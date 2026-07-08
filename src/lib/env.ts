@@ -13,6 +13,30 @@ const appUrlSchema = z.object({
   NEXT_PUBLIC_APP_URL: z.string().url().default("http://localhost:3000"),
 })
 
+const r2EnvSchema = z.object({
+  CLOUDFLARE_R2_ACCOUNT_ID: z.string().min(1),
+  CLOUDFLARE_R2_ACCESS_KEY_ID: z.string().min(1),
+  CLOUDFLARE_R2_SECRET_ACCESS_KEY: z.string().min(1),
+  CLOUDFLARE_R2_BUCKET_NAME: z.string().min(1),
+  CLOUDFLARE_R2_ENDPOINT: z.string().url(),
+  CLOUDFLARE_R2_REGION: z.string().min(1).default("auto"),
+  CLOUDFLARE_R2_SIGNED_URL_TTL_SECONDS: z
+    .preprocess(
+      parseIntegerEnvValue,
+      z.number().int().min(1).max(604800).default(900)
+    ),
+})
+
+const fileUploadPolicySchema = z.object({
+  FILE_UPLOAD_MAX_BYTES: z.preprocess(
+    parseIntegerEnvValue,
+    z.number().int().positive()
+  ),
+  FILE_UPLOAD_ALLOWED_MIME_TYPES: z
+    .string()
+    .transform(parseAllowedMimeTypes),
+})
+
 type PublicSupabaseInput = z.infer<typeof publicSupabaseSchema>
 type AdminSupabaseInput = z.infer<typeof adminSupabaseSchema>
 
@@ -26,6 +50,46 @@ export type AdminSupabaseEnv = PublicSupabaseEnv & {
 }
 
 export type AppUrlEnv = z.infer<typeof appUrlSchema>
+export type R2Env = z.infer<typeof r2EnvSchema>
+export type FileUploadPolicyEnv = z.infer<typeof fileUploadPolicySchema>
+
+function parseIntegerEnvValue(value: unknown): unknown {
+  if (typeof value !== "string") {
+    return value
+  }
+
+  const normalizedValue = value.trim()
+
+  if (normalizedValue.length === 0) {
+    return undefined
+  }
+
+  if (!/^-?\d+$/.test(normalizedValue)) {
+    return Number.NaN
+  }
+
+  return Number(normalizedValue)
+}
+
+function parseAllowedMimeTypes(
+  value: string,
+  context: z.core.$RefinementCtx<string>
+): string[] {
+  const mimeTypes = value
+    .split(",")
+    .map((mimeType: string) => mimeType.trim())
+    .filter((mimeType: string) => mimeType.length > 0)
+
+  if (mimeTypes.length === 0) {
+    context.addIssue({
+      code: "custom",
+      message: "At least one MIME type is required.",
+    })
+    return z.NEVER
+  }
+
+  return mimeTypes
+}
 
 function formatEnvError(error: z.ZodError): string {
   return error.issues
@@ -105,6 +169,38 @@ export function getAppUrlEnv(): AppUrlEnv {
 
   if (!result.success) {
     throw new Error(`Invalid app URL environment: ${formatEnvError(result.error)}`)
+  }
+
+  return result.data
+}
+
+/**
+ * Reads and validates server-only Cloudflare R2 environment values.
+ *
+ * @returns R2 account, bucket, endpoint, credentials, region, and signed URL TTL.
+ * @throws Error when required values are missing or invalid.
+ */
+export function getR2Env(): R2Env {
+  const result = r2EnvSchema.safeParse(process.env)
+
+  if (!result.success) {
+    throw new Error(`Invalid R2 environment: ${formatEnvError(result.error)}`)
+  }
+
+  return result.data
+}
+
+/**
+ * Reads and validates document upload policy environment values.
+ *
+ * @returns Maximum upload size and allowed MIME types.
+ * @throws Error when the size or MIME type list is missing or invalid.
+ */
+export function getFileUploadPolicyEnv(): FileUploadPolicyEnv {
+  const result = fileUploadPolicySchema.safeParse(process.env)
+
+  if (!result.success) {
+    throw new Error(`Invalid file upload policy environment: ${formatEnvError(result.error)}`)
   }
 
   return result.data

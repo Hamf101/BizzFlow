@@ -81,19 +81,19 @@ corepack pnpm build
 - Create: `src/services/document-storage-service.ts`
 - Create: `src/services/document-storage-service.test.ts`
 
-- [ ] Add dependencies: `@aws-sdk/client-s3` and `@aws-sdk/s3-request-presigner`.
-- [ ] Add `getR2Env()` for server-only R2 settings: account id, access key id, secret access key, bucket name, endpoint, region, signed URL TTL seconds.
-- [ ] Add `getFileUploadPolicyEnv()` for max bytes and allowed MIME types.
-- [ ] Validate TTL between 1 and 604800 seconds and default to 900 when absent.
-- [ ] Validate allowed MIME types as a non-empty comma-delimited list and max bytes as positive.
-- [ ] Create `createR2Client()` that constructs `S3Client` with `region: "auto"` by default, configured endpoint, and server-only credentials.
-- [ ] Create pure helpers for allowed MIME type lookup, safe extension derivation, object key creation, and upload size validation.
-- [ ] Use object keys shaped as `organizations/{organizationId}/documents/{documentId}/versions/{versionId}/original{extension}`.
-- [ ] Create signed PUT and GET helpers using `PutObjectCommand`, `GetObjectCommand`, and `getSignedUrl`.
-- [ ] Do not log signed URLs or secrets.
-- [ ] Add unit tests for env validation, object key format, MIME/size rejection, and injected signer behavior.
-- [ ] Run `corepack pnpm test -- src/lib/env.test.ts src/services/document-storage-service.test.ts`.
-- [ ] Commit with `feat(documents): add R2 signing foundation`.
+- [x] Add dependencies: `@aws-sdk/client-s3` and `@aws-sdk/s3-request-presigner`.
+- [x] Add `getR2Env()` for server-only R2 settings: account id, access key id, secret access key, bucket name, endpoint, region, signed URL TTL seconds.
+- [x] Add `getFileUploadPolicyEnv()` for max bytes and allowed MIME types.
+- [x] Validate TTL between 1 and 604800 seconds and default to 900 when absent.
+- [x] Validate allowed MIME types as a non-empty comma-delimited list and max bytes as positive.
+- [x] Create `createR2Client()` that constructs `S3Client` with `region: "auto"` by default, configured endpoint, and server-only credentials.
+- [x] Create pure helpers for allowed MIME type lookup, safe extension derivation, object key creation, and upload size validation.
+- [x] Use object keys shaped as `organizations/{organizationId}/documents/{documentId}/versions/{versionId}/original{extension}`.
+- [x] Create signed PUT and GET helpers using `PutObjectCommand`, `GetObjectCommand`, and `getSignedUrl`.
+- [x] Do not log signed URLs or secrets.
+- [x] Add unit tests for env validation, object key format, MIME/size rejection, and injected signer behavior.
+- [x] Run `corepack pnpm test -- src/lib/env.test.ts src/services/document-storage-service.test.ts`.
+- [x] Commit with `feat(documents): add R2 signing foundation`.
 
 ### Task 3: Document service and API routes
 
