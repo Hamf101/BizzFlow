@@ -1,0 +1,46 @@
+# Dependencies
+node_modules/
+
+# Next.js
+.next/
+out/
+tsconfig.tsbuildinfo
+
+# Production builds
+dist/
+build/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Local tooling
+.turbo/
+.vercel/
+.supabase/
+supabase/.temp/
+.agents/
+skills-lock.json
+
+# Tests and coverage
+coverage/
+test-results/
+playwright-report/
+.playwright-cli/
+output/playwright/
+
+# Temporary files
+.tmp/
+tmp/
+temp/
+
+# OS files
+.DS_Store
