@@ -12,6 +12,11 @@ export const ORGANIZATION_PERMISSION_ACTIONS = [
   "members:invite",
   "members:update_role",
   "audit_logs:view",
+  "documents:view",
+  "documents:create",
+  "documents:archive",
+  "folders:manage",
+  "document_versions:create",
 ] as const
 
 export type OrganizationPermissionAction =
@@ -28,9 +33,23 @@ const permissionsByRole: Record<
   readonly OrganizationPermissionAction[]
 > = {
   owner_admin: ORGANIZATION_PERMISSION_ACTIONS,
-  manager: ["people:view", "members:invite", "audit_logs:view"],
-  staff: ["people:view"],
-  external_reviewer: ["people:view"],
+  manager: [
+    "people:view",
+    "members:invite",
+    "audit_logs:view",
+    "documents:view",
+    "documents:create",
+    "documents:archive",
+    "folders:manage",
+    "document_versions:create",
+  ],
+  staff: [
+    "people:view",
+    "documents:view",
+    "documents:create",
+    "document_versions:create",
+  ],
+  external_reviewer: ["people:view", "documents:view"],
 }
 
 /**

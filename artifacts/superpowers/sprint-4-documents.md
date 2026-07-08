@@ -52,23 +52,23 @@ corepack pnpm build
 - Modify: `src/types/audit.ts`
 - Modify: `src/services/audit-service.ts`
 
-- [ ] Add document permission actions: `documents:view`, `documents:create`, `documents:archive`, `folders:manage`, and `document_versions:create`.
-- [ ] Allow owner admins and managers to perform all document/folder/version actions.
-- [ ] Allow staff to view documents and create document versions, but not archive documents or manage folders.
-- [ ] Allow external reviewers to view documents only.
-- [ ] Extend audit unions and parser support for `folder.created`, `folder.archived`, `document.created`, `document.archived`, `document_version.created`, and target types `folder`, `document`, `document_version`.
-- [ ] Add a Sprint 4 migration that creates `folders`, `documents`, and `document_versions`.
-- [ ] Include UUID primary keys, `org_id`, timestamps, creator/updater/archive metadata, folder parent support, document archive fields, version metadata, and `document_versions.status` values `upload_pending` and `available`.
-- [ ] Add composite foreign keys that prevent cross-org folder/document/version references.
-- [ ] Enable and force RLS on all three tables.
-- [ ] Grant authenticated users `select` only on all three tables.
-- [ ] Grant `service_role` `select, insert, update, delete` on all three tables.
-- [ ] Add select policies using `(select public.is_organization_member(org_id))`.
-- [ ] Add tenant and active-record indexes for folders, active documents, archived documents, and document versions.
-- [ ] End the migration with `notify pgrst, 'reload schema'`.
-- [ ] Extend migration tests to assert the Sprint 4 table creation, forced RLS, policies, direct-write omission, service-role grants, and schema reload.
-- [ ] Run `corepack pnpm test -- supabase/migrations/rls-permissions.test.ts src/lib/permissions.test.ts`.
-- [ ] Commit with `feat(documents): add document schema contracts`.
+- [x] Add document permission actions: `documents:view`, `documents:create`, `documents:archive`, `folders:manage`, and `document_versions:create`.
+- [x] Allow owner admins and managers to perform all document/folder/version actions.
+- [x] Allow staff to view documents and create document versions, but not archive documents or manage folders.
+- [x] Allow external reviewers to view documents only.
+- [x] Extend audit unions and parser support for `folder.created`, `folder.archived`, `document.created`, `document.archived`, `document_version.created`, and target types `folder`, `document`, `document_version`.
+- [x] Add a Sprint 4 migration that creates `folders`, `documents`, and `document_versions`.
+- [x] Include UUID primary keys, `org_id`, timestamps, creator/updater/archive metadata, folder parent support, document archive fields, version metadata, and `document_versions.status` values `upload_pending` and `available`.
+- [x] Add composite foreign keys that prevent cross-org folder/document/version references.
+- [x] Enable and force RLS on all three tables.
+- [x] Grant authenticated users `select` only on all three tables.
+- [x] Grant `service_role` `select, insert, update, delete` on all three tables.
+- [x] Add select policies using `(select public.is_organization_member(org_id))`.
+- [x] Add tenant and active-record indexes for folders, active documents, archived documents, and document versions.
+- [x] End the migration with `notify pgrst, 'reload schema'`.
+- [x] Extend migration tests to assert the Sprint 4 table creation, forced RLS, policies, direct-write omission, service-role grants, and schema reload.
+- [x] Run `corepack pnpm test -- supabase/migrations/rls-permissions.test.ts src/lib/permissions.test.ts`.
+- [x] Commit with `feat(documents): add document schema contracts`.
 
 ### Task 2: R2 environment, client, and signed URL helpers
 

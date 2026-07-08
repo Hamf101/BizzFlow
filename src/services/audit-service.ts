@@ -208,7 +208,12 @@ function parseAuditLogAction(value: string): AuditLogAction {
     value === "organization.created" ||
     value === "invite.created" ||
     value === "invite.accepted" ||
-    value === "membership.role_updated"
+    value === "membership.role_updated" ||
+    value === "folder.created" ||
+    value === "folder.archived" ||
+    value === "document.created" ||
+    value === "document.archived" ||
+    value === "document_version.created"
   ) {
     return value
   }
@@ -217,7 +222,14 @@ function parseAuditLogAction(value: string): AuditLogAction {
 }
 
 function parseAuditLogTargetType(value: string): AuditLogTargetType {
-  if (value === "organization" || value === "invite" || value === "membership") {
+  if (
+    value === "organization" ||
+    value === "invite" ||
+    value === "membership" ||
+    value === "folder" ||
+    value === "document" ||
+    value === "document_version"
+  ) {
     return value
   }
 

@@ -3,8 +3,19 @@ export type AuditLogAction =
   | "invite.created"
   | "invite.accepted"
   | "membership.role_updated"
+  | "folder.created"
+  | "folder.archived"
+  | "document.created"
+  | "document.archived"
+  | "document_version.created"
 
-export type AuditLogTargetType = "organization" | "invite" | "membership"
+export type AuditLogTargetType =
+  | "organization"
+  | "invite"
+  | "membership"
+  | "folder"
+  | "document"
+  | "document_version"
 
 export type AuditMetadataValue = string | number | boolean | null
 

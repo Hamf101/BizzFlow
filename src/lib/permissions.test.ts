@@ -51,6 +51,11 @@ describe("organization permissions", () => {
       "members:invite",
       "members:update_role",
       "audit_logs:view",
+      "documents:view",
+      "documents:create",
+      "documents:archive",
+      "folders:manage",
+      "document_versions:create",
     ])
   })
 
@@ -59,6 +64,11 @@ describe("organization permissions", () => {
     expect(canPerformOrganizationAction("staff", "members:invite")).toBe(false)
     expect(canPerformOrganizationAction("staff", "members:update_role")).toBe(false)
     expect(canPerformOrganizationAction("staff", "audit_logs:view")).toBe(false)
+    expect(canPerformOrganizationAction("staff", "documents:view")).toBe(true)
+    expect(canPerformOrganizationAction("staff", "documents:create")).toBe(true)
+    expect(canPerformOrganizationAction("staff", "documents:archive")).toBe(false)
+    expect(canPerformOrganizationAction("staff", "folders:manage")).toBe(false)
+    expect(canPerformOrganizationAction("staff", "document_versions:create")).toBe(true)
   })
 
   it("allows managers to invite members and view audit logs without role updates", () => {
@@ -66,6 +76,25 @@ describe("organization permissions", () => {
     expect(canPerformOrganizationAction("manager", "members:invite")).toBe(true)
     expect(canPerformOrganizationAction("manager", "members:update_role")).toBe(false)
     expect(canPerformOrganizationAction("manager", "audit_logs:view")).toBe(true)
+    expect(canPerformOrganizationAction("manager", "documents:view")).toBe(true)
+    expect(canPerformOrganizationAction("manager", "documents:create")).toBe(true)
+    expect(canPerformOrganizationAction("manager", "documents:archive")).toBe(true)
+    expect(canPerformOrganizationAction("manager", "folders:manage")).toBe(true)
+    expect(canPerformOrganizationAction("manager", "document_versions:create")).toBe(true)
+  })
+
+  it("allows external reviewers to view people and documents only", () => {
+    expect(canPerformOrganizationAction("external_reviewer", "people:view")).toBe(true)
+    expect(canPerformOrganizationAction("external_reviewer", "documents:view")).toBe(true)
+    expect(canPerformOrganizationAction("external_reviewer", "documents:create")).toBe(false)
+    expect(canPerformOrganizationAction("external_reviewer", "documents:archive")).toBe(false)
+    expect(canPerformOrganizationAction("external_reviewer", "folders:manage")).toBe(false)
+    expect(canPerformOrganizationAction("external_reviewer", "document_versions:create")).toBe(
+      false
+    )
+    expect(canPerformOrganizationAction("external_reviewer", "members:invite")).toBe(false)
+    expect(canPerformOrganizationAction("external_reviewer", "members:update_role")).toBe(false)
+    expect(canPerformOrganizationAction("external_reviewer", "audit_logs:view")).toBe(false)
   })
 
   it("allows owner admins to perform every organization permission action", () => {
