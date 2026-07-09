@@ -4,6 +4,11 @@ import {
 } from "@supabase/supabase-js"
 
 import { getAdminSupabaseEnv } from "@/lib/env"
+import type {
+  DocumentRow,
+  DocumentVersionRow,
+  FolderRow,
+} from "@/types/document"
 
 type DatabaseOrganizationRole =
   | "owner_admin"
@@ -78,6 +83,22 @@ type AuditLogRow = Record<string, unknown> & {
   created_at: string
 }
 
+type FolderInsert = Partial<FolderRow> & Pick<FolderRow, "id" | "org_id" | "name">
+type DocumentInsert = Partial<DocumentRow> &
+  Pick<DocumentRow, "id" | "org_id" | "title">
+type DocumentVersionInsert = Partial<DocumentVersionRow> &
+  Pick<
+    DocumentVersionRow,
+    | "id"
+    | "org_id"
+    | "document_id"
+    | "version_number"
+    | "storage_key"
+    | "original_filename"
+    | "content_type"
+    | "byte_size"
+  >
+
 type AdminDatabase = {
   public: {
     Tables: {
@@ -106,6 +127,13 @@ type AdminDatabase = {
         Partial<AuditLogRow> &
           Pick<AuditLogRow, "org_id" | "action" | "target_type">,
         Partial<AuditLogRow>
+      >
+      folders: DatabaseTable<FolderRow, FolderInsert, Partial<FolderRow>>
+      documents: DatabaseTable<DocumentRow, DocumentInsert, Partial<DocumentRow>>
+      document_versions: DatabaseTable<
+        DocumentVersionRow,
+        DocumentVersionInsert,
+        Partial<DocumentVersionRow>
       >
     }
     Views: Record<string, never>
