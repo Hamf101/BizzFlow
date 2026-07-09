@@ -36,10 +36,10 @@ type DashboardSearchParams = Promise<{
 }>
 
 const sprintItems: readonly string[] = [
-  "Create the first organization workspace.",
-  "Invite staff and assign MVP roles.",
-  "Accept pending organization invites.",
-  "Prepare tenant data for stricter Sprint 3 permission tests.",
+  "Create tenant-scoped folders.",
+  "Upload documents through signed R2 URLs.",
+  "View document detail and version metadata.",
+  "Archive documents without deleting rows.",
 ]
 
 export default async function DashboardPage({
@@ -74,8 +74,8 @@ export default async function DashboardPage({
       <section className="flex flex-col gap-2">
         <h1 className="text-2xl font-semibold tracking-normal">Dashboard</h1>
         <p className="max-w-2xl text-sm text-muted-foreground">
-          Signed in as {user.email ?? "Authenticated user"}. Sprint 3 hardens
-          organization permissions, role checks, and audit visibility.
+          Signed in as {user.email ?? "Authenticated user"}. Sprint 4 adds
+          document storage, version metadata, and signed file access.
         </p>
       </section>
 
@@ -169,8 +169,8 @@ export default async function DashboardPage({
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Sprint 2 checklist</CardTitle>
-            <CardDescription>What this implementation slice makes usable.</CardDescription>
+            <CardTitle>Sprint 4 checklist</CardTitle>
+            <CardDescription>Document workflows available in this slice.</CardDescription>
           </CardHeader>
           <CardContent>
             <ul className="flex flex-col gap-3 text-sm">
@@ -185,12 +185,12 @@ export default async function DashboardPage({
         <Card>
           <CardHeader>
             <CardTitle>Next build target</CardTitle>
-            <CardDescription>Sprint 3 hardens tenant permissions.</CardDescription>
+            <CardDescription>Templates and submissions come next.</CardDescription>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground">
-              The next implementation slice expands RLS coverage, adds
-              server-side permission tests, and introduces role-based UI guards.
+              The next implementation slice turns stored documents into reusable
+              collection workflows with form templates and submission review.
             </p>
           </CardContent>
         </Card>
