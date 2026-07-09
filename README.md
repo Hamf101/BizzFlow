@@ -5,8 +5,8 @@ BizFlow Docs is a mobile-first, multi-tenant workflow portal for reusable forms,
 ## Current Status
 
 - Project phase: implementation.
-- Sprint: Sprint 3 in progress.
-- Application scaffold: Next.js App Router foundation exists.
+- Sprint: Sprint 4 document workflows implemented locally.
+- Application scaffold: Next.js App Router foundation with dashboard document storage.
 - Canonical project guide: `.agent/AGENT.md`.
 
 ## MVP Scope
@@ -49,10 +49,18 @@ The local app is expected to run at `http://localhost:3000` unless the scaffold 
 Example API calls after the app is scaffolded:
 
 ```bash
-curl http://localhost:3000/api/organizations
-curl -X POST http://localhost:3000/api/templates \
+curl -X POST http://localhost:3000/api/documents/upload-url \
   -H "Content-Type: application/json" \
-  -d '{"name":"Client Intake","description":"Collect onboarding documents"}'
+  -H "Cookie: <authenticated Supabase cookies>" \
+  -d '{
+    "organizationId": "00000000-0000-0000-0000-000000000000",
+    "folderId": null,
+    "title": "Client Intake",
+    "description": "Signed onboarding packet",
+    "originalFilename": "client-intake.pdf",
+    "contentType": "application/pdf",
+    "byteSize": 1024
+  }'
 ```
 
 ## Environment Variables
@@ -67,13 +75,16 @@ Expected variable groups:
 
 - App: `NEXT_PUBLIC_APP_URL`.
 - Supabase: `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, `SUPABASE_PROJECT_REF`, `SUPABASE_DB_URL`, and `SUPABASE_POOLER_URL`.
-- Cloudflare R2: account ID, access key ID, secret access key, bucket name, and public signing configuration.
+- Cloudflare R2: `CLOUDFLARE_R2_ACCOUNT_ID`, `CLOUDFLARE_R2_ACCESS_KEY_ID`, `CLOUDFLARE_R2_SECRET_ACCESS_KEY`, `CLOUDFLARE_R2_BUCKET_NAME`, `CLOUDFLARE_R2_ENDPOINT`, `CLOUDFLARE_R2_REGION`, and `CLOUDFLARE_R2_SIGNED_URL_TTL_SECONDS`.
+- File uploads: `FILE_UPLOAD_MAX_BYTES` and `FILE_UPLOAD_ALLOWED_MIME_TYPES`.
 - Inngest: event key and signing key.
 - Resend: API key and sender address.
 - SMS: Termii credentials, with Africa's Talking placeholders reserved for a later provider switch.
 - Observability: Sentry DSN and PostHog key or internal analytics settings.
 
 Do not commit real secrets. Keep local secrets in `.env.local` and deployment secrets in the target hosting provider.
+
+For browser-based signed uploads and downloads, configure the private R2 bucket CORS policy to allow the deployed app origin, `PUT`, `GET`, and `HEAD` methods, and the `content-type` request header. Keep the bucket private; the app signs object access server-side.
 
 ## Supabase Migrations
 
@@ -90,13 +101,20 @@ If the CLI cannot be linked, open the Supabase SQL Editor and run the migration 
 ```text
 supabase/migrations/20260708170500_sprint_2_organizations_roles.sql
 supabase/migrations/20260708174500_sprint_3_rls_permissions.sql
+supabase/migrations/20260708190000_sprint_4_documents.sql
 ```
 
-The Sprint 3 migration includes explicit Data API grants for `authenticated` and `service_role`, plus a PostgREST schema-cache reload.
+The Sprint 3 and Sprint 4 migrations include explicit Data API grants for `authenticated` and `service_role`, plus PostgREST schema-cache reloads.
 
-## Planned API Endpoints
+## API Endpoints Summary
 
-These routes are planned for the Next.js App Router scaffold and may be adjusted during implementation.
+Implemented document routes:
+
+- `POST /api/documents/upload-url`
+- `POST /api/documents/:id/complete-upload`
+- `GET /api/documents/:id/download-url`
+
+Planned routes may be adjusted during implementation.
 
 Organizations and access:
 
@@ -116,13 +134,11 @@ Documents and folders:
 - `PATCH /api/folders/:id`
 - `DELETE /api/folders/:id`
 - `GET /api/documents`
-- `POST /api/documents/upload-url`
 - `POST /api/documents`
 - `GET /api/documents/:id`
 - `POST /api/documents/:id/replace-upload-url`
 - `POST /api/documents/:id/replace`
 - `POST /api/documents/:id/archive`
-- `GET /api/documents/:id/download-url`
 
 Templates and submissions:
 

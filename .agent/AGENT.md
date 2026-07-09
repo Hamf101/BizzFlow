@@ -1,13 +1,14 @@
 # BizFlow Docs Agent Guide
 
-Last updated: 2026-07-08
+Last updated: 2026-07-09
 
 This is the working development guide for BizFlow Docs. Treat the pasted MVP requirements and this file as the source of truth for the project unless the user explicitly replaces them.
 
 Important local context:
 
-- The repository is currently in Sprint 3 implementation.
+- The repository is currently completing Sprint 4 document storage.
 - The Next.js App Router foundation from Sprint 1 is scaffolded.
+- Sprint 4 adds tenant-scoped folders, documents, document versions, signed R2 upload/download routes, and document dashboard pages.
 - `.agent/Project_inf.md` was stale context for another product and is no longer present. Do not recreate it unless it describes BizFlow.
 - Existing local rules still apply: plan before non-trivial work, verify before completion claims, prefer simple designs, avoid speculative features, and keep work grounded in actual files.
 

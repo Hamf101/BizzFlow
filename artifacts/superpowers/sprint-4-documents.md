@@ -10,7 +10,7 @@
 
 ---
 
-Last updated: 2026-07-08
+Last updated: 2026-07-09
 
 ## Scope
 
@@ -102,26 +102,28 @@ corepack pnpm build
 - Create: `src/types/document.ts`
 - Create: `src/services/document-service.ts`
 - Create: `src/services/document-service.test.ts`
+- Create: `src/app/api/documents/_utils.ts`
+- Create: `src/app/api/documents/document-routes.test.ts`
 - Create: `src/app/api/documents/upload-url/route.ts`
 - Create: `src/app/api/documents/[documentId]/complete-upload/route.ts`
 - Create: `src/app/api/documents/[documentId]/download-url/route.ts`
 
-- [ ] Add typed Supabase table rows for `folders`, `documents`, and `document_versions`.
-- [ ] Create document DTOs for folders, documents, document versions, upload URL responses, download URL responses, workspace lists, and document detail.
-- [ ] Implement `DocumentServiceError` with HTTP-style status codes.
-- [ ] Implement `createFolder`, `listDocumentWorkspace`, `getDocumentDetail`, `createDocumentUploadUrl`, `completeDocumentUpload`, `archiveDocument`, and `createDocumentDownloadUrl`.
-- [ ] Check actor membership through `organization_memberships` before service writes/signing.
-- [ ] Check role permissions through the central permission matrix.
-- [ ] Create documents with an `upload_pending` version before signing PUT URLs.
-- [ ] Complete uploads by marking the version `available` and setting `documents.current_version_id`.
-- [ ] List only non-archived documents on the workspace page by default.
-- [ ] Archive documents by setting `archived_at` and `archived_by`, not deleting rows.
-- [ ] Sign downloads only for available current versions.
-- [ ] Write audit events for folder creation, document creation, document version creation, and document archive.
-- [ ] API routes must authenticate, parse JSON, call services, and return JSON with specific HTTP status codes.
-- [ ] Add focused tests for missing setup handling, permission rejection, upload validation, archive behavior, and route status mapping using injected dependencies or mocks.
-- [ ] Run `corepack pnpm test -- src/services/document-service.test.ts`.
-- [ ] Commit with `feat(documents): add document services and API routes`.
+- [x] Add typed Supabase table rows for `folders`, `documents`, and `document_versions`.
+- [x] Create document DTOs for folders, documents, document versions, upload URL responses, download URL responses, workspace lists, and document detail.
+- [x] Implement `DocumentServiceError` with HTTP-style status codes.
+- [x] Implement `createFolder`, `listDocumentWorkspace`, `getDocumentDetail`, `createDocumentUploadUrl`, `completeDocumentUpload`, `archiveDocument`, and `createDocumentDownloadUrl`.
+- [x] Check actor membership through `organization_memberships` before service writes/signing.
+- [x] Check role permissions through the central permission matrix.
+- [x] Create documents with an `upload_pending` version before signing PUT URLs.
+- [x] Complete uploads by marking the version `available` and setting `documents.current_version_id`.
+- [x] List only non-archived documents on the workspace page by default.
+- [x] Archive documents by setting `archived_at` and `archived_by`, not deleting rows.
+- [x] Sign downloads only for available current versions.
+- [x] Write audit events for folder creation, document creation, document version creation, and document archive.
+- [x] API routes must authenticate, parse JSON, call services, and return JSON with specific HTTP status codes.
+- [x] Add focused tests for missing setup handling, permission rejection, upload validation, archive behavior, and route status mapping using injected dependencies or mocks.
+- [x] Run `corepack pnpm test -- src/services/document-service.test.ts src/app/api/documents/document-routes.test.ts`.
+- [x] Commit with `feat(documents): add document services and API routes`.
 
 ### Task 4: Documents dashboard UI
 
@@ -132,18 +134,19 @@ corepack pnpm build
 - Create: `src/app/(dashboard)/documents/[documentId]/page.tsx`
 - Create: `src/app/(dashboard)/documents/actions.ts`
 - Create: `src/components/documents/document-upload-form.tsx`
+- Create: `src/components/documents/document-download-button.tsx`
 
-- [ ] Add `/documents` navigation as an active link instead of placeholder text.
-- [ ] Update dashboard copy from Sprint 3 to Sprint 4 document storage.
-- [ ] Build a documents page that loads auth and organization context like People/Audit pages.
-- [ ] Show folders, active documents, and an upload panel using existing Card, Alert, Badge, Button, Field, Input, and native select patterns.
-- [ ] Add a thin server action for folder creation.
-- [ ] Add a client upload form that requests `/api/documents/upload-url`, PUTs the selected file to R2 using the returned URL, calls `/api/documents/{id}/complete-upload`, and redirects to the document detail page.
-- [ ] Build document detail with metadata, current version, download button, version list, and archive action.
-- [ ] The download button must request `/api/documents/{id}/download-url` client-side and open the returned URL.
-- [ ] Keep mobile layout non-overlapping and use the existing dashboard card/list density.
-- [ ] Run `corepack pnpm lint` and `corepack pnpm typecheck`.
-- [ ] Commit with `feat(documents): add document dashboard UI`.
+- [x] Add `/documents` navigation as an active link instead of placeholder text.
+- [x] Update dashboard copy from Sprint 3 to Sprint 4 document storage.
+- [x] Build a documents page that loads auth and organization context like People/Audit pages.
+- [x] Show folders, active documents, and an upload panel using existing Card, Alert, Badge, Button, Field, Input, and native select patterns.
+- [x] Add a thin server action for folder creation.
+- [x] Add a client upload form that requests `/api/documents/upload-url`, PUTs the selected file to R2 using the returned URL, calls `/api/documents/{id}/complete-upload`, and redirects to the document detail page.
+- [x] Build document detail with metadata, current version, download button, version list, and archive action.
+- [x] The download button must request `/api/documents/{id}/download-url` client-side and open the returned URL.
+- [x] Keep mobile layout non-overlapping and use the existing dashboard card/list density.
+- [x] Run `corepack pnpm lint` and `corepack pnpm typecheck`.
+- [x] Commit with `feat(documents): add document dashboard UI`.
 
 ### Task 5: Sprint docs, verification, and final review
 
@@ -153,13 +156,24 @@ corepack pnpm build
 - Modify: `artifacts/superpowers/bizflow-development-plan.md`
 - Modify: `artifacts/superpowers/sprint-4-documents.md`
 
-- [ ] Update docs from Sprint 3 to Sprint 4 current status.
-- [ ] Add Sprint 4 migration to the manual migration order in README.
-- [ ] Document the R2 env variables and CORS note for signed browser PUT/GET access.
-- [ ] Record final verification commands and results in this sprint artifact.
-- [ ] Run `corepack pnpm test`.
-- [ ] Run `corepack pnpm lint`.
-- [ ] Run `corepack pnpm typecheck`.
-- [ ] Run `corepack pnpm build`.
-- [ ] Run a final code review subagent over the full Sprint 4 diff.
-- [ ] Commit with `docs: record sprint 4 verification`.
+- [x] Update docs from Sprint 3 to Sprint 4 current status.
+- [x] Add Sprint 4 migration to the manual migration order in README.
+- [x] Document the R2 env variables and CORS note for signed browser PUT/GET access.
+- [x] Record final verification commands and results in this sprint artifact.
+- [x] Run `corepack pnpm test`.
+- [x] Run `corepack pnpm lint`.
+- [x] Run `corepack pnpm typecheck`.
+- [x] Run `corepack pnpm build`.
+- [x] Run a final code review pass over the full Sprint 4 diff. Subagent review was replaced with an inline review because this Codex thread was not explicitly authorized to spawn subagents.
+- [x] Commit with `docs: record sprint 4 verification`.
+
+## Verification Performed
+
+2026-07-09:
+
+- `corepack pnpm test` — passed. Vitest reported 8 test files and 62 tests passing.
+- `corepack pnpm lint` — passed with no warnings.
+- `corepack pnpm typecheck` — passed.
+- `corepack pnpm build` — passed. Next.js built the document API routes and `/documents` dashboard routes successfully.
+
+Note: an earlier parallel `corepack pnpm typecheck` run failed while `next build` was regenerating `.next/types`; the rerun after build completed passed.
