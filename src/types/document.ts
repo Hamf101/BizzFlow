@@ -20,6 +20,9 @@ export type DocumentRow = Record<string, unknown> & {
   title: string
   description: string | null
   current_version_id: string | null
+  source_kind?: string
+  template_id?: string | null
+  template_revision?: number | null
   created_by: string | null
   updated_by: string | null
   archived_by: string | null
@@ -64,6 +67,9 @@ export type DocumentSummary = {
   title: string
   description: string | null
   currentVersionId: string | null
+  sourceKind?: "upload" | "generated"
+  templateId?: string | null
+  templateRevision?: number | null
   createdBy: string | null
   updatedBy: string | null
   archivedBy: string | null
@@ -82,7 +88,6 @@ export type DocumentVersion = {
   originalFilename: string
   contentType: string
   byteSize: number
-  checksumSha256: string | null
   uploadedBy: string | null
   createdAt: string
   updatedAt: string

@@ -3,7 +3,13 @@ import { NextResponse, type NextRequest } from "next/server"
 
 import { getPublicSupabaseEnv, isPublicSupabaseEnvConfigured } from "@/lib/env"
 
-const PROTECTED_PREFIXES: readonly string[] = ["/dashboard", "/people", "/audit-log"]
+const PROTECTED_PREFIXES: readonly string[] = [
+  "/audit-log",
+  "/dashboard",
+  "/documents",
+  "/people",
+  "/templates",
+]
 
 /**
  * Checks whether a request path requires an authenticated session.
@@ -12,7 +18,10 @@ const PROTECTED_PREFIXES: readonly string[] = ["/dashboard", "/people", "/audit-
  * @returns True when the path belongs to a protected app area.
  */
 export function isProtectedPath(pathname: string): boolean {
-  return PROTECTED_PREFIXES.some((prefix: string) => pathname.startsWith(prefix))
+  return PROTECTED_PREFIXES.some(
+    (prefix: string): boolean =>
+      pathname === prefix || pathname.startsWith(`${prefix}/`)
+  )
 }
 
 /**
@@ -42,6 +51,11 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
     env.SUPABASE_URL,
     env.SUPABASE_PUBLISHABLE_KEY,
     {
+      cookieOptions: {
+        path: "/",
+        sameSite: "lax",
+        secure: process.env.NODE_ENV === "production",
+      },
       cookies: {
         getAll() {
           return request.cookies.getAll()

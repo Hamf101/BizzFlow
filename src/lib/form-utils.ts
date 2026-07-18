@@ -13,11 +13,16 @@ export function getFormString(formData: FormData, key: string): string {
 /**
  * Builds a redirect path with query parameters.
  *
- * @param pathname - Redirect path without query parameters.
+ * @param pathname - Redirect path, with optional existing query parameters.
  * @param params - Query parameters to append.
  * @returns Path with encoded query string.
  */
 export function buildRedirect(pathname: string, params: Record<string, string>): string {
-  const searchParams = new URLSearchParams(params)
-  return `${pathname}?${searchParams.toString()}`
+  const redirectUrl = new URL(pathname, "https://bizflow.invalid")
+
+  for (const [key, value] of Object.entries(params)) {
+    redirectUrl.searchParams.set(key, value)
+  }
+
+  return `${redirectUrl.pathname}${redirectUrl.search}${redirectUrl.hash}`
 }

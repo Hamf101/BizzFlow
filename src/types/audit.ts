@@ -8,6 +8,7 @@ export type AuditLogAction =
   | "document.created"
   | "document.archived"
   | "document_version.created"
+  | "document_version.download_url_issued"
 
 export type AuditLogTargetType =
   | "organization"

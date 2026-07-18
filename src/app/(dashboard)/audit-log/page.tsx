@@ -10,38 +10,22 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import {
-  AuthenticationError,
-  getAuthenticatedUser,
-  type AuthenticatedUser,
-} from "@/lib/auth"
+import { formatMediumDateTime } from "@/lib/date-format"
 import { buildRedirect } from "@/lib/form-utils"
+import { loadAuthenticatedPageUser } from "@/lib/page-auth"
+import { getPageErrorMessage } from "@/lib/page-errors"
+import { loadPageOrganizationContext } from "@/lib/page-organization-context"
 import { canPerformOrganizationAction } from "@/lib/permissions"
 import { listAuditLogs } from "@/services/audit-service"
-import { getCurrentOrganizationContext } from "@/services/organization-service"
 import type { AuditLogEntry } from "@/types/audit"
 
 export default async function AuditLogPage(): Promise<ReactElement> {
-  const user = await loadAuditLogUser()
+  const user = await loadAuthenticatedPageUser("/audit-log")
   const { context, errorMessage: contextErrorMessage } =
-    await getCurrentOrganizationContext(user.id)
-      .then((context) => ({ context, errorMessage: null as string | null }))
-      .catch((error: unknown) => {
-        const errorMessage = getPageErrorMessage(
-          error,
-          "Unable to load organization context."
-        )
-
-        console.warn("audit_log_context_load_failed", {
-          userId: user.id,
-          reason: errorMessage,
-        })
-
-        return {
-          context: null,
-          errorMessage,
-        }
-      })
+    await loadPageOrganizationContext({
+      userId: user.id,
+      failureEvent: "audit_log_context_load_failed",
+    })
 
   if (!context) {
     if (contextErrorMessage) {
@@ -163,22 +147,10 @@ function AuditLogEntryRow({
         </span>
       </div>
       <span className="text-xs text-muted-foreground md:text-right">
-        {formatDateTime(entry.createdAt)}
+        {formatMediumDateTime(entry.createdAt)}
       </span>
     </div>
   )
-}
-
-async function loadAuditLogUser(): Promise<AuthenticatedUser> {
-  try {
-    return await getAuthenticatedUser()
-  } catch (error: unknown) {
-    if (error instanceof AuthenticationError) {
-      redirect(buildRedirect("/login", { next: "/audit-log" }))
-    }
-
-    throw error
-  }
 }
 
 function formatAction(action: string): string {
@@ -198,19 +170,4 @@ function formatMetadata(metadata: Record<string, unknown>): string {
   return entries
     .map(([key, value]: [string, unknown]) => `${key}: ${String(value)}`)
     .join(", ")
-}
-
-function formatDateTime(value: string): string {
-  return new Intl.DateTimeFormat("en", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value))
-}
-
-function getPageErrorMessage(error: unknown, fallback: string): string {
-  if (error instanceof Error) {
-    return error.message
-  }
-
-  return fallback
 }

@@ -56,7 +56,7 @@ export async function createInviteAction(formData: FormData): Promise<void> {
     )
   }
 
-  redirect(buildRedirect("/people", { message: "Invite created." }))
+  redirect(buildRedirect("/people", { message: "Invite email sent." }))
 }
 
 /**
@@ -111,10 +111,6 @@ export async function updateMemberRoleAction(formData: FormData): Promise<void> 
 
 function getActionErrorMessage(error: unknown, fallback: string): string {
   if (error instanceof OrganizationServiceError) {
-    return error.message
-  }
-
-  if (error instanceof Error) {
     return error.message
   }
 

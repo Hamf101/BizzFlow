@@ -1,5 +1,4 @@
 import Link from "next/link"
-import { redirect } from "next/navigation"
 import type { ReactElement } from "react"
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -20,13 +19,8 @@ import {
   FieldLabel,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import {
-  AuthenticationError,
-  getAuthenticatedUser,
-  type AuthenticatedUser,
-} from "@/lib/auth"
-import { buildRedirect } from "@/lib/form-utils"
-import { getCurrentOrganizationContext } from "@/services/organization-service"
+import { loadAuthenticatedPageUser } from "@/lib/page-auth"
+import { loadPageOrganizationContext } from "@/lib/page-organization-context"
 
 import { createOrganizationAction } from "./actions"
 
@@ -36,10 +30,10 @@ type DashboardSearchParams = Promise<{
 }>
 
 const sprintItems: readonly string[] = [
-  "Create tenant-scoped folders.",
-  "Upload documents through signed R2 URLs.",
-  "View document detail and version metadata.",
-  "Archive documents without deleting rows.",
+  "Replace files while preserving prior versions.",
+  "Download current or historical versions with audit records.",
+  "Discuss documents with tenant-scoped comments.",
+  "Review a member-visible document activity timeline.",
 ]
 
 export default async function DashboardPage({
@@ -48,34 +42,20 @@ export default async function DashboardPage({
   searchParams: DashboardSearchParams
 }): Promise<ReactElement> {
   const params = await searchParams
-  const user = await loadDashboardUser()
+  const user = await loadAuthenticatedPageUser("/dashboard")
   const { context, errorMessage: contextErrorMessage } =
-    await getCurrentOrganizationContext(user.id)
-      .then((context) => ({ context, errorMessage: null as string | null }))
-      .catch((error: unknown) => {
-        const errorMessage =
-          error instanceof Error
-            ? error.message
-            : "Unable to load organization context."
-
-        console.warn("dashboard_context_load_failed", {
-          userId: user.id,
-          reason: errorMessage,
-        })
-
-        return {
-          context: null,
-          errorMessage,
-        }
-      })
+    await loadPageOrganizationContext({
+      userId: user.id,
+      failureEvent: "dashboard_context_load_failed",
+    })
 
   return (
     <div className="flex flex-col gap-6">
       <section className="flex flex-col gap-2">
         <h1 className="text-2xl font-semibold tracking-normal">Dashboard</h1>
         <p className="max-w-2xl text-sm text-muted-foreground">
-          Signed in as {user.email ?? "Authenticated user"}. Sprint 4 adds
-          document storage, version metadata, and signed file access.
+          Signed in as {user.email ?? "Authenticated user"}. Sprint 5 adds
+          replacement versions, comments, activity, and audited file access.
         </p>
       </section>
 
@@ -169,8 +149,8 @@ export default async function DashboardPage({
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Sprint 4 checklist</CardTitle>
-            <CardDescription>Document workflows available in this slice.</CardDescription>
+            <CardTitle>Sprint 5 checklist</CardTitle>
+            <CardDescription>Document collaboration available in this slice.</CardDescription>
           </CardHeader>
           <CardContent>
             <ul className="flex flex-col gap-3 text-sm">
@@ -185,28 +165,16 @@ export default async function DashboardPage({
         <Card>
           <CardHeader>
             <CardTitle>Next build target</CardTitle>
-            <CardDescription>Templates and submissions come next.</CardDescription>
+            <CardDescription>The reusable template builder comes next.</CardDescription>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground">
-              The next implementation slice turns stored documents into reusable
-              collection workflows with form templates and submission review.
+              Sprint 6 turns repeatable intake requirements into reusable form
+              templates with custom fields, previews, duplication, and archival.
             </p>
           </CardContent>
         </Card>
       </div>
     </div>
   )
-}
-
-async function loadDashboardUser(): Promise<AuthenticatedUser> {
-  try {
-    return await getAuthenticatedUser()
-  } catch (error: unknown) {
-    if (error instanceof AuthenticationError) {
-      redirect(buildRedirect("/login", { next: "/dashboard" }))
-    }
-
-    throw error
-  }
 }

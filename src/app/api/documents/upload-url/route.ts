@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 
 import { getAuthenticatedUser } from "@/lib/auth"
+import { readTrustedJsonObject } from "@/lib/request-security"
 import {
   createDocumentUploadUrl,
   type CreateDocumentUploadUrlInput,
@@ -11,7 +12,6 @@ import {
   getOptionalString,
   getRequiredNumber,
   getRequiredString,
-  readJsonObject,
 } from "../_utils"
 
 /**
@@ -23,8 +23,7 @@ import {
 export async function POST(request: Request): Promise<Response> {
   try {
     const user = await getAuthenticatedUser()
-    const body = await readJsonObject(request)
-    const checksumSha256 = getOptionalString(body, "checksumSha256")
+    const body = await readTrustedJsonObject(request)
     const input: CreateDocumentUploadUrlInput = {
       actorUserId: user.id,
       organizationId: getRequiredString(body, "organizationId", "Organization id"),
@@ -38,10 +37,6 @@ export async function POST(request: Request): Promise<Response> {
       ),
       contentType: getRequiredString(body, "contentType", "Content type"),
       byteSize: getRequiredNumber(body, "byteSize", "Byte size"),
-    }
-
-    if (checksumSha256) {
-      input.checksumSha256 = checksumSha256
     }
 
     const result = await createDocumentUploadUrl(input)

@@ -4,11 +4,21 @@ import {
 } from "@supabase/supabase-js"
 
 import { getAdminSupabaseEnv } from "@/lib/env"
+import type { DocumentActivityEventRow } from "@/types/activity"
+import type { DocumentCommentRow } from "@/types/comment"
 import type {
   DocumentRow,
   DocumentVersionRow,
   FolderRow,
 } from "@/types/document"
+import type {
+  DocumentAnswerRow,
+  DocumentRecentAccessRow,
+  DocumentSigningRecipientRow,
+  DocumentSourceKind,
+  DocumentTemplateRow,
+  TemplateContent,
+} from "@/types/template"
 
 type DatabaseOrganizationRole =
   | "owner_admin"
@@ -83,9 +93,16 @@ type AuditLogRow = Record<string, unknown> & {
   created_at: string
 }
 
+type AdminDocumentRow = DocumentRow & {
+  source_kind: DocumentSourceKind
+  template_id: string | null
+  template_revision: number | null
+  template_snapshot: TemplateContent | null
+}
+
 type FolderInsert = Partial<FolderRow> & Pick<FolderRow, "id" | "org_id" | "name">
-type DocumentInsert = Partial<DocumentRow> &
-  Pick<DocumentRow, "id" | "org_id" | "title">
+type DocumentInsert = Partial<AdminDocumentRow> &
+  Pick<AdminDocumentRow, "id" | "org_id" | "title">
 type DocumentVersionInsert = Partial<DocumentVersionRow> &
   Pick<
     DocumentVersionRow,
@@ -98,8 +115,37 @@ type DocumentVersionInsert = Partial<DocumentVersionRow> &
     | "content_type"
     | "byte_size"
   >
+type DocumentCommentInsert = Partial<DocumentCommentRow> &
+  Pick<
+    DocumentCommentRow,
+    "id" | "org_id" | "document_id" | "body" | "created_by"
+  >
+type DocumentActivityEventInsert = Partial<DocumentActivityEventRow> &
+  Pick<
+    DocumentActivityEventRow,
+    "id" | "org_id" | "document_id" | "event_type"
+  >
+type DocumentTemplateInsert = Partial<DocumentTemplateRow> &
+  Pick<DocumentTemplateRow, "id" | "org_id" | "title" | "content">
+type DocumentAnswerInsert = Partial<DocumentAnswerRow> &
+  Pick<DocumentAnswerRow, "document_id" | "org_id">
+type DocumentSigningRecipientInsert = Partial<DocumentSigningRecipientRow> &
+  Pick<
+    DocumentSigningRecipientRow,
+    | "id"
+    | "org_id"
+    | "document_id"
+    | "name"
+    | "email"
+    | "token_hash"
+    | "token_expires_at"
+  >
+type DocumentRecentAccessInsert = Pick<
+  DocumentRecentAccessRow,
+  "org_id" | "user_id" | "document_id" | "last_opened_at"
+>
 
-type AdminDatabase = {
+export type AdminDatabase = {
   public: {
     Tables: {
       profiles: DatabaseTable<
@@ -129,15 +175,129 @@ type AdminDatabase = {
         Partial<AuditLogRow>
       >
       folders: DatabaseTable<FolderRow, FolderInsert, Partial<FolderRow>>
-      documents: DatabaseTable<DocumentRow, DocumentInsert, Partial<DocumentRow>>
+      documents: DatabaseTable<
+        AdminDocumentRow,
+        DocumentInsert,
+        Partial<AdminDocumentRow>
+      >
       document_versions: DatabaseTable<
         DocumentVersionRow,
         DocumentVersionInsert,
         Partial<DocumentVersionRow>
       >
+      document_comments: DatabaseTable<
+        DocumentCommentRow,
+        DocumentCommentInsert,
+        Partial<DocumentCommentRow>
+      >
+      document_activity_events: DatabaseTable<
+        DocumentActivityEventRow,
+        DocumentActivityEventInsert,
+        Partial<DocumentActivityEventRow>
+      >
+      document_templates: DatabaseTable<
+        DocumentTemplateRow,
+        DocumentTemplateInsert,
+        Partial<DocumentTemplateRow>
+      >
+      document_answers: DatabaseTable<
+        DocumentAnswerRow,
+        DocumentAnswerInsert,
+        Partial<DocumentAnswerRow>
+      >
+      document_signing_recipients: DatabaseTable<
+        DocumentSigningRecipientRow,
+        DocumentSigningRecipientInsert,
+        Partial<DocumentSigningRecipientRow>
+      >
+      document_recent_accesses: DatabaseTable<
+        DocumentRecentAccessRow,
+        DocumentRecentAccessInsert,
+        Partial<DocumentRecentAccessRow>
+      >
     }
     Views: Record<string, never>
-    Functions: Record<string, never>
+    Functions: {
+      accept_organization_invite: {
+        Args: {
+          target_invite_id: string
+          target_token: string
+          target_user_id: string
+          target_user_email: string
+        }
+        Returns: string
+      }
+      archive_document: {
+        Args: {
+          target_org_id: string
+          target_document_id: string
+          target_actor_user_id: string
+        }
+        Returns: boolean
+      }
+      create_document_comment: {
+        Args: {
+          target_org_id: string
+          target_document_id: string
+          target_comment_id: string
+          target_body: string
+          target_actor_user_id: string
+        }
+        Returns: string
+      }
+      create_pending_document_version: {
+        Args: {
+          target_org_id: string
+          target_document_id: string
+          target_version_id: string
+          target_storage_key: string
+          target_original_filename: string
+          target_content_type: string
+          target_byte_size: number
+          target_checksum_sha256: string | null
+          target_uploaded_by: string
+        }
+        Returns: string
+      }
+      complete_document_version: {
+        Args: {
+          target_org_id: string
+          target_document_id: string
+          target_version_id: string
+          target_actor_user_id: string
+        }
+        Returns: boolean
+      }
+      complete_document_recipient_signature: {
+        Args: {
+          target_org_id: string
+          target_document_id: string
+          target_recipient_id: string
+          target_token_hash: string
+          target_values: Record<string, unknown>
+          target_signature_data: Record<string, unknown> | null
+          target_initials_data: Record<string, unknown> | null
+        }
+        Returns: string
+      }
+      merge_generated_document_answers: {
+        Args: {
+          target_org_id: string
+          target_document_id: string
+          target_values: Record<string, unknown>
+        }
+        Returns: Record<string, unknown>
+      }
+      update_organization_member_role: {
+        Args: {
+          target_org_id: string
+          target_membership_id: string
+          target_actor_user_id: string
+          target_role: DatabaseOrganizationRole
+        }
+        Returns: string
+      }
+    }
   }
 }
 

@@ -5,7 +5,10 @@ import type { ReactElement } from "react"
 
 import { PermissionButton } from "@/components/auth/permission-button"
 import { RoleGuard } from "@/components/auth/role-guard"
+import { DocumentCommentSubmitButton } from "@/components/documents/document-comment-submit-button"
 import { DocumentDownloadButton } from "@/components/documents/document-download-button"
+import { DocumentOpenTracker } from "@/components/documents/document-open-tracker"
+import { DocumentReplaceForm } from "@/components/documents/document-replace-form"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -15,18 +18,23 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import {
-  AuthenticationError,
-  getAuthenticatedUser,
-  type AuthenticatedUser,
-} from "@/lib/auth"
+import { formatMediumDateTime } from "@/lib/date-format"
 import { buildRedirect } from "@/lib/form-utils"
+import { loadAuthenticatedPageUser } from "@/lib/page-auth"
+import { getPageErrorMessage } from "@/lib/page-errors"
+import { loadPageOrganizationContext } from "@/lib/page-organization-context"
 import { getDocumentDetail } from "@/services/document-service"
-import { getCurrentOrganizationContext } from "@/services/organization-service"
+import { listDocumentActivity } from "@/services/document-activity-service"
+import { listDocumentComments } from "@/services/document-comment-service"
+import type { DocumentActivityEvent } from "@/types/activity"
+import type { DocumentComment } from "@/types/comment"
 import type { DocumentDetail, DocumentVersion } from "@/types/document"
 import type { OrganizationContext } from "@/types/organization"
 
-import { archiveDocumentAction } from "../actions"
+import {
+  archiveDocumentAction,
+  createDocumentCommentAction,
+} from "../actions"
 
 type DocumentDetailParams = Promise<{
   documentId: string
@@ -46,27 +54,13 @@ export default async function DocumentDetailPage({
 }): Promise<ReactElement> {
   const { documentId } = await params
   const query = await searchParams
-  const user = await loadDocumentDetailUser(documentId)
+  const user = await loadAuthenticatedPageUser(`/documents/${documentId}`)
   const { context, errorMessage: contextErrorMessage } =
-    await getCurrentOrganizationContext(user.id)
-      .then((context) => ({ context, errorMessage: null as string | null }))
-      .catch((error: unknown) => {
-        const errorMessage = getPageErrorMessage(
-          error,
-          "Unable to load organization context."
-        )
-
-        console.warn("document_detail_context_load_failed", {
-          userId: user.id,
-          documentId,
-          reason: errorMessage,
-        })
-
-        return {
-          context: null,
-          errorMessage,
-        }
-      })
+    await loadPageOrganizationContext({
+      userId: user.id,
+      failureEvent: "document_detail_context_load_failed",
+      failureDetails: { documentId },
+    })
 
   if (!context) {
     if (contextErrorMessage) {
@@ -123,8 +117,61 @@ export default async function DocumentDetailPage({
     )
   }
 
+  if (detail.document.sourceKind === "generated") {
+    redirect(`/documents/${encodeURIComponent(detail.document.id)}/edit`)
+  }
+
+  const [commentsResult, activityResult] = await Promise.all([
+    listDocumentComments({
+      actorUserId: user.id,
+      organizationId: context.organization.id,
+      documentId: detail.document.id,
+    })
+      .then((comments) => ({ comments, errorMessage: null as string | null }))
+      .catch((error: unknown) => {
+        const errorMessage = getPageErrorMessage(
+          error,
+          "Unable to load document comments."
+        )
+
+        console.warn("document_comments_load_failed", {
+          userId: user.id,
+          organizationId: context.organization.id,
+          documentId: detail.document.id,
+          reason: errorMessage,
+        })
+
+        return { comments: [] as DocumentComment[], errorMessage }
+      }),
+    listDocumentActivity({
+      actorUserId: user.id,
+      organizationId: context.organization.id,
+      documentId: detail.document.id,
+    })
+      .then((events) => ({ events, errorMessage: null as string | null }))
+      .catch((error: unknown) => {
+        const errorMessage = getPageErrorMessage(
+          error,
+          "Unable to load document activity."
+        )
+
+        console.warn("document_activity_load_failed", {
+          userId: user.id,
+          organizationId: context.organization.id,
+          documentId: detail.document.id,
+          reason: errorMessage,
+        })
+
+        return { events: [] as DocumentActivityEvent[], errorMessage }
+      }),
+  ])
+
   return (
     <DocumentDetailShell params={query}>
+      <DocumentOpenTracker
+        documentId={detail.document.id}
+        organizationId={context.organization.id}
+      />
       <section className="flex flex-col gap-2">
         <Link
           className="text-sm font-medium text-primary underline-offset-4 hover:underline"
@@ -148,11 +195,38 @@ export default async function DocumentDetailPage({
       </section>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="flex flex-col gap-4">
-          <DocumentMetadataCard context={context} detail={detail} />
-          <VersionListCard versions={detail.versions} />
+        <div className="contents lg:flex lg:flex-col lg:gap-4">
+          <div className="order-1 lg:order-0">
+            <DocumentMetadataCard context={context} detail={detail} />
+          </div>
+          <div className="order-3 lg:order-0">
+            <VersionListCard
+              currentVersionId={detail.document.currentVersionId}
+              documentId={detail.document.id}
+              organizationId={context.organization.id}
+              versions={detail.versions}
+            />
+          </div>
+          <div className="order-5 lg:order-0">
+            <DocumentActivityCard
+              errorMessage={activityResult.errorMessage}
+              events={activityResult.events}
+            />
+          </div>
         </div>
-        <DocumentActionsCard context={context} detail={detail} />
+        <div className="contents lg:flex lg:flex-col lg:gap-4">
+          <div className="order-2 lg:order-0">
+            <DocumentActionsCard context={context} detail={detail} />
+          </div>
+          <div className="order-4 lg:order-0">
+            <DocumentCommentsCard
+              comments={commentsResult.comments}
+              context={context}
+              detail={detail}
+              errorMessage={commentsResult.errorMessage}
+            />
+          </div>
+        </div>
       </div>
     </DocumentDetailShell>
   )
@@ -200,10 +274,13 @@ function DocumentMetadataCard({
         <CardDescription>{context.organization.name}</CardDescription>
       </CardHeader>
       <CardContent className="grid gap-3 text-sm md:grid-cols-3">
-        <MetadataItem label="Created" value={formatDateTime(detail.document.createdAt)} />
+        <MetadataItem
+          label="Created"
+          value={formatMediumDateTime(detail.document.createdAt)}
+        />
         <MetadataItem
           label="Updated"
-          value={formatDateTime(detail.document.updatedAt)}
+          value={formatMediumDateTime(detail.document.updatedAt)}
         />
         <MetadataItem
           label="Current version"
@@ -215,7 +292,7 @@ function DocumentMetadataCard({
           label="Archive status"
           value={
             detail.document.archivedAt
-              ? `Archived ${formatDateTime(detail.document.archivedAt)}`
+              ? `Archived ${formatMediumDateTime(detail.document.archivedAt)}`
               : "Active"
           }
         />
@@ -240,8 +317,14 @@ function MetadataItem({
 }
 
 function VersionListCard({
+  currentVersionId,
+  documentId,
+  organizationId,
   versions,
 }: {
+  currentVersionId: string | null
+  documentId: string
+  organizationId: string
   versions: DocumentVersion[]
 }): ReactElement {
   return (
@@ -272,19 +355,167 @@ function VersionListCard({
                     <span className="text-xs text-muted-foreground">
                       {version.contentType} · {formatBytes(version.byteSize)}
                     </span>
+                    <span className="text-xs text-muted-foreground">
+                      Added {formatMediumDateTime(version.createdAt)}
+                    </span>
                   </div>
                 </div>
-                <div className="flex flex-col items-start gap-1 md:items-end">
+                <div className="flex flex-col items-start gap-2 md:items-end">
                   <Badge variant={version.status === "available" ? "secondary" : "outline"}>
-                    {version.status === "available" ? "Available" : "Pending"}
+                    {version.id === currentVersionId
+                      ? "Current"
+                      : version.status === "available"
+                        ? "Previous"
+                        : "Pending"}
                   </Badge>
                   <span className="text-xs text-muted-foreground">
                     v{version.versionNumber}
                   </span>
+                  {version.status === "available" && (
+                    <DocumentDownloadButton
+                      documentId={documentId}
+                      label={`Download v${version.versionNumber}`}
+                      organizationId={organizationId}
+                      versionId={version.id}
+                    />
+                  )}
                 </div>
               </div>
             ))}
           </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+function DocumentActivityCard({
+  errorMessage,
+  events,
+}: {
+  errorMessage: string | null
+  events: DocumentActivityEvent[]
+}): ReactElement {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Activity</CardTitle>
+        <CardDescription>Recent changes to this document.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {errorMessage ? (
+          <Alert variant="destructive">
+            <AlertTitle>Activity unavailable</AlertTitle>
+            <AlertDescription>{errorMessage}</AlertDescription>
+          </Alert>
+        ) : events.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No activity yet.</p>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {events.map((event: DocumentActivityEvent) => (
+              <div
+                className="flex flex-col gap-1 rounded-lg border bg-background p-3"
+                key={event.id}
+              >
+                <p className="text-sm">
+                  <span className="font-medium">{event.actorDisplayName}</span>{" "}
+                  {formatActivityDescription(event)}
+                </p>
+                <span className="text-xs text-muted-foreground">
+                  {formatMediumDateTime(event.createdAt)}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+function DocumentCommentsCard({
+  comments,
+  context,
+  detail,
+  errorMessage,
+}: {
+  comments: DocumentComment[]
+  context: OrganizationContext
+  detail: DocumentDetail
+  errorMessage: string | null
+}): ReactElement {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Comments</CardTitle>
+        <CardDescription>Keep document discussion with the file.</CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        {errorMessage ? (
+          <Alert variant="destructive">
+            <AlertTitle>Comments unavailable</AlertTitle>
+            <AlertDescription>{errorMessage}</AlertDescription>
+          </Alert>
+        ) : comments.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No comments yet.</p>
+        ) : (
+          <div
+            aria-label="Document comments"
+            className="flex max-h-80 flex-col gap-3 overflow-y-auto"
+            role="region"
+            tabIndex={0}
+          >
+            {comments.map((comment: DocumentComment) => (
+              <div
+                className="flex flex-col gap-1 rounded-lg border bg-background p-3"
+                key={comment.id}
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-sm font-medium">
+                    {comment.authorDisplayName}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {formatMediumDateTime(comment.createdAt)}
+                  </span>
+                </div>
+                <p className="whitespace-pre-wrap break-words text-sm text-muted-foreground">
+                  {comment.body}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {!detail.document.archivedAt && (
+          <RoleGuard
+            action="document_comments:create"
+            role={context.membership.role}
+          >
+            <form action={createDocumentCommentAction} className="flex flex-col gap-3">
+              <input
+                name="organizationId"
+                type="hidden"
+                value={context.organization.id}
+              />
+              <input
+                name="documentId"
+                type="hidden"
+                value={detail.document.id}
+              />
+              <label className="text-sm font-medium" htmlFor="document-comment">
+                Add comment
+              </label>
+              <textarea
+                className="min-h-24 w-full resize-y rounded-lg border border-input bg-transparent px-3 py-2 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+                id="document-comment"
+                maxLength={2000}
+                name="body"
+                placeholder="Share context or a review note"
+                required
+              />
+              <DocumentCommentSubmitButton role={context.membership.role} />
+            </form>
+          </RoleGuard>
         )}
       </CardContent>
     </Card>
@@ -302,7 +533,7 @@ function DocumentActionsCard({
     <Card>
       <CardHeader>
         <CardTitle>Actions</CardTitle>
-        <CardDescription>Download or archive this document.</CardDescription>
+        <CardDescription>Download, replace, or archive this document.</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         <DocumentDownloadButton
@@ -310,6 +541,17 @@ function DocumentActionsCard({
           documentId={detail.document.id}
           organizationId={context.organization.id}
         />
+        {!detail.document.archivedAt && (
+          <RoleGuard
+            role={context.membership.role}
+            action="document_versions:create"
+          >
+            <DocumentReplaceForm
+              documentId={detail.document.id}
+              organizationId={context.organization.id}
+            />
+          </RoleGuard>
+        )}
         <RoleGuard role={context.membership.role} action="documents:archive">
           <form action={archiveDocumentAction}>
             <input
@@ -335,23 +577,24 @@ function DocumentActionsCard({
   )
 }
 
-async function loadDocumentDetailUser(documentId: string): Promise<AuthenticatedUser> {
-  try {
-    return await getAuthenticatedUser()
-  } catch (error: unknown) {
-    if (error instanceof AuthenticationError) {
-      redirect(buildRedirect("/login", { next: `/documents/${documentId}` }))
-    }
+function formatActivityDescription(event: DocumentActivityEvent): string {
+  const versionNumber = event.metadata.versionNumber
 
-    throw error
+  if (event.eventType === "document.uploaded") {
+    return "uploaded the first version."
   }
-}
 
-function formatDateTime(value: string): string {
-  return new Intl.DateTimeFormat("en", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value))
+  if (event.eventType === "document.replaced") {
+    return typeof versionNumber === "number"
+      ? `uploaded version ${versionNumber}.`
+      : "uploaded a replacement version."
+  }
+
+  if (event.eventType === "document.commented") {
+    return "added a comment."
+  }
+
+  return "archived the document."
 }
 
 function formatBytes(value: number): string {
@@ -364,12 +607,4 @@ function formatBytes(value: number): string {
   }
 
   return `${(value / (1024 * 1024)).toFixed(1)} MB`
-}
-
-function getPageErrorMessage(error: unknown, fallback: string): string {
-  if (error instanceof Error) {
-    return error.message
-  }
-
-  return fallback
 }

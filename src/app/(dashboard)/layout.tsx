@@ -43,10 +43,10 @@ export default async function DashboardLayout({
           <div className="flex flex-col gap-1">
             <div className="flex items-center gap-2">
               <span className="text-base font-semibold">BizFlow Docs</span>
-              <Badge variant="secondary">Sprint 4</Badge>
+              <Badge variant="secondary">Guided documents</Badge>
             </div>
             <span className="text-sm text-muted-foreground">
-              Document workspace for folders, uploads, and review workflows.
+              Templates, versioned files, signing, and review workflows.
             </span>
           </div>
           <form action={signOutAction}>
@@ -73,7 +73,9 @@ export default async function DashboardLayout({
             <Link className="hover:text-foreground" href="/documents">
               Documents
             </Link>
-            <span>Templates</span>
+            <Link className="hover:text-foreground" href="/templates">
+              Templates
+            </Link>
             <span>Submissions</span>
             <span>Tasks</span>
           </nav>

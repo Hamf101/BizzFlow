@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server"
 
 import { getAuthenticatedUser } from "@/lib/auth"
+import { readTrustedJsonObject } from "@/lib/request-security"
 import { completeDocumentUpload } from "@/services/document-service"
 
 import {
   createDocumentRouteErrorResponse,
   getRequiredString,
-  readJsonObject,
 } from "../../_utils"
 
 type CompleteUploadRouteContext = {
@@ -26,7 +26,7 @@ export async function POST(
 ): Promise<Response> {
   try {
     const user = await getAuthenticatedUser()
-    const body = await readJsonObject(request)
+    const body = await readTrustedJsonObject(request)
     const { documentId } = await context.params
     const version = await completeDocumentUpload({
       actorUserId: user.id,

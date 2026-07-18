@@ -1,11 +1,10 @@
-import { FileText, Folder } from "lucide-react"
+import { ChevronRight, FileText, Folder, Plus } from "lucide-react"
 import Link from "next/link"
 import { redirect } from "next/navigation"
-import type { ReactElement } from "react"
+import type { ReactElement, ReactNode } from "react"
 
 import { PermissionButton } from "@/components/auth/permission-button"
 import { RoleGuard } from "@/components/auth/role-guard"
-import { DocumentUploadForm } from "@/components/documents/document-upload-form"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -15,60 +14,49 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import {
-  Field,
-  FieldGroup,
-  FieldLabel,
-} from "@/components/ui/field"
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import {
-  AuthenticationError,
-  getAuthenticatedUser,
-  type AuthenticatedUser,
-} from "@/lib/auth"
+  formatMediumDate,
+  formatMediumDateTime,
+} from "@/lib/date-format"
 import { buildRedirect } from "@/lib/form-utils"
-import { getCurrentOrganizationContext } from "@/services/organization-service"
+import { loadAuthenticatedPageUser } from "@/lib/page-auth"
+import { buildDocumentFolderPath } from "@/lib/page-document-folders"
+import { getPageErrorMessage } from "@/lib/page-errors"
+import { loadPageOrganizationContext } from "@/lib/page-organization-context"
 import { listDocumentWorkspace } from "@/services/document-service"
-import type {
-  DocumentFolder,
-  DocumentSummary,
-  DocumentWorkspace,
-} from "@/types/document"
+import { listRecentDocuments } from "@/services/template-service"
+import type { DocumentFolder, DocumentSummary } from "@/types/document"
 import type { OrganizationContext } from "@/types/organization"
+import type { RecentDocument } from "@/types/template"
 
 import { createFolderAction } from "./actions"
 
 type DocumentsSearchParams = Promise<{
   error?: string
+  folderId?: string
   message?: string
 }>
 
+/**
+ * Renders recent documents plus the current folder's navigable contents.
+ *
+ * @param props - Optional status messages and active folder query parameter.
+ * @returns Tenant-scoped Documents workspace.
+ */
 export default async function DocumentsPage({
   searchParams,
 }: {
   searchParams: DocumentsSearchParams
 }): Promise<ReactElement> {
   const params = await searchParams
-  const user = await loadDocumentsUser()
+  const user = await loadAuthenticatedPageUser("/documents")
   const { context, errorMessage: contextErrorMessage } =
-    await getCurrentOrganizationContext(user.id)
-      .then((context) => ({ context, errorMessage: null as string | null }))
-      .catch((error: unknown) => {
-        const errorMessage = getPageErrorMessage(
-          error,
-          "Unable to load organization context."
-        )
-
-        console.warn("documents_context_load_failed", {
-          userId: user.id,
-          reason: errorMessage,
-        })
-
-        return {
-          context: null,
-          errorMessage,
-        }
-      })
+    await loadPageOrganizationContext({
+      userId: user.id,
+      failureEvent: "documents_context_load_failed",
+    })
 
   if (!context) {
     if (contextErrorMessage) {
@@ -89,67 +77,120 @@ export default async function DocumentsPage({
     )
   }
 
-  const { workspace, errorMessage: workspaceErrorMessage } =
-    await listDocumentWorkspace({
+  const [workspaceResult, recentResult] = await Promise.allSettled([
+    listDocumentWorkspace({
       actorUserId: user.id,
       organizationId: context.organization.id,
+    }),
+    listRecentDocuments({
+      actorUserId: user.id,
+      organizationId: context.organization.id,
+      limit: 6,
+    }),
+  ])
+
+  if (workspaceResult.status === "rejected") {
+    const errorMessage = getPageErrorMessage(
+      workspaceResult.reason,
+      "Unable to load documents."
+    )
+    console.warn("documents_workspace_load_failed", {
+      userId: user.id,
+      organizationId: context.organization.id,
+      reason: errorMessage,
     })
-      .then((workspace) => ({ workspace, errorMessage: null as string | null }))
-      .catch((error: unknown) => {
-        const errorMessage = getPageErrorMessage(
-          error,
-          "Unable to load documents."
-        )
-
-        console.warn("documents_workspace_load_failed", {
-          userId: user.id,
-          organizationId: context.organization.id,
-          reason: errorMessage,
-        })
-
-        return {
-          workspace: null,
-          errorMessage,
-        }
-      })
-
-  if (!workspace) {
     return (
       <DocumentsShell params={params}>
         <Alert variant="destructive">
           <AlertTitle>Documents unavailable</AlertTitle>
-          <AlertDescription>{workspaceErrorMessage}</AlertDescription>
+          <AlertDescription>{errorMessage}</AlertDescription>
         </Alert>
       </DocumentsShell>
     )
   }
 
+  const workspace = workspaceResult.value
+  const recentDocuments =
+    recentResult.status === "fulfilled" ? recentResult.value : []
+
+  if (recentResult.status === "rejected") {
+    console.warn("recent_documents_load_failed", {
+      userId: user.id,
+      organizationId: context.organization.id,
+      reason: getPageErrorMessage(
+        recentResult.reason,
+        "Unable to load recent documents."
+      ),
+    })
+  }
+
+  const activeFolder = params.folderId
+    ? workspace.folders.find(
+        (folder: DocumentFolder): boolean => folder.id === params.folderId
+      ) ?? null
+    : null
+
+  if (params.folderId && !activeFolder) {
+    return (
+      <DocumentsShell params={params}>
+        <Alert variant="destructive">
+          <AlertTitle>Folder unavailable</AlertTitle>
+          <AlertDescription>
+            This folder does not exist or is no longer active.
+          </AlertDescription>
+        </Alert>
+        <Link className="text-sm font-medium underline" href="/documents">
+          Return to Documents
+        </Link>
+      </DocumentsShell>
+    )
+  }
+
+  const activeFolderId = activeFolder?.id ?? null
+  const folders = workspace.folders.filter(
+    (folder: DocumentFolder): boolean =>
+      folder.parentFolderId === activeFolderId
+  )
+  const documents = workspace.documents.filter(
+    (document: DocumentSummary): boolean =>
+      document.folderId === activeFolderId
+  )
+  const breadcrumbs = buildDocumentFolderPath(
+    activeFolder,
+    workspace.folders
+  )
+
   return (
     <DocumentsShell params={params}>
-      <section className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold tracking-normal">Documents</h1>
-        <p className="max-w-2xl text-sm text-muted-foreground">
-          Store folders and documents for {context.organization.name}.
-        </p>
+      <section className="flex flex-col gap-3">
+        <DocumentBreadcrumbs folders={breadcrumbs} />
+        <div className="flex flex-col gap-2">
+          <h1 className="text-2xl font-semibold tracking-normal">
+            {activeFolder?.name ?? "Documents"}
+          </h1>
+          <p className="max-w-2xl text-sm text-muted-foreground">
+            Recently opened documents and organized files for{" "}
+            {context.organization.name}.
+          </p>
+        </div>
       </section>
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="flex flex-col gap-4">
-          <DocumentsCard documents={workspace.documents} />
-          <FoldersCard folders={workspace.folders} />
-        </div>
-        <div className="flex flex-col gap-4">
-          <RoleGuard role={context.membership.role} action="documents:create">
-            <UploadCard context={context} workspace={workspace} />
-          </RoleGuard>
-          <RoleGuard role={context.membership.role} action="folders:manage">
-            <CreateFolderCard
-              folders={workspace.folders}
-              organizationId={context.organization.id}
-              role={context.membership.role}
-            />
-          </RoleGuard>
-        </div>
+      <RecentDocumentsCard documents={recentDocuments} />
+
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <FolderContentsCard
+          activeFolder={activeFolder}
+          documents={documents}
+          folders={folders}
+          role={context.membership.role}
+        />
+        <RoleGuard role={context.membership.role} action="folders:manage">
+          <CreateFolderCard
+            activeFolderId={activeFolderId}
+            organizationId={context.organization.id}
+            role={context.membership.role}
+          />
+        </RoleGuard>
       </div>
     </DocumentsShell>
   )
@@ -159,71 +200,92 @@ function DocumentsShell({
   children,
   params,
 }: {
-  children: ReactElement | ReactElement[]
+  children: ReactNode
   params: Awaited<DocumentsSearchParams>
 }): ReactElement {
   return (
     <div className="flex flex-col gap-6">
-      {params.error && (
+      {params.error ? (
         <Alert variant="destructive">
           <AlertTitle>Documents action failed</AlertTitle>
           <AlertDescription>{params.error}</AlertDescription>
         </Alert>
-      )}
-
-      {params.message && (
+      ) : null}
+      {params.message ? (
         <Alert>
           <AlertTitle>Documents updated</AlertTitle>
           <AlertDescription>{params.message}</AlertDescription>
         </Alert>
-      )}
-
+      ) : null}
       {children}
     </div>
   )
 }
 
-function DocumentsCard({
+function DocumentBreadcrumbs({
+  folders,
+}: {
+  folders: DocumentFolder[]
+}): ReactElement {
+  return (
+    <nav aria-label="Document folder path">
+      <ol className="flex flex-wrap items-center gap-1 text-sm text-muted-foreground">
+        <li>
+          <Link className="transition-colors hover:text-foreground" href="/documents">
+            Documents
+          </Link>
+        </li>
+        {folders.map((folder: DocumentFolder) => (
+          <li className="flex items-center gap-1" key={folder.id}>
+            <ChevronRight aria-hidden="true" className="size-4" />
+            <Link
+              className="transition-colors hover:text-foreground"
+              href={getFolderHref(folder.id)}
+            >
+              {folder.name}
+            </Link>
+          </li>
+        ))}
+      </ol>
+    </nav>
+  )
+}
+
+function RecentDocumentsCard({
   documents,
 }: {
-  documents: DocumentSummary[]
+  documents: RecentDocument[]
 }): ReactElement {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Active documents</CardTitle>
-        <CardDescription>Current organization files.</CardDescription>
+        <CardTitle>Recent documents</CardTitle>
+        <CardDescription>
+          The documents you opened most recently, newest first.
+        </CardDescription>
       </CardHeader>
       <CardContent>
         {documents.length === 0 ? (
-          <Alert>
-            <AlertTitle>No documents yet</AlertTitle>
-            <AlertDescription>Use the upload panel to add the first file.</AlertDescription>
-          </Alert>
+          <p className="text-sm text-muted-foreground">
+            Open a document and it will appear here.
+          </p>
         ) : (
-          <div className="flex flex-col gap-3">
-            {documents.map((document: DocumentSummary) => (
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {documents.map((document: RecentDocument) => (
               <Link
-                className="grid gap-3 rounded-lg border bg-background p-3 transition-colors hover:bg-muted/50 md:grid-cols-[minmax(0,1fr)_140px]"
-                href={`/documents/${document.id}`}
-                key={document.id}
+                className="flex min-w-0 gap-3 rounded-xl border bg-background p-4 transition-colors hover:bg-muted/50"
+                href={getDocumentHref(document.documentId, document.sourceKind)}
+                key={document.documentId}
               >
-                <div className="flex min-w-0 gap-3">
-                  <FileText className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-                  <div className="flex min-w-0 flex-col gap-1">
-                    <span className="truncate text-sm font-medium">
-                      {document.title}
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      Created {formatDate(document.createdAt)}
-                    </span>
-                  </div>
-                </div>
-                <div className="flex items-start justify-start md:justify-end">
-                  <Badge variant={document.currentVersionId ? "secondary" : "outline"}>
-                    {document.currentVersionId ? "Available" : "Pending upload"}
-                  </Badge>
-                </div>
+                <FileText className="mt-0.5 size-5 shrink-0 text-muted-foreground" />
+                <span className="flex min-w-0 flex-col gap-1">
+                  <span className="truncate text-sm font-medium">
+                    {document.title}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    Opened {formatMediumDateTime(document.lastOpenedAt)}
+                  </span>
+                </span>
               </Link>
             ))}
           </div>
@@ -233,79 +295,117 @@ function DocumentsCard({
   )
 }
 
-function FoldersCard({
+function FolderContentsCard({
+  activeFolder,
+  documents,
   folders,
+  role,
 }: {
+  activeFolder: DocumentFolder | null
+  documents: DocumentSummary[]
   folders: DocumentFolder[]
+  role: OrganizationContext["membership"]["role"]
 }): ReactElement {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Folders</CardTitle>
-        <CardDescription>Active document groups.</CardDescription>
-      </CardHeader>
-      <CardContent>
-        {folders.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No folders yet.</p>
-        ) : (
-          <div className="grid gap-3 md:grid-cols-2">
-            {folders.map((folder: DocumentFolder) => (
-              <div
-                className="flex items-center gap-2 rounded-lg border bg-background p-3"
-                key={folder.id}
-              >
-                <Folder className="size-4 shrink-0 text-muted-foreground" />
-                <span className="truncate text-sm font-medium">{folder.name}</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  )
-}
+  const addDocumentHref = activeFolder
+    ? `/documents/new?folderId=${encodeURIComponent(activeFolder.id)}`
+    : "/documents/new"
 
-function UploadCard({
-  context,
-  workspace,
-}: {
-  context: OrganizationContext
-  workspace: DocumentWorkspace
-}): ReactElement {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Upload document</CardTitle>
-        <CardDescription>Add a file to the workspace.</CardDescription>
+        <CardTitle>{activeFolder ? "Folder contents" : "Files and folders"}</CardTitle>
+        <CardDescription>
+          Open a folder or document, or add a document in this location.
+        </CardDescription>
       </CardHeader>
       <CardContent>
-        <DocumentUploadForm
-          folders={workspace.folders}
-          organizationId={context.organization.id}
-        />
+        <div className="grid gap-3 sm:grid-cols-2">
+          {folders.map((folder: DocumentFolder) => (
+            <Link
+              className="flex items-center gap-3 rounded-xl border bg-background p-4 transition-colors hover:bg-muted/50"
+              href={getFolderHref(folder.id)}
+              key={folder.id}
+            >
+              <Folder className="size-5 shrink-0 text-muted-foreground" />
+              <span className="truncate text-sm font-medium">{folder.name}</span>
+            </Link>
+          ))}
+          {documents.map((document: DocumentSummary) => (
+            <Link
+              className="flex min-w-0 items-start gap-3 rounded-xl border bg-background p-4 transition-colors hover:bg-muted/50"
+              href={getDocumentHref(
+                document.id,
+                document.sourceKind ?? "upload"
+              )}
+              key={document.id}
+            >
+              <FileText className="mt-0.5 size-5 shrink-0 text-muted-foreground" />
+              <span className="flex min-w-0 flex-1 flex-col gap-1">
+                <span className="truncate text-sm font-medium">
+                  {document.title}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  Updated {formatMediumDate(document.updatedAt)}
+                </span>
+              </span>
+              <Badge variant="outline">
+                {document.sourceKind === "generated" ? "Editable" : "File"}
+              </Badge>
+            </Link>
+          ))}
+          <RoleGuard role={role} action="documents:create">
+            <Link
+              aria-label="Add a document in this folder"
+              className="flex min-h-24 flex-col items-center justify-center gap-2 rounded-xl border border-dashed bg-muted/20 p-4 text-center text-sm font-medium transition-colors hover:bg-muted/60"
+              href={addDocumentHref}
+            >
+              <span className="flex size-9 items-center justify-center rounded-full border bg-background">
+                <Plus aria-hidden="true" className="size-5" />
+              </span>
+              Add document
+            </Link>
+          </RoleGuard>
+        </div>
+        {folders.length === 0 && documents.length === 0 ? (
+          <p className="mt-4 text-sm text-muted-foreground">
+            This location is empty.
+          </p>
+        ) : null}
       </CardContent>
     </Card>
   )
 }
 
 function CreateFolderCard({
-  folders,
+  activeFolderId,
   organizationId,
   role,
 }: {
-  folders: DocumentFolder[]
+  activeFolderId: string | null
   organizationId: string
   role: OrganizationContext["membership"]["role"]
 }): ReactElement {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Create folder</CardTitle>
-        <CardDescription>Add a document group.</CardDescription>
+        <CardTitle>{activeFolderId ? "Create subfolder" : "Create folder"}</CardTitle>
+        <CardDescription>
+          Add a folder in the current location.
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <form action={createFolderAction} className="flex flex-col gap-5">
           <input type="hidden" name="organizationId" value={organizationId} />
+          <input
+            type="hidden"
+            name="parentFolderId"
+            value={activeFolderId ?? ""}
+          />
+          <input
+            type="hidden"
+            name="returnFolderId"
+            value={activeFolderId ?? ""}
+          />
           <FieldGroup>
             <Field>
               <FieldLabel htmlFor="folder-name">Folder name</FieldLabel>
@@ -318,21 +418,6 @@ function CreateFolderCard({
                 type="text"
               />
             </Field>
-            <Field>
-              <FieldLabel htmlFor="parent-folder">Parent folder</FieldLabel>
-              <select
-                className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
-                id="parent-folder"
-                name="parentFolderId"
-              >
-                <option value="">None</option>
-                {folders.map((folder: DocumentFolder) => (
-                  <option key={folder.id} value={folder.id}>
-                    {folder.name}
-                  </option>
-                ))}
-              </select>
-            </Field>
           </FieldGroup>
           <PermissionButton action="folders:manage" role={role} type="submit">
             Create folder
@@ -343,28 +428,15 @@ function CreateFolderCard({
   )
 }
 
-async function loadDocumentsUser(): Promise<AuthenticatedUser> {
-  try {
-    return await getAuthenticatedUser()
-  } catch (error: unknown) {
-    if (error instanceof AuthenticationError) {
-      redirect(buildRedirect("/login", { next: "/documents" }))
-    }
-
-    throw error
-  }
+function getFolderHref(folderId: string): string {
+  return `/documents?folderId=${encodeURIComponent(folderId)}`
 }
 
-function formatDate(value: string): string {
-  return new Intl.DateTimeFormat("en", {
-    dateStyle: "medium",
-  }).format(new Date(value))
-}
-
-function getPageErrorMessage(error: unknown, fallback: string): string {
-  if (error instanceof Error) {
-    return error.message
-  }
-
-  return fallback
+function getDocumentHref(
+  documentId: string,
+  sourceKind: "upload" | "generated"
+): string {
+  return sourceKind === "generated"
+    ? `/documents/${encodeURIComponent(documentId)}/edit`
+    : `/documents/${encodeURIComponent(documentId)}`
 }

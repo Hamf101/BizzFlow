@@ -1,34 +1,8 @@
 import { NextResponse } from "next/server"
 
 import { AuthenticationError } from "@/lib/auth"
+import { RequestSecurityError } from "@/lib/request-security"
 import { DocumentServiceError } from "@/services/document-service"
-
-/**
- * Reads a JSON object request body.
- *
- * @param request - Incoming route request.
- * @returns Parsed JSON object.
- * @throws DocumentServiceError when the body is missing, invalid, or not an object.
- */
-export async function readJsonObject(
-  request: Request
-): Promise<Record<string, unknown>> {
-  try {
-    const body: unknown = await request.json()
-
-    if (!body || typeof body !== "object" || Array.isArray(body)) {
-      throw new DocumentServiceError("Request body must be a JSON object.", 400)
-    }
-
-    return body as Record<string, unknown>
-  } catch (error: unknown) {
-    if (error instanceof DocumentServiceError) {
-      throw error
-    }
-
-    throw new DocumentServiceError("Request body must be valid JSON.", 400)
-  }
-}
 
 /**
  * Reads a required string field from a parsed JSON body.
@@ -76,6 +50,27 @@ export function getOptionalString(
 }
 
 /**
+ * Reads a string that may be omitted but cannot be blank or non-string when present.
+ *
+ * @param body - Parsed JSON body.
+ * @param key - Field name to read.
+ * @param label - User-safe field label for validation errors.
+ * @returns Trimmed string value, or undefined when the field is omitted.
+ * @throws DocumentServiceError when a present field is not a non-empty string.
+ */
+export function getOptionalNonEmptyString(
+  body: Record<string, unknown>,
+  key: string,
+  label: string
+): string | undefined {
+  if (!(key in body)) {
+    return undefined
+  }
+
+  return getRequiredString(body, key, label)
+}
+
+/**
  * Reads a required numeric field from a parsed JSON body.
  *
  * @param body - Parsed JSON body.
@@ -110,6 +105,18 @@ export function createDocumentRouteErrorResponse(
   error: unknown,
   routeName: string
 ): Response {
+  if (error instanceof RequestSecurityError) {
+    console.warn("document_route_rejected", {
+      routeName,
+      reason: error.message,
+      statusCode: error.statusCode,
+    })
+    return NextResponse.json(
+      { error: error.message },
+      { status: error.statusCode }
+    )
+  }
+
   if (error instanceof AuthenticationError) {
     console.warn("document_route_rejected", {
       routeName,

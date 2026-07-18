@@ -12,6 +12,11 @@ import {
   FieldLabel,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import {
+  completeDocumentUploadRequest,
+  readApiErrorMessage,
+  uploadFileToSignedUrl,
+} from "@/components/documents/document-upload-client"
 import type {
   CreateDocumentUploadUrlResponse,
   DocumentFolder,
@@ -20,6 +25,8 @@ import type {
 type DocumentUploadFormProps = {
   organizationId: string
   folders: DocumentFolder[]
+  initialFolderId?: string | null
+  lockFolderSelection?: boolean
 }
 
 const selectClassName =
@@ -28,12 +35,14 @@ const selectClassName =
 /**
  * Uploads a document through the signed URL API workflow.
  *
- * @param props - Organization and available folders for document placement.
+ * @param props - Organization, available folders, and optional fixed placement.
  * @returns Client-side upload form.
  */
 export function DocumentUploadForm({
   organizationId,
   folders,
+  initialFolderId = null,
+  lockFolderSelection = false,
 }: DocumentUploadFormProps): ReactElement {
   const router = useRouter()
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
@@ -54,8 +63,16 @@ export function DocumentUploadForm({
 
       const uploadMetadata = await requestUploadUrl(formData, file, organizationId)
 
-      await uploadFileToR2(uploadMetadata.uploadUrl, file)
-      await completeUpload(uploadMetadata, organizationId)
+      await uploadFileToSignedUrl(
+        uploadMetadata.uploadUrl,
+        file,
+        "Unable to upload file to storage."
+      )
+      await completeDocumentUploadRequest(
+        uploadMetadata,
+        organizationId,
+        "Unable to complete upload."
+      )
 
       router.push(`/documents/${uploadMetadata.documentId}`)
       router.refresh()
@@ -91,17 +108,30 @@ export function DocumentUploadForm({
             type="text"
           />
         </Field>
-        <Field>
-          <FieldLabel htmlFor="document-folder">Folder</FieldLabel>
-          <select className={selectClassName} id="document-folder" name="folderId">
-            <option value="">No folder</option>
-            {folders.map((folder: DocumentFolder) => (
-              <option key={folder.id} value={folder.id}>
-                {folder.name}
-              </option>
-            ))}
-          </select>
-        </Field>
+        {lockFolderSelection ? (
+          <input
+            name="folderId"
+            type="hidden"
+            value={initialFolderId ?? ""}
+          />
+        ) : (
+          <Field>
+            <FieldLabel htmlFor="document-folder">Folder</FieldLabel>
+            <select
+              className={selectClassName}
+              defaultValue={initialFolderId ?? ""}
+              id="document-folder"
+              name="folderId"
+            >
+              <option value="">No folder</option>
+              {folders.map((folder: DocumentFolder) => (
+                <option key={folder.id} value={folder.id}>
+                  {folder.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
         <Field>
           <FieldLabel htmlFor="document-file">File</FieldLabel>
           <Input
@@ -151,65 +181,12 @@ async function requestUploadUrl(
   })
 
   if (!response.ok) {
-    throw new Error(await readErrorMessage(response, "Unable to prepare upload."))
+    throw new Error(
+      await readApiErrorMessage(response, "Unable to prepare upload.")
+    )
   }
 
   return (await response.json()) as CreateDocumentUploadUrlResponse
-}
-
-async function uploadFileToR2(uploadUrl: string, file: File): Promise<void> {
-  const response = await fetch(uploadUrl, {
-    method: "PUT",
-    headers: { "content-type": file.type },
-    body: file,
-  })
-
-  if (!response.ok) {
-    throw new Error("Unable to upload file to storage.")
-  }
-}
-
-async function completeUpload(
-  uploadMetadata: CreateDocumentUploadUrlResponse,
-  organizationId: string
-): Promise<void> {
-  const response = await fetch(
-    `/api/documents/${uploadMetadata.documentId}/complete-upload`,
-    {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        organizationId,
-        versionId: uploadMetadata.versionId,
-      }),
-    }
-  )
-
-  if (!response.ok) {
-    throw new Error(await readErrorMessage(response, "Unable to complete upload."))
-  }
-}
-
-async function readErrorMessage(
-  response: Response,
-  fallbackMessage: string
-): Promise<string> {
-  try {
-    const body: unknown = await response.json()
-
-    if (
-      body &&
-      typeof body === "object" &&
-      "error" in body &&
-      typeof body.error === "string"
-    ) {
-      return body.error
-    }
-  } catch {
-    return fallbackMessage
-  }
-
-  return fallbackMessage
 }
 
 function getFormValue(formData: FormData, key: string): string {

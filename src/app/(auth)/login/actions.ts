@@ -3,6 +3,8 @@
 import { redirect } from "next/navigation"
 import { z } from "zod"
 
+import { getSafeNextPath } from "@/lib/auth-redirects"
+import { buildRedirect, getFormString } from "@/lib/form-utils"
 import { createClient } from "@/lib/supabase/server"
 
 const loginSchema = z.object({
@@ -11,21 +13,11 @@ const loginSchema = z.object({
   next: z.string().optional(),
 })
 
-function getStringValue(formData: FormData, key: string): string {
-  const value = formData.get(key)
-  return typeof value === "string" ? value : ""
-}
-
-function buildRedirect(pathname: string, params: Record<string, string>): string {
-  const searchParams = new URLSearchParams(params)
-  return `${pathname}?${searchParams.toString()}`
-}
-
 export async function loginAction(formData: FormData): Promise<void> {
   const parsed = loginSchema.safeParse({
-    email: getStringValue(formData, "email"),
-    password: getStringValue(formData, "password"),
-    next: getStringValue(formData, "next") || undefined,
+    email: getFormString(formData, "email"),
+    password: getFormString(formData, "password"),
+    next: getFormString(formData, "next") || undefined,
   })
 
   if (!parsed.success) {
@@ -53,12 +45,12 @@ export async function loginAction(formData: FormData): Promise<void> {
   })
 
   if (error) {
-    console.error("login_failed", {
-      email: parsed.data.email,
-      reason: error.message,
+    console.warn("login_rejected", {
+      errorCode: error.code ?? "auth_error",
+      statusCode: error.status,
     })
     redirect(buildRedirect("/login", { error: "Invalid email or password." }))
   }
 
-  redirect(parsed.data.next || "/dashboard")
+  redirect(getSafeNextPath(parsed.data.next, "/dashboard"))
 }

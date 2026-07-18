@@ -1,6 +1,8 @@
 import {
   GetObjectCommand,
+  HeadObjectCommand,
   PutObjectCommand,
+  type HeadObjectCommandOutput,
   type S3Client,
 } from "@aws-sdk/client-s3"
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
@@ -31,6 +33,11 @@ export type DocumentStorageSigner = (
   options: { expiresIn: number }
 ) => Promise<string>
 
+export type DocumentStorageHeadObject = (
+  client: S3Client,
+  command: HeadObjectCommand
+) => Promise<HeadObjectCommandOutput>
+
 export type BuildDocumentObjectKeyInput = {
   organizationId: string
   documentId: string
@@ -50,6 +57,12 @@ export type CreateSignedDocumentDownloadUrlInput = {
   storageKey: string
 }
 
+export type VerifyDocumentUploadInput = {
+  storageKey: string
+  contentType: string
+  byteSize: number
+}
+
 export type SignedDocumentUploadUrl = {
   uploadUrl: string
   storageKey: string
@@ -66,6 +79,7 @@ export type DocumentStorageServiceDeps = {
   r2Env?: R2Env
   fileUploadPolicy?: FileUploadPolicyEnv
   signer?: DocumentStorageSigner
+  headObject?: DocumentStorageHeadObject
 }
 
 /**
@@ -164,7 +178,9 @@ export async function createSignedDocumentUploadUrl(
     const command = new PutObjectCommand({
       Bucket: r2Env.CLOUDFLARE_R2_BUCKET_NAME,
       Key: storageKey,
+      ContentLength: input.byteSize,
       ContentType: input.contentType,
+      IfNoneMatch: "*",
     })
     const uploadUrl = await signer(r2Client, command, {
       expiresIn: r2Env.CLOUDFLARE_R2_SIGNED_URL_TTL_SECONDS,
@@ -213,6 +229,7 @@ export async function createSignedDocumentDownloadUrl(
     const command = new GetObjectCommand({
       Bucket: r2Env.CLOUDFLARE_R2_BUCKET_NAME,
       Key: input.storageKey,
+      ResponseContentDisposition: "attachment",
     })
     const downloadUrl = await signer(r2Client, command, {
       expiresIn: r2Env.CLOUDFLARE_R2_SIGNED_URL_TTL_SECONDS,
@@ -234,6 +251,96 @@ export async function createSignedDocumentDownloadUrl(
   }
 }
 
+/**
+ * Verifies that an uploaded R2 object exists and matches its pending version.
+ *
+ * The content type comparison ignores casing, surrounding whitespace, and MIME
+ * parameters such as a charset while retaining an exact byte-size comparison.
+ *
+ * @param input - Stored object key and the expected upload metadata.
+ * @param deps - Optional R2 client, environment, and HEAD executor for tests.
+ * @returns A promise that resolves after the object metadata is verified.
+ * @throws DocumentStorageServiceError with status 400 for invalid input, 409
+ * when the object is missing or its metadata differs, and 500 when R2 cannot be
+ * queried.
+ */
+export async function verifyDocumentUpload(
+  input: VerifyDocumentUploadInput,
+  deps: DocumentStorageServiceDeps = {}
+): Promise<void> {
+  const startedAt = Date.now()
+  const storageKey = input.storageKey.trim()
+
+  try {
+    validateDocumentUploadVerificationInput({
+      ...input,
+      storageKey,
+    })
+
+    const r2Env = deps.r2Env ?? getR2Env()
+    const r2Client = deps.r2Client ?? createR2Client(r2Env)
+    const headObject = deps.headObject ?? headDocumentStorageObject
+    const command = new HeadObjectCommand({
+      Bucket: r2Env.CLOUDFLARE_R2_BUCKET_NAME,
+      Key: storageKey,
+    })
+    const objectMetadata = await headObject(r2Client, command)
+
+    if (objectMetadata.ContentLength !== input.byteSize) {
+      throw new DocumentStorageServiceError(
+        "Uploaded document byte size does not match the pending version.",
+        409
+      )
+    }
+
+    if (
+      normalizeContentType(objectMetadata.ContentType) !==
+      normalizeContentType(input.contentType)
+    ) {
+      throw new DocumentStorageServiceError(
+        "Uploaded document content type does not match the pending version.",
+        409
+      )
+    }
+
+    console.info("document_upload_verification_completed", {
+      storageKey,
+      durationMs: Date.now() - startedAt,
+    })
+  } catch (error: unknown) {
+    if (error instanceof DocumentStorageServiceError) {
+      console.warn("document_upload_verification_rejected", {
+        storageKey,
+        statusCode: error.statusCode,
+        durationMs: Date.now() - startedAt,
+      })
+      throw error
+    }
+
+    if (isDocumentObjectNotFoundError(error)) {
+      console.warn("document_upload_verification_rejected", {
+        storageKey,
+        statusCode: 409,
+        durationMs: Date.now() - startedAt,
+      })
+      throw new DocumentStorageServiceError(
+        "Uploaded document object was not found.",
+        409
+      )
+    }
+
+    console.error("document_upload_verification_failed", {
+      storageKey,
+      durationMs: Date.now() - startedAt,
+      error,
+    })
+    throw new DocumentStorageServiceError(
+      "Unable to verify uploaded document object.",
+      500
+    )
+  }
+}
+
 function getSafeExtensionForContentType(contentType: string): string {
   const extension = DOCUMENT_CONTENT_TYPE_EXTENSIONS[contentType]
 
@@ -245,6 +352,66 @@ function getSafeExtensionForContentType(contentType: string): string {
   }
 
   return extension
+}
+
+function validateDocumentUploadVerificationInput(
+  input: VerifyDocumentUploadInput
+): void {
+  if (input.storageKey.length === 0) {
+    throw new DocumentStorageServiceError(
+      "Document storage key is required.",
+      400
+    )
+  }
+
+  if (normalizeContentType(input.contentType).length === 0) {
+    throw new DocumentStorageServiceError(
+      "Document content type is required.",
+      400
+    )
+  }
+
+  if (!Number.isInteger(input.byteSize) || input.byteSize < 1) {
+    throw new DocumentStorageServiceError(
+      "Document byte size must be a positive integer.",
+      400
+    )
+  }
+}
+
+function normalizeContentType(contentType: string | undefined): string {
+  return contentType?.split(";", 1)[0]?.trim().toLowerCase() ?? ""
+}
+
+function isDocumentObjectNotFoundError(error: unknown): boolean {
+  if (typeof error !== "object" || error === null) {
+    return false
+  }
+
+  const candidate = error as {
+    name?: unknown
+    code?: unknown
+    Code?: unknown
+    $metadata?: { httpStatusCode?: unknown }
+  }
+  const errorCodes = [candidate.name, candidate.code, candidate.Code]
+
+  return (
+    candidate.$metadata?.httpStatusCode === 404 ||
+    errorCodes.some(
+      (errorCode: unknown): boolean =>
+        errorCode === "NotFound" ||
+        errorCode === "NoSuchKey" ||
+        errorCode === "NoSuchObject"
+    )
+  )
+}
+
+async function headDocumentStorageObject(
+  client: S3Client,
+  command: HeadObjectCommand
+): Promise<HeadObjectCommandOutput> {
+  return client.send(command)
 }
 
 async function signDocumentStorageCommand(

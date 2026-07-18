@@ -61,9 +61,5 @@ function getActionErrorMessage(error: unknown, fallback: string): string {
     return error.message
   }
 
-  if (error instanceof Error) {
-    return error.message
-  }
-
   return fallback
 }

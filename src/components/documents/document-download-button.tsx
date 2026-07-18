@@ -4,12 +4,15 @@ import { Download } from "lucide-react"
 import { type ReactElement, useState } from "react"
 
 import { Button } from "@/components/ui/button"
+import { readApiErrorMessage } from "@/components/documents/document-upload-client"
 import type { CreateDocumentDownloadUrlResponse } from "@/types/document"
 
 type DocumentDownloadButtonProps = {
   organizationId: string
   documentId: string
   disabled?: boolean
+  label?: string
+  versionId?: string | null
 }
 
 /**
@@ -22,6 +25,8 @@ export function DocumentDownloadButton({
   organizationId,
   documentId,
   disabled = false,
+  label = "Download",
+  versionId = null,
 }: DocumentDownloadButtonProps): ReactElement {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState<boolean>(false)
@@ -29,22 +34,39 @@ export function DocumentDownloadButton({
   async function handleDownload(): Promise<void> {
     setErrorMessage(null)
     setIsLoading(true)
+    let downloadWindow: Window | null = null
 
     try {
-      const params = new URLSearchParams({ organizationId })
+      // Open synchronously while the click still has browser user activation.
+      downloadWindow = window.open("about:blank", "_blank")
+
+      if (!downloadWindow) {
+        throw new Error("Allow pop-ups to download this document.")
+      }
+
+      downloadWindow.opener = null
       const response = await fetch(
-        `/api/documents/${documentId}/download-url?${params.toString()}`
+        `/api/documents/${documentId}/download-url`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ organizationId, versionId }),
+        }
       )
 
       if (!response.ok) {
         throw new Error(
-          await readErrorMessage(response, "Unable to prepare download.")
+          await readApiErrorMessage(response, "Unable to prepare download.")
         )
       }
 
       const body = (await response.json()) as CreateDocumentDownloadUrlResponse
-      window.open(body.downloadUrl, "_blank", "noopener,noreferrer")
+      downloadWindow.location.replace(body.downloadUrl)
     } catch (error: unknown) {
+      if (downloadWindow && !downloadWindow.closed) {
+        downloadWindow.close()
+      }
+
       setErrorMessage(
         error instanceof Error ? error.message : "Unable to download document."
       )
@@ -62,7 +84,7 @@ export function DocumentDownloadButton({
         variant="outline"
       >
         <Download data-icon="inline-start" />
-        {isLoading ? "Preparing" : "Download"}
+        {isLoading ? "Preparing" : label}
       </Button>
       {errorMessage && (
         <p className="text-sm text-destructive" role="alert">
@@ -71,26 +93,4 @@ export function DocumentDownloadButton({
       )}
     </div>
   )
-}
-
-async function readErrorMessage(
-  response: Response,
-  fallbackMessage: string
-): Promise<string> {
-  try {
-    const body: unknown = await response.json()
-
-    if (
-      body &&
-      typeof body === "object" &&
-      "error" in body &&
-      typeof body.error === "string"
-    ) {
-      return body.error
-    }
-  } catch {
-    return fallbackMessage
-  }
-
-  return fallbackMessage
 }

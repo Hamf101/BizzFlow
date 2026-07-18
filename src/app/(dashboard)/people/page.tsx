@@ -21,18 +21,16 @@ import {
   FieldLabel,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import {
-  AuthenticationError,
-  getAuthenticatedUser,
-  type AuthenticatedUser,
-} from "@/lib/auth"
+import { formatMediumDate } from "@/lib/date-format"
 import { buildRedirect } from "@/lib/form-utils"
+import { loadAuthenticatedPageUser } from "@/lib/page-auth"
+import { getPageErrorMessage } from "@/lib/page-errors"
+import { loadPageOrganizationContext } from "@/lib/page-organization-context"
 import {
   getAssignableOrganizationRoles,
   type OrganizationRole,
 } from "@/lib/permissions"
 import {
-  getCurrentOrganizationContext,
   listOrganizationPeople,
 } from "@/services/organization-service"
 import type {
@@ -64,26 +62,12 @@ export default async function PeoplePage({
   searchParams: PeopleSearchParams
 }): Promise<ReactElement> {
   const params = await searchParams
-  const user = await loadPeopleUser()
+  const user = await loadAuthenticatedPageUser("/people")
   const { context, errorMessage: contextErrorMessage } =
-    await getCurrentOrganizationContext(user.id)
-      .then((context) => ({ context, errorMessage: null as string | null }))
-      .catch((error: unknown) => {
-        const errorMessage = getPageErrorMessage(
-          error,
-          "Unable to load organization context."
-        )
-
-        console.warn("people_context_load_failed", {
-          userId: user.id,
-          reason: errorMessage,
-        })
-
-        return {
-          context: null,
-          errorMessage,
-        }
-      })
+    await loadPageOrganizationContext({
+      userId: user.id,
+      failureEvent: "people_context_load_failed",
+    })
 
   if (!context) {
     if (contextErrorMessage) {
@@ -211,7 +195,7 @@ function MembersCard({
               <div className="flex min-w-0 flex-col gap-1">
                 <span className="truncate text-sm font-medium">{member.email}</span>
                 <span className="text-xs text-muted-foreground">
-                  Joined {formatDate(member.createdAt)}
+                  Joined {formatMediumDate(member.createdAt)}
                 </span>
               </div>
               {member.role !== "owner_admin" ? (
@@ -279,7 +263,9 @@ function InviteCard({ organizationId }: { organizationId: string }): ReactElemen
     <Card>
       <CardHeader>
         <CardTitle>Invite staff</CardTitle>
-        <CardDescription>Create a pending invite for this organization.</CardDescription>
+        <CardDescription>
+          Email an invite that lets a recipient create an account or sign in.
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <form action={createInviteAction} className="flex flex-col gap-5">
@@ -314,7 +300,7 @@ function InviteCard({ organizationId }: { organizationId: string }): ReactElemen
               </FieldDescription>
             </Field>
           </FieldGroup>
-          <Button type="submit">Create invite</Button>
+          <Button type="submit">Send invite</Button>
         </form>
       </CardContent>
     </Card>
@@ -330,7 +316,9 @@ function PendingInvitesCard({
     <Card>
       <CardHeader>
         <CardTitle>Pending invites</CardTitle>
-        <CardDescription>Invite links remain valid until expiration.</CardDescription>
+        <CardDescription>
+          Sent email links remain valid until expiration.
+        </CardDescription>
       </CardHeader>
       <CardContent>
         {invites.length === 0 ? (
@@ -344,7 +332,7 @@ function PendingInvitesCard({
                   <Badge variant="outline">{formatRole(invite.role)}</Badge>
                 </div>
                 <span className="text-xs text-muted-foreground">
-                  Expires {formatDate(invite.expiresAt)}
+                  Expires {formatMediumDate(invite.expiresAt)}
                 </span>
                 <Link
                   className="text-sm font-medium text-primary underline-offset-4 hover:underline"
@@ -361,32 +349,6 @@ function PendingInvitesCard({
   )
 }
 
-async function loadPeopleUser(): Promise<AuthenticatedUser> {
-  try {
-    return await getAuthenticatedUser()
-  } catch (error: unknown) {
-    if (error instanceof AuthenticationError) {
-      redirect(buildRedirect("/login", { next: "/people" }))
-    }
-
-    throw error
-  }
-}
-
 function formatRole(role: OrganizationRole): string {
   return roleLabels[role]
-}
-
-function formatDate(value: string): string {
-  return new Intl.DateTimeFormat("en", {
-    dateStyle: "medium",
-  }).format(new Date(value))
-}
-
-function getPageErrorMessage(error: unknown, fallback: string): string {
-  if (error instanceof Error) {
-    return error.message
-  }
-
-  return fallback
 }

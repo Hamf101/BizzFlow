@@ -5,8 +5,8 @@ BizFlow Docs is a mobile-first, multi-tenant workflow portal for reusable forms,
 ## Current Status
 
 - Project phase: implementation.
-- Sprint: Sprint 4 document workflows implemented locally.
-- Application scaffold: Next.js App Router foundation with dashboard document storage.
+- Sprint: Sprint 6 guided templates, signing, and recent documents are implemented and migrated to the configured Supabase project.
+- Application scaffold: Next.js App Router foundation with versioned uploads, nested folders, organization templates, guided generated documents, private all-party signing links, and print-ready PDFs.
 - Canonical project guide: `.agent/AGENT.md`.
 
 ## MVP Scope
@@ -16,7 +16,7 @@ The MVP includes organizations, members, reusable templates, document storage, i
 MVP non-goals:
 
 - Billing and subscriptions.
-- OCR, AI extraction, and e-signatures.
+- OCR/import conversion, AI extraction, and qualified or regulated e-signatures. Proposal-only AI block design and basic drawn acknowledgements are included.
 - Native mobile apps.
 - Advanced workflow builders or custom role builders.
 - Public developer APIs.
@@ -61,6 +61,16 @@ curl -X POST http://localhost:3000/api/documents/upload-url \
     "contentType": "application/pdf",
     "byteSize": 1024
   }'
+
+curl -X POST http://localhost:3000/api/documents/00000000-0000-0000-0000-000000000001/replace-upload-url \
+  -H "Content-Type: application/json" \
+  -H "Cookie: <authenticated Supabase cookies>" \
+  -d '{
+    "organizationId": "00000000-0000-0000-0000-000000000000",
+    "originalFilename": "client-intake-v2.pdf",
+    "contentType": "application/pdf",
+    "byteSize": 2048
+  }'
 ```
 
 ## Environment Variables
@@ -74,17 +84,24 @@ cp .env.example .env.local
 Expected variable groups:
 
 - App: `NEXT_PUBLIC_APP_URL`.
-- Supabase: `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, `SUPABASE_PROJECT_REF`, `SUPABASE_DB_URL`, and `SUPABASE_POOLER_URL`.
+- Supabase: `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, `SUPABASE_JWKS_URL`, `SUPABASE_PROJECT_REF`, `SUPABASE_DB_URL`, and `SUPABASE_POOLER_URL`.
 - Cloudflare R2: `CLOUDFLARE_R2_ACCOUNT_ID`, `CLOUDFLARE_R2_ACCESS_KEY_ID`, `CLOUDFLARE_R2_SECRET_ACCESS_KEY`, `CLOUDFLARE_R2_BUCKET_NAME`, `CLOUDFLARE_R2_ENDPOINT`, `CLOUDFLARE_R2_REGION`, and `CLOUDFLARE_R2_SIGNED_URL_TTL_SECONDS`.
 - File uploads: `FILE_UPLOAD_MAX_BYTES` and `FILE_UPLOAD_ALLOWED_MIME_TYPES`.
 - Inngest: event key and signing key.
-- Resend: API key and sender address.
+- Resend: `RESEND_API_KEY`, a verified `RESEND_FROM_EMAIL`, optional `RESEND_REPLY_TO_EMAIL`, and `RESEND_TIMEOUT_MS` for invitations and document signing links.
+- OpenRouter: server-only `OPENROUTER_API_KEY`, optional `OPENROUTER_MODEL`, and `OPENROUTER_TIMEOUT_MS` for proposal-only template block suggestions.
 - SMS: Termii credentials, with Africa's Talking placeholders reserved for a later provider switch.
 - Observability: Sentry DSN and PostHog key or internal analytics settings.
 
 Do not commit real secrets. Keep local secrets in `.env.local` and deployment secrets in the target hosting provider.
 
-For browser-based signed uploads and downloads, configure the private R2 bucket CORS policy to allow the deployed app origin, `PUT`, `GET`, and `HEAD` methods, and the `content-type` request header. Keep the bucket private; the app signs object access server-side.
+## Invite email setup
+
+Inviting a person sends a Resend email containing a one-time BizFlow invite URL. The same Resend configuration delivers private, seven-day document signing links. Configure `RESEND_API_KEY` and a verified `RESEND_FROM_EMAIL` before using the People page or sending a document. Optionally set `RESEND_REPLY_TO_EMAIL` for recipient replies.
+
+Recipients can create an account from the invite URL or sign in with an existing account. For account-confirmation links to return the recipient to their invite, add the deployed callback URL (for example, `https://app.example.com/auth/callback`) to Supabase Auth's Redirect URLs. The Supabase Site URL should be the deployed application origin.
+
+For browser-based signed uploads and downloads, configure the private R2 bucket CORS policy to allow the deployed app origin, `PUT`, `GET`, and `HEAD` methods, plus the `content-type` and `if-none-match` request headers. Keep the bucket private; the app signs create-only object uploads server-side so a completed version cannot be overwritten by reusing its URL.
 
 ## Supabase Migrations
 
@@ -102,17 +119,34 @@ If the CLI cannot be linked, open the Supabase SQL Editor and run the migration 
 supabase/migrations/20260708170500_sprint_2_organizations_roles.sql
 supabase/migrations/20260708174500_sprint_3_rls_permissions.sql
 supabase/migrations/20260708190000_sprint_4_documents.sql
+supabase/migrations/20260717190016_sprint_5_document_versioning_comments.sql
+supabase/migrations/20260717193648_sprint_5_atomic_document_comments.sql
+supabase/migrations/20260717194631_sprint_5_completion_archive_hardening.sql
+supabase/migrations/20260717205037_document_templates_signing_recents.sql
+supabase/migrations/20260718002902_audit_security_hardening.sql
 ```
 
-The Sprint 3 and Sprint 4 migrations include explicit Data API grants for `authenticated` and `service_role`, plus PostgREST schema-cache reloads.
+The Sprint 3 through Sprint 6 migrations include explicit Data API grants for `authenticated` and `service_role`, plus PostgREST schema-cache reloads. The guided-document migration adds organization-wide template revisions, immutable per-document snapshots, shared answers, unordered all-party signer state, per-user recent access, and tenant-scoped RLS. The audit hardening migration closes profile-email claiming, aligns template and signing-recipient Data API access with application permissions, and moves invite acceptance, owner-role changes, and generated-answer merges into transactional service-role RPCs.
 
 ## API Endpoints Summary
 
 Implemented document routes:
 
 - `POST /api/documents/upload-url`
+- `POST /api/documents/:id/replace-upload-url`
 - `POST /api/documents/:id/complete-upload`
-- `GET /api/documents/:id/download-url`
+- `POST /api/documents/:id/download-url` (JSON body with `organizationId` and optional `versionId`)
+- `POST /api/documents/:id/opened`
+- `GET /api/documents/:id/pdf`
+- `POST /api/templates/suggest-blocks`
+
+Implemented guided-document pages:
+
+- `/documents` for per-user recents, nested folder navigation, and folder-scoped creation.
+- `/documents/new` for upload, published-template, or blank guided documents.
+- `/documents/:id/edit` for shared answers, signing recipients, status, and PDF export.
+- `/templates`, `/templates/new`, and `/templates/:id/edit` for organization template management.
+- `/sign/:token` for private recipient review, field completion, and drawn acknowledgement.
 
 Planned routes may be adjusted during implementation.
 
@@ -183,13 +217,10 @@ Activity, audit, and background jobs:
 
 ## Verification Commands
 
-After the app is scaffolded and scripts are added to `package.json`, expected verification commands are:
+Run the aggregate local quality gate before submitting changes:
 
 ```bash
-pnpm lint
-pnpm typecheck
-pnpm test
-pnpm build
+pnpm check
 ```
 
-Use additional focused commands as features land, such as database migration checks, RLS policy tests, and end-to-end tests for auth, submissions, uploads, and offline drafts.
+The aggregate gate runs lint, strict TypeScript, unit/integration tests, production-code duplication detection, a production build, and a production dependency audit. When configured with local secrets, also run `pnpm supabase:check`; use authenticated two-tenant end-to-end checks for effective RLS rather than treating the service-role smoke test as authorization proof.

@@ -31,6 +31,42 @@ const TABLE_CHECKS = [
     name: "audit_logs",
     select: "id,org_id,actor_user_id,action,target_type,target_id,metadata,created_at",
   },
+  {
+    name: "folders",
+    select: "id,org_id,parent_folder_id,name,archived_at,created_at,updated_at",
+  },
+  {
+    name: "documents",
+    select: "id,org_id,folder_id,title,current_version_id,source_kind,template_id,template_revision,archived_at,created_at,updated_at",
+  },
+  {
+    name: "document_versions",
+    select: "id,org_id,document_id,version_number,status,created_at,updated_at",
+  },
+  {
+    name: "document_comments",
+    select: "id,org_id,document_id,created_by,body,created_at",
+  },
+  {
+    name: "document_activity_events",
+    select: "id,org_id,document_id,actor_user_id,event_type,metadata,created_at",
+  },
+  {
+    name: "document_templates",
+    select: "id,org_id,title,status,revision,created_at,updated_at",
+  },
+  {
+    name: "document_answers",
+    select: "document_id,org_id,workflow_status,created_at,updated_at",
+  },
+  {
+    name: "document_signing_recipients",
+    select: "id,org_id,document_id,status,requires_signature,token_expires_at",
+  },
+  {
+    name: "document_recent_accesses",
+    select: "org_id,user_id,document_id,last_opened_at",
+  },
 ]
 
 function readEnvFile() {

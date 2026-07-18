@@ -51,7 +51,12 @@ describe("organization permissions", () => {
       "members:invite",
       "members:update_role",
       "audit_logs:view",
+      "templates:view",
+      "templates:manage",
       "documents:view",
+      "documents:send",
+      "documents:fill",
+      "document_comments:create",
       "documents:create",
       "documents:archive",
       "folders:manage",
@@ -65,6 +70,7 @@ describe("organization permissions", () => {
     expect(canPerformOrganizationAction("staff", "members:update_role")).toBe(false)
     expect(canPerformOrganizationAction("staff", "audit_logs:view")).toBe(false)
     expect(canPerformOrganizationAction("staff", "documents:view")).toBe(true)
+    expect(canPerformOrganizationAction("staff", "document_comments:create")).toBe(true)
     expect(canPerformOrganizationAction("staff", "documents:create")).toBe(true)
     expect(canPerformOrganizationAction("staff", "documents:archive")).toBe(false)
     expect(canPerformOrganizationAction("staff", "folders:manage")).toBe(false)
@@ -77,15 +83,32 @@ describe("organization permissions", () => {
     expect(canPerformOrganizationAction("manager", "members:update_role")).toBe(false)
     expect(canPerformOrganizationAction("manager", "audit_logs:view")).toBe(true)
     expect(canPerformOrganizationAction("manager", "documents:view")).toBe(true)
+    expect(canPerformOrganizationAction("manager", "document_comments:create")).toBe(true)
     expect(canPerformOrganizationAction("manager", "documents:create")).toBe(true)
     expect(canPerformOrganizationAction("manager", "documents:archive")).toBe(true)
     expect(canPerformOrganizationAction("manager", "folders:manage")).toBe(true)
     expect(canPerformOrganizationAction("manager", "document_versions:create")).toBe(true)
   })
 
+  it("applies template, send, and fill permissions by organization role", () => {
+    expect(canPerformOrganizationAction("owner_admin", "templates:manage")).toBe(true)
+    expect(canPerformOrganizationAction("manager", "templates:manage")).toBe(true)
+    expect(canPerformOrganizationAction("staff", "templates:manage")).toBe(false)
+    expect(canPerformOrganizationAction("external_reviewer", "templates:view")).toBe(false)
+
+    expect(canPerformOrganizationAction("staff", "templates:view")).toBe(true)
+    expect(canPerformOrganizationAction("staff", "documents:send")).toBe(true)
+    expect(canPerformOrganizationAction("staff", "documents:fill")).toBe(true)
+    expect(canPerformOrganizationAction("external_reviewer", "documents:send")).toBe(false)
+    expect(canPerformOrganizationAction("external_reviewer", "documents:fill")).toBe(true)
+  })
+
   it("allows external reviewers to view people and documents only", () => {
     expect(canPerformOrganizationAction("external_reviewer", "people:view")).toBe(true)
     expect(canPerformOrganizationAction("external_reviewer", "documents:view")).toBe(true)
+    expect(canPerformOrganizationAction("external_reviewer", "document_comments:create")).toBe(
+      true
+    )
     expect(canPerformOrganizationAction("external_reviewer", "documents:create")).toBe(false)
     expect(canPerformOrganizationAction("external_reviewer", "documents:archive")).toBe(false)
     expect(canPerformOrganizationAction("external_reviewer", "folders:manage")).toBe(false)

@@ -1,165 +1,19 @@
 import { readFileSync } from "node:fs"
-import { join } from "node:path"
 
 import { describe, expect, it } from "vitest"
 
-const sprint2MigrationPath = join(
-  process.cwd(),
-  "supabase/migrations/20260708170500_sprint_2_organizations_roles.sql"
-)
+import {
+  directWriteActions,
+  getAuthenticatedWriteGrantStatements,
+  getMigrationPath,
+  getTableDefinition,
+  normalizeSql,
+} from "./migration-contract-helpers"
 
-const sprint3MigrationPath = join(
-  process.cwd(),
-  "supabase/migrations/20260708174500_sprint_3_rls_permissions.sql"
+const sprint4MigrationPath = getMigrationPath(
+  "20260708190000_sprint_4_documents.sql"
 )
-
-const sprint4MigrationPath = join(
-  process.cwd(),
-  "supabase/migrations/20260708190000_sprint_4_documents.sql"
-)
-
 const sprint4DocumentTables = ["folders", "documents", "document_versions"] as const
-const directWriteActions = ["insert", "update", "delete"] as const
-
-function getTableDefinition(sql: string, tableName: string): string {
-  const pattern = new RegExp(`create table public\\.${tableName} \\(([\\s\\S]*?)\\n\\);`)
-  const match = sql.match(pattern)
-
-  if (!match) {
-    throw new Error(`Missing table definition for public.${tableName}.`)
-  }
-
-  return match[1]
-}
-
-function normalizeSql(sql: string): string {
-  return sql.replace(/\s+/g, " ").toLowerCase()
-}
-
-function getSqlStatements(sql: string): readonly string[] {
-  return normalizeSql(sql)
-    .split(";")
-    .map((statement: string): string => statement.trim())
-    .filter((statement: string): boolean => statement.length > 0)
-}
-
-function getAuthenticatedWriteGrantStatements(
-  sql: string,
-  tableNames: readonly string[]
-): readonly string[] {
-  const targetedTables = tableNames.map((tableName: string): string => `public.${tableName}`)
-
-  return getSqlStatements(sql).filter((statement: string): boolean => {
-    const grantMatch = statement.match(
-      /^grant\s+(.+?)\s+on\s+table\s+(.+?)\s+to\s+(.+?)$/
-    )
-
-    if (!grantMatch) {
-      return false
-    }
-
-    const privileges = grantMatch[1]
-      .split(",")
-      .map((privilege: string): string => privilege.trim())
-    const tableTargets = grantMatch[2]
-      .split(",")
-      .map((tableTarget: string): string => tableTarget.trim())
-    const grantees = grantMatch[3]
-      .split(",")
-      .map((grantee: string): string => grantee.trim())
-    const grantsAuthenticated = grantees.some(
-      (grantee: string): boolean => grantee === "authenticated"
-    )
-    const targetsDocumentTable = tableTargets.some((tableTarget: string): boolean =>
-      targetedTables.includes(tableTarget)
-    )
-    const includesWritePrivilege = privileges.some((privilege: string): boolean => {
-      return (
-        directWriteActions.includes(privilege as (typeof directWriteActions)[number]) ||
-        privilege === "all" ||
-        privilege === "all privileges"
-      )
-    })
-
-    return grantsAuthenticated && targetsDocumentTable && includesWritePrivilege
-  })
-}
-
-describe("Sprint 2 organization migration", () => {
-  it("grants Data API access for organization tables and reloads PostgREST", () => {
-    const sql = readFileSync(sprint2MigrationPath, "utf8")
-
-    expect(sql).toContain("grant usage on schema public to authenticated, service_role")
-    expect(sql).toContain("grant usage on type public.organization_role to authenticated, service_role")
-    expect(sql).toContain("grant select, insert, update on table public.profiles to authenticated")
-    expect(sql).toContain("grant select, insert on table public.organizations to authenticated")
-    expect(sql).toContain(
-      "grant select, insert, update on table public.organization_memberships to authenticated"
-    )
-    expect(sql).toContain("grant select, insert, update on table public.invites to authenticated")
-    expect(sql).toContain("grant select, insert, update on table public.profiles to service_role")
-    expect(sql).toContain("grant select, insert, delete on table public.organizations to service_role")
-    expect(sql).toContain(
-      "grant select, insert, update on table public.organization_memberships to service_role"
-    )
-    expect(sql).toContain("grant select, insert, update on table public.invites to service_role")
-    expect(sql).toContain("notify pgrst, 'reload schema'")
-  })
-})
-
-describe("Sprint 3 RLS hardening migration", () => {
-  it("adds audit logs with forced RLS and tenant-scoped manager reads", () => {
-    const sql = readFileSync(sprint3MigrationPath, "utf8")
-
-    expect(sql).toContain("create table if not exists public.audit_logs")
-    expect(sql).toContain("alter table public.audit_logs enable row level security")
-    expect(sql).toContain("alter table public.audit_logs force row level security")
-    expect(sql).toContain("create policy audit_logs_select_manager")
-    expect(sql).toContain("(select public.organization_role_for(org_id)) in ('owner_admin', 'manager')")
-  })
-
-  it("removes direct authenticated writes for tenant administration tables", () => {
-    const sql = readFileSync(sprint3MigrationPath, "utf8")
-
-    expect(sql).toContain("drop policy if exists organizations_insert_self")
-    expect(sql).toContain("drop policy if exists organization_memberships_insert_owner")
-    expect(sql).toContain("drop policy if exists organization_memberships_update_owner")
-    expect(sql).toContain("drop policy if exists invites_insert_manager")
-    expect(sql).toContain("drop policy if exists invites_update_manager")
-    expect(sql).toContain("revoke insert, update, delete on table public.organizations from authenticated")
-    expect(sql).toContain(
-      "revoke insert, update, delete on table public.organization_memberships from authenticated"
-    )
-    expect(sql).toContain("revoke insert, update, delete on table public.invites from authenticated")
-  })
-
-  it("grants Data API access for authenticated reads and secret-key service writes", () => {
-    const sql = readFileSync(sprint3MigrationPath, "utf8")
-
-    expect(sql).toContain("grant usage on schema public to authenticated, service_role")
-    expect(sql).toContain("grant usage on type public.organization_role to authenticated, service_role")
-    expect(sql).toContain("grant select, insert, update on table public.profiles to authenticated")
-    expect(sql).toContain("grant select on table public.organizations to authenticated")
-    expect(sql).toContain(
-      "grant select on table public.organization_memberships to authenticated"
-    )
-    expect(sql).toContain("grant select on table public.invites to authenticated")
-    expect(sql).toContain("grant select on table public.audit_logs to authenticated")
-    expect(sql).toContain("grant select, insert, update on table public.profiles to service_role")
-    expect(sql).toContain("grant select, insert, delete on table public.organizations to service_role")
-    expect(sql).toContain(
-      "grant select, insert, update on table public.organization_memberships to service_role"
-    )
-    expect(sql).toContain("grant select, insert, update on table public.invites to service_role")
-    expect(sql).toContain("grant select, insert on table public.audit_logs to service_role")
-  })
-
-  it("reloads the PostgREST schema cache after table and grant changes", () => {
-    const sql = readFileSync(sprint3MigrationPath, "utf8")
-
-    expect(sql).toContain("notify pgrst, 'reload schema'")
-  })
-})
 
 describe("Sprint 4 document migration", () => {
   it("creates document tables with tenant-scoped relational constraints", () => {
