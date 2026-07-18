@@ -6,6 +6,7 @@ export const DOCUMENT_ACTIVITY_EVENT_TYPES = [
   "document.replaced",
   "document.commented",
   "document.archived",
+  "document.finalized",
 ] as const
 
 export type DocumentActivityEventType =

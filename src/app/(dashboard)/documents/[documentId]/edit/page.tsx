@@ -189,7 +189,7 @@ export default async function GeneratedDocumentEditorPage({
           target="_blank"
         >
           <Download />
-          Download PDF
+          {isCompleted ? "Download final PDF" : "Download preview PDF"}
         </a>
       </section>
 
@@ -198,7 +198,8 @@ export default async function GeneratedDocumentEditorPage({
           <AlertTitle>Document complete</AlertTitle>
           <AlertDescription>
             Every signing party has signed. Answers are now read only and the
-            PDF includes the signer record.
+            final PDF includes the signer record. The same finalized file is
+            reused for later downloads.
           </AlertDescription>
         </Alert>
       )}

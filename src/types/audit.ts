@@ -7,6 +7,7 @@ export type AuditLogAction =
   | "folder.archived"
   | "document.created"
   | "document.archived"
+  | "document.finalized"
   | "document_version.created"
   | "document_version.download_url_issued"
 

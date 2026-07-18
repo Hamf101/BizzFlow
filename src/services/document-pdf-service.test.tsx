@@ -106,6 +106,41 @@ describe("document PDF service", () => {
     expect(renderedDocument.getPageCount()).toBe(plannedPageCount)
   })
 
+  it("renders byte-identical PDFs for the same persisted metadata timestamp", async () => {
+    const input = {
+      ...createPdfInput({ repeatHeader: true, repeatFooter: true }),
+      metadataTimestamp: "2026-07-18T03:14:15.926Z",
+    }
+
+    const firstBuffer = await renderGeneratedDocumentPdf(input)
+    const secondBuffer = await renderGeneratedDocumentPdf(input)
+
+    expect(firstBuffer.equals(secondBuffer)).toBe(true)
+
+    const renderedDocument = await PDFDocument.load(firstBuffer, {
+      updateMetadata: false,
+    })
+
+    expect(renderedDocument.getCreationDate()?.toISOString()).toBe(
+      "2026-07-18T03:14:15.000Z"
+    )
+    expect(renderedDocument.getModificationDate()?.toISOString()).toBe(
+      "2026-07-18T03:14:15.000Z"
+    )
+  })
+
+  it("rejects malformed PDF metadata timestamps", async () => {
+    await expect(
+      renderGeneratedDocumentPdf({
+        ...createPdfInput({ repeatHeader: false, repeatFooter: false }),
+        metadataTimestamp: "tomorrow morning",
+      })
+    ).rejects.toMatchObject({
+      statusCode: 400,
+      message: "PDF metadata timestamp is invalid.",
+    })
+  })
+
   it("rejects malformed signature drawings before rendering", async () => {
     const input = createPdfInput({ repeatHeader: false, repeatFooter: false })
 

@@ -1,18 +1,18 @@
 # BizFlow Docs
 
-BizFlow Docs is a mobile-first, multi-tenant workflow portal for reusable forms, document collection, submissions, tasks, reminders, public form links, and offline drafts. The MVP is focused on proving that two pilot businesses can run repeatable document workflows in the same system without custom code.
+BizFlow Docs is a mobile-first, multi-tenant workflow portal for reusable forms, generated documents, signing, document collection, submissions, tasks, reminders, and public form links. The MVP is focused on proving that two pilot businesses can run repeatable document workflows in the same system without custom code.
 
 ## Current Status
 
 - Project phase: implementation.
-- Sprint: Sprint 6 guided templates, signing, and recent documents are implemented and migrated to the configured Supabase project.
-- Application scaffold: Next.js App Router foundation with versioned uploads, nested folders, organization templates, guided generated documents, private all-party signing links, and print-ready PDFs.
+- Sprint: Sprint 6 guided templates, signing, recent documents, and immutable generated-document finalization are implemented and migrated to the configured Supabase project.
+- Application scaffold: Next.js App Router foundation with versioned uploads, nested folders, organization templates, guided generated documents, private all-party signing links, deterministic PDF rendering, and private finalized PDF versions.
 - Delivery direction: cloud-first. Offline/PWA work and related packages are deferred until explicitly reprioritized.
 - Canonical project guide: `.agent/AGENT.md`.
 
 ## MVP Scope
 
-The MVP includes organizations, members, reusable templates, document storage, internal submissions, public submissions, review workflows, comments, tasks, reminders, activity history, audit logs, email/SMS notifications, and offline draft support.
+The cloud MVP includes organizations, members, reusable templates, document storage, internal submissions, public submissions, review workflows, comments, tasks, reminders, activity history, audit logs, and email/SMS notifications. Offline drafts are deferred.
 
 MVP non-goals:
 
@@ -125,9 +125,10 @@ supabase/migrations/20260717193648_sprint_5_atomic_document_comments.sql
 supabase/migrations/20260717194631_sprint_5_completion_archive_hardening.sql
 supabase/migrations/20260717205037_document_templates_signing_recents.sql
 supabase/migrations/20260718002902_audit_security_hardening.sql
+supabase/migrations/20260718070000_generated_document_finalizations.sql
 ```
 
-The Sprint 3 through Sprint 6 migrations include explicit Data API grants for `authenticated` and `service_role`, plus PostgREST schema-cache reloads. The guided-document migration adds organization-wide template revisions, immutable per-document snapshots, shared answers, unordered all-party signer state, per-user recent access, and tenant-scoped RLS. The audit hardening migration closes profile-email claiming, aligns template and signing-recipient Data API access with application permissions, and moves invite acceptance, owner-role changes, and generated-answer merges into transactional service-role RPCs.
+The Sprint 3 through Sprint 6 migrations include explicit Data API grants for `authenticated` and `service_role`, plus PostgREST schema-cache reloads. The guided-document migration adds organization-wide template revisions, immutable per-document snapshots, shared answers, unordered all-party signer state, per-user recent access, and tenant-scoped RLS. The audit hardening migration closes profile-email claiming, aligns template and signing-recipient Data API access with application permissions, and moves invite acceptance, owner-role changes, and generated-answer merges into transactional service-role RPCs. The finalization migration records one immutable render input per completed generated document, promotes the create-only R2 object to an exact document version, and writes the corresponding activity and audit events atomically. This is application-enforced object immutability, not a regulatory retention or qualified e-signature feature.
 
 ## API Endpoints Summary
 
@@ -138,7 +139,7 @@ Implemented document routes:
 - `POST /api/documents/:id/complete-upload`
 - `POST /api/documents/:id/download-url` (JSON body with `organizationId` and optional `versionId`)
 - `POST /api/documents/:id/opened`
-- `GET /api/documents/:id/pdf`
+- `GET /api/documents/:id/pdf` (no-store preview while editable; signed redirect to the exact finalized version after completion)
 - `POST /api/templates/suggest-blocks`
 
 Implemented guided-document pages:

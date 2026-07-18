@@ -20,6 +20,7 @@ export type RenderGeneratedDocumentPdfInput = {
   answers: Record<string, unknown>
   workflowStatus: "draft" | "awaiting_signatures" | "completed"
   signers?: DocumentPdfSigner[]
+  metadataTimestamp?: string
 }
 
 export type NormalizedPdfInput = Omit<

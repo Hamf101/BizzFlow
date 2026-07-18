@@ -213,6 +213,7 @@ function parseAuditLogAction(value: string): AuditLogAction {
     value === "folder.archived" ||
     value === "document.created" ||
     value === "document.archived" ||
+    value === "document.finalized" ||
     value === "document_version.created" ||
     value === "document_version.download_url_issued"
   ) {

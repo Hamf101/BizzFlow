@@ -102,6 +102,15 @@ export async function renderPdfLibDocument(
     )
   }
 
+  // pdf-lib refreshes the modification date while pages and resources change,
+  // so immutable metadata must be applied only after all drawing is complete.
+  if (input.metadataTimestamp) {
+    const metadataDate = new Date(input.metadataTimestamp)
+
+    document.setCreationDate(metadataDate)
+    document.setModificationDate(metadataDate)
+  }
+
   // Plain indirect objects maximize compatibility with strict PDF processors
   // and print pipelines that do not reliably support compressed object streams.
   return Buffer.from(await document.save({ useObjectStreams: false }))

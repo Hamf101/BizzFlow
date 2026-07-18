@@ -9,6 +9,7 @@ export type MigrationFileName =
   | "20260717194631_sprint_5_completion_archive_hardening.sql"
   | "20260717205037_document_templates_signing_recents.sql"
   | "20260718002902_audit_security_hardening.sql"
+  | "20260718070000_generated_document_finalizations.sql"
 
 export const directWriteActions = ["insert", "update", "delete"] as const
 

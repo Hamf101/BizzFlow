@@ -594,6 +594,12 @@ function formatActivityDescription(event: DocumentActivityEvent): string {
     return "added a comment."
   }
 
+  if (event.eventType === "document.finalized") {
+    return typeof versionNumber === "number"
+      ? `finalized version ${versionNumber}.`
+      : "finalized the generated PDF."
+  }
+
   return "archived the document."
 }
 

@@ -6,7 +6,7 @@ This is the working development guide for BizFlow Docs. Treat the pasted MVP req
 
 Important local context:
 
-- Sprint 6 guided templates, signing, recent documents, and generated PDFs are implemented and migrated.
+- Sprint 6 guided templates, signing, recent documents, and generated PDFs are implemented and migrated. Completed generated documents now use deterministic rendering, create-only R2 storage, and an atomically promoted immutable document version.
 - The Next.js App Router foundation from Sprint 1 is scaffolded.
 - Sprint 4 added tenant-scoped folders, documents, signed R2 upload/download routes, and document dashboard pages.
 - Sprint 5 adds create-only, R2-verified replacement versions, transactionally paired comments/archive activity, member-visible timelines, and download audit events.
@@ -15,7 +15,7 @@ Important local context:
 
 ## Product Summary
 
-BizFlow Docs is a mobile-first, multi-tenant business workflow portal where teams create reusable forms, collect documents, assign submissions, review work, track tasks, send reminders, support public form links, and save offline drafts.
+BizFlow Docs is a mobile-first, multi-tenant business workflow portal where teams create reusable forms and generated documents, collect files, coordinate signing, assign submissions, review work, track tasks, send reminders, and support public form links.
 
 MVP goal:
 
@@ -51,8 +51,8 @@ The user superseded the local-first execution lock on 2026-07-18:
 - Do not install PWA, service-worker, IndexedDB/Dexie, Tauri, or other offline-runtime packages unless the user explicitly reactivates that work.
 - Spike 001 and the Offline Foundation documents remain valid research for a possible future offline phase. Their open PWA target-device gates do not block cloud feature work.
 - The cloud remains authoritative. Every mutation and file operation must use the authenticated actor, current organization membership, server validation, idempotency where replay is possible, and durable audit evidence for high-integrity transitions.
-- Before Sprint 7, close the highest-value cloud safety gaps that can be verified locally: R2 upload compatibility, exact-revision template publishing, and a two-tenant authenticated RLS test path. Run real browser-to-R2 UAT when deployment R2 credentials are available.
-- Immutable generated-document finalization and signing evidence remain cloud hardening priorities; do not represent a mutable browser-rendered document as an immutable finalized record.
+- The highest-value pre-Sprint-7 cloud safety gaps now have local coverage: R2 upload compatibility, exact-revision template publishing, a fail-closed two-tenant authenticated RLS runner, and immutable generated-document PDF finalization. Run the credential-backed RLS fixture and real browser-to-R2 UAT when those deployment fixtures are available.
+- Draft and awaiting-signature PDFs are labeled no-store previews. Only a completed document's create-only R2 object and atomically promoted version may be represented as finalized. This is application-level immutability, not regulatory WORM storage or a qualified e-signature claim.
 
 If offline work is reactivated, first review `artifacts/audits/BizzFlow-threat-model.md`, the preserved Spike 001 evidence, `artifacts/superpowers/offline-foundation-security-spike.md`, and `artifacts/superpowers/offline-foundation-plan.md`. Re-plan against the requirements current at that time instead of treating the old execution order as active.
 

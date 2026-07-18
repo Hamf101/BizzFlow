@@ -67,6 +67,11 @@ const TABLE_CHECKS = [
     name: "document_recent_accesses",
     select: "org_id,user_id,document_id,last_opened_at",
   },
+  {
+    name: "generated_document_finalizations",
+    select:
+      "id,org_id,document_id,status,storage_key,render_input_sha256,pdf_sha256,byte_size,document_version_id,created_at,finalized_at",
+  },
 ]
 
 function readEnvFile() {

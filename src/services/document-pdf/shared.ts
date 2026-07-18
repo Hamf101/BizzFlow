@@ -53,6 +53,9 @@ export function normalizePdfInput(
   }
 
   const signers = input.signers ?? []
+  const metadataTimestamp = normalizeMetadataTimestamp(
+    input.metadataTimestamp
+  )
 
   for (const signer of signers) {
     if (!signer.id.trim() || !signer.name.trim() || !signer.email.trim()) {
@@ -72,8 +75,42 @@ export function normalizePdfInput(
     ...input,
     title,
     content,
+    metadataTimestamp,
     signers,
   }
+}
+
+/**
+ * Validates and canonicalizes the optional timestamp written to PDF metadata.
+ *
+ * @param value - RFC 3339 timestamp supplied by immutable persistence metadata.
+ * @returns A whole-second UTC timestamp, or `undefined` when metadata is omitted.
+ * @throws DocumentPdfServiceError when a supplied timestamp is malformed.
+ */
+function normalizeMetadataTimestamp(
+  value: string | undefined
+): string | undefined {
+  if (value === undefined) {
+    return undefined
+  }
+
+  const isTimestamp =
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(
+      value
+    )
+  const timestamp = new Date(value)
+
+  if (!isTimestamp || Number.isNaN(timestamp.getTime())) {
+    throw new DocumentPdfServiceError(
+      "PDF metadata timestamp is invalid.",
+      400
+    )
+  }
+
+  // PDF date strings have whole-second precision; normalize before rendering so
+  // the in-memory input and serialized metadata describe the same instant.
+  timestamp.setUTCMilliseconds(0)
+  return timestamp.toISOString()
 }
 
 /**
