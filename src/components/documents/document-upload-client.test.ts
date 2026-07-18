@@ -27,8 +27,33 @@ describe("document upload client", () => {
     ).resolves.toBeUndefined()
     expect(fetchMock).toHaveBeenCalledWith(
       "https://storage.example.com/upload",
-      expect.objectContaining({ method: "PUT", body: file })
+      {
+        method: "PUT",
+        headers: {
+          "content-type": "application/pdf",
+          "if-none-match": "*",
+        },
+        body: file,
+      }
     )
+  })
+
+  it("rejects a non-idempotent storage error", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(null, { status: 500 }))
+    vi.stubGlobal("fetch", fetchMock)
+    const file = new File(["pdf"], "contract.pdf", {
+      type: "application/pdf",
+    })
+
+    await expect(
+      uploadFileToSignedUrl(
+        "https://storage.example.com/upload",
+        file,
+        "Upload failed."
+      )
+    ).rejects.toThrow("Upload failed.")
   })
 
   it("uses the standard API error payload for completion failures", async () => {

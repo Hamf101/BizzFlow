@@ -12,6 +12,7 @@
     "lint": "eslint",
     "test": "vitest run",
     "supabase:check": "node scripts/check-supabase-live.mjs",
+    "supabase:check:rls": "node scripts/check-supabase-rls.mjs",
     "typecheck": "tsc --noEmit",
     "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm check:duplication && pnpm build && pnpm audit:dependencies",
     "check:duplication": "jscpd src --format typescript,tsx --min-lines 5 --min-tokens 50 --mode strict --ignore '**/*.test.ts,**/*.test.tsx' --threshold 3 --reporters console --no-colors --no-tips",

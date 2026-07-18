@@ -11,6 +11,7 @@ import type {
   CreateDocumentTemplateInput,
   GetDocumentTemplateInput,
   ListDocumentTemplatesInput,
+  PublishDocumentTemplateInput,
   TemplateServiceDeps,
   UpdateDocumentTemplateInput,
 } from "./contracts"
@@ -270,6 +271,7 @@ export async function updateDocumentTemplate(
         .eq("id", input.templateId)
         .eq("org_id", input.organizationId)
         .eq("revision", input.expectedRevision)
+        .eq("status", existing.status)
         .select(TEMPLATE_COLUMNS)
         .maybeSingle()
 
@@ -292,13 +294,13 @@ export async function updateDocumentTemplate(
 /**
  * Publishes a schema-valid template for use by organization staff.
  *
- * @param input - Actor, organization, and template identifiers.
+ * @param input - Actor, organization, template, and exact saved revision.
  * @param deps - Optional injected dependencies for tests.
  * @returns Published template; an already-published template is returned unchanged.
- * @throws TemplateServiceError when permission, validation, or persistence fails.
+ * @throws TemplateServiceError when permission, validation, revision matching, or persistence fails.
  */
 export async function publishDocumentTemplate(
-  input: ChangeDocumentTemplateStatusInput,
+  input: PublishDocumentTemplateInput,
   deps: TemplateServiceDeps = {}
 ): Promise<DocumentTemplate> {
   return runTemplateOperation(
@@ -314,11 +316,20 @@ export async function publishDocumentTemplate(
         "templates:manage",
         "You cannot manage document templates."
       )
+      assertRevision(input.expectedRevision)
+
       const existing = await getTemplateById(
         client,
         input.organizationId,
         input.templateId
       )
+
+      if (existing.revision !== input.expectedRevision) {
+        throw new TemplateServiceError(
+          "Document template changed before it could be published.",
+          409
+        )
+      }
 
       if (existing.status === "archived") {
         throw new TemplateServiceError(
@@ -343,7 +354,7 @@ export async function publishDocumentTemplate(
         })
         .eq("id", input.templateId)
         .eq("org_id", input.organizationId)
-        .eq("revision", existing.revision)
+        .eq("revision", input.expectedRevision)
         .eq("status", existing.status)
         .select(TEMPLATE_COLUMNS)
         .maybeSingle()

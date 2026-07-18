@@ -147,6 +147,7 @@ export async function publishTemplateAction(formData: FormData): Promise<void> {
       actorUserId: actionContext.actorUserId,
       organizationId: actionContext.context.organization.id,
       templateId: savedTemplate.id,
+      expectedRevision: savedTemplate.revision,
     })
 
     revalidateTemplatePaths(template.id)
@@ -223,13 +224,25 @@ async function persistTemplateDraftForPublish(
       throw error
     }
 
-    // Publishing an already-saved draft is valid. Revision conflicts are
-    // rejected by updateDocumentTemplate before it reports a no-op.
-    return getDocumentTemplate({
+    // Publishing an already-saved draft is valid, but the follow-up read must
+    // still represent the exact revision submitted by the editor.
+    const expectedRevision = parseExpectedRevision(
+      getFormString(formData, "expectedRevision")
+    )
+    const template = await getDocumentTemplate({
       actorUserId: actionContext.actorUserId,
       organizationId: actionContext.context.organization.id,
       templateId: requireTemplateId(getFormString(formData, "templateId")),
     })
+
+    if (template.revision !== expectedRevision) {
+      throw new TemplateServiceError(
+        "Document template changed since it was opened.",
+        409
+      )
+    }
+
+    return template
   }
 }
 

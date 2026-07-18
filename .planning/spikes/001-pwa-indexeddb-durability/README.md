@@ -12,7 +12,7 @@ tags: [pwa, indexeddb, durability, quota, recovery, tm-004, tm-013, tm-015]
 
 ## Status
 
-`PARTIAL` — the automated macOS Chrome development envelope passed, including a real root-browser process kill during the current 60-second active transaction. Windows installed-PWA, actual quota/storage pressure, and hard-power gates remain open, so this result does not select the production runtime.
+`PARTIAL — DEFERRED` — the automated macOS Chrome development envelope passed, including a real root-browser process kill during the current 60-second active transaction. The user then selected a cloud-first direction and deferred PWA packages. Windows installed-PWA, actual quota/storage pressure, and hard-power gates remain open, but they do not block current cloud work. No production PWA dependency was installed for this spike.
 
 ## What This Validates
 
@@ -149,6 +149,7 @@ The [evidence README](../../../artifacts/verification/offline-foundation/001-pwa
 | 2026-07-18 | Corpus iteration | A repeated-character 1.6-MiB fixture produced a misleadingly small storage estimate. | Replace it with deterministic high-entropy binary records and verify every stored checksum. |
 | 2026-07-18 | Process-kill iteration | A recent local-storage marker could disappear after root Chrome received `SIGKILL`, and stopping the automation daemon did not reliably kill Chrome. | Persist the oracle in its own completed strict IndexedDB transaction and resolve the exact isolated root-browser PID before termination. |
 | 2026-07-18 | macOS evidence | Current-code automation passed 5/5, 25 corpus checksums matched, reload recovery passed, and a 60-second-window `SIGKILL` recovered neither half of the interrupted pair. | Keep the spike `PARTIAL`; run the required Windows installed-PWA, real quota/storage-pressure, clearing, and hard-power matrix. |
+| 2026-07-18 | Product direction | The user selected a primarily cloud product and explicitly declined PWA packages for now. | Preserve the harness and evidence, mark further PWA work deferred, and continue cloud hardening. |
 
 Add one row per meaningful implementation or test iteration. Preserve failed and surprising observations; do not overwrite them with the final summary.
 
@@ -164,7 +165,7 @@ The [macOS Chrome 150 development result](../../../artifacts/verification/offlin
 - a 25-record, 1.6-MiB high-entropy corpus committed and all 25 SHA-256 checksums matched; and
 - a real root Chrome `SIGKILL` during the current 60-second active transaction recovered neither partial record using an independently committed IndexedDB oracle.
 
-The PWA candidate remains undecided. `VALIDATED` requires:
+The PWA candidate remains undecided and further evaluation is deferred. If offline support is reactivated, `VALIDATED` requires:
 
 - the automated scenarios pass against the recorded macOS Chromium binary;
 - the same applicable scenarios run on current stable Microsoft Edge and Google Chrome on Windows 10/11 in installed-PWA mode;

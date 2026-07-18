@@ -1,15 +1,15 @@
 # BizFlow Offline Foundation Security and Durability Spike
 
 Date: 2026-07-18
-Status: mandatory first executable work item
+Status: deferred; Spike 001 development evidence is preserved
 Production data: prohibited
 Purpose: replace assumptions with reproducible evidence before the Offline Foundation architecture is implemented
 
-## Execution lock
+## Supersession Note
 
-This spike is the next project phase. Do not start Sprint 6 or another feature sprint first.
+The user's later 2026-07-18 direction makes BizFlow cloud-first and explicitly defers PWA packages. This spike is no longer the next project phase and does not block cloud feature work.
 
-After this spike:
+If offline support is explicitly reactivated:
 
 1. Review all evidence and failed gates.
 2. Select PWA/IndexedDB or Tauri/SQLite.

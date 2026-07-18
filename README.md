@@ -7,6 +7,7 @@ BizFlow Docs is a mobile-first, multi-tenant workflow portal for reusable forms,
 - Project phase: implementation.
 - Sprint: Sprint 6 guided templates, signing, and recent documents are implemented and migrated to the configured Supabase project.
 - Application scaffold: Next.js App Router foundation with versioned uploads, nested folders, organization templates, guided generated documents, private all-party signing links, and print-ready PDFs.
+- Delivery direction: cloud-first. Offline/PWA work and related packages are deferred until explicitly reprioritized.
 - Canonical project guide: `.agent/AGENT.md`.
 
 ## MVP Scope
@@ -31,7 +32,7 @@ MVP non-goals:
 - Storage: Cloudflare R2 private buckets with signed URLs.
 - Background jobs: Inngest.
 - Notifications: Resend for email and Termii for initial SMS support.
-- Offline: PWA, IndexedDB, and Dexie.js.
+- Offline: deferred; no PWA, service-worker, IndexedDB/Dexie, or desktop-runtime dependency is part of the current cloud build.
 - Monitoring and analytics: Sentry plus PostHog or an internal event table.
 - Hosting: Vercel, Supabase, Cloudflare R2, and Inngest.
 
@@ -223,4 +224,13 @@ Run the aggregate local quality gate before submitting changes:
 pnpm check
 ```
 
-The aggregate gate runs lint, strict TypeScript, unit/integration tests, production-code duplication detection, a production build, and a production dependency audit. When configured with local secrets, also run `pnpm supabase:check`; use authenticated two-tenant end-to-end checks for effective RLS rather than treating the service-role smoke test as authorization proof.
+The aggregate gate runs lint, strict TypeScript, unit/integration tests, production-code duplication detection, a production build, and a production dependency audit. When configured with local secrets, also run `pnpm supabase:check`.
+
+For effective RLS verification, provision two isolated synthetic users in different organizations and follow the fail-closed fixture contract:
+
+```bash
+pnpm supabase:check:rls --help
+pnpm supabase:check:rls
+```
+
+This runner uses ordinary publishable-key user sessions for tenant reads. It does not treat the service-role smoke test as authorization proof, create fixtures, or print credentials, tokens, fixture IDs, or returned row bodies.

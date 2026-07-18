@@ -7,6 +7,7 @@ import {
 import { describe, expect, it, vi } from "vitest"
 
 import type { FileUploadPolicyEnv, R2Env } from "@/lib/env"
+import { createR2Client } from "@/lib/r2/client"
 import {
   buildDocumentObjectKey,
   createSignedDocumentDownloadUrl,
@@ -138,7 +139,7 @@ describe("document upload validation", () => {
 })
 
 describe("document signed URL helpers", () => {
-  it("cryptographically binds the declared upload length", async () => {
+  it("signs required upload headers without synthetic checksum parameters", async () => {
     const r2Client = createTestR2Client()
 
     const result = await createSignedDocumentUploadUrl(
@@ -157,7 +158,17 @@ describe("document signed URL helpers", () => {
     const signedHeaders =
       signedUrl.searchParams.get("X-Amz-SignedHeaders")?.split(";") ?? []
 
-    expect(signedHeaders).toContain("content-length")
+    expect(signedHeaders).toEqual(
+      expect.arrayContaining([
+        "content-length",
+        "content-type",
+        "if-none-match",
+      ])
+    )
+    expect(signedUrl.searchParams.has("x-amz-checksum-crc32")).toBe(false)
+    expect(
+      signedUrl.searchParams.has("x-amz-sdk-checksum-algorithm")
+    ).toBe(false)
   })
 
   it("signs an attachment-only response override for downloads", async () => {
@@ -228,7 +239,10 @@ describe("document signed URL helpers", () => {
       ContentType: "application/pdf",
       IfNoneMatch: "*",
     })
-    expect(signedOptions).toEqual({ expiresIn: 60 })
+    expect(signedOptions).toEqual({
+      expiresIn: 60,
+      signableHeaders: new Set(["content-type"]),
+    })
   })
 
   it("uses an injected signer with a GetObjectCommand for downloads", async () => {
@@ -278,14 +292,7 @@ describe("document signed URL helpers", () => {
 })
 
 function createTestR2Client(): S3Client {
-  return new S3Client({
-    region: r2Env.CLOUDFLARE_R2_REGION,
-    endpoint: r2Env.CLOUDFLARE_R2_ENDPOINT,
-    credentials: {
-      accessKeyId: r2Env.CLOUDFLARE_R2_ACCESS_KEY_ID,
-      secretAccessKey: r2Env.CLOUDFLARE_R2_SECRET_ACCESS_KEY,
-    },
-  })
+  return createR2Client(r2Env)
 }
 
 describe("document upload verification", () => {
@@ -397,27 +404,46 @@ describe("document upload verification", () => {
   })
 
   it("returns a storage error when the HEAD request fails unexpectedly", async () => {
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation((): void => undefined)
     const headObject = vi.fn<DocumentStorageHeadObject>(async () => {
-      throw new Error("R2 is unavailable")
+      throw Object.assign(new Error("sensitive provider response"), {
+        providerRequest: { authorization: "sensitive credential" },
+      })
     })
+    const storageKey = "documents/version.pdf"
 
-    await expect(
-      verifyDocumentUpload(
+    try {
+      await expect(
+        verifyDocumentUpload(
+          {
+            storageKey,
+            contentType: "application/pdf",
+            byteSize: 10,
+          },
+          {
+            r2Client: {} as S3Client,
+            r2Env,
+            headObject,
+          }
+        )
+      ).rejects.toMatchObject({
+        message: "Unable to verify uploaded document object.",
+        statusCode: 500,
+      } satisfies Partial<DocumentStorageServiceError>)
+
+      expect(consoleError).toHaveBeenCalledWith(
+        "document_upload_verification_failed",
         {
-          storageKey: "documents/version.pdf",
-          contentType: "application/pdf",
-          byteSize: 10,
-        },
-        {
-          r2Client: {} as S3Client,
-          r2Env,
-          headObject,
+          storageKey,
+          durationMs: expect.any(Number),
         }
       )
-    ).rejects.toMatchObject({
-      message: "Unable to verify uploaded document object.",
-      statusCode: 500,
-    } satisfies Partial<DocumentStorageServiceError>)
+      expect(consoleError).toHaveBeenCalledOnce()
+    } finally {
+      consoleError.mockRestore()
+    }
   })
 
   it("preserves structured validation errors", async () => {

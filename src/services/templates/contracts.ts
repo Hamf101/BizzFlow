@@ -25,6 +25,10 @@ export type UpdateDocumentTemplateInput = GetDocumentTemplateInput & {
   content?: TemplateContent
 }
 
+export type PublishDocumentTemplateInput = GetDocumentTemplateInput & {
+  expectedRevision: number
+}
+
 export type ChangeDocumentTemplateStatusInput = GetDocumentTemplateInput
 
 export type CreateGeneratedDocumentInput = ListDocumentTemplatesInput & {

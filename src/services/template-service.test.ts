@@ -22,6 +22,10 @@ type FakeResult = {
 }
 type FakeFilter = (row: FakeRow) => boolean
 type FakeOperation = "select" | "insert" | "update" | "upsert" | "delete"
+type FakeOperationHook = (
+  tableName: string,
+  operation: FakeOperation
+) => void
 
 const ORG_ID = "10000000-0000-4000-8000-000000000001"
 const MANAGER_ID = "20000000-0000-4000-8000-000000000001"
@@ -44,7 +48,8 @@ class FakeQuery implements PromiseLike<FakeResult> {
 
   constructor(
     private readonly tableName: string,
-    private readonly tables: FakeTables
+    private readonly tables: FakeTables,
+    private readonly beforeOperation?: FakeOperationHook
   ) {}
 
   select(): FakeQuery {
@@ -119,6 +124,7 @@ class FakeQuery implements PromiseLike<FakeResult> {
 
   private execute(): FakeResult {
     const table = this.tables[this.tableName] ?? (this.tables[this.tableName] = [])
+    this.beforeOperation?.(this.tableName, this.operation)
 
     if (this.operation === "insert") {
       const row = withDatabaseDefaults(this.tableName, this.payload ?? {})
@@ -183,10 +189,13 @@ class FakeQuery implements PromiseLike<FakeResult> {
 }
 
 class FakeClient {
-  constructor(readonly tables: FakeTables) {}
+  constructor(
+    readonly tables: FakeTables,
+    private readonly beforeOperation?: FakeOperationHook
+  ) {}
 
   from(tableName: string): FakeQuery {
-    return new FakeQuery(tableName, this.tables)
+    return new FakeQuery(tableName, this.tables, this.beforeOperation)
   }
 }
 
@@ -314,6 +323,7 @@ describe("template service", () => {
         actorUserId: MANAGER_ID,
         organizationId: ORG_ID,
         templateId: DRAFT_TEMPLATE_ID,
+        expectedRevision: 1,
       },
       {
         client: client as never,
@@ -330,6 +340,84 @@ describe("template service", () => {
       DRAFT_TEMPLATE_ID,
       TEMPLATE_ID,
     ])
+  })
+
+  it("rejects publishing when the database has a newer revision", async () => {
+    const tables = createBaseTables()
+    const draft = tables.document_templates.find(
+      (row: FakeRow): boolean => row.id === DRAFT_TEMPLATE_ID
+    )
+
+    if (!draft) {
+      throw new Error("Expected the draft template fixture to exist.")
+    }
+
+    draft.revision = 2
+    draft.title = "Concurrent draft update"
+    const client = new FakeClient(tables)
+
+    await expect(
+      publishDocumentTemplate(
+        {
+          actorUserId: MANAGER_ID,
+          organizationId: ORG_ID,
+          templateId: DRAFT_TEMPLATE_ID,
+          expectedRevision: 1,
+        },
+        { client: client as never }
+      )
+    ).rejects.toMatchObject({
+      message: "Document template changed before it could be published.",
+      statusCode: 409,
+    })
+
+    expect(draft.status).toBe("draft")
+    expect(draft.revision).toBe(2)
+  })
+
+  it("rejects an edit when the template is archived after it is read", async () => {
+    const tables = createBaseTables()
+    const draft = tables.document_templates.find(
+      (row: FakeRow): boolean => row.id === DRAFT_TEMPLATE_ID
+    )
+
+    if (!draft) {
+      throw new Error("Expected the draft template fixture to exist.")
+    }
+
+    let lifecycleChanged = false
+    const client = new FakeClient(
+      tables,
+      (tableName: string, operation: FakeOperation): void => {
+        if (
+          !lifecycleChanged &&
+          tableName === "document_templates" &&
+          operation === "update"
+        ) {
+          draft.status = "archived"
+          lifecycleChanged = true
+        }
+      }
+    )
+
+    await expect(
+      updateDocumentTemplate(
+        {
+          actorUserId: MANAGER_ID,
+          organizationId: ORG_ID,
+          templateId: DRAFT_TEMPLATE_ID,
+          expectedRevision: 1,
+          title: "Unsafe concurrent edit",
+        },
+        { client: client as never }
+      )
+    ).rejects.toMatchObject({
+      message: "Document template changed since it was opened.",
+      statusCode: 409,
+    })
+
+    expect(draft.status).toBe("archived")
+    expect(draft.title).not.toBe("Unsafe concurrent edit")
   })
 
   it("increments revisions while preserving previously generated snapshots", async () => {

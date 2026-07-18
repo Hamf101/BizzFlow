@@ -30,7 +30,10 @@ type DocumentStorageCommand = PutObjectCommand | GetObjectCommand
 export type DocumentStorageSigner = (
   client: S3Client,
   command: DocumentStorageCommand,
-  options: { expiresIn: number }
+  options: {
+    expiresIn: number
+    signableHeaders?: Set<string>
+  }
 ) => Promise<string>
 
 export type DocumentStorageHeadObject = (
@@ -184,6 +187,7 @@ export async function createSignedDocumentUploadUrl(
     })
     const uploadUrl = await signer(r2Client, command, {
       expiresIn: r2Env.CLOUDFLARE_R2_SIGNED_URL_TTL_SECONDS,
+      signableHeaders: new Set(["content-type"]),
     })
 
     return {
@@ -332,7 +336,6 @@ export async function verifyDocumentUpload(
     console.error("document_upload_verification_failed", {
       storageKey,
       durationMs: Date.now() - startedAt,
-      error,
     })
     throw new DocumentStorageServiceError(
       "Unable to verify uploaded document object.",
@@ -417,7 +420,10 @@ async function headDocumentStorageObject(
 async function signDocumentStorageCommand(
   client: S3Client,
   command: DocumentStorageCommand,
-  options: { expiresIn: number }
+  options: {
+    expiresIn: number
+    signableHeaders?: Set<string>
+  }
 ): Promise<string> {
   return getSignedUrl(client, command, options)
 }

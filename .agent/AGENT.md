@@ -6,7 +6,7 @@ This is the working development guide for BizFlow Docs. Treat the pasted MVP req
 
 Important local context:
 
-- Sprint 5 document versioning and comments is implemented, verified, and migrated; the security-gated Offline Foundation phase now precedes further sprint work.
+- Sprint 6 guided templates, signing, recent documents, and generated PDFs are implemented and migrated.
 - The Next.js App Router foundation from Sprint 1 is scaffolded.
 - Sprint 4 added tenant-scoped folders, documents, signed R2 upload/download routes, and document dashboard pages.
 - Sprint 5 adds create-only, R2-verified replacement versions, transactionally paired comments/archive activity, member-visible timelines, and download audit events.
@@ -38,38 +38,23 @@ Use this stack unless the user explicitly changes it:
 - Background jobs: Inngest first; reconsider Trigger.dev later for long-running OCR, AI, or heavy file workflows
 - Email: Resend
 - SMS: Termii initially; keep Africa's Talking as a later switch option
-- Offline: PWA, IndexedDB, Dexie.js
+- Offline: deferred until the user explicitly reprioritizes it; do not add PWA, service-worker, IndexedDB/Dexie, or desktop-runtime packages for the current cloud build
 - Monitoring: Sentry
 - Analytics: PostHog or an internal event table
 - Hosting: Vercel, Supabase, Cloudflare R2, Inngest
 
-## Local-First Desktop Direction
+## Cloud-First Direction
 
-The following product decisions are locked as of 2026-07-18:
+The user superseded the local-first execution lock on 2026-07-18:
 
-- BizFlow is a desktop-oriented cloud application that must remain useful through low bandwidth, abrupt power loss, and complete internet outages.
-- Pilot users are expected to use dedicated devices rather than shared office computers.
-- Offline scope includes draft fields, attachments, complete documents, recipient information, generated PDFs, and drawn signatures.
-- A previously authenticated user may continue reading and editing protected local data indefinitely while offline.
-- The first delivery target is an installable PWA using IndexedDB through Dexie. Tauri plus SQLite is a conditional fallback only if field evidence proves the PWA cannot meet durability, capacity, or file-queue requirements.
-- The cloud remains authoritative. Every synchronized mutation and file must be authenticated, reauthorized against current organization membership, validated, made idempotent, and audited by the server. The client-supplied actor, role, organization, timestamps, and queue contents are never trusted.
-- Offline signature capture is provisional until the server accepts it. Role changes, invitations, provider calls, final workflow transitions, and other privileged effects require fresh online authorization.
+- BizFlow is currently a cloud application. Continue the hosted Next.js, Supabase, R2, and provider-backed MVP.
+- Do not install PWA, service-worker, IndexedDB/Dexie, Tauri, or other offline-runtime packages unless the user explicitly reactivates that work.
+- Spike 001 and the Offline Foundation documents remain valid research for a possible future offline phase. Their open PWA target-device gates do not block cloud feature work.
+- The cloud remains authoritative. Every mutation and file operation must use the authenticated actor, current organization membership, server validation, idempotency where replay is possible, and durable audit evidence for high-integrity transitions.
+- Before Sprint 7, close the highest-value cloud safety gaps that can be verified locally: R2 upload compatibility, exact-revision template publishing, and a two-tenant authenticated RLS test path. Run real browser-to-R2 UAT when deployment R2 credentials are available.
+- Immutable generated-document finalization and signing evidence remain cloud hardening priorities; do not represent a mutable browser-rendered document as an immutable finalized record.
 
-Indefinite offline access has an unavoidable residual risk: a disconnected device cannot receive revocation or remote-wipe instructions. Dedicated-device policy, OS accounts, full-disk encryption, an automatically locking local vault, and secure device disposal reduce this risk but cannot eliminate it. This tradeoff must remain visible in product documentation and deployment guidance.
-
-Before offline implementation begins:
-
-1. Review `artifacts/audits/BizzFlow-threat-model.md`.
-2. Execute and record the tests in `artifacts/superpowers/offline-foundation-security-spike.md`.
-3. Approve the implementation sequence in `artifacts/superpowers/offline-foundation-plan.md`.
-4. Treat every proposed security control as a candidate. Verify the threat, proposed control, platform/provider behavior, operational cost, privacy impact, and regression behavior before implementation.
-
-Execution lock:
-
-- The next implementation work must start with the Offline Foundation security spike and then follow the approved Offline Foundation plan.
-- The user's 2026-07-18 instruction authorizes starting this sequence; do not ask which sprint to run next or route back to Sprint 6. Pause only for a documented spike stop condition, a failed release-blocking gate, or authority needed for an external/destructive action.
-- Do not advance to Sprint 6 or any later feature sprint until the Offline Foundation is implemented, its security and durability gates pass, and the result is reviewed.
-- A general-purpose end-user VPN is not part of the Offline Foundation. A VPN requires an underlying network connection and therefore cannot solve BizFlow's complete-connectivity-outage requirement. Continue to use HTTPS/TLS for cloud traffic; evaluate private enterprise access separately only if a future deployment has a real private-network requirement.
+If offline work is reactivated, first review `artifacts/audits/BizzFlow-threat-model.md`, the preserved Spike 001 evidence, `artifacts/superpowers/offline-foundation-security-spike.md`, and `artifacts/superpowers/offline-foundation-plan.md`. Re-plan against the requirements current at that time instead of treating the old execution order as active.
 
 ## Architecture Rules
 
@@ -474,9 +459,9 @@ Done when:
 
 - Users can replace documents while keeping version history, discuss active documents, and see a tenant-scoped activity timeline.
 
-### Priority Phase: Offline Foundation (Before Sprint 6)
+### Deferred Phase: Offline Foundation (After Cloud MVP Reprioritization)
 
-Build only after the threat model and verification spike are reviewed:
+Build only if the user explicitly reactivates offline support and the threat model and verification spike are reviewed:
 
 - Local persistence and crash-safe autosave.
 - Per-user and per-organization local isolation.
@@ -492,6 +477,8 @@ Done when:
 - Every security and durability acceptance criterion in the Offline Foundation spike has recorded evidence.
 
 Detailed plan: `artifacts/superpowers/offline-foundation-plan.md`.
+
+This phase is not a prerequisite for Sprint 7 or other current cloud work, and it must not add dependencies while deferred.
 
 ### Sprint 6: Template Builder
 

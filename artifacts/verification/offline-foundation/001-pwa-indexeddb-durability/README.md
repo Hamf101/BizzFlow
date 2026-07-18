@@ -2,7 +2,7 @@
 
 ## Evidence Status
 
-`PARTIAL` — the macOS Chrome development envelope is recorded and passed. Keep the Spike 001 production verdict partial until the required Windows installed-PWA, real quota/storage-pressure, clearing, and hard-power evidence is complete and reviewed.
+`PARTIAL — DEFERRED` — the macOS Chrome development envelope is recorded and passed. The user selected a cloud-first direction and deferred PWA packages, so the remaining Windows installed-PWA, real quota/storage-pressure, clearing, and hard-power evidence is paused and does not block cloud work. Keep the production verdict partial unless this phase is reactivated and the remaining evidence is completed.
 
 This package is for synthetic, metadata-only evidence. Never place production documents, recipient details, signatures, credentials, tokens, signed URLs, database dumps, unrestricted filenames, or browser profiles here.
 
@@ -43,10 +43,10 @@ Do not perform destructive power or disk-pressure testing on a primary workstati
 | Evidence target | Scenarios | Required mode | Status | Result file / notes |
 | --- | --- | --- | --- | --- |
 | macOS + automated Chromium | Automated CAP-02/04/05/08, DUR-01/02, VAULT-05 cases | Headed system Chrome 150.0.7871.125; reused isolated persistent profile | `PASS` | [Result](./macos-chrome-150-result.md), [JSON](./macos-chrome-150-headed-persistent-profile.json), [screenshot](./macos-chrome-150-result.png) |
-| Windows 10/11 + Microsoft Edge stable | Applicable CAP-02/04/05/08, DUR-01/02, VAULT-05 cases | Installed PWA; normal tab fallback recorded separately | `PENDING` | |
-| Windows 10/11 + Google Chrome stable | Applicable CAP-02/04/05/08, DUR-01/02, VAULT-05 cases | Installed PWA; normal tab fallback recorded separately | `PENDING` | |
-| Windows disposable VM/test device + Edge | Manual CAP-05/06/07, DUR-01/07 cases | Forced termination, actual quota, hard power, clearing, storage pressure | `PENDING` | |
-| Windows disposable VM/test device + Chrome | Manual CAP-05/06/07, DUR-01/07 cases | Forced termination, actual quota, hard power, clearing, storage pressure | `PENDING` | |
+| Windows 10/11 + Microsoft Edge stable | Applicable CAP-02/04/05/08, DUR-01/02, VAULT-05 cases | Installed PWA; normal tab fallback recorded separately | `DEFERRED` | Reactivate only if a production PWA is reconsidered. |
+| Windows 10/11 + Google Chrome stable | Applicable CAP-02/04/05/08, DUR-01/02, VAULT-05 cases | Installed PWA; normal tab fallback recorded separately | `DEFERRED` | Reactivate only if a production PWA is reconsidered. |
+| Windows disposable VM/test device + Edge | Manual CAP-05/06/07, DUR-01/07 cases | Forced termination, actual quota, hard power, clearing, storage pressure | `DEFERRED` | Reactivate only if a production PWA is reconsidered. |
+| Windows disposable VM/test device + Chrome | Manual CAP-05/06/07, DUR-01/07 cases | Forced termination, actual quota, hard power, clearing, storage pressure | `DEFERRED` | Reactivate only if a production PWA is reconsidered. |
 
 ## File Naming
 

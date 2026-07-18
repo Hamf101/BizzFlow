@@ -1,14 +1,18 @@
 # BizFlow Offline Foundation Plan
 
 Date: 2026-07-18
-Status: approved for next-work execution; implementation has not started
-Priority: mandatory next work before Sprint 6 or any later feature sprint
+Status: deferred by the user's cloud-first direction; implementation has not started
+Priority: future research only; not a prerequisite for current cloud work
 
-## Execution lock
+## Supersession Note
 
-The next agent must begin with this plan. It must not select the next numbered product sprint.
+The user's later 2026-07-18 direction supersedes this plan's former execution lock. BizFlow is currently a cloud-first application, and no PWA, service-worker, IndexedDB/Dexie, Tauri, or other offline-runtime package should be added unless the user explicitly reactivates this phase.
 
-The user's 2026-07-18 instruction authorizes the agent to start Phase 0. It should pause only when a documented stop condition is reached, a release-blocking gate fails, or an external/destructive action requires additional authority.
+The design, threat analysis, and Spike 001 evidence are preserved as future research. Open target-device and PWA gates are not cloud-MVP blockers.
+
+## Deferred Execution Order
+
+If the user reactivates offline support, revalidate the requirements and then use this order:
 
 Required order:
 
@@ -17,9 +21,9 @@ Required order:
 3. Resolve or explicitly accept every failed release-blocking gate.
 4. Implement the Offline Foundation in the phases below.
 5. Verify the complete save, crash recovery, authorization, sync, conflict, and file path.
-6. Resume Sprint 6 only after the foundation is accepted.
+6. Integrate the accepted result into the then-current cloud product plan.
 
-No application-code phase may silently skip the spike, and no sprint-status document may mark the foundation complete without fresh evidence.
+No future sprint-status document may mark the foundation complete without fresh evidence, but current cloud application work may proceed while this plan is deferred.
 
 ## Verification-before-implementation rule
 
@@ -674,7 +678,7 @@ Do not collect:
 
 | Decision | Status | Rationale | Verification required |
 | --- | --- | --- | --- |
-| Offline Foundation precedes Sprint 6 | Locked | Later workflows otherwise deepen cloud-first coupling | Confirm all planning/context files route next work here |
+| Offline Foundation precedes cloud feature work | Superseded | The user selected a cloud-first MVP and deferred PWA packages | Reactivate only on explicit user direction |
 | Dedicated devices | Confirmed assumption | Reduces intentional cross-user sharing but not theft/malware | Pilot device-management survey |
 | All listed data available offline | Confirmed requirement | Core value during outages | Capacity, privacy, and recovery spike |
 | Indefinite offline local access | Confirmed requirement with residual risk | Supports long outages | Explicit acceptance of no remote revocation/wipe |
@@ -698,4 +702,4 @@ The Offline Foundation is complete only when:
 - recovery and support artifacts are usable and redacted;
 - no Critical or unaccepted High threat remains;
 - the user reviews the residual risk of indefinite disconnected access;
-- the canonical plan explicitly releases the Sprint 6 execution lock.
+- the canonical plan explicitly records the current offline-phase decision.

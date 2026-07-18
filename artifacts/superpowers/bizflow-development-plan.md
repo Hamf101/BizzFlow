@@ -10,8 +10,8 @@ Canonical guide:
 
 Summary:
 
-- Product: BizFlow Docs, a mobile-first, multi-tenant workflow portal for forms, document collection, submissions, tasks, reminders, public links, and offline drafts.
-- Current state: Sprint 5 is implemented and schema-verified against the live Supabase project. Before further feature sprints, the project is entering a security-gated Offline Foundation planning and verification phase.
+- Product: BizFlow Docs, a mobile-first, multi-tenant cloud workflow portal for forms, document collection, submissions, tasks, reminders, and public links. Offline drafts remain a deferred option.
+- Current state: Sprint 6 is implemented and schema-verified against the live Supabase project. Cloud hardening now precedes Sprint 7; the Offline Foundation is not an active release gate.
 - Source of truth: `.agent/AGENT.md` and the attached BizFlow MVP notes.
 - Stale context: `.agent/Project_inf.md` described an unrelated product and should not guide BizFlow implementation.
 
@@ -30,21 +30,23 @@ Current checklist:
 - [x] Sprint 3 RLS and permissions implemented and locally verified.
 - [x] Sprint 4 documents implemented and locally verified.
 - [x] Sprint 5 document versioning and comments implemented and locally verified.
+- [x] Sprint 6 guided templates, signing, recent documents, and generated PDFs implemented and migrated.
 - [x] Supabase migrations applied and live schema verified against the real project.
+- [x] Fail-closed two-tenant authenticated RLS verification harness added.
+- [ ] Two-tenant authenticated RLS checks completed without service-role query access.
 - [ ] Authenticated browser-to-R2 upload/download UAT completed with test-user credentials and deployment R2 settings.
-- [x] Local-first desktop direction and offline scope confirmed with the user.
+- [x] Cloud-first direction confirmed; PWA/offline dependencies explicitly deferred.
 - [x] Repository-grounded offline threat model documented.
 - [x] Offline Foundation phase plan documented.
 - [x] Offline security and durability spike specified.
-- [ ] Threat model, candidate controls, and spike exit criteria reviewed before implementation.
+- [ ] Immutable generated-document finalization and signing evidence designed before representing a document as finalized.
 
-Offline direction:
+Deferred offline research:
 
-- Dedicated user devices.
-- Offline support for drafts, attachments, complete documents, recipient data, generated PDFs, and drawn signatures.
-- Indefinite offline read/edit access, with the documented limitation that a fully disconnected device cannot be remotely revoked or wiped.
-- PWA plus IndexedDB/Dexie first; Tauri plus SQLite only after field evidence justifies it.
-- Cloud authorization remains authoritative for every synchronized mutation.
+- Spike 001 established useful native IndexedDB development evidence without adding a production PWA dependency.
+- Windows installed-PWA, storage-pressure, and hard-power gates remain open by design while this work is deferred.
+- Do not install PWA, service-worker, IndexedDB/Dexie, Tauri, or other offline-runtime packages unless the user explicitly reactivates the phase.
+- If reactivated, cloud authorization must remain authoritative for every synchronized mutation.
 
 Planning artifacts:
 
@@ -52,17 +54,17 @@ Planning artifacts:
 - `artifacts/superpowers/offline-foundation-plan.md`
 - `artifacts/superpowers/offline-foundation-security-spike.md`
 
-Mandatory next-work routing:
+Current next-work routing:
 
-The user's 2026-07-18 instruction approves starting this sequence. The next agent should execute it rather than ask which sprint comes next.
+The user's later 2026-07-18 instruction supersedes the Offline Foundation execution lock and makes the cloud application the current target.
 
-1. Run the Offline Foundation security and durability spike.
-2. Resolve or explicitly accept every failed security gate.
-3. Implement the Offline Foundation plan in its defined order.
-4. Verify the complete local-save, recovery, authorization, synchronization, and file-upload path.
-5. Resume Sprint 6 only after the Offline Foundation is accepted.
+1. Harden the real cloud upload and template-publishing paths.
+2. Add and run an authenticated two-tenant RLS verification path.
+3. Complete browser-to-R2 UAT when test-user and R2 deployment credentials are available.
+4. Design immutable generated-document finalization and signing evidence.
+5. Continue to Sprint 7 internal submissions once the locally actionable cloud gates pass.
 
-Do not substitute a VPN project for the Offline Foundation. A VPN can protect or route traffic only when a network path already exists; it cannot preserve work or synchronize devices during a total connectivity outage. HTTPS/TLS remains mandatory for normal cloud traffic, while any later private-access requirement must be justified and planned independently.
+Keep HTTPS/TLS and server-side authorization mandatory for cloud traffic. Do not substitute unrelated PWA, VPN, desktop-runtime, or speculative infrastructure work for the current cloud path.
 
 Execution model:
 

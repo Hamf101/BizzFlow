@@ -5,6 +5,7 @@ export type {
   GetDocumentTemplateInput,
   ListDocumentTemplatesInput,
   ListRecentDocumentsInput,
+  PublishDocumentTemplateInput,
   RecordDocumentRecentAccessInput,
   TemplateServiceDeps,
   UpdateDocumentTemplateInput,
