@@ -6,7 +6,7 @@ This is the working development guide for BizFlow Docs. Treat the pasted MVP req
 
 Important local context:
 
-- Sprint 7 internal submissions are implemented and migrated: published-template snapshots, creator-owned revisioned drafts, checksum-bound single-file fields, byte-level R2 verification, recoverable replace/cancel tombstones with expiry-safe scheduled cleanup, immutable submission, and role-aware list/detail views. Sprint 8 review and assignment remain intentionally separate.
+- Sprint 8 submission review is implemented and migrated: manager inbox, assignment, requested-change resubmission, approval/rejection/completion, immutable comments/activity, and assigned-only external-reviewer access. Sprint 7 remains the underlying published-snapshot, revisioned draft, and verified private-file workflow.
 - Sprint 6 guided templates, signing, recent documents, and generated PDFs are implemented and migrated. Completed generated documents use deterministic rendering, create-only R2 storage, and an atomically promoted immutable document version.
 - The Next.js App Router foundation from Sprint 1 is scaffolded.
 - Sprint 4 added tenant-scoped folders, documents, signed R2 upload/download routes, and document dashboard pages.
@@ -52,7 +52,7 @@ The user superseded the local-first execution lock on 2026-07-18:
 - Do not install PWA, service-worker, IndexedDB/Dexie, Tauri, or other offline-runtime packages unless the user explicitly reactivates that work.
 - Spike 001 and the Offline Foundation documents remain valid research for a possible future offline phase. Their open PWA target-device gates do not block cloud feature work.
 - The cloud remains authoritative. Every mutation and file operation must use the authenticated actor, current organization membership, server validation, idempotency where replay is possible, and durable audit evidence for high-integrity transitions.
-- The highest-value cloud safety gaps now have local coverage: R2 upload compatibility, exact-revision template publishing, immutable generated-document PDF finalization, valid submission RPC execution, checksum and format-bound submission uploads, and a fail-closed role/tenant submission RLS runner. Run the credential-backed RLS fixture and real browser-to-R2 UAT when those deployment fixtures are available.
+- The highest-value cloud safety gaps now have local coverage: R2 upload compatibility, exact-revision template publishing, immutable generated-document PDF finalization, valid submission/review RPC execution, checksum and format-bound uploads, and a fail-closed role/tenant submission RLS runner. Run the credential-backed RLS fixture and real browser-to-R2 UAT when those deployment fixtures are available.
 - Draft and awaiting-signature PDFs are labeled no-store previews. Only a completed document's create-only R2 object and atomically promoted version may be represented as finalized. This is application-level immutability, not regulatory WORM storage or a qualified e-signature claim.
 
 If offline work is reactivated, first review `artifacts/audits/BizzFlow-threat-model.md`, the preserved Spike 001 evidence, `artifacts/superpowers/offline-foundation-security-spike.md`, and `artifacts/superpowers/offline-foundation-plan.md`. Re-plan against the requirements current at that time instead of treating the old execution order as active.
@@ -273,11 +273,11 @@ Required tenant tables:
 - `template_fields`
 - `submissions`
 - `submission_files`
-- `comments`
+- `submission_comments`
+- `submission_activity_events`
 - `tasks`
 - `reminders`
 - `public_form_links`
-- `activity_events`
 - `audit_logs`
 
 ## Security And Storage
@@ -327,7 +327,6 @@ needs_changes
 approved
 rejected
 completed
-archived
 ```
 
 Allowed submission transitions:
@@ -335,15 +334,15 @@ Allowed submission transitions:
 ```txt
 draft -> submitted
 submitted -> in_review
-submitted -> assigned
 in_review -> needs_changes
 in_review -> approved
 in_review -> rejected
 needs_changes -> submitted
 approved -> completed
-completed -> archived
-rejected -> archived
 ```
+
+Assignment is review metadata, not a status. Initial assignment moves a
+`submitted` row to `in_review`; reassignment retains the current review state.
 
 Task statuses:
 
@@ -643,9 +642,9 @@ Core MVP:
 - [ ] Document upload/download works through R2 signed URLs.
 - [ ] Document versioning works.
 - [ ] Template builder works.
-- [ ] Internal submissions work.
-- [ ] Review workflow works.
-- [ ] Comments and activity timeline work.
+- [x] Internal submissions work.
+- [x] Review workflow works.
+- [x] Comments and activity timeline work.
 - [ ] Tasks work.
 - [ ] Inngest reminders work.
 - [ ] Email notifications work.
@@ -667,18 +666,18 @@ Definition of done for MVP:
 - [ ] Manager can create a template.
 - [ ] Staff can fill and submit a form.
 - [ ] Submitters can upload files inside a form.
-- [ ] Manager can assign a submission.
-- [ ] Users can comment on a submission.
-- [ ] Manager can request changes.
-- [ ] Manager can approve or reject.
-- [ ] Manager can mark work complete.
+- [x] Manager can assign a submission.
+- [x] Users can comment on a submission.
+- [x] Manager can request changes.
+- [x] Manager can approve or reject.
+- [x] Manager can mark work complete.
 - [ ] Users can create tasks.
 - [ ] Assigned users receive email/SMS reminders.
 - [ ] Manager can share a public form link.
 - [ ] Business can receive an external submission.
 - [ ] User can save a draft offline.
 - [ ] User can sync the draft later.
-- [ ] Users can view activity timelines.
+- [x] Users can view activity timelines.
 - [ ] Admins can export basic audit/submission data.
 
 ## Verification Matrix

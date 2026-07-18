@@ -39,7 +39,7 @@ export const SUBMISSION_VISIBILITY_PLAN = Object.freeze([
   { actor: "manager", fixture: "manager", visible: true },
   { actor: "staff", fixture: "staff", visible: true },
   { actor: "staff", fixture: "manager", visible: false },
-  { actor: "reviewer", fixture: "staff", visible: false },
+  { actor: "reviewer", fixture: "staff", visible: true },
   { actor: "reviewer", fixture: "manager", visible: false },
   { actor: "tenantB", fixture: "staff", visible: false },
   { actor: "tenantB", fixture: "manager", visible: false },
@@ -55,9 +55,12 @@ export const AUTHENTICATED_SUBMISSION_RPC_NAMES = Object.freeze([
   "record_internal_submission_file_upload_window",
   "mark_internal_submission_file_storage_cleaned",
   "submit_internal_submission",
+  "assign_internal_submission",
+  "transition_internal_submission",
+  "create_internal_submission_comment",
 ])
 
-/** Direct Data API mutations that must remain closed on both submission tables. */
+/** Direct Data API mutations that must remain closed on all submission workflow tables. */
 export const DIRECT_SUBMISSION_WRITE_PLAN = Object.freeze([
   { table: "submissions", operation: "insert" },
   { table: "submissions", operation: "update" },
@@ -65,6 +68,12 @@ export const DIRECT_SUBMISSION_WRITE_PLAN = Object.freeze([
   { table: "submission_files", operation: "insert" },
   { table: "submission_files", operation: "update" },
   { table: "submission_files", operation: "delete" },
+  { table: "submission_comments", operation: "insert" },
+  { table: "submission_comments", operation: "update" },
+  { table: "submission_comments", operation: "delete" },
+  { table: "submission_activity_events", operation: "insert" },
+  { table: "submission_activity_events", operation: "update" },
+  { table: "submission_activity_events", operation: "delete" },
 ])
 
 export const HELP_TEXT = `BizFlow authenticated two-tenant Supabase RLS check
@@ -97,7 +106,10 @@ Fixture contract:
   - All users and both organizations must be synthetic, pre-provisioned test fixtures.
   - Owner, manager, actor A, and reviewer must have exactly their named active role in actor A's organization.
   - Actor B must be an active owner_admin, manager, or staff member only in the other organization.
-  - The two named submissions/files must already exist, be related exactly, and have their named creator.
+  - The two named submissions/files must already exist, be related exactly, have their named creator,
+    use an available file, and have at least one comment and one activity event.
+  - The staff-created submission must be non-draft and assigned to the configured external reviewer.
+  - The manager-created submission must not be assigned to the configured external reviewer.
   - Actor identities, organization IDs, submission IDs, and file IDs must be distinct within each category.
 
 Safety and scope:
@@ -373,6 +385,36 @@ async function expectOneVisible(client, actorLabel, table, columns, filters, ass
 }
 
 /**
+ * Require at least one workflow-evidence row to be visible for a targeted submission.
+ *
+ * @param {ReturnType<typeof createClient>} client - Authenticated Supabase client.
+ * @param {string} actorLabel - Non-sensitive actor label.
+ * @param {string} table - Public workflow evidence table name.
+ * @param {Record<string, string>} filters - Exact tenant and submission filters.
+ * @param {string} assertion - Assertion identifier.
+ * @returns {Promise<void>}
+ * @throws {Error} When the query fails or returns no matching rows.
+ */
+async function expectAnyVisible(client, actorLabel, table, filters, assertion) {
+  const startedAt = performance.now()
+  const { data, error, status } = await client
+    .from(table)
+    .select("id")
+    .match(filters)
+    .limit(1)
+
+  if (error) {
+    throw createSafeSupabaseError(`${actorLabel} ${assertion}`, error, status)
+  }
+
+  if (!Array.isArray(data) || data.length !== 1) {
+    throw new Error(`${actorLabel} ${assertion} expected visible workflow evidence.`)
+  }
+
+  logPass(actorLabel, assertion, startedAt)
+}
+
+/**
  * Require a targeted fixture row to be hidden by RLS.
  *
  * @param {ReturnType<typeof createClient>} client - Authenticated Supabase client.
@@ -438,6 +480,8 @@ async function expectActorRole(client, actor, userId, expectedRoles) {
  * @param {string} actorLabel - Non-sensitive actor label.
  * @param {{ label: string, organizationId: string, submissionId: string, fileId: string }} fixture - Exact fixture IDs.
  * @param {string} expectedCreatorId - Authenticated creator ID for fixture-integrity checks.
+ * @param {string | null} expectedAssigneeId - Reviewer ID when assignment must be verified.
+ * @param {string | null} forbiddenAssigneeId - Reviewer ID that must not own this fixture.
  * @returns {Promise<void>}
  * @throws {Error} When either row is hidden, duplicated, or does not match the fixture contract.
  */
@@ -445,13 +489,15 @@ async function expectSubmissionFixtureVisible(
   client,
   actorLabel,
   fixture,
-  expectedCreatorId
+  expectedCreatorId,
+  expectedAssigneeId = null,
+  forbiddenAssigneeId = null
 ) {
   const submission = await expectOneVisible(
     client,
     actorLabel,
     "submissions",
-    "id,org_id,created_by",
+    "id,org_id,created_by,status,assigned_to",
     {
       id: fixture.submissionId,
       org_id: fixture.organizationId,
@@ -463,11 +509,24 @@ async function expectSubmissionFixtureVisible(
     throw new Error(`${fixture.label} submission does not have its configured synthetic creator.`)
   }
 
+  if (
+    expectedAssigneeId !== null &&
+    (submission.assigned_to !== expectedAssigneeId || submission.status === "draft")
+  ) {
+    throw new Error(
+      `${fixture.label} submission must be non-draft and assigned to the configured reviewer.`
+    )
+  }
+
+  if (forbiddenAssigneeId !== null && submission.assigned_to === forbiddenAssigneeId) {
+    throw new Error(`${fixture.label} submission must not be assigned to the reviewer fixture.`)
+  }
+
   const submissionFile = await expectOneVisible(
     client,
     actorLabel,
     "submission_files",
-    "id,org_id,submission_id",
+    "id,org_id,submission_id,status",
     {
       id: fixture.fileId,
       org_id: fixture.organizationId,
@@ -478,10 +537,33 @@ async function expectSubmissionFixtureVisible(
 
   if (
     submissionFile.org_id !== fixture.organizationId ||
-    submissionFile.submission_id !== fixture.submissionId
+    submissionFile.submission_id !== fixture.submissionId ||
+    submissionFile.status !== "available"
   ) {
-    throw new Error(`${fixture.label} file does not belong to its configured submission.`)
+    throw new Error(
+      `${fixture.label} file must be available and belong to its configured submission.`
+    )
   }
+
+  const evidenceFilters = {
+    org_id: fixture.organizationId,
+    submission_id: fixture.submissionId,
+  }
+
+  await expectAnyVisible(
+    client,
+    actorLabel,
+    "submission_comments",
+    evidenceFilters,
+    `${fixture.label}-comments-visible`
+  )
+  await expectAnyVisible(
+    client,
+    actorLabel,
+    "submission_activity_events",
+    evidenceFilters,
+    `${fixture.label}-activity-visible`
+  )
 }
 
 /**
@@ -514,6 +596,26 @@ async function expectSubmissionFixtureHidden(client, actorLabel, fixture) {
       submission_id: fixture.submissionId,
     },
     `${fixture.label}-file-hidden`
+  )
+  await expectHidden(
+    client,
+    actorLabel,
+    "submission_comments",
+    {
+      org_id: fixture.organizationId,
+      submission_id: fixture.submissionId,
+    },
+    `${fixture.label}-comments-hidden`
+  )
+  await expectHidden(
+    client,
+    actorLabel,
+    "submission_activity_events",
+    {
+      org_id: fixture.organizationId,
+      submission_id: fixture.submissionId,
+    },
+    `${fixture.label}-activity-hidden`
   )
 }
 
@@ -588,6 +690,28 @@ function buildDeniedRpcArguments(functionName) {
       target_values: null,
       target_actor_user_id: null,
     },
+    assign_internal_submission: {
+      target_org_id: null,
+      target_submission_id: null,
+      target_expected_revision: null,
+      target_assignee_user_id: null,
+      target_actor_user_id: null,
+    },
+    transition_internal_submission: {
+      target_org_id: null,
+      target_submission_id: null,
+      target_expected_revision: null,
+      target_transition: null,
+      target_comment: null,
+      target_actor_user_id: null,
+    },
+    create_internal_submission_comment: {
+      target_org_id: null,
+      target_submission_id: null,
+      target_comment_id: null,
+      target_body: null,
+      target_actor_user_id: null,
+    },
   }
   const rpcArguments = argumentsByFunction[functionName]
 
@@ -630,7 +754,7 @@ async function expectAuthenticatedSubmissionRpcsDenied(client, actorLabel) {
 /**
  * Build a constraint-safe insert probe whose fresh foreign keys prevent persistence.
  *
- * @param {"submissions" | "submission_files"} table - Submission table under test.
+ * @param {"submissions" | "submission_files" | "submission_comments" | "submission_activity_events"} table - Submission table under test.
  * @param {{ organizationId: string }} actor - Synthetic actor metadata.
  * @param {string} actorUserId - Authenticated actor identifier.
  * @returns {Record<string, unknown>} Non-persisting insert body.
@@ -653,24 +777,48 @@ function buildDeniedInsertPayload(table, actor, actorUserId) {
   }
 
   const submissionId = randomUUID()
-  const fileId = randomUUID()
-  const fieldKey = "RlsProbe"
-  const safeFilename = "rls-probe.pdf"
+
+  if (table === "submission_files") {
+    const fileId = randomUUID()
+    const fieldKey = "RlsProbe"
+    const safeFilename = "rls-probe.pdf"
+
+    return {
+      id: fileId,
+      org_id: actor.organizationId,
+      submission_id: submissionId,
+      field_key: fieldKey,
+      status: "upload_pending",
+      storage_key:
+        `organizations/${actor.organizationId}/submissions/${submissionId}` +
+        `/files/${fieldKey}/${fileId}/${safeFilename}`,
+      original_filename: "rls-probe.pdf",
+      safe_filename: safeFilename,
+      content_type: "application/pdf",
+      byte_size: 1,
+      uploaded_by: actorUserId,
+    }
+  }
+
+  if (table === "submission_comments") {
+    return {
+      id: randomUUID(),
+      org_id: actor.organizationId,
+      submission_id: submissionId,
+      body: "Authenticated write denial probe",
+      created_by: actorUserId,
+    }
+  }
 
   return {
-    id: fileId,
+    id: randomUUID(),
     org_id: actor.organizationId,
     submission_id: submissionId,
-    field_key: fieldKey,
-    status: "upload_pending",
-    storage_key:
-      `organizations/${actor.organizationId}/submissions/${submissionId}` +
-      `/files/${fieldKey}/${fileId}/${safeFilename}`,
-    original_filename: "rls-probe.pdf",
-    safe_filename: safeFilename,
-    content_type: "application/pdf",
-    byte_size: 1,
-    uploaded_by: actorUserId,
+    actor_user_id: actorUserId,
+    event_type: "submitted",
+    from_status: "draft",
+    to_status: "submitted",
+    submission_revision: 1,
   }
 }
 
@@ -694,9 +842,15 @@ async function expectDirectSubmissionWritesDenied(client, actor, actorUserId) {
         .insert(buildDeniedInsertPayload(probe.table, actor, actorUserId))
         .select("id")
     } else if (probe.operation === "update") {
+      const updatePayload = probe.table === "submission_comments"
+        ? { body: "Authenticated update denial probe" }
+        : probe.table === "submission_activity_events"
+          ? { event_type: "commented" }
+          : { updated_at: new Date(0).toISOString() }
+
       result = await client
         .from(probe.table)
-        .update({ updated_at: new Date(0).toISOString() })
+        .update(updatePayload)
         .eq("id", randomUUID())
         .select("id")
     } else {
@@ -916,11 +1070,18 @@ export async function runHarness(configuration) {
       const fixture = fixtures[assertion.fixture]
 
       if (assertion.visible) {
+        const expectedAssigneeId =
+          assertion.actor === "reviewer" ? authenticatedActors.reviewer.id : null
+        const forbiddenAssigneeId =
+          assertion.fixture === "manager" ? authenticatedActors.reviewer.id : null
+
         await expectSubmissionFixtureVisible(
           clients[assertion.actor],
           actor.label,
           fixture,
-          fixture.creatorId
+          fixture.creatorId,
+          expectedAssigneeId,
+          forbiddenAssigneeId
         )
       } else {
         await expectSubmissionFixtureHidden(clients[assertion.actor], actor.label, fixture)

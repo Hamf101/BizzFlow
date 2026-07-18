@@ -17,6 +17,23 @@ const answerValuesSchema = z.record(
   z.union([z.string(), z.boolean()])
 )
 
+const submittedRowShape = {
+  submitted_by: actorIdSchema,
+  submitted_at: timestampSchema,
+} as const
+
+const unassignedRowShape = {
+  assigned_to: z.null(),
+  assigned_by: z.null(),
+  assigned_at: z.null(),
+} as const
+
+const assignedRowShape = {
+  assigned_to: actorIdSchema,
+  assigned_by: actorIdSchema,
+  assigned_at: timestampSchema,
+} as const
+
 const submissionRowShape = {
   id: uuidSchema,
   org_id: uuidSchema,
@@ -37,18 +54,41 @@ const draftSubmissionRowSchema = z.object({
   status: z.literal("draft"),
   submitted_by: z.null(),
   submitted_at: z.null(),
+  ...unassignedRowShape,
 })
 
-const submittedSubmissionRowSchema = z.object({
+const submittedSubmissionRowSchema = z.union([
+  z.object({
+    ...submissionRowShape,
+    status: z.literal("submitted"),
+    ...submittedRowShape,
+    ...unassignedRowShape,
+  }),
+  z.object({
+    ...submissionRowShape,
+    status: z.literal("submitted"),
+    ...submittedRowShape,
+    ...assignedRowShape,
+  }),
+])
+
+const assignedSubmissionRowSchema = z.object({
   ...submissionRowShape,
-  status: z.literal("submitted"),
-  submitted_by: actorIdSchema,
-  submitted_at: timestampSchema,
+  status: z.enum([
+    "in_review",
+    "needs_changes",
+    "approved",
+    "rejected",
+    "completed",
+  ]),
+  ...submittedRowShape,
+  ...assignedRowShape,
 })
 
-const submissionRowSchema = z.discriminatedUnion("status", [
+const submissionRowSchema = z.union([
   draftSubmissionRowSchema,
   submittedSubmissionRowSchema,
+  assignedSubmissionRowSchema,
 ])
 
 const submissionFileRowShape = {
@@ -118,8 +158,15 @@ export class SubmissionDomainError extends Error {
   }
 }
 
-/** Lifecycle states implemented by the internal-submissions MVP. */
-export type SubmissionStatus = "draft" | "submitted"
+/** Lifecycle states implemented by the internal-submission review workflow. */
+export type SubmissionStatus =
+  | "draft"
+  | "submitted"
+  | "in_review"
+  | "needs_changes"
+  | "approved"
+  | "rejected"
+  | "completed"
 
 /** Storage-verification states for a single submission file. */
 export type SubmissionFileStatus = "upload_pending" | "available"
@@ -130,7 +177,7 @@ export type SubmissionAnswerValue = string | boolean
 /** Normalized answers keyed by immutable template field key. */
 export type SubmissionAnswers = Record<string, SubmissionAnswerValue>
 
-/** Fields shared by draft and submitted internal submissions. */
+/** Fields shared by every internal-submission lifecycle state. */
 export type SubmissionBase = {
   id: string
   organizationId: string
@@ -142,6 +189,9 @@ export type SubmissionBase = {
   revision: number
   createdBy: string | null
   updatedBy: string | null
+  assignedTo: string | null
+  assignedBy: string | null
+  assignedAt: string | null
   createdAt: string
   updatedAt: string
 }
@@ -151,17 +201,37 @@ export type DraftSubmission = SubmissionBase & {
   status: "draft"
   submittedBy: null
   submittedAt: null
+  assignedTo: null
+  assignedBy: null
+  assignedAt: null
 }
 
-/** Immutable internal submission ready for a later review workflow. */
+/** Submitted internal submission waiting for review or resubmitted after changes. */
 export type SubmittedSubmission = SubmissionBase & {
   status: "submitted"
   submittedBy: string | null
   submittedAt: string
 }
 
-/** Internal submission in one of the Sprint 7 lifecycle states. */
-export type Submission = DraftSubmission | SubmittedSubmission
+/** Statuses that require assignment metadata for a review decision. */
+export type AssignedSubmissionStatus = Exclude<
+  SubmissionStatus,
+  "draft" | "submitted"
+>
+
+/** Assigned review state, including creator-editable requested changes. */
+export type AssignedSubmission = SubmissionBase & {
+  status: AssignedSubmissionStatus
+  submittedBy: string | null
+  submittedAt: string
+  assignedAt: string
+}
+
+/** Internal submission in one of the Sprint 8 lifecycle states. */
+export type Submission =
+  | DraftSubmission
+  | SubmittedSubmission
+  | AssignedSubmission
 
 /** Fields shared by pending and verified single-file upload records. */
 export type SubmissionFileBase = {
@@ -216,7 +286,10 @@ export function parseSubmissionRow(value: unknown): Submission {
   }
 
   const row = result.data
-  const submissionBase: SubmissionBase = {
+  const submissionBase: Omit<
+    SubmissionBase,
+    "assignedTo" | "assignedBy" | "assignedAt"
+  > = {
     id: row.id,
     organizationId: row.org_id,
     title: row.title,
@@ -231,19 +304,39 @@ export function parseSubmissionRow(value: unknown): Submission {
     updatedAt: row.updated_at,
   }
 
-  return row.status === "draft"
-    ? {
-        ...submissionBase,
-        status: "draft",
-        submittedBy: null,
-        submittedAt: null,
-      }
-    : {
-        ...submissionBase,
-        status: "submitted",
-        submittedBy: row.submitted_by,
-        submittedAt: row.submitted_at,
-      }
+  if (row.status === "draft") {
+    return {
+      ...submissionBase,
+      status: "draft",
+      submittedBy: null,
+      submittedAt: null,
+      assignedTo: null,
+      assignedBy: null,
+      assignedAt: null,
+    }
+  }
+
+  if (row.status === "submitted") {
+    return {
+      ...submissionBase,
+      status: "submitted",
+      submittedBy: row.submitted_by,
+      submittedAt: row.submitted_at,
+      assignedTo: row.assigned_to,
+      assignedBy: row.assigned_by,
+      assignedAt: row.assigned_at,
+    }
+  }
+
+  return {
+    ...submissionBase,
+    status: row.status,
+    submittedBy: row.submitted_by,
+    submittedAt: row.submitted_at,
+    assignedTo: row.assigned_to,
+    assignedBy: row.assigned_by,
+    assignedAt: row.assigned_at,
+  }
 }
 
 /**

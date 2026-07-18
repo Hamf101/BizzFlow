@@ -64,6 +64,9 @@ describe("organization permissions", () => {
       "submissions:view",
       "submissions:create",
       "submissions:edit",
+      "submissions:assign",
+      "submissions:review",
+      "submission_comments:create",
     ])
   })
 
@@ -81,6 +84,11 @@ describe("organization permissions", () => {
     expect(canPerformOrganizationAction("staff", "submissions:view")).toBe(true)
     expect(canPerformOrganizationAction("staff", "submissions:create")).toBe(true)
     expect(canPerformOrganizationAction("staff", "submissions:edit")).toBe(true)
+    expect(canPerformOrganizationAction("staff", "submissions:assign")).toBe(false)
+    expect(canPerformOrganizationAction("staff", "submissions:review")).toBe(false)
+    expect(canPerformOrganizationAction("staff", "submission_comments:create")).toBe(
+      true
+    )
   })
 
   it("allows managers to invite members and view audit logs without role updates", () => {
@@ -97,6 +105,11 @@ describe("organization permissions", () => {
     expect(canPerformOrganizationAction("manager", "submissions:view")).toBe(true)
     expect(canPerformOrganizationAction("manager", "submissions:create")).toBe(true)
     expect(canPerformOrganizationAction("manager", "submissions:edit")).toBe(true)
+    expect(canPerformOrganizationAction("manager", "submissions:assign")).toBe(true)
+    expect(canPerformOrganizationAction("manager", "submissions:review")).toBe(true)
+    expect(canPerformOrganizationAction("manager", "submission_comments:create")).toBe(
+      true
+    )
   })
 
   it("applies template, send, and fill permissions by organization role", () => {
@@ -112,7 +125,7 @@ describe("organization permissions", () => {
     expect(canPerformOrganizationAction("external_reviewer", "documents:fill")).toBe(true)
   })
 
-  it("allows external reviewers to view people and documents only", () => {
+  it("allows external reviewers to view and comment on assigned submissions", () => {
     expect(canPerformOrganizationAction("external_reviewer", "people:view")).toBe(true)
     expect(canPerformOrganizationAction("external_reviewer", "documents:view")).toBe(true)
     expect(canPerformOrganizationAction("external_reviewer", "document_comments:create")).toBe(
@@ -127,9 +140,14 @@ describe("organization permissions", () => {
     expect(canPerformOrganizationAction("external_reviewer", "members:invite")).toBe(false)
     expect(canPerformOrganizationAction("external_reviewer", "members:update_role")).toBe(false)
     expect(canPerformOrganizationAction("external_reviewer", "audit_logs:view")).toBe(false)
-    expect(canPerformOrganizationAction("external_reviewer", "submissions:view")).toBe(false)
+    expect(canPerformOrganizationAction("external_reviewer", "submissions:view")).toBe(true)
     expect(canPerformOrganizationAction("external_reviewer", "submissions:create")).toBe(false)
     expect(canPerformOrganizationAction("external_reviewer", "submissions:edit")).toBe(false)
+    expect(canPerformOrganizationAction("external_reviewer", "submissions:assign")).toBe(false)
+    expect(canPerformOrganizationAction("external_reviewer", "submissions:review")).toBe(false)
+    expect(
+      canPerformOrganizationAction("external_reviewer", "submission_comments:create")
+    ).toBe(true)
   })
 
   it("allows owner admins to perform every organization permission action", () => {

@@ -24,11 +24,13 @@ import {
   type Submission,
   type SubmissionAnswers,
   type SubmissionFile,
+  type SubmissionFileStatus,
 } from "@/types/submission"
+import { SubmissionReviewDomainError } from "@/types/submission-review"
 
 /** Columns required by the canonical submission row parser. */
 export const SUBMISSION_COLUMNS =
-  "id,org_id,title,template_id,template_revision,template_snapshot,values,status,revision,created_by,updated_by,submitted_by,created_at,updated_at,submitted_at"
+  "id,org_id,title,template_id,template_revision,template_snapshot,values,status,revision,created_by,updated_by,submitted_by,assigned_to,assigned_by,created_at,updated_at,submitted_at,assigned_at"
 
 /** Columns required by the canonical submission-file row parser. */
 export const SUBMISSION_FILE_COLUMNS =
@@ -100,7 +102,7 @@ export function getSubmissionClient(
  * Creates a UUID using an injected generator when provided.
  *
  * @param deps - Optional submission service dependencies.
- * @returns New submission or file identifier.
+ * @returns New submission, file, or comment identifier.
  */
 export function createSubmissionId(deps: SubmissionServiceDeps): string {
   return deps.createId?.() ?? randomUUID()
@@ -190,20 +192,25 @@ export async function getSubmissionById(
  * @param client - Trusted Supabase client.
  * @param organizationId - Tenant identifier.
  * @param submissionId - Submission identifier.
+ * @param statuses - Active file states visible to the caller.
  * @returns File allocations ordered by creation time.
  * @throws SubmissionServiceError when the query fails.
  */
 export async function listSubmissionFiles(
   client: SubmissionServiceClient,
   organizationId: string,
-  submissionId: string
+  submissionId: string,
+  statuses: readonly SubmissionFileStatus[] = [
+    "upload_pending",
+    "available",
+  ]
 ): Promise<SubmissionFile[]> {
   const { data, error } = await client
     .from("submission_files")
     .select(SUBMISSION_FILE_COLUMNS)
     .eq("org_id", organizationId)
     .eq("submission_id", submissionId)
-    .in("status", ["upload_pending", "available"])
+    .in("status", Array.from(statuses))
     .order("created_at", { ascending: true })
 
   if (error || !data) {
@@ -222,7 +229,7 @@ export async function listSubmissionFiles(
  * @param role - Validated internal organization role.
  * @param submission - Tenant-scoped submission.
  * @param actorUserId - Requesting user identifier.
- * @throws SubmissionServiceError when staff attempts to access another creator's row.
+ * @throws SubmissionServiceError when the row is outside the actor's role scope.
  */
 export function assertSubmissionVisible(
   role: OrganizationRole,
@@ -232,15 +239,22 @@ export function assertSubmissionVisible(
   if (role === "staff" && submission.createdBy !== actorUserId) {
     throw new SubmissionServiceError("Submission was not found.", 404)
   }
+
+  if (
+    role === "external_reviewer" &&
+    (submission.status === "draft" || submission.assignedTo !== actorUserId)
+  ) {
+    throw new SubmissionServiceError("Submission was not found.", 404)
+  }
 }
 
 /**
- * Requires the current actor to own an editable draft at an exact revision.
+ * Requires the creator to own an editable submission at an exact revision.
  *
  * @param submission - Current persisted submission.
  * @param actorUserId - Requesting user identifier.
  * @param expectedRevision - Client revision used for optimistic concurrency.
- * @throws SubmissionServiceError for non-owners, submitted rows, or stale revisions.
+ * @throws SubmissionServiceError for non-owners, locked rows, or stale revisions.
  */
 export function assertEditableSubmissionDraft(
   submission: Submission,
@@ -254,9 +268,12 @@ export function assertEditableSubmissionDraft(
     )
   }
 
-  if (submission.status !== "draft") {
+  if (
+    submission.status !== "draft" &&
+    submission.status !== "needs_changes"
+  ) {
     throw new SubmissionServiceError(
-      "Submitted submissions cannot be changed.",
+      "This submission is not editable in its current status.",
       409
     )
   }
@@ -395,7 +412,8 @@ function toSubmissionServiceError(error: unknown): SubmissionServiceError {
 
   if (
     error instanceof SubmissionStorageServiceError ||
-    error instanceof SubmissionDomainError
+    error instanceof SubmissionDomainError ||
+    error instanceof SubmissionReviewDomainError
   ) {
     return new SubmissionServiceError(error.message, error.statusCode)
   }
@@ -424,17 +442,29 @@ function getKnownMutationMessage(message: string | undefined): string | null {
   }
 
   const safePrefixes = [
+    "Active review assignee",
     "An active internal organization membership",
+    "Assigned reviewer",
     "Complete submission file metadata",
     "Completed submission file metadata",
     "Files cannot be",
     "Only the submission creator",
+    "Only the assigned reviewer",
     "Published submission template",
     "Required submission",
+    "Review comment",
+    "Submission assignee",
+    "Submission assignment",
+    "Submission comment",
     "Submission draft",
     "Submission field",
     "Submission file",
     "Submission identifier",
+    "Submission review",
+    "Submission revision",
+    "Submission status",
+    "Submission timestamp",
+    "Submission transition",
     "Submission values",
     "Submitted submissions",
     "This submission field",

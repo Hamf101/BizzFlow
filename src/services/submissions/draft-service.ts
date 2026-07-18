@@ -219,11 +219,19 @@ export async function submitInternalSubmission(
         )
       }
 
-      if (submission.status === "draft") {
+      if (
+        submission.status === "draft" ||
+        submission.status === "needs_changes"
+      ) {
         assertEditableSubmissionDraft(
           submission,
           input.actorUserId,
           input.expectedRevision
+        )
+      } else if (submission.status !== "submitted") {
+        throw new SubmissionServiceError(
+          "This submission cannot be submitted in its current status.",
+          409
         )
       }
 

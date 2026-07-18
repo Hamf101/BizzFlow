@@ -2,8 +2,10 @@ import { describe, expect, it, vi } from "vitest"
 
 import {
   allocateInternalSubmissionFile,
+  assignInternalSubmission,
   cleanupExpiredSubmissionFileObjects,
   completeInternalSubmissionFile,
+  createInternalSubmissionComment,
   createInternalSubmissionDraft,
   createInternalSubmissionFileDownloadUrl,
   getInternalSubmission,
@@ -11,6 +13,7 @@ import {
   saveInternalSubmissionDraft,
   submitInternalSubmission,
   supersedeInternalSubmissionFile,
+  transitionInternalSubmission,
 } from "@/services/submission-service"
 import {
   parseTemplateContent,
@@ -35,6 +38,8 @@ const TEMPLATE_ID = "30000000-0000-4000-8000-000000000001"
 const SUBMISSION_ID = "40000000-0000-4000-8000-000000000001"
 const OTHER_SUBMISSION_ID = "40000000-0000-4000-8000-000000000002"
 const FILE_ID = "50000000-0000-4000-8000-000000000001"
+const COMMENT_ID = "70000000-0000-4000-8000-000000000001"
+const ACTIVITY_ID = "80000000-0000-4000-8000-000000000001"
 const CHECKSUM = "a".repeat(64)
 const SNAPSHOT = createSnapshot()
 
@@ -164,15 +169,38 @@ describe("internal submission visibility", () => {
     ])
   })
 
-  it("denies external reviewers and hides another staff member's submission", async () => {
-    const client = createClient()
+  it("shows external reviewers only assigned non-drafts and hides other staff rows", async () => {
+    const client = createClient({
+      submissions: [
+        createSubmissionRow({
+          status: "in_review",
+          revision: 3,
+          submitted_by: STAFF_ID,
+          submitted_at: "2026-07-18T17:00:00.000Z",
+          assigned_to: EXTERNAL_ID,
+          assigned_by: MANAGER_ID,
+          assigned_at: "2026-07-18T17:05:00.000Z",
+        }),
+        createSubmissionRow({
+          id: OTHER_SUBMISSION_ID,
+          status: "submitted",
+          submitted_by: OTHER_STAFF_ID,
+          submitted_at: "2026-07-18T17:00:00.000Z",
+          created_by: OTHER_STAFF_ID,
+          updated_by: OTHER_STAFF_ID,
+          updated_at: "2026-07-18T17:00:00.000Z",
+        }),
+      ],
+    })
 
-    await expect(
-      listInternalSubmissions(
-        { actorUserId: EXTERNAL_ID, organizationId: ORGANIZATION_ID },
-        { client: client as never }
-      )
-    ).rejects.toMatchObject({ statusCode: 403 })
+    const externalRows = await listInternalSubmissions(
+      { actorUserId: EXTERNAL_ID, organizationId: ORGANIZATION_ID },
+      { client: client as never }
+    )
+
+    expect(externalRows.map((submission) => submission.id)).toEqual([
+      SUBMISSION_ID,
+    ])
 
     await expect(
       getInternalSubmission(
@@ -184,6 +212,47 @@ describe("internal submission visibility", () => {
         { client: client as never }
       )
     ).rejects.toMatchObject({ statusCode: 404 })
+  })
+
+  it("loads assigned review history without exposing pending files to external reviewers", async () => {
+    const client = createClient({
+      submissions: [createAssignedSubmissionRow()],
+      submission_files: [
+        createFileRow(),
+        createFileRow({
+          id: "50000000-0000-4000-8000-000000000002",
+          status: "available",
+        }),
+      ],
+      submission_comments: [createCommentRow()],
+      submission_activity_events: [createActivityRow()],
+    })
+
+    const detail = await getInternalSubmission(
+      {
+        actorUserId: EXTERNAL_ID,
+        organizationId: ORGANIZATION_ID,
+        submissionId: SUBMISSION_ID,
+      },
+      { client: client as never }
+    )
+
+    expect(detail.files).toHaveLength(1)
+    expect(detail.files[0]).toMatchObject({ status: "available" })
+    expect(detail.comments).toEqual([
+      expect.objectContaining({
+        id: COMMENT_ID,
+        body: "Please confirm the attachment.",
+      }),
+    ])
+    expect(detail.activity).toEqual([
+      expect.objectContaining({
+        id: ACTIVITY_ID,
+        eventType: "assigned",
+        fromStatus: "submitted",
+        toStatus: "in_review",
+      }),
+    ])
   })
 })
 
@@ -427,6 +496,245 @@ describe("internal submission draft lifecycle", () => {
     expect(result).toMatchObject({ status: "submitted", revision: 2 })
     expect(client.rpc).toHaveBeenCalledOnce()
   })
+
+  it("saves and resubmits creator changes after review requests updates", async () => {
+    const needsChangesRow = createAssignedSubmissionRow({
+      status: "needs_changes",
+      revision: 4,
+      values: { vendor_name: "Old", notes: "Keep this" },
+    })
+    const client = createClient({
+      submissions: [needsChangesRow],
+      submission_files: [createFileRow({ status: "available" })],
+    })
+    client.rpc.mockImplementation(async (functionName, args) => {
+      if (functionName === "save_internal_submission_draft") {
+        return {
+          data: createAssignedSubmissionRow({
+            status: "needs_changes",
+            revision: 5,
+            values: args.target_values,
+          }),
+          error: null,
+        }
+      }
+
+      expect(functionName).toBe("submit_internal_submission")
+      return {
+        data: createSubmissionRow({
+          status: "submitted",
+          revision: 5,
+          values: args.target_values,
+          submitted_by: STAFF_ID,
+          submitted_at: "2026-07-18T18:00:00.000Z",
+          assigned_to: EXTERNAL_ID,
+          assigned_by: MANAGER_ID,
+          assigned_at: "2026-07-18T17:05:00.000Z",
+        }),
+        error: null,
+      }
+    })
+
+    const saved = await saveInternalSubmissionDraft(
+      {
+        actorUserId: STAFF_ID,
+        organizationId: ORGANIZATION_ID,
+        submissionId: SUBMISSION_ID,
+        expectedRevision: 4,
+        values: { vendor_name: "Northstar" },
+      },
+      { client: client as never }
+    )
+    const resubmitted = await submitInternalSubmission(
+      {
+        actorUserId: STAFF_ID,
+        organizationId: ORGANIZATION_ID,
+        submissionId: SUBMISSION_ID,
+        expectedRevision: 4,
+        values: { vendor_name: "Northstar" },
+      },
+      { client: client as never }
+    )
+
+    expect(saved).toMatchObject({ status: "needs_changes", revision: 5 })
+    expect(resubmitted).toMatchObject({
+      status: "submitted",
+      assignedTo: EXTERNAL_ID,
+    })
+  })
+})
+
+describe("internal submission review workflow", () => {
+  it("assigns an eligible reviewer through the revision-guarded RPC", async () => {
+    const client = createClient({
+      submissions: [
+        createSubmissionRow({
+          status: "submitted",
+          revision: 2,
+          submitted_by: STAFF_ID,
+          submitted_at: "2026-07-18T17:00:00.000Z",
+        }),
+      ],
+    })
+    client.rpc.mockImplementation(async (functionName, args) => {
+      expect(functionName).toBe("assign_internal_submission")
+      expect(args).toEqual({
+        target_org_id: ORGANIZATION_ID,
+        target_submission_id: SUBMISSION_ID,
+        target_expected_revision: 2,
+        target_assignee_user_id: EXTERNAL_ID,
+        target_actor_user_id: MANAGER_ID,
+      })
+      return { data: createAssignedSubmissionRow(), error: null }
+    })
+
+    const result = await assignInternalSubmission(
+      {
+        actorUserId: MANAGER_ID,
+        organizationId: ORGANIZATION_ID,
+        submissionId: SUBMISSION_ID,
+        expectedRevision: 2,
+        assignedTo: EXTERNAL_ID,
+      },
+      { client: client as never }
+    )
+
+    expect(result).toMatchObject({
+      status: "in_review",
+      assignedTo: EXTERNAL_ID,
+    })
+  })
+
+  it("denies assignment to staff before invoking the RPC", async () => {
+    const client = createClient()
+
+    await expect(
+      assignInternalSubmission(
+        {
+          actorUserId: STAFF_ID,
+          organizationId: ORGANIZATION_ID,
+          submissionId: SUBMISSION_ID,
+          expectedRevision: 1,
+          assignedTo: EXTERNAL_ID,
+        },
+        { client: client as never }
+      )
+    ).rejects.toMatchObject({ statusCode: 403 })
+    expect(client.rpc).not.toHaveBeenCalled()
+  })
+
+  it("returns the safe review conflict message from the database", async () => {
+    const client = createClient()
+    client.rpc.mockResolvedValue({
+      data: null,
+      error: Object.assign(
+        new Error("Submission review has changed. Reload and try again."),
+        { code: "40001" }
+      ),
+    })
+
+    await expect(
+      assignInternalSubmission(
+        {
+          actorUserId: MANAGER_ID,
+          organizationId: ORGANIZATION_ID,
+          submissionId: SUBMISSION_ID,
+          expectedRevision: 2,
+          assignedTo: EXTERNAL_ID,
+        },
+        { client: client as never }
+      )
+    ).rejects.toMatchObject({
+      message: "Submission review has changed. Reload and try again.",
+      statusCode: 409,
+    })
+  })
+
+  it("trims a required change request comment before the atomic transition", async () => {
+    const client = createClient({
+      submissions: [createAssignedSubmissionRow()],
+    })
+    client.rpc.mockImplementation(async (functionName, args) => {
+      expect(functionName).toBe("transition_internal_submission")
+      expect(args).toMatchObject({
+        target_expected_revision: 3,
+        target_transition: "needs_changes",
+        target_comment: "Please correct the total.",
+        target_actor_user_id: MANAGER_ID,
+      })
+      return {
+        data: createAssignedSubmissionRow({
+          status: "needs_changes",
+          revision: 4,
+        }),
+        error: null,
+      }
+    })
+
+    const result = await transitionInternalSubmission(
+      {
+        actorUserId: MANAGER_ID,
+        organizationId: ORGANIZATION_ID,
+        submissionId: SUBMISSION_ID,
+        expectedRevision: 3,
+        targetStatus: "needs_changes",
+        comment: "  Please correct the total.  ",
+      },
+      { client: client as never }
+    )
+
+    expect(result).toMatchObject({ status: "needs_changes", revision: 4 })
+  })
+
+  it("requires a nonblank note before changes or rejection", async () => {
+    const client = createClient({
+      submissions: [createAssignedSubmissionRow()],
+    })
+
+    await expect(
+      transitionInternalSubmission(
+        {
+          actorUserId: MANAGER_ID,
+          organizationId: ORGANIZATION_ID,
+          submissionId: SUBMISSION_ID,
+          expectedRevision: 3,
+          targetStatus: "rejected",
+          comment: "   ",
+        },
+        { client: client as never }
+      )
+    ).rejects.toMatchObject({ statusCode: 400 })
+    expect(client.rpc).not.toHaveBeenCalled()
+  })
+
+  it("lets an assigned external reviewer add a general comment", async () => {
+    const client = createClient({
+      submissions: [createAssignedSubmissionRow()],
+    })
+    client.rpc.mockImplementation(async (functionName, args) => {
+      expect(functionName).toBe("create_internal_submission_comment")
+      expect(args).toEqual({
+        target_org_id: ORGANIZATION_ID,
+        target_submission_id: SUBMISSION_ID,
+        target_comment_id: COMMENT_ID,
+        target_body: "Please confirm the attachment.",
+        target_actor_user_id: EXTERNAL_ID,
+      })
+      return { data: createCommentRow(), error: null }
+    })
+
+    const result = await createInternalSubmissionComment(
+      {
+        actorUserId: EXTERNAL_ID,
+        organizationId: ORGANIZATION_ID,
+        submissionId: SUBMISSION_ID,
+        body: "  Please confirm the attachment.  ",
+      },
+      { client: client as never, createId: (): string => COMMENT_ID }
+    )
+
+    expect(result).toMatchObject({ id: COMMENT_ID, createdBy: EXTERNAL_ID })
+  })
 })
 
 describe("internal submission file workflow", () => {
@@ -643,6 +951,40 @@ describe("internal submission file workflow", () => {
     })
   })
 
+  it("allows the creator to replace a file after changes are requested", async () => {
+    const client = createClient({
+      submissions: [
+        createAssignedSubmissionRow({
+          status: "needs_changes",
+          revision: 4,
+        }),
+      ],
+      submission_files: [createFileRow({ status: "available" })],
+    })
+    client.rpc.mockResolvedValue({
+      data: {
+        ...createFileRow({ status: "superseded" }),
+        storage_key: buildExpectedStorageKey(FILE_ID),
+      },
+      error: null,
+    })
+
+    await expect(
+      supersedeInternalSubmissionFile(
+        {
+          actorUserId: STAFF_ID,
+          organizationId: ORGANIZATION_ID,
+          submissionId: SUBMISSION_ID,
+          fileId: FILE_ID,
+        },
+        {
+          client: client as never,
+          deleteSubmissionStorageObject: vi.fn(async () => undefined),
+        }
+      )
+    ).resolves.toMatchObject({ fileId: FILE_ID })
+  })
+
   it("deletes bytes that arrive after their upload allocation was cancelled", async () => {
     const client = createClient({
       submission_files: [
@@ -810,6 +1152,8 @@ function createClient(overrides: Partial<FakeTables> = {}): FakeClient {
       }),
     ],
     submission_files: [],
+    submission_comments: [],
+    submission_activity_events: [],
     ...overrides,
   })
 }
@@ -837,9 +1181,54 @@ function createSubmissionRow(overrides: FakeRow = {}): FakeRow {
     created_by: STAFF_ID,
     updated_by: STAFF_ID,
     submitted_by: null,
+    assigned_to: null,
+    assigned_by: null,
     created_at: "2026-07-18T15:00:00.000Z",
     updated_at: "2026-07-18T16:00:00.000Z",
     submitted_at: null,
+    assigned_at: null,
+    ...overrides,
+  }
+}
+
+function createAssignedSubmissionRow(overrides: FakeRow = {}): FakeRow {
+  return createSubmissionRow({
+    status: "in_review",
+    revision: 3,
+    submitted_by: STAFF_ID,
+    submitted_at: "2026-07-18T17:00:00.000Z",
+    assigned_to: EXTERNAL_ID,
+    assigned_by: MANAGER_ID,
+    assigned_at: "2026-07-18T17:05:00.000Z",
+    ...overrides,
+  })
+}
+
+function createCommentRow(overrides: FakeRow = {}): FakeRow {
+  return {
+    id: COMMENT_ID,
+    org_id: ORGANIZATION_ID,
+    submission_id: SUBMISSION_ID,
+    body: "Please confirm the attachment.",
+    created_by: EXTERNAL_ID,
+    created_at: "2026-07-18T17:10:00.000Z",
+    ...overrides,
+  }
+}
+
+function createActivityRow(overrides: FakeRow = {}): FakeRow {
+  return {
+    id: ACTIVITY_ID,
+    org_id: ORGANIZATION_ID,
+    submission_id: SUBMISSION_ID,
+    actor_user_id: MANAGER_ID,
+    event_type: "assigned",
+    from_status: "submitted",
+    to_status: "in_review",
+    assignee_user_id: EXTERNAL_ID,
+    comment_id: null,
+    submission_revision: 3,
+    created_at: "2026-07-18T17:05:00.000Z",
     ...overrides,
   }
 }

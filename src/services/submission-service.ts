@@ -1,8 +1,10 @@
 export type {
   AllocateInternalSubmissionFileInput,
   AllocateInternalSubmissionFileResponse,
+  AssignInternalSubmissionInput,
   CompleteInternalSubmissionFileInput,
   CompleteInternalSubmissionFileResponse,
+  CreateInternalSubmissionCommentInput,
   CreateInternalSubmissionDraftInput,
   CreateInternalSubmissionFileDownloadUrlInput,
   CreateInternalSubmissionFileDownloadUrlResponse,
@@ -14,6 +16,7 @@ export type {
   SubmitInternalSubmissionInput,
   SupersedeInternalSubmissionFileInput,
   SupersedeInternalSubmissionFileResponse,
+  TransitionInternalSubmissionInput,
 } from "@/services/submissions/contracts"
 export type {
   CleanupExpiredSubmissionFilesInput,
@@ -36,3 +39,13 @@ export {
   getInternalSubmission,
   listInternalSubmissions,
 } from "@/services/submissions/workspace-service"
+export {
+  assignInternalSubmission,
+  createInternalSubmissionComment,
+  transitionInternalSubmission,
+} from "@/services/submissions/review-service"
+export type {
+  SubmissionActivityEvent,
+  SubmissionComment,
+  SubmissionReviewTransition,
+} from "@/types/submission-review"

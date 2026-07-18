@@ -1,10 +1,12 @@
-import { ArrowLeft, Save, Send } from "lucide-react"
+import { ArrowLeft, MessageSquare, Save, Send } from "lucide-react"
 import Link from "next/link"
 import { redirect } from "next/navigation"
 import type { ReactElement, ReactNode } from "react"
 
 import { GeneratedDocumentContent } from "@/components/documents/generated-document-content"
+import { SubmissionActivityTimeline } from "@/components/submissions/submission-activity-timeline"
 import { SubmissionFileField } from "@/components/submissions/submission-file-field"
+import { SubmissionReviewControls } from "@/components/submissions/submission-review-controls"
 import { SubmissionStatusBadge } from "@/components/submissions/submission-status-badge"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
@@ -25,13 +27,14 @@ import { getPageErrorMessage } from "@/lib/page-errors"
 import { loadPageOrganizationContext } from "@/lib/page-organization-context"
 import { canPerformOrganizationAction } from "@/lib/permissions"
 import { cn } from "@/lib/utils"
+import { listOrganizationPeople } from "@/services/organization-service"
 import { getInternalSubmission } from "@/services/submission-service"
-import type {
-  SubmissionDetail,
-} from "@/services/submission-service"
+import type { SubmissionDetail } from "@/services/submission-service"
+import type { OrganizationMember } from "@/types/organization"
 import type { SubmissionFile } from "@/types/submission"
 
 import {
+  createSubmissionCommentAction,
   saveSubmissionAction,
   submitSubmissionAction,
 } from "../actions"
@@ -77,22 +80,42 @@ export default async function SubmissionDetailPage({
   }
 
   const context = contextResult.context
-  const result = await getInternalSubmission({
-    actorUserId: user.id,
-    organizationId: context.organization.id,
-    submissionId,
-  })
-    .then((detail: SubmissionDetail) => ({
-      detail,
-      errorMessage: null as string | null,
-    }))
-    .catch((error: unknown) => ({
-      detail: null,
-      errorMessage: getPageErrorMessage(
-        error,
-        "Unable to load internal submission."
-      ),
-    }))
+  const [result, peopleResult] = await Promise.all([
+    getInternalSubmission({
+      actorUserId: user.id,
+      organizationId: context.organization.id,
+      submissionId,
+    })
+      .then((detail: SubmissionDetail) => ({
+        detail,
+        errorMessage: null as string | null,
+      }))
+      .catch((error: unknown) => ({
+        detail: null,
+        errorMessage: getPageErrorMessage(
+          error,
+          "Unable to load internal submission."
+        ),
+      })),
+    listOrganizationPeople(user.id, context.organization.id)
+      .then((people) => ({
+        members: people.members,
+        errorMessage: null as string | null,
+      }))
+      .catch((error: unknown) => {
+        const errorMessage = getPageErrorMessage(
+          error,
+          "Unable to load reviewer names."
+        )
+        console.warn("submission_review_people_load_failed", {
+          organizationId: context.organization.id,
+          reason: errorMessage,
+          submissionId,
+          userId: user.id,
+        })
+        return { members: [] as OrganizationMember[], errorMessage }
+      }),
+  ])
 
   if (!result.detail) {
     return (
@@ -108,11 +131,25 @@ export default async function SubmissionDetailPage({
   const detail = result.detail
   const submission = detail.submission
   const editable =
-    submission.status === "draft" &&
+    (submission.status === "draft" || submission.status === "needs_changes") &&
     submission.createdBy === user.id &&
     canPerformOrganizationAction(
       context.membership.role,
       "submissions:edit"
+    )
+  const canAssign = canPerformOrganizationAction(
+    context.membership.role,
+    "submissions:assign"
+  )
+  const canReview = canPerformOrganizationAction(
+    context.membership.role,
+    "submissions:review"
+  )
+  const canComment =
+    submission.status !== "draft" &&
+    canPerformOrganizationAction(
+      context.membership.role,
+      "submission_comments:create"
     )
   const fileFieldContent = buildFileFieldContent({
     detail,
@@ -144,15 +181,74 @@ export default async function SubmissionDetailPage({
             Template revision {submission.templateRevision} · Submission revision{" "}
             {submission.revision}
           </p>
+          {submission.assignedAt && (
+            <p className="text-sm text-muted-foreground">
+              Assigned to{" "}
+              {getMemberDisplayName(
+                submission.assignedTo,
+                peopleResult.members
+              )}
+            </p>
+          )}
         </div>
       </section>
 
       {submission.status === "submitted" && (
         <Alert>
-          <AlertTitle>Submission sent</AlertTitle>
+          <AlertTitle>Waiting for review</AlertTitle>
           <AlertDescription>
-            Submitted {formatMediumDateTime(submission.submittedAt)}. Answers and
-            files are now read only; review workflow controls arrive in Sprint 8.
+            Submitted {formatMediumDateTime(submission.submittedAt)}. A manager
+            can assign the review when it is ready to begin.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {submission.status === "in_review" && (
+        <Alert>
+          <AlertTitle>Review in progress</AlertTitle>
+          <AlertDescription>
+            The assigned reviewer can add context, while the assigned owner or
+            manager records the binding outcome.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {submission.status === "needs_changes" && (
+        <Alert variant={editable ? "default" : "destructive"}>
+          <AlertTitle>Changes requested</AlertTitle>
+          <AlertDescription>
+            {editable
+              ? "Update the answers or files below, then resubmit for another review."
+              : "Only the team member who created this submission can make the requested changes."}
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {submission.status === "approved" && (
+        <Alert>
+          <AlertTitle>Submission approved</AlertTitle>
+          <AlertDescription>
+            The review is approved and ready to be marked complete after any
+            remaining follow-up work.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {submission.status === "rejected" && (
+        <Alert variant="destructive">
+          <AlertTitle>Submission rejected</AlertTitle>
+          <AlertDescription>
+            The review history below includes the reviewer&apos;s decision note.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {submission.status === "completed" && (
+        <Alert>
+          <AlertTitle>Submission complete</AlertTitle>
+          <AlertDescription>
+            This review is closed. Its answers, files, discussion, and activity
+            remain available as a read-only record.
           </AlertDescription>
         </Alert>
       )}
@@ -207,7 +303,9 @@ export default async function SubmissionDetailPage({
                 variant="outline"
               >
                 <Save />
-                Save draft
+                {submission.status === "needs_changes"
+                  ? "Save changes"
+                  : "Save draft"}
               </Button>
               <Button
                 form="submission-answer-form"
@@ -215,13 +313,91 @@ export default async function SubmissionDetailPage({
                 type="submit"
               >
                 <Send />
-                Submit
+                {submission.status === "needs_changes" ? "Resubmit" : "Submit"}
               </Button>
             </div>
           )}
         </CardFooter>
       </Card>
+
+      {peopleResult.errorMessage && submission.status !== "draft" && (
+        <Alert variant="destructive">
+          <AlertTitle>Reviewer names unavailable</AlertTitle>
+          <AlertDescription>{peopleResult.errorMessage}</AlertDescription>
+        </Alert>
+      )}
+
+      {submission.status !== "draft" && (
+        <div className="grid items-start gap-4 lg:grid-cols-2">
+          <div className="flex flex-col gap-4">
+            <SubmissionReviewControls
+              canAssign={canAssign && !peopleResult.errorMessage}
+              canReview={canReview}
+              currentUserId={user.id}
+              members={peopleResult.members}
+              submission={submission}
+            />
+            <SubmissionDiscussionCard
+              canComment={canComment}
+              submissionId={submission.id}
+            />
+          </div>
+          <SubmissionActivityTimeline
+            activity={detail.activity}
+            comments={detail.comments}
+            members={peopleResult.members}
+          />
+        </div>
+      )}
     </SubmissionDetailShell>
+  )
+}
+
+function SubmissionDiscussionCard({
+  canComment,
+  submissionId,
+}: {
+  canComment: boolean
+  submissionId: string
+}): ReactElement {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Discussion</CardTitle>
+        <CardDescription>
+          Add context without changing the binding review decision.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {canComment ? (
+          <form
+            action={createSubmissionCommentAction}
+            className="flex flex-col gap-3"
+          >
+            <input name="submissionId" type="hidden" value={submissionId} />
+            <label className="text-sm font-medium" htmlFor="submission-comment">
+              Add comment
+            </label>
+            <textarea
+              className="min-h-24 w-full resize-y rounded-lg border border-input bg-transparent px-3 py-2 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+              id="submission-comment"
+              maxLength={2_000}
+              name="body"
+              placeholder="Share an update or review context"
+              required
+            />
+            <Button className="w-fit" type="submit" variant="outline">
+              <MessageSquare />
+              Add comment
+            </Button>
+          </form>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            You do not have permission to comment on this submission.
+          </p>
+        )}
+      </CardContent>
+    </Card>
   )
 }
 
@@ -286,4 +462,18 @@ function buildFileFieldContent(input: {
   }
 
   return content
+}
+
+function getMemberDisplayName(
+  userId: string | null,
+  members: OrganizationMember[]
+): string {
+  if (!userId) {
+    return "a former member"
+  }
+
+  const member = members.find(
+    (candidate: OrganizationMember): boolean => candidate.userId === userId
+  )
+  return member?.fullName?.trim() || member?.email || "a team member"
 }

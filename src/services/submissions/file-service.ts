@@ -246,7 +246,7 @@ export async function completeInternalSubmissionFile(
         input.organizationId,
         input.submissionId
       )
-      assertSubmissionCreatorDraft(submission, input.actorUserId)
+      assertSubmissionCreatorEditableState(submission, input.actorUserId)
       const files = await listSubmissionFiles(
         client,
         input.organizationId,
@@ -357,12 +357,7 @@ export async function supersedeInternalSubmissionFile(
         input.submissionId
       )
 
-      if (submission.createdBy !== input.actorUserId) {
-        throw new SubmissionServiceError(
-          "Only the submission creator may replace draft files.",
-          403
-        )
-      }
+      assertSubmissionCreatorEditableState(submission, input.actorUserId)
 
       const { data, error } = await client.rpc(
         "supersede_internal_submission_file",
@@ -438,7 +433,10 @@ export async function createInternalSubmissionFileDownloadUrl(
       const files = await listSubmissionFiles(
         client,
         input.organizationId,
-        input.submissionId
+        input.submissionId,
+        role === "external_reviewer"
+          ? ["available"]
+          : ["upload_pending", "available"]
       )
       const file = files.find(
         (candidate: SubmissionFile): boolean => candidate.id === input.fileId
@@ -548,7 +546,7 @@ function readSupersededStorageKey(value: unknown): string {
   return value.storage_key
 }
 
-function assertSubmissionCreatorDraft(
+function assertSubmissionCreatorEditableState(
   submission: Submission,
   actorUserId: string
 ): void {
@@ -559,9 +557,12 @@ function assertSubmissionCreatorDraft(
     )
   }
 
-  if (submission.status !== "draft") {
+  if (
+    submission.status !== "draft" &&
+    submission.status !== "needs_changes"
+  ) {
     throw new SubmissionServiceError(
-      "Files cannot be changed after submission.",
+      "Files cannot be changed in this submission status.",
       409
     )
   }

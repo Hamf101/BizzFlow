@@ -22,7 +22,9 @@ import { getPageErrorMessage } from "@/lib/page-errors"
 import { loadPageOrganizationContext } from "@/lib/page-organization-context"
 import { canPerformOrganizationAction } from "@/lib/permissions"
 import { cn } from "@/lib/utils"
+import { listOrganizationPeople } from "@/services/organization-service"
 import { listInternalSubmissions } from "@/services/submission-service"
+import type { OrganizationMember } from "@/types/organization"
 import type { Submission } from "@/types/submission"
 
 export const dynamic = "force-dynamic"
@@ -74,26 +76,47 @@ export default async function SubmissionsPage({
     context.membership.role,
     "submissions:create"
   )
-  const result = await listInternalSubmissions({
-    actorUserId: user.id,
-    organizationId: context.organization.id,
-  })
-    .then((submissions: Submission[]) => ({
-      submissions,
-      errorMessage: null as string | null,
-    }))
-    .catch((error: unknown) => {
-      const errorMessage = getPageErrorMessage(
-        error,
-        "Unable to load internal submissions."
-      )
-      console.warn("submissions_list_load_failed", {
-        organizationId: context.organization.id,
-        reason: errorMessage,
-        userId: user.id,
-      })
-      return { submissions: [] as Submission[], errorMessage }
+  const canAssign = canPerformOrganizationAction(
+    context.membership.role,
+    "submissions:assign"
+  )
+  const [result, members] = await Promise.all([
+    listInternalSubmissions({
+      actorUserId: user.id,
+      organizationId: context.organization.id,
     })
+      .then((submissions: Submission[]) => ({
+        submissions,
+        errorMessage: null as string | null,
+      }))
+      .catch((error: unknown) => {
+        const errorMessage = getPageErrorMessage(
+          error,
+          "Unable to load internal submissions."
+        )
+        console.warn("submissions_list_load_failed", {
+          organizationId: context.organization.id,
+          reason: errorMessage,
+          userId: user.id,
+        })
+        return { submissions: [] as Submission[], errorMessage }
+      }),
+    canAssign
+      ? listOrganizationPeople(user.id, context.organization.id)
+          .then((people) => people.members)
+          .catch((error: unknown) => {
+            console.warn("submissions_people_load_failed", {
+              organizationId: context.organization.id,
+              reason: getPageErrorMessage(
+                error,
+                "Unable to load reviewer names."
+              ),
+              userId: user.id,
+            })
+            return [] as OrganizationMember[]
+          })
+      : Promise.resolve([] as OrganizationMember[]),
+  ])
 
   return (
     <SubmissionsShell query={query}>
@@ -101,8 +124,9 @@ export default async function SubmissionsPage({
         <div className="flex flex-col gap-2">
           <h1 className="text-2xl font-semibold tracking-normal">Submissions</h1>
           <p className="max-w-2xl text-sm text-muted-foreground">
-            Fill published forms, attach supporting files, and send completed
-            work to {context.organization.name}.
+            {canAssign
+              ? `Assign reviews, record decisions, and track submissions for ${context.organization.name}.`
+              : `Fill published forms, attach supporting files, and track work sent to ${context.organization.name}.`}
           </p>
         </div>
         {canCreate && (
@@ -119,11 +143,16 @@ export default async function SubmissionsPage({
           <AlertDescription>{result.errorMessage}</AlertDescription>
         </Alert>
       ) : (
-        <SubmissionList
-          canCreate={canCreate}
-          currentUserId={user.id}
-          submissions={result.submissions}
-        />
+        <>
+          {canAssign && <ReviewInboxSummary submissions={result.submissions} />}
+          <SubmissionList
+            canAssign={canAssign}
+            canCreate={canCreate}
+            currentUserId={user.id}
+            members={members}
+            submissions={result.submissions}
+          />
+        </>
       )}
     </SubmissionsShell>
   )
@@ -156,12 +185,16 @@ function SubmissionsShell({
 }
 
 function SubmissionList({
+  canAssign,
   canCreate,
   currentUserId,
+  members,
   submissions,
 }: {
+  canAssign: boolean
   canCreate: boolean
   currentUserId: string
+  members: OrganizationMember[]
   submissions: Submission[]
 }): ReactElement {
   if (submissions.length === 0) {
@@ -216,17 +249,118 @@ function SubmissionList({
                 ? "Created by you"
                 : "Created by a team member"}
             </span>
+            {submission.status !== "draft" && (
+              <span>
+                {formatAssignmentLabel(submission, currentUserId, members)}
+              </span>
+            )}
           </CardContent>
           <CardFooter>
             <Link
               className={cn(buttonVariants({ variant: "outline" }))}
               href={`/submissions/${encodeURIComponent(submission.id)}`}
             >
-              {submission.status === "draft" ? "Open draft" : "View submission"}
+              {getSubmissionLinkLabel(submission, canAssign, currentUserId)}
             </Link>
           </CardFooter>
         </Card>
       ))}
     </div>
   )
+}
+
+function ReviewInboxSummary({
+  submissions,
+}: {
+  submissions: Submission[]
+}): ReactElement {
+  const waitingForAssignment = submissions.filter(
+    (submission: Submission): boolean => submission.status === "submitted"
+  ).length
+  const inReview = submissions.filter(
+    (submission: Submission): boolean => submission.status === "in_review"
+  ).length
+  const needsChanges = submissions.filter(
+    (submission: Submission): boolean => submission.status === "needs_changes"
+  ).length
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Review inbox</CardTitle>
+        <CardDescription>
+          Open work that may need assignment or a review decision.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-3 sm:grid-cols-3">
+        <ReviewInboxCount
+          label="Waiting for assignment"
+          value={waitingForAssignment}
+        />
+        <ReviewInboxCount label="In review" value={inReview} />
+        <ReviewInboxCount label="Needs changes" value={needsChanges} />
+      </CardContent>
+    </Card>
+  )
+}
+
+function ReviewInboxCount({
+  label,
+  value,
+}: {
+  label: string
+  value: number
+}): ReactElement {
+  return (
+    <div className="flex flex-col gap-1 rounded-lg border bg-background p-3">
+      <span className="text-2xl font-semibold tabular-nums">{value}</span>
+      <span className="text-xs text-muted-foreground">{label}</span>
+    </div>
+  )
+}
+
+function formatAssignmentLabel(
+  submission: Submission,
+  currentUserId: string,
+  members: OrganizationMember[]
+): string {
+  if (!submission.assignedTo) {
+    return submission.status === "submitted" ? "Unassigned" : "No assignee"
+  }
+
+  if (submission.assignedTo === currentUserId) {
+    return "Assigned to you"
+  }
+
+  const member = members.find(
+    (candidate: OrganizationMember): boolean =>
+      candidate.userId === submission.assignedTo
+  )
+  return `Assigned to ${member?.fullName?.trim() || member?.email || "a team member"}`
+}
+
+function getSubmissionLinkLabel(
+  submission: Submission,
+  canAssign: boolean,
+  currentUserId: string
+): string {
+  if (submission.status === "draft") {
+    return "Open draft"
+  }
+
+  if (
+    submission.status === "needs_changes" &&
+    submission.createdBy === currentUserId
+  ) {
+    return "Make changes"
+  }
+
+  if (
+    canAssign &&
+    (submission.status === "submitted" || submission.status === "in_review")
+  ) {
+    return "Review submission"
+  }
+
+  return "View submission"
 }

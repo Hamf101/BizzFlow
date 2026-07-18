@@ -4,6 +4,7 @@ import type {
   SubmissionDetail,
   SubmissionServiceDeps,
 } from "@/services/submissions/contracts"
+import { listSubmissionReviewData } from "@/services/submissions/review-service"
 import {
   assertSubmissionVisible,
   createSubmissionDatabaseError,
@@ -23,7 +24,7 @@ import {
  * Lists submissions visible to one active internal organization member.
  *
  * Owners and managers receive every organization submission; staff receive only
- * submissions they created. External reviewers have no submission permission.
+ * submissions they created; external reviewers receive assigned non-drafts.
  *
  * @param input - Actor and tenant identifiers.
  * @param deps - Optional trusted database dependency.
@@ -53,6 +54,17 @@ export async function listInternalSubmissions(
 
       if (role === "staff") {
         query = query.eq("created_by", input.actorUserId)
+      } else if (role === "external_reviewer") {
+        query = query
+          .eq("assigned_to", input.actorUserId)
+          .in("status", [
+            "submitted",
+            "in_review",
+            "needs_changes",
+            "approved",
+            "rejected",
+            "completed",
+          ])
       }
 
       const { data, error } = await query.order("updated_at", {
@@ -76,7 +88,7 @@ export async function listInternalSubmissions(
  *
  * @param input - Actor, tenant, and submission identifiers.
  * @param deps - Optional trusted database dependency.
- * @returns Submission detail with pending and available file metadata.
+ * @returns Submission detail with role-scoped files, comments, and activity.
  * @throws SubmissionServiceError when access is denied or the row is absent.
  */
 export async function getInternalSubmission(
@@ -101,13 +113,23 @@ export async function getInternalSubmission(
         input.submissionId
       )
       assertSubmissionVisible(role, submission, input.actorUserId)
-      const files = await listSubmissionFiles(
-        client,
-        input.organizationId,
-        input.submissionId
-      )
+      const [files, reviewData] = await Promise.all([
+        listSubmissionFiles(
+          client,
+          input.organizationId,
+          input.submissionId,
+          role === "external_reviewer"
+            ? ["available"]
+            : ["upload_pending", "available"]
+        ),
+        listSubmissionReviewData(
+          client,
+          input.organizationId,
+          input.submissionId
+        ),
+      ])
 
-      return { submission, files }
+      return { submission, files, ...reviewData }
     }
   )
 }

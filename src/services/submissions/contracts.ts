@@ -17,6 +17,11 @@ import type {
   SubmissionAnswers,
   SubmissionFile,
 } from "@/types/submission"
+import type {
+  SubmissionActivityEvent,
+  SubmissionComment,
+  SubmissionReviewTransition,
+} from "@/types/submission-review"
 
 /** Narrow trusted Supabase client used by submission services. */
 export type SubmissionServiceClient = Pick<
@@ -28,6 +33,8 @@ export type SubmissionServiceClient = Pick<
 export type SubmissionDetail = {
   submission: Submission
   files: SubmissionFile[]
+  comments: SubmissionComment[]
+  activity: SubmissionActivityEvent[]
 }
 
 /** Actor and tenant identifiers shared by submission calls. */
@@ -62,6 +69,26 @@ export type SubmitInternalSubmissionInput = GetInternalSubmissionInput & {
   expectedRevision: number
   values: unknown
 }
+
+/** Input for assigning or reassigning a submission review. */
+export type AssignInternalSubmissionInput = GetInternalSubmissionInput & {
+  expectedRevision: number
+  assignedTo: string
+}
+
+/** Input for one binding submission review state change. */
+export type TransitionInternalSubmissionInput =
+  GetInternalSubmissionInput & {
+    expectedRevision: number
+    targetStatus: SubmissionReviewTransition
+    comment?: string | null
+  }
+
+/** Input for an immutable general submission comment. */
+export type CreateInternalSubmissionCommentInput =
+  GetInternalSubmissionInput & {
+    body: string
+  }
 
 /** Input for allocating or resuming a single-file template field. */
 export type AllocateInternalSubmissionFileInput = GetInternalSubmissionInput & {

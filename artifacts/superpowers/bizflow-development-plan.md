@@ -11,7 +11,7 @@ Canonical guide:
 Summary:
 
 - Product: BizFlow Docs, a mobile-first, multi-tenant cloud workflow portal for forms, document collection, submissions, tasks, reminders, and public links. Offline drafts remain a deferred option.
-- Current state: Sprint 7 internal submissions and their cloud-upload hardening are implemented, migrated, and schema-verified. Sprint 8 review and assignment are next; the Offline Foundation is not an active release gate.
+- Current state: Sprint 8 assignment, review decisions, requested-change resubmission, comments, and activity are implemented, migrated, and schema-verified. Sprint 9 tasks and reminders are next; the Offline Foundation is not an active release gate.
 - Source of truth: `.agent/AGENT.md` and the attached BizFlow MVP notes.
 - Stale context: `.agent/Project_inf.md` described an unrelated product and should not guide BizFlow implementation.
 
@@ -41,6 +41,7 @@ Current checklist:
 - [x] Offline security and durability spike specified.
 - [x] Immutable generated-document finalization and signing evidence implemented before representing a document as finalized.
 - [x] Sprint 7 internal submissions implemented and migrated with draft, file, submit, and detail workflows.
+- [x] Sprint 8 assignment and review workflow implemented with atomic activity and audit evidence.
 
 Deferred offline research:
 
@@ -59,8 +60,8 @@ Current next-work routing:
 
 The user's later 2026-07-18 instruction supersedes the Offline Foundation execution lock and makes the cloud application the current target.
 
-1. Build Sprint 8 assignment and review decisions on the submitted-only boundary.
-2. Keep comments, review activity, and later task automation separated by service responsibility.
+1. Build Sprint 9 tasks and reminders from reviewed submissions.
+2. Keep task automation separate from the completed submission review service.
 3. Run the credential-backed two-tenant RLS fixture when test-user credentials are available.
 4. Complete real browser-to-R2 UAT when deployment R2 credentials are available.
 

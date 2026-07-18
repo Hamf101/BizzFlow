@@ -76,12 +76,21 @@ export const TABLE_CHECKS = [
   {
     name: "submissions",
     select:
-      "id,org_id,title,template_id,template_revision,template_snapshot,values,status,revision,created_by,updated_by,submitted_by,created_at,updated_at,submitted_at",
+      "id,org_id,title,template_id,template_revision,template_snapshot,values,status,revision,created_by,updated_by,submitted_by,assigned_to,assigned_by,created_at,updated_at,submitted_at,assigned_at",
   },
   {
     name: "submission_files",
     select:
       "id,org_id,submission_id,field_key,status,storage_key,original_filename,safe_filename,content_type,byte_size,expected_checksum_sha256,checksum_sha256,uploaded_by,superseded_by,created_at,updated_at,available_at,superseded_at,cleanup_after,storage_cleaned_at",
+  },
+  {
+    name: "submission_comments",
+    select: "id,org_id,submission_id,body,created_by,created_at",
+  },
+  {
+    name: "submission_activity_events",
+    select:
+      "id,org_id,submission_id,actor_user_id,event_type,from_status,to_status,assignee_user_id,comment_id,submission_revision,created_at",
   },
 ]
 
@@ -169,6 +178,37 @@ export const SERVICE_ROLE_RPC_CHECKS = [
       target_submission_id: null,
       target_expected_revision: null,
       target_values: null,
+      target_actor_user_id: null,
+    },
+  },
+  {
+    name: "assign_internal_submission",
+    args: {
+      target_org_id: null,
+      target_submission_id: null,
+      target_expected_revision: null,
+      target_assignee_user_id: null,
+      target_actor_user_id: null,
+    },
+  },
+  {
+    name: "transition_internal_submission",
+    args: {
+      target_org_id: null,
+      target_submission_id: null,
+      target_expected_revision: null,
+      target_transition: null,
+      target_comment: null,
+      target_actor_user_id: null,
+    },
+  },
+  {
+    name: "create_internal_submission_comment",
+    args: {
+      target_org_id: null,
+      target_submission_id: null,
+      target_comment_id: null,
+      target_body: null,
       target_actor_user_id: null,
     },
   },

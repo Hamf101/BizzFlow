@@ -119,6 +119,8 @@ describe("authenticated Supabase RLS harness configuration", () => {
     expect(HELP_TEXT).toContain("No fixture rows are created, updated, or deleted")
     expect(HELP_TEXT).toContain("fresh nonexistent foreign keys")
     expect(HELP_TEXT).toContain("exact configured IDs")
+    expect(HELP_TEXT).toContain("assigned to the configured external reviewer")
+    expect(HELP_TEXT).toContain("at least one comment and one activity event")
   })
 
   it("covers the complete submission and file visibility matrix", () => {
@@ -129,7 +131,7 @@ describe("authenticated Supabase RLS harness configuration", () => {
       { actor: "manager", fixture: "manager", visible: true },
       { actor: "staff", fixture: "staff", visible: true },
       { actor: "staff", fixture: "manager", visible: false },
-      { actor: "reviewer", fixture: "staff", visible: false },
+      { actor: "reviewer", fixture: "staff", visible: true },
       { actor: "reviewer", fixture: "manager", visible: false },
       { actor: "tenantB", fixture: "staff", visible: false },
       { actor: "tenantB", fixture: "manager", visible: false },
@@ -146,6 +148,9 @@ describe("authenticated Supabase RLS harness configuration", () => {
       "record_internal_submission_file_upload_window",
       "mark_internal_submission_file_storage_cleaned",
       "submit_internal_submission",
+      "assign_internal_submission",
+      "transition_internal_submission",
+      "create_internal_submission_comment",
     ])
     expect(DIRECT_SUBMISSION_WRITE_PLAN).toEqual([
       { table: "submissions", operation: "insert" },
@@ -154,6 +159,12 @@ describe("authenticated Supabase RLS harness configuration", () => {
       { table: "submission_files", operation: "insert" },
       { table: "submission_files", operation: "update" },
       { table: "submission_files", operation: "delete" },
+      { table: "submission_comments", operation: "insert" },
+      { table: "submission_comments", operation: "update" },
+      { table: "submission_comments", operation: "delete" },
+      { table: "submission_activity_events", operation: "insert" },
+      { table: "submission_activity_events", operation: "update" },
+      { table: "submission_activity_events", operation: "delete" },
     ])
   })
 
@@ -162,6 +173,8 @@ describe("authenticated Supabase RLS harness configuration", () => {
       expect.arrayContaining([
         expect.objectContaining({ name: "submissions" }),
         expect.objectContaining({ name: "submission_files" }),
+        expect.objectContaining({ name: "submission_comments" }),
+        expect.objectContaining({ name: "submission_activity_events" }),
       ])
     )
     expect(SERVICE_ROLE_RPC_CHECKS.map((rpc) => rpc.name)).toEqual(
@@ -170,6 +183,13 @@ describe("authenticated Supabase RLS harness configuration", () => {
     expect(SERVICE_ROLE_RPC_CHECKS.every((rpc) =>
       Object.values(rpc.args).every((value) => value === null)
     )).toBe(true)
+    expect(
+      TABLE_CHECKS.find((table) => table.name === "submissions")?.select
+    ).toContain("assigned_to")
+    expect(
+      TABLE_CHECKS.find((table) => table.name === "submission_activity_events")
+        ?.select
+    ).toContain("submission_revision")
     expect(SERVICE_ROLE_READ_ONLY_RPC_CHECKS).toHaveLength(1)
     expect(SERVICE_ROLE_READ_ONLY_RPC_CHECKS[0].name).toBe(
       "validate_internal_submission_values"

@@ -5,8 +5,8 @@ BizFlow Docs is a mobile-first, multi-tenant workflow portal for reusable forms,
 ## Current Status
 
 - Project phase: implementation.
-- Sprint: Sprint 7 internal submissions are implemented and migrated to the configured Supabase project; Sprint 8 review and assignment are next.
-- Application scaffold: Next.js App Router foundation with versioned documents, organization templates, guided signing/PDF workflows, creator-owned submission drafts, and private verified submission files.
+- Sprint: Sprint 8 submission assignment and review are implemented and migrated; Sprint 9 tasks and reminders are next.
+- Application scaffold: Next.js App Router foundation with versioned documents, organization templates, guided signing/PDF workflows, creator-owned submission drafts, private verified files, and a tenant-scoped review inbox.
 - Delivery direction: cloud-first. Offline/PWA work and related packages are deferred until explicitly reprioritized.
 - Canonical project guide: `.agent/AGENT.md`.
 
@@ -147,9 +147,11 @@ supabase/migrations/20260718175458_sprint_7_submission_function_hardening.sql
 supabase/migrations/20260718180607_sprint_7_submission_drawing_values.sql
 supabase/migrations/20260718181552_sprint_7_submission_upload_hardening.sql
 supabase/migrations/20260718184631_sprint_7_submission_storage_cleanup.sql
+supabase/migrations/20260718190946_sprint_8_submission_review_workflow.sql
+supabase/migrations/20260718194429_sprint_8_submission_function_lint.sql
 ```
 
-The Sprint 3 through Sprint 7 migrations include explicit Data API grants for `authenticated` and `service_role`, plus PostgREST schema-cache reloads. The guided-document migration adds organization-wide template revisions, immutable per-document snapshots, shared answers, unordered all-party signer state, per-user recent access, and tenant-scoped RLS. The audit hardening migration closes profile-email claiming and moves high-integrity mutations into transactional service-role RPCs. The finalization migration promotes one deterministic, create-only R2 PDF to an exact immutable document version. Sprint 7 adds role-aware submissions, immutable template snapshots, optimistic draft revisions, checksum-bound create-only file allocations, recoverable file tombstones, expiry-safe object cleanup, and atomic create/save/submit RPCs with audit evidence.
+The Sprint 3 through Sprint 8 migrations include explicit Data API grants for `authenticated` and `service_role`, plus PostgREST schema-cache reloads. The guided-document migration adds organization-wide template revisions, immutable per-document snapshots, shared answers, unordered all-party signer state, per-user recent access, and tenant-scoped RLS. The audit hardening migration closes profile-email claiming and moves high-integrity mutations into transactional service-role RPCs. The finalization migration promotes one deterministic, create-only R2 PDF to an exact immutable document version. Sprint 7 adds role-aware submissions, immutable template snapshots, optimistic draft revisions, checksum-bound create-only file allocations, recoverable file tombstones, expiry-safe object cleanup, and atomic create/save/submit RPCs with audit evidence. Sprint 8 adds assignment, requested-change resubmission, binding manager decisions, immutable comments/activity, and assigned-only external-reviewer access.
 
 ## API Endpoints Summary
 
@@ -181,9 +183,9 @@ Implemented guided-document pages:
 - `/documents/:id/edit` for shared answers, signing recipients, status, and PDF export.
 - `/templates`, `/templates/new`, and `/templates/:id/edit` for organization template management.
 - `/sign/:token` for private recipient review, field completion, and drawn acknowledgement.
-- `/submissions` for role-aware internal submission lists.
+- `/submissions` for creator lists, assigned external reviews, and the manager review inbox.
 - `/submissions/new` for starting a draft from a published template.
-- `/submissions/:id` for saving creator-owned drafts, uploading or replacing verified files, submitting, and read-only detail.
+- `/submissions/:id` for draft/resubmission editing, verified files, assignment, review decisions, comments, and activity history.
 
 Planned routes may be adjusted during implementation.
 
@@ -262,7 +264,7 @@ pnpm check
 
 The aggregate gate runs lint, strict TypeScript, unit/integration tests, production-code duplication detection, a production build, and a production dependency audit. When configured with local secrets, also run `pnpm supabase:check`.
 
-The valid-RPC smoke test creates isolated synthetic rows inside one database statement, exercises create/save/allocate/complete/supersede/submit, and removes the fixtures before returning:
+The valid-RPC smoke test creates isolated synthetic rows inside one database statement, exercises the submission/file lifecycle plus assignment, review, comments, and resubmission, and removes the fixtures before returning:
 
 ```bash
 set -a

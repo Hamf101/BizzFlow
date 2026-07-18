@@ -4,11 +4,13 @@ import {
   isOrganizationRole,
   type OrganizationRole,
 } from "@/lib/permissions"
-import type {
-  AuditLogAction,
-  AuditLogEntry,
-  AuditLogTargetType,
-  AuditMetadata,
+import {
+  AUDIT_LOG_ACTIONS,
+  AUDIT_LOG_TARGET_TYPES,
+  type AuditLogAction,
+  type AuditLogEntry,
+  type AuditLogTargetType,
+  type AuditMetadata,
 } from "@/types/audit"
 
 type AdminClient = ReturnType<typeof createAdminClient>
@@ -204,35 +206,16 @@ function mapAuditLog(row: AuditLogRow): AuditLogEntry {
 }
 
 function parseAuditLogAction(value: string): AuditLogAction {
-  if (
-    value === "organization.created" ||
-    value === "invite.created" ||
-    value === "invite.accepted" ||
-    value === "membership.role_updated" ||
-    value === "folder.created" ||
-    value === "folder.archived" ||
-    value === "document.created" ||
-    value === "document.archived" ||
-    value === "document.finalized" ||
-    value === "document_version.created" ||
-    value === "document_version.download_url_issued"
-  ) {
-    return value
+  if (AUDIT_LOG_ACTIONS.includes(value as AuditLogAction)) {
+    return value as AuditLogAction
   }
 
   throw new AuditServiceError("Database returned an unsupported audit action.", 500)
 }
 
 function parseAuditLogTargetType(value: string): AuditLogTargetType {
-  if (
-    value === "organization" ||
-    value === "invite" ||
-    value === "membership" ||
-    value === "folder" ||
-    value === "document" ||
-    value === "document_version"
-  ) {
-    return value
+  if (AUDIT_LOG_TARGET_TYPES.includes(value as AuditLogTargetType)) {
+    return value as AuditLogTargetType
   }
 
   throw new AuditServiceError("Database returned an unsupported audit target.", 500)

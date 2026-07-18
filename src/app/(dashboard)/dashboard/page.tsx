@@ -30,10 +30,10 @@ type DashboardSearchParams = Promise<{
 }>
 
 const sprintItems: readonly string[] = [
-  "Start a submission from an exact published template revision.",
-  "Save creator-owned drafts with revision conflict protection.",
-  "Attach private, server-verified supporting files.",
-  "Submit complete forms as immutable review inputs.",
+  "Assign submitted work to an eligible reviewer.",
+  "Request changes and safely resubmit revised answers or files.",
+  "Approve, reject, and complete work with revision protection.",
+  "Keep required feedback, comments, and activity in one history.",
 ]
 
 export default async function DashboardPage({
@@ -54,8 +54,8 @@ export default async function DashboardPage({
       <section className="flex flex-col gap-2">
         <h1 className="text-2xl font-semibold tracking-normal">Dashboard</h1>
         <p className="max-w-2xl text-sm text-muted-foreground">
-          Signed in as {user.email ?? "Authenticated user"}. Sprint 7 adds
-          internal form submissions with private cloud file collection.
+          Signed in as {user.email ?? "Authenticated user"}. Sprint 8 adds a
+          tenant-safe assignment and review workflow for internal submissions.
         </p>
       </section>
 
@@ -149,8 +149,10 @@ export default async function DashboardPage({
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Sprint 7 checklist</CardTitle>
-            <CardDescription>Internal submissions available in this slice.</CardDescription>
+            <CardTitle>Sprint 8 checklist</CardTitle>
+            <CardDescription>
+              Submission review capabilities available in this slice.
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <ul className="flex flex-col gap-3 text-sm">
@@ -165,12 +167,12 @@ export default async function DashboardPage({
         <Card>
           <CardHeader>
             <CardTitle>Next build target</CardTitle>
-            <CardDescription>Submission review workflow comes next.</CardDescription>
+            <CardDescription>Tasks and reminders come next.</CardDescription>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground">
-              Sprint 8 adds the manager inbox, assignment metadata, review
-              decisions, required feedback, comments, and activity history.
+              Sprint 9 turns reviewed submissions into assigned work with due
+              dates, reminder processing, and notification delivery.
             </p>
           </CardContent>
         </Card>

@@ -19,6 +19,10 @@ import type {
   DocumentTemplateRow,
   TemplateContent,
 } from "@/types/template"
+import type {
+  SubmissionActivityEventRow,
+  SubmissionCommentRow,
+} from "@/types/submission-review"
 
 type DatabaseOrganizationRole =
   | "owner_admin"
@@ -108,14 +112,24 @@ type AdminSubmissionRow = Record<string, unknown> & {
   template_revision: number
   template_snapshot: TemplateContent
   values: Record<string, string | boolean>
-  status: "draft" | "submitted"
+  status:
+    | "draft"
+    | "submitted"
+    | "in_review"
+    | "needs_changes"
+    | "approved"
+    | "rejected"
+    | "completed"
   revision: number
   created_by: string | null
   updated_by: string | null
   submitted_by: string | null
+  assigned_to: string | null
+  assigned_by: string | null
   created_at: string
   updated_at: string
   submitted_at: string | null
+  assigned_at: string | null
 }
 
 type AdminSubmissionFileRow = Record<string, unknown> & {
@@ -185,6 +199,22 @@ type DocumentRecentAccessInsert = Pick<
   DocumentRecentAccessRow,
   "org_id" | "user_id" | "document_id" | "last_opened_at"
 >
+type SubmissionCommentInsert = Partial<SubmissionCommentRow> &
+  Pick<
+    SubmissionCommentRow,
+    "id" | "org_id" | "submission_id" | "body"
+  >
+type SubmissionActivityEventInsert = Partial<SubmissionActivityEventRow> &
+  Pick<
+    SubmissionActivityEventRow,
+    | "id"
+    | "org_id"
+    | "submission_id"
+    | "event_type"
+    | "from_status"
+    | "to_status"
+    | "submission_revision"
+  >
 
 export type AdminDatabase = {
   public: {
@@ -281,6 +311,16 @@ export type AdminDatabase = {
             | "byte_size"
           >,
         Partial<AdminSubmissionFileRow>
+      >
+      submission_comments: DatabaseTable<
+        SubmissionCommentRow,
+        SubmissionCommentInsert,
+        never
+      >
+      submission_activity_events: DatabaseTable<
+        SubmissionActivityEventRow,
+        SubmissionActivityEventInsert,
+        never
       >
     }
     Views: Record<string, never>
@@ -440,6 +480,37 @@ export type AdminDatabase = {
           target_actor_user_id: string
         }
         Returns: AdminSubmissionRow
+      }
+      assign_internal_submission: {
+        Args: {
+          target_org_id: string
+          target_submission_id: string
+          target_expected_revision: number
+          target_assignee_user_id: string
+          target_actor_user_id: string
+        }
+        Returns: AdminSubmissionRow
+      }
+      transition_internal_submission: {
+        Args: {
+          target_org_id: string
+          target_submission_id: string
+          target_expected_revision: number
+          target_transition: string
+          target_comment: string | null
+          target_actor_user_id: string
+        }
+        Returns: AdminSubmissionRow
+      }
+      create_internal_submission_comment: {
+        Args: {
+          target_org_id: string
+          target_submission_id: string
+          target_comment_id: string
+          target_body: string
+          target_actor_user_id: string
+        }
+        Returns: SubmissionCommentRow
       }
       update_organization_member_role: {
         Args: {
