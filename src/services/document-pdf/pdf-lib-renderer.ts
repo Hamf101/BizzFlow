@@ -351,6 +351,8 @@ async function drawPdfLibBlock(
         thickness: 0.8,
       })
       return topY - 20
+    case "file_field":
+      return drawPdfLibField(item, context, topY)
     default:
       return drawPdfLibField(item, context, topY)
   }

@@ -1,6 +1,13 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
   "installCommand": "corepack pnpm install",
   "buildCommand": "corepack pnpm build",
-  "devCommand": "corepack pnpm dev"
+  "devCommand": "corepack pnpm dev",
+  "crons": [
+    {
+      "path": "/api/cron/submission-file-cleanup",
+      "schedule": "15 3 * * *"
+    }
+  ]
 }

@@ -340,6 +340,7 @@ function summarizeBlock(block: TemplateBlock): string {
     case "dropdown_field":
     case "initials_field":
     case "signature_field":
+    case "file_field":
       return block.label
   }
 }

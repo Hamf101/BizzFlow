@@ -76,7 +76,9 @@ export default async function DashboardLayout({
             <Link className="hover:text-foreground" href="/templates">
               Templates
             </Link>
-            <span>Submissions</span>
+            <Link className="hover:text-foreground" href="/submissions">
+              Submissions
+            </Link>
             <span>Tasks</span>
           </nav>
         </aside>

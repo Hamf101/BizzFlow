@@ -38,6 +38,7 @@ const BLOCK_LABELS: Record<TemplateBlock["type"], string> = {
   dropdown_field: "Dropdown",
   initials_field: "Initials field",
   signature_field: "Signature field",
+  file_field: "File upload",
 }
 
 type TemplateFieldBlock = Extract<
@@ -50,6 +51,7 @@ type TemplateFieldBlock = Extract<
       | "dropdown_field"
       | "initials_field"
       | "signature_field"
+      | "file_field"
   }
 >
 
@@ -327,6 +329,7 @@ function BlockFields({
     case "date_field":
     case "initials_field":
     case "signature_field":
+    case "file_field":
       return <FieldBlockFields block={block} onChange={onChange} />
   }
 }

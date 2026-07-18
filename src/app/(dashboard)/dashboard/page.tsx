@@ -30,10 +30,10 @@ type DashboardSearchParams = Promise<{
 }>
 
 const sprintItems: readonly string[] = [
-  "Replace files while preserving prior versions.",
-  "Download current or historical versions with audit records.",
-  "Discuss documents with tenant-scoped comments.",
-  "Review a member-visible document activity timeline.",
+  "Start a submission from an exact published template revision.",
+  "Save creator-owned drafts with revision conflict protection.",
+  "Attach private, server-verified supporting files.",
+  "Submit complete forms as immutable review inputs.",
 ]
 
 export default async function DashboardPage({
@@ -54,8 +54,8 @@ export default async function DashboardPage({
       <section className="flex flex-col gap-2">
         <h1 className="text-2xl font-semibold tracking-normal">Dashboard</h1>
         <p className="max-w-2xl text-sm text-muted-foreground">
-          Signed in as {user.email ?? "Authenticated user"}. Sprint 5 adds
-          replacement versions, comments, activity, and audited file access.
+          Signed in as {user.email ?? "Authenticated user"}. Sprint 7 adds
+          internal form submissions with private cloud file collection.
         </p>
       </section>
 
@@ -149,8 +149,8 @@ export default async function DashboardPage({
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Sprint 5 checklist</CardTitle>
-            <CardDescription>Document collaboration available in this slice.</CardDescription>
+            <CardTitle>Sprint 7 checklist</CardTitle>
+            <CardDescription>Internal submissions available in this slice.</CardDescription>
           </CardHeader>
           <CardContent>
             <ul className="flex flex-col gap-3 text-sm">
@@ -165,12 +165,12 @@ export default async function DashboardPage({
         <Card>
           <CardHeader>
             <CardTitle>Next build target</CardTitle>
-            <CardDescription>The reusable template builder comes next.</CardDescription>
+            <CardDescription>Submission review workflow comes next.</CardDescription>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground">
-              Sprint 6 turns repeatable intake requirements into reusable form
-              templates with custom fields, previews, duplication, and archival.
+              Sprint 8 adds the manager inbox, assignment metadata, review
+              decisions, required feedback, comments, and activity history.
             </p>
           </CardContent>
         </Card>

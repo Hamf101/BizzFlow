@@ -120,6 +120,14 @@ export async function createGeneratedDocument(
       const snapshot = parseTemplateContent(
         template?.content ?? input.content ?? createBlankTemplateContent()
       )
+
+      if (containsFileField(snapshot)) {
+        throw new TemplateServiceError(
+          "File upload fields are only supported in internal submissions.",
+          409
+        )
+      }
+
       const documentId = createId(deps)
       const title = normalizeTitle(
         input.title ?? template?.title ?? "Untitled document"
@@ -187,6 +195,14 @@ export async function createGeneratedDocument(
 
       return mapGeneratedDocument(data as GeneratedDocumentRow)
     }
+  )
+}
+
+function containsFileField(
+  content: ReturnType<typeof parseTemplateContent>
+): boolean {
+  return Object.values(content.sections).some((section): boolean =>
+    section.blocks.some((block): boolean => block.type === "file_field")
   )
 }
 

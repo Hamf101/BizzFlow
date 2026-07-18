@@ -10,6 +10,11 @@ export type MigrationFileName =
   | "20260717205037_document_templates_signing_recents.sql"
   | "20260718002902_audit_security_hardening.sql"
   | "20260718070000_generated_document_finalizations.sql"
+  | "20260718171349_sprint_7_internal_submissions.sql"
+  | "20260718175458_sprint_7_submission_function_hardening.sql"
+  | "20260718180607_sprint_7_submission_drawing_values.sql"
+  | "20260718181552_sprint_7_submission_upload_hardening.sql"
+  | "20260718184631_sprint_7_submission_storage_cleanup.sql"
 
 export const directWriteActions = ["insert", "update", "delete"] as const
 

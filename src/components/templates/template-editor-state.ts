@@ -165,6 +165,8 @@ export function createTemplateBlock(
       return { ...fieldDefaults, type: blockType }
     case "signature_field":
       return { ...fieldDefaults, type: blockType }
+    case "file_field":
+      return { ...fieldDefaults, type: blockType }
   }
 }
 

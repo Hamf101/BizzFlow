@@ -6,7 +6,8 @@ This is the working development guide for BizFlow Docs. Treat the pasted MVP req
 
 Important local context:
 
-- Sprint 6 guided templates, signing, recent documents, and generated PDFs are implemented and migrated. Completed generated documents now use deterministic rendering, create-only R2 storage, and an atomically promoted immutable document version.
+- Sprint 7 internal submissions are implemented and migrated: published-template snapshots, creator-owned revisioned drafts, checksum-bound single-file fields, byte-level R2 verification, recoverable replace/cancel tombstones with expiry-safe scheduled cleanup, immutable submission, and role-aware list/detail views. Sprint 8 review and assignment remain intentionally separate.
+- Sprint 6 guided templates, signing, recent documents, and generated PDFs are implemented and migrated. Completed generated documents use deterministic rendering, create-only R2 storage, and an atomically promoted immutable document version.
 - The Next.js App Router foundation from Sprint 1 is scaffolded.
 - Sprint 4 added tenant-scoped folders, documents, signed R2 upload/download routes, and document dashboard pages.
 - Sprint 5 adds create-only, R2-verified replacement versions, transactionally paired comments/archive activity, member-visible timelines, and download audit events.
@@ -51,7 +52,7 @@ The user superseded the local-first execution lock on 2026-07-18:
 - Do not install PWA, service-worker, IndexedDB/Dexie, Tauri, or other offline-runtime packages unless the user explicitly reactivates that work.
 - Spike 001 and the Offline Foundation documents remain valid research for a possible future offline phase. Their open PWA target-device gates do not block cloud feature work.
 - The cloud remains authoritative. Every mutation and file operation must use the authenticated actor, current organization membership, server validation, idempotency where replay is possible, and durable audit evidence for high-integrity transitions.
-- The highest-value pre-Sprint-7 cloud safety gaps now have local coverage: R2 upload compatibility, exact-revision template publishing, a fail-closed two-tenant authenticated RLS runner, and immutable generated-document PDF finalization. Run the credential-backed RLS fixture and real browser-to-R2 UAT when those deployment fixtures are available.
+- The highest-value cloud safety gaps now have local coverage: R2 upload compatibility, exact-revision template publishing, immutable generated-document PDF finalization, valid submission RPC execution, checksum and format-bound submission uploads, and a fail-closed role/tenant submission RLS runner. Run the credential-backed RLS fixture and real browser-to-R2 UAT when those deployment fixtures are available.
 - Draft and awaiting-signature PDFs are labeled no-store previews. Only a completed document's create-only R2 object and atomically promoted version may be represented as finalized. This is application-level immutability, not regulatory WORM storage or a qualified e-signature claim.
 
 If offline work is reactivated, first review `artifacts/audits/BizzFlow-threat-model.md`, the preserved Spike 001 evidence, `artifacts/superpowers/offline-foundation-security-spike.md`, and `artifacts/superpowers/offline-foundation-plan.md`. Re-plan against the requirements current at that time instead of treating the old execution order as active.
@@ -287,6 +288,7 @@ Cloudflare R2:
 - Never expose raw R2 URLs.
 - Backend checks permissions before creating signed upload or download URLs.
 - Store file metadata in Postgres and object bytes in R2.
+- Cap submission upload URLs at 15 minutes and keep the protected scheduled tombstone cleanup enabled so a delayed cancelled upload cannot leave an orphan indefinitely.
 
 Initial file rules:
 
@@ -297,9 +299,9 @@ Initial file rules:
 Suggested object key patterns:
 
 ```txt
-/orgs/{org_id}/documents/{document_id}/versions/{version_id}/{safe_filename}
-/orgs/{org_id}/submissions/{submission_id}/files/{field_id}/{file_id}/{safe_filename}
-/orgs/{org_id}/public-submissions/{submission_id}/files/{field_id}/{file_id}/{safe_filename}
+organizations/{org_id}/documents/{document_id}/versions/{version_id}/original.{ext}
+organizations/{org_id}/submissions/{submission_id}/files/{field_key}/{file_id}/{safe_filename}
+organizations/{org_id}/public-submissions/{submission_id}/files/{field_key}/{file_id}/{safe_filename}
 ```
 
 ## Roles

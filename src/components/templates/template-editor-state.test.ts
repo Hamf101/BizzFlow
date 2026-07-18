@@ -111,6 +111,7 @@ describe("templateEditorReducer", () => {
       "dropdown_field",
       "initials_field",
       "signature_field",
+      "file_field",
     ]
 
     for (const blockType of blockTypes) {

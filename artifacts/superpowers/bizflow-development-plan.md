@@ -11,7 +11,7 @@ Canonical guide:
 Summary:
 
 - Product: BizFlow Docs, a mobile-first, multi-tenant cloud workflow portal for forms, document collection, submissions, tasks, reminders, and public links. Offline drafts remain a deferred option.
-- Current state: Sprint 6 is implemented and schema-verified against the live Supabase project. Cloud hardening now precedes Sprint 7; the Offline Foundation is not an active release gate.
+- Current state: Sprint 7 internal submissions and their cloud-upload hardening are implemented, migrated, and schema-verified. Sprint 8 review and assignment are next; the Offline Foundation is not an active release gate.
 - Source of truth: `.agent/AGENT.md` and the attached BizFlow MVP notes.
 - Stale context: `.agent/Project_inf.md` described an unrelated product and should not guide BizFlow implementation.
 
@@ -39,7 +39,8 @@ Current checklist:
 - [x] Repository-grounded offline threat model documented.
 - [x] Offline Foundation phase plan documented.
 - [x] Offline security and durability spike specified.
-- [ ] Immutable generated-document finalization and signing evidence designed before representing a document as finalized.
+- [x] Immutable generated-document finalization and signing evidence implemented before representing a document as finalized.
+- [x] Sprint 7 internal submissions implemented and migrated with draft, file, submit, and detail workflows.
 
 Deferred offline research:
 
@@ -58,11 +59,10 @@ Current next-work routing:
 
 The user's later 2026-07-18 instruction supersedes the Offline Foundation execution lock and makes the cloud application the current target.
 
-1. Harden the real cloud upload and template-publishing paths.
-2. Add and run an authenticated two-tenant RLS verification path.
-3. Complete browser-to-R2 UAT when test-user and R2 deployment credentials are available.
-4. Design immutable generated-document finalization and signing evidence.
-5. Continue to Sprint 7 internal submissions once the locally actionable cloud gates pass.
+1. Build Sprint 8 assignment and review decisions on the submitted-only boundary.
+2. Keep comments, review activity, and later task automation separated by service responsibility.
+3. Run the credential-backed two-tenant RLS fixture when test-user credentials are available.
+4. Complete real browser-to-R2 UAT when deployment R2 credentials are available.
 
 Keep HTTPS/TLS and server-side authorization mandatory for cloud traffic. Do not substitute unrelated PWA, VPN, desktop-runtime, or speculative infrastructure work for the current cloud path.
 

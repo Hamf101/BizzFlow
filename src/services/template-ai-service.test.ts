@@ -131,6 +131,50 @@ describe("template AI service", () => {
     })
   })
 
+  it("returns file upload proposals for internal submission templates", async () => {
+    const fetchImpl = vi.fn<typeof fetch>(
+      async (): Promise<Response> =>
+        jsonResponse({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  proposals: [
+                    {
+                      type: "file_field",
+                      fieldKey: "supporting_document",
+                      label: "Supporting document",
+                      required: true,
+                      helpText: "Upload one supporting file.",
+                    },
+                  ],
+                }),
+              },
+            },
+          ],
+        })
+    )
+
+    await expect(
+      suggestTemplateBlocks(
+        createSuggestionInput(createBlankTemplateContent()),
+        createDependencies({
+          createId: (): string => PROPOSAL_BLOCK_ID,
+          fetchImpl,
+        })
+      )
+    ).resolves.toEqual([
+      {
+        id: PROPOSAL_BLOCK_ID,
+        type: "file_field",
+        fieldKey: "supporting_document",
+        label: "Supporting document",
+        required: true,
+        helpText: "Upload one supporting file.",
+      },
+    ])
+  })
+
   it("maps abort failures to a bounded timeout response", async () => {
     const fetchImpl = vi.fn<typeof fetch>(async (): Promise<Response> => {
       const error = new Error("request aborted")

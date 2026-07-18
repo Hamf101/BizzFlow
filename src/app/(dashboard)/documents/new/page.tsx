@@ -93,7 +93,11 @@ export default async function NewDocumentPage({
   }
 
   const publishedTemplates = templates.filter(
-    (template: DocumentTemplate): boolean => template.status === "published"
+    (template: DocumentTemplate): boolean =>
+      template.status === "published" &&
+      !Object.values(template.content.sections).some((section): boolean =>
+        section.blocks.some((block): boolean => block.type === "file_field")
+      )
   )
   const folderPath = buildDocumentFolderPath(activeFolder, workspace.folders)
   const locationHref = activeFolder
@@ -241,8 +245,9 @@ export default async function NewDocumentPage({
                     ))}
                   </select>
                   <FieldDescription>
-                    Templates are shared by your organization. This document keeps
-                    an immutable snapshot of the selected revision.
+                    This document keeps an immutable snapshot of the selected
+                    revision. Templates with file upload fields are used from
+                    Submissions.
                   </FieldDescription>
                 </Field>
               </FieldGroup>

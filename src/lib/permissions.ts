@@ -22,6 +22,9 @@ export const ORGANIZATION_PERMISSION_ACTIONS = [
   "documents:archive",
   "folders:manage",
   "document_versions:create",
+  "submissions:view",
+  "submissions:create",
+  "submissions:edit",
 ] as const
 
 export type OrganizationPermissionAction =
@@ -52,6 +55,9 @@ const permissionsByRole: Record<
     "documents:archive",
     "folders:manage",
     "document_versions:create",
+    "submissions:view",
+    "submissions:create",
+    "submissions:edit",
   ],
   staff: [
     "people:view",
@@ -62,6 +68,9 @@ const permissionsByRole: Record<
     "document_comments:create",
     "documents:create",
     "document_versions:create",
+    "submissions:view",
+    "submissions:create",
+    "submissions:edit",
   ],
   external_reviewer: [
     "people:view",

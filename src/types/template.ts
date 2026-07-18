@@ -154,6 +154,14 @@ export const signatureFieldBlockSchema = z
   })
   .strict()
 
+/** Single-file upload block reserved for internal submission workflows. */
+export const fileFieldBlockSchema = z
+  .object({
+    ...fieldBlockShape,
+    type: z.literal("file_field"),
+  })
+  .strict()
+
 /** Canonical union of every supported guided document block. */
 export const templateBlockSchema = z.discriminatedUnion("type", [
   headingBlockSchema,
@@ -169,6 +177,7 @@ export const templateBlockSchema = z.discriminatedUnion("type", [
   dropdownFieldBlockSchema,
   initialsFieldBlockSchema,
   signatureFieldBlockSchema,
+  fileFieldBlockSchema,
 ])
 
 /** A bounded ordered section of guided document blocks. */
@@ -272,6 +281,7 @@ export type CheckboxFieldBlock = z.infer<typeof checkboxFieldBlockSchema>
 export type DropdownFieldBlock = z.infer<typeof dropdownFieldBlockSchema>
 export type InitialsFieldBlock = z.infer<typeof initialsFieldBlockSchema>
 export type SignatureFieldBlock = z.infer<typeof signatureFieldBlockSchema>
+export type FileFieldBlock = z.infer<typeof fileFieldBlockSchema>
 export type TemplateBlock = z.infer<typeof templateBlockSchema>
 export type TemplateSection = z.infer<typeof templateSectionSchema>
 export type TemplateBranding = z.infer<typeof templateBrandingSchema>

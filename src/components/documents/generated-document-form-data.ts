@@ -164,13 +164,21 @@ function createBaselineField(
   }
 
   if (block.type === "checkbox_field") {
+    const value = Object.prototype.hasOwnProperty.call(answers, block.fieldKey)
+      ? answers[block.fieldKey] === true
+      : block.checkedByDefault
+
     return {
       name: `${BASELINE_BOOLEAN_PREFIX}${block.fieldKey}`,
-      value: answers[block.fieldKey] === true ? "true" : "false",
+      value: value ? "true" : "false",
     }
   }
 
-  if (block.type === "signature_field" || block.type === "initials_field") {
+  if (
+    block.type === "signature_field" ||
+    block.type === "initials_field" ||
+    block.type === "file_field"
+  ) {
     return null
   }
 

@@ -183,6 +183,7 @@ function expandBlockForPagination(
       return splitTableBlock(block)
     case "signature_field":
     case "initials_field":
+    case "file_field":
       return [{ kind: "block", block }]
     case "text_field":
     case "date_field":
@@ -463,6 +464,19 @@ function estimateBlockHeight(
     case "signature_field":
     case "initials_field":
       return normalizeDrawingDataUrl(answers[block.fieldKey]) ? 78 : 48
+    case "file_field": {
+      const labelHeight = estimateWrappedTextHeight(block.label, 78, 13)
+      const noticeHeight = estimateWrappedTextHeight(
+        "File uploads are available only in internal submissions.",
+        88,
+        15
+      )
+      const helpHeight = block.helpText
+        ? estimateWrappedTextHeight(block.helpText, 110, 10)
+        : 0
+
+      return labelHeight + noticeHeight + helpHeight + 20
+    }
     default: {
       const answer =
         answerOverride ?? formatFieldValue(block, answers[block.fieldKey])

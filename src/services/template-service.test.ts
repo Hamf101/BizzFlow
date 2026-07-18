@@ -475,6 +475,41 @@ describe("template service", () => {
     ).rejects.toMatchObject({ statusCode: 409 })
   })
 
+  it("reserves file upload fields for internal submissions", async () => {
+    const tables = createBaseTables()
+    const content = createBlankTemplateContent()
+
+    content.sections.body.blocks.push({
+      id: "50000000-0000-4000-8000-000000000001",
+      type: "file_field",
+      fieldKey: "supporting_document",
+      label: "Supporting document",
+      required: true,
+      helpText: "Upload one supporting file.",
+    })
+    tables.document_templates[0].content = content
+    const client = new FakeClient(tables)
+
+    await expect(
+      createGeneratedDocument(
+        {
+          actorUserId: STAFF_ID,
+          organizationId: ORG_ID,
+          templateId: TEMPLATE_ID,
+        },
+        {
+          client: client as never,
+          createId: (): string => CREATED_DOCUMENT_ID,
+        }
+      )
+    ).rejects.toMatchObject({
+      message: "File upload fields are only supported in internal submissions.",
+      statusCode: 409,
+    })
+    expect(tables.documents).toHaveLength(2)
+    expect(tables.document_answers).toEqual([])
+  })
+
   it("upserts and lists per-user recents in last-opened order", async () => {
     const tables = createBaseTables()
     tables.document_recent_accesses.push({

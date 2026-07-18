@@ -124,8 +124,13 @@ export function formatFieldValue(
   block: PdfFieldBlock,
   value: unknown
 ): string {
+  if (block.type === "file_field") {
+    return "File uploads are available only in internal submissions."
+  }
+
   if (block.type === "checkbox_field") {
-    return value === true ? "Checked" : "Not checked"
+    const checked = value === undefined ? block.checkedByDefault : value === true
+    return checked ? "Checked" : "Not checked"
   }
 
   if (typeof value === "string" && value.trim().length > 0) {

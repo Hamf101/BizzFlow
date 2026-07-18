@@ -10,18 +10,20 @@ import type { CreateDocumentUploadUrlResponse } from "@/types/document"
  * @param uploadUrl - Short-lived signed object-storage URL.
  * @param file - Browser file whose type and size were signed by the server.
  * @param failureMessage - User-safe error for storage failures.
+ * @param contentType - Optional canonical MIME type when the browser omits it.
  * @returns A promise that resolves after the object is present.
  * @throws Error when storage rejects the upload for a non-idempotent reason.
  */
 export async function uploadFileToSignedUrl(
   uploadUrl: string,
   file: File,
-  failureMessage: string
+  failureMessage: string,
+  contentType: string = file.type
 ): Promise<void> {
   const response = await fetch(uploadUrl, {
     method: "PUT",
     headers: {
-      "content-type": file.type,
+      "content-type": contentType,
       "if-none-match": "*",
     },
     body: file,

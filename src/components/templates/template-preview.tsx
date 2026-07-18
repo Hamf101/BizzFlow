@@ -198,6 +198,18 @@ function PreviewBlock({ block }: { block: TemplateBlock }): ReactElement {
           </div>
         </PreviewField>
       )
+    case "file_field":
+      return (
+        <PreviewField
+          helpText={block.helpText}
+          label={block.label}
+          required={block.required}
+        >
+          <div className="rounded-sm border border-dashed border-slate-300 px-3 py-3 text-sm text-slate-400">
+            Choose a file
+          </div>
+        </PreviewField>
+      )
   }
 }
 

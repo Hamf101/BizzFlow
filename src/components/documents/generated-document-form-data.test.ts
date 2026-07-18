@@ -86,12 +86,21 @@ describe("generated document form data", () => {
         required: true,
         helpText: null,
       },
+      {
+        id: "50000000-0000-4000-8000-000000000004",
+        type: "file_field",
+        fieldKey: "supporting_document",
+        label: "Supporting document",
+        required: true,
+        helpText: null,
+      },
     ]
 
     const fields = getGeneratedDocumentAnswerBaselineFields(content, {
       client_name: "Northstar",
       approved: true,
       manager_signature: "data:image/png;base64,large-drawing",
+      supporting_document: "not-a-generated-document-answer",
     })
     const formData = new FormData()
 
@@ -104,5 +113,29 @@ describe("generated document form data", () => {
       client_name: "Northstar",
       approved: true,
     })
+  })
+
+  it("uses checkbox defaults only while the answer key is absent", () => {
+    const content = createBlankTemplateContent()
+    content.sections.body.blocks = [
+      {
+        id: "50000000-0000-4000-8000-000000000010",
+        type: "checkbox_field",
+        fieldKey: "approved",
+        label: "Approved",
+        required: false,
+        helpText: null,
+        checkedByDefault: true,
+      },
+    ]
+
+    expect(getGeneratedDocumentAnswerBaselineFields(content, {})).toEqual([
+      { name: "answer-baseline.boolean.approved", value: "true" },
+    ])
+    expect(
+      getGeneratedDocumentAnswerBaselineFields(content, { approved: false })
+    ).toEqual([
+      { name: "answer-baseline.boolean.approved", value: "false" },
+    ])
   })
 })

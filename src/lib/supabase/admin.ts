@@ -100,6 +100,47 @@ type AdminDocumentRow = DocumentRow & {
   template_snapshot: TemplateContent | null
 }
 
+type AdminSubmissionRow = Record<string, unknown> & {
+  id: string
+  org_id: string
+  title: string
+  template_id: string
+  template_revision: number
+  template_snapshot: TemplateContent
+  values: Record<string, string | boolean>
+  status: "draft" | "submitted"
+  revision: number
+  created_by: string | null
+  updated_by: string | null
+  submitted_by: string | null
+  created_at: string
+  updated_at: string
+  submitted_at: string | null
+}
+
+type AdminSubmissionFileRow = Record<string, unknown> & {
+  id: string
+  org_id: string
+  submission_id: string
+  field_key: string
+  status: "upload_pending" | "available" | "superseded"
+  storage_key: string
+  original_filename: string
+  safe_filename: string
+  content_type: string
+  byte_size: number
+  expected_checksum_sha256: string | null
+  checksum_sha256: string | null
+  uploaded_by: string | null
+  superseded_by: string | null
+  created_at: string
+  updated_at: string
+  available_at: string | null
+  superseded_at: string | null
+  cleanup_after: string
+  storage_cleaned_at: string | null
+}
+
 type FolderInsert = Partial<FolderRow> & Pick<FolderRow, "id" | "org_id" | "name">
 type DocumentInsert = Partial<AdminDocumentRow> &
   Pick<AdminDocumentRow, "id" | "org_id" | "title">
@@ -215,6 +256,32 @@ export type AdminDatabase = {
         DocumentRecentAccessInsert,
         Partial<DocumentRecentAccessRow>
       >
+      submissions: DatabaseTable<
+        AdminSubmissionRow,
+        Partial<AdminSubmissionRow> &
+          Pick<
+            AdminSubmissionRow,
+            "id" | "org_id" | "title" | "template_id" | "template_snapshot"
+          >,
+        Partial<AdminSubmissionRow>
+      >
+      submission_files: DatabaseTable<
+        AdminSubmissionFileRow,
+        Partial<AdminSubmissionFileRow> &
+          Pick<
+            AdminSubmissionFileRow,
+            | "id"
+            | "org_id"
+            | "submission_id"
+            | "field_key"
+            | "storage_key"
+            | "original_filename"
+            | "safe_filename"
+            | "content_type"
+            | "byte_size"
+          >,
+        Partial<AdminSubmissionFileRow>
+      >
     }
     Views: Record<string, never>
     Functions: {
@@ -287,6 +354,92 @@ export type AdminDatabase = {
           target_values: Record<string, unknown>
         }
         Returns: Record<string, unknown>
+      }
+      create_internal_submission_draft: {
+        Args: {
+          target_org_id: string
+          target_template_id: string
+          target_submission_id: string
+          target_title: string
+          target_actor_user_id: string
+        }
+        Returns: AdminSubmissionRow
+      }
+      save_internal_submission_draft: {
+        Args: {
+          target_org_id: string
+          target_submission_id: string
+          target_expected_revision: number
+          target_values: Record<string, string | boolean>
+          target_actor_user_id: string
+        }
+        Returns: AdminSubmissionRow
+      }
+      allocate_internal_submission_file: {
+        Args: {
+          target_org_id: string
+          target_submission_id: string
+          target_expected_revision: number
+          target_file_id: string
+          target_field_key: string
+          target_original_filename: string
+          target_safe_filename: string
+          target_content_type: string
+          target_byte_size: number
+          target_storage_key: string
+          target_expected_checksum_sha256: string
+          target_actor_user_id: string
+        }
+        Returns: AdminSubmissionFileRow
+      }
+      complete_internal_submission_file: {
+        Args: {
+          target_org_id: string
+          target_submission_id: string
+          target_file_id: string
+          target_storage_key: string
+          target_content_type: string
+          target_byte_size: number
+          target_checksum_sha256: string | null
+          target_actor_user_id: string
+        }
+        Returns: AdminSubmissionFileRow
+      }
+      supersede_internal_submission_file: {
+        Args: {
+          target_org_id: string
+          target_submission_id: string
+          target_file_id: string
+          target_actor_user_id: string
+        }
+        Returns: AdminSubmissionFileRow
+      }
+      record_internal_submission_file_upload_window: {
+        Args: {
+          target_org_id: string
+          target_submission_id: string
+          target_file_id: string
+          target_cleanup_after: string
+          target_actor_user_id: string
+        }
+        Returns: AdminSubmissionFileRow
+      }
+      mark_internal_submission_file_storage_cleaned: {
+        Args: {
+          target_file_id: string
+          target_storage_key: string
+        }
+        Returns: AdminSubmissionFileRow
+      }
+      submit_internal_submission: {
+        Args: {
+          target_org_id: string
+          target_submission_id: string
+          target_expected_revision: number
+          target_values: Record<string, string | boolean>
+          target_actor_user_id: string
+        }
+        Returns: AdminSubmissionRow
       }
       update_organization_member_role: {
         Args: {

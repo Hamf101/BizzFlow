@@ -8,7 +8,7 @@ import type { TemplateBlock, TemplateContent } from "@/types/template"
 export type FieldBlock = Extract<TemplateBlock, { fieldKey: string }>
 
 /**
- * Collects every fillable block in a generated-document snapshot.
+ * Collects every generated-document answer block in a snapshot.
  *
  * @param content - Validated immutable template snapshot.
  * @returns Field blocks indexed by their stable field keys.
@@ -21,7 +21,7 @@ export function collectFields(
 
   for (const section of Object.values(content.sections)) {
     for (const block of section.blocks) {
-      if (!("fieldKey" in block)) {
+      if (!("fieldKey" in block) || block.type === "file_field") {
         continue
       }
 

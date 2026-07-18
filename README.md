@@ -5,8 +5,8 @@ BizFlow Docs is a mobile-first, multi-tenant workflow portal for reusable forms,
 ## Current Status
 
 - Project phase: implementation.
-- Sprint: Sprint 6 guided templates, signing, recent documents, and immutable generated-document finalization are implemented and migrated to the configured Supabase project.
-- Application scaffold: Next.js App Router foundation with versioned uploads, nested folders, organization templates, guided generated documents, private all-party signing links, deterministic PDF rendering, and private finalized PDF versions.
+- Sprint: Sprint 7 internal submissions are implemented and migrated to the configured Supabase project; Sprint 8 review and assignment are next.
+- Application scaffold: Next.js App Router foundation with versioned documents, organization templates, guided signing/PDF workflows, creator-owned submission drafts, and private verified submission files.
 - Delivery direction: cloud-first. Offline/PWA work and related packages are deferred until explicitly reprioritized.
 - Canonical project guide: `.agent/AGENT.md`.
 
@@ -72,6 +72,19 @@ curl -X POST http://localhost:3000/api/documents/00000000-0000-0000-0000-0000000
     "contentType": "application/pdf",
     "byteSize": 2048
   }'
+
+curl -X POST http://localhost:3000/api/submissions/00000000-0000-4000-8000-000000000010/files/upload-url \
+  -H "Content-Type: application/json" \
+  -H "Cookie: <authenticated Supabase cookies>" \
+  -d '{
+    "organizationId": "00000000-0000-4000-8000-000000000000",
+    "expectedRevision": 1,
+    "fieldKey": "supporting_document",
+    "originalFilename": "evidence.pdf",
+    "contentType": "application/pdf",
+    "byteSize": 4096,
+    "checksumSha256": "<lowercase SHA-256 of the exact file bytes>"
+  }'
 ```
 
 ## Environment Variables
@@ -85,6 +98,7 @@ cp .env.example .env.local
 Expected variable groups:
 
 - App: `NEXT_PUBLIC_APP_URL`.
+- Scheduled maintenance: server-only `CRON_SECRET` (at least 16 random characters in Vercel).
 - Supabase: `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, `SUPABASE_JWKS_URL`, `SUPABASE_PROJECT_REF`, `SUPABASE_DB_URL`, and `SUPABASE_POOLER_URL`.
 - Cloudflare R2: `CLOUDFLARE_R2_ACCOUNT_ID`, `CLOUDFLARE_R2_ACCESS_KEY_ID`, `CLOUDFLARE_R2_SECRET_ACCESS_KEY`, `CLOUDFLARE_R2_BUCKET_NAME`, `CLOUDFLARE_R2_ENDPOINT`, `CLOUDFLARE_R2_REGION`, and `CLOUDFLARE_R2_SIGNED_URL_TTL_SECONDS`.
 - File uploads: `FILE_UPLOAD_MAX_BYTES` and `FILE_UPLOAD_ALLOWED_MIME_TYPES`.
@@ -103,6 +117,8 @@ Inviting a person sends a Resend email containing a one-time BizFlow invite URL.
 Recipients can create an account from the invite URL or sign in with an existing account. For account-confirmation links to return the recipient to their invite, add the deployed callback URL (for example, `https://app.example.com/auth/callback`) to Supabase Auth's Redirect URLs. The Supabase Site URL should be the deployed application origin.
 
 For browser-based signed uploads and downloads, configure the private R2 bucket CORS policy to allow the deployed app origin, `PUT`, `GET`, and `HEAD` methods, plus the `content-type` and `if-none-match` request headers. Keep the bucket private; the app signs create-only object uploads server-side so a completed version cannot be overwritten by reusing its URL.
+
+The server-side R2 token must permit private object reads, writes, and deletes. Submission upload URLs are capped at 15 minutes. `vercel.json` runs a protected daily cleanup for superseded objects after every issued URL and a safety buffer have elapsed; configure the same `CRON_SECRET` in the production Vercel environment before deployment.
 
 ## Supabase Migrations
 
@@ -126,9 +142,14 @@ supabase/migrations/20260717194631_sprint_5_completion_archive_hardening.sql
 supabase/migrations/20260717205037_document_templates_signing_recents.sql
 supabase/migrations/20260718002902_audit_security_hardening.sql
 supabase/migrations/20260718070000_generated_document_finalizations.sql
+supabase/migrations/20260718171349_sprint_7_internal_submissions.sql
+supabase/migrations/20260718175458_sprint_7_submission_function_hardening.sql
+supabase/migrations/20260718180607_sprint_7_submission_drawing_values.sql
+supabase/migrations/20260718181552_sprint_7_submission_upload_hardening.sql
+supabase/migrations/20260718184631_sprint_7_submission_storage_cleanup.sql
 ```
 
-The Sprint 3 through Sprint 6 migrations include explicit Data API grants for `authenticated` and `service_role`, plus PostgREST schema-cache reloads. The guided-document migration adds organization-wide template revisions, immutable per-document snapshots, shared answers, unordered all-party signer state, per-user recent access, and tenant-scoped RLS. The audit hardening migration closes profile-email claiming, aligns template and signing-recipient Data API access with application permissions, and moves invite acceptance, owner-role changes, and generated-answer merges into transactional service-role RPCs. The finalization migration records one immutable render input per completed generated document, promotes the create-only R2 object to an exact document version, and writes the corresponding activity and audit events atomically. This is application-enforced object immutability, not a regulatory retention or qualified e-signature feature.
+The Sprint 3 through Sprint 7 migrations include explicit Data API grants for `authenticated` and `service_role`, plus PostgREST schema-cache reloads. The guided-document migration adds organization-wide template revisions, immutable per-document snapshots, shared answers, unordered all-party signer state, per-user recent access, and tenant-scoped RLS. The audit hardening migration closes profile-email claiming and moves high-integrity mutations into transactional service-role RPCs. The finalization migration promotes one deterministic, create-only R2 PDF to an exact immutable document version. Sprint 7 adds role-aware submissions, immutable template snapshots, optimistic draft revisions, checksum-bound create-only file allocations, recoverable file tombstones, expiry-safe object cleanup, and atomic create/save/submit RPCs with audit evidence.
 
 ## API Endpoints Summary
 
@@ -142,6 +163,17 @@ Implemented document routes:
 - `GET /api/documents/:id/pdf` (no-store preview while editable; signed redirect to the exact finalized version after completion)
 - `POST /api/templates/suggest-blocks`
 
+Implemented internal-submission file routes:
+
+- `POST /api/submissions/:id/files/upload-url`
+- `POST /api/submissions/:id/files/:fileId/complete`
+- `POST /api/submissions/:id/files/:fileId/download-url`
+- `POST /api/submissions/:id/files/:fileId/supersede`
+
+Internal scheduled maintenance:
+
+- `GET /api/cron/submission-file-cleanup` (Vercel Cron only; requires `Authorization: Bearer $CRON_SECRET`)
+
 Implemented guided-document pages:
 
 - `/documents` for per-user recents, nested folder navigation, and folder-scoped creation.
@@ -149,6 +181,9 @@ Implemented guided-document pages:
 - `/documents/:id/edit` for shared answers, signing recipients, status, and PDF export.
 - `/templates`, `/templates/new`, and `/templates/:id/edit` for organization template management.
 - `/sign/:token` for private recipient review, field completion, and drawn acknowledgement.
+- `/submissions` for role-aware internal submission lists.
+- `/submissions/new` for starting a draft from a published template.
+- `/submissions/:id` for saving creator-owned drafts, uploading or replacing verified files, submitting, and read-only detail.
 
 Planned routes may be adjusted during implementation.
 
@@ -227,11 +262,19 @@ pnpm check
 
 The aggregate gate runs lint, strict TypeScript, unit/integration tests, production-code duplication detection, a production build, and a production dependency audit. When configured with local secrets, also run `pnpm supabase:check`.
 
-For effective RLS verification, provision two isolated synthetic users in different organizations and follow the fail-closed fixture contract:
+The valid-RPC smoke test creates isolated synthetic rows inside one database statement, exercises create/save/allocate/complete/supersede/submit, and removes the fixtures before returning:
+
+```bash
+set -a
+source .env.local
+npx supabase db query --db-url "$SUPABASE_DB_URL" --file supabase/tests/internal-submissions-live-rpc.sql
+```
+
+For effective submission RLS verification, provision the isolated owner, manager, staff, external-reviewer, and other-tenant synthetic fixtures documented by the fail-closed runner:
 
 ```bash
 pnpm supabase:check:rls --help
 pnpm supabase:check:rls
 ```
 
-This runner uses ordinary publishable-key user sessions for tenant reads. It does not treat the service-role smoke test as authorization proof, create fixtures, or print credentials, tokens, fixture IDs, or returned row bodies.
+This runner uses ordinary publishable-key user sessions for tenant reads. It does not treat the service-role smoke test as authorization proof, create fixtures, or print credentials, tokens, fixture IDs, or returned row bodies. See `.env.example` and `pnpm supabase:check:rls --help` for the exact synthetic-only fixture keys.

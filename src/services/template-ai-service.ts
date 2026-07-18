@@ -117,6 +117,12 @@ const proposedBlockSchema = z.discriminatedUnion("type", [
       type: z.literal("signature_field"),
     })
     .strict(),
+  z
+    .object({
+      ...proposedFieldShape,
+      type: z.literal("file_field"),
+    })
+    .strict(),
 ])
 
 const openRouterProposalSchema = z

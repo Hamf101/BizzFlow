@@ -59,6 +59,7 @@ const BLOCK_OPTIONS: ReadonlyArray<{
   { type: "dropdown_field", label: "Dropdown" },
   { type: "initials_field", label: "Initials field" },
   { type: "signature_field", label: "Signature field" },
+  { type: "file_field", label: "File upload" },
 ]
 
 const SELECT_CLASS_NAME =
@@ -225,7 +226,7 @@ export function TemplateEditor({
           </CardContent>
           <CardFooter className="justify-between gap-3">
             <span className="text-xs text-muted-foreground">
-              Preview only; fields become interactive in a generated document.
+              Preview only; fields become interactive in their supported workflow.
             </span>
             {template.status !== "archived" && (
               <Button type="submit">

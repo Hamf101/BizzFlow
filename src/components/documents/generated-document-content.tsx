@@ -22,6 +22,7 @@ type GeneratedDocumentContentProps = {
   answers: Record<string, unknown>
   content: TemplateContent
   editable: boolean
+  fileFieldContent?: Readonly<Record<string, ReactNode>>
   recipientSigning?: boolean
   recipientSigned?: boolean
 }
@@ -36,6 +37,7 @@ export function GeneratedDocumentContent({
   answers,
   content,
   editable,
+  fileFieldContent = {},
   recipientSigning = false,
   recipientSigned = false,
 }: GeneratedDocumentContentProps): ReactElement {
@@ -77,6 +79,7 @@ export function GeneratedDocumentContent({
         answers={answers}
         blocks={content.sections.header.blocks}
         editable={editable}
+        fileFieldContent={fileFieldContent}
         label="Header"
         recipientSigned={recipientSigned}
         recipientSigning={recipientSigning}
@@ -87,6 +90,7 @@ export function GeneratedDocumentContent({
         answers={answers}
         blocks={content.sections.body.blocks}
         editable={editable}
+        fileFieldContent={fileFieldContent}
         label="Body"
         recipientSigned={recipientSigned}
         recipientSigning={recipientSigning}
@@ -96,6 +100,7 @@ export function GeneratedDocumentContent({
         answers={answers}
         blocks={content.sections.footer.blocks}
         editable={editable}
+        fileFieldContent={fileFieldContent}
         label="Footer"
         recipientSigned={recipientSigned}
         recipientSigning={recipientSigning}
@@ -110,6 +115,7 @@ function DocumentRegion({
   answers,
   blocks,
   editable,
+  fileFieldContent,
   label,
   recipientSigned,
   recipientSigning,
@@ -119,6 +125,7 @@ function DocumentRegion({
   answers: Record<string, unknown>
   blocks: TemplateBlock[]
   editable: boolean
+  fileFieldContent: Readonly<Record<string, ReactNode>>
   label: string
   recipientSigned: boolean
   recipientSigning: boolean
@@ -155,6 +162,7 @@ function DocumentRegion({
               answers={answers}
               block={block}
               editable={editable}
+              fileFieldContent={fileFieldContent}
               key={block.id}
               recipientSigned={recipientSigned}
               recipientSigning={recipientSigning}
@@ -170,12 +178,14 @@ function GeneratedBlock({
   answers,
   block,
   editable,
+  fileFieldContent,
   recipientSigned,
   recipientSigning,
 }: {
   answers: Record<string, unknown>
   block: TemplateBlock
   editable: boolean
+  fileFieldContent: Readonly<Record<string, ReactNode>>
   recipientSigned: boolean
   recipientSigning: boolean
 }): ReactElement {
@@ -244,7 +254,11 @@ function GeneratedBlock({
               <input name={answerName} type="hidden" value="false" />
               <input
                 className="mt-0.5 size-4 accent-slate-900"
-                defaultChecked={readBooleanAnswer(answers, block.fieldKey)}
+                defaultChecked={readBooleanAnswer(
+                  answers,
+                  block.fieldKey,
+                  block.checkedByDefault
+                )}
                 id={block.id}
                 name={answerName}
                 type="checkbox"
@@ -261,7 +275,13 @@ function GeneratedBlock({
                 aria-hidden="true"
                 className="flex size-4 items-center justify-center rounded-sm border border-slate-400 text-[10px]"
               >
-                {readBooleanAnswer(answers, block.fieldKey) ? "✓" : ""}
+                {readBooleanAnswer(
+                  answers,
+                  block.fieldKey,
+                  block.checkedByDefault
+                )
+                  ? "✓"
+                  : ""}
               </span>
               {block.label}
             </div>
@@ -288,6 +308,16 @@ function GeneratedBlock({
             </select>
           ) : (
             <ReadOnlyAnswer value={readStringAnswer(answers, block.fieldKey)} />
+          )}
+        </AnswerFieldFrame>
+      )
+    case "file_field":
+      return (
+        <AnswerFieldFrame block={block}>
+          {fileFieldContent[block.fieldKey] ?? (
+            <div className="rounded-lg border border-dashed border-slate-300 px-4 py-5 text-sm text-slate-500">
+              File uploads are available only in internal submissions.
+            </div>
           )}
         </AnswerFieldFrame>
       )
@@ -414,7 +444,10 @@ function readStringAnswer(
 
 function readBooleanAnswer(
   answers: Record<string, unknown>,
-  fieldKey: string
+  fieldKey: string,
+  defaultValue: boolean
 ): boolean {
-  return answers[fieldKey] === true
+  return Object.prototype.hasOwnProperty.call(answers, fieldKey)
+    ? answers[fieldKey] === true
+    : defaultValue
 }

@@ -10,6 +10,8 @@ export type AuditLogAction =
   | "document.finalized"
   | "document_version.created"
   | "document_version.download_url_issued"
+  | "submission.created"
+  | "submission.submitted"
 
 export type AuditLogTargetType =
   | "organization"
@@ -18,6 +20,7 @@ export type AuditLogTargetType =
   | "folder"
   | "document"
   | "document_version"
+  | "submission"
 
 export type AuditMetadataValue = string | number | boolean | null
 
