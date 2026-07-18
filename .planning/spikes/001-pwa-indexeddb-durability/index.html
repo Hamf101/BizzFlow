@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="icon" href="data:," />
+    <title>BizFlow IndexedDB Durability Spike</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">Skip to test controls</a>
+
+    <header class="site-header">
+      <div>
+        <p class="eyebrow">Spike 001 · experimental localhost prototype</p>
+        <h1>IndexedDB durability and recovery lab</h1>
+        <p class="lede">
+          This lab writes generated fixtures only. It does not prove power-loss durability,
+          eviction safety, vault security, or cloud authorization.
+        </p>
+      </div>
+      <div class="header-actions" aria-label="Prototype actions">
+        <button id="run-self-test-button" type="button">Run automated checks</button>
+        <button id="export-log-button" type="button">Export forensic JSON</button>
+        <button id="reset-button" class="danger" type="button">Reset prototype data</button>
+      </div>
+    </header>
+
+    <main id="main-content">
+      <section class="notice" aria-labelledby="safety-heading">
+        <h2 id="safety-heading">Safety boundary</h2>
+        <p>
+          Use this page only on localhost with synthetic fixtures. Event records contain IDs,
+          counts, byte sizes, timings, and outcomes—never document bodies or binary contents.
+        </p>
+      </section>
+
+      <div id="global-status" class="global-status" role="status" aria-live="polite">
+        Initializing the IndexedDB test database…
+      </div>
+
+      <section class="summary-grid" aria-label="Current capability summary">
+        <article class="summary-card">
+          <span class="summary-label">Strict durability</span>
+          <strong id="strict-summary">Not tested</strong>
+        </article>
+        <article class="summary-card">
+          <span class="summary-label">Persistent storage</span>
+          <strong id="persist-summary">Checking…</strong>
+        </article>
+        <article class="summary-card">
+          <span class="summary-label">Storage usage</span>
+          <strong id="storage-summary">Checking…</strong>
+        </article>
+        <article class="summary-card">
+          <span class="summary-label">Local records</span>
+          <strong id="record-summary">Checking…</strong>
+        </article>
+        <article class="summary-card">
+          <span class="summary-label">Last recovery check</span>
+          <strong id="recovery-summary">None pending</strong>
+        </article>
+      </section>
+
+      <section class="test-card" aria-labelledby="capability-heading">
+        <div class="section-heading">
+          <div>
+            <p class="scenario">CAP-02 · DUR-01</p>
+            <h2 id="capability-heading">Browser capability and storage status</h2>
+          </div>
+          <span class="risk-label">Evidence, not a guarantee</span>
+        </div>
+        <p>
+          The strict probe reports support only when a real read/write transaction exposes
+          <code>transaction.durability === "strict"</code>. An accepted argument alone is not
+          treated as proof.
+        </p>
+        <div class="button-row">
+          <button id="strict-probe-button" type="button">Probe strict durability</button>
+          <button id="refresh-storage-button" type="button">Refresh storage estimate</button>
+          <button id="request-persist-button" type="button">Request persistent storage</button>
+        </div>
+        <output id="capability-output" class="test-output" aria-live="polite">
+          No capability probe has run yet.
+        </output>
+      </section>
+
+      <section class="test-card" aria-labelledby="atomic-heading">
+        <div class="section-heading">
+          <div>
+            <p class="scenario">DUR-01 · DUR-02</p>
+            <h2 id="atomic-heading">Atomic save, rollback, and reload recovery</h2>
+          </div>
+          <span class="risk-label">Synthetic document metadata</span>
+        </div>
+        <p>
+          Each save writes one document and its outbox intent in the same read/write
+          transaction. Failure probes verify that both records exist or neither record exists.
+        </p>
+        <div class="button-row">
+          <button id="atomic-commit-button" type="button">Test atomic commit</button>
+          <button id="abort-rollback-button" type="button">Inject abort after document write</button>
+          <button id="save-reload-button" type="button">Save acknowledged pair and reload</button>
+        </div>
+        <output id="atomic-output" class="test-output" aria-live="polite">
+          No atomicity test has run yet.
+        </output>
+
+        <div class="kill-window" aria-labelledby="kill-window-heading">
+          <h3 id="kill-window-heading">60-second abrupt-termination window</h3>
+          <p>
+            Arm a strict transaction, then terminate the browser process while the state reads
+            <strong>ARMED</strong>. The document is written first; repeated IndexedDB requests
+            keep the transaction active before the outbox write. On the next load, recovery must
+            find neither partial record. Letting the timer finish should commit both records.
+          </p>
+          <div class="button-row">
+            <button id="arm-kill-window-button" type="button">Arm 60-second kill window</button>
+            <button id="reload-during-window-button" type="button" disabled>
+              Reload tab during window
+            </button>
+          </div>
+          <output id="kill-window-output" class="test-output" aria-live="assertive">
+            IDLE — no kill-window transaction is active.
+          </output>
+        </div>
+      </section>
+
+      <section class="test-card" aria-labelledby="isolation-heading">
+        <div class="section-heading">
+          <div>
+            <p class="scenario">VAULT-05</p>
+            <h2 id="isolation-heading">Per-user and per-organization query isolation</h2>
+          </div>
+          <span class="risk-label">Not an authorization boundary</span>
+        </div>
+        <p>
+          The self-test creates four synthetic scopes and queries a compound index. Passing proves
+          query filtering only; local organization and user fields remain untrusted.
+        </p>
+        <div class="control-grid">
+          <label>
+            Synthetic user
+            <select id="query-user-select">
+              <option value="synthetic-user-a">synthetic-user-a</option>
+              <option value="synthetic-user-b">synthetic-user-b</option>
+            </select>
+          </label>
+          <label>
+            Synthetic organization
+            <select id="query-org-select">
+              <option value="synthetic-org-red">synthetic-org-red</option>
+              <option value="synthetic-org-blue">synthetic-org-blue</option>
+            </select>
+          </label>
+        </div>
+        <div class="button-row">
+          <button id="isolation-test-button" type="button">Run four-scope self-test</button>
+          <button id="query-scope-button" type="button">Query selected scope</button>
+        </div>
+        <output id="isolation-output" class="test-output" aria-live="polite">
+          No isolation test has run yet.
+        </output>
+      </section>
+
+      <section class="test-card" aria-labelledby="corpus-heading">
+        <div class="section-heading">
+          <div>
+            <p class="scenario">CAP-04 · CAP-05 · CAP-08</p>
+            <h2 id="corpus-heading">Bounded corpus and quota handling</h2>
+          </div>
+          <span class="risk-label">Maximum 64 MiB per run</span>
+        </div>
+        <p>
+          Admission uses the browser estimate and reserves the greater of 20% of reported quota or
+          32 MiB. The estimate is advisory: every write still handles a real quota failure.
+        </p>
+        <div class="control-grid corpus-controls">
+          <label>
+            Records (1–200)
+            <input id="corpus-count-input" type="number" min="1" max="200" value="25" />
+          </label>
+          <label>
+            Synthetic KiB per record (1–2048)
+            <input id="corpus-kib-input" type="number" min="1" max="2048" value="64" />
+          </label>
+          <label>
+            Synthetic user
+            <select id="corpus-user-select">
+              <option value="synthetic-user-a">synthetic-user-a</option>
+              <option value="synthetic-user-b">synthetic-user-b</option>
+            </select>
+          </label>
+          <label>
+            Synthetic organization
+            <select id="corpus-org-select">
+              <option value="synthetic-org-red">synthetic-org-red</option>
+              <option value="synthetic-org-blue">synthetic-org-blue</option>
+            </select>
+          </label>
+        </div>
+        <p id="admission-preview" class="admission-preview">Calculating admission preview…</p>
+        <div class="button-row">
+          <button id="write-corpus-button" type="button">Write admitted synthetic corpus</button>
+          <button id="simulate-quota-button" type="button">
+            Simulate QuotaExceeded after document write
+          </button>
+        </div>
+        <progress id="corpus-progress" max="100" value="0">0%</progress>
+        <output id="corpus-output" class="test-output" aria-live="polite">
+          No corpus or quota test has run yet.
+        </output>
+      </section>
+
+      <section class="test-card" aria-labelledby="log-heading">
+        <div class="section-heading">
+          <div>
+            <p class="scenario">Forensic output</p>
+            <h2 id="log-heading">Sanitized event log</h2>
+          </div>
+          <button id="clear-log-button" class="secondary" type="button">Clear event log</button>
+        </div>
+        <p>
+          The bounded log survives reloads in local storage. Export it with the button at the top
+          of this page. Payload-like fields are rejected by the logger.
+        </p>
+        <ol id="event-log" class="event-log" aria-live="polite"></ol>
+      </section>
+    </main>
+
+    <footer>
+      <p>
+        Localhost evidence must be repeated on the target OS, browser version, installed-PWA mode,
+        and disposable power-loss test environment before an architecture decision.
+      </p>
+    </footer>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

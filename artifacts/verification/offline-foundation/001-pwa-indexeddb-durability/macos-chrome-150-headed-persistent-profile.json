@@ -1,0 +1,2769 @@
+{
+  "schemaVersion": 1,
+  "exportedAt": "2026-07-18T11:20:23.692Z",
+  "environment": {
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36",
+    "platform": "MacIntel",
+    "hardwareConcurrency": 8,
+    "deviceMemoryGiB": 8,
+    "secureContext": true,
+    "origin": "http://127.0.0.1:4173",
+    "databaseName": "bizflow-offline-spike-001",
+    "databaseVersion": 1
+  },
+  "storage": {
+    "usage": 3644163,
+    "quota": 10741062403,
+    "persisted": true
+  },
+  "counts": {
+    "documents": 30,
+    "outbox": 30,
+    "corpus": 50
+  },
+  "events": [
+    {
+      "at": "2026-07-18T10:51:10.247Z",
+      "category": "storage",
+      "action": "storage_observed",
+      "outcome": "info",
+      "metadata": {
+        "secureContext": true,
+        "usageBytes": 156624,
+        "quotaBytes": 10737574864,
+        "persisted": false
+      }
+    },
+    {
+      "at": "2026-07-18T10:52:06.734Z",
+      "category": "storage",
+      "action": "storage_observed",
+      "outcome": "info",
+      "metadata": {
+        "secureContext": true,
+        "usageBytes": 37286,
+        "quotaBytes": 10737455526,
+        "persisted": false
+      }
+    },
+    {
+      "at": "2026-07-18T10:52:06.770Z",
+      "category": "maintenance",
+      "action": "prototype_database_reset",
+      "outcome": "pass",
+      "metadata": {}
+    },
+    {
+      "at": "2026-07-18T10:52:08.507Z",
+      "category": "storage",
+      "action": "storage_observed",
+      "outcome": "info",
+      "metadata": {
+        "secureContext": true,
+        "usageBytes": 37286,
+        "quotaBytes": 10737455526,
+        "persisted": false
+      }
+    },
+    {
+      "at": "2026-07-18T10:52:08.526Z",
+      "category": "lifecycle",
+      "action": "prototype_ready",
+      "outcome": "info",
+      "metadata": {
+        "databaseVersion": 1,
+        "secureContext": true
+      }
+    },
+    {
+      "at": "2026-07-18T10:52:26.276Z",
+      "category": "durability",
+      "action": "strict_durability_probe",
+      "outcome": "conditional",
+      "metadata": {
+        "optionsAccepted": true,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T10:52:26.310Z",
+      "category": "transaction",
+      "action": "transaction_started",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "atomic-commit",
+        "runId": "e4619c2e-1c7e-4798-af4c-7f5d6ef5b336",
+        "optionsAccepted": true,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T10:52:26.341Z",
+      "category": "transaction",
+      "action": "document_request_succeeded",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "atomic-commit",
+        "runId": "e4619c2e-1c7e-4798-af4c-7f5d6ef5b336"
+      }
+    },
+    {
+      "at": "2026-07-18T10:52:26.343Z",
+      "category": "transaction",
+      "action": "outbox_request_succeeded",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "atomic-commit",
+        "runId": "e4619c2e-1c7e-4798-af4c-7f5d6ef5b336"
+      }
+    },
+    {
+      "at": "2026-07-18T10:52:26.353Z",
+      "category": "transaction",
+      "action": "transaction_complete",
+      "outcome": "pass",
+      "metadata": {
+        "scenario": "atomic-commit",
+        "runId": "e4619c2e-1c7e-4798-af4c-7f5d6ef5b336",
+        "durationMs": 42.5,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T10:52:26.353Z",
+      "category": "ui",
+      "action": "local_save_acknowledged",
+      "outcome": "pass",
+      "metadata": {
+        "scenario": "atomic-commit",
+        "runId": "e4619c2e-1c7e-4798-af4c-7f5d6ef5b336"
+      }
+    },
+    {
+      "at": "2026-07-18T10:52:26.370Z",
+      "category": "verification",
+      "action": "atomic_pair_verified",
+      "outcome": "pass",
+      "metadata": {
+        "runId": "e4619c2e-1c7e-4798-af4c-7f5d6ef5b336",
+        "documentPresent": true,
+        "outboxPresent": true
+      }
+    },
+    {
+      "at": "2026-07-18T10:52:26.389Z",
+      "category": "transaction",
+      "action": "transaction_started",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "injected-abort",
+        "runId": "410b077d-8c85-4a24-bd97-febd7957d927",
+        "optionsAccepted": true,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T10:52:26.390Z",
+      "category": "transaction",
+      "action": "document_request_succeeded",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "injected-abort",
+        "runId": "410b077d-8c85-4a24-bd97-febd7957d927"
+      }
+    },
+    {
+      "at": "2026-07-18T10:52:26.397Z",
+      "category": "verification",
+      "action": "injected_abort_verified",
+      "outcome": "pass",
+      "metadata": {
+        "errorName": "AbortError",
+        "documentsBefore": 1,
+        "documentsAfter": 1,
+        "outboxBefore": 1,
+        "outboxAfter": 1
+      }
+    },
+    {
+      "at": "2026-07-18T10:52:26.398Z",
+      "category": "transaction",
+      "action": "transaction_started",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "scope-test-ee761b25-2069-427a-b4d2-9946ba408e57",
+        "runId": "ab982120-725a-4d18-aad7-25ae487d660b",
+        "optionsAccepted": true,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T10:52:26.401Z",
+      "category": "transaction",
+      "action": "document_request_succeeded",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "scope-test-ee761b25-2069-427a-b4d2-9946ba408e57",
+        "runId": "ab982120-725a-4d18-aad7-25ae487d660b"
+      }
+    },
+    {
+      "at": "2026-07-18T10:52:26.403Z",
+      "category": "transaction",
+      "action": "outbox_request_succeeded",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "scope-test-ee761b25-2069-427a-b4d2-9946ba408e57",
+        "runId": "ab982120-725a-4d18-aad7-25ae487d660b"
+      }
+    },
+    {
+      "at": "2026-07-18T10:52:26.405Z",
+      "category": "transaction",
+      "action": "transaction_complete",
+      "outcome": "pass",
+      "metadata": {
+        "scenario": "scope-test-ee761b25-2069-427a-b4d2-9946ba408e57",
+        "runId": "ab982120-725a-4d18-aad7-25ae487d660b",
+        "durationMs": 6.3,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T10:52:26.405Z",
+      "category": "ui",
+      "action": "local_save_acknowledged",
+      "outcome": "pass",
+      "metadata": {
+        "scenario": "scope-test-ee761b25-2069-427a-b4d2-9946ba408e57",
+        "runId": "ab982120-725a-4d18-aad7-25ae487d660b"
+      }
+    },
+    {
+      "at": "2026-07-18T10:52:26.405Z",
+      "category": "transaction",
+      "action": "transaction_started",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "scope-test-ee761b25-2069-427a-b4d2-9946ba408e57",
+        "runId": "c03d122c-d82e-4e6c-8974-40705cf7bce4",
+        "optionsAccepted": true,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T10:52:26.405Z",
+      "category": "transaction",
+      "action": "document_request_succeeded",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "scope-test-ee761b25-2069-427a-b4d2-9946ba408e57",
+        "runId": "c03d122c-d82e-4e6c-8974-40705cf7bce4"
+      }
+    },
+    {
+      "at": "2026-07-18T10:52:26.405Z",
+      "category": "transaction",
+      "action": "outbox_request_succeeded",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "scope-test-ee761b25-2069-427a-b4d2-9946ba408e57",
+        "runId": "c03d122c-d82e-4e6c-8974-40705cf7bce4"
+      }
+    },
+    {
+      "at": "2026-07-18T10:52:26.406Z",
+      "category": "transaction",
+      "action": "transaction_complete",
+      "outcome": "pass",
+      "metadata": {
+        "scenario": "scope-test-ee761b25-2069-427a-b4d2-9946ba408e57",
+        "runId": "c03d122c-d82e-4e6c-8974-40705cf7bce4",
+        "durationMs": 1.1,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T10:52:26.406Z",
+      "category": "ui",
+      "action": "local_save_acknowledged",
+      "outcome": "pass",
+      "metadata": {
+        "scenario": "scope-test-ee761b25-2069-427a-b4d2-9946ba408e57",
+        "runId": "c03d122c-d82e-4e6c-8974-40705cf7bce4"
+      }
+    },
+    {
+      "at": "2026-07-18T10:52:26.406Z",
+      "category": "transaction",
+      "action": "transaction_started",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "scope-test-ee761b25-2069-427a-b4d2-9946ba408e57",
+        "runId": "40afc3f0-07a4-4efb-ba5b-e6985ede8c37",
+        "optionsAccepted": true,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T10:52:26.407Z",
+      "category": "transaction",
+      "action": "document_request_succeeded",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "scope-test-ee761b25-2069-427a-b4d2-9946ba408e57",
+        "runId": "40afc3f0-07a4-4efb-ba5b-e6985ede8c37"
+      }
+    },
+    {
+      "at": "2026-07-18T10:52:26.407Z",
+      "category": "transaction",
+      "action": "outbox_request_succeeded",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "scope-test-ee761b25-2069-427a-b4d2-9946ba408e57",
+        "runId": "40afc3f0-07a4-4efb-ba5b-e6985ede8c37"
+      }
+    },
+    {
+      "at": "2026-07-18T10:52:26.408Z",
+      "category": "transaction",
+      "action": "transaction_complete",
+      "outcome": "pass",
+      "metadata": {
+        "scenario": "scope-test-ee761b25-2069-427a-b4d2-9946ba408e57",
+        "runId": "40afc3f0-07a4-4efb-ba5b-e6985ede8c37",
+        "durationMs": 1.3,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T10:52:26.408Z",
+      "category": "ui",
+      "action": "local_save_acknowledged",
+      "outcome": "pass",
+      "metadata": {
+        "scenario": "scope-test-ee761b25-2069-427a-b4d2-9946ba408e57",
+        "runId": "40afc3f0-07a4-4efb-ba5b-e6985ede8c37"
+      }
+    },
+    {
+      "at": "2026-07-18T10:52:26.408Z",
+      "category": "transaction",
+      "action": "transaction_started",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "scope-test-ee761b25-2069-427a-b4d2-9946ba408e57",
+        "runId": "1c5a3481-cfff-4352-ac8e-3d0f8386c5c3",
+        "optionsAccepted": true,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T10:52:26.408Z",
+      "category": "transaction",
+      "action": "document_request_succeeded",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "scope-test-ee761b25-2069-427a-b4d2-9946ba408e57",
+        "runId": "1c5a3481-cfff-4352-ac8e-3d0f8386c5c3"
+      }
+    },
+    {
+      "at": "2026-07-18T10:52:26.408Z",
+      "category": "transaction",
+      "action": "outbox_request_succeeded",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "scope-test-ee761b25-2069-427a-b4d2-9946ba408e57",
+        "runId": "1c5a3481-cfff-4352-ac8e-3d0f8386c5c3"
+      }
+    },
+    {
+      "at": "2026-07-18T10:52:26.410Z",
+      "category": "transaction",
+      "action": "transaction_complete",
+      "outcome": "pass",
+      "metadata": {
+        "scenario": "scope-test-ee761b25-2069-427a-b4d2-9946ba408e57",
+        "runId": "1c5a3481-cfff-4352-ac8e-3d0f8386c5c3",
+        "durationMs": 1.6,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T10:52:26.410Z",
+      "category": "ui",
+      "action": "local_save_acknowledged",
+      "outcome": "pass",
+      "metadata": {
+        "scenario": "scope-test-ee761b25-2069-427a-b4d2-9946ba408e57",
+        "runId": "1c5a3481-cfff-4352-ac8e-3d0f8386c5c3"
+      }
+    },
+    {
+      "at": "2026-07-18T10:52:26.417Z",
+      "category": "isolation",
+      "action": "four_scope_query_verified",
+      "outcome": "pass",
+      "metadata": {
+        "runPrefix": "scope-test-ee761b25-2069-427a-b4d2-9946ba408e57",
+        "scopeCount": 4
+      }
+    },
+    {
+      "at": "2026-07-18T10:52:26.417Z",
+      "category": "transaction",
+      "action": "transaction_started",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "simulated-quota",
+        "runId": "58cd4177-a869-470a-b75d-b256e6aa5af9",
+        "optionsAccepted": true,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T10:52:26.418Z",
+      "category": "transaction",
+      "action": "document_request_succeeded",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "simulated-quota",
+        "runId": "58cd4177-a869-470a-b75d-b256e6aa5af9"
+      }
+    },
+    {
+      "at": "2026-07-18T10:52:26.418Z",
+      "category": "quota",
+      "action": "simulated_quota_rollback_verified",
+      "outcome": "pass",
+      "metadata": {
+        "simulated": true,
+        "errorName": "QuotaExceededError",
+        "documentsBefore": 5,
+        "documentsAfter": 5,
+        "outboxBefore": 5,
+        "outboxAfter": 5
+      }
+    },
+    {
+      "at": "2026-07-18T10:52:26.419Z",
+      "category": "suite",
+      "action": "automated_checks_complete",
+      "outcome": "pass",
+      "metadata": {
+        "passedCount": 5,
+        "checkCount": 5,
+        "durationMs": 223.4
+      }
+    },
+    {
+      "at": "2026-07-18T10:52:38.335Z",
+      "category": "corpus",
+      "action": "bounded_corpus_committed",
+      "outcome": "pass",
+      "metadata": {
+        "runId": "ff29a77c-db2f-424f-985d-816e4a988a19",
+        "recordCount": 25,
+        "checksumCount": 25,
+        "logicalBytes": 1638400,
+        "durationMs": 153.4,
+        "usageBytesAfter": 1766184
+      }
+    },
+    {
+      "at": "2026-07-18T10:52:38.339Z",
+      "category": "storage",
+      "action": "storage_observed",
+      "outcome": "info",
+      "metadata": {
+        "secureContext": true,
+        "usageBytes": 1766184,
+        "quotaBytes": 10739184424,
+        "persisted": false
+      }
+    },
+    {
+      "at": "2026-07-18T10:52:51.246Z",
+      "category": "transaction",
+      "action": "transaction_started",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "reload-recovery",
+        "runId": "e0b79ac2-93b6-4db0-a1da-30180ef648ab",
+        "optionsAccepted": true,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T10:52:51.254Z",
+      "category": "transaction",
+      "action": "document_request_succeeded",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "reload-recovery",
+        "runId": "e0b79ac2-93b6-4db0-a1da-30180ef648ab"
+      }
+    },
+    {
+      "at": "2026-07-18T10:52:51.254Z",
+      "category": "transaction",
+      "action": "outbox_request_succeeded",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "reload-recovery",
+        "runId": "e0b79ac2-93b6-4db0-a1da-30180ef648ab"
+      }
+    },
+    {
+      "at": "2026-07-18T10:52:51.259Z",
+      "category": "transaction",
+      "action": "transaction_complete",
+      "outcome": "pass",
+      "metadata": {
+        "scenario": "reload-recovery",
+        "runId": "e0b79ac2-93b6-4db0-a1da-30180ef648ab",
+        "durationMs": 13,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T10:52:51.259Z",
+      "category": "ui",
+      "action": "local_save_acknowledged",
+      "outcome": "pass",
+      "metadata": {
+        "scenario": "reload-recovery",
+        "runId": "e0b79ac2-93b6-4db0-a1da-30180ef648ab"
+      }
+    },
+    {
+      "at": "2026-07-18T10:52:51.476Z",
+      "category": "recovery",
+      "action": "reload_recovery_verified",
+      "outcome": "pass",
+      "metadata": {
+        "documentPresent": true,
+        "outboxPresent": true,
+        "digestMatched": true
+      }
+    },
+    {
+      "at": "2026-07-18T10:52:51.491Z",
+      "category": "storage",
+      "action": "storage_observed",
+      "outcome": "info",
+      "metadata": {
+        "secureContext": true,
+        "usageBytes": 1771278,
+        "quotaBytes": 10739189518,
+        "persisted": false
+      }
+    },
+    {
+      "at": "2026-07-18T10:52:51.492Z",
+      "category": "lifecycle",
+      "action": "prototype_ready",
+      "outcome": "info",
+      "metadata": {
+        "databaseVersion": 1,
+        "secureContext": true
+      }
+    },
+    {
+      "at": "2026-07-18T10:53:06.030Z",
+      "category": "termination",
+      "action": "kill_window_armed",
+      "outcome": "conditional",
+      "metadata": {
+        "runId": "788301e2-8a2b-4600-9868-626f6867781b",
+        "windowSeconds": 15
+      }
+    },
+    {
+      "at": "2026-07-18T10:53:18.054Z",
+      "category": "recovery",
+      "action": "kill_window_recovery_verified",
+      "outcome": "pass",
+      "metadata": {
+        "expectedCommitted": false,
+        "documentPresent": false,
+        "outboxPresent": false
+      }
+    },
+    {
+      "at": "2026-07-18T10:53:18.075Z",
+      "category": "storage",
+      "action": "storage_observed",
+      "outcome": "info",
+      "metadata": {
+        "secureContext": true,
+        "usageBytes": 1771278,
+        "quotaBytes": 10739189518,
+        "persisted": false
+      }
+    },
+    {
+      "at": "2026-07-18T10:53:18.076Z",
+      "category": "lifecycle",
+      "action": "prototype_ready",
+      "outcome": "info",
+      "metadata": {
+        "databaseVersion": 1,
+        "secureContext": true
+      }
+    },
+    {
+      "at": "2026-07-18T10:53:34.816Z",
+      "category": "termination",
+      "action": "kill_window_armed",
+      "outcome": "conditional",
+      "metadata": {
+        "runId": "2c688281-96fb-45e2-ac6e-5bd800fc0d96",
+        "windowSeconds": 15
+      }
+    },
+    {
+      "at": "2026-07-18T10:53:49.531Z",
+      "category": "recovery",
+      "action": "kill_window_recovery_verified",
+      "outcome": "pass",
+      "metadata": {
+        "expectedCommitted": false,
+        "documentPresent": false,
+        "outboxPresent": false
+      }
+    },
+    {
+      "at": "2026-07-18T10:53:49.566Z",
+      "category": "storage",
+      "action": "storage_observed",
+      "outcome": "info",
+      "metadata": {
+        "secureContext": true,
+        "usageBytes": 1777475,
+        "quotaBytes": 10739195715,
+        "persisted": false
+      }
+    },
+    {
+      "at": "2026-07-18T10:53:49.572Z",
+      "category": "lifecycle",
+      "action": "prototype_ready",
+      "outcome": "info",
+      "metadata": {
+        "databaseVersion": 1,
+        "secureContext": true
+      }
+    },
+    {
+      "at": "2026-07-18T10:54:05.987Z",
+      "category": "termination",
+      "action": "kill_window_armed",
+      "outcome": "conditional",
+      "metadata": {
+        "runId": "a7e6669f-52b2-43d4-928f-ea752ef17b1e",
+        "windowSeconds": 15
+      }
+    },
+    {
+      "at": "2026-07-18T10:54:21.009Z",
+      "category": "termination",
+      "action": "kill_window_committed",
+      "outcome": "pass",
+      "metadata": {
+        "runId": "a7e6669f-52b2-43d4-928f-ea752ef17b1e",
+        "keepaliveIterations": 587403
+      }
+    },
+    {
+      "at": "2026-07-18T10:54:40.560Z",
+      "category": "recovery",
+      "action": "kill_window_recovery_verified",
+      "outcome": "pass",
+      "metadata": {
+        "expectedCommitted": true,
+        "documentPresent": true,
+        "outboxPresent": true
+      }
+    },
+    {
+      "at": "2026-07-18T10:54:40.631Z",
+      "category": "storage",
+      "action": "storage_observed",
+      "outcome": "info",
+      "metadata": {
+        "secureContext": true,
+        "usageBytes": 1782191,
+        "quotaBytes": 10739200431,
+        "persisted": false
+      }
+    },
+    {
+      "at": "2026-07-18T10:54:40.637Z",
+      "category": "lifecycle",
+      "action": "prototype_ready",
+      "outcome": "info",
+      "metadata": {
+        "databaseVersion": 1,
+        "secureContext": true
+      }
+    },
+    {
+      "at": "2026-07-18T10:56:09.617Z",
+      "category": "storage",
+      "action": "storage_observed",
+      "outcome": "info",
+      "metadata": {
+        "secureContext": true,
+        "usageBytes": 1787192,
+        "quotaBytes": 10739205432,
+        "persisted": false
+      }
+    },
+    {
+      "at": "2026-07-18T10:56:09.619Z",
+      "category": "lifecycle",
+      "action": "prototype_ready",
+      "outcome": "info",
+      "metadata": {
+        "databaseVersion": 1,
+        "secureContext": true
+      }
+    },
+    {
+      "at": "2026-07-18T10:57:14.140Z",
+      "category": "storage",
+      "action": "storage_observed",
+      "outcome": "info",
+      "metadata": {
+        "secureContext": true,
+        "usageBytes": 1787192,
+        "quotaBytes": 10739205432,
+        "persisted": false
+      }
+    },
+    {
+      "at": "2026-07-18T10:57:14.142Z",
+      "category": "lifecycle",
+      "action": "prototype_ready",
+      "outcome": "info",
+      "metadata": {
+        "databaseVersion": 1,
+        "secureContext": true
+      }
+    },
+    {
+      "at": "2026-07-18T10:58:14.135Z",
+      "category": "termination",
+      "action": "kill_window_armed",
+      "outcome": "conditional",
+      "metadata": {
+        "runId": "00d3c7ff-1e24-4d62-b0de-b82161a7ce58",
+        "windowSeconds": 15
+      }
+    },
+    {
+      "at": "2026-07-18T10:58:52.991Z",
+      "category": "recovery",
+      "action": "kill_window_recovery_verified",
+      "outcome": "pass",
+      "metadata": {
+        "oracleSource": "indexeddb_strict_transaction",
+        "expectedCommitted": false,
+        "documentPresent": false,
+        "outboxPresent": false
+      }
+    },
+    {
+      "at": "2026-07-18T10:58:53.034Z",
+      "category": "storage",
+      "action": "storage_observed",
+      "outcome": "info",
+      "metadata": {
+        "secureContext": true,
+        "usageBytes": 1790985,
+        "quotaBytes": 10739209225,
+        "persisted": false
+      }
+    },
+    {
+      "at": "2026-07-18T10:58:53.065Z",
+      "category": "lifecycle",
+      "action": "prototype_ready",
+      "outcome": "info",
+      "metadata": {
+        "databaseVersion": 1,
+        "secureContext": true
+      }
+    },
+    {
+      "at": "2026-07-18T11:00:03.943Z",
+      "category": "recovery",
+      "action": "kill_window_recovery_verified",
+      "outcome": "pass",
+      "metadata": {
+        "oracleSource": "indexeddb_strict_transaction",
+        "expectedCommitted": true,
+        "documentPresent": true,
+        "outboxPresent": true
+      }
+    },
+    {
+      "at": "2026-07-18T11:00:03.988Z",
+      "category": "storage",
+      "action": "storage_observed",
+      "outcome": "info",
+      "metadata": {
+        "secureContext": true,
+        "usageBytes": 1797896,
+        "quotaBytes": 10739216136,
+        "persisted": false
+      }
+    },
+    {
+      "at": "2026-07-18T11:00:03.989Z",
+      "category": "lifecycle",
+      "action": "prototype_ready",
+      "outcome": "info",
+      "metadata": {
+        "databaseVersion": 1,
+        "secureContext": true
+      }
+    },
+    {
+      "at": "2026-07-18T11:01:08.481Z",
+      "category": "storage",
+      "action": "storage_observed",
+      "outcome": "info",
+      "metadata": {
+        "secureContext": true,
+        "usageBytes": 1797896,
+        "quotaBytes": 10739216136,
+        "persisted": false
+      }
+    },
+    {
+      "at": "2026-07-18T11:01:08.492Z",
+      "category": "lifecycle",
+      "action": "prototype_ready",
+      "outcome": "info",
+      "metadata": {
+        "databaseVersion": 1,
+        "secureContext": true
+      }
+    },
+    {
+      "at": "2026-07-18T11:02:06.173Z",
+      "category": "recovery",
+      "action": "kill_window_recovery_verified",
+      "outcome": "pass",
+      "metadata": {
+        "oracleSource": "indexeddb_strict_transaction",
+        "expectedCommitted": false,
+        "documentPresent": false,
+        "outboxPresent": false
+      }
+    },
+    {
+      "at": "2026-07-18T11:02:06.223Z",
+      "category": "storage",
+      "action": "storage_observed",
+      "outcome": "info",
+      "metadata": {
+        "secureContext": true,
+        "usageBytes": 1801689,
+        "quotaBytes": 10739219929,
+        "persisted": false
+      }
+    },
+    {
+      "at": "2026-07-18T11:02:06.224Z",
+      "category": "lifecycle",
+      "action": "prototype_ready",
+      "outcome": "info",
+      "metadata": {
+        "databaseVersion": 1,
+        "secureContext": true
+      }
+    },
+    {
+      "at": "2026-07-18T11:03:09.040Z",
+      "category": "recovery",
+      "action": "kill_window_recovery_verified",
+      "outcome": "pass",
+      "metadata": {
+        "oracleSource": "indexeddb_strict_transaction",
+        "expectedCommitted": false,
+        "documentPresent": false,
+        "outboxPresent": false
+      }
+    },
+    {
+      "at": "2026-07-18T11:03:09.108Z",
+      "category": "storage",
+      "action": "storage_observed",
+      "outcome": "info",
+      "metadata": {
+        "secureContext": true,
+        "usageBytes": 1805482,
+        "quotaBytes": 10739223722,
+        "persisted": false
+      }
+    },
+    {
+      "at": "2026-07-18T11:03:09.109Z",
+      "category": "lifecycle",
+      "action": "prototype_ready",
+      "outcome": "info",
+      "metadata": {
+        "databaseVersion": 1,
+        "secureContext": true
+      }
+    },
+    {
+      "at": "2026-07-18T11:03:25.669Z",
+      "category": "evidence",
+      "action": "forensic_json_exported",
+      "outcome": "info",
+      "metadata": {
+        "eventCount": 121
+      }
+    },
+    {
+      "at": "2026-07-18T11:07:02.744Z",
+      "category": "storage",
+      "action": "storage_observed",
+      "outcome": "info",
+      "metadata": {
+        "secureContext": true,
+        "usageBytes": 1805482,
+        "quotaBytes": 10739223722,
+        "persisted": false
+      }
+    },
+    {
+      "at": "2026-07-18T11:07:02.748Z",
+      "category": "lifecycle",
+      "action": "prototype_ready",
+      "outcome": "info",
+      "metadata": {
+        "databaseVersion": 1,
+        "secureContext": true
+      }
+    },
+    {
+      "at": "2026-07-18T11:07:11.143Z",
+      "category": "durability",
+      "action": "strict_durability_probe",
+      "outcome": "conditional",
+      "metadata": {
+        "optionsAccepted": true,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T11:07:11.162Z",
+      "category": "transaction",
+      "action": "transaction_started",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "atomic-commit",
+        "runId": "e082faf2-a2a2-45d2-93fa-bb19e8ed1aca",
+        "optionsAccepted": true,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T11:07:11.180Z",
+      "category": "transaction",
+      "action": "document_request_succeeded",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "atomic-commit",
+        "runId": "e082faf2-a2a2-45d2-93fa-bb19e8ed1aca"
+      }
+    },
+    {
+      "at": "2026-07-18T11:07:11.181Z",
+      "category": "transaction",
+      "action": "outbox_request_succeeded",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "atomic-commit",
+        "runId": "e082faf2-a2a2-45d2-93fa-bb19e8ed1aca"
+      }
+    },
+    {
+      "at": "2026-07-18T11:07:11.187Z",
+      "category": "transaction",
+      "action": "transaction_complete",
+      "outcome": "pass",
+      "metadata": {
+        "scenario": "atomic-commit",
+        "runId": "e082faf2-a2a2-45d2-93fa-bb19e8ed1aca",
+        "durationMs": 25.4,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T11:07:11.188Z",
+      "category": "ui",
+      "action": "local_save_acknowledged",
+      "outcome": "pass",
+      "metadata": {
+        "scenario": "atomic-commit",
+        "runId": "e082faf2-a2a2-45d2-93fa-bb19e8ed1aca"
+      }
+    },
+    {
+      "at": "2026-07-18T11:07:11.189Z",
+      "category": "verification",
+      "action": "atomic_pair_verified",
+      "outcome": "pass",
+      "metadata": {
+        "runId": "e082faf2-a2a2-45d2-93fa-bb19e8ed1aca",
+        "documentPresent": true,
+        "outboxPresent": true
+      }
+    },
+    {
+      "at": "2026-07-18T11:07:11.190Z",
+      "category": "transaction",
+      "action": "transaction_started",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "injected-abort",
+        "runId": "0be158aa-14da-4591-a01b-29fb6e94f487",
+        "optionsAccepted": true,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T11:07:11.191Z",
+      "category": "transaction",
+      "action": "document_request_succeeded",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "injected-abort",
+        "runId": "0be158aa-14da-4591-a01b-29fb6e94f487"
+      }
+    },
+    {
+      "at": "2026-07-18T11:07:11.202Z",
+      "category": "verification",
+      "action": "injected_abort_verified",
+      "outcome": "pass",
+      "metadata": {
+        "errorName": "AbortError",
+        "documentsBefore": 10,
+        "documentsAfter": 10,
+        "outboxBefore": 10,
+        "outboxAfter": 10
+      }
+    },
+    {
+      "at": "2026-07-18T11:07:11.203Z",
+      "category": "transaction",
+      "action": "transaction_started",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "scope-test-a4bceabb-de0e-42f6-91c1-621a089cdf4e",
+        "runId": "84a315e6-85c3-484f-9ca6-3c32528d926b",
+        "optionsAccepted": true,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T11:07:11.204Z",
+      "category": "transaction",
+      "action": "document_request_succeeded",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "scope-test-a4bceabb-de0e-42f6-91c1-621a089cdf4e",
+        "runId": "84a315e6-85c3-484f-9ca6-3c32528d926b"
+      }
+    },
+    {
+      "at": "2026-07-18T11:07:11.212Z",
+      "category": "transaction",
+      "action": "outbox_request_succeeded",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "scope-test-a4bceabb-de0e-42f6-91c1-621a089cdf4e",
+        "runId": "84a315e6-85c3-484f-9ca6-3c32528d926b"
+      }
+    },
+    {
+      "at": "2026-07-18T11:07:11.216Z",
+      "category": "transaction",
+      "action": "transaction_complete",
+      "outcome": "pass",
+      "metadata": {
+        "scenario": "scope-test-a4bceabb-de0e-42f6-91c1-621a089cdf4e",
+        "runId": "84a315e6-85c3-484f-9ca6-3c32528d926b",
+        "durationMs": 13.2,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T11:07:11.216Z",
+      "category": "ui",
+      "action": "local_save_acknowledged",
+      "outcome": "pass",
+      "metadata": {
+        "scenario": "scope-test-a4bceabb-de0e-42f6-91c1-621a089cdf4e",
+        "runId": "84a315e6-85c3-484f-9ca6-3c32528d926b"
+      }
+    },
+    {
+      "at": "2026-07-18T11:07:11.217Z",
+      "category": "transaction",
+      "action": "transaction_started",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "scope-test-a4bceabb-de0e-42f6-91c1-621a089cdf4e",
+        "runId": "0820d43a-329c-4f77-ade5-e4d5faeb0e60",
+        "optionsAccepted": true,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T11:07:11.217Z",
+      "category": "transaction",
+      "action": "document_request_succeeded",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "scope-test-a4bceabb-de0e-42f6-91c1-621a089cdf4e",
+        "runId": "0820d43a-329c-4f77-ade5-e4d5faeb0e60"
+      }
+    },
+    {
+      "at": "2026-07-18T11:07:11.218Z",
+      "category": "transaction",
+      "action": "outbox_request_succeeded",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "scope-test-a4bceabb-de0e-42f6-91c1-621a089cdf4e",
+        "runId": "0820d43a-329c-4f77-ade5-e4d5faeb0e60"
+      }
+    },
+    {
+      "at": "2026-07-18T11:07:11.223Z",
+      "category": "transaction",
+      "action": "transaction_complete",
+      "outcome": "pass",
+      "metadata": {
+        "scenario": "scope-test-a4bceabb-de0e-42f6-91c1-621a089cdf4e",
+        "runId": "0820d43a-329c-4f77-ade5-e4d5faeb0e60",
+        "durationMs": 6.8,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T11:07:11.224Z",
+      "category": "ui",
+      "action": "local_save_acknowledged",
+      "outcome": "pass",
+      "metadata": {
+        "scenario": "scope-test-a4bceabb-de0e-42f6-91c1-621a089cdf4e",
+        "runId": "0820d43a-329c-4f77-ade5-e4d5faeb0e60"
+      }
+    },
+    {
+      "at": "2026-07-18T11:07:11.224Z",
+      "category": "transaction",
+      "action": "transaction_started",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "scope-test-a4bceabb-de0e-42f6-91c1-621a089cdf4e",
+        "runId": "05ce2277-0b5b-4acd-988e-16c7f19f5ca0",
+        "optionsAccepted": true,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T11:07:11.225Z",
+      "category": "transaction",
+      "action": "document_request_succeeded",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "scope-test-a4bceabb-de0e-42f6-91c1-621a089cdf4e",
+        "runId": "05ce2277-0b5b-4acd-988e-16c7f19f5ca0"
+      }
+    },
+    {
+      "at": "2026-07-18T11:07:11.225Z",
+      "category": "transaction",
+      "action": "outbox_request_succeeded",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "scope-test-a4bceabb-de0e-42f6-91c1-621a089cdf4e",
+        "runId": "05ce2277-0b5b-4acd-988e-16c7f19f5ca0"
+      }
+    },
+    {
+      "at": "2026-07-18T11:07:11.226Z",
+      "category": "transaction",
+      "action": "transaction_complete",
+      "outcome": "pass",
+      "metadata": {
+        "scenario": "scope-test-a4bceabb-de0e-42f6-91c1-621a089cdf4e",
+        "runId": "05ce2277-0b5b-4acd-988e-16c7f19f5ca0",
+        "durationMs": 1.7,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T11:07:11.226Z",
+      "category": "ui",
+      "action": "local_save_acknowledged",
+      "outcome": "pass",
+      "metadata": {
+        "scenario": "scope-test-a4bceabb-de0e-42f6-91c1-621a089cdf4e",
+        "runId": "05ce2277-0b5b-4acd-988e-16c7f19f5ca0"
+      }
+    },
+    {
+      "at": "2026-07-18T11:07:11.227Z",
+      "category": "transaction",
+      "action": "transaction_started",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "scope-test-a4bceabb-de0e-42f6-91c1-621a089cdf4e",
+        "runId": "678b7a89-e42b-42a4-b0b0-575489df0349",
+        "optionsAccepted": true,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T11:07:11.229Z",
+      "category": "transaction",
+      "action": "document_request_succeeded",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "scope-test-a4bceabb-de0e-42f6-91c1-621a089cdf4e",
+        "runId": "678b7a89-e42b-42a4-b0b0-575489df0349"
+      }
+    },
+    {
+      "at": "2026-07-18T11:07:11.230Z",
+      "category": "transaction",
+      "action": "outbox_request_succeeded",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "scope-test-a4bceabb-de0e-42f6-91c1-621a089cdf4e",
+        "runId": "678b7a89-e42b-42a4-b0b0-575489df0349"
+      }
+    },
+    {
+      "at": "2026-07-18T11:07:11.231Z",
+      "category": "transaction",
+      "action": "transaction_complete",
+      "outcome": "pass",
+      "metadata": {
+        "scenario": "scope-test-a4bceabb-de0e-42f6-91c1-621a089cdf4e",
+        "runId": "678b7a89-e42b-42a4-b0b0-575489df0349",
+        "durationMs": 3.9,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T11:07:11.232Z",
+      "category": "ui",
+      "action": "local_save_acknowledged",
+      "outcome": "pass",
+      "metadata": {
+        "scenario": "scope-test-a4bceabb-de0e-42f6-91c1-621a089cdf4e",
+        "runId": "678b7a89-e42b-42a4-b0b0-575489df0349"
+      }
+    },
+    {
+      "at": "2026-07-18T11:07:11.292Z",
+      "category": "isolation",
+      "action": "four_scope_query_verified",
+      "outcome": "pass",
+      "metadata": {
+        "runPrefix": "scope-test-a4bceabb-de0e-42f6-91c1-621a089cdf4e",
+        "scopeCount": 4
+      }
+    },
+    {
+      "at": "2026-07-18T11:07:11.301Z",
+      "category": "transaction",
+      "action": "transaction_started",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "simulated-quota",
+        "runId": "8e358321-2ca2-4d6e-9bab-765162f353d7",
+        "optionsAccepted": true,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T11:07:11.302Z",
+      "category": "transaction",
+      "action": "document_request_succeeded",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "simulated-quota",
+        "runId": "8e358321-2ca2-4d6e-9bab-765162f353d7"
+      }
+    },
+    {
+      "at": "2026-07-18T11:07:11.302Z",
+      "category": "quota",
+      "action": "simulated_quota_rollback_verified",
+      "outcome": "pass",
+      "metadata": {
+        "simulated": true,
+        "errorName": "QuotaExceededError",
+        "documentsBefore": 14,
+        "documentsAfter": 14,
+        "outboxBefore": 14,
+        "outboxAfter": 14
+      }
+    },
+    {
+      "at": "2026-07-18T11:07:11.303Z",
+      "category": "suite",
+      "action": "automated_checks_complete",
+      "outcome": "pass",
+      "metadata": {
+        "passedCount": 5,
+        "checkCount": 5,
+        "durationMs": 167.4
+      }
+    },
+    {
+      "at": "2026-07-18T11:07:17.778Z",
+      "category": "transaction",
+      "action": "transaction_started",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "reload-recovery",
+        "runId": "340f7dd8-4102-459a-bee4-627df5f293cb",
+        "optionsAccepted": true,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T11:07:17.886Z",
+      "category": "transaction",
+      "action": "document_request_succeeded",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "reload-recovery",
+        "runId": "340f7dd8-4102-459a-bee4-627df5f293cb"
+      }
+    },
+    {
+      "at": "2026-07-18T11:07:17.947Z",
+      "category": "transaction",
+      "action": "outbox_request_succeeded",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "reload-recovery",
+        "runId": "340f7dd8-4102-459a-bee4-627df5f293cb"
+      }
+    },
+    {
+      "at": "2026-07-18T11:07:17.961Z",
+      "category": "transaction",
+      "action": "transaction_complete",
+      "outcome": "pass",
+      "metadata": {
+        "scenario": "reload-recovery",
+        "runId": "340f7dd8-4102-459a-bee4-627df5f293cb",
+        "durationMs": 183.9,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T11:07:17.962Z",
+      "category": "ui",
+      "action": "local_save_acknowledged",
+      "outcome": "pass",
+      "metadata": {
+        "scenario": "reload-recovery",
+        "runId": "340f7dd8-4102-459a-bee4-627df5f293cb"
+      }
+    },
+    {
+      "at": "2026-07-18T11:07:18.211Z",
+      "category": "recovery",
+      "action": "reload_recovery_verified",
+      "outcome": "pass",
+      "metadata": {
+        "documentPresent": true,
+        "outboxPresent": true,
+        "digestMatched": true
+      }
+    },
+    {
+      "at": "2026-07-18T11:07:18.231Z",
+      "category": "storage",
+      "action": "storage_observed",
+      "outcome": "info",
+      "metadata": {
+        "secureContext": true,
+        "usageBytes": 1842908,
+        "quotaBytes": 10739261148,
+        "persisted": false
+      }
+    },
+    {
+      "at": "2026-07-18T11:07:18.232Z",
+      "category": "lifecycle",
+      "action": "prototype_ready",
+      "outcome": "info",
+      "metadata": {
+        "databaseVersion": 1,
+        "secureContext": true
+      }
+    },
+    {
+      "at": "2026-07-18T11:08:06.132Z",
+      "category": "recovery",
+      "action": "kill_window_recovery_verified",
+      "outcome": "pass",
+      "metadata": {
+        "oracleSource": "indexeddb_strict_transaction",
+        "expectedCommitted": false,
+        "documentPresent": false,
+        "outboxPresent": false
+      }
+    },
+    {
+      "at": "2026-07-18T11:08:06.194Z",
+      "category": "storage",
+      "action": "storage_observed",
+      "outcome": "info",
+      "metadata": {
+        "secureContext": true,
+        "usageBytes": 1846708,
+        "quotaBytes": 10739264948,
+        "persisted": false
+      }
+    },
+    {
+      "at": "2026-07-18T11:08:06.203Z",
+      "category": "lifecycle",
+      "action": "prototype_ready",
+      "outcome": "info",
+      "metadata": {
+        "databaseVersion": 1,
+        "secureContext": true
+      }
+    },
+    {
+      "at": "2026-07-18T11:08:23.842Z",
+      "category": "evidence",
+      "action": "forensic_json_exported",
+      "outcome": "info",
+      "metadata": {
+        "eventCount": 170
+      }
+    },
+    {
+      "at": "2026-07-18T11:08:39.628Z",
+      "category": "durability",
+      "action": "strict_durability_probe",
+      "outcome": "conditional",
+      "metadata": {
+        "optionsAccepted": true,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T11:08:39.641Z",
+      "category": "transaction",
+      "action": "transaction_started",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "atomic-commit",
+        "runId": "c7cd410d-a038-4387-a9a0-3f8b368deddf",
+        "optionsAccepted": true,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T11:08:39.658Z",
+      "category": "transaction",
+      "action": "document_request_succeeded",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "atomic-commit",
+        "runId": "c7cd410d-a038-4387-a9a0-3f8b368deddf"
+      }
+    },
+    {
+      "at": "2026-07-18T11:08:39.669Z",
+      "category": "transaction",
+      "action": "outbox_request_succeeded",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "atomic-commit",
+        "runId": "c7cd410d-a038-4387-a9a0-3f8b368deddf"
+      }
+    },
+    {
+      "at": "2026-07-18T11:08:39.672Z",
+      "category": "transaction",
+      "action": "transaction_complete",
+      "outcome": "pass",
+      "metadata": {
+        "scenario": "atomic-commit",
+        "runId": "c7cd410d-a038-4387-a9a0-3f8b368deddf",
+        "durationMs": 31.4,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T11:08:39.673Z",
+      "category": "ui",
+      "action": "local_save_acknowledged",
+      "outcome": "pass",
+      "metadata": {
+        "scenario": "atomic-commit",
+        "runId": "c7cd410d-a038-4387-a9a0-3f8b368deddf"
+      }
+    },
+    {
+      "at": "2026-07-18T11:08:39.685Z",
+      "category": "verification",
+      "action": "atomic_pair_verified",
+      "outcome": "pass",
+      "metadata": {
+        "runId": "c7cd410d-a038-4387-a9a0-3f8b368deddf",
+        "documentPresent": true,
+        "outboxPresent": true
+      }
+    },
+    {
+      "at": "2026-07-18T11:08:39.688Z",
+      "category": "transaction",
+      "action": "transaction_started",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "injected-abort",
+        "runId": "d97aa83a-db5b-4795-bff5-f9f702b05ebd",
+        "optionsAccepted": true,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T11:08:39.688Z",
+      "category": "transaction",
+      "action": "document_request_succeeded",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "injected-abort",
+        "runId": "d97aa83a-db5b-4795-bff5-f9f702b05ebd"
+      }
+    },
+    {
+      "at": "2026-07-18T11:08:39.728Z",
+      "category": "verification",
+      "action": "injected_abort_verified",
+      "outcome": "pass",
+      "metadata": {
+        "errorName": "AbortError",
+        "documentsBefore": 16,
+        "documentsAfter": 16,
+        "outboxBefore": 16,
+        "outboxAfter": 16
+      }
+    },
+    {
+      "at": "2026-07-18T11:08:39.730Z",
+      "category": "transaction",
+      "action": "transaction_started",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "scope-test-3c100021-294b-4a77-be44-c99b1e162474",
+        "runId": "e25cf104-ecd3-4a25-af61-b8fbd2b14321",
+        "optionsAccepted": true,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T11:08:39.739Z",
+      "category": "transaction",
+      "action": "document_request_succeeded",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "scope-test-3c100021-294b-4a77-be44-c99b1e162474",
+        "runId": "e25cf104-ecd3-4a25-af61-b8fbd2b14321"
+      }
+    },
+    {
+      "at": "2026-07-18T11:08:39.741Z",
+      "category": "transaction",
+      "action": "outbox_request_succeeded",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "scope-test-3c100021-294b-4a77-be44-c99b1e162474",
+        "runId": "e25cf104-ecd3-4a25-af61-b8fbd2b14321"
+      }
+    },
+    {
+      "at": "2026-07-18T11:08:39.743Z",
+      "category": "transaction",
+      "action": "transaction_complete",
+      "outcome": "pass",
+      "metadata": {
+        "scenario": "scope-test-3c100021-294b-4a77-be44-c99b1e162474",
+        "runId": "e25cf104-ecd3-4a25-af61-b8fbd2b14321",
+        "durationMs": 12.6,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T11:08:39.743Z",
+      "category": "ui",
+      "action": "local_save_acknowledged",
+      "outcome": "pass",
+      "metadata": {
+        "scenario": "scope-test-3c100021-294b-4a77-be44-c99b1e162474",
+        "runId": "e25cf104-ecd3-4a25-af61-b8fbd2b14321"
+      }
+    },
+    {
+      "at": "2026-07-18T11:08:39.744Z",
+      "category": "transaction",
+      "action": "transaction_started",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "scope-test-3c100021-294b-4a77-be44-c99b1e162474",
+        "runId": "109c7c14-c14e-4d0a-9c98-37a41693d6ea",
+        "optionsAccepted": true,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T11:08:39.750Z",
+      "category": "transaction",
+      "action": "document_request_succeeded",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "scope-test-3c100021-294b-4a77-be44-c99b1e162474",
+        "runId": "109c7c14-c14e-4d0a-9c98-37a41693d6ea"
+      }
+    },
+    {
+      "at": "2026-07-18T11:08:39.751Z",
+      "category": "transaction",
+      "action": "outbox_request_succeeded",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "scope-test-3c100021-294b-4a77-be44-c99b1e162474",
+        "runId": "109c7c14-c14e-4d0a-9c98-37a41693d6ea"
+      }
+    },
+    {
+      "at": "2026-07-18T11:08:39.753Z",
+      "category": "transaction",
+      "action": "transaction_complete",
+      "outcome": "pass",
+      "metadata": {
+        "scenario": "scope-test-3c100021-294b-4a77-be44-c99b1e162474",
+        "runId": "109c7c14-c14e-4d0a-9c98-37a41693d6ea",
+        "durationMs": 9.1,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T11:08:39.753Z",
+      "category": "ui",
+      "action": "local_save_acknowledged",
+      "outcome": "pass",
+      "metadata": {
+        "scenario": "scope-test-3c100021-294b-4a77-be44-c99b1e162474",
+        "runId": "109c7c14-c14e-4d0a-9c98-37a41693d6ea"
+      }
+    },
+    {
+      "at": "2026-07-18T11:08:39.753Z",
+      "category": "transaction",
+      "action": "transaction_started",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "scope-test-3c100021-294b-4a77-be44-c99b1e162474",
+        "runId": "d16e7602-a05b-4b15-b7bb-dae9037acf06",
+        "optionsAccepted": true,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T11:08:39.754Z",
+      "category": "transaction",
+      "action": "document_request_succeeded",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "scope-test-3c100021-294b-4a77-be44-c99b1e162474",
+        "runId": "d16e7602-a05b-4b15-b7bb-dae9037acf06"
+      }
+    },
+    {
+      "at": "2026-07-18T11:08:39.756Z",
+      "category": "transaction",
+      "action": "outbox_request_succeeded",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "scope-test-3c100021-294b-4a77-be44-c99b1e162474",
+        "runId": "d16e7602-a05b-4b15-b7bb-dae9037acf06"
+      }
+    },
+    {
+      "at": "2026-07-18T11:08:39.757Z",
+      "category": "transaction",
+      "action": "transaction_complete",
+      "outcome": "pass",
+      "metadata": {
+        "scenario": "scope-test-3c100021-294b-4a77-be44-c99b1e162474",
+        "runId": "d16e7602-a05b-4b15-b7bb-dae9037acf06",
+        "durationMs": 3.5,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T11:08:39.757Z",
+      "category": "ui",
+      "action": "local_save_acknowledged",
+      "outcome": "pass",
+      "metadata": {
+        "scenario": "scope-test-3c100021-294b-4a77-be44-c99b1e162474",
+        "runId": "d16e7602-a05b-4b15-b7bb-dae9037acf06"
+      }
+    },
+    {
+      "at": "2026-07-18T11:08:39.758Z",
+      "category": "transaction",
+      "action": "transaction_started",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "scope-test-3c100021-294b-4a77-be44-c99b1e162474",
+        "runId": "a956afad-6a10-4ef2-90c5-347f2ca44bff",
+        "optionsAccepted": true,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T11:08:39.758Z",
+      "category": "transaction",
+      "action": "document_request_succeeded",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "scope-test-3c100021-294b-4a77-be44-c99b1e162474",
+        "runId": "a956afad-6a10-4ef2-90c5-347f2ca44bff"
+      }
+    },
+    {
+      "at": "2026-07-18T11:08:39.759Z",
+      "category": "transaction",
+      "action": "outbox_request_succeeded",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "scope-test-3c100021-294b-4a77-be44-c99b1e162474",
+        "runId": "a956afad-6a10-4ef2-90c5-347f2ca44bff"
+      }
+    },
+    {
+      "at": "2026-07-18T11:08:39.760Z",
+      "category": "transaction",
+      "action": "transaction_complete",
+      "outcome": "pass",
+      "metadata": {
+        "scenario": "scope-test-3c100021-294b-4a77-be44-c99b1e162474",
+        "runId": "a956afad-6a10-4ef2-90c5-347f2ca44bff",
+        "durationMs": 2.3,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T11:08:39.760Z",
+      "category": "ui",
+      "action": "local_save_acknowledged",
+      "outcome": "pass",
+      "metadata": {
+        "scenario": "scope-test-3c100021-294b-4a77-be44-c99b1e162474",
+        "runId": "a956afad-6a10-4ef2-90c5-347f2ca44bff"
+      }
+    },
+    {
+      "at": "2026-07-18T11:08:39.771Z",
+      "category": "isolation",
+      "action": "four_scope_query_verified",
+      "outcome": "pass",
+      "metadata": {
+        "runPrefix": "scope-test-3c100021-294b-4a77-be44-c99b1e162474",
+        "scopeCount": 4
+      }
+    },
+    {
+      "at": "2026-07-18T11:08:39.772Z",
+      "category": "transaction",
+      "action": "transaction_started",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "simulated-quota",
+        "runId": "e31cbf4c-cb09-4243-ae23-c2309c97ec95",
+        "optionsAccepted": true,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T11:08:39.772Z",
+      "category": "transaction",
+      "action": "document_request_succeeded",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "simulated-quota",
+        "runId": "e31cbf4c-cb09-4243-ae23-c2309c97ec95"
+      }
+    },
+    {
+      "at": "2026-07-18T11:08:39.773Z",
+      "category": "quota",
+      "action": "simulated_quota_rollback_verified",
+      "outcome": "pass",
+      "metadata": {
+        "simulated": true,
+        "errorName": "QuotaExceededError",
+        "documentsBefore": 20,
+        "documentsAfter": 20,
+        "outboxBefore": 20,
+        "outboxAfter": 20
+      }
+    },
+    {
+      "at": "2026-07-18T11:08:39.774Z",
+      "category": "suite",
+      "action": "automated_checks_complete",
+      "outcome": "pass",
+      "metadata": {
+        "passedCount": 5,
+        "checkCount": 5,
+        "durationMs": 161.4
+      }
+    },
+    {
+      "at": "2026-07-18T11:08:40.403Z",
+      "category": "storage",
+      "action": "persistence_requested",
+      "outcome": "conditional",
+      "metadata": {
+        "persistedBefore": false,
+        "requestGranted": true,
+        "persistedAfter": true
+      }
+    },
+    {
+      "at": "2026-07-18T11:08:41.234Z",
+      "category": "corpus",
+      "action": "bounded_corpus_committed",
+      "outcome": "pass",
+      "metadata": {
+        "runId": "e7d32d3a-09ac-4509-af4c-d06fc1e623ae",
+        "recordCount": 25,
+        "checksumCount": 25,
+        "logicalBytes": 1638400,
+        "durationMs": 73.9,
+        "usageBytesAfter": 3575689
+      }
+    },
+    {
+      "at": "2026-07-18T11:08:41.237Z",
+      "category": "storage",
+      "action": "storage_observed",
+      "outcome": "info",
+      "metadata": {
+        "secureContext": true,
+        "usageBytes": 3575689,
+        "quotaBytes": 10740993929,
+        "persisted": true
+      }
+    },
+    {
+      "at": "2026-07-18T11:09:04.612Z",
+      "category": "evidence",
+      "action": "forensic_json_exported",
+      "outcome": "info",
+      "metadata": {
+        "eventCount": 209
+      }
+    },
+    {
+      "at": "2026-07-18T11:09:52.713Z",
+      "category": "storage",
+      "action": "storage_observed",
+      "outcome": "info",
+      "metadata": {
+        "secureContext": true,
+        "usageBytes": 3575689,
+        "quotaBytes": 10740993929,
+        "persisted": true
+      }
+    },
+    {
+      "at": "2026-07-18T11:09:52.716Z",
+      "category": "lifecycle",
+      "action": "prototype_ready",
+      "outcome": "info",
+      "metadata": {
+        "databaseVersion": 1,
+        "secureContext": true
+      }
+    },
+    {
+      "at": "2026-07-18T11:12:58.167Z",
+      "category": "termination",
+      "action": "kill_window_armed",
+      "outcome": "conditional",
+      "metadata": {
+        "runId": "04749835-84b0-462f-a21e-28b46f90ebb5",
+        "windowSeconds": 60
+      }
+    },
+    {
+      "at": "2026-07-18T11:13:48.423Z",
+      "category": "recovery",
+      "action": "kill_window_recovery_verified",
+      "outcome": "pass",
+      "metadata": {
+        "oracleSource": "indexeddb_strict_transaction",
+        "windowSeconds": 60,
+        "expectedCommitted": false,
+        "documentPresent": false,
+        "outboxPresent": false
+      }
+    },
+    {
+      "at": "2026-07-18T11:13:48.498Z",
+      "category": "storage",
+      "action": "storage_observed",
+      "outcome": "info",
+      "metadata": {
+        "secureContext": true,
+        "usageBytes": 3579499,
+        "quotaBytes": 10740997739,
+        "persisted": true
+      }
+    },
+    {
+      "at": "2026-07-18T11:13:48.509Z",
+      "category": "lifecycle",
+      "action": "prototype_ready",
+      "outcome": "info",
+      "metadata": {
+        "databaseVersion": 1,
+        "secureContext": true
+      }
+    },
+    {
+      "at": "2026-07-18T11:13:58.617Z",
+      "category": "durability",
+      "action": "strict_durability_probe",
+      "outcome": "conditional",
+      "metadata": {
+        "optionsAccepted": true,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T11:13:58.644Z",
+      "category": "transaction",
+      "action": "transaction_started",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "atomic-commit",
+        "runId": "c9be7f79-e871-4cf6-81da-10123f682e71",
+        "optionsAccepted": true,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T11:13:58.735Z",
+      "category": "transaction",
+      "action": "document_request_succeeded",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "atomic-commit",
+        "runId": "c9be7f79-e871-4cf6-81da-10123f682e71"
+      }
+    },
+    {
+      "at": "2026-07-18T11:13:58.743Z",
+      "category": "transaction",
+      "action": "outbox_request_succeeded",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "atomic-commit",
+        "runId": "c9be7f79-e871-4cf6-81da-10123f682e71"
+      }
+    },
+    {
+      "at": "2026-07-18T11:13:58.799Z",
+      "category": "transaction",
+      "action": "transaction_complete",
+      "outcome": "pass",
+      "metadata": {
+        "scenario": "atomic-commit",
+        "runId": "c9be7f79-e871-4cf6-81da-10123f682e71",
+        "durationMs": 154.8,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T11:13:58.801Z",
+      "category": "ui",
+      "action": "local_save_acknowledged",
+      "outcome": "pass",
+      "metadata": {
+        "scenario": "atomic-commit",
+        "runId": "c9be7f79-e871-4cf6-81da-10123f682e71"
+      }
+    },
+    {
+      "at": "2026-07-18T11:13:58.849Z",
+      "category": "verification",
+      "action": "atomic_pair_verified",
+      "outcome": "pass",
+      "metadata": {
+        "runId": "c9be7f79-e871-4cf6-81da-10123f682e71",
+        "documentPresent": true,
+        "outboxPresent": true
+      }
+    },
+    {
+      "at": "2026-07-18T11:13:58.874Z",
+      "category": "transaction",
+      "action": "transaction_started",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "injected-abort",
+        "runId": "c8aadc4d-aed0-4bf8-b011-1329ae0ab800",
+        "optionsAccepted": true,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T11:13:58.875Z",
+      "category": "transaction",
+      "action": "document_request_succeeded",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "injected-abort",
+        "runId": "c8aadc4d-aed0-4bf8-b011-1329ae0ab800"
+      }
+    },
+    {
+      "at": "2026-07-18T11:13:58.878Z",
+      "category": "verification",
+      "action": "injected_abort_verified",
+      "outcome": "pass",
+      "metadata": {
+        "errorName": "AbortError",
+        "documentsBefore": 21,
+        "documentsAfter": 21,
+        "outboxBefore": 21,
+        "outboxAfter": 21
+      }
+    },
+    {
+      "at": "2026-07-18T11:13:58.878Z",
+      "category": "transaction",
+      "action": "transaction_started",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "scope-test-7f0ba790-1eee-49da-810d-54ee815823e6",
+        "runId": "161cde0f-7629-477e-8d98-db55a238831a",
+        "optionsAccepted": true,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T11:13:58.887Z",
+      "category": "transaction",
+      "action": "document_request_succeeded",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "scope-test-7f0ba790-1eee-49da-810d-54ee815823e6",
+        "runId": "161cde0f-7629-477e-8d98-db55a238831a"
+      }
+    },
+    {
+      "at": "2026-07-18T11:13:58.888Z",
+      "category": "transaction",
+      "action": "outbox_request_succeeded",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "scope-test-7f0ba790-1eee-49da-810d-54ee815823e6",
+        "runId": "161cde0f-7629-477e-8d98-db55a238831a"
+      }
+    },
+    {
+      "at": "2026-07-18T11:13:58.890Z",
+      "category": "transaction",
+      "action": "transaction_complete",
+      "outcome": "pass",
+      "metadata": {
+        "scenario": "scope-test-7f0ba790-1eee-49da-810d-54ee815823e6",
+        "runId": "161cde0f-7629-477e-8d98-db55a238831a",
+        "durationMs": 11.6,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T11:13:58.890Z",
+      "category": "ui",
+      "action": "local_save_acknowledged",
+      "outcome": "pass",
+      "metadata": {
+        "scenario": "scope-test-7f0ba790-1eee-49da-810d-54ee815823e6",
+        "runId": "161cde0f-7629-477e-8d98-db55a238831a"
+      }
+    },
+    {
+      "at": "2026-07-18T11:13:58.891Z",
+      "category": "transaction",
+      "action": "transaction_started",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "scope-test-7f0ba790-1eee-49da-810d-54ee815823e6",
+        "runId": "ea0ff88c-5722-410c-974a-d1bef146f605",
+        "optionsAccepted": true,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T11:13:58.899Z",
+      "category": "transaction",
+      "action": "document_request_succeeded",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "scope-test-7f0ba790-1eee-49da-810d-54ee815823e6",
+        "runId": "ea0ff88c-5722-410c-974a-d1bef146f605"
+      }
+    },
+    {
+      "at": "2026-07-18T11:13:58.900Z",
+      "category": "transaction",
+      "action": "outbox_request_succeeded",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "scope-test-7f0ba790-1eee-49da-810d-54ee815823e6",
+        "runId": "ea0ff88c-5722-410c-974a-d1bef146f605"
+      }
+    },
+    {
+      "at": "2026-07-18T11:13:58.901Z",
+      "category": "transaction",
+      "action": "transaction_complete",
+      "outcome": "pass",
+      "metadata": {
+        "scenario": "scope-test-7f0ba790-1eee-49da-810d-54ee815823e6",
+        "runId": "ea0ff88c-5722-410c-974a-d1bef146f605",
+        "durationMs": 10.1,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T11:13:58.901Z",
+      "category": "ui",
+      "action": "local_save_acknowledged",
+      "outcome": "pass",
+      "metadata": {
+        "scenario": "scope-test-7f0ba790-1eee-49da-810d-54ee815823e6",
+        "runId": "ea0ff88c-5722-410c-974a-d1bef146f605"
+      }
+    },
+    {
+      "at": "2026-07-18T11:13:58.902Z",
+      "category": "transaction",
+      "action": "transaction_started",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "scope-test-7f0ba790-1eee-49da-810d-54ee815823e6",
+        "runId": "e54bad18-d468-495a-8e34-09b874fb439a",
+        "optionsAccepted": true,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T11:13:58.902Z",
+      "category": "transaction",
+      "action": "document_request_succeeded",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "scope-test-7f0ba790-1eee-49da-810d-54ee815823e6",
+        "runId": "e54bad18-d468-495a-8e34-09b874fb439a"
+      }
+    },
+    {
+      "at": "2026-07-18T11:13:58.905Z",
+      "category": "transaction",
+      "action": "outbox_request_succeeded",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "scope-test-7f0ba790-1eee-49da-810d-54ee815823e6",
+        "runId": "e54bad18-d468-495a-8e34-09b874fb439a"
+      }
+    },
+    {
+      "at": "2026-07-18T11:13:58.906Z",
+      "category": "transaction",
+      "action": "transaction_complete",
+      "outcome": "pass",
+      "metadata": {
+        "scenario": "scope-test-7f0ba790-1eee-49da-810d-54ee815823e6",
+        "runId": "e54bad18-d468-495a-8e34-09b874fb439a",
+        "durationMs": 4,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T11:13:58.906Z",
+      "category": "ui",
+      "action": "local_save_acknowledged",
+      "outcome": "pass",
+      "metadata": {
+        "scenario": "scope-test-7f0ba790-1eee-49da-810d-54ee815823e6",
+        "runId": "e54bad18-d468-495a-8e34-09b874fb439a"
+      }
+    },
+    {
+      "at": "2026-07-18T11:13:58.907Z",
+      "category": "transaction",
+      "action": "transaction_started",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "scope-test-7f0ba790-1eee-49da-810d-54ee815823e6",
+        "runId": "a5205f27-b0ec-4f3b-93f5-cbef86eb289d",
+        "optionsAccepted": true,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T11:13:58.907Z",
+      "category": "transaction",
+      "action": "document_request_succeeded",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "scope-test-7f0ba790-1eee-49da-810d-54ee815823e6",
+        "runId": "a5205f27-b0ec-4f3b-93f5-cbef86eb289d"
+      }
+    },
+    {
+      "at": "2026-07-18T11:13:58.908Z",
+      "category": "transaction",
+      "action": "outbox_request_succeeded",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "scope-test-7f0ba790-1eee-49da-810d-54ee815823e6",
+        "runId": "a5205f27-b0ec-4f3b-93f5-cbef86eb289d"
+      }
+    },
+    {
+      "at": "2026-07-18T11:13:58.909Z",
+      "category": "transaction",
+      "action": "transaction_complete",
+      "outcome": "pass",
+      "metadata": {
+        "scenario": "scope-test-7f0ba790-1eee-49da-810d-54ee815823e6",
+        "runId": "a5205f27-b0ec-4f3b-93f5-cbef86eb289d",
+        "durationMs": 2.1,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T11:13:58.909Z",
+      "category": "ui",
+      "action": "local_save_acknowledged",
+      "outcome": "pass",
+      "metadata": {
+        "scenario": "scope-test-7f0ba790-1eee-49da-810d-54ee815823e6",
+        "runId": "a5205f27-b0ec-4f3b-93f5-cbef86eb289d"
+      }
+    },
+    {
+      "at": "2026-07-18T11:13:58.914Z",
+      "category": "isolation",
+      "action": "four_scope_query_verified",
+      "outcome": "pass",
+      "metadata": {
+        "runPrefix": "scope-test-7f0ba790-1eee-49da-810d-54ee815823e6",
+        "scopeCount": 4
+      }
+    },
+    {
+      "at": "2026-07-18T11:13:58.915Z",
+      "category": "transaction",
+      "action": "transaction_started",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "simulated-quota",
+        "runId": "765f2ce2-a7f8-49e3-b60e-0c438ecb6486",
+        "optionsAccepted": true,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T11:13:58.916Z",
+      "category": "transaction",
+      "action": "document_request_succeeded",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "simulated-quota",
+        "runId": "765f2ce2-a7f8-49e3-b60e-0c438ecb6486"
+      }
+    },
+    {
+      "at": "2026-07-18T11:13:58.917Z",
+      "category": "quota",
+      "action": "simulated_quota_rollback_verified",
+      "outcome": "pass",
+      "metadata": {
+        "simulated": true,
+        "errorName": "QuotaExceededError",
+        "documentsBefore": 25,
+        "documentsAfter": 25,
+        "outboxBefore": 25,
+        "outboxAfter": 25
+      }
+    },
+    {
+      "at": "2026-07-18T11:13:58.917Z",
+      "category": "suite",
+      "action": "automated_checks_complete",
+      "outcome": "pass",
+      "metadata": {
+        "passedCount": 5,
+        "checkCount": 5,
+        "durationMs": 319.9
+      }
+    },
+    {
+      "at": "2026-07-18T11:14:11.149Z",
+      "category": "evidence",
+      "action": "forensic_json_exported",
+      "outcome": "info",
+      "metadata": {
+        "eventCount": 250
+      }
+    },
+    {
+      "at": "2026-07-18T11:20:09.164Z",
+      "category": "storage",
+      "action": "storage_observed",
+      "outcome": "info",
+      "metadata": {
+        "secureContext": true,
+        "usageBytes": 3611831,
+        "quotaBytes": 10741030071,
+        "persisted": true
+      }
+    },
+    {
+      "at": "2026-07-18T11:20:09.178Z",
+      "category": "lifecycle",
+      "action": "prototype_ready",
+      "outcome": "info",
+      "metadata": {
+        "databaseVersion": 1,
+        "secureContext": true
+      }
+    },
+    {
+      "at": "2026-07-18T11:20:17.883Z",
+      "category": "durability",
+      "action": "strict_durability_probe",
+      "outcome": "conditional",
+      "metadata": {
+        "optionsAccepted": true,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T11:20:17.897Z",
+      "category": "transaction",
+      "action": "transaction_started",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "atomic-commit",
+        "runId": "a7c034e8-b690-4bf0-8140-b2d9606158e0",
+        "optionsAccepted": true,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T11:20:17.920Z",
+      "category": "transaction",
+      "action": "document_request_succeeded",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "atomic-commit",
+        "runId": "a7c034e8-b690-4bf0-8140-b2d9606158e0"
+      }
+    },
+    {
+      "at": "2026-07-18T11:20:17.921Z",
+      "category": "transaction",
+      "action": "outbox_request_succeeded",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "atomic-commit",
+        "runId": "a7c034e8-b690-4bf0-8140-b2d9606158e0"
+      }
+    },
+    {
+      "at": "2026-07-18T11:20:17.932Z",
+      "category": "transaction",
+      "action": "transaction_complete",
+      "outcome": "pass",
+      "metadata": {
+        "scenario": "atomic-commit",
+        "runId": "a7c034e8-b690-4bf0-8140-b2d9606158e0",
+        "durationMs": 35.3,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T11:20:17.933Z",
+      "category": "ui",
+      "action": "local_save_acknowledged",
+      "outcome": "pass",
+      "metadata": {
+        "scenario": "atomic-commit",
+        "runId": "a7c034e8-b690-4bf0-8140-b2d9606158e0"
+      }
+    },
+    {
+      "at": "2026-07-18T11:20:17.935Z",
+      "category": "verification",
+      "action": "atomic_pair_verified",
+      "outcome": "pass",
+      "metadata": {
+        "runId": "a7c034e8-b690-4bf0-8140-b2d9606158e0",
+        "documentPresent": true,
+        "outboxPresent": true
+      }
+    },
+    {
+      "at": "2026-07-18T11:20:17.949Z",
+      "category": "transaction",
+      "action": "transaction_started",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "injected-abort",
+        "runId": "5593fb2b-4b18-46fa-9e6d-a12fb71bea7a",
+        "optionsAccepted": true,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T11:20:17.960Z",
+      "category": "transaction",
+      "action": "document_request_succeeded",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "injected-abort",
+        "runId": "5593fb2b-4b18-46fa-9e6d-a12fb71bea7a"
+      }
+    },
+    {
+      "at": "2026-07-18T11:20:17.989Z",
+      "category": "verification",
+      "action": "injected_abort_verified",
+      "outcome": "pass",
+      "metadata": {
+        "errorName": "AbortError",
+        "documentsBefore": 26,
+        "documentsAfter": 26,
+        "outboxBefore": 26,
+        "outboxAfter": 26
+      }
+    },
+    {
+      "at": "2026-07-18T11:20:17.990Z",
+      "category": "transaction",
+      "action": "transaction_started",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "scope-test-b9611021-90ee-4099-9848-1a70e36f4660",
+        "runId": "f49c9f92-bc47-4cad-9aca-35a4248cf8eb",
+        "optionsAccepted": true,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T11:20:18.001Z",
+      "category": "transaction",
+      "action": "document_request_succeeded",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "scope-test-b9611021-90ee-4099-9848-1a70e36f4660",
+        "runId": "f49c9f92-bc47-4cad-9aca-35a4248cf8eb"
+      }
+    },
+    {
+      "at": "2026-07-18T11:20:18.008Z",
+      "category": "transaction",
+      "action": "outbox_request_succeeded",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "scope-test-b9611021-90ee-4099-9848-1a70e36f4660",
+        "runId": "f49c9f92-bc47-4cad-9aca-35a4248cf8eb"
+      }
+    },
+    {
+      "at": "2026-07-18T11:20:18.018Z",
+      "category": "transaction",
+      "action": "transaction_complete",
+      "outcome": "pass",
+      "metadata": {
+        "scenario": "scope-test-b9611021-90ee-4099-9848-1a70e36f4660",
+        "runId": "f49c9f92-bc47-4cad-9aca-35a4248cf8eb",
+        "durationMs": 28.4,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T11:20:18.019Z",
+      "category": "ui",
+      "action": "local_save_acknowledged",
+      "outcome": "pass",
+      "metadata": {
+        "scenario": "scope-test-b9611021-90ee-4099-9848-1a70e36f4660",
+        "runId": "f49c9f92-bc47-4cad-9aca-35a4248cf8eb"
+      }
+    },
+    {
+      "at": "2026-07-18T11:20:18.019Z",
+      "category": "transaction",
+      "action": "transaction_started",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "scope-test-b9611021-90ee-4099-9848-1a70e36f4660",
+        "runId": "c033a9e9-2de2-4382-8af5-4aaca5363f31",
+        "optionsAccepted": true,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T11:20:18.020Z",
+      "category": "transaction",
+      "action": "document_request_succeeded",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "scope-test-b9611021-90ee-4099-9848-1a70e36f4660",
+        "runId": "c033a9e9-2de2-4382-8af5-4aaca5363f31"
+      }
+    },
+    {
+      "at": "2026-07-18T11:20:18.021Z",
+      "category": "transaction",
+      "action": "outbox_request_succeeded",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "scope-test-b9611021-90ee-4099-9848-1a70e36f4660",
+        "runId": "c033a9e9-2de2-4382-8af5-4aaca5363f31"
+      }
+    },
+    {
+      "at": "2026-07-18T11:20:18.022Z",
+      "category": "transaction",
+      "action": "transaction_complete",
+      "outcome": "pass",
+      "metadata": {
+        "scenario": "scope-test-b9611021-90ee-4099-9848-1a70e36f4660",
+        "runId": "c033a9e9-2de2-4382-8af5-4aaca5363f31",
+        "durationMs": 2.2,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T11:20:18.022Z",
+      "category": "ui",
+      "action": "local_save_acknowledged",
+      "outcome": "pass",
+      "metadata": {
+        "scenario": "scope-test-b9611021-90ee-4099-9848-1a70e36f4660",
+        "runId": "c033a9e9-2de2-4382-8af5-4aaca5363f31"
+      }
+    },
+    {
+      "at": "2026-07-18T11:20:18.023Z",
+      "category": "transaction",
+      "action": "transaction_started",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "scope-test-b9611021-90ee-4099-9848-1a70e36f4660",
+        "runId": "99d57b23-cb50-4aff-bff4-636cf6602751",
+        "optionsAccepted": true,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T11:20:18.023Z",
+      "category": "transaction",
+      "action": "document_request_succeeded",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "scope-test-b9611021-90ee-4099-9848-1a70e36f4660",
+        "runId": "99d57b23-cb50-4aff-bff4-636cf6602751"
+      }
+    },
+    {
+      "at": "2026-07-18T11:20:18.024Z",
+      "category": "transaction",
+      "action": "outbox_request_succeeded",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "scope-test-b9611021-90ee-4099-9848-1a70e36f4660",
+        "runId": "99d57b23-cb50-4aff-bff4-636cf6602751"
+      }
+    },
+    {
+      "at": "2026-07-18T11:20:18.025Z",
+      "category": "transaction",
+      "action": "transaction_complete",
+      "outcome": "pass",
+      "metadata": {
+        "scenario": "scope-test-b9611021-90ee-4099-9848-1a70e36f4660",
+        "runId": "99d57b23-cb50-4aff-bff4-636cf6602751",
+        "durationMs": 2.2,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T11:20:18.025Z",
+      "category": "ui",
+      "action": "local_save_acknowledged",
+      "outcome": "pass",
+      "metadata": {
+        "scenario": "scope-test-b9611021-90ee-4099-9848-1a70e36f4660",
+        "runId": "99d57b23-cb50-4aff-bff4-636cf6602751"
+      }
+    },
+    {
+      "at": "2026-07-18T11:20:18.026Z",
+      "category": "transaction",
+      "action": "transaction_started",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "scope-test-b9611021-90ee-4099-9848-1a70e36f4660",
+        "runId": "58661a4a-0ba3-433f-8d0e-5b6a80b1e9ae",
+        "optionsAccepted": true,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T11:20:18.026Z",
+      "category": "transaction",
+      "action": "document_request_succeeded",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "scope-test-b9611021-90ee-4099-9848-1a70e36f4660",
+        "runId": "58661a4a-0ba3-433f-8d0e-5b6a80b1e9ae"
+      }
+    },
+    {
+      "at": "2026-07-18T11:20:18.027Z",
+      "category": "transaction",
+      "action": "outbox_request_succeeded",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "scope-test-b9611021-90ee-4099-9848-1a70e36f4660",
+        "runId": "58661a4a-0ba3-433f-8d0e-5b6a80b1e9ae"
+      }
+    },
+    {
+      "at": "2026-07-18T11:20:18.028Z",
+      "category": "transaction",
+      "action": "transaction_complete",
+      "outcome": "pass",
+      "metadata": {
+        "scenario": "scope-test-b9611021-90ee-4099-9848-1a70e36f4660",
+        "runId": "58661a4a-0ba3-433f-8d0e-5b6a80b1e9ae",
+        "durationMs": 2,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T11:20:18.028Z",
+      "category": "ui",
+      "action": "local_save_acknowledged",
+      "outcome": "pass",
+      "metadata": {
+        "scenario": "scope-test-b9611021-90ee-4099-9848-1a70e36f4660",
+        "runId": "58661a4a-0ba3-433f-8d0e-5b6a80b1e9ae"
+      }
+    },
+    {
+      "at": "2026-07-18T11:20:18.038Z",
+      "category": "isolation",
+      "action": "four_scope_query_verified",
+      "outcome": "pass",
+      "metadata": {
+        "runPrefix": "scope-test-b9611021-90ee-4099-9848-1a70e36f4660",
+        "scopeCount": 4
+      }
+    },
+    {
+      "at": "2026-07-18T11:20:18.039Z",
+      "category": "transaction",
+      "action": "transaction_started",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "simulated-quota",
+        "runId": "90d3a90f-3e38-4566-bf5c-092396f7285e",
+        "optionsAccepted": true,
+        "reportedDurability": "strict"
+      }
+    },
+    {
+      "at": "2026-07-18T11:20:18.040Z",
+      "category": "transaction",
+      "action": "document_request_succeeded",
+      "outcome": "info",
+      "metadata": {
+        "scenario": "simulated-quota",
+        "runId": "90d3a90f-3e38-4566-bf5c-092396f7285e"
+      }
+    },
+    {
+      "at": "2026-07-18T11:20:18.041Z",
+      "category": "quota",
+      "action": "simulated_quota_rollback_verified",
+      "outcome": "pass",
+      "metadata": {
+        "simulated": true,
+        "errorName": "QuotaExceededError",
+        "documentsBefore": 30,
+        "documentsAfter": 30,
+        "outboxBefore": 30,
+        "outboxAfter": 30
+      }
+    },
+    {
+      "at": "2026-07-18T11:20:18.041Z",
+      "category": "suite",
+      "action": "automated_checks_complete",
+      "outcome": "pass",
+      "metadata": {
+        "passedCount": 5,
+        "checkCount": 5,
+        "durationMs": 168.7
+      }
+    }
+  ],
+  "limitations": [
+    "macOS browser evidence does not prove Windows Edge or Chrome behavior",
+    "strict durability is a browser hint and not a no-loss guarantee",
+    "simulated quota failure does not reproduce actual disk pressure or eviction",
+    "scope filtering is not local encryption or cloud authorization"
+  ]
+}
