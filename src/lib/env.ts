@@ -13,21 +13,15 @@ const appUrlSchema = z.object({
   NEXT_PUBLIC_APP_URL: z.string().url(),
 })
 
-const emailJsEnvSchema = z.object({
-  EMAILJS_SERVICE_ID: z.string().min(1),
-  EMAILJS_TEMPLATE_ID: z.string().min(1),
-  EMAILJS_PUBLIC_KEY: z.string().min(1),
-  EMAILJS_PRIVATE_KEY: z.preprocess(
-    (value: unknown): unknown =>
-      typeof value === "string" && value.trim().length === 0 ? undefined : value,
-    z.string().min(1).optional()
-  ),
-  EMAILJS_REPLY_TO_EMAIL: z.preprocess(
+const resendEnvSchema = z.object({
+  RESEND_API_KEY: z.string().min(1),
+  RESEND_FROM_EMAIL: z.string().email(),
+  RESEND_REPLY_TO_EMAIL: z.preprocess(
     (value: unknown): unknown =>
       typeof value === "string" && value.trim().length === 0 ? undefined : value,
     z.string().email().optional()
   ),
-  EMAILJS_TIMEOUT_MS: z.preprocess(
+  RESEND_TIMEOUT_MS: z.preprocess(
     parseIntegerEnvValue,
     z.number().int().min(1000).max(60000).default(10000)
   ),
@@ -92,7 +86,7 @@ export type AdminSupabaseEnv = PublicSupabaseEnv & {
 }
 
 export type AppUrlEnv = z.infer<typeof appUrlSchema>
-export type EmailJsEnv = z.infer<typeof emailJsEnvSchema>
+export type ResendEnv = z.infer<typeof resendEnvSchema>
 export type GeminiEnv = z.infer<typeof geminiEnvSchema>
 export type R2Env = z.infer<typeof r2EnvSchema>
 export type FileUploadPolicyEnv = z.infer<typeof fileUploadPolicySchema>
@@ -238,16 +232,16 @@ export function getAppUrlEnv(): AppUrlEnv {
 }
 
 /**
- * Reads and validates the server-side EmailJS configuration.
+ * Reads and validates the server-side Resend configuration.
  *
- * @returns EmailJS service, template, account keys, reply address, and timeout.
+ * @returns Resend API key, sender, reply address, and timeout.
  * @throws Error when required email-delivery values are missing or invalid.
  */
-export function getEmailJsEnv(): EmailJsEnv {
-  const result = emailJsEnvSchema.safeParse(process.env)
+export function getResendEnv(): ResendEnv {
+  const result = resendEnvSchema.safeParse(process.env)
 
   if (!result.success) {
-    throw new Error(`Invalid EmailJS environment: ${formatEnvError(result.error)}`)
+    throw new Error(`Invalid Resend environment: ${formatEnvError(result.error)}`)
   }
 
   return result.data

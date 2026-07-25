@@ -3,10 +3,10 @@ import { afterEach, describe, expect, it } from "vitest"
 import {
   getAdminSupabaseEnv,
   getAppUrlEnv,
-  getEmailJsEnv,
   getFileUploadPolicyEnv,
   getGeminiEnv,
   getR2Env,
+  getResendEnv,
   getSentryEnv,
 } from "./env"
 
@@ -85,33 +85,40 @@ describe("application URL validation", () => {
   })
 })
 
-describe("EmailJS environment validation", () => {
-  it("defaults the request timeout to ten seconds", () => {
+describe("Resend environment validation", () => {
+  it("drops a blank reply-to and defaults the request timeout", () => {
     setIsolatedEnv({
-      EMAILJS_SERVICE_ID: "service_o0h0qnp",
-      EMAILJS_TEMPLATE_ID: "template_notifications",
-      EMAILJS_PUBLIC_KEY: "public-test-key",
+      RESEND_API_KEY: "re-test-key",
+      RESEND_FROM_EMAIL: "docs@example.com",
+      RESEND_REPLY_TO_EMAIL: "  ",
     })
 
-    expect(getEmailJsEnv()).toEqual({
-      EMAILJS_SERVICE_ID: "service_o0h0qnp",
-      EMAILJS_TEMPLATE_ID: "template_notifications",
-      EMAILJS_PUBLIC_KEY: "public-test-key",
-      EMAILJS_TIMEOUT_MS: 10000,
+    expect(getResendEnv()).toEqual({
+      RESEND_API_KEY: "re-test-key",
+      RESEND_FROM_EMAIL: "docs@example.com",
+      RESEND_TIMEOUT_MS: 10000,
     })
   })
 
+  it("requires a valid sender address", () => {
+    setIsolatedEnv({
+      RESEND_API_KEY: "re-test-key",
+      RESEND_FROM_EMAIL: "not-an-email",
+    })
+
+    expect(() => getResendEnv()).toThrow("RESEND_FROM_EMAIL")
+  })
+
   it.each(["999", "60001", "1.5", "not-a-number"])(
-    "rejects invalid EmailJS timeout %s",
+    "rejects invalid Resend timeout %s",
     (timeoutMs: string) => {
       setIsolatedEnv({
-        EMAILJS_SERVICE_ID: "service_o0h0qnp",
-        EMAILJS_TEMPLATE_ID: "template_notifications",
-        EMAILJS_PUBLIC_KEY: "public-test-key",
-        EMAILJS_TIMEOUT_MS: timeoutMs,
+        RESEND_API_KEY: "re-test-key",
+        RESEND_FROM_EMAIL: "docs@example.com",
+        RESEND_TIMEOUT_MS: timeoutMs,
       })
 
-      expect(() => getEmailJsEnv()).toThrow("EMAILJS_TIMEOUT_MS")
+      expect(() => getResendEnv()).toThrow("RESEND_TIMEOUT_MS")
     }
   )
 })

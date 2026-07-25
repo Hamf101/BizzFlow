@@ -20,13 +20,12 @@ describe("document signing email service", () => {
     process.env = {
       ...originalEnv,
       NEXT_PUBLIC_APP_URL: "https://app.example.com",
-      EMAILJS_SERVICE_ID: "service_o0h0qnp",
-      EMAILJS_TEMPLATE_ID: "template_notifications",
-      EMAILJS_PUBLIC_KEY: "public-test-key",
-      EMAILJS_TIMEOUT_MS: "2500",
+      RESEND_API_KEY: "re-test-key",
+      RESEND_FROM_EMAIL: "docs@example.com",
+      RESEND_TIMEOUT_MS: "2500",
     }
     const fetchMock = vi.fn().mockResolvedValue(
-      new Response("OK", { status: 200 })
+      new Response(JSON.stringify({ id: "email-1" }), { status: 200 })
     )
     vi.stubGlobal("fetch", fetchMock)
     vi.spyOn(console, "info").mockImplementation(() => {})
@@ -45,34 +44,37 @@ describe("document signing email service", () => {
     const body = JSON.parse(String(request.body)) as Record<string, unknown>
 
     expect(fetchMock).toHaveBeenCalledWith(
-      "https://api.emailjs.com/api/v1.0/email/send",
+      "https://api.resend.com/emails",
       expect.objectContaining({
         method: "POST",
+        headers: expect.objectContaining({
+          Authorization: "Bearer re-test-key",
+          "Idempotency-Key": `document-signing/document-1/recipient-1/${createHash("sha256").update("private token", "utf8").digest("hex")}`,
+        }),
         signal: expect.any(AbortSignal),
       })
     )
-    const templateParams = body.template_params as Record<string, unknown>
-
-    expect(templateParams).toMatchObject({
-      to_email: "signer@example.com",
-      delivery_reference: `document-signing/document-1/recipient-1/${createHash("sha256").update("private token", "utf8").digest("hex")}`,
+    expect(body).toMatchObject({
+      from: "docs@example.com",
+      to: ["signer@example.com"],
     })
-    expect(String(templateParams.html)).toContain("North &amp; Co.")
-    expect(String(templateParams.html)).toContain("Ada &lt;Signer&gt;")
-    expect(String(templateParams.html)).toContain(
+    expect(String(body.html)).toContain("North &amp; Co.")
+    expect(String(body.html)).toContain("Ada &lt;Signer&gt;")
+    expect(String(body.html)).toContain(
       "https://app.example.com/sign/private%20token"
     )
-    expect(String(templateParams.html)).toContain("Review document")
-    expect(String(templateParams.html)).toContain("Do not forward this email.")
+    expect(String(body.html)).toContain("Review document")
+    expect(String(body.html)).toContain("Do not forward this email.")
+    expect(String(body.html)).toContain("<!doctype html>")
+    expect(String(body.html)).toContain("Sent securely by BizFlow Docs.")
   })
 
-  it("returns a user-safe error when EmailJS rejects delivery", async () => {
+  it("returns a user-safe error when Resend rejects delivery", async () => {
     process.env = {
       ...originalEnv,
       NEXT_PUBLIC_APP_URL: "https://app.example.com",
-      EMAILJS_SERVICE_ID: "service_o0h0qnp",
-      EMAILJS_TEMPLATE_ID: "template_notifications",
-      EMAILJS_PUBLIC_KEY: "public-test-key",
+      RESEND_API_KEY: "re-test-key",
+      RESEND_FROM_EMAIL: "docs@example.com",
     }
     vi.stubGlobal(
       "fetch",
@@ -92,7 +94,7 @@ describe("document signing email service", () => {
       })
     ).rejects.toMatchObject({
       message:
-        "Unable to send the document email. Check the EmailJS configuration and try again.",
+        "Unable to send the document email. Check the Resend configuration and try again.",
       statusCode: 502,
     } satisfies Partial<DocumentSigningEmailServiceError>)
   })

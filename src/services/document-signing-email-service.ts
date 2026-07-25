@@ -1,13 +1,13 @@
 import { createHash } from "node:crypto"
 
-import { getAppUrlEnv, getEmailJsEnv } from "@/lib/env"
-import { escapeHtml } from "@/services/email/html"
+import { getAppUrlEnv, getResendEnv } from "@/lib/env"
+import { escapeHtml, wrapEmailDocument } from "@/services/email/html"
 import {
-  EmailJsTransportError,
-  sendEmailJsEmail,
-  type EmailJsEmailPayload,
-  type EmailJsTransport,
-} from "@/services/email/emailjs-transport"
+  EmailTransportError,
+  sendResendEmail,
+  type EmailPayload,
+  type EmailTransport,
+} from "@/services/email/resend-transport"
 
 export type SendDocumentSigningEmailInput = {
   documentId: string
@@ -20,7 +20,7 @@ export type SendDocumentSigningEmailInput = {
 }
 
 export type DocumentSigningEmailServiceDeps = {
-  transport?: EmailJsTransport
+  transport?: EmailTransport
 }
 
 /**
@@ -47,7 +47,7 @@ export class DocumentSigningEmailServiceError extends Error {
  *
  * @param input - Document, organization, recipient, and one-time link details.
  * @param deps - Optional email transport dependency for tests.
- * @returns Resolves after EmailJS accepts the email.
+ * @returns Resolves after Resend accepts the email.
  * @throws DocumentSigningEmailServiceError when configuration or delivery fails.
  */
 export async function sendDocumentSigningEmail(
@@ -56,10 +56,10 @@ export async function sendDocumentSigningEmail(
 ): Promise<void> {
   const startedAt = performance.now()
   let signingUrl: string
-  let emailJsEnv: ReturnType<typeof getEmailJsEnv>
+  let resendEnv: ReturnType<typeof getResendEnv>
 
   try {
-    emailJsEnv = getEmailJsEnv()
+    resendEnv = getResendEnv()
     signingUrl = new URL(
       `/sign/${encodeURIComponent(input.token)}`,
       getAppUrlEnv().NEXT_PUBLIC_APP_URL
@@ -72,39 +72,44 @@ export async function sendDocumentSigningEmail(
       failureKind: "invalid_configuration",
     })
     throw new DocumentSigningEmailServiceError(
-      "Document email is not configured. Add the required EMAILJS environment variables.",
+      "Document email is not configured. Add the required RESEND environment variables.",
       500
     )
   }
 
-  const payload: EmailJsEmailPayload = {
+  const subject = `${input.organizationName} sent you ${input.documentTitle}`
+  const payload: EmailPayload = {
     toEmail: input.recipientEmail,
-    subject: `${input.organizationName} sent you ${input.documentTitle}`,
-    html: createSigningEmailHtml(input, signingUrl),
+    subject,
+    html: wrapEmailDocument({
+      subject,
+      contentHtml: createSigningEmailHtml(input, signingUrl),
+    }),
     text: createSigningEmailText(input, signingUrl),
-    ...(emailJsEnv.EMAILJS_REPLY_TO_EMAIL
-      ? { replyTo: emailJsEnv.EMAILJS_REPLY_TO_EMAIL }
+    ...(resendEnv.RESEND_REPLY_TO_EMAIL
+      ? { replyTo: resendEnv.RESEND_REPLY_TO_EMAIL }
       : {}),
   }
 
   try {
-    const transport = deps.transport ?? sendEmailJsEmail
+    const transport = deps.transport ?? sendResendEmail
     const result = await transport(
       {
         deliveryReference: createSigningDeliveryReference(input),
         payload,
       },
-      emailJsEnv
+      resendEnv
     )
 
     console.info("document_signing_email_delivered", {
       documentId: input.documentId,
       recipientId: input.recipientId,
       providerStatus: result.providerStatus,
+      providerMessageId: result.providerMessageId,
       durationMs: Math.round(performance.now() - startedAt),
     })
   } catch (error: unknown) {
-    const transportError = error instanceof EmailJsTransportError ? error : null
+    const transportError = error instanceof EmailTransportError ? error : null
 
     console.error("document_signing_email_delivery_failed", {
       documentId: input.documentId,
@@ -116,7 +121,7 @@ export async function sendDocumentSigningEmail(
 
     if (transportError?.kind === "provider_rejected") {
       throw new DocumentSigningEmailServiceError(
-        "Unable to send the document email. Check the EmailJS configuration and try again.",
+        "Unable to send the document email. Check the Resend configuration and try again.",
         502
       )
     }

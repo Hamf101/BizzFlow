@@ -1,12 +1,12 @@
-import { getAppUrlEnv, getEmailJsEnv } from "@/lib/env"
+import { getAppUrlEnv, getResendEnv } from "@/lib/env"
 import { buildAcceptInvitePath } from "@/lib/auth-redirects"
-import { escapeHtml } from "@/services/email/html"
+import { escapeHtml, wrapEmailDocument } from "@/services/email/html"
 import {
-  EmailJsTransportError,
-  sendEmailJsEmail,
-  type EmailJsEmailPayload,
-  type EmailJsTransport,
-} from "@/services/email/emailjs-transport"
+  EmailTransportError,
+  sendResendEmail,
+  type EmailPayload,
+  type EmailTransport,
+} from "@/services/email/resend-transport"
 
 type SendInviteEmailInput = {
   inviteId: string
@@ -16,7 +16,7 @@ type SendInviteEmailInput = {
 }
 
 export type InviteEmailServiceDeps = {
-  transport?: EmailJsTransport
+  transport?: EmailTransport
 }
 
 /**
@@ -43,7 +43,7 @@ export class InviteEmailServiceError extends Error {
  *
  * @param input - Invite identifiers and recipient details.
  * @param deps - Optional email transport dependency for tests.
- * @returns Resolves once EmailJS accepts the delivery request.
+ * @returns Resolves once Resend accepts the delivery request.
  * @throws InviteEmailServiceError when email configuration or delivery fails.
  */
 export async function sendInviteEmail(
@@ -51,11 +51,11 @@ export async function sendInviteEmail(
   deps: InviteEmailServiceDeps = {}
 ): Promise<void> {
   const startedAt = performance.now()
-  let emailJsEnv: ReturnType<typeof getEmailJsEnv>
+  let resendEnv: ReturnType<typeof getResendEnv>
   let invitationUrl: string
 
   try {
-    emailJsEnv = getEmailJsEnv()
+    resendEnv = getResendEnv()
     const appUrl = getAppUrlEnv().NEXT_PUBLIC_APP_URL
     invitationUrl = new URL(buildAcceptInvitePath(input.token), appUrl).toString()
   } catch {
@@ -65,38 +65,43 @@ export async function sendInviteEmail(
       failureKind: "invalid_configuration",
     })
     throw new InviteEmailServiceError(
-      "Invite email is not configured. Add the required EMAILJS environment variables.",
+      "Invite email is not configured. Add the required RESEND environment variables.",
       500
     )
   }
 
-  const payload: EmailJsEmailPayload = {
+  const subject = `You're invited to ${input.organizationName} on BizFlow Docs`
+  const payload: EmailPayload = {
     toEmail: input.recipientEmail,
-    subject: `You're invited to ${input.organizationName} on BizFlow Docs`,
-    html: createInviteEmailHtml(input.organizationName, invitationUrl),
+    subject,
+    html: wrapEmailDocument({
+      subject,
+      contentHtml: createInviteEmailHtml(input.organizationName, invitationUrl),
+    }),
     text: createInviteEmailText(input.organizationName, invitationUrl),
-    ...(emailJsEnv.EMAILJS_REPLY_TO_EMAIL
-      ? { replyTo: emailJsEnv.EMAILJS_REPLY_TO_EMAIL }
+    ...(resendEnv.RESEND_REPLY_TO_EMAIL
+      ? { replyTo: resendEnv.RESEND_REPLY_TO_EMAIL }
       : {}),
   }
 
   try {
-    const transport = deps.transport ?? sendEmailJsEmail
+    const transport = deps.transport ?? sendResendEmail
     const result = await transport(
       {
         deliveryReference: `organization-invite/${input.inviteId}`,
         payload,
       },
-      emailJsEnv
+      resendEnv
     )
 
     console.info("invite_email_delivered", {
       inviteId: input.inviteId,
       providerStatus: result.providerStatus,
+      providerMessageId: result.providerMessageId,
       durationMs: Math.round(performance.now() - startedAt),
     })
   } catch (error: unknown) {
-    const transportError = error instanceof EmailJsTransportError ? error : null
+    const transportError = error instanceof EmailTransportError ? error : null
 
     console.error("invite_email_delivery_failed", {
       inviteId: input.inviteId,
@@ -107,7 +112,7 @@ export async function sendInviteEmail(
 
     if (transportError?.kind === "provider_rejected") {
       throw new InviteEmailServiceError(
-        "Unable to send the invite email. Check the EmailJS configuration and try again.",
+        "Unable to send the invite email. Check the Resend configuration and try again.",
         502
       )
     }
