@@ -66,6 +66,19 @@ const fileUploadPolicySchema = z.object({
     .transform(parseAllowedMimeTypes),
 })
 
+const sentryEnvSchema = z.object({
+  SENTRY_DSN: z.string().url(),
+  SENTRY_ENVIRONMENT: z.string().min(1).default("development"),
+  SENTRY_TRACES_SAMPLE_RATE: z.preprocess(
+    parseNumberEnvValue,
+    z.number().min(0).max(1).default(0.1)
+  ),
+  SENTRY_PROFILES_SAMPLE_RATE: z.preprocess(
+    parseNumberEnvValue,
+    z.number().min(0).max(1).default(0)
+  ),
+})
+
 type PublicSupabaseInput = z.infer<typeof publicSupabaseSchema>
 type AdminSupabaseInput = z.infer<typeof adminSupabaseSchema>
 
@@ -83,6 +96,7 @@ export type EmailJsEnv = z.infer<typeof emailJsEnvSchema>
 export type GeminiEnv = z.infer<typeof geminiEnvSchema>
 export type R2Env = z.infer<typeof r2EnvSchema>
 export type FileUploadPolicyEnv = z.infer<typeof fileUploadPolicySchema>
+export type SentryEnv = z.infer<typeof sentryEnvSchema>
 
 function parseIntegerEnvValue(value: unknown): unknown {
   if (typeof value !== "string") {
@@ -96,6 +110,24 @@ function parseIntegerEnvValue(value: unknown): unknown {
   }
 
   if (!/^-?\d+$/.test(normalizedValue)) {
+    return Number.NaN
+  }
+
+  return Number(normalizedValue)
+}
+
+function parseNumberEnvValue(value: unknown): unknown {
+  if (typeof value !== "string") {
+    return value
+  }
+
+  const normalizedValue = value.trim()
+
+  if (normalizedValue.length === 0) {
+    return undefined
+  }
+
+  if (!/^-?\d+(\.\d+)?$/.test(normalizedValue)) {
     return Number.NaN
   }
 
@@ -266,6 +298,32 @@ export function getFileUploadPolicyEnv(): FileUploadPolicyEnv {
 
   if (!result.success) {
     throw new Error(`Invalid file upload policy environment: ${formatEnvError(result.error)}`)
+  }
+
+  return result.data
+}
+
+/**
+ * Reads and validates the optional Sentry monitoring configuration.
+ *
+ * Monitoring is opt-in: when no DSN is set the app runs without Sentry, so
+ * this getter returns `null` instead of throwing — SDK initialization has no
+ * caller positioned to catch a configuration error.
+ *
+ * @returns Validated Sentry settings, or null when no DSN is configured.
+ * @throws Error when a DSN is set but the configuration is invalid.
+ */
+export function getSentryEnv(): SentryEnv | null {
+  const configuredDsn = process.env.SENTRY_DSN
+
+  if (typeof configuredDsn !== "string" || configuredDsn.trim().length === 0) {
+    return null
+  }
+
+  const result = sentryEnvSchema.safeParse(process.env)
+
+  if (!result.success) {
+    throw new Error(`Invalid Sentry environment: ${formatEnvError(result.error)}`)
   }
 
   return result.data

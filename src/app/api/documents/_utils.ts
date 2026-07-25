@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 
 import { AuthenticationError } from "@/lib/auth"
+import { captureUnexpectedError } from "@/lib/observability"
 import { RequestSecurityError } from "@/lib/request-security"
 import { DocumentServiceError } from "@/services/document-service"
 
@@ -139,5 +140,6 @@ export function createDocumentRouteErrorResponse(
     routeName,
     reason: error instanceof Error ? error.message : "Unknown route error",
   })
+  captureUnexpectedError(error, { routeName })
   return NextResponse.json({ error: "Document request failed." }, { status: 500 })
 }

@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto"
 
+import { captureUnexpectedError } from "@/lib/observability"
 import {
   canPerformOrganizationAction,
   isOrganizationRole,
@@ -82,6 +83,16 @@ export async function runSubmissionOperation<T>(
       organizationId: identifiers.organizationId,
       submissionId: identifiers.submissionId,
     })
+
+    if (serviceError.statusCode >= 500) {
+      captureUnexpectedError(error, {
+        operationName,
+        actorUserId: identifiers.actorUserId,
+        organizationId: identifiers.organizationId,
+        submissionId: identifiers.submissionId,
+      })
+    }
+
     throw serviceError
   }
 }

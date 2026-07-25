@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/nextjs"
 import Link from "next/link"
 import { redirect } from "next/navigation"
 import type { ReactElement, ReactNode } from "react"
@@ -7,6 +8,7 @@ import { DashboardNavigation } from "@/components/navigation/dashboard-navigatio
 import { ThemeToggle } from "@/components/theme/theme-toggle"
 import { Button } from "@/components/ui/button"
 import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
+import { captureUnexpectedError } from "@/lib/observability"
 import { createClient } from "@/lib/supabase/server"
 
 export const dynamic = "force-dynamic"
@@ -25,12 +27,18 @@ export default async function DashboardLayout({
   children: ReactNode
 }>): Promise<ReactElement> {
   try {
-    await getAuthenticatedUser()
+    const user = await getAuthenticatedUser()
+    Sentry.setUser({ id: user.id })
   } catch (error: unknown) {
     if (error instanceof AuthenticationError) {
       redirect("/login")
     }
 
+    console.error("dashboard_layout_configuration_failed", {
+      reason:
+        error instanceof Error ? error.message : "Unknown configuration error",
+    })
+    captureUnexpectedError(error, { boundary: "dashboard_layout" })
     redirect("/login?error=Supabase%20environment%20is%20not%20configured.")
   }
 

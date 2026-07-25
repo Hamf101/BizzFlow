@@ -7,6 +7,7 @@ import {
   getFileUploadPolicyEnv,
   getGeminiEnv,
   getR2Env,
+  getSentryEnv,
 } from "./env"
 
 const originalEnv = { ...process.env }
@@ -111,6 +112,46 @@ describe("EmailJS environment validation", () => {
       })
 
       expect(() => getEmailJsEnv()).toThrow("EMAILJS_TIMEOUT_MS")
+    }
+  )
+})
+
+describe("Sentry environment validation", () => {
+  it("returns null when no DSN is configured", () => {
+    setIsolatedEnv({ SENTRY_TRACES_SAMPLE_RATE: "0.5" })
+
+    expect(getSentryEnv()).toBeNull()
+  })
+
+  it("treats a blank DSN as unconfigured", () => {
+    setIsolatedEnv({ SENTRY_DSN: "   " })
+
+    expect(getSentryEnv()).toBeNull()
+  })
+
+  it("applies defaults and parses fractional sample rates", () => {
+    setIsolatedEnv({
+      SENTRY_DSN: "https://key@o0.ingest.sentry.io/1",
+      SENTRY_TRACES_SAMPLE_RATE: "0.25",
+    })
+
+    expect(getSentryEnv()).toEqual({
+      SENTRY_DSN: "https://key@o0.ingest.sentry.io/1",
+      SENTRY_ENVIRONMENT: "development",
+      SENTRY_TRACES_SAMPLE_RATE: 0.25,
+      SENTRY_PROFILES_SAMPLE_RATE: 0,
+    })
+  })
+
+  it.each(["1.5", "-0.1", "not-a-number"])(
+    "rejects invalid traces sample rate %s",
+    (sampleRate: string) => {
+      setIsolatedEnv({
+        SENTRY_DSN: "https://key@o0.ingest.sentry.io/1",
+        SENTRY_TRACES_SAMPLE_RATE: sampleRate,
+      })
+
+      expect(() => getSentryEnv()).toThrow("SENTRY_TRACES_SAMPLE_RATE")
     }
   )
 })

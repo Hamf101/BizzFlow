@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 
 import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
+import { captureUnexpectedError } from "@/lib/observability"
 import {
   readTrustedJsonObject,
   RequestSecurityError,
@@ -59,6 +60,7 @@ export async function POST(
     console.error("document_open_route_failed", {
       reason: error instanceof Error ? error.message : "Unknown route error",
     })
+    captureUnexpectedError(error, { routeName: "documents_opened" })
     return NextResponse.json(
       { error: "Unable to record document open." },
       { status: 500 }

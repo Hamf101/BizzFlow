@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto"
 
+import { captureUnexpectedError } from "@/lib/observability"
 import {
   canPerformOrganizationAction,
   isOrganizationRole,
@@ -113,6 +114,7 @@ export async function runDocumentOperation<T>(
       reason: error instanceof Error ? error.message : "Unknown service error",
       ...identifiers,
     })
+    captureUnexpectedError(error, { operationName, ...identifiers })
     throw new DocumentServiceError("Document service failed.", 500)
   }
 }

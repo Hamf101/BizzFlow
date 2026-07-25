@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto"
 
 import { ZodError } from "zod"
 
+import { captureUnexpectedError } from "@/lib/observability"
 import {
   canPerformOrganizationAction,
   isOrganizationRole,
@@ -345,6 +346,7 @@ export async function runTemplateOperation<T>(
       reason: error instanceof Error ? error.message : "Unknown service error",
       ...identifiers,
     })
+    captureUnexpectedError(error, { operationName, ...identifiers })
     throw new TemplateServiceError("Template service failed.", 500)
   }
 }

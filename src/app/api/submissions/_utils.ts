@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 
 import { AuthenticationError } from "@/lib/auth"
+import { captureUnexpectedError } from "@/lib/observability"
 import { RequestSecurityError } from "@/lib/request-security"
 import { SubmissionStorageServiceError } from "@/services/submission-storage-service"
 import { SubmissionServiceError } from "@/services/submission-service"
@@ -82,6 +83,7 @@ export function createSubmissionRouteErrorResponse(
     reason: error instanceof Error ? error.message : "Unknown route error",
     routeName,
   })
+  captureUnexpectedError(error, { routeName })
   return NextResponse.json(
     { error: "Submission request failed." },
     { status: 500 }

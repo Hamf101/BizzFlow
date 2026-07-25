@@ -1,3 +1,5 @@
+import { captureUnexpectedError } from "@/lib/observability"
+
 type LogValue = string | number | boolean | null | undefined
 
 type SupabaseErrorLike = {
@@ -105,14 +107,21 @@ export async function runSigningOperation<T>(
             "Unable to complete the document signing request.",
             500
           )
+    const log =
+      normalizedError.statusCode >= 500 ? console.error : console.warn
 
-    console.error("document_signing_operation_failed", {
+    log("document_signing_operation_failed", {
       operation,
       ...context,
       statusCode: normalizedError.statusCode,
       reason: normalizedError.message,
       durationMs: Math.round(performance.now() - startedAt),
     })
+
+    if (normalizedError.statusCode >= 500) {
+      captureUnexpectedError(error, { operation, ...context })
+    }
+
     throw normalizedError
   }
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 
 import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
+import { captureUnexpectedError } from "@/lib/observability"
 import {
   createDocumentDownloadUrl,
   DocumentServiceError,
@@ -133,6 +134,10 @@ export async function GET(
     console.error("generated_document_pdf_route_failed", {
       documentId: requestedDocumentId,
       errorName: error instanceof Error ? error.name : "UnknownError",
+    })
+    captureUnexpectedError(error, {
+      routeName: "documents_pdf",
+      documentId: requestedDocumentId,
     })
     return NextResponse.json(
       { error: "Unable to download generated document PDF." },

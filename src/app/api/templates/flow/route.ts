@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 
 import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
+import { captureUnexpectedError } from "@/lib/observability"
 import {
   readTrustedJsonObject,
   RequestSecurityError,
@@ -84,6 +85,7 @@ function createTemplateFlowErrorResponse(error: unknown): Response {
   console.error("template_flow_route_failed", {
     reason: error instanceof Error ? error.message : "Unknown route error",
   })
+  captureUnexpectedError(error, { routeName: "templates_flow" })
   return NextResponse.json(
     { error: "Unable to complete the Flow request." },
     { status: 500 }

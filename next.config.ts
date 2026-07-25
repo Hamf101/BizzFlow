@@ -1,3 +1,4 @@
+import { withSentryConfig } from "@sentry/nextjs"
 import type { NextConfig } from "next"
 
 const isProduction = process.env.NODE_ENV === "production"
@@ -61,4 +62,17 @@ const nextConfig: NextConfig = {
   },
 }
 
-export default nextConfig
+export default withSentryConfig(nextConfig, {
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+  silent: true,
+  telemetry: false,
+  // Browser events post to same-origin /monitoring, so the strict CSP
+  // connect-src above needs no Sentry ingest origin.
+  tunnelRoute: "/monitoring",
+  disableLogger: true,
+  // Sourcemap upload only runs on builds that hold an auth token (release
+  // CI); local and CI check builds stay network-free.
+  sourcemaps: { disable: !process.env.SENTRY_AUTH_TOKEN },
+})

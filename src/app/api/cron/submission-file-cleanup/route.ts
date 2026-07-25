@@ -2,6 +2,7 @@ import { timingSafeEqual } from "node:crypto"
 
 import { NextResponse } from "next/server"
 
+import { captureUnexpectedError } from "@/lib/observability"
 import { cleanupExpiredSubmissionFileObjects } from "@/services/submission-service"
 
 /**
@@ -39,6 +40,7 @@ export async function GET(request: Request): Promise<Response> {
       durationMs: Date.now() - startedAt,
       reason: error instanceof Error ? error.name : "Unknown cleanup error",
     })
+    captureUnexpectedError(error, { routeName: "cron_submission_file_cleanup" })
     return createNoStoreResponse(
       { error: "Submission file cleanup failed." },
       500

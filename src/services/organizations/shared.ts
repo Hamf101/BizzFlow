@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto"
 
+import { captureUnexpectedError } from "@/lib/observability"
 import { isOrganizationRole, type OrganizationRole } from "@/lib/permissions"
 import { recordAuditLog } from "@/services/audit-service"
 import type {
@@ -74,6 +75,7 @@ export async function runOrganizationOperation<T>(
       reason: error instanceof Error ? error.message : "Unknown service error",
       ...identifiers,
     })
+    captureUnexpectedError(error, { operationName, ...identifiers })
     throw new OrganizationServiceError("Organization service failed.", 500)
   }
 }
