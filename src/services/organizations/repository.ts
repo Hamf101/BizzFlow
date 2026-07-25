@@ -18,6 +18,7 @@ import {
 } from "@/services/organizations/shared"
 import type {
   Organization,
+  OrganizationContext,
   OrganizationInvite,
   OrganizationMembership,
 } from "@/types/organization"
@@ -152,24 +153,21 @@ export async function createOwnerMembership(
 }
 
 /**
- * Loads the user's oldest active membership.
+ * Loads the user's oldest active membership with its organization in one
+ * database round trip.
  *
  * @param client - Trusted Supabase client.
  * @param userId - User identifier.
- * @returns Active membership, or null when none exists.
+ * @returns Organization context, or null when the user has no membership.
  */
-export async function getFirstActiveMembership(
+export async function getCurrentMembershipContext(
   client: OrganizationServiceClient,
   userId: string
-): Promise<OrganizationMembership | null> {
-  const { data, error } = await client
-    .from("organization_memberships")
-    .select("id,org_id,user_id,role,status,created_at,updated_at")
-    .eq("user_id", userId)
-    .eq("status", "active")
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle()
+): Promise<OrganizationContext | null> {
+  const { data, error } = await client.rpc(
+    "get_current_organization_context",
+    { target_user_id: userId }
+  )
 
   if (error) {
     throw createSupabaseServiceError(
@@ -178,7 +176,31 @@ export async function getFirstActiveMembership(
     )
   }
 
-  return data ? mapMembership(data as MembershipRow) : null
+  const row = data?.[0]
+
+  if (!row) {
+    return null
+  }
+
+  return {
+    membership: mapMembership({
+      id: row.membership_id,
+      org_id: row.org_id,
+      user_id: row.user_id,
+      role: row.role,
+      status: row.status,
+      created_at: row.membership_created_at,
+      updated_at: row.membership_updated_at,
+    }),
+    organization: mapOrganization({
+      id: row.org_id,
+      name: row.organization_name,
+      slug: row.organization_slug,
+      created_by: row.organization_created_by,
+      created_at: row.organization_created_at,
+      updated_at: row.organization_updated_at,
+    }),
+  }
 }
 
 /**

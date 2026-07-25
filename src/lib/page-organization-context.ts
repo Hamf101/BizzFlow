@@ -1,6 +1,16 @@
+import { cache } from "react"
+
 import { getPageErrorMessage } from "@/lib/page-errors"
 import { getCurrentOrganizationContext } from "@/services/organization-service"
 import type { OrganizationContext } from "@/types/organization"
+
+// Keyed by the primitive userId (an input object would defeat cache()'s
+// identity-based memoization), so a layout and its page share one lookup
+// per request instead of repeating the round trip.
+const getCachedOrganizationContext = cache(
+  async (userId: string): Promise<OrganizationContext | null> =>
+    getCurrentOrganizationContext(userId)
+)
 
 type PageOrganizationContextLogDetails = Readonly<
   Record<string, string | number | boolean | null | undefined>
@@ -28,7 +38,7 @@ export async function loadPageOrganizationContext(
 ): Promise<PageOrganizationContextResult> {
   try {
     return {
-      context: await getCurrentOrganizationContext(input.userId),
+      context: await getCachedOrganizationContext(input.userId),
       errorMessage: null,
     }
   } catch (error: unknown) {

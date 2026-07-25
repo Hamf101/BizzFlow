@@ -142,6 +142,78 @@ describe("organization service setup failures", () => {
   })
 })
 
+describe("organization context lookup", () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it("returns the mapped context from one rpc round trip", async () => {
+    vi.spyOn(console, "info").mockImplementation(() => {})
+    const client = new QueuedAdminClient(
+      {},
+      {
+        get_current_organization_context: [
+          {
+            data: [
+              {
+                membership_id: OWNER_MEMBERSHIP_ID,
+                org_id: ORGANIZATION_ID,
+                user_id: OWNER_ID,
+                role: "owner_admin",
+                status: "active",
+                membership_created_at: "2026-07-01T00:00:00.000Z",
+                membership_updated_at: "2026-07-01T00:00:00.000Z",
+                organization_name: "Acme",
+                organization_slug: "acme",
+                organization_created_by: OWNER_ID,
+                organization_created_at: "2026-06-01T00:00:00.000Z",
+                organization_updated_at: "2026-06-01T00:00:00.000Z",
+              },
+            ],
+            error: null,
+          },
+        ],
+      }
+    )
+
+    const context = await getCurrentOrganizationContext(OWNER_ID, {
+      client: client as never,
+    })
+
+    expect(context?.organization).toMatchObject({
+      id: ORGANIZATION_ID,
+      name: "Acme",
+      slug: "acme",
+    })
+    expect(context?.membership).toMatchObject({
+      id: OWNER_MEMBERSHIP_ID,
+      organizationId: ORGANIZATION_ID,
+      role: "owner_admin",
+    })
+    expect(client.rpcCalls).toEqual([
+      {
+        functionName: "get_current_organization_context",
+        args: { target_user_id: OWNER_ID },
+      },
+    ])
+    expect(client.fromCalls).toEqual([])
+  })
+
+  it("returns null when the user has no active membership", async () => {
+    vi.spyOn(console, "info").mockImplementation(() => {})
+    const client = new QueuedAdminClient(
+      {},
+      { get_current_organization_context: [{ data: [], error: null }] }
+    )
+
+    const context = await getCurrentOrganizationContext(OWNER_ID, {
+      client: client as never,
+    })
+
+    expect(context).toBeNull()
+  })
+})
+
 describe("organization service atomic mutations", () => {
   afterEach(() => {
     vi.restoreAllMocks()

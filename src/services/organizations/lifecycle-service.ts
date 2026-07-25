@@ -1,12 +1,14 @@
 import { createAdminClient } from "@/lib/supabase/admin"
-import type { CreateOrganizationInput } from "@/services/organizations/contracts"
+import type {
+  CreateOrganizationInput,
+  OrganizationMutationDeps,
+} from "@/services/organizations/contracts"
 import {
   createOrganizationRecord,
   createOwnerMembership,
   deleteOrganizationRecord,
   ensureProfile,
-  getFirstActiveMembership,
-  getOrganizationById,
+  getCurrentMembershipContext,
 } from "@/services/organizations/repository"
 import {
   createOrganizationSlug,
@@ -71,30 +73,21 @@ export async function createOrganization(
  * Loads the first active organization context for an authenticated user.
  *
  * @param userId - Authenticated Supabase user id.
+ * @param deps - Optional injected client for tests.
  * @returns Current organization context, or null when the user has none.
  * @throws OrganizationServiceError when Supabase reads fail.
  */
 export async function getCurrentOrganizationContext(
-  userId: string
+  userId: string,
+  deps: OrganizationMutationDeps = {}
 ): Promise<OrganizationContext | null> {
   return runOrganizationOperation(
     "get_current_organization_context",
     { userId },
     async (): Promise<OrganizationContext | null> => {
-      const client = createAdminClient()
-      const membership = await getFirstActiveMembership(client, userId)
+      const client = deps.client ?? createAdminClient()
 
-      if (!membership) {
-        return null
-      }
-
-      return {
-        organization: await getOrganizationById(
-          client,
-          membership.organizationId
-        ),
-        membership,
-      }
+      return getCurrentMembershipContext(client, userId)
     }
   )
 }

@@ -87,6 +87,21 @@ type InviteRow = Record<string, unknown> & {
   updated_at: string
 }
 
+export type CurrentOrganizationContextRow = {
+  membership_id: string
+  org_id: string
+  user_id: string
+  role: DatabaseOrganizationRole
+  status: DatabaseMembershipStatus
+  membership_created_at: string
+  membership_updated_at: string
+  organization_name: string
+  organization_slug: string
+  organization_created_by: string | null
+  organization_created_at: string
+  organization_updated_at: string
+}
+
 type AuditLogRow = Record<string, unknown> & {
   id: string
   org_id: string
@@ -344,6 +359,12 @@ export type AdminDatabase = {
           target_user_email: string
         }
         Returns: string
+      }
+      get_current_organization_context: {
+        Args: {
+          target_user_id: string
+        }
+        Returns: CurrentOrganizationContextRow[]
       }
       archive_document: {
         Args: {
