@@ -106,6 +106,7 @@ Expected variable groups:
 - Resend: server-only `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, optional `RESEND_REPLY_TO_EMAIL`, and `RESEND_TIMEOUT_MS` for invitations and document signing links.
 - Gemini: server-only `GEMINI_API_KEY`, optional `GEMINI_MODEL`, and `GEMINI_TIMEOUT_MS` for stateless, schema-validated Flow document editing.
 - SMS: Termii credentials, with Africa's Talking placeholders reserved for a later provider switch.
+- Rate limiting: `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN`; when unset, limits are disabled (local dev, CI).
 - Observability: Sentry DSN and PostHog key or internal analytics settings.
 
 Do not commit real secrets. Keep local secrets in `.env.local` and deployment secrets in the target hosting provider.

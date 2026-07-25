@@ -8,6 +8,8 @@ import {
   getR2Env,
   getResendEnv,
   getSentryEnv,
+  getUpstashRedisEnv,
+  isUpstashRedisEnvConfigured,
 } from "./env"
 
 const originalEnv = { ...process.env }
@@ -121,6 +123,38 @@ describe("Resend environment validation", () => {
       expect(() => getResendEnv()).toThrow("RESEND_TIMEOUT_MS")
     }
   )
+})
+
+describe("Upstash Redis environment validation", () => {
+  it("reports unconfigured when the URL or token is missing", () => {
+    setIsolatedEnv({ UPSTASH_REDIS_REST_URL: "https://example.upstash.io" })
+
+    expect(isUpstashRedisEnvConfigured()).toBe(false)
+    expect(() => getUpstashRedisEnv()).toThrow("UPSTASH_REDIS_REST_TOKEN")
+  })
+
+  it("accepts a complete REST configuration", () => {
+    setIsolatedEnv({
+      UPSTASH_REDIS_REST_URL: "https://example.upstash.io",
+      UPSTASH_REDIS_REST_TOKEN: "upstash-test-token",
+    })
+
+    expect(isUpstashRedisEnvConfigured()).toBe(true)
+    expect(getUpstashRedisEnv()).toEqual({
+      UPSTASH_REDIS_REST_URL: "https://example.upstash.io",
+      UPSTASH_REDIS_REST_TOKEN: "upstash-test-token",
+    })
+  })
+
+  it("rejects a non-URL REST endpoint", () => {
+    setIsolatedEnv({
+      UPSTASH_REDIS_REST_URL: "not-a-url",
+      UPSTASH_REDIS_REST_TOKEN: "upstash-test-token",
+    })
+
+    expect(isUpstashRedisEnvConfigured()).toBe(false)
+    expect(() => getUpstashRedisEnv()).toThrow("UPSTASH_REDIS_REST_URL")
+  })
 })
 
 describe("Sentry environment validation", () => {

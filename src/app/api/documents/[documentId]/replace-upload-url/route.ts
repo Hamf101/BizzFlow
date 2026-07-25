@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 
 import { getAuthenticatedUser } from "@/lib/auth"
+import { checkRateLimit } from "@/lib/rate-limit"
 import { readTrustedJsonObject } from "@/lib/request-security"
 import {
   createDocumentReplacementUploadUrl,
@@ -31,6 +32,7 @@ export async function POST(
 ): Promise<Response> {
   try {
     const user = await getAuthenticatedUser()
+    await checkRateLimit("upload_initiation", user.id)
     const body = await readTrustedJsonObject(request)
     const { documentId } = await context.params
     const input: CreateDocumentReplacementUploadUrlInput = {

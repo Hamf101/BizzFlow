@@ -1,5 +1,6 @@
 import { CheckCircle2, LockKeyhole, Send } from "lucide-react"
 import type { Metadata } from "next"
+import { headers } from "next/headers"
 import type { ReactElement } from "react"
 
 import { BizFlowWordmark } from "@/components/brand/bizflow-mark"
@@ -18,7 +19,9 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { getClientIp } from "@/lib/client-ip"
 import { formatMediumDateTime } from "@/lib/date-format"
+import { checkRateLimit, RateLimitError } from "@/lib/rate-limit"
 import {
   SigningRecipientStatusBadge,
   SigningWorkflowBadge,
@@ -61,23 +64,29 @@ export default async function PublicSigningPage({
   searchParams: PublicSigningSearchParams
 }): Promise<ReactElement> {
   const [{ token }, query] = await Promise.all([params, searchParams])
-  const viewResult = await getPublicDocumentSigningView({ token })
-    .then((view: PublicDocumentSigningView) => ({
-      view,
-      errorMessage: null as string | null,
-    }))
-    .catch((error: unknown) => {
-      const errorMessage =
-        error instanceof Error
-          ? error.message
-          : "This signing link is invalid or no longer available."
+  const viewResult = (await isSigningViewAllowed())
+    ? await getPublicDocumentSigningView({ token })
+        .then((view: PublicDocumentSigningView) => ({
+          view,
+          errorMessage: null as string | null,
+        }))
+        .catch((error: unknown) => {
+          const errorMessage =
+            error instanceof Error
+              ? error.message
+              : "This signing link is invalid or no longer available."
 
-      // The private token and token-derived path must never enter logs.
-      console.warn("public_document_signing_view_failed", {
-        reason: errorMessage,
-      })
-      return { view: null, errorMessage }
-    })
+          // The private token and token-derived path must never enter logs.
+          console.warn("public_document_signing_view_failed", {
+            reason: errorMessage,
+          })
+          return { view: null, errorMessage }
+        })
+    : {
+        view: null,
+        errorMessage:
+          "Too many requests from your network. Wait a moment and reload.",
+      }
 
   if (!viewResult.view) {
     return (
@@ -160,6 +169,19 @@ export default async function PublicSigningPage({
       </div>
     </PublicSigningShell>
   )
+}
+
+async function isSigningViewAllowed(): Promise<boolean> {
+  try {
+    await checkRateLimit("public_signing", getClientIp(await headers()))
+    return true
+  } catch (error: unknown) {
+    if (error instanceof RateLimitError) {
+      return false
+    }
+
+    throw error
+  }
 }
 
 function PublicDocumentForm({

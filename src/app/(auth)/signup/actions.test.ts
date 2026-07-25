@@ -14,6 +14,14 @@ vi.mock("next/navigation", () => ({
   redirect: redirectMock,
 }))
 
+vi.mock("next/headers", () => ({
+  headers: vi.fn(async () => new Headers({ "x-real-ip": "203.0.113.7" })),
+}))
+
+vi.mock("@/lib/action-rate-limit", () => ({
+  enforceActionRateLimit: vi.fn().mockResolvedValue(undefined),
+}))
+
 vi.mock("@/services/organization-service", () => ({
   getInvitePreview: vi.fn(),
 }))

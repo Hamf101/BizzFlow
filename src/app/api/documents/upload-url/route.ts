@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 
 import { getAuthenticatedUser } from "@/lib/auth"
+import { checkRateLimit } from "@/lib/rate-limit"
 import { readTrustedJsonObject } from "@/lib/request-security"
 import {
   createDocumentUploadUrl,
@@ -23,6 +24,7 @@ import {
 export async function POST(request: Request): Promise<Response> {
   try {
     const user = await getAuthenticatedUser()
+    await checkRateLimit("upload_initiation", user.id)
     const body = await readTrustedJsonObject(request)
     const input: CreateDocumentUploadUrlInput = {
       actorUserId: user.id,

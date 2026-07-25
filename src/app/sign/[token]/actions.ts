@@ -1,5 +1,6 @@
 "use server"
 
+import { headers } from "next/headers"
 import { redirect } from "next/navigation"
 
 import {
@@ -7,6 +8,8 @@ import {
   parseGeneratedDocumentAnswerBaseline,
   parseGeneratedDocumentAnswers,
 } from "@/components/documents/generated-document-form-data"
+import { enforceActionRateLimit } from "@/lib/action-rate-limit"
+import { getClientIp } from "@/lib/client-ip"
 import { buildRedirect, getFormString } from "@/lib/form-utils"
 import {
   completePublicDocumentSigning,
@@ -30,6 +33,13 @@ export async function completePublicSigningAction(
   const signingPath = getSigningPath(token)
   const startedAt = Date.now()
   let workflowStatus: GeneratedDocumentWorkflowStatus = "awaiting_signatures"
+
+  await enforceActionRateLimit({
+    bucket: "public_signing",
+    key: getClientIp(await headers()),
+    redirectPath: signingPath,
+    message: "Too many requests. Wait a moment and try again.",
+  })
 
   try {
     const view = await completePublicDocumentSigning({

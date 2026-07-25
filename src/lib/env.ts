@@ -60,6 +60,11 @@ const fileUploadPolicySchema = z.object({
     .transform(parseAllowedMimeTypes),
 })
 
+const upstashRedisEnvSchema = z.object({
+  UPSTASH_REDIS_REST_URL: z.string().url(),
+  UPSTASH_REDIS_REST_TOKEN: z.string().min(1),
+})
+
 const sentryEnvSchema = z.object({
   SENTRY_DSN: z.string().url(),
   SENTRY_ENVIRONMENT: z.string().min(1).default("development"),
@@ -91,6 +96,7 @@ export type GeminiEnv = z.infer<typeof geminiEnvSchema>
 export type R2Env = z.infer<typeof r2EnvSchema>
 export type FileUploadPolicyEnv = z.infer<typeof fileUploadPolicySchema>
 export type SentryEnv = z.infer<typeof sentryEnvSchema>
+export type UpstashRedisEnv = z.infer<typeof upstashRedisEnvSchema>
 
 function parseIntegerEnvValue(value: unknown): unknown {
   if (typeof value !== "string") {
@@ -295,6 +301,40 @@ export function getFileUploadPolicyEnv(): FileUploadPolicyEnv {
   }
 
   return result.data
+}
+
+/**
+ * Reads and validates the Upstash Redis REST configuration.
+ *
+ * @returns Upstash REST URL and token for distributed rate limiting.
+ * @throws Error when the URL or token is missing or invalid.
+ */
+export function getUpstashRedisEnv(): UpstashRedisEnv {
+  const result = upstashRedisEnvSchema.safeParse(process.env)
+
+  if (!result.success) {
+    throw new Error(`Invalid Upstash Redis environment: ${formatEnvError(result.error)}`)
+  }
+
+  return result.data
+}
+
+/**
+ * Checks whether the Upstash Redis environment is configured.
+ *
+ * Rate limiting is opt-in per environment: when unconfigured the limiter
+ * allows every request, so local dev, CI, and tests need no Redis.
+ *
+ * @returns True when the REST URL and token are both set and valid.
+ */
+export function isUpstashRedisEnvConfigured(): boolean {
+  const result = upstashRedisEnvSchema.safeParse(process.env)
+
+  if (!result.success) {
+    return false
+  }
+
+  return true
 }
 
 /**

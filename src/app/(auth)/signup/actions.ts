@@ -1,12 +1,15 @@
 "use server"
 
+import { headers } from "next/headers"
 import { redirect } from "next/navigation"
 import { z } from "zod"
 
+import { enforceActionRateLimit } from "@/lib/action-rate-limit"
 import {
   buildAcceptInvitePath,
   buildAuthCallbackUrl,
 } from "@/lib/auth-redirects"
+import { getClientIp } from "@/lib/client-ip"
 import { getAppUrlEnv } from "@/lib/env"
 import { buildRedirect, getFormString } from "@/lib/form-utils"
 import { createClient } from "@/lib/supabase/server"
@@ -40,6 +43,13 @@ export async function signupAction(formData: FormData): Promise<void> {
       })
     )
   }
+
+  await enforceActionRateLimit({
+    bucket: "auth",
+    key: getClientIp(await headers()),
+    redirectPath: signupPath,
+    message: "Too many sign-up attempts. Try again in a few minutes.",
+  })
 
   let supabase: Awaited<ReturnType<typeof createClient>>
   let appUrl: ReturnType<typeof getAppUrlEnv>

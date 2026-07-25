@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 
 import { AuthenticationError } from "@/lib/auth"
 import { captureUnexpectedError } from "@/lib/observability"
+import { RateLimitError } from "@/lib/rate-limit"
 import { RequestSecurityError } from "@/lib/request-security"
 import { SubmissionStorageServiceError } from "@/services/submission-storage-service"
 import { SubmissionServiceError } from "@/services/submission-service"
@@ -65,6 +66,21 @@ export function createSubmissionRouteErrorResponse(
 ): Response {
   if (error instanceof AuthenticationError) {
     return logSubmissionRouteRejection(error.message, 401, routeName)
+  }
+
+  if (error instanceof RateLimitError) {
+    console.warn("submission_route_rejected", {
+      reason: error.message,
+      routeName,
+      statusCode: error.statusCode,
+    })
+    return NextResponse.json(
+      { error: error.message },
+      {
+        status: error.statusCode,
+        headers: { "Retry-After": String(error.retryAfterSeconds) },
+      }
+    )
   }
 
   if (
