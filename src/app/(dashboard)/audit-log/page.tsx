@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation"
-import type { ReactElement } from "react"
+import type { ReactElement, ReactNode } from "react"
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
@@ -16,7 +16,7 @@ import { loadAuthenticatedPageUser } from "@/lib/page-auth"
 import { getPageErrorMessage } from "@/lib/page-errors"
 import { loadPageOrganizationContext } from "@/lib/page-organization-context"
 import { canPerformOrganizationAction } from "@/lib/permissions"
-import { listAuditLogs } from "@/services/audit-service"
+import { listAuditLogs, verifyAuditLogChain } from "@/services/audit-service"
 import type { AuditLogEntry } from "@/types/audit"
 
 export default async function AuditLogPage(): Promise<ReactElement> {
@@ -85,6 +85,23 @@ export default async function AuditLogPage(): Promise<ReactElement> {
     )
   }
 
+  const verification = canPerformOrganizationAction(
+    context.membership.role,
+    "audit_logs:verify"
+  )
+    ? await verifyAuditLogChain({
+        actorUserId: user.id,
+        organizationId: context.organization.id,
+      }).catch((error: unknown) => {
+        console.warn("audit_log_chain_verification_failed", {
+          userId: user.id,
+          organizationId: context.organization.id,
+          reason: getPageErrorMessage(error, "Verification unavailable."),
+        })
+        return null
+      })
+    : null
+
   return (
     <AuditLogShell>
       <section className="flex flex-col gap-2">
@@ -94,12 +111,30 @@ export default async function AuditLogPage(): Promise<ReactElement> {
         </p>
       </section>
 
+      {verification && !verification.valid ? (
+        <Alert variant="destructive">
+          <AlertTitle>Audit chain integrity check failed</AlertTitle>
+          <AlertDescription>
+            The tamper-evidence check failed at entry #
+            {verification.firstInvalidSeq ?? "unknown"} (
+            {verification.failureReason ?? "unknown reason"}). Investigate
+            before trusting this history.
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
       <Card>
         <CardHeader>
           <CardTitle>Recent events</CardTitle>
           <CardDescription>
             Server-side audit events from organization and people workflows.
           </CardDescription>
+          {verification?.valid ? (
+            <Badge variant="outline">
+              Integrity verified · {verification.checkedCount}{" "}
+              {verification.checkedCount === 1 ? "entry" : "entries"}
+            </Badge>
+          ) : null}
         </CardHeader>
         <CardContent>
           {entries.length === 0 ? (
@@ -125,7 +160,7 @@ export default async function AuditLogPage(): Promise<ReactElement> {
 function AuditLogShell({
   children,
 }: {
-  children: ReactElement | ReactElement[]
+  children: ReactNode
 }): ReactElement {
   return <div className="flex flex-col gap-6">{children}</div>
 }

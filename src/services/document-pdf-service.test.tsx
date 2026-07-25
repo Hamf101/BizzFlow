@@ -68,7 +68,10 @@ describe("document PDF service", () => {
     expect(buffer.length).toBeGreaterThan(1_000)
   })
 
-  it("renders every planned page through the production pdf-lib adapter", async () => {
+  // Multi-page renders embed the full DejaVu fonts and legitimately exceed
+  // vitest's 5s default on loaded machines; the generous timeout keeps the
+  // suite deterministic without hiding real hangs.
+  it("renders every planned page through the production pdf-lib adapter", { timeout: 30_000 }, async () => {
     const input = createPdfInput({
       longBody: true,
       repeatHeader: true,
@@ -82,7 +85,7 @@ describe("document PDF service", () => {
     expect(renderedDocument.getPageCount()).toBe(plannedPageCount)
   })
 
-  it("renders byte-identical PDFs for the same persisted metadata timestamp", async () => {
+  it("renders byte-identical PDFs for the same persisted metadata timestamp", { timeout: 30_000 }, async () => {
     const input = {
       ...createPdfInput({ repeatHeader: true, repeatFooter: true }),
       metadataTimestamp: "2026-07-18T03:14:15.926Z"

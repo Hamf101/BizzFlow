@@ -177,9 +177,12 @@ describe("authenticated Supabase RLS harness configuration", () => {
         expect.objectContaining({ name: "submission_activity_events" }),
       ])
     )
-    expect(SERVICE_ROLE_RPC_CHECKS.map((rpc) => rpc.name)).toEqual(
-      AUTHENTICATED_SUBMISSION_RPC_NAMES
-    )
+    expect(SERVICE_ROLE_RPC_CHECKS.map((rpc) => rpc.name)).toEqual([
+      ...AUTHENTICATED_SUBMISSION_RPC_NAMES,
+      // Audit-chain verification is service-role-only and probed the same
+      // way (null args reach the function's 22023 validation guard).
+      "verify_audit_log_chain",
+    ])
     expect(SERVICE_ROLE_RPC_CHECKS.every((rpc) =>
       Object.values(rpc.args).every((value) => value === null)
     )).toBe(true)

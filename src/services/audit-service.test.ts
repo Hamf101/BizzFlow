@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { createAdminClient } from "@/lib/supabase/admin"
-import { listAuditLogs } from "@/services/audit-service"
+import { listAuditLogs, verifyAuditLogChain } from "@/services/audit-service"
 import type { AuditLogAction } from "@/types/audit"
 
 vi.mock("@/lib/supabase/admin", () => ({
@@ -63,10 +63,32 @@ class QueuedQuery implements PromiseLike<FakeResult> {
 }
 
 class QueuedAdminClient {
-  constructor(private readonly results: Record<string, FakeResult[]>) {}
+  readonly rpcCalls: Array<{
+    functionName: string
+    args: Record<string, unknown>
+  }> = []
+
+  constructor(
+    private readonly results: Record<string, FakeResult[]>,
+    private readonly rpcResults: Record<string, FakeResult[]> = {}
+  ) {}
 
   from(tableName: string): QueuedQuery {
     return new QueuedQuery(this, tableName)
+  }
+
+  async rpc(
+    functionName: string,
+    args: Record<string, unknown>
+  ): Promise<FakeResult> {
+    this.rpcCalls.push({ functionName, args })
+    const result = this.rpcResults[functionName]?.shift()
+
+    if (!result) {
+      throw new Error(`Missing queued RPC result for ${functionName}.`)
+    }
+
+    return result
   }
 
   takeResult(tableName: string): FakeResult {
@@ -89,6 +111,9 @@ function createAuditRow(action: AuditLogAction, index: number): Record<string, u
     target_type: "submission",
     target_id: "submission-1",
     metadata: { revision: index + 1 },
+    seq: index + 1,
+    prev_hash: index === 0 ? null : "c".repeat(64),
+    entry_hash: "d".repeat(64),
     created_at: `2026-07-18T12:${String(index).padStart(2, "0")}:00.000Z`,
   }
 }
@@ -122,6 +147,11 @@ describe("list audit logs", () => {
 
     expect(entries.map((entry) => entry.action)).toEqual(SUBMISSION_AUDIT_ACTIONS)
     expect(entries.every((entry) => entry.targetType === "submission")).toBe(true)
+    expect(entries[0]).toMatchObject({
+      seq: 1,
+      prevHash: null,
+      entryHash: "d".repeat(64),
+    })
   })
 
   it("rejects unknown audit actions returned by the database", async () => {
@@ -150,5 +180,87 @@ describe("list audit logs", () => {
       message: "Database returned an unsupported audit action.",
       statusCode: 500,
     })
+  })
+})
+
+describe("verify audit log chain", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it("returns the mapped verdict for an owner", async () => {
+    const client = new QueuedAdminClient(
+      {
+        organization_memberships: [
+          { data: { role: "owner_admin" }, error: null },
+        ],
+      },
+      {
+        verify_audit_log_chain: [
+          {
+            data: [
+              {
+                valid: false,
+                checked_count: 41,
+                first_invalid_seq: 42,
+                failure_reason: "entry_hash_mismatch",
+              },
+            ],
+            error: null,
+          },
+        ],
+      }
+    )
+    vi.mocked(createAdminClient).mockReturnValue(client as never)
+
+    const verification = await verifyAuditLogChain({
+      actorUserId: "owner-1",
+      organizationId: "org-1",
+    })
+
+    expect(verification).toEqual({
+      valid: false,
+      checkedCount: 41,
+      firstInvalidSeq: 42,
+      failureReason: "entry_hash_mismatch",
+    })
+    expect(client.rpcCalls).toEqual([
+      {
+        functionName: "verify_audit_log_chain",
+        args: { target_org_id: "org-1" },
+      },
+    ])
+  })
+
+  it("rejects managers, who hold view but not verify", async () => {
+    const client = new QueuedAdminClient({
+      organization_memberships: [{ data: { role: "manager" }, error: null }],
+    })
+    vi.mocked(createAdminClient).mockReturnValue(client as never)
+
+    await expect(
+      verifyAuditLogChain({ actorUserId: "manager-1", organizationId: "org-1" })
+    ).rejects.toMatchObject({ statusCode: 403 })
+    expect(client.rpcCalls).toEqual([])
+  })
+
+  it("surfaces a 500 when the database check errors", async () => {
+    const client = new QueuedAdminClient(
+      {
+        organization_memberships: [
+          { data: { role: "owner_admin" }, error: null },
+        ],
+      },
+      {
+        verify_audit_log_chain: [
+          { data: null, error: new Error("verification unavailable") },
+        ],
+      }
+    )
+    vi.mocked(createAdminClient).mockReturnValue(client as never)
+
+    await expect(
+      verifyAuditLogChain({ actorUserId: "owner-1", organizationId: "org-1" })
+    ).rejects.toMatchObject({ statusCode: 500 })
   })
 })

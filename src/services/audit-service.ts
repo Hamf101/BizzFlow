@@ -7,6 +7,7 @@ import {
 import {
   AUDIT_LOG_ACTIONS,
   AUDIT_LOG_TARGET_TYPES,
+  type AuditChainVerification,
   type AuditLogAction,
   type AuditLogEntry,
   type AuditLogTargetType,
@@ -14,6 +15,9 @@ import {
 } from "@/types/audit"
 
 type AdminClient = ReturnType<typeof createAdminClient>
+
+const AUDIT_LOG_COLUMNS =
+  "id,org_id,actor_user_id,action,target_type,target_id,metadata,seq,prev_hash,entry_hash,created_at"
 
 type AuditLogRow = {
   id: string
@@ -23,6 +27,9 @@ type AuditLogRow = {
   target_type: string
   target_id: string | null
   metadata: Record<string, unknown>
+  seq: number
+  prev_hash: string | null
+  entry_hash: string
   created_at: string
 }
 
@@ -88,7 +95,7 @@ export async function recordAuditLog(
         target_id: input.targetId ?? null,
         metadata: input.metadata ?? {},
       })
-      .select("id,org_id,actor_user_id,action,target_type,target_id,metadata,created_at")
+      .select(AUDIT_LOG_COLUMNS)
       .single()
 
     if (error || !data) {
@@ -150,9 +157,11 @@ export async function listAuditLogs(
 
   const { data, error } = await client
     .from("audit_logs")
-    .select("id,org_id,actor_user_id,action,target_type,target_id,metadata,created_at")
+    .select(AUDIT_LOG_COLUMNS)
     .eq("org_id", input.organizationId)
-    .order("created_at", { ascending: false })
+    // seq is the chain's total order per organization; created_at ties are
+    // real (same-transaction rows) and would make this nondeterministic.
+    .order("seq", { ascending: false })
     .limit(input.limit ?? 50)
 
   if (error || !data) {
@@ -160,6 +169,57 @@ export async function listAuditLogs(
   }
 
   return (data as AuditLogRow[]).map(mapAuditLog)
+}
+
+type VerifyAuditLogChainInput = {
+  actorUserId: string
+  organizationId: string
+}
+
+/**
+ * Verifies the organization's audit hash chain server-side.
+ *
+ * Recomputation happens inside the database function, so no cross-language
+ * jsonb canonicalization is ever relied on. Reads bypass RLS via the admin
+ * client, so permission is enforced here like every other audit read.
+ *
+ * @param input - Actor and organization identifiers.
+ * @returns Chain verification verdict with the first invalid sequence, if any.
+ * @throws AuditServiceError when the actor lacks permission or the check fails.
+ */
+export async function verifyAuditLogChain(
+  input: VerifyAuditLogChainInput
+): Promise<AuditChainVerification> {
+  const client = createAdminClient()
+  const actorRole = await getOrganizationRole(
+    client,
+    input.organizationId,
+    input.actorUserId
+  )
+
+  if (
+    !actorRole ||
+    !canPerformOrganizationAction(actorRole, "audit_logs:verify")
+  ) {
+    throw new AuditServiceError("You cannot verify audit logs.", 403)
+  }
+
+  const { data, error } = await client.rpc("verify_audit_log_chain", {
+    target_org_id: input.organizationId,
+  })
+
+  const verdict = data?.[0]
+
+  if (error || !verdict) {
+    throw new AuditServiceError("Unable to verify the audit log chain.", 500)
+  }
+
+  return {
+    valid: verdict.valid,
+    checkedCount: verdict.checked_count,
+    firstInvalidSeq: verdict.first_invalid_seq,
+    failureReason: verdict.failure_reason,
+  }
 }
 
 async function getOrganizationRole(
@@ -201,6 +261,9 @@ function mapAuditLog(row: AuditLogRow): AuditLogEntry {
     targetType: parseAuditLogTargetType(row.target_type),
     targetId: row.target_id,
     metadata: parseAuditMetadata(row.metadata),
+    seq: row.seq,
+    prevHash: row.prev_hash,
+    entryHash: row.entry_hash,
     createdAt: row.created_at,
   }
 }

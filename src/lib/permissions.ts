@@ -12,6 +12,9 @@ export const ORGANIZATION_PERMISSION_ACTIONS = [
   "members:invite",
   "members:update_role",
   "audit_logs:view",
+  // Chain verification is an incident-response signal for the tenant owner;
+  // owner_admin receives it through the full-array grant below.
+  "audit_logs:verify",
   "templates:view",
   "templates:manage",
   "documents:view",

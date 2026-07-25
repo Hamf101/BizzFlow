@@ -110,7 +110,19 @@ type AuditLogRow = Record<string, unknown> & {
   target_type: string
   target_id: string | null
   metadata: Record<string, unknown>
+  // Chain columns are computed by the audit_logs_chain_link trigger;
+  // client-supplied values are always overwritten.
+  seq: number
+  prev_hash: string | null
+  entry_hash: string
   created_at: string
+}
+
+export type AuditChainVerificationRow = {
+  valid: boolean
+  checked_count: number
+  first_invalid_seq: number | null
+  failure_reason: string | null
 }
 
 type AdminDocumentRow = DocumentRow & {
@@ -365,6 +377,12 @@ export type AdminDatabase = {
           target_user_id: string
         }
         Returns: CurrentOrganizationContextRow[]
+      }
+      verify_audit_log_chain: {
+        Args: {
+          target_org_id: string
+        }
+        Returns: AuditChainVerificationRow[]
       }
       archive_document: {
         Args: {

@@ -30,7 +30,7 @@ export const TABLE_CHECKS = [
   },
   {
     name: "audit_logs",
-    select: "id,org_id,actor_user_id,action,target_type,target_id,metadata,created_at",
+    select: "id,org_id,actor_user_id,action,target_type,target_id,metadata,seq,prev_hash,entry_hash,created_at",
   },
   {
     name: "folders",
@@ -210,6 +210,12 @@ export const SERVICE_ROLE_RPC_CHECKS = [
       target_comment_id: null,
       target_body: null,
       target_actor_user_id: null,
+    },
+  },
+  {
+    name: "verify_audit_log_chain",
+    args: {
+      target_org_id: null,
     },
   },
 ]

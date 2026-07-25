@@ -18,6 +18,7 @@ export type MigrationFileName =
   | "20260723172350_template_flow_messages.sql"
   | "20260723181119_freeform_template_content_v2.sql"
   | "20260725190000_organization_context_function.sql"
+  | "20260725200000_audit_log_hash_chain.sql"
 
 export const directWriteActions = ["insert", "update", "delete"] as const
 
