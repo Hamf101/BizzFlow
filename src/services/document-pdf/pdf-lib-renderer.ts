@@ -6,7 +6,7 @@ import {
   rgb,
   type PDFFont,
   type PDFImage,
-  type RGB,
+  type RGB
 } from "pdf-lib"
 
 import type { TemplateBlock } from "@/types/template"
@@ -19,31 +19,23 @@ import {
   PAGE_TOP_MARGIN,
   PDF_BOLD_FONT_PATH,
   PDF_CONTENT_WIDTH,
-  PDF_REGULAR_FONT_PATH,
-  REPEATED_HEADER_GAP,
+  PDF_REGULAR_FONT_PATH
 } from "./constants"
-import { estimateBlocksHeight } from "./planner"
 import { embedPdfLibImage, fitPdfImage } from "./pdf-lib-images"
-import {
-  drawPdfLibSigner,
-  drawPdfLibSigningIntro,
-} from "./pdf-lib-signing"
+import { drawPdfLibSigner, drawPdfLibSigningIntro } from "./pdf-lib-signing"
 import {
   drawWrappedPdfText,
   hexToPdfColor,
   normalizeStandardFontText,
-  wrapPdfText,
+  wrapPdfText
 } from "./pdf-lib-text"
 import type { PdfLibRenderContext } from "./pdf-lib-types"
-import {
-  formatFieldValue,
-  normalizeDrawingDataUrl,
-} from "./shared"
+import { formatFieldValue, normalizeDrawingDataUrl } from "./shared"
 import type {
   NormalizedPdfInput,
   PdfFieldBlock,
   PdfFlowItem,
-  PdfPagePlan,
+  PdfPagePlan
 } from "./types"
 
 let bundledPdfFontsPromise: Promise<{
@@ -72,9 +64,7 @@ export async function renderPdfLibDocument(
   const boldFont = await document.embedFont(fontBytes.bold)
 
   document.setTitle(input.title)
-  document.setAuthor(
-    input.content.branding.organizationName || "BizFlow Docs"
-  )
+  document.setAuthor(input.content.branding.organizationName || "BizFlow Docs")
   document.setSubject("Generated business document")
   document.setCreator("BizFlow Docs")
   document.setProducer("BizFlow Docs")
@@ -90,7 +80,7 @@ export async function renderPdfLibDocument(
       imageCache,
       page,
       regularFont,
-      workflowStatus: input.workflowStatus,
+      workflowStatus: input.workflowStatus
     }
 
     await drawPdfLibPage(
@@ -122,7 +112,7 @@ async function loadBundledPdfFonts(): Promise<{
 }> {
   bundledPdfFontsPromise ??= Promise.all([
     readFile(PDF_REGULAR_FONT_PATH),
-    readFile(PDF_BOLD_FONT_PATH),
+    readFile(PDF_BOLD_FONT_PATH)
   ]).then(([regular, bold]: [Buffer, Buffer]) => ({ bold, regular }))
 
   return bundledPdfFontsPromise
@@ -137,16 +127,6 @@ async function drawPdfLibPage(
 ): Promise<void> {
   let cursorY = A4_HEIGHT - PAGE_TOP_MARGIN
 
-  if (context.content.repeat.header) {
-    cursorY = await drawPdfLibBranding(context, cursorY)
-    cursorY = await drawPdfLibBlocks(
-      context.content.sections.header.blocks,
-      context,
-      cursorY
-    )
-    cursorY -= REPEATED_HEADER_GAP
-  }
-
   for (const item of plan.items) {
     cursorY = await drawPdfLibFlowItem(item, context, cursorY, title)
   }
@@ -159,34 +139,17 @@ async function drawPdfLibFooter(
   pageNumber: number,
   totalPages: number
 ): Promise<void> {
-  const footerHeight = context.content.repeat.footer
-    ? estimateBlocksHeight(
-        context.content.sections.footer.blocks,
-        context.answers
-      )
-    : 0
-  const footerTop = PAGE_BOTTOM_MARGIN + 17 + footerHeight
+  const footerTop = PAGE_BOTTOM_MARGIN + 17
 
   context.page.drawLine({
     start: { x: PAGE_HORIZONTAL_MARGIN, y: footerTop + 3 },
     end: { x: A4_WIDTH - PAGE_HORIZONTAL_MARGIN, y: footerTop + 3 },
     color: rgb(0.9, 0.91, 0.93),
-    thickness: 0.8,
+    thickness: 0.8
   })
 
-  if (context.content.repeat.footer) {
-    await drawPdfLibBlocks(
-      context.content.sections.footer.blocks,
-      context,
-      footerTop
-    )
-  }
-
   const pageLabel = `Page ${pageNumber} of ${totalPages}`
-  const safeLabel = normalizeStandardFontText(
-    pageLabel,
-    context.regularFont
-  )
+  const safeLabel = normalizeStandardFontText(pageLabel, context.regularFont)
   const labelWidth = context.regularFont.widthOfTextAtSize(safeLabel, 7)
 
   context.page.drawText(safeLabel, {
@@ -194,22 +157,8 @@ async function drawPdfLibFooter(
     y: PAGE_BOTTOM_MARGIN,
     color: rgb(0.42, 0.45, 0.5),
     font: context.regularFont,
-    size: 7,
+    size: 7
   })
-}
-
-async function drawPdfLibBlocks(
-  blocks: TemplateBlock[],
-  context: PdfLibRenderContext,
-  topY: number
-): Promise<number> {
-  let cursorY = topY
-
-  for (const block of blocks) {
-    cursorY = await drawPdfLibBlock({ kind: "block", block }, context, cursorY)
-  }
-
-  return cursorY
 }
 
 async function drawPdfLibFlowItem(
@@ -255,40 +204,73 @@ async function drawPdfLibBranding(
     return topY - 8
   }
 
-  let textX = PAGE_HORIZONTAL_MARGIN
+  const availableWidth = A4_WIDTH - PAGE_HORIZONTAL_MARGIN * 2
+  let logoHeight = 0
+  let logoWidth = 0
+  let logoX = PAGE_HORIZONTAL_MARGIN
 
   if (branding.logoDataUrl) {
     const logo = await embedPdfLibImage(context, branding.logoDataUrl)
-    const size = fitPdfImage(logo, 70, 34)
+    const size = fitPdfImage(
+      logo,
+      availableWidth * (branding.logoWidthPercent / 100),
+      34
+    )
+    logoHeight = size.height
+    logoWidth = size.width
+    logoX =
+      branding.logoAlignment === "center"
+        ? PAGE_HORIZONTAL_MARGIN + (availableWidth - size.width) / 2
+        : branding.logoAlignment === "right"
+          ? A4_WIDTH - PAGE_HORIZONTAL_MARGIN - size.width
+          : PAGE_HORIZONTAL_MARGIN
     context.page.drawImage(logo, {
-      x: PAGE_HORIZONTAL_MARGIN,
+      x: logoX,
       y: topY - size.height,
       height: size.height,
-      width: size.width,
+      width: size.width
     })
-    textX += size.width + 10
   }
 
   if (branding.organizationName) {
+    const sideBySide =
+      branding.logoDataUrl !== null && branding.logoAlignment === "left"
+    const textX = sideBySide ? logoX + logoWidth + 10 : PAGE_HORIZONTAL_MARGIN
+    const textWidth = sideBySide
+      ? A4_WIDTH - PAGE_HORIZONTAL_MARGIN - textX
+      : availableWidth
     const lines = wrapPdfText(
       branding.organizationName,
       context.boldFont,
       12,
-      A4_WIDTH - PAGE_HORIZONTAL_MARGIN - textX
+      textWidth
     )
+    const firstLineY = sideBySide ? topY - 14 : topY - logoHeight - 14
 
     lines.forEach((line: string, index: number): void => {
+      const lineWidth = context.boldFont.widthOfTextAtSize(line, 12)
+      const alignedTextX =
+        branding.logoAlignment === "center" && !sideBySide
+          ? PAGE_HORIZONTAL_MARGIN + (availableWidth - lineWidth) / 2
+          : branding.logoAlignment === "right" && !sideBySide
+            ? A4_WIDTH - PAGE_HORIZONTAL_MARGIN - lineWidth
+            : textX
+
       context.page.drawText(line, {
-        x: textX,
-        y: topY - 14 - index * 16,
+        x: alignedTextX,
+        y: firstLineY - index * 16,
         color: hexToPdfColor(branding.primaryColor),
         font: context.boldFont,
-        size: 12,
+        size: 12
       })
     })
+
+    if (!sideBySide) {
+      return topY - logoHeight - lines.length * 16 - 8
+    }
   }
 
-  return topY - 46
+  return topY - Math.max(46, logoHeight + 8)
 }
 
 async function drawPdfLibBlock(
@@ -297,9 +279,7 @@ async function drawPdfLibBlock(
   topY: number
 ): Promise<number> {
   const { block } = item
-  const primaryColor = hexToPdfColor(
-    context.content.branding.primaryColor
-  )
+  const primaryColor = hexToPdfColor(context.content.branding.primaryColor)
 
   switch (block.type) {
     case "heading": {
@@ -348,7 +328,7 @@ async function drawPdfLibBlock(
         start: { x: PAGE_HORIZONTAL_MARGIN, y: topY - 6 },
         end: { x: A4_WIDTH - PAGE_HORIZONTAL_MARGIN, y: topY - 6 },
         color: rgb(0.82, 0.84, 0.87),
-        thickness: 0.8,
+        thickness: 0.8
       })
       return topY - 20
     case "file_field":
@@ -415,7 +395,7 @@ async function drawPdfLibContentImage(
     x: imageX,
     y: topY - size.height,
     height: size.height,
-    width: size.width,
+    width: size.width
   })
 
   let cursorY = topY - size.height - 4
@@ -448,20 +428,11 @@ function drawPdfLibTable(
   const columnWidth = PDF_CONTENT_WIDTH / columnCount
   let cursorY = topY
 
-  const drawRow = (
-    cells: string[],
-    font: PDFFont,
-    fillColor?: RGB
-  ): void => {
+  const drawRow = (cells: string[], font: PDFFont, fillColor?: RGB): void => {
     const wrappedCells = Array.from(
       { length: columnCount },
       (_value: unknown, index: number): string[] =>
-        wrapPdfText(
-          cells[index] ?? "",
-          font,
-          9,
-          columnWidth - 10
-        )
+        wrapPdfText(cells[index] ?? "", font, 9, columnWidth - 10)
     )
     const rowHeight =
       Math.max(
@@ -480,7 +451,7 @@ function drawPdfLibTable(
         height: rowHeight,
         borderColor: rgb(0.61, 0.64, 0.69),
         borderWidth: 0.7,
-        color: fillColor,
+        color: fillColor
       })
 
       lines.forEach((line: string, lineIndex: number): void => {
@@ -489,7 +460,7 @@ function drawPdfLibTable(
           y: cursorY - 5 - 9 - lineIndex * 12,
           color: rgb(0.07, 0.09, 0.13),
           font,
-          size: 9,
+          size: 9
         })
       })
     })
@@ -540,13 +511,12 @@ async function drawPdfLibField(
       x: PAGE_HORIZONTAL_MARGIN,
       y: cursorY - size.height,
       height: size.height,
-      width: size.width,
+      width: size.width
     })
     cursorY -= Math.max(45, size.height)
   } else {
     const answer =
-      (block.type === "signature_field" ||
-        block.type === "initials_field") &&
+      (block.type === "signature_field" || block.type === "initials_field") &&
       context.hasSigners
         ? "Captured per signer in signing record below"
         : (item.answerOverride ??
@@ -570,7 +540,7 @@ async function drawPdfLibField(
     start: { x: PAGE_HORIZONTAL_MARGIN, y: cursorY },
     end: { x: A4_WIDTH - PAGE_HORIZONTAL_MARGIN, y: cursorY },
     color: rgb(0.61, 0.64, 0.69),
-    thickness: 0.7,
+    thickness: 0.7
   })
   cursorY -= 3
 

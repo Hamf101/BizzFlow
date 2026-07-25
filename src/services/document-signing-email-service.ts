@@ -1,13 +1,13 @@
 import { createHash } from "node:crypto"
 
-import { getAppUrlEnv, getResendEnv } from "@/lib/env"
+import { getAppUrlEnv, getEmailJsEnv } from "@/lib/env"
 import { escapeHtml } from "@/services/email/html"
 import {
-  ResendTransportError,
-  sendResendEmail,
-  type ResendEmailPayload,
-  type ResendTransport,
-} from "@/services/email/resend-transport"
+  EmailJsTransportError,
+  sendEmailJsEmail,
+  type EmailJsEmailPayload,
+  type EmailJsTransport,
+} from "@/services/email/emailjs-transport"
 
 export type SendDocumentSigningEmailInput = {
   documentId: string
@@ -20,7 +20,7 @@ export type SendDocumentSigningEmailInput = {
 }
 
 export type DocumentSigningEmailServiceDeps = {
-  transport?: ResendTransport
+  transport?: EmailJsTransport
 }
 
 /**
@@ -47,7 +47,7 @@ export class DocumentSigningEmailServiceError extends Error {
  *
  * @param input - Document, organization, recipient, and one-time link details.
  * @param deps - Optional email transport dependency for tests.
- * @returns Resolves after Resend accepts the email.
+ * @returns Resolves after EmailJS accepts the email.
  * @throws DocumentSigningEmailServiceError when configuration or delivery fails.
  */
 export async function sendDocumentSigningEmail(
@@ -56,10 +56,10 @@ export async function sendDocumentSigningEmail(
 ): Promise<void> {
   const startedAt = performance.now()
   let signingUrl: string
-  let resendEnv: ReturnType<typeof getResendEnv>
+  let emailJsEnv: ReturnType<typeof getEmailJsEnv>
 
   try {
-    resendEnv = getResendEnv()
+    emailJsEnv = getEmailJsEnv()
     signingUrl = new URL(
       `/sign/${encodeURIComponent(input.token)}`,
       getAppUrlEnv().NEXT_PUBLIC_APP_URL
@@ -72,40 +72,39 @@ export async function sendDocumentSigningEmail(
       failureKind: "invalid_configuration",
     })
     throw new DocumentSigningEmailServiceError(
-      "Document email is not configured. Add RESEND_API_KEY and RESEND_FROM_EMAIL.",
+      "Document email is not configured. Add the required EMAILJS environment variables.",
       500
     )
   }
 
-  const payload: ResendEmailPayload = {
-    from: resendEnv.RESEND_FROM_EMAIL,
-    to: [input.recipientEmail],
+  const payload: EmailJsEmailPayload = {
+    toEmail: input.recipientEmail,
     subject: `${input.organizationName} sent you ${input.documentTitle}`,
     html: createSigningEmailHtml(input, signingUrl),
     text: createSigningEmailText(input, signingUrl),
-    ...(resendEnv.RESEND_REPLY_TO_EMAIL
-      ? { reply_to: resendEnv.RESEND_REPLY_TO_EMAIL }
+    ...(emailJsEnv.EMAILJS_REPLY_TO_EMAIL
+      ? { replyTo: emailJsEnv.EMAILJS_REPLY_TO_EMAIL }
       : {}),
   }
 
   try {
-    const transport = deps.transport ?? sendResendEmail
+    const transport = deps.transport ?? sendEmailJsEmail
     const result = await transport(
       {
-        logicalDeliveryId: createSigningDeliveryId(input),
+        deliveryReference: createSigningDeliveryReference(input),
         payload,
       },
-      resendEnv
+      emailJsEnv
     )
 
     console.info("document_signing_email_delivered", {
       documentId: input.documentId,
       recipientId: input.recipientId,
-      resendEmailId: result.emailId,
+      providerStatus: result.providerStatus,
       durationMs: Math.round(performance.now() - startedAt),
     })
   } catch (error: unknown) {
-    const transportError = error instanceof ResendTransportError ? error : null
+    const transportError = error instanceof EmailJsTransportError ? error : null
 
     console.error("document_signing_email_delivery_failed", {
       documentId: input.documentId,
@@ -117,7 +116,7 @@ export async function sendDocumentSigningEmail(
 
     if (transportError?.kind === "provider_rejected") {
       throw new DocumentSigningEmailServiceError(
-        "Unable to send the document email. Check the configured sender and try again.",
+        "Unable to send the document email. Check the EmailJS configuration and try again.",
         502
       )
     }
@@ -133,12 +132,21 @@ function createSigningEmailHtml(
   input: SendDocumentSigningEmailInput,
   signingUrl: string
 ): string {
+  const safeOrganizationName = escapeHtml(input.organizationName)
+  const safeRecipientName = escapeHtml(input.recipientName)
+  const safeDocumentTitle = escapeHtml(input.documentTitle)
+  const safeSigningUrl = escapeHtml(signingUrl)
+
   return [
-    `<h2>${escapeHtml(input.organizationName)} sent you a document</h2>`,
-    `<p>Hello ${escapeHtml(input.recipientName)},</p>`,
-    `<p>Please review and complete <strong>${escapeHtml(input.documentTitle)}</strong>.</p>`,
-    `<p><a href="${escapeHtml(signingUrl)}">Open document</a></p>`,
-    "<p>This private link is intended only for you and expires automatically.</p>",
+    `<h1 style="margin:0 0 16px;color:#171717;font-family:Arial,Helvetica,sans-serif;font-size:24px;font-weight:700;line-height:32px;">${safeOrganizationName} sent you a document</h1>`,
+    `<p style="margin:0 0 12px;color:#525252;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:24px;">Hello ${safeRecipientName},</p>`,
+    `<p style="margin:0 0 24px;color:#525252;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:24px;">Please review and complete <strong style="color:#171717;font-weight:700;">${safeDocumentTitle}</strong>.</p>`,
+    '<table role="presentation" border="0" cellpadding="0" cellspacing="0" style="margin:0 0 24px;border-collapse:separate;"><tr><td style="border-radius:8px;background-color:#171717;">',
+    `<a href="${safeSigningUrl}" target="_blank" style="display:inline-block;padding:12px 20px;color:#ffffff;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:700;line-height:20px;text-decoration:none;">Review document</a>`,
+    "</td></tr></table>",
+    '<p style="margin:0 0 8px;color:#737373;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;">If the button does not work, copy and paste this link into your browser:</p>',
+    `<p style="margin:0 0 24px;overflow-wrap:anywhere;word-break:break-word;"><a href="${safeSigningUrl}" target="_blank" style="color:#404040;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;text-decoration:underline;">${safeSigningUrl}</a></p>`,
+    '<p style="margin:0;padding-top:20px;border-top:1px solid #e5e5e5;color:#737373;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;">This private link is intended only for you and expires automatically. Do not forward this email.</p>',
   ].join("")
 }
 
@@ -149,7 +157,9 @@ function createSigningEmailText(
   return `${input.organizationName} sent you ${input.documentTitle}. Review and complete it using your private link: ${signingUrl}`
 }
 
-function createSigningDeliveryId(input: SendDocumentSigningEmailInput): string {
+function createSigningDeliveryReference(
+  input: SendDocumentSigningEmailInput
+): string {
   const tokenDigest = createHash("sha256")
     .update(input.token, "utf8")
     .digest("hex")

@@ -7,7 +7,8 @@ import { createClient } from "@supabase/supabase-js"
 
 const ENV_FILE = ".env.local"
 const OPT_IN_VALUE = "synthetic-test-fixtures"
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 const REQUIRED_ENV_KEYS = [
   "SUPABASE_URL",
@@ -28,7 +29,7 @@ const REQUIRED_ENV_KEYS = [
   "BIZFLOW_RLS_STAFF_SUBMISSION_ID",
   "BIZFLOW_RLS_STAFF_SUBMISSION_FILE_ID",
   "BIZFLOW_RLS_MANAGER_SUBMISSION_ID",
-  "BIZFLOW_RLS_MANAGER_SUBMISSION_FILE_ID",
+  "BIZFLOW_RLS_MANAGER_SUBMISSION_FILE_ID"
 ]
 
 /** Expected submission/file visibility for each synthetic actor and exact fixture pair. */
@@ -42,7 +43,7 @@ export const SUBMISSION_VISIBILITY_PLAN = Object.freeze([
   { actor: "reviewer", fixture: "staff", visible: true },
   { actor: "reviewer", fixture: "manager", visible: false },
   { actor: "tenantB", fixture: "staff", visible: false },
-  { actor: "tenantB", fixture: "manager", visible: false },
+  { actor: "tenantB", fixture: "manager", visible: false }
 ])
 
 /** Service-only submission RPCs that ordinary authenticated sessions must not execute. */
@@ -57,7 +58,7 @@ export const AUTHENTICATED_SUBMISSION_RPC_NAMES = Object.freeze([
   "submit_internal_submission",
   "assign_internal_submission",
   "transition_internal_submission",
-  "create_internal_submission_comment",
+  "create_internal_submission_comment"
 ])
 
 /** Direct Data API mutations that must remain closed on all submission workflow tables. */
@@ -73,7 +74,7 @@ export const DIRECT_SUBMISSION_WRITE_PLAN = Object.freeze([
   { table: "submission_comments", operation: "delete" },
   { table: "submission_activity_events", operation: "insert" },
   { table: "submission_activity_events", operation: "update" },
-  { table: "submission_activity_events", operation: "delete" },
+  { table: "submission_activity_events", operation: "delete" }
 ])
 
 export const HELP_TEXT = `BizFlow authenticated two-tenant Supabase RLS check
@@ -152,8 +153,10 @@ export function mergeEnvironment(processEnvironment, fileEnvironment) {
   return {
     ...fileEnvironment,
     ...Object.fromEntries(
-      Object.entries(processEnvironment).filter(([, value]) => value !== undefined)
-    ),
+      Object.entries(processEnvironment).filter(
+        ([, value]) => value !== undefined
+      )
+    )
   }
 }
 
@@ -177,7 +180,9 @@ export function mergeEnvironment(processEnvironment, fileEnvironment) {
  * @throws {Error} When any required or safety-critical value is missing or invalid.
  */
 export function buildConfiguration(environment) {
-  const missingKeys = REQUIRED_ENV_KEYS.filter((key) => !environment[key]?.trim())
+  const missingKeys = REQUIRED_ENV_KEYS.filter(
+    (key) => !environment[key]?.trim()
+  )
 
   if (missingKeys.length > 0) {
     throw new Error(
@@ -188,16 +193,20 @@ export function buildConfiguration(environment) {
   const supabaseUrl = environment.SUPABASE_URL.trim()
   const publishableKey = environment.SUPABASE_PUBLISHABLE_KEY.trim()
   const ownerEmail = environment.BIZFLOW_RLS_OWNER_EMAIL.trim().toLowerCase()
-  const managerEmail = environment.BIZFLOW_RLS_MANAGER_EMAIL.trim().toLowerCase()
+  const managerEmail =
+    environment.BIZFLOW_RLS_MANAGER_EMAIL.trim().toLowerCase()
   const actorAEmail = environment.BIZFLOW_RLS_ACTOR_A_EMAIL.trim().toLowerCase()
-  const reviewerEmail = environment.BIZFLOW_RLS_REVIEWER_EMAIL.trim().toLowerCase()
+  const reviewerEmail =
+    environment.BIZFLOW_RLS_REVIEWER_EMAIL.trim().toLowerCase()
   const actorBEmail = environment.BIZFLOW_RLS_ACTOR_B_EMAIL.trim().toLowerCase()
   const actorAOrganizationId = environment.BIZFLOW_RLS_ACTOR_A_ORG_ID.trim()
   const actorBOrganizationId = environment.BIZFLOW_RLS_ACTOR_B_ORG_ID.trim()
   const staffSubmissionId = environment.BIZFLOW_RLS_STAFF_SUBMISSION_ID.trim()
   const staffFileId = environment.BIZFLOW_RLS_STAFF_SUBMISSION_FILE_ID.trim()
-  const managerSubmissionId = environment.BIZFLOW_RLS_MANAGER_SUBMISSION_ID.trim()
-  const managerFileId = environment.BIZFLOW_RLS_MANAGER_SUBMISSION_FILE_ID.trim()
+  const managerSubmissionId =
+    environment.BIZFLOW_RLS_MANAGER_SUBMISSION_ID.trim()
+  const managerFileId =
+    environment.BIZFLOW_RLS_MANAGER_SUBMISSION_FILE_ID.trim()
 
   if (environment.BIZFLOW_RLS_TEST_CONFIRM !== OPT_IN_VALUE) {
     throw new Error(
@@ -229,14 +238,22 @@ export function buildConfiguration(environment) {
     staffSubmissionId,
     staffFileId,
     managerSubmissionId,
-    managerFileId,
+    managerFileId
   ]
 
   if (configuredIds.some((identifier) => !UUID_PATTERN.test(identifier))) {
-    throw new Error("Configured organization, submission, and file IDs must be UUIDs.")
+    throw new Error(
+      "Configured organization, submission, and file IDs must be UUIDs."
+    )
   }
 
-  const actorEmails = [ownerEmail, managerEmail, actorAEmail, reviewerEmail, actorBEmail]
+  const actorEmails = [
+    ownerEmail,
+    managerEmail,
+    actorAEmail,
+    reviewerEmail,
+    actorBEmail
+  ]
 
   if (new Set(actorEmails).size !== actorEmails.length) {
     throw new Error("Every RLS actor must use a different authentication user.")
@@ -247,7 +264,9 @@ export function buildConfiguration(environment) {
   }
 
   if (new Set(configuredIds).size !== configuredIds.length) {
-    throw new Error("Organization, submission, and file fixture IDs must be distinct.")
+    throw new Error(
+      "Organization, submission, and file fixture IDs must be distinct."
+    )
   }
 
   return {
@@ -257,46 +276,46 @@ export function buildConfiguration(environment) {
       label: "actor-a-owner",
       email: ownerEmail,
       password: environment.BIZFLOW_RLS_OWNER_PASSWORD,
-      organizationId: actorAOrganizationId,
+      organizationId: actorAOrganizationId
     },
     manager: {
       label: "actor-a-manager",
       email: managerEmail,
       password: environment.BIZFLOW_RLS_MANAGER_PASSWORD,
-      organizationId: actorAOrganizationId,
+      organizationId: actorAOrganizationId
     },
     actorA: {
       label: "actor-a-staff",
       email: actorAEmail,
       password: environment.BIZFLOW_RLS_ACTOR_A_PASSWORD,
-      organizationId: actorAOrganizationId,
+      organizationId: actorAOrganizationId
     },
     reviewer: {
       label: "actor-a-reviewer",
       email: reviewerEmail,
       password: environment.BIZFLOW_RLS_REVIEWER_PASSWORD,
-      organizationId: actorAOrganizationId,
+      organizationId: actorAOrganizationId
     },
     actorB: {
       label: "actor-b-internal",
       email: actorBEmail,
       password: environment.BIZFLOW_RLS_ACTOR_B_PASSWORD,
-      organizationId: actorBOrganizationId,
+      organizationId: actorBOrganizationId
     },
     fixtures: {
       staff: {
         label: "staff-created",
         organizationId: actorAOrganizationId,
         submissionId: staffSubmissionId,
-        fileId: staffFileId,
+        fileId: staffFileId
       },
       manager: {
         label: "manager-created",
         organizationId: actorAOrganizationId,
         submissionId: managerSubmissionId,
-        fileId: managerFileId,
-      },
-    },
+        fileId: managerFileId
+      }
+    }
   }
 }
 
@@ -324,7 +343,9 @@ function createSafeSupabaseError(context, error, status) {
  */
 function logPass(actorLabel, assertion, startedAt) {
   const durationMs = Math.round(performance.now() - startedAt)
-  console.log(`[actor=${actorLabel} assertion=${assertion}] pass duration_ms=${durationMs}`)
+  console.log(
+    `[actor=${actorLabel} assertion=${assertion}] pass duration_ms=${durationMs}`
+  )
 }
 
 /**
@@ -339,11 +360,15 @@ async function authenticateActor(client, actor) {
   const startedAt = performance.now()
   const { data, error } = await client.auth.signInWithPassword({
     email: actor.email,
-    password: actor.password,
+    password: actor.password
   })
 
   if (error || !data.session || !data.user) {
-    throw createSafeSupabaseError(`${actor.label} authentication`, error, error?.status)
+    throw createSafeSupabaseError(
+      `${actor.label} authentication`,
+      error,
+      error?.status
+    )
   }
 
   logPass(actor.label, "password-session", startedAt)
@@ -362,7 +387,14 @@ async function authenticateActor(client, actor) {
  * @returns {Promise<Record<string, unknown>>} The one visible row, used only for local assertions.
  * @throws {Error} When the query fails or does not return exactly one row.
  */
-async function expectOneVisible(client, actorLabel, table, columns, filters, assertion) {
+async function expectOneVisible(
+  client,
+  actorLabel,
+  table,
+  columns,
+  filters,
+  assertion
+) {
   const startedAt = performance.now()
   const { data, error, status } = await client
     .from(table)
@@ -408,7 +440,9 @@ async function expectAnyVisible(client, actorLabel, table, filters, assertion) {
   }
 
   if (!Array.isArray(data) || data.length !== 1) {
-    throw new Error(`${actorLabel} ${assertion} expected visible workflow evidence.`)
+    throw new Error(
+      `${actorLabel} ${assertion} expected visible workflow evidence.`
+    )
   }
 
   logPass(actorLabel, assertion, startedAt)
@@ -438,7 +472,9 @@ async function expectHidden(client, actorLabel, table, filters, assertion) {
   }
 
   if (!Array.isArray(data) || data.length !== 0) {
-    throw new Error(`${actorLabel} ${assertion} exposed a fixture that must be hidden.`)
+    throw new Error(
+      `${actorLabel} ${assertion} exposed a fixture that must be hidden.`
+    )
   }
 
   logPass(actorLabel, assertion, startedAt)
@@ -463,13 +499,18 @@ async function expectActorRole(client, actor, userId, expectedRoles) {
     {
       org_id: actor.organizationId,
       user_id: userId,
-      status: "active",
+      status: "active"
     },
     "own-active-membership-visible"
   )
 
-  if (typeof membership.role !== "string" || !expectedRoles.includes(membership.role)) {
-    throw new Error(`${actor.label} does not have its required synthetic fixture role.`)
+  if (
+    typeof membership.role !== "string" ||
+    !expectedRoles.includes(membership.role)
+  ) {
+    throw new Error(
+      `${actor.label} does not have its required synthetic fixture role.`
+    )
   }
 }
 
@@ -500,26 +541,34 @@ async function expectSubmissionFixtureVisible(
     "id,org_id,created_by,status,assigned_to",
     {
       id: fixture.submissionId,
-      org_id: fixture.organizationId,
+      org_id: fixture.organizationId
     },
     `${fixture.label}-submission-visible`
   )
 
   if (submission.created_by !== expectedCreatorId) {
-    throw new Error(`${fixture.label} submission does not have its configured synthetic creator.`)
+    throw new Error(
+      `${fixture.label} submission does not have its configured synthetic creator.`
+    )
   }
 
   if (
     expectedAssigneeId !== null &&
-    (submission.assigned_to !== expectedAssigneeId || submission.status === "draft")
+    (submission.assigned_to !== expectedAssigneeId ||
+      submission.status === "draft")
   ) {
     throw new Error(
       `${fixture.label} submission must be non-draft and assigned to the configured reviewer.`
     )
   }
 
-  if (forbiddenAssigneeId !== null && submission.assigned_to === forbiddenAssigneeId) {
-    throw new Error(`${fixture.label} submission must not be assigned to the reviewer fixture.`)
+  if (
+    forbiddenAssigneeId !== null &&
+    submission.assigned_to === forbiddenAssigneeId
+  ) {
+    throw new Error(
+      `${fixture.label} submission must not be assigned to the reviewer fixture.`
+    )
   }
 
   const submissionFile = await expectOneVisible(
@@ -530,7 +579,7 @@ async function expectSubmissionFixtureVisible(
     {
       id: fixture.fileId,
       org_id: fixture.organizationId,
-      submission_id: fixture.submissionId,
+      submission_id: fixture.submissionId
     },
     `${fixture.label}-file-visible`
   )
@@ -547,7 +596,7 @@ async function expectSubmissionFixtureVisible(
 
   const evidenceFilters = {
     org_id: fixture.organizationId,
-    submission_id: fixture.submissionId,
+    submission_id: fixture.submissionId
   }
 
   await expectAnyVisible(
@@ -582,7 +631,7 @@ async function expectSubmissionFixtureHidden(client, actorLabel, fixture) {
     "submissions",
     {
       id: fixture.submissionId,
-      org_id: fixture.organizationId,
+      org_id: fixture.organizationId
     },
     `${fixture.label}-submission-hidden`
   )
@@ -593,7 +642,7 @@ async function expectSubmissionFixtureHidden(client, actorLabel, fixture) {
     {
       id: fixture.fileId,
       org_id: fixture.organizationId,
-      submission_id: fixture.submissionId,
+      submission_id: fixture.submissionId
     },
     `${fixture.label}-file-hidden`
   )
@@ -603,7 +652,7 @@ async function expectSubmissionFixtureHidden(client, actorLabel, fixture) {
     "submission_comments",
     {
       org_id: fixture.organizationId,
-      submission_id: fixture.submissionId,
+      submission_id: fixture.submissionId
     },
     `${fixture.label}-comments-hidden`
   )
@@ -613,7 +662,7 @@ async function expectSubmissionFixtureHidden(client, actorLabel, fixture) {
     "submission_activity_events",
     {
       org_id: fixture.organizationId,
-      submission_id: fixture.submissionId,
+      submission_id: fixture.submissionId
     },
     `${fixture.label}-activity-hidden`
   )
@@ -633,14 +682,14 @@ function buildDeniedRpcArguments(functionName) {
       target_template_id: null,
       target_submission_id: null,
       target_title: null,
-      target_actor_user_id: null,
+      target_actor_user_id: null
     },
     save_internal_submission_draft: {
       target_org_id: null,
       target_submission_id: null,
       target_expected_revision: null,
       target_values: null,
-      target_actor_user_id: null,
+      target_actor_user_id: null
     },
     allocate_internal_submission_file: {
       target_org_id: null,
@@ -654,7 +703,7 @@ function buildDeniedRpcArguments(functionName) {
       target_byte_size: null,
       target_storage_key: null,
       target_expected_checksum_sha256: null,
-      target_actor_user_id: null,
+      target_actor_user_id: null
     },
     complete_internal_submission_file: {
       target_org_id: null,
@@ -664,38 +713,38 @@ function buildDeniedRpcArguments(functionName) {
       target_content_type: null,
       target_byte_size: null,
       target_checksum_sha256: null,
-      target_actor_user_id: null,
+      target_actor_user_id: null
     },
     supersede_internal_submission_file: {
       target_org_id: null,
       target_submission_id: null,
       target_file_id: null,
-      target_actor_user_id: null,
+      target_actor_user_id: null
     },
     record_internal_submission_file_upload_window: {
       target_org_id: null,
       target_submission_id: null,
       target_file_id: null,
       target_cleanup_after: null,
-      target_actor_user_id: null,
+      target_actor_user_id: null
     },
     mark_internal_submission_file_storage_cleaned: {
       target_file_id: null,
-      target_storage_key: null,
+      target_storage_key: null
     },
     submit_internal_submission: {
       target_org_id: null,
       target_submission_id: null,
       target_expected_revision: null,
       target_values: null,
-      target_actor_user_id: null,
+      target_actor_user_id: null
     },
     assign_internal_submission: {
       target_org_id: null,
       target_submission_id: null,
       target_expected_revision: null,
       target_assignee_user_id: null,
-      target_actor_user_id: null,
+      target_actor_user_id: null
     },
     transition_internal_submission: {
       target_org_id: null,
@@ -703,20 +752,22 @@ function buildDeniedRpcArguments(functionName) {
       target_expected_revision: null,
       target_transition: null,
       target_comment: null,
-      target_actor_user_id: null,
+      target_actor_user_id: null
     },
     create_internal_submission_comment: {
       target_org_id: null,
       target_submission_id: null,
       target_comment_id: null,
       target_body: null,
-      target_actor_user_id: null,
-    },
+      target_actor_user_id: null
+    }
   }
   const rpcArguments = argumentsByFunction[functionName]
 
   if (!rpcArguments) {
-    throw new Error(`Unknown authenticated RPC-denial assertion: ${functionName}.`)
+    throw new Error(
+      `Unknown authenticated RPC-denial assertion: ${functionName}.`
+    )
   }
 
   return rpcArguments
@@ -767,12 +818,23 @@ function buildDeniedInsertPayload(table, actor, actorUserId) {
       title: "Authenticated write denial probe",
       template_id: randomUUID(),
       template_revision: 1,
-      template_snapshot: { schemaVersion: 1 },
+      template_snapshot: {
+        schemaVersion: 2,
+        branding: {
+          organizationName: "",
+          logoDataUrl: null,
+          logoAlignment: "left",
+          logoWidthPercent: 24,
+          primaryColor: "#252329",
+          accentColor: "#635273"
+        },
+        blocks: []
+      },
       values: {},
       status: "draft",
       revision: 1,
       created_by: actorUserId,
-      updated_by: actorUserId,
+      updated_by: actorUserId
     }
   }
 
@@ -796,7 +858,7 @@ function buildDeniedInsertPayload(table, actor, actorUserId) {
       safe_filename: safeFilename,
       content_type: "application/pdf",
       byte_size: 1,
-      uploaded_by: actorUserId,
+      uploaded_by: actorUserId
     }
   }
 
@@ -806,7 +868,7 @@ function buildDeniedInsertPayload(table, actor, actorUserId) {
       org_id: actor.organizationId,
       submission_id: submissionId,
       body: "Authenticated write denial probe",
-      created_by: actorUserId,
+      created_by: actorUserId
     }
   }
 
@@ -818,7 +880,7 @@ function buildDeniedInsertPayload(table, actor, actorUserId) {
     event_type: "submitted",
     from_status: "draft",
     to_status: "submitted",
-    submission_revision: 1,
+    submission_revision: 1
   }
 }
 
@@ -842,11 +904,12 @@ async function expectDirectSubmissionWritesDenied(client, actor, actorUserId) {
         .insert(buildDeniedInsertPayload(probe.table, actor, actorUserId))
         .select("id")
     } else if (probe.operation === "update") {
-      const updatePayload = probe.table === "submission_comments"
-        ? { body: "Authenticated update denial probe" }
-        : probe.table === "submission_activity_events"
-          ? { event_type: "commented" }
-          : { updated_at: new Date(0).toISOString() }
+      const updatePayload =
+        probe.table === "submission_comments"
+          ? { body: "Authenticated update denial probe" }
+          : probe.table === "submission_activity_events"
+            ? { event_type: "commented" }
+            : { updated_at: new Date(0).toISOString() }
 
       result = await client
         .from(probe.table)
@@ -854,18 +917,30 @@ async function expectDirectSubmissionWritesDenied(client, actor, actorUserId) {
         .eq("id", randomUUID())
         .select("id")
     } else {
-      result = await client.from(probe.table).delete().eq("id", randomUUID()).select("id")
+      result = await client
+        .from(probe.table)
+        .delete()
+        .eq("id", randomUUID())
+        .select("id")
     }
 
     const { data, error, status } = result
 
-    if (!error || error.code !== "42501" || (Array.isArray(data) && data.length > 0)) {
+    if (
+      !error ||
+      error.code !== "42501" ||
+      (Array.isArray(data) && data.length > 0)
+    ) {
       throw new Error(
         `${actor.label} direct-${probe.table}-${probe.operation} expected code=42501; observed status=${status ?? error?.status ?? "unknown"}, code=${error?.code ?? "none"}.`
       )
     }
 
-    logPass(actor.label, `direct-${probe.table}-${probe.operation}-denied`, startedAt)
+    logPass(
+      actor.label,
+      `direct-${probe.table}-${probe.operation}-denied`,
+      startedAt
+    )
   }
 }
 
@@ -885,11 +960,15 @@ async function expectStaffDirectWriteDenied(client, actor) {
       org_id: actor.organizationId,
       user_id: randomUUID(),
       role: "manager",
-      status: "active",
+      status: "active"
     })
     .select("id")
 
-  if (!error || error.code !== "42501" || (Array.isArray(data) && data.length > 0)) {
+  if (
+    !error ||
+    error.code !== "42501" ||
+    (Array.isArray(data) && data.length > 0)
+  ) {
     throw new Error(
       `actor-a-staff direct-membership-write expected code=42501; observed status=${status ?? error?.status ?? "unknown"}, code=${error?.code ?? "none"}.`
     )
@@ -918,7 +997,9 @@ async function clearSession(client, actorLabel) {
       )
     }
   } catch {
-    console.warn(`[actor=${actorLabel} cleanup=session] warning unexpected-cleanup-failure`)
+    console.warn(
+      `[actor=${actorLabel} cleanup=session] warning unexpected-cleanup-failure`
+    )
   }
 }
 
@@ -935,20 +1016,24 @@ export async function runHarness(configuration) {
     auth: {
       autoRefreshToken: false,
       detectSessionInUrl: false,
-      persistSession: false,
-    },
+      persistSession: false
+    }
   }
   const actorDefinitions = {
     owner: configuration.owner,
     manager: configuration.manager,
     staff: configuration.actorA,
     reviewer: configuration.reviewer,
-    tenantB: configuration.actorB,
+    tenantB: configuration.actorB
   }
   const clients = Object.fromEntries(
     Object.keys(actorDefinitions).map((actorKey) => [
       actorKey,
-      createClient(configuration.supabaseUrl, configuration.publishableKey, clientOptions),
+      createClient(
+        configuration.supabaseUrl,
+        configuration.publishableKey,
+        clientOptions
+      )
     ])
   )
 
@@ -959,15 +1044,19 @@ export async function runHarness(configuration) {
     for (const [actorKey, actor] of Object.entries(actorDefinitions)) {
       authenticatedActorEntries.push([
         actorKey,
-        await authenticateActor(clients[actorKey], actor),
+        await authenticateActor(clients[actorKey], actor)
       ])
     }
 
     const authenticatedActors = Object.fromEntries(authenticatedActorEntries)
-    const authenticatedUserIds = Object.values(authenticatedActors).map((user) => user.id)
+    const authenticatedUserIds = Object.values(authenticatedActors).map(
+      (user) => user.id
+    )
 
     if (new Set(authenticatedUserIds).size !== authenticatedUserIds.length) {
-      throw new Error("Multiple credentials authenticated as the same user; distinct fixtures are required.")
+      throw new Error(
+        "Multiple credentials authenticated as the same user; distinct fixtures are required."
+      )
     }
 
     await Promise.all([
@@ -1000,7 +1089,7 @@ export async function runHarness(configuration) {
         configuration.actorB,
         authenticatedActors.tenantB.id,
         ["owner_admin", "manager", "staff"]
-      ),
+      )
     ])
 
     await expectOneVisible(
@@ -1024,7 +1113,7 @@ export async function runHarness(configuration) {
       "organization_memberships",
       {
         org_id: configuration.actorB.organizationId,
-        user_id: authenticatedActors.tenantB.id,
+        user_id: authenticatedActors.tenantB.id
       },
       "other-membership-hidden"
     )
@@ -1049,7 +1138,7 @@ export async function runHarness(configuration) {
       "organization_memberships",
       {
         org_id: configuration.actorA.organizationId,
-        user_id: authenticatedActors.staff.id,
+        user_id: authenticatedActors.staff.id
       },
       "other-membership-hidden"
     )
@@ -1057,12 +1146,12 @@ export async function runHarness(configuration) {
     const fixtures = {
       staff: {
         ...configuration.fixtures.staff,
-        creatorId: authenticatedActors.staff.id,
+        creatorId: authenticatedActors.staff.id
       },
       manager: {
         ...configuration.fixtures.manager,
-        creatorId: authenticatedActors.manager.id,
-      },
+        creatorId: authenticatedActors.manager.id
+      }
     }
 
     for (const assertion of SUBMISSION_VISIBILITY_PLAN) {
@@ -1071,9 +1160,13 @@ export async function runHarness(configuration) {
 
       if (assertion.visible) {
         const expectedAssigneeId =
-          assertion.actor === "reviewer" ? authenticatedActors.reviewer.id : null
+          assertion.actor === "reviewer"
+            ? authenticatedActors.reviewer.id
+            : null
         const forbiddenAssigneeId =
-          assertion.fixture === "manager" ? authenticatedActors.reviewer.id : null
+          assertion.fixture === "manager"
+            ? authenticatedActors.reviewer.id
+            : null
 
         await expectSubmissionFixtureVisible(
           clients[assertion.actor],
@@ -1084,7 +1177,11 @@ export async function runHarness(configuration) {
           forbiddenAssigneeId
         )
       } else {
-        await expectSubmissionFixtureHidden(clients[assertion.actor], actor.label, fixture)
+        await expectSubmissionFixtureHidden(
+          clients[assertion.actor],
+          actor.label,
+          fixture
+        )
       }
     }
 
@@ -1100,7 +1197,9 @@ export async function runHarness(configuration) {
     await expectStaffDirectWriteDenied(clients.staff, configuration.actorA)
 
     const durationMs = Math.round(performance.now() - startedAt)
-    console.log(`[check=authenticated-two-tenant-rls] pass duration_ms=${durationMs}`)
+    console.log(
+      `[check=authenticated-two-tenant-rls] pass duration_ms=${durationMs}`
+    )
   } finally {
     await Promise.all(
       Object.entries(actorDefinitions).map(([actorKey, actor]) =>
@@ -1125,7 +1224,9 @@ async function main() {
   }
 
   if (argumentsList.length > 0) {
-    throw new Error("Unsupported arguments. Run with --help for usage; credentials are env-only.")
+    throw new Error(
+      "Unsupported arguments. Run with --help for usage; credentials are env-only."
+    )
   }
 
   const environment = mergeEnvironment(process.env, readEnvFile())
@@ -1134,7 +1235,11 @@ async function main() {
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   main().catch((error) => {
-    console.error(error instanceof Error ? error.message : "Unknown authenticated RLS check failure.")
+    console.error(
+      error instanceof Error
+        ? error.message
+        : "Unknown authenticated RLS check failure."
+    )
     process.exitCode = 1
   })
 }

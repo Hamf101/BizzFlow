@@ -17,7 +17,7 @@ The cloud MVP includes organizations, members, reusable templates, document stor
 MVP non-goals:
 
 - Billing and subscriptions.
-- OCR/import conversion, AI extraction, and qualified or regulated e-signatures. Proposal-only AI block design and basic drawn acknowledgements are included.
+- OCR/import conversion, AI extraction, and qualified or regulated e-signatures. Conversational AI document editing and basic drawn acknowledgements are included.
 - Native mobile apps.
 - Advanced workflow builders or custom role builders.
 - Public developer APIs.
@@ -31,7 +31,7 @@ MVP non-goals:
 - Database and auth: Supabase PostgreSQL, Supabase Auth, and Postgres RLS.
 - Storage: Cloudflare R2 private buckets with signed URLs.
 - Background jobs: Inngest.
-- Notifications: Resend for email and Termii for initial SMS support.
+- Notifications: EmailJS for email and Termii for initial SMS support.
 - Offline: deferred; no PWA, service-worker, IndexedDB/Dexie, or desktop-runtime dependency is part of the current cloud build.
 - Monitoring and analytics: Sentry plus PostHog or an internal event table.
 - Hosting: Vercel, Supabase, Cloudflare R2, and Inngest.
@@ -103,16 +103,62 @@ Expected variable groups:
 - Cloudflare R2: `CLOUDFLARE_R2_ACCOUNT_ID`, `CLOUDFLARE_R2_ACCESS_KEY_ID`, `CLOUDFLARE_R2_SECRET_ACCESS_KEY`, `CLOUDFLARE_R2_BUCKET_NAME`, `CLOUDFLARE_R2_ENDPOINT`, `CLOUDFLARE_R2_REGION`, and `CLOUDFLARE_R2_SIGNED_URL_TTL_SECONDS`.
 - File uploads: `FILE_UPLOAD_MAX_BYTES` and `FILE_UPLOAD_ALLOWED_MIME_TYPES`.
 - Inngest: event key and signing key.
-- Resend: `RESEND_API_KEY`, a verified `RESEND_FROM_EMAIL`, optional `RESEND_REPLY_TO_EMAIL`, and `RESEND_TIMEOUT_MS` for invitations and document signing links.
-- OpenRouter: server-only `OPENROUTER_API_KEY`, optional `OPENROUTER_MODEL`, and `OPENROUTER_TIMEOUT_MS` for proposal-only template block suggestions.
+- EmailJS: `EMAILJS_SERVICE_ID`, `EMAILJS_TEMPLATE_ID`, `EMAILJS_PUBLIC_KEY`, optional server-only `EMAILJS_PRIVATE_KEY`, optional `EMAILJS_REPLY_TO_EMAIL`, and `EMAILJS_TIMEOUT_MS` for invitations and document signing links.
+- Gemini: server-only `GEMINI_API_KEY`, optional `GEMINI_MODEL`, and `GEMINI_TIMEOUT_MS` for stateless, schema-validated Flow document editing.
 - SMS: Termii credentials, with Africa's Talking placeholders reserved for a later provider switch.
 - Observability: Sentry DSN and PostHog key or internal analytics settings.
 
 Do not commit real secrets. Keep local secrets in `.env.local` and deployment secrets in the target hosting provider.
 
+## Gemini Flow document editor
+
+The template studio includes a persistent Flow chat beside a single free-form document canvas. Blocks remain in one ordered flow inside the visible printable boundary—there are no fixed header, body, or footer regions. Flow can answer questions, create blocks, revise or move existing content, update document details and branding, and explain what it changed. Document actions are returned as compact structured operations, validated against the canonical Zod schemas, applied to the unsaved browser draft, highlighted in the page margin, and grouped into an undoable change receipt inside the conversation.
+
+Gemini requests use the stable Interactions API with provider-side storage disabled (`store: false`). The application sends a bounded copy of its own Supabase-backed conversation history on each turn, so the team retains the template chat without relying on Gemini interaction retention. Flow cannot publish or archive a template. Existing logos and images are preserved unless removal is explicitly requested, and ambiguous destructive requests require confirmation.
+
+Create a Gemini API key in Google AI Studio, restrict it to the Gemini API, and configure the server-only variables:
+
+```bash
+GEMINI_API_KEY=<your-key>
+GEMINI_MODEL=gemini-3.6-flash
+GEMINI_TIMEOUT_MS=30000
+```
+
+Restart the application after changing local environment values. In deployed environments, add the same values to the hosting provider and redeploy. Only active organization owners and managers can use a template's shared Flow conversation.
+
+Authenticated example:
+
+```bash
+curl -X POST http://localhost:3000/api/templates/flow \
+  -H "Content-Type: application/json" \
+  -H "Cookie: <authenticated Supabase cookies>" \
+  -d '{
+    "templateId": "00000000-0000-4000-8000-000000000010",
+    "instruction": "Add a concise payment schedule after the introduction.",
+    "draft": {
+      "title": "Vendor agreement",
+      "description": "Reusable service agreement",
+      "content": "<the current schemaVersion 2 template content>"
+    }
+  }'
+```
+
 ## Invite email setup
 
-Inviting a person sends a Resend email containing a one-time BizFlow invite URL. The same Resend configuration delivers private, seven-day document signing links. Configure `RESEND_API_KEY` and a verified `RESEND_FROM_EMAIL` before using the People page or sending a document. Optionally set `RESEND_REPLY_TO_EMAIL` for recipient replies.
+Inviting a person sends an EmailJS email containing a one-time BizFlow invite URL. The same server-side EmailJS transport delivers private, seven-day document signing links without exposing those tokens to browser code.
+
+The configured service is `service_o0h0qnp`. Create one EmailJS template for both email types and configure these fields in the EmailJS dashboard:
+
+- To Email: `{{to_email}}`
+- Reply-To: `{{reply_to}}`
+- Subject: `{{subject}}`
+- Content: paste the complete contents of [`emailjs-template.html`](emailjs-template.html)
+
+The template's `{{{html}}}` placeholder must keep all three braces so EmailJS renders the application's escaped, branded message markup instead of displaying it as text. The template deliberately uses a text wordmark; a `cid:logo.png` source only works when that image is sent as a real email attachment.
+
+Copy that template's ID and the EmailJS account public key into `EMAILJS_TEMPLATE_ID` and `EMAILJS_PUBLIC_KEY`. If private-key authorization is enabled under EmailJS Account Security, store the private key only in server-side `EMAILJS_PRIVATE_KEY`. The transport also provides `text` and `delivery_reference` template parameters for optional plain-text content and dashboard diagnostics. Optionally set `EMAILJS_REPLY_TO_EMAIL` for recipient replies.
+
+EmailJS limits sends to one request per second. The transport queues and spaces requests within each running application instance so multi-recipient signing batches respect that limit.
 
 Recipients can create an account from the invite URL or sign in with an existing account. For account-confirmation links to return the recipient to their invite, add the deployed callback URL (for example, `https://app.example.com/auth/callback`) to Supabase Auth's Redirect URLs. The Supabase Site URL should be the deployed application origin.
 
@@ -149,9 +195,10 @@ supabase/migrations/20260718181552_sprint_7_submission_upload_hardening.sql
 supabase/migrations/20260718184631_sprint_7_submission_storage_cleanup.sql
 supabase/migrations/20260718190946_sprint_8_submission_review_workflow.sql
 supabase/migrations/20260718194429_sprint_8_submission_function_lint.sql
+supabase/migrations/20260723172350_template_flow_messages.sql
 ```
 
-The Sprint 3 through Sprint 8 migrations include explicit Data API grants for `authenticated` and `service_role`, plus PostgREST schema-cache reloads. The guided-document migration adds organization-wide template revisions, immutable per-document snapshots, shared answers, unordered all-party signer state, per-user recent access, and tenant-scoped RLS. The audit hardening migration closes profile-email claiming and moves high-integrity mutations into transactional service-role RPCs. The finalization migration promotes one deterministic, create-only R2 PDF to an exact immutable document version. Sprint 7 adds role-aware submissions, immutable template snapshots, optimistic draft revisions, checksum-bound create-only file allocations, recoverable file tombstones, expiry-safe object cleanup, and atomic create/save/submit RPCs with audit evidence. Sprint 8 adds assignment, requested-change resubmission, binding manager decisions, immutable comments/activity, and assigned-only external-reviewer access.
+The Sprint 3 through Sprint 8 migrations include explicit Data API grants for `authenticated` and `service_role`, plus PostgREST schema-cache reloads. The guided-document migration adds organization-wide template revisions, immutable per-document snapshots, shared answers, unordered all-party signer state, per-user recent access, and tenant-scoped RLS. The audit hardening migration closes profile-email claiming and moves high-integrity mutations into transactional service-role RPCs. The finalization migration promotes one deterministic, create-only R2 PDF to an exact immutable document version. Sprint 7 adds role-aware submissions, immutable template snapshots, optimistic draft revisions, checksum-bound create-only file allocations, recoverable file tombstones, expiry-safe object cleanup, and atomic create/save/submit RPCs with audit evidence. Sprint 8 adds assignment, requested-change resubmission, binding manager decisions, immutable comments/activity, and assigned-only external-reviewer access. The Flow migration adds manager-visible, template-scoped chat history with browser writes revoked and service-role persistence.
 
 ## API Endpoints Summary
 
@@ -163,7 +210,7 @@ Implemented document routes:
 - `POST /api/documents/:id/download-url` (JSON body with `organizationId` and optional `versionId`)
 - `POST /api/documents/:id/opened`
 - `GET /api/documents/:id/pdf` (no-store preview while editable; signed redirect to the exact finalized version after completion)
-- `POST /api/templates/suggest-blocks`
+- `POST /api/templates/flow`
 
 Implemented internal-submission file routes:
 

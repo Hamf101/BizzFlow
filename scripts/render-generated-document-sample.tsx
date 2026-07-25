@@ -5,7 +5,7 @@ import { renderGeneratedDocumentPdf } from "../src/services/document-pdf-service
 import {
   createBlankTemplateContent,
   type ParagraphBlock,
-  type TemplateContent,
+  type TemplateContent
 } from "../src/types/template"
 
 const SAMPLE_SIGNATURE_DATA_URL =
@@ -19,8 +19,8 @@ const SAMPLE_INITIALS_DATA_URL =
  * @returns Resolves after writing the requested sample PDF.
  */
 async function main(): Promise<void> {
-  const requestedPath = process.argv[2] ??
-    "artifacts/verification/generated-document-sample.pdf"
+  const requestedPath =
+    process.argv[2] ?? "artifacts/verification/generated-document-sample.pdf"
   const outputPath = resolve(process.cwd(), requestedPath)
   const content = createSampleContent()
   const pdf = await renderGeneratedDocumentPdf({
@@ -31,7 +31,7 @@ async function main(): Promise<void> {
       client_name: "Northstar Labs LLC",
       effective_date: "2026-07-17",
       engagement_type: "Fixed fee",
-      terms_accepted: true,
+      terms_accepted: true
     },
     workflowStatus: "completed",
     signers: [
@@ -43,7 +43,7 @@ async function main(): Promise<void> {
         status: "signed",
         signedAt: "2026-07-17T18:30:00.000Z",
         signatureDataUrl: SAMPLE_SIGNATURE_DATA_URL,
-        initialsDataUrl: SAMPLE_INITIALS_DATA_URL,
+        initialsDataUrl: SAMPLE_INITIALS_DATA_URL
       },
       {
         id: "signer-2",
@@ -53,16 +53,16 @@ async function main(): Promise<void> {
         status: "signed",
         signedAt: "2026-07-17T19:10:00.000Z",
         signatureDataUrl: SAMPLE_SIGNATURE_DATA_URL,
-        initialsDataUrl: SAMPLE_INITIALS_DATA_URL,
-      },
-    ],
+        initialsDataUrl: SAMPLE_INITIALS_DATA_URL
+      }
+    ]
   })
 
   await mkdir(dirname(outputPath), { recursive: true })
   await writeFile(outputPath, pdf)
   console.info("generated_document_visual_sample_written", {
     outputPath,
-    byteSize: pdf.length,
+    byteSize: pdf.length
   })
 }
 
@@ -74,7 +74,7 @@ function createSampleContent(): TemplateContent {
       id: `00000000-0000-4000-8${String(index).padStart(3, "0")}-000000000100`,
       type: "paragraph",
       text: `Service detail ${index + 1}. BizFlow Studio will coordinate the agreed discovery, implementation, review, and handoff activities with the client team. Each milestone will be confirmed in writing before the next phase begins.`,
-      alignment: "left",
+      alignment: "left"
     })
   )
 
@@ -84,122 +84,109 @@ function createSampleContent(): TemplateContent {
       ...content.branding,
       organizationName: "BizFlow Studio",
       primaryColor: "#17324D",
-      accentColor: "#2F6B8A",
+      accentColor: "#2F6B8A"
     },
-    repeat: { header: true, footer: true },
-    sections: {
-      header: {
-        blocks: [
-          {
-            id: "00000000-0000-4000-8000-000000000001",
-            type: "paragraph",
-            text: "CONFIDENTIAL - CLIENT AGREEMENT",
-            alignment: "right",
-          },
-        ],
+    blocks: [
+      {
+        id: "00000000-0000-4000-8000-000000000001",
+        type: "paragraph",
+        text: "CONFIDENTIAL - CLIENT AGREEMENT",
+        alignment: "right"
       },
-      body: {
-        blocks: [
-          {
-            id: "00000000-0000-4000-8000-000000000002",
-            type: "heading",
-            text: "Engagement overview",
-            level: 2,
-            alignment: "left",
-          },
-          {
-            id: "00000000-0000-4000-8000-000000000003",
-            type: "paragraph",
-            text: "This agreement records the services, commercial terms, and acknowledgements accepted by both parties.",
-            alignment: "left",
-          },
-          {
-            id: "00000000-0000-4000-8000-000000000004",
-            type: "bullet_list",
-            items: [
-              "Discovery and requirements workshop",
-              "Structured implementation and weekly review",
-              "Final handoff and supporting documentation",
-            ],
-          },
-          {
-            id: "00000000-0000-4000-8000-000000000005",
-            type: "table",
-            headers: ["Phase", "Target", "Amount"],
-            rows: [
-              ["Discovery", "Week 1", "$1,500"],
-              ["Implementation", "Weeks 2-4", "$4,500"],
-              ["Handoff", "Week 5", "$1,000"],
-            ],
-          },
-          {
-            id: "00000000-0000-4000-8000-000000000006",
-            type: "text_field",
-            fieldKey: "client_name",
-            label: "Client legal name",
-            required: true,
-            helpText: "Use the registered business name.",
-            placeholder: null,
-            multiline: false,
-          },
-          {
-            id: "00000000-0000-4000-8000-000000000007",
-            type: "date_field",
-            fieldKey: "effective_date",
-            label: "Effective date",
-            required: true,
-            helpText: null,
-          },
-          {
-            id: "00000000-0000-4000-8000-000000000008",
-            type: "dropdown_field",
-            fieldKey: "engagement_type",
-            label: "Engagement type",
-            required: true,
-            helpText: null,
-            placeholder: null,
-            options: ["Fixed fee", "Time and materials"],
-          },
-          {
-            id: "00000000-0000-4000-8000-000000000009",
-            type: "checkbox_field",
-            fieldKey: "terms_accepted",
-            label: "Commercial terms accepted",
-            required: true,
-            helpText: null,
-            checkedByDefault: false,
-          },
-          {
-            id: "00000000-0000-4000-8000-000000000010",
-            type: "divider",
-          },
-          {
-            id: "00000000-0000-4000-8000-000000000011",
-            type: "heading",
-            text: "Detailed service terms",
-            level: 2,
-            alignment: "left",
-          },
-          ...detailParagraphs,
-        ],
+      {
+        id: "00000000-0000-4000-8000-000000000002",
+        type: "heading",
+        text: "Engagement overview",
+        level: 2,
+        alignment: "left"
       },
-      footer: {
-        blocks: [
-          {
-            id: "00000000-0000-4000-8000-000000000012",
-            type: "paragraph",
-            text: "BizFlow Studio - BF-2026-0717",
-            alignment: "center",
-          },
-        ],
+      {
+        id: "00000000-0000-4000-8000-000000000003",
+        type: "paragraph",
+        text: "This agreement records the services, commercial terms, and acknowledgements accepted by both parties.",
+        alignment: "left"
       },
-    },
+      {
+        id: "00000000-0000-4000-8000-000000000004",
+        type: "bullet_list",
+        items: [
+          "Discovery and requirements workshop",
+          "Structured implementation and weekly review",
+          "Final handoff and supporting documentation"
+        ]
+      },
+      {
+        id: "00000000-0000-4000-8000-000000000005",
+        type: "table",
+        headers: ["Phase", "Target", "Amount"],
+        rows: [
+          ["Discovery", "Week 1", "$1,500"],
+          ["Implementation", "Weeks 2-4", "$4,500"],
+          ["Handoff", "Week 5", "$1,000"]
+        ]
+      },
+      {
+        id: "00000000-0000-4000-8000-000000000006",
+        type: "text_field",
+        fieldKey: "client_name",
+        label: "Client legal name",
+        required: true,
+        helpText: "Use the registered business name.",
+        placeholder: null,
+        multiline: false
+      },
+      {
+        id: "00000000-0000-4000-8000-000000000007",
+        type: "date_field",
+        fieldKey: "effective_date",
+        label: "Effective date",
+        required: true,
+        helpText: null
+      },
+      {
+        id: "00000000-0000-4000-8000-000000000008",
+        type: "dropdown_field",
+        fieldKey: "engagement_type",
+        label: "Engagement type",
+        required: true,
+        helpText: null,
+        placeholder: null,
+        options: ["Fixed fee", "Time and materials"]
+      },
+      {
+        id: "00000000-0000-4000-8000-000000000009",
+        type: "checkbox_field",
+        fieldKey: "terms_accepted",
+        label: "Commercial terms accepted",
+        required: true,
+        helpText: null,
+        checkedByDefault: false
+      },
+      {
+        id: "00000000-0000-4000-8000-000000000010",
+        type: "divider"
+      },
+      {
+        id: "00000000-0000-4000-8000-000000000011",
+        type: "heading",
+        text: "Detailed service terms",
+        level: 2,
+        alignment: "left"
+      },
+      ...detailParagraphs,
+      {
+        id: "00000000-0000-4000-8000-000000000012",
+        type: "paragraph",
+        text: "BizFlow Studio - BF-2026-0717",
+        alignment: "center"
+      }
+    ]
   }
 }
 
 void main().catch((error: unknown): void => {
   console.error("generated_document_visual_sample_failed", {
-    reason: error instanceof Error ? error.message : "Unknown sample error",
+    reason: error instanceof Error ? error.message : "Unknown sample error"
   })
   process.exitCode = 1
 })

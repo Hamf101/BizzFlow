@@ -14,8 +14,9 @@
     "supabase:check": "node scripts/check-supabase-live.mjs",
     "supabase:check:rls": "node scripts/check-supabase-rls.mjs",
     "typecheck": "tsc --noEmit",
-    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm check:duplication && pnpm build && pnpm audit:dependencies",
+    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm check:duplication && pnpm check:deadcode && pnpm build && pnpm audit:dependencies",
     "check:duplication": "jscpd src --format typescript,tsx --min-lines 5 --min-tokens 50 --mode strict --ignore '**/*.test.ts,**/*.test.tsx' --threshold 3 --reporters console --no-colors --no-tips",
+    "check:deadcode": "knip --include files,dependencies,exports,unlisted,unresolved",
     "audit:dependencies": "pnpm audit --prod --audit-level=moderate"
   },
   "dependencies": {
@@ -30,6 +31,7 @@
     "dejavu-fonts-ttf": "^2.37.3",
     "lucide-react": "^1.23.0",
     "next": "16.2.10",
+    "next-themes": "^0.4.6",
     "pdf-lib": "^1.17.1",
     "react": "19.2.4",
     "react-dom": "19.2.4",
@@ -45,6 +47,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.10",
     "jscpd": "5.0.12",
+    "knip": "^6.29.0",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^4.1.10"

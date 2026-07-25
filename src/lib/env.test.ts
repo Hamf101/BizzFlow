@@ -3,10 +3,10 @@ import { afterEach, describe, expect, it } from "vitest"
 import {
   getAdminSupabaseEnv,
   getAppUrlEnv,
+  getEmailJsEnv,
   getFileUploadPolicyEnv,
-  getOpenRouterEnv,
+  getGeminiEnv,
   getR2Env,
-  getResendEnv,
 } from "./env"
 
 const originalEnv = { ...process.env }
@@ -84,30 +84,33 @@ describe("application URL validation", () => {
   })
 })
 
-describe("Resend environment validation", () => {
+describe("EmailJS environment validation", () => {
   it("defaults the request timeout to ten seconds", () => {
     setIsolatedEnv({
-      RESEND_API_KEY: "resend-test-key",
-      RESEND_FROM_EMAIL: "BizFlow Docs <noreply@example.com>",
+      EMAILJS_SERVICE_ID: "service_o0h0qnp",
+      EMAILJS_TEMPLATE_ID: "template_notifications",
+      EMAILJS_PUBLIC_KEY: "public-test-key",
     })
 
-    expect(getResendEnv()).toEqual({
-      RESEND_API_KEY: "resend-test-key",
-      RESEND_FROM_EMAIL: "BizFlow Docs <noreply@example.com>",
-      RESEND_TIMEOUT_MS: 10000,
+    expect(getEmailJsEnv()).toEqual({
+      EMAILJS_SERVICE_ID: "service_o0h0qnp",
+      EMAILJS_TEMPLATE_ID: "template_notifications",
+      EMAILJS_PUBLIC_KEY: "public-test-key",
+      EMAILJS_TIMEOUT_MS: 10000,
     })
   })
 
   it.each(["999", "60001", "1.5", "not-a-number"])(
-    "rejects invalid Resend timeout %s",
+    "rejects invalid EmailJS timeout %s",
     (timeoutMs: string) => {
       setIsolatedEnv({
-        RESEND_API_KEY: "resend-test-key",
-        RESEND_FROM_EMAIL: "BizFlow Docs <noreply@example.com>",
-        RESEND_TIMEOUT_MS: timeoutMs,
+        EMAILJS_SERVICE_ID: "service_o0h0qnp",
+        EMAILJS_TEMPLATE_ID: "template_notifications",
+        EMAILJS_PUBLIC_KEY: "public-test-key",
+        EMAILJS_TIMEOUT_MS: timeoutMs,
       })
 
-      expect(() => getResendEnv()).toThrow("RESEND_TIMEOUT_MS")
+      expect(() => getEmailJsEnv()).toThrow("EMAILJS_TIMEOUT_MS")
     }
   )
 })
@@ -209,28 +212,28 @@ describe("file upload policy environment validation", () => {
   )
 })
 
-describe("OpenRouter environment validation", () => {
+describe("Gemini environment validation", () => {
   it("uses a stable model and timeout by default", () => {
     setIsolatedEnv({
-      OPENROUTER_API_KEY: "openrouter-test-key",
+      GEMINI_API_KEY: "gemini-test-key",
     })
 
-    expect(getOpenRouterEnv()).toEqual({
-      OPENROUTER_API_KEY: "openrouter-test-key",
-      OPENROUTER_MODEL: "openai/gpt-5-mini",
-      OPENROUTER_TIMEOUT_MS: 30000,
+    expect(getGeminiEnv()).toEqual({
+      GEMINI_API_KEY: "gemini-test-key",
+      GEMINI_MODEL: "gemini-3.6-flash",
+      GEMINI_TIMEOUT_MS: 30000,
     })
   })
 
   it.each(["999", "60001", "1.5", "not-a-number"])(
-    "rejects invalid OpenRouter timeout %s",
+    "rejects invalid Gemini timeout %s",
     (timeoutMs: string) => {
       setIsolatedEnv({
-        OPENROUTER_API_KEY: "openrouter-test-key",
-        OPENROUTER_TIMEOUT_MS: timeoutMs,
+        GEMINI_API_KEY: "gemini-test-key",
+        GEMINI_TIMEOUT_MS: timeoutMs,
       })
 
-      expect(() => getOpenRouterEnv()).toThrow("OPENROUTER_TIMEOUT_MS")
+      expect(() => getGeminiEnv()).toThrow("GEMINI_TIMEOUT_MS")
     }
   )
 })

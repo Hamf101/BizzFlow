@@ -4,16 +4,15 @@ import type { CSSProperties, ReactElement, ReactNode } from "react"
 import { DrawnSignatureField } from "@/components/documents/drawn-signature-field"
 import {
   isStaticTemplateBlock,
-  TemplateStaticBlock,
+  TemplateStaticBlock
 } from "@/components/templates/template-static-block"
-import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import {
   IMAGE_DATA_URL_PATTERN,
   MAX_IMAGE_DATA_URL_LENGTH,
   type TemplateBlock,
-  type TemplateContent,
+  type TemplateContent
 } from "@/types/template"
 
 import { getGeneratedDocumentAnswerName } from "./generated-document-form-data"
@@ -39,124 +38,94 @@ export function GeneratedDocumentContent({
   editable,
   fileFieldContent = {},
   recipientSigning = false,
-  recipientSigned = false,
+  recipientSigned = false
 }: GeneratedDocumentContentProps): ReactElement {
   const paperStyle = {
     "--document-accent": content.branding.accentColor,
-    "--document-primary": content.branding.primaryColor,
+    "--document-primary": content.branding.primaryColor
   } as CSSProperties
 
   return (
     <article
       aria-label="Generated document content"
-      className="mx-auto flex min-h-[48rem] w-full max-w-[50rem] flex-col overflow-hidden rounded-sm border bg-white text-slate-900 shadow-sm"
+      className="mx-auto min-h-[48rem] w-full max-w-[50rem] overflow-hidden rounded-sm border bg-card text-foreground shadow-sm"
       style={paperStyle}
     >
-      {(content.branding.logoDataUrl || content.branding.organizationName) && (
-        <div className="flex items-center gap-4 border-b border-slate-200 px-8 py-5 sm:px-12">
-          {content.branding.logoDataUrl && (
-            <Image
-              alt={`${content.branding.organizationName || "Organization"} logo`}
-              className="max-h-12 w-auto max-w-36 object-contain"
-              height={48}
-              src={content.branding.logoDataUrl}
-              unoptimized
-              width={144}
-            />
-          )}
-          {content.branding.organizationName && (
-            <span
-              className="text-sm font-semibold"
-              style={{ color: "var(--document-primary)" }}
-            >
-              {content.branding.organizationName}
-            </span>
-          )}
-        </div>
-      )}
+      <div className="mx-6 my-8 min-h-[42rem] min-w-0 overflow-hidden sm:mx-10">
+        {(content.branding.logoDataUrl ||
+          content.branding.organizationName) && (
+          <div
+            className={cn(
+              "flex min-w-0 flex-col gap-2 overflow-hidden border-b border-border px-1 pb-5",
+              content.branding.logoAlignment === "left" &&
+                "items-start text-left",
+              content.branding.logoAlignment === "center" &&
+                "items-center text-center",
+              content.branding.logoAlignment === "right" &&
+                "items-end text-right"
+            )}
+          >
+            {content.branding.logoDataUrl && (
+              <Image
+                alt={`${content.branding.organizationName || "Organization"} logo`}
+                className="h-auto max-h-16 object-contain"
+                height={96}
+                src={content.branding.logoDataUrl}
+                style={{ width: `${content.branding.logoWidthPercent}%` }}
+                unoptimized
+                width={480}
+              />
+            )}
+            {content.branding.organizationName && (
+              <span
+                className="text-sm font-semibold"
+                style={{ color: "var(--document-primary)" }}
+              >
+                {content.branding.organizationName}
+              </span>
+            )}
+          </div>
+        )}
 
-      <DocumentRegion
-        answers={answers}
-        blocks={content.sections.header.blocks}
-        editable={editable}
-        fileFieldContent={fileFieldContent}
-        label="Header"
-        recipientSigned={recipientSigned}
-        recipientSigning={recipientSigning}
-        repeat={content.repeat.header}
-        variant="header"
-      />
-      <DocumentRegion
-        answers={answers}
-        blocks={content.sections.body.blocks}
-        editable={editable}
-        fileFieldContent={fileFieldContent}
-        label="Body"
-        recipientSigned={recipientSigned}
-        recipientSigning={recipientSigning}
-        variant="body"
-      />
-      <DocumentRegion
-        answers={answers}
-        blocks={content.sections.footer.blocks}
-        editable={editable}
-        fileFieldContent={fileFieldContent}
-        label="Footer"
-        recipientSigned={recipientSigned}
-        recipientSigning={recipientSigning}
-        repeat={content.repeat.footer}
-        variant="footer"
-      />
+        <DocumentFlow
+          answers={answers}
+          blocks={content.blocks}
+          editable={editable}
+          fileFieldContent={fileFieldContent}
+          recipientSigned={recipientSigned}
+          recipientSigning={recipientSigning}
+        />
+      </div>
     </article>
   )
 }
 
-function DocumentRegion({
+function DocumentFlow({
   answers,
   blocks,
   editable,
   fileFieldContent,
-  label,
   recipientSigned,
-  recipientSigning,
-  repeat = false,
-  variant,
+  recipientSigning
 }: {
   answers: Record<string, unknown>
   blocks: TemplateBlock[]
   editable: boolean
   fileFieldContent: Readonly<Record<string, ReactNode>>
-  label: string
   recipientSigned: boolean
   recipientSigning: boolean
-  repeat?: boolean
-  variant: "header" | "body" | "footer"
 }): ReactElement {
   return (
     <section
-      aria-label={`${label} section`}
-      className={cn(
-        "px-8 py-6 sm:px-12",
-        variant === "body" && "min-h-[32rem] flex-1",
-        variant === "header" && "border-b border-dashed border-slate-200",
-        variant === "footer" && "border-t border-dashed border-slate-200"
-      )}
+      aria-label="Document content"
+      className="min-h-[32rem] min-w-0 overflow-hidden py-7"
     >
-      <div className="mb-4 flex items-center justify-between gap-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">
-        <span>{label}</span>
-        {variant !== "body" && repeat && (
-          <Badge className="border-slate-200 text-slate-500" variant="outline">
-            Repeats when printed
-          </Badge>
-        )}
-      </div>
-
       {blocks.length === 0 ? (
-        <div className="rounded-md border border-dashed border-slate-200 px-4 py-7 text-center text-xs text-slate-400">
-          No {label.toLowerCase()} content
+        <div className="rounded-md border border-dashed border-border px-4 py-7 text-center text-xs text-muted-foreground">
+          This document has no content yet
         </div>
       ) : (
-        <div className="flex flex-col gap-5">
+        <div className="flex flex-col gap-3">
           {blocks.map((block: TemplateBlock) => (
             <GeneratedBlock
               answers={answers}
@@ -180,7 +149,7 @@ function GeneratedBlock({
   editable,
   fileFieldContent,
   recipientSigned,
-  recipientSigning,
+  recipientSigning
 }: {
   answers: Record<string, unknown>
   block: TemplateBlock
@@ -202,11 +171,14 @@ function GeneratedBlock({
   switch (block.type) {
     case "text_field":
       return (
-        <AnswerFieldFrame block={block} labelFor={editable ? block.id : undefined}>
+        <AnswerFieldFrame
+          block={block}
+          labelFor={editable ? block.id : undefined}
+        >
           {editable ? (
             block.multiline ? (
               <textarea
-                className="min-h-24 w-full resize-y rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus-visible:border-slate-500 focus-visible:ring-2 focus-visible:ring-slate-300"
+                className="min-h-24 w-full resize-y rounded-lg border border-input bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
                 defaultValue={readStringAnswer(answers, block.fieldKey)}
                 id={block.id}
                 maxLength={20_000}
@@ -215,7 +187,7 @@ function GeneratedBlock({
               />
             ) : (
               <Input
-                className="border-slate-300 bg-white dark:bg-white"
+                className="border-input"
                 defaultValue={readStringAnswer(answers, block.fieldKey)}
                 id={block.id}
                 maxLength={20_000}
@@ -230,10 +202,13 @@ function GeneratedBlock({
       )
     case "date_field":
       return (
-        <AnswerFieldFrame block={block} labelFor={editable ? block.id : undefined}>
+        <AnswerFieldFrame
+          block={block}
+          labelFor={editable ? block.id : undefined}
+        >
           {editable ? (
             <Input
-              className="border-slate-300 bg-white dark:bg-white"
+              className="border-input"
               defaultValue={readStringAnswer(answers, block.fieldKey)}
               id={block.id}
               name={getGeneratedDocumentAnswerName("text", block.fieldKey)}
@@ -245,15 +220,21 @@ function GeneratedBlock({
         </AnswerFieldFrame>
       )
     case "checkbox_field": {
-      const answerName = getGeneratedDocumentAnswerName("boolean", block.fieldKey)
+      const answerName = getGeneratedDocumentAnswerName(
+        "boolean",
+        block.fieldKey
+      )
 
       return (
         <AnswerFieldFrame block={block} hideLabel>
           {editable ? (
-            <label className="flex items-start gap-3 text-sm" htmlFor={block.id}>
+            <label
+              className="flex items-start gap-3 text-sm"
+              htmlFor={block.id}
+            >
               <input name={answerName} type="hidden" value="false" />
               <input
-                className="mt-0.5 size-4 accent-slate-900"
+                className="mt-0.5 size-4 accent-primary"
                 defaultChecked={readBooleanAnswer(
                   answers,
                   block.fieldKey,
@@ -266,14 +247,14 @@ function GeneratedBlock({
               />
               <span>
                 {block.label}
-                {block.required && <span className="ml-1 text-red-600">*</span>}
+                {block.required && <span className="ml-1 text-destructive">*</span>}
               </span>
             </label>
           ) : (
             <div className="flex items-center gap-2 text-sm">
               <span
                 aria-hidden="true"
-                className="flex size-4 items-center justify-center rounded-sm border border-slate-400 text-[10px]"
+                className="flex size-4 items-center justify-center rounded-sm border border-muted-foreground/40 text-[10px]"
               >
                 {readBooleanAnswer(
                   answers,
@@ -291,15 +272,20 @@ function GeneratedBlock({
     }
     case "dropdown_field":
       return (
-        <AnswerFieldFrame block={block} labelFor={editable ? block.id : undefined}>
+        <AnswerFieldFrame
+          block={block}
+          labelFor={editable ? block.id : undefined}
+        >
           {editable ? (
             <select
-              className="h-8 w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-sm outline-none focus-visible:border-slate-500 focus-visible:ring-2 focus-visible:ring-slate-300"
+              className="h-8 w-full rounded-lg border border-input bg-card px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
               defaultValue={readStringAnswer(answers, block.fieldKey)}
               id={block.id}
               name={getGeneratedDocumentAnswerName("text", block.fieldKey)}
             >
-              <option value="">{block.placeholder || "Select an option"}</option>
+              <option value="">
+                {block.placeholder || "Select an option"}
+              </option>
               {block.options.map((option: string) => (
                 <option key={option} value={option}>
                   {option}
@@ -315,7 +301,7 @@ function GeneratedBlock({
       return (
         <AnswerFieldFrame block={block}>
           {fileFieldContent[block.fieldKey] ?? (
-            <div className="rounded-lg border border-dashed border-slate-300 px-4 py-5 text-sm text-slate-500">
+            <div className="rounded-lg border border-dashed border-border px-4 py-5 text-sm text-muted-foreground">
               File uploads are available only in internal submissions.
             </div>
           )}
@@ -330,7 +316,7 @@ function GeneratedBlock({
       if (recipientSigning) {
         return (
           <AnswerFieldFrame block={block}>
-            <div className="rounded-lg border border-dashed border-slate-300 px-4 py-5 text-sm text-slate-500">
+            <div className="rounded-lg border border-dashed border-border px-4 py-5 text-sm text-muted-foreground">
               {recipientSigned
                 ? `${drawingLabel === "signature" ? "Signature" : "Initials"} recorded.`
                 : `${drawingLabel === "signature" ? "Signature" : "Initials"} will be captured in the signing acknowledgement below.`}
@@ -341,13 +327,15 @@ function GeneratedBlock({
 
       return (
         <AnswerFieldFrame block={block} hideLabel={editable}>
-          {existingValue && <DrawingPreview label={block.label} value={existingValue} />}
+          {existingValue && (
+            <DrawingPreview label={block.label} value={existingValue} />
+          )}
           {editable && (
             <DrawnSignatureField
               description={
                 existingValue
                   ? `Draw new ${drawingLabel} only if you want to replace the saved one.`
-                  : block.helpText ?? undefined
+                  : (block.helpText ?? undefined)
               }
               label={existingValue ? `Replace ${block.label}` : block.label}
               name={getGeneratedDocumentAnswerName("drawing", block.fieldKey)}
@@ -364,7 +352,7 @@ function AnswerFieldFrame({
   block,
   children,
   hideLabel = false,
-  labelFor,
+  labelFor
 }: {
   block: Extract<TemplateBlock, { fieldKey: string }>
   children: ReactNode
@@ -374,7 +362,7 @@ function AnswerFieldFrame({
   const labelContent = (
     <>
       {block.label}
-      {block.required && <span className="ml-1 text-red-600">*</span>}
+      {block.required && <span className="ml-1 text-destructive">*</span>}
     </>
   )
 
@@ -382,17 +370,20 @@ function AnswerFieldFrame({
     <div className="flex flex-col gap-2">
       {!hideLabel &&
         (labelFor ? (
-          <label className="text-xs font-semibold text-slate-700" htmlFor={labelFor}>
+          <label
+            className="text-xs font-semibold text-foreground"
+            htmlFor={labelFor}
+          >
             {labelContent}
           </label>
         ) : (
-          <span className="text-xs font-semibold text-slate-700">
+          <span className="text-xs font-semibold text-foreground">
             {labelContent}
           </span>
         ))}
       {children}
       {block.helpText && (
-        <p className="text-xs leading-5 text-slate-500">{block.helpText}</p>
+        <p className="text-xs leading-5 text-muted-foreground">{block.helpText}</p>
       )}
     </div>
   )
@@ -400,15 +391,15 @@ function AnswerFieldFrame({
 
 function ReadOnlyAnswer({ value }: { value: string }): ReactElement {
   return (
-    <div className="min-h-9 whitespace-pre-wrap rounded-sm border border-slate-300 bg-slate-50 px-3 py-2 text-sm">
-      {value || <span className="text-slate-400">Not completed</span>}
+    <div className="min-h-9 whitespace-pre-wrap rounded-sm border border-border bg-muted px-3 py-2 text-sm">
+      {value || <span className="text-muted-foreground">Not completed</span>}
     </div>
   )
 }
 
 function DrawingPreview({
   label,
-  value,
+  value
 }: {
   label: string
   value: string
@@ -421,7 +412,7 @@ function DrawingPreview({
   }
 
   return (
-    <div className="rounded-lg border border-slate-300 bg-white p-3">
+    <div className="rounded-lg border border-border bg-white p-3">
       <Image
         alt={`Saved ${label}`}
         className="h-24 w-auto max-w-full object-contain"

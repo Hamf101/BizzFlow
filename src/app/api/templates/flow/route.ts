@@ -10,15 +10,15 @@ import {
   OrganizationServiceError,
 } from "@/services/organization-service"
 import {
-  suggestTemplateBlocks,
-  TemplateAiServiceError,
-} from "@/services/template-ai-service"
+  executeTemplateFlow,
+  TemplateFlowServiceError,
+} from "@/services/template-flow-service"
 
 /**
- * Creates non-mutating AI block proposals for the authenticated manager's draft.
+ * Completes one authenticated Flow chat turn and returns a validated next draft.
  *
- * @param request - JSON request containing draft, section, and instruction.
- * @returns Canonical proposal blocks or a user-safe JSON error.
+ * @param request - JSON request with template id, current draft, and user message.
+ * @returns Canonical draft changes, attributed chat messages, or a safe error.
  */
 export async function POST(request: Request): Promise<Response> {
   try {
@@ -26,28 +26,28 @@ export async function POST(request: Request): Promise<Response> {
     const context = await getCurrentOrganizationContext(user.id)
 
     if (!context) {
-      throw new TemplateAiServiceError(
-        "Create or join an organization before requesting suggestions.",
+      throw new TemplateFlowServiceError(
+        "Create or join an organization before using Flow.",
         403
       )
     }
 
     const body = await readTrustedJsonObject(request)
-    const proposals = await suggestTemplateBlocks({
+    const result = await executeTemplateFlow({
       actorUserId: user.id,
       organizationId: context.organization.id,
+      templateId: body.templateId,
       draft: body.draft,
-      section: body.section,
       instruction: body.instruction,
     })
 
-    return NextResponse.json({ proposals })
+    return NextResponse.json(result)
   } catch (error: unknown) {
-    return createTemplateAiErrorResponse(error)
+    return createTemplateFlowErrorResponse(error)
   }
 }
 
-function createTemplateAiErrorResponse(error: unknown): Response {
+function createTemplateFlowErrorResponse(error: unknown): Response {
   if (error instanceof RequestSecurityError) {
     return NextResponse.json(
       { error: error.message },
@@ -59,8 +59,8 @@ function createTemplateAiErrorResponse(error: unknown): Response {
     return NextResponse.json({ error: error.message }, { status: 401 })
   }
 
-  if (error instanceof TemplateAiServiceError) {
-    console.warn("template_ai_route_rejected", {
+  if (error instanceof TemplateFlowServiceError) {
+    console.warn("template_flow_route_rejected", {
       reason: error.message,
       statusCode: error.statusCode,
     })
@@ -71,7 +71,7 @@ function createTemplateAiErrorResponse(error: unknown): Response {
   }
 
   if (error instanceof OrganizationServiceError) {
-    console.warn("template_ai_route_rejected", {
+    console.warn("template_flow_route_rejected", {
       reason: error.message,
       statusCode: error.statusCode,
     })
@@ -81,11 +81,11 @@ function createTemplateAiErrorResponse(error: unknown): Response {
     )
   }
 
-  console.error("template_ai_route_failed", {
+  console.error("template_flow_route_failed", {
     reason: error instanceof Error ? error.message : "Unknown route error",
   })
   return NextResponse.json(
-    { error: "Unable to create AI suggestions." },
+    { error: "Unable to complete the Flow request." },
     { status: 500 }
   )
 }

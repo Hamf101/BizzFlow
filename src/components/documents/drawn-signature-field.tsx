@@ -78,7 +78,7 @@ export function DrawnSignatureField({
     context.lineCap = "round"
     context.lineJoin = "round"
     context.lineWidth = 3
-    context.strokeStyle = "#111827"
+    context.strokeStyle = "#252329"
     context.lineTo(point.x, point.y)
     context.stroke()
     strokeChangedRef.current = true

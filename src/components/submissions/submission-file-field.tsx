@@ -170,11 +170,11 @@ export function SubmissionFileField({
 
   if (file?.status === "available") {
     return (
-      <div className="flex flex-col gap-3 rounded-lg border border-slate-300 bg-slate-50 px-4 py-4">
+      <div className="flex flex-col gap-3 rounded-lg border border-border bg-muted px-4 py-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
             <p className="truncate text-sm font-medium">{file.originalFilename}</p>
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-muted-foreground">
               {formatByteSize(file.byteSize)} · Upload verified
             </p>
           </div>
@@ -214,17 +214,17 @@ export function SubmissionFileField({
 
   if (!editable) {
     return (
-      <div className="rounded-lg border border-dashed border-slate-300 px-4 py-5 text-sm text-slate-500">
+      <div className="rounded-lg border border-dashed border-border px-4 py-5 text-sm text-muted-foreground">
         {file ? "File upload is awaiting verification." : "No file uploaded."}
       </div>
     )
   }
 
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-dashed border-slate-300 px-4 py-4">
+    <div className="flex flex-col gap-3 rounded-lg border border-dashed border-border px-4 py-4">
       {file?.status === "upload_pending" && (
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-xs text-amber-700">
+          <p className="text-xs text-amber-700 dark:text-amber-500">
             The earlier upload was not verified. Choose the same file to retry
             it, or cancel it and choose another.
           </p>
@@ -241,7 +241,7 @@ export function SubmissionFileField({
         </div>
       )}
       <div className="flex flex-col gap-2">
-        <label className="text-xs font-medium text-slate-700" htmlFor={inputId}>
+        <label className="text-xs font-medium text-foreground" htmlFor={inputId}>
           Choose file
         </label>
         <Input
@@ -251,7 +251,7 @@ export function SubmissionFileField({
           onChange={handleFileChange}
           type="file"
         />
-        <p className="text-xs text-slate-500">
+        <p className="text-xs text-muted-foreground">
           PDF, PNG, JPG, DOCX, XLSX, or CSV. Maximum 20 MB.
         </p>
       </div>

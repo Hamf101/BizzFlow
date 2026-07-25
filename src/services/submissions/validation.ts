@@ -2,7 +2,7 @@ import { normalizeOptionalDrawing } from "@/services/document-signing/drawing-va
 import {
   SubmissionDomainError,
   type SubmissionAnswers,
-  type SubmissionAnswerValue,
+  type SubmissionAnswerValue
 } from "@/types/submission"
 import type { TemplateBlock, TemplateContent } from "@/types/template"
 
@@ -95,22 +95,20 @@ function collectSubmissionFields(
 ): Map<string, SubmissionFieldBlock> {
   const fieldByKey = new Map<string, SubmissionFieldBlock>()
 
-  for (const section of Object.values(snapshot.sections)) {
-    for (const block of section.blocks) {
-      if (!("fieldKey" in block)) {
-        continue
-      }
-
-      if (fieldByKey.has(block.fieldKey)) {
-        throw new SubmissionDomainError(
-          `Submission template field ${block.fieldKey} is duplicated.`,
-          "invalid_submission_snapshot",
-          500
-        )
-      }
-
-      fieldByKey.set(block.fieldKey, block)
+  for (const block of snapshot.blocks) {
+    if (!("fieldKey" in block)) {
+      continue
     }
+
+    if (fieldByKey.has(block.fieldKey)) {
+      throw new SubmissionDomainError(
+        `Submission template field ${block.fieldKey} is duplicated.`,
+        "invalid_submission_snapshot",
+        500
+      )
+    }
+
+    fieldByKey.set(block.fieldKey, block)
   }
 
   return fieldByKey
@@ -150,9 +148,7 @@ async function normalizeFieldAnswer(
       )
       return drawing?.dataUrl ?? ""
     } catch {
-      throw invalidAnswers(
-        `The drawn ${field.label.toLowerCase()} is invalid.`
-      )
+      throw invalidAnswers(`The drawn ${field.label.toLowerCase()} is invalid.`)
     }
   }
 
@@ -228,9 +224,5 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function invalidAnswers(message: string): SubmissionDomainError {
-  return new SubmissionDomainError(
-    message,
-    "invalid_submission_answers",
-    400
-  )
+  return new SubmissionDomainError(message, "invalid_submission_answers", 400)
 }

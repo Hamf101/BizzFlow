@@ -1,6 +1,4 @@
-import {
-  normalizeRequiredDrawing,
-} from "@/services/document-signing/drawing-validation"
+import { normalizeRequiredDrawing } from "@/services/document-signing/drawing-validation"
 import { DocumentSigningServiceError } from "@/services/document-signing/errors"
 import type { TemplateBlock, TemplateContent } from "@/types/template"
 
@@ -19,21 +17,19 @@ export function collectFields(
 ): Map<string, FieldBlock> {
   const fieldByKey = new Map<string, FieldBlock>()
 
-  for (const section of Object.values(content.sections)) {
-    for (const block of section.blocks) {
-      if (!("fieldKey" in block) || block.type === "file_field") {
-        continue
-      }
-
-      if (fieldByKey.has(block.fieldKey)) {
-        throw new DocumentSigningServiceError(
-          `Document field key ${block.fieldKey} is duplicated.`,
-          500
-        )
-      }
-
-      fieldByKey.set(block.fieldKey, block)
+  for (const block of content.blocks) {
+    if (!("fieldKey" in block) || block.type === "file_field") {
+      continue
     }
+
+    if (fieldByKey.has(block.fieldKey)) {
+      throw new DocumentSigningServiceError(
+        `Document field key ${block.fieldKey} is duplicated.`,
+        500
+      )
+    }
+
+    fieldByKey.set(block.fieldKey, block)
   }
 
   return fieldByKey
@@ -146,11 +142,9 @@ export function assertRequiredAnswersComplete(
 export function templateRequiresRecipientInitials(
   content: TemplateContent
 ): boolean {
-  for (const section of Object.values(content.sections)) {
-    for (const block of section.blocks) {
-      if (block.type === "initials_field" && block.required) {
-        return true
-      }
+  for (const block of content.blocks) {
+    if (block.type === "initials_field" && block.required) {
+      return true
     }
   }
 
@@ -173,10 +167,7 @@ async function normalizeFieldAnswer(
   }
 
   if (typeof value !== "string") {
-    throw new DocumentSigningServiceError(
-      `${block.label} must be text.`,
-      400
-    )
+    throw new DocumentSigningServiceError(`${block.label} must be text.`, 400)
   }
 
   const normalizedValue = value.trim()
@@ -188,10 +179,7 @@ async function normalizeFieldAnswer(
   }
 
   if (normalizedValue.length > 20_000) {
-    throw new DocumentSigningServiceError(
-      `${block.label} is too long.`,
-      400
-    )
+    throw new DocumentSigningServiceError(`${block.label} is too long.`, 400)
   }
 
   if (block.type === "date_field" && normalizedValue.length > 0) {

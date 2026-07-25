@@ -11,7 +11,7 @@ import {
   CardDescription,
   CardFooter,
   CardHeader,
-  CardTitle,
+  CardTitle
 } from "@/components/ui/card"
 import { Field, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
@@ -34,7 +34,7 @@ type NewTemplateSearchParams = Promise<{
  * @returns A manager-only create form.
  */
 export default async function NewTemplatePage({
-  searchParams,
+  searchParams
 }: {
   searchParams: NewTemplateSearchParams
 }): Promise<ReactElement> {
@@ -42,7 +42,7 @@ export default async function NewTemplatePage({
   const user = await loadAuthenticatedPageUser("/templates/new")
   const contextResult = await loadPageOrganizationContext({
     userId: user.id,
-    failureEvent: "new_template_context_load_failed",
+    failureEvent: "new_template_context_load_failed"
   })
 
   if (!contextResult.context && contextResult.errorMessage) {
@@ -69,7 +69,7 @@ export default async function NewTemplatePage({
   if (!contextResult.context) {
     redirect(
       buildRedirect("/dashboard", {
-        error: "Create an organization before managing templates.",
+        error: "Create an organization before managing templates."
       })
     )
   }
@@ -81,7 +81,7 @@ export default async function NewTemplatePage({
   ) {
     redirect(
       buildRedirect("/templates", {
-        error: "You cannot create document templates.",
+        error: "You cannot create document templates."
       })
     )
   }
@@ -97,7 +97,10 @@ export default async function NewTemplatePage({
 
       <div className="flex flex-col gap-3">
         <Link
-          className={cn(buttonVariants({ size: "sm", variant: "ghost" }), "w-fit")}
+          className={cn(
+            buttonVariants({ size: "sm", variant: "ghost" }),
+            "w-fit"
+          )}
           href="/templates"
         >
           <ArrowLeft />
@@ -108,8 +111,8 @@ export default async function NewTemplatePage({
             Create a template
           </h1>
           <p className="max-w-2xl text-sm text-muted-foreground">
-            Start with a blank header, body, and footer, then build the content in
-            the guided editor.
+            Start with one blank document flow, then add content anywhere inside
+            the printable page boundary.
           </p>
         </div>
       </div>
@@ -122,7 +125,11 @@ export default async function NewTemplatePage({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form action={createTemplateAction} className="flex flex-col gap-5" id="new-template-form">
+          <form
+            action={createTemplateAction}
+            className="flex flex-col gap-5"
+            id="new-template-form"
+          >
             <Field>
               <FieldLabel htmlFor="new-template-title">Title</FieldLabel>
               <Input

@@ -18,7 +18,7 @@ import {
   CardDescription,
   CardFooter,
   CardHeader,
-  CardTitle,
+  CardTitle
 } from "@/components/ui/card"
 import { formatMediumDateTime } from "@/lib/date-format"
 import { buildRedirect } from "@/lib/form-utils"
@@ -36,7 +36,7 @@ import type { SubmissionFile } from "@/types/submission"
 import {
   createSubmissionCommentAction,
   saveSubmissionAction,
-  submitSubmissionAction,
+  submitSubmissionAction
 } from "../actions"
 
 export const dynamic = "force-dynamic"
@@ -55,7 +55,7 @@ type SubmissionDetailSearchParams = Promise<{
  */
 export default async function SubmissionDetailPage({
   params,
-  searchParams,
+  searchParams
 }: {
   params: SubmissionDetailParams
   searchParams: SubmissionDetailSearchParams
@@ -66,7 +66,7 @@ export default async function SubmissionDetailPage({
   const contextResult = await loadPageOrganizationContext({
     userId: user.id,
     failureEvent: "submission_detail_context_load_failed",
-    failureDetails: { submissionId },
+    failureDetails: { submissionId }
   })
 
   if (!contextResult.context) {
@@ -74,7 +74,7 @@ export default async function SubmissionDetailPage({
       buildRedirect("/submissions", {
         error:
           contextResult.errorMessage ??
-          "Create an organization before viewing submissions.",
+          "Create an organization before viewing submissions."
       })
     )
   }
@@ -84,23 +84,23 @@ export default async function SubmissionDetailPage({
     getInternalSubmission({
       actorUserId: user.id,
       organizationId: context.organization.id,
-      submissionId,
+      submissionId
     })
       .then((detail: SubmissionDetail) => ({
         detail,
-        errorMessage: null as string | null,
+        errorMessage: null as string | null
       }))
       .catch((error: unknown) => ({
         detail: null,
         errorMessage: getPageErrorMessage(
           error,
           "Unable to load internal submission."
-        ),
+        )
       })),
     listOrganizationPeople(user.id, context.organization.id)
       .then((people) => ({
         members: people.members,
-        errorMessage: null as string | null,
+        errorMessage: null as string | null
       }))
       .catch((error: unknown) => {
         const errorMessage = getPageErrorMessage(
@@ -111,10 +111,10 @@ export default async function SubmissionDetailPage({
           organizationId: context.organization.id,
           reason: errorMessage,
           submissionId,
-          userId: user.id,
+          userId: user.id
         })
         return { members: [] as OrganizationMember[], errorMessage }
-      }),
+      })
   ])
 
   if (!result.detail) {
@@ -133,10 +133,7 @@ export default async function SubmissionDetailPage({
   const editable =
     (submission.status === "draft" || submission.status === "needs_changes") &&
     submission.createdBy === user.id &&
-    canPerformOrganizationAction(
-      context.membership.role,
-      "submissions:edit"
-    )
+    canPerformOrganizationAction(context.membership.role, "submissions:edit")
   const canAssign = canPerformOrganizationAction(
     context.membership.role,
     "submissions:assign"
@@ -154,7 +151,7 @@ export default async function SubmissionDetailPage({
   const fileFieldContent = buildFileFieldContent({
     detail,
     editable,
-    organizationId: context.organization.id,
+    organizationId: context.organization.id
   })
 
   return (
@@ -178,8 +175,8 @@ export default async function SubmissionDetailPage({
             <SubmissionStatusBadge status={submission.status} />
           </div>
           <p className="text-sm text-muted-foreground">
-            Template revision {submission.templateRevision} · Submission revision{" "}
-            {submission.revision}
+            Template revision {submission.templateRevision} · Submission
+            revision {submission.revision}
           </p>
           {submission.assignedAt && (
             <p className="text-sm text-muted-foreground">
@@ -271,7 +268,9 @@ export default async function SubmissionDetailPage({
               : "This view uses the exact template snapshot saved with the submission."}
           </CardDescription>
           <CardAction>
-            <Badge variant="outline">{editable ? "Editable" : "Read only"}</Badge>
+            <Badge variant="outline">
+              {editable ? "Editable" : "Read only"}
+            </Badge>
           </CardAction>
         </CardHeader>
         <CardContent className="overflow-auto bg-muted/30 p-4 sm:p-6">
@@ -355,7 +354,7 @@ export default async function SubmissionDetailPage({
 
 function SubmissionDiscussionCard({
   canComment,
-  submissionId,
+  submissionId
 }: {
   canComment: boolean
   submissionId: string
@@ -403,7 +402,7 @@ function SubmissionDiscussionCard({
 
 function SubmissionDetailShell({
   children,
-  query,
+  query
 }: {
   children: ReactNode
   query: Awaited<SubmissionDetailSearchParams>
@@ -433,32 +432,29 @@ function buildFileFieldContent(input: {
   organizationId: string
 }): Readonly<Record<string, ReactNode>> {
   const filesByFieldKey = new Map<string, SubmissionFile>(
-    input.detail.files.map(
-      (file: SubmissionFile): [string, SubmissionFile] => [file.fieldKey, file]
-    )
+    input.detail.files.map((file: SubmissionFile): [string, SubmissionFile] => [
+      file.fieldKey,
+      file
+    ])
   )
   const content: Record<string, ReactNode> = {}
 
-  for (const section of Object.values(
-    input.detail.submission.templateSnapshot.sections
-  )) {
-    for (const block of section.blocks) {
-      if (block.type !== "file_field") {
-        continue
-      }
-
-      content[block.fieldKey] = (
-        <SubmissionFileField
-          editable={input.editable}
-          expectedRevision={input.detail.submission.revision}
-          fieldKey={block.fieldKey}
-          file={filesByFieldKey.get(block.fieldKey) ?? null}
-          key={block.id}
-          organizationId={input.organizationId}
-          submissionId={input.detail.submission.id}
-        />
-      )
+  for (const block of input.detail.submission.templateSnapshot.blocks) {
+    if (block.type !== "file_field") {
+      continue
     }
+
+    content[block.fieldKey] = (
+      <SubmissionFileField
+        editable={input.editable}
+        expectedRevision={input.detail.submission.revision}
+        fieldKey={block.fieldKey}
+        file={filesByFieldKey.get(block.fieldKey) ?? null}
+        key={block.id}
+        organizationId={input.organizationId}
+        submissionId={input.detail.submission.id}
+      />
+    )
   }
 
   return content

@@ -1,12 +1,12 @@
-import { getAppUrlEnv, getResendEnv } from "@/lib/env"
+import { getAppUrlEnv, getEmailJsEnv } from "@/lib/env"
 import { buildAcceptInvitePath } from "@/lib/auth-redirects"
 import { escapeHtml } from "@/services/email/html"
 import {
-  ResendTransportError,
-  sendResendEmail,
-  type ResendEmailPayload,
-  type ResendTransport,
-} from "@/services/email/resend-transport"
+  EmailJsTransportError,
+  sendEmailJsEmail,
+  type EmailJsEmailPayload,
+  type EmailJsTransport,
+} from "@/services/email/emailjs-transport"
 
 type SendInviteEmailInput = {
   inviteId: string
@@ -16,7 +16,7 @@ type SendInviteEmailInput = {
 }
 
 export type InviteEmailServiceDeps = {
-  transport?: ResendTransport
+  transport?: EmailJsTransport
 }
 
 /**
@@ -43,7 +43,7 @@ export class InviteEmailServiceError extends Error {
  *
  * @param input - Invite identifiers and recipient details.
  * @param deps - Optional email transport dependency for tests.
- * @returns Resolves once Resend accepts the delivery request.
+ * @returns Resolves once EmailJS accepts the delivery request.
  * @throws InviteEmailServiceError when email configuration or delivery fails.
  */
 export async function sendInviteEmail(
@@ -51,11 +51,11 @@ export async function sendInviteEmail(
   deps: InviteEmailServiceDeps = {}
 ): Promise<void> {
   const startedAt = performance.now()
-  let resendEnv: ReturnType<typeof getResendEnv>
+  let emailJsEnv: ReturnType<typeof getEmailJsEnv>
   let invitationUrl: string
 
   try {
-    resendEnv = getResendEnv()
+    emailJsEnv = getEmailJsEnv()
     const appUrl = getAppUrlEnv().NEXT_PUBLIC_APP_URL
     invitationUrl = new URL(buildAcceptInvitePath(input.token), appUrl).toString()
   } catch {
@@ -65,39 +65,38 @@ export async function sendInviteEmail(
       failureKind: "invalid_configuration",
     })
     throw new InviteEmailServiceError(
-      "Invite email is not configured. Add RESEND_API_KEY and RESEND_FROM_EMAIL.",
+      "Invite email is not configured. Add the required EMAILJS environment variables.",
       500
     )
   }
 
-  const payload: ResendEmailPayload = {
-    from: resendEnv.RESEND_FROM_EMAIL,
-    to: [input.recipientEmail],
+  const payload: EmailJsEmailPayload = {
+    toEmail: input.recipientEmail,
     subject: `You're invited to ${input.organizationName} on BizFlow Docs`,
     html: createInviteEmailHtml(input.organizationName, invitationUrl),
     text: createInviteEmailText(input.organizationName, invitationUrl),
-    ...(resendEnv.RESEND_REPLY_TO_EMAIL
-      ? { reply_to: resendEnv.RESEND_REPLY_TO_EMAIL }
+    ...(emailJsEnv.EMAILJS_REPLY_TO_EMAIL
+      ? { replyTo: emailJsEnv.EMAILJS_REPLY_TO_EMAIL }
       : {}),
   }
 
   try {
-    const transport = deps.transport ?? sendResendEmail
+    const transport = deps.transport ?? sendEmailJsEmail
     const result = await transport(
       {
-        logicalDeliveryId: `organization-invite/${input.inviteId}`,
+        deliveryReference: `organization-invite/${input.inviteId}`,
         payload,
       },
-      resendEnv
+      emailJsEnv
     )
 
     console.info("invite_email_delivered", {
       inviteId: input.inviteId,
-      resendEmailId: result.emailId,
+      providerStatus: result.providerStatus,
       durationMs: Math.round(performance.now() - startedAt),
     })
   } catch (error: unknown) {
-    const transportError = error instanceof ResendTransportError ? error : null
+    const transportError = error instanceof EmailJsTransportError ? error : null
 
     console.error("invite_email_delivery_failed", {
       inviteId: input.inviteId,
@@ -108,7 +107,7 @@ export async function sendInviteEmail(
 
     if (transportError?.kind === "provider_rejected") {
       throw new InviteEmailServiceError(
-        "Unable to send the invite email. Check the configured sender and try again.",
+        "Unable to send the invite email. Check the EmailJS configuration and try again.",
         502
       )
     }
@@ -127,7 +126,16 @@ function createInviteEmailHtml(
   const safeOrganizationName = escapeHtml(organizationName)
   const safeInvitationUrl = escapeHtml(invitationUrl)
 
-  return `<h2>You've been invited to ${safeOrganizationName}</h2><p>Create a BizFlow Docs account or sign in to join the workspace.</p><p><a href="${safeInvitationUrl}">Accept invitation</a></p><p>If you were not expecting this email, you can safely ignore it.</p>`
+  return [
+    `<h1 style="margin:0 0 16px;color:#171717;font-family:Arial,Helvetica,sans-serif;font-size:24px;font-weight:700;line-height:32px;">You&#39;ve been invited to ${safeOrganizationName}</h1>`,
+    '<p style="margin:0 0 24px;color:#525252;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:24px;">Create a BizFlow Docs account or sign in to join the workspace.</p>',
+    '<table role="presentation" border="0" cellpadding="0" cellspacing="0" style="margin:0 0 24px;border-collapse:separate;"><tr><td style="border-radius:8px;background-color:#171717;">',
+    `<a href="${safeInvitationUrl}" target="_blank" style="display:inline-block;padding:12px 20px;color:#ffffff;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:700;line-height:20px;text-decoration:none;">Accept invitation</a>`,
+    "</td></tr></table>",
+    '<p style="margin:0 0 8px;color:#737373;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;">If the button does not work, copy and paste this link into your browser:</p>',
+    `<p style="margin:0 0 24px;overflow-wrap:anywhere;word-break:break-word;"><a href="${safeInvitationUrl}" target="_blank" style="color:#404040;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;text-decoration:underline;">${safeInvitationUrl}</a></p>`,
+    '<p style="margin:0;padding-top:20px;border-top:1px solid #e5e5e5;color:#737373;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;">If you were not expecting this invitation, you can safely ignore this email.</p>',
+  ].join("")
 }
 
 function createInviteEmailText(

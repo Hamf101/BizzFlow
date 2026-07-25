@@ -13,24 +13,30 @@ const appUrlSchema = z.object({
   NEXT_PUBLIC_APP_URL: z.string().url(),
 })
 
-const resendEnvSchema = z.object({
-  RESEND_API_KEY: z.string().min(1),
-  RESEND_FROM_EMAIL: z.string().min(1),
-  RESEND_REPLY_TO_EMAIL: z.preprocess(
+const emailJsEnvSchema = z.object({
+  EMAILJS_SERVICE_ID: z.string().min(1),
+  EMAILJS_TEMPLATE_ID: z.string().min(1),
+  EMAILJS_PUBLIC_KEY: z.string().min(1),
+  EMAILJS_PRIVATE_KEY: z.preprocess(
+    (value: unknown): unknown =>
+      typeof value === "string" && value.trim().length === 0 ? undefined : value,
+    z.string().min(1).optional()
+  ),
+  EMAILJS_REPLY_TO_EMAIL: z.preprocess(
     (value: unknown): unknown =>
       typeof value === "string" && value.trim().length === 0 ? undefined : value,
     z.string().email().optional()
   ),
-  RESEND_TIMEOUT_MS: z.preprocess(
+  EMAILJS_TIMEOUT_MS: z.preprocess(
     parseIntegerEnvValue,
     z.number().int().min(1000).max(60000).default(10000)
   ),
 })
 
-const openRouterEnvSchema = z.object({
-  OPENROUTER_API_KEY: z.string().min(1),
-  OPENROUTER_MODEL: z.string().min(1).default("openai/gpt-5-mini"),
-  OPENROUTER_TIMEOUT_MS: z.preprocess(
+const geminiEnvSchema = z.object({
+  GEMINI_API_KEY: z.string().min(1),
+  GEMINI_MODEL: z.string().min(1).default("gemini-3.6-flash"),
+  GEMINI_TIMEOUT_MS: z.preprocess(
     parseIntegerEnvValue,
     z.number().int().min(1000).max(60000).default(30000)
   ),
@@ -73,8 +79,8 @@ export type AdminSupabaseEnv = PublicSupabaseEnv & {
 }
 
 export type AppUrlEnv = z.infer<typeof appUrlSchema>
-export type ResendEnv = z.infer<typeof resendEnvSchema>
-export type OpenRouterEnv = z.infer<typeof openRouterEnvSchema>
+export type EmailJsEnv = z.infer<typeof emailJsEnvSchema>
+export type GeminiEnv = z.infer<typeof geminiEnvSchema>
 export type R2Env = z.infer<typeof r2EnvSchema>
 export type FileUploadPolicyEnv = z.infer<typeof fileUploadPolicySchema>
 
@@ -200,33 +206,33 @@ export function getAppUrlEnv(): AppUrlEnv {
 }
 
 /**
- * Reads and validates the server-only Resend email configuration.
+ * Reads and validates the server-side EmailJS configuration.
  *
- * @returns Resend API key, sender addresses, and request timeout.
+ * @returns EmailJS service, template, account keys, reply address, and timeout.
  * @throws Error when required email-delivery values are missing or invalid.
  */
-export function getResendEnv(): ResendEnv {
-  const result = resendEnvSchema.safeParse(process.env)
+export function getEmailJsEnv(): EmailJsEnv {
+  const result = emailJsEnvSchema.safeParse(process.env)
 
   if (!result.success) {
-    throw new Error(`Invalid Resend environment: ${formatEnvError(result.error)}`)
+    throw new Error(`Invalid EmailJS environment: ${formatEnvError(result.error)}`)
   }
 
   return result.data
 }
 
 /**
- * Reads and validates server-only OpenRouter assistant configuration.
+ * Reads and validates server-only Gemini assistant configuration.
  *
- * @returns OpenRouter API key, model identifier, and request timeout.
+ * @returns Gemini API key, model identifier, and request timeout.
  * @throws Error when required AI configuration is missing or invalid.
  */
-export function getOpenRouterEnv(): OpenRouterEnv {
-  const result = openRouterEnvSchema.safeParse(process.env)
+export function getGeminiEnv(): GeminiEnv {
+  const result = geminiEnvSchema.safeParse(process.env)
 
   if (!result.success) {
     throw new Error(
-      `Invalid OpenRouter environment: ${formatEnvError(result.error)}`
+      `Invalid Gemini environment: ${formatEnvError(result.error)}`
     )
   }
 

@@ -108,7 +108,7 @@ export function TemplateStaticBlock({
             width={800}
           />
           {block.caption && (
-            <figcaption className="text-xs text-slate-500">
+            <figcaption className="text-xs text-muted-foreground">
               {block.caption}
             </figcaption>
           )}
@@ -116,13 +116,13 @@ export function TemplateStaticBlock({
       )
     case "table":
       return (
-        <div className="overflow-x-auto rounded-sm border border-slate-300">
+        <div className="overflow-x-auto rounded-sm border border-border">
           <table className="w-full border-collapse text-left text-xs">
-            <thead className="bg-slate-100">
+            <thead className="bg-muted">
               <tr>
                 {block.headers.map((header: string, index: number) => (
                   <th
-                    className="border-b border-slate-300 px-3 py-2 font-semibold"
+                    className="border-b border-border px-3 py-2 font-semibold"
                     key={`${block.id}-header-${index}`}
                     scope="col"
                   >
@@ -136,7 +136,7 @@ export function TemplateStaticBlock({
                 <tr key={`${block.id}-row-${rowIndex}`}>
                   {block.headers.map((_header: string, columnIndex: number) => (
                     <td
-                      className="border-b border-slate-200 px-3 py-2"
+                      className="border-b border-border px-3 py-2"
                       key={`${block.id}-${rowIndex}-${columnIndex}`}
                     >
                       {row[columnIndex] ?? ""}

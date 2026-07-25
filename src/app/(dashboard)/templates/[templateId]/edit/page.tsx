@@ -12,8 +12,10 @@ import { getPageErrorMessage } from "@/lib/page-errors"
 import { loadPageOrganizationContext } from "@/lib/page-organization-context"
 import { canPerformOrganizationAction } from "@/lib/permissions"
 import { cn } from "@/lib/utils"
+import { listTemplateFlowMessages } from "@/services/template-flow-service"
 import { getDocumentTemplate } from "@/services/template-service"
 import type { DocumentTemplate } from "@/types/template"
+import type { TemplateFlowMessage } from "@/types/template-flow"
 
 import {
   archiveTemplateAction,
@@ -123,12 +125,27 @@ export default async function EditTemplatePage({
     )
   }
 
+  const initialFlowMessages = await listTemplateFlowMessages({
+    actorUserId: user.id,
+    organizationId: context.organization.id,
+    templateId,
+  }).catch((error: unknown): TemplateFlowMessage[] => {
+    console.warn("template_flow_history_page_load_failed", {
+      organizationId: context.organization.id,
+      templateId,
+      userId: user.id,
+      reason: error instanceof Error ? error.message : "Unknown history error",
+    })
+    return []
+  })
+
   return (
     <EditTemplateShell query={query}>
       <TemplateEditor
         archiveAction={archiveTemplateAction}
         publishAction={publishTemplateAction}
         saveAction={updateTemplateAction}
+        initialFlowMessages={initialFlowMessages}
         template={templateResult.template}
       />
     </EditTemplateShell>

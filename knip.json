@@ -1,0 +1,11 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": [
+    "src/**/*.test.{ts,tsx}",
+    "scripts/**/*.{mjs,ts,tsx}",
+    "supabase/tests/**/*.test.ts"
+  ],
+  "project": ["src/**/*.{ts,tsx}"],
+  "ignoreDependencies": ["dejavu-fonts-ttf", "tailwindcss", "tw-animate-css"],
+  "ignoreExportsUsedInFile": true
+}

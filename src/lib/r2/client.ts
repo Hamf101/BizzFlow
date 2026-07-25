@@ -12,6 +12,8 @@ export function createR2Client(r2Env: R2Env = getR2Env()): S3Client {
   return new S3Client({
     endpoint: r2Env.CLOUDFLARE_R2_ENDPOINT,
     region: r2Env.CLOUDFLARE_R2_REGION,
+    // R2's account endpoint expects the bucket in the URL path.
+    forcePathStyle: true,
     // Keep presigned R2 PUT URLs free of optional SDK-generated CRC32 parameters.
     requestChecksumCalculation: "WHEN_REQUIRED",
     credentials: {

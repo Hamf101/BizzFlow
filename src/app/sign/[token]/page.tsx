@@ -2,6 +2,7 @@ import { CheckCircle2, LockKeyhole, Send } from "lucide-react"
 import type { Metadata } from "next"
 import type { ReactElement } from "react"
 
+import { BizFlowWordmark } from "@/components/brand/bizflow-mark"
 import { DrawnSignatureField } from "@/components/documents/drawn-signature-field"
 import { GeneratedDocumentContent } from "@/components/documents/generated-document-content"
 import { getGeneratedDocumentAnswerBaselineFields } from "@/components/documents/generated-document-form-data"
@@ -311,15 +312,10 @@ function PublicSigningShell({
   query: Awaited<PublicSigningSearchParams>
 }): ReactElement {
   return (
-    <main className="min-h-screen bg-muted/20 px-4 py-8 text-foreground sm:py-12">
+    <main className="min-h-screen bg-background px-4 py-8 text-foreground sm:py-12">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
         <div className="flex items-center justify-between gap-4 border-b pb-4">
-          <div className="flex flex-col gap-1">
-            <span className="text-base font-semibold">BizFlow Docs</span>
-            <span className="text-xs text-muted-foreground">
-              Secure document review and signing
-            </span>
-          </div>
+          <BizFlowWordmark />
           <Badge variant="secondary">Private access</Badge>
         </div>
         {query.error && (

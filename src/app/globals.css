@@ -1,26 +1,63 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --canvas: #e8e4db;
+  --background: #f3f1ed;
+  --foreground: #252329;
+  --card: #fffdfc;
+  --card-foreground: #252329;
+  --popover: #fffdfc;
+  --popover-foreground: #252329;
+  --primary: #635273;
+  --primary-foreground: #fffdfc;
+  --secondary: #ece6f3;
+  --secondary-foreground: #4c4058;
+  --muted: #ebe8e3;
+  --muted-foreground: #706a72;
+  --accent: #e7dfed;
+  --accent-foreground: #4c4058;
+  --destructive: #a24949;
+  --border: #d9d4ce;
+  --input: #d9d4ce;
+  --ring: #8a729a;
+  --brand-stone: #f3f1ed;
+  --brand-paper: #fffdfc;
+  --brand-ink: #252329;
+  --brand-vellum: #ece6f3;
+  --brand-plum: #635273;
+  --brand-rule: #c9c2bb;
+}
+
+.dark {
+  --canvas: #0b0910;
+  --background: #16141b;
+  --foreground: #ece9f2;
+  --card: #201d29;
+  --card-foreground: #ece9f2;
+  --popover: #221e2b;
+  --popover-foreground: #ece9f2;
+  --primary: #ab93c4;
+  --primary-foreground: #1b1822;
+  --secondary: #2b2634;
+  --secondary-foreground: #ded4ec;
+  --muted: #211e29;
+  --muted-foreground: #9d96aa;
+  --accent: #342d41;
+  --accent-foreground: #e8dff4;
+  --destructive: #e27e7a;
+  --border: #322c3d;
+  --input: #342e40;
+  --ring: #a890c6;
+  --brand-stone: #16141b;
+  --brand-paper: #201d29;
+  --brand-ink: #ece9f2;
+  --brand-vellum: #2b2634;
+  --brand-plum: #ab93c4;
+  --brand-rule: #3b3549;
 }
 
 @theme inline {
@@ -28,6 +65,7 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+  --color-canvas: var(--canvas);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -46,14 +84,24 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-brand-stone: var(--brand-stone);
+  --color-brand-paper: var(--brand-paper);
+  --color-brand-ink: var(--brand-ink);
+  --color-brand-vellum: var(--brand-vellum);
+  --color-brand-plum: var(--brand-plum);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-editorial: var(--font-newsreader);
 }
 
 @layer base {
   * {
     border-color: var(--border);
     outline-color: color-mix(in oklch, var(--ring) 50%, transparent);
+  }
+
+  .lucide {
+    stroke-width: 1.6;
   }
 
   html {
@@ -64,6 +112,42 @@
     min-height: 100%;
     background: var(--background);
     color: var(--foreground);
-    font-family: Arial, Helvetica, sans-serif;
+    font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+    background-image:
+      linear-gradient(
+        to right,
+        transparent calc(50% - 0.5px),
+        color-mix(in srgb, var(--brand-rule) 22%, transparent) 50%,
+        transparent calc(50% + 0.5px)
+      );
+    background-size: min(100%, 96rem) 100%;
+    background-position: center;
+    background-repeat: no-repeat;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-newsreader), Georgia, serif;
+    letter-spacing: -0.018em;
+  }
+
+  ::selection {
+    background: var(--brand-vellum);
+    color: var(--brand-ink);
+  }
+}
+
+@layer utilities {
+  .font-editorial {
+    font-family: var(--font-newsreader), Georgia, serif;
+  }
+
+  .editorial-kicker {
+    font-family: var(--font-geist-mono), monospace;
+    font-size: 0.625rem;
+    line-height: 1rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
   }
 }

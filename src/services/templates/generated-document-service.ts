@@ -1,6 +1,6 @@
 import {
   GENERATED_DOCUMENT_COLUMNS,
-  type GeneratedDocumentRow,
+  type GeneratedDocumentRow
 } from "@/services/generated-documents/generated-document-persistence"
 import {
   createBlankTemplateContent,
@@ -8,14 +8,14 @@ import {
   type DocumentRecentAccessRow,
   type DocumentTemplate,
   type GeneratedDocument,
-  type RecentDocument,
+  type RecentDocument
 } from "@/types/template"
 
 import type {
   CreateGeneratedDocumentInput,
   ListRecentDocumentsInput,
   RecordDocumentRecentAccessInput,
-  TemplateServiceDeps,
+  TemplateServiceDeps
 } from "./contracts"
 import { TemplateServiceError } from "./errors"
 import {
@@ -33,7 +33,7 @@ import {
   requireActiveFolder,
   requirePermission,
   requireTenantDocument,
-  runTemplateOperation,
+  runTemplateOperation
 } from "./shared"
 
 type RecentDocumentRow = Record<string, unknown> & {
@@ -50,7 +50,7 @@ type RecentDocumentRow = Record<string, unknown> & {
  * Creates a generated document and an immutable content snapshot.
  *
  * A template-backed document always snapshots a published revision. A blank
- * document snapshots supplied valid content or a fresh empty three-section document.
+ * document snapshots supplied valid content or a fresh empty free-form document.
  *
  * @param input - Actor, tenant, optional template/folder, and document metadata.
  * @param deps - Optional injected dependencies for tests.
@@ -67,7 +67,7 @@ export async function createGeneratedDocument(
       actorUserId: input.actorUserId,
       organizationId: input.organizationId,
       folderId: input.folderId ?? null,
-      templateId: input.templateId ?? null,
+      templateId: input.templateId ?? null
     },
     async (): Promise<GeneratedDocument> => {
       const client = getClient(deps)
@@ -154,7 +154,7 @@ export async function createGeneratedDocument(
           created_by: input.actorUserId,
           updated_by: input.actorUserId,
           archived_by: null,
-          archived_at: null,
+          archived_at: null
         })
         .select(GENERATED_DOCUMENT_COLUMNS)
         .single()
@@ -169,7 +169,7 @@ export async function createGeneratedDocument(
           document_id: documentId,
           org_id: input.organizationId,
           values: {},
-          workflow_status: "draft",
+          workflow_status: "draft"
         })
 
       if (answerError) {
@@ -183,7 +183,7 @@ export async function createGeneratedDocument(
           console.error("generated_document_cleanup_failed", {
             organizationId: input.organizationId,
             documentId,
-            actorUserId: input.actorUserId,
+            actorUserId: input.actorUserId
           })
         }
 
@@ -201,9 +201,7 @@ export async function createGeneratedDocument(
 function containsFileField(
   content: ReturnType<typeof parseTemplateContent>
 ): boolean {
-  return Object.values(content.sections).some((section): boolean =>
-    section.blocks.some((block): boolean => block.type === "file_field")
-  )
+  return content.blocks.some((block): boolean => block.type === "file_field")
 }
 
 /**
@@ -244,7 +242,7 @@ export async function recordDocumentRecentAccess(
             org_id: input.organizationId,
             user_id: input.actorUserId,
             document_id: input.documentId,
-            last_opened_at: nowIso(deps),
+            last_opened_at: nowIso(deps)
           },
           { onConflict: "org_id,user_id,document_id" }
         )
@@ -353,8 +351,8 @@ export async function listRecentDocuments(
               title: document.title,
               description: document.description,
               folderId: document.folder_id,
-              sourceKind: parseDocumentSourceKind(document.source_kind),
-            },
+              sourceKind: parseDocumentSourceKind(document.source_kind)
+            }
           ]
         })
         .slice(0, requestedLimit)

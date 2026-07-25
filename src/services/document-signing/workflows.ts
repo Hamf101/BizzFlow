@@ -180,7 +180,7 @@ export async function saveGeneratedDocumentAnswers(
  *
  * @param input - Actor, generated document, and recipient collection.
  * @param deps - Optional id, token, clock, database, and email dependencies.
- * @returns Created recipients after Resend accepts every invitation.
+ * @returns Created recipients after EmailJS accepts every invitation.
  * @throws DocumentSigningServiceError for invalid recipients, state, or delivery.
  */
 export async function sendDocumentForSigning(

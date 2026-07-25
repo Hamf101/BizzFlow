@@ -19,6 +19,7 @@ import type {
   DocumentTemplateRow,
   TemplateContent,
 } from "@/types/template"
+import type { TemplateFlowMessageRow } from "@/types/template-flow"
 import type {
   SubmissionActivityEventRow,
   SubmissionCommentRow,
@@ -182,6 +183,11 @@ type DocumentActivityEventInsert = Partial<DocumentActivityEventRow> &
   >
 type DocumentTemplateInsert = Partial<DocumentTemplateRow> &
   Pick<DocumentTemplateRow, "id" | "org_id" | "title" | "content">
+type TemplateFlowMessageInsert = Partial<TemplateFlowMessageRow> &
+  Pick<
+    TemplateFlowMessageRow,
+    "id" | "org_id" | "template_id" | "role" | "content"
+  >
 type DocumentAnswerInsert = Partial<DocumentAnswerRow> &
   Pick<DocumentAnswerRow, "document_id" | "org_id">
 type DocumentSigningRecipientInsert = Partial<DocumentSigningRecipientRow> &
@@ -270,6 +276,11 @@ export type AdminDatabase = {
         DocumentTemplateRow,
         DocumentTemplateInsert,
         Partial<DocumentTemplateRow>
+      >
+      template_flow_messages: DatabaseTable<
+        TemplateFlowMessageRow,
+        TemplateFlowMessageInsert,
+        never
       >
       document_answers: DatabaseTable<
         DocumentAnswerRow,

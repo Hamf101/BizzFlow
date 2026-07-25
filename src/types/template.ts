@@ -26,45 +26,45 @@ const fieldBlockShape = {
   fieldKey: fieldKeySchema,
   label: z.string().trim().min(1).max(160),
   required: z.boolean().default(false),
-  helpText: z.string().trim().max(500).nullable().default(null),
+  helpText: z.string().trim().max(500).nullable().default(null)
 } as const
 
-/** Heading block in a guided document section. */
+/** Heading block in the ordered document flow. */
 export const headingBlockSchema = z
   .object({
     id: blockIdSchema,
     type: z.literal("heading"),
     text: z.string().trim().min(1).max(500),
     level: z.union([z.literal(1), z.literal(2), z.literal(3)]).default(2),
-    alignment: z.enum(["left", "center", "right"]).default("left"),
+    alignment: z.enum(["left", "center", "right"]).default("left")
   })
   .strict()
 
-/** Paragraph block in a guided document section. */
+/** Paragraph block in the ordered document flow. */
 export const paragraphBlockSchema = z
   .object({
     id: blockIdSchema,
     type: z.literal("paragraph"),
     text: richTextSchema,
-    alignment: z.enum(["left", "center", "right"]).default("left"),
+    alignment: z.enum(["left", "center", "right"]).default("left")
   })
   .strict()
 
-/** Bulleted list block in a guided document section. */
+/** Bulleted list block in the ordered document flow. */
 export const bulletListBlockSchema = z
   .object({
     id: blockIdSchema,
     type: z.literal("bullet_list"),
-    items: z.array(z.string().trim().min(1).max(2_000)).min(1).max(100),
+    items: z.array(z.string().trim().min(1).max(2_000)).min(1).max(100)
   })
   .strict()
 
-/** Numbered list block in a guided document section. */
+/** Numbered list block in the ordered document flow. */
 export const numberedListBlockSchema = z
   .object({
     id: blockIdSchema,
     type: z.literal("numbered_list"),
-    items: z.array(z.string().trim().min(1).max(2_000)).min(1).max(100),
+    items: z.array(z.string().trim().min(1).max(2_000)).min(1).max(100)
   })
   .strict()
 
@@ -77,7 +77,7 @@ export const imageBlockSchema = z
     altText: z.string().trim().min(1).max(500),
     caption: z.string().trim().max(500).nullable().default(null),
     alignment: z.enum(["left", "center", "right"]).default("center"),
-    widthPercent: z.number().int().min(10).max(100).default(100),
+    widthPercent: z.number().int().min(10).max(100).default(100)
   })
   .strict()
 
@@ -87,9 +87,7 @@ export const tableBlockSchema = z
     id: blockIdSchema,
     type: z.literal("table"),
     headers: z.array(z.string().trim().min(1).max(240)).min(1).max(12),
-    rows: z
-      .array(z.array(z.string().trim().max(2_000)).min(1).max(12))
-      .max(100),
+    rows: z.array(z.array(z.string().trim().max(2_000)).min(1).max(12)).max(100)
   })
   .strict()
 
@@ -97,7 +95,7 @@ export const tableBlockSchema = z
 export const dividerBlockSchema = z
   .object({
     id: blockIdSchema,
-    type: z.literal("divider"),
+    type: z.literal("divider")
   })
   .strict()
 
@@ -107,7 +105,7 @@ export const textFieldBlockSchema = z
     ...fieldBlockShape,
     type: z.literal("text_field"),
     placeholder: shortTextSchema.nullable().default(null),
-    multiline: z.boolean().default(false),
+    multiline: z.boolean().default(false)
   })
   .strict()
 
@@ -115,7 +113,7 @@ export const textFieldBlockSchema = z
 export const dateFieldBlockSchema = z
   .object({
     ...fieldBlockShape,
-    type: z.literal("date_field"),
+    type: z.literal("date_field")
   })
   .strict()
 
@@ -124,7 +122,7 @@ export const checkboxFieldBlockSchema = z
   .object({
     ...fieldBlockShape,
     type: z.literal("checkbox_field"),
-    checkedByDefault: z.boolean().default(false),
+    checkedByDefault: z.boolean().default(false)
   })
   .strict()
 
@@ -134,7 +132,7 @@ export const dropdownFieldBlockSchema = z
     ...fieldBlockShape,
     type: z.literal("dropdown_field"),
     placeholder: shortTextSchema.nullable().default(null),
-    options: z.array(z.string().trim().min(1).max(240)).min(1).max(100),
+    options: z.array(z.string().trim().min(1).max(240)).min(1).max(100)
   })
   .strict()
 
@@ -142,7 +140,7 @@ export const dropdownFieldBlockSchema = z
 export const initialsFieldBlockSchema = z
   .object({
     ...fieldBlockShape,
-    type: z.literal("initials_field"),
+    type: z.literal("initials_field")
   })
   .strict()
 
@@ -150,7 +148,7 @@ export const initialsFieldBlockSchema = z
 export const signatureFieldBlockSchema = z
   .object({
     ...fieldBlockShape,
-    type: z.literal("signature_field"),
+    type: z.literal("signature_field")
   })
   .strict()
 
@@ -158,7 +156,7 @@ export const signatureFieldBlockSchema = z
 export const fileFieldBlockSchema = z
   .object({
     ...fieldBlockShape,
-    type: z.literal("file_field"),
+    type: z.literal("file_field")
   })
   .strict()
 
@@ -177,93 +175,70 @@ export const templateBlockSchema = z.discriminatedUnion("type", [
   dropdownFieldBlockSchema,
   initialsFieldBlockSchema,
   signatureFieldBlockSchema,
-  fileFieldBlockSchema,
+  fileFieldBlockSchema
 ])
-
-/** A bounded ordered section of guided document blocks. */
-export const templateSectionSchema = z
-  .object({
-    blocks: z.array(templateBlockSchema).max(250).default([]),
-  })
-  .strict()
 
 /** Organization-controlled visual choices stored with each document snapshot. */
 export const templateBrandingSchema = z
   .object({
     organizationName: z.string().trim().max(160).default(""),
     logoDataUrl: imageDataUrlSchema.nullable().default(null),
-    primaryColor: z.string().regex(HEX_COLOR_PATTERN).default("#111827"),
-    accentColor: z.string().regex(HEX_COLOR_PATTERN).default("#2563EB"),
+    logoAlignment: z.enum(["left", "center", "right"]).default("left"),
+    logoWidthPercent: z.number().int().min(10).max(60).default(24),
+    primaryColor: z.string().regex(HEX_COLOR_PATTERN).default("#252329"),
+    accentColor: z.string().regex(HEX_COLOR_PATTERN).default("#635273")
   })
   .strict()
 
-/** Print repetition settings stored inside versioned template content. */
-export const templateRepeatSettingsSchema = z
-  .object({
-    header: z.boolean().default(false),
-    footer: z.boolean().default(false),
-  })
-  .strict()
-
-/** Version-one canonical template and generated-document content schema. */
+/** Canonical free-form template and generated-document content schema. */
 export const templateContentSchema = z
   .object({
-    schemaVersion: z.literal(1),
+    schemaVersion: z.literal(2),
     branding: templateBrandingSchema.default({
       organizationName: "",
       logoDataUrl: null,
-      primaryColor: "#111827",
-      accentColor: "#2563EB",
+      logoAlignment: "left",
+      logoWidthPercent: 24,
+      primaryColor: "#252329",
+      accentColor: "#635273"
     }),
-    repeat: templateRepeatSettingsSchema.default({
-      header: false,
-      footer: false,
-    }),
-    sections: z
-      .object({
-        header: templateSectionSchema.default({ blocks: [] }),
-        body: templateSectionSchema.default({ blocks: [] }),
-        footer: templateSectionSchema.default({ blocks: [] }),
-      })
-      .strict(),
+    blocks: z.array(templateBlockSchema).max(750).default([])
   })
   .strict()
   .superRefine((content, context): void => {
     if (JSON.stringify(content).length > MAX_TEMPLATE_CONTENT_JSON_LENGTH) {
       context.addIssue({
         code: "custom",
-        message: "Template content is too large.",
+        message: "Template content is too large."
       })
     }
 
     const blockIds = new Set<string>()
     const fieldKeys = new Set<string>()
 
-    for (const [sectionName, section] of Object.entries(content.sections)) {
-      for (const [blockIndex, block] of section.blocks.entries()) {
-        const blockPath = ["sections", sectionName, "blocks", blockIndex]
+    for (const [blockIndex, block] of content.blocks.entries()) {
+      const blockPath = ["blocks", blockIndex]
 
-        if (blockIds.has(block.id)) {
+      if (blockIds.has(block.id)) {
+        context.addIssue({
+          code: "custom",
+          message: "Every document block must have a unique id.",
+          path: [...blockPath, "id"]
+        })
+      }
+      blockIds.add(block.id)
+
+      if ("fieldKey" in block) {
+        const normalizedFieldKey = block.fieldKey.toLowerCase()
+
+        if (fieldKeys.has(normalizedFieldKey)) {
           context.addIssue({
             code: "custom",
-            message: "Every document block must have a unique id.",
-            path: [...blockPath, "id"],
+            message: "Every fillable field must have a unique field key.",
+            path: [...blockPath, "fieldKey"]
           })
         }
-        blockIds.add(block.id)
-
-        if ("fieldKey" in block) {
-          const normalizedFieldKey = block.fieldKey.toLowerCase()
-
-          if (fieldKeys.has(normalizedFieldKey)) {
-            context.addIssue({
-              code: "custom",
-              message: "Every fillable field must have a unique field key.",
-              path: [...blockPath, "fieldKey"],
-            })
-          }
-          fieldKeys.add(normalizedFieldKey)
-        }
+        fieldKeys.add(normalizedFieldKey)
       }
     }
   })
@@ -283,19 +258,13 @@ export type InitialsFieldBlock = z.infer<typeof initialsFieldBlockSchema>
 export type SignatureFieldBlock = z.infer<typeof signatureFieldBlockSchema>
 export type FileFieldBlock = z.infer<typeof fileFieldBlockSchema>
 export type TemplateBlock = z.infer<typeof templateBlockSchema>
-export type TemplateSection = z.infer<typeof templateSectionSchema>
 export type TemplateBranding = z.infer<typeof templateBrandingSchema>
-export type TemplateRepeatSettings = z.infer<
-  typeof templateRepeatSettingsSchema
->
 export type TemplateContent = z.infer<typeof templateContentSchema>
 
 export type DocumentTemplateStatus = "draft" | "published" | "archived"
 export type DocumentSourceKind = "upload" | "generated"
 export type GeneratedDocumentWorkflowStatus =
-  | "draft"
-  | "awaiting_signatures"
-  | "completed"
+  "draft" | "awaiting_signatures" | "completed"
 export type DocumentSigningRecipientStatus = "pending" | "viewed" | "signed"
 
 /** Database row for an organization-owned reusable document template. */
@@ -415,17 +384,13 @@ export function parseTemplateContent(value: unknown): TemplateContent {
 }
 
 /**
- * Creates an empty, schema-valid three-section guided document.
+ * Creates an empty, schema-valid free-form guided document.
  *
- * @returns Fresh version-one content with header/footer repetition disabled.
+ * @returns Fresh version-two content with one ordered block sequence.
  */
 export function createBlankTemplateContent(): TemplateContent {
   return templateContentSchema.parse({
-    schemaVersion: 1,
-    sections: {
-      header: {},
-      body: {},
-      footer: {},
-    },
+    schemaVersion: 2,
+    blocks: []
   })
 }

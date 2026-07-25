@@ -15,6 +15,8 @@ export type MigrationFileName =
   | "20260718180607_sprint_7_submission_drawing_values.sql"
   | "20260718181552_sprint_7_submission_upload_hardening.sql"
   | "20260718184631_sprint_7_submission_storage_cleanup.sql"
+  | "20260723172350_template_flow_messages.sql"
+  | "20260723181119_freeform_template_content_v2.sql"
 
 export const directWriteActions = ["insert", "update", "delete"] as const
 

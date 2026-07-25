@@ -6,12 +6,12 @@ import {
   listRecentDocuments,
   publishDocumentTemplate,
   recordDocumentRecentAccess,
-  updateDocumentTemplate,
+  updateDocumentTemplate
 } from "@/services/template-service"
 import {
   createBlankTemplateContent,
   parseTemplateContent,
-  type TemplateContent,
+  type TemplateContent
 } from "@/types/template"
 
 type FakeRow = Record<string, unknown>
@@ -22,10 +22,7 @@ type FakeResult = {
 }
 type FakeFilter = (row: FakeRow) => boolean
 type FakeOperation = "select" | "insert" | "update" | "upsert" | "delete"
-type FakeOperationHook = (
-  tableName: string,
-  operation: FakeOperation
-) => void
+type FakeOperationHook = (tableName: string, operation: FakeOperation) => void
 
 const ORG_ID = "10000000-0000-4000-8000-000000000001"
 const MANAGER_ID = "20000000-0000-4000-8000-000000000001"
@@ -116,14 +113,16 @@ class FakeQuery implements PromiseLike<FakeResult> {
   }
 
   then<TResult1 = FakeResult, TResult2 = never>(
-    onfulfilled?: ((value: FakeResult) => TResult1 | PromiseLike<TResult1>) | null,
+    onfulfilled?:
+      ((value: FakeResult) => TResult1 | PromiseLike<TResult1>) | null,
     onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
   ): PromiseLike<TResult1 | TResult2> {
     return Promise.resolve(this.execute()).then(onfulfilled, onrejected)
   }
 
   private execute(): FakeResult {
-    const table = this.tables[this.tableName] ?? (this.tables[this.tableName] = [])
+    const table =
+      this.tables[this.tableName] ?? (this.tables[this.tableName] = [])
     this.beforeOperation?.(this.tableName, this.operation)
 
     if (this.operation === "insert") {
@@ -158,7 +157,9 @@ class FakeQuery implements PromiseLike<FakeResult> {
 
     if (this.operation === "update") {
       matchingRows.forEach((row: FakeRow): void => {
-        Object.assign(row, this.payload ?? {}, { updated_at: "2026-07-17T20:00:00.000Z" })
+        Object.assign(row, this.payload ?? {}, {
+          updated_at: "2026-07-17T20:00:00.000Z"
+        })
       })
       return { data: matchingRows, error: null }
     }
@@ -176,7 +177,9 @@ class FakeQuery implements PromiseLike<FakeResult> {
       const column = this.orderColumn
       const direction = this.orderAscending ? 1 : -1
       selectedRows.sort((left: FakeRow, right: FakeRow): number => {
-        return String(left[column]).localeCompare(String(right[column])) * direction
+        return (
+          String(left[column]).localeCompare(String(right[column])) * direction
+        )
       })
     }
 
@@ -202,7 +205,7 @@ class FakeClient {
 function withDatabaseDefaults(tableName: string, payload: FakeRow): FakeRow {
   const timestamps = {
     created_at: "2026-07-17T19:00:00.000Z",
-    updated_at: "2026-07-17T19:00:00.000Z",
+    updated_at: "2026-07-17T19:00:00.000Z"
   }
 
   if (tableName === "document_templates") {
@@ -221,7 +224,7 @@ function createMembership(userId: string, role: string): FakeRow {
     org_id: ORG_ID,
     user_id: userId,
     role,
-    status: "active",
+    status: "active"
   }
 }
 
@@ -247,9 +250,8 @@ function createTemplateRow(
       status === "published"
         ? "2026-07-17T19:00:00.000Z"
         : "2026-07-17T20:00:00.000Z",
-    published_at:
-      status === "published" ? "2026-07-17T19:00:00.000Z" : null,
-    archived_at: null,
+    published_at: status === "published" ? "2026-07-17T19:00:00.000Z" : null,
+    archived_at: null
   }
 }
 
@@ -261,7 +263,7 @@ function createDocumentRow(id: string, title: string): FakeRow {
     title,
     description: null,
     source_kind: "generated",
-    archived_at: null,
+    archived_at: null
   }
 }
 
@@ -271,19 +273,19 @@ function createBaseTables(): FakeTables {
       createMembership(MANAGER_ID, "manager"),
       createMembership(STAFF_ID, "staff"),
       createMembership(EXTERNAL_ID, "external_reviewer"),
-      createMembership(OTHER_USER_ID, "staff"),
+      createMembership(OTHER_USER_ID, "staff")
     ],
     document_templates: [
       createTemplateRow(TEMPLATE_ID, "published"),
-      createTemplateRow(DRAFT_TEMPLATE_ID, "draft"),
+      createTemplateRow(DRAFT_TEMPLATE_ID, "draft")
     ],
     folders: [],
     documents: [
       createDocumentRow(DOCUMENT_ID, "First document"),
-      createDocumentRow(SECOND_DOCUMENT_ID, "Second document"),
+      createDocumentRow(SECOND_DOCUMENT_ID, "Second document")
     ],
     document_answers: [],
-    document_recent_accesses: [],
+    document_recent_accesses: []
   }
 }
 
@@ -302,10 +304,10 @@ describe("template service", () => {
 
     expect(managerTemplates.map((template) => template.status)).toEqual([
       "draft",
-      "published",
+      "published"
     ])
     expect(staffTemplates.map((template) => template.status)).toEqual([
-      "published",
+      "published"
     ])
     await expect(
       listDocumentTemplates(
@@ -323,11 +325,11 @@ describe("template service", () => {
         actorUserId: MANAGER_ID,
         organizationId: ORG_ID,
         templateId: DRAFT_TEMPLATE_ID,
-        expectedRevision: 1,
+        expectedRevision: 1
       },
       {
         client: client as never,
-        now: (): Date => new Date("2026-07-17T21:00:00.000Z"),
+        now: (): Date => new Date("2026-07-17T21:00:00.000Z")
       }
     )
 
@@ -338,7 +340,7 @@ describe("template service", () => {
 
     expect(templates.map((template) => template.id)).toEqual([
       DRAFT_TEMPLATE_ID,
-      TEMPLATE_ID,
+      TEMPLATE_ID
     ])
   })
 
@@ -362,13 +364,13 @@ describe("template service", () => {
           actorUserId: MANAGER_ID,
           organizationId: ORG_ID,
           templateId: DRAFT_TEMPLATE_ID,
-          expectedRevision: 1,
+          expectedRevision: 1
         },
         { client: client as never }
       )
     ).rejects.toMatchObject({
       message: "Document template changed before it could be published.",
-      statusCode: 409,
+      statusCode: 409
     })
 
     expect(draft.status).toBe("draft")
@@ -407,13 +409,13 @@ describe("template service", () => {
           organizationId: ORG_ID,
           templateId: DRAFT_TEMPLATE_ID,
           expectedRevision: 1,
-          title: "Unsafe concurrent edit",
+          title: "Unsafe concurrent edit"
         },
         { client: client as never }
       )
     ).rejects.toMatchObject({
       message: "Document template changed since it was opened.",
-      statusCode: 409,
+      statusCode: 409
     })
 
     expect(draft.status).toBe("archived")
@@ -431,11 +433,11 @@ describe("template service", () => {
       {
         actorUserId: STAFF_ID,
         organizationId: ORG_ID,
-        templateId: TEMPLATE_ID,
+        templateId: TEMPLATE_ID
       },
       {
         client: client as never,
-        createId: (): string => CREATED_DOCUMENT_ID,
+        createId: (): string => CREATED_DOCUMENT_ID
       }
     )
     const revisedContent = createBlankTemplateContent()
@@ -446,20 +448,24 @@ describe("template service", () => {
         organizationId: ORG_ID,
         templateId: TEMPLATE_ID,
         expectedRevision: 1,
-        content: revisedContent,
+        content: revisedContent
       },
       { client: client as never }
     )
 
     expect(updated.revision).toBe(2)
-    expect(updated.content.branding.organizationName).toBe("Revised organization")
+    expect(updated.content.branding.organizationName).toBe(
+      "Revised organization"
+    )
     expect(generated.templateSnapshot.branding.organizationName).toBe(
       "Original organization"
     )
     expect(
-      (tables.documents.find(
-        (row: FakeRow): boolean => row.id === CREATED_DOCUMENT_ID
-      )?.template_snapshot as TemplateContent).branding.organizationName
+      (
+        tables.documents.find(
+          (row: FakeRow): boolean => row.id === CREATED_DOCUMENT_ID
+        )?.template_snapshot as TemplateContent
+      ).branding.organizationName
     ).toBe("Original organization")
     await expect(
       updateDocumentTemplate(
@@ -468,7 +474,7 @@ describe("template service", () => {
           organizationId: ORG_ID,
           templateId: TEMPLATE_ID,
           expectedRevision: 1,
-          title: "Stale edit",
+          title: "Stale edit"
         },
         { client: client as never }
       )
@@ -479,13 +485,13 @@ describe("template service", () => {
     const tables = createBaseTables()
     const content = createBlankTemplateContent()
 
-    content.sections.body.blocks.push({
+    content.blocks.push({
       id: "50000000-0000-4000-8000-000000000001",
       type: "file_field",
       fieldKey: "supporting_document",
       label: "Supporting document",
       required: true,
-      helpText: "Upload one supporting file.",
+      helpText: "Upload one supporting file."
     })
     tables.document_templates[0].content = content
     const client = new FakeClient(tables)
@@ -495,16 +501,16 @@ describe("template service", () => {
         {
           actorUserId: STAFF_ID,
           organizationId: ORG_ID,
-          templateId: TEMPLATE_ID,
+          templateId: TEMPLATE_ID
         },
         {
           client: client as never,
-          createId: (): string => CREATED_DOCUMENT_ID,
+          createId: (): string => CREATED_DOCUMENT_ID
         }
       )
     ).rejects.toMatchObject({
       message: "File upload fields are only supported in internal submissions.",
-      statusCode: 409,
+      statusCode: 409
     })
     expect(tables.documents).toHaveLength(2)
     expect(tables.document_answers).toEqual([])
@@ -516,7 +522,7 @@ describe("template service", () => {
       org_id: ORG_ID,
       user_id: OTHER_USER_ID,
       document_id: SECOND_DOCUMENT_ID,
-      last_opened_at: "2026-07-17T23:00:00.000Z",
+      last_opened_at: "2026-07-17T23:00:00.000Z"
     })
     const client = new FakeClient(tables)
 
@@ -524,33 +530,33 @@ describe("template service", () => {
       {
         actorUserId: STAFF_ID,
         organizationId: ORG_ID,
-        documentId: DOCUMENT_ID,
+        documentId: DOCUMENT_ID
       },
       {
         client: client as never,
-        now: (): Date => new Date("2026-07-17T20:00:00.000Z"),
+        now: (): Date => new Date("2026-07-17T20:00:00.000Z")
       }
     )
     await recordDocumentRecentAccess(
       {
         actorUserId: STAFF_ID,
         organizationId: ORG_ID,
-        documentId: SECOND_DOCUMENT_ID,
+        documentId: SECOND_DOCUMENT_ID
       },
       {
         client: client as never,
-        now: (): Date => new Date("2026-07-17T21:00:00.000Z"),
+        now: (): Date => new Date("2026-07-17T21:00:00.000Z")
       }
     )
     await recordDocumentRecentAccess(
       {
         actorUserId: STAFF_ID,
         organizationId: ORG_ID,
-        documentId: DOCUMENT_ID,
+        documentId: DOCUMENT_ID
       },
       {
         client: client as never,
-        now: (): Date => new Date("2026-07-17T22:00:00.000Z"),
+        now: (): Date => new Date("2026-07-17T22:00:00.000Z")
       }
     )
 
@@ -561,25 +567,25 @@ describe("template service", () => {
 
     expect(recent.map((document) => document.documentId)).toEqual([
       DOCUMENT_ID,
-      SECOND_DOCUMENT_ID,
+      SECOND_DOCUMENT_ID
     ])
     expect(recent.map((document) => document.lastOpenedAt)).toEqual([
       "2026-07-17T22:00:00.000Z",
-      "2026-07-17T21:00:00.000Z",
+      "2026-07-17T21:00:00.000Z"
     ])
     expect(recent.every((document) => document.userId === STAFF_ID)).toBe(true)
   })
 
   it("rejects non-PNG/JPEG embedded image data", () => {
     const content = createBlankTemplateContent()
-    content.sections.body.blocks.push({
+    content.blocks.push({
       id: "50000000-0000-4000-8000-000000000001",
       type: "image",
       dataUrl: "data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=",
       altText: "Unsafe vector image",
       caption: null,
       alignment: "center",
-      widthPercent: 100,
+      widthPercent: 100
     })
 
     expect(() => parseTemplateContent(content)).toThrow()
@@ -587,7 +593,7 @@ describe("template service", () => {
 
   it("rejects duplicate field keys before a template can be published", () => {
     const content = createBlankTemplateContent()
-    content.sections.body.blocks.push(
+    content.blocks.push(
       {
         id: "50000000-0000-4000-8000-000000000002",
         type: "text_field",
@@ -596,7 +602,7 @@ describe("template service", () => {
         required: true,
         helpText: null,
         placeholder: null,
-        multiline: false,
+        multiline: false
       },
       {
         id: "50000000-0000-4000-8000-000000000003",
@@ -604,7 +610,7 @@ describe("template service", () => {
         fieldKey: "CLIENT_NAME",
         label: "Effective date",
         required: false,
-        helpText: null,
+        helpText: null
       }
     )
 

@@ -2,9 +2,11 @@ import Link from "next/link"
 import { redirect } from "next/navigation"
 import type { ReactElement, ReactNode } from "react"
 
-import { Badge } from "@/components/ui/badge"
+import { BizFlowWordmark } from "@/components/brand/bizflow-mark"
+import { DashboardNavigation } from "@/components/navigation/dashboard-navigation"
+import { ThemeToggle } from "@/components/theme/theme-toggle"
 import { Button } from "@/components/ui/button"
-import { Separator } from "@/components/ui/separator"
+import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
 import { createClient } from "@/lib/supabase/server"
 
 export const dynamic = "force-dynamic"
@@ -22,67 +24,57 @@ export default async function DashboardLayout({
 }: Readonly<{
   children: ReactNode
 }>): Promise<ReactElement> {
-  let supabase: Awaited<ReturnType<typeof createClient>>
-
   try {
-    supabase = await createClient()
-  } catch {
+    await getAuthenticatedUser()
+  } catch (error: unknown) {
+    if (error instanceof AuthenticationError) {
+      redirect("/login")
+    }
+
     redirect("/login?error=Supabase%20environment%20is%20not%20configured.")
   }
 
-  const { data, error } = await supabase.auth.getClaims()
-
-  if (error || !data?.claims) {
-    redirect("/login")
-  }
-
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <header className="border-b bg-card">
-        <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-4 py-4">
-          <div className="flex flex-col gap-1">
-            <div className="flex items-center gap-2">
-              <span className="text-base font-semibold">BizFlow Docs</span>
-              <Badge variant="secondary">Guided documents</Badge>
-            </div>
-            <span className="text-sm text-muted-foreground">
-              Templates, versioned files, signing, and review workflows.
+    <div className="min-h-screen bg-canvas text-foreground">
+      <div className="mx-auto flex min-h-screen w-full max-w-[96rem] flex-col md:flex-row">
+        <aside className="flex flex-col gap-6 px-4 pt-5 pb-4 md:w-[232px] md:shrink-0 md:pt-6">
+          <Link
+            aria-label="BizFlow dashboard"
+            className="inline-flex w-fit rounded-[12px] outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+            href="/dashboard"
+          >
+            <BizFlowWordmark />
+          </Link>
+          <div className="hidden md:block">
+            <span className="editorial-kicker text-muted-foreground">
+              Workspace
             </span>
+            <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+              Structured documents with a visible history.
+            </p>
           </div>
-          <form action={signOutAction}>
-            <Button variant="outline" type="submit">
-              Sign out
-            </Button>
-          </form>
-        </div>
-      </header>
-      <div className="mx-auto grid w-full max-w-6xl gap-6 px-4 py-6 md:grid-cols-[220px_1fr]">
-        <aside className="flex flex-col gap-3 text-sm">
-          <span className="font-medium">Navigation</span>
-          <Separator />
-          <nav className="flex flex-col gap-2 text-muted-foreground">
-            <Link className="font-medium text-foreground" href="/dashboard">
-              Dashboard
-            </Link>
-            <Link className="hover:text-foreground" href="/people">
-              People
-            </Link>
-            <Link className="hover:text-foreground" href="/audit-log">
-              Audit Log
-            </Link>
-            <Link className="hover:text-foreground" href="/documents">
-              Documents
-            </Link>
+          <DashboardNavigation />
+          <div className="mt-auto hidden border-t border-border/70 pt-4 text-xs text-muted-foreground md:block">
             <Link className="hover:text-foreground" href="/templates">
-              Templates
+              Start from a template →
             </Link>
-            <Link className="hover:text-foreground" href="/submissions">
-              Submissions
-            </Link>
-            <span>Tasks</span>
-          </nav>
+          </div>
         </aside>
-        <main>{children}</main>
+        <div className="min-w-0 flex-1 p-3 md:py-4 md:pr-4 md:pl-1">
+          <main className="flex min-h-full flex-col rounded-[18px] border border-border/70 bg-background shadow-[0_1px_2px_rgba(37,35,41,0.04)]">
+            <header className="flex items-center justify-end gap-2 border-b border-border/70 px-5 py-3 sm:px-7">
+              <ThemeToggle />
+              <form action={signOutAction}>
+                <Button size="sm" variant="outline" type="submit">
+                  Sign out
+                </Button>
+              </form>
+            </header>
+            <div className="min-w-0 flex-1 px-5 py-6 sm:px-7 sm:py-7">
+              {children}
+            </div>
+          </main>
+        </div>
       </div>
     </div>
   )

@@ -3,7 +3,7 @@ import { createHash } from "node:crypto"
 import {
   createBlankTemplateContent,
   type TemplateBlock,
-  type TemplateContent,
+  type TemplateContent
 } from "@/types/template"
 
 export type FakeRow = Record<string, unknown>
@@ -18,9 +18,7 @@ export const ORG_ID = "10000000-0000-4000-8000-000000000001"
 export const MANAGER_ID = "20000000-0000-4000-8000-000000000001"
 export const DOCUMENT_ID = "30000000-0000-4000-8000-000000000001"
 export const RECIPIENT_ONE_ID = "40000000-0000-4000-8000-000000000001"
-export const RECIPIENT_TWO_ID = "40000000-0000-4000-8000-000000000002"
 export const TOKEN_ONE = "token_one_abcdefghijklmnopqrstuvwxyz123456"
-export const TOKEN_TWO = "token_two_abcdefghijklmnopqrstuvwxyz123456"
 export const DRAWING_DATA_URL =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAAAgCAYAAACinX6EAAAAqklEQVR4nOXQyw2EMAwFwLTAbTug/wqztxUCIRYIjBMfIkX52H5Tps9cl6vWWjKtsgbIBvHbZIXYHGSD2L3IAnH4YHSIvx+OCnH6w2gQlz+OAnG7QO8QzQr1CtG8YG8QjxXuBeLxBtEhXmsUFeL1htEgmHwUCAYQBYIDaAgeXEPwwBqCB9UQPKCG4ME0BA+kIXgQDcEDaAg+uIbgA2sIPqiG4ANqCD6YhvgCi4+tg797B8QAAAAASUVORK5CYII="
 export const NOW = new Date("2026-07-17T20:00:00.000Z")
@@ -94,20 +92,24 @@ class FakeQuery implements PromiseLike<FakeResult> {
   }
 
   then<TResult1 = FakeResult, TResult2 = never>(
-    onfulfilled?: ((value: FakeResult) => TResult1 | PromiseLike<TResult1>) | null,
+    onfulfilled?:
+      ((value: FakeResult) => TResult1 | PromiseLike<TResult1>) | null,
     onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
   ): PromiseLike<TResult1 | TResult2> {
     return Promise.resolve(this.execute()).then(onfulfilled, onrejected)
   }
 
   private execute(): FakeResult {
-    const table = this.tables[this.tableName] ?? (this.tables[this.tableName] = [])
+    const table =
+      this.tables[this.tableName] ?? (this.tables[this.tableName] = [])
 
     if (this.operation === "insert") {
       const payloads = Array.isArray(this.payload)
         ? this.payload
         : [this.payload ?? {}]
-      const rows = payloads.map((payload: FakeRow): FakeRow => ({ ...payload }))
+      const rows = payloads.map((payload: FakeRow): FakeRow => ({
+        ...payload
+      }))
       table.push(...rows)
       return { data: rows, error: null }
     }
@@ -119,7 +121,7 @@ class FakeQuery implements PromiseLike<FakeResult> {
     if (this.operation === "update") {
       matchingRows.forEach((row: FakeRow): void => {
         Object.assign(row, this.payload ?? {}, {
-          updated_at: "2026-07-17T20:00:00.000Z",
+          updated_at: "2026-07-17T20:00:00.000Z"
         })
       })
       return { data: matchingRows, error: null }
@@ -137,9 +139,10 @@ class FakeQuery implements PromiseLike<FakeResult> {
     if (this.orderColumn) {
       const orderColumn = this.orderColumn
       const direction = this.orderAscending ? 1 : -1
-      selectedRows.sort((left: FakeRow, right: FakeRow): number =>
-        String(left[orderColumn]).localeCompare(String(right[orderColumn])) *
-        direction
+      selectedRows.sort(
+        (left: FakeRow, right: FakeRow): number =>
+          String(left[orderColumn]).localeCompare(String(right[orderColumn])) *
+          direction
       )
     }
 
@@ -185,7 +188,7 @@ export class FakeClient {
       if (!answer) {
         return {
           data: null,
-          error: { code: "P0002", message: "Answers were not found." },
+          error: { code: "P0002", message: "Answers were not found." }
         }
       }
 
@@ -194,14 +197,14 @@ export class FakeClient {
           data: null,
           error: {
             code: "23514",
-            message: "Completed document answers are immutable.",
-          },
+            message: "Completed document answers are immutable."
+          }
         }
       }
 
       answer.values = {
         ...(answer.values as FakeRow),
-        ...(args.target_values as FakeRow),
+        ...(args.target_values as FakeRow)
       }
       answer.updated_at = NOW.toISOString()
 
@@ -236,7 +239,7 @@ export class FakeClient {
     recipient.initials_data = args.target_initials_data
     answer.values = {
       ...(answer.values as FakeRow),
-      ...(args.target_values as FakeRow),
+      ...(args.target_values as FakeRow)
     }
     const hasPendingRequiredRecipient =
       this.tables.document_signing_recipients.some(
@@ -266,8 +269,8 @@ export function createBaseTables(): FakeTables {
         org_id: ORG_ID,
         user_id: MANAGER_ID,
         role: "manager",
-        status: "active",
-      },
+        status: "active"
+      }
     ],
     organizations: [{ id: ORG_ID, name: "BizFlow Studio" }],
     documents: [
@@ -285,8 +288,8 @@ export function createBaseTables(): FakeTables {
         updated_by: MANAGER_ID,
         archived_at: null,
         created_at: "2026-07-17T19:00:00.000Z",
-        updated_at: "2026-07-17T19:00:00.000Z",
-      },
+        updated_at: "2026-07-17T19:00:00.000Z"
+      }
     ],
     document_answers: [
       {
@@ -295,10 +298,10 @@ export function createBaseTables(): FakeTables {
         values: {},
         workflow_status: "draft",
         created_at: "2026-07-17T19:00:00.000Z",
-        updated_at: "2026-07-17T19:00:00.000Z",
-      },
+        updated_at: "2026-07-17T19:00:00.000Z"
+      }
     ],
-    document_signing_recipients: [],
+    document_signing_recipients: []
   }
 }
 
@@ -321,8 +324,8 @@ export function createTemplateContent(
       required: true,
       helpText: null,
       placeholder: null,
-      multiline: false,
-    },
+      multiline: false
+    }
   ]
 
   if (options.requiredInitials) {
@@ -332,18 +335,13 @@ export function createTemplateContent(
       fieldKey: "client_initials",
       label: "Client initials",
       required: true,
-      helpText: null,
+      helpText: null
     })
   }
 
   return {
     ...content,
-    sections: {
-      ...content.sections,
-      body: {
-        blocks: bodyBlocks,
-      },
-    },
+    blocks: bodyBlocks
   }
 }
 
@@ -377,7 +375,7 @@ export function createRecipientRow(
     viewed_at: null,
     signed_at: null,
     signature_data: null,
-    initials_data: null,
+    initials_data: null
   }
 }
 

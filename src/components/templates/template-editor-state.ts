@@ -1,13 +1,11 @@
 import type {
   TemplateBlock,
   TemplateBranding,
-  TemplateContent,
+  TemplateContent
 } from "@/types/template"
 
 const PLACEHOLDER_IMAGE_DATA_URL =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
-
-export type TemplateSectionKey = keyof TemplateContent["sections"]
 
 export type TemplateEditorState = {
   title: string
@@ -16,28 +14,26 @@ export type TemplateEditorState = {
 }
 
 export type TemplateEditorAction =
+  | { type: "replace_state"; value: TemplateEditorState }
   | { type: "set_title"; value: string }
   | { type: "set_description"; value: string }
   | { type: "set_branding"; value: TemplateBranding }
+  | { type: "add_block"; block: TemplateBlock }
   | {
-      type: "set_repeat"
-      section: "header" | "footer"
-      value: boolean
+      type: "insert_block"
+      afterBlockId: string | null
+      block: TemplateBlock
     }
-  | { type: "add_block"; section: TemplateSectionKey; block: TemplateBlock }
   | {
       type: "update_block"
-      section: TemplateSectionKey
       block: TemplateBlock
     }
   | {
       type: "delete_block"
-      section: TemplateSectionKey
       blockId: string
     }
   | {
       type: "move_block"
-      section: TemplateSectionKey
       blockId: string
       direction: "up" | "down"
     }
@@ -54,6 +50,8 @@ export function templateEditorReducer(
   action: TemplateEditorAction
 ): TemplateEditorState {
   switch (action.type) {
+    case "replace_state":
+      return action.value
     case "set_title":
       return { ...state, title: action.value }
     case "set_description":
@@ -61,39 +59,53 @@ export function templateEditorReducer(
     case "set_branding":
       return {
         ...state,
-        content: { ...state.content, branding: action.value },
-      }
-    case "set_repeat":
-      return {
-        ...state,
-        content: {
-          ...state.content,
-          repeat: {
-            ...state.content.repeat,
-            [action.section]: action.value,
-          },
-        },
+        content: { ...state.content, branding: action.value }
       }
     case "add_block":
-      return updateSectionBlocks(state, action.section, (blocks) => [
-        ...blocks,
-        action.block,
-      ])
+      return updateBlocks(state, (blocks) => [...blocks, action.block])
+    case "insert_block":
+      return updateBlocks(state, (blocks) =>
+        insertBlock(blocks, action.afterBlockId, action.block)
+      )
     case "update_block":
-      return updateSectionBlocks(state, action.section, (blocks) =>
+      return updateBlocks(state, (blocks) =>
         blocks.map((block: TemplateBlock) =>
           block.id === action.block.id ? action.block : block
         )
       )
     case "delete_block":
-      return updateSectionBlocks(state, action.section, (blocks) =>
+      return updateBlocks(state, (blocks) =>
         blocks.filter((block: TemplateBlock) => block.id !== action.blockId)
       )
     case "move_block":
-      return updateSectionBlocks(state, action.section, (blocks) =>
+      return updateBlocks(state, (blocks) =>
         moveBlock(blocks, action.blockId, action.direction)
       )
   }
+}
+
+function insertBlock(
+  blocks: TemplateBlock[],
+  afterBlockId: string | null,
+  block: TemplateBlock
+): TemplateBlock[] {
+  if (afterBlockId === null) {
+    return [block, ...blocks]
+  }
+
+  const targetIndex = blocks.findIndex(
+    (candidate: TemplateBlock): boolean => candidate.id === afterBlockId
+  )
+
+  if (targetIndex === -1) {
+    return [...blocks, block]
+  }
+
+  return [
+    ...blocks.slice(0, targetIndex + 1),
+    block,
+    ...blocks.slice(targetIndex + 1)
+  ]
 }
 
 /**
@@ -112,12 +124,18 @@ export function createTemplateBlock(
     fieldKey,
     label: "New field",
     required: false,
-    helpText: null,
+    helpText: null
   }
 
   switch (blockType) {
     case "heading":
-      return { id, type: blockType, text: "New heading", level: 2, alignment: "left" }
+      return {
+        id,
+        type: blockType,
+        text: "New heading",
+        level: 2,
+        alignment: "left"
+      }
     case "paragraph":
       return { id, type: blockType, text: "", alignment: "left" }
     case "bullet_list":
@@ -132,14 +150,14 @@ export function createTemplateBlock(
         altText: "Image",
         caption: null,
         alignment: "center",
-        widthPercent: 100,
+        widthPercent: 100
       }
     case "table":
       return {
         id,
         type: blockType,
         headers: ["Column 1", "Column 2"],
-        rows: [["", ""]],
+        rows: [["", ""]]
       }
     case "divider":
       return { id, type: blockType }
@@ -148,7 +166,7 @@ export function createTemplateBlock(
         ...fieldDefaults,
         type: blockType,
         placeholder: null,
-        multiline: false,
+        multiline: false
       }
     case "date_field":
       return { ...fieldDefaults, type: blockType }
@@ -159,7 +177,7 @@ export function createTemplateBlock(
         ...fieldDefaults,
         type: blockType,
         placeholder: "Select an option",
-        options: ["Option 1"],
+        options: ["Option 1"]
       }
     case "initials_field":
       return { ...fieldDefaults, type: blockType }
@@ -170,25 +188,16 @@ export function createTemplateBlock(
   }
 }
 
-function updateSectionBlocks(
+function updateBlocks(
   state: TemplateEditorState,
-  section: TemplateSectionKey,
   update: (blocks: TemplateBlock[]) => TemplateBlock[]
 ): TemplateEditorState {
-  const currentSection = state.content.sections[section]
-
   return {
     ...state,
     content: {
       ...state.content,
-      sections: {
-        ...state.content.sections,
-        [section]: {
-          ...currentSection,
-          blocks: update(currentSection.blocks),
-        },
-      },
-    },
+      blocks: update(state.content.blocks)
+    }
   }
 }
 

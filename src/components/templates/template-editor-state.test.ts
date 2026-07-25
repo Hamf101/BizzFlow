@@ -3,13 +3,13 @@ import { describe, expect, it } from "vitest"
 import {
   createBlankTemplateContent,
   templateBlockSchema,
-  type TemplateBlock,
+  type TemplateBlock
 } from "@/types/template"
 
 import {
   createTemplateBlock,
   templateEditorReducer,
-  type TemplateEditorState,
+  type TemplateEditorState
 } from "./template-editor-state"
 
 const FIRST_BLOCK_ID = "00000000-0000-4000-8000-000000000001"
@@ -19,81 +19,105 @@ function createState(): TemplateEditorState {
   return {
     title: "Agreement",
     description: "Reusable agreement",
-    content: createBlankTemplateContent(),
+    content: createBlankTemplateContent()
   }
 }
 
 describe("templateEditorReducer", () => {
-  it("adds, updates, reorders, and deletes section blocks explicitly", () => {
+  it("adds, updates, reorders, and deletes free-form blocks explicitly", () => {
     const initialState = createState()
     const withHeading = templateEditorReducer(initialState, {
       type: "add_block",
-      section: "body",
       block: {
         id: FIRST_BLOCK_ID,
         type: "heading",
         text: "First heading",
         level: 2,
-        alignment: "left",
-      },
+        alignment: "left"
+      }
     })
     const withParagraph = templateEditorReducer(withHeading, {
       type: "add_block",
-      section: "body",
       block: {
         id: SECOND_BLOCK_ID,
         type: "paragraph",
         text: "Paragraph",
-        alignment: "left",
-      },
+        alignment: "left"
+      }
     })
     const reordered = templateEditorReducer(withParagraph, {
       type: "move_block",
-      section: "body",
       blockId: SECOND_BLOCK_ID,
-      direction: "up",
+      direction: "up"
     })
     const updated = templateEditorReducer(reordered, {
       type: "update_block",
-      section: "body",
       block: {
         id: FIRST_BLOCK_ID,
         type: "heading",
         text: "Updated heading",
         level: 1,
-        alignment: "center",
-      },
+        alignment: "center"
+      }
     })
     const deleted = templateEditorReducer(updated, {
       type: "delete_block",
-      section: "body",
-      blockId: SECOND_BLOCK_ID,
+      blockId: SECOND_BLOCK_ID
     })
 
-    expect(initialState.content.sections.body.blocks).toEqual([])
-    expect(reordered.content.sections.body.blocks.map((block) => block.id)).toEqual([
+    expect(initialState.content.blocks).toEqual([])
+    expect(reordered.content.blocks.map((block) => block.id)).toEqual([
       SECOND_BLOCK_ID,
-      FIRST_BLOCK_ID,
+      FIRST_BLOCK_ID
     ])
-    expect(updated.content.sections.body.blocks[1]).toMatchObject({
+    expect(updated.content.blocks[1]).toMatchObject({
       text: "Updated heading",
-      level: 1,
+      level: 1
     })
-    expect(deleted.content.sections.body.blocks).toHaveLength(1)
-    expect(deleted.content.sections.body.blocks[0]?.id).toBe(FIRST_BLOCK_ID)
+    expect(deleted.content.blocks).toHaveLength(1)
+    expect(deleted.content.blocks[0]?.id).toBe(FIRST_BLOCK_ID)
   })
 
-  it("keeps header and footer repetition independent", () => {
-    const headerRepeating = templateEditorReducer(createState(), {
-      type: "set_repeat",
-      section: "header",
-      value: true,
+  it("inserts a block at a requested editorial gutter position", () => {
+    const withFirstBlock = templateEditorReducer(createState(), {
+      type: "add_block",
+      block: {
+        id: FIRST_BLOCK_ID,
+        type: "paragraph",
+        text: "First",
+        alignment: "left"
+      }
+    })
+    const inserted = templateEditorReducer(withFirstBlock, {
+      type: "insert_block",
+      afterBlockId: FIRST_BLOCK_ID,
+      block: {
+        id: SECOND_BLOCK_ID,
+        type: "heading",
+        text: "Next",
+        level: 2,
+        alignment: "left"
+      }
     })
 
-    expect(headerRepeating.content.repeat).toEqual({
-      header: true,
-      footer: false,
-    })
+    expect(inserted.content.blocks.map((block) => block.id)).toEqual([
+      FIRST_BLOCK_ID,
+      SECOND_BLOCK_ID
+    ])
+  })
+
+  it("replaces the draft with a validated Flow result", () => {
+    const nextState = {
+      ...createState(),
+      title: "AI organized agreement"
+    }
+
+    expect(
+      templateEditorReducer(createState(), {
+        type: "replace_state",
+        value: nextState
+      })
+    ).toBe(nextState)
   })
 
   it("creates a schema-valid starter for every supported block type", () => {
@@ -111,13 +135,13 @@ describe("templateEditorReducer", () => {
       "dropdown_field",
       "initials_field",
       "signature_field",
-      "file_field",
+      "file_field"
     ]
 
     for (const blockType of blockTypes) {
-      expect(templateBlockSchema.safeParse(createTemplateBlock(blockType)).success).toBe(
-        true
-      )
+      expect(
+        templateBlockSchema.safeParse(createTemplateBlock(blockType)).success
+      ).toBe(true)
     }
   })
 })

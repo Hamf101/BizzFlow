@@ -13,12 +13,9 @@ import {
   saveInternalSubmissionDraft,
   submitInternalSubmission,
   supersedeInternalSubmissionFile,
-  transitionInternalSubmission,
+  transitionInternalSubmission
 } from "@/services/submission-service"
-import {
-  parseTemplateContent,
-  type TemplateContent,
-} from "@/types/template"
+import { parseTemplateContent, type TemplateContent } from "@/types/template"
 
 type FakeRow = Record<string, unknown>
 type FakeTables = Record<string, FakeRow[]>
@@ -98,14 +95,15 @@ class FakeQuery implements PromiseLike<FakeResult> {
       error:
         rows.length > 1
           ? Object.assign(new Error("Expected one row."), {
-              code: "PGRST116",
+              code: "PGRST116"
             })
-          : null,
+          : null
     }
   }
 
   then<TResult1 = FakeResult, TResult2 = never>(
-    onfulfilled?: ((value: FakeResult) => TResult1 | PromiseLike<TResult1>) | null,
+    onfulfilled?:
+      ((value: FakeResult) => TResult1 | PromiseLike<TResult1>) | null,
     onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
   ): PromiseLike<TResult1 | TResult2> {
     return Promise.resolve({ data: this.execute(), error: null }).then(
@@ -123,9 +121,10 @@ class FakeQuery implements PromiseLike<FakeResult> {
     if (this.orderColumn) {
       const orderColumn = this.orderColumn
       const direction = this.orderAscending ? 1 : -1
-      rows = [...rows].sort((left: FakeRow, right: FakeRow): number =>
-        String(left[orderColumn]).localeCompare(String(right[orderColumn])) *
-        direction
+      rows = [...rows].sort(
+        (left: FakeRow, right: FakeRow): number =>
+          String(left[orderColumn]).localeCompare(String(right[orderColumn])) *
+          direction
       )
     }
 
@@ -162,10 +161,10 @@ describe("internal submission visibility", () => {
 
     expect(managerRows.map((submission) => submission.id)).toEqual([
       OTHER_SUBMISSION_ID,
-      SUBMISSION_ID,
+      SUBMISSION_ID
     ])
     expect(staffRows.map((submission) => submission.id)).toEqual([
-      SUBMISSION_ID,
+      SUBMISSION_ID
     ])
   })
 
@@ -179,7 +178,7 @@ describe("internal submission visibility", () => {
           submitted_at: "2026-07-18T17:00:00.000Z",
           assigned_to: EXTERNAL_ID,
           assigned_by: MANAGER_ID,
-          assigned_at: "2026-07-18T17:05:00.000Z",
+          assigned_at: "2026-07-18T17:05:00.000Z"
         }),
         createSubmissionRow({
           id: OTHER_SUBMISSION_ID,
@@ -188,9 +187,9 @@ describe("internal submission visibility", () => {
           submitted_at: "2026-07-18T17:00:00.000Z",
           created_by: OTHER_STAFF_ID,
           updated_by: OTHER_STAFF_ID,
-          updated_at: "2026-07-18T17:00:00.000Z",
-        }),
-      ],
+          updated_at: "2026-07-18T17:00:00.000Z"
+        })
+      ]
     })
 
     const externalRows = await listInternalSubmissions(
@@ -199,7 +198,7 @@ describe("internal submission visibility", () => {
     )
 
     expect(externalRows.map((submission) => submission.id)).toEqual([
-      SUBMISSION_ID,
+      SUBMISSION_ID
     ])
 
     await expect(
@@ -207,7 +206,7 @@ describe("internal submission visibility", () => {
         {
           actorUserId: STAFF_ID,
           organizationId: ORGANIZATION_ID,
-          submissionId: OTHER_SUBMISSION_ID,
+          submissionId: OTHER_SUBMISSION_ID
         },
         { client: client as never }
       )
@@ -221,18 +220,18 @@ describe("internal submission visibility", () => {
         createFileRow(),
         createFileRow({
           id: "50000000-0000-4000-8000-000000000002",
-          status: "available",
-        }),
+          status: "available"
+        })
       ],
       submission_comments: [createCommentRow()],
-      submission_activity_events: [createActivityRow()],
+      submission_activity_events: [createActivityRow()]
     })
 
     const detail = await getInternalSubmission(
       {
         actorUserId: EXTERNAL_ID,
         organizationId: ORGANIZATION_ID,
-        submissionId: SUBMISSION_ID,
+        submissionId: SUBMISSION_ID
       },
       { client: client as never }
     )
@@ -242,16 +241,16 @@ describe("internal submission visibility", () => {
     expect(detail.comments).toEqual([
       expect.objectContaining({
         id: COMMENT_ID,
-        body: "Please confirm the attachment.",
-      }),
+        body: "Please confirm the attachment."
+      })
     ])
     expect(detail.activity).toEqual([
       expect.objectContaining({
         id: ACTIVITY_ID,
         eventType: "assigned",
         fromStatus: "submitted",
-        toStatus: "in_review",
-      }),
+        toStatus: "in_review"
+      })
     ])
   })
 })
@@ -266,11 +265,11 @@ describe("internal submission draft lifecycle", () => {
         target_template_id: TEMPLATE_ID,
         target_submission_id: SUBMISSION_ID,
         target_title: "Vendor intake",
-        target_actor_user_id: STAFF_ID,
+        target_actor_user_id: STAFF_ID
       })
       return {
         data: createSubmissionRow({ values: {}, revision: 1 }),
-        error: null,
+        error: null
       }
     })
 
@@ -280,10 +279,10 @@ describe("internal submission draft lifecycle", () => {
         organizationId: ORGANIZATION_ID,
         submissionId: SUBMISSION_ID,
         templateId: TEMPLATE_ID,
-        title: "  Vendor   intake ",
+        title: "  Vendor   intake "
       },
       {
-        client: client as never,
+        client: client as never
       }
     )
 
@@ -294,22 +293,22 @@ describe("internal submission draft lifecycle", () => {
     const client = createClient({
       submissions: [
         createSubmissionRow({
-          values: { vendor_name: "Old", notes: "Keep this" },
-        }),
-      ],
+          values: { vendor_name: "Old", notes: "Keep this" }
+        })
+      ]
     })
     client.rpc.mockImplementation(async (functionName, args) => {
       expect(functionName).toBe("save_internal_submission_draft")
       expect(args.target_values).toEqual({
         vendor_name: "Northstar",
-        notes: "Keep this",
+        notes: "Keep this"
       })
       return {
         data: createSubmissionRow({
           values: args.target_values,
-          revision: 2,
+          revision: 2
         }),
-        error: null,
+        error: null
       }
     })
 
@@ -319,14 +318,14 @@ describe("internal submission draft lifecycle", () => {
         organizationId: ORGANIZATION_ID,
         submissionId: SUBMISSION_ID,
         expectedRevision: 1,
-        values: { vendor_name: " Northstar " },
+        values: { vendor_name: " Northstar " }
       },
       { client: client as never }
     )
 
     expect(result).toMatchObject({
       revision: 2,
-      values: { vendor_name: "Northstar", notes: "Keep this" },
+      values: { vendor_name: "Northstar", notes: "Keep this" }
     })
   })
 
@@ -340,7 +339,7 @@ describe("internal submission draft lifecycle", () => {
           organizationId: ORGANIZATION_ID,
           submissionId: SUBMISSION_ID,
           expectedRevision: 1,
-          values: {},
+          values: {}
         },
         { client: client as never }
       )
@@ -358,13 +357,13 @@ describe("internal submission draft lifecycle", () => {
           organizationId: ORGANIZATION_ID,
           submissionId: SUBMISSION_ID,
           expectedRevision: 2,
-          values: { vendor_name: "Northstar" },
+          values: { vendor_name: "Northstar" }
         },
         { client: client as never }
       )
     ).rejects.toMatchObject({
       message: "Submission draft has changed. Reload and try again.",
-      statusCode: 409,
+      statusCode: 409
     })
     expect(client.rpc).not.toHaveBeenCalled()
   })
@@ -373,16 +372,16 @@ describe("internal submission draft lifecycle", () => {
     const client = createClient({
       submissions: [
         createSubmissionRow({
-          values: { vendor_name: "Old", notes: "Keep this" },
-        }),
+          values: { vendor_name: "Old", notes: "Keep this" }
+        })
       ],
-      submission_files: [createFileRow({ status: "available" })],
+      submission_files: [createFileRow({ status: "available" })]
     })
     client.rpc.mockImplementation(async (functionName, args) => {
       expect(functionName).toBe("submit_internal_submission")
       expect(args.target_values).toEqual({
         vendor_name: "Northstar",
-        notes: "Keep this",
+        notes: "Keep this"
       })
       return {
         data: createSubmissionRow({
@@ -390,9 +389,9 @@ describe("internal submission draft lifecycle", () => {
           revision: 2,
           values: args.target_values,
           submitted_by: STAFF_ID,
-          submitted_at: "2026-07-18T18:00:00.000Z",
+          submitted_at: "2026-07-18T18:00:00.000Z"
         }),
-        error: null,
+        error: null
       }
     })
 
@@ -402,7 +401,7 @@ describe("internal submission draft lifecycle", () => {
         organizationId: ORGANIZATION_ID,
         submissionId: SUBMISSION_ID,
         expectedRevision: 1,
-        values: { vendor_name: "Northstar" },
+        values: { vendor_name: "Northstar" }
       },
       { client: client as never }
     )
@@ -413,9 +412,9 @@ describe("internal submission draft lifecycle", () => {
   it("blocks submit while any upload remains pending", async () => {
     const client = createClient({
       submissions: [
-        createSubmissionRow({ values: { vendor_name: "Northstar" } }),
+        createSubmissionRow({ values: { vendor_name: "Northstar" } })
       ],
-      submission_files: [createFileRow()],
+      submission_files: [createFileRow()]
     })
 
     await expect(
@@ -425,13 +424,13 @@ describe("internal submission draft lifecycle", () => {
           organizationId: ORGANIZATION_ID,
           submissionId: SUBMISSION_ID,
           expectedRevision: 1,
-          values: {},
+          values: {}
         },
         { client: client as never }
       )
     ).rejects.toMatchObject({
       message: "Wait for pending file uploads before submitting.",
-      statusCode: 409,
+      statusCode: 409
     })
     expect(client.rpc).not.toHaveBeenCalled()
   })
@@ -439,7 +438,7 @@ describe("internal submission draft lifecycle", () => {
   it("rejects submit when a required snapshot answer is missing", async () => {
     const client = createClient({
       submissions: [createSubmissionRow()],
-      submission_files: [createFileRow({ status: "available" })],
+      submission_files: [createFileRow({ status: "available" })]
     })
 
     await expect(
@@ -449,14 +448,14 @@ describe("internal submission draft lifecycle", () => {
           organizationId: ORGANIZATION_ID,
           submissionId: SUBMISSION_ID,
           expectedRevision: 1,
-          values: {},
+          values: {}
         },
         { client: client as never }
       )
     ).rejects.toMatchObject({
       message:
         "Vendor name must be completed before this submission can be submitted.",
-      statusCode: 400,
+      statusCode: 400
     })
     expect(client.rpc).not.toHaveBeenCalled()
   })
@@ -467,17 +466,17 @@ describe("internal submission draft lifecycle", () => {
       revision: 2,
       values: { vendor_name: "Northstar" },
       submitted_by: STAFF_ID,
-      submitted_at: "2026-07-18T18:00:00.000Z",
+      submitted_at: "2026-07-18T18:00:00.000Z"
     })
     const client = createClient({
       submissions: [submittedRow],
-      submission_files: [createFileRow({ status: "available" })],
+      submission_files: [createFileRow({ status: "available" })]
     })
     client.rpc.mockImplementation(async (functionName, args) => {
       expect(functionName).toBe("submit_internal_submission")
       expect(args).toMatchObject({
         target_expected_revision: 1,
-        target_values: { vendor_name: "Northstar" },
+        target_values: { vendor_name: "Northstar" }
       })
       return { data: submittedRow, error: null }
     })
@@ -488,7 +487,7 @@ describe("internal submission draft lifecycle", () => {
         organizationId: ORGANIZATION_ID,
         submissionId: SUBMISSION_ID,
         expectedRevision: 1,
-        values: {},
+        values: {}
       },
       { client: client as never }
     )
@@ -501,11 +500,11 @@ describe("internal submission draft lifecycle", () => {
     const needsChangesRow = createAssignedSubmissionRow({
       status: "needs_changes",
       revision: 4,
-      values: { vendor_name: "Old", notes: "Keep this" },
+      values: { vendor_name: "Old", notes: "Keep this" }
     })
     const client = createClient({
       submissions: [needsChangesRow],
-      submission_files: [createFileRow({ status: "available" })],
+      submission_files: [createFileRow({ status: "available" })]
     })
     client.rpc.mockImplementation(async (functionName, args) => {
       if (functionName === "save_internal_submission_draft") {
@@ -513,9 +512,9 @@ describe("internal submission draft lifecycle", () => {
           data: createAssignedSubmissionRow({
             status: "needs_changes",
             revision: 5,
-            values: args.target_values,
+            values: args.target_values
           }),
-          error: null,
+          error: null
         }
       }
 
@@ -529,9 +528,9 @@ describe("internal submission draft lifecycle", () => {
           submitted_at: "2026-07-18T18:00:00.000Z",
           assigned_to: EXTERNAL_ID,
           assigned_by: MANAGER_ID,
-          assigned_at: "2026-07-18T17:05:00.000Z",
+          assigned_at: "2026-07-18T17:05:00.000Z"
         }),
-        error: null,
+        error: null
       }
     })
 
@@ -541,7 +540,7 @@ describe("internal submission draft lifecycle", () => {
         organizationId: ORGANIZATION_ID,
         submissionId: SUBMISSION_ID,
         expectedRevision: 4,
-        values: { vendor_name: "Northstar" },
+        values: { vendor_name: "Northstar" }
       },
       { client: client as never }
     )
@@ -551,7 +550,7 @@ describe("internal submission draft lifecycle", () => {
         organizationId: ORGANIZATION_ID,
         submissionId: SUBMISSION_ID,
         expectedRevision: 4,
-        values: { vendor_name: "Northstar" },
+        values: { vendor_name: "Northstar" }
       },
       { client: client as never }
     )
@@ -559,7 +558,7 @@ describe("internal submission draft lifecycle", () => {
     expect(saved).toMatchObject({ status: "needs_changes", revision: 5 })
     expect(resubmitted).toMatchObject({
       status: "submitted",
-      assignedTo: EXTERNAL_ID,
+      assignedTo: EXTERNAL_ID
     })
   })
 })
@@ -572,9 +571,9 @@ describe("internal submission review workflow", () => {
           status: "submitted",
           revision: 2,
           submitted_by: STAFF_ID,
-          submitted_at: "2026-07-18T17:00:00.000Z",
-        }),
-      ],
+          submitted_at: "2026-07-18T17:00:00.000Z"
+        })
+      ]
     })
     client.rpc.mockImplementation(async (functionName, args) => {
       expect(functionName).toBe("assign_internal_submission")
@@ -583,7 +582,7 @@ describe("internal submission review workflow", () => {
         target_submission_id: SUBMISSION_ID,
         target_expected_revision: 2,
         target_assignee_user_id: EXTERNAL_ID,
-        target_actor_user_id: MANAGER_ID,
+        target_actor_user_id: MANAGER_ID
       })
       return { data: createAssignedSubmissionRow(), error: null }
     })
@@ -594,14 +593,14 @@ describe("internal submission review workflow", () => {
         organizationId: ORGANIZATION_ID,
         submissionId: SUBMISSION_ID,
         expectedRevision: 2,
-        assignedTo: EXTERNAL_ID,
+        assignedTo: EXTERNAL_ID
       },
       { client: client as never }
     )
 
     expect(result).toMatchObject({
       status: "in_review",
-      assignedTo: EXTERNAL_ID,
+      assignedTo: EXTERNAL_ID
     })
   })
 
@@ -615,7 +614,7 @@ describe("internal submission review workflow", () => {
           organizationId: ORGANIZATION_ID,
           submissionId: SUBMISSION_ID,
           expectedRevision: 1,
-          assignedTo: EXTERNAL_ID,
+          assignedTo: EXTERNAL_ID
         },
         { client: client as never }
       )
@@ -630,7 +629,7 @@ describe("internal submission review workflow", () => {
       error: Object.assign(
         new Error("Submission review has changed. Reload and try again."),
         { code: "40001" }
-      ),
+      )
     })
 
     await expect(
@@ -640,19 +639,19 @@ describe("internal submission review workflow", () => {
           organizationId: ORGANIZATION_ID,
           submissionId: SUBMISSION_ID,
           expectedRevision: 2,
-          assignedTo: EXTERNAL_ID,
+          assignedTo: EXTERNAL_ID
         },
         { client: client as never }
       )
     ).rejects.toMatchObject({
       message: "Submission review has changed. Reload and try again.",
-      statusCode: 409,
+      statusCode: 409
     })
   })
 
   it("trims a required change request comment before the atomic transition", async () => {
     const client = createClient({
-      submissions: [createAssignedSubmissionRow()],
+      submissions: [createAssignedSubmissionRow()]
     })
     client.rpc.mockImplementation(async (functionName, args) => {
       expect(functionName).toBe("transition_internal_submission")
@@ -660,14 +659,14 @@ describe("internal submission review workflow", () => {
         target_expected_revision: 3,
         target_transition: "needs_changes",
         target_comment: "Please correct the total.",
-        target_actor_user_id: MANAGER_ID,
+        target_actor_user_id: MANAGER_ID
       })
       return {
         data: createAssignedSubmissionRow({
           status: "needs_changes",
-          revision: 4,
+          revision: 4
         }),
-        error: null,
+        error: null
       }
     })
 
@@ -678,7 +677,7 @@ describe("internal submission review workflow", () => {
         submissionId: SUBMISSION_ID,
         expectedRevision: 3,
         targetStatus: "needs_changes",
-        comment: "  Please correct the total.  ",
+        comment: "  Please correct the total.  "
       },
       { client: client as never }
     )
@@ -688,7 +687,7 @@ describe("internal submission review workflow", () => {
 
   it("requires a nonblank note before changes or rejection", async () => {
     const client = createClient({
-      submissions: [createAssignedSubmissionRow()],
+      submissions: [createAssignedSubmissionRow()]
     })
 
     await expect(
@@ -699,7 +698,7 @@ describe("internal submission review workflow", () => {
           submissionId: SUBMISSION_ID,
           expectedRevision: 3,
           targetStatus: "rejected",
-          comment: "   ",
+          comment: "   "
         },
         { client: client as never }
       )
@@ -709,7 +708,7 @@ describe("internal submission review workflow", () => {
 
   it("lets an assigned external reviewer add a general comment", async () => {
     const client = createClient({
-      submissions: [createAssignedSubmissionRow()],
+      submissions: [createAssignedSubmissionRow()]
     })
     client.rpc.mockImplementation(async (functionName, args) => {
       expect(functionName).toBe("create_internal_submission_comment")
@@ -718,7 +717,7 @@ describe("internal submission review workflow", () => {
         target_submission_id: SUBMISSION_ID,
         target_comment_id: COMMENT_ID,
         target_body: "Please confirm the attachment.",
-        target_actor_user_id: EXTERNAL_ID,
+        target_actor_user_id: EXTERNAL_ID
       })
       return { data: createCommentRow(), error: null }
     })
@@ -728,7 +727,7 @@ describe("internal submission review workflow", () => {
         actorUserId: EXTERNAL_ID,
         organizationId: ORGANIZATION_ID,
         submissionId: SUBMISSION_ID,
-        body: "  Please confirm the attachment.  ",
+        body: "  Please confirm the attachment.  "
       },
       { client: client as never, createId: (): string => COMMENT_ID }
     )
@@ -744,7 +743,7 @@ describe("internal submission file workflow", () => {
       uploadUrl: "https://r2.example/upload",
       storageKey: buildExpectedStorageKey(FILE_ID, "Evidence-final.pdf"),
       expiresInSeconds: 300,
-      input,
+      input
     }))
     client.rpc.mockImplementation(async (functionName, args) => {
       if (functionName === "allocate_internal_submission_file") {
@@ -763,9 +762,9 @@ describe("internal submission file workflow", () => {
           id: FILE_ID,
           original_filename: "Evidence final.pdf",
           safe_filename: "Evidence-final.pdf",
-          storage_key: buildExpectedStorageKey(FILE_ID, "Evidence-final.pdf"),
+          storage_key: buildExpectedStorageKey(FILE_ID, "Evidence-final.pdf")
         }),
-        error: null,
+        error: null
       }
     })
 
@@ -779,7 +778,7 @@ describe("internal submission file workflow", () => {
         originalFilename: "Evidence final.pdf",
         contentType: "application/pdf",
         byteSize: 1_024,
-        checksumSha256: CHECKSUM,
+        checksumSha256: CHECKSUM
       },
       {
         client: client as never,
@@ -787,14 +786,14 @@ describe("internal submission file workflow", () => {
         validateSubmissionUploadRequest: vi.fn(),
         now: () => new Date("2026-07-18T18:00:00.000Z"),
         createSignedSubmissionUploadUrl:
-          createSignedSubmissionUploadUrl as never,
+          createSignedSubmissionUploadUrl as never
       }
     )
 
     expect(result).toMatchObject({
       file: { id: FILE_ID, status: "upload_pending" },
       uploadUrl: "https://r2.example/upload",
-      expiresInSeconds: 300,
+      expiresInSeconds: 300
     })
     expect(createSignedSubmissionUploadUrl).toHaveBeenCalledOnce()
     expect(client.rpc).toHaveBeenCalledTimes(2)
@@ -805,15 +804,13 @@ describe("internal submission file workflow", () => {
       submission_files: [
         createFileRow({
           original_filename: "Evidence.pdf",
-          safe_filename: "Evidence.pdf",
-        }),
-      ],
+          safe_filename: "Evidence.pdf"
+        })
+      ]
     })
     const createId = vi.fn(() => "unexpected")
     client.rpc.mockImplementation(async (functionName, args) => {
-      expect(functionName).toBe(
-        "record_internal_submission_file_upload_window"
-      )
+      expect(functionName).toBe("record_internal_submission_file_upload_window")
       expect(args.target_file_id).toBe(FILE_ID)
       return { data: createFileRow(), error: null }
     })
@@ -828,7 +825,7 @@ describe("internal submission file workflow", () => {
         originalFilename: "Evidence.pdf",
         contentType: "application/pdf",
         byteSize: 1_024,
-        checksumSha256: CHECKSUM,
+        checksumSha256: CHECKSUM
       },
       {
         client: client as never,
@@ -837,8 +834,8 @@ describe("internal submission file workflow", () => {
         createSignedSubmissionUploadUrl: vi.fn(async () => ({
           uploadUrl: "https://r2.example/retry",
           storageKey: buildExpectedStorageKey(FILE_ID),
-          expiresInSeconds: 300,
-        })),
+          expiresInSeconds: 300
+        }))
       }
     )
 
@@ -849,7 +846,7 @@ describe("internal submission file workflow", () => {
 
   it("byte-verifies the bound checksum before completing the allocation", async () => {
     const client = createClient({
-      submission_files: [createFileRow()],
+      submission_files: [createFileRow()]
     })
     const events: string[] = []
     const verifySubmissionUpload = vi.fn(async (input) => {
@@ -862,7 +859,7 @@ describe("internal submission file workflow", () => {
       events.push("rpc")
       return {
         data: createFileRow({ status: "available" }),
-        error: null,
+        error: null
       }
     })
 
@@ -871,11 +868,11 @@ describe("internal submission file workflow", () => {
         actorUserId: STAFF_ID,
         organizationId: ORGANIZATION_ID,
         submissionId: SUBMISSION_ID,
-        fileId: FILE_ID,
+        fileId: FILE_ID
       },
       {
         client: client as never,
-        verifySubmissionUpload,
+        verifySubmissionUpload
       }
     )
 
@@ -885,7 +882,7 @@ describe("internal submission file workflow", () => {
 
   it("rejects a same-metadata retry when the selected bytes changed", async () => {
     const client = createClient({
-      submission_files: [createFileRow()],
+      submission_files: [createFileRow()]
     })
 
     await expect(
@@ -899,23 +896,23 @@ describe("internal submission file workflow", () => {
           originalFilename: "evidence.pdf",
           contentType: "application/pdf",
           byteSize: 1_024,
-          checksumSha256: "b".repeat(64),
+          checksumSha256: "b".repeat(64)
         },
         {
           client: client as never,
-          validateSubmissionUploadRequest: vi.fn(),
+          validateSubmissionUploadRequest: vi.fn()
         }
       )
     ).rejects.toMatchObject({
       message: "Pending submission file metadata does not match this upload.",
-      statusCode: 409,
+      statusCode: 409
     })
     expect(client.rpc).not.toHaveBeenCalled()
   })
 
   it("tombstones an active file before best-effort object cleanup", async () => {
     const client = createClient({
-      submission_files: [createFileRow({ status: "available" })],
+      submission_files: [createFileRow({ status: "available" })]
     })
     const deleteSubmissionStorageObject = vi.fn(async () => undefined)
     client.rpc.mockImplementation(async (functionName) => {
@@ -923,9 +920,9 @@ describe("internal submission file workflow", () => {
       return {
         data: {
           ...createFileRow({ status: "superseded" }),
-          storage_key: buildExpectedStorageKey(FILE_ID),
+          storage_key: buildExpectedStorageKey(FILE_ID)
         },
-        error: null,
+        error: null
       }
     })
 
@@ -935,19 +932,19 @@ describe("internal submission file workflow", () => {
           actorUserId: STAFF_ID,
           organizationId: ORGANIZATION_ID,
           submissionId: SUBMISSION_ID,
-          fileId: FILE_ID,
+          fileId: FILE_ID
         },
         {
           client: client as never,
-          deleteSubmissionStorageObject,
+          deleteSubmissionStorageObject
         }
       )
     ).resolves.toEqual({
       fileId: FILE_ID,
-      storageKey: buildExpectedStorageKey(FILE_ID),
+      storageKey: buildExpectedStorageKey(FILE_ID)
     })
     expect(deleteSubmissionStorageObject).toHaveBeenCalledWith({
-      storageKey: buildExpectedStorageKey(FILE_ID),
+      storageKey: buildExpectedStorageKey(FILE_ID)
     })
   })
 
@@ -956,17 +953,17 @@ describe("internal submission file workflow", () => {
       submissions: [
         createAssignedSubmissionRow({
           status: "needs_changes",
-          revision: 4,
-        }),
+          revision: 4
+        })
       ],
-      submission_files: [createFileRow({ status: "available" })],
+      submission_files: [createFileRow({ status: "available" })]
     })
     client.rpc.mockResolvedValue({
       data: {
         ...createFileRow({ status: "superseded" }),
-        storage_key: buildExpectedStorageKey(FILE_ID),
+        storage_key: buildExpectedStorageKey(FILE_ID)
       },
-      error: null,
+      error: null
     })
 
     await expect(
@@ -975,11 +972,11 @@ describe("internal submission file workflow", () => {
           actorUserId: STAFF_ID,
           organizationId: ORGANIZATION_ID,
           submissionId: SUBMISSION_ID,
-          fileId: FILE_ID,
+          fileId: FILE_ID
         },
         {
           client: client as never,
-          deleteSubmissionStorageObject: vi.fn(async () => undefined),
+          deleteSubmissionStorageObject: vi.fn(async () => undefined)
         }
       )
     ).resolves.toMatchObject({ fileId: FILE_ID })
@@ -992,9 +989,9 @@ describe("internal submission file workflow", () => {
           status: "superseded",
           superseded_by: STAFF_ID,
           superseded_at: "2026-07-18T18:00:00.000Z",
-          storage_cleaned_at: null,
-        }),
-      ],
+          storage_cleaned_at: null
+        })
+      ]
     })
     const deleteSubmissionStorageObject = vi.fn(async () => undefined)
 
@@ -1004,51 +1001,51 @@ describe("internal submission file workflow", () => {
           actorUserId: STAFF_ID,
           organizationId: ORGANIZATION_ID,
           submissionId: SUBMISSION_ID,
-          fileId: FILE_ID,
+          fileId: FILE_ID
         },
         {
           client: client as never,
-          deleteSubmissionStorageObject,
+          deleteSubmissionStorageObject
         }
       )
     ).rejects.toMatchObject({
       message: "This submission file upload was cancelled.",
-      statusCode: 409,
+      statusCode: 409
     })
     expect(deleteSubmissionStorageObject).toHaveBeenCalledWith({
-      storageKey: buildExpectedStorageKey(FILE_ID),
+      storageKey: buildExpectedStorageKey(FILE_ID)
     })
   })
 
   it("signs downloads only for available visible files", async () => {
     const client = createClient({
-      submission_files: [createFileRow({ status: "available" })],
+      submission_files: [createFileRow({ status: "available" })]
     })
     const result = await createInternalSubmissionFileDownloadUrl(
       {
         actorUserId: MANAGER_ID,
         organizationId: ORGANIZATION_ID,
         submissionId: SUBMISSION_ID,
-        fileId: FILE_ID,
+        fileId: FILE_ID
       },
       {
         client: client as never,
         createSignedSubmissionDownloadUrl: vi.fn(async () => ({
           downloadUrl: "https://r2.example/download",
-          expiresInSeconds: 300,
-        })),
+          expiresInSeconds: 300
+        }))
       }
     )
 
     expect(result).toEqual({
       downloadUrl: "https://r2.example/download",
-      expiresInSeconds: 300,
+      expiresInSeconds: 300
     })
   })
 
   it("does not sign a download while the file is pending", async () => {
     const client = createClient({
-      submission_files: [createFileRow()],
+      submission_files: [createFileRow()]
     })
     const createSignedSubmissionDownloadUrl = vi.fn()
 
@@ -1058,11 +1055,11 @@ describe("internal submission file workflow", () => {
           actorUserId: MANAGER_ID,
           organizationId: ORGANIZATION_ID,
           submissionId: SUBMISSION_ID,
-          fileId: FILE_ID,
+          fileId: FILE_ID
         },
         {
           client: client as never,
-          createSignedSubmissionDownloadUrl,
+          createSignedSubmissionDownloadUrl
         }
       )
     ).rejects.toMatchObject({ statusCode: 409 })
@@ -1076,7 +1073,7 @@ describe("internal submission file cleanup", () => {
     const dueRow = createFileRow({
       status: "superseded",
       cleanup_after: "2026-07-18T17:59:00.000Z",
-      storage_cleaned_at: null,
+      storage_cleaned_at: null
     })
     const client = createClient({
       submission_files: [
@@ -1086,26 +1083,24 @@ describe("internal submission file cleanup", () => {
           status: "superseded",
           storage_key: buildExpectedStorageKey(futureFileId),
           cleanup_after: "2026-07-18T18:01:00.000Z",
-          storage_cleaned_at: null,
+          storage_cleaned_at: null
         }),
-        createFileRow({ status: "available" }),
-      ],
+        createFileRow({ status: "available" })
+      ]
     })
     const deleteSubmissionStorageObject = vi.fn(async () => undefined)
     client.rpc.mockImplementation(async (functionName, args) => {
-      expect(functionName).toBe(
-        "mark_internal_submission_file_storage_cleaned"
-      )
+      expect(functionName).toBe("mark_internal_submission_file_storage_cleaned")
       expect(args).toEqual({
         target_file_id: FILE_ID,
-        target_storage_key: buildExpectedStorageKey(FILE_ID),
+        target_storage_key: buildExpectedStorageKey(FILE_ID)
       })
       return {
         data: {
           ...dueRow,
-          storage_cleaned_at: "2026-07-18T18:00:00.000Z",
+          storage_cleaned_at: "2026-07-18T18:00:00.000Z"
         },
-        error: null,
+        error: null
       }
     })
 
@@ -1114,13 +1109,13 @@ describe("internal submission file cleanup", () => {
       {
         client: client as never,
         deleteSubmissionStorageObject,
-        now: () => new Date("2026-07-18T18:00:00.000Z"),
+        now: () => new Date("2026-07-18T18:00:00.000Z")
       }
     )
 
     expect(result).toEqual({ attempted: 1, cleaned: 1, failed: 0 })
     expect(deleteSubmissionStorageObject).toHaveBeenCalledWith({
-      storageKey: buildExpectedStorageKey(FILE_ID),
+      storageKey: buildExpectedStorageKey(FILE_ID)
     })
     expect(client.rpc).toHaveBeenCalledOnce()
   })
@@ -1132,15 +1127,15 @@ function createClient(overrides: Partial<FakeTables> = {}): FakeClient {
       createMembership(MANAGER_ID, "manager"),
       createMembership(STAFF_ID, "staff"),
       createMembership(OTHER_STAFF_ID, "staff"),
-      createMembership(EXTERNAL_ID, "external_reviewer"),
+      createMembership(EXTERNAL_ID, "external_reviewer")
     ],
     document_templates: [
       {
         id: TEMPLATE_ID,
         org_id: ORGANIZATION_ID,
         status: "published",
-        content: SNAPSHOT,
-      },
+        content: SNAPSHOT
+      }
     ],
     submissions: [
       createSubmissionRow(),
@@ -1148,13 +1143,13 @@ function createClient(overrides: Partial<FakeTables> = {}): FakeClient {
         id: OTHER_SUBMISSION_ID,
         created_by: OTHER_STAFF_ID,
         updated_by: OTHER_STAFF_ID,
-        updated_at: "2026-07-18T17:00:00.000Z",
-      }),
+        updated_at: "2026-07-18T17:00:00.000Z"
+      })
     ],
     submission_files: [],
     submission_comments: [],
     submission_activity_events: [],
-    ...overrides,
+    ...overrides
   })
 }
 
@@ -1163,7 +1158,7 @@ function createMembership(userId: string, role: string): FakeRow {
     org_id: ORGANIZATION_ID,
     user_id: userId,
     role,
-    status: "active",
+    status: "active"
   }
 }
 
@@ -1187,7 +1182,7 @@ function createSubmissionRow(overrides: FakeRow = {}): FakeRow {
     updated_at: "2026-07-18T16:00:00.000Z",
     submitted_at: null,
     assigned_at: null,
-    ...overrides,
+    ...overrides
   }
 }
 
@@ -1200,7 +1195,7 @@ function createAssignedSubmissionRow(overrides: FakeRow = {}): FakeRow {
     assigned_to: EXTERNAL_ID,
     assigned_by: MANAGER_ID,
     assigned_at: "2026-07-18T17:05:00.000Z",
-    ...overrides,
+    ...overrides
   })
 }
 
@@ -1212,7 +1207,7 @@ function createCommentRow(overrides: FakeRow = {}): FakeRow {
     body: "Please confirm the attachment.",
     created_by: EXTERNAL_ID,
     created_at: "2026-07-18T17:10:00.000Z",
-    ...overrides,
+    ...overrides
   }
 }
 
@@ -1229,7 +1224,7 @@ function createActivityRow(overrides: FakeRow = {}): FakeRow {
     comment_id: null,
     submission_revision: 3,
     created_at: "2026-07-18T17:05:00.000Z",
-    ...overrides,
+    ...overrides
   }
 }
 
@@ -1257,7 +1252,7 @@ function createFileRow(overrides: FakeRow = {}): FakeRow {
     superseded_at: null,
     cleanup_after: "2026-07-18T16:30:00.000Z",
     storage_cleaned_at: null,
-    ...overrides,
+    ...overrides
   }
 }
 
@@ -1270,42 +1265,36 @@ function buildExpectedStorageKey(
 
 function createSnapshot(): TemplateContent {
   return parseTemplateContent({
-    schemaVersion: 1,
-    sections: {
-      header: { blocks: [] },
-      body: {
-        blocks: [
-          {
-            id: "60000000-0000-4000-8000-000000000001",
-            type: "text_field",
-            fieldKey: "vendor_name",
-            label: "Vendor name",
-            required: true,
-            helpText: null,
-            placeholder: null,
-            multiline: false,
-          },
-          {
-            id: "60000000-0000-4000-8000-000000000002",
-            type: "text_field",
-            fieldKey: "notes",
-            label: "Notes",
-            required: false,
-            helpText: null,
-            placeholder: null,
-            multiline: true,
-          },
-          {
-            id: "60000000-0000-4000-8000-000000000003",
-            type: "file_field",
-            fieldKey: "evidence",
-            label: "Evidence",
-            required: true,
-            helpText: null,
-          },
-        ],
+    schemaVersion: 2,
+    blocks: [
+      {
+        id: "60000000-0000-4000-8000-000000000001",
+        type: "text_field",
+        fieldKey: "vendor_name",
+        label: "Vendor name",
+        required: true,
+        helpText: null,
+        placeholder: null,
+        multiline: false
       },
-      footer: { blocks: [] },
-    },
+      {
+        id: "60000000-0000-4000-8000-000000000002",
+        type: "text_field",
+        fieldKey: "notes",
+        label: "Notes",
+        required: false,
+        helpText: null,
+        placeholder: null,
+        multiline: true
+      },
+      {
+        id: "60000000-0000-4000-8000-000000000003",
+        type: "file_field",
+        fieldKey: "evidence",
+        label: "Evidence",
+        required: true,
+        helpText: null
+      }
+    ]
   })
 }

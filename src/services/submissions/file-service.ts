@@ -8,7 +8,7 @@ import {
   normalizeSubmissionOriginalFilename as defaultNormalizeSubmissionOriginalFilename,
   SUBMISSION_UPLOAD_CLEANUP_GRACE_SECONDS,
   validateSubmissionUploadRequest as defaultValidateSubmissionUploadRequest,
-  verifySubmissionUpload as defaultVerifySubmissionUpload,
+  verifySubmissionUpload as defaultVerifySubmissionUpload
 } from "@/services/submission-storage-service"
 import type {
   AllocateInternalSubmissionFileInput,
@@ -19,7 +19,7 @@ import type {
   CreateInternalSubmissionFileDownloadUrlResponse,
   SubmissionServiceDeps,
   SupersedeInternalSubmissionFileInput,
-  SupersedeInternalSubmissionFileResponse,
+  SupersedeInternalSubmissionFileResponse
 } from "@/services/submissions/contracts"
 import { SubmissionServiceError } from "@/services/submissions/errors"
 import {
@@ -31,12 +31,12 @@ import {
   getSubmissionClient,
   listSubmissionFiles,
   requireSubmissionPermission,
-  runSubmissionOperation,
+  runSubmissionOperation
 } from "@/services/submissions/shared"
 import {
   parseSubmissionFileRow,
   type Submission,
-  type SubmissionFile,
+  type SubmissionFile
 } from "@/types/submission"
 
 /**
@@ -59,7 +59,7 @@ export async function allocateInternalSubmissionFile(
       submissionId: input.submissionId,
       fieldKey: input.fieldKey,
       contentType: input.contentType,
-      byteSize: input.byteSize,
+      byteSize: input.byteSize
     },
     async (): Promise<AllocateInternalSubmissionFileResponse> => {
       const client = getSubmissionClient(deps)
@@ -88,8 +88,7 @@ export async function allocateInternalSubmissionFile(
         deps.normalizeSubmissionOriginalFilename ??
         defaultNormalizeSubmissionOriginalFilename
       const createSafeFilename =
-        deps.createSafeSubmissionFilename ??
-        defaultCreateSafeSubmissionFilename
+        deps.createSafeSubmissionFilename ?? defaultCreateSafeSubmissionFilename
       const validateUpload =
         deps.validateSubmissionUploadRequest ??
         defaultValidateSubmissionUploadRequest
@@ -99,7 +98,7 @@ export async function allocateInternalSubmissionFile(
       validateUpload({
         contentType: input.contentType,
         byteSize: input.byteSize,
-        checksumSha256: input.checksumSha256,
+        checksumSha256: input.checksumSha256
       })
       assertSubmissionFilenameMatchesContentType(
         originalFilename,
@@ -123,7 +122,7 @@ export async function allocateInternalSubmissionFile(
           safeFilename,
           contentType: input.contentType,
           byteSize: input.byteSize,
-          checksumSha256: input.checksumSha256,
+          checksumSha256: input.checksumSha256
         })
         file = existingFile
       } else {
@@ -133,7 +132,7 @@ export async function allocateInternalSubmissionFile(
           submissionId: input.submissionId,
           fieldKey,
           fileId,
-          safeFilename,
+          safeFilename
         })
         const { data, error } = await client.rpc(
           "allocate_internal_submission_file",
@@ -149,7 +148,7 @@ export async function allocateInternalSubmissionFile(
             target_byte_size: input.byteSize,
             target_storage_key: storageKey,
             target_expected_checksum_sha256: input.checksumSha256,
-            target_actor_user_id: input.actorUserId,
+            target_actor_user_id: input.actorUserId
           }
         )
 
@@ -174,7 +173,7 @@ export async function allocateInternalSubmissionFile(
         safeFilename: file.safeFilename,
         contentType: file.contentType,
         byteSize: file.byteSize,
-        checksumSha256: input.checksumSha256,
+        checksumSha256: input.checksumSha256
       })
 
       if (signedUrl.storageKey !== file.storageKey) {
@@ -197,7 +196,7 @@ export async function allocateInternalSubmissionFile(
           target_submission_id: input.submissionId,
           target_file_id: file.id,
           target_cleanup_after: cleanupAfter,
-          target_actor_user_id: input.actorUserId,
+          target_actor_user_id: input.actorUserId
         })
 
       if (recordWindowError || !recordedFileData) {
@@ -210,7 +209,7 @@ export async function allocateInternalSubmissionFile(
       return {
         file: parseSubmissionFileRow(recordedFileData),
         uploadUrl: signedUrl.uploadUrl,
-        expiresInSeconds: signedUrl.expiresInSeconds,
+        expiresInSeconds: signedUrl.expiresInSeconds
       }
     }
   )
@@ -293,7 +292,7 @@ export async function completeInternalSubmissionFile(
         storageKey: file.storageKey,
         contentType: file.contentType,
         byteSize: file.byteSize,
-        checksumSha256: file.expectedChecksumSha256,
+        checksumSha256: file.expectedChecksumSha256
       })
 
       const { data, error } = await client.rpc(
@@ -306,7 +305,7 @@ export async function completeInternalSubmissionFile(
           target_content_type: file.contentType,
           target_byte_size: file.byteSize,
           target_checksum_sha256: file.expectedChecksumSha256,
-          target_actor_user_id: input.actorUserId,
+          target_actor_user_id: input.actorUserId
         }
       )
 
@@ -365,7 +364,7 @@ export async function supersedeInternalSubmissionFile(
           target_org_id: input.organizationId,
           target_submission_id: input.submissionId,
           target_file_id: input.fileId,
-          target_actor_user_id: input.actorUserId,
+          target_actor_user_id: input.actorUserId
         }
       )
 
@@ -391,7 +390,7 @@ export async function supersedeInternalSubmissionFile(
           reason:
             error instanceof Error
               ? error.name
-              : "Unknown submission object cleanup error",
+              : "Unknown submission object cleanup error"
         })
       }
 
@@ -458,12 +457,12 @@ export async function createInternalSubmissionFileDownloadUrl(
         defaultCreateSignedSubmissionDownloadUrl
       const signedUrl = await createSignedDownloadUrl({
         storageKey: file.storageKey,
-        downloadFilename: file.originalFilename,
+        downloadFilename: file.originalFilename
       })
 
       return {
         downloadUrl: signedUrl.downloadUrl,
-        expiresInSeconds: signedUrl.expiresInSeconds,
+        expiresInSeconds: signedUrl.expiresInSeconds
       }
     }
   )
@@ -473,13 +472,9 @@ function requireSnapshotFileField(
   submission: Submission,
   fieldKey: string
 ): void {
-  const fileFieldExists = Object.values(
-    submission.templateSnapshot.sections
-  ).some((section): boolean =>
-    section.blocks.some(
-      (block): boolean =>
-        block.type === "file_field" && block.fieldKey === fieldKey
-    )
+  const fileFieldExists = submission.templateSnapshot.blocks.some(
+    (block): boolean =>
+      block.type === "file_field" && block.fieldKey === fieldKey
   )
 
   if (!fileFieldExists) {
@@ -557,10 +552,7 @@ function assertSubmissionCreatorEditableState(
     )
   }
 
-  if (
-    submission.status !== "draft" &&
-    submission.status !== "needs_changes"
-  ) {
+  if (submission.status !== "draft" && submission.status !== "needs_changes") {
     throw new SubmissionServiceError(
       "Files cannot be changed in this submission status.",
       409
@@ -594,8 +586,7 @@ async function cleanupCancelledCompletionRace(
 
   if (data.storage_cleaned_at === null) {
     const deleteObject =
-      deps.deleteSubmissionStorageObject ??
-      defaultDeleteSubmissionStorageObject
+      deps.deleteSubmissionStorageObject ?? defaultDeleteSubmissionStorageObject
 
     try {
       await deleteObject({ storageKey: data.storage_key })
@@ -607,7 +598,7 @@ async function cleanupCancelledCompletionRace(
         reason:
           cleanupError instanceof Error
             ? cleanupError.name
-            : "Unknown submission object cleanup error",
+            : "Unknown submission object cleanup error"
       })
     }
   }

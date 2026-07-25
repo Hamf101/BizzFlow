@@ -4,14 +4,9 @@ import {
   FIELD_CHUNK_CHARACTERS,
   LIST_CHUNK_HEIGHT,
   LIST_ENTRY_CHUNK_CHARACTERS,
-  MAX_REPEATED_FOOTER_HEIGHT,
-  MAX_REPEATED_HEADER_HEIGHT,
-  MIN_PAGE_FLOW_HEIGHT,
   PAGE_FLOW_HEIGHT,
   PARAGRAPH_CHUNK_CHARACTERS,
-  REPEATED_FOOTER_GAP,
-  REPEATED_HEADER_GAP,
-  TABLE_CHUNK_HEIGHT,
+  TABLE_CHUNK_HEIGHT
 } from "./constants"
 import { DocumentPdfServiceError } from "./errors"
 import { formatFieldValue, normalizeDrawingDataUrl } from "./shared"
@@ -19,7 +14,7 @@ import type {
   DocumentPdfSigner,
   NormalizedPdfInput,
   PdfFlowItem,
-  PdfPagePlan,
+  PdfPagePlan
 } from "./types"
 
 /**
@@ -30,49 +25,7 @@ import type {
  * @throws DocumentPdfServiceError when repeated regions or a block cannot fit.
  */
 export function createPdfPagePlans(input: NormalizedPdfInput): PdfPagePlan[] {
-  const repeatedHeaderHeight = input.content.repeat.header
-    ? estimateBrandingHeight(input.content) +
-      estimateBlocksHeight(
-        input.content.sections.header.blocks,
-        input.answers
-      )
-    : 0
-  const repeatedFooterHeight = input.content.repeat.footer
-    ? estimateBlocksHeight(
-        input.content.sections.footer.blocks,
-        input.answers
-      )
-    : 0
-
-  if (repeatedHeaderHeight > MAX_REPEATED_HEADER_HEIGHT) {
-    throw new DocumentPdfServiceError(
-      "The repeated header is too tall. Shorten it or turn off header repetition.",
-      400
-    )
-  }
-
-  if (repeatedFooterHeight > MAX_REPEATED_FOOTER_HEIGHT) {
-    throw new DocumentPdfServiceError(
-      "The repeated footer is too tall. Shorten it or turn off footer repetition.",
-      400
-    )
-  }
-
-  const pageCapacity =
-    PAGE_FLOW_HEIGHT -
-    (input.content.repeat.header
-      ? repeatedHeaderHeight + REPEATED_HEADER_GAP
-      : 0) -
-    (input.content.repeat.footer
-      ? repeatedFooterHeight + REPEATED_FOOTER_GAP
-      : 0)
-
-  if (pageCapacity < MIN_PAGE_FLOW_HEIGHT) {
-    throw new DocumentPdfServiceError(
-      "The repeated header and footer leave too little room for document content.",
-      400
-    )
-  }
+  const pageCapacity = PAGE_FLOW_HEIGHT
 
   const flowItems = createPdfFlowItems(input)
   const pages: PdfPagePlan[] = []
@@ -89,10 +42,7 @@ export function createPdfPagePlans(input: NormalizedPdfInput): PdfPagePlan[] {
       )
     }
 
-    if (
-      currentItems.length > 0 &&
-      currentHeight + itemHeight > pageCapacity
-    ) {
+    if (currentItems.length > 0 && currentHeight + itemHeight > pageCapacity) {
       pages.push({ items: currentItems })
       currentItems = []
       currentHeight = 0
@@ -110,44 +60,19 @@ export function createPdfPagePlans(input: NormalizedPdfInput): PdfPagePlan[] {
 }
 
 function createPdfFlowItems(input: NormalizedPdfInput): PdfFlowItem[] {
-  const items: PdfFlowItem[] = []
-
-  if (!input.content.repeat.header) {
-    items.push({ kind: "branding" })
-    items.push(
-      ...expandBlocksForPagination(
-        input.content.sections.header.blocks,
-        input.answers
-      )
-    )
-  }
-
-  items.push({ kind: "title" })
-  items.push(
-    ...expandBlocksForPagination(
-      input.content.sections.body.blocks,
-      input.answers
-    )
-  )
+  const items: PdfFlowItem[] = [
+    { kind: "branding" },
+    { kind: "title" },
+    ...expandBlocksForPagination(input.content.blocks, input.answers)
+  ]
 
   if (input.signers.length > 0) {
     items.push({ kind: "signing_intro" })
     items.push(
-      ...input.signers.map(
-        (signer: DocumentPdfSigner): PdfFlowItem => ({
-          kind: "signer",
-          signer,
-        })
-      )
-    )
-  }
-
-  if (!input.content.repeat.footer) {
-    items.push(
-      ...expandBlocksForPagination(
-        input.content.sections.footer.blocks,
-        input.answers
-      )
+      ...input.signers.map((signer: DocumentPdfSigner): PdfFlowItem => ({
+        kind: "signer",
+        signer
+      }))
     )
   }
 
@@ -158,9 +83,8 @@ function expandBlocksForPagination(
   blocks: TemplateBlock[],
   answers: Record<string, unknown>
 ): PdfFlowItem[] {
-  return blocks.flatMap(
-    (block: TemplateBlock): PdfFlowItem[] =>
-      expandBlockForPagination(block, answers)
+  return blocks.flatMap((block: TemplateBlock): PdfFlowItem[] =>
+    expandBlockForPagination(block, answers)
   )
 }
 
@@ -173,7 +97,7 @@ function expandBlockForPagination(
       return splitText(block.text, PARAGRAPH_CHUNK_CHARACTERS).map(
         (text: string): PdfFlowItem => ({
           kind: "block",
-          block: { ...block, text },
+          block: { ...block, text }
         })
       )
     case "bullet_list":
@@ -196,7 +120,7 @@ function expandBlockForPagination(
           kind: "block",
           block,
           answerOverride,
-          fieldContinued: index > 0,
+          fieldContinued: index > 0
         })
       )
     }
@@ -227,7 +151,7 @@ function splitListBlock(
                 ? "-"
                 : `${itemIndex + 1}.`
               : "",
-          text,
+          text
         })
       )
   )
@@ -246,11 +170,11 @@ function splitListBlock(
         ...block,
         items: currentEntries.map(
           (entry: { marker: string; text: string }): string => entry.text
-        ),
+        )
       },
       listMarkers: currentEntries.map(
         (entry: { marker: string; text: string }): string => entry.marker
-      ),
+      )
     })
     currentEntries = []
     currentHeight = 0
@@ -298,7 +222,7 @@ function splitTableBlock(
 
     chunks.push({
       kind: "block",
-      block: { ...block, rows: currentRows },
+      block: { ...block, rows: currentRows }
     })
     currentRows = []
     currentHeight = headerHeight
@@ -383,11 +307,7 @@ function estimateFlowItemHeight(
     case "title":
       return estimateWrappedTextHeight(input.title, 55, 35) + 16
     case "block":
-      return estimateBlockHeight(
-        item.block,
-        input.answers,
-        item.answerOverride
-      )
+      return estimateBlockHeight(item.block, input.answers, item.answerOverride)
     case "signing_intro":
       return 52
     case "signer":
@@ -400,24 +320,6 @@ function estimateFlowItemHeight(
   }
 }
 
-/**
- * Estimates the vertical space required by a collection of template blocks.
- *
- * @param blocks - Canonical blocks to measure.
- * @param answers - Stored field answers used when measuring printable values.
- * @returns Estimated height in PDF points.
- */
-export function estimateBlocksHeight(
-  blocks: TemplateBlock[],
-  answers: Record<string, unknown>
-): number {
-  return blocks.reduce(
-    (height: number, block: TemplateBlock): number =>
-      height + estimateBlockHeight(block, answers),
-    0
-  )
-}
-
 function estimateBlockHeight(
   block: TemplateBlock,
   answers: Record<string, unknown>,
@@ -427,14 +329,12 @@ function estimateBlockHeight(
     case "heading": {
       const charactersPerLine =
         block.level === 1 ? 55 : block.level === 2 ? 65 : 75
-      const lineHeight =
-        block.level === 1 ? 29 : block.level === 2 ? 24 : 20
+      const lineHeight = block.level === 1 ? 29 : block.level === 2 ? 24 : 20
 
-      return estimateWrappedTextHeight(
-        block.text,
-        charactersPerLine,
-        lineHeight
-      ) + 16
+      return (
+        estimateWrappedTextHeight(block.text, charactersPerLine, lineHeight) +
+        16
+      )
     }
     case "paragraph":
       return estimateWrappedTextHeight(block.text, 88, 15) + 10
@@ -501,10 +401,7 @@ function estimateListEntryHeight(value: string): number {
   return estimateWrappedTextHeight(value, 82, 15) + 4
 }
 
-function estimateTableRowHeight(
-  cells: string[],
-  columnCount: number
-): number {
+function estimateTableRowHeight(cells: string[], columnCount: number): number {
   const charactersPerLine = Math.max(4, Math.floor(103 / columnCount))
   const maximumLines = Math.max(
     1,

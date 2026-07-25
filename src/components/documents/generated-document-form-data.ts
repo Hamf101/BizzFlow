@@ -65,7 +65,7 @@ export function parseGeneratedDocumentAnswers(
     booleanPrefix: ANSWER_BOOLEAN_PREFIX,
     drawingPrefix: ANSWER_DRAWING_PREFIX,
     malformedBooleanMessage: "A checkbox answer was malformed.",
-    textPrefix: ANSWER_TEXT_PREFIX,
+    textPrefix: ANSWER_TEXT_PREFIX
   })
 }
 
@@ -86,13 +86,11 @@ export function getGeneratedDocumentAnswerBaselineFields(
 ): GeneratedDocumentAnswerBaselineField[] {
   const fields: GeneratedDocumentAnswerBaselineField[] = []
 
-  for (const section of Object.values(content.sections)) {
-    for (const block of section.blocks) {
-      const field = createBaselineField(block, answers)
+  for (const block of content.blocks) {
+    const field = createBaselineField(block, answers)
 
-      if (field) {
-        fields.push(field)
-      }
+    if (field) {
+      fields.push(field)
     }
   }
 
@@ -112,7 +110,7 @@ export function parseGeneratedDocumentAnswerBaseline(
   return parseNamespacedGeneratedDocumentAnswers(formData, {
     booleanPrefix: BASELINE_BOOLEAN_PREFIX,
     malformedBooleanMessage: "A checkbox answer baseline was malformed.",
-    textPrefix: BASELINE_TEXT_PREFIX,
+    textPrefix: BASELINE_TEXT_PREFIX
   })
 }
 
@@ -136,7 +134,9 @@ function parseNamespacedGeneratedDocumentAnswers(
       const fieldKey = readFieldKey(name, options.booleanPrefix)
 
       if (entry !== "true" && entry !== "false") {
-        throw new GeneratedDocumentFormDataError(options.malformedBooleanMessage)
+        throw new GeneratedDocumentFormDataError(
+          options.malformedBooleanMessage
+        )
       }
 
       values[fieldKey] = entry === "true"
@@ -170,7 +170,7 @@ function createBaselineField(
 
     return {
       name: `${BASELINE_BOOLEAN_PREFIX}${block.fieldKey}`,
-      value: value ? "true" : "false",
+      value: value ? "true" : "false"
     }
   }
 
@@ -185,7 +185,7 @@ function createBaselineField(
   const value = answers[block.fieldKey]
   return {
     name: `${BASELINE_TEXT_PREFIX}${block.fieldKey}`,
-    value: typeof value === "string" ? value : "",
+    value: typeof value === "string" ? value : ""
   }
 }
 

@@ -11,13 +11,13 @@ import {
   CardContent,
   CardDescription,
   CardHeader,
-  CardTitle,
+  CardTitle
 } from "@/components/ui/card"
 import {
   Field,
   FieldDescription,
   FieldGroup,
-  FieldLabel,
+  FieldLabel
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { getAuthenticatedUser } from "@/lib/auth"
@@ -44,7 +44,7 @@ type NewDocumentSearchParams = Promise<{
  * @returns Two-step document creation page.
  */
 export default async function NewDocumentPage({
-  searchParams,
+  searchParams
 }: {
   searchParams: NewDocumentSearchParams
 }): Promise<ReactElement> {
@@ -55,7 +55,7 @@ export default async function NewDocumentPage({
   if (!context) {
     redirect(
       buildRedirect("/dashboard", {
-        error: "Create an organization before adding documents.",
+        error: "Create an organization before adding documents."
       })
     )
   }
@@ -63,17 +63,17 @@ export default async function NewDocumentPage({
   const [workspace, templates] = await Promise.all([
     listDocumentWorkspace({
       actorUserId: user.id,
-      organizationId: context.organization.id,
+      organizationId: context.organization.id
     }),
     listDocumentTemplates({
       actorUserId: user.id,
-      organizationId: context.organization.id,
-    }),
+      organizationId: context.organization.id
+    })
   ])
   const activeFolder = params.folderId
-    ? workspace.folders.find(
+    ? (workspace.folders.find(
         (folder: DocumentFolder): boolean => folder.id === params.folderId
-      ) ?? null
+      ) ?? null)
     : null
 
   if (params.folderId && !activeFolder) {
@@ -85,7 +85,10 @@ export default async function NewDocumentPage({
             Choose an active folder before adding a document.
           </AlertDescription>
         </Alert>
-        <Link className={buttonVariants({ variant: "outline" })} href="/documents">
+        <Link
+          className={buttonVariants({ variant: "outline" })}
+          href="/documents"
+        >
           Return to Documents
         </Link>
       </div>
@@ -95,8 +98,8 @@ export default async function NewDocumentPage({
   const publishedTemplates = templates.filter(
     (template: DocumentTemplate): boolean =>
       template.status === "published" &&
-      !Object.values(template.content.sections).some((section): boolean =>
-        section.blocks.some((block): boolean => block.type === "file_field")
+      !template.content.blocks.some(
+        (block): boolean => block.type === "file_field"
       )
   )
   const folderPath = buildDocumentFolderPath(activeFolder, workspace.folders)
@@ -125,7 +128,9 @@ export default async function NewDocumentPage({
             {folderPath.map((folder: DocumentFolder) => (
               <li className="flex items-center gap-1" key={folder.id}>
                 <ChevronRight aria-hidden="true" className="size-4" />
-                <Link href={`/documents?folderId=${encodeURIComponent(folder.id)}`}>
+                <Link
+                  href={`/documents?folderId=${encodeURIComponent(folder.id)}`}
+                >
                   {folder.name}
                 </Link>
               </li>
@@ -137,7 +142,9 @@ export default async function NewDocumentPage({
           </ol>
         </nav>
         <div>
-          <h1 className="text-2xl font-semibold tracking-normal">Add document</h1>
+          <h1 className="text-2xl font-semibold tracking-normal">
+            Add document
+          </h1>
           <p className="mt-2 text-sm text-muted-foreground">
             Upload an existing file or create an editable guided document.
           </p>
@@ -154,7 +161,8 @@ export default async function NewDocumentPage({
           <Upload className="mb-3 size-6" />
           <h2 className="font-semibold">Upload a document</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Keep an existing PDF, image, Word file, spreadsheet, or CSV as a file.
+            Keep an existing PDF, image, Word file, spreadsheet, or CSV as a
+            file.
           </p>
         </Link>
         <Link
@@ -196,11 +204,14 @@ export default async function NewDocumentPage({
             <CardTitle>Create editable document</CardTitle>
             <CardDescription>
               Choose the current organization template revision or start with an
-              empty three-section page.
+              empty free-form page.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <form action={createGeneratedDocumentAction} className="flex flex-col gap-5">
+            <form
+              action={createGeneratedDocumentAction}
+              className="flex flex-col gap-5"
+            >
               <input
                 name="folderId"
                 type="hidden"
@@ -208,7 +219,9 @@ export default async function NewDocumentPage({
               />
               <FieldGroup>
                 <Field>
-                  <FieldLabel htmlFor="generated-document-title">Title</FieldLabel>
+                  <FieldLabel htmlFor="generated-document-title">
+                    Title
+                  </FieldLabel>
                   <Input
                     id="generated-document-title"
                     maxLength={180}
@@ -237,7 +250,7 @@ export default async function NewDocumentPage({
                     id="generated-document-template"
                     name="templateId"
                   >
-                    <option value="">Empty three-section document</option>
+                    <option value="">Empty free-form document</option>
                     {publishedTemplates.map((template: DocumentTemplate) => (
                       <option key={template.id} value={template.id}>
                         {template.title} (revision {template.revision})
@@ -261,7 +274,10 @@ export default async function NewDocumentPage({
       ) : null}
 
       <Link
-        className={buttonVariants({ className: "self-start", variant: "ghost" })}
+        className={buttonVariants({
+          className: "self-start",
+          variant: "ghost"
+        })}
         href={locationHref}
       >
         Back to {activeFolder?.name ?? "Documents"}

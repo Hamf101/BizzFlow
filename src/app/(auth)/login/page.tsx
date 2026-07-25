@@ -28,7 +28,6 @@ export default async function LoginPage({
 
   return (
     <AuthPageCard
-      description="Access your organization dashboard, submissions, and document workflows."
       footer={
         <>
           <span className="text-sm text-muted-foreground">New workspace?</span>
@@ -41,7 +40,7 @@ export default async function LoginPage({
         </>
       }
       footerClassName="justify-between gap-3"
-      title="Sign in to BizFlow Docs"
+      title="Sign in to BizFlow"
     >
       <form action={loginAction} className="flex flex-col gap-5">
         <input type="hidden" name="next" value={params.next ?? ""} />
