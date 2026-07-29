@@ -104,26 +104,29 @@ Expected variable groups:
 - File uploads: `FILE_UPLOAD_MAX_BYTES` and `FILE_UPLOAD_ALLOWED_MIME_TYPES`.
 - Inngest: event key and signing key.
 - Resend: server-only `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, optional `RESEND_REPLY_TO_EMAIL`, and `RESEND_TIMEOUT_MS` for invitations and document signing links.
-- Gemini: server-only `GEMINI_API_KEY`, optional `GEMINI_MODEL`, and `GEMINI_TIMEOUT_MS` for stateless, schema-validated Flow document editing.
+- AI Flow: server-only `AI_PROVIDER`, `AI_MODEL`, `AI_TIMEOUT_MS`, and the selected adapter's credential (currently `GEMINI_API_KEY`) for stateless, schema-validated document editing.
 - SMS: Termii credentials, with Africa's Talking placeholders reserved for a later provider switch.
 - Rate limiting: `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN`; when unset, limits are disabled (local dev, CI).
 - Observability: Sentry DSN and PostHog key or internal analytics settings.
 
 Do not commit real secrets. Keep local secrets in `.env.local` and deployment secrets in the target hosting provider.
 
-## Gemini Flow document editor
+## AI-backed Flow document editor
 
 The template studio includes a persistent Flow chat beside a single free-form document canvas. Blocks remain in one ordered flow inside the visible printable boundary—there are no fixed header, body, or footer regions. Flow can answer questions, create blocks, revise or move existing content, update document details and branding, and explain what it changed. Document actions are returned as compact structured operations, validated against the canonical Zod schemas, applied to the unsaved browser draft, highlighted in the page margin, and grouped into an undoable change receipt inside the conversation.
 
-Gemini requests use the stable Interactions API with provider-side storage disabled (`store: false`). The application sends a bounded copy of its own Supabase-backed conversation history on each turn, so the team retains the template chat without relying on Gemini interaction retention. Flow cannot publish or archive a template. Existing logos and images are preserved unless removal is explicitly requested, and ambiguous destructive requests require confirmation.
+Gemini is the currently enabled AI adapter. It uses the official Google Gen AI SDK and stable Interactions API with provider-side storage disabled (`store: false`). Flow's business contract identifies models by provider plus exact model and never silently switches to another model. The application sends a bounded copy of its own Supabase-backed conversation history on each turn, so the team retains the template chat without relying on provider interaction retention. Flow cannot publish or archive a template. Existing logos and images are preserved unless removal is explicitly requested, and ambiguous destructive requests require confirmation.
 
 Create a Gemini API key in Google AI Studio, restrict it to the Gemini API, and configure the server-only variables:
 
 ```bash
+AI_PROVIDER=gemini
+AI_MODEL=gemini-3.6-flash
+AI_TIMEOUT_MS=30000
 GEMINI_API_KEY=<your-key>
-GEMINI_MODEL=gemini-3.6-flash
-GEMINI_TIMEOUT_MS=30000
 ```
+
+`AI_PROVIDER` currently defaults to the registered `gemini` adapter, and `AI_MODEL` defaults to the stable `gemini-3.6-flash` model for that adapter. The Flow service itself is provider-neutral: adding another adapter is isolated to the provider registry and its credential configuration. An unregistered provider is rejected without fallback. For one release, existing Gemini deployments may continue to supply deprecated `GEMINI_MODEL` and `GEMINI_TIMEOUT_MS`; each is read only when its canonical AI-prefixed replacement is absent. Migrate those aliases rather than configuring both.
 
 Restart the application after changing local environment values. In deployed environments, add the same values to the hosting provider and redeploy. Only active organization owners and managers can use a template's shared Flow conversation.
 
@@ -160,7 +163,7 @@ Recipients can create an account from the invite URL or sign in with an existing
 
 For browser-based signed uploads and downloads, configure the private R2 bucket CORS policy to allow the deployed app origin, `PUT`, `GET`, and `HEAD` methods, plus the `content-type` and `if-none-match` request headers. Keep the bucket private; the app signs create-only object uploads server-side so a completed version cannot be overwritten by reusing its URL.
 
-The server-side R2 token must permit private object reads, writes, and deletes. Submission upload URLs are capped at 15 minutes. `vercel.json` runs a protected daily cleanup for superseded objects after every issued URL and a safety buffer have elapsed; configure the same `CRON_SECRET` in the production Vercel environment before deployment.
+The server-side R2 token must permit private object reads, writes, and deletes. Submission upload URLs are capped at 15 minutes. `vercel.json` runs protected daily maintenance: superseded submission-file cleanup at `03:15 UTC` and bounded document/folder purge processing at `03:45 UTC`. Configure the same `CRON_SECRET` in the production Vercel environment before deployment.
 
 ## Supabase Migrations
 
@@ -218,6 +221,7 @@ Implemented internal-submission file routes:
 Internal scheduled maintenance:
 
 - `GET /api/cron/submission-file-cleanup` (Vercel Cron only; requires `Authorization: Bearer $CRON_SECRET`)
+- `GET /api/cron/document-purge` (Vercel Cron only; bounded enqueue, R2 deletion, retry, and finalization; requires `Authorization: Bearer $CRON_SECRET`)
 
 Implemented guided-document pages:
 
