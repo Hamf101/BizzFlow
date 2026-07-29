@@ -28,8 +28,8 @@ as $$
     membership.id,
     membership.org_id,
     membership.user_id,
-    membership.role,
-    membership.status,
+    membership.role::text,
+    membership.status::text,
     membership.created_at,
     membership.updated_at,
     organization.name,
@@ -42,7 +42,7 @@ as $$
     on organization.id = membership.org_id
   where membership.user_id = target_user_id
     and membership.status = 'active'
-  order by membership.created_at asc
+  order by membership.created_at asc, membership.id asc
   limit 1
 $$;
 
