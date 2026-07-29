@@ -9,6 +9,7 @@ import {
   SUBMISSION_VISIBILITY_PLAN,
 } from "./check-supabase-rls.mjs"
 import {
+  RESOURCE_PURGE_SCHEMA_CONTRACT,
   SERVICE_ROLE_READ_ONLY_RPC_CHECKS,
   SERVICE_ROLE_RPC_CHECKS,
   TABLE_CHECKS,
@@ -193,6 +194,25 @@ describe("authenticated Supabase RLS harness configuration", () => {
       TABLE_CHECKS.find((table) => table.name === "submission_activity_events")
         ?.select
     ).toContain("submission_revision")
+    expect(
+      RESOURCE_PURGE_SCHEMA_CONTRACT.tableNames.every((tableName) =>
+        TABLE_CHECKS.some((table) => table.name === tableName)
+      )
+    ).toBe(true)
+    expect(RESOURCE_PURGE_SCHEMA_CONTRACT.functionNames).toEqual([
+      "request_document_purge",
+      "request_folder_purge",
+      "enqueue_due_resource_purges",
+      "lease_resource_purge_objects",
+      "complete_resource_purge_object",
+      "fail_resource_purge_object",
+      "finalize_ready_resource_purges",
+    ])
+    expect(
+      SERVICE_ROLE_RPC_CHECKS.some((rpc) =>
+        RESOURCE_PURGE_SCHEMA_CONTRACT.functionNames.includes(rpc.name)
+      )
+    ).toBe(false)
     expect(SERVICE_ROLE_READ_ONLY_RPC_CHECKS).toHaveLength(1)
     expect(SERVICE_ROLE_READ_ONLY_RPC_CHECKS[0].name).toBe(
       "validate_internal_submission_values"

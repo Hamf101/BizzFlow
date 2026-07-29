@@ -92,7 +92,50 @@ export const TABLE_CHECKS = [
     select:
       "id,org_id,submission_id,actor_user_id,event_type,from_status,to_status,assignee_user_id,comment_id,submission_revision,created_at",
   },
+  {
+    name: "resource_purge_jobs",
+    select:
+      "id,org_id,root_resource_kind,root_resource_id,request_kind,status,attempt_count,max_attempts,available_at,last_error_code,requested_at,completed_at,failed_at",
+  },
+  {
+    name: "resource_purge_members",
+    select: "id,job_id,org_id,resource_kind,resource_id,depth",
+  },
+  {
+    name: "resource_purge_objects",
+    select:
+      "id,job_id,org_id,object_kind,status,attempt_count,max_attempts,available_at,last_error_code,deleted_at,created_at,updated_at",
+  },
+  {
+    name: "resource_purge_tombstones",
+    select: "org_id,resource_kind,resource_id,root_job_id,purged_at",
+  },
+  {
+    name: "resource_purge_receipts",
+    select:
+      "id,job_id,org_id,root_resource_kind,root_resource_id,request_kind,requested_by,object_count,document_count,folder_count,purged_at",
+  },
 ]
+
+export const RESOURCE_PURGE_SCHEMA_CONTRACT = {
+  rpcName: "get_resource_purge_schema_contract",
+  tableNames: [
+    "resource_purge_jobs",
+    "resource_purge_members",
+    "resource_purge_objects",
+    "resource_purge_tombstones",
+    "resource_purge_receipts",
+  ],
+  functionNames: [
+    "request_document_purge",
+    "request_folder_purge",
+    "enqueue_due_resource_purges",
+    "lease_resource_purge_objects",
+    "complete_resource_purge_object",
+    "fail_resource_purge_object",
+    "finalize_ready_resource_purges",
+  ],
+}
 
 export const SERVICE_ROLE_RPC_CHECKS = [
   {
@@ -227,15 +270,7 @@ export const SERVICE_ROLE_READ_ONLY_RPC_CHECKS = [
     name: "validate_internal_submission_values",
     args: {
       target_template_snapshot: {
-        sections: {
-          header: { blocks: [] },
-          body: {
-            blocks: [
-              { fieldKey: "signature", type: "signature_field" },
-            ],
-          },
-          footer: { blocks: [] },
-        },
+        blocks: [{ fieldKey: "signature", type: "signature_field" }],
       },
       target_values: { signature: DRAWING_PROBE_DATA_URL },
     },
@@ -301,6 +336,61 @@ async function checkTables(env) {
   }
 }
 
+async function checkResourcePurgeSchema(env) {
+  const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SECRET_KEY, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  })
+  const { data, error, status, statusText } = await supabase.rpc(
+    RESOURCE_PURGE_SCHEMA_CONTRACT.rpcName
+  )
+
+  if (error) {
+    throw new Error(
+      `${RESOURCE_PURGE_SCHEMA_CONTRACT.rpcName}: expected read-only schema contract success; received ${status ?? "n/a"} ${statusText ?? ""} ${error.code ?? "unknown"}`.trim()
+    )
+  }
+
+  if (!Array.isArray(data)) {
+    throw new Error(
+      `${RESOURCE_PURGE_SCHEMA_CONTRACT.rpcName}: expected an array response`
+    )
+  }
+
+  const records = new Map(
+    data.map((record) => [
+      `${record.object_kind}:${record.object_name}`,
+      record,
+    ])
+  )
+
+  for (const tableName of RESOURCE_PURGE_SCHEMA_CONTRACT.tableNames) {
+    const record = records.get(`table:${tableName}`)
+
+    if (
+      record?.present !== true ||
+      record.rls_enabled !== true ||
+      record.rls_forced !== true
+    ) {
+      throw new Error(
+        `${tableName}: expected live table with enabled and forced RLS`
+      )
+    }
+  }
+
+  for (const functionName of RESOURCE_PURGE_SCHEMA_CONTRACT.functionNames) {
+    const record = records.get(`function:${functionName}`)
+
+    if (record?.present !== true) {
+      throw new Error(`${functionName}: expected live purge function`)
+    }
+  }
+
+  console.log("resource purge schema: tables, functions, and forced RLS OK")
+}
+
 async function checkServiceRoleRpcs(env) {
   const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SECRET_KEY, {
     auth: {
@@ -345,6 +435,7 @@ async function main() {
 
   await checkJwks(env.SUPABASE_JWKS_URL)
   await checkTables(env)
+  await checkResourcePurgeSchema(env)
   await checkServiceRoleRpcs(env)
 }
 

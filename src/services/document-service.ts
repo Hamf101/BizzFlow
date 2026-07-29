@@ -13,6 +13,13 @@ export type {
   TrashDocumentInput,
 } from "@/services/documents/contracts"
 export type {
+  ProcessDueResourcePurgesOptions,
+  ProcessDueResourcePurgesResult,
+  RequestDocumentPurgeInput,
+  RequestFolderPurgeInput,
+  ResourcePurgeRequestResult,
+} from "@/services/documents/purge-contracts"
+export type {
   DocumentAccessLookupInput,
   DocumentAccessRequirementInput,
   FolderAccessLookupInput,
@@ -39,3 +46,8 @@ export {
   trashDocument,
   trashFolder,
 } from "@/services/documents/lifecycle-service"
+export {
+  processDueResourcePurges,
+  requestDocumentPurge,
+  requestFolderPurge,
+} from "@/services/documents/purge-service"
