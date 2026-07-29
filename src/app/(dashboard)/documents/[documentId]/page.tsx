@@ -9,6 +9,7 @@ import { DocumentCommentSubmitButton } from "@/components/documents/document-com
 import { DocumentDownloadButton } from "@/components/documents/document-download-button"
 import { DocumentOpenTracker } from "@/components/documents/document-open-tracker"
 import { DocumentReplaceForm } from "@/components/documents/document-replace-form"
+import { PurgeRequestForm } from "@/components/documents/purge-request-form"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -38,6 +39,7 @@ import type { OrganizationContext } from "@/types/organization"
 import {
   archiveDocumentAction,
   createDocumentCommentAction,
+  requestDocumentPurgeAction,
   restoreDocumentAction,
   trashDocumentAction,
 } from "../actions"
@@ -633,7 +635,8 @@ function DocumentActionsCard({
             role={context.membership.role}
             action="documents:archive"
           >
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-wrap gap-2">
               {document.lifecycleState === "active" ? (
                 <DocumentLifecycleForm
                   action={archiveDocumentAction}
@@ -686,6 +689,22 @@ function DocumentActionsCard({
                     Move to Trash
                   </PermissionButton>
                 </DocumentLifecycleForm>
+              ) : null}
+              </div>
+              {document.lifecycleState === "trashed" ? (
+                <PurgeRequestForm
+                  action={requestDocumentPurgeAction}
+                  confirmationFieldName="confirmationTitle"
+                  hiddenFields={{
+                    organizationId: context.organization.id,
+                    documentId: document.id,
+                  }}
+                  inputId={`purge-document-${document.id}`}
+                  permissionAction="documents:archive"
+                  resourceKind="document"
+                  resourceName={document.title}
+                  role={context.membership.role}
+                />
               ) : null}
             </div>
           </RoleGuard>

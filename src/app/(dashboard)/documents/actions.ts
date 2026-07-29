@@ -10,6 +10,8 @@ import {
   archiveFolder,
   createFolder,
   DocumentServiceError,
+  requestDocumentPurge,
+  requestFolderPurge,
   restoreDocument,
   restoreFolder,
   trashDocument,
@@ -229,6 +231,58 @@ export async function trashFolderAction(formData: FormData): Promise<void> {
 }
 
 /**
+ * Queues permanent deletion of a trashed document from its detail page.
+ *
+ * @param formData - Document identifier and the exact confirmation title.
+ * @returns Never returns; redirects to document detail with status.
+ */
+export async function requestDocumentPurgeAction(
+  formData: FormData
+): Promise<void> {
+  const documentId = getFormString(formData, "documentId")
+  const detailPath = `/documents/${encodeURIComponent(documentId)}`
+
+  return runResourcePurgeAction({
+    failureEvent: "request_document_purge_action_failed",
+    logContext: { documentId },
+    requestPurge: (scope: ResourcePurgeActionScope): Promise<unknown> =>
+      requestDocumentPurge({
+        ...scope,
+        documentId,
+        confirmationTitle: getFormString(formData, "confirmationTitle"),
+      }),
+    returnPath: detailPath,
+    revalidatePaths: ["/documents", detailPath],
+  })
+}
+
+/**
+ * Queues permanent deletion of a trashed folder subtree from the workspace.
+ *
+ * @param formData - Folder identifier, exact confirmation name, and safe
+ * workspace return values.
+ * @returns Never returns; redirects to the Documents workspace with status.
+ */
+export async function requestFolderPurgeAction(
+  formData: FormData
+): Promise<void> {
+  const folderId = getFormString(formData, "folderId")
+
+  return runResourcePurgeAction({
+    failureEvent: "request_folder_purge_action_failed",
+    logContext: { folderId },
+    requestPurge: (scope: ResourcePurgeActionScope): Promise<unknown> =>
+      requestFolderPurge({
+        ...scope,
+        folderId,
+        confirmationName: getFormString(formData, "confirmationName"),
+      }),
+    returnPath: getDocumentsReturnPath(formData),
+    revalidatePaths: ["/documents"],
+  })
+}
+
+/**
  * Adds an immutable comment to a document.
  *
  * @param formData - Organization, document, and comment body fields.
@@ -380,6 +434,64 @@ async function runFolderLifecycleAction(
   }
 
   redirect(buildRedirect(returnPath, { message: config.successMessage }))
+}
+
+type ResourcePurgeActionScope = {
+  actorUserId: string
+  organizationId: string
+}
+
+type ResourcePurgeActionConfig = {
+  failureEvent: string
+  logContext: Record<string, string>
+  requestPurge: (scope: ResourcePurgeActionScope) => Promise<unknown>
+  returnPath: string
+  revalidatePaths: string[]
+}
+
+async function runResourcePurgeAction(
+  config: ResourcePurgeActionConfig
+): Promise<void> {
+  let organizationId = "unavailable"
+
+  try {
+    const actionContext = await loadLifecycleActionContext()
+    organizationId = actionContext.organizationId
+    await config.requestPurge({
+      actorUserId: actionContext.actorUserId,
+      organizationId,
+    })
+
+    for (const revalidatedPath of config.revalidatePaths) {
+      revalidatePath(revalidatedPath)
+    }
+  } catch (error: unknown) {
+    if (error instanceof AuthenticationError) {
+      redirect(buildRedirect("/login", { next: config.returnPath }))
+    }
+
+    logDocumentActionFailure(config.failureEvent, {
+      organizationId,
+      ...config.logContext,
+      reason:
+        error instanceof Error ? error.message : "Unknown purge request error",
+    })
+
+    redirect(
+      buildRedirect(config.returnPath, {
+        error: getActionErrorMessage(
+          error,
+          "Unable to queue permanent deletion."
+        ),
+      })
+    )
+  }
+
+  redirect(
+    buildRedirect(config.returnPath, {
+      message: "Permanent deletion queued.",
+    })
+  )
 }
 
 async function loadLifecycleActionContext(): Promise<{

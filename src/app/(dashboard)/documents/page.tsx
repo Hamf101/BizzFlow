@@ -13,6 +13,7 @@ import { Suspense, type ReactElement, type ReactNode } from "react"
 
 import { PermissionButton } from "@/components/auth/permission-button"
 import { RoleGuard } from "@/components/auth/role-guard"
+import { PurgeRequestForm } from "@/components/documents/purge-request-form"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -47,6 +48,7 @@ import type { RecentDocument } from "@/types/template"
 import {
   archiveFolderAction,
   createFolderAction,
+  requestFolderPurgeAction,
   restoreFolderAction,
   trashFolderAction,
 } from "./actions"
@@ -577,6 +579,7 @@ function FolderLifecycleActions({
 
   return (
     <RoleGuard role={role} action="folders:manage">
+      <div className="flex flex-col gap-3">
       <div className="flex flex-wrap gap-2">
         {folder.lifecycleState === "active" ? (
           <FolderLifecycleForm
@@ -642,6 +645,24 @@ function FolderLifecycleActions({
               Trash
             </PermissionButton>
           </FolderLifecycleForm>
+        ) : null}
+      </div>
+        {folder.lifecycleState === "trashed" ? (
+          <PurgeRequestForm
+            action={requestFolderPurgeAction}
+            confirmationFieldName="confirmationName"
+            hiddenFields={{
+              organizationId,
+              folderId: folder.id,
+              returnFolderId: returnFolderId ?? "",
+              returnView: workspaceView,
+            }}
+            inputId={`purge-folder-${folder.id}`}
+            permissionAction="folders:manage"
+            resourceKind="folder"
+            resourceName={folder.name}
+            role={role}
+          />
         ) : null}
       </div>
     </RoleGuard>
