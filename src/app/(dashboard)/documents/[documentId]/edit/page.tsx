@@ -49,8 +49,6 @@ import {
   sendGeneratedDocumentAction,
 } from "./actions"
 
-export const dynamic = "force-dynamic"
-
 type GeneratedDocumentEditorParams = Promise<{
   documentId: string
 }>
@@ -138,14 +136,14 @@ export default async function GeneratedDocumentEditorPage({
   }
 
   const view = viewResult.view
-  const canFill = canPerformOrganizationAction(
-    context.membership.role,
-    "documents:fill"
-  )
-  const canSend = canPerformOrganizationAction(
-    context.membership.role,
-    "documents:send"
-  )
+  const canFill =
+    canPerformOrganizationAction(context.membership.role, "documents:fill") &&
+    view.accessLevel === "contributor" &&
+    view.document.lifecycleState === "active"
+  const canSend =
+    canPerformOrganizationAction(context.membership.role, "documents:send") &&
+    view.accessLevel === "contributor" &&
+    view.document.lifecycleState === "active"
   const isCompleted = view.workflowStatus === "completed"
   const documentsHref = view.document.folderId
     ? `/documents?folderId=${encodeURIComponent(view.document.folderId)}`
@@ -218,7 +216,7 @@ export default async function GeneratedDocumentEditorPage({
             role={context.membership.role}
             view={view}
           />
-          {!isCompleted && (
+          {!isCompleted && canSend && (
             <RoleGuard action="documents:send" role={context.membership.role}>
               <DocumentRecipientCollection
                 action={sendGeneratedDocumentAction}
