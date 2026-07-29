@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest"
 
 import {
-  createGeminiTemplateFlowSchema,
-  TEMPLATE_FLOW_OPERATION_TYPES
-} from "@/services/template-ai/gemini-flow-schema"
+  createTemplateFlowResponseSchema,
+  TEMPLATE_FLOW_OPERATION_TYPES,
+} from "@/services/template-ai/flow-response-schema"
 
 type JsonSchemaNode = {
   type?: string | string[]
@@ -15,7 +15,7 @@ type JsonSchemaNode = {
   enum?: unknown[]
 }
 
-describe("Gemini template Flow schema", () => {
+describe("template Flow response schema", () => {
   it("uses a compact closed response envelope", () => {
     const rootSchema = getRootSchema()
 
@@ -25,7 +25,7 @@ describe("Gemini template Flow schema", () => {
       "assistantMessage",
       "needsConfirmation",
       "confirmationQuestion",
-      "operations"
+      "operations",
     ])
     expect(JSON.stringify(rootSchema).length).toBeLessThan(3_000)
     expect(JSON.stringify(rootSchema)).not.toContain('"anyOf"')
@@ -39,7 +39,7 @@ describe("Gemini template Flow schema", () => {
     expect(operationSchema.required).toEqual([
       "type",
       "summary",
-      "payloadJson"
+      "payloadJson",
     ])
     expect(operationSchema.properties?.type?.enum).toEqual(
       TEMPLATE_FLOW_OPERATION_TYPES
@@ -50,14 +50,14 @@ describe("Gemini template Flow schema", () => {
 })
 
 function getRootSchema(): JsonSchemaNode {
-  return createGeminiTemplateFlowSchema() as JsonSchemaNode
+  return createTemplateFlowResponseSchema() as JsonSchemaNode
 }
 
 function getOperationSchema(): JsonSchemaNode {
   const operationItems = getRootSchema().properties?.operations?.items
 
   if (!operationItems || Array.isArray(operationItems)) {
-    throw new Error("Missing Gemini operation item schema.")
+    throw new Error("Missing Flow operation item schema.")
   }
 
   return operationItems

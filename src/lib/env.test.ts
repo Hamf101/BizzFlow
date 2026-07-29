@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest"
 
 import {
   getAdminSupabaseEnv,
+  getAiEnv,
   getAppUrlEnv,
   getFileUploadPolicyEnv,
   getGeminiEnv,
@@ -294,28 +295,96 @@ describe("file upload policy environment validation", () => {
   )
 })
 
-describe("Gemini environment validation", () => {
-  it("uses a stable model and timeout by default", () => {
+describe("AI environment validation", () => {
+  it("uses the current provider, stable model, and timeout by default", () => {
+    setIsolatedEnv({
+      GEMINI_API_KEY: "gemini-test-key",
+    })
+
+    expect(getAiEnv()).toEqual({
+      AI_PROVIDER: "gemini",
+      AI_MODEL: "gemini-3.6-flash",
+      AI_TIMEOUT_MS: 30000,
+    })
+  })
+
+  it("uses canonical model and timeout values without changing the model", () => {
+    setIsolatedEnv({
+      AI_PROVIDER: "gemini",
+      AI_MODEL: "gemini-exact-test-model",
+      AI_TIMEOUT_MS: "12000",
+      GEMINI_API_KEY: "gemini-test-key",
+      GEMINI_MODEL: "deprecated-model",
+      GEMINI_TIMEOUT_MS: "45000",
+    })
+
+    expect(getAiEnv()).toEqual({
+      AI_PROVIDER: "gemini",
+      AI_MODEL: "gemini-exact-test-model",
+      AI_TIMEOUT_MS: 12000,
+    })
+  })
+
+  it("reads deprecated model and timeout aliases for one release", () => {
+    setIsolatedEnv({
+      GEMINI_API_KEY: "gemini-test-key",
+      GEMINI_MODEL: "gemini-deployed-model",
+      GEMINI_TIMEOUT_MS: "18000",
+    })
+
+    expect(getAiEnv()).toEqual({
+      AI_PROVIDER: "gemini",
+      AI_MODEL: "gemini-deployed-model",
+      AI_TIMEOUT_MS: 18000,
+    })
+  })
+
+  it("keeps generic provider configuration independent of adapter registration", () => {
+    setIsolatedEnv({
+      AI_PROVIDER: "unknown-provider",
+      AI_MODEL: "provider-model-v1",
+    })
+
+    expect(getAiEnv()).toEqual({
+      AI_PROVIDER: "unknown-provider",
+      AI_MODEL: "provider-model-v1",
+      AI_TIMEOUT_MS: 30000,
+    })
+  })
+
+  it("requires an explicit model for providers without a registered default", () => {
+    setIsolatedEnv({
+      AI_PROVIDER: "future-provider",
+    })
+
+    expect(() => getAiEnv()).toThrow("AI_MODEL")
+  })
+
+  it("validates Gemini credentials separately from generic AI settings", () => {
     setIsolatedEnv({
       GEMINI_API_KEY: "gemini-test-key",
     })
 
     expect(getGeminiEnv()).toEqual({
       GEMINI_API_KEY: "gemini-test-key",
-      GEMINI_MODEL: "gemini-3.6-flash",
-      GEMINI_TIMEOUT_MS: 30000,
     })
   })
 
+  it("rejects a missing Gemini adapter credential", () => {
+    setIsolatedEnv({})
+
+    expect(() => getGeminiEnv()).toThrow("GEMINI_API_KEY")
+  })
+
   it.each(["999", "60001", "1.5", "not-a-number"])(
-    "rejects invalid Gemini timeout %s",
+    "rejects invalid AI timeout %s",
     (timeoutMs: string) => {
       setIsolatedEnv({
+        AI_TIMEOUT_MS: timeoutMs,
         GEMINI_API_KEY: "gemini-test-key",
-        GEMINI_TIMEOUT_MS: timeoutMs,
       })
 
-      expect(() => getGeminiEnv()).toThrow("GEMINI_TIMEOUT_MS")
+      expect(() => getAiEnv()).toThrow("AI_TIMEOUT_MS")
     }
   )
 })

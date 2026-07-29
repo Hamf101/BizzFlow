@@ -17,8 +17,7 @@ const resendEnvSchema = z.object({
   RESEND_API_KEY: z.string().min(1),
   RESEND_FROM_EMAIL: z.string().email(),
   RESEND_REPLY_TO_EMAIL: z.preprocess(
-    (value: unknown): unknown =>
-      typeof value === "string" && value.trim().length === 0 ? undefined : value,
+    emptyStringToUndefined,
     z.string().email().optional()
   ),
   RESEND_TIMEOUT_MS: z.preprocess(
@@ -27,13 +26,22 @@ const resendEnvSchema = z.object({
   ),
 })
 
-const geminiEnvSchema = z.object({
-  GEMINI_API_KEY: z.string().min(1),
-  GEMINI_MODEL: z.string().min(1).default("gemini-3.6-flash"),
-  GEMINI_TIMEOUT_MS: z.preprocess(
+const aiEnvSchema = z.object({
+  AI_PROVIDER: z
+    .string()
+    .trim()
+    .min(1)
+    .regex(/^[a-z][a-z0-9_-]*$/)
+    .default("gemini"),
+  AI_MODEL: z.string().trim().min(1),
+  AI_TIMEOUT_MS: z.preprocess(
     parseIntegerEnvValue,
     z.number().int().min(1000).max(60000).default(30000)
-  ),
+  )
+})
+
+const geminiEnvSchema = z.object({
+  GEMINI_API_KEY: z.string().trim().min(1)
 })
 
 const r2EnvSchema = z.object({
@@ -65,6 +73,25 @@ const upstashRedisEnvSchema = z.object({
   UPSTASH_REDIS_REST_TOKEN: z.string().min(1),
 })
 
+const inngestEnvSchema = z.object({
+  INNGEST_APP_ID: z
+    .string()
+    .trim()
+    .min(1)
+    .regex(/^[a-z][a-z0-9-]*$/)
+    .default("bizflow-docs"),
+  INNGEST_SERVE_PATH: z
+    .string()
+    .trim()
+    .regex(/^\/[a-z0-9/-]*$/)
+    .default("/api/inngest"),
+  INNGEST_EVENT_KEY: z.preprocess(emptyStringToUndefined, z.string().optional()),
+  INNGEST_SIGNING_KEY: z.preprocess(
+    emptyStringToUndefined,
+    z.string().optional()
+  ),
+})
+
 const sentryEnvSchema = z.object({
   SENTRY_DSN: z.string().url(),
   SENTRY_ENVIRONMENT: z.string().min(1).default("development"),
@@ -92,11 +119,19 @@ export type AdminSupabaseEnv = PublicSupabaseEnv & {
 
 export type AppUrlEnv = z.infer<typeof appUrlSchema>
 export type ResendEnv = z.infer<typeof resendEnvSchema>
+export type AiEnv = z.infer<typeof aiEnvSchema>
 export type GeminiEnv = z.infer<typeof geminiEnvSchema>
 export type R2Env = z.infer<typeof r2EnvSchema>
 export type FileUploadPolicyEnv = z.infer<typeof fileUploadPolicySchema>
+export type InngestEnv = z.infer<typeof inngestEnvSchema>
 export type SentryEnv = z.infer<typeof sentryEnvSchema>
 export type UpstashRedisEnv = z.infer<typeof upstashRedisEnvSchema>
+
+function emptyStringToUndefined(value: unknown): unknown {
+  return typeof value === "string" && value.trim().length === 0
+    ? undefined
+    : value
+}
 
 function parseIntegerEnvValue(value: unknown): unknown {
   if (typeof value !== "string") {
@@ -254,10 +289,42 @@ export function getResendEnv(): ResendEnv {
 }
 
 /**
- * Reads and validates server-only Gemini assistant configuration.
+ * Reads and validates the server-only AI provider configuration.
  *
- * @returns Gemini API key, model identifier, and request timeout.
+ * The deprecated Gemini model and timeout names remain read-only compatibility
+ * aliases for one release. Canonical AI-prefixed values always take precedence.
+ *
+ * @returns Provider, exact model identifier, provider credential, and timeout.
  * @throws Error when required AI configuration is missing or invalid.
+ */
+export function getAiEnv(): AiEnv {
+  const provider = process.env.AI_PROVIDER?.trim() || "gemini"
+  const result = aiEnvSchema.safeParse({
+    AI_PROVIDER: provider,
+    AI_MODEL: readCanonicalOrDeprecatedEnvValue(
+      process.env.AI_MODEL,
+      provider === "gemini" ? process.env.GEMINI_MODEL : undefined
+    ) ?? (provider === "gemini" ? "gemini-3.6-flash" : undefined),
+    AI_TIMEOUT_MS: readCanonicalOrDeprecatedEnvValue(
+      process.env.AI_TIMEOUT_MS,
+      provider === "gemini" ? process.env.GEMINI_TIMEOUT_MS : undefined
+    ),
+  })
+
+  if (!result.success) {
+    throw new Error(
+      `Invalid AI environment: ${formatEnvError(result.error)}`
+    )
+  }
+
+  return result.data
+}
+
+/**
+ * Reads and validates the credential for the Gemini infrastructure adapter.
+ *
+ * @returns Server-only Gemini credential.
+ * @throws Error when the Gemini credential is missing or invalid.
  */
 export function getGeminiEnv(): GeminiEnv {
   const result = geminiEnvSchema.safeParse(process.env)
@@ -269,6 +336,27 @@ export function getGeminiEnv(): GeminiEnv {
   }
 
   return result.data
+}
+
+function readCanonicalOrDeprecatedEnvValue(
+  canonicalValue: string | undefined,
+  deprecatedValue: string | undefined
+): string | undefined {
+  if (
+    typeof canonicalValue === "string" &&
+    canonicalValue.trim().length > 0
+  ) {
+    return canonicalValue
+  }
+
+  if (
+    typeof deprecatedValue === "string" &&
+    deprecatedValue.trim().length > 0
+  ) {
+    return deprecatedValue
+  }
+
+  return undefined
 }
 
 /**
@@ -335,6 +423,26 @@ export function isUpstashRedisEnvConfigured(): boolean {
   }
 
   return true
+}
+
+/**
+ * Reads and validates the Inngest background-job configuration.
+ *
+ * Both keys are optional by design: the local Inngest Dev Server accepts
+ * unsigned requests and mints its own keys, so development and tests need no
+ * credentials. Production receives them from the Inngest Vercel integration.
+ *
+ * @returns App id, serve path, and the optional event and signing keys.
+ * @throws Error when a configured value is present but malformed.
+ */
+export function getInngestEnv(): InngestEnv {
+  const result = inngestEnvSchema.safeParse(process.env)
+
+  if (!result.success) {
+    throw new Error(`Invalid Inngest environment: ${formatEnvError(result.error)}`)
+  }
+
+  return result.data
 }
 
 /**

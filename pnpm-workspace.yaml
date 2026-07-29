@@ -1,6 +1,10 @@
 allowBuilds:
   # sentry-cli's postinstall downloads the binary used for sourcemap upload.
+  # The published Gemini SDK and protobuf runtime already include distributable
+  # artifacts; their package build scripts are not required by this application.
+  '@google/genai': false
   '@sentry/cli': true
+  protobufjs: false
   sharp: true
   unrs-resolver: true
 
