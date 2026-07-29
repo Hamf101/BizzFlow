@@ -183,7 +183,7 @@ export function TemplateEditor({
   }
 
   function insertBlock(blockType: TemplateBlock["type"]): void {
-    const block = createTemplateBlock(blockType)
+    const block = createTemplateBlock(blockType, state.content.blocks)
     applyManualAction({
       type: "insert_block",
       afterBlockId: insertAfterBlockId,

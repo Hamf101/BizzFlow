@@ -1,9 +1,10 @@
 import * as Sentry from "@sentry/nextjs"
 import Link from "next/link"
 import { redirect } from "next/navigation"
-import type { ReactElement, ReactNode } from "react"
+import { Suspense, type ReactElement, type ReactNode } from "react"
 
 import { BizFlowWordmark } from "@/components/brand/bizflow-mark"
+import { DashboardContentSkeleton } from "@/components/dashboard/dashboard-content-skeleton"
 import { DashboardNavigation } from "@/components/navigation/dashboard-navigation"
 import { ThemeToggle } from "@/components/theme/theme-toggle"
 import { Button } from "@/components/ui/button"
@@ -21,27 +22,38 @@ async function signOutAction(): Promise<void> {
   redirect("/login")
 }
 
-export default async function DashboardLayout({
-  children,
-}: Readonly<{
-  children: ReactNode
-}>): Promise<ReactElement> {
+/**
+ * Attaches the signed-in member to the request's error-reporting scope.
+ *
+ * Renders nothing and never redirects: `src/lib/supabase/proxy.ts` already
+ * bounces unauthenticated and unconfigured requests for every protected prefix,
+ * and each page resolves the member itself. Awaiting auth in the layout body
+ * instead would block the entire shell on a round trip the proxy already made.
+ *
+ * @returns Nothing; this component exists only for its scope side effect.
+ */
+async function DashboardUserScope(): Promise<null> {
   try {
     const user = await getAuthenticatedUser()
     Sentry.setUser({ id: user.id })
   } catch (error: unknown) {
-    if (error instanceof AuthenticationError) {
-      redirect("/login")
+    if (!(error instanceof AuthenticationError)) {
+      console.error("dashboard_layout_configuration_failed", {
+        reason:
+          error instanceof Error ? error.message : "Unknown configuration error",
+      })
+      captureUnexpectedError(error, { boundary: "dashboard_layout" })
     }
-
-    console.error("dashboard_layout_configuration_failed", {
-      reason:
-        error instanceof Error ? error.message : "Unknown configuration error",
-    })
-    captureUnexpectedError(error, { boundary: "dashboard_layout" })
-    redirect("/login?error=Supabase%20environment%20is%20not%20configured.")
   }
 
+  return null
+}
+
+export default function DashboardLayout({
+  children,
+}: Readonly<{
+  children: ReactNode
+}>): ReactElement {
   return (
     <div className="min-h-screen bg-canvas text-foreground">
       <div className="mx-auto flex min-h-screen w-full max-w-[96rem] flex-col md:flex-row">
@@ -79,7 +91,10 @@ export default async function DashboardLayout({
               </form>
             </header>
             <div className="min-w-0 flex-1 px-5 py-6 sm:px-7 sm:py-7">
-              {children}
+              <Suspense fallback={<DashboardContentSkeleton />}>
+                <DashboardUserScope />
+                {children}
+              </Suspense>
             </div>
           </main>
         </div>

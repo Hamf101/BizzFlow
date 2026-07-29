@@ -1,8 +1,32 @@
-import type {
-  TemplateBlock,
-  TemplateBranding,
-  TemplateContent
+import {
+  upgradeV2TemplateContentToV3,
+  type TemplateBlock,
+  type TemplateBranding,
+  type TemplateContent,
+  type TemplateContentV3
 } from "@/types/template"
+import {
+  createUniqueTemplateFieldKey,
+  deleteTemplateBlock,
+  insertTemplateBlock,
+  moveTemplateBlock,
+  updateTemplateBlock
+} from "@/types/template-structure"
+
+type TemplateFieldBlockType = Extract<
+  TemplateBlock,
+  { fieldKey: string }
+>["type"]
+
+const DEFAULT_FIELD_LABEL_BY_TYPE: Record<TemplateFieldBlockType, string> = {
+  text_field: "Text field",
+  date_field: "Date field",
+  checkbox_field: "Checkbox",
+  dropdown_field: "Dropdown",
+  initials_field: "Initials field",
+  signature_field: "Signature field",
+  file_field: "File upload"
+}
 
 const PLACEHOLDER_IMAGE_DATA_URL =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
@@ -11,6 +35,10 @@ export type TemplateEditorState = {
   title: string
   description: string
   content: TemplateContent
+}
+
+type EditableTemplateEditorState = Omit<TemplateEditorState, "content"> & {
+  content: TemplateContentV3
 }
 
 export type TemplateEditorAction =
@@ -49,83 +77,74 @@ export function templateEditorReducer(
   state: TemplateEditorState,
   action: TemplateEditorAction
 ): TemplateEditorState {
+  if (action.type === "replace_state") {
+    return toEditableTemplateEditorState(action.value)
+  }
+
+  const editableState = toEditableTemplateEditorState(state)
+
   switch (action.type) {
-    case "replace_state":
-      return action.value
     case "set_title":
-      return { ...state, title: action.value }
+      return { ...editableState, title: action.value }
     case "set_description":
-      return { ...state, description: action.value }
+      return { ...editableState, description: action.value }
     case "set_branding":
       return {
-        ...state,
-        content: { ...state.content, branding: action.value }
+        ...editableState,
+        content: { ...editableState.content, branding: action.value }
       }
     case "add_block":
-      return updateBlocks(state, (blocks) => [...blocks, action.block])
-    case "insert_block":
-      return updateBlocks(state, (blocks) =>
-        insertBlock(blocks, action.afterBlockId, action.block)
-      )
-    case "update_block":
-      return updateBlocks(state, (blocks) =>
-        blocks.map((block: TemplateBlock) =>
-          block.id === action.block.id ? action.block : block
+      return {
+        ...editableState,
+        content: insertTemplateBlock(
+          editableState.content,
+          editableState.content.blocks.at(-1)?.id ?? null,
+          action.block
         )
-      )
+      }
+    case "insert_block":
+      return {
+        ...editableState,
+        content: insertTemplateBlock(
+          editableState.content,
+          action.afterBlockId,
+          action.block
+        )
+      }
+    case "update_block":
+      return {
+        ...editableState,
+        content: updateTemplateBlock(editableState.content, action.block)
+      }
     case "delete_block":
-      return updateBlocks(state, (blocks) =>
-        blocks.filter((block: TemplateBlock) => block.id !== action.blockId)
-      )
+      return {
+        ...editableState,
+        content: deleteTemplateBlock(editableState.content, action.blockId)
+      }
     case "move_block":
-      return updateBlocks(state, (blocks) =>
-        moveBlock(blocks, action.blockId, action.direction)
-      )
+      return {
+        ...editableState,
+        content: moveTemplateBlock(
+          editableState.content,
+          action.blockId,
+          action.direction
+        )
+      }
   }
-}
-
-function insertBlock(
-  blocks: TemplateBlock[],
-  afterBlockId: string | null,
-  block: TemplateBlock
-): TemplateBlock[] {
-  if (afterBlockId === null) {
-    return [block, ...blocks]
-  }
-
-  const targetIndex = blocks.findIndex(
-    (candidate: TemplateBlock): boolean => candidate.id === afterBlockId
-  )
-
-  if (targetIndex === -1) {
-    return [...blocks, block]
-  }
-
-  return [
-    ...blocks.slice(0, targetIndex + 1),
-    block,
-    ...blocks.slice(targetIndex + 1)
-  ]
 }
 
 /**
  * Creates a schema-shaped starter block for a user-selected block type.
  *
  * @param blockType - Canonical discriminant for the requested block.
+ * @param existingBlocks - Current blocks used to keep generated field keys unique.
  * @returns A new block with a UUID and clear editable defaults.
  */
 export function createTemplateBlock(
-  blockType: TemplateBlock["type"]
+  blockType: TemplateBlock["type"],
+  existingBlocks: readonly TemplateBlock[] = []
 ): TemplateBlock {
   const id = crypto.randomUUID()
-  const fieldKey = `${blockType.replace("_field", "")}_${id.replaceAll("-", "").slice(0, 8)}`
-  const fieldDefaults = {
-    id,
-    fieldKey,
-    label: "New field",
-    required: false,
-    helpText: null
-  }
 
   switch (blockType) {
     case "heading":
@@ -163,63 +182,80 @@ export function createTemplateBlock(
       return { id, type: blockType }
     case "text_field":
       return {
-        ...fieldDefaults,
+        ...createFieldDefaults(id, blockType, existingBlocks),
         type: blockType,
         placeholder: null,
         multiline: false
       }
     case "date_field":
-      return { ...fieldDefaults, type: blockType }
+      return {
+        ...createFieldDefaults(id, blockType, existingBlocks),
+        type: blockType
+      }
     case "checkbox_field":
-      return { ...fieldDefaults, type: blockType, checkedByDefault: false }
+      return {
+        ...createFieldDefaults(id, blockType, existingBlocks),
+        type: blockType,
+        checkedByDefault: false
+      }
     case "dropdown_field":
       return {
-        ...fieldDefaults,
+        ...createFieldDefaults(id, blockType, existingBlocks),
         type: blockType,
         placeholder: "Select an option",
-        options: ["Option 1"]
+        options: []
       }
     case "initials_field":
-      return { ...fieldDefaults, type: blockType }
+      return {
+        ...createFieldDefaults(id, blockType, existingBlocks),
+        type: blockType
+      }
     case "signature_field":
-      return { ...fieldDefaults, type: blockType }
+      return {
+        ...createFieldDefaults(id, blockType, existingBlocks),
+        type: blockType
+      }
     case "file_field":
-      return { ...fieldDefaults, type: blockType }
+      return {
+        ...createFieldDefaults(id, blockType, existingBlocks),
+        type: blockType
+      }
   }
 }
 
-function updateBlocks(
-  state: TemplateEditorState,
-  update: (blocks: TemplateBlock[]) => TemplateBlock[]
-): TemplateEditorState {
+function createFieldDefaults(
+  id: string,
+  blockType: TemplateFieldBlockType,
+  existingBlocks: readonly TemplateBlock[]
+): {
+  id: string
+  fieldKey: string
+  label: string
+  required: false
+  helpText: null
+} {
+  const label = DEFAULT_FIELD_LABEL_BY_TYPE[blockType]
+
+  return {
+    id,
+    fieldKey: createUniqueTemplateFieldKey(label, existingBlocks),
+    label,
+    required: false,
+    helpText: null
+  }
+}
+
+function toEditableTemplateEditorState(
+  state: TemplateEditorState
+): EditableTemplateEditorState {
+  const content = upgradeV2TemplateContentToV3(state.content)
+
+  if (content === state.content) {
+    return state as EditableTemplateEditorState
+  }
+
   return {
     ...state,
-    content: {
-      ...state.content,
-      blocks: update(state.content.blocks)
-    }
+    content
   }
-}
-
-function moveBlock(
-  blocks: TemplateBlock[],
-  blockId: string,
-  direction: "up" | "down"
-): TemplateBlock[] {
-  const index = blocks.findIndex((block: TemplateBlock) => block.id === blockId)
-  const targetIndex = direction === "up" ? index - 1 : index + 1
-
-  if (index < 0 || targetIndex < 0 || targetIndex >= blocks.length) {
-    return blocks
-  }
-
-  const reorderedBlocks = [...blocks]
-  const [selectedBlock] = reorderedBlocks.splice(index, 1)
-
-  if (!selectedBlock) {
-    return blocks
-  }
-
-  reorderedBlocks.splice(targetIndex, 0, selectedBlock)
-  return reorderedBlocks
 }

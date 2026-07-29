@@ -22,6 +22,8 @@ type FakeRpcError = {
 
 type FakeSupabaseClientOptions = {
   activityInsertFails?: boolean
+  beforeCreateDocumentComment?: (document: FakeRow) => void
+  documentAccessLevel?: "viewer" | "contributor" | null
 }
 
 afterEach(() => {
@@ -66,6 +68,30 @@ class FakeSupabaseClient {
   ): Promise<{ data: string | null; error: FakeRpcError | null }> {
     this.rpcCalls.push({ functionName, args })
 
+    if (functionName === "get_document_access_level") {
+      const document = this.tables.documents.find(
+        (row: FakeRow): boolean =>
+          row.id === args.target_document_id &&
+          row.org_id === args.target_org_id
+      )
+      const membership = this.tables.organization_memberships.find(
+        (row: FakeRow): boolean =>
+          row.org_id === args.target_org_id &&
+          row.user_id === args.target_actor_user_id &&
+          row.status === "active"
+      )
+
+      return {
+        data:
+          document && membership
+            ? this.options.documentAccessLevel === undefined
+              ? "viewer"
+              : this.options.documentAccessLevel
+            : null,
+        error: null,
+      }
+    }
+
     if (functionName !== "create_document_comment") {
       return {
         data: null,
@@ -85,12 +111,17 @@ class FakeSupabaseClient {
       }
     }
 
-    if (document.archived_at) {
+    this.options.beforeCreateDocumentComment?.(document)
+
+    if (
+      document.lifecycle_state !== "active" ||
+      document.archived_at
+    ) {
       return {
         data: null,
         error: {
           code: "P0001",
-          message: "Archived documents cannot be commented on.",
+          message: "Only active documents may be modified.",
         },
       }
     }
@@ -256,6 +287,7 @@ function documentRow(
   return {
     id: "document-1",
     org_id: organizationId,
+    lifecycle_state: archivedAt === null ? "active" : "archived",
     archived_at: archivedAt,
   }
 }
@@ -284,9 +316,35 @@ describe("document comment permissions and tenancy", () => {
         },
         createDeps(client)
       )
-    ).rejects.toMatchObject({ statusCode: 403 })
+    ).rejects.toMatchObject({ statusCode: 404 })
 
     expect(client.tables.document_comments).toHaveLength(0)
+  })
+
+  it("hides a private document from an active member without a grant", async () => {
+    const client = new FakeSupabaseClient(
+      {
+        organization_memberships: [membership()],
+        documents: [documentRow()],
+      },
+      { documentAccessLevel: null }
+    )
+
+    await expect(
+      listDocumentComments(
+        {
+          actorUserId: "user-1",
+          organizationId: "org-1",
+          documentId: "document-1",
+        },
+        createDeps(client)
+      )
+    ).rejects.toMatchObject({
+      message: "Document was not found.",
+      statusCode: 404,
+    })
+
+    expect(client.fromCounts.document_comments).toBe(0)
   })
 
   it("does not accept a document from another tenant", async () => {
@@ -356,6 +414,64 @@ describe("document comment validation and creation", () => {
     ).rejects.toMatchObject({ statusCode: 409 })
   })
 
+  it("hides trashed documents from comment mutations", async () => {
+    const trashedDocument = documentRow()
+    trashedDocument.lifecycle_state = "trashed"
+    const client = new FakeSupabaseClient({
+      organization_memberships: [membership()],
+      documents: [trashedDocument],
+    })
+
+    await expect(
+      createDocumentComment(
+        {
+          actorUserId: "user-1",
+          organizationId: "org-1",
+          documentId: "document-1",
+          body: "Please review this.",
+        },
+        createDeps(client)
+      )
+    ).rejects.toMatchObject({
+      message: "Document was not found.",
+      statusCode: 404,
+    })
+
+    expect(client.tables.document_comments).toHaveLength(0)
+  })
+
+  it("maps a lifecycle change racing the atomic comment RPC to conflict", async () => {
+    const client = new FakeSupabaseClient(
+      {
+        organization_memberships: [membership()],
+        documents: [documentRow()],
+      },
+      {
+        beforeCreateDocumentComment: (document: FakeRow): void => {
+          document.lifecycle_state = "archived"
+          document.archived_at = "2026-07-16T12:00:00.000Z"
+        },
+      }
+    )
+
+    await expect(
+      createDocumentComment(
+        {
+          actorUserId: "user-1",
+          organizationId: "org-1",
+          documentId: "document-1",
+          body: "Please review this.",
+        },
+        createDeps(client)
+      )
+    ).rejects.toMatchObject({
+      message: "Archived documents cannot be commented on.",
+      statusCode: 409,
+    })
+
+    expect(client.tables.document_comments).toHaveLength(0)
+  })
+
   it("trims a reviewer comment and records its activity atomically", async () => {
     const client = new FakeSupabaseClient({
       organization_memberships: [membership("external_reviewer")],
@@ -385,6 +501,14 @@ describe("document comment validation and creation", () => {
       createdAt: "2026-07-17T12:00:00.000Z",
     })
     expect(client.rpcCalls).toEqual([
+      {
+        functionName: "get_document_access_level",
+        args: {
+          target_org_id: "org-1",
+          target_document_id: "document-1",
+          target_actor_user_id: "user-1",
+        },
+      },
       {
         functionName: "create_document_comment",
         args: {
@@ -440,6 +564,41 @@ describe("document comment validation and creation", () => {
 })
 
 describe("document comment listing", () => {
+  it("hides comments after a document enters trash", async () => {
+    const trashedDocument = documentRow()
+    trashedDocument.lifecycle_state = "purge_pending"
+    const client = new FakeSupabaseClient({
+      organization_memberships: [membership()],
+      documents: [trashedDocument],
+      document_comments: [
+        {
+          id: "comment-private",
+          org_id: "org-1",
+          document_id: "document-1",
+          body: "Hidden",
+          created_by: "user-1",
+          created_at: "2026-07-17T11:00:00.000Z",
+        },
+      ],
+    })
+
+    await expect(
+      listDocumentComments(
+        {
+          actorUserId: "user-1",
+          organizationId: "org-1",
+          documentId: "document-1",
+        },
+        createDeps(client)
+      )
+    ).rejects.toMatchObject({
+      message: "Document was not found.",
+      statusCode: 404,
+    })
+
+    expect(client.fromCounts.document_comments).toBe(0)
+  })
+
   it("returns only document-scoped comments newest first with batched author labels", async () => {
     const client = new FakeSupabaseClient({
       organization_memberships: [membership("external_reviewer")],

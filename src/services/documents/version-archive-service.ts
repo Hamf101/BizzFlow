@@ -1,4 +1,5 @@
 import { recordDocumentAuditLog } from "@/services/documents/audit"
+import { requireDocumentAccess } from "@/services/documents/access-service"
 import type {
   ArchiveDocumentInput,
   DocumentServiceDeps,
@@ -8,13 +9,15 @@ import {
   createSupabaseServiceError,
   getClient,
   getDocumentById,
-  requirePermission,
   runDocumentOperation,
 } from "@/services/documents/shared"
 import type { DocumentSummary } from "@/types/document"
 
 type SupabaseErrorLike = {
   code?: string
+  message?: string
+  details?: string
+  hint?: string
 }
 
 /**
@@ -39,12 +42,16 @@ export async function archiveDocument(
     async (): Promise<DocumentSummary> => {
       const client = getClient(deps)
 
-      await requirePermission(
-        client,
-        input.organizationId,
-        input.actorUserId,
-        "documents:archive",
-        "You cannot archive documents."
+      await requireDocumentAccess(
+        {
+          actorUserId: input.actorUserId,
+          organizationId: input.organizationId,
+          documentId: input.documentId,
+          requiredAccess: "contributor",
+          operation: "mutation",
+          requiredOrganizationPermissionAction: "documents:archive",
+        },
+        client
       )
 
       const existingDocument = await getDocumentById(
@@ -53,8 +60,11 @@ export async function archiveDocument(
         input.documentId
       )
 
-      if (existingDocument.archivedAt) {
-        throw new DocumentServiceError("Document is already archived.", 409)
+      if (existingDocument.lifecycleState !== "active") {
+        throw new DocumentServiceError(
+          "Only active documents can be archived.",
+          409
+        )
       }
 
       const { data: archived, error: archiveError } = await client.rpc(
@@ -102,6 +112,41 @@ function createArchiveMutationError(error: unknown): DocumentServiceError {
 
   if (errorLike?.code === "P0002") {
     return new DocumentServiceError("Document was not found.", 404)
+  }
+
+  const searchableMessage = [
+    errorLike?.message,
+    errorLike?.details,
+    errorLike?.hint,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase()
+
+  if (
+    errorLike?.code === "42501" &&
+    (searchableMessage.includes("active organization membership") ||
+      searchableMessage.includes(
+        "contributor access and a manager role"
+      ) ||
+      searchableMessage.includes("sufficient access"))
+  ) {
+    return new DocumentServiceError(
+      "You do not have sufficient access to archive this document.",
+      403
+    )
+  }
+
+  if (
+    errorLike?.code === "P0001" ||
+    errorLike?.code === "23514" ||
+    errorLike?.code === "23505" ||
+    errorLike?.code === "40001"
+  ) {
+    return new DocumentServiceError(
+      "The document lifecycle changed before it could be archived.",
+      409
+    )
   }
 
   return createSupabaseServiceError(error, "Unable to archive document.")

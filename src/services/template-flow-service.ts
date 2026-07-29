@@ -2,15 +2,25 @@ import { randomUUID } from "node:crypto"
 
 import { z } from "zod"
 
-import { getGeminiEnv, type GeminiEnv } from "@/lib/env"
 import {
   createAdminClient,
   type AdminSupabaseClient
 } from "@/lib/supabase/admin"
 import {
-  createGeminiTemplateFlowSchema,
+  type AiModelReference,
+  type AiRuntime,
+  type AiStructuredGenerationResult,
+  type AiTokenUsage
+} from "@/services/ai/contracts"
+import {
+  AI_PROVIDER_ERROR_CODES,
+  AiProviderError
+} from "@/services/ai/errors"
+import { createAiRuntime } from "@/services/ai/provider-factory"
+import {
+  createTemplateFlowResponseSchema,
   TEMPLATE_FLOW_OPERATION_TYPES
-} from "@/services/template-ai/gemini-flow-schema"
+} from "@/services/template-ai/flow-response-schema"
 import {
   bulletListBlockSchema,
   checkboxFieldBlockSchema,
@@ -26,10 +36,21 @@ import {
   tableBlockSchema,
   templateBlockSchema,
   templateContentSchema,
+  templateContentV3Schema,
   textFieldBlockSchema,
+  upgradeV2TemplateContentToV3,
   type TemplateBlock,
-  type TemplateContent
+  type TemplateContent,
+  type TemplateContentV3
 } from "@/types/template"
+import {
+  createUniqueTemplateFieldKey,
+  deleteTemplateBlock,
+  insertTemplateBlock,
+  isTemplateFieldBlock,
+  moveTemplateBlockAfter,
+  updateTemplateBlock
+} from "@/types/template-structure"
 import type {
   TemplateFlowDraft,
   TemplateFlowLedgerItem,
@@ -39,28 +60,25 @@ import type {
   TemplateFlowResult
 } from "@/types/template-flow"
 
-const GEMINI_INTERACTIONS_API_URL =
-  "https://generativelanguage.googleapis.com/v1/interactions"
-const GEMINI_MAX_OUTPUT_TOKENS = 8_192
-const GEMINI_MAX_REQUEST_ATTEMPTS = 3
-const GEMINI_RETRY_BASE_DELAY_MS = 500
-const GEMINI_FALLBACK_MODELS = [
-  "gemini-3.5-flash",
-  "gemini-3.5-flash-lite",
-  "gemini-3.1-flash-lite",
-  "gemini-3-flash-preview"
-] as const
+const FLOW_MAX_OUTPUT_TOKENS = 8_192
+const FLOW_MAX_UPSTREAM_CALLS = 2
+const MAX_FLOW_REPAIR_RESPONSE_CHARACTERS = 12_000
 const MAX_FLOW_HISTORY_MESSAGES = 20
 const MAX_FLOW_CONTEXT_CHARACTERS = 55_000
+const MAX_FLOW_STRUCTURE_CONTEXT_CHARACTERS = 10_000
 
 const uuidSchema = z.string().uuid()
 const hexColorSchema = z.string().regex(/^#[0-9A-Fa-f]{6}$/)
+const generatedFieldKeySchema = z.string().trim().min(1).max(240)
 const flowDraftSchema = z
   .object({
     title: z.string().trim().min(1).max(180),
     description: z.string().trim().max(2_000),
     content: templateContentSchema
   })
+  .strict()
+const editableFlowDraftSchema = flowDraftSchema
+  .extend({ content: templateContentV3Schema })
   .strict()
 const flowRequestSchema = z
   .object({
@@ -78,13 +96,34 @@ const generatedBlockSchema = z.discriminatedUnion("type", [
   numberedListBlockSchema.omit({ id: true }),
   tableBlockSchema.omit({ id: true }),
   dividerBlockSchema.omit({ id: true }),
-  textFieldBlockSchema.omit({ id: true }),
-  dateFieldBlockSchema.omit({ id: true }),
-  checkboxFieldBlockSchema.omit({ id: true }),
-  dropdownFieldBlockSchema.omit({ id: true }),
-  initialsFieldBlockSchema.omit({ id: true }),
-  signatureFieldBlockSchema.omit({ id: true }),
-  fileFieldBlockSchema.omit({ id: true })
+  textFieldBlockSchema
+    .omit({ id: true, fieldKey: true })
+    .extend({ fieldKey: generatedFieldKeySchema })
+    .strict(),
+  dateFieldBlockSchema
+    .omit({ id: true, fieldKey: true })
+    .extend({ fieldKey: generatedFieldKeySchema })
+    .strict(),
+  checkboxFieldBlockSchema
+    .omit({ id: true, fieldKey: true })
+    .extend({ fieldKey: generatedFieldKeySchema })
+    .strict(),
+  dropdownFieldBlockSchema
+    .omit({ id: true, fieldKey: true })
+    .extend({ fieldKey: generatedFieldKeySchema })
+    .strict(),
+  initialsFieldBlockSchema
+    .omit({ id: true, fieldKey: true })
+    .extend({ fieldKey: generatedFieldKeySchema })
+    .strict(),
+  signatureFieldBlockSchema
+    .omit({ id: true, fieldKey: true })
+    .extend({ fieldKey: generatedFieldKeySchema })
+    .strict(),
+  fileFieldBlockSchema
+    .omit({ id: true, fieldKey: true })
+    .extend({ fieldKey: generatedFieldKeySchema })
+    .strict()
 ])
 const operationSummarySchema = z.string().trim().min(1).max(180)
 const flowWireOperationSchema = z.discriminatedUnion("type", [
@@ -185,7 +224,7 @@ const flowProviderResponseSchema = z
     operations: z.array(flowWireOperationSchema).max(24)
   })
   .strict()
-const geminiFlowProviderResponseSchema = z
+const flowStructuredResponseSchema = z
   .object({
     assistantMessage: z.string().trim().min(1).max(2_000),
     needsConfirmation: z.boolean(),
@@ -206,27 +245,34 @@ const geminiFlowProviderResponseSchema = z
 
 type FlowProviderResponse = z.infer<typeof flowProviderResponseSchema>
 type FlowProviderResult = {
-  model: string
+  model: AiModelReference
   response: FlowProviderResponse
+  traceId: string
+  upstreamCalls: number
+  usage: AiTokenUsage
 }
+type FlowProviderParseResult =
+  | {
+      success: true
+      data: FlowProviderResponse
+    }
+  | {
+      success: false
+      issueCode: string
+      issuePath: string
+    }
 type FlowWireOperation = z.infer<typeof flowWireOperationSchema>
 type GeneratedBlock = z.infer<typeof generatedBlockSchema>
+type ParsedFlowRequest = z.infer<typeof flowRequestSchema>
+type EditableFlowDraft = z.infer<typeof editableFlowDraftSchema>
+type EditableFlowRequest = Omit<ParsedFlowRequest, "draft"> & {
+  draft: EditableFlowDraft
+}
 type FlowOperationPayload<T extends TemplateFlowOperationType> = Extract<
   FlowWireOperation,
   { type: T }
 >["payload"]
 type TemplateFlowClient = Pick<AdminSupabaseClient, "from">
-
-type GeminiInteractionResponse = {
-  status?: string
-  steps?: Array<{
-    type?: string
-    content?: Array<{
-      type?: string
-      text?: string
-    }>
-  }>
-}
 
 export type ExecuteTemplateFlowInput = {
   actorUserId: string
@@ -249,9 +295,8 @@ export type TemplateFlowServiceDeps = {
     templateId: string
   }) => Promise<void>
   createId?: () => string
-  delayImpl?: (durationMs: number, signal: AbortSignal) => Promise<void>
-  fetchImpl?: typeof fetch
-  getConfig?: () => GeminiEnv
+  createTraceId?: () => string
+  getAiRuntime?: () => AiRuntime
   loadHistory?: (input: {
     organizationId: string
     templateId: string
@@ -310,12 +355,18 @@ export async function executeTemplateFlow(
     )
   }
 
-  const request = parsedInput.data
+  const request: EditableFlowRequest = {
+    ...parsedInput.data,
+    draft: {
+      ...parsedInput.data.draft,
+      content: upgradeV2TemplateContentToV3(parsedInput.data.draft.content)
+    }
+  }
 
   await authorizeFlowRequest(request, deps, startedAt)
 
-  const [config, history, authorName] = await Promise.all([
-    loadGeminiConfig(deps, request, startedAt),
+  const [aiRuntime, history, authorName] = await Promise.all([
+    loadAiRuntime(deps, request, startedAt),
     (deps.loadHistory ?? loadFlowHistory)({
       organizationId: request.organizationId,
       templateId: request.templateId
@@ -323,12 +374,11 @@ export async function executeTemplateFlow(
     (deps.resolveAuthorName ?? resolveFlowAuthorName)(request.actorUserId)
   ])
   const providerResult = await requestFlowProvider({
-    config,
-    fetchImpl: deps.fetchImpl ?? fetch,
-    delayImpl: deps.delayImpl ?? delayWithAbort,
     history,
+    runtime: aiRuntime,
     request,
-    startedAt
+    startedAt,
+    traceId: deps.createTraceId?.() ?? randomUUID()
   })
   const providerResponse = providerResult.response
   const confirmationQuestion = readRequiredConfirmation(
@@ -388,9 +438,17 @@ export async function executeTemplateFlow(
     actorUserId: request.actorUserId,
     organizationId: request.organizationId,
     templateId: request.templateId,
-    model: providerResult.model,
+    provider: providerResult.model.provider,
+    model: providerResult.model.model,
+    traceId: providerResult.traceId,
     operationCount: applyResult.ledgerItems.length,
     needsConfirmation: confirmationQuestion !== null,
+    // Spend signal: hard-bounded upstream calls plus billed tokens when the
+    // provider reports them. This is the only per-turn cost record kept here.
+    upstreamCalls: providerResult.upstreamCalls,
+    inputTokens: providerResult.usage.inputTokens,
+    outputTokens: providerResult.usage.outputTokens,
+    totalTokens: providerResult.usage.totalTokens,
     durationMs: Math.round(performance.now() - startedAt)
   })
 
@@ -431,7 +489,7 @@ export async function listTemplateFlowMessages(
 }
 
 async function authorizeFlowRequest(
-  request: z.infer<typeof flowRequestSchema>,
+  request: EditableFlowRequest,
   deps: TemplateFlowServiceDeps,
   startedAt: number
 ): Promise<void> {
@@ -461,13 +519,13 @@ async function authorizeFlowRequest(
   }
 }
 
-async function loadGeminiConfig(
+async function loadAiRuntime(
   deps: TemplateFlowServiceDeps,
-  request: z.infer<typeof flowRequestSchema>,
+  request: EditableFlowRequest,
   startedAt: number
-): Promise<GeminiEnv> {
+): Promise<AiRuntime> {
   try {
-    return (deps.getConfig ?? getGeminiEnv)()
+    return (deps.getAiRuntime ?? createAiRuntime)()
   } catch (error: unknown) {
     console.error("template_flow_configuration_failed", {
       actorUserId: request.actorUserId,
@@ -478,220 +536,290 @@ async function loadGeminiConfig(
         error instanceof Error ? error.message : "Unknown configuration error"
     })
     throw new TemplateFlowServiceError(
-      "Flow is not configured. Add the Gemini environment variables.",
+      "Flow is not configured. Add the AI environment variables.",
       503
     )
   }
 }
 
 async function requestFlowProvider(input: {
-  config: GeminiEnv
-  delayImpl: (durationMs: number, signal: AbortSignal) => Promise<void>
-  fetchImpl: typeof fetch
   history: TemplateFlowMessage[]
-  request: z.infer<typeof flowRequestSchema>
+  request: EditableFlowRequest
+  runtime: AiRuntime
   startedAt: number
+  traceId: string
 }): Promise<FlowProviderResult> {
-  const controller = new AbortController()
-  const timeoutId = setTimeout(
-    (): void => controller.abort(),
-    input.config.GEMINI_TIMEOUT_MS
-  )
-  const modelCandidates = buildGeminiModelCandidates(input.config.GEMINI_MODEL)
-  let activeModel = input.config.GEMINI_MODEL
-  const requestBody = {
-    input: JSON.stringify({
-      conversation: input.history
-        .slice(-MAX_FLOW_HISTORY_MESSAGES)
-        .map((message: TemplateFlowMessage) => ({
-          role: message.role,
-          content: message.content
-        })),
-      userMessage: input.request.instruction,
-      currentDraft: buildFlowDocumentContext(input.request.draft)
-    }),
-    system_instruction: createFlowSystemInstruction(),
-    store: false,
-    response_format: {
-      type: "text",
-      mime_type: "application/json",
-      schema: createGeminiTemplateFlowSchema()
-    },
-    generation_config: {
-      max_output_tokens: GEMINI_MAX_OUTPUT_TOKENS,
-      thinking_level: "low",
-      thinking_summaries: "none"
-    }
-  }
+  const model = input.runtime.model
+  const systemInstruction = createFlowSystemInstruction()
+  const responseSchema = createTemplateFlowResponseSchema()
+  const initialPrompt = JSON.stringify({
+    conversation: input.history
+      .slice(-MAX_FLOW_HISTORY_MESSAGES)
+      .map((message: TemplateFlowMessage) => ({
+        role: message.role,
+        content: message.content
+      })),
+    userMessage: input.request.instruction,
+    currentDraft: buildFlowDocumentContext(input.request.draft)
+  })
+  const usageReports: AiTokenUsage[] = []
+  let currentPrompt = initialPrompt
+  let upstreamCalls = 0
+  let latestTraceId = input.traceId
 
-  try {
-    let response: Response | null = null
-
-    for (const [index, model] of modelCandidates.entries()) {
-      activeModel = model
-      response = await fetchFlowInteraction({
-        actorUserId: input.request.actorUserId,
-        apiKey: input.config.GEMINI_API_KEY,
-        delayImpl: input.delayImpl,
-        fetchImpl: input.fetchImpl,
-        model,
-        organizationId: input.request.organizationId,
-        requestBody: { ...requestBody, model },
-        signal: controller.signal,
-        startedAt: input.startedAt,
-        templateId: input.request.templateId
-      })
-
-      if (response.status !== 429 && response.status !== 404) {
-        break
-      }
-
-      const nextModel = modelCandidates[index + 1]
-
-      if (nextModel === undefined) {
-        break
-      }
-
-      console.warn("template_flow_provider_fallback", {
-        actorUserId: input.request.actorUserId,
-        organizationId: input.request.organizationId,
-        templateId: input.request.templateId,
-        exhaustedModel: model,
-        nextModel,
-        status: response.status,
-        durationMs: Math.round(performance.now() - input.startedAt)
-      })
-    }
-
-    if (response === null) {
-      throw new Error("Gemini model selection returned no candidates.")
-    }
-
-    if (!response.ok) {
-      if (response.status === 429) {
-        console.warn("template_flow_provider_rate_limited", {
-          actorUserId: input.request.actorUserId,
-          organizationId: input.request.organizationId,
-          templateId: input.request.templateId,
-          model: activeModel,
-          status: response.status,
-          durationMs: Math.round(performance.now() - input.startedAt)
-        })
-        throw new TemplateFlowServiceError(
-          "Flow has reached the Gemini rate limit. Wait a minute and try again.",
-          429
-        )
-      }
-
-      console.error("template_flow_provider_rejected", {
-        actorUserId: input.request.actorUserId,
-        organizationId: input.request.organizationId,
-        templateId: input.request.templateId,
-        model: activeModel,
-        status: response.status,
-        durationMs: Math.round(performance.now() - input.startedAt)
-      })
-      throw new TemplateFlowServiceError(
-        "Flow could not update the document. Try again shortly.",
-        502
-      )
-    }
-
-    const responseBody = (await response.json()) as GeminiInteractionResponse
-    const outputText = readGeminiOutputText(responseBody)
-
-    if (outputText === null) {
-      throw new TemplateFlowServiceError(
-        "Flow did not return a usable response.",
-        502
-      )
-    }
-
-    let decodedOutput: unknown
+  for (
+    let providerCall = 1;
+    providerCall <= FLOW_MAX_UPSTREAM_CALLS;
+    providerCall += 1
+  ) {
+    let result: AiStructuredGenerationResult
 
     try {
-      decodedOutput = JSON.parse(outputText) as unknown
-    } catch {
-      throw new TemplateFlowServiceError(
-        "Flow returned an unreadable response.",
-        502
-      )
+      result = await input.runtime.provider.generateStructured({
+        model,
+        input: currentPrompt,
+        systemInstruction,
+        responseSchema,
+        maxOutputTokens: FLOW_MAX_OUTPUT_TOKENS,
+        traceId: input.traceId
+      })
+    } catch (error: unknown) {
+      throwFlowProviderError(error, input, model)
     }
 
-    const parsedGeminiOutput =
-      geminiFlowProviderResponseSchema.safeParse(decodedOutput)
-    const parsedOutput = parsedGeminiOutput.success
-      ? flowProviderResponseSchema.safeParse(
-          normalizeGeminiFlowResponse(parsedGeminiOutput.data)
-        )
-      : parsedGeminiOutput
+    upstreamCalls += result.upstreamCalls
+    latestTraceId = result.traceId
+    usageReports.push(result.usage)
 
-    if (!parsedOutput.success) {
-      const firstIssue = parsedOutput.error.issues[0]
-
-      console.warn("template_flow_provider_output_invalid", {
+    if (upstreamCalls > FLOW_MAX_UPSTREAM_CALLS) {
+      console.error("template_flow_provider_call_budget_exceeded", {
         actorUserId: input.request.actorUserId,
         organizationId: input.request.organizationId,
         templateId: input.request.templateId,
-        model: activeModel,
-        issueCode: firstIssue?.code ?? "unknown",
-        issuePath: firstIssue?.path.join(".") ?? "unknown",
+        provider: model.provider,
+        model: model.model,
+        traceId: latestTraceId,
+        upstreamCalls,
         durationMs: Math.round(performance.now() - input.startedAt)
       })
       throw new TemplateFlowServiceError(
-        "Flow returned changes that failed validation.",
+        "Unable to complete the Flow request. Try again shortly.",
         502
       )
     }
 
-    return {
-      model: activeModel,
-      response: parsedOutput.data
-    }
-  } catch (error: unknown) {
-    if (error instanceof TemplateFlowServiceError) {
-      throw error
+    const parsedOutput = parseFlowProviderText(result.text)
+
+    if (parsedOutput.success) {
+      return {
+        model,
+        response: parsedOutput.data,
+        traceId: latestTraceId,
+        upstreamCalls,
+        usage: aggregateTokenUsage(usageReports)
+      }
     }
 
-    const timedOut =
-      controller.signal.aborted ||
-      (error instanceof Error && error.name === "AbortError")
-
-    console.error("template_flow_request_failed", {
+    console.warn("template_flow_provider_output_invalid", {
       actorUserId: input.request.actorUserId,
       organizationId: input.request.organizationId,
       templateId: input.request.templateId,
-      model: activeModel,
-      timedOut,
+      provider: model.provider,
+      model: model.model,
+      traceId: latestTraceId,
+      providerCall,
+      issueCode: parsedOutput.issueCode,
+      issuePath: parsedOutput.issuePath,
       durationMs: Math.round(performance.now() - input.startedAt),
-      reason: error instanceof Error ? error.message : "Unknown provider error"
     })
-    throw new TemplateFlowServiceError(
-      timedOut
-        ? "Flow timed out. Try a shorter request."
-        : "Unable to complete the Flow request. Try again shortly.",
-      timedOut ? 504 : 502
-    )
-  } finally {
-    clearTimeout(timeoutId)
+
+    if (providerCall < FLOW_MAX_UPSTREAM_CALLS) {
+      currentPrompt = createFlowRepairPrompt({
+        initialPrompt,
+        invalidResponse: result.text,
+        issueCode: parsedOutput.issueCode,
+        issuePath: parsedOutput.issuePath
+      })
+    }
+  }
+
+  throw new TemplateFlowServiceError(
+    "Flow returned changes that failed validation.",
+    502
+  )
+}
+
+function parseFlowProviderText(text: string): FlowProviderParseResult {
+  let decodedOutput: unknown
+
+  try {
+    decodedOutput = JSON.parse(text) as unknown
+  } catch {
+    return {
+      success: false,
+      issueCode: "invalid_json",
+      issuePath: "root"
+    }
+  }
+
+  const structuredOutput =
+    flowStructuredResponseSchema.safeParse(decodedOutput)
+
+  if (!structuredOutput.success) {
+    return readFlowParseIssue(structuredOutput.error)
+  }
+
+  const parsedOutput = flowProviderResponseSchema.safeParse(
+    normalizeFlowResponse(structuredOutput.data)
+  )
+
+  if (!parsedOutput.success) {
+    return readFlowParseIssue(parsedOutput.error)
+  }
+
+  return {
+    success: true,
+    data: parsedOutput.data
   }
 }
 
-function buildGeminiModelCandidates(primaryModel: string): string[] {
-  return [...new Set([primaryModel, ...GEMINI_FALLBACK_MODELS])]
+function readFlowParseIssue(error: z.ZodError): FlowProviderParseResult {
+  const firstIssue = error.issues[0]
+
+  return {
+    success: false,
+    issueCode: firstIssue?.code ?? "unknown",
+    issuePath: firstIssue?.path.join(".") || "root"
+  }
+}
+
+function createFlowRepairPrompt(input: {
+  initialPrompt: string
+  invalidResponse: string
+  issueCode: string
+  issuePath: string
+}): string {
+  return JSON.stringify({
+    originalRequest: input.initialPrompt,
+    semanticRepair: {
+      instruction:
+        "Return one corrected response that follows the response schema and operation payload contracts exactly.",
+      priorResponse: input.invalidResponse.slice(
+        0,
+        MAX_FLOW_REPAIR_RESPONSE_CHARACTERS
+      ),
+      validationIssue: {
+        code: input.issueCode,
+        path: input.issuePath
+      }
+    }
+  })
+}
+
+function aggregateTokenUsage(usages: AiTokenUsage[]): AiTokenUsage {
+  return {
+    inputTokens: sumReportedUsage(
+      usages.map((usage: AiTokenUsage): number | null => usage.inputTokens)
+    ),
+    outputTokens: sumReportedUsage(
+      usages.map((usage: AiTokenUsage): number | null => usage.outputTokens)
+    ),
+    totalTokens: sumReportedUsage(
+      usages.map((usage: AiTokenUsage): number | null => usage.totalTokens)
+    )
+  }
+}
+
+function sumReportedUsage(values: Array<number | null>): number | null {
+  if (values.length === 0 || values.some((value: number | null) => value === null)) {
+    return null
+  }
+
+  return values.reduce(
+    (total: number, value: number | null): number => total + (value ?? 0),
+    0
+  )
+}
+
+function throwFlowProviderError(
+  error: unknown,
+  input: {
+    request: EditableFlowRequest
+    startedAt: number
+    traceId: string
+  },
+  model: AiModelReference
+): never {
+  const providerError =
+    error instanceof AiProviderError
+      ? error
+      : new AiProviderError({
+          code: AI_PROVIDER_ERROR_CODES.UNKNOWN,
+          message: "The AI provider request failed.",
+          model,
+          provider: model.provider,
+          retryable: false,
+          statusCode: null,
+          traceId: input.traceId,
+          cause: error
+        })
+  const logContext = {
+    actorUserId: input.request.actorUserId,
+    organizationId: input.request.organizationId,
+    templateId: input.request.templateId,
+    provider: model.provider,
+    model: model.model,
+    providerErrorCode: providerError.code,
+    providerStatusCode: providerError.statusCode,
+    retryable: providerError.retryable,
+    traceId: providerError.traceId,
+    durationMs: Math.round(performance.now() - input.startedAt)
+  }
+
+  if (providerError.code === AI_PROVIDER_ERROR_CODES.RATE_LIMITED) {
+    console.warn("template_flow_provider_rate_limited", logContext)
+    throw new TemplateFlowServiceError(
+      "Flow has reached the AI service rate limit. Wait a minute and try again.",
+      429
+    )
+  }
+
+  console.error("template_flow_provider_failed", logContext)
+
+  if (providerError.code === AI_PROVIDER_ERROR_CODES.REQUEST_TIMEOUT) {
+    throw new TemplateFlowServiceError(
+      "Flow timed out. Try a shorter request.",
+      504
+    )
+  }
+
+  throw new TemplateFlowServiceError(
+    "Unable to complete the Flow request. Try again shortly.",
+    502
+  )
 }
 
 function createFlowSystemInstruction(): string {
   return [
     "You are Flow, BizFlow's accountable business-document editor.",
     "BizFlow creates reusable business documents, intake forms, agreements, approval workflows, and signing templates.",
+    "Produce a complete, usable first draft: include the expected professional structure, sensible fields, explicit placeholders, and enough guidance for a person to review it immediately.",
     "Write in clear, professional, plain language. Prefer concise headings, specific field labels, and actionable instructions.",
+    "Infer ordinary document structure when the context supports it. Ask one focused question only when omitting the answer would materially change meaning, obligations, or workflow.",
     "Preserve the user's terminology, organization identity, document intent, and existing branding.",
     "Do not invent legal guarantees, regulatory claims, prices, dates, parties, or policies that the user did not provide.",
+    "Turn unknown recipient-supplied facts into fillable fields. Mark unresolved author decisions visibly as 'Needs input: ...' instead of fabricating an answer.",
     "Respond conversationally and use operations only when the user asks to change the current draft.",
     "The document status, publication state, and archive state are outside your control.",
     "Preserve all content, stable field keys, image bytes, and branding that the user did not ask to change.",
-    "The document has one ordered free-form block flow bounded by printable page margins; there are no header, body, or footer sections.",
+    "Treat existing document titles, section names, field labels, field keys, organization names, and choice wording as locked unless the user explicitly asks to rename or reword them.",
+    "Use sentence case for every new field label. Derive each new field key once as lower_snake_case from its label; if that key already exists case-insensitively, append _2, _3, and so on. Renaming a label never changes its existing field key.",
+    "Mark a field required only when the document cannot fulfill its purpose without it. Use help text to explain purpose or expected input, not to repeat the label.",
+    "Never silently choose between ambiguous names, parties, labels, or destinations; ask one specific clarification question instead.",
+    "For a dropdown field, use distinct, meaningful choices supported by the user's context or established domain meaning. Never use placeholders such as Option 1. When meaningful choices cannot be inferred safely, use a text field or ask one focused question. Add Other or Not applicable only when genuinely useful.",
+    "Whenever a dropdown includes the exact choice 'Other', pair it immediately with a required text field labelled 'Please specify' whose visibleWhen compares that dropdown to 'Other'. For a newly added dropdown, Flow creates this paired field automatically; do not add a duplicate. For an existing dropdown id, add the paired field yourself.",
+    "Use the document metadata as the single title. New content headings establish hierarchy beneath it instead of repeating the title.",
+    "All document content lives in root canonical blocks with one order bounded by printable page margins. Sections, field groups, and block rules are metadata references into that root order, not nested content containers. Never invent legacy header, body, or footer containers.",
     "Never remove a logo, image, field, or content block unless the user explicitly requests removal.",
     "When a request could cause unintended loss, return needsConfirmation=true, a single clear confirmationQuestion, and no operations.",
     "Use only ids present in currentDraft when updating, moving, or removing blocks.",
@@ -726,18 +854,19 @@ function createFlowPayloadContract(): string {
     'numbered_list {"type":"numbered_list","items":["Plain text"]};',
     'table {"type":"table","headers":["Header"],"rows":[["Cell"]]};',
     'divider {"type":"divider"};',
-    'text_field {"type":"text_field","fieldKey":"stable_key","label":"Label","required":true,"helpText":null,"placeholder":null,"multiline":false};',
-    'date_field {"type":"date_field","fieldKey":"stable_key","label":"Label","required":true,"helpText":null};',
-    'initials_field {"type":"initials_field","fieldKey":"stable_key","label":"Label","required":true,"helpText":null};',
-    'signature_field {"type":"signature_field","fieldKey":"stable_key","label":"Label","required":true,"helpText":null};',
-    'file_field {"type":"file_field","fieldKey":"stable_key","label":"Label","required":true,"helpText":null};',
-    'checkbox_field {"type":"checkbox_field","fieldKey":"stable_key","label":"Label","required":true,"helpText":null,"checkedByDefault":false};',
-    'dropdown_field {"type":"dropdown_field","fieldKey":"stable_key","label":"Label","required":true,"helpText":null,"placeholder":null,"options":["Option"]}.'
+    'text_field {"type":"text_field","fieldKey":"stable_key","label":"Label","required":true,"helpText":null,"placeholder":null,"multiline":false,"visibleWhen":{"sourceBlockId":"earlier-dropdown-or-checkbox-uuid","operator":"equals","value":"Other"}};',
+    'date_field {"type":"date_field","fieldKey":"stable_key","label":"Label","required":true,"helpText":null,"visibleWhen":optional};',
+    'initials_field {"type":"initials_field","fieldKey":"stable_key","label":"Label","required":true,"helpText":null,"visibleWhen":optional};',
+    'signature_field {"type":"signature_field","fieldKey":"stable_key","label":"Label","required":true,"helpText":null,"visibleWhen":optional};',
+    'file_field {"type":"file_field","fieldKey":"stable_key","label":"Label","required":true,"helpText":null,"visibleWhen":optional};',
+    'checkbox_field {"type":"checkbox_field","fieldKey":"stable_key","label":"Label","required":true,"helpText":null,"checkedByDefault":false,"visibleWhen":optional};',
+    'dropdown_field {"type":"dropdown_field","fieldKey":"stable_key","label":"Label","required":true,"helpText":null,"placeholder":null,"options":["Known choice A","Known choice B","Other"],"visibleWhen":optional}.',
+    "Omit visibleWhen when it is not needed. When present, encode it as an object with sourceBlockId, operator='equals', and a declared string choice or checkbox boolean."
   ].join(" ")
 }
 
-function normalizeGeminiFlowResponse(
-  response: z.infer<typeof geminiFlowProviderResponseSchema>
+function normalizeFlowResponse(
+  response: z.infer<typeof flowStructuredResponseSchema>
 ): unknown {
   return {
     assistantMessage: response.assistantMessage,
@@ -746,18 +875,18 @@ function normalizeGeminiFlowResponse(
     operations: response.operations.map(
       (
         operation: z.infer<
-          typeof geminiFlowProviderResponseSchema
+          typeof flowStructuredResponseSchema
         >["operations"][number]
       ): Record<string, unknown> => ({
         type: operation.type,
         summary: operation.summary,
-        payload: parseGeminiPayloadJson(operation.payloadJson)
+        payload: parseFlowPayloadJson(operation.payloadJson)
       })
     )
   }
 }
 
-function parseGeminiPayloadJson(payloadJson: string): unknown {
+function parseFlowPayloadJson(payloadJson: string): unknown {
   try {
     return JSON.parse(payloadJson) as unknown
   } catch {
@@ -766,14 +895,53 @@ function parseGeminiPayloadJson(payloadJson: string): unknown {
 }
 
 function buildFlowDocumentContext(
-  draft: TemplateFlowDraft
+  draft: EditableFlowDraft
 ): Record<string, unknown> {
-  let usedCharacters = 0
-  const blocks: unknown[] = []
-  let omittedBlockCount = 0
+  const context = {
+    title: draft.title,
+    description: draft.description,
+    schemaVersion: draft.content.schemaVersion,
+    branding: {
+      organizationName: draft.content.branding.organizationName,
+      primaryColor: draft.content.branding.primaryColor,
+      accentColor: draft.content.branding.accentColor,
+      hasLogo: draft.content.branding.logoDataUrl !== null,
+      logoAlignment: draft.content.branding.logoAlignment,
+      logoWidthPercent: draft.content.branding.logoWidthPercent
+    },
+    layout: draft.content.layout,
+    sections: [] as unknown[],
+    fieldGroups: [] as unknown[],
+    blockRules: [] as unknown[],
+    blocks: [] as unknown[],
+    omitted: {
+      sections: 0,
+      fieldGroups: 0,
+      blockRules: 0,
+      blocks: 0
+    }
+  }
 
-  for (const block of draft.content.blocks) {
-    const sanitizedBlock =
+  context.omitted.sections = appendBoundedFlowContextItems(
+    draft.content.sections,
+    context.sections,
+    context,
+    MAX_FLOW_STRUCTURE_CONTEXT_CHARACTERS
+  )
+  context.omitted.fieldGroups = appendBoundedFlowContextItems(
+    draft.content.fieldGroups,
+    context.fieldGroups,
+    context,
+    MAX_FLOW_STRUCTURE_CONTEXT_CHARACTERS
+  )
+  context.omitted.blockRules = appendBoundedFlowContextItems(
+    draft.content.blockRules,
+    context.blockRules,
+    context,
+    MAX_FLOW_STRUCTURE_CONTEXT_CHARACTERS
+  )
+  const sanitizedBlocks = draft.content.blocks.map(
+    (block: TemplateBlock): unknown =>
       block.type === "image"
         ? {
             id: block.id,
@@ -785,31 +953,38 @@ function buildFlowDocumentContext(
             imageDataOmitted: true
           }
         : block
-    const characterCount = JSON.stringify(sanitizedBlock).length
+  )
 
-    if (usedCharacters + characterCount > MAX_FLOW_CONTEXT_CHARACTERS) {
-      omittedBlockCount += 1
+  context.omitted.blocks = appendBoundedFlowContextItems(
+    sanitizedBlocks,
+    context.blocks,
+    context,
+    MAX_FLOW_CONTEXT_CHARACTERS
+  )
+
+  return context
+}
+
+function appendBoundedFlowContextItems(
+  source: readonly unknown[],
+  target: unknown[],
+  context: Record<string, unknown>,
+  characterLimit: number
+): number {
+  let omittedCount = 0
+
+  for (const item of source) {
+    target.push(item)
+
+    if (JSON.stringify(context).length <= characterLimit) {
       continue
     }
 
-    blocks.push(sanitizedBlock)
-    usedCharacters += characterCount
+    target.pop()
+    omittedCount += 1
   }
 
-  return {
-    title: draft.title,
-    description: draft.description,
-    branding: {
-      organizationName: draft.content.branding.organizationName,
-      primaryColor: draft.content.branding.primaryColor,
-      accentColor: draft.content.branding.accentColor,
-      hasLogo: draft.content.branding.logoDataUrl !== null,
-      logoAlignment: draft.content.branding.logoAlignment,
-      logoWidthPercent: draft.content.branding.logoWidthPercent
-    },
-    blocks,
-    omittedBlockCount
-  }
+  return omittedCount
 }
 
 function readRequiredConfirmation(
@@ -953,15 +1128,15 @@ function boundLedgerTarget(value: string): string {
 }
 
 function applyFlowOperations(
-  currentDraft: TemplateFlowDraft,
+  currentDraft: EditableFlowDraft,
   operations: FlowWireOperation[],
   createId: () => string
 ): {
-  draft: TemplateFlowDraft
+  draft: EditableFlowDraft
   ledgerItems: TemplateFlowLedgerItem[]
   changedBlockIds: string[]
 } {
-  const nextDraft = structuredClone(currentDraft) as TemplateFlowDraft
+  const nextDraft = structuredClone(currentDraft) as EditableFlowDraft
   const ledgerItems: TemplateFlowLedgerItem[] = []
   const changedBlockIds = new Set<string>()
 
@@ -981,7 +1156,7 @@ function applyFlowOperations(
     })
   }
 
-  const parsedDraft = flowDraftSchema.safeParse(nextDraft)
+  const parsedDraft = editableFlowDraftSchema.safeParse(nextDraft)
 
   if (!parsedDraft.success) {
     throw new TemplateFlowServiceError(
@@ -998,7 +1173,7 @@ function applyFlowOperations(
 }
 
 function applyFlowOperation(
-  draft: TemplateFlowDraft,
+  draft: EditableFlowDraft,
   operation: FlowWireOperation,
   createId: () => string
 ): string[] {
@@ -1026,7 +1201,7 @@ function applyFlowOperation(
 }
 
 function applyBrandingOperation(
-  draft: TemplateFlowDraft,
+  draft: EditableFlowDraft,
   payload: FlowOperationPayload<"set_branding">
 ): void {
   if (payload.organizationName !== undefined) {
@@ -1050,42 +1225,73 @@ function applyBrandingOperation(
 }
 
 function applyAddBlockOperation(
-  draft: TemplateFlowDraft,
+  draft: EditableFlowDraft,
   payload: FlowOperationPayload<"add_block">,
   createId: () => string
 ): string[] {
-  const blockId = createId()
-  const candidate = ensureUniqueFieldKey(
-    { ...payload.block, id: blockId },
-    draft.content
-  )
-  const block = parseCanonicalBlock(candidate)
-  const blocks = draft.content.blocks
-
-  if (payload.afterBlockId === null) {
-    blocks.push(block)
-    return [block.id]
-  }
-
-  const targetIndex = blocks.findIndex(
-    (existingBlock: TemplateBlock): boolean =>
-      existingBlock.id === payload.afterBlockId
-  )
-
-  if (targetIndex === -1) {
+  if (
+    payload.afterBlockId !== null &&
+    !draft.content.blocks.some(
+      (block: TemplateBlock): boolean => block.id === payload.afterBlockId
+    )
+  ) {
     throw invalidOperationError()
   }
 
-  blocks.splice(targetIndex + 1, 0, block)
-  return [block.id]
+  const blockId = createId()
+  const block = createGeneratedTemplateBlock(
+    payload.block,
+    blockId,
+    draft.content
+  )
+  const resolvedAfterBlockId =
+    payload.afterBlockId ??
+    draft.content.blocks[draft.content.blocks.length - 1]?.id ??
+    null
+
+  draft.content = insertTemplateBlock(
+    draft.content,
+    resolvedAfterBlockId,
+    block
+  )
+  const affectedBlockIds = [block.id]
+
+  if (block.type === "dropdown_field" && block.options.includes("Other")) {
+    const specifyBlock = parseCanonicalBlock({
+      id: createId(),
+      type: "text_field",
+      fieldKey: createUniqueTemplateFieldKey(
+        "Please specify",
+        draft.content.blocks
+      ),
+      label: "Please specify",
+      required: true,
+      helpText: null,
+      placeholder: null,
+      multiline: false,
+      visibleWhen: {
+        sourceBlockId: block.id,
+        operator: "equals",
+        value: "Other"
+      }
+    })
+
+    draft.content = insertTemplateBlock(
+      draft.content,
+      block.id,
+      specifyBlock
+    )
+    affectedBlockIds.push(specifyBlock.id)
+  }
+
+  return affectedBlockIds
 }
 
 function applyUpdateBlockOperation(
-  draft: TemplateFlowDraft,
+  draft: EditableFlowDraft,
   payload: FlowOperationPayload<"update_block">
 ): string[] {
-  const blocks = draft.content.blocks
-  const blockIndex = blocks.findIndex(
+  const blockIndex = draft.content.blocks.findIndex(
     (block: TemplateBlock): boolean => block.id === payload.blockId
   )
 
@@ -1093,7 +1299,7 @@ function applyUpdateBlockOperation(
     throw invalidOperationError()
   }
 
-  const existingBlock = blocks[blockIndex]
+  const existingBlock = draft.content.blocks[blockIndex]
 
   if (
     existingBlock?.type === "image" ||
@@ -1102,91 +1308,117 @@ function applyUpdateBlockOperation(
     throw invalidOperationError()
   }
 
-  const candidate = ensureUniqueFieldKey(
-    { ...payload.block, id: payload.blockId },
-    draft.content,
-    payload.blockId
-  )
-  blocks[blockIndex] = parseCanonicalBlock(candidate)
+  const candidate: Record<string, unknown> = {
+    ...payload.block,
+    id: payload.blockId
+  }
+
+  if (
+    existingBlock !== undefined &&
+    isTemplateFieldBlock(existingBlock) &&
+    "fieldKey" in payload.block
+  ) {
+    candidate.fieldKey = existingBlock.fieldKey
+
+    if (
+      existingBlock.visibleWhen !== undefined &&
+      payload.block.visibleWhen === undefined
+    ) {
+      candidate.visibleWhen = existingBlock.visibleWhen
+    }
+  }
+
+  const block = parseCanonicalBlock(candidate)
+  draft.content = updateTemplateBlock(draft.content, block)
   return [payload.blockId]
 }
 
 function applyUpdateImageOperation(
-  draft: TemplateFlowDraft,
+  draft: EditableFlowDraft,
   payload: FlowOperationPayload<"update_image">
 ): string[] {
-  const blocks = draft.content.blocks
-  const blockIndex = blocks.findIndex(
+  const blockIndex = draft.content.blocks.findIndex(
     (block: TemplateBlock): boolean => block.id === payload.blockId
   )
-  const existingBlock = blocks[blockIndex]
+  const existingBlock = draft.content.blocks[blockIndex]
 
   if (blockIndex === -1 || existingBlock?.type !== "image") {
     throw invalidOperationError()
   }
 
-  blocks[blockIndex] = {
+  draft.content = updateTemplateBlock(draft.content, {
     ...existingBlock,
     altText: payload.altText,
     caption: payload.caption,
     alignment: payload.alignment,
     widthPercent: payload.widthPercent
-  }
+  })
   return [payload.blockId]
 }
 
 function applyMoveBlockOperation(
-  draft: TemplateFlowDraft,
+  draft: EditableFlowDraft,
   payload: FlowOperationPayload<"move_block">
 ): string[] {
-  const blocks = draft.content.blocks
-  const sourceIndex = blocks.findIndex(
+  const sourceExists = draft.content.blocks.some(
     (block: TemplateBlock): boolean => block.id === payload.blockId
   )
+  const destinationExists =
+    payload.afterBlockId === null ||
+    draft.content.blocks.some(
+      (block: TemplateBlock): boolean => block.id === payload.afterBlockId
+    )
 
-  if (sourceIndex === -1 || payload.afterBlockId === payload.blockId) {
+  if (
+    !sourceExists ||
+    !destinationExists ||
+    payload.afterBlockId === payload.blockId
+  ) {
     throw invalidOperationError()
   }
 
-  const [block] = blocks.splice(sourceIndex, 1)
-
-  if (!block) {
-    throw invalidOperationError()
-  }
-
-  if (payload.afterBlockId === null) {
-    blocks.unshift(block)
-    return [block.id]
-  }
-
-  const targetIndex = blocks.findIndex(
-    (candidate: TemplateBlock): boolean => candidate.id === payload.afterBlockId
+  draft.content = moveTemplateBlockAfter(
+    draft.content,
+    payload.blockId,
+    payload.afterBlockId
   )
-
-  if (targetIndex === -1) {
-    blocks.splice(sourceIndex, 0, block)
-    throw invalidOperationError()
-  }
-
-  blocks.splice(targetIndex + 1, 0, block)
-  return [block.id]
+  return [payload.blockId]
 }
 
 function applyRemoveBlockOperation(
-  draft: TemplateFlowDraft,
+  draft: EditableFlowDraft,
   payload: FlowOperationPayload<"remove_block">
 ): string[] {
-  const blocks = draft.content.blocks
-  const blockIndex = blocks.findIndex(
+  const blockExists = draft.content.blocks.some(
     (block: TemplateBlock): boolean => block.id === payload.blockId
   )
 
-  if (blockIndex === -1) {
+  if (!blockExists) {
     throw invalidOperationError()
   }
 
-  blocks.splice(blockIndex, 1)
+  draft.content = deleteTemplateBlock(draft.content, payload.blockId)
   return [payload.blockId]
+}
+
+function createGeneratedTemplateBlock(
+  generatedBlock: GeneratedBlock,
+  blockId: string,
+  content: TemplateContentV3
+): TemplateBlock {
+  const candidate: Record<string, unknown> = {
+    ...generatedBlock,
+    id: blockId
+  }
+
+  if ("fieldKey" in generatedBlock) {
+    candidate.fieldKey = createUniqueTemplateFieldKey(
+      generatedBlock.label,
+      content.blocks
+    )
+  }
+
+  return parseCanonicalBlock(candidate)
 }
 
 function parseCanonicalBlock(candidate: unknown): TemplateBlock {
@@ -1197,36 +1429,6 @@ function parseCanonicalBlock(candidate: unknown): TemplateBlock {
   }
 
   return result.data
-}
-
-function ensureUniqueFieldKey(
-  candidate: Record<string, unknown>,
-  content: TemplateContent,
-  excludedBlockId?: string
-): Record<string, unknown> {
-  if (typeof candidate.fieldKey !== "string") {
-    return candidate
-  }
-
-  const usedFieldKeys = new Set<string>()
-
-  for (const block of content.blocks) {
-    if ("fieldKey" in block && block.id !== excludedBlockId) {
-      usedFieldKeys.add(block.fieldKey.toLowerCase())
-    }
-  }
-
-  const originalKey = candidate.fieldKey
-  let nextKey = originalKey
-  let suffix = 2
-
-  while (usedFieldKeys.has(nextKey.toLowerCase())) {
-    const suffixText = `_${suffix}`
-    nextKey = `${originalKey.slice(0, 80 - suffixText.length)}${suffixText}`
-    suffix += 1
-  }
-
-  return { ...candidate, fieldKey: nextKey }
 }
 
 function invalidOperationError(): TemplateFlowServiceError {
@@ -1475,163 +1677,6 @@ function parseLedgerItem(value: unknown): TemplateFlowLedgerItem | null {
       (blockId: unknown): blockId is string => typeof blockId === "string"
     )
   }
-}
-
-async function fetchFlowInteraction(input: {
-  actorUserId: string
-  apiKey: string
-  delayImpl: (durationMs: number, signal: AbortSignal) => Promise<void>
-  fetchImpl: typeof fetch
-  model: string
-  organizationId: string
-  requestBody: Record<string, unknown>
-  signal: AbortSignal
-  startedAt: number
-  templateId: string
-}): Promise<Response> {
-  for (let attempt = 1; attempt <= GEMINI_MAX_REQUEST_ATTEMPTS; attempt += 1) {
-    try {
-      const response = await input.fetchImpl(GEMINI_INTERACTIONS_API_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-goog-api-key": input.apiKey
-        },
-        body: JSON.stringify(input.requestBody),
-        signal: input.signal
-      })
-
-      if (
-        response.ok ||
-        !isRetryableGeminiStatus(response.status) ||
-        attempt === GEMINI_MAX_REQUEST_ATTEMPTS
-      ) {
-        return response
-      }
-
-      await waitBeforeFlowRetry(input, attempt, response.status)
-    } catch (error: unknown) {
-      if (
-        isAbortError(error, input.signal) ||
-        attempt === GEMINI_MAX_REQUEST_ATTEMPTS
-      ) {
-        throw error
-      }
-
-      console.warn("template_flow_provider_retry", {
-        actorUserId: input.actorUserId,
-        organizationId: input.organizationId,
-        templateId: input.templateId,
-        model: input.model,
-        attempt,
-        status: null,
-        durationMs: Math.round(performance.now() - input.startedAt),
-        reason: error instanceof Error ? error.message : "Unknown network error"
-      })
-      await input.delayImpl(calculateRetryDelayMs(attempt), input.signal)
-    }
-  }
-
-  throw new Error("Gemini request exhausted all attempts.")
-}
-
-async function waitBeforeFlowRetry(
-  input: Parameters<typeof fetchFlowInteraction>[0],
-  attempt: number,
-  status: number
-): Promise<void> {
-  const delayMs = calculateRetryDelayMs(attempt)
-
-  console.warn("template_flow_provider_retry", {
-    actorUserId: input.actorUserId,
-    organizationId: input.organizationId,
-    templateId: input.templateId,
-    model: input.model,
-    attempt,
-    status,
-    delayMs,
-    durationMs: Math.round(performance.now() - input.startedAt)
-  })
-  await input.delayImpl(delayMs, input.signal)
-}
-
-function isRetryableGeminiStatus(status: number): boolean {
-  return status === 408 || status >= 500
-}
-
-function calculateRetryDelayMs(attempt: number): number {
-  const exponentialDelay = GEMINI_RETRY_BASE_DELAY_MS * 2 ** (attempt - 1)
-  const jitterMs = Math.floor(Math.random() * GEMINI_RETRY_BASE_DELAY_MS)
-  return exponentialDelay + jitterMs
-}
-
-function isAbortError(error: unknown, signal: AbortSignal): boolean {
-  return (
-    signal.aborted || (error instanceof Error && error.name === "AbortError")
-  )
-}
-
-function delayWithAbort(
-  durationMs: number,
-  signal: AbortSignal
-): Promise<void> {
-  return new Promise<void>(
-    (resolve: () => void, reject: (reason: Error) => void): void => {
-      if (signal.aborted) {
-        reject(createAbortError())
-        return
-      }
-
-      const onAbort = (): void => {
-        clearTimeout(timeoutId)
-        reject(createAbortError())
-      }
-      const timeoutId = setTimeout((): void => {
-        signal.removeEventListener("abort", onAbort)
-        resolve()
-      }, durationMs)
-
-      signal.addEventListener("abort", onAbort, { once: true })
-    }
-  )
-}
-
-function createAbortError(): Error {
-  const error = new Error("Gemini request aborted.")
-  error.name = "AbortError"
-  return error
-}
-
-function readGeminiOutputText(
-  response: GeminiInteractionResponse
-): string | null {
-  if (response.status !== undefined && response.status !== "completed") {
-    return null
-  }
-
-  for (let index = (response.steps ?? []).length - 1; index >= 0; index -= 1) {
-    const step = response.steps?.[index]
-
-    if (step?.type !== "model_output") {
-      continue
-    }
-
-    const text = (step.content ?? [])
-      .filter(
-        (part): part is { type?: string; text: string } =>
-          part.type === "text" &&
-          typeof part.text === "string" &&
-          part.text.length > 0
-      )
-      .map((part: { type?: string; text: string }): string => part.text)
-      .join("")
-
-    if (text.length > 0) {
-      return text
-    }
-  }
-
-  return null
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

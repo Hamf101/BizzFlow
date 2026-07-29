@@ -68,6 +68,10 @@ describe("organization permissions", () => {
       "submissions:assign",
       "submissions:review",
       "submission_comments:create",
+      "tasks:view",
+      "tasks:create",
+      "tasks:edit",
+      "tasks:assign",
     ])
   })
 
@@ -125,7 +129,7 @@ describe("organization permissions", () => {
     expect(canPerformOrganizationAction("staff", "documents:send")).toBe(true)
     expect(canPerformOrganizationAction("staff", "documents:fill")).toBe(true)
     expect(canPerformOrganizationAction("external_reviewer", "documents:send")).toBe(false)
-    expect(canPerformOrganizationAction("external_reviewer", "documents:fill")).toBe(true)
+    expect(canPerformOrganizationAction("external_reviewer", "documents:fill")).toBe(false)
   })
 
   it("allows external reviewers to view and comment on assigned submissions", () => {
@@ -151,6 +155,28 @@ describe("organization permissions", () => {
     expect(
       canPerformOrganizationAction("external_reviewer", "submission_comments:create")
     ).toBe(true)
+  })
+
+  it("grants task actions to internal roles only, with assignment held to managers", () => {
+    expect(canPerformOrganizationAction("owner_admin", "tasks:view")).toBe(true)
+    expect(canPerformOrganizationAction("owner_admin", "tasks:create")).toBe(true)
+    expect(canPerformOrganizationAction("owner_admin", "tasks:edit")).toBe(true)
+    expect(canPerformOrganizationAction("owner_admin", "tasks:assign")).toBe(true)
+
+    expect(canPerformOrganizationAction("manager", "tasks:view")).toBe(true)
+    expect(canPerformOrganizationAction("manager", "tasks:create")).toBe(true)
+    expect(canPerformOrganizationAction("manager", "tasks:edit")).toBe(true)
+    expect(canPerformOrganizationAction("manager", "tasks:assign")).toBe(true)
+
+    expect(canPerformOrganizationAction("staff", "tasks:view")).toBe(true)
+    expect(canPerformOrganizationAction("staff", "tasks:create")).toBe(true)
+    expect(canPerformOrganizationAction("staff", "tasks:edit")).toBe(true)
+    expect(canPerformOrganizationAction("staff", "tasks:assign")).toBe(false)
+
+    expect(canPerformOrganizationAction("external_reviewer", "tasks:view")).toBe(false)
+    expect(canPerformOrganizationAction("external_reviewer", "tasks:create")).toBe(false)
+    expect(canPerformOrganizationAction("external_reviewer", "tasks:edit")).toBe(false)
+    expect(canPerformOrganizationAction("external_reviewer", "tasks:assign")).toBe(false)
   })
 
   it("allows owner admins to perform every organization permission action", () => {

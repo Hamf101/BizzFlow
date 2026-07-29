@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto"
 
+import type { OrganizationPermissionAction } from "@/lib/permissions"
 import {
   sendDocumentSigningEmail as defaultSendDocumentSigningEmail,
   DocumentSigningEmailServiceError,
@@ -18,12 +19,14 @@ import type {
   ResendDocumentSigningInvitationInput,
   SaveGeneratedDocumentAnswersInput,
   SendDocumentForSigningInput,
+  SigningServiceClient,
 } from "@/services/document-signing/contracts"
 import {
   normalizeOptionalDrawing,
   normalizeRequiredDrawing,
 } from "@/services/document-signing/drawing-validation"
 import {
+  createDatabaseError,
   DocumentSigningServiceError,
   runSigningOperation,
 } from "@/services/document-signing/errors"
@@ -38,10 +41,12 @@ import {
   markSigningRecipientViewed,
   mergeGeneratedDocumentAnswers,
   refreshSigningRecipientLink,
-  requirePermission,
   resolveSigningClient,
   startSigningWorkflow,
 } from "@/services/document-signing/persistence"
+import { requireDocumentAccess } from "@/services/documents/access-service"
+import { DocumentServiceError } from "@/services/documents/errors"
+import type { DocumentAccessLevel } from "@/types/document"
 import {
   assertNewRecipientEmails,
   normalizeRecipientInputs,
@@ -70,6 +75,11 @@ type PendingInvitation = {
   row: DocumentSigningRecipientRow
 }
 
+type SigningDocumentStateRow = {
+  lifecycle_state?: unknown
+  archived_at?: unknown
+}
+
 /**
  * Loads a generated document, shared answers, and recipients for a member.
  *
@@ -88,18 +98,30 @@ export async function getGeneratedDocumentSigningView(
     async (): Promise<GeneratedDocumentSigningView> => {
       const client = resolveSigningClient(deps.client)
 
-      await requirePermission(
+      const accessLevel = await requireMemberDocumentAccess(
         client,
         input.organizationId,
+        input.documentId,
         input.actorUserId,
+        "viewer",
+        "read",
         "documents:view",
         "You cannot view this document."
       )
-      return loadGeneratedDocumentView(
+      await requireMemberSigningDocumentLifecycle(
+        client,
+        input.organizationId,
+        input.documentId,
+        "read",
+        "Archived documents cannot be changed."
+      )
+      const view = await loadGeneratedDocumentView(
         client,
         input.organizationId,
         input.documentId
       )
+
+      return { ...view, accessLevel }
     }
   )
 }
@@ -126,12 +148,22 @@ export async function saveGeneratedDocumentAnswers(
     async (): Promise<GeneratedDocumentSigningView> => {
       const client = resolveSigningClient(deps.client)
 
-      await requirePermission(
+      await requireMemberDocumentAccess(
         client,
         input.organizationId,
+        input.documentId,
         input.actorUserId,
+        "contributor",
+        "mutation",
         "documents:fill",
         "You cannot fill this document."
+      )
+      await requireMemberSigningDocumentLifecycle(
+        client,
+        input.organizationId,
+        input.documentId,
+        "mutation",
+        "Archived documents cannot be changed."
       )
       const view = await loadGeneratedDocumentView(
         client,
@@ -198,12 +230,22 @@ export async function sendDocumentForSigning(
     async (): Promise<SendDocumentForSigningResult> => {
       const client = resolveSigningClient(deps.client)
 
-      await requirePermission(
+      await requireMemberDocumentAccess(
         client,
         input.organizationId,
+        input.documentId,
         input.actorUserId,
+        "contributor",
+        "mutation",
         "documents:send",
         "You cannot send documents for signing."
+      )
+      await requireMemberSigningDocumentLifecycle(
+        client,
+        input.organizationId,
+        input.documentId,
+        "mutation",
+        "Archived documents cannot be sent for signing."
       )
       const view = await loadGeneratedDocumentView(
         client,
@@ -371,12 +413,22 @@ export async function resendDocumentSigningInvitation(
     async (): Promise<DocumentSigningRecipient> => {
       const client = resolveSigningClient(deps.client)
 
-      await requirePermission(
+      await requireMemberDocumentAccess(
         client,
         input.organizationId,
+        input.documentId,
         input.actorUserId,
+        "contributor",
+        "mutation",
         "documents:send",
         "You cannot send documents for signing."
+      )
+      await requireMemberSigningDocumentLifecycle(
+        client,
+        input.organizationId,
+        input.documentId,
+        "mutation",
+        "Archived documents cannot be sent for signing."
       )
       const view = await loadGeneratedDocumentView(
         client,
@@ -570,5 +622,107 @@ export async function completePublicDocumentSigning(
       const updatedRecipient = await loadRecipientByToken(client, tokenHash)
       return loadPublicSigningView(client, updatedRecipient)
     }
+  )
+}
+
+async function requireMemberDocumentAccess(
+  client: SigningServiceClient,
+  organizationId: string,
+  documentId: string,
+  actorUserId: string,
+  requiredAccess: DocumentAccessLevel,
+  operation: "read" | "mutation",
+  organizationAction: OrganizationPermissionAction,
+  rejectionMessage: string
+): Promise<DocumentAccessLevel> {
+  try {
+    return await requireDocumentAccess(
+      {
+        organizationId,
+        documentId,
+        actorUserId,
+        requiredAccess,
+        operation,
+        requiredOrganizationPermissionAction: organizationAction,
+      },
+      client
+    )
+  } catch (error: unknown) {
+    if (error instanceof DocumentServiceError) {
+      throw new DocumentSigningServiceError(
+        error.statusCode === 403 ? rejectionMessage : error.message,
+        error.statusCode
+      )
+    }
+
+    throw error
+  }
+}
+
+async function requireMemberSigningDocumentLifecycle(
+  client: SigningServiceClient,
+  organizationId: string,
+  documentId: string,
+  operation: "read" | "mutation",
+  inactiveMessage: string
+): Promise<void> {
+  const { data, error } = await client
+    .from("documents")
+    .select("lifecycle_state,archived_at")
+    .eq("id", documentId)
+    .eq("org_id", organizationId)
+    .maybeSingle()
+
+  if (error) {
+    throw createDatabaseError(error, "Unable to load generated document.")
+  }
+
+  if (!data) {
+    throw new DocumentSigningServiceError(
+      "Generated document was not found.",
+      404
+    )
+  }
+
+  const lifecycleState = normalizeSigningDocumentLifecycle(
+    data as SigningDocumentStateRow
+  )
+
+  if (
+    lifecycleState === "trashed" ||
+    lifecycleState === "purge_pending"
+  ) {
+    throw new DocumentSigningServiceError(
+      "Generated document was not found.",
+      404
+    )
+  }
+
+  if (operation === "mutation" && lifecycleState !== "active") {
+    throw new DocumentSigningServiceError(inactiveMessage, 409)
+  }
+}
+
+function normalizeSigningDocumentLifecycle(
+  document: SigningDocumentStateRow
+): "active" | "archived" | "trashed" | "purge_pending" {
+  const lifecycleState = document.lifecycle_state
+
+  if (
+    lifecycleState === "active" ||
+    lifecycleState === "archived" ||
+    lifecycleState === "trashed" ||
+    lifecycleState === "purge_pending"
+  ) {
+    return lifecycleState
+  }
+
+  if (lifecycleState === undefined || lifecycleState === null) {
+    return document.archived_at == null ? "active" : "archived"
+  }
+
+  throw new DocumentSigningServiceError(
+    "Database returned an unsupported document lifecycle state.",
+    500
   )
 }

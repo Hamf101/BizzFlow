@@ -4,6 +4,7 @@ import {
   AuthenticationError,
   getAuthenticatedUser,
 } from "@/lib/auth"
+import { checkRateLimit, RateLimitError } from "@/lib/rate-limit"
 import {
   completeDocumentUpload,
   createDocumentDownloadUrl,
@@ -31,6 +32,13 @@ vi.mock("@/lib/auth", () => {
   }
 })
 
+// Keeps the real RateLimitError so the route mappers' instanceof checks still
+// match, while letting each test drive the check's outcome.
+vi.mock("@/lib/rate-limit", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/rate-limit")>()),
+  checkRateLimit: vi.fn(),
+}))
+
 vi.mock("@/services/document-service", () => {
   class MockDocumentServiceError extends Error {
     readonly statusCode: number
@@ -54,6 +62,7 @@ vi.mock("@/services/document-service", () => {
 describe("document API routes", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.mocked(checkRateLimit).mockResolvedValue(undefined)
     vi.mocked(getAuthenticatedUser).mockResolvedValue({
       id: "user-1",
       email: "owner@example.com",
@@ -91,6 +100,25 @@ describe("document API routes", () => {
       contentType: "application/pdf",
       byteSize: 1024,
     })
+  })
+
+  it("answers a throttled upload with 429 and a Retry-After hint", async () => {
+    vi.spyOn(console, "warn").mockImplementation((): void => {})
+    vi.mocked(checkRateLimit).mockRejectedValue(new RateLimitError(17))
+
+    const response = await uploadUrlPost(
+      jsonRequest("http://localhost/api/documents/upload-url", {
+        organizationId: "org-1",
+      })
+    )
+
+    expect(response.status).toBe(429)
+    expect(response.headers.get("Retry-After")).toBe("17")
+    await expect(response.json()).resolves.toEqual({
+      error: "Too many requests. Try again shortly.",
+    })
+    // The budget is enforced before the body is parsed on the caller's behalf.
+    expect(createDocumentUploadUrl).not.toHaveBeenCalled()
   })
 
   it("rejects cross-origin JSON mutation requests before calling services", async () => {

@@ -8,6 +8,7 @@ const PROTECTED_PREFIXES: readonly string[] = [
   "/dashboard",
   "/documents",
   "/people",
+  "/submissions",
   "/templates",
 ]
 

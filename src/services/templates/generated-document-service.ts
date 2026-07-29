@@ -3,6 +3,12 @@ import {
   type GeneratedDocumentRow
 } from "@/services/generated-documents/generated-document-persistence"
 import {
+  getEffectiveDocumentAccess,
+  requireDocumentAccess,
+  requireFolderAccess,
+} from "@/services/documents/access-service"
+import { DocumentServiceError } from "@/services/documents/errors"
+import {
   createBlankTemplateContent,
   parseTemplateContent,
   type DocumentRecentAccessRow,
@@ -15,6 +21,7 @@ import type {
   CreateGeneratedDocumentInput,
   ListRecentDocumentsInput,
   RecordDocumentRecentAccessInput,
+  TemplateServiceClient,
   TemplateServiceDeps
 } from "./contracts"
 import { TemplateServiceError } from "./errors"
@@ -43,6 +50,7 @@ type RecentDocumentRow = Record<string, unknown> & {
   title: string
   description: string | null
   source_kind: string
+  lifecycle_state: string
   archived_at: string | null
 }
 
@@ -82,6 +90,12 @@ export async function createGeneratedDocument(
       const folderId = normalizeNullableId(input.folderId)
 
       if (folderId) {
+        await requireTemplateFolderContributor(
+          client,
+          input.organizationId,
+          folderId,
+          input.actorUserId
+        )
         await requireActiveFolder(client, input.organizationId, folderId)
       }
 
@@ -229,6 +243,16 @@ export async function recordDocumentRecentAccess(
         "documents:view",
         "You cannot view documents."
       )
+      await requireTemplateDocumentAccess(
+        client,
+        {
+          actorUserId: input.actorUserId,
+          organizationId: input.organizationId,
+          documentId: input.documentId,
+          requiredAccess: "viewer",
+          operation: "read",
+        }
+      )
       await requireTenantDocument(
         client,
         input.organizationId,
@@ -311,7 +335,7 @@ export async function listRecentDocuments(
 
       const { data: documentData, error: documentError } = await client
         .from("documents")
-        .select("id,org_id,folder_id,title,description,source_kind,archived_at")
+        .select("id,org_id,folder_id,title,description,source_kind,lifecycle_state,archived_at")
         .eq("org_id", input.organizationId)
         .in(
           "id",
@@ -319,7 +343,7 @@ export async function listRecentDocuments(
             (row: DocumentRecentAccessRow): string => row.document_id
           )
         )
-        .is("archived_at", null)
+        .eq("lifecycle_state", "active")
 
       if (documentError || !documentData) {
         throw createDatabaseError(
@@ -328,9 +352,30 @@ export async function listRecentDocuments(
         )
       }
 
-      const documentById = new Map<string, RecentDocumentRow>(
+      const accessibleDocumentRows = await Promise.all(
         (documentData as RecentDocumentRow[]).map(
-          (row: RecentDocumentRow): [string, RecentDocumentRow] => [row.id, row]
+          async (row: RecentDocumentRow): Promise<RecentDocumentRow | null> => {
+            try {
+              const access = await getEffectiveDocumentAccess(
+                {
+                  actorUserId: input.actorUserId,
+                  organizationId: input.organizationId,
+                  documentId: row.id,
+                },
+                client
+              )
+
+              return access ? row : null
+            } catch (error: unknown) {
+              throw translateDocumentAccessError(error)
+            }
+          }
+        )
+      )
+      const documentById = new Map<string, RecentDocumentRow>(
+        accessibleDocumentRows.flatMap(
+          (row: RecentDocumentRow | null): [string, RecentDocumentRow][] =>
+            row ? [[row.id, row]] : []
         )
       )
 
@@ -358,4 +403,47 @@ export async function listRecentDocuments(
         .slice(0, requestedLimit)
     }
   )
+}
+
+async function requireTemplateFolderContributor(
+  client: TemplateServiceClient,
+  organizationId: string,
+  folderId: string,
+  actorUserId: string
+): Promise<void> {
+  try {
+    await requireFolderAccess(
+      {
+        actorUserId,
+        organizationId,
+        folderId,
+        requiredAccess: "contributor",
+        operation: "mutation",
+      },
+      client
+    )
+  } catch (error: unknown) {
+    throw translateDocumentAccessError(error)
+  }
+}
+
+async function requireTemplateDocumentAccess(
+  client: TemplateServiceClient,
+  input: Parameters<typeof requireDocumentAccess>[0]
+): Promise<void> {
+  try {
+    await requireDocumentAccess(input, client)
+  } catch (error: unknown) {
+    throw translateDocumentAccessError(error)
+  }
+}
+
+function translateDocumentAccessError(error: unknown): Error {
+  if (error instanceof DocumentServiceError) {
+    return new TemplateServiceError(error.message, error.statusCode)
+  }
+
+  return error instanceof Error
+    ? error
+    : new TemplateServiceError("Unable to verify document access.", 500)
 }

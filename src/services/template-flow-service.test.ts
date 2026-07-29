@@ -1,7 +1,17 @@
 import { describe, expect, it, vi } from "vitest"
 
+import type {
+  AiProvider,
+  AiStructuredGenerationRequest,
+  AiStructuredGenerationResult
+} from "@/services/ai/contracts"
+import {
+  AI_PROVIDER_ERROR_CODES,
+  AiProviderError
+} from "@/services/ai/errors"
 import {
   executeTemplateFlow,
+  type ExecuteTemplateFlowInput,
   type TemplateFlowServiceDeps
 } from "@/services/template-flow-service"
 import {
@@ -12,19 +22,14 @@ import type { TemplateFlowMessage } from "@/types/template-flow"
 
 const TEMPLATE_ID = "00000000-0000-4000-8000-000000000010"
 const PARAGRAPH_ID = "00000000-0000-4000-8000-000000000011"
-const GEMINI_MODEL_CANDIDATES = [
-  "gemini-3.6-flash",
-  "gemini-3.5-flash",
-  "gemini-3.5-flash-lite",
-  "gemini-3.1-flash-lite",
-  "gemini-3-flash-preview"
-]
+const TEST_PROVIDER_ID = "test-provider"
+const TEST_MODEL = "test-exact-model"
 
 describe("template Flow service", () => {
   it("applies validated edits, preserves branding bytes, and persists chat", async () => {
     const content = createContent()
-    const fetchImpl = vi.fn<typeof fetch>(async (): Promise<Response> =>
-      geminiResponse({
+    const aiProvider = createTestAiProvider([
+      flowProviderResult({
         assistantMessage:
           "I tightened the introduction and kept your existing logo.",
         needsConfirmation: false,
@@ -53,7 +58,7 @@ describe("template Flow service", () => {
           }
         ]
       })
-    )
+    ])
     const persistMessages = vi.fn(async (): Promise<void> => {})
     const authorizeTemplateManagement = vi.fn(async (): Promise<void> => {})
     const history: TemplateFlowMessage[] = [
@@ -72,7 +77,7 @@ describe("template Flow service", () => {
       createInput(content, "Make the introduction more concise."),
       createDependencies({
         authorizeTemplateManagement,
-        fetchImpl,
+        aiProvider,
         loadHistory: async (): Promise<TemplateFlowMessage[]> => history,
         persistMessages
       })
@@ -99,28 +104,27 @@ describe("template Flow service", () => {
     expect(result.messages[1].operations[1]?.target).toBe("Document branding")
     expect(persistMessages).toHaveBeenCalledTimes(1)
 
-    const requestInit = fetchImpl.mock.calls[0]?.[1]
-    const requestBody = JSON.parse(String(requestInit?.body)) as {
-      input: string
-      store: boolean
-      system_instruction: string
-      response_format: {
-        schema: Record<string, unknown>
-      }
-    }
+    const providerRequest = readProviderRequests(aiProvider)[0]
 
-    expect(fetchImpl.mock.calls[0]?.[0]).toBe(
-      "https://generativelanguage.googleapis.com/v1/interactions"
-    )
-    expect(requestBody.store).toBe(false)
-    expect(requestBody.input).toContain("What would you like to improve?")
-    expect(requestBody.input).not.toContain("aGVsbG8=")
-    expect(requestBody.system_instruction).toContain(
+    expect(providerRequest?.model).toEqual({
+      provider: TEST_PROVIDER_ID,
+      model: TEST_MODEL
+    })
+    expect(providerRequest?.input).toContain("What would you like to improve?")
+    expect(providerRequest?.input).not.toContain("aGVsbG8=")
+    expect(providerRequest?.systemInstruction).toContain(
       "BizFlow's accountable business-document editor"
     )
-    expect(requestBody.system_instruction).toContain("intake forms")
-    expect(requestBody.system_instruction).toContain("payloadJson")
-    const responseSchema = JSON.stringify(requestBody.response_format.schema)
+    expect(providerRequest?.systemInstruction).toContain("intake forms")
+    expect(providerRequest?.systemInstruction).toContain("locked")
+    expect(providerRequest?.systemInstruction).toContain("lower_snake_case")
+    expect(providerRequest?.systemInstruction).toContain("Needs input:")
+    expect(providerRequest?.systemInstruction).toContain(
+      "meaningful choices"
+    )
+    expect(providerRequest?.systemInstruction).toContain("single title")
+    expect(providerRequest?.systemInstruction).toContain("payloadJson")
+    const responseSchema = JSON.stringify(providerRequest?.responseSchema)
     expect(responseSchema).not.toContain('"anyOf"')
     expect(responseSchema).toContain('"payloadJson"')
     expect(responseSchema).toContain('"remove_block"')
@@ -129,8 +133,8 @@ describe("template Flow service", () => {
 
   it("asks before an ambiguous removal and leaves the draft unchanged", async () => {
     const content = createContent()
-    const fetchImpl = vi.fn<typeof fetch>(async (): Promise<Response> =>
-      geminiResponse({
+    const aiProvider = createTestAiProvider([
+      flowProviderResult({
         assistantMessage: "I can shorten the document.",
         needsConfirmation: false,
         confirmationQuestion: "",
@@ -144,11 +148,11 @@ describe("template Flow service", () => {
           }
         ]
       })
-    )
+    ])
 
     const result = await executeTemplateFlow(
       createInput(content, "Make this document shorter."),
-      createDependencies({ fetchImpl })
+      createDependencies({ aiProvider })
     )
 
     expect(result.needsConfirmation).toBe(true)
@@ -158,8 +162,8 @@ describe("template Flow service", () => {
   })
 
   it("keeps appended free-form blocks in provider operation order", async () => {
-    const fetchImpl = vi.fn<typeof fetch>(async (): Promise<Response> =>
-      geminiResponse({
+    const aiProvider = createTestAiProvider([
+      flowProviderResult({
         assistantMessage: "I added the agreement sections in order.",
         needsConfirmation: false,
         confirmationQuestion: "",
@@ -192,11 +196,11 @@ describe("template Flow service", () => {
           }
         ]
       })
-    )
+    ])
 
     const result = await executeTemplateFlow(
       createInput(createContent(), "Add scope and payment sections."),
-      createDependencies({ fetchImpl })
+      createDependencies({ aiProvider })
     )
 
     expect(
@@ -207,8 +211,8 @@ describe("template Flow service", () => {
   })
 
   it("creates a canonical bulleted list in a blank free-form draft", async () => {
-    const fetchImpl = vi.fn<typeof fetch>(async (): Promise<Response> =>
-      geminiResponse({
+    const aiProvider = createTestAiProvider([
+      flowProviderResult({
         assistantMessage: "I added the requested service list.",
         needsConfirmation: false,
         confirmationQuestion: "",
@@ -226,12 +230,12 @@ describe("template Flow service", () => {
           }
         ]
       })
-    )
+    ])
     const content = createBlankTemplateContent()
 
     const result = await executeTemplateFlow(
       createInput(content, "Create a short list of services."),
-      createDependencies({ fetchImpl })
+      createDependencies({ aiProvider })
     )
 
     expect(result.draft.content.blocks).toEqual([
@@ -246,8 +250,8 @@ describe("template Flow service", () => {
 
   it("allows explicit removal while keeping publication state out of scope", async () => {
     const content = createContent()
-    const fetchImpl = vi.fn<typeof fetch>(async (): Promise<Response> =>
-      geminiResponse({
+    const aiProvider = createTestAiProvider([
+      flowProviderResult({
         assistantMessage: "I removed the introduction.",
         needsConfirmation: false,
         confirmationQuestion: "",
@@ -261,11 +265,11 @@ describe("template Flow service", () => {
           }
         ]
       })
-    )
+    ])
 
     const result = await executeTemplateFlow(
       createInput(content, "Delete the introduction."),
-      createDependencies({ fetchImpl })
+      createDependencies({ aiProvider })
     )
 
     expect(result.needsConfirmation).toBe(false)
@@ -275,8 +279,8 @@ describe("template Flow service", () => {
 
   it("requires an explicit logo-removal request even when other deletion is requested", async () => {
     const content = createContent()
-    const fetchImpl = vi.fn<typeof fetch>(async (): Promise<Response> =>
-      geminiResponse({
+    const aiProvider = createTestAiProvider([
+      flowProviderResult({
         assistantMessage: "I removed the requested content.",
         needsConfirmation: false,
         confirmationQuestion: "",
@@ -288,11 +292,11 @@ describe("template Flow service", () => {
           }
         ]
       })
-    )
+    ])
 
     const result = await executeTemplateFlow(
       createInput(content, "Delete the introduction."),
-      createDependencies({ fetchImpl })
+      createDependencies({ aiProvider })
     )
 
     expect(result.needsConfirmation).toBe(true)
@@ -302,221 +306,105 @@ describe("template Flow service", () => {
     )
   })
 
-  it.each([
-    {
-      rateLimitedResponseCount: 1,
-      expectedModels: GEMINI_MODEL_CANDIDATES.slice(0, 2)
-    },
-    {
-      rateLimitedResponseCount: 3,
-      expectedModels: GEMINI_MODEL_CANDIDATES.slice(0, 4)
-    }
-  ])(
-    "completes with a fallback after $rateLimitedResponseCount rate-limited response(s)",
-    async ({ rateLimitedResponseCount, expectedModels }): Promise<void> => {
-      let responseCount = 0
-      const fetchImpl = vi.fn<typeof fetch>(async (): Promise<Response> => {
-        responseCount += 1
-        return responseCount <= rateLimitedResponseCount
-          ? geminiRateLimitResponse()
-          : successfulGeminiResponse()
-      })
+  it("uses the configured provider and exact model without fallback", async () => {
+    const aiProvider = createTestAiProvider([
+      flowProviderResult(successfulFlowPayload())
+    ])
 
-      const result = await executeTemplateFlow(
-        createInput(createBlankTemplateContent(), "Create an agreement."),
-        createDependencies({ fetchImpl })
-      )
-
-      expect(result.needsConfirmation).toBe(false)
-      expect(
-        fetchImpl.mock.calls.map((call): string =>
-          readRequestedModel(call[1])
-        )
-      ).toEqual(expectedModels)
-    }
-  )
-
-  it("tries the exact model order and preserves the safe error when all quotas are exhausted", async () => {
-    const signals: Array<AbortSignal | null | undefined> = []
-    const fetchImpl = vi.fn<typeof fetch>(
-      async (
-        _input: RequestInfo | URL,
-        init?: RequestInit
-      ): Promise<Response> => {
-        signals.push(init?.signal)
-        return geminiRateLimitResponse()
-      }
+    await executeTemplateFlow(
+      createInput(createBlankTemplateContent(), "Create an agreement."),
+      createDependencies({ aiProvider })
     )
+
+    expect(readProviderRequests(aiProvider)).toHaveLength(1)
+    expect(readProviderRequests(aiProvider)[0]?.model).toEqual({
+      provider: TEST_PROVIDER_ID,
+      model: TEST_MODEL
+    })
+  })
+
+  it("surfaces a typed provider quota rejection without another call", async () => {
+    const providerError = new AiProviderError({
+      code: AI_PROVIDER_ERROR_CODES.RATE_LIMITED,
+      message: "Provider quota reached.",
+      model: { provider: TEST_PROVIDER_ID, model: TEST_MODEL },
+      provider: TEST_PROVIDER_ID,
+      retryable: true,
+      statusCode: 429,
+      traceId: "provider-rate-trace"
+    })
+    const aiProvider = createTestAiProvider([providerError])
 
     await expect(
       executeTemplateFlow(
         createInput(createBlankTemplateContent(), "Create an agreement."),
-        createDependencies({ fetchImpl })
+        createDependencies({ aiProvider })
       )
     ).rejects.toMatchObject({
       statusCode: 429,
       message:
-        "Flow has reached the Gemini rate limit. Wait a minute and try again."
+        "Flow has reached the AI service rate limit. Wait a minute and try again."
     })
-    expect(
-      fetchImpl.mock.calls.map((call): string => readRequestedModel(call[1]))
-    ).toEqual(GEMINI_MODEL_CANDIDATES)
-    expect(new Set(signals).size).toBe(1)
+    expect(readProviderRequests(aiProvider)).toHaveLength(1)
   })
 
-  it("skips a duplicate when the configured primary is already a fallback model", async () => {
-    const fetchImpl = vi.fn<typeof fetch>(
-      async (): Promise<Response> => geminiRateLimitResponse()
-    )
-
-    await expect(
-      executeTemplateFlow(
-        createInput(createBlankTemplateContent(), "Create an agreement."),
-        createDependencies({
-          fetchImpl,
-          getConfig: () => ({
-            GEMINI_API_KEY: "test-gemini-key",
-            GEMINI_MODEL: "gemini-3.5-flash",
-            GEMINI_TIMEOUT_MS: 10_000
-          })
-        })
-      )
-    ).rejects.toMatchObject({ statusCode: 429 })
-    expect(
-      fetchImpl.mock.calls.map((call): string => readRequestedModel(call[1]))
-    ).toEqual(GEMINI_MODEL_CANDIDATES.slice(1))
-  })
-
-  it.each([400, 401, 403])(
-    "does not switch models for a non-quota HTTP %i response",
-    async (status: number): Promise<void> => {
-      const fetchImpl = vi.fn<typeof fetch>(
-        async (): Promise<Response> => new Response("Rejected", { status })
-      )
-
-      await expect(
-        executeTemplateFlow(
-          createInput(createBlankTemplateContent(), "Create an agreement."),
-          createDependencies({ fetchImpl })
-        )
-      ).rejects.toMatchObject({
-        statusCode: 502,
-        message: "Flow could not update the document. Try again shortly."
-      })
-      expect(fetchImpl).toHaveBeenCalledTimes(1)
-      expect(readRequestedModel(fetchImpl.mock.calls[0]?.[1])).toBe(
-        "gemini-3.6-flash"
-      )
-    }
-  )
-
-  it("continues to a supported Gemini fallback when a model is unavailable", async () => {
-    let responseCount = 0
-    const fetchImpl = vi.fn<typeof fetch>(async (): Promise<Response> => {
-      responseCount += 1
-
-      return responseCount === 1
-        ? new Response("Model unavailable", { status: 404 })
-        : successfulGeminiResponse()
-    })
-
-    await executeTemplateFlow(
-      createInput(createBlankTemplateContent(), "Create an agreement."),
-      createDependencies({ fetchImpl })
-    )
-
-    expect(
-      fetchImpl.mock.calls.map((call): string => readRequestedModel(call[1]))
-    ).toEqual(GEMINI_MODEL_CANDIDATES.slice(0, 2))
-  })
-
-  it.each([408, 503])(
-    "retries HTTP %i on the same model without falling back",
-    async (status: number): Promise<void> => {
-      const fetchImpl = vi.fn<typeof fetch>(
-        async (): Promise<Response> => new Response("Retry", { status })
-      )
-
-      await expect(
-        executeTemplateFlow(
-          createInput(createBlankTemplateContent(), "Create an agreement."),
-          createDependencies({ fetchImpl })
-        )
-      ).rejects.toMatchObject({ statusCode: 502 })
-      expect(
-        fetchImpl.mock.calls.map((call): string =>
-          readRequestedModel(call[1])
-        )
-      ).toEqual([
-        "gemini-3.6-flash",
-        "gemini-3.6-flash",
-        "gemini-3.6-flash"
-      ])
-    }
-  )
-
-  it("retries network failures on the same model without falling back", async () => {
-    let requestCount = 0
-    const fetchImpl = vi.fn<typeof fetch>(async (): Promise<Response> => {
-      requestCount += 1
-
-      if (requestCount < 3) {
-        throw new TypeError("Network unavailable")
+  it("performs one bounded semantic repair on the same model", async () => {
+    const aiProvider = createTestAiProvider([
+      {
+        ...flowProviderResult(successfulFlowPayload()),
+        text: "not-json",
+        traceId: "initial-invalid-trace",
+        usage: {
+          inputTokens: 100,
+          outputTokens: 20,
+          totalTokens: 120
+        }
+      },
+      {
+        ...flowProviderResult(successfulFlowPayload()),
+        traceId: "repair-success-trace",
+        usage: {
+          inputTokens: 140,
+          outputTokens: 30,
+          totalTokens: 170
+        }
       }
-
-      return successfulGeminiResponse()
-    })
-
-    await executeTemplateFlow(
-      createInput(createBlankTemplateContent(), "Create an agreement."),
-      createDependencies({ fetchImpl })
-    )
-
-    expect(
-      fetchImpl.mock.calls.map((call): string => readRequestedModel(call[1]))
-    ).toEqual([
-      "gemini-3.6-flash",
-      "gemini-3.6-flash",
-      "gemini-3.6-flash"
     ])
-  })
-
-  it("logs fallback context and the model that completed the turn", async () => {
-    let responseCount = 0
-    const fetchImpl = vi.fn<typeof fetch>(async (): Promise<Response> => {
-      responseCount += 1
-      return responseCount === 1
-        ? geminiRateLimitResponse()
-        : successfulGeminiResponse()
-    })
     const infoSpy = vi.spyOn(console, "info").mockImplementation((): void => {})
     const warnSpy = vi.spyOn(console, "warn").mockImplementation((): void => {})
 
     try {
       await executeTemplateFlow(
         createInput(createBlankTemplateContent(), "Create an agreement."),
-        createDependencies({ fetchImpl })
+        createDependencies({ aiProvider })
       )
 
-      expect(warnSpy).toHaveBeenCalledWith(
-        "template_flow_provider_fallback",
-        expect.objectContaining({
-          actorUserId: "user-1",
-          organizationId: "org-1",
-          templateId: TEMPLATE_ID,
-          exhaustedModel: "gemini-3.6-flash",
-          nextModel: "gemini-3.5-flash",
-          status: 429,
-          durationMs: expect.any(Number)
-        })
-      )
+      const requests = readProviderRequests(aiProvider)
+      expect(requests).toHaveLength(2)
+      expect(requests.map((request) => request.model)).toEqual([
+        { provider: TEST_PROVIDER_ID, model: TEST_MODEL },
+        { provider: TEST_PROVIDER_ID, model: TEST_MODEL }
+      ])
+      expect(requests[1]?.input).toContain("semanticRepair")
       expect(infoSpy).toHaveBeenCalledWith(
         "template_flow_turn_completed",
         expect.objectContaining({
-          actorUserId: "user-1",
-          organizationId: "org-1",
-          templateId: TEMPLATE_ID,
-          model: "gemini-3.5-flash"
+          provider: TEST_PROVIDER_ID,
+          model: TEST_MODEL,
+          traceId: "repair-success-trace",
+          upstreamCalls: 2,
+          inputTokens: 240,
+          outputTokens: 50,
+          totalTokens: 290
+        })
+      )
+      expect(warnSpy).toHaveBeenCalledWith(
+        "template_flow_provider_output_invalid",
+        expect.objectContaining({
+          provider: TEST_PROVIDER_ID,
+          model: TEST_MODEL,
+          providerCall: 1,
+          issueCode: "invalid_json"
         })
       )
     } finally {
@@ -525,9 +413,53 @@ describe("template Flow service", () => {
     }
   })
 
+  it("caps invalid structured output at two upstream calls", async () => {
+    const invalidResult = {
+      ...flowProviderResult(successfulFlowPayload()),
+      text: "not-json"
+    }
+    const aiProvider = createTestAiProvider([invalidResult, invalidResult])
+
+    await expect(
+      executeTemplateFlow(
+        createInput(createBlankTemplateContent(), "Create an agreement."),
+        createDependencies({ aiProvider })
+      )
+    ).rejects.toMatchObject({
+      statusCode: 502,
+      message: "Flow returned changes that failed validation."
+    })
+    expect(readProviderRequests(aiProvider)).toHaveLength(2)
+  })
+
+  it("logs null usage when the provider omits token counts", async () => {
+    const aiProvider = createTestAiProvider([
+      flowProviderResult(successfulFlowPayload())
+    ])
+    const infoSpy = vi.spyOn(console, "info").mockImplementation((): void => {})
+
+    try {
+      await executeTemplateFlow(
+        createInput(createBlankTemplateContent(), "Create an agreement."),
+        createDependencies({ aiProvider })
+      )
+
+      expect(infoSpy).toHaveBeenCalledWith(
+        "template_flow_turn_completed",
+        expect.objectContaining({
+          inputTokens: null,
+          outputTokens: null,
+          totalTokens: null
+        })
+      )
+    } finally {
+      infoSpy.mockRestore()
+    }
+  })
+
   it("rejects the legacy generic-list shape before changing the draft", async () => {
-    const fetchImpl = vi.fn<typeof fetch>(async (): Promise<Response> =>
-      geminiResponse({
+    const aiProvider = createTestAiProvider([
+      flowProviderResult({
         assistantMessage: "I added a list.",
         needsConfirmation: false,
         confirmationQuestion: "",
@@ -546,12 +478,12 @@ describe("template Flow service", () => {
           }
         ]
       })
-    )
+    ])
 
     await expect(
       executeTemplateFlow(
         createInput(createBlankTemplateContent(), "Add a service list."),
-        createDependencies({ fetchImpl })
+        createDependencies({ aiProvider })
       )
     ).rejects.toMatchObject({
       statusCode: 502,
@@ -560,8 +492,8 @@ describe("template Flow service", () => {
   })
 
   it("rejects unreadable operation payload JSON before changing the draft", async () => {
-    const fetchImpl = vi.fn<typeof fetch>(async (): Promise<Response> =>
-      geminiRawResponse({
+    const aiProvider = createTestAiProvider([
+      rawFlowProviderResult({
         assistantMessage: "I renamed the document.",
         needsConfirmation: false,
         confirmationQuestion: "",
@@ -573,12 +505,12 @@ describe("template Flow service", () => {
           }
         ]
       })
-    )
+    ])
 
     await expect(
       executeTemplateFlow(
         createInput(createBlankTemplateContent(), "Rename the document."),
-        createDependencies({ fetchImpl })
+        createDependencies({ aiProvider })
       )
     ).rejects.toMatchObject({
       statusCode: 502,
@@ -601,7 +533,10 @@ function createContent(): TemplateContent {
   return content
 }
 
-function createInput(content: TemplateContent, instruction: string) {
+function createInput(
+  content: TemplateContent,
+  instruction: string
+): ExecuteTemplateFlowInput {
   return {
     actorUserId: "user-1",
     organizationId: "org-1",
@@ -615,10 +550,20 @@ function createInput(content: TemplateContent, instruction: string) {
   }
 }
 
+type TestTemplateFlowServiceDeps = Partial<TemplateFlowServiceDeps> & {
+  aiProvider?: AiProvider
+}
+
 function createDependencies(
-  overrides: Partial<TemplateFlowServiceDeps>
+  overrides: TestTemplateFlowServiceDeps
 ): TemplateFlowServiceDeps {
   let idSequence = 100
+  const {
+    aiProvider = createTestAiProvider([
+      flowProviderResult(successfulFlowPayload())
+    ]),
+    ...serviceOverrides
+  } = overrides
 
   return {
     authorizeTemplateManagement: async (): Promise<void> => {},
@@ -627,38 +572,47 @@ function createDependencies(
       idSequence += 1
       return `00000000-0000-4000-8000-${suffix}`
     },
-    delayImpl: async (): Promise<void> => {},
-    getConfig: () => ({
-      GEMINI_API_KEY: "test-gemini-key",
-      GEMINI_MODEL: "gemini-3.6-flash",
-      GEMINI_TIMEOUT_MS: 10_000
+    createTraceId: (): string => "local-flow-trace",
+    getAiRuntime: () => ({
+      provider: aiProvider,
+      model: {
+        provider: TEST_PROVIDER_ID,
+        model: TEST_MODEL
+      }
     }),
     loadHistory: async (): Promise<TemplateFlowMessage[]> => [],
     now: () => new Date("2026-07-23T17:30:00.000Z"),
     persistMessages: async (): Promise<void> => {},
     resolveAuthorName: async (): Promise<string> => "Alex Morgan",
-    ...overrides
+    ...serviceOverrides
   }
 }
 
-type TestGeminiOperation = {
+type TestFlowOperation = {
   type: string
   summary: string
   payload: unknown
 }
 
-type TestGeminiPayload = {
+type TestFlowPayload = {
   assistantMessage: string
   needsConfirmation: boolean
   confirmationQuestion: string
-  operations: TestGeminiOperation[]
+  operations: TestFlowOperation[]
 }
 
-function geminiResponse(payload: TestGeminiPayload): Response {
+const testProviderRequests = new WeakMap<
+  AiProvider,
+  AiStructuredGenerationRequest[]
+>()
+
+function flowProviderResult(
+  payload: TestFlowPayload
+): AiStructuredGenerationResult {
   const providerPayload = {
     ...payload,
     operations: payload.operations.map(
-      (operation: TestGeminiOperation): Record<string, string> => ({
+      (operation: TestFlowOperation): Record<string, string> => ({
         type: operation.type,
         summary: operation.summary,
         payloadJson: JSON.stringify(operation.payload)
@@ -666,54 +620,70 @@ function geminiResponse(payload: TestGeminiPayload): Response {
     )
   }
 
-  return geminiRawResponse(providerPayload)
+  return rawFlowProviderResult(providerPayload)
 }
 
-function geminiRawResponse(payload: unknown): Response {
-  return new Response(
-    JSON.stringify({
-      status: "completed",
-      steps: [
-        {
-          type: "model_output",
-          content: [{ type: "text", text: JSON.stringify(payload) }]
-        }
-      ]
-    }),
-    {
-      headers: { "Content-Type": "application/json" },
-      status: 200
+function rawFlowProviderResult(
+  payload: unknown
+): AiStructuredGenerationResult {
+  return {
+    model: {
+      provider: TEST_PROVIDER_ID,
+      model: TEST_MODEL
+    },
+    text: JSON.stringify(payload),
+    traceId: "provider-success-trace",
+    upstreamCalls: 1,
+    usage: {
+      inputTokens: null,
+      outputTokens: null,
+      totalTokens: null
     }
-  )
+  }
 }
 
-function successfulGeminiResponse(): Response {
-  return geminiResponse({
+function successfulFlowPayload(): TestFlowPayload {
+  return {
     assistantMessage: "I created the agreement.",
     needsConfirmation: false,
     confirmationQuestion: "",
     operations: []
-  })
-}
-
-function geminiRateLimitResponse(): Response {
-  return new Response(
-    JSON.stringify({
-      error: {
-        code: "resource_exhausted",
-        message: "Quota exceeded."
-      }
-    }),
-    {
-      headers: { "Content-Type": "application/json" },
-      status: 429
-    }
-  )
-}
-
-function readRequestedModel(requestInit: RequestInit | undefined): string {
-  const requestBody = JSON.parse(String(requestInit?.body)) as {
-    model: string
   }
-  return requestBody.model
+}
+
+function createTestAiProvider(
+  sequence: Array<AiStructuredGenerationResult | AiProviderError>
+): AiProvider {
+  const requests: AiStructuredGenerationRequest[] = []
+  let responseIndex = 0
+  const provider: AiProvider = {
+    id: TEST_PROVIDER_ID,
+    async generateStructured(
+      request: AiStructuredGenerationRequest
+    ): Promise<AiStructuredGenerationResult> {
+      requests.push(request)
+      const result =
+        sequence[Math.min(responseIndex, Math.max(sequence.length - 1, 0))]
+      responseIndex += 1
+
+      if (result instanceof AiProviderError) {
+        throw result
+      }
+
+      if (result === undefined) {
+        throw new Error("The test AI provider has no configured result.")
+      }
+
+      return result
+    }
+  }
+
+  testProviderRequests.set(provider, requests)
+  return provider
+}
+
+function readProviderRequests(
+  provider: AiProvider
+): AiStructuredGenerationRequest[] {
+  return testProviderRequests.get(provider) ?? []
 }

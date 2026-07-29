@@ -27,7 +27,11 @@ pnpm-debug.log*
 .vercel/
 .supabase/
 supabase/.temp/
+.agent/
 .agents/
+
+# Internal security material — not for a public repo
+artifacts/audits/
 skills-lock.json
 
 # Tests and coverage

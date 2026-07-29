@@ -177,6 +177,34 @@ export class FakeClient {
     functionName: string,
     args: Record<string, unknown>
   ): Promise<FakeResult> {
+    if (functionName === "get_document_access_level") {
+      const membership = this.tables.organization_memberships.find(
+        (row: FakeRow): boolean =>
+          row.org_id === args.target_org_id &&
+          row.user_id === args.target_actor_user_id &&
+          row.status === "active"
+      )
+      const document = this.tables.documents.find(
+        (row: FakeRow): boolean =>
+          row.id === args.target_document_id &&
+          row.org_id === args.target_org_id
+      )
+      const effectiveAccess = this.tables.document_effective_access.find(
+        (row: FakeRow): boolean =>
+          row.org_id === args.target_org_id &&
+          row.document_id === args.target_document_id &&
+          row.user_id === args.target_actor_user_id
+      )
+
+      return {
+        data:
+          membership && document
+            ? (effectiveAccess?.access_level ?? null)
+            : null,
+        error: null
+      }
+    }
+
     if (functionName === "merge_generated_document_answers") {
       this.beforeMergeGeneratedDocumentAnswers?.()
       const answer = this.tables.document_answers.find(
@@ -272,6 +300,14 @@ export function createBaseTables(): FakeTables {
         status: "active"
       }
     ],
+    document_effective_access: [
+      {
+        org_id: ORG_ID,
+        document_id: DOCUMENT_ID,
+        user_id: MANAGER_ID,
+        access_level: "contributor"
+      }
+    ],
     organizations: [{ id: ORG_ID, name: "BizFlow Studio" }],
     documents: [
       {
@@ -284,9 +320,12 @@ export function createBaseTables(): FakeTables {
         template_id: null,
         template_revision: null,
         template_snapshot: createTemplateContent(),
+        lifecycle_state: "active",
         created_by: MANAGER_ID,
         updated_by: MANAGER_ID,
         archived_at: null,
+        trashed_at: null,
+        purge_after: null,
         created_at: "2026-07-17T19:00:00.000Z",
         updated_at: "2026-07-17T19:00:00.000Z"
       }

@@ -31,6 +31,10 @@ export const ORGANIZATION_PERMISSION_ACTIONS = [
   "submissions:assign",
   "submissions:review",
   "submission_comments:create",
+  "tasks:view",
+  "tasks:create",
+  "tasks:edit",
+  "tasks:assign",
 ] as const
 
 export type OrganizationPermissionAction =
@@ -67,6 +71,10 @@ const permissionsByRole: Record<
     "submissions:assign",
     "submissions:review",
     "submission_comments:create",
+    "tasks:view",
+    "tasks:create",
+    "tasks:edit",
+    "tasks:assign",
   ],
   staff: [
     "people:view",
@@ -81,11 +89,13 @@ const permissionsByRole: Record<
     "submissions:create",
     "submissions:edit",
     "submission_comments:create",
+    "tasks:view",
+    "tasks:create",
+    "tasks:edit",
   ],
   external_reviewer: [
     "people:view",
     "documents:view",
-    "documents:fill",
     "document_comments:create",
     "submissions:view",
     "submission_comments:create",

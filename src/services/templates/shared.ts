@@ -121,7 +121,7 @@ export async function requireActiveFolder(
     .select("id")
     .eq("id", folderId)
     .eq("org_id", organizationId)
-    .is("archived_at", null)
+    .eq("lifecycle_state", "active")
     .maybeSingle()
 
   if (error) {
@@ -143,6 +143,7 @@ export async function requireTenantDocument(
     .select("id")
     .eq("id", documentId)
     .eq("org_id", organizationId)
+    .eq("lifecycle_state", "active")
     .maybeSingle()
 
   if (error) {

@@ -1,7 +1,7 @@
 import type { AdminSupabaseClient } from "@/lib/supabase/admin"
 import type { TemplateContent } from "@/types/template"
 
-export type TemplateServiceClient = Pick<AdminSupabaseClient, "from">
+export type TemplateServiceClient = Pick<AdminSupabaseClient, "from" | "rpc">
 
 export type ListDocumentTemplatesInput = {
   actorUserId: string

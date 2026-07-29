@@ -58,6 +58,18 @@ export function createDatabaseError(
     )
   }
 
+  if (
+    error?.code === "P0001" &&
+    error.message
+      ?.toLowerCase()
+      .includes("only active documents may be modified")
+  ) {
+    return new DocumentSigningServiceError(
+      "Archived documents cannot be changed.",
+      409
+    )
+  }
+
   if (error?.code === "23514") {
     return new DocumentSigningServiceError(
       error.message ?? "Signing state changed before it could be saved.",

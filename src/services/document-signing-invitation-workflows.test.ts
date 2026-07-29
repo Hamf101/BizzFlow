@@ -25,6 +25,106 @@ const RECIPIENT_TWO_ID = "40000000-0000-4000-8000-000000000002"
 const TOKEN_TWO = "token_two_abcdefghijklmnopqrstuvwxyz123456"
 
 describe("document signing invitation, token, and public workflows", () => {
+  it("requires Contributor access before sending signing invitations", async () => {
+    const tables = createBaseTables()
+    tables.document_effective_access[0].access_level = "viewer"
+    const client = new FakeClient(tables)
+    const sendDocumentSigningEmail = vi.fn(async (): Promise<void> => {})
+
+    await expect(
+      sendDocumentForSigning(
+        {
+          actorUserId: MANAGER_ID,
+          organizationId: ORG_ID,
+          documentId: DOCUMENT_ID,
+          recipients: [
+            { name: "Avery Morgan", email: "avery@example.com" },
+          ],
+        },
+        {
+          client: client as never,
+          createId: (): string => RECIPIENT_ONE_ID,
+          createToken: (): string => TOKEN_ONE,
+          now: (): Date => NOW,
+          sendDocumentSigningEmail,
+        }
+      )
+    ).rejects.toMatchObject({
+      statusCode: 403,
+      message: "You cannot send documents for signing.",
+    })
+
+    expect(tables.document_signing_recipients).toHaveLength(0)
+    expect(sendDocumentSigningEmail).not.toHaveBeenCalled()
+  })
+
+  it("keeps the organization-role ceiling for signing invitations", async () => {
+    const tables = createBaseTables()
+    tables.organization_memberships[0].role = "external_reviewer"
+    const client = new FakeClient(tables)
+    const sendDocumentSigningEmail = vi.fn(async (): Promise<void> => {})
+
+    await expect(
+      sendDocumentForSigning(
+        {
+          actorUserId: MANAGER_ID,
+          organizationId: ORG_ID,
+          documentId: DOCUMENT_ID,
+          recipients: [
+            { name: "Avery Morgan", email: "avery@example.com" },
+          ],
+        },
+        {
+          client: client as never,
+          createId: (): string => RECIPIENT_ONE_ID,
+          createToken: (): string => TOKEN_ONE,
+          now: (): Date => NOW,
+          sendDocumentSigningEmail,
+        }
+      )
+    ).rejects.toMatchObject({
+      statusCode: 403,
+      message: "You cannot send documents for signing.",
+    })
+
+    expect(tables.document_signing_recipients).toHaveLength(0)
+    expect(sendDocumentSigningEmail).not.toHaveBeenCalled()
+  })
+
+  it("rejects sending invitations for a non-active document", async () => {
+    const tables = createBaseTables()
+    tables.documents[0].lifecycle_state = "archived"
+    tables.documents[0].archived_at = "2026-07-18T12:00:00.000Z"
+    const client = new FakeClient(tables)
+    const sendDocumentSigningEmail = vi.fn(async (): Promise<void> => {})
+
+    await expect(
+      sendDocumentForSigning(
+        {
+          actorUserId: MANAGER_ID,
+          organizationId: ORG_ID,
+          documentId: DOCUMENT_ID,
+          recipients: [
+            { name: "Avery Morgan", email: "avery@example.com" },
+          ],
+        },
+        {
+          client: client as never,
+          createId: (): string => RECIPIENT_ONE_ID,
+          createToken: (): string => TOKEN_ONE,
+          now: (): Date => NOW,
+          sendDocumentSigningEmail,
+        }
+      )
+    ).rejects.toMatchObject({
+      statusCode: 409,
+      message: "Archived documents cannot be sent for signing.",
+    })
+
+    expect(tables.document_signing_recipients).toHaveLength(0)
+    expect(sendDocumentSigningEmail).not.toHaveBeenCalled()
+  })
+
   it("stores only token hashes and emails each raw private link token", async () => {
     const client = new FakeClient(createBaseTables())
     const sendDocumentSigningEmail = vi.fn(async (): Promise<void> => {})
@@ -113,6 +213,47 @@ describe("document signing invitation, token, and public workflows", () => {
         recipientId: RECIPIENT_ONE_ID,
         token: TOKEN_TWO,
       })
+    )
+  })
+
+  it("rejects resending an invitation for a non-active document", async () => {
+    const tables = createBaseTables()
+    tables.documents[0].lifecycle_state = "archived"
+    tables.documents[0].archived_at = "2026-07-18T12:00:00.000Z"
+    tables.document_signing_recipients.push(
+      createRecipientRow(
+        RECIPIENT_ONE_ID,
+        TOKEN_ONE,
+        "Avery Morgan",
+        "avery@example.com"
+      )
+    )
+    const client = new FakeClient(tables)
+    const sendDocumentSigningEmail = vi.fn(async (): Promise<void> => {})
+
+    await expect(
+      resendDocumentSigningInvitation(
+        {
+          actorUserId: MANAGER_ID,
+          organizationId: ORG_ID,
+          documentId: DOCUMENT_ID,
+          recipientId: RECIPIENT_ONE_ID,
+        },
+        {
+          client: client as never,
+          createToken: (): string => TOKEN_TWO,
+          now: (): Date => NOW,
+          sendDocumentSigningEmail,
+        }
+      )
+    ).rejects.toMatchObject({
+      statusCode: 409,
+      message: "Archived documents cannot be sent for signing.",
+    })
+
+    expect(sendDocumentSigningEmail).not.toHaveBeenCalled()
+    expect(tables.document_signing_recipients[0].token_hash).toBe(
+      hashToken(TOKEN_ONE)
     )
   })
 

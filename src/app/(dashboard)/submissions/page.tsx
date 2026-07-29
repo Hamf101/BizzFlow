@@ -27,8 +27,6 @@ import { listInternalSubmissions } from "@/services/submission-service"
 import type { OrganizationMember } from "@/types/organization"
 import type { Submission } from "@/types/submission"
 
-export const dynamic = "force-dynamic"
-
 type SubmissionsSearchParams = Promise<{
   error?: string
   message?: string

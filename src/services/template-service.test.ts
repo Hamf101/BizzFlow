@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import {
+  createDocumentTemplate,
   createGeneratedDocument,
   listDocumentTemplates,
   listRecentDocuments,
@@ -11,8 +12,12 @@ import {
 import {
   createBlankTemplateContent,
   parseTemplateContent,
-  type TemplateContent
+  type TemplateBlock,
+  type TemplateContent,
+  type TemplateContentV2,
+  type TemplateContentV3
 } from "@/types/template"
+import { insertTemplateBlock } from "@/types/template-structure"
 
 type FakeRow = Record<string, unknown>
 type FakeTables = Record<string, FakeRow[]>
@@ -34,6 +39,46 @@ const DRAFT_TEMPLATE_ID = "30000000-0000-4000-8000-000000000002"
 const DOCUMENT_ID = "40000000-0000-4000-8000-000000000001"
 const SECOND_DOCUMENT_ID = "40000000-0000-4000-8000-000000000002"
 const CREATED_DOCUMENT_ID = "40000000-0000-4000-8000-000000000003"
+
+function createContentWithBlocks(
+  blocks: readonly TemplateBlock[]
+): TemplateContentV3 {
+  return blocks.reduce(
+    (content: TemplateContentV3, block: TemplateBlock): TemplateContentV3 =>
+      insertTemplateBlock(
+        content,
+        content.blocks.at(-1)?.id ?? null,
+        block
+      ),
+    createBlankTemplateContent()
+  )
+}
+
+function createUsableTemplateContent(): TemplateContentV3 {
+  return createContentWithBlocks([
+    {
+      id: "50000000-0000-4000-8000-000000000010",
+      type: "paragraph",
+      text: "Complete the details below.",
+      alignment: "left"
+    }
+  ])
+}
+
+function createLegacyUsableTemplateContent(): TemplateContentV2 {
+  return {
+    schemaVersion: 2,
+    branding: createBlankTemplateContent().branding,
+    blocks: [
+      {
+        id: "50000000-0000-4000-8000-000000000011",
+        type: "paragraph",
+        text: "Legacy template body",
+        alignment: "left"
+      }
+    ]
+  }
+}
 
 class FakeQuery implements PromiseLike<FakeResult> {
   private operation: FakeOperation = "select"
@@ -200,6 +245,47 @@ class FakeClient {
   from(tableName: string): FakeQuery {
     return new FakeQuery(tableName, this.tables, this.beforeOperation)
   }
+
+  async rpc(
+    functionName: "get_document_access_level" | "get_folder_access_level",
+    args: Record<string, unknown>
+  ): Promise<{ data: "viewer" | "contributor" | null; error: null }> {
+    const membership = this.tables.organization_memberships.find(
+      (row: FakeRow): boolean =>
+        row.org_id === args.target_org_id &&
+        row.user_id === args.target_actor_user_id &&
+        row.status === "active"
+    )
+
+    if (!membership) {
+      return { data: null, error: null }
+    }
+
+    if (membership.role === "owner_admin") {
+      return { data: "contributor", error: null }
+    }
+
+    const tableName =
+      functionName === "get_document_access_level" ? "documents" : "folders"
+    const resourceId =
+      functionName === "get_document_access_level"
+        ? args.target_document_id
+        : args.target_folder_id
+    const resource = this.tables[tableName]?.find(
+      (row: FakeRow): boolean =>
+        row.id === resourceId && row.org_id === args.target_org_id
+    )
+
+    return {
+      data:
+        resource?.created_by === args.target_actor_user_id
+          ? membership.role === "external_reviewer"
+            ? "viewer"
+            : "contributor"
+          : null,
+      error: null,
+    }
+  }
 }
 
 function withDatabaseDefaults(tableName: string, payload: FakeRow): FakeRow {
@@ -213,7 +299,14 @@ function withDatabaseDefaults(tableName: string, payload: FakeRow): FakeRow {
   }
 
   if (tableName === "documents") {
-    return { ...timestamps, archived_at: null, ...payload }
+    return {
+      ...timestamps,
+      lifecycle_state: "active",
+      archived_at: null,
+      trashed_at: null,
+      purge_after: null,
+      ...payload,
+    }
   }
 
   return { ...payload }
@@ -231,7 +324,7 @@ function createMembership(userId: string, role: string): FakeRow {
 function createTemplateRow(
   id: string,
   status: "draft" | "published",
-  content: TemplateContent = createBlankTemplateContent()
+  content: TemplateContent = createUsableTemplateContent()
 ): FakeRow {
   return {
     id,
@@ -263,6 +356,8 @@ function createDocumentRow(id: string, title: string): FakeRow {
     title,
     description: null,
     source_kind: "generated",
+    lifecycle_state: "active",
+    created_by: STAFF_ID,
     archived_at: null
   }
 }
@@ -290,6 +385,91 @@ function createBaseTables(): FakeTables {
 }
 
 describe("template service", () => {
+  it("upgrades supplied legacy content when a new editable template is created", async () => {
+    const client = new FakeClient(createBaseTables())
+
+    const created = await createDocumentTemplate(
+      {
+        actorUserId: MANAGER_ID,
+        organizationId: ORG_ID,
+        title: "Legacy import",
+        description: "Imported for editing.",
+        content: createLegacyUsableTemplateContent()
+      },
+      {
+        client: client as never,
+        createId: (): string => "30000000-0000-4000-8000-000000000099"
+      }
+    )
+
+    expect(created.content).toMatchObject({
+      schemaVersion: 3,
+      sections: [
+        {
+          startBlockId: "50000000-0000-4000-8000-000000000011"
+        }
+      ]
+    })
+  })
+
+  it("upgrades legacy draft content when metadata is genuinely edited", async () => {
+    const tables = createBaseTables()
+    const draft = tables.document_templates.find(
+      (row: FakeRow): boolean => row.id === DRAFT_TEMPLATE_ID
+    )
+
+    if (!draft) {
+      throw new Error("Expected the draft template fixture to exist.")
+    }
+
+    draft.content = createLegacyUsableTemplateContent()
+    const client = new FakeClient(tables)
+    const updated = await updateDocumentTemplate(
+      {
+        actorUserId: MANAGER_ID,
+        organizationId: ORG_ID,
+        templateId: DRAFT_TEMPLATE_ID,
+        expectedRevision: 1,
+        title: "Updated legacy draft"
+      },
+      { client: client as never }
+    )
+
+    expect(updated.content.schemaVersion).toBe(3)
+    expect(updated.revision).toBe(2)
+  })
+
+  it("does not treat a legacy schema upgrade alone as a user edit", async () => {
+    const tables = createBaseTables()
+    const draft = tables.document_templates.find(
+      (row: FakeRow): boolean => row.id === DRAFT_TEMPLATE_ID
+    )
+
+    if (!draft) {
+      throw new Error("Expected the draft template fixture to exist.")
+    }
+
+    draft.content = createLegacyUsableTemplateContent()
+    const client = new FakeClient(tables)
+
+    await expect(
+      updateDocumentTemplate(
+        {
+          actorUserId: MANAGER_ID,
+          organizationId: ORG_ID,
+          templateId: DRAFT_TEMPLATE_ID,
+          expectedRevision: 1,
+          title: draft.title as string
+        },
+        { client: client as never }
+      )
+    ).rejects.toMatchObject({
+      message: "No template changes were provided.",
+      statusCode: 400
+    })
+    expect(draft.content).toMatchObject({ schemaVersion: 2 })
+  })
+
   it("shows all template statuses to managers and only published templates to staff", async () => {
     const client = new FakeClient(createBaseTables())
 
@@ -375,6 +555,94 @@ describe("template service", () => {
 
     expect(draft.status).toBe("draft")
     expect(draft.revision).toBe(2)
+  })
+
+  it.each([
+    ["no choices", []],
+    ["only one choice", ["Sales"]],
+    ["choices that only differ by casing and whitespace", ["Sales", " sales "]]
+  ])(
+    "rejects publishing a dropdown with %s",
+    async (_description, options) => {
+      const tables = createBaseTables()
+      const draft = tables.document_templates.find(
+        (row: FakeRow): boolean => row.id === DRAFT_TEMPLATE_ID
+      )
+
+      if (!draft) {
+        throw new Error("Expected the draft template fixture to exist.")
+      }
+
+      const content = createContentWithBlocks([
+        {
+          id: "50000000-0000-4000-8000-000000000001",
+          type: "dropdown_field",
+          fieldKey: "department",
+          label: "Department",
+          required: true,
+          helpText: null,
+          placeholder: "Select a department",
+          options
+        }
+      ])
+      draft.content = content
+      const client = new FakeClient(tables)
+
+      await expect(
+        publishDocumentTemplate(
+          {
+            actorUserId: MANAGER_ID,
+            organizationId: ORG_ID,
+            templateId: DRAFT_TEMPLATE_ID,
+            expectedRevision: 1
+          },
+          { client: client as never }
+        )
+      ).rejects.toMatchObject({
+        message: "Dropdown fields need at least two distinct choices.",
+        statusCode: 400
+      })
+
+      expect(draft.status).toBe("draft")
+    }
+  )
+
+  it("publishes a dropdown with two distinct meaningful choices", async () => {
+    const tables = createBaseTables()
+    const draft = tables.document_templates.find(
+      (row: FakeRow): boolean => row.id === DRAFT_TEMPLATE_ID
+    )
+
+    if (!draft) {
+      throw new Error("Expected the draft template fixture to exist.")
+    }
+
+    const content = createContentWithBlocks([
+      {
+        id: "50000000-0000-4000-8000-000000000001",
+        type: "dropdown_field",
+        fieldKey: "department",
+        label: "Department",
+        required: true,
+        helpText: null,
+        placeholder: "Select a department",
+        options: ["Sales", "Finance"]
+      }
+    ])
+    draft.content = content
+    const client = new FakeClient(tables)
+
+    const published = await publishDocumentTemplate(
+      {
+        actorUserId: MANAGER_ID,
+        organizationId: ORG_ID,
+        templateId: DRAFT_TEMPLATE_ID,
+        expectedRevision: 1
+      },
+      { client: client as never }
+    )
+
+    expect(published.status).toBe("published")
   })
 
   it("rejects an edit when the template is archived after it is read", async () => {
@@ -483,16 +751,16 @@ describe("template service", () => {
 
   it("reserves file upload fields for internal submissions", async () => {
     const tables = createBaseTables()
-    const content = createBlankTemplateContent()
-
-    content.blocks.push({
-      id: "50000000-0000-4000-8000-000000000001",
-      type: "file_field",
-      fieldKey: "supporting_document",
-      label: "Supporting document",
-      required: true,
-      helpText: "Upload one supporting file."
-    })
+    const content = createContentWithBlocks([
+      {
+        id: "50000000-0000-4000-8000-000000000001",
+        type: "file_field",
+        fieldKey: "supporting_document",
+        label: "Supporting document",
+        required: true,
+        helpText: "Upload one supporting file."
+      }
+    ])
     tables.document_templates[0].content = content
     const client = new FakeClient(tables)
 
@@ -577,23 +845,23 @@ describe("template service", () => {
   })
 
   it("rejects non-PNG/JPEG embedded image data", () => {
-    const content = createBlankTemplateContent()
-    content.blocks.push({
-      id: "50000000-0000-4000-8000-000000000001",
-      type: "image",
-      dataUrl: "data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=",
-      altText: "Unsafe vector image",
-      caption: null,
-      alignment: "center",
-      widthPercent: 100
-    })
+    const content = createContentWithBlocks([
+      {
+        id: "50000000-0000-4000-8000-000000000001",
+        type: "image",
+        dataUrl: "data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=",
+        altText: "Unsafe vector image",
+        caption: null,
+        alignment: "center",
+        widthPercent: 100
+      }
+    ])
 
     expect(() => parseTemplateContent(content)).toThrow()
   })
 
   it("rejects duplicate field keys before a template can be published", () => {
-    const content = createBlankTemplateContent()
-    content.blocks.push(
+    const content = createContentWithBlocks([
       {
         id: "50000000-0000-4000-8000-000000000002",
         type: "text_field",
@@ -612,7 +880,14 @@ describe("template service", () => {
         required: false,
         helpText: null
       }
-    )
+    ])
+    const duplicateKeyBlock = content.blocks[1]
+
+    if (!duplicateKeyBlock || !("fieldKey" in duplicateKeyBlock)) {
+      throw new Error("Expected the duplicate field fixture to exist.")
+    }
+
+    duplicateKeyBlock.fieldKey = "CLIENT_NAME"
 
     expect(() => parseTemplateContent(content)).toThrow(
       "Every fillable field must have a unique field key."

@@ -241,7 +241,9 @@ describe("document upload lifecycle", () => {
       uploadUrl: "https://r2.example/upload",
     })
     expect(deps.createId).not.toHaveBeenCalled()
-    expect(rpcSpy).not.toHaveBeenCalled()
+    expect(rpcSpy.mock.calls.map(([functionName]) => functionName)).toEqual([
+      "get_document_access_level",
+    ])
     expect(client.tables.document_versions).toHaveLength(2)
   })
 
@@ -342,7 +344,7 @@ describe("document upload lifecycle", () => {
         deps
       )
     ).rejects.toMatchObject({
-      message: "Archived documents cannot be replaced.",
+      message: "Only active documents can be replaced.",
       statusCode: 409,
     })
 
@@ -428,7 +430,9 @@ describe("document upload lifecycle", () => {
     )
 
     expect(version.status).toBe("available")
-    expect(rpcSpy).not.toHaveBeenCalled()
+    expect(rpcSpy.mock.calls.map(([functionName]) => functionName)).toEqual([
+      "get_document_access_level",
+    ])
   })
 
   it("completes concurrent retries without duplicating version activity", async () => {
@@ -508,7 +512,9 @@ describe("document upload lifecycle", () => {
 
     expect(client.tables.documents[0]?.current_version_id).toBe("version-1")
     expect(client.tables.document_versions[1]?.status).toBe("upload_pending")
-    expect(rpcSpy).not.toHaveBeenCalled()
+    expect(rpcSpy.mock.calls.map(([functionName]) => functionName)).toEqual([
+      "get_document_access_level",
+    ])
   })
 
   it("keeps a pending replacement out of current state when metadata mismatches", async () => {
@@ -553,6 +559,8 @@ describe("document upload lifecycle", () => {
 
     expect(client.tables.documents[0]?.current_version_id).toBe("version-1")
     expect(client.tables.document_versions[1]?.status).toBe("upload_pending")
-    expect(rpcSpy).not.toHaveBeenCalled()
+    expect(rpcSpy.mock.calls.map(([functionName]) => functionName)).toEqual([
+      "get_document_access_level",
+    ])
   })
 })

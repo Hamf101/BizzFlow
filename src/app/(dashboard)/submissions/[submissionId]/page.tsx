@@ -39,8 +39,6 @@ import {
   submitSubmissionAction
 } from "../actions"
 
-export const dynamic = "force-dynamic"
-
 type SubmissionDetailParams = Promise<{ submissionId: string }>
 type SubmissionDetailSearchParams = Promise<{
   error?: string

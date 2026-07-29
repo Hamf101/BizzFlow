@@ -7,6 +7,7 @@ import { getAdminSupabaseEnv } from "@/lib/env"
 import type { DocumentActivityEventRow } from "@/types/activity"
 import type { DocumentCommentRow } from "@/types/comment"
 import type {
+  DocumentAccessLevel,
   DocumentRow,
   DocumentVersionRow,
   FolderRow,
@@ -87,6 +88,30 @@ type InviteRow = Record<string, unknown> & {
   updated_at: string
 }
 
+type DocumentAccessGrantRow = Record<string, unknown> & {
+  id: string
+  org_id: string
+  document_id: string
+  user_id: string | null
+  organization_role: DatabaseOrganizationRole | null
+  access_level: DocumentAccessLevel
+  granted_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+type FolderAccessGrantRow = Record<string, unknown> & {
+  id: string
+  org_id: string
+  folder_id: string
+  user_id: string | null
+  organization_role: DatabaseOrganizationRole | null
+  access_level: DocumentAccessLevel
+  granted_by: string | null
+  created_at: string
+  updated_at: string
+}
+
 export type CurrentOrganizationContextRow = {
   membership_id: string
   org_id: string
@@ -123,6 +148,14 @@ export type AuditChainVerificationRow = {
   checked_count: number
   first_invalid_seq: number | null
   failure_reason: string | null
+}
+
+export type LeasedResourcePurgeObjectRow = {
+  object_id: string
+  job_id: string
+  storage_key: string
+  lease_token: string
+  attempt_count: number
 }
 
 type AdminDocumentRow = DocumentRow & {
@@ -186,6 +219,13 @@ type AdminSubmissionFileRow = Record<string, unknown> & {
 type FolderInsert = Partial<FolderRow> & Pick<FolderRow, "id" | "org_id" | "name">
 type DocumentInsert = Partial<AdminDocumentRow> &
   Pick<AdminDocumentRow, "id" | "org_id" | "title">
+type DocumentAccessGrantInsert = Partial<DocumentAccessGrantRow> &
+  Pick<
+    DocumentAccessGrantRow,
+    "org_id" | "document_id" | "access_level"
+  >
+type FolderAccessGrantInsert = Partial<FolderAccessGrantRow> &
+  Pick<FolderAccessGrantRow, "org_id" | "folder_id" | "access_level">
 type DocumentVersionInsert = Partial<DocumentVersionRow> &
   Pick<
     DocumentVersionRow,
@@ -284,6 +324,16 @@ export type AdminDatabase = {
         DocumentInsert,
         Partial<AdminDocumentRow>
       >
+      document_access_grants: DatabaseTable<
+        DocumentAccessGrantRow,
+        DocumentAccessGrantInsert,
+        Partial<DocumentAccessGrantRow>
+      >
+      folder_access_grants: DatabaseTable<
+        FolderAccessGrantRow,
+        FolderAccessGrantInsert,
+        Partial<FolderAccessGrantRow>
+      >
       document_versions: DatabaseTable<
         DocumentVersionRow,
         DocumentVersionInsert,
@@ -378,6 +428,22 @@ export type AdminDatabase = {
         }
         Returns: CurrentOrganizationContextRow[]
       }
+      get_document_access_level: {
+        Args: {
+          target_org_id: string
+          target_document_id: string
+          target_actor_user_id: string
+        }
+        Returns: DocumentAccessLevel | null
+      }
+      get_folder_access_level: {
+        Args: {
+          target_org_id: string
+          target_folder_id: string
+          target_actor_user_id: string
+        }
+        Returns: DocumentAccessLevel | null
+      }
       verify_audit_log_chain: {
         Args: {
           target_org_id: string
@@ -391,6 +457,102 @@ export type AdminDatabase = {
           target_actor_user_id: string
         }
         Returns: boolean
+      }
+      restore_document: {
+        Args: {
+          target_org_id: string
+          target_document_id: string
+          target_actor_user_id: string
+        }
+        Returns: boolean
+      }
+      trash_document: {
+        Args: {
+          target_org_id: string
+          target_document_id: string
+          target_actor_user_id: string
+          target_trash_operation_id: string
+        }
+        Returns: boolean
+      }
+      archive_folder: {
+        Args: {
+          target_org_id: string
+          target_folder_id: string
+          target_actor_user_id: string
+        }
+        Returns: boolean
+      }
+      restore_folder: {
+        Args: {
+          target_org_id: string
+          target_folder_id: string
+          target_actor_user_id: string
+        }
+        Returns: boolean
+      }
+      trash_folder: {
+        Args: {
+          target_org_id: string
+          target_folder_id: string
+          target_actor_user_id: string
+          target_trash_operation_id: string
+        }
+        Returns: boolean
+      }
+      request_document_purge: {
+        Args: {
+          target_org_id: string
+          target_document_id: string
+          target_actor_user_id: string
+          target_confirmation_title: string
+          target_job_id: string
+        }
+        Returns: string
+      }
+      request_folder_purge: {
+        Args: {
+          target_org_id: string
+          target_folder_id: string
+          target_actor_user_id: string
+          target_confirmation_name: string
+          target_job_id: string
+        }
+        Returns: string
+      }
+      enqueue_due_resource_purges: {
+        Args: {
+          target_limit: number
+        }
+        Returns: number
+      }
+      lease_resource_purge_objects: {
+        Args: {
+          target_limit: number
+          target_lease_seconds: number
+        }
+        Returns: LeasedResourcePurgeObjectRow[]
+      }
+      complete_resource_purge_object: {
+        Args: {
+          target_object_id: string
+          target_lease_token: string
+        }
+        Returns: boolean
+      }
+      fail_resource_purge_object: {
+        Args: {
+          target_object_id: string
+          target_lease_token: string
+          target_error_code: string
+        }
+        Returns: "retry_wait" | "failed"
+      }
+      finalize_ready_resource_purges: {
+        Args: {
+          target_limit: number
+        }
+        Returns: number
       }
       create_document_comment: {
         Args: {

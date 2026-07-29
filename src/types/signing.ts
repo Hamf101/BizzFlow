@@ -3,6 +3,7 @@ import type {
   GeneratedDocument,
   GeneratedDocumentWorkflowStatus,
 } from "@/types/template"
+import type { DocumentAccessLevel } from "@/types/document"
 
 /** Member-facing signing recipient without the private token hash. */
 export type DocumentSigningRecipient = {
@@ -26,6 +27,7 @@ export type DocumentSigningRecipient = {
 export type GeneratedDocumentSigningView = {
   organizationName: string
   document: GeneratedDocument
+  accessLevel?: DocumentAccessLevel
   answers: Record<string, unknown>
   workflowStatus: GeneratedDocumentWorkflowStatus
   recipients: DocumentSigningRecipient[]

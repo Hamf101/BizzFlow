@@ -1,14 +1,26 @@
 export type DocumentVersionStatus = "upload_pending" | "available"
+export type DocumentAccessLevel = "viewer" | "contributor"
+export type DocumentLifecycleState =
+  | "active"
+  | "archived"
+  | "trashed"
+  | "purge_pending"
 
 export type FolderRow = Record<string, unknown> & {
   id: string
   org_id: string
   parent_folder_id: string | null
   name: string
+  lifecycle_state: DocumentLifecycleState
   created_by: string | null
   updated_by: string | null
   archived_by: string | null
   archived_at: string | null
+  trashed_by: string | null
+  trashed_at: string | null
+  purge_after: string | null
+  pre_trash_lifecycle_state: DocumentLifecycleState | null
+  trash_operation_id: string | null
   created_at: string
   updated_at: string
 }
@@ -23,10 +35,16 @@ export type DocumentRow = Record<string, unknown> & {
   source_kind?: string
   template_id?: string | null
   template_revision?: number | null
+  lifecycle_state: DocumentLifecycleState
   created_by: string | null
   updated_by: string | null
   archived_by: string | null
   archived_at: string | null
+  trashed_by: string | null
+  trashed_at: string | null
+  purge_after: string | null
+  pre_trash_lifecycle_state: DocumentLifecycleState | null
+  trash_operation_id: string | null
   created_at: string
   updated_at: string
 }
@@ -52,10 +70,16 @@ export type DocumentFolder = {
   organizationId: string
   parentFolderId: string | null
   name: string
+  lifecycleState: DocumentLifecycleState
   createdBy: string | null
   updatedBy: string | null
   archivedBy: string | null
   archivedAt: string | null
+  trashedBy: string | null
+  trashedAt: string | null
+  purgeAfter: string | null
+  preTrashLifecycleState: DocumentLifecycleState | null
+  trashOperationId: string | null
   createdAt: string
   updatedAt: string
 }
@@ -70,12 +94,26 @@ export type DocumentSummary = {
   sourceKind?: "upload" | "generated"
   templateId?: string | null
   templateRevision?: number | null
+  lifecycleState: DocumentLifecycleState
   createdBy: string | null
   updatedBy: string | null
   archivedBy: string | null
   archivedAt: string | null
+  trashedBy: string | null
+  trashedAt: string | null
+  purgeAfter: string | null
+  preTrashLifecycleState: DocumentLifecycleState | null
+  trashOperationId: string | null
   createdAt: string
   updatedAt: string
+}
+
+export type AccessibleDocumentFolder = DocumentFolder & {
+  accessLevel: DocumentAccessLevel
+}
+
+export type AccessibleDocumentSummary = DocumentSummary & {
+  accessLevel: DocumentAccessLevel
 }
 
 export type DocumentVersion = {
@@ -94,12 +132,12 @@ export type DocumentVersion = {
 }
 
 export type DocumentWorkspace = {
-  folders: DocumentFolder[]
-  documents: DocumentSummary[]
+  folders: AccessibleDocumentFolder[]
+  documents: AccessibleDocumentSummary[]
 }
 
 export type DocumentDetail = {
-  document: DocumentSummary
+  document: AccessibleDocumentSummary
   versions: DocumentVersion[]
 }
 

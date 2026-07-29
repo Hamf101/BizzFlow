@@ -22,11 +22,18 @@ describe("organization context function migration", () => {
 
   it("preserves the oldest-active-membership selection contract", () => {
     expect(normalizedSql).toContain("membership.status = 'active'")
-    expect(normalizedSql).toContain("order by membership.created_at asc")
+    expect(normalizedSql).toContain(
+      "order by membership.created_at asc, membership.id asc"
+    )
     expect(normalizedSql).toContain("limit 1")
     expect(normalizedSql).toContain(
       "join public.organizations organization on organization.id = membership.org_id"
     )
+  })
+
+  it("casts enum-backed membership values to the declared text columns", () => {
+    expect(normalizedSql).toContain("membership.role::text")
+    expect(normalizedSql).toContain("membership.status::text")
   })
 
   it("locks execution down to the service role", () => {

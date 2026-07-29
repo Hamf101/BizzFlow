@@ -7,8 +7,15 @@ import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
 import { buildRedirect, getFormString } from "@/lib/form-utils"
 import {
   archiveDocument,
+  archiveFolder,
   createFolder,
   DocumentServiceError,
+  requestDocumentPurge,
+  requestFolderPurge,
+  restoreDocument,
+  restoreFolder,
+  trashDocument,
+  trashFolder,
 } from "@/services/document-service"
 import {
   createDocumentComment,
@@ -140,38 +147,139 @@ export async function createGeneratedDocumentAction(
  * @returns Never returns; redirects to document detail with status.
  */
 export async function archiveDocumentAction(formData: FormData): Promise<void> {
-  const organizationId = getFormString(formData, "organizationId")
+  return runDocumentLifecycleAction(formData, {
+    operation: archiveDocument,
+    failureEvent: "archive_document_action_failed",
+    fallbackError: "Unable to archive document.",
+    successMessage: "Document archived.",
+  })
+}
+
+/**
+ * Restores an archived or trashed document from the document detail page.
+ *
+ * @param formData - Submitted restore form data.
+ * @returns Never returns; redirects to document detail with status.
+ */
+export async function restoreDocumentAction(formData: FormData): Promise<void> {
+  return runDocumentLifecycleAction(formData, {
+    operation: restoreDocument,
+    failureEvent: "restore_document_action_failed",
+    fallbackError: "Unable to restore document.",
+    successMessage: "Document restored.",
+  })
+}
+
+/**
+ * Moves a document to Trash from the document detail page.
+ *
+ * @param formData - Submitted trash form data.
+ * @returns Never returns; redirects to document detail with status.
+ */
+export async function trashDocumentAction(formData: FormData): Promise<void> {
+  return runDocumentLifecycleAction(formData, {
+    operation: trashDocument,
+    failureEvent: "trash_document_action_failed",
+    fallbackError: "Unable to move document to Trash.",
+    successMessage: "Document moved to Trash.",
+  })
+}
+
+/**
+ * Archives a folder from the Documents workspace.
+ *
+ * @param formData - Folder identifiers and safe workspace return values.
+ * @returns Never returns; redirects to the Documents workspace with status.
+ */
+export async function archiveFolderAction(formData: FormData): Promise<void> {
+  return runFolderLifecycleAction(formData, {
+    operation: archiveFolder,
+    failureEvent: "archive_folder_action_failed",
+    fallbackError: "Unable to archive folder.",
+    successMessage: "Folder archived.",
+  })
+}
+
+/**
+ * Restores an archived or trashed folder from the Documents workspace.
+ *
+ * @param formData - Folder identifiers and safe workspace return values.
+ * @returns Never returns; redirects to the Documents workspace with status.
+ */
+export async function restoreFolderAction(formData: FormData): Promise<void> {
+  return runFolderLifecycleAction(formData, {
+    operation: restoreFolder,
+    failureEvent: "restore_folder_action_failed",
+    fallbackError: "Unable to restore folder.",
+    successMessage: "Folder restored.",
+  })
+}
+
+/**
+ * Moves a folder subtree to Trash from the Documents workspace.
+ *
+ * @param formData - Folder identifiers and safe workspace return values.
+ * @returns Never returns; redirects to the Documents workspace with status.
+ */
+export async function trashFolderAction(formData: FormData): Promise<void> {
+  return runFolderLifecycleAction(formData, {
+    operation: trashFolder,
+    failureEvent: "trash_folder_action_failed",
+    fallbackError: "Unable to move folder to Trash.",
+    successMessage: "Folder moved to Trash.",
+  })
+}
+
+/**
+ * Queues permanent deletion of a trashed document from its detail page.
+ *
+ * @param formData - Document identifier and the exact confirmation title.
+ * @returns Never returns; redirects to document detail with status.
+ */
+export async function requestDocumentPurgeAction(
+  formData: FormData
+): Promise<void> {
   const documentId = getFormString(formData, "documentId")
-  const detailPath = `/documents/${documentId}`
+  const detailPath = `/documents/${encodeURIComponent(documentId)}`
 
-  try {
-    const user = await getAuthenticatedUser()
-    await archiveDocument({
-      actorUserId: user.id,
-      organizationId,
-      documentId,
-    })
-    revalidatePath("/documents")
-    revalidatePath(detailPath)
-  } catch (error: unknown) {
-    if (error instanceof AuthenticationError) {
-      redirect(buildRedirect("/login", { next: detailPath }))
-    }
+  return runResourcePurgeAction({
+    failureEvent: "request_document_purge_action_failed",
+    logContext: { documentId },
+    requestPurge: (scope: ResourcePurgeActionScope): Promise<unknown> =>
+      requestDocumentPurge({
+        ...scope,
+        documentId,
+        confirmationTitle: getFormString(formData, "confirmationTitle"),
+      }),
+    returnPath: detailPath,
+    revalidatePaths: ["/documents", detailPath],
+  })
+}
 
-    logDocumentActionFailure("archive_document_action_failed", {
-      organizationId,
-      documentId,
-      reason: error instanceof Error ? error.message : "Unknown archive error",
-    })
+/**
+ * Queues permanent deletion of a trashed folder subtree from the workspace.
+ *
+ * @param formData - Folder identifier, exact confirmation name, and safe
+ * workspace return values.
+ * @returns Never returns; redirects to the Documents workspace with status.
+ */
+export async function requestFolderPurgeAction(
+  formData: FormData
+): Promise<void> {
+  const folderId = getFormString(formData, "folderId")
 
-    redirect(
-      buildRedirect(detailPath, {
-        error: getActionErrorMessage(error, "Unable to archive document."),
-      })
-    )
-  }
-
-  redirect(buildRedirect(detailPath, { message: "Document archived." }))
+  return runResourcePurgeAction({
+    failureEvent: "request_folder_purge_action_failed",
+    logContext: { folderId },
+    requestPurge: (scope: ResourcePurgeActionScope): Promise<unknown> =>
+      requestFolderPurge({
+        ...scope,
+        folderId,
+        confirmationName: getFormString(formData, "confirmationName"),
+      }),
+    returnPath: getDocumentsReturnPath(formData),
+    revalidatePaths: ["/documents"],
+  })
 }
 
 /**
@@ -224,6 +332,200 @@ function logDocumentActionFailure(
   if (context.reason) {
     console.warn(eventName, context)
   }
+}
+
+type DocumentLifecycleOperation = (input: {
+  actorUserId: string
+  organizationId: string
+  documentId: string
+}) => Promise<unknown>
+
+type FolderLifecycleOperation = (input: {
+  actorUserId: string
+  organizationId: string
+  folderId: string
+}) => Promise<unknown>
+
+type LifecycleActionConfig<Operation> = {
+  operation: Operation
+  failureEvent: string
+  fallbackError: string
+  successMessage: string
+}
+
+async function runDocumentLifecycleAction(
+  formData: FormData,
+  config: LifecycleActionConfig<DocumentLifecycleOperation>
+): Promise<void> {
+  let organizationId = "unavailable"
+  const documentId = getFormString(formData, "documentId")
+  const detailPath = `/documents/${encodeURIComponent(documentId)}`
+
+  try {
+    const actionContext = await loadLifecycleActionContext()
+    organizationId = actionContext.organizationId
+    await config.operation({
+      actorUserId: actionContext.actorUserId,
+      organizationId,
+      documentId,
+    })
+    revalidatePath("/documents")
+    revalidatePath(detailPath)
+  } catch (error: unknown) {
+    if (error instanceof AuthenticationError) {
+      redirect(buildRedirect("/login", { next: detailPath }))
+    }
+
+    logDocumentActionFailure(config.failureEvent, {
+      organizationId,
+      documentId,
+      reason:
+        error instanceof Error
+          ? error.message
+          : "Unknown document lifecycle error",
+    })
+
+    redirect(
+      buildRedirect(detailPath, {
+        error: getActionErrorMessage(error, config.fallbackError),
+      })
+    )
+  }
+
+  redirect(buildRedirect(detailPath, { message: config.successMessage }))
+}
+
+async function runFolderLifecycleAction(
+  formData: FormData,
+  config: LifecycleActionConfig<FolderLifecycleOperation>
+): Promise<void> {
+  let organizationId = "unavailable"
+  const folderId = getFormString(formData, "folderId")
+  const returnPath = getDocumentsReturnPath(formData)
+
+  try {
+    const actionContext = await loadLifecycleActionContext()
+    organizationId = actionContext.organizationId
+    await config.operation({
+      actorUserId: actionContext.actorUserId,
+      organizationId,
+      folderId,
+    })
+    revalidatePath("/documents")
+  } catch (error: unknown) {
+    if (error instanceof AuthenticationError) {
+      redirect(buildRedirect("/login", { next: returnPath }))
+    }
+
+    logDocumentActionFailure(config.failureEvent, {
+      organizationId,
+      folderId,
+      reason:
+        error instanceof Error
+          ? error.message
+          : "Unknown folder lifecycle error",
+    })
+
+    redirect(
+      buildRedirect(returnPath, {
+        error: getActionErrorMessage(error, config.fallbackError),
+      })
+    )
+  }
+
+  redirect(buildRedirect(returnPath, { message: config.successMessage }))
+}
+
+type ResourcePurgeActionScope = {
+  actorUserId: string
+  organizationId: string
+}
+
+type ResourcePurgeActionConfig = {
+  failureEvent: string
+  logContext: Record<string, string>
+  requestPurge: (scope: ResourcePurgeActionScope) => Promise<unknown>
+  returnPath: string
+  revalidatePaths: string[]
+}
+
+async function runResourcePurgeAction(
+  config: ResourcePurgeActionConfig
+): Promise<void> {
+  let organizationId = "unavailable"
+
+  try {
+    const actionContext = await loadLifecycleActionContext()
+    organizationId = actionContext.organizationId
+    await config.requestPurge({
+      actorUserId: actionContext.actorUserId,
+      organizationId,
+    })
+
+    for (const revalidatedPath of config.revalidatePaths) {
+      revalidatePath(revalidatedPath)
+    }
+  } catch (error: unknown) {
+    if (error instanceof AuthenticationError) {
+      redirect(buildRedirect("/login", { next: config.returnPath }))
+    }
+
+    logDocumentActionFailure(config.failureEvent, {
+      organizationId,
+      ...config.logContext,
+      reason:
+        error instanceof Error ? error.message : "Unknown purge request error",
+    })
+
+    redirect(
+      buildRedirect(config.returnPath, {
+        error: getActionErrorMessage(
+          error,
+          "Unable to queue permanent deletion."
+        ),
+      })
+    )
+  }
+
+  redirect(
+    buildRedirect(config.returnPath, {
+      message: "Permanent deletion queued.",
+    })
+  )
+}
+
+async function loadLifecycleActionContext(): Promise<{
+  actorUserId: string
+  organizationId: string
+}> {
+  const user = await getAuthenticatedUser()
+  const context = await getCurrentOrganizationContext(user.id)
+
+  if (!context) {
+    throw new DocumentServiceError(
+      "Create an organization before managing documents.",
+      403
+    )
+  }
+
+  return {
+    actorUserId: user.id,
+    organizationId: context.organization.id,
+  }
+}
+
+function getDocumentsReturnPath(formData: FormData): string {
+  const returnFolderId = getFormString(formData, "returnFolderId")
+  const returnView = getFormString(formData, "returnView")
+  const safeView =
+    returnView === "archived" || returnView === "trash"
+      ? returnView
+      : "active"
+
+  return buildRedirect("/documents", {
+    ...(safeView === "active" ? {} : { view: safeView }),
+    ...(returnFolderId ? { folderId: returnFolderId } : {}),
+  })
 }
 
 function getActionErrorMessage(error: unknown, fallback: string): string {

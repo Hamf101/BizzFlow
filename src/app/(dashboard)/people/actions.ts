@@ -2,8 +2,10 @@
 
 import { redirect } from "next/navigation"
 
+import { enforceOutboundEmailRateLimit } from "@/lib/action-rate-limit"
 import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
 import { buildRedirect, getFormString } from "@/lib/form-utils"
+import { loadAuthenticatedPageUser } from "@/lib/page-auth"
 import { isOrganizationRole } from "@/lib/permissions"
 import {
   createInvite,
@@ -25,8 +27,15 @@ export async function createInviteAction(formData: FormData): Promise<void> {
     redirect(buildRedirect("/people", { error: "Choose a valid role." }))
   }
 
+  // Both calls reject by throwing (a redirect), so they must stay outside the
+  // try that maps invite failures — a catch would swallow the redirect signal.
+  const user = await loadAuthenticatedPageUser("/people")
+  await enforceOutboundEmailRateLimit({
+    userId: user.id,
+    redirectPath: "/people",
+  })
+
   try {
-    const user = await getAuthenticatedUser()
     await createInvite({
       actorUserId: user.id,
       organizationId,
@@ -34,10 +43,6 @@ export async function createInviteAction(formData: FormData): Promise<void> {
       role,
     })
   } catch (error: unknown) {
-    if (error instanceof AuthenticationError) {
-      redirect(buildRedirect("/login", { next: "/people" }))
-    }
-
     const logContext = {
       organizationId,
       reason: error instanceof Error ? error.message : "Unknown invite error",
