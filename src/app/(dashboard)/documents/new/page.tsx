@@ -20,11 +20,11 @@ import {
   FieldLabel
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import { getAuthenticatedUser } from "@/lib/auth"
+import { loadAuthenticatedPageUser } from "@/lib/page-auth"
 import { buildRedirect } from "@/lib/form-utils"
 import { buildDocumentFolderPath } from "@/lib/page-document-folders"
+import { loadPageOrganizationContext } from "@/lib/page-organization-context"
 import { listDocumentWorkspace } from "@/services/document-service"
-import { getCurrentOrganizationContext } from "@/services/organization-service"
 import { listDocumentTemplates } from "@/services/template-service"
 import type { DocumentFolder } from "@/types/document"
 import type { DocumentTemplate } from "@/types/template"
@@ -49,8 +49,11 @@ export default async function NewDocumentPage({
   searchParams: NewDocumentSearchParams
 }): Promise<ReactElement> {
   const params = await searchParams
-  const user = await getAuthenticatedUser()
-  const context = await getCurrentOrganizationContext(user.id)
+  const user = await loadAuthenticatedPageUser("/documents/new")
+  const { context } = await loadPageOrganizationContext({
+    userId: user.id,
+    failureEvent: "new_document_page_context_failed"
+  })
 
   if (!context) {
     redirect(
