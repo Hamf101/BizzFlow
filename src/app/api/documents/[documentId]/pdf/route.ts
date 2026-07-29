@@ -2,6 +2,8 @@ import { NextResponse } from "next/server"
 
 import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
 import { captureUnexpectedError } from "@/lib/observability"
+import { checkRateLimit, RateLimitError } from "@/lib/rate-limit"
+import { createRateLimitResponse } from "@/lib/rate-limit-response"
 import {
   createDocumentDownloadUrl,
   DocumentServiceError,
@@ -53,6 +55,14 @@ export async function GET(
 
     const { documentId } = await context.params
     requestedDocumentId = documentId
+    // Keyed on the document because the preview path below re-renders the whole
+    // PDF on every request (no-store), so a hot loop on one large document is
+    // the expensive case rather than a member opening many documents.
+    await checkRateLimit(
+      "pdf_render",
+      `${organizationContext.organization.id}:${documentId}`
+    )
+
     const view = await getGeneratedDocumentSigningView({
       actorUserId: user.id,
       organizationId: organizationContext.organization.id,
@@ -114,6 +124,14 @@ export async function GET(
       },
     })
   } catch (error: unknown) {
+    if (error instanceof RateLimitError) {
+      return createRateLimitResponse(
+        error,
+        "document_route_rejected",
+        "documents_pdf"
+      )
+    }
+
     if (error instanceof AuthenticationError) {
       return NextResponse.json({ error: error.message }, { status: 401 })
     }

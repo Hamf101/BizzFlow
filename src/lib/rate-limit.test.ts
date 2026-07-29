@@ -73,6 +73,46 @@ describe("createRateLimitCheck", () => {
     )
   })
 
+  it("fails closed when a spend-bearing bucket's limiter fails", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    const check = createRateLimitCheck({
+      createLimiter: () => ({
+        limit: vi.fn().mockRejectedValue(new Error("redis unreachable")),
+      }),
+    })
+
+    await expect(check("ai_flow", "org-1:user-1")).rejects.toMatchObject({
+      statusCode: 429,
+      retryAfterSeconds: 30,
+    } satisfies Partial<RateLimitError>)
+    await expect(
+      check("outbound_email", "user-1")
+    ).rejects.toBeInstanceOf(RateLimitError)
+  })
+
+  it("allows fail-closed buckets when no limiter is configured at all", async () => {
+    const check = createRateLimitCheck({ createLimiter: () => null })
+
+    await expect(check("ai_flow", "org-1:user-1")).resolves.toBeUndefined()
+    await expect(check("outbound_email", "user-1")).resolves.toBeUndefined()
+    await expect(check("email_recipient", "a:b:c")).resolves.toBeUndefined()
+  })
+
+  it("records the fail mode on the limiter failure log", async () => {
+    const errorLog = vi.spyOn(console, "error").mockImplementation(() => {})
+    const check = createRateLimitCheck({
+      createLimiter: () => ({
+        limit: vi.fn().mockRejectedValue(new Error("redis unreachable")),
+      }),
+    })
+
+    await expect(check("pdf_render", "org-1:doc-1")).resolves.toBeUndefined()
+    expect(errorLog).toHaveBeenCalledWith(
+      "rate_limit_check_failed",
+      expect.objectContaining({ bucket: "pdf_render", failMode: "open" })
+    )
+  })
+
   it("constructs one limiter per bucket and reuses it", async () => {
     const limiter: LimiterLike = {
       limit: vi.fn().mockResolvedValue({ success: true, reset: 0 }),

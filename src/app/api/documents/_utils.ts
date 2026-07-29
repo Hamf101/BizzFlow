@@ -3,6 +3,7 @@ import { NextResponse } from "next/server"
 import { AuthenticationError } from "@/lib/auth"
 import { captureUnexpectedError } from "@/lib/observability"
 import { RateLimitError } from "@/lib/rate-limit"
+import { createRateLimitResponse } from "@/lib/rate-limit-response"
 import { RequestSecurityError } from "@/lib/request-security"
 import { DocumentServiceError } from "@/services/document-service"
 
@@ -108,18 +109,7 @@ export function createDocumentRouteErrorResponse(
   routeName: string
 ): Response {
   if (error instanceof RateLimitError) {
-    console.warn("document_route_rejected", {
-      routeName,
-      reason: error.message,
-      statusCode: error.statusCode,
-    })
-    return NextResponse.json(
-      { error: error.message },
-      {
-        status: error.statusCode,
-        headers: { "Retry-After": String(error.retryAfterSeconds) },
-      }
-    )
+    return createRateLimitResponse(error, "document_route_rejected", routeName)
   }
 
   if (error instanceof RequestSecurityError) {

@@ -1,19 +1,15 @@
 import { NextResponse } from "next/server"
 
-import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
-import { captureUnexpectedError } from "@/lib/observability"
-import {
-  readTrustedJsonObject,
-  RequestSecurityError,
-} from "@/lib/request-security"
-import {
-  getCurrentOrganizationContext,
-  OrganizationServiceError,
-} from "@/services/organization-service"
+import { getAuthenticatedUser } from "@/lib/auth"
+import { checkRateLimit } from "@/lib/rate-limit"
+import { readTrustedJsonObject } from "@/lib/request-security"
+import { getCurrentOrganizationContext } from "@/services/organization-service"
 import {
   executeTemplateFlow,
   TemplateFlowServiceError,
 } from "@/services/template-flow-service"
+
+import { createTemplateRouteErrorResponse } from "../_utils"
 
 /**
  * Completes one authenticated Flow chat turn and returns a validated next draft.
@@ -33,6 +29,12 @@ export async function POST(request: Request): Promise<Response> {
       )
     }
 
+    // Gated before the body is parsed so an abusive caller never gets the parse
+    // done on their behalf. Both buckets fail closed: an Upstash outage must not
+    // silently remove the only ceiling on metered AI-provider spend.
+    await checkRateLimit("ai_flow", `${context.organization.id}:${user.id}`)
+    await checkRateLimit("ai_flow_daily", context.organization.id)
+
     const body = await readTrustedJsonObject(request)
     const result = await executeTemplateFlow({
       actorUserId: user.id,
@@ -44,50 +46,6 @@ export async function POST(request: Request): Promise<Response> {
 
     return NextResponse.json(result)
   } catch (error: unknown) {
-    return createTemplateFlowErrorResponse(error)
+    return createTemplateRouteErrorResponse(error, "templates_flow")
   }
-}
-
-function createTemplateFlowErrorResponse(error: unknown): Response {
-  if (error instanceof RequestSecurityError) {
-    return NextResponse.json(
-      { error: error.message },
-      { status: error.statusCode }
-    )
-  }
-
-  if (error instanceof AuthenticationError) {
-    return NextResponse.json({ error: error.message }, { status: 401 })
-  }
-
-  if (error instanceof TemplateFlowServiceError) {
-    console.warn("template_flow_route_rejected", {
-      reason: error.message,
-      statusCode: error.statusCode,
-    })
-    return NextResponse.json(
-      { error: error.message },
-      { status: error.statusCode }
-    )
-  }
-
-  if (error instanceof OrganizationServiceError) {
-    console.warn("template_flow_route_rejected", {
-      reason: error.message,
-      statusCode: error.statusCode,
-    })
-    return NextResponse.json(
-      { error: error.message },
-      { status: error.statusCode }
-    )
-  }
-
-  console.error("template_flow_route_failed", {
-    reason: error instanceof Error ? error.message : "Unknown route error",
-  })
-  captureUnexpectedError(error, { routeName: "templates_flow" })
-  return NextResponse.json(
-    { error: "Unable to complete the Flow request." },
-    { status: 500 }
-  )
 }

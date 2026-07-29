@@ -32,3 +32,36 @@ export async function enforceActionRateLimit(input: {
     redirect(buildRedirect(input.redirectPath, { error: input.message }))
   }
 }
+
+/** Shared rejection copy for every mail-sending server action. */
+const OUTBOUND_EMAIL_THROTTLE_MESSAGE =
+  "Too many emails sent from this account. Wait a little while and try again."
+
+/**
+ * Enforces the hourly burst and daily ceiling budgets for a mail-sending action.
+ *
+ * Keyed on the authenticated member rather than an organization id, because
+ * every one of these actions reads its organization from submitted form data,
+ * which stays unverified until the service checks membership.
+ *
+ * Call this OUTSIDE any try/catch: rejection redirects, which works by throwing.
+ *
+ * @param input - Authenticated member id and the path to redirect back to.
+ */
+export async function enforceOutboundEmailRateLimit(input: {
+  userId: string
+  redirectPath: string
+}): Promise<void> {
+  await enforceActionRateLimit({
+    bucket: "outbound_email",
+    key: input.userId,
+    redirectPath: input.redirectPath,
+    message: OUTBOUND_EMAIL_THROTTLE_MESSAGE,
+  })
+  await enforceActionRateLimit({
+    bucket: "outbound_email_daily",
+    key: input.userId,
+    redirectPath: input.redirectPath,
+    message: OUTBOUND_EMAIL_THROTTLE_MESSAGE,
+  })
+}

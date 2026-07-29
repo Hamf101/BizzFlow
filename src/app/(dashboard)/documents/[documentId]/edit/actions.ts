@@ -7,8 +7,13 @@ import {
   GeneratedDocumentFormDataError,
   parseGeneratedDocumentAnswers,
 } from "@/components/documents/generated-document-form-data"
+import {
+  enforceActionRateLimit,
+  enforceOutboundEmailRateLimit,
+} from "@/lib/action-rate-limit"
 import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
 import { buildRedirect, getFormString } from "@/lib/form-utils"
+import { loadAuthenticatedPageUser } from "@/lib/page-auth"
 import {
   canPerformOrganizationAction,
   type OrganizationPermissionAction,
@@ -89,6 +94,14 @@ export async function sendGeneratedDocumentAction(
   const editorPath = getDocumentEditorPath(documentId)
   const startedAt = Date.now()
 
+  // One submission fans out to as many as MAX_RECIPIENTS emails. Both calls
+  // reject by throwing (a redirect), so they must stay outside the try below.
+  const user = await loadAuthenticatedPageUser(editorPath)
+  await enforceOutboundEmailRateLimit({
+    userId: user.id,
+    redirectPath: editorPath,
+  })
+
   try {
     const actionContext = await loadMemberActionContext("documents:send")
     const recipients = parseRecipientCollection(
@@ -135,6 +148,23 @@ export async function resendGeneratedDocumentInvitationAction(
   const recipientId = getFormString(formData, "recipientId")
   const editorPath = getDocumentEditorPath(documentId)
   const startedAt = Date.now()
+
+  // This action re-mails one external recipient on demand, so it needs a budget
+  // per recipient as well as per member: without it a resend loop is a mailbomb
+  // aimed at a third party. Both calls redirect by throwing — keep them outside
+  // the try below.
+  const user = await loadAuthenticatedPageUser(editorPath)
+  await enforceActionRateLimit({
+    bucket: "email_recipient",
+    key: `${user.id}:${documentId}:${recipientId}`,
+    redirectPath: editorPath,
+    message:
+      "This invitation was resent too recently. Wait a while before trying again.",
+  })
+  await enforceOutboundEmailRateLimit({
+    userId: user.id,
+    redirectPath: editorPath,
+  })
 
   try {
     const actionContext = await loadMemberActionContext("documents:send")
