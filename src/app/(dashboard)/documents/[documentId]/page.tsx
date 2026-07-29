@@ -1,7 +1,7 @@
-import { Archive, FileText } from "lucide-react"
+import { Archive, FileText, RotateCcw, Trash2 } from "lucide-react"
 import Link from "next/link"
 import { redirect } from "next/navigation"
-import type { ReactElement } from "react"
+import type { ReactElement, ReactNode } from "react"
 
 import { PermissionButton } from "@/components/auth/permission-button"
 import { RoleGuard } from "@/components/auth/role-guard"
@@ -28,12 +28,18 @@ import { listDocumentActivity } from "@/services/document-activity-service"
 import { listDocumentComments } from "@/services/document-comment-service"
 import type { DocumentActivityEvent } from "@/types/activity"
 import type { DocumentComment } from "@/types/comment"
-import type { DocumentDetail, DocumentVersion } from "@/types/document"
+import type {
+  DocumentDetail,
+  DocumentLifecycleState,
+  DocumentVersion,
+} from "@/types/document"
 import type { OrganizationContext } from "@/types/organization"
 
 import {
   archiveDocumentAction,
   createDocumentCommentAction,
+  restoreDocumentAction,
+  trashDocumentAction,
 } from "../actions"
 
 type DocumentDetailParams = Promise<{
@@ -117,65 +123,84 @@ export default async function DocumentDetailPage({
     )
   }
 
-  if (detail.document.sourceKind === "generated") {
+  if (
+    detail.document.sourceKind === "generated" &&
+    detail.document.lifecycleState === "active"
+  ) {
     redirect(`/documents/${encodeURIComponent(detail.document.id)}/edit`)
   }
 
-  const [commentsResult, activityResult] = await Promise.all([
-    listDocumentComments({
-      actorUserId: user.id,
-      organizationId: context.organization.id,
-      documentId: detail.document.id,
-    })
-      .then((comments) => ({ comments, errorMessage: null as string | null }))
-      .catch((error: unknown) => {
-        const errorMessage = getPageErrorMessage(
-          error,
-          "Unable to load document comments."
-        )
-
-        console.warn("document_comments_load_failed", {
-          userId: user.id,
+  const isCollaborationReadable =
+    detail.document.lifecycleState === "active" ||
+    detail.document.lifecycleState === "archived"
+  const [commentsResult, activityResult] = isCollaborationReadable
+    ? await Promise.all([
+        listDocumentComments({
+          actorUserId: user.id,
           organizationId: context.organization.id,
           documentId: detail.document.id,
-          reason: errorMessage,
         })
+          .then((comments) => ({
+            comments,
+            errorMessage: null as string | null,
+          }))
+          .catch((error: unknown) => {
+            const errorMessage = getPageErrorMessage(
+              error,
+              "Unable to load document comments."
+            )
 
-        return { comments: [] as DocumentComment[], errorMessage }
-      }),
-    listDocumentActivity({
-      actorUserId: user.id,
-      organizationId: context.organization.id,
-      documentId: detail.document.id,
-    })
-      .then((events) => ({ events, errorMessage: null as string | null }))
-      .catch((error: unknown) => {
-        const errorMessage = getPageErrorMessage(
-          error,
-          "Unable to load document activity."
-        )
+            console.warn("document_comments_load_failed", {
+              userId: user.id,
+              organizationId: context.organization.id,
+              documentId: detail.document.id,
+              reason: errorMessage,
+            })
 
-        console.warn("document_activity_load_failed", {
-          userId: user.id,
+            return { comments: [] as DocumentComment[], errorMessage }
+          }),
+        listDocumentActivity({
+          actorUserId: user.id,
           organizationId: context.organization.id,
           documentId: detail.document.id,
-          reason: errorMessage,
         })
+          .then((events) => ({
+            events,
+            errorMessage: null as string | null,
+          }))
+          .catch((error: unknown) => {
+            const errorMessage = getPageErrorMessage(
+              error,
+              "Unable to load document activity."
+            )
 
-        return { events: [] as DocumentActivityEvent[], errorMessage }
-      }),
-  ])
+            console.warn("document_activity_load_failed", {
+              userId: user.id,
+              organizationId: context.organization.id,
+              documentId: detail.document.id,
+              reason: errorMessage,
+            })
+
+            return { events: [] as DocumentActivityEvent[], errorMessage }
+          }),
+      ])
+    : [
+        { comments: [] as DocumentComment[], errorMessage: null },
+        { events: [] as DocumentActivityEvent[], errorMessage: null },
+      ]
 
   return (
     <DocumentDetailShell params={query}>
-      <DocumentOpenTracker
-        documentId={detail.document.id}
-        organizationId={context.organization.id}
-      />
+      {detail.document.lifecycleState === "active" ? (
+        <DocumentOpenTracker
+          documentId={detail.document.id}
+          organizationId={context.organization.id}
+        />
+      ) : null}
       <section className="flex flex-col gap-2">
         <Link
           className="text-sm font-medium text-primary underline-offset-4 hover:underline"
-          href="/documents"
+          href={getWorkspaceHref(detail.document.lifecycleState)}
         >
           Back to documents
         </Link>
@@ -183,8 +208,14 @@ export default async function DocumentDetailPage({
           <h1 className="text-2xl font-semibold tracking-normal">
             {detail.document.title}
           </h1>
-          <Badge variant={detail.document.archivedAt ? "outline" : "secondary"}>
-            {detail.document.archivedAt ? "Archived" : "Active"}
+          <Badge
+            variant={
+              detail.document.lifecycleState === "active"
+                ? "secondary"
+                : "outline"
+            }
+          >
+            {getLifecycleLabel(detail.document.lifecycleState)}
           </Badge>
         </div>
         {detail.document.description && (
@@ -201,31 +232,36 @@ export default async function DocumentDetailPage({
           </div>
           <div className="order-3 lg:order-0">
             <VersionListCard
+              allowDownloads={isCollaborationReadable}
               currentVersionId={detail.document.currentVersionId}
               documentId={detail.document.id}
               organizationId={context.organization.id}
               versions={detail.versions}
             />
           </div>
-          <div className="order-5 lg:order-0">
-            <DocumentActivityCard
-              errorMessage={activityResult.errorMessage}
-              events={activityResult.events}
-            />
-          </div>
+          {isCollaborationReadable ? (
+            <div className="order-5 lg:order-0">
+              <DocumentActivityCard
+                errorMessage={activityResult.errorMessage}
+                events={activityResult.events}
+              />
+            </div>
+          ) : null}
         </div>
         <div className="contents lg:flex lg:flex-col lg:gap-4">
           <div className="order-2 lg:order-0">
             <DocumentActionsCard context={context} detail={detail} />
           </div>
-          <div className="order-4 lg:order-0">
-            <DocumentCommentsCard
-              comments={commentsResult.comments}
-              context={context}
-              detail={detail}
-              errorMessage={commentsResult.errorMessage}
-            />
-          </div>
+          {isCollaborationReadable ? (
+            <div className="order-4 lg:order-0">
+              <DocumentCommentsCard
+                comments={commentsResult.comments}
+                context={context}
+                detail={detail}
+                errorMessage={commentsResult.errorMessage}
+              />
+            </div>
+          ) : null}
         </div>
       </div>
     </DocumentDetailShell>
@@ -236,7 +272,7 @@ function DocumentDetailShell({
   children,
   params,
 }: {
-  children: ReactElement | ReactElement[]
+  children: ReactNode
   params: Awaited<DocumentDetailSearchParams>
 }): ReactElement {
   return (
@@ -275,6 +311,18 @@ function DocumentMetadataCard({
       </CardHeader>
       <CardContent className="grid gap-3 text-sm md:grid-cols-3">
         <MetadataItem
+          label="Lifecycle"
+          value={getLifecycleLabel(detail.document.lifecycleState)}
+        />
+        <MetadataItem
+          label="Your access"
+          value={
+            detail.document.accessLevel === "contributor"
+              ? "Contributor"
+              : "Viewer"
+          }
+        />
+        <MetadataItem
           label="Created"
           value={formatMediumDateTime(detail.document.createdAt)}
         />
@@ -288,14 +336,22 @@ function DocumentMetadataCard({
         />
         <MetadataItem label="Document id" value={detail.document.id} />
         <MetadataItem label="Folder id" value={detail.document.folderId ?? "No folder"} />
-        <MetadataItem
-          label="Archive status"
-          value={
-            detail.document.archivedAt
-              ? `Archived ${formatMediumDateTime(detail.document.archivedAt)}`
-              : "Active"
-          }
-        />
+        {detail.document.archivedAt ? (
+          <MetadataItem
+            label="Archived"
+            value={formatMediumDateTime(detail.document.archivedAt)}
+          />
+        ) : null}
+        {detail.document.lifecycleState === "trashed" ||
+        detail.document.lifecycleState === "purge_pending" ? (
+          <MetadataItem
+            label="Retention"
+            value={getRetentionDescription(
+              detail.document.lifecycleState,
+              detail.document.purgeAfter
+            )}
+          />
+        ) : null}
       </CardContent>
     </Card>
   )
@@ -317,11 +373,13 @@ function MetadataItem({
 }
 
 function VersionListCard({
+  allowDownloads,
   currentVersionId,
   documentId,
   organizationId,
   versions,
 }: {
+  allowDownloads: boolean
   currentVersionId: string | null
   documentId: string
   organizationId: string
@@ -371,7 +429,7 @@ function VersionListCard({
                   <span className="text-xs text-muted-foreground">
                     v{version.versionNumber}
                   </span>
-                  {version.status === "available" && (
+                  {allowDownloads && version.status === "available" && (
                     <DocumentDownloadButton
                       documentId={documentId}
                       label={`Download v${version.versionNumber}`}
@@ -486,7 +544,7 @@ function DocumentCommentsCard({
           </div>
         )}
 
-        {!detail.document.archivedAt && (
+        {detail.document.lifecycleState === "active" && (
           <RoleGuard
             action="document_comments:create"
             role={context.membership.role}
@@ -529,52 +587,207 @@ function DocumentActionsCard({
   context: OrganizationContext
   detail: DocumentDetail
 }): ReactElement {
+  const document = detail.document
+  const canContribute = document.accessLevel === "contributor"
+  const canDownload =
+    document.lifecycleState === "active" ||
+    document.lifecycleState === "archived"
+  const hasLifecycleAction =
+    canContribute && document.lifecycleState !== "purge_pending"
+
   return (
     <Card>
       <CardHeader>
         <CardTitle>Actions</CardTitle>
-        <CardDescription>Download, replace, or archive this document.</CardDescription>
+        <CardDescription>
+          {!canDownload &&
+          (document.lifecycleState === "trashed" ||
+            document.lifecycleState === "purge_pending")
+            ? "Downloads and collaboration are unavailable in this lifecycle state."
+            : canContribute
+            ? "Download or manage this document according to its lifecycle."
+            : "Your viewer access includes downloads and comments."}
+        </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
-        <DocumentDownloadButton
-          disabled={!detail.document.currentVersionId}
-          documentId={detail.document.id}
-          organizationId={context.organization.id}
-        />
-        {!detail.document.archivedAt && (
+        {canDownload ? (
+          <DocumentDownloadButton
+            disabled={!document.currentVersionId}
+            documentId={document.id}
+            organizationId={context.organization.id}
+          />
+        ) : null}
+        {canContribute && document.lifecycleState === "active" ? (
           <RoleGuard
             role={context.membership.role}
             action="document_versions:create"
           >
             <DocumentReplaceForm
-              documentId={detail.document.id}
+              documentId={document.id}
               organizationId={context.organization.id}
             />
           </RoleGuard>
-        )}
-        <RoleGuard role={context.membership.role} action="documents:archive">
-          <form action={archiveDocumentAction}>
-            <input
-              type="hidden"
-              name="organizationId"
-              value={context.organization.id}
-            />
-            <input type="hidden" name="documentId" value={detail.document.id} />
-            <PermissionButton
-              action="documents:archive"
-              disabled={Boolean(detail.document.archivedAt)}
-              role={context.membership.role}
-              type="submit"
-              variant="destructive"
-            >
-              <Archive data-icon="inline-start" />
-              Archive
-            </PermissionButton>
-          </form>
-        </RoleGuard>
+        ) : null}
+        {hasLifecycleAction ? (
+          <RoleGuard
+            role={context.membership.role}
+            action="documents:archive"
+          >
+            <div className="flex flex-wrap gap-2">
+              {document.lifecycleState === "active" ? (
+                <DocumentLifecycleForm
+                  action={archiveDocumentAction}
+                  documentId={document.id}
+                  organizationId={context.organization.id}
+                >
+                  <PermissionButton
+                    action="documents:archive"
+                    role={context.membership.role}
+                    type="submit"
+                    variant="outline"
+                  >
+                    <Archive data-icon="inline-start" />
+                    Archive
+                  </PermissionButton>
+                </DocumentLifecycleForm>
+              ) : null}
+              {document.lifecycleState === "archived" ||
+              document.lifecycleState === "trashed" ? (
+                <DocumentLifecycleForm
+                  action={restoreDocumentAction}
+                  documentId={document.id}
+                  organizationId={context.organization.id}
+                >
+                  <PermissionButton
+                    action="documents:archive"
+                    role={context.membership.role}
+                    type="submit"
+                    variant="outline"
+                  >
+                    <RotateCcw data-icon="inline-start" />
+                    Restore
+                  </PermissionButton>
+                </DocumentLifecycleForm>
+              ) : null}
+              {document.lifecycleState === "active" ||
+              document.lifecycleState === "archived" ? (
+                <DocumentLifecycleForm
+                  action={trashDocumentAction}
+                  documentId={document.id}
+                  organizationId={context.organization.id}
+                >
+                  <PermissionButton
+                    action="documents:archive"
+                    role={context.membership.role}
+                    type="submit"
+                    variant="destructive"
+                  >
+                    <Trash2 data-icon="inline-start" />
+                    Move to Trash
+                  </PermissionButton>
+                </DocumentLifecycleForm>
+              ) : null}
+            </div>
+          </RoleGuard>
+        ) : null}
+        {document.lifecycleState === "trashed" ||
+        document.lifecycleState === "purge_pending" ? (
+          <Alert>
+            <AlertTitle>Retention status</AlertTitle>
+            <AlertDescription>
+              {getRetentionDescription(
+                document.lifecycleState,
+                document.purgeAfter
+              )}
+            </AlertDescription>
+          </Alert>
+        ) : null}
+        {!canDownload && !hasLifecycleAction ? (
+          <p className="text-sm text-muted-foreground">
+            No document actions are available in this lifecycle state.
+          </p>
+        ) : null}
       </CardContent>
     </Card>
   )
+}
+
+function DocumentLifecycleForm({
+  action,
+  children,
+  documentId,
+  organizationId,
+}: {
+  action: (formData: FormData) => Promise<void>
+  children: ReactNode
+  documentId: string
+  organizationId: string
+}): ReactElement {
+  return (
+    <form action={action}>
+      <input
+        name="organizationId"
+        type="hidden"
+        value={organizationId}
+      />
+      <input name="documentId" type="hidden" value={documentId} />
+      {children}
+    </form>
+  )
+}
+
+function getLifecycleLabel(
+  lifecycleState: DocumentLifecycleState
+): string {
+  if (lifecycleState === "purge_pending") {
+    return "Purge pending"
+  }
+
+  if (lifecycleState === "trashed") {
+    return "Trash"
+  }
+
+  if (lifecycleState === "archived") {
+    return "Archived"
+  }
+
+  return "Active"
+}
+
+function getWorkspaceHref(
+  lifecycleState: DocumentLifecycleState
+): string {
+  if (
+    lifecycleState === "trashed" ||
+    lifecycleState === "purge_pending"
+  ) {
+    return "/documents?view=trash"
+  }
+
+  return lifecycleState === "archived"
+    ? "/documents?view=archived"
+    : "/documents"
+}
+
+function getRetentionDescription(
+  lifecycleState: DocumentLifecycleState,
+  purgeAfter: string | null
+): string {
+  if (lifecycleState === "purge_pending") {
+    return "Permanent deletion is pending."
+  }
+
+  if (purgeAfter === null) {
+    return "Retention protected; no automatic purge is scheduled."
+  }
+
+  const purgeDate = new Date(purgeAfter)
+
+  if (Number.isNaN(purgeDate.getTime())) {
+    return "Automatic purge timing is unavailable."
+  }
+
+  return `Scheduled for permanent deletion ${formatMediumDateTime(purgeAfter)}.`
 }
 
 function formatActivityDescription(event: DocumentActivityEvent): string {
@@ -598,6 +811,14 @@ function formatActivityDescription(event: DocumentActivityEvent): string {
     return typeof versionNumber === "number"
       ? `finalized version ${versionNumber}.`
       : "finalized the generated PDF."
+  }
+
+  if (event.eventType === "document.restored") {
+    return "restored the document."
+  }
+
+  if (event.eventType === "document.trashed") {
+    return "moved the document to Trash."
   }
 
   return "archived the document."

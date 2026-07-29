@@ -68,6 +68,130 @@ describe("document signing answer persistence", () => {
     })
   })
 
+  it("allows Viewer access to the generated signing view", async () => {
+    const tables = createBaseTables()
+    tables.document_effective_access[0].access_level = "viewer"
+    const client = new FakeClient(tables)
+
+    const view = await getGeneratedDocumentSigningView(
+      {
+        actorUserId: MANAGER_ID,
+        organizationId: ORG_ID,
+        documentId: DOCUMENT_ID,
+      },
+      { client: client as never }
+    )
+
+    expect(view.document.id).toBe(DOCUMENT_ID)
+    expect(view.accessLevel).toBe("viewer")
+  })
+
+  it("allows read-only access to an archived generated document", async () => {
+    const tables = createBaseTables()
+    tables.documents[0].lifecycle_state = "archived"
+    tables.documents[0].archived_at = "2026-07-18T12:00:00.000Z"
+    const client = new FakeClient(tables)
+
+    const view = await getGeneratedDocumentSigningView(
+      {
+        actorUserId: MANAGER_ID,
+        organizationId: ORG_ID,
+        documentId: DOCUMENT_ID,
+      },
+      { client: client as never }
+    )
+
+    expect(view.document.lifecycleState).toBe("archived")
+    expect(view.accessLevel).toBe("contributor")
+  })
+
+  it("requires Contributor access before saving generated answers", async () => {
+    const tables = createBaseTables()
+    tables.document_effective_access[0].access_level = "viewer"
+    const client = new FakeClient(tables)
+
+    await expect(
+      saveGeneratedDocumentAnswers(
+        {
+          actorUserId: MANAGER_ID,
+          organizationId: ORG_ID,
+          documentId: DOCUMENT_ID,
+          values: { client_name: "Denied update" },
+        },
+        { client: client as never }
+      )
+    ).rejects.toMatchObject({
+      statusCode: 403,
+      message: "You cannot fill this document.",
+    })
+
+    expect(tables.document_answers[0].values).toEqual({})
+  })
+
+  it("hides generated signing views when the actor has no document grant", async () => {
+    const tables = createBaseTables()
+    tables.document_effective_access = []
+    const client = new FakeClient(tables)
+
+    await expect(
+      getGeneratedDocumentSigningView(
+        {
+          actorUserId: MANAGER_ID,
+          organizationId: ORG_ID,
+          documentId: DOCUMENT_ID,
+        },
+        { client: client as never }
+      )
+    ).rejects.toMatchObject({
+      statusCode: 404,
+      message: "Document was not found.",
+    })
+  })
+
+  it("hides generated signing views after the document enters trash", async () => {
+    const tables = createBaseTables()
+    tables.documents[0].lifecycle_state = "purge_pending"
+    const client = new FakeClient(tables)
+
+    await expect(
+      getGeneratedDocumentSigningView(
+        {
+          actorUserId: MANAGER_ID,
+          organizationId: ORG_ID,
+          documentId: DOCUMENT_ID,
+        },
+        { client: client as never }
+      )
+    ).rejects.toMatchObject({
+      statusCode: 404,
+      message: "Generated document was not found.",
+    })
+  })
+
+  it("rejects answer changes after the document leaves active lifecycle", async () => {
+    const tables = createBaseTables()
+    tables.documents[0].lifecycle_state = "archived"
+    tables.documents[0].archived_at = "2026-07-18T12:00:00.000Z"
+    const client = new FakeClient(tables)
+
+    await expect(
+      saveGeneratedDocumentAnswers(
+        {
+          actorUserId: MANAGER_ID,
+          organizationId: ORG_ID,
+          documentId: DOCUMENT_ID,
+          values: { client_name: "Late update" },
+        },
+        { client: client as never }
+      )
+    ).rejects.toMatchObject({
+      statusCode: 409,
+      message: "Archived documents cannot be changed.",
+    })
+
+    expect(tables.document_answers[0].values).toEqual({})
+  })
+
   it("merges answer patches atomically without erasing a concurrent value", async () => {
     const tables = createBaseTables()
     tables.document_answers[0].values = { client_name: "Old value" }

@@ -1,6 +1,7 @@
 import {
   createSignedDocumentDownloadUrl as defaultCreateSignedDocumentDownloadUrl,
 } from "@/services/document-storage-service"
+import { requireDocumentAccess } from "@/services/documents/access-service"
 import { recordRequiredDocumentAuditLog } from "@/services/documents/audit"
 import type {
   CreateDocumentDownloadUrlInput,
@@ -11,7 +12,6 @@ import {
   getClient,
   getDocumentById,
   normalizeNullableId,
-  requirePermission,
   runDocumentOperation,
 } from "@/services/documents/shared"
 import { getDocumentVersionById } from "@/services/documents/version-shared"
@@ -40,12 +40,16 @@ export async function createDocumentDownloadUrl(
     async (): Promise<CreateDocumentDownloadUrlResponse> => {
       const client = getClient(deps)
 
-      await requirePermission(
-        client,
-        input.organizationId,
-        input.actorUserId,
-        "documents:view",
-        "You cannot download documents."
+      await requireDocumentAccess(
+        {
+          actorUserId: input.actorUserId,
+          organizationId: input.organizationId,
+          documentId: input.documentId,
+          requiredAccess: "viewer",
+          operation: "read",
+          requiredOrganizationPermissionAction: "documents:view",
+        },
+        client
       )
 
       const document = await getDocumentById(
@@ -53,6 +57,13 @@ export async function createDocumentDownloadUrl(
         input.organizationId,
         input.documentId
       )
+
+      if (
+        document.lifecycleState === "trashed" ||
+        document.lifecycleState === "purge_pending"
+      ) {
+        throw new DocumentServiceError("Document was not found.", 404)
+      }
       const versionId =
         normalizeNullableId(input.versionId) ?? document.currentVersionId
 

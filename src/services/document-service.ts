@@ -6,9 +6,19 @@ export type {
   CreateDocumentUploadUrlInput,
   CreateFolderInput,
   DocumentServiceDeps,
+  FolderLifecycleInput,
   GetDocumentDetailInput,
   ListDocumentWorkspaceInput,
+  RestoreDocumentInput,
+  TrashDocumentInput,
 } from "@/services/documents/contracts"
+export type {
+  DocumentAccessLookupInput,
+  DocumentAccessRequirementInput,
+  FolderAccessLookupInput,
+  FolderAccessRequirementInput,
+  ResourceAccessOperation,
+} from "@/services/documents/access-service"
 export { DocumentServiceError } from "@/services/documents/errors"
 export {
   archiveDocument,
@@ -22,3 +32,10 @@ export {
   getDocumentDetail,
   listDocumentWorkspace,
 } from "@/services/documents/workspace-service"
+export {
+  archiveFolder,
+  restoreDocument,
+  restoreFolder,
+  trashDocument,
+  trashFolder,
+} from "@/services/documents/lifecycle-service"

@@ -25,6 +25,11 @@ const SUBMISSION_AUDIT_ACTIONS: readonly AuditLogAction[] = [
   "submission.completed",
 ]
 
+const PURGE_AUDIT_ACTIONS: readonly AuditLogAction[] = [
+  "document.purged",
+  "folder.purged",
+]
+
 class QueuedQuery implements PromiseLike<FakeResult> {
   constructor(
     private readonly client: QueuedAdminClient,
@@ -179,6 +184,50 @@ describe("list audit logs", () => {
     ).rejects.toMatchObject({
       message: "Database returned an unsupported audit action.",
       statusCode: 500,
+    })
+  })
+
+  it("maps immutable document and folder purge receipts", async () => {
+    const client = new QueuedAdminClient({
+      organization_memberships: [
+        {
+          data: { role: "owner_admin" },
+          error: null,
+        },
+      ],
+      audit_logs: [
+        {
+          data: PURGE_AUDIT_ACTIONS.map(
+            (action: AuditLogAction, index: number) => ({
+              ...createAuditRow(action, index),
+              target_type: action.startsWith("document")
+                ? "document"
+                : "folder",
+              metadata: {
+                receiptId: `receipt-${index}`,
+                objectCount: index + 1,
+              },
+            })
+          ),
+          error: null,
+        },
+      ],
+    })
+    vi.mocked(createAdminClient).mockReturnValue(client as never)
+
+    const entries = await listAuditLogs({
+      actorUserId: "owner-1",
+      organizationId: "org-1",
+    })
+
+    expect(entries.map((entry) => entry.action)).toEqual(PURGE_AUDIT_ACTIONS)
+    expect(entries.map((entry) => entry.targetType)).toEqual([
+      "document",
+      "folder",
+    ])
+    expect(entries[0]?.metadata).toEqual({
+      receiptId: "receipt-0",
+      objectCount: 1,
     })
   })
 })

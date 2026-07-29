@@ -101,6 +101,52 @@ describe("document archive and download lifecycle", () => {
     expect(client.tables.document_activity_events).toHaveLength(1)
   })
 
+  it.each([
+    {
+      code: "42501",
+      databaseMessage: "Contributor access and a manager role are required.",
+      expectedStatusCode: 403,
+    },
+    {
+      code: "P0001",
+      databaseMessage: "Only active documents may be archived.",
+      expectedStatusCode: 409,
+    },
+  ])(
+    "maps archive RPC $code races to a stable client error",
+    async ({ code, databaseMessage, expectedStatusCode }) => {
+      const client = new FakeSupabaseClient({
+        organization_memberships: [createMembershipRow("manager")],
+        documents: [createDocumentRow()],
+      })
+      const originalRpc = client.rpc.bind(client)
+
+      vi.spyOn(client, "rpc").mockImplementation(
+        async (functionName, args) => {
+          if (functionName === "archive_document") {
+            return {
+              data: null,
+              error: Object.assign(new Error(databaseMessage), { code }),
+            }
+          }
+
+          return originalRpc(functionName, args)
+        }
+      )
+
+      await expect(
+        archiveDocument(
+          {
+            actorUserId: "user-1",
+            organizationId: "org-1",
+            documentId: "document-1",
+          },
+          createDeps(client)
+        )
+      ).rejects.toMatchObject({ statusCode: expectedStatusCode })
+    }
+  )
+
   it("signs downloads only for available current versions", async () => {
     const client = new FakeSupabaseClient({
       organization_memberships: [createMembershipRow("external_reviewer")],

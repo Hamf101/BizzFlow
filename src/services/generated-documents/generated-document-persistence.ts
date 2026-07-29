@@ -1,8 +1,9 @@
+import type { DocumentLifecycleState } from "@/types/document"
 import type { GeneratedDocument, TemplateContent } from "@/types/template"
 
 /** Canonical database projection required to hydrate a generated document. */
 export const GENERATED_DOCUMENT_COLUMNS =
-  "id,org_id,folder_id,title,description,source_kind,template_id,template_revision,template_snapshot,created_by,updated_by,archived_at,created_at,updated_at"
+  "id,org_id,folder_id,title,description,source_kind,template_id,template_revision,template_snapshot,lifecycle_state,created_by,updated_by,archived_at,trashed_at,purge_after,created_at,updated_at"
 
 /** Persistence shape returned by the generated-document database projection. */
 export type GeneratedDocumentRow = Record<string, unknown> & {
@@ -15,9 +16,12 @@ export type GeneratedDocumentRow = Record<string, unknown> & {
   template_id: string | null
   template_revision: number | null
   template_snapshot: unknown
+  lifecycle_state: DocumentLifecycleState
   created_by: string | null
   updated_by: string | null
   archived_at: string | null
+  trashed_at: string | null
+  purge_after: string | null
   created_at: string
   updated_at: string
 }
@@ -55,10 +59,26 @@ export function mapGeneratedDocumentRow(
     templateId: row.template_id,
     templateRevision: row.template_revision,
     templateSnapshot: options.parseSnapshot(row.template_snapshot),
+    lifecycleState: parseLifecycleState(row.lifecycle_state),
     createdBy: row.created_by,
     updatedBy: row.updated_by,
     archivedAt: row.archived_at,
+    trashedAt: row.trashed_at,
+    purgeAfter: row.purge_after,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
+}
+
+function parseLifecycleState(value: unknown): DocumentLifecycleState {
+  if (
+    value === "active" ||
+    value === "archived" ||
+    value === "trashed" ||
+    value === "purge_pending"
+  ) {
+    return value
+  }
+
+  throw new Error("Database returned an unsupported document lifecycle state.")
 }

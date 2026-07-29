@@ -1,4 +1,5 @@
 import {
+  DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
   PutObjectCommand,
@@ -41,6 +42,11 @@ export type DocumentStorageHeadObject = (
   command: HeadObjectCommand
 ) => Promise<HeadObjectCommandOutput>
 
+export type DocumentStorageDeleteObject = (
+  client: S3Client,
+  command: DeleteObjectCommand
+) => Promise<void>
+
 export type BuildDocumentObjectKeyInput = {
   organizationId: string
   documentId: string
@@ -66,6 +72,10 @@ export type VerifyDocumentUploadInput = {
   byteSize: number
 }
 
+export type DeleteDocumentStorageObjectInput = {
+  storageKey: string
+}
+
 export type SignedDocumentUploadUrl = {
   uploadUrl: string
   storageKey: string
@@ -83,6 +93,7 @@ export type DocumentStorageServiceDeps = {
   fileUploadPolicy?: FileUploadPolicyEnv
   signer?: DocumentStorageSigner
   headObject?: DocumentStorageHeadObject
+  deleteObject?: DocumentStorageDeleteObject
 }
 
 /**
@@ -344,6 +355,73 @@ export async function verifyDocumentUpload(
   }
 }
 
+/**
+ * Deletes one persisted document object from private R2 storage.
+ *
+ * R2/S3 DELETE is idempotent. A provider-specific not-found response is also
+ * treated as success so a retry can safely reconcile an already deleted key.
+ * Raw storage keys are intentionally excluded from every log and error.
+ *
+ * @param input - Exact object key loaded from the purge outbox.
+ * @param deps - Optional R2 client, environment, and delete executor for tests.
+ * @returns A promise that resolves once the object is absent.
+ * @throws DocumentStorageServiceError with status 400 for an empty key or 500
+ * when R2 cannot confirm the delete.
+ */
+export async function deleteDocumentStorageObject(
+  input: DeleteDocumentStorageObjectInput,
+  deps: DocumentStorageServiceDeps = {}
+): Promise<void> {
+  const startedAt = Date.now()
+  const storageKey = input.storageKey.trim()
+
+  try {
+    if (storageKey.length === 0) {
+      throw new DocumentStorageServiceError(
+        "Document storage key is required.",
+        400
+      )
+    }
+
+    const r2Env = deps.r2Env ?? getR2Env()
+    const r2Client = deps.r2Client ?? createR2Client(r2Env)
+    const deleteObject =
+      deps.deleteObject ?? deleteDocumentStorageObjectCommand
+    const command = new DeleteObjectCommand({
+      Bucket: r2Env.CLOUDFLARE_R2_BUCKET_NAME,
+      Key: storageKey,
+    })
+
+    await deleteObject(r2Client, command)
+    console.info("document_storage_object_deleted", {
+      durationMs: Date.now() - startedAt,
+    })
+  } catch (error: unknown) {
+    if (isDocumentObjectNotFoundError(error)) {
+      console.info("document_storage_object_already_absent", {
+        durationMs: Date.now() - startedAt,
+      })
+      return
+    }
+
+    if (error instanceof DocumentStorageServiceError) {
+      console.warn("document_storage_object_delete_rejected", {
+        statusCode: error.statusCode,
+        durationMs: Date.now() - startedAt,
+      })
+      throw error
+    }
+
+    console.error("document_storage_object_delete_failed", {
+      durationMs: Date.now() - startedAt,
+    })
+    throw new DocumentStorageServiceError(
+      "Unable to delete document storage object.",
+      500
+    )
+  }
+}
+
 function getSafeExtensionForContentType(contentType: string): string {
   const extension = DOCUMENT_CONTENT_TYPE_EXTENSIONS[contentType]
 
@@ -415,6 +493,13 @@ async function headDocumentStorageObject(
   command: HeadObjectCommand
 ): Promise<HeadObjectCommandOutput> {
   return client.send(command)
+}
+
+async function deleteDocumentStorageObjectCommand(
+  client: S3Client,
+  command: DeleteObjectCommand
+): Promise<void> {
+  await client.send(command)
 }
 
 async function signDocumentStorageCommand(

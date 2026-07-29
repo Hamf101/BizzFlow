@@ -13,6 +13,9 @@ type FakeTableName =
   | "document_activity_events"
   | "profiles"
 type FakeTables = Record<FakeTableName, FakeRow[]>
+type FakeSupabaseClientOptions = {
+  documentAccessLevel?: "viewer" | "contributor" | null
+}
 
 class FakeSupabaseClient {
   readonly tables: FakeTables
@@ -23,7 +26,10 @@ class FakeSupabaseClient {
     profiles: 0,
   }
 
-  constructor(seed: Partial<FakeTables> = {}) {
+  constructor(
+    seed: Partial<FakeTables> = {},
+    private readonly options: FakeSupabaseClientOptions = {}
+  ) {
     this.tables = {
       organization_memberships: seed.organization_memberships ?? [],
       documents: seed.documents ?? [],
@@ -35,6 +41,39 @@ class FakeSupabaseClient {
   from(tableName: FakeTableName): FakeQueryBuilder {
     this.fromCounts[tableName] += 1
     return new FakeQueryBuilder(this, tableName)
+  }
+
+  async rpc(
+    functionName: string,
+    args: Record<string, unknown>
+  ): Promise<{ data: string | null; error: Error | null }> {
+    if (functionName !== "get_document_access_level") {
+      return {
+        data: null,
+        error: new Error(`Unsupported fake RPC: ${functionName}`),
+      }
+    }
+
+    const document = this.tables.documents.find(
+      (row: FakeRow): boolean =>
+        row.id === args.target_document_id &&
+        row.org_id === args.target_org_id
+    )
+    const membership = this.tables.organization_memberships.find(
+      (row: FakeRow): boolean =>
+        row.org_id === args.target_org_id &&
+        row.user_id === args.target_actor_user_id &&
+        row.status === "active"
+    )
+    const accessLevel =
+      this.options.documentAccessLevel === undefined
+        ? "viewer"
+        : this.options.documentAccessLevel
+
+    return {
+      data: document && membership ? accessLevel : null,
+      error: null,
+    }
   }
 }
 
@@ -210,7 +249,87 @@ describe("list document activity", () => {
         },
         deps(client)
       )
-    ).rejects.toMatchObject({ statusCode: 403 })
+    ).rejects.toMatchObject({ statusCode: 404 })
+  })
+
+  it("hides activity from active members without a document grant", async () => {
+    const client = new FakeSupabaseClient(
+      {
+        organization_memberships: [
+          {
+            org_id: "org-1",
+            user_id: "user-1",
+            role: "staff",
+            status: "active",
+          },
+        ],
+        documents: [{ id: "document-1", org_id: "org-1" }],
+      },
+      { documentAccessLevel: null }
+    )
+
+    await expect(
+      listDocumentActivity(
+        {
+          actorUserId: "user-1",
+          organizationId: "org-1",
+          documentId: "document-1",
+        },
+        deps(client)
+      )
+    ).rejects.toMatchObject({
+      message: "Document was not found.",
+      statusCode: 404,
+    })
+
+    expect(client.fromCounts.document_activity_events).toBe(0)
+  })
+
+  it("hides activity after a document enters trash", async () => {
+    const client = new FakeSupabaseClient({
+      organization_memberships: [
+        {
+          org_id: "org-1",
+          user_id: "user-1",
+          role: "staff",
+          status: "active",
+        },
+      ],
+      documents: [
+        {
+          id: "document-1",
+          org_id: "org-1",
+          lifecycle_state: "trashed",
+        },
+      ],
+      document_activity_events: [
+        {
+          id: "event-private",
+          org_id: "org-1",
+          document_id: "document-1",
+          actor_user_id: "user-1",
+          event_type: "document.commented",
+          metadata: {},
+          created_at: "2026-07-17T11:00:00.000Z",
+        },
+      ],
+    })
+
+    await expect(
+      listDocumentActivity(
+        {
+          actorUserId: "user-1",
+          organizationId: "org-1",
+          documentId: "document-1",
+        },
+        deps(client)
+      )
+    ).rejects.toMatchObject({
+      message: "Document was not found.",
+      statusCode: 404,
+    })
+
+    expect(client.fromCounts.document_activity_events).toBe(0)
   })
 
   it("returns scoped events newest first and resolves actors in one profile query", async () => {

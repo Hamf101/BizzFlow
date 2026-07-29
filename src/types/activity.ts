@@ -6,6 +6,8 @@ export const DOCUMENT_ACTIVITY_EVENT_TYPES = [
   "document.replaced",
   "document.commented",
   "document.archived",
+  "document.restored",
+  "document.trashed",
   "document.finalized",
 ] as const
 

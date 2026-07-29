@@ -11,6 +11,7 @@ import type {
   AuditLogTargetType,
   AuditMetadata,
 } from "@/types/audit"
+import type { DocumentLifecycleState } from "@/types/document"
 
 export type DocumentServiceClient = Pick<AdminSupabaseClient, "from" | "rpc">
 
@@ -35,6 +36,10 @@ export type CreateFolderInput = {
 export type ListDocumentWorkspaceInput = {
   actorUserId: string
   organizationId: string
+  lifecycleState?: Extract<
+    DocumentLifecycleState,
+    "active" | "archived" | "trashed"
+  >
 }
 
 export type GetDocumentDetailInput = {
@@ -75,6 +80,16 @@ export type ArchiveDocumentInput = {
   actorUserId: string
   organizationId: string
   documentId: string
+}
+
+export type RestoreDocumentInput = ArchiveDocumentInput
+
+export type TrashDocumentInput = ArchiveDocumentInput
+
+export type FolderLifecycleInput = {
+  actorUserId: string
+  organizationId: string
+  folderId: string
 }
 
 export type CreateDocumentDownloadUrlInput = {

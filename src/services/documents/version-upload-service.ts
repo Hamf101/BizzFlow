@@ -5,6 +5,10 @@ import {
   validateDocumentUploadRequest as defaultValidateDocumentUploadRequest,
   verifyDocumentUpload as defaultVerifyDocumentUpload,
 } from "@/services/document-storage-service"
+import {
+  requireDocumentAccess,
+  requireFolderAccess,
+} from "@/services/documents/access-service"
 import { recordDocumentAuditLog } from "@/services/documents/audit"
 import type {
   CompleteDocumentUploadInput,
@@ -86,6 +90,16 @@ export async function createDocumentUploadUrl(
       const folderId = normalizeNullableId(input.folderId)
 
       if (folderId) {
+        await requireFolderAccess(
+          {
+            actorUserId: input.actorUserId,
+            organizationId: input.organizationId,
+            folderId,
+            requiredAccess: "contributor",
+            operation: "mutation",
+          },
+          client
+        )
         await requireActiveFolder(client, input.organizationId, folderId)
       }
 
@@ -206,12 +220,16 @@ export async function completeDocumentUpload(
     async (): Promise<DocumentVersion> => {
       const client = getClient(deps)
 
-      await requirePermission(
-        client,
-        input.organizationId,
-        input.actorUserId,
-        "document_versions:create",
-        "You cannot complete document uploads."
+      await requireDocumentAccess(
+        {
+          actorUserId: input.actorUserId,
+          organizationId: input.organizationId,
+          documentId: input.documentId,
+          requiredAccess: "contributor",
+          operation: "mutation",
+          requiredOrganizationPermissionAction: "document_versions:create",
+        },
+        client
       )
 
       const document = await getDocumentById(
@@ -220,9 +238,9 @@ export async function completeDocumentUpload(
         input.documentId
       )
 
-      if (document.archivedAt) {
+      if (document.lifecycleState !== "active") {
         throw new DocumentServiceError(
-          "Archived documents cannot be updated.",
+          "Only active documents can be updated.",
           409
         )
       }
@@ -306,7 +324,7 @@ async function insertDocument(
   const { data, error } = await client
     .from("documents")
     .insert(row)
-    .select("id,org_id,folder_id,title,description,current_version_id,source_kind,template_id,template_revision,created_by,updated_by,archived_by,archived_at,created_at,updated_at")
+    .select("id,org_id,folder_id,title,description,current_version_id,source_kind,template_id,template_revision,lifecycle_state,created_by,updated_by,archived_by,archived_at,trashed_by,trashed_at,purge_after,pre_trash_lifecycle_state,trash_operation_id,created_at,updated_at")
     .single()
 
   if (error || !data) {

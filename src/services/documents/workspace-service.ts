@@ -1,4 +1,10 @@
 import { recordDocumentAuditLog } from "@/services/documents/audit"
+import {
+  getEffectiveDocumentAccess,
+  getEffectiveFolderAccess,
+  requireDocumentAccess,
+  requireFolderAccess,
+} from "@/services/documents/access-service"
 import type {
   CreateFolderInput,
   DocumentServiceClient,
@@ -21,6 +27,8 @@ import {
   runDocumentOperation,
 } from "@/services/documents/shared"
 import type {
+  AccessibleDocumentFolder,
+  AccessibleDocumentSummary,
   DocumentDetail,
   DocumentFolder,
   DocumentRow,
@@ -29,6 +37,8 @@ import type {
   DocumentWorkspace,
   FolderRow,
 } from "@/types/document"
+
+const ACCESS_LOOKUP_CONCURRENCY = 8
 
 /**
  * Creates a tenant-scoped folder.
@@ -62,6 +72,16 @@ export async function createFolder(
       const parentFolderId = normalizeNullableId(input.parentFolderId)
 
       if (parentFolderId) {
+        await requireFolderAccess(
+          {
+            actorUserId: input.actorUserId,
+            organizationId: input.organizationId,
+            folderId: parentFolderId,
+            requiredAccess: "contributor",
+            operation: "mutation",
+          },
+          client
+        )
         await requireActiveFolder(client, input.organizationId, parentFolderId)
       }
 
@@ -77,7 +97,7 @@ export async function createFolder(
           archived_by: null,
           archived_at: null,
         })
-        .select("id,org_id,parent_folder_id,name,created_by,updated_by,archived_by,archived_at,created_at,updated_at")
+        .select("id,org_id,parent_folder_id,name,lifecycle_state,created_by,updated_by,archived_by,archived_at,trashed_by,trashed_at,purge_after,pre_trash_lifecycle_state,trash_operation_id,created_at,updated_at")
         .single()
 
       if (error || !data) {
@@ -104,7 +124,7 @@ export async function createFolder(
 }
 
 /**
- * Lists active folders and non-archived documents for a workspace.
+ * Lists accessible folders and documents for one lifecycle workspace view.
  *
  * @param input - Actor and organization identifiers.
  * @param deps - Optional service dependencies for tests.
@@ -120,6 +140,7 @@ export async function listDocumentWorkspace(
     {
       actorUserId: input.actorUserId,
       organizationId: input.organizationId,
+      lifecycleState: input.lifecycleState ?? "active",
     },
     async (): Promise<DocumentWorkspace> => {
       const client = getClient(deps)
@@ -131,24 +152,41 @@ export async function listDocumentWorkspace(
         "documents:view",
         "You cannot view documents."
       )
+      const lifecycleState = input.lifecycleState ?? "active"
+      const lifecycleStates =
+        lifecycleState === "trashed"
+          ? (["trashed", "purge_pending"] as const)
+          : [lifecycleState]
 
-      const { data: folderData, error: folderError } = await client
+      const folderQuery = client
         .from("folders")
-        .select("id,org_id,parent_folder_id,name,created_by,updated_by,archived_by,archived_at,created_at,updated_at")
+        .select("id,org_id,parent_folder_id,name,lifecycle_state,created_by,updated_by,archived_by,archived_at,trashed_by,trashed_at,purge_after,pre_trash_lifecycle_state,trash_operation_id,created_at,updated_at")
         .eq("org_id", input.organizationId)
-        .is("archived_at", null)
-        .order("name", { ascending: true })
+      const { data: folderData, error: folderError } =
+        lifecycleStates.length === 1
+          ? await folderQuery
+              .eq("lifecycle_state", lifecycleStates[0])
+              .order("name", { ascending: true })
+          : await folderQuery
+              .in("lifecycle_state", [...lifecycleStates])
+              .order("name", { ascending: true })
 
       if (folderError || !folderData) {
         throw createSupabaseServiceError(folderError, "Unable to load folders.")
       }
 
-      const { data: documentData, error: documentError } = await client
+      const documentQuery = client
         .from("documents")
-        .select("id,org_id,folder_id,title,description,current_version_id,source_kind,template_id,template_revision,created_by,updated_by,archived_by,archived_at,created_at,updated_at")
+        .select("id,org_id,folder_id,title,description,current_version_id,source_kind,template_id,template_revision,lifecycle_state,created_by,updated_by,archived_by,archived_at,trashed_by,trashed_at,purge_after,pre_trash_lifecycle_state,trash_operation_id,created_at,updated_at")
         .eq("org_id", input.organizationId)
-        .is("archived_at", null)
-        .order("created_at", { ascending: false })
+      const { data: documentData, error: documentError } =
+        lifecycleStates.length === 1
+          ? await documentQuery
+              .eq("lifecycle_state", lifecycleStates[0])
+              .order("created_at", { ascending: false })
+          : await documentQuery
+              .in("lifecycle_state", [...lifecycleStates])
+              .order("created_at", { ascending: false })
 
       if (documentError || !documentData) {
         throw createSupabaseServiceError(
@@ -157,9 +195,85 @@ export async function listDocumentWorkspace(
         )
       }
 
+      const foldersWithAccess = await mapWithAccessLookupLimit(
+        folderData as FolderRow[],
+        async (
+          row: FolderRow
+        ): Promise<AccessibleDocumentFolder | null> => {
+          const access = await getEffectiveFolderAccess(
+            {
+              actorUserId: input.actorUserId,
+              organizationId: input.organizationId,
+              folderId: row.id,
+            },
+            client
+          )
+
+          return access
+            ? {
+                ...mapFolder(row),
+                accessLevel: access,
+              }
+            : null
+        }
+      )
+      const visibleFolders = foldersWithAccess.filter(
+        (
+          folder: AccessibleDocumentFolder | null
+        ): folder is AccessibleDocumentFolder => folder !== null
+      )
+      const visibleFolderIds = new Set(
+        visibleFolders.map(
+          (folder: AccessibleDocumentFolder): string => folder.id
+        )
+      )
+      const normalizedFolders = visibleFolders.map(
+        (
+          folder: AccessibleDocumentFolder
+        ): AccessibleDocumentFolder =>
+          folder.parentFolderId &&
+          !visibleFolderIds.has(folder.parentFolderId)
+            ? { ...folder, parentFolderId: null }
+            : folder
+      )
+      const documentsWithAccess = await mapWithAccessLookupLimit(
+        documentData as DocumentRow[],
+        async (
+          row: DocumentRow
+        ): Promise<AccessibleDocumentSummary | null> => {
+          const access = await getEffectiveDocumentAccess(
+            {
+              actorUserId: input.actorUserId,
+              organizationId: input.organizationId,
+              documentId: row.id,
+            },
+            client
+          )
+
+          if (!access) {
+            return null
+          }
+
+          const document: AccessibleDocumentSummary = {
+            ...mapDocument(row),
+            accessLevel: access,
+          }
+
+          // A direct document grant must not disclose an inaccessible parent
+          // folder or strand the document outside the visible workspace.
+          return document.folderId && !visibleFolderIds.has(document.folderId)
+            ? { ...document, folderId: null }
+            : document
+        }
+      )
+
       return {
-        folders: (folderData as FolderRow[]).map(mapFolder),
-        documents: (documentData as DocumentRow[]).map(mapDocument),
+        folders: normalizedFolders,
+        documents: documentsWithAccess.filter(
+          (
+            document: AccessibleDocumentSummary | null
+          ): document is AccessibleDocumentSummary => document !== null
+        ),
       }
     }
   )
@@ -187,12 +301,16 @@ export async function getDocumentDetail(
     async (): Promise<DocumentDetail> => {
       const client = getClient(deps)
 
-      await requirePermission(
-        client,
-        input.organizationId,
-        input.actorUserId,
-        "documents:view",
-        "You cannot view documents."
+      const accessLevel = await requireDocumentAccess(
+        {
+          actorUserId: input.actorUserId,
+          organizationId: input.organizationId,
+          documentId: input.documentId,
+          requiredAccess: "viewer",
+          operation: "read",
+          requiredOrganizationPermissionAction: "documents:view",
+        },
+        client
       )
 
       const document = await getDocumentById(
@@ -200,13 +318,20 @@ export async function getDocumentDetail(
         input.organizationId,
         input.documentId
       )
+
       const versions = await listDocumentVersions(
         client,
         input.organizationId,
         input.documentId
       )
 
-      return { document, versions }
+      return {
+        document: {
+          ...document,
+          accessLevel,
+        },
+        versions,
+      }
     }
   )
 }
@@ -228,6 +353,30 @@ async function listDocumentVersions(
   }
 
   return (data as DocumentVersionRow[]).map(mapDocumentVersion)
+}
+
+async function mapWithAccessLookupLimit<Input, Output>(
+  items: readonly Input[],
+  mapper: (item: Input) => Promise<Output>
+): Promise<Output[]> {
+  const results = new Array<Output>(items.length)
+  let nextIndex = 0
+
+  const workers = Array.from(
+    {
+      length: Math.min(ACCESS_LOOKUP_CONCURRENCY, items.length),
+    },
+    async (): Promise<void> => {
+      while (nextIndex < items.length) {
+        const itemIndex = nextIndex
+        nextIndex += 1
+        results[itemIndex] = await mapper(items[itemIndex])
+      }
+    }
+  )
+
+  await Promise.all(workers)
+  return results
 }
 
 function normalizeFolderName(name: string): string {

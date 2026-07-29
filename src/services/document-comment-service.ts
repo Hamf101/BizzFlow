@@ -1,10 +1,6 @@
 import { randomUUID } from "node:crypto"
 
-import {
-  canPerformOrganizationAction,
-  isOrganizationRole,
-  type OrganizationPermissionAction,
-} from "@/lib/permissions"
+import type { OrganizationPermissionAction } from "@/lib/permissions"
 import {
   createAdminClient,
   type AdminSupabaseClient,
@@ -16,6 +12,8 @@ import {
   uniqueDocumentCollaborationProfileIds,
   type DocumentCollaborationProfileRow,
 } from "@/services/document-collaboration/profiles"
+import { requireDocumentAccess } from "@/services/documents/access-service"
+import { DocumentServiceError } from "@/services/documents/errors"
 import type {
   DocumentComment,
   DocumentCommentRow,
@@ -25,12 +23,9 @@ type DocumentCommentServiceClient = Pick<AdminSupabaseClient, "from" | "rpc">
 
 type LogValue = string | number | boolean | null | undefined
 
-type MembershipRow = {
-  role: string
-}
-
 type DocumentStateRow = {
   id: string
+  lifecycle_state?: unknown
   archived_at: string | null
 }
 
@@ -94,12 +89,21 @@ export async function createDocumentComment(
     async (): Promise<DocumentComment> => {
       const client = getClient(deps)
 
-      await requirePermission(
+      await requireCommentDocumentAccess(
         client,
         input.organizationId,
+        input.documentId,
         input.actorUserId,
+        "viewer",
+        "mutation",
         "document_comments:create",
         "You cannot comment on documents."
+      )
+      await requireTenantDocument(
+        client,
+        input.organizationId,
+        input.documentId,
+        "mutation"
       )
 
       const body = normalizeCommentBody(input.body)
@@ -168,17 +172,21 @@ export async function listDocumentComments(
     async (): Promise<DocumentComment[]> => {
       const client = getClient(deps)
 
-      await requirePermission(
+      await requireCommentDocumentAccess(
         client,
         input.organizationId,
+        input.documentId,
         input.actorUserId,
+        "viewer",
+        "read",
         "documents:view",
         "You cannot view document comments."
       )
       await requireTenantDocument(
         client,
         input.organizationId,
-        input.documentId
+        input.documentId,
+        "read"
       )
 
       const { data, error } = await client
@@ -213,54 +221,49 @@ export async function listDocumentComments(
   )
 }
 
-async function requirePermission(
+async function requireCommentDocumentAccess(
   client: DocumentCommentServiceClient,
   organizationId: string,
+  documentId: string,
   actorUserId: string,
+  requiredAccess: "viewer" | "contributor",
+  operation: "read" | "mutation",
   action: OrganizationPermissionAction,
   rejectionMessage: string
 ): Promise<void> {
-  const { data, error } = await client
-    .from("organization_memberships")
-    .select("role")
-    .eq("org_id", organizationId)
-    .eq("user_id", actorUserId)
-    .eq("status", "active")
-    .maybeSingle()
-
-  if (error) {
-    throw new DocumentCommentServiceError(
-      "Unable to load document permissions.",
-      500
+  try {
+    await requireDocumentAccess(
+      {
+        organizationId,
+        documentId,
+        actorUserId,
+        requiredAccess,
+        operation,
+        requiredOrganizationPermissionAction: action,
+      },
+      client
     )
-  }
+  } catch (error: unknown) {
+    if (error instanceof DocumentServiceError) {
+      throw new DocumentCommentServiceError(
+        error.statusCode === 403 ? rejectionMessage : error.message,
+        error.statusCode
+      )
+    }
 
-  if (!data) {
-    throw new DocumentCommentServiceError(rejectionMessage, 403)
-  }
-
-  const role = (data as MembershipRow).role
-
-  if (!isOrganizationRole(role)) {
-    throw new DocumentCommentServiceError(
-      "Database returned an unsupported organization role.",
-      500
-    )
-  }
-
-  if (!canPerformOrganizationAction(role, action)) {
-    throw new DocumentCommentServiceError(rejectionMessage, 403)
+    throw error
   }
 }
 
 async function requireTenantDocument(
   client: DocumentCommentServiceClient,
   organizationId: string,
-  documentId: string
+  documentId: string,
+  operation: "read" | "mutation"
 ): Promise<DocumentStateRow> {
   const { data, error } = await client
     .from("documents")
-    .select("id,archived_at")
+    .select("id,lifecycle_state,archived_at")
     .eq("id", documentId)
     .eq("org_id", organizationId)
     .maybeSingle()
@@ -273,7 +276,48 @@ async function requireTenantDocument(
     throw new DocumentCommentServiceError("Document was not found.", 404)
   }
 
-  return data as DocumentStateRow
+  const document = data as DocumentStateRow
+  const lifecycleState = normalizeDocumentLifecycleState(document)
+
+  if (
+    lifecycleState === "trashed" ||
+    lifecycleState === "purge_pending"
+  ) {
+    throw new DocumentCommentServiceError("Document was not found.", 404)
+  }
+
+  if (operation === "mutation" && lifecycleState !== "active") {
+    throw new DocumentCommentServiceError(
+      "Archived documents cannot be commented on.",
+      409
+    )
+  }
+
+  return document
+}
+
+function normalizeDocumentLifecycleState(
+  document: DocumentStateRow
+): "active" | "archived" | "trashed" | "purge_pending" {
+  const lifecycleState = document.lifecycle_state
+
+  if (
+    lifecycleState === "active" ||
+    lifecycleState === "archived" ||
+    lifecycleState === "trashed" ||
+    lifecycleState === "purge_pending"
+  ) {
+    return lifecycleState
+  }
+
+  if (lifecycleState === undefined || lifecycleState === null) {
+    return document.archived_at === null ? "active" : "archived"
+  }
+
+  throw new DocumentCommentServiceError(
+    "Database returned an unsupported document lifecycle state.",
+    500
+  )
 }
 
 function mapDocumentComment(
@@ -333,7 +377,13 @@ function createCommentMutationError(error: unknown): DocumentCommentServiceError
     return new DocumentCommentServiceError("Document was not found.", 404)
   }
 
-  if (errorLike?.code === "P0001" && message.includes("archived")) {
+  if (
+    (errorLike?.code === "P0001" || errorLike?.code === "23514") &&
+    (message.includes("archived") ||
+      message.includes("not active") ||
+      message.includes("only active documents") ||
+      message.includes("lifecycle"))
+  ) {
     return new DocumentCommentServiceError(
       "Archived documents cannot be commented on.",
       409

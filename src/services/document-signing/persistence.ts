@@ -1,8 +1,3 @@
-import {
-  canPerformOrganizationAction,
-  isOrganizationRole,
-  type OrganizationPermissionAction,
-} from "@/lib/permissions"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { templateRequiresRecipientInitials } from "@/services/document-signing/answer-validation"
 import type { SigningServiceClient } from "@/services/document-signing/contracts"
@@ -38,10 +33,6 @@ const ANSWER_COLUMNS =
   "document_id,org_id,values,workflow_status,created_at,updated_at"
 const RECIPIENT_COLUMNS =
   "id,org_id,document_id,user_id,name,email,requires_signature,status,token_hash,token_expires_at,invited_at,viewed_at,signed_at,signature_data,initials_data"
-
-type MembershipRow = {
-  role: string
-}
 
 type OrganizationRow = {
   name: string
@@ -101,7 +92,6 @@ export async function loadGeneratedDocumentView(
         .select(GENERATED_DOCUMENT_COLUMNS)
         .eq("id", documentId)
         .eq("org_id", organizationId)
-        .is("archived_at", null)
         .maybeSingle(),
       client
         .from("document_answers")
@@ -262,46 +252,6 @@ export async function loadRecipientByToken(
   }
 
   return data as DocumentSigningRecipientRow
-}
-
-/**
- * Requires an active organization role that can perform a signing action.
- *
- * @param client - Signing persistence client.
- * @param organizationId - Tenant identifier.
- * @param actorUserId - Acting member identifier.
- * @param action - Permission action to authorize.
- * @param message - Safe denial message.
- * @throws DocumentSigningServiceError when access is denied or cannot be checked.
- */
-export async function requirePermission(
-  client: SigningServiceClient,
-  organizationId: string,
-  actorUserId: string,
-  action: OrganizationPermissionAction,
-  message: string
-): Promise<void> {
-  const { data, error } = await client
-    .from("organization_memberships")
-    .select("role")
-    .eq("org_id", organizationId)
-    .eq("user_id", actorUserId)
-    .eq("status", "active")
-    .maybeSingle()
-
-  if (error) {
-    throw createDatabaseError(error, "Unable to verify organization access.")
-  }
-
-  const membership = data as MembershipRow | null
-
-  if (
-    !membership ||
-    !isOrganizationRole(membership.role) ||
-    !canPerformOrganizationAction(membership.role, action)
-  ) {
-    throw new DocumentSigningServiceError(message, 403)
-  }
 }
 
 /**

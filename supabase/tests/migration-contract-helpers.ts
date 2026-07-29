@@ -19,6 +19,11 @@ export type MigrationFileName =
   | "20260723181119_freeform_template_content_v2.sql"
   | "20260725190000_organization_context_function.sql"
   | "20260725200000_audit_log_hash_chain.sql"
+  | "20260726002558_private_document_access_lifecycle.sql"
+  | "20260729085546_cast_private_access_enum_returns.sql"
+  | "20260729115742_document_folder_purge_lifecycle.sql"
+  | "20260729121109_template_content_v3_expand.sql"
+  | "20260730090000_sprint_9_tasks_reminders.sql"
 
 export const directWriteActions = ["insert", "update", "delete"] as const
 

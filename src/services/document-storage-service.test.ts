@@ -1,4 +1,5 @@
 import {
+  DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
   PutObjectCommand,
@@ -12,7 +13,9 @@ import {
   buildDocumentObjectKey,
   createSignedDocumentDownloadUrl,
   createSignedDocumentUploadUrl,
+  deleteDocumentStorageObject,
   DocumentStorageServiceError,
+  type DocumentStorageDeleteObject,
   type DocumentStorageHeadObject,
   type DocumentStorageSigner,
   validateDocumentUploadRequest,
@@ -467,5 +470,84 @@ describe("document upload verification", () => {
       statusCode: 400,
     } satisfies Partial<DocumentStorageServiceError>)
     expect(headObject).not.toHaveBeenCalled()
+  })
+})
+
+describe("document object deletion", () => {
+  it("deletes the exact persisted object with an idempotent R2 command", async () => {
+    const r2Client = {} as S3Client
+    const deleteObject = vi.fn<DocumentStorageDeleteObject>(
+      async (): Promise<void> => undefined
+    )
+    const storageKey =
+      "organizations/org-1/documents/doc-1/versions/ver-1/original.pdf"
+
+    await expect(
+      deleteDocumentStorageObject(
+        { storageKey },
+        { r2Client, r2Env, deleteObject }
+      )
+    ).resolves.toBeUndefined()
+
+    expect(deleteObject).toHaveBeenCalledOnce()
+    const deleteCall = deleteObject.mock.calls[0]
+
+    if (!deleteCall) {
+      throw new Error("Expected document object delete executor to be called.")
+    }
+
+    const [deleteClient, deleteCommand] = deleteCall
+
+    expect(deleteClient).toBe(r2Client)
+    expect(deleteCommand).toBeInstanceOf(DeleteObjectCommand)
+    expect(deleteCommand.input).toEqual({
+      Bucket: "documents",
+      Key: storageKey,
+    })
+  })
+
+  it("treats a missing object as an idempotent deletion success", async () => {
+    const deleteObject = vi.fn<DocumentStorageDeleteObject>(async () => {
+      throw Object.assign(new Error("Object not found"), {
+        name: "NoSuchKey",
+        $metadata: { httpStatusCode: 404 },
+      })
+    })
+
+    await expect(
+      deleteDocumentStorageObject(
+        { storageKey: "organizations/org-1/documents/missing.pdf" },
+        {
+          r2Client: {} as S3Client,
+          r2Env,
+          deleteObject,
+        }
+      )
+    ).resolves.toBeUndefined()
+  })
+
+  it("never includes the raw object key in deletion logs or errors", async () => {
+    const rawStorageKey =
+      "organizations/org-secret/documents/doc-secret/private.pdf"
+    const deleteObject = vi.fn<DocumentStorageDeleteObject>(async () => {
+      throw new Error(`provider failure for ${rawStorageKey}`)
+    })
+    const errorLog = vi.spyOn(console, "error").mockImplementation(() => {})
+
+    await expect(
+      deleteDocumentStorageObject(
+        { storageKey: rawStorageKey },
+        {
+          r2Client: {} as S3Client,
+          r2Env,
+          deleteObject,
+        }
+      )
+    ).rejects.toMatchObject({
+      message: "Unable to delete document storage object.",
+      statusCode: 500,
+    } satisfies Partial<DocumentStorageServiceError>)
+
+    expect(JSON.stringify(errorLog.mock.calls)).not.toContain(rawStorageKey)
   })
 })

@@ -24,7 +24,28 @@ describe("generated document finalization Supabase persistence", () => {
     const database = createTestDatabase({
       queryResults: {
         organization_memberships: {
-          data: { role: "external_reviewer" },
+          data: {
+            id: "60000000-0000-4000-8000-000000000001",
+            org_id: ORGANIZATION_ID,
+            user_id: ACTOR_ID,
+            role: "external_reviewer",
+            status: "active",
+            created_at: "2026-07-18T07:00:00.000Z",
+            updated_at: "2026-07-18T07:00:00.000Z",
+          },
+          error: null,
+        },
+        documents: {
+          data: {
+            lifecycle_state: "active",
+            archived_at: null,
+          },
+          error: null,
+        },
+      },
+      rpcResults: {
+        get_document_access_level: {
+          data: "viewer",
           error: null,
         },
       },
@@ -34,17 +55,91 @@ describe("generated document finalization Supabase persistence", () => {
     await expect(
       persistence.requireViewPermission(input)
     ).resolves.toBeUndefined()
+    expect(database.rpc).toHaveBeenCalledWith("get_document_access_level", {
+      target_org_id: ORGANIZATION_ID,
+      target_document_id: DOCUMENT_ID,
+      target_actor_user_id: ACTOR_ID,
+    })
     expect(database.queryCalls).toEqual([
       {
         relation: "organization_memberships",
-        columns: "role",
+        columns: "id,org_id,user_id,role,status,created_at,updated_at",
         filters: [
           ["org_id", ORGANIZATION_ID],
           ["user_id", ACTOR_ID],
           ["status", "active"],
         ],
       },
+      {
+        relation: "documents",
+        columns: "lifecycle_state,archived_at",
+        filters: [
+          ["id", DOCUMENT_ID],
+          ["org_id", ORGANIZATION_ID],
+        ],
+      },
     ])
+  })
+
+  it("hides finalization state when the actor lacks document access", async () => {
+    const database = createTestDatabase({
+      rpcResults: {
+        get_document_access_level: {
+          data: null,
+          error: null,
+        },
+      },
+    })
+    const persistence = createSupabaseFinalizationPersistence(database.client)
+
+    await expect(
+      persistence.requireViewPermission(input)
+    ).rejects.toMatchObject({
+      message: "Document was not found.",
+      statusCode: 404,
+    })
+
+    expect(database.queryCalls).toEqual([])
+  })
+
+  it("hides finalization state for a trashed document", async () => {
+    const database = createTestDatabase({
+      queryResults: {
+        organization_memberships: {
+          data: {
+            id: "60000000-0000-4000-8000-000000000001",
+            org_id: ORGANIZATION_ID,
+            user_id: ACTOR_ID,
+            role: "manager",
+            status: "active",
+            created_at: "2026-07-18T07:00:00.000Z",
+            updated_at: "2026-07-18T07:00:00.000Z",
+          },
+          error: null,
+        },
+        documents: {
+          data: {
+            lifecycle_state: "trashed",
+            archived_at: null,
+          },
+          error: null,
+        },
+      },
+      rpcResults: {
+        get_document_access_level: {
+          data: "contributor",
+          error: null,
+        },
+      },
+    })
+    const persistence = createSupabaseFinalizationPersistence(database.client)
+
+    await expect(
+      persistence.requireViewPermission(input)
+    ).rejects.toMatchObject({
+      message: "Document was not found.",
+      statusCode: 404,
+    })
   })
 
   it("loads and maps one tenant-scoped finalized row", async () => {

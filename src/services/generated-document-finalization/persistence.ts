@@ -1,8 +1,7 @@
-import {
-  canPerformOrganizationAction,
-  isOrganizationRole,
-} from "@/lib/permissions"
 import type { AdminSupabaseClient } from "@/lib/supabase/admin"
+import { requireDocumentAccess } from "@/services/documents/access-service"
+import type { DocumentServiceClient } from "@/services/documents/contracts"
+import { DocumentServiceError } from "@/services/documents/errors"
 
 import type {
   FinalizeGeneratedDocumentPdfInput,
@@ -44,10 +43,6 @@ type FinalizationDatabaseClient = {
   ) => Promise<QueryResult>
 }
 
-type MembershipRow = {
-  role: unknown
-}
-
 type FinalizationRow = {
   id: unknown
   status: unknown
@@ -57,6 +52,11 @@ type FinalizationRow = {
   byte_size: unknown
   document_version_id: unknown
   created_at: unknown
+}
+
+type FinalizationDocumentStateRow = {
+  lifecycle_state?: unknown
+  archived_at?: unknown
 }
 
 /**
@@ -97,41 +97,79 @@ async function requireViewPermission(
   client: FinalizationDatabaseClient,
   input: FinalizeGeneratedDocumentPdfInput
 ): Promise<void> {
+  try {
+    await requireDocumentAccess(
+      {
+        organizationId: input.organizationId,
+        documentId: input.documentId,
+        actorUserId: input.actorUserId,
+        requiredAccess: "viewer",
+        operation: "read",
+        requiredOrganizationPermissionAction: "documents:view",
+      },
+      client as unknown as DocumentServiceClient
+    )
+  } catch (error: unknown) {
+    if (error instanceof DocumentServiceError) {
+      throw new GeneratedDocumentFinalizationServiceError(
+        error.message,
+        error.statusCode
+      )
+    }
+
+    throw error
+  }
+
+  await requireReadableFinalizationDocument(client, input)
+}
+
+async function requireReadableFinalizationDocument(
+  client: FinalizationDatabaseClient,
+  input: FinalizeGeneratedDocumentPdfInput
+): Promise<void> {
   const { data, error } = await client
-    .from("organization_memberships")
-    .select("role")
+    .from("documents")
+    .select("lifecycle_state,archived_at")
+    .eq("id", input.documentId)
     .eq("org_id", input.organizationId)
-    .eq("user_id", input.actorUserId)
-    .eq("status", "active")
     .maybeSingle()
 
   if (error) {
     throw createPersistenceError(
       error,
-      "Unable to verify generated document permissions."
+      "Unable to verify generated document lifecycle."
     )
   }
 
-  const role = (data as MembershipRow | null)?.role
-
-  if (typeof role !== "string" || !isOrganizationRole(role)) {
-    if (data === null) {
-      throw new GeneratedDocumentFinalizationServiceError(
-        "You cannot view this document.",
-        403
-      )
-    }
-
+  if (!data) {
     throw new GeneratedDocumentFinalizationServiceError(
-      "Database returned an unsupported organization role.",
+      "Document was not found.",
+      404
+    )
+  }
+
+  const document = data as FinalizationDocumentStateRow
+  const lifecycleState = document.lifecycle_state
+
+  if (
+    lifecycleState === "trashed" ||
+    lifecycleState === "purge_pending"
+  ) {
+    throw new GeneratedDocumentFinalizationServiceError(
+      "Document was not found.",
+      404
+    )
+  }
+
+  if (
+    lifecycleState !== undefined &&
+    lifecycleState !== null &&
+    lifecycleState !== "active" &&
+    lifecycleState !== "archived"
+  ) {
+    throw new GeneratedDocumentFinalizationServiceError(
+      "Database returned an unsupported document lifecycle state.",
       500
-    )
-  }
-
-  if (!canPerformOrganizationAction(role, "documents:view")) {
-    throw new GeneratedDocumentFinalizationServiceError(
-      "You cannot view this document.",
-      403
     )
   }
 }

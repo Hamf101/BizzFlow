@@ -17,6 +17,7 @@ import type {
 import { DocumentServiceError } from "@/services/documents/errors"
 import type {
   DocumentFolder,
+  DocumentLifecycleState,
   DocumentRow,
   DocumentSummary,
   DocumentVersion,
@@ -166,10 +167,45 @@ export async function requireActiveFolder(
 ): Promise<DocumentFolder> {
   const { data, error } = await client
     .from("folders")
-    .select("id,org_id,parent_folder_id,name,created_by,updated_by,archived_by,archived_at,created_at,updated_at")
+    .select("id,org_id,parent_folder_id,name,lifecycle_state,created_by,updated_by,archived_by,archived_at,trashed_by,trashed_at,purge_after,pre_trash_lifecycle_state,trash_operation_id,created_at,updated_at")
     .eq("id", folderId)
     .eq("org_id", organizationId)
-    .is("archived_at", null)
+    .eq("lifecycle_state", "active")
+    .maybeSingle()
+
+  if (error) {
+    throw createSupabaseServiceError(error, "Unable to load folder.")
+  }
+
+  if (!data) {
+    throw new DocumentServiceError("Folder was not found.", 404)
+  }
+
+  return mapFolder(data as FolderRow)
+}
+
+/**
+ * Loads a folder in any lifecycle state, scoped to an organization.
+ *
+ * Callers must perform the appropriate resource-access check before using this
+ * admin-client lookup.
+ *
+ * @param client - Supabase client used for the query.
+ * @param organizationId - Tenant identifier.
+ * @param folderId - Folder identifier.
+ * @returns Folder DTO in its current lifecycle state.
+ * @throws DocumentServiceError when the query fails or the folder is absent.
+ */
+export async function getFolderById(
+  client: DocumentServiceClient,
+  organizationId: string,
+  folderId: string
+): Promise<DocumentFolder> {
+  const { data, error } = await client
+    .from("folders")
+    .select("id,org_id,parent_folder_id,name,lifecycle_state,created_by,updated_by,archived_by,archived_at,trashed_by,trashed_at,purge_after,pre_trash_lifecycle_state,trash_operation_id,created_at,updated_at")
+    .eq("id", folderId)
+    .eq("org_id", organizationId)
     .maybeSingle()
 
   if (error) {
@@ -199,7 +235,7 @@ export async function getDocumentById(
 ): Promise<DocumentSummary> {
   const { data, error } = await client
     .from("documents")
-    .select("id,org_id,folder_id,title,description,current_version_id,source_kind,template_id,template_revision,created_by,updated_by,archived_by,archived_at,created_at,updated_at")
+    .select("id,org_id,folder_id,title,description,current_version_id,source_kind,template_id,template_revision,lifecycle_state,created_by,updated_by,archived_by,archived_at,trashed_by,trashed_at,purge_after,pre_trash_lifecycle_state,trash_operation_id,created_at,updated_at")
     .eq("id", documentId)
     .eq("org_id", organizationId)
     .maybeSingle()
@@ -247,10 +283,21 @@ export function mapFolder(row: FolderRow): DocumentFolder {
     organizationId: row.org_id,
     parentFolderId: row.parent_folder_id,
     name: row.name,
+    lifecycleState: parseDocumentLifecycleState(
+      row.lifecycle_state,
+      row.archived_at
+    ),
     createdBy: row.created_by,
     updatedBy: row.updated_by,
     archivedBy: row.archived_by,
     archivedAt: row.archived_at,
+    trashedBy: row.trashed_by ?? null,
+    trashedAt: row.trashed_at ?? null,
+    purgeAfter: row.purge_after ?? null,
+    preTrashLifecycleState: parseNullableDocumentLifecycleState(
+      row.pre_trash_lifecycle_state
+    ),
+    trashOperationId: row.trash_operation_id ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
@@ -280,10 +327,21 @@ export function mapDocument(row: DocumentRow): DocumentSummary {
           templateRevision: row.template_revision ?? null,
         }
       : {}),
+    lifecycleState: parseDocumentLifecycleState(
+      row.lifecycle_state,
+      row.archived_at
+    ),
     createdBy: row.created_by,
     updatedBy: row.updated_by,
     archivedBy: row.archived_by,
     archivedAt: row.archived_at,
+    trashedBy: row.trashed_by ?? null,
+    trashedAt: row.trashed_at ?? null,
+    purgeAfter: row.purge_after ?? null,
+    preTrashLifecycleState: parseNullableDocumentLifecycleState(
+      row.pre_trash_lifecycle_state
+    ),
+    trashOperationId: row.trash_operation_id ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
@@ -413,6 +471,40 @@ function parseDocumentVersionStatus(value: string): DocumentVersionStatus {
     "Database returned an unsupported document version status.",
     500
   )
+}
+
+function parseDocumentLifecycleState(
+  value: unknown,
+  archivedAt: string | null
+): DocumentLifecycleState {
+  if (
+    value === "active" ||
+    value === "archived" ||
+    value === "trashed" ||
+    value === "purge_pending"
+  ) {
+    return value
+  }
+
+  if (value === undefined) {
+    // Keep legacy projections safe during the additive lifecycle rollout.
+    return archivedAt ? "archived" : "active"
+  }
+
+  throw new DocumentServiceError(
+    "Database returned an unsupported document lifecycle state.",
+    500
+  )
+}
+
+function parseNullableDocumentLifecycleState(
+  value: unknown
+): DocumentLifecycleState | null {
+  if (value === null || value === undefined) {
+    return null
+  }
+
+  return parseDocumentLifecycleState(value, null)
 }
 
 function createDocumentSetupError(error: unknown): DocumentServiceError | null {

@@ -1,10 +1,6 @@
 import { randomUUID } from "node:crypto"
 
 import {
-  canPerformOrganizationAction,
-  isOrganizationRole,
-} from "@/lib/permissions"
-import {
   createAdminClient,
   type AdminSupabaseClient,
 } from "@/lib/supabase/admin"
@@ -15,6 +11,8 @@ import {
   uniqueDocumentCollaborationProfileIds,
   type DocumentCollaborationProfileRow,
 } from "@/services/document-collaboration/profiles"
+import { requireDocumentAccess } from "@/services/documents/access-service"
+import { DocumentServiceError } from "@/services/documents/errors"
 import {
   DOCUMENT_ACTIVITY_EVENT_TYPES,
   type ActivityMetadata,
@@ -24,12 +22,12 @@ import {
   type DocumentActivityEventType,
 } from "@/types/activity"
 
-type DocumentActivityServiceClient = Pick<AdminSupabaseClient, "from">
+type DocumentActivityServiceClient = Pick<AdminSupabaseClient, "from" | "rpc">
 
 type LogValue = string | number | boolean | null | undefined
 
-type MembershipRow = {
-  role: string
+type DocumentStateRow = {
+  lifecycle_state?: unknown
 }
 
 export type RecordDocumentActivityInput = {
@@ -144,9 +142,10 @@ export async function listDocumentActivity(
       await requireDocumentViewPermission(
         client,
         input.organizationId,
+        input.documentId,
         input.actorUserId
       )
-      await requireTenantDocument(
+      await requireReadableTenantDocument(
         client,
         input.organizationId,
         input.documentId
@@ -193,44 +192,32 @@ export async function listDocumentActivity(
 async function requireDocumentViewPermission(
   client: DocumentActivityServiceClient,
   organizationId: string,
+  documentId: string,
   actorUserId: string
 ): Promise<void> {
-  const { data, error } = await client
-    .from("organization_memberships")
-    .select("role")
-    .eq("org_id", organizationId)
-    .eq("user_id", actorUserId)
-    .eq("status", "active")
-    .maybeSingle()
-
-  if (error) {
-    throw new DocumentActivityServiceError(
-      "Unable to load document permissions.",
-      500
+  try {
+    await requireDocumentAccess(
+      {
+        organizationId,
+        documentId,
+        actorUserId,
+        requiredAccess: "viewer",
+        operation: "read",
+        requiredOrganizationPermissionAction: "documents:view",
+      },
+      client
     )
-  }
+  } catch (error: unknown) {
+    if (error instanceof DocumentServiceError) {
+      throw new DocumentActivityServiceError(
+        error.statusCode === 403
+          ? "You cannot view document activity."
+          : error.message,
+        error.statusCode
+      )
+    }
 
-  if (!data) {
-    throw new DocumentActivityServiceError(
-      "You cannot view document activity.",
-      403
-    )
-  }
-
-  const role = (data as MembershipRow).role
-
-  if (!isOrganizationRole(role)) {
-    throw new DocumentActivityServiceError(
-      "Database returned an unsupported organization role.",
-      500
-    )
-  }
-
-  if (!canPerformOrganizationAction(role, "documents:view")) {
-    throw new DocumentActivityServiceError(
-      "You cannot view document activity.",
-      403
-    )
+    throw error
   }
 }
 
@@ -252,6 +239,48 @@ async function requireTenantDocument(
 
   if (!data) {
     throw new DocumentActivityServiceError("Document was not found.", 404)
+  }
+}
+
+async function requireReadableTenantDocument(
+  client: DocumentActivityServiceClient,
+  organizationId: string,
+  documentId: string
+): Promise<void> {
+  const { data, error } = await client
+    .from("documents")
+    .select("id,lifecycle_state")
+    .eq("id", documentId)
+    .eq("org_id", organizationId)
+    .maybeSingle()
+
+  if (error) {
+    throw new DocumentActivityServiceError("Unable to load document.", 500)
+  }
+
+  if (!data) {
+    throw new DocumentActivityServiceError("Document was not found.", 404)
+  }
+
+  const lifecycleState = (data as DocumentStateRow).lifecycle_state
+
+  if (
+    lifecycleState === "trashed" ||
+    lifecycleState === "purge_pending"
+  ) {
+    throw new DocumentActivityServiceError("Document was not found.", 404)
+  }
+
+  if (
+    lifecycleState !== undefined &&
+    lifecycleState !== null &&
+    lifecycleState !== "active" &&
+    lifecycleState !== "archived"
+  ) {
+    throw new DocumentActivityServiceError(
+      "Database returned an unsupported document lifecycle state.",
+      500
+    )
   }
 }
 

@@ -2,6 +2,7 @@ import { vi } from "vitest"
 
 import type { OrganizationRole } from "@/lib/permissions"
 import type { DocumentServiceDeps } from "@/services/document-service"
+import type { DocumentAccessLevel } from "@/types/document"
 
 export type FakeRow = Record<string, unknown>
 
@@ -9,6 +10,8 @@ type FakeTableName =
   | "organization_memberships"
   | "folders"
   | "documents"
+  | "folder_access_grants"
+  | "document_access_grants"
   | "document_versions"
   | "document_activity_events"
   | "audit_logs"
@@ -26,6 +29,8 @@ export class FakeSupabaseClient {
       organization_memberships: seed.organization_memberships ?? [],
       folders: seed.folders ?? [],
       documents: seed.documents ?? [],
+      folder_access_grants: seed.folder_access_grants ?? [],
+      document_access_grants: seed.document_access_grants ?? [],
       document_versions: seed.document_versions ?? [],
       document_activity_events: seed.document_activity_events ?? [],
       audit_logs: seed.audit_logs ?? [],
@@ -53,9 +58,33 @@ export class FakeSupabaseClient {
     functionName:
       | "archive_document"
       | "create_pending_document_version"
-      | "complete_document_version",
+      | "complete_document_version"
+      | "get_document_access_level"
+      | "get_folder_access_level",
     args: Record<string, unknown>
   ): Promise<{ data: string | boolean | null; error: Error | null }> {
+    if (functionName === "get_document_access_level") {
+      return {
+        data: this.getEffectiveDocumentAccess(
+          String(args.target_org_id),
+          String(args.target_document_id),
+          String(args.target_actor_user_id)
+        ),
+        error: null,
+      }
+    }
+
+    if (functionName === "get_folder_access_level") {
+      return {
+        data: this.getEffectiveFolderAccess(
+          String(args.target_org_id),
+          String(args.target_folder_id),
+          String(args.target_actor_user_id)
+        ),
+        error: null,
+      }
+    }
+
     if (functionName === "create_pending_document_version") {
       const document = this.tables.documents.find(
         (row: FakeRow): boolean =>
@@ -111,6 +140,7 @@ export class FakeSupabaseClient {
 
       document.archived_at = "2026-07-09T12:00:00.000Z"
       document.archived_by = args.target_actor_user_id
+      document.lifecycle_state = "archived"
       document.updated_by = args.target_actor_user_id
       document.updated_at = "2026-07-09T12:00:00.000Z"
       this.tables.document_activity_events.push({
@@ -174,6 +204,182 @@ export class FakeSupabaseClient {
     }
 
     return { data: true, error: null }
+  }
+
+  private getEffectiveDocumentAccess(
+    organizationId: string,
+    documentId: string,
+    actorUserId: string
+  ): DocumentAccessLevel | null {
+    const membership = this.getActiveMembership(
+      organizationId,
+      actorUserId
+    )
+    const document = this.tables.documents.find(
+      (row: FakeRow): boolean =>
+        row.id === documentId && row.org_id === organizationId
+    )
+
+    if (!membership || !document) {
+      return null
+    }
+
+    if (membership.role === "owner_admin") {
+      return "contributor"
+    }
+
+    const creatorAccess =
+      document.created_by === actorUserId ? "contributor" : null
+    const directAccess = getHighestAccessLevel(
+      creatorAccess,
+      this.getGrantAccess(
+        this.tables.document_access_grants,
+        "document_id",
+        documentId,
+        organizationId,
+        actorUserId,
+        String(membership.role)
+      )
+    )
+    const inheritedAccess = document.folder_id
+      ? this.getInheritedFolderGrantAccess(
+          organizationId,
+          String(document.folder_id),
+          actorUserId,
+          String(membership.role)
+        )
+      : null
+
+    const effectiveAccess = getHighestAccessLevel(
+      directAccess,
+      inheritedAccess
+    )
+
+    return membership.role === "external_reviewer" && effectiveAccess
+      ? "viewer"
+      : effectiveAccess
+  }
+
+  private getEffectiveFolderAccess(
+    organizationId: string,
+    folderId: string,
+    actorUserId: string
+  ): DocumentAccessLevel | null {
+    const membership = this.getActiveMembership(
+      organizationId,
+      actorUserId
+    )
+    const folder = this.tables.folders.find(
+      (row: FakeRow): boolean =>
+        row.id === folderId && row.org_id === organizationId
+    )
+
+    if (!membership || !folder) {
+      return null
+    }
+
+    if (membership.role === "owner_admin") {
+      return "contributor"
+    }
+
+    const effectiveAccess = this.getInheritedFolderGrantAccess(
+      organizationId,
+      folderId,
+      actorUserId,
+      String(membership.role)
+    )
+
+    return membership.role === "external_reviewer" && effectiveAccess
+      ? "viewer"
+      : effectiveAccess
+  }
+
+  private getActiveMembership(
+    organizationId: string,
+    actorUserId: string
+  ): FakeRow | null {
+    return (
+      this.tables.organization_memberships.find(
+        (row: FakeRow): boolean =>
+          row.org_id === organizationId &&
+          row.user_id === actorUserId &&
+          row.status === "active"
+      ) ?? null
+    )
+  }
+
+  private getInheritedFolderGrantAccess(
+    organizationId: string,
+    folderId: string,
+    actorUserId: string,
+    actorRole: string
+  ): DocumentAccessLevel | null {
+    const visitedFolderIds = new Set<string>()
+    let currentFolderId: string | null = folderId
+    let effectiveAccess: DocumentAccessLevel | null = null
+
+    while (currentFolderId && !visitedFolderIds.has(currentFolderId)) {
+      visitedFolderIds.add(currentFolderId)
+      effectiveAccess = getHighestAccessLevel(
+        effectiveAccess,
+        this.getGrantAccess(
+          this.tables.folder_access_grants,
+          "folder_id",
+          currentFolderId,
+          organizationId,
+          actorUserId,
+          actorRole
+        )
+      )
+
+      const folder = this.tables.folders.find(
+        (row: FakeRow): boolean =>
+          row.id === currentFolderId && row.org_id === organizationId
+      )
+      effectiveAccess = getHighestAccessLevel(
+        effectiveAccess,
+        folder?.created_by === actorUserId ? "contributor" : null
+      )
+      currentFolderId =
+        typeof folder?.parent_folder_id === "string"
+          ? folder.parent_folder_id
+          : null
+    }
+
+    return effectiveAccess
+  }
+
+  private getGrantAccess(
+    grants: FakeRow[],
+    resourceColumn: "document_id" | "folder_id",
+    resourceId: string,
+    organizationId: string,
+    actorUserId: string,
+    actorRole: string
+  ): DocumentAccessLevel | null {
+    return grants.reduce<DocumentAccessLevel | null>(
+      (
+        effectiveAccess: DocumentAccessLevel | null,
+        grant: FakeRow
+      ): DocumentAccessLevel | null => {
+        const appliesToActor =
+          grant.user_id === actorUserId ||
+          grant.organization_role === actorRole
+        const accessLevel = parseAccessLevel(grant.access_level)
+
+        if (
+          grant.org_id !== organizationId ||
+          grant[resourceColumn] !== resourceId ||
+          !appliesToActor ||
+          accessLevel === null
+        ) {
+          return effectiveAccess
+        }
+
+        return getHighestAccessLevel(effectiveAccess, accessLevel)
+      },
+      null
+    )
   }
 }
 
@@ -308,12 +514,40 @@ class FakeQueryBuilder {
   }
 
   private withTimestamps(row: FakeRow): FakeRow {
+    const lifecycleDefaults =
+      this.tableName === "folders" || this.tableName === "documents"
+        ? {
+            lifecycle_state: "active",
+            trashed_by: null,
+            trashed_at: null,
+            purge_after: null,
+            pre_trash_lifecycle_state: null,
+            trash_operation_id: null,
+          }
+        : {}
+
     return {
       created_at: "2026-07-09T12:00:00.000Z",
       updated_at: "2026-07-09T12:00:00.000Z",
+      ...lifecycleDefaults,
       ...row,
     }
   }
+}
+
+function parseAccessLevel(value: unknown): DocumentAccessLevel | null {
+  return value === "viewer" || value === "contributor" ? value : null
+}
+
+function getHighestAccessLevel(
+  left: DocumentAccessLevel | null,
+  right: DocumentAccessLevel | null
+): DocumentAccessLevel | null {
+  if (left === "contributor" || right === "contributor") {
+    return "contributor"
+  }
+
+  return left ?? right
 }
 
 /**
@@ -341,6 +575,13 @@ export function createMembershipRow(role: OrganizationRole): FakeRow {
  * @returns Document database row.
  */
 export function createDocumentRow(overrides: FakeRow = {}): FakeRow {
+  const lifecycleState =
+    typeof overrides.lifecycle_state === "string"
+      ? overrides.lifecycle_state
+      : overrides.archived_at
+        ? "archived"
+        : "active"
+
   return {
     id: "document-1",
     org_id: "org-1",
@@ -348,10 +589,16 @@ export function createDocumentRow(overrides: FakeRow = {}): FakeRow {
     title: "Signed contract",
     description: null,
     current_version_id: "version-1",
+    lifecycle_state: lifecycleState,
     created_by: "user-1",
     updated_by: "user-1",
     archived_by: null,
     archived_at: null,
+    trashed_by: null,
+    trashed_at: null,
+    purge_after: null,
+    pre_trash_lifecycle_state: null,
+    trash_operation_id: null,
     created_at: "2026-07-09T11:00:00.000Z",
     updated_at: "2026-07-09T11:00:00.000Z",
     ...overrides,

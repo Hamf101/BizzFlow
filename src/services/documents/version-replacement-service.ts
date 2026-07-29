@@ -3,6 +3,7 @@ import {
   createSignedDocumentUploadUrl as defaultCreateSignedDocumentUploadUrl,
   validateDocumentUploadRequest as defaultValidateDocumentUploadRequest,
 } from "@/services/document-storage-service"
+import { requireDocumentAccess } from "@/services/documents/access-service"
 import { recordDocumentAuditLog } from "@/services/documents/audit"
 import type {
   CreateDocumentReplacementUploadUrlInput,
@@ -56,15 +57,25 @@ export async function createDocumentReplacementUploadUrl(
         "document_versions:create",
         "You cannot create document versions."
       )
+      await requireDocumentAccess(
+        {
+          actorUserId: input.actorUserId,
+          organizationId: input.organizationId,
+          documentId: input.documentId,
+          requiredAccess: "contributor",
+          operation: "mutation",
+        },
+        client
+      )
       const document = await getDocumentById(
         client,
         input.organizationId,
         input.documentId
       )
 
-      if (document.archivedAt) {
+      if (document.lifecycleState !== "active") {
         throw new DocumentServiceError(
-          "Archived documents cannot be replaced.",
+          "Only active documents can be replaced.",
           409
         )
       }
