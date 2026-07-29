@@ -2,8 +2,10 @@ import { canPerformOrganizationAction } from "@/lib/permissions"
 import {
   createBlankTemplateContent,
   parseTemplateContent,
+  upgradeV2TemplateContentToV3,
   type DocumentTemplate,
   type DocumentTemplateRow,
+  type TemplateContent,
 } from "@/types/template"
 
 import type {
@@ -16,6 +18,7 @@ import type {
   UpdateDocumentTemplateInput,
 } from "./contracts"
 import { TemplateServiceError } from "./errors"
+import { evaluateTemplateQuality } from "./template-quality-service"
 import {
   assertRevision,
   createDatabaseError,
@@ -159,8 +162,10 @@ export async function createDocumentTemplate(
           description: normalizeDescription(input.description),
           status: "draft",
           revision: 1,
-          content: parseTemplateContent(
-            input.content ?? createBlankTemplateContent()
+          content: upgradeV2TemplateContentToV3(
+            parseTemplateContent(
+              input.content ?? createBlankTemplateContent()
+            )
           ),
           created_by: input.actorUserId,
           updated_by: input.actorUserId,
@@ -247,17 +252,20 @@ export async function updateDocumentTemplate(
       const nextDescription = hasDescription
         ? normalizeDescription(input.description)
         : existing.description
-      const nextContent = hasContent
+      const parsedExistingContent = parseTemplateContent(existing.content)
+      const proposedContent = hasContent
         ? parseTemplateContent(input.content)
-        : parseTemplateContent(existing.content)
+        : parsedExistingContent
 
       if (
         nextTitle === existing.title &&
         nextDescription === existing.description &&
-        JSON.stringify(nextContent) === JSON.stringify(existing.content)
+        JSON.stringify(proposedContent) === JSON.stringify(parsedExistingContent)
       ) {
         throw new TemplateServiceError("No template changes were provided.", 400)
       }
+
+      const nextContent = upgradeV2TemplateContentToV3(proposedContent)
 
       const { data, error } = await client
         .from("document_templates")
@@ -338,7 +346,12 @@ export async function publishDocumentTemplate(
         )
       }
 
-      parseTemplateContent(existing.content)
+      const content = parseTemplateContent(existing.content)
+      assertTemplatePublishReady(
+        existing.title,
+        existing.description,
+        content
+      )
 
       if (existing.status === "published") {
         return existing
@@ -373,6 +386,25 @@ export async function publishDocumentTemplate(
       return mapDocumentTemplate(data as DocumentTemplateRow)
     }
   )
+}
+
+function assertTemplatePublishReady(
+  title: string,
+  description: string | null,
+  content: TemplateContent
+): void {
+  const evaluation = evaluateTemplateQuality({
+    title,
+    description,
+    content
+  })
+  const firstBlockingIssue = evaluation.issues.find(
+    (issue): boolean => issue.severity === "critical"
+  )
+
+  if (firstBlockingIssue) {
+    throw new TemplateServiceError(firstBlockingIssue.message, 400)
+  }
 }
 
 /**
