@@ -2,6 +2,10 @@ import { randomUUID } from "node:crypto"
 
 import { createAdminClient } from "@/lib/supabase/admin"
 import { deleteDocumentStorageObject } from "@/services/document-storage-service"
+import {
+  requireDocumentAccess,
+  requireFolderAccess,
+} from "@/services/documents/access-service"
 import type {
   LeasedResourcePurgeObject,
   ProcessDueResourcePurgesOptions,
@@ -37,8 +41,9 @@ type SupabaseErrorLike = {
 /**
  * Atomically queues permanent deletion of one trashed document.
  *
- * The database is authoritative for creator/owner authorization, retention
- * protection, exact title confirmation, and idempotency.
+ * Contributor access plus `documents:archive` is required here; the database
+ * remains authoritative for creator/owner authorization, retention protection,
+ * exact title confirmation, and idempotency.
  *
  * @param input - Actor, tenant, document, and exact confirmation title.
  * @param deps - Optional purge dependencies for tests.
@@ -60,6 +65,20 @@ export async function requestDocumentPurge(
     async (): Promise<ResourcePurgeRequestResult> => {
       requireConfirmation(input.confirmationTitle, "confirmationTitle")
       const client = getPurgeClient(deps)
+
+      // Normalizes an invisible document to 404 before the request reaches the
+      // database, so no member can probe ids or titles they cannot already see.
+      await requireDocumentAccess(
+        {
+          actorUserId: input.actorUserId,
+          organizationId: input.organizationId,
+          documentId: input.documentId,
+          requiredAccess: "contributor",
+          operation: "mutation",
+          requiredOrganizationPermissionAction: "documents:archive",
+        },
+        client
+      )
       const jobId = (deps.createId ?? randomUUID)()
       const { data, error } = await client.rpc("request_document_purge", {
         target_org_id: input.organizationId,
@@ -91,8 +110,9 @@ export async function requestDocumentPurge(
 /**
  * Atomically queues permanent deletion of a trashed folder's physical subtree.
  *
- * The database locks and inventories the complete subtree, applies creator or
- * owner authorization, and requires an exact folder-name confirmation.
+ * Contributor access plus `folders:manage` is required here; the database then
+ * locks and inventories the complete subtree, applies creator or owner
+ * authorization, and requires an exact folder-name confirmation.
  *
  * @param input - Actor, tenant, folder, and exact confirmation name.
  * @param deps - Optional purge dependencies for tests.
@@ -114,6 +134,20 @@ export async function requestFolderPurge(
     async (): Promise<ResourcePurgeRequestResult> => {
       requireConfirmation(input.confirmationName, "confirmationName")
       const client = getPurgeClient(deps)
+
+      // Same enumeration guard as the document path; the database still applies
+      // creator-or-owner authorization over the locked subtree.
+      await requireFolderAccess(
+        {
+          actorUserId: input.actorUserId,
+          organizationId: input.organizationId,
+          folderId: input.folderId,
+          requiredAccess: "contributor",
+          operation: "mutation",
+          requiredOrganizationPermissionAction: "folders:manage",
+        },
+        client
+      )
       const jobId = (deps.createId ?? randomUUID)()
       const { data, error } = await client.rpc("request_folder_purge", {
         target_org_id: input.organizationId,

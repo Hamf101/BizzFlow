@@ -2,7 +2,13 @@ import type { AdminSupabaseClient } from "@/lib/supabase/admin"
 import type { deleteDocumentStorageObject } from "@/services/document-storage-service"
 import type { DocumentLifecycleState } from "@/types/document"
 
-export type ResourcePurgeServiceClient = Pick<AdminSupabaseClient, "rpc">
+// Manual purge requests additionally read resource access and membership, so
+// this matches DocumentServiceClient rather than the rpc-only surface the
+// scheduled batch needs.
+export type ResourcePurgeServiceClient = Pick<
+  AdminSupabaseClient,
+  "from" | "rpc"
+>
 
 export type ResourcePurgeObjectFailureDisposition =
   | "retry_wait"
