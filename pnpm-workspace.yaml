@@ -1,0 +1,52 @@
+allowBuilds:
+  # sentry-cli's postinstall downloads the binary used for sourcemap upload.
+  # The published Gemini SDK and protobuf runtime already include distributable
+  # artifacts; their package build scripts are not required by this application.
+  '@google/genai': false
+  '@sentry/cli': true
+  core-js: true
+  protobufjs: false
+  sharp: true
+  unrs-resolver: true
+
+minimumReleaseAgeExclude:
+  - '@next/env@16.3.0'
+  - '@next/eslint-plugin-next@16.3.0'
+  - '@next/swc-darwin-arm64@16.3.0'
+  - '@next/swc-darwin-x64@16.3.0'
+  - '@next/swc-linux-arm64-gnu@16.3.0'
+  - '@next/swc-linux-arm64-musl@16.3.0'
+  - '@next/swc-linux-x64-gnu@16.3.0'
+  - '@next/swc-linux-x64-musl@16.3.0'
+  - '@next/swc-win32-arm64-msvc@16.3.0'
+  - '@next/swc-win32-x64-msvc@16.3.0'
+  - eslint-config-next@16.3.0
+  - next@16.3.0
+  - jscpd-darwin-arm64@5.0.15
+  - jscpd-darwin-x64@5.0.15
+  - jscpd-linux-arm64-gnu@5.0.15
+  - jscpd-linux-x64-gnu@5.0.15
+  - jscpd-linux-x64-musl@5.0.15
+  - jscpd-windows-x64-msvc@5.0.15
+  - jscpd@5.0.15
+  - '@aws-sdk/client-s3@3.1110.0'
+  - '@aws-sdk/s3-request-presigner@3.1110.0'
+  - '@posthog/core@1.48.0'
+  - '@posthog/types@1.404.0'
+  - inngest@4.18.1
+  - posthog-js@1.417.0
+  - '@google/genai@2.17.0'
+
+overrides:
+  postcss: 8.5.23
+  # Transitive advisory floor: sharp inherits libvips CVEs below 0.35 (via next).
+  sharp: '>=0.35.3'
+  # DoS advisory GHSA-mh99-v99m-4gvg; scoped to the 5.x line used by glob 13.
+  # Raised to 5.0.9: 5.0.8 is still in the advisory's vulnerable range.
+  brace-expansion@5: '>=5.0.9'
+  # Host confusion via backslash; reached through @sentry/webpack-plugin.
+  # Bounded below 4 so the advisory floor cannot drag in a major upgrade.
+  fast-uri: '>=3.1.5 <4'
+  # Custom generators can loop indefinitely; reached through the pinned postcss.
+  # Bounded below 4 for the same reason.
+  nanoid: '>=3.3.18 <4'
