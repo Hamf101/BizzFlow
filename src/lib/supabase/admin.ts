@@ -249,7 +249,7 @@ type AdminTaskReminderRow = Record<string, unknown> & {
   remind_at: string
   channel: "email" | "sms"
   origin: "manual" | "automatic"
-  status: "pending" | "sent" | "failed" | "cancelled"
+  status: "pending" | "sent" | "failed" | "cancelled" | "superseded"
   attempt_count: number
   last_error: string | null
   sent_at: string | null

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto"
 
 import { createAdminClient, type AdminSupabaseClient } from "@/lib/supabase/admin"
+import { recordAuditLog as defaultRecordAuditLog } from "@/services/audit-service"
 import type { AuditLogAction, AuditMetadata } from "@/types/audit"
 import {
   parseNotificationDeliveryRow,
@@ -131,22 +132,7 @@ export async function recordNotificationDelivery(
 
     const delivery = parseNotificationDeliveryRow(data)
 
-    if (deps.recordAuditLog) {
-      await deps.recordAuditLog({
-        organizationId: delivery.organizationId,
-        // A notification is emitted by a background job, not a member.
-        actorUserId: null,
-        action: AUDIT_ACTION_BY_STATUS[delivery.status],
-        targetType: "notification",
-        targetId: delivery.id,
-        metadata: {
-          channel: delivery.channel,
-          purpose: delivery.purpose,
-          recipientUserId: delivery.recipientUserId,
-          attemptCount: delivery.attemptCount,
-        },
-      })
-    }
+    await recordDeliveryAuditLog(deps, delivery)
 
     return delivery
   } catch (error: unknown) {
@@ -200,4 +186,50 @@ export async function listNotificationDeliveries(
   }
 
   return data.map(parseNotificationDeliveryRow)
+}
+
+/**
+ * Records the audit event for one delivery attempt, best effort.
+ *
+ * Defaults to the real recorder, matching `recordTaskAuditLog`
+ * (`src/services/tasks/shared.ts:606`). The previous `if (deps.recordAuditLog)`
+ * guard had no fallback and every production caller passes no deps, so
+ * `notification.sent` / `.failed` / `.suppressed` never reached the audit log —
+ * only tests, which inject a fake, ever saw one.
+ *
+ * A failed audit write must not discard a delivery row that was written, so
+ * this logs and returns rather than throwing.
+ *
+ * @param deps - Injected notification service dependencies.
+ * @param delivery - The delivery attempt just persisted.
+ */
+async function recordDeliveryAuditLog(
+  deps: NotificationServiceDeps,
+  delivery: NotificationDelivery
+): Promise<void> {
+  const recordAuditLog = deps.recordAuditLog ?? defaultRecordAuditLog
+
+  try {
+    await recordAuditLog({
+      organizationId: delivery.organizationId,
+      // A notification is emitted by a background job, not a member.
+      actorUserId: null,
+      action: AUDIT_ACTION_BY_STATUS[delivery.status],
+      targetType: "notification",
+      targetId: delivery.id,
+      metadata: {
+        channel: delivery.channel,
+        purpose: delivery.purpose,
+        recipientUserId: delivery.recipientUserId,
+        attemptCount: delivery.attemptCount,
+      },
+    })
+  } catch (error: unknown) {
+    console.warn("notification_audit_log_failed", {
+      organizationId: delivery.organizationId,
+      action: AUDIT_ACTION_BY_STATUS[delivery.status],
+      deliveryId: delivery.id,
+      reason: error instanceof Error ? error.message : "Unknown audit error",
+    })
+  }
 }

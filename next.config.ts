@@ -1,44 +1,22 @@
 import { withSentryConfig } from "@sentry/nextjs"
 import type { NextConfig } from "next"
 
+import { buildContentSecurityPolicy } from "./src/lib/content-security-policy"
+
 const isProduction = process.env.NODE_ENV === "production"
 const usesHttps =
   isProduction && process.env.NEXT_PUBLIC_APP_URL?.startsWith("https://") === true
 
-// PostHog ingests from its own origin, so analytics is silently dropped by the
-// strict connect-src below unless that origin is allowed. Sentry needs no entry
-// because it tunnels through the same-origin /monitoring route instead.
-const posthogConnectSrc = ((): string => {
-  const configuredKey = process.env.NEXT_PUBLIC_POSTHOG_KEY
-
-  if (typeof configuredKey !== "string" || configuredKey.trim().length === 0) {
-    return ""
-  }
-
-  const host = process.env.NEXT_PUBLIC_POSTHOG_HOST ?? "https://us.i.posthog.com"
-
-  try {
-    return ` ${new URL(host).origin}`
-  } catch {
-    return ""
-  }
-})()
-
-const contentSecurityPolicy = [
-  "default-src 'self'",
-  `script-src 'self' 'unsafe-inline'${isProduction ? "" : " 'unsafe-eval'"}`,
-  "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob:",
-  "font-src 'self' data:",
-  `connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.r2.cloudflarestorage.com${posthogConnectSrc}`,
-  "worker-src 'self' blob:",
-  "frame-src 'none'",
-  "object-src 'none'",
-  "base-uri 'self'",
-  "form-action 'self'",
-  "frame-ancestors 'none'",
-  ...(usesHttps ? ["upgrade-insecure-requests"] : []),
-].join("; ")
+// Sentry needs no connect-src entry because browser events tunnel through the
+// same-origin /monitoring route. Browser uploads do need the configured R2
+// origin, including the local MinIO origin used by the end-to-end suite.
+const contentSecurityPolicy = buildContentSecurityPolicy({
+  appUrl: process.env.NEXT_PUBLIC_APP_URL,
+  isProduction,
+  posthogHost: process.env.NEXT_PUBLIC_POSTHOG_HOST,
+  posthogKey: process.env.NEXT_PUBLIC_POSTHOG_KEY,
+  r2Endpoint: process.env.CLOUDFLARE_R2_ENDPOINT,
+})
 
 const securityHeaders: Array<{ key: string; value: string }> = [
   { key: "Content-Security-Policy", value: contentSecurityPolicy },

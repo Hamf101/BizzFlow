@@ -21,9 +21,13 @@ test.describe("invitations", () => {
     const password = "e2e-BizFlow-Passw0rd"
 
     await owner.goto("/people")
-    await owner.getByLabel("Email").fill(inviteeEmail)
-    await owner.getByLabel("Role").selectOption("staff")
-    await owner.getByRole("button", { name: "Send invite" }).click()
+    const inviteForm = owner.locator("form").filter({
+      has: owner.getByRole("button", { name: "Send invite" }),
+    })
+
+    await inviteForm.getByLabel("Email").fill(inviteeEmail)
+    await inviteForm.getByLabel("Role").selectOption("staff")
+    await inviteForm.getByRole("button", { name: "Send invite" }).click()
 
     await expect(owner.getByText(inviteeEmail)).toBeVisible()
 
@@ -40,27 +44,55 @@ test.describe("invitations", () => {
 
     // The invite flow supports an existing account signing in to accept; the
     // account is created directly so the spec tests acceptance, not signup.
-    const { data: created } = await admin.auth.admin.createUser({
-      email: inviteeEmail,
-      email_confirm: true,
-      password,
-    })
+    const { data: created, error: createUserError } =
+      await admin.auth.admin.createUser({
+        email: inviteeEmail,
+        email_confirm: true,
+        password,
+      })
+
+    expect(createUserError).toBeNull()
+    expect(created.user).toBeTruthy()
+
+    if (!created.user) {
+      throw new Error("Supabase did not return the created invitee user.")
+    }
+
+    const createdUser = created.user
 
     const context = await browser.newContext()
     const page = await context.newPage()
 
-    await signInAs(page, inviteeEmail, password)
-    await page.goto(`/accept-invite/${invite?.token as string}`)
-    await page.getByRole("button", { name: "Accept invite" }).click()
+    try {
+      await signInAs(page, inviteeEmail, password)
+      await page.goto(`/accept-invite/${invite?.token as string}`)
+      await page.getByRole("button", { name: "Accept invite" }).click()
+      await page.waitForURL(/\/dashboard\?message=Invite\+accepted\./)
 
-    await page.goto("/dashboard")
-    await expect(page.getByText(tenant.organizationName)).toBeVisible()
-    await expect(page.getByText("staff")).toBeVisible()
+      const { data: membership, error: membershipError } = await admin
+        .from("organization_memberships")
+        .select("org_id,role,status")
+        .eq("org_id", tenant.organizationId)
+        .eq("user_id", createdUser.id)
+        .single()
 
-    await context.close()
+      expect(membershipError).toBeNull()
+      expect(membership).toMatchObject({
+        org_id: tenant.organizationId,
+        role: "staff",
+        status: "active",
+      })
 
-    if (created.user) {
-      await admin.auth.admin.deleteUser(created.user.id)
+      const dashboard = page.getByRole("main")
+
+      await expect(
+        dashboard.getByText(tenant.organizationName, { exact: true })
+      ).toBeVisible()
+      await expect(dashboard.getByText("staff", { exact: true })).toBeVisible()
+    } finally {
+      await context.close()
+
+      await admin.auth.admin.deleteUser(createdUser.id)
     }
   })
 

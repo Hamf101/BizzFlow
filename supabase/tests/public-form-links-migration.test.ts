@@ -1,4 +1,5 @@
-import { readFileSync } from "node:fs"
+import { readdirSync, readFileSync } from "node:fs"
+import { join } from "node:path"
 
 import { describe, expect, it } from "vitest"
 
@@ -14,6 +15,15 @@ const migrationSql = readFileSync(
 )
 
 const normalized = normalizeSql(migrationSql)
+const migrationHistory = normalizeSql(
+  readdirSync(join(process.cwd(), "supabase/migrations"))
+    .filter((fileName: string): boolean => fileName.endsWith(".sql"))
+    .sort()
+    .map((fileName: string): string =>
+      readFileSync(join(process.cwd(), "supabase/migrations", fileName), "utf8")
+    )
+    .join("\n")
+)
 
 describe("sprint 11 public form links migration contract", () => {
   it("defines public_form_links table with constraints and RLS", () => {
@@ -72,6 +82,21 @@ describe("sprint 11 public form links migration contract", () => {
     )
     expect(normalized).not.toContain(
       "grant execute on function public.increment_public_form_link_submission_count(text) to anon"
+    )
+  })
+
+  it("finishes with forced RLS and explicit Data API grants", () => {
+    expect(migrationHistory).toContain(
+      "alter table public.public_form_links force row level security"
+    )
+    expect(migrationHistory).toContain(
+      "revoke all on table public.public_form_links from public, anon, authenticated, service_role"
+    )
+    expect(migrationHistory).toContain(
+      "grant select, insert, update, delete on table public.public_form_links to authenticated"
+    )
+    expect(migrationHistory).toContain(
+      "grant select, insert, update on table public.public_form_links to service_role"
     )
   })
 

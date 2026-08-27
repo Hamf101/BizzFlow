@@ -754,6 +754,7 @@ export type DocumentTemplateRow = Record<string, unknown> & {
   org_id: string
   title: string
   description: string | null
+  category: string | null
   status: DocumentTemplateStatus
   revision: number
   content: TemplateContent
@@ -773,6 +774,8 @@ export type DocumentTemplate = {
   organizationId: string
   title: string
   description: string | null
+  /** Optional grouping label; null is a legitimate state, not a backfill gap. */
+  category: string | null
   status: DocumentTemplateStatus
   revision: number
   content: TemplateContent

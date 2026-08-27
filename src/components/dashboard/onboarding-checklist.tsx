@@ -1,6 +1,6 @@
 "use client"
 
-import { CheckCircle2, Circle, Sparkles } from "lucide-react"
+import { CheckCircle2, Circle, FlaskConical, Sparkles } from "lucide-react"
 import Link from "next/link"
 import type { ReactElement } from "react"
 
@@ -25,10 +25,16 @@ export type OnboardingStep = {
 }
 
 export function OnboardingChecklist({
+  sampleAction,
+  sampleActionLabel,
   seedAction,
+  seedActionLabel,
   steps,
 }: {
+  sampleAction?: () => Promise<void>
+  sampleActionLabel?: string
   seedAction?: () => Promise<void>
+  seedActionLabel?: string
   steps: OnboardingStep[]
 }): ReactElement {
   const completedCount = steps.filter((s) => s.completed).length
@@ -90,13 +96,25 @@ export function OnboardingChecklist({
           ))}
         </div>
 
-        {seedAction && (
-          <form action={seedAction} className="pt-2 flex justify-end">
-            <Button size="sm" type="submit" variant="secondary">
-              <Sparkles className="mr-1.5 size-3.5" />
-              Seed 4 Starter Templates
-            </Button>
-          </form>
+        {(seedAction || sampleAction) && (
+          <div className="flex flex-wrap justify-end gap-2 pt-2">
+            {seedAction && (
+              <form action={seedAction}>
+                <Button size="sm" type="submit" variant="secondary">
+                  <Sparkles className="mr-1.5 size-3.5" />
+                  {seedActionLabel ?? "Add starter templates"}
+                </Button>
+              </form>
+            )}
+            {sampleAction && (
+              <form action={sampleAction}>
+                <Button size="sm" type="submit" variant="outline">
+                  <FlaskConical className="mr-1.5 size-3.5" />
+                  {sampleActionLabel ?? "Add sample submissions"}
+                </Button>
+              </form>
+            )}
+          </div>
         )}
       </CardContent>
     </Card>

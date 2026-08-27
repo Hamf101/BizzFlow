@@ -42,7 +42,7 @@ test.describe("submission review", () => {
     // Assigning a submitted item is what starts its review — there is no
     // separate "begin" control.
     await manager
-      .getByLabel(/assign review/i)
+      .getByRole("combobox", { name: "Reviewer" })
       .selectOption({ value: tenant.users.manager.id })
     await manager.getByRole("button", { name: /start review/i }).click()
 
@@ -61,7 +61,7 @@ test.describe("submission review", () => {
 
     await manager.goto(`/submissions/${submissionId}`)
     await manager
-      .getByLabel(/assign review/i)
+      .getByRole("combobox", { name: "Reviewer" })
       .selectOption({ value: tenant.users.manager.id })
     await manager.getByRole("button", { name: /start review/i }).click()
     await manager.getByRole("button", { name: "Approve" }).click()
@@ -97,7 +97,7 @@ test.describe("submission review", () => {
 
     await manager.goto(`/submissions/${submissionId}`)
     await manager
-      .getByLabel(/assign review/i)
+      .getByRole("combobox", { name: "Reviewer" })
       .selectOption({ value: tenant.users.manager.id })
     await manager.getByRole("button", { name: /start review/i }).click()
 
@@ -127,6 +127,18 @@ test.describe("submission review", () => {
       title,
       tenant.users.staff.id
     )
+    const { error: assignmentError } = await admin.rpc(
+      "assign_internal_submission",
+      {
+        target_actor_user_id: tenant.users.manager.id,
+        target_assignee_user_id: tenant.users.external_reviewer.id,
+        target_expected_revision: 1,
+        target_org_id: tenant.organizationId,
+        target_submission_id: submissionId,
+      }
+    )
+
+    expect(assignmentError).toBeNull()
 
     const staff = await pageAs("staff")
     const reviewer = await pageAs("external_reviewer")
@@ -137,8 +149,21 @@ test.describe("submission review", () => {
     // Both can read the submission; neither may decide it. The external
     // reviewer role exists precisely to make that distinction, so a regression
     // here is a permissions failure with a customer on the other end of it.
-    await expect(staff.getByText(title)).toBeVisible()
-    await expect(reviewer.getByText(title)).toBeVisible()
+    const staffTitleHeadings = staff.getByRole("heading", {
+      exact: true,
+      level: 1,
+      name: title,
+    })
+    const reviewerTitleHeadings = reviewer.getByRole("heading", {
+      exact: true,
+      level: 1,
+      name: title,
+    })
+
+    await expect(staffTitleHeadings).toHaveCount(2)
+    await expect(staffTitleHeadings.first()).toBeVisible()
+    await expect(reviewerTitleHeadings).toHaveCount(2)
+    await expect(reviewerTitleHeadings.first()).toBeVisible()
 
     await expect(staff.getByRole("button", { name: "Approve" })).toBeHidden()
     await expect(reviewer.getByRole("button", { name: "Approve" })).toBeHidden()

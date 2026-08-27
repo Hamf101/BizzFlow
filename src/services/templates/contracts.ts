@@ -3,18 +3,28 @@ import type { TemplateContent } from "@/types/template"
 
 export type TemplateServiceClient = Pick<AdminSupabaseClient, "from" | "rpc">
 
-export type ListDocumentTemplatesInput = {
+/** Actor and tenant identifiers carried by every template operation. */
+export type TemplateActorInput = {
   actorUserId: string
   organizationId: string
 }
 
-export type GetDocumentTemplateInput = ListDocumentTemplatesInput & {
+export type ListDocumentTemplatesInput = TemplateActorInput & {
+  /**
+   * Category filter. Omit for every category; pass `null` to select the
+   * uncategorised templates specifically.
+   */
+  category?: string | null
+}
+
+export type GetDocumentTemplateInput = TemplateActorInput & {
   templateId: string
 }
 
-export type CreateDocumentTemplateInput = ListDocumentTemplatesInput & {
+export type CreateDocumentTemplateInput = TemplateActorInput & {
   title: string
   description?: string | null
+  category?: string | null
   content?: TemplateContent
 }
 
@@ -22,6 +32,7 @@ export type UpdateDocumentTemplateInput = GetDocumentTemplateInput & {
   expectedRevision: number
   title?: string
   description?: string | null
+  category?: string | null
   content?: TemplateContent
 }
 
@@ -33,7 +44,7 @@ export type ChangeDocumentTemplateStatusInput = GetDocumentTemplateInput
 
 export type DuplicateDocumentTemplateInput = GetDocumentTemplateInput
 
-export type CreateGeneratedDocumentInput = ListDocumentTemplatesInput & {
+export type CreateGeneratedDocumentInput = TemplateActorInput & {
   folderId?: string | null
   templateId?: string | null
   title?: string
@@ -41,11 +52,11 @@ export type CreateGeneratedDocumentInput = ListDocumentTemplatesInput & {
   content?: TemplateContent
 }
 
-export type RecordDocumentRecentAccessInput = ListDocumentTemplatesInput & {
+export type RecordDocumentRecentAccessInput = TemplateActorInput & {
   documentId: string
 }
 
-export type ListRecentDocumentsInput = ListDocumentTemplatesInput & {
+export type ListRecentDocumentsInput = TemplateActorInput & {
   limit?: number
 }
 

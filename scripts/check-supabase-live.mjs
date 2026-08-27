@@ -75,6 +75,11 @@ export const TABLE_CHECKS = [
       "id,org_id,document_id,status,storage_key,render_input_sha256,pdf_sha256,byte_size,document_version_id,created_at,finalized_at",
   },
   {
+    name: "public_form_links",
+    select:
+      "id,org_id,template_id,token,status,expires_at,max_submissions,submission_count,created_by,created_at,updated_at",
+  },
+  {
     name: "submissions",
     select:
       "id,org_id,title,template_id,template_revision,template_snapshot,values,status,revision,created_by,updated_by,submitted_by,assigned_to,assigned_by,created_at,updated_at,submitted_at,assigned_at",
@@ -290,6 +295,12 @@ export const SERVICE_ROLE_READ_ONLY_RPC_CHECKS = [
         blocks: [{ fieldKey: "signature", type: "signature_field" }],
       },
       target_values: { signature: DRAWING_PROBE_DATA_URL },
+    },
+  },
+  {
+    name: "increment_public_form_link_submission_count",
+    args: {
+      p_token: null,
     },
   },
 ]

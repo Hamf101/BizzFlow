@@ -323,6 +323,15 @@ export async function syncAutomaticTaskReminder(
       task.id
     )
 
+    // A closed task's reminder is genuinely cancelled — terminal statuses are
+    // not reopenable, so nothing can ever revive it and the member should still
+    // see it in the task's history. Every other reason the sync retires a row
+    // (the due date moved, the assignee changed, either was cleared) is
+    // reversible, so those rows are superseded and stay revivable.
+    const retiredStatus = isTerminalTaskStatus(task.status)
+      ? "cancelled"
+      : "superseded"
+
     for (const reminder of existing) {
       if (
         reminder.origin === "automatic" &&
@@ -331,7 +340,7 @@ export async function syncAutomaticTaskReminder(
           reminder.recipientUserId !== desired.recipientUserId ||
           reminder.remindAt !== desired.remindAt)
       ) {
-        await cancelAutomaticReminderRow(client, deps, reminder)
+        await retireAutomaticReminderRow(client, deps, reminder, retiredStatus)
       }
     }
 
@@ -339,17 +348,27 @@ export async function syncAutomaticTaskReminder(
       return
     }
 
-    // `(task, recipient, instant)` is a unique key, and it spans both origins.
-    // Matching against every reminder — not just the automatic ones — keeps the
-    // sync idempotent and avoids colliding with a manual reminder a member
-    // already scheduled for that exact moment.
-    const alreadyScheduled = existing.some(
+    // `(task, recipient, instant)` is a unique key and it spans every origin
+    // and status, so an existing row for this instant cannot be inserted over —
+    // it has to be reused or left alone.
+    const match = existing.find(
       (reminder: TaskReminder): boolean =>
         reminder.recipientUserId === desired.recipientUserId &&
         reminder.remindAt === desired.remindAt
     )
 
-    if (alreadyScheduled) {
+    if (match) {
+      // `superseded` is a row this sync displaced earlier, so bringing the same
+      // instant back must bring the reminder back with it — that is the whole
+      // point of reassigning to the original member or restoring a due date.
+      //
+      // Every other status is left exactly as it is: `pending` is already
+      // correct, `cancelled` records a member choosing to stop this reminder,
+      // and `sent` / `failed` already had their attempt.
+      if (match.origin === "automatic" && match.status === "superseded") {
+        await reviveAutomaticReminderRow(client, deps, match, task, actorUserId)
+      }
+
       return
     }
 
@@ -385,15 +404,25 @@ function resolveDesiredAutomaticReminder(
   return { recipientUserId: task.assignedTo, remindAt: task.dueAt }
 }
 
-async function cancelAutomaticReminderRow(
+/**
+ * Retires an automatic reminder the task no longer calls for.
+ *
+ * The row stays on the `(task, recipient, instant)` unique key either way, so
+ * the status is what tells a later sync whether it may bring the reminder back.
+ *
+ * @param status - `superseded` when the change is reversible, `cancelled` when
+ *   the task closed and nothing can revive it.
+ */
+async function retireAutomaticReminderRow(
   client: TaskServiceClient,
   deps: TaskServiceDeps,
-  reminder: TaskReminder
+  reminder: TaskReminder,
+  status: "superseded" | "cancelled"
 ): Promise<void> {
   const { error } = await client
     .from("task_reminders")
     .update({
-      status: "cancelled",
+      status,
       updated_at: taskNow(deps).toISOString(),
     })
     .eq("id", reminder.id)
@@ -401,8 +430,63 @@ async function cancelAutomaticReminderRow(
     .eq("status", "pending")
 
   if (error) {
-    throw createTaskDatabaseError(error, "Unable to cancel task reminder.")
+    throw createTaskDatabaseError(error, "Unable to retire task reminder.")
   }
+}
+
+/**
+ * Returns a superseded automatic reminder to pending, in place.
+ *
+ * An update rather than an insert because the row still holds
+ * `(task, recipient, instant)` on the unique key. The attempt counter and last
+ * error are reset so the revived reminder starts its delivery budget fresh.
+ */
+async function reviveAutomaticReminderRow(
+  client: TaskServiceClient,
+  deps: TaskServiceDeps,
+  reminder: TaskReminder,
+  task: Task,
+  actorUserId: string
+): Promise<void> {
+  const { data, error } = await client
+    .from("task_reminders")
+    .update({
+      status: "pending",
+      attempt_count: 0,
+      last_error: null,
+      sent_at: null,
+      updated_at: taskNow(deps).toISOString(),
+    })
+    .eq("id", reminder.id)
+    .eq("org_id", reminder.organizationId)
+    // Never revive a member's cancellation or an already-delivered row.
+    .eq("status", "superseded")
+    .eq("origin", "automatic")
+    .select(TASK_REMINDER_COLUMNS)
+    .maybeSingle()
+
+  if (error) {
+    throw createTaskDatabaseError(error, "Unable to restore task reminder.")
+  }
+
+  if (!data) {
+    return
+  }
+
+  const revived = parseTaskReminderRow(data)
+  await recordTaskAuditLog(deps, {
+    organizationId: revived.organizationId,
+    actorUserId,
+    action: "task_reminder.scheduled",
+    targetType: "task_reminder",
+    targetId: revived.id,
+    metadata: {
+      taskId: task.id,
+      recipientUserId: revived.recipientUserId,
+      remindAt: revived.remindAt,
+      origin: revived.origin,
+    },
+  })
 }
 
 async function insertAutomaticReminderRow(
@@ -484,8 +568,18 @@ export async function listTaskReminders(
       )
 
       const task = await getTaskById(client, input.organizationId, input.taskId)
+      const reminders = await listTaskReminderRows(
+        client,
+        input.organizationId,
+        task.id
+      )
 
-      return listTaskReminderRows(client, input.organizationId, task.id)
+      // A superseded row is the sync's own bookkeeping — the reminder it
+      // replaced when the due date or assignee moved. No member scheduled it,
+      // so it does not belong in their reminder history.
+      return reminders.filter(
+        (reminder: TaskReminder): boolean => reminder.status !== "superseded"
+      )
     }
   )
 }

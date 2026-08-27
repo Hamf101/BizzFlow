@@ -32,6 +32,7 @@ function createState(): TemplateEditorState {
   return {
     title: "Agreement",
     description: "Reusable agreement",
+    category: "Operations",
     content: createBlankTemplateContent()
   }
 }
@@ -60,6 +61,7 @@ describe("templateEditorReducer", () => {
     const initialState: TemplateEditorState = {
       title: "Legacy draft",
       description: "",
+      category: "",
       content: legacyContent
     }
 

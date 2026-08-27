@@ -103,7 +103,7 @@ Expected variable groups:
 - Cloudflare R2: `CLOUDFLARE_R2_ACCOUNT_ID`, `CLOUDFLARE_R2_ACCESS_KEY_ID`, `CLOUDFLARE_R2_SECRET_ACCESS_KEY`, `CLOUDFLARE_R2_BUCKET_NAME`, `CLOUDFLARE_R2_ENDPOINT`, `CLOUDFLARE_R2_REGION`, and `CLOUDFLARE_R2_SIGNED_URL_TTL_SECONDS`.
 - File uploads: `FILE_UPLOAD_MAX_BYTES` and `FILE_UPLOAD_ALLOWED_MIME_TYPES`.
 - Inngest: event key and signing key.
-- Resend: server-only `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, optional `RESEND_REPLY_TO_EMAIL`, and `RESEND_TIMEOUT_MS` for invitations and document signing links.
+- Email: server-only `EMAIL_PROVIDER`, optional `EMAIL_REPLY_TO_EMAIL`, and `EMAIL_TIMEOUT_MS`, plus the selected provider's Resend or EmailJS credentials for invitations, signing links, task assignments, and reminders.
 - AI Flow: server-only `AI_PROVIDER`, `AI_MODEL`, `AI_TIMEOUT_MS`, and the selected adapter's credential (currently `GEMINI_API_KEY`) for stateless, schema-validated document editing.
 - SMS: Termii credentials, with Africa's Talking placeholders reserved for a later provider switch.
 - Rate limiting: `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN`; when unset, limits are disabled (local dev, CI).
@@ -147,17 +147,27 @@ curl -X POST http://localhost:3000/api/templates/flow \
   }'
 ```
 
-## Invite email setup
+## Transactional email setup
 
-Inviting a person sends a Resend email containing a one-time BizFlow invite URL. The same server-side Resend transport delivers private, seven-day document signing links without exposing those tokens to browser code.
+Inviting a person sends an email containing a one-time BizFlow invite URL. The same server-side provider-neutral transport delivers private, seven-day document signing links, task assignments, and reminders without exposing tokens or provider credentials to browser code.
+
+Select one provider with `EMAIL_PROVIDER=emailjs` or `EMAIL_PROVIDER=resend`. Existing deployments default to Resend when the selector is omitted. `EMAIL_TIMEOUT_MS` defaults to 10 seconds, and `EMAIL_REPLY_TO_EMAIL` can remain empty until a monitored reply address is available.
+
+EmailJS setup:
+
+1. Configure server-only `EMAILJS_SERVICE_ID`, `EMAILJS_TEMPLATE_ID`, and `EMAILJS_PUBLIC_KEY`. If private-key authorization is enabled under Account → Security, also configure `EMAILJS_PRIVATE_KEY`.
+2. In the selected EmailJS template, set **To Email** to `{{to_email}}`, **Subject** to `{{subject}}`, and the content source to `{{{message_html}}}`. Triple braces are required so the already-escaped application HTML is rendered instead of displayed as text.
+3. Use the connected service's default From Email. Set the dashboard's From Name to the desired sender label. Leave Reply To empty when `EMAIL_REPLY_TO_EMAIL` is not configured.
+
+The EmailJS REST API permits one request per second. BizFlow serializes sends within each running application instance so multi-recipient signing invitations do not burst through that limit. EmailJS receives the internal delivery reference for tracing, but unlike Resend it does not provide an equivalent idempotency-key guarantee.
 
 Resend setup:
 
 1. Create an API key in the Resend dashboard and store it in server-only `RESEND_API_KEY`.
 2. Verify the sending domain (DNS records shown in the Resend dashboard) for the address in `RESEND_FROM_EMAIL`. Before domain verification, `onboarding@resend.dev` works as the sender but only delivers to the Resend account owner's address.
-3. Optionally set `RESEND_REPLY_TO_EMAIL` for recipient replies.
+3. Optionally set the provider-neutral `EMAIL_REPLY_TO_EMAIL` for recipient replies.
 
-The application owns the full branded HTML document (`wrapEmailDocument` in `src/services/email/html.ts`) and passes it to Resend verbatim, along with a plain-text body. Each send uses its delivery reference as the `Idempotency-Key` header, so a retried request can never double-send, and the reference traces the message back to its invite or signing recipient without exposing raw tokens.
+The application owns the full branded HTML document (`wrapEmailDocument` in `src/services/email/html.ts`) and passes it to the selected provider, along with a plain-text body. Resend sends use the delivery reference as the `Idempotency-Key` header, preventing duplicate delivery on retry. Both providers receive the reference for tracing without exposing raw tokens.
 
 Recipients can create an account from the invite URL or sign in with an existing account. For account-confirmation links to return the recipient to their invite, add the deployed callback URL (for example, `https://app.example.com/auth/callback`) to Supabase Auth's Redirect URLs. The Supabase Site URL should be the deployed application origin.
 

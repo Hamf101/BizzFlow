@@ -14,14 +14,16 @@ describe("invite email service", () => {
     vi.restoreAllMocks()
   })
 
-  it("sends a Resend email containing the encoded invite URL", async () => {
+  it("sends an EmailJS message containing the branded encoded invite URL", async () => {
     process.env = {
       ...originalEnv,
       NEXT_PUBLIC_APP_URL: "https://app.example.com",
-      RESEND_API_KEY: "re-test-key",
-      RESEND_FROM_EMAIL: "docs@example.com",
-      RESEND_REPLY_TO_EMAIL: "support@example.com",
-      RESEND_TIMEOUT_MS: "2500",
+      EMAIL_PROVIDER: "emailjs",
+      EMAILJS_SERVICE_ID: "service_buy2dql",
+      EMAILJS_TEMPLATE_ID: "template_wg2zfqi",
+      EMAILJS_PUBLIC_KEY: "public-test-key",
+      EMAILJS_PRIVATE_KEY: "private-test-key",
+      EMAIL_TIMEOUT_MS: "2500",
     }
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ id: "email-9" }), { status: 200 })
@@ -37,13 +39,10 @@ describe("invite email service", () => {
     })
 
     expect(fetchMock).toHaveBeenCalledWith(
-      "https://api.resend.com/emails",
+      "https://api.emailjs.com/api/v1.0/email/send",
       expect.objectContaining({
         method: "POST",
-        headers: expect.objectContaining({
-          Authorization: "Bearer re-test-key",
-          "Idempotency-Key": "organization-invite/invite-123",
-        }),
+        headers: { "Content-Type": "application/json" },
         signal: expect.any(AbortSignal),
       })
     )
@@ -51,18 +50,26 @@ describe("invite email service", () => {
     const body = JSON.parse(String(request.body)) as Record<string, unknown>
 
     expect(body).toMatchObject({
-      from: "docs@example.com",
-      to: ["member@example.com"],
-      reply_to: "support@example.com",
+      service_id: "service_buy2dql",
+      template_id: "template_wg2zfqi",
+      user_id: "public-test-key",
+      accessToken: "private-test-key",
     })
-    expect(String(body.html)).toContain("North &amp; Co.")
-    expect(String(body.html)).toContain(
+    const templateParams = body.template_params as Record<string, unknown>
+
+    expect(templateParams).not.toHaveProperty("reply_to")
+    expect(String(templateParams.message_html)).toContain("North &amp; Co.")
+    expect(String(templateParams.message_html)).toContain(
       "https://app.example.com/accept-invite/invite%20token"
     )
-    expect(String(body.html)).toContain("Accept invitation")
-    expect(String(body.html)).toContain("background-color:#171717")
-    expect(String(body.html)).toContain("<!doctype html>")
-    expect(String(body.html)).toContain("Sent securely by BizFlow Docs.")
+    expect(String(templateParams.message_html)).toContain("Accept invitation")
+    expect(String(templateParams.message_html)).toContain(
+      "background-color:#635273"
+    )
+    expect(String(templateParams.message_html)).toContain("<!doctype html>")
+    expect(String(templateParams.message_html)).toContain(
+      "Sent securely by BizFlow Docs."
+    )
   })
 
   it("returns a user-safe error when Resend rejects delivery", async () => {

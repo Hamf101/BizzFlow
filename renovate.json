@@ -1,0 +1,128 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", ":semanticCommits"],
+  "enabledManagers": ["npm", "github-actions"],
+  "timezone": "America/Chicago",
+  "schedule": ["before 6am on monday"],
+  "dependencyDashboard": true,
+  "labels": ["dependencies"],
+  "prConcurrentLimit": 5,
+  "minimumReleaseAge": "7 days",
+  "minimumReleaseAgeBehaviour": "timestamp-required",
+  "internalChecksFilter": "strict",
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 6am on monday"],
+    "automerge": true,
+    "automergeType": "pr"
+  },
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "labels": ["security"],
+    "minimumReleaseAge": "0 days",
+    "prCreation": "immediate",
+    "automerge": false,
+    "vulnerabilityFixStrategy": "lowest",
+    "prBodyNotes": [
+      "This security update bypasses the normal seven-day release-age gate and requires manual review."
+    ]
+  },
+  "packageRules": [
+    {
+      "description": "Automerge aged patch and minor updates after required checks pass",
+      "matchUpdateTypes": ["minor", "patch"],
+      "automerge": true,
+      "automergeType": "pr",
+      "platformAutomerge": true
+    },
+    {
+      "description": "Require manual review for every major update",
+      "matchUpdateTypes": ["major"],
+      "automerge": false,
+      "labels": ["dependencies-major"]
+    },
+    {
+      "description": "Keep the Next.js and React runtime toolchain coordinated",
+      "matchPackageNames": [
+        "next",
+        "eslint-config-next",
+        "react",
+        "react-dom",
+        "@types/react",
+        "@types/react-dom",
+        "@next/**"
+      ],
+      "groupName": "Next.js and React toolchain"
+    },
+    {
+      "description": "Group AWS SDK updates",
+      "matchPackageNames": ["@aws-sdk/**"],
+      "groupName": "AWS SDK"
+    },
+    {
+      "description": "Group Supabase client and CLI updates",
+      "matchPackageNames": ["supabase", "@supabase/**"],
+      "groupName": "Supabase"
+    },
+    {
+      "description": "Group linting toolchain updates",
+      "matchPackageNames": ["eslint", "@eslint/**"],
+      "groupName": "linting toolchain"
+    },
+    {
+      "description": "Group test and static-analysis toolchain updates",
+      "matchPackageNames": [
+        "@playwright/test",
+        "vitest",
+        "jscpd",
+        "jscpd-**",
+        "knip"
+      ],
+      "groupName": "test and static-analysis toolchain"
+    },
+    {
+      "description": "Keep the maintained PDF fork and font adapter visible together",
+      "matchPackageNames": [
+        "pdf-lib",
+        "@cantoo/pdf-lib",
+        "@pdf-lib/fontkit"
+      ],
+      "groupName": "PDF toolchain"
+    },
+    {
+      "description": "Group GitHub Actions updates",
+      "matchManagers": ["github-actions"],
+      "groupName": "GitHub Actions"
+    },
+    {
+      "description": "Keep TypeScript on the supported 5.x compiler line",
+      "matchPackageNames": ["typescript"],
+      "allowedVersions": "<6.0.0"
+    },
+    {
+      "description": "Keep ESLint on the supported 9.x line",
+      "matchPackageNames": ["eslint"],
+      "allowedVersions": "<10.0.0"
+    },
+    {
+      "description": "Hold the frozen fontkit adapter at its verified release",
+      "matchPackageNames": ["@pdf-lib/fontkit"],
+      "allowedVersions": "1.1.1",
+      "automerge": false
+    },
+    {
+      "description": "Keep Node.js on the production-supported 22.x line",
+      "matchDepTypes": ["engines"],
+      "matchPackageNames": ["node"],
+      "allowedVersions": "<23.0.0",
+      "automerge": false
+    },
+    {
+      "description": "Keep pnpm on the pinned 11.x line and review runtime changes manually",
+      "matchDepTypes": ["packageManager"],
+      "matchPackageNames": ["pnpm"],
+      "allowedVersions": "<12.0.0",
+      "automerge": false
+    }
+  ]
+}

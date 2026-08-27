@@ -9,33 +9,14 @@ allowBuilds:
   sharp: true
   unrs-resolver: true
 
-minimumReleaseAgeExclude:
-  - '@next/env@16.3.0'
-  - '@next/eslint-plugin-next@16.3.0'
-  - '@next/swc-darwin-arm64@16.3.0'
-  - '@next/swc-darwin-x64@16.3.0'
-  - '@next/swc-linux-arm64-gnu@16.3.0'
-  - '@next/swc-linux-arm64-musl@16.3.0'
-  - '@next/swc-linux-x64-gnu@16.3.0'
-  - '@next/swc-linux-x64-musl@16.3.0'
-  - '@next/swc-win32-arm64-msvc@16.3.0'
-  - '@next/swc-win32-x64-msvc@16.3.0'
-  - eslint-config-next@16.3.0
-  - next@16.3.0
-  - jscpd-darwin-arm64@5.0.15
-  - jscpd-darwin-x64@5.0.15
-  - jscpd-linux-arm64-gnu@5.0.15
-  - jscpd-linux-x64-gnu@5.0.15
-  - jscpd-linux-x64-musl@5.0.15
-  - jscpd-windows-x64-msvc@5.0.15
-  - jscpd@5.0.15
-  - '@aws-sdk/client-s3@3.1110.0'
-  - '@aws-sdk/s3-request-presigner@3.1110.0'
-  - '@posthog/core@1.48.0'
-  - '@posthog/types@1.404.0'
-  - inngest@4.18.1
-  - posthog-js@1.417.0
-  - '@google/genai@2.17.0'
+# Seven days. This applies to direct and transitive dependencies.
+minimumReleaseAge: 10080
+minimumReleaseAgeStrict: true
+minimumReleaseAgeIgnoreMissingTime: false
+# Security exceptions must name an exact reviewed version and be removed after
+# it ages. pnpm 11.10 predates minimumReleaseAgeExcludePrune, so pruning remains
+# a manual review step until the pinned package manager is deliberately updated.
+minimumReleaseAgeExclude: []
 
 overrides:
   postcss: 8.5.23

@@ -22,8 +22,8 @@ export function escapeHtml(value: string): string {
 /**
  * Wraps an email body fragment in the full branded HTML document.
  *
- * Resend sends the `html` body verbatim, so the application owns the complete
- * document (this markup previously lived in the EmailJS dashboard template).
+ * Both supported providers receive this complete document verbatim. The
+ * EmailJS dashboard template injects it through `{{{message_html}}}`.
  *
  * @param input - Email subject (used for the title and hidden preheader) and
  *   the already-escaped body fragment.
@@ -44,14 +44,14 @@ export function wrapEmailDocument(input: {
     '<meta name="x-apple-disable-message-reformatting" />',
     `<title>${safeSubject}</title>`,
     "</head>",
-    '<body style="margin:0;padding:0;background-color:#f5f5f5;color:#171717;font-family:Arial,Helvetica,sans-serif;">',
+    '<body style="margin:0;padding:0;background-color:#f3f1ed;color:#252329;font-family:Arial,Helvetica,sans-serif;">',
     `<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">${safeSubject}</div>`,
-    '<table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;background-color:#f5f5f5;">',
+    '<table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;background-color:#f3f1ed;">',
     '<tr><td align="center" style="padding:32px 16px;">',
-    '<table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="width:100%;max-width:600px;border:1px solid #e5e5e5;border-radius:12px;border-collapse:separate;background-color:#ffffff;overflow:hidden;">',
-    '<tr><td style="padding:24px 32px;border-bottom:1px solid #e5e5e5;color:#171717;font-family:Arial,Helvetica,sans-serif;font-size:18px;font-weight:700;line-height:24px;">BizFlow Docs</td></tr>',
+    '<table role="presentation" width="100%" border="0" cellpadding="0" cellspacing="0" style="width:100%;max-width:600px;border:1px solid #c9c2bb;border-radius:12px;border-collapse:separate;background-color:#fffdfc;overflow:hidden;">',
+    '<tr><td style="padding:24px 32px;border-bottom:1px solid #c9c2bb;background-color:#ece6f3;color:#635273;font-family:Arial,Helvetica,sans-serif;font-size:18px;font-weight:700;line-height:24px;">BizFlow Docs</td></tr>',
     `<tr><td style="padding:32px;">${input.contentHtml}</td></tr>`,
-    '<tr><td style="padding:20px 32px;border-top:1px solid #e5e5e5;background-color:#fafafa;color:#737373;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:18px;">Sent securely by BizFlow Docs. This is an automated notification.</td></tr>',
+    '<tr><td style="padding:20px 32px;border-top:1px solid #c9c2bb;background-color:#ece6f3;color:#706a72;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:18px;">Sent securely by BizFlow Docs. This is an automated notification.</td></tr>',
     "</table>",
     "</td></tr>",
     "</table>",

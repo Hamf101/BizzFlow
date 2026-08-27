@@ -27,7 +27,16 @@ import {
   type OnboardingProgress,
 } from "@/services/organization-service"
 
-import { createOrganizationAction, seedStarterTemplatesAction } from "./actions"
+import {
+  SAMPLE_SUBMISSION_COUNT,
+  STARTER_TEMPLATES,
+} from "@/services/templates/starter-templates"
+
+import {
+  createOrganizationAction,
+  seedSampleSubmissionsAction,
+  seedStarterTemplatesAction,
+} from "./actions"
 
 type DashboardSearchParams = Promise<{
   error?: string
@@ -170,7 +179,10 @@ export default async function DashboardPage({
       {context && (
         <>
           <OnboardingChecklist
+            sampleAction={seedSampleSubmissionsAction}
+            sampleActionLabel={`Add ${SAMPLE_SUBMISSION_COUNT} sample submissions`}
             seedAction={seedStarterTemplatesAction}
+            seedActionLabel={`Add ${STARTER_TEMPLATES.length} starter templates`}
             steps={onboardingSteps}
           />
 

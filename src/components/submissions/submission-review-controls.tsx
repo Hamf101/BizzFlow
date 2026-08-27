@@ -6,6 +6,8 @@ import {
   transitionSubmissionAction,
 } from "@/app/(dashboard)/submissions/actions"
 import { Button } from "@/components/ui/button"
+import { Select } from "@/components/ui/select"
+import { Textarea } from "@/components/ui/textarea"
 import {
   Card,
   CardContent,
@@ -29,12 +31,6 @@ const roleLabels: Record<OrganizationRole, string> = {
   staff: "Staff",
   external_reviewer: "External reviewer",
 }
-
-const selectClassName =
-  "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50 dark:bg-input/30"
-
-const textareaClassName =
-  "min-h-24 w-full resize-y rounded-lg border border-input bg-transparent px-3 py-2 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
 
 /**
  * Renders assignment and binding review actions for a submission manager.
@@ -99,8 +95,7 @@ export function SubmissionReviewControls({
                   : "Assign review"}
             </label>
             <div className="flex flex-col gap-2 sm:flex-row">
-              <select
-                className={selectClassName}
+              <Select
                 defaultValue={submission.assignedTo ?? ""}
                 id="submission-assignee"
                 name="assignedTo"
@@ -116,7 +111,7 @@ export function SubmissionReviewControls({
                     {formatMemberLabel(member)} · {roleLabels[member.role]}
                   </option>
                 ))}
-              </select>
+              </Select>
               <Button type="submit" variant="outline">
                 <UserRoundCheck />
                 {startsReview
@@ -147,9 +142,9 @@ export function SubmissionReviewControls({
             <label className="text-sm font-medium" htmlFor="review-comment">
               Review note
             </label>
-            <textarea
+            <Textarea
               aria-describedby="review-comment-description"
-              className={textareaClassName}
+              className="min-h-24"
               id="review-comment"
               maxLength={2_000}
               name="comment"

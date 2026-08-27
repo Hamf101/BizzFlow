@@ -129,7 +129,7 @@ export default async function SubmissionsPage({
         </div>
         <div className="flex items-center gap-2">
           <a
-            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-input bg-background px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground"
+            className={cn(buttonVariants({ variant: "outline" }))}
             download
             href="/api/export/submissions"
           >

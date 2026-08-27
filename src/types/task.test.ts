@@ -86,6 +86,8 @@ describe("task status contract", () => {
       "sent",
       "failed",
       "cancelled",
+      // Sync bookkeeping, revivable — distinct from a member's final cancel.
+      "superseded",
     ])
     expect(TASK_REMINDER_CHANNELS).toEqual(["email", "sms"])
     expect(taskStatusSchema.options).toEqual([...TASK_STATUSES])

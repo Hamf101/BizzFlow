@@ -1,81 +1,42 @@
-import { createAdminClient } from "@/lib/supabase/admin"
-
-export type AuditLogEntry = {
-  id: string
-  organizationId: string
-  actorUserId: string | null
-  action: string
-  targetResourceType: string | null
-  targetResourceId: string | null
-  details: Record<string, unknown> | null
-  ipAddress: string | null
-  createdAt: string
-}
-
-function escapeCsvField(field: unknown): string {
-  if (field === null || field === undefined) return '""'
-  const str = typeof field === "object" ? JSON.stringify(field) : String(field)
-  return `"${str.replace(/"/g, '""')}"`
-}
+import { formatCsv } from "@/lib/csv"
+import type { AuditLogEntry } from "@/types/audit"
 
 /**
- * Generates an RFC-4180 compliant CSV string from an array of audit log entries.
+ * Export columns, in output order.
+ *
+ * These mirror `public.audit_logs` exactly. There is deliberately no IP address
+ * column: the table has never stored one, and the previous export emitted an
+ * always-empty column that implied otherwise.
  */
-export function formatAuditLogsAsCsv(logs: AuditLogEntry[]): string {
-  const headers = [
-    "Log ID",
-    "Timestamp",
-    "Action",
-    "Actor User ID",
-    "Target Resource Type",
-    "Target Resource ID",
-    "IP Address",
-    "Details",
-  ]
-
-  const rows = logs.map((log) => [
-    escapeCsvField(log.id),
-    escapeCsvField(log.createdAt),
-    escapeCsvField(log.action),
-    escapeCsvField(log.actorUserId),
-    escapeCsvField(log.targetResourceType),
-    escapeCsvField(log.targetResourceId),
-    escapeCsvField(log.ipAddress),
-    escapeCsvField(log.details),
-  ])
-
-  return [headers.join(","), ...rows.map((row) => row.join(","))].join("\n")
-}
+const AUDIT_LOG_CSV_HEADERS = [
+  "Log ID",
+  "Sequence",
+  "Timestamp",
+  "Action",
+  "Actor User ID",
+  "Target Type",
+  "Target ID",
+  "Metadata",
+] as const
 
 /**
- * Fetches organization audit logs for display and CSV export.
+ * Generates an RFC-4180 CSV document from organization audit log entries.
+ *
+ * @param logs - Audit entries in the order they should appear.
+ * @returns CSV text with a header row and one row per entry.
  */
-export async function getOrganizationAuditLogs(
-  organizationId: string,
-  limit = 100
-): Promise<AuditLogEntry[]> {
-  const client = createAdminClient()
-
-  const { data, error } = await client
-    .from("audit_logs")
-    .select("*")
-    .eq("org_id", organizationId)
-    .order("created_at", { ascending: false })
-    .limit(limit)
-
-  if (error || !data) {
-    return []
-  }
-
-  return data.map((row) => ({
-    id: row.id,
-    organizationId: row.org_id,
-    actorUserId: row.actor_user_id,
-    action: row.action,
-    targetResourceType: typeof row.target_resource_type === "string" ? row.target_resource_type : null,
-    targetResourceId: typeof row.target_resource_id === "string" ? row.target_resource_id : null,
-    details: (row.details as Record<string, unknown> | null) ?? null,
-    ipAddress: typeof row.ip_address === "string" ? row.ip_address : null,
-    createdAt: row.created_at,
-  }))
+export function formatAuditLogsAsCsv(logs: readonly AuditLogEntry[]): string {
+  return formatCsv(
+    AUDIT_LOG_CSV_HEADERS,
+    logs.map((log: AuditLogEntry): readonly unknown[] => [
+      log.id,
+      log.seq,
+      log.createdAt,
+      log.action,
+      log.actorUserId,
+      log.targetType,
+      log.targetId,
+      log.metadata,
+    ])
+  )
 }

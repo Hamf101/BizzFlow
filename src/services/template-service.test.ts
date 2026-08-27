@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import {
   createDocumentTemplate,
+  listDocumentTemplateCategories,
   createGeneratedDocument,
   listDocumentTemplates,
   listRecentDocuments,
@@ -40,6 +41,7 @@ const DRAFT_TEMPLATE_ID = "30000000-0000-4000-8000-000000000002"
 const DOCUMENT_ID = "40000000-0000-4000-8000-000000000001"
 const SECOND_DOCUMENT_ID = "40000000-0000-4000-8000-000000000002"
 const CREATED_DOCUMENT_ID = "40000000-0000-4000-8000-000000000003"
+const NEW_TEMPLATE_ID = "30000000-0000-4000-8000-000000000098"
 
 function createContentWithBlocks(
   blocks: readonly TemplateBlock[]
@@ -332,6 +334,7 @@ function createTemplateRow(
     org_id: ORG_ID,
     title: status === "draft" ? "Draft handbook" : "Published handbook",
     description: null,
+    category: null,
     status,
     revision: 1,
     content,
@@ -384,6 +387,131 @@ function createBaseTables(): FakeTables {
     document_recent_accesses: []
   }
 }
+
+describe("template categories", () => {
+  function createCategorizedTables(): FakeTables {
+    const tables = createBaseTables()
+    tables.document_templates = [
+      { ...createTemplateRow(TEMPLATE_ID, "published"), category: "Safety" },
+      {
+        ...createTemplateRow(DRAFT_TEMPLATE_ID, "draft"),
+        category: "Operations"
+      },
+      {
+        ...createTemplateRow(SECOND_DOCUMENT_ID, "published"),
+        category: null
+      }
+    ]
+    return tables
+  }
+
+  it("filters the library to one category", async () => {
+    const client = new FakeClient(createCategorizedTables())
+
+    const templates = await listDocumentTemplates(
+      {
+        actorUserId: MANAGER_ID,
+        organizationId: ORG_ID,
+        category: "Safety"
+      },
+      { client: client as never }
+    )
+
+    expect(templates.map((template) => template.id)).toEqual([TEMPLATE_ID])
+    expect(templates[0]?.category).toBe("Safety")
+  })
+
+  it("treats a null category as the uncategorised filter, not as no filter", async () => {
+    const client = new FakeClient(createCategorizedTables())
+
+    const templates = await listDocumentTemplates(
+      { actorUserId: MANAGER_ID, organizationId: ORG_ID, category: null },
+      { client: client as never }
+    )
+
+    expect(templates.map((template) => template.id)).toEqual([
+      SECOND_DOCUMENT_ID
+    ])
+  })
+
+  it("returns every category when the key is omitted", async () => {
+    const client = new FakeClient(createCategorizedTables())
+
+    const templates = await listDocumentTemplates(
+      { actorUserId: MANAGER_ID, organizationId: ORG_ID },
+      { client: client as never }
+    )
+
+    expect(templates).toHaveLength(3)
+  })
+
+  it("lists distinct categories alphabetically, excluding uncategorised", async () => {
+    const client = new FakeClient(createCategorizedTables())
+
+    const categories = await listDocumentTemplateCategories(
+      { actorUserId: MANAGER_ID, organizationId: ORG_ID },
+      { client: client as never }
+    )
+
+    expect(categories).toEqual(["Operations", "Safety"])
+  })
+
+  it("hides a draft template's category from a member who cannot manage templates", async () => {
+    const client = new FakeClient(createCategorizedTables())
+
+    const categories = await listDocumentTemplateCategories(
+      { actorUserId: STAFF_ID, organizationId: ORG_ID },
+      { client: client as never }
+    )
+
+    // "Operations" belongs to the draft, which staff cannot see at all.
+    expect(categories).toEqual(["Safety"])
+  })
+
+  it("persists a trimmed category and rejects one over the column limit", async () => {
+    const client = new FakeClient(createBaseTables())
+
+    const created = await createDocumentTemplate(
+      {
+        actorUserId: MANAGER_ID,
+        organizationId: ORG_ID,
+        title: "Categorised",
+        category: "  Field   Operations  "
+      },
+      { client: client as never, createId: () => NEW_TEMPLATE_ID }
+    )
+
+    expect(created.category).toBe("Field Operations")
+
+    await expect(
+      createDocumentTemplate(
+        {
+          actorUserId: MANAGER_ID,
+          organizationId: ORG_ID,
+          title: "Too long",
+          category: "x".repeat(41)
+        },
+        { client: client as never, createId: () => NEW_TEMPLATE_ID }
+      )
+    ).rejects.toMatchObject({ statusCode: 400 })
+  })
+
+  it("stores a whitespace-only category as uncategorised", async () => {
+    const client = new FakeClient(createBaseTables())
+
+    const created = await createDocumentTemplate(
+      {
+        actorUserId: MANAGER_ID,
+        organizationId: ORG_ID,
+        title: "Blank category",
+        category: "   "
+      },
+      { client: client as never, createId: () => NEW_TEMPLATE_ID }
+    )
+
+    expect(created.category).toBeNull()
+  })
+})
 
 describe("template service", () => {
   it("upgrades supplied legacy content when a new editable template is created", async () => {

@@ -30,6 +30,7 @@ test.describe("signing", () => {
       tenant.organizationId,
       template,
       title,
+      tenant.users.manager.id,
       { email: "counterparty@e2e.bizflow.test", name: "Avery Morgan" }
     )
 
@@ -39,7 +40,14 @@ test.describe("signing", () => {
 
     await page.goto(`/sign/${signingToken}`)
 
-    await expect(page.getByText(title)).toBeVisible()
+    const titleHeadings = page.getByRole("heading", {
+      exact: true,
+      level: 1,
+      name: title,
+    })
+
+    await expect(titleHeadings).toHaveCount(2)
+    await expect(titleHeadings.first()).toBeVisible()
     await expect(page.getByText("Signing status")).toBeVisible()
 
     await drawSignature(page, "Signature drawing area")
@@ -107,6 +115,7 @@ async function drawSignature(page: Page, label: string): Promise<void> {
   const canvas = page.getByRole("img", { name: label })
 
   await expect(canvas).toBeVisible()
+  await canvas.scrollIntoViewIfNeeded()
 
   const box = await canvas.boundingBox()
 
@@ -123,4 +132,11 @@ async function drawSignature(page: Page, label: string): Promise<void> {
     steps: 8,
   })
   await page.mouse.up()
+
+  await expect(
+    canvas.locator("xpath=ancestor::*[@data-slot='field'][1]").getByRole(
+      "button",
+      { name: "Clear" }
+    )
+  ).toBeEnabled()
 }

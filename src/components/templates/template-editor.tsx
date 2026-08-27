@@ -171,6 +171,8 @@ type StructureIntegrityNotice = {
 
 type TemplateEditorProps = {
   archiveAction: (formData: FormData) => Promise<void>
+  /** Categories already in use in this tenant, offered as datalist hints. */
+  categorySuggestions?: readonly string[]
   initialFlowMessages: TemplateFlowMessage[]
   publishAction: (formData: FormData) => Promise<void>
   saveAction: (formData: FormData) => Promise<void>
@@ -185,6 +187,7 @@ type TemplateEditorProps = {
  */
 export function TemplateEditor({
   archiveAction,
+  categorySuggestions = [],
   initialFlowMessages,
   publishAction,
   saveAction,
@@ -194,9 +197,10 @@ export function TemplateEditor({
     (): TemplateEditorState => ({
       title: template.title,
       description: template.description ?? "",
+      category: template.category ?? "",
       content: template.content
     }),
-    [template.content, template.description, template.title]
+    [template.category, template.content, template.description, template.title]
   )
   const [state, dispatch] = useReducer(templateEditorReducer, initialState)
   const localDraftKey = `template:${template.id}`
@@ -481,7 +485,12 @@ export function TemplateEditor({
       changedBlockIds: [...changedBlockIds],
       messageId
     })
-    dispatch({ type: "replace_state", value: nextDraft })
+    // Flow rewrites title, description and content; the category is the
+    // author's filing decision and is carried through untouched.
+    dispatch({
+      type: "replace_state",
+      value: { ...nextDraft, category: state.category }
+    })
     setChangedBlockIds(new Set(nextChangedBlockIds))
     setSelectedBlockId(null)
     setActivePanel(null)
@@ -549,6 +558,7 @@ export function TemplateEditor({
         />
         <input name="title" type="hidden" value={state.title} />
         <input name="description" type="hidden" value={state.description} />
+        <input name="category" type="hidden" value={state.category} />
         <input
           name="content"
           type="hidden"
@@ -815,7 +825,12 @@ export function TemplateEditor({
             >
               {activePanel === "details" && (
                 <TemplateDetailsPanel
+                  category={state.category}
+                  categorySuggestions={categorySuggestions}
                   description={state.description}
+                  onCategoryChange={(value: string): void =>
+                    applyManualAction({ type: "set_category", value })
+                  }
                   onDescriptionChange={(value: string): void =>
                     applyManualAction({ type: "set_description", value })
                   }
@@ -1239,12 +1254,18 @@ function EditorFloatingPanel({
 }
 
 function TemplateDetailsPanel({
+  category,
+  categorySuggestions,
   description,
+  onCategoryChange,
   onDescriptionChange,
   onTitleChange,
   title
 }: {
+  category: string
+  categorySuggestions: readonly string[]
   description: string
+  onCategoryChange: (value: string) => void
   onDescriptionChange: (value: string) => void
   onTitleChange: (value: string) => void
   title: string
@@ -1262,6 +1283,24 @@ function TemplateDetailsPanel({
           required
           value={title}
         />
+      </Field>
+      <Field>
+        <FieldLabel htmlFor="template-category">Category</FieldLabel>
+        <Input
+          id="template-category"
+          list="template-editor-category-suggestions"
+          maxLength={40}
+          onChange={(event: ChangeEvent<HTMLInputElement>): void =>
+            onCategoryChange(event.target.value)
+          }
+          placeholder="Ungrouped"
+          value={category}
+        />
+        <datalist id="template-editor-category-suggestions">
+          {categorySuggestions.map((suggestion: string) => (
+            <option key={suggestion} value={suggestion} />
+          ))}
+        </datalist>
       </Field>
       <Field>
         <FieldLabel htmlFor="template-description">Description</FieldLabel>

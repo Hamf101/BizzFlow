@@ -162,6 +162,7 @@ export type SeededSigningDocument = {
  * @param organizationId - Owning organization.
  * @param template - Template the document was generated from.
  * @param title - Document title, unique per run.
+ * @param createdByUserId - Member who owns the generated document.
  * @param signer - Recipient name and email.
  * @returns The document id and the plaintext signing token.
  */
@@ -170,11 +171,13 @@ export async function seedSigningDocument(
   organizationId: string,
   template: SeededTemplate,
   title: string,
+  createdByUserId: string,
   signer: { email: string; name: string }
 ): Promise<SeededSigningDocument> {
   const { data: document, error: documentError } = await client
     .from("documents")
     .insert({
+      created_by: createdByUserId,
       org_id: organizationId,
       source_kind: "generated",
       template_id: template.id,

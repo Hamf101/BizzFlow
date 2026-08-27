@@ -26,6 +26,8 @@ import {
 } from "@/components/ui/card"
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { Select } from "@/components/ui/select"
+import { Textarea } from "@/components/ui/textarea"
 import { formatMediumDateTime } from "@/lib/date-format"
 import { buildRedirect } from "@/lib/form-utils"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
@@ -55,8 +57,6 @@ import {
   formatTaskMemberName,
   getTaskStatusLabel,
   listInternalTaskMembers,
-  TASK_SELECT_CLASS_NAME,
-  TASK_TEXTAREA_CLASS_NAME,
   TaskPageShell,
   TaskReminderStatusBadge,
   TaskStatusBadge,
@@ -359,8 +359,7 @@ function TaskAssignmentPanel({
             <Field>
               <FieldLabel htmlFor="task-assignee">Assignee</FieldLabel>
               <div className="flex flex-col gap-2 sm:flex-row">
-                <select
-                  className={TASK_SELECT_CLASS_NAME}
+                <Select
                   defaultValue={task.assignedTo ?? ""}
                   id="task-assignee"
                   name="assignedTo"
@@ -371,7 +370,7 @@ function TaskAssignmentPanel({
                       {member.fullName?.trim() || member.email}
                     </option>
                   ))}
-                </select>
+                </Select>
                 <Button type="submit" variant="outline">
                   <UserRoundCheck />
                   Save
@@ -418,8 +417,7 @@ function TaskDetailsPanel({ task }: { task: Task }): ReactElement {
           </Field>
           <Field>
             <FieldLabel htmlFor="task-description">Description</FieldLabel>
-            <textarea
-              className={TASK_TEXTAREA_CLASS_NAME}
+            <Textarea
               defaultValue={task.description ?? ""}
               id="task-description"
               maxLength={5_000}
@@ -535,8 +533,7 @@ function TaskRemindersPanel({
             <input name="taskId" type="hidden" value={task.id} />
             <Field>
               <FieldLabel htmlFor="reminder-recipient">Recipient</FieldLabel>
-              <select
-                className={TASK_SELECT_CLASS_NAME}
+              <Select
                 defaultValue={task.assignedTo ?? ""}
                 id="reminder-recipient"
                 name="recipientUserId"
@@ -550,12 +547,11 @@ function TaskRemindersPanel({
                     {member.fullName?.trim() || member.email}
                   </option>
                 ))}
-              </select>
+              </Select>
             </Field>
             <Field>
               <FieldLabel htmlFor="reminder-channel">Notification Channel</FieldLabel>
-              <select
-                className={TASK_SELECT_CLASS_NAME}
+              <Select
                 defaultValue="email"
                 id="reminder-channel"
                 name="channel"
@@ -563,7 +559,7 @@ function TaskRemindersPanel({
               >
                 <option value="email">Email</option>
                 <option value="sms">SMS</option>
-              </select>
+              </Select>
             </Field>
             <Field>
               <FieldLabel htmlFor="reminder-remind-at">

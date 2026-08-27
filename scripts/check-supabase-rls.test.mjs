@@ -177,6 +177,7 @@ describe("authenticated Supabase RLS harness configuration", () => {
   it("keeps live schema and service-role checks aligned with the authenticated boundary", () => {
     expect(TABLE_CHECKS).toEqual(
       expect.arrayContaining([
+        expect.objectContaining({ name: "public_form_links" }),
         expect.objectContaining({ name: "submissions" }),
         expect.objectContaining({ name: "submission_files" }),
         expect.objectContaining({ name: "submission_comments" }),
@@ -222,12 +223,13 @@ describe("authenticated Supabase RLS harness configuration", () => {
         RESOURCE_PURGE_SCHEMA_CONTRACT.functionNames.includes(rpc.name)
       )
     ).toBe(false)
-    expect(SERVICE_ROLE_READ_ONLY_RPC_CHECKS).toHaveLength(1)
-    expect(SERVICE_ROLE_READ_ONLY_RPC_CHECKS[0].name).toBe(
-      "validate_internal_submission_values"
-    )
+    expect(SERVICE_ROLE_READ_ONLY_RPC_CHECKS.map((rpc) => rpc.name)).toEqual([
+      "validate_internal_submission_values",
+      "increment_public_form_link_submission_count",
+    ])
     expect(
       SERVICE_ROLE_READ_ONLY_RPC_CHECKS[0].args.target_values.signature.length
     ).toBeGreaterThan(20_000)
+    expect(SERVICE_ROLE_READ_ONLY_RPC_CHECKS[1].args).toEqual({ p_token: null })
   })
 })

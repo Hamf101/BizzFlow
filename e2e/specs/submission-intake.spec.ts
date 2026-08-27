@@ -36,10 +36,11 @@ test.describe("submission intake", () => {
 
     await staff.goto("/submissions/new")
     await staff.getByLabel("Title").fill(submissionTitle)
-    await staff.getByLabel("Template").selectOption({ label: template.title })
+    await staff.getByLabel("Template").selectOption(template.id)
     await staff.getByRole("button", { name: "Create draft" }).click()
 
-    await staff.waitForURL(/\/submissions\/[0-9a-f-]+$/i)
+    await staff.waitForURL(/\/submissions\/[0-9a-f-]+(?:\?.*)?$/i)
+    await expect(staff.getByText("Submission draft created.")).toBeVisible()
 
     await staff.getByLabel("Client reference").fill("REF-4417")
 

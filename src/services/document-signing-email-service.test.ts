@@ -93,8 +93,7 @@ describe("document signing email service", () => {
         token: "private-token",
       })
     ).rejects.toMatchObject({
-      message:
-        "Unable to send the document email. Check the Resend configuration and try again.",
+      message: expect.stringContaining("Unable to send the document email."),
       statusCode: 502,
     } satisfies Partial<DocumentSigningEmailServiceError>)
   })

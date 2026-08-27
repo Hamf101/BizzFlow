@@ -1,3 +1,7 @@
+import {
+  createInternalSubmissionDraft as defaultCreateInternalSubmissionDraft,
+  submitInternalSubmission as defaultSubmitInternalSubmission,
+} from "@/services/submission-service"
 import type { TemplateServiceDeps } from "@/services/templates/contracts"
 import { TemplateServiceError } from "@/services/templates/errors"
 import {
@@ -10,11 +14,23 @@ import {
 } from "@/services/templates/shared"
 import { templateContentV3Schema, type TemplateContentV3 } from "@/types/template"
 
+/** One worked example submitted against a starter template. */
+export type StarterSampleSubmission = {
+  title: string
+  values: Record<string, unknown>
+}
+
 export type StarterTemplateDefinition = {
   title: string
   description: string
   category: "Safety" | "Operations" | "Admin" | "Finance"
   content: TemplateContentV3
+  /**
+   * Worked examples seeded on request, so a pilot can see a populated list,
+   * review queue and export before anyone fills a form by hand. Keys must match
+   * the template's `fieldKey`s — the real submission validator runs over them.
+   */
+  sampleSubmissions: StarterSampleSubmission[]
 }
 
 export const STARTER_TEMPLATES: StarterTemplateDefinition[] = [
@@ -83,6 +99,28 @@ export const STARTER_TEMPLATES: StarterTemplateDefinition[] = [
       fieldGroups: [],
       blockRules: [],
     }),
+    sampleSubmissions: [
+      {
+        title: "Sample: forklift near miss in Bay 4",
+        values: {
+          incident_date: "2026-07-14",
+          incident_location: "Warehouse Bay 4",
+          severity_level: "Low (Near Miss)",
+          incident_description:
+            "A forklift reversed toward a pedestrian walkway while the spotter was away. No contact and no injury. Walkway markings have been repainted and the spotter rota reissued.",
+        },
+      },
+      {
+        title: "Sample: chemical spill in the wash bay",
+        values: {
+          incident_date: "2026-07-22",
+          incident_location: "Wash Bay",
+          severity_level: "Medium (Minor Injury/Damage)",
+          incident_description:
+            "A 5L degreaser container split while being moved. One operator reported skin irritation and was treated on site. Spill kit used; supplier has been asked about container batch quality.",
+        },
+      },
+    ],
   },
   {
     title: "Equipment & Facility Inspection",
@@ -140,6 +178,26 @@ export const STARTER_TEMPLATES: StarterTemplateDefinition[] = [
       fieldGroups: [],
       blockRules: [],
     }),
+    sampleSubmissions: [
+      {
+        title: "Sample: compressor 2 monthly check",
+        values: {
+          equipment_name: "Air compressor 2",
+          inspection_passed: true,
+          inspector_notes:
+            "Pressure holding at 8 bar, no audible leaks, belt tension within tolerance. Next service due in September.",
+        },
+      },
+      {
+        title: "Sample: loading dock shutter check",
+        values: {
+          equipment_name: "Loading dock shutter",
+          inspection_passed: false,
+          inspector_notes:
+            "Shutter binds about two thirds of the way down and the safety edge did not trigger on test. Taken out of service pending an engineer visit.",
+        },
+      },
+    ],
   },
   {
     title: "Expense & Purchase Request",
@@ -188,6 +246,15 @@ export const STARTER_TEMPLATES: StarterTemplateDefinition[] = [
       fieldGroups: [],
       blockRules: [],
     }),
+    sampleSubmissions: [
+      {
+        title: "Sample: replacement safety boots",
+        values: {
+          item_title: "Replacement safety boots (4 pairs)",
+          estimated_amount: "320.00",
+        },
+      },
+    ],
   },
 ]
 
@@ -290,6 +357,154 @@ export async function seedStarterTemplatesForOrganization(
       if (seededCount === 0 && skippedCount === 0) {
         throw new TemplateServiceError(
           "No starter templates are available to add.",
+          500
+        )
+      }
+
+      return { seededCount, skippedCount }
+    }
+  )
+}
+
+/** How many worked examples a full sample-data seed writes. */
+export const SAMPLE_SUBMISSION_COUNT = STARTER_TEMPLATES.reduce(
+  (total: number, starter: StarterTemplateDefinition): number =>
+    total + starter.sampleSubmissions.length,
+  0
+)
+
+/** Outcome of one sample-submission seeding pass. */
+export type SeedSampleSubmissionsResult = {
+  seededCount: number
+  skippedCount: number
+}
+
+/** Dependencies the sample seeder injects for tests. */
+export type SeedSampleSubmissionsDeps = TemplateServiceDeps & {
+  createInternalSubmissionDraft?: typeof defaultCreateInternalSubmissionDraft
+  submitInternalSubmission?: typeof defaultSubmitInternalSubmission
+}
+
+/**
+ * Seeds worked example submissions against the seeded starter templates.
+ *
+ * Sprint 13 promised sample data and shipped none, so a fresh pilot workspace
+ * showed an empty submissions list, an empty review queue and an empty export
+ * until someone filled a form by hand.
+ *
+ * Gated on `templates:manage`, matching `seedStarterTemplatesForOrganization` —
+ * this writes submitted records into a shared workspace, which is not something
+ * a staff member should be able to do in bulk. The composed submission
+ * operations enforce `submissions:create` on top of that.
+ *
+ * The examples go through the real draft-and-submit path rather than raw
+ * inserts, so they carry a genuine template snapshot and pass the same
+ * validator as a member's own submission. A starter template that has not been
+ * seeded yet is skipped rather than treated as an error.
+ *
+ * Re-running is safe: a sample whose title already exists in the tenant counts
+ * as skipped.
+ *
+ * @param input - Actor and tenant identifiers.
+ * @param deps - Optional database, identifier, clock, and submission dependencies.
+ * @returns How many samples were created and how many already existed.
+ * @throws TemplateServiceError when access or persistence fails.
+ */
+export async function seedSampleSubmissionsForOrganization(
+  input: { actorUserId: string; organizationId: string },
+  deps: SeedSampleSubmissionsDeps = {}
+): Promise<SeedSampleSubmissionsResult> {
+  return runTemplateOperation(
+    "seed_sample_submissions",
+    {
+      actorUserId: input.actorUserId,
+      organizationId: input.organizationId,
+    },
+    async (): Promise<SeedSampleSubmissionsResult> => {
+      const client = getClient(deps)
+      await requirePermission(
+        client,
+        input.organizationId,
+        input.actorUserId,
+        "templates:manage",
+        "You cannot add sample submissions."
+      )
+
+      const createDraft =
+        deps.createInternalSubmissionDraft ?? defaultCreateInternalSubmissionDraft
+      const submitDraft =
+        deps.submitInternalSubmission ?? defaultSubmitInternalSubmission
+
+      let seededCount = 0
+      let skippedCount = 0
+
+      for (const starter of STARTER_TEMPLATES) {
+        const { data: template, error: templateError } = await client
+          .from("document_templates")
+          .select("id")
+          .eq("org_id", input.organizationId)
+          .eq("title", starter.title)
+          .eq("status", "published")
+          .maybeSingle()
+
+        if (templateError) {
+          throw createDatabaseError(
+            templateError,
+            "Unable to check the existing template library."
+          )
+        }
+
+        if (!template) {
+          // Its starter template has not been seeded, so there is nothing to
+          // submit against. Counted as skipped, not as a failure.
+          skippedCount += starter.sampleSubmissions.length
+          continue
+        }
+
+        for (const sample of starter.sampleSubmissions) {
+          const { data: existing, error: lookupError } = await client
+            .from("submissions")
+            .select("id")
+            .eq("org_id", input.organizationId)
+            .eq("title", sample.title)
+            .maybeSingle()
+
+          if (lookupError) {
+            throw createDatabaseError(
+              lookupError,
+              "Unable to check the existing submissions."
+            )
+          }
+
+          if (existing) {
+            skippedCount += 1
+            continue
+          }
+
+          const submissionId = createId(deps)
+          const draft = await createDraft({
+            actorUserId: input.actorUserId,
+            organizationId: input.organizationId,
+            submissionId,
+            templateId: (template as { id: string }).id,
+            title: sample.title,
+          })
+
+          await submitDraft({
+            actorUserId: input.actorUserId,
+            organizationId: input.organizationId,
+            submissionId: draft.id,
+            expectedRevision: draft.revision,
+            values: sample.values,
+          })
+
+          seededCount += 1
+        }
+      }
+
+      if (seededCount === 0 && skippedCount === 0) {
+        throw new TemplateServiceError(
+          "No sample submissions are available to add.",
           500
         )
       }

@@ -47,7 +47,9 @@ export function DashboardSidebar({
   return (
     <aside
       className={cn(
-        "flex flex-col gap-6 px-4 pt-5 pb-4 transition-[width,padding] duration-200 md:w-[232px] md:shrink-0 md:pt-6",
+        // Hidden below md: at 375px this aside was ~500px of chrome above every
+        // page heading. Mobile navigation is the bottom tab bar instead.
+        "hidden flex-col gap-6 px-4 pt-5 pb-4 transition-[width,padding] duration-200 md:flex md:w-[232px] md:shrink-0 md:pt-6",
         collapsed && "md:w-[80px] md:cursor-e-resize md:px-3"
       )}
       data-collapsed={collapsed}

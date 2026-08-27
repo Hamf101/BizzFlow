@@ -403,6 +403,7 @@ export async function getPublicFormLinkByToken(
     organizationId: rawTemplate.org_id,
     title: rawTemplate.title,
     description: rawTemplate.description,
+    category: rawTemplate.category ?? null,
     status: rawTemplate.status,
     revision: rawTemplate.revision,
     content: parseTemplateContent(rawTemplate.content),

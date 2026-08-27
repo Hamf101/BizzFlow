@@ -11,7 +11,10 @@ import {
   OrganizationServiceError,
 } from "@/services/organization-service"
 import { TemplateServiceError } from "@/services/templates/errors"
-import { seedStarterTemplatesForOrganization } from "@/services/templates/starter-templates"
+import {
+  seedSampleSubmissionsForOrganization,
+  seedStarterTemplatesForOrganization,
+} from "@/services/templates/starter-templates"
 
 /**
  * Handles organization creation from the dashboard setup form.
@@ -95,6 +98,59 @@ export async function seedStarterTemplatesAction(): Promise<void> {
 
   // Outside the try: redirect() signals by throwing NEXT_REDIRECT, and a catch
   // around it would turn every success into "Unable to add starter templates."
+  redirect(buildRedirect("/dashboard", { message: successMessage }))
+}
+
+/**
+ * Seeds worked example submissions against the seeded starter templates.
+ *
+ * @returns Never returns; redirects to the dashboard with status.
+ */
+export async function seedSampleSubmissionsAction(): Promise<void> {
+  let successMessage: string
+
+  try {
+    const user = await getAuthenticatedUser()
+    const context = await getCurrentOrganizationContext(user.id)
+
+    if (!context) {
+      throw new SeedActionError(
+        "Create an organization before adding sample submissions."
+      )
+    }
+
+    const { seededCount, skippedCount } =
+      await seedSampleSubmissionsForOrganization({
+        actorUserId: user.id,
+        organizationId: context.organization.id,
+      })
+
+    revalidatePath("/dashboard")
+    revalidatePath("/submissions")
+
+    successMessage =
+      seededCount > 0
+        ? `Added ${seededCount} sample submission${seededCount === 1 ? "" : "s"}.`
+        : `All ${skippedCount} sample submissions already exist, or their starter templates have not been added yet.`
+  } catch (error: unknown) {
+    if (error instanceof AuthenticationError) {
+      redirect(buildRedirect("/login", { next: "/dashboard" }))
+    }
+
+    const reason = error instanceof Error ? error.message : "Unknown seeding error"
+    console.warn("seed_sample_submissions_action_failed", { reason })
+
+    redirect(
+      buildRedirect("/dashboard", {
+        error:
+          error instanceof SeedActionError || error instanceof TemplateServiceError
+            ? error.message
+            : "Unable to add sample submissions.",
+      })
+    )
+  }
+
+  // Outside the try, for the same reason as seedStarterTemplatesAction.
   redirect(buildRedirect("/dashboard", { message: successMessage }))
 }
 

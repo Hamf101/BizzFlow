@@ -12,6 +12,7 @@ import {
   FieldLabel,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { Select } from "@/components/ui/select"
 import {
   completeDocumentUploadRequest,
   readApiErrorMessage,
@@ -29,9 +30,6 @@ type DocumentUploadFormProps = {
   initialFolderId?: string | null
   lockFolderSelection?: boolean
 }
-
-const selectClassName =
-  "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50 dark:bg-input/30"
 
 /**
  * Uploads a document through the signed URL API workflow.
@@ -120,8 +118,7 @@ export function DocumentUploadForm({
         ) : (
           <Field>
             <FieldLabel htmlFor="document-folder">Folder</FieldLabel>
-            <select
-              className={selectClassName}
+            <Select
               defaultValue={initialFolderId ?? ""}
               id="document-folder"
               name="folderId"
@@ -132,7 +129,7 @@ export function DocumentUploadForm({
                   {folder.name}
                 </option>
               ))}
-            </select>
+            </Select>
           </Field>
         )}
         <Field>

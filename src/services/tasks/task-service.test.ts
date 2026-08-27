@@ -918,10 +918,12 @@ describe("automatic due reminders", () => {
         remind_at: FUTURE_AT,
       }),
     ])
+    // Superseded, not cancelled: the sync displaced this row itself, so
+    // reassigning back to STAFF_ID must be able to revive it.
     expect(
       client.tables.task_reminders.find((row: FakeRow) => row.id === REMINDER_A)
         ?.status
-    ).toBe("cancelled")
+    ).toBe("superseded")
   })
 
   it("cancels the reminder when the task is completed", async () => {
@@ -1010,6 +1012,175 @@ describe("automatic due reminders", () => {
 
     expect(pendingAutomatic(client)).toEqual([])
     expect(client.tables.task_reminders).toHaveLength(1)
+  })
+
+  // Regression: `alreadyScheduled` matched every reminder regardless of status,
+  // and (task, recipient, instant) is a status-blind unique key, so a row the
+  // sync had retired itself permanently blocked the reminder coming back.
+  it("restores the reminder when a task is reassigned back to the first assignee", async () => {
+    const client = createClient([
+      createTaskRow({ due_at: FUTURE_AT, ...assignedTo(STAFF_ID) }),
+    ])
+    client.tables.task_reminders.push(
+      createTaskReminderRow({
+        id: REMINDER_A,
+        origin: "automatic",
+        recipient_user_id: STAFF_ID,
+        remind_at: FUTURE_AT,
+      })
+    )
+    const deps = createDeps(client, [
+      "50000000-0000-4000-8000-0000000000a2",
+      "50000000-0000-4000-8000-0000000000a3",
+    ])
+
+    await assignTask(
+      {
+        actorUserId: MANAGER_ID,
+        organizationId: ORG_ID,
+        taskId: TASK_ID,
+        expectedRevision: 1,
+        assignedTo: OWNER_ID,
+      },
+      deps
+    )
+    await assignTask(
+      {
+        actorUserId: MANAGER_ID,
+        organizationId: ORG_ID,
+        taskId: TASK_ID,
+        expectedRevision: 2,
+        assignedTo: STAFF_ID,
+      },
+      deps
+    )
+
+    expect(pendingAutomatic(client)).toEqual([
+      expect.objectContaining({
+        id: REMINDER_A,
+        recipient_user_id: STAFF_ID,
+        remind_at: FUTURE_AT,
+      }),
+    ])
+    // Revived in place — the unique key means no second row may exist.
+    expect(client.tables.task_reminders).toHaveLength(2)
+  })
+
+  it("restores the reminder when a due date is moved away and back", async () => {
+    const MOVED_AT = "2026-08-06T09:00:00.000Z"
+    const client = createClient([
+      createTaskRow({ due_at: FUTURE_AT, ...assignedTo(STAFF_ID) }),
+    ])
+    client.tables.task_reminders.push(
+      createTaskReminderRow({
+        id: REMINDER_A,
+        origin: "automatic",
+        recipient_user_id: STAFF_ID,
+        remind_at: FUTURE_AT,
+      })
+    )
+    const deps = createDeps(client, ["50000000-0000-4000-8000-0000000000a4"])
+
+    await updateTask(
+      {
+        actorUserId: MANAGER_ID,
+        organizationId: ORG_ID,
+        taskId: TASK_ID,
+        expectedRevision: 1,
+        dueAt: MOVED_AT,
+      },
+      deps
+    )
+    await updateTask(
+      {
+        actorUserId: MANAGER_ID,
+        organizationId: ORG_ID,
+        taskId: TASK_ID,
+        expectedRevision: 2,
+        dueAt: FUTURE_AT,
+      },
+      deps
+    )
+
+    expect(pendingAutomatic(client)).toEqual([
+      expect.objectContaining({ id: REMINDER_A, remind_at: FUTURE_AT }),
+    ])
+  })
+
+  it("restores the reminder when a task is unassigned and reassigned", async () => {
+    const client = createClient([
+      createTaskRow({ due_at: FUTURE_AT, ...assignedTo(STAFF_ID) }),
+    ])
+    client.tables.task_reminders.push(
+      createTaskReminderRow({
+        id: REMINDER_A,
+        origin: "automatic",
+        recipient_user_id: STAFF_ID,
+        remind_at: FUTURE_AT,
+      })
+    )
+    const deps = createDeps(client)
+
+    await assignTask(
+      {
+        actorUserId: MANAGER_ID,
+        organizationId: ORG_ID,
+        taskId: TASK_ID,
+        expectedRevision: 1,
+        assignedTo: null,
+      },
+      deps
+    )
+
+    expect(pendingAutomatic(client)).toEqual([])
+
+    await assignTask(
+      {
+        actorUserId: MANAGER_ID,
+        organizationId: ORG_ID,
+        taskId: TASK_ID,
+        expectedRevision: 2,
+        assignedTo: STAFF_ID,
+      },
+      deps
+    )
+
+    expect(pendingAutomatic(client)).toEqual([
+      expect.objectContaining({ id: REMINDER_A, recipient_user_id: STAFF_ID }),
+    ])
+  })
+
+  it("keeps a closed task's reminder cancelled and out of revival", async () => {
+    const client = createClient([
+      createTaskRow({ due_at: FUTURE_AT, ...assignedTo(STAFF_ID) }),
+    ])
+    client.tables.task_reminders.push(
+      createTaskReminderRow({
+        id: REMINDER_A,
+        origin: "automatic",
+        recipient_user_id: STAFF_ID,
+        remind_at: FUTURE_AT,
+      })
+    )
+    const deps = createDeps(client)
+
+    await transitionTaskStatus(
+      {
+        actorUserId: MANAGER_ID,
+        organizationId: ORG_ID,
+        taskId: TASK_ID,
+        expectedRevision: 1,
+        targetStatus: "completed",
+      },
+      deps
+    )
+
+    // Cancelled, not superseded: a terminal task cannot reopen, so the row is
+    // final and stays visible in the task's reminder history.
+    expect(
+      client.tables.task_reminders.find((row: FakeRow) => row.id === REMINDER_A)
+        ?.status
+    ).toBe("cancelled")
   })
 
   it("does not duplicate a manual reminder already set for that exact instant", async () => {

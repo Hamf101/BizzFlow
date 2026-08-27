@@ -13,7 +13,10 @@ import { loadPageOrganizationContext } from "@/lib/page-organization-context"
 import { canPerformOrganizationAction } from "@/lib/permissions"
 import { cn } from "@/lib/utils"
 import { listTemplateFlowMessages } from "@/services/template-flow-service"
-import { getDocumentTemplate } from "@/services/template-service"
+import {
+  getDocumentTemplate,
+  listDocumentTemplateCategories,
+} from "@/services/template-service"
 import type { DocumentTemplate } from "@/types/template"
 import type { TemplateFlowMessage } from "@/types/template-flow"
 
@@ -139,10 +142,17 @@ export default async function EditTemplatePage({
     return []
   })
 
+  // Hints only, so a read failure must not block editing the template.
+  const categorySuggestions = await listDocumentTemplateCategories({
+    actorUserId: user.id,
+    organizationId: context.organization.id,
+  }).catch((): string[] => [])
+
   return (
     <EditTemplateShell query={query}>
       <TemplateEditor
         archiveAction={archiveTemplateAction}
+        categorySuggestions={categorySuggestions}
         publishAction={publishTemplateAction}
         saveAction={updateTemplateAction}
         initialFlowMessages={initialFlowMessages}

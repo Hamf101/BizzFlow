@@ -1,11 +1,11 @@
-import { getAppUrlEnv, getResendEnv } from "@/lib/env"
-import { escapeHtml, wrapEmailDocument } from "@/services/email/html"
+import { getAppUrlEnv, getEmailEnv } from "@/lib/env"
 import {
   EmailTransportError,
-  sendResendEmail,
   type EmailPayload,
   type EmailTransport,
-} from "@/services/email/resend-transport"
+} from "@/services/email/contracts"
+import { escapeHtml, wrapEmailDocument } from "@/services/email/html"
+import { sendEmail } from "@/services/email/transport"
 import { TaskServiceError } from "@/services/tasks/errors"
 
 /** Reason a task notification email is being sent. */
@@ -51,8 +51,9 @@ const dueAtFormatter = new Intl.DateTimeFormat("en-US", {
 /**
  * Sends one task notification through the shared transactional transport.
  *
- * The delivery reference travels as the provider idempotency key, so an
- * at-least-once background retry cannot produce a duplicate delivery.
+ * Resend receives the delivery reference as an idempotency key. EmailJS keeps
+ * it as provider-visible trace metadata but does not offer equivalent
+ * idempotency guarantees.
  *
  * @param input - Notification kind, task summary, and recipient details.
  * @param deps - Optional transport dependency for tests.
@@ -64,11 +65,11 @@ export async function sendTaskEmail(
   deps: TaskEmailDeps = {}
 ): Promise<void> {
   const startedAt = Date.now()
-  let resendEnv: ReturnType<typeof getResendEnv>
+  let emailEnv: ReturnType<typeof getEmailEnv>
   let taskUrl: string
 
   try {
-    resendEnv = getResendEnv()
+    emailEnv = getEmailEnv()
     taskUrl = new URL(
       `/tasks/${encodeURIComponent(input.taskId)}`,
       getAppUrlEnv().NEXT_PUBLIC_APP_URL
@@ -81,7 +82,7 @@ export async function sendTaskEmail(
       failureKind: "invalid_configuration",
     })
     throw new TaskServiceError(
-      "Task email is not configured. Add the required RESEND environment variables.",
+      "Task email is not configured. Add the required email provider environment variables.",
       500
     )
   }
@@ -96,16 +97,16 @@ export async function sendTaskEmail(
       contentHtml: createTaskEmailHtml(input, taskUrl),
     }),
     text: createTaskEmailText(input, taskUrl),
-    ...(resendEnv.RESEND_REPLY_TO_EMAIL
-      ? { replyTo: resendEnv.RESEND_REPLY_TO_EMAIL }
+    ...(emailEnv.EMAIL_REPLY_TO_EMAIL
+      ? { replyTo: emailEnv.EMAIL_REPLY_TO_EMAIL }
       : {}),
   }
 
   try {
-    const transport = deps.transport ?? sendResendEmail
+    const transport = deps.transport ?? sendEmail
     const result = await transport(
       { deliveryReference: input.deliveryReference, payload },
-      resendEnv
+      emailEnv
     )
 
     console.info("task_email_delivered", {
@@ -160,23 +161,23 @@ function createTaskEmailHtml(
   const safeTaskUrl = escapeHtml(taskUrl)
   const formattedDueAt = formatTaskDueAt(input.dueAt)
   const greeting = input.recipientName
-    ? `<p style="margin:0 0 12px;color:#525252;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:24px;">Hello ${escapeHtml(input.recipientName)},</p>`
+    ? `<p style="margin:0 0 12px;color:#706a72;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:24px;">Hello ${escapeHtml(input.recipientName)},</p>`
     : ""
   const dueLine = formattedDueAt
-    ? `<p style="margin:0 0 24px;color:#525252;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:24px;">Due ${escapeHtml(formattedDueAt)}.</p>`
+    ? `<p style="margin:0 0 24px;color:#706a72;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:24px;">Due ${escapeHtml(formattedDueAt)}.</p>`
     : ""
 
   return [
-    `<h1 style="margin:0 0 16px;color:#171717;font-family:Arial,Helvetica,sans-serif;font-size:24px;font-weight:700;line-height:32px;">${copy.heading}</h1>`,
+    `<h1 style="margin:0 0 16px;color:#252329;font-family:Arial,Helvetica,sans-serif;font-size:24px;font-weight:700;line-height:32px;">${copy.heading}</h1>`,
     greeting,
-    `<p style="margin:0 0 12px;color:#525252;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:24px;">${copy.intro}</p>`,
-    `<p style="margin:0 0 12px;color:#171717;font-family:Arial,Helvetica,sans-serif;font-size:18px;font-weight:700;line-height:26px;">${safeTaskTitle}</p>`,
+    `<p style="margin:0 0 12px;color:#706a72;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:24px;">${copy.intro}</p>`,
+    `<p style="margin:0 0 12px;color:#252329;font-family:Arial,Helvetica,sans-serif;font-size:18px;font-weight:700;line-height:26px;">${safeTaskTitle}</p>`,
     dueLine,
-    '<table role="presentation" border="0" cellpadding="0" cellspacing="0" style="margin:0 0 24px;border-collapse:separate;"><tr><td style="border-radius:8px;background-color:#171717;">',
-    `<a href="${safeTaskUrl}" target="_blank" style="display:inline-block;padding:12px 20px;color:#ffffff;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:700;line-height:20px;text-decoration:none;">Open task</a>`,
+    '<table role="presentation" border="0" cellpadding="0" cellspacing="0" style="margin:0 0 24px;border-collapse:separate;"><tr><td style="border-radius:8px;background-color:#635273;">',
+    `<a href="${safeTaskUrl}" target="_blank" style="display:inline-block;padding:12px 20px;color:#fffdfc;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:700;line-height:20px;text-decoration:none;">Open task</a>`,
     "</td></tr></table>",
-    '<p style="margin:0 0 8px;color:#737373;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;">If the button does not work, copy and paste this link into your browser:</p>',
-    `<p style="margin:0;overflow-wrap:anywhere;word-break:break-word;"><a href="${safeTaskUrl}" target="_blank" style="color:#404040;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;text-decoration:underline;">${safeTaskUrl}</a></p>`,
+    '<p style="margin:0 0 8px;color:#706a72;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;">If the button does not work, copy and paste this link into your browser:</p>',
+    `<p style="margin:0;overflow-wrap:anywhere;word-break:break-word;"><a href="${safeTaskUrl}" target="_blank" style="color:#635273;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;text-decoration:underline;">${safeTaskUrl}</a></p>`,
   ].join("")
 }
 

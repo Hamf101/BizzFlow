@@ -22,6 +22,7 @@ import {
   FieldLabel,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { Select } from "@/components/ui/select"
 import { formatMediumDate } from "@/lib/date-format"
 import { buildRedirect } from "@/lib/form-utils"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
@@ -53,9 +54,6 @@ const roleLabels: Record<OrganizationRole, string> = {
   staff: "Staff",
   external_reviewer: "External reviewer",
 }
-
-const selectClassName =
-  "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50 dark:bg-input/30"
 
 export default async function PeoplePage({
   searchParams,
@@ -217,8 +215,7 @@ function MembersCard({
                       <FieldLabel className="sr-only" htmlFor={`role-${member.id}`}>
                         Role
                       </FieldLabel>
-                      <select
-                        className={selectClassName}
+                      <Select
                         defaultValue={member.role}
                         id={`role-${member.id}`}
                         name="role"
@@ -228,7 +225,7 @@ function MembersCard({
                             {formatRole(role)}
                           </option>
                         ))}
-                      </select>
+                      </Select>
                     </Field>
                     <PermissionButton
                       action="members:update_role"
@@ -285,8 +282,7 @@ function InviteCard({ organizationId }: { organizationId: string }): ReactElemen
             </Field>
             <Field>
               <FieldLabel htmlFor="invite-role">Role</FieldLabel>
-              <select
-                className={selectClassName}
+              <Select
                 defaultValue="staff"
                 id="invite-role"
                 name="role"
@@ -296,7 +292,7 @@ function InviteCard({ organizationId }: { organizationId: string }): ReactElemen
                     {formatRole(role)}
                   </option>
                 ))}
-              </select>
+              </Select>
               <FieldDescription>
                 Owner admin is reserved for initial workspace ownership.
               </FieldDescription>

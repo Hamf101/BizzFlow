@@ -1,13 +1,15 @@
-import { getAppUrlEnv, getResendEnv } from "@/lib/env"
+import { getAppUrlEnv, getEmailEnv } from "@/lib/env"
 import { buildAcceptInvitePath } from "@/lib/auth-redirects"
+import {
+  EmailTransportError,
+  type EmailPayload,
+  type EmailTransport,
+} from "@/services/email/contracts"
 import { escapeHtml, wrapEmailDocument } from "@/services/email/html"
 import {
   describeEmailRejection,
-  EmailTransportError,
-  sendResendEmail,
-  type EmailPayload,
-  type EmailTransport,
-} from "@/services/email/resend-transport"
+  sendEmail,
+} from "@/services/email/transport"
 
 type SendInviteEmailInput = {
   inviteId: string
@@ -44,7 +46,7 @@ export class InviteEmailServiceError extends Error {
  *
  * @param input - Invite identifiers and recipient details.
  * @param deps - Optional email transport dependency for tests.
- * @returns Resolves once Resend accepts the delivery request.
+ * @returns Resolves once the selected provider accepts the delivery request.
  * @throws InviteEmailServiceError when email configuration or delivery fails.
  */
 export async function sendInviteEmail(
@@ -52,11 +54,11 @@ export async function sendInviteEmail(
   deps: InviteEmailServiceDeps = {}
 ): Promise<void> {
   const startedAt = performance.now()
-  let resendEnv: ReturnType<typeof getResendEnv>
+  let emailEnv: ReturnType<typeof getEmailEnv>
   let invitationUrl: string
 
   try {
-    resendEnv = getResendEnv()
+    emailEnv = getEmailEnv()
     const appUrl = getAppUrlEnv().NEXT_PUBLIC_APP_URL
     invitationUrl = new URL(buildAcceptInvitePath(input.token), appUrl).toString()
   } catch {
@@ -66,7 +68,7 @@ export async function sendInviteEmail(
       failureKind: "invalid_configuration",
     })
     throw new InviteEmailServiceError(
-      "Invite email is not configured. Add the required RESEND environment variables.",
+      "Invite email is not configured. Add the required email provider environment variables.",
       500
     )
   }
@@ -80,19 +82,19 @@ export async function sendInviteEmail(
       contentHtml: createInviteEmailHtml(input.organizationName, invitationUrl),
     }),
     text: createInviteEmailText(input.organizationName, invitationUrl),
-    ...(resendEnv.RESEND_REPLY_TO_EMAIL
-      ? { replyTo: resendEnv.RESEND_REPLY_TO_EMAIL }
+    ...(emailEnv.EMAIL_REPLY_TO_EMAIL
+      ? { replyTo: emailEnv.EMAIL_REPLY_TO_EMAIL }
       : {}),
   }
 
   try {
-    const transport = deps.transport ?? sendResendEmail
+    const transport = deps.transport ?? sendEmail
     const result = await transport(
       {
         deliveryReference: `organization-invite/${input.inviteId}`,
         payload,
       },
-      resendEnv
+      emailEnv
     )
 
     console.info("invite_email_delivered", {
@@ -113,7 +115,7 @@ export async function sendInviteEmail(
 
     if (transportError?.kind === "provider_rejected") {
       throw new InviteEmailServiceError(
-        `Unable to send the invite email. ${describeEmailRejection(transportError.providerStatus)}`,
+        `Unable to send the invite email. ${describeEmailRejection(emailEnv, transportError.providerStatus)}`,
         502
       )
     }
@@ -133,14 +135,14 @@ function createInviteEmailHtml(
   const safeInvitationUrl = escapeHtml(invitationUrl)
 
   return [
-    `<h1 style="margin:0 0 16px;color:#171717;font-family:Arial,Helvetica,sans-serif;font-size:24px;font-weight:700;line-height:32px;">You&#39;ve been invited to ${safeOrganizationName}</h1>`,
-    '<p style="margin:0 0 24px;color:#525252;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:24px;">Create a BizFlow Docs account or sign in to join the workspace.</p>',
-    '<table role="presentation" border="0" cellpadding="0" cellspacing="0" style="margin:0 0 24px;border-collapse:separate;"><tr><td style="border-radius:8px;background-color:#171717;">',
-    `<a href="${safeInvitationUrl}" target="_blank" style="display:inline-block;padding:12px 20px;color:#ffffff;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:700;line-height:20px;text-decoration:none;">Accept invitation</a>`,
+    `<h1 style="margin:0 0 16px;color:#252329;font-family:Arial,Helvetica,sans-serif;font-size:24px;font-weight:700;line-height:32px;">You&#39;ve been invited to ${safeOrganizationName}</h1>`,
+    '<p style="margin:0 0 24px;color:#706a72;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:24px;">Create a BizFlow Docs account or sign in to join the workspace.</p>',
+    '<table role="presentation" border="0" cellpadding="0" cellspacing="0" style="margin:0 0 24px;border-collapse:separate;"><tr><td style="border-radius:8px;background-color:#635273;">',
+    `<a href="${safeInvitationUrl}" target="_blank" style="display:inline-block;padding:12px 20px;color:#fffdfc;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:700;line-height:20px;text-decoration:none;">Accept invitation</a>`,
     "</td></tr></table>",
-    '<p style="margin:0 0 8px;color:#737373;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;">If the button does not work, copy and paste this link into your browser:</p>',
-    `<p style="margin:0 0 24px;overflow-wrap:anywhere;word-break:break-word;"><a href="${safeInvitationUrl}" target="_blank" style="color:#404040;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;text-decoration:underline;">${safeInvitationUrl}</a></p>`,
-    '<p style="margin:0;padding-top:20px;border-top:1px solid #e5e5e5;color:#737373;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;">If you were not expecting this invitation, you can safely ignore this email.</p>',
+    '<p style="margin:0 0 8px;color:#706a72;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;">If the button does not work, copy and paste this link into your browser:</p>',
+    `<p style="margin:0 0 24px;overflow-wrap:anywhere;word-break:break-word;"><a href="${safeInvitationUrl}" target="_blank" style="color:#635273;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;text-decoration:underline;">${safeInvitationUrl}</a></p>`,
+    '<p style="margin:0;padding-top:20px;border-top:1px solid #c9c2bb;color:#706a72;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;">If you were not expecting this invitation, you can safely ignore this email.</p>',
   ].join("")
 }
 

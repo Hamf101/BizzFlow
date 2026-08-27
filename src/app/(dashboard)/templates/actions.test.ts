@@ -144,6 +144,7 @@ function createTemplate(
     organizationId: ORGANIZATION_ID,
     title: "Client handbook",
     description: null,
+    category: null,
     status,
     revision,
     content: createBlankTemplateContent(),

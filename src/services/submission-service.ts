@@ -29,6 +29,7 @@ export {
   submitInternalSubmission,
 } from "@/services/submissions/draft-service"
 export { SubmissionServiceError } from "@/services/submissions/errors"
+export { exportInternalSubmissionsCsv } from "@/services/submissions/export-service"
 export {
   allocateInternalSubmissionFile,
   completeInternalSubmissionFile,

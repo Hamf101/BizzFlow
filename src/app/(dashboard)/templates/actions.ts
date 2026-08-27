@@ -55,6 +55,7 @@ export async function createTemplateAction(formData: FormData): Promise<void> {
       organizationId: actionContext.context.organization.id,
       title: getFormString(formData, "title"),
       description: getFormString(formData, "description") || null,
+      category: getFormString(formData, "category") || null,
       content,
     })
 
@@ -328,6 +329,7 @@ async function persistTemplateDraft(
     expectedRevision,
     title: getFormString(formData, "title"),
     description: getFormString(formData, "description") || null,
+    category: getFormString(formData, "category") || null,
     content,
   })
 }

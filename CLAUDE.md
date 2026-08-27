@@ -52,6 +52,13 @@ Run `pnpm check` before claiming a change is done. CI runs the same gate.
    Check latest version, publish date, deprecation flag, and peer deps. Stars are not a
    maintenance signal — `pdf-lib` had 8.5k stars and no release for two years. The verified
    ledger with per-package gotchas lives in `.agent/AGENT.md` under "Dependency Ledger".
+7. **Features are test-first.** Add a behavioral test and confirm it fails for the intended
+   reason before changing production code. Then implement the smallest change that makes it
+   pass and run the relevant negative/permission/tenant cases. A test is not evidence merely
+   because it asserts a mock call or repeats implementation logic: it must prove meaningful
+   output, persisted state, authorization, failure behavior, or an end-user outcome. When
+   reviewing existing tests, strengthen any case that remains green after its claimed behavior
+   is deliberately broken.
 
 ## Repo map
 

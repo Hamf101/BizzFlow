@@ -5,6 +5,8 @@ import { Suspense, type ReactElement, type ReactNode } from "react"
 import { PostHogProvider } from "@/components/analytics/posthog-provider"
 import { DashboardContentSkeleton } from "@/components/dashboard/dashboard-content-skeleton"
 import type { DashboardAccount } from "@/components/navigation/dashboard-account-menu"
+import { MobileTabBar } from "@/components/navigation/mobile-tab-bar"
+import { MobileTopBar } from "@/components/navigation/mobile-top-bar"
 import { DashboardSidebar } from "@/components/navigation/dashboard-sidebar"
 import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
 import { captureUnexpectedError } from "@/lib/observability"
@@ -140,9 +142,10 @@ export default async function DashboardLayout({
   return (
     <PostHogProvider userId={userId}>
       <div className="min-h-screen bg-canvas text-foreground">
+        <MobileTopBar account={account} signOutAction={signOutAction} />
         <div className="mx-auto flex min-h-screen w-full max-w-[96rem] flex-col md:flex-row">
           <DashboardSidebar account={account} signOutAction={signOutAction} />
-          <div className="min-w-0 flex-1 p-3 md:py-4 md:pr-4 md:pl-1">
+          <div className="min-w-0 flex-1 p-3 pb-[calc(3.5rem+0.75rem+env(safe-area-inset-bottom))] md:py-4 md:pr-4 md:pb-4 md:pl-1">
             <main className="flex min-h-full flex-col rounded-[18px] border border-border/70 bg-background shadow-[0_1px_2px_rgba(37,35,41,0.04)]">
               <div className="min-w-0 flex-1 px-5 py-6 sm:px-7 sm:py-7">
                 <Suspense fallback={<DashboardContentSkeleton />}>
@@ -153,6 +156,7 @@ export default async function DashboardLayout({
             </main>
           </div>
         </div>
+        <MobileTabBar role={account.role} />
       </div>
     </PostHogProvider>
   )

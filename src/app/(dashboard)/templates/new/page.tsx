@@ -20,6 +20,7 @@ import { loadAuthenticatedPageUser } from "@/lib/page-auth"
 import { loadPageOrganizationContext } from "@/lib/page-organization-context"
 import { canPerformOrganizationAction } from "@/lib/permissions"
 import { cn } from "@/lib/utils"
+import { listDocumentTemplateCategories } from "@/services/template-service"
 
 import { createTemplateAction } from "../actions"
 
@@ -86,6 +87,13 @@ export default async function NewTemplatePage({
     )
   }
 
+  // Suggestions only — the field stays free text so a new category never needs
+  // a code change. An empty list simply means nothing is categorised yet.
+  const categorySuggestions = await listDocumentTemplateCategories({
+    actorUserId: user.id,
+    organizationId: context.organization.id
+  }).catch((): string[] => [])
+
   return (
     <div className="flex flex-col gap-6">
       {params.error && (
@@ -140,6 +148,21 @@ export default async function NewTemplatePage({
                 placeholder="For example: New client agreement"
                 required
               />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="new-template-category">Category</FieldLabel>
+              <Input
+                id="new-template-category"
+                list="template-category-suggestions"
+                maxLength={40}
+                name="category"
+                placeholder="For example: Operations"
+              />
+              <datalist id="template-category-suggestions">
+                {categorySuggestions.map((category: string) => (
+                  <option key={category} value={category} />
+                ))}
+              </datalist>
             </Field>
             <Field>
               <FieldLabel htmlFor="new-template-description">

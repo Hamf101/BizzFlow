@@ -6,8 +6,8 @@ import {
   getAppUrlEnv,
   getFileUploadPolicyEnv,
   getGeminiEnv,
+  getEmailEnv,
   getR2Env,
-  getResendEnv,
   getSentryEnv,
   getUpstashRedisEnv,
   isUpstashRedisEnvConfigured,
@@ -88,40 +88,72 @@ describe("application URL validation", () => {
   })
 })
 
-describe("Resend environment validation", () => {
-  it("drops a blank reply-to and defaults the request timeout", () => {
+describe("email environment validation", () => {
+  it("keeps Resend as the default provider for existing deployments", () => {
     setIsolatedEnv({
       RESEND_API_KEY: "re-test-key",
       RESEND_FROM_EMAIL: "docs@example.com",
       RESEND_REPLY_TO_EMAIL: "  ",
     })
 
-    expect(getResendEnv()).toEqual({
+    expect(getEmailEnv()).toEqual({
+      EMAIL_PROVIDER: "resend",
+      EMAIL_TIMEOUT_MS: 10000,
       RESEND_API_KEY: "re-test-key",
       RESEND_FROM_EMAIL: "docs@example.com",
-      RESEND_TIMEOUT_MS: 10000,
     })
   })
 
-  it("requires a valid sender address", () => {
+  it("loads the selected EmailJS account and template without a reply-to", () => {
+    setIsolatedEnv({
+      EMAIL_PROVIDER: "emailjs",
+      EMAILJS_SERVICE_ID: "service_buy2dql",
+      EMAILJS_TEMPLATE_ID: "template_wg2zfqi",
+      EMAILJS_PUBLIC_KEY: "public-test-key",
+      EMAILJS_PRIVATE_KEY: "private-test-key",
+      EMAIL_TIMEOUT_MS: "2500",
+    })
+
+    expect(getEmailEnv()).toEqual({
+      EMAIL_PROVIDER: "emailjs",
+      EMAILJS_SERVICE_ID: "service_buy2dql",
+      EMAILJS_TEMPLATE_ID: "template_wg2zfqi",
+      EMAILJS_PUBLIC_KEY: "public-test-key",
+      EMAILJS_PRIVATE_KEY: "private-test-key",
+      EMAIL_TIMEOUT_MS: 2500,
+    })
+  })
+
+  it("requires the public EmailJS account key", () => {
+    setIsolatedEnv({
+      EMAIL_PROVIDER: "emailjs",
+      EMAILJS_SERVICE_ID: "service_buy2dql",
+      EMAILJS_TEMPLATE_ID: "template_wg2zfqi",
+      EMAILJS_PRIVATE_KEY: "private-test-key",
+    })
+
+    expect(() => getEmailEnv()).toThrow("EMAILJS_PUBLIC_KEY")
+  })
+
+  it("requires a valid Resend sender address", () => {
     setIsolatedEnv({
       RESEND_API_KEY: "re-test-key",
       RESEND_FROM_EMAIL: "not-an-email",
     })
 
-    expect(() => getResendEnv()).toThrow("RESEND_FROM_EMAIL")
+    expect(() => getEmailEnv()).toThrow("RESEND_FROM_EMAIL")
   })
 
   it.each(["999", "60001", "1.5", "not-a-number"])(
-    "rejects invalid Resend timeout %s",
+    "rejects invalid email timeout %s",
     (timeoutMs: string) => {
       setIsolatedEnv({
         RESEND_API_KEY: "re-test-key",
         RESEND_FROM_EMAIL: "docs@example.com",
-        RESEND_TIMEOUT_MS: timeoutMs,
+        EMAIL_TIMEOUT_MS: timeoutMs,
       })
 
-      expect(() => getResendEnv()).toThrow("RESEND_TIMEOUT_MS")
+      expect(() => getEmailEnv()).toThrow("EMAIL_TIMEOUT_MS")
     }
   )
 })

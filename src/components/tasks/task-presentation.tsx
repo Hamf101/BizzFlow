@@ -49,15 +49,14 @@ const TASK_REMINDER_STATUS_PRESENTATIONS: Record<
     label: "Cancelled",
     variant: "ghost",
   },
+  // Sync bookkeeping. listTaskReminders filters these out, so this exists to
+  // keep the map exhaustive rather than to be rendered.
+  superseded: {
+    className: "text-muted-foreground",
+    label: "Replaced",
+    variant: "ghost",
+  },
 }
-
-/** Shared native-select styling matching the themed input control. */
-export const TASK_SELECT_CLASS_NAME =
-  "h-8 w-full rounded-[8px] border border-input bg-card px-2.5 py-1 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
-
-/** Shared textarea styling matching the themed input control. */
-export const TASK_TEXTAREA_CLASS_NAME =
-  "min-h-20 w-full resize-y rounded-[8px] border border-input bg-card px-2.5 py-2 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
 
 /**
  * Renders one task lifecycle state with a stable label and tone.

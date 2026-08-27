@@ -1,7 +1,7 @@
 import { Copy, FileText, Pencil, Plus } from "lucide-react"
 import Link from "next/link"
 import { redirect } from "next/navigation"
-import type { ReactElement } from "react"
+import type { ReactElement, ReactNode } from "react"
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { buttonVariants } from "@/components/ui/button"
@@ -24,7 +24,10 @@ import { TemplateStatusBadge } from "@/lib/page-status-badges"
 import { canPerformOrganizationAction } from "@/lib/permissions"
 import { cn } from "@/lib/utils"
 import { listPublicFormLinks } from "@/services/public-form-service"
-import { listDocumentTemplates } from "@/services/template-service"
+import {
+  listDocumentTemplateCategories,
+  listDocumentTemplates,
+} from "@/services/template-service"
 import type { PublicFormLink } from "@/types/public-link"
 import type { DocumentTemplate } from "@/types/template"
 
@@ -35,9 +38,13 @@ import {
 import { duplicateTemplateAction } from "./actions"
 
 type TemplatesSearchParams = Promise<{
+  category?: string
   error?: string
   message?: string
 }>
+
+/** Search-param value selecting the templates with no category at all. */
+const UNCATEGORIZED_FILTER = "none"
 
 /**
  * Lists organization templates visible to the current authenticated member.
@@ -77,9 +84,17 @@ export default async function TemplatesPage({
   }
 
   const context = contextResult.context
+  const activeCategory = params.category?.trim() || null
   const templatesResult = await listDocumentTemplates({
     actorUserId: user.id,
     organizationId: context.organization.id,
+    // Omitting the key means "every category"; null means "uncategorised".
+    ...(activeCategory === null
+      ? {}
+      : {
+          category:
+            activeCategory === UNCATEGORIZED_FILTER ? null : activeCategory,
+        }),
   })
     .then((templates: DocumentTemplate[]) => ({
       templates,
@@ -102,6 +117,11 @@ export default async function TemplatesPage({
     context.membership.role,
     "templates:manage"
   )
+  // Always the full set, so filtering to one category never hides the others.
+  const categories = await listDocumentTemplateCategories({
+    actorUserId: user.id,
+    organizationId: context.organization.id,
+  }).catch((): string[] => [])
 
   const publicLinksMap: Record<string, PublicFormLink[]> = {}
   if (templatesResult.templates.length > 0 && canManage) {
@@ -139,6 +159,13 @@ export default async function TemplatesPage({
         )}
       </section>
 
+      {categories.length > 0 && (
+        <TemplateCategoryFilter
+          activeCategory={activeCategory}
+          categories={categories}
+        />
+      )}
+
       {templatesResult.errorMessage ? (
         <Alert variant="destructive">
           <AlertTitle>Template library unavailable</AlertTitle>
@@ -146,6 +173,7 @@ export default async function TemplatesPage({
         </Alert>
       ) : (
         <TemplateLibrary
+          activeCategory={activeCategory}
           canManage={canManage}
           publicLinksMap={publicLinksMap}
           templates={templatesResult.templates}
@@ -159,7 +187,7 @@ function TemplatesShell({
   children,
   params,
 }: {
-  children: ReactElement | ReactElement[]
+  children: ReactNode
   params: Awaited<TemplatesSearchParams>
 }): ReactElement {
   return (
@@ -181,11 +209,71 @@ function TemplatesShell({
   )
 }
 
+/**
+ * Lets a member narrow the library to one category.
+ *
+ * Plain links rather than a client-side control: the filter is applied by the
+ * service against an indexed column, so it belongs in the URL where it can be
+ * shared and restored.
+ *
+ * @param props - Every category in use and the one currently applied.
+ * @returns A row of filter chips.
+ */
+function TemplateCategoryFilter({
+  activeCategory,
+  categories,
+}: {
+  activeCategory: string | null
+  categories: string[]
+}): ReactElement {
+  const options: { href: string; key: string; label: string }[] = [
+    { href: "/templates", key: "all", label: "All" },
+    ...categories.map((category: string) => ({
+      href: `/templates?category=${encodeURIComponent(category)}`,
+      key: category,
+      label: category,
+    })),
+    {
+      href: `/templates?category=${UNCATEGORIZED_FILTER}`,
+      key: UNCATEGORIZED_FILTER,
+      label: "Ungrouped",
+    },
+  ]
+
+  return (
+    <nav aria-label="Filter templates by category">
+      <ul className="flex flex-wrap items-center gap-2">
+        {options.map((option) => {
+          const isActive = (activeCategory ?? "all") === option.key
+
+          return (
+            <li key={option.key}>
+              <Link
+                aria-current={isActive ? "page" : undefined}
+                className={cn(
+                  buttonVariants({ size: "sm", variant: "outline" }),
+                  isActive &&
+                    "border-primary bg-secondary text-secondary-foreground"
+                )}
+                href={option.href}
+              >
+                {option.label}
+              </Link>
+            </li>
+          )
+        })}
+      </ul>
+    </nav>
+  )
+}
+
 function TemplateLibrary({
+  activeCategory,
   canManage,
   publicLinksMap,
   templates,
 }: {
+  activeCategory: string | null
   canManage: boolean
   publicLinksMap: Record<string, PublicFormLink[]>
   templates: DocumentTemplate[]
@@ -194,11 +282,17 @@ function TemplateLibrary({
     return (
       <Card>
         <CardHeader>
-          <CardTitle>No templates yet</CardTitle>
+          <CardTitle>
+            {activeCategory === null
+              ? "No templates yet"
+              : "No templates in this category"}
+          </CardTitle>
           <CardDescription>
-            {canManage
-              ? "Create a guided template for your organization."
-              : "Published templates will appear here when they are ready."}
+            {activeCategory !== null
+              ? "Clear the filter to see the rest of the library."
+              : canManage
+                ? "Create a guided template for your organization."
+                : "Published templates will appear here when they are ready."}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -237,7 +331,9 @@ function TemplateLibrary({
             <CardHeader>
               <CardTitle>{template.title}</CardTitle>
               <CardDescription>
-                Updated {formatMediumDate(template.updatedAt)}
+                {template.category
+                  ? `${template.category} · Updated ${formatMediumDate(template.updatedAt)}`
+                  : `Updated ${formatMediumDate(template.updatedAt)}`}
               </CardDescription>
               <CardAction>
                 <TemplateStatusBadge status={template.status} />

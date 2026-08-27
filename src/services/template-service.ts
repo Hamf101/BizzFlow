@@ -22,6 +22,7 @@ export {
   createDocumentTemplate,
   duplicateDocumentTemplate,
   getDocumentTemplate,
+  listDocumentTemplateCategories,
   listDocumentTemplates,
   publishDocumentTemplate,
   updateDocumentTemplate,

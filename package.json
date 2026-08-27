@@ -3,11 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "engines": {
-    "node": ">=22"
+    "node": "22.x"
   },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "build:e2e": "node scripts/build-e2e.mjs",
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
@@ -15,14 +16,15 @@
     "supabase:check:rls": "node scripts/check-supabase-rls.mjs",
     "supabase:check:audit-chain": "node scripts/verify-audit-chain.mjs",
     "typecheck": "tsc --noEmit",
-    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm check:duplication && pnpm check:deadcode && pnpm build && pnpm audit:dependencies",
-    "check:e2e": "pnpm build && pnpm test:e2e",
+    "check": "pnpm lint && pnpm typecheck && pnpm check:test-integrity && pnpm test && pnpm check:duplication && pnpm check:deadcode && pnpm build && pnpm audit:dependencies",
+    "check:e2e": "pnpm build:e2e && pnpm test:e2e",
     "test:e2e": "playwright test",
-    "e2e:up": "corepack pnpm exec supabase start && docker compose -f docker-compose.e2e.yml up -d --wait && pnpm e2e:env",
+    "e2e:up": "corepack pnpm exec supabase start && docker compose -f docker-compose.e2e.yml up -d --wait minio && docker compose -f docker-compose.e2e.yml run --rm create-bucket && pnpm e2e:env",
     "e2e:down": "docker compose -f docker-compose.e2e.yml down -v && corepack pnpm exec supabase stop",
     "e2e:env": "node scripts/write-e2e-env.mjs",
     "check:duplication": "jscpd src --format typescript,tsx --min-lines 5 --min-tokens 50 --mode strict --ignore '**/*.test.ts,**/*.test.tsx' --threshold 3 --reporters console --no-colors --no-tips",
     "check:deadcode": "knip --include files,dependencies,exports,unlisted,unresolved",
+    "check:test-integrity": "node scripts/test-integrity.mjs",
     "audit:dependencies": "corepack pnpm audit --prod --audit-level=moderate"
   },
   "dependencies": {

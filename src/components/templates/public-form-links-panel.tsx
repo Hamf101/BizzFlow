@@ -106,7 +106,13 @@ export function PublicFormLinksPanel({
               >
                 <div className="flex min-w-0 flex-col gap-1">
                   <div className="flex items-center gap-2">
-                    <span className="font-mono text-xs font-medium text-foreground">
+                    {/* The token is 55 characters with nothing to break on,
+                        which is the one real horizontal overflow at 375px.
+                        Truncate for display; Copy still yields the full URL. */}
+                    <span
+                      className="min-w-0 truncate font-mono text-xs font-medium text-foreground"
+                      title={`/forms/${link.token}`}
+                    >
                       /forms/{link.token}
                     </span>
                     <Badge variant={link.status === "active" ? "default" : "secondary"}>

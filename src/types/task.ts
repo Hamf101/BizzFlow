@@ -17,6 +17,9 @@ export const TASK_REMINDER_STATUSES = [
   "sent",
   "failed",
   "cancelled",
+  // Displaced by the automatic sync and revivable. Distinct from `cancelled`,
+  // which records a member choosing to stop a reminder and is final.
+  "superseded",
 ] as const
 
 /** Delivery channels available to task reminders. */
@@ -159,7 +162,7 @@ const taskReminderRowShape = {
 export const taskReminderSchema = z.union([
   z.object({
     ...taskReminderRowShape,
-    status: z.enum(["pending", "failed", "cancelled"]),
+    status: z.enum(["pending", "failed", "cancelled", "superseded"]),
     sent_at: z.null(),
   }),
   z.object({

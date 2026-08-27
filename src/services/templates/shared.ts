@@ -30,7 +30,10 @@ import type {
 import { TemplateServiceError } from "./errors"
 
 export const TEMPLATE_COLUMNS =
-  "id,org_id,title,description,status,revision,content,created_by,updated_by,published_by,archived_by,created_at,updated_at,published_at,archived_at"
+  "id,org_id,title,description,category,status,revision,content,created_by,updated_by,published_by,archived_by,created_at,updated_at,published_at,archived_at"
+
+/** Longest category the `document_templates_category_check` constraint accepts. */
+export const TEMPLATE_CATEGORY_MAX_LENGTH = 40
 
 type LogValue = string | number | boolean | null | undefined
 
@@ -163,6 +166,7 @@ export function mapDocumentTemplate(
     organizationId: row.org_id,
     title: row.title,
     description: row.description,
+    category: row.category ?? null,
     status: parseDocumentTemplateStatus(row.status),
     revision: row.revision,
     content: parseTemplateContent(row.content),
@@ -235,6 +239,40 @@ export function normalizeDescription(
   }
 
   return description
+}
+
+/**
+ * Normalizes an author-supplied category to what the check constraint accepts.
+ *
+ * Whitespace-only input becomes `null` rather than a blank category, because
+ * `document_templates_category_check` rejects untrimmed values and an
+ * uncategorised template is a legitimate state.
+ *
+ * @param value - Raw category from a form or seed definition.
+ * @returns A trimmed category, or null when none was supplied.
+ * @throws TemplateServiceError when the category is too long.
+ */
+export function normalizeCategory(
+  value: string | null | undefined
+): string | null {
+  if (value === null || value === undefined) {
+    return null
+  }
+
+  const category = value.trim().replace(/\s+/g, " ")
+
+  if (category.length === 0) {
+    return null
+  }
+
+  if (category.length > TEMPLATE_CATEGORY_MAX_LENGTH) {
+    throw new TemplateServiceError(
+      `Category cannot exceed ${TEMPLATE_CATEGORY_MAX_LENGTH} characters.`,
+      400
+    )
+  }
+
+  return category
 }
 
 export function normalizeNullableId(

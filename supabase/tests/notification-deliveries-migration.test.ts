@@ -77,3 +77,29 @@ describe("sprint 10 notification deliveries migration contract", () => {
     )
   })
 })
+
+const grantMigrationSql = normalizeSql(
+  readFileSync(
+    getMigrationPath(
+      "20260817090000_notification_deliveries_service_role_grant.sql"
+    ),
+    "utf8"
+  )
+)
+
+describe("notification deliveries service-role grant", () => {
+  // Regression: the Sprint 10 migration revoked every privilege from
+  // service_role and never granted any back, while delivery-service.ts writes
+  // through createAdminClient(). BYPASSRLS skips policies but confers no table
+  // privileges, so every insert failed with "permission denied".
+  it("lets the server insert and read delivery attempts", () => {
+    expect(grantMigrationSql).toContain(
+      "grant select, insert on table public.notification_deliveries to service_role"
+    )
+  })
+
+  it("does not hand the server update or delete on an append-only record", () => {
+    expect(grantMigrationSql).not.toContain("update on table public.notification_deliveries")
+    expect(grantMigrationSql).not.toContain("delete on table public.notification_deliveries")
+  })
+})

@@ -1,4 +1,5 @@
-import { readFileSync } from "node:fs"
+import { readdirSync, readFileSync } from "node:fs"
+import { join } from "node:path"
 
 import { describe, expect, it } from "vitest"
 
@@ -15,6 +16,63 @@ const migrationPath = getMigrationPath(
 )
 const migrationSql = readFileSync(migrationPath, "utf8")
 const sql = normalizeSql(migrationSql)
+const migrationHistory = readdirSync(join(process.cwd(), "supabase/migrations"))
+  .filter((fileName: string): boolean => fileName.endsWith(".sql"))
+  .sort()
+  .map((fileName: string): string =>
+    readFileSync(join(process.cwd(), "supabase/migrations", fileName), "utf8")
+  )
+  .join("\n")
+
+function getLastFunctionDefinition(
+  historySql: string,
+  functionName: string
+): string {
+  const marker = `create or replace function ${functionName}(`
+  const start = historySql.toLowerCase().lastIndexOf(marker)
+
+  if (start < 0) {
+    throw new Error(`Missing function definition for ${functionName}.`)
+  }
+
+  const bodyStart = historySql.toLowerCase().indexOf("as $$", start)
+  const end = historySql.indexOf("$$;", bodyStart)
+
+  if (bodyStart < 0 || end < 0) {
+    throw new Error(`Incomplete function definition for ${functionName}.`)
+  }
+
+  return historySql.slice(start, end + 3)
+}
+
+function findDeclaredRecordAliasCollisions(
+  functionSql: string
+): readonly string[] {
+  const declarationBlock = functionSql.match(/\bdeclare\b([\s\S]*?)\bbegin\b/i)?.[1]
+
+  if (!declarationBlock) {
+    return []
+  }
+
+  const declaredRecords = new Set(
+    Array.from(
+      declarationBlock.matchAll(/^\s*([a-z_][a-z0-9_]*)\s+record\s*;/gim),
+      (match: RegExpMatchArray): string => match[1].toLowerCase()
+    )
+  )
+  const relationAliases = new Set(
+    Array.from(
+      functionSql.matchAll(
+        /\b(?:from|join|update|using)\s+(?:[a-z_][a-z0-9_]*\.)?[a-z_][a-z0-9_]*\s+(?:as\s+)?([a-z_][a-z0-9_]*)/gim
+      ),
+      (match: RegExpMatchArray): string => match[1].toLowerCase()
+    )
+  )
+
+  return [...declaredRecords].filter((recordName: string): boolean =>
+    relationAliases.has(recordName)
+  )
+}
 
 const serviceOnlyTables = [
   "resource_purge_objects",
@@ -201,6 +259,31 @@ describe("document and folder purge lifecycle migration", () => {
     expect(sql).toContain("delete from public.documents")
     expect(sql).toContain("order by member.depth desc")
     expect(sql).toContain("delete from public.folders")
+  })
+
+  it("keeps record variables distinct from SQL relation aliases in the finalizer", () => {
+    const functionSql = getLastFunctionDefinition(
+      migrationHistory,
+      "public.finalize_ready_resource_purges"
+    )
+
+    expect(findDeclaredRecordAliasCollisions(functionSql)).toEqual([])
+  })
+
+  it("detects a finalizer mutation that reuses a record name as a relation alias", () => {
+    const functionSql = getLastFunctionDefinition(
+      migrationHistory,
+      "public.finalize_ready_resource_purges"
+    )
+    const unsafeFunctionSql = functionSql.replace(
+      "join public.resource_purge_members folder_member",
+      "join public.resource_purge_members captured_folder"
+    )
+
+    expect(unsafeFunctionSql).not.toBe(functionSql)
+    expect(findDeclaredRecordAliasCollisions(unsafeFunctionSql)).toContain(
+      "captured_folder"
+    )
   })
 
   it("writes content-free immutable tombstones and chained audit receipts after finalization", () => {

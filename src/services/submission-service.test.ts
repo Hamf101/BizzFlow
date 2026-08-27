@@ -8,6 +8,7 @@ import {
   createInternalSubmissionComment,
   createInternalSubmissionDraft,
   createInternalSubmissionFileDownloadUrl,
+  exportInternalSubmissionsCsv,
   getInternalSubmission,
   listInternalSubmissions,
   saveInternalSubmissionDraft,
@@ -252,6 +253,54 @@ describe("internal submission visibility", () => {
         toStatus: "in_review"
       })
     ])
+  })
+})
+
+describe("internal submission csv export", () => {
+  it("renders a header row and one escaped row per visible submission", async () => {
+    const client = createClient({
+      submissions: [createSubmissionRow({ title: 'Vendor "Northstar", Inc.' })]
+    })
+
+    const csv = await exportInternalSubmissionsCsv(
+      { actorUserId: MANAGER_ID, organizationId: ORGANIZATION_ID },
+      { client: client as never }
+    )
+
+    expect(csv.split("\n")).toEqual([
+      '"Submission ID","Title","Status","Template ID","Created At","Submitted At","Updated At"',
+      `"${SUBMISSION_ID}","Vendor ""Northstar"", Inc.","draft","${TEMPLATE_ID}","2026-07-18T15:00:00.000Z","","2026-07-18T16:00:00.000Z"`
+    ])
+  })
+
+  // The export used to run its own admin query in the route handler, so any
+  // holder of submissions:view received every organization row.
+  it("applies the same role scoping as the submissions list", async () => {
+    const client = createClient()
+
+    const managerCsv = await exportInternalSubmissionsCsv(
+      { actorUserId: MANAGER_ID, organizationId: ORGANIZATION_ID },
+      { client: client as never }
+    )
+    const staffCsv = await exportInternalSubmissionsCsv(
+      { actorUserId: STAFF_ID, organizationId: ORGANIZATION_ID },
+      { client: client as never }
+    )
+
+    expect(managerCsv).toContain(OTHER_SUBMISSION_ID)
+    expect(staffCsv).toContain(SUBMISSION_ID)
+    expect(staffCsv).not.toContain(OTHER_SUBMISSION_ID)
+  })
+
+  it("rejects an actor with no active membership", async () => {
+    const client = createClient({ organization_memberships: [] })
+
+    await expect(
+      exportInternalSubmissionsCsv(
+        { actorUserId: MANAGER_ID, organizationId: ORGANIZATION_ID },
+        { client: client as never }
+      )
+    ).rejects.toMatchObject({ statusCode: 403 })
   })
 })
 

@@ -17,6 +17,8 @@ import {
 } from "@/components/ui/card"
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { Select } from "@/components/ui/select"
+import { Textarea } from "@/components/ui/textarea"
 import { formatMediumDateTime } from "@/lib/date-format"
 import { buildRedirect } from "@/lib/form-utils"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
@@ -39,8 +41,6 @@ import {
   formatTaskMemberName,
   getTaskStatusLabel,
   listInternalTaskMembers,
-  TASK_SELECT_CLASS_NAME,
-  TASK_TEXTAREA_CLASS_NAME,
   TaskPageShell,
   TaskStatusBadge,
 } from "@/components/tasks/task-presentation"
@@ -226,8 +226,7 @@ function TaskFilters({
         <form className="flex flex-col gap-3 sm:flex-row sm:items-end">
           <Field className="sm:flex-1">
             <FieldLabel htmlFor="task-filter-status">Status</FieldLabel>
-            <select
-              className={TASK_SELECT_CLASS_NAME}
+            <Select
               defaultValue={status ?? ""}
               id="task-filter-status"
               name="status"
@@ -238,12 +237,11 @@ function TaskFilters({
                   {getTaskStatusLabel(value)}
                 </option>
               ))}
-            </select>
+            </Select>
           </Field>
           <Field className="sm:flex-1">
             <FieldLabel htmlFor="task-filter-assignee">Assignee</FieldLabel>
-            <select
-              className={TASK_SELECT_CLASS_NAME}
+            <Select
               defaultValue={assignee ?? ""}
               id="task-filter-assignee"
               name="assignee"
@@ -254,7 +252,7 @@ function TaskFilters({
                   {member.fullName?.trim() || member.email}
                 </option>
               ))}
-            </select>
+            </Select>
           </Field>
           <div className="flex gap-2">
             <Button type="submit" variant="outline">
@@ -305,8 +303,7 @@ function NewTaskPanel({
               <FieldLabel htmlFor="new-task-description">
                 Description
               </FieldLabel>
-              <textarea
-                className={TASK_TEXTAREA_CLASS_NAME}
+              <Textarea
                 id="new-task-description"
                 maxLength={5_000}
                 name="description"
@@ -328,8 +325,7 @@ function NewTaskPanel({
               {canAssign && (
                 <Field className="sm:flex-1">
                   <FieldLabel htmlFor="new-task-assignee">Assignee</FieldLabel>
-                  <select
-                    className={TASK_SELECT_CLASS_NAME}
+                  <Select
                     defaultValue=""
                     id="new-task-assignee"
                     name="assignedTo"
@@ -340,7 +336,7 @@ function NewTaskPanel({
                         {member.fullName?.trim() || member.email}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                   <FieldDescription>
                     The assignee is emailed when the task is handed over.
                   </FieldDescription>
