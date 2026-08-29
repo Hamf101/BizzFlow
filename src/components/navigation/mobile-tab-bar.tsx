@@ -1,10 +1,10 @@
 "use client"
 
 import { Ellipsis } from "lucide-react"
-import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useState, type ReactElement } from "react"
 
+import { IntentPrefetchLink } from "@/components/navigation/intent-prefetch-link"
 import {
   getMobileNavigationLayout,
   type NavigationItem,
@@ -76,7 +76,7 @@ export function MobileTabBar({
 
           return (
             <li className="contents" key={item.href}>
-              <Link
+              <IntentPrefetchLink
                 aria-current={current ? "page" : undefined}
                 className={cn(
                   "flex flex-col items-center justify-center gap-1 text-[10px] leading-none transition-colors",
@@ -88,7 +88,7 @@ export function MobileTabBar({
               >
                 <Icon className="size-5" />
                 {item.shortLabel ?? item.label}
-              </Link>
+              </IntentPrefetchLink>
             </li>
           )
         })}
@@ -114,7 +114,7 @@ export function MobileTabBar({
                   const Icon = item.icon
 
                   return (
-                    <Link
+                    <IntentPrefetchLink
                       className={cn(
                         "flex h-11 items-center gap-3 rounded-[10px] px-3 text-sm transition-colors",
                         current
@@ -133,7 +133,7 @@ export function MobileTabBar({
                         )}
                       />
                       {item.label}
-                    </Link>
+                    </IntentPrefetchLink>
                   )
                 })}
               </SheetContent>

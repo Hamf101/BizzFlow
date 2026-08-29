@@ -1,42 +1,20 @@
 "use client"
 
-import {
-  ClipboardCheck,
-  FileText,
-  LayoutDashboard,
-  ListChecks,
-  Loader2,
-  ScrollText,
-  SendToBack,
-  Settings,
-  Users,
-} from "lucide-react"
-import Link, { useLinkStatus } from "next/link"
+import { Loader2 } from "lucide-react"
+import { useLinkStatus } from "next/link"
 import { usePathname } from "next/navigation"
-import type { ComponentType, ReactElement } from "react"
+import type { ReactElement } from "react"
 
+import { IntentPrefetchLink } from "@/components/navigation/intent-prefetch-link"
+import { getVisibleNavigationItems } from "@/components/navigation/navigation-items"
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import type { OrganizationRole } from "@/lib/permissions"
 import { cn } from "@/lib/utils"
-
-const navigationItems: ReadonlyArray<{
-  href: string
-  icon: ComponentType<{ className?: string }>
-  label: string
-}> = [
-  { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
-  { href: "/people", icon: Users, label: "People" },
-  { href: "/documents", icon: FileText, label: "Documents" },
-  { href: "/templates", icon: ScrollText, label: "Templates" },
-  { href: "/submissions", icon: SendToBack, label: "Submissions" },
-  { href: "/tasks", icon: ListChecks, label: "Tasks" },
-  { href: "/audit-log", icon: ClipboardCheck, label: "Audit log" },
-  { href: "/settings", icon: Settings, label: "Settings" },
-]
 
 /**
  * Shows a spinner on the link currently being navigated to, giving an immediate
@@ -73,10 +51,13 @@ function NavPendingIndicator({
  */
 export function DashboardNavigation({
   collapsed = false,
+  role,
 }: {
   collapsed?: boolean
+  role: OrganizationRole | null
 }): ReactElement {
   const pathname = usePathname()
+  const navigationItems = getVisibleNavigationItems(role)
 
   return (
     <TooltipProvider>
@@ -86,7 +67,7 @@ export function DashboardNavigation({
             pathname === item.href || pathname.startsWith(`${item.href}/`)
           const Icon = item.icon
           const navigationLink = (
-            <Link
+            <IntentPrefetchLink
               aria-label={collapsed ? item.label : undefined}
               aria-current={isActive ? "page" : undefined}
               className={cn(
@@ -127,7 +108,7 @@ export function DashboardNavigation({
                 {item.label}
               </span>
               <NavPendingIndicator collapsed={collapsed} />
-            </Link>
+            </IntentPrefetchLink>
           )
 
           return (

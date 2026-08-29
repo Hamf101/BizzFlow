@@ -42,15 +42,6 @@ const nextConfig: NextConfig = {
   experimental: {
     // Embedded logos/images are validated and capped by the template schema.
     serverActions: { bodySizeLimit: "10mb" },
-    // Every dashboard route is dynamic, and Next's default `dynamic: 0` means
-    // the client router re-fetches from the server on every visit — including
-    // going straight back to a page opened seconds ago. Mutations already call
-    // revalidatePath, so a short reuse window is safe and makes repeat
-    // navigation instant.
-    staleTimes: { dynamic: 30, static: 300 },
-    // Prefetch the real page payload on hover/touch rather than only the
-    // loading skeleton, so the data is usually resolved before the click lands.
-    dynamicOnHover: true,
   },
   // Ensure serverless/standalone builds carry the PDF renderer's font files.
   outputFileTracingIncludes: {

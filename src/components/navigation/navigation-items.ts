@@ -96,13 +96,15 @@ const MOBILE_PRIMARY_COUNT = MOBILE_PRIMARY_HREFS.length
  * Filters the destinations to those an actor's role can actually open.
  *
  * @param role - Active organization role, or null when there is no membership.
- * @returns Reachable destinations in sidebar order.
+ * @returns Reachable destinations in sidebar order, including universal pages before setup.
  */
 export function getVisibleNavigationItems(
   role: OrganizationRole | null
 ): NavigationItem[] {
   if (!role) {
-    return []
+    return NAVIGATION_ITEMS.filter(
+      (item: NavigationItem): boolean => !item.requiredAction
+    )
   }
 
   return NAVIGATION_ITEMS.filter(

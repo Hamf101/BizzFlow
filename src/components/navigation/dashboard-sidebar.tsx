@@ -111,7 +111,7 @@ export function DashboardSidebar({
         </p>
       </div>
 
-      <DashboardNavigation collapsed={collapsed} />
+      <DashboardNavigation collapsed={collapsed} role={account.role} />
 
       <div className="mt-auto border-t border-border/70 pt-3">
         <DashboardAccountMenu
