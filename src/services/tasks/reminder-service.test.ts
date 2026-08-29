@@ -566,7 +566,7 @@ describe("processDueTaskReminders", () => {
     const client = createReminderClient([createTaskReminderRow()])
     const deps = createDeps(client)
     deps.sendTaskEmail = async (): Promise<never> => {
-      throw new Error("resend 422 {\"to\":\"staff@example.com\"}")
+      throw new Error("emailjs 400 {\"to\":\"staff@example.com\"}")
     }
 
     await processDueTaskReminders(deps)

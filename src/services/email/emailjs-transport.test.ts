@@ -14,7 +14,7 @@ import {
 const environment: EmailJsEmailEnv = {
   EMAIL_PROVIDER: "emailjs",
   EMAILJS_SERVICE_ID: "service_buy2dql",
-  EMAILJS_TEMPLATE_ID: "template_wg2zfqi",
+  EMAILJS_TEMPLATE_ID: "template_d6o6c8p",
   EMAILJS_PUBLIC_KEY: "public-test-key",
   EMAILJS_PRIVATE_KEY: "private-test-key",
   EMAIL_TIMEOUT_MS: 2500,
@@ -59,7 +59,7 @@ describe("sendEmailJsEmail", () => {
     expect(request.headers).toEqual({ "Content-Type": "application/json" })
     expect(JSON.parse(String(request.body))).toEqual({
       service_id: "service_buy2dql",
-      template_id: "template_wg2zfqi",
+      template_id: "template_d6o6c8p",
       user_id: "public-test-key",
       accessToken: "private-test-key",
       template_params: {

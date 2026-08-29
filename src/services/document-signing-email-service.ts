@@ -50,7 +50,7 @@ export class DocumentSigningEmailServiceError extends Error {
  *
  * @param input - Document, organization, recipient, and one-time link details.
  * @param deps - Optional email transport dependency for tests.
- * @returns Resolves after the selected provider accepts the email.
+ * @returns Resolves after EmailJS accepts the email.
  * @throws DocumentSigningEmailServiceError when configuration or delivery fails.
  */
 export async function sendDocumentSigningEmail(
@@ -124,7 +124,7 @@ export async function sendDocumentSigningEmail(
 
     if (transportError?.kind === "provider_rejected") {
       throw new DocumentSigningEmailServiceError(
-        `Unable to send the document email. ${describeEmailRejection(emailEnv, transportError.providerStatus)}`,
+        `Unable to send the document email. ${describeEmailRejection(transportError.providerStatus)}`,
         502
       )
     }

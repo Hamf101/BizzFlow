@@ -8,6 +8,9 @@ import {
 
 const RESEND_EMAILS_ENDPOINT = "https://api.resend.com/emails"
 
+// Dormant adapter: the shared transport intentionally does not import this
+// module while EmailJS is the pinned transactional provider.
+
 export type EmailTransportDeps = {
   fetcher?: typeof fetch
   createTimeoutSignal?: (timeoutMs: number) => AbortSignal
@@ -72,39 +75,6 @@ export async function sendResendEmail(
     }
 
     throw new EmailTransportError("request_failed")
-  }
-}
-
-/**
- * Explains a provider rejection in terms an operator can act on.
- *
- * The transport deliberately never reads provider error bodies, so the HTTP
- * status is all the signal there is. These are the statuses Resend actually
- * uses, and each one has a different fix.
- *
- * @param status - Provider HTTP status, when a request was rejected.
- * @returns A user-safe sentence naming the likely misconfiguration.
- */
-export function describeResendRejection(status: number | null): string {
-  switch (status) {
-    case 401:
-    case 403:
-      return (
-        "The email provider refused the request. This usually means " +
-        "RESEND_FROM_EMAIL is still a sandbox sender such as " +
-        "onboarding@resend.dev, which can only deliver to the Resend " +
-        "account owner, or the sending domain is not verified."
-      )
-    case 422:
-      return (
-        "The email provider rejected the message. Check that " +
-        "RESEND_FROM_EMAIL is a verified sender and the recipient address " +
-        "is valid."
-      )
-    case 429:
-      return "The email provider is rate limiting this account. Try again shortly."
-    default:
-      return "Check the Resend configuration and try again."
   }
 }
 

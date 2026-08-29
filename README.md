@@ -31,7 +31,7 @@ MVP non-goals:
 - Database and auth: Supabase PostgreSQL, Supabase Auth, and Postgres RLS.
 - Storage: Cloudflare R2 private buckets with signed URLs.
 - Background jobs: Inngest.
-- Notifications: Resend for transactional email and Termii for initial SMS support.
+- Notifications: EmailJS for transactional email and Termii for initial SMS support.
 - Offline: deferred; no PWA, service-worker, IndexedDB/Dexie, or desktop-runtime dependency is part of the current cloud build.
 - Monitoring and analytics: Sentry plus PostHog or an internal event table.
 - Hosting: Vercel, Supabase, Cloudflare R2, and Inngest.
@@ -103,7 +103,7 @@ Expected variable groups:
 - Cloudflare R2: `CLOUDFLARE_R2_ACCOUNT_ID`, `CLOUDFLARE_R2_ACCESS_KEY_ID`, `CLOUDFLARE_R2_SECRET_ACCESS_KEY`, `CLOUDFLARE_R2_BUCKET_NAME`, `CLOUDFLARE_R2_ENDPOINT`, `CLOUDFLARE_R2_REGION`, and `CLOUDFLARE_R2_SIGNED_URL_TTL_SECONDS`.
 - File uploads: `FILE_UPLOAD_MAX_BYTES` and `FILE_UPLOAD_ALLOWED_MIME_TYPES`.
 - Inngest: event key and signing key.
-- Email: server-only `EMAIL_PROVIDER`, optional `EMAIL_REPLY_TO_EMAIL`, and `EMAIL_TIMEOUT_MS`, plus the selected provider's Resend or EmailJS credentials for invitations, signing links, task assignments, and reminders.
+- Email: server-only EmailJS credentials, optional `EMAIL_REPLY_TO_EMAIL`, and `EMAIL_TIMEOUT_MS` for invitations, signing links, task assignments, and reminders. `EMAIL_PROVIDER=emailjs` documents the temporarily pinned provider.
 - AI Flow: server-only `AI_PROVIDER`, `AI_MODEL`, `AI_TIMEOUT_MS`, and the selected adapter's credential (currently `GEMINI_API_KEY`) for stateless, schema-validated document editing.
 - SMS: Termii credentials, with Africa's Talking placeholders reserved for a later provider switch.
 - Rate limiting: `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN`; when unset, limits are disabled (local dev, CI).
@@ -151,7 +151,7 @@ curl -X POST http://localhost:3000/api/templates/flow \
 
 Inviting a person sends an email containing a one-time BizFlow invite URL. The same server-side provider-neutral transport delivers private, seven-day document signing links, task assignments, and reminders without exposing tokens or provider credentials to browser code.
 
-Select one provider with `EMAIL_PROVIDER=emailjs` or `EMAIL_PROVIDER=resend`. Existing deployments default to Resend when the selector is omitted. `EMAIL_TIMEOUT_MS` defaults to 10 seconds, and `EMAIL_REPLY_TO_EMAIL` can remain empty until a monitored reply address is available.
+Transactional delivery is temporarily pinned to EmailJS in code. A missing or stale `EMAIL_PROVIDER` value cannot route mail through Resend. Keep `EMAIL_PROVIDER=emailjs` in deployed environments to document the active provider. `EMAIL_TIMEOUT_MS` defaults to 10 seconds, and `EMAIL_REPLY_TO_EMAIL` can remain empty until a monitored reply address is available.
 
 EmailJS setup:
 
@@ -161,13 +161,11 @@ EmailJS setup:
 
 The EmailJS REST API permits one request per second. BizFlow serializes sends within each running application instance so multi-recipient signing invitations do not burst through that limit. EmailJS receives the internal delivery reference for tracing, but unlike Resend it does not provide an equivalent idempotency-key guarantee.
 
-Resend setup:
+Paused Resend adapter:
 
-1. Create an API key in the Resend dashboard and store it in server-only `RESEND_API_KEY`.
-2. Verify the sending domain (DNS records shown in the Resend dashboard) for the address in `RESEND_FROM_EMAIL`. Before domain verification, `onboarding@resend.dev` works as the sender but only delivers to the Resend account owner's address.
-3. Optionally set the provider-neutral `EMAIL_REPLY_TO_EMAIL` for recipient replies.
+The standalone Resend adapter remains in the repository for later reactivation after sender-domain verification. It is not imported by the active shared transport, and Resend credentials are not read by runtime email configuration.
 
-The application owns the full branded HTML document (`wrapEmailDocument` in `src/services/email/html.ts`) and passes it to the selected provider, along with a plain-text body. Resend sends use the delivery reference as the `Idempotency-Key` header, preventing duplicate delivery on retry. Both providers receive the reference for tracing without exposing raw tokens.
+The application owns the full branded HTML document (`wrapEmailDocument` in `src/services/email/html.ts`) and passes it to EmailJS along with a plain-text body. EmailJS receives the delivery reference for tracing without exposing raw tokens.
 
 Recipients can create an account from the invite URL or sign in with an existing account. For account-confirmation links to return the recipient to their invite, add the deployed callback URL (for example, `https://app.example.com/auth/callback`) to Supabase Auth's Redirect URLs. The Supabase Site URL should be the deployed application origin.
 

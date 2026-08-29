@@ -24,25 +24,17 @@ const sharedEmailEnvShape = {
   ),
 }
 
-const emailEnvSchema = z.discriminatedUnion("EMAIL_PROVIDER", [
-  z.object({
-    EMAIL_PROVIDER: z.literal("resend"),
-    ...sharedEmailEnvShape,
-    RESEND_API_KEY: z.string().trim().min(1),
-    RESEND_FROM_EMAIL: z.string().email(),
-  }),
-  z.object({
-    EMAIL_PROVIDER: z.literal("emailjs"),
-    ...sharedEmailEnvShape,
-    EMAILJS_SERVICE_ID: z.string().trim().min(1),
-    EMAILJS_TEMPLATE_ID: z.string().trim().min(1),
-    EMAILJS_PUBLIC_KEY: z.string().trim().min(1),
-    EMAILJS_PRIVATE_KEY: z.preprocess(
-      emptyStringToUndefined,
-      z.string().trim().min(1).optional()
-    ),
-  }),
-])
+const emailJsEmailEnvSchema = z.object({
+  EMAIL_PROVIDER: z.literal("emailjs"),
+  ...sharedEmailEnvShape,
+  EMAILJS_SERVICE_ID: z.string().trim().min(1),
+  EMAILJS_TEMPLATE_ID: z.string().trim().min(1),
+  EMAILJS_PUBLIC_KEY: z.string().trim().min(1),
+  EMAILJS_PRIVATE_KEY: z.preprocess(
+    emptyStringToUndefined,
+    z.string().trim().min(1).optional()
+  ),
+})
 
 const aiEnvSchema = z.object({
   AI_PROVIDER: z
@@ -157,15 +149,16 @@ export type AdminSupabaseEnv = PublicSupabaseEnv & {
 }
 
 export type AppUrlEnv = z.infer<typeof appUrlSchema>
-export type EmailEnv = z.infer<typeof emailEnvSchema>
-export type EmailJsEmailEnv = Extract<
-  EmailEnv,
-  { EMAIL_PROVIDER: "emailjs" }
->
-export type ResendEmailEnv = Extract<
-  EmailEnv,
-  { EMAIL_PROVIDER: "resend" }
->
+export type EmailJsEmailEnv = z.infer<typeof emailJsEmailEnvSchema>
+export type EmailEnv = EmailJsEmailEnv
+/** Dormant Resend adapter configuration retained for later reactivation. */
+export type ResendEmailEnv = {
+  EMAIL_PROVIDER: "resend"
+  EMAIL_REPLY_TO_EMAIL?: string
+  EMAIL_TIMEOUT_MS: number
+  RESEND_API_KEY: string
+  RESEND_FROM_EMAIL: string
+}
 export type AiEnv = z.infer<typeof aiEnvSchema>
 export type GeminiEnv = z.infer<typeof geminiEnvSchema>
 export type R2Env = z.infer<typeof r2EnvSchema>
@@ -322,28 +315,19 @@ export function getAppUrlEnv(): AppUrlEnv {
 }
 
 /**
- * Reads and validates the selected server-side email provider configuration.
+ * Reads and validates the active server-side EmailJS configuration.
  *
- * Existing Resend deployments remain the default. The old Resend-specific
- * reply-to and timeout names are read as compatibility aliases when their
- * provider-neutral replacements are absent.
+ * Transactional delivery is temporarily pinned to EmailJS while the Resend
+ * sender is unavailable. A stale EMAIL_PROVIDER value cannot reactivate the
+ * dormant Resend adapter.
  *
- * @returns A discriminated EmailJS or Resend configuration.
+ * @returns The validated EmailJS delivery configuration.
  * @throws Error when required email-delivery values are missing or invalid.
  */
 export function getEmailEnv(): EmailEnv {
-  const provider = process.env.EMAIL_PROVIDER?.trim() || "resend"
-  const result = emailEnvSchema.safeParse({
+  const result = emailJsEmailEnvSchema.safeParse({
     ...process.env,
-    EMAIL_PROVIDER: provider,
-    EMAIL_REPLY_TO_EMAIL: readCanonicalOrDeprecatedEnvValue(
-      process.env.EMAIL_REPLY_TO_EMAIL,
-      provider === "resend" ? process.env.RESEND_REPLY_TO_EMAIL : undefined
-    ),
-    EMAIL_TIMEOUT_MS: readCanonicalOrDeprecatedEnvValue(
-      process.env.EMAIL_TIMEOUT_MS,
-      provider === "resend" ? process.env.RESEND_TIMEOUT_MS : undefined
-    ),
+    EMAIL_PROVIDER: "emailjs",
   })
 
   if (!result.success) {

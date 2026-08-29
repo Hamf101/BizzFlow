@@ -21,13 +21,15 @@ function createInput(
   }
 }
 
-function stubResendEnv(): void {
+function stubEmailJsEnv(): void {
   process.env = {
     ...originalEnv,
     NEXT_PUBLIC_APP_URL: "https://app.example.com",
-    RESEND_API_KEY: "re-test-key",
-    RESEND_FROM_EMAIL: "docs@example.com",
-    RESEND_REPLY_TO_EMAIL: "support@example.com",
+    EMAILJS_SERVICE_ID: "service_buy2dql",
+    EMAILJS_TEMPLATE_ID: "template_d6o6c8p",
+    EMAILJS_PUBLIC_KEY: "public-test-key",
+    EMAILJS_PRIVATE_KEY: "private-test-key",
+    EMAIL_REPLY_TO_EMAIL: "support@example.com",
   }
 }
 
@@ -38,8 +40,8 @@ describe("sendTaskEmail", () => {
     vi.restoreAllMocks()
   })
 
-  it("sends through the shared transport with the delivery reference as the idempotency key", async () => {
-    stubResendEnv()
+  it("sends through EmailJS with the delivery reference as trace metadata", async () => {
+    stubEmailJsEnv()
     const fetchMock = vi
       .fn()
       .mockResolvedValue(
@@ -51,12 +53,10 @@ describe("sendTaskEmail", () => {
     await sendTaskEmail(createInput())
 
     expect(fetchMock).toHaveBeenCalledWith(
-      "https://api.resend.com/emails",
+      "https://api.emailjs.com/api/v1.0/email/send",
       expect.objectContaining({
         method: "POST",
-        headers: expect.objectContaining({
-          "Idempotency-Key": `task-reminder/${TASK_ID}`,
-        }),
+        headers: { "Content-Type": "application/json" },
       })
     )
 
@@ -64,20 +64,31 @@ describe("sendTaskEmail", () => {
     const body = JSON.parse(String(request.body)) as Record<string, unknown>
 
     expect(body).toMatchObject({
-      to: ["staff@example.com"],
+      service_id: "service_buy2dql",
+      template_id: "template_d6o6c8p",
+      user_id: "public-test-key",
+      accessToken: "private-test-key",
+    })
+    const templateParams = body.template_params as Record<string, unknown>
+
+    expect(templateParams).toMatchObject({
+      to_email: "staff@example.com",
       reply_to: "support@example.com",
       subject: "Task reminder: Collect signed lease & W-9",
+      delivery_reference: `task-reminder/${TASK_ID}`,
     })
-    expect(String(body.html)).toContain("Collect signed lease &amp; W-9")
-    expect(String(body.html)).toContain(
+    expect(String(templateParams.message_html)).toContain(
+      "Collect signed lease &amp; W-9"
+    )
+    expect(String(templateParams.message_html)).toContain(
       `https://app.example.com/tasks/${TASK_ID}`
     )
-    expect(String(body.html)).toContain("Jul 31, 2026")
-    expect(String(body.text)).toContain("Reminder for your task")
+    expect(String(templateParams.message_html)).toContain("Jul 31, 2026")
+    expect(String(templateParams.message_text)).toContain("Reminder for your task")
   })
 
   it("uses assignment copy for an assignment notification", async () => {
-    stubResendEnv()
+    stubEmailJsEnv()
     const fetchMock = vi
       .fn()
       .mockResolvedValue(new Response(JSON.stringify({ id: "email-2" }), { status: 200 }))
@@ -88,14 +99,22 @@ describe("sendTaskEmail", () => {
 
     const request = fetchMock.mock.calls[0]?.[1] as RequestInit
     const body = JSON.parse(String(request.body)) as Record<string, unknown>
+    const templateParams = body.template_params as Record<string, unknown>
 
-    expect(String(body.subject)).toContain("New task assigned")
-    expect(String(body.html)).toContain("A task was assigned to you")
-    expect(String(body.html)).not.toContain("Due ")
+    expect(String(templateParams.subject)).toContain("New task assigned")
+    expect(String(templateParams.message_html)).toContain(
+      "A task was assigned to you"
+    )
+    expect(String(templateParams.message_html)).not.toContain("Due ")
   })
 
-  it("rejects with a configuration error when Resend is not configured", async () => {
-    process.env = { ...originalEnv, RESEND_API_KEY: "", RESEND_FROM_EMAIL: "" }
+  it("rejects with a configuration error when EmailJS is not configured", async () => {
+    process.env = {
+      ...originalEnv,
+      EMAILJS_SERVICE_ID: "",
+      EMAILJS_TEMPLATE_ID: "",
+      EMAILJS_PUBLIC_KEY: "",
+    }
     vi.spyOn(console, "error").mockImplementation(() => {})
 
     await expect(sendTaskEmail(createInput())).rejects.toMatchObject({
@@ -104,7 +123,7 @@ describe("sendTaskEmail", () => {
   })
 
   it("never leaks provider or recipient detail into the failure path", async () => {
-    stubResendEnv()
+    stubEmailJsEnv()
     const errorLog = vi.spyOn(console, "error").mockImplementation(() => {})
     vi.stubGlobal(
       "fetch",
@@ -121,11 +140,11 @@ describe("sendTaskEmail", () => {
     expect(JSON.stringify(errorLog.mock.calls)).not.toContain(
       "staff@example.com"
     )
-    expect(JSON.stringify(errorLog.mock.calls)).not.toContain("re-test-key")
+    expect(JSON.stringify(errorLog.mock.calls)).not.toContain("private-test-key")
   })
 
   it("supports an injected transport for domain-level tests", async () => {
-    stubResendEnv()
+    stubEmailJsEnv()
     vi.spyOn(console, "info").mockImplementation(() => {})
     const transport = vi
       .fn()
@@ -137,7 +156,10 @@ describe("sendTaskEmail", () => {
       expect.objectContaining({
         deliveryReference: `task-reminder/${TASK_ID}`,
       }),
-      expect.objectContaining({ RESEND_FROM_EMAIL: "docs@example.com" })
+      expect.objectContaining({
+        EMAIL_PROVIDER: "emailjs",
+        EMAILJS_SERVICE_ID: "service_buy2dql",
+      })
     )
   })
 })

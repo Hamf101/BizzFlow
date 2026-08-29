@@ -20,7 +20,7 @@ describe("invite email service", () => {
       NEXT_PUBLIC_APP_URL: "https://app.example.com",
       EMAIL_PROVIDER: "emailjs",
       EMAILJS_SERVICE_ID: "service_buy2dql",
-      EMAILJS_TEMPLATE_ID: "template_wg2zfqi",
+      EMAILJS_TEMPLATE_ID: "template_d6o6c8p",
       EMAILJS_PUBLIC_KEY: "public-test-key",
       EMAILJS_PRIVATE_KEY: "private-test-key",
       EMAIL_TIMEOUT_MS: "2500",
@@ -51,7 +51,7 @@ describe("invite email service", () => {
 
     expect(body).toMatchObject({
       service_id: "service_buy2dql",
-      template_id: "template_wg2zfqi",
+      template_id: "template_d6o6c8p",
       user_id: "public-test-key",
       accessToken: "private-test-key",
     })
@@ -72,14 +72,18 @@ describe("invite email service", () => {
     )
   })
 
-  it("returns a user-safe error when Resend rejects delivery", async () => {
+  it("returns a user-safe error when EmailJS rejects delivery", async () => {
     process.env = {
       ...originalEnv,
       NEXT_PUBLIC_APP_URL: "https://app.example.com",
-      RESEND_API_KEY: "re-test-key",
-      RESEND_FROM_EMAIL: "docs@example.com",
+      EMAILJS_SERVICE_ID: "service_buy2dql",
+      EMAILJS_TEMPLATE_ID: "template_d6o6c8p",
+      EMAILJS_PUBLIC_KEY: "public-test-key",
     }
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 422 })))
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response(null, { status: 400 }))
+    )
     vi.spyOn(console, "error").mockImplementation(() => {})
 
     await expect(
@@ -91,19 +95,20 @@ describe("invite email service", () => {
       })
     ).rejects.toMatchObject({
       message:
-        "Unable to send the invite email. The email provider rejected the " +
-        "message. Check that RESEND_FROM_EMAIL is a verified sender and the " +
-        "recipient address is valid.",
+        "Unable to send the invite email. EmailJS rejected the message. " +
+        "Check the service, template fields, and recipient address.",
       statusCode: 502,
     } satisfies Partial<InviteEmailServiceError>)
   })
 
-  it("names the sandbox-sender cause when Resend refuses the request", async () => {
+  it("names the account-key cause when EmailJS refuses the request", async () => {
     process.env = {
       ...originalEnv,
       NEXT_PUBLIC_APP_URL: "https://app.example.com",
-      RESEND_API_KEY: "re-test-key",
-      RESEND_FROM_EMAIL: "onboarding@resend.dev",
+      EMAILJS_SERVICE_ID: "service_buy2dql",
+      EMAILJS_TEMPLATE_ID: "template_d6o6c8p",
+      EMAILJS_PUBLIC_KEY: "public-test-key",
+      EMAILJS_PRIVATE_KEY: "private-test-key",
     }
     vi.stubGlobal(
       "fetch",
@@ -119,7 +124,7 @@ describe("invite email service", () => {
         token: "invite-token",
       })
     ).rejects.toMatchObject({
-      message: expect.stringContaining("onboarding@resend.dev"),
+      message: expect.stringContaining("public and private account keys"),
       statusCode: 502,
     })
   })
@@ -128,8 +133,10 @@ describe("invite email service", () => {
     process.env = {
       ...originalEnv,
       NEXT_PUBLIC_APP_URL: "https://app.example.com",
-      RESEND_API_KEY: "re-test-key",
-      RESEND_FROM_EMAIL: "docs@example.com",
+      EMAILJS_SERVICE_ID: "service_buy2dql",
+      EMAILJS_TEMPLATE_ID: "template_d6o6c8p",
+      EMAILJS_PUBLIC_KEY: "public-test-key",
+      EMAILJS_PRIVATE_KEY: "private-test-key",
     }
     const errorLog = vi.spyOn(console, "error").mockImplementation(() => {})
     vi.stubGlobal(
@@ -155,6 +162,6 @@ describe("invite email service", () => {
     expect(JSON.stringify(errorLog.mock.calls)).not.toContain(
       "private-invite-token"
     )
-    expect(JSON.stringify(errorLog.mock.calls)).not.toContain("re-test-key")
+    expect(JSON.stringify(errorLog.mock.calls)).not.toContain("private-test-key")
   })
 })

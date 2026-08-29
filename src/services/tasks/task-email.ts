@@ -51,9 +51,8 @@ const dueAtFormatter = new Intl.DateTimeFormat("en-US", {
 /**
  * Sends one task notification through the shared transactional transport.
  *
- * Resend receives the delivery reference as an idempotency key. EmailJS keeps
- * it as provider-visible trace metadata but does not offer equivalent
- * idempotency guarantees.
+ * EmailJS receives the delivery reference as provider-visible trace metadata
+ * but does not offer an equivalent idempotency-key guarantee.
  *
  * @param input - Notification kind, task summary, and recipient details.
  * @param deps - Optional transport dependency for tests.

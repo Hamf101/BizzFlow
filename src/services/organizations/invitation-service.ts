@@ -111,7 +111,7 @@ export async function createInvite(
       // The token is already persisted, scoped, expiring, and single-use, so a
       // provider outage or an unverified sending domain must not destroy the
       // invite — the People page shows the link for the manager to share
-      // directly. Revoking here used to make a misconfigured Resend account
+      // directly. Revoking here used to make a misconfigured email provider
       // look like a broken invite feature.
       let emailDelivered = true
       let emailFailureReason: string | null = null

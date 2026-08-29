@@ -26,7 +26,7 @@ export type RateLimitBucket =
  *
  * `open` allows the request: an Upstash outage must never lock members out of
  * sign-in or signing. `closed` denies it, which is correct only where a request
- * spends money with a third party (AI tokens, Resend sends) and losing the
+ * spends money with a third party (AI tokens, transactional email sends) and losing the
  * ceiling is worse than losing the feature.
  */
 type BucketFailMode = "open" | "closed"

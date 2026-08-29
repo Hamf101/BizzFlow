@@ -89,18 +89,35 @@ describe("application URL validation", () => {
 })
 
 describe("email environment validation", () => {
-  it("keeps Resend as the default provider for existing deployments", () => {
+  it("pins transactional delivery to EmailJS when the selector is omitted", () => {
     setIsolatedEnv({
-      RESEND_API_KEY: "re-test-key",
-      RESEND_FROM_EMAIL: "docs@example.com",
-      RESEND_REPLY_TO_EMAIL: "  ",
+      EMAILJS_SERVICE_ID: "service_buy2dql",
+      EMAILJS_TEMPLATE_ID: "template_d6o6c8p",
+      EMAILJS_PUBLIC_KEY: "public-test-key",
+      EMAILJS_PRIVATE_KEY: "private-test-key",
     })
 
     expect(getEmailEnv()).toEqual({
-      EMAIL_PROVIDER: "resend",
+      EMAIL_PROVIDER: "emailjs",
       EMAIL_TIMEOUT_MS: 10000,
-      RESEND_API_KEY: "re-test-key",
-      RESEND_FROM_EMAIL: "docs@example.com",
+      EMAILJS_SERVICE_ID: "service_buy2dql",
+      EMAILJS_TEMPLATE_ID: "template_d6o6c8p",
+      EMAILJS_PUBLIC_KEY: "public-test-key",
+      EMAILJS_PRIVATE_KEY: "private-test-key",
+    })
+  })
+
+  it("keeps Resend disabled even when a stale selector remains deployed", () => {
+    setIsolatedEnv({
+      EMAIL_PROVIDER: "resend",
+      EMAILJS_SERVICE_ID: "service_buy2dql",
+      EMAILJS_TEMPLATE_ID: "template_d6o6c8p",
+      EMAILJS_PUBLIC_KEY: "public-test-key",
+    })
+
+    expect(getEmailEnv()).toMatchObject({
+      EMAIL_PROVIDER: "emailjs",
+      EMAILJS_TEMPLATE_ID: "template_d6o6c8p",
     })
   })
 
@@ -108,7 +125,7 @@ describe("email environment validation", () => {
     setIsolatedEnv({
       EMAIL_PROVIDER: "emailjs",
       EMAILJS_SERVICE_ID: "service_buy2dql",
-      EMAILJS_TEMPLATE_ID: "template_wg2zfqi",
+      EMAILJS_TEMPLATE_ID: "template_d6o6c8p",
       EMAILJS_PUBLIC_KEY: "public-test-key",
       EMAILJS_PRIVATE_KEY: "private-test-key",
       EMAIL_TIMEOUT_MS: "2500",
@@ -117,7 +134,7 @@ describe("email environment validation", () => {
     expect(getEmailEnv()).toEqual({
       EMAIL_PROVIDER: "emailjs",
       EMAILJS_SERVICE_ID: "service_buy2dql",
-      EMAILJS_TEMPLATE_ID: "template_wg2zfqi",
+      EMAILJS_TEMPLATE_ID: "template_d6o6c8p",
       EMAILJS_PUBLIC_KEY: "public-test-key",
       EMAILJS_PRIVATE_KEY: "private-test-key",
       EMAIL_TIMEOUT_MS: 2500,
@@ -128,28 +145,29 @@ describe("email environment validation", () => {
     setIsolatedEnv({
       EMAIL_PROVIDER: "emailjs",
       EMAILJS_SERVICE_ID: "service_buy2dql",
-      EMAILJS_TEMPLATE_ID: "template_wg2zfqi",
+      EMAILJS_TEMPLATE_ID: "template_d6o6c8p",
       EMAILJS_PRIVATE_KEY: "private-test-key",
     })
 
     expect(() => getEmailEnv()).toThrow("EMAILJS_PUBLIC_KEY")
   })
 
-  it("requires a valid Resend sender address", () => {
+  it("does not accept Resend credentials in place of EmailJS configuration", () => {
     setIsolatedEnv({
       RESEND_API_KEY: "re-test-key",
-      RESEND_FROM_EMAIL: "not-an-email",
+      RESEND_FROM_EMAIL: "docs@example.com",
     })
 
-    expect(() => getEmailEnv()).toThrow("RESEND_FROM_EMAIL")
+    expect(() => getEmailEnv()).toThrow("EMAILJS_SERVICE_ID")
   })
 
   it.each(["999", "60001", "1.5", "not-a-number"])(
     "rejects invalid email timeout %s",
     (timeoutMs: string) => {
       setIsolatedEnv({
-        RESEND_API_KEY: "re-test-key",
-        RESEND_FROM_EMAIL: "docs@example.com",
+        EMAILJS_SERVICE_ID: "service_buy2dql",
+        EMAILJS_TEMPLATE_ID: "template_d6o6c8p",
+        EMAILJS_PUBLIC_KEY: "public-test-key",
         EMAIL_TIMEOUT_MS: timeoutMs,
       })
 

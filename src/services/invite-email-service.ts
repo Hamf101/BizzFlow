@@ -46,7 +46,7 @@ export class InviteEmailServiceError extends Error {
  *
  * @param input - Invite identifiers and recipient details.
  * @param deps - Optional email transport dependency for tests.
- * @returns Resolves once the selected provider accepts the delivery request.
+ * @returns Resolves once EmailJS accepts the delivery request.
  * @throws InviteEmailServiceError when email configuration or delivery fails.
  */
 export async function sendInviteEmail(
@@ -115,7 +115,7 @@ export async function sendInviteEmail(
 
     if (transportError?.kind === "provider_rejected") {
       throw new InviteEmailServiceError(
-        `Unable to send the invite email. ${describeEmailRejection(emailEnv, transportError.providerStatus)}`,
+        `Unable to send the invite email. ${describeEmailRejection(transportError.providerStatus)}`,
         502
       )
     }
