@@ -3,6 +3,7 @@ import { Geist, Geist_Mono, Newsreader } from "next/font/google";
 import "./globals.css";
 
 import { OfflineDraftBanner } from "@/components/ui/offline-draft-banner";
+import { BizFlowToaster } from "@/components/ui/toaster";
 import { ThemeProvider } from "@/components/theme/theme-provider";
 
 const geistSans = Geist({
@@ -49,6 +50,7 @@ export default function RootLayout({
         >
           {children}
           <OfflineDraftBanner />
+          <BizFlowToaster />
         </ThemeProvider>
       </body>
     </html>
