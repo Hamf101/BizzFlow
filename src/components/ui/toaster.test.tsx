@@ -41,17 +41,36 @@ describe("BizFlowToaster", () => {
     })
   })
 
-  it("routes each semantic entry point through the matching Sonner channel", () => {
+  it("loads Sonner on demand and routes feedback through its semantic channel", async () => {
     const options = { description: "The authoritative result is available." }
 
-    bizflowToast.success("Saved", options)
-    bizflowToast.error("Could not save", options)
-    bizflowToast.info("Review needed", options)
-    bizflowToast.loading("Saving", options)
+    const toastIds = [
+      bizflowToast.success("Saved", options),
+      bizflowToast.error("Could not save", options),
+      bizflowToast.info("Review needed", options),
+      bizflowToast.loading("Saving", options),
+    ]
 
-    expect(sonner.success).toHaveBeenCalledWith("Saved", options)
-    expect(sonner.error).toHaveBeenCalledWith("Could not save", options)
-    expect(sonner.info).toHaveBeenCalledWith("Review needed", options)
-    expect(sonner.loading).toHaveBeenCalledWith("Saving", options)
+    expect(sonner.success).not.toHaveBeenCalled()
+
+    await vi.dynamicImportSettled()
+
+    expect(toastIds.every((id) => typeof id === "string")).toBe(true)
+    expect(sonner.success).toHaveBeenCalledWith(
+      "Saved",
+      expect.objectContaining(options)
+    )
+    expect(sonner.error).toHaveBeenCalledWith(
+      "Could not save",
+      expect.objectContaining(options)
+    )
+    expect(sonner.info).toHaveBeenCalledWith(
+      "Review needed",
+      expect.objectContaining(options)
+    )
+    expect(sonner.loading).toHaveBeenCalledWith(
+      "Saving",
+      expect.objectContaining(options)
+    )
   })
 })

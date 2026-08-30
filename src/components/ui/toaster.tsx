@@ -1,12 +1,41 @@
 "use client"
 
+import dynamic from "next/dynamic"
 import type { ReactElement, ReactNode } from "react"
-import {
-  Toaster,
-  toast,
-  type ExternalToast,
-  type ToasterProps,
-} from "sonner"
+import type { ExternalToast, ToasterProps } from "sonner"
+
+type SonnerModule = typeof import("sonner")
+type ToastChannel = "error" | "info" | "loading" | "success"
+
+let sonnerPromise: Promise<SonnerModule> | undefined
+let toastSequence = 0
+
+function loadSonner(): Promise<SonnerModule> {
+  sonnerPromise ??= import("sonner")
+  return sonnerPromise
+}
+
+const DeferredToaster = dynamic(
+  async () => {
+    const { Toaster } = await loadSonner()
+    return Toaster
+  },
+  { ssr: false }
+)
+
+function showToast(
+  channel: ToastChannel,
+  title: ReactNode,
+  options?: ExternalToast
+): string | number {
+  const id = options?.id ?? `bizflow-toast-${++toastSequence}`
+
+  void loadSonner()
+    .then(({ toast }) => toast[channel](title, { ...options, id }))
+    .catch(() => undefined)
+
+  return id
+}
 
 const toastClassNames = {
   actionButton:
@@ -29,19 +58,19 @@ const toastClassNames = {
 export const bizflowToast = {
   /** Shows a successful authoritative result. */
   success(title: ReactNode, options?: ExternalToast): string | number {
-    return toast.success(title, options)
+    return showToast("success", title, options)
   },
   /** Shows a recoverable failed result without exposing raw server errors. */
   error(title: ReactNode, options?: ExternalToast): string | number {
-    return toast.error(title, options)
+    return showToast("error", title, options)
   },
   /** Shows neutral workflow information. */
   info(title: ReactNode, options?: ExternalToast): string | number {
-    return toast.info(title, options)
+    return showToast("info", title, options)
   },
   /** Shows an in-progress operation that can later be updated by id. */
   loading(title: ReactNode, options?: ExternalToast): string | number {
-    return toast.loading(title, options)
+    return showToast("loading", title, options)
   },
 } as const
 
@@ -52,7 +81,7 @@ export const bizflowToast = {
  */
 export function BizFlowToaster(): ReactElement<ToasterProps> {
   return (
-    <Toaster
+    <DeferredToaster
       closeButton
       duration={5_000}
       position="top-center"
