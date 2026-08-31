@@ -4,6 +4,11 @@ import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 
 import { enforceOutboundEmailRateLimit } from "@/lib/action-rate-limit"
+import {
+  buildFeedbackRedirect,
+  getActionErrorFeedbackCode,
+  type ActionFeedbackCode,
+} from "@/lib/action-result"
 import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
 import { buildRedirect, getFormString } from "@/lib/form-utils"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
@@ -26,7 +31,7 @@ export async function createInviteAction(formData: FormData): Promise<void> {
   const role = getFormString(formData, "role")
 
   if (!isOrganizationRole(role)) {
-    redirect(buildRedirect("/people", { error: "Choose a valid role." }))
+    redirect(buildFeedbackRedirect("/people", "invalid_input"))
   }
 
   // Both calls reject by throwing (a redirect), so they must stay outside the
@@ -37,7 +42,7 @@ export async function createInviteAction(formData: FormData): Promise<void> {
     redirectPath: "/people",
   })
 
-  let successMessage = "Invite email sent."
+  let successCode: ActionFeedbackCode = "invite_email_sent"
 
   try {
     const result = await createInvite({
@@ -48,10 +53,7 @@ export async function createInviteAction(formData: FormData): Promise<void> {
     })
 
     if (!result.emailDelivered) {
-      successMessage =
-        "Invite created, but the email could not be sent. " +
-        "Copy its link below and share it directly. " +
-        (result.emailFailureReason ?? "")
+      successCode = "invite_created_email_failed"
     }
   } catch (error: unknown) {
     const logContext = {
@@ -66,14 +68,12 @@ export async function createInviteAction(formData: FormData): Promise<void> {
     }
 
     redirect(
-      buildRedirect("/people", {
-        error: getActionErrorMessage(error, "Unable to create invite."),
-      })
+      buildFeedbackRedirect("/people", getActionErrorFeedbackCode(error))
     )
   }
 
   revalidatePath("/people")
-  redirect(buildRedirect("/people", { message: successMessage }))
+  redirect(buildFeedbackRedirect("/people", successCode))
 }
 
 /**
@@ -88,7 +88,7 @@ export async function updateMemberRoleAction(formData: FormData): Promise<void> 
   const role = getFormString(formData, "role")
 
   if (!isOrganizationRole(role)) {
-    redirect(buildRedirect("/people", { error: "Choose a valid role." }))
+    redirect(buildFeedbackRedirect("/people", "invalid_input"))
   }
 
   try {
@@ -117,14 +117,12 @@ export async function updateMemberRoleAction(formData: FormData): Promise<void> 
     }
 
     redirect(
-      buildRedirect("/people", {
-        error: getActionErrorMessage(error, "Unable to update member role."),
-      })
+      buildFeedbackRedirect("/people", getActionErrorFeedbackCode(error))
     )
   }
 
   revalidatePath("/people")
-  redirect(buildRedirect("/people", { message: "Member role updated." }))
+  redirect(buildFeedbackRedirect("/people", "member_role_updated"))
 }
 
 /**
@@ -148,20 +146,10 @@ export async function updateProfilePhoneAction(formData: FormData): Promise<void
     }
 
     redirect(
-      buildRedirect("/people", {
-        error: getActionErrorMessage(error, "Unable to update phone number."),
-      })
+      buildFeedbackRedirect("/people", getActionErrorFeedbackCode(error))
     )
   }
 
   revalidatePath("/people")
-  redirect(buildRedirect("/people", { message: "Phone number updated." }))
-}
-
-function getActionErrorMessage(error: unknown, fallback: string): string {
-  if (error instanceof OrganizationServiceError) {
-    return error.message
-  }
-
-  return fallback
+  redirect(buildFeedbackRedirect("/people", "changes_saved"))
 }

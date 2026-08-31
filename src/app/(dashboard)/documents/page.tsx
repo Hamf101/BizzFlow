@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/card"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { buildFeedbackRedirect } from "@/lib/action-result"
 import {
   formatMediumDate,
   formatMediumDateTime,
@@ -58,9 +59,7 @@ import {
 } from "./actions"
 
 type DocumentsSearchParams = Promise<{
-  error?: string
   folderId?: string
-  message?: string
   view?: string
 }>
 
@@ -69,7 +68,7 @@ type WorkspaceView = "active" | "archived" | "trash"
 /**
  * Renders recent documents plus the current folder's navigable contents.
  *
- * @param props - Optional status messages and active folder query parameter.
+ * @param props - Active folder and lifecycle-view query parameters.
  * @returns Tenant-scoped Documents workspace.
  */
 export default async function DocumentsPage({
@@ -89,7 +88,7 @@ export default async function DocumentsPage({
   if (!context) {
     if (contextErrorMessage) {
       return (
-        <DocumentsShell params={params}>
+        <DocumentsShell>
           <Alert variant="destructive">
             <AlertTitle>Supabase setup incomplete</AlertTitle>
             <AlertDescription>{contextErrorMessage}</AlertDescription>
@@ -99,9 +98,7 @@ export default async function DocumentsPage({
     }
 
     redirect(
-      buildRedirect("/dashboard", {
-        error: "Create an organization before managing documents.",
-      })
+      buildFeedbackRedirect("/dashboard", "organization_required")
     )
   }
 
@@ -125,7 +122,7 @@ export default async function DocumentsPage({
       reason: errorMessage,
     })
     return (
-      <DocumentsShell params={params}>
+      <DocumentsShell>
         <Alert variant="destructive">
           <AlertTitle>Documents unavailable</AlertTitle>
           <AlertDescription>{errorMessage}</AlertDescription>
@@ -143,7 +140,7 @@ export default async function DocumentsPage({
 
   if (params.folderId && !activeFolder) {
     return (
-      <DocumentsShell params={params}>
+      <DocumentsShell>
         <Alert variant="destructive">
           <AlertTitle>Folder unavailable</AlertTitle>
           <AlertDescription>
@@ -176,7 +173,7 @@ export default async function DocumentsPage({
   )
 
   return (
-    <DocumentsShell params={params}>
+    <DocumentsShell>
       <section className="flex flex-col gap-3">
         <WorkspaceNavigation activeView={workspaceView} />
         <DocumentBreadcrumbs
@@ -242,25 +239,11 @@ export default async function DocumentsPage({
 
 function DocumentsShell({
   children,
-  params,
 }: {
   children: ReactNode
-  params: Awaited<DocumentsSearchParams>
 }): ReactElement {
   return (
     <div className="flex flex-col gap-6">
-      {params.error ? (
-        <Alert variant="destructive">
-          <AlertTitle>Documents action failed</AlertTitle>
-          <AlertDescription>{params.error}</AlertDescription>
-        </Alert>
-      ) : null}
-      {params.message ? (
-        <Alert>
-          <AlertTitle>Documents updated</AlertTitle>
-          <AlertDescription>{params.message}</AlertDescription>
-        </Alert>
-      ) : null}
       {children}
     </div>
   )

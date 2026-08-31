@@ -4,6 +4,10 @@ import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 
 import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
+import {
+  buildFeedbackRedirect,
+  getActionErrorFeedbackCode,
+} from "@/lib/action-result"
 import { buildRedirect, getFormString } from "@/lib/form-utils"
 import { canPerformOrganizationAction } from "@/lib/permissions"
 import { getCurrentOrganizationContext } from "@/services/organization-service"
@@ -30,9 +34,12 @@ type TemplateActionContext = {
 }
 
 class TemplateActionError extends Error {
-  constructor(message: string) {
+  readonly statusCode: number
+
+  constructor(message: string, statusCode = 400) {
     super(message)
     this.name = "TemplateActionError"
+    this.statusCode = statusCode
   }
 }
 
@@ -76,19 +83,18 @@ export async function createTemplateAction(formData: FormData): Promise<void> {
       reason: getUnknownErrorMessage(error),
     })
     redirect(
-      buildRedirect("/templates/new", {
-        error: getTemplateActionErrorMessage(
-          error,
-          "Unable to create document template."
-        ),
-      })
+      buildFeedbackRedirect(
+        "/templates/new",
+        getActionErrorFeedbackCode(error)
+      )
     )
   }
 
   redirect(
-    buildRedirect(`/templates/${createdTemplateId}/edit`, {
-      message: "Template draft created.",
-    })
+    buildFeedbackRedirect(
+      `/templates/${createdTemplateId}/edit`,
+      "template_created"
+    )
   )
 }
 
@@ -121,11 +127,10 @@ export async function updateTemplateAction(formData: FormData): Promise<void> {
       nextPath: editorPath,
       startedAt,
       templateId,
-      fallback: "Unable to save document template.",
     })
   }
 
-  redirect(buildRedirect(editorPath, { message: "Template saved." }))
+  redirect(buildFeedbackRedirect(editorPath, "changes_saved"))
 }
 
 /**
@@ -165,11 +170,10 @@ export async function publishTemplateAction(formData: FormData): Promise<void> {
       nextPath: editorPath,
       startedAt,
       templateId,
-      fallback: "Unable to publish document template.",
     })
   }
 
-  redirect(buildRedirect(editorPath, { message: "Template published." }))
+  redirect(buildFeedbackRedirect(editorPath, "template_published"))
 }
 
 /**
@@ -204,11 +208,10 @@ export async function archiveTemplateAction(formData: FormData): Promise<void> {
       nextPath: editorPath,
       startedAt,
       templateId,
-      fallback: "Unable to archive document template.",
     })
   }
 
-  redirect(buildRedirect("/templates", { message: "Template archived." }))
+  redirect(buildFeedbackRedirect("/templates", "resource_archived"))
 }
 
 /**
@@ -245,14 +248,14 @@ export async function duplicateTemplateAction(formData: FormData): Promise<void>
       nextPath: "/templates", // Fallback path if duplication fails
       startedAt,
       templateId,
-      fallback: "Unable to duplicate document template.",
     })
   }
 
   redirect(
-    buildRedirect(`/templates/${createdTemplateId}/edit`, {
-      message: "Template duplicated.",
-    })
+    buildFeedbackRedirect(
+      `/templates/${createdTemplateId}/edit`,
+      "template_duplicated"
+    )
   )
 }
 
@@ -299,14 +302,15 @@ async function loadTemplateActionContext(): Promise<TemplateActionContext> {
 
   if (!context) {
     throw new TemplateActionError(
-      "Create an organization before managing document templates."
+      "Create an organization before managing document templates.",
+      403
     )
   }
 
   if (
     !canPerformOrganizationAction(context.membership.role, "templates:manage")
   ) {
-    throw new TemplateActionError("You cannot manage document templates.")
+    throw new TemplateActionError("You cannot manage document templates.", 403)
   }
 
   return { actorUserId: user.id, context }
@@ -379,7 +383,6 @@ function revalidateTemplatePaths(templateId: string): void {
 function handleTemplateActionFailure(input: {
   error: unknown
   eventName: string
-  fallback: string
   nextPath: string
   startedAt: number
   templateId: string
@@ -394,9 +397,10 @@ function handleTemplateActionFailure(input: {
     templateId: input.templateId,
   })
   redirect(
-    buildRedirect(input.nextPath, {
-      error: getTemplateActionErrorMessage(input.error, input.fallback),
-    })
+    buildFeedbackRedirect(
+      input.nextPath,
+      getActionErrorFeedbackCode(input.error)
+    )
   )
 }
 
@@ -405,14 +409,6 @@ function logTemplateActionFailure(
   context: Record<string, string | number>
 ): void {
   console.warn(eventName, context)
-}
-
-function getTemplateActionErrorMessage(error: unknown, fallback: string): string {
-  if (error instanceof TemplateServiceError || error instanceof TemplateActionError) {
-    return error.message
-  }
-
-  return fallback
 }
 
 function getUnknownErrorMessage(error: unknown): string {

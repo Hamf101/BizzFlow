@@ -5,13 +5,15 @@ import { redirect } from "next/navigation"
 import { z } from "zod"
 
 import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
+import {
+  buildFeedbackRedirect,
+  getActionErrorFeedbackCode,
+} from "@/lib/action-result"
 import { buildRedirect, getFormString } from "@/lib/form-utils"
 import {
-  NotificationServiceError,
   updateOrganizationNotificationSettings,
 } from "@/services/notification-service"
 import {
-  OrganizationServiceError,
   updateProfile,
   updateNotificationPreferences,
 } from "@/services/organization-service"
@@ -45,11 +47,7 @@ export async function updateProfileAction(formData: FormData): Promise<void> {
   })
 
   if (!parsed.success) {
-    redirect(
-      buildRedirect("/settings", {
-        error: parsed.error.issues[0]?.message ?? "Invalid profile input.",
-      })
-    )
+    redirect(buildFeedbackRedirect("/settings", "invalid_input"))
   }
 
   try {
@@ -65,14 +63,12 @@ export async function updateProfileAction(formData: FormData): Promise<void> {
     }
 
     redirect(
-      buildRedirect("/settings", {
-        error: error instanceof OrganizationServiceError ? error.message : "Unable to update profile.",
-      })
+      buildFeedbackRedirect("/settings", getActionErrorFeedbackCode(error))
     )
   }
 
   revalidatePath("/settings")
-  redirect(buildRedirect("/settings", { message: "Profile updated." }))
+  redirect(buildFeedbackRedirect("/settings", "changes_saved"))
 }
 
 /**
@@ -89,11 +85,7 @@ export async function updateNotificationPreferencesAction(formData: FormData): P
   })
 
   if (!parsed.success) {
-    redirect(
-      buildRedirect("/settings", {
-        error: parsed.error.issues[0]?.message ?? "Invalid preferences input.",
-      })
-    )
+    redirect(buildFeedbackRedirect("/settings", "invalid_input"))
   }
 
   try {
@@ -110,14 +102,12 @@ export async function updateNotificationPreferencesAction(formData: FormData): P
     }
 
     redirect(
-      buildRedirect("/settings", {
-        error: error instanceof OrganizationServiceError ? error.message : "Unable to update preferences.",
-      })
+      buildFeedbackRedirect("/settings", getActionErrorFeedbackCode(error))
     )
   }
 
   revalidatePath("/settings")
-  redirect(buildRedirect("/settings", { message: "Notification preferences updated." }))
+  redirect(buildFeedbackRedirect("/settings", "changes_saved"))
 }
 
 const updateOrganizationSettingsSchema = z.object({
@@ -145,11 +135,7 @@ export async function updateOrganizationNotificationSettingsAction(
   })
 
   if (!parsed.success) {
-    redirect(
-      buildRedirect("/settings", {
-        error: parsed.error.issues[0]?.message ?? "Invalid settings input.",
-      })
-    )
+    redirect(buildFeedbackRedirect("/settings", "invalid_input"))
   }
 
   try {
@@ -166,19 +152,10 @@ export async function updateOrganizationNotificationSettingsAction(
     }
 
     redirect(
-      buildRedirect("/settings", {
-        error:
-          error instanceof NotificationServiceError
-            ? error.message
-            : "Unable to update organization notification settings.",
-      })
+      buildFeedbackRedirect("/settings", getActionErrorFeedbackCode(error))
     )
   }
 
   revalidatePath("/settings")
-  redirect(
-    buildRedirect("/settings", {
-      message: "Organization notification settings updated.",
-    })
-  )
+  redirect(buildFeedbackRedirect("/settings", "changes_saved"))
 }

@@ -15,8 +15,8 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { PublicFormLinksPanel } from "@/components/templates/public-form-links-panel"
+import { buildFeedbackRedirect } from "@/lib/action-result"
 import { formatMediumDate } from "@/lib/date-format"
-import { buildRedirect } from "@/lib/form-utils"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
 import { getPageErrorMessage } from "@/lib/page-errors"
 import { loadPageOrganizationContext } from "@/lib/page-organization-context"
@@ -39,8 +39,6 @@ import { duplicateTemplateAction } from "./actions"
 
 type TemplatesSearchParams = Promise<{
   category?: string
-  error?: string
-  message?: string
 }>
 
 /** Search-param value selecting the templates with no category at all. */
@@ -49,7 +47,7 @@ const UNCATEGORIZED_FILTER = "none"
 /**
  * Lists organization templates visible to the current authenticated member.
  *
- * @param props - Optional action feedback encoded in search parameters.
+ * @param props - Optional category filter encoded in search parameters.
  * @returns The permission-aware template library.
  */
 export default async function TemplatesPage({
@@ -67,7 +65,7 @@ export default async function TemplatesPage({
   if (!contextResult.context) {
     if (contextResult.errorMessage) {
       return (
-        <TemplatesShell params={params}>
+        <TemplatesShell>
           <Alert variant="destructive">
             <AlertTitle>Templates unavailable</AlertTitle>
             <AlertDescription>{contextResult.errorMessage}</AlertDescription>
@@ -77,9 +75,7 @@ export default async function TemplatesPage({
     }
 
     redirect(
-      buildRedirect("/dashboard", {
-        error: "Create an organization before viewing templates.",
-      })
+      buildFeedbackRedirect("/dashboard", "organization_required")
     )
   }
 
@@ -143,7 +139,7 @@ export default async function TemplatesPage({
   }
 
   return (
-    <TemplatesShell params={params}>
+    <TemplatesShell>
       <section className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex flex-col gap-2">
           <h1 className="text-2xl font-semibold tracking-normal">Templates</h1>
@@ -185,25 +181,11 @@ export default async function TemplatesPage({
 
 function TemplatesShell({
   children,
-  params,
 }: {
   children: ReactNode
-  params: Awaited<TemplatesSearchParams>
 }): ReactElement {
   return (
     <div className="flex flex-col gap-6">
-      {params.error && (
-        <Alert variant="destructive">
-          <AlertTitle>Template action failed</AlertTitle>
-          <AlertDescription>{params.error}</AlertDescription>
-        </Alert>
-      )}
-      {params.message && (
-        <Alert>
-          <AlertTitle>Templates updated</AlertTitle>
-          <AlertDescription>{params.message}</AlertDescription>
-        </Alert>
-      )}
       {children}
     </div>
   )

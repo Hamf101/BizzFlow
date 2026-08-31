@@ -1,9 +1,28 @@
 /** Stable feedback codes that may cross the server-action redirect boundary. */
 export const ACTION_FEEDBACK_CODES = [
   "changes_saved",
+  "comment_added",
+  "deletion_queued",
+  "document_created",
   "document_uploaded",
+  "folder_created",
+  "invalid_input",
+  "invite_created_email_failed",
+  "invite_email_sent",
+  "member_role_updated",
   "operation_failed",
+  "organization_created",
+  "organization_required",
+  "permission_denied",
+  "public_link_created",
+  "public_link_disabled",
+  "refresh_required",
+  "resource_archived",
+  "resource_restored",
+  "resource_trashed",
   "retry_later",
+  "sample_content_added",
+  "starter_content_added",
   "submission_created",
   "submission_submitted",
   "task_completed",
@@ -72,4 +91,33 @@ export function buildFeedbackRedirect(
 
   redirectUrl.searchParams.set("feedback", code)
   return `${redirectUrl.pathname}${redirectUrl.search}${redirectUrl.hash}`
+}
+
+/**
+ * Maps an unknown action exception to a fixed presentation code.
+ *
+ * @param error - Service or action exception that may expose an HTTP-style status.
+ * @param fallback - Closed code used when the exception has no recognized status.
+ * @returns A stable code that never includes exception copy.
+ */
+export function getActionErrorFeedbackCode(
+  error: unknown,
+  fallback: ActionFeedbackCode = "operation_failed"
+): ActionFeedbackCode {
+  const statusCode = getErrorStatusCode(error)
+
+  if (statusCode === 400 || statusCode === 422) return "invalid_input"
+  if (statusCode === 401 || statusCode === 403) return "permission_denied"
+  if (statusCode === 409) return "refresh_required"
+  if (statusCode === 429) return "retry_later"
+
+  return fallback
+}
+
+function getErrorStatusCode(error: unknown): number | null {
+  if (typeof error !== "object" || error === null || !("statusCode" in error)) {
+    return null
+  }
+
+  return typeof error.statusCode === "number" ? error.statusCode : null
 }

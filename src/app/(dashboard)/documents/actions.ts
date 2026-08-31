@@ -4,6 +4,11 @@ import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 
 import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
+import {
+  buildFeedbackRedirect,
+  getActionErrorFeedbackCode,
+  type ActionFeedbackCode,
+} from "@/lib/action-result"
 import { buildRedirect, getFormString } from "@/lib/form-utils"
 import {
   archiveDocument,
@@ -19,7 +24,6 @@ import {
 } from "@/services/document-service"
 import {
   createDocumentComment,
-  DocumentCommentServiceError,
 } from "@/services/document-comment-service"
 import { getCurrentOrganizationContext } from "@/services/organization-service"
 import {
@@ -61,13 +65,11 @@ export async function createFolderAction(formData: FormData): Promise<void> {
     })
 
     redirect(
-      buildRedirect(returnPath, {
-        error: getActionErrorMessage(error, "Unable to create folder."),
-      })
+      buildFeedbackRedirect(returnPath, getActionErrorFeedbackCode(error))
     )
   }
 
-  redirect(buildRedirect(returnPath, { message: "Folder created." }))
+  redirect(buildFeedbackRedirect(returnPath, "folder_created"))
 }
 
 /**
@@ -128,16 +130,16 @@ export async function createGeneratedDocumentAction(
         error instanceof Error ? error.message : "Unknown generated document error",
     })
     redirect(
-      buildRedirect(returnPath, {
-        error: getActionErrorMessage(
-          error,
-          "Unable to create editable document."
-        ),
-      })
+      buildFeedbackRedirect(returnPath, getActionErrorFeedbackCode(error))
     )
   }
 
-  redirect(`/documents/${encodeURIComponent(createdDocumentId)}/edit`)
+  redirect(
+    buildFeedbackRedirect(
+      `/documents/${encodeURIComponent(createdDocumentId)}/edit`,
+      "document_created"
+    )
+  )
 }
 
 /**
@@ -150,8 +152,7 @@ export async function archiveDocumentAction(formData: FormData): Promise<void> {
   return runDocumentLifecycleAction(formData, {
     operation: archiveDocument,
     failureEvent: "archive_document_action_failed",
-    fallbackError: "Unable to archive document.",
-    successMessage: "Document archived.",
+    successCode: "resource_archived",
   })
 }
 
@@ -165,8 +166,7 @@ export async function restoreDocumentAction(formData: FormData): Promise<void> {
   return runDocumentLifecycleAction(formData, {
     operation: restoreDocument,
     failureEvent: "restore_document_action_failed",
-    fallbackError: "Unable to restore document.",
-    successMessage: "Document restored.",
+    successCode: "resource_restored",
   })
 }
 
@@ -180,8 +180,7 @@ export async function trashDocumentAction(formData: FormData): Promise<void> {
   return runDocumentLifecycleAction(formData, {
     operation: trashDocument,
     failureEvent: "trash_document_action_failed",
-    fallbackError: "Unable to move document to Trash.",
-    successMessage: "Document moved to Trash.",
+    successCode: "resource_trashed",
   })
 }
 
@@ -195,8 +194,7 @@ export async function archiveFolderAction(formData: FormData): Promise<void> {
   return runFolderLifecycleAction(formData, {
     operation: archiveFolder,
     failureEvent: "archive_folder_action_failed",
-    fallbackError: "Unable to archive folder.",
-    successMessage: "Folder archived.",
+    successCode: "resource_archived",
   })
 }
 
@@ -210,8 +208,7 @@ export async function restoreFolderAction(formData: FormData): Promise<void> {
   return runFolderLifecycleAction(formData, {
     operation: restoreFolder,
     failureEvent: "restore_folder_action_failed",
-    fallbackError: "Unable to restore folder.",
-    successMessage: "Folder restored.",
+    successCode: "resource_restored",
   })
 }
 
@@ -225,8 +222,7 @@ export async function trashFolderAction(formData: FormData): Promise<void> {
   return runFolderLifecycleAction(formData, {
     operation: trashFolder,
     failureEvent: "trash_folder_action_failed",
-    fallbackError: "Unable to move folder to Trash.",
-    successMessage: "Folder moved to Trash.",
+    successCode: "resource_trashed",
   })
 }
 
@@ -321,13 +317,11 @@ export async function createDocumentCommentAction(
     })
 
     redirect(
-      buildRedirect(detailPath, {
-        error: getActionErrorMessage(error, "Unable to add comment."),
-      })
+      buildFeedbackRedirect(detailPath, getActionErrorFeedbackCode(error))
     )
   }
 
-  redirect(buildRedirect(detailPath, { message: "Comment added." }))
+  redirect(buildFeedbackRedirect(detailPath, "comment_added"))
 }
 
 function logDocumentActionFailure(
@@ -354,8 +348,7 @@ type FolderLifecycleOperation = (input: {
 type LifecycleActionConfig<Operation> = {
   operation: Operation
   failureEvent: string
-  fallbackError: string
-  successMessage: string
+  successCode: ActionFeedbackCode
 }
 
 async function runDocumentLifecycleAction(
@@ -397,13 +390,11 @@ async function runDocumentLifecycleAction(
     })
 
     redirect(
-      buildRedirect(returnPath, {
-        error: getActionErrorMessage(error, config.fallbackError),
-      })
+      buildFeedbackRedirect(returnPath, getActionErrorFeedbackCode(error))
     )
   }
 
-  redirect(buildRedirect(returnPath, { message: config.successMessage }))
+  redirect(buildFeedbackRedirect(returnPath, config.successCode))
 }
 
 async function runFolderLifecycleAction(
@@ -438,13 +429,11 @@ async function runFolderLifecycleAction(
     })
 
     redirect(
-      buildRedirect(returnPath, {
-        error: getActionErrorMessage(error, config.fallbackError),
-      })
+      buildFeedbackRedirect(returnPath, getActionErrorFeedbackCode(error))
     )
   }
 
-  redirect(buildRedirect(returnPath, { message: config.successMessage }))
+  redirect(buildFeedbackRedirect(returnPath, config.successCode))
 }
 
 type ResourcePurgeActionScope = {
@@ -489,20 +478,14 @@ async function runResourcePurgeAction(
     })
 
     redirect(
-      buildRedirect(config.returnPath, {
-        error: getActionErrorMessage(
-          error,
-          "Unable to queue permanent deletion."
-        ),
-      })
+      buildFeedbackRedirect(
+        config.returnPath,
+        getActionErrorFeedbackCode(error)
+      )
     )
   }
 
-  redirect(
-    buildRedirect(config.returnPath, {
-      message: "Permanent deletion queued.",
-    })
-  )
+  redirect(buildFeedbackRedirect(config.returnPath, "deletion_queued"))
 }
 
 async function loadLifecycleActionContext(): Promise<{
@@ -537,20 +520,4 @@ function getDocumentsReturnPath(formData: FormData): string {
     ...(safeView === "active" ? {} : { view: safeView }),
     ...(returnFolderId ? { folderId: returnFolderId } : {}),
   })
-}
-
-function getActionErrorMessage(error: unknown, fallback: string): string {
-  if (error instanceof DocumentServiceError) {
-    return error.message
-  }
-
-  if (error instanceof DocumentCommentServiceError) {
-    return error.message
-  }
-
-  if (error instanceof TemplateServiceError) {
-    return error.message
-  }
-
-  return fallback
 }

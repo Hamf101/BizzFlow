@@ -6,7 +6,7 @@ import type { ReactElement } from "react"
 import { TemplateEditor } from "@/components/templates/template-editor"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { buttonVariants } from "@/components/ui/button"
-import { buildRedirect } from "@/lib/form-utils"
+import { buildFeedbackRedirect } from "@/lib/action-result"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
 import { getPageErrorMessage } from "@/lib/page-errors"
 import { loadPageOrganizationContext } from "@/lib/page-organization-context"
@@ -30,25 +30,18 @@ type EditTemplateParams = Promise<{
   templateId: string
 }>
 
-type EditTemplateSearchParams = Promise<{
-  error?: string
-  message?: string
-}>
-
 /**
  * Loads a manager-visible template into the guided editor.
  *
- * @param props - Route template id and optional action feedback.
+ * @param props - Route template identifier.
  * @returns The authenticated editor or a user-safe load error.
  */
 export default async function EditTemplatePage({
   params,
-  searchParams,
 }: {
   params: EditTemplateParams
-  searchParams: EditTemplateSearchParams
 }): Promise<ReactElement> {
-  const [{ templateId }, query] = await Promise.all([params, searchParams])
+  const { templateId } = await params
   const editorPath = `/templates/${templateId}/edit`
   const user = await loadAuthenticatedPageUser(editorPath)
   const contextResult = await loadPageOrganizationContext({
@@ -60,7 +53,7 @@ export default async function EditTemplatePage({
   if (!contextResult.context) {
     if (contextResult.errorMessage) {
       return (
-        <EditTemplateShell query={query}>
+        <EditTemplateShell>
           <Alert variant="destructive">
             <AlertTitle>Template unavailable</AlertTitle>
             <AlertDescription>{contextResult.errorMessage}</AlertDescription>
@@ -70,9 +63,7 @@ export default async function EditTemplatePage({
     }
 
     redirect(
-      buildRedirect("/dashboard", {
-        error: "Create an organization before managing templates.",
-      })
+      buildFeedbackRedirect("/dashboard", "organization_required")
     )
   }
 
@@ -82,9 +73,7 @@ export default async function EditTemplatePage({
     !canPerformOrganizationAction(context.membership.role, "templates:manage")
   ) {
     redirect(
-      buildRedirect("/templates", {
-        error: "You cannot edit document templates.",
-      })
+      buildFeedbackRedirect("/templates", "permission_denied")
     )
   }
 
@@ -111,7 +100,7 @@ export default async function EditTemplatePage({
 
   if (!templateResult.template) {
     return (
-      <EditTemplateShell query={query}>
+      <EditTemplateShell>
         <Alert variant="destructive">
           <AlertTitle>Template unavailable</AlertTitle>
           <AlertDescription>{templateResult.errorMessage}</AlertDescription>
@@ -122,9 +111,7 @@ export default async function EditTemplatePage({
 
   if (templateResult.template.status === "archived") {
     redirect(
-      buildRedirect("/templates", {
-        error: "Archived templates are read only.",
-      })
+      buildFeedbackRedirect("/templates", "refresh_required")
     )
   }
 
@@ -149,7 +136,7 @@ export default async function EditTemplatePage({
   }).catch((): string[] => [])
 
   return (
-    <EditTemplateShell query={query}>
+    <EditTemplateShell>
       <TemplateEditor
         archiveAction={archiveTemplateAction}
         categorySuggestions={categorySuggestions}
@@ -164,10 +151,8 @@ export default async function EditTemplatePage({
 
 function EditTemplateShell({
   children,
-  query,
 }: {
   children: ReactElement
-  query: Awaited<EditTemplateSearchParams>
 }): ReactElement {
   return (
     <div className="flex flex-col gap-6">
@@ -178,18 +163,6 @@ function EditTemplateShell({
         <ArrowLeft />
         Back to templates
       </Link>
-      {query.error && (
-        <Alert variant="destructive">
-          <AlertTitle>Template action failed</AlertTitle>
-          <AlertDescription>{query.error}</AlertDescription>
-        </Alert>
-      )}
-      {query.message && (
-        <Alert>
-          <AlertTitle>Template updated</AlertTitle>
-          <AlertDescription>{query.message}</AlertDescription>
-        </Alert>
-      )}
       {children}
     </div>
   )

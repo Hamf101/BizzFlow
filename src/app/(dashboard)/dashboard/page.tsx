@@ -38,17 +38,7 @@ import {
   seedStarterTemplatesAction,
 } from "./actions"
 
-type DashboardSearchParams = Promise<{
-  error?: string
-  message?: string
-}>
-
-export default async function DashboardPage({
-  searchParams,
-}: {
-  searchParams: DashboardSearchParams
-}): Promise<ReactElement> {
-  const params = await searchParams
+export default async function DashboardPage(): Promise<ReactElement> {
   const user = await loadAuthenticatedPageUser("/dashboard")
   const { context, errorMessage: contextErrorMessage } =
     await loadPageOrganizationContext({
@@ -121,20 +111,6 @@ export default async function DashboardPage({
           Signed in as {user.email ?? "Authenticated user"}. Welcome to BizFlow Document Studio.
         </p>
       </section>
-
-      {params.error && (
-        <Alert variant="destructive">
-          <AlertTitle>Dashboard action failed</AlertTitle>
-          <AlertDescription>{params.error}</AlertDescription>
-        </Alert>
-      )}
-
-      {params.message && (
-        <Alert>
-          <AlertTitle>Dashboard updated</AlertTitle>
-          <AlertDescription>{params.message}</AlertDescription>
-        </Alert>
-      )}
 
       {contextErrorMessage && (
         <Alert variant="destructive">

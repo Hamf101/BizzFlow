@@ -14,8 +14,8 @@ import {
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
+import { buildFeedbackRedirect } from "@/lib/action-result"
 import { formatMediumDateTime } from "@/lib/date-format"
-import { buildRedirect } from "@/lib/form-utils"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
 import { loadPageOrganizationContext } from "@/lib/page-organization-context"
 import { canPerformOrganizationAction } from "@/lib/permissions"
@@ -36,17 +36,7 @@ import {
   updateProfileAction,
 } from "./actions"
 
-type SettingsSearchParams = Promise<{
-  error?: string
-  message?: string
-}>
-
-export default async function SettingsPage({
-  searchParams,
-}: {
-  searchParams: SettingsSearchParams
-}): Promise<ReactElement> {
-  const params = await searchParams
+export default async function SettingsPage(): Promise<ReactElement> {
   const user = await loadAuthenticatedPageUser("/settings")
   const { context, errorMessage: contextErrorMessage } =
     await loadPageOrganizationContext({
@@ -57,7 +47,7 @@ export default async function SettingsPage({
   if (!context) {
     if (contextErrorMessage) {
       return (
-        <SettingsShell params={params}>
+        <SettingsShell>
           <Alert variant="destructive">
             <AlertTitle>Supabase setup incomplete</AlertTitle>
             <AlertDescription>{contextErrorMessage}</AlertDescription>
@@ -67,9 +57,7 @@ export default async function SettingsPage({
     }
 
     redirect(
-      buildRedirect("/dashboard", {
-        error: "Create an organization before managing settings.",
-      })
+      buildFeedbackRedirect("/dashboard", "organization_required")
     )
   }
 
@@ -91,7 +79,7 @@ export default async function SettingsPage({
     ])
   } catch (error: unknown) {
     return (
-      <SettingsShell params={params}>
+      <SettingsShell>
         <Alert variant="destructive">
           <AlertTitle>Settings unavailable</AlertTitle>
           <AlertDescription>
@@ -105,7 +93,7 @@ export default async function SettingsPage({
   }
 
   return (
-    <SettingsShell params={params}>
+    <SettingsShell>
       <section className="flex flex-col gap-2">
         <h1 className="text-2xl font-semibold tracking-normal">Settings</h1>
         <p className="max-w-2xl text-sm text-muted-foreground">
@@ -353,27 +341,11 @@ function NotificationActivityCard({
 
 function SettingsShell({
   children,
-  params,
 }: {
   children: ReactNode
-  params: Awaited<SettingsSearchParams>
 }): ReactElement {
   return (
     <div className="flex flex-col gap-6">
-      {params.error && (
-        <Alert variant="destructive">
-          <AlertTitle>Settings update failed</AlertTitle>
-          <AlertDescription>{params.error}</AlertDescription>
-        </Alert>
-      )}
-
-      {params.message && (
-        <Alert>
-          <AlertTitle>Settings updated</AlertTitle>
-          <AlertDescription>{params.message}</AlertDescription>
-        </Alert>
-      )}
-
       {children}
     </div>
   )

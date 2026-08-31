@@ -2,6 +2,7 @@ import { describe, expect, expectTypeOf, it } from "vitest"
 
 import {
   buildFeedbackRedirect,
+  getActionErrorFeedbackCode,
   type ActionFeedbackCode,
   type ActionOutcome,
 } from "./action-result"
@@ -65,5 +66,24 @@ describe("buildFeedbackRedirect", () => {
         message: "raw provider exception",
       })
     }
+  })
+})
+
+describe("getActionErrorFeedbackCode", () => {
+  it.each([
+    { error: { statusCode: 400 }, expected: "invalid_input" },
+    { error: { statusCode: 403 }, expected: "permission_denied" },
+    { error: { statusCode: 409 }, expected: "refresh_required" },
+    { error: { statusCode: 429 }, expected: "retry_later" },
+    { error: { statusCode: 500 }, expected: "operation_failed" },
+    { error: new Error("EmailJS provider stack"), expected: "operation_failed" },
+  ])("maps service status to $expected without using exception copy", ({ error, expected }) => {
+    expect(getActionErrorFeedbackCode(error)).toBe(expected)
+  })
+
+  it("uses the caller's closed fallback when no service status is available", () => {
+    expect(getActionErrorFeedbackCode(null, "invalid_input")).toBe(
+      "invalid_input"
+    )
   })
 })

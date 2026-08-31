@@ -1,5 +1,9 @@
 import { redirect } from "next/navigation"
 
+import {
+  buildFeedbackRedirect,
+  type ActionFeedbackCode,
+} from "@/lib/action-result"
 import { buildRedirect } from "@/lib/form-utils"
 import {
   checkRateLimit,
@@ -10,18 +14,24 @@ import {
 /**
  * Enforces a rate-limit bucket inside a server action.
  *
- * Server actions surface rejections as redirects with an `error` query param
- * (never thrown errors), so a denied check redirects with the given message.
+ * Dashboard actions use a stable feedback code; routes without the dashboard
+ * bridge may provide their own fixed inline message.
  * Call this OUTSIDE any try/catch: the redirect works by throwing.
  *
- * @param input - Bucket, caller key, redirect target, and user-safe message.
+ * @param input - Bucket, caller key, redirect target, and closed rejection form.
  */
-export async function enforceActionRateLimit(input: {
+type ActionRateLimitInput = {
   bucket: RateLimitBucket
   key: string
   redirectPath: string
-  message: string
-}): Promise<void> {
+} & (
+  | { feedbackCode: ActionFeedbackCode; message?: never }
+  | { feedbackCode?: never; message: string }
+)
+
+export async function enforceActionRateLimit(
+  input: ActionRateLimitInput
+): Promise<void> {
   try {
     await checkRateLimit(input.bucket, input.key)
   } catch (error: unknown) {
@@ -29,13 +39,13 @@ export async function enforceActionRateLimit(input: {
       throw error
     }
 
-    redirect(buildRedirect(input.redirectPath, { error: input.message }))
+    redirect(
+      input.feedbackCode
+        ? buildFeedbackRedirect(input.redirectPath, input.feedbackCode)
+        : buildRedirect(input.redirectPath, { error: input.message })
+    )
   }
 }
-
-/** Shared rejection copy for every mail-sending server action. */
-const OUTBOUND_EMAIL_THROTTLE_MESSAGE =
-  "Too many emails sent from this account. Wait a little while and try again."
 
 /**
  * Enforces the hourly burst and daily ceiling budgets for a mail-sending action.
@@ -54,14 +64,14 @@ export async function enforceOutboundEmailRateLimit(input: {
 }): Promise<void> {
   await enforceActionRateLimit({
     bucket: "outbound_email",
+    feedbackCode: "retry_later",
     key: input.userId,
     redirectPath: input.redirectPath,
-    message: OUTBOUND_EMAIL_THROTTLE_MESSAGE,
   })
   await enforceActionRateLimit({
     bucket: "outbound_email_daily",
+    feedbackCode: "retry_later",
     key: input.userId,
     redirectPath: input.redirectPath,
-    message: OUTBOUND_EMAIL_THROTTLE_MESSAGE,
   })
 }

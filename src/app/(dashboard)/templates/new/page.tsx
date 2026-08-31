@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/card"
 import { Field, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import { buildRedirect } from "@/lib/form-utils"
+import { buildFeedbackRedirect } from "@/lib/action-result"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
 import { loadPageOrganizationContext } from "@/lib/page-organization-context"
 import { canPerformOrganizationAction } from "@/lib/permissions"
@@ -24,22 +24,12 @@ import { listDocumentTemplateCategories } from "@/services/template-service"
 
 import { createTemplateAction } from "../actions"
 
-type NewTemplateSearchParams = Promise<{
-  error?: string
-}>
-
 /**
  * Collects initial template metadata before creating a draft revision.
  *
- * @param props - Optional action error encoded in search parameters.
  * @returns A manager-only create form.
  */
-export default async function NewTemplatePage({
-  searchParams
-}: {
-  searchParams: NewTemplateSearchParams
-}): Promise<ReactElement> {
-  const params = await searchParams
+export default async function NewTemplatePage(): Promise<ReactElement> {
   const user = await loadAuthenticatedPageUser("/templates/new")
   const contextResult = await loadPageOrganizationContext({
     userId: user.id,
@@ -69,9 +59,7 @@ export default async function NewTemplatePage({
 
   if (!contextResult.context) {
     redirect(
-      buildRedirect("/dashboard", {
-        error: "Create an organization before managing templates."
-      })
+      buildFeedbackRedirect("/dashboard", "organization_required")
     )
   }
 
@@ -81,9 +69,7 @@ export default async function NewTemplatePage({
     !canPerformOrganizationAction(context.membership.role, "templates:manage")
   ) {
     redirect(
-      buildRedirect("/templates", {
-        error: "You cannot create document templates."
-      })
+      buildFeedbackRedirect("/templates", "permission_denied")
     )
   }
 
@@ -96,13 +82,6 @@ export default async function NewTemplatePage({
 
   return (
     <div className="flex flex-col gap-6">
-      {params.error && (
-        <Alert variant="destructive">
-          <AlertTitle>Template could not be created</AlertTitle>
-          <AlertDescription>{params.error}</AlertDescription>
-        </Alert>
-      )}
-
       <div className="flex flex-col gap-3">
         <Link
           className={cn(

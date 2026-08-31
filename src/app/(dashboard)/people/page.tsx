@@ -23,8 +23,8 @@ import {
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
+import { buildFeedbackRedirect } from "@/lib/action-result"
 import { formatMediumDate } from "@/lib/date-format"
-import { buildRedirect } from "@/lib/form-utils"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
 import { getPageErrorMessage } from "@/lib/page-errors"
 import { loadPageOrganizationContext } from "@/lib/page-organization-context"
@@ -43,11 +43,6 @@ import type {
 
 import { createInviteAction, updateMemberRoleAction, updateProfilePhoneAction } from "./actions"
 
-type PeopleSearchParams = Promise<{
-  error?: string
-  message?: string
-}>
-
 const roleLabels: Record<OrganizationRole, string> = {
   owner_admin: "Owner admin",
   manager: "Manager",
@@ -55,12 +50,7 @@ const roleLabels: Record<OrganizationRole, string> = {
   external_reviewer: "External reviewer",
 }
 
-export default async function PeoplePage({
-  searchParams,
-}: {
-  searchParams: PeopleSearchParams
-}): Promise<ReactElement> {
-  const params = await searchParams
+export default async function PeoplePage(): Promise<ReactElement> {
   const user = await loadAuthenticatedPageUser("/people")
   const { context, errorMessage: contextErrorMessage } =
     await loadPageOrganizationContext({
@@ -71,7 +61,7 @@ export default async function PeoplePage({
   if (!context) {
     if (contextErrorMessage) {
       return (
-        <PeopleShell params={params}>
+        <PeopleShell>
           <Alert variant="destructive">
             <AlertTitle>Supabase setup incomplete</AlertTitle>
             <AlertDescription>{contextErrorMessage}</AlertDescription>
@@ -81,9 +71,7 @@ export default async function PeoplePage({
     }
 
     redirect(
-      buildRedirect("/dashboard", {
-        error: "Create an organization before managing people.",
-      })
+      buildFeedbackRedirect("/dashboard", "organization_required")
     )
   }
 
@@ -109,7 +97,7 @@ export default async function PeoplePage({
 
   if (!people) {
     return (
-      <PeopleShell params={params}>
+      <PeopleShell>
         <Alert variant="destructive">
           <AlertTitle>People unavailable</AlertTitle>
           <AlertDescription>{peopleErrorMessage}</AlertDescription>
@@ -119,7 +107,7 @@ export default async function PeoplePage({
   }
 
   return (
-    <PeopleShell params={params}>
+    <PeopleShell>
       <section className="flex flex-col gap-2">
         <h1 className="text-2xl font-semibold tracking-normal">People</h1>
         <p className="max-w-2xl text-sm text-muted-foreground">
@@ -146,27 +134,11 @@ export default async function PeoplePage({
 
 function PeopleShell({
   children,
-  params,
 }: {
   children: ReactElement | ReactElement[]
-  params: Awaited<PeopleSearchParams>
 }): ReactElement {
   return (
     <div className="flex flex-col gap-6">
-      {params.error && (
-        <Alert variant="destructive">
-          <AlertTitle>People action failed</AlertTitle>
-          <AlertDescription>{params.error}</AlertDescription>
-        </Alert>
-      )}
-
-      {params.message && (
-        <Alert>
-          <AlertTitle>People updated</AlertTitle>
-          <AlertDescription>{params.message}</AlertDescription>
-        </Alert>
-      )}
-
       {children}
     </div>
   )

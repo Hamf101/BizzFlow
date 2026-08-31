@@ -4,14 +4,21 @@ import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 
 import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
+import {
+  buildFeedbackRedirect,
+  getActionErrorFeedbackCode,
+} from "@/lib/action-result"
 import { buildRedirect, getFormString } from "@/lib/form-utils"
 import { canPerformOrganizationAction } from "@/lib/permissions"
 import { getCurrentOrganizationContext } from "@/services/organization-service"
 import {
   createPublicFormLink,
   disablePublicFormLink,
-  PublicFormServiceError,
 } from "@/services/public-form-service"
+
+class PublicLinkActionError extends Error {
+  readonly statusCode = 403
+}
 
 export async function createPublicFormLinkAction(
   formData: FormData
@@ -32,10 +39,8 @@ export async function createPublicFormLinkAction(
         "templates:manage"
       )
     ) {
-      redirect(
-        buildRedirect(templatePath, {
-          error: "You do not have permission to manage public form links.",
-        })
+      throw new PublicLinkActionError(
+        "You do not have permission to manage public form links."
       )
     }
 
@@ -57,15 +62,12 @@ export async function createPublicFormLinkAction(
       redirect(buildRedirect("/login", { next: templatePath }))
     }
 
-    const message =
-      error instanceof PublicFormServiceError
-        ? error.message
-        : "Unable to create public form link."
-
-    redirect(buildRedirect(templatePath, { error: message }))
+    redirect(
+      buildFeedbackRedirect(templatePath, getActionErrorFeedbackCode(error))
+    )
   }
 
-  redirect(buildRedirect(templatePath, { message: "Public form link created." }))
+  redirect(buildFeedbackRedirect(templatePath, "public_link_created"))
 }
 
 export async function disablePublicFormLinkAction(
@@ -85,10 +87,8 @@ export async function disablePublicFormLinkAction(
         "templates:manage"
       )
     ) {
-      redirect(
-        buildRedirect(templatePath, {
-          error: "You do not have permission to manage public form links.",
-        })
+      throw new PublicLinkActionError(
+        "You do not have permission to manage public form links."
       )
     }
 
@@ -104,13 +104,10 @@ export async function disablePublicFormLinkAction(
       redirect(buildRedirect("/login", { next: templatePath }))
     }
 
-    const message =
-      error instanceof PublicFormServiceError
-        ? error.message
-        : "Unable to disable public form link."
-
-    redirect(buildRedirect(templatePath, { error: message }))
+    redirect(
+      buildFeedbackRedirect(templatePath, getActionErrorFeedbackCode(error))
+    )
   }
 
-  redirect(buildRedirect(templatePath, { message: "Public form link disabled." }))
+  redirect(buildFeedbackRedirect(templatePath, "public_link_disabled"))
 }

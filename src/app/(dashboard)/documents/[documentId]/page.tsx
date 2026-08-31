@@ -19,8 +19,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { buildFeedbackRedirect } from "@/lib/action-result"
 import { formatMediumDateTime } from "@/lib/date-format"
-import { buildRedirect } from "@/lib/form-utils"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
 import { getPageErrorMessage } from "@/lib/page-errors"
 import { loadPageOrganizationContext } from "@/lib/page-organization-context"
@@ -48,20 +48,12 @@ type DocumentDetailParams = Promise<{
   documentId: string
 }>
 
-type DocumentDetailSearchParams = Promise<{
-  error?: string
-  message?: string
-}>
-
 export default async function DocumentDetailPage({
   params,
-  searchParams,
 }: {
   params: DocumentDetailParams
-  searchParams: DocumentDetailSearchParams
 }): Promise<ReactElement> {
   const { documentId } = await params
-  const query = await searchParams
   const user = await loadAuthenticatedPageUser(`/documents/${documentId}`)
   const { context, errorMessage: contextErrorMessage } =
     await loadPageOrganizationContext({
@@ -73,7 +65,7 @@ export default async function DocumentDetailPage({
   if (!context) {
     if (contextErrorMessage) {
       return (
-        <DocumentDetailShell params={query}>
+        <DocumentDetailShell>
           <Alert variant="destructive">
             <AlertTitle>Supabase setup incomplete</AlertTitle>
             <AlertDescription>{contextErrorMessage}</AlertDescription>
@@ -83,9 +75,7 @@ export default async function DocumentDetailPage({
     }
 
     redirect(
-      buildRedirect("/dashboard", {
-        error: "Create an organization before viewing documents.",
-      })
+      buildFeedbackRedirect("/dashboard", "organization_required")
     )
   }
 
@@ -116,7 +106,7 @@ export default async function DocumentDetailPage({
 
   if (!detail) {
     return (
-      <DocumentDetailShell params={query}>
+      <DocumentDetailShell>
         <Alert variant="destructive">
           <AlertTitle>Document unavailable</AlertTitle>
           <AlertDescription>{detailErrorMessage}</AlertDescription>
@@ -192,7 +182,7 @@ export default async function DocumentDetailPage({
       ]
 
   return (
-    <DocumentDetailShell params={query}>
+    <DocumentDetailShell>
       {detail.document.lifecycleState === "active" ? (
         <DocumentOpenTracker
           documentId={detail.document.id}
@@ -272,27 +262,11 @@ export default async function DocumentDetailPage({
 
 function DocumentDetailShell({
   children,
-  params,
 }: {
   children: ReactNode
-  params: Awaited<DocumentDetailSearchParams>
 }): ReactElement {
   return (
     <div className="flex flex-col gap-6">
-      {params.error && (
-        <Alert variant="destructive">
-          <AlertTitle>Document action failed</AlertTitle>
-          <AlertDescription>{params.error}</AlertDescription>
-        </Alert>
-      )}
-
-      {params.message && (
-        <Alert>
-          <AlertTitle>Document updated</AlertTitle>
-          <AlertDescription>{params.message}</AlertDescription>
-        </Alert>
-      )}
-
       {children}
     </div>
   )

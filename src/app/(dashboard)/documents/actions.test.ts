@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-import { getAuthenticatedUser } from "@/lib/auth"
+import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
 import {
   archiveDocument,
   archiveFolder,
+  createFolder,
   DocumentServiceError,
   requestDocumentPurge,
   requestFolderPurge,
@@ -12,11 +13,16 @@ import {
   trashDocument,
   trashFolder,
 } from "@/services/document-service"
+import { createDocumentComment } from "@/services/document-comment-service"
 import { getCurrentOrganizationContext } from "@/services/organization-service"
 
 import {
   archiveDocumentAction,
   archiveFolderAction,
+  createDocumentCommentAction,
+  createFolderAction,
+  requestDocumentPurgeAction,
+  requestFolderPurgeAction,
   restoreDocumentAction,
   restoreFolderAction,
   trashDocumentAction,
@@ -57,6 +63,7 @@ vi.mock("@/services/document-service", async (importOriginal) => {
     ...actual,
     archiveDocument: vi.fn(),
     archiveFolder: vi.fn(),
+    createFolder: vi.fn(),
     requestDocumentPurge: vi.fn(),
     requestFolderPurge: vi.fn(),
     restoreDocument: vi.fn(),
@@ -69,6 +76,16 @@ vi.mock("@/services/document-service", async (importOriginal) => {
 vi.mock("@/services/organization-service", () => ({
   getCurrentOrganizationContext: vi.fn(),
 }))
+
+vi.mock("@/services/document-comment-service", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/services/document-comment-service")>()
+
+  return {
+    ...actual,
+    createDocumentComment: vi.fn(),
+  }
+})
 
 const ACTOR_USER_ID = "20000000-0000-4000-8000-000000000001"
 const ORGANIZATION_ID = "10000000-0000-4000-8000-000000000001"
@@ -109,6 +126,8 @@ beforeEach((): void => {
   vi.mocked(archiveFolder).mockResolvedValue(undefined as never)
   vi.mocked(restoreFolder).mockResolvedValue(undefined as never)
   vi.mocked(trashFolder).mockResolvedValue(undefined as never)
+  vi.mocked(createFolder).mockResolvedValue(undefined as never)
+  vi.mocked(createDocumentComment).mockResolvedValue(undefined as never)
   vi.mocked(requestDocumentPurge).mockResolvedValue({
     jobId: PURGE_JOB_ID,
     lifecycleState: "purge_pending",
@@ -125,23 +144,23 @@ describe("document lifecycle actions", (): void => {
     {
       action: archiveDocumentAction,
       operation: archiveDocument,
-      message: "Document+archived.",
+      feedback: "resource_archived",
     },
     {
       action: restoreDocumentAction,
       operation: restoreDocument,
-      message: "Document+restored.",
+      feedback: "resource_restored",
     },
     {
       action: trashDocumentAction,
       operation: trashDocument,
-      message: "Document+moved+to+Trash.",
+      feedback: "resource_trashed",
     },
   ])(
     "derives document lifecycle tenant scope from authenticated context",
-    async ({ action, operation, message }): Promise<void> => {
+    async ({ action, operation, feedback }): Promise<void> => {
       await expect(action(createDocumentForm())).rejects.toThrow(
-        `NEXT_REDIRECT:${DETAIL_PATH}?message=${message}`
+        `NEXT_REDIRECT:${DETAIL_PATH}?feedback=${feedback}`
       )
 
       expect(operation).toHaveBeenCalledExactlyOnceWith({
@@ -160,7 +179,10 @@ describe("document lifecycle actions", (): void => {
     )
 
     await expect(trashDocumentAction(createDocumentForm())).rejects.toThrow(
-      `NEXT_REDIRECT:${DETAIL_PATH}?error=Document+is+already+in+Trash.`
+      `NEXT_REDIRECT:${DETAIL_PATH}?feedback=refresh_required`
+    )
+    expect(redirectMock).not.toHaveBeenCalledWith(
+      expect.stringContaining("Document+is+already+in+Trash")
     )
     expect(revalidatePathMock).not.toHaveBeenCalled()
   })
@@ -168,23 +190,23 @@ describe("document lifecycle actions", (): void => {
   it.each([
     {
       action: archiveDocumentAction,
-      message: "Document+archived.",
+      feedback: "resource_archived",
     },
     {
       action: restoreDocumentAction,
-      message: "Document+restored.",
+      feedback: "resource_restored",
     },
     {
       action: trashDocumentAction,
-      message: "Document+moved+to+Trash.",
+      feedback: "resource_trashed",
     },
   ])(
     "returns a workspace row to the view it acted from",
-    async ({ action, message }): Promise<void> => {
+    async ({ action, feedback }): Promise<void> => {
       await expect(
         action(createWorkspaceDocumentForm("archived"))
       ).rejects.toThrow(
-        `NEXT_REDIRECT:/documents?view=archived&folderId=${PARENT_FOLDER_ID}&message=${message}`
+        `NEXT_REDIRECT:/documents?view=archived&folderId=${PARENT_FOLDER_ID}&feedback=${feedback}`
       )
     }
   )
@@ -193,7 +215,7 @@ describe("document lifecycle actions", (): void => {
     await expect(
       restoreDocumentAction(createWorkspaceDocumentForm("external"))
     ).rejects.toThrow(
-      `NEXT_REDIRECT:/documents?folderId=${PARENT_FOLDER_ID}&message=Document+restored.`
+      `NEXT_REDIRECT:/documents?folderId=${PARENT_FOLDER_ID}&feedback=resource_restored`
     )
   })
 
@@ -205,8 +227,19 @@ describe("document lifecycle actions", (): void => {
     await expect(
       trashDocumentAction(createWorkspaceDocumentForm("active"))
     ).rejects.toThrow(
-      `NEXT_REDIRECT:/documents?folderId=${PARENT_FOLDER_ID}&error=Document+is+already+in+Trash.`
+      `NEXT_REDIRECT:/documents?folderId=${PARENT_FOLDER_ID}&feedback=refresh_required`
     )
+  })
+
+  it("preserves the exact document return path when authentication expires", async (): Promise<void> => {
+    vi.mocked(getAuthenticatedUser).mockRejectedValue(
+      new AuthenticationError("Sign in to continue.")
+    )
+
+    await expect(archiveDocumentAction(createDocumentForm())).rejects.toThrow(
+      `NEXT_REDIRECT:/login?next=%2Fdocuments%2F${DOCUMENT_ID}`
+    )
+    expect(archiveDocument).not.toHaveBeenCalled()
   })
 })
 
@@ -215,23 +248,23 @@ describe("folder lifecycle actions", (): void => {
     {
       action: archiveFolderAction,
       operation: archiveFolder,
-      message: "Folder+archived.",
+      feedback: "resource_archived",
     },
     {
       action: restoreFolderAction,
       operation: restoreFolder,
-      message: "Folder+restored.",
+      feedback: "resource_restored",
     },
     {
       action: trashFolderAction,
       operation: trashFolder,
-      message: "Folder+moved+to+Trash.",
+      feedback: "resource_trashed",
     },
   ])(
     "derives folder lifecycle tenant scope and preserves the safe return path",
-    async ({ action, operation, message }): Promise<void> => {
+    async ({ action, operation, feedback }): Promise<void> => {
       await expect(action(createFolderForm("archived"))).rejects.toThrow(
-        `NEXT_REDIRECT:/documents?view=archived&folderId=${PARENT_FOLDER_ID}&message=${message}`
+        `NEXT_REDIRECT:/documents?view=archived&folderId=${PARENT_FOLDER_ID}&feedback=${feedback}`
       )
 
       expect(operation).toHaveBeenCalledExactlyOnceWith({
@@ -249,7 +282,70 @@ describe("folder lifecycle actions", (): void => {
     await expect(
       restoreFolderAction(createFolderForm("external"))
     ).rejects.toThrow(
-      `NEXT_REDIRECT:/documents?folderId=${PARENT_FOLDER_ID}&message=Folder+restored.`
+      `NEXT_REDIRECT:/documents?folderId=${PARENT_FOLDER_ID}&feedback=resource_restored`
+    )
+  })
+})
+
+describe("document creation and collaboration actions", (): void => {
+  it("creates a folder and reports a stable outcome on the current folder", async (): Promise<void> => {
+    const formData = new FormData()
+    formData.set("organizationId", ORGANIZATION_ID)
+    formData.set("name", "Contracts")
+    formData.set("parentFolderId", PARENT_FOLDER_ID)
+    formData.set("returnFolderId", PARENT_FOLDER_ID)
+
+    await expect(createFolderAction(formData)).rejects.toThrow(
+      `NEXT_REDIRECT:/documents?folderId=${PARENT_FOLDER_ID}&feedback=folder_created`
+    )
+    expect(createFolder).toHaveBeenCalledExactlyOnceWith({
+      actorUserId: ACTOR_USER_ID,
+      organizationId: ORGANIZATION_ID,
+      name: "Contracts",
+      parentFolderId: PARENT_FOLDER_ID,
+    })
+  })
+
+  it("adds a comment without reflecting a service error in the redirect", async (): Promise<void> => {
+    vi.mocked(createDocumentComment).mockRejectedValue(
+      new Error("private comment persistence detail")
+    )
+    const formData = new FormData()
+    formData.set("organizationId", ORGANIZATION_ID)
+    formData.set("documentId", DOCUMENT_ID)
+    formData.set("body", "Please review this section.")
+
+    await expect(createDocumentCommentAction(formData)).rejects.toThrow(
+      `NEXT_REDIRECT:${DETAIL_PATH}?feedback=operation_failed`
+    )
+    expect(redirectMock).not.toHaveBeenCalledWith(
+      expect.stringContaining("private+comment+persistence+detail")
+    )
+  })
+})
+
+describe("permanent deletion actions", (): void => {
+  it("queues document deletion and keeps workspace route state", async (): Promise<void> => {
+    const formData = createWorkspaceDocumentForm("trash")
+    formData.set("confirmationTitle", "Client handbook")
+
+    await expect(requestDocumentPurgeAction(formData)).rejects.toThrow(
+      `NEXT_REDIRECT:/documents?view=trash&folderId=${PARENT_FOLDER_ID}&feedback=deletion_queued`
+    )
+    expect(requestDocumentPurge).toHaveBeenCalledExactlyOnceWith({
+      actorUserId: ACTOR_USER_ID,
+      organizationId: ORGANIZATION_ID,
+      documentId: DOCUMENT_ID,
+      confirmationTitle: "Client handbook",
+    })
+  })
+
+  it("queues folder deletion with the same authoritative outcome", async (): Promise<void> => {
+    const formData = createFolderForm("trash")
+    formData.set("confirmationName", "Contracts")
+
+    await expect(requestFolderPurgeAction(formData)).rejects.toThrow(
+      `NEXT_REDIRECT:/documents?view=trash&folderId=${PARENT_FOLDER_ID}&feedback=deletion_queued`
     )
   })
 })
