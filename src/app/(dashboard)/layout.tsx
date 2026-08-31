@@ -8,6 +8,7 @@ import type { DashboardAccount } from "@/components/navigation/dashboard-account
 import { MobileTabBar } from "@/components/navigation/mobile-tab-bar"
 import { MobileTopBar } from "@/components/navigation/mobile-top-bar"
 import { DashboardSidebar } from "@/components/navigation/dashboard-sidebar"
+import { ActionFeedback } from "@/components/ui/action-feedback"
 import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
 import { captureUnexpectedError } from "@/lib/observability"
 import { createClient } from "@/lib/supabase/server"
@@ -141,6 +142,9 @@ export default async function DashboardLayout({
 
   return (
     <PostHogProvider userId={userId}>
+      <Suspense fallback={null}>
+        <ActionFeedback />
+      </Suspense>
       <div className="min-h-screen bg-canvas text-foreground">
         <MobileTopBar account={account} signOutAction={signOutAction} />
         <div className="mx-auto flex min-h-screen w-full max-w-[96rem] flex-col md:flex-row">

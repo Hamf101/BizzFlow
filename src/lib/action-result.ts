@@ -1,16 +1,19 @@
 /** Stable feedback codes that may cross the server-action redirect boundary. */
-export type ActionFeedbackCode =
-  | "changes_saved"
-  | "document_uploaded"
-  | "operation_failed"
-  | "retry_later"
-  | "submission_created"
-  | "submission_submitted"
-  | "task_completed"
-  | "task_created"
-  | "template_created"
-  | "template_duplicated"
-  | "template_published"
+export const ACTION_FEEDBACK_CODES = [
+  "changes_saved",
+  "document_uploaded",
+  "operation_failed",
+  "retry_later",
+  "submission_created",
+  "submission_submitted",
+  "task_completed",
+  "task_created",
+  "template_created",
+  "template_duplicated",
+  "template_published",
+] as const
+
+export type ActionFeedbackCode = (typeof ACTION_FEEDBACK_CODES)[number]
 
 /** Field-specific validation copy that remains beside the owning form control. */
 export type ActionFieldErrors = Readonly<Record<string, readonly string[]>>
