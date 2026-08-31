@@ -15,8 +15,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { buildFeedbackRedirect } from "@/lib/action-result"
 import { formatMediumDateTime } from "@/lib/date-format"
-import { buildRedirect } from "@/lib/form-utils"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
 import { getPageErrorMessage } from "@/lib/page-errors"
 import { loadPageOrganizationContext } from "@/lib/page-organization-context"
@@ -27,23 +27,12 @@ import { listInternalSubmissions } from "@/services/submission-service"
 import type { OrganizationMember } from "@/types/organization"
 import type { Submission } from "@/types/submission"
 
-type SubmissionsSearchParams = Promise<{
-  error?: string
-  message?: string
-}>
-
 /**
  * Lists internal submissions visible to the authenticated organization member.
  *
- * @param props - Optional action feedback encoded in search parameters.
  * @returns Creator-scoped staff list or tenant-wide owner/manager list.
  */
-export default async function SubmissionsPage({
-  searchParams,
-}: {
-  searchParams: SubmissionsSearchParams
-}): Promise<ReactElement> {
-  const query = await searchParams
+export default async function SubmissionsPage(): Promise<ReactElement> {
   const user = await loadAuthenticatedPageUser("/submissions")
   const contextResult = await loadPageOrganizationContext({
     userId: user.id,
@@ -53,7 +42,7 @@ export default async function SubmissionsPage({
   if (!contextResult.context) {
     if (contextResult.errorMessage) {
       return (
-        <SubmissionsShell query={query}>
+        <SubmissionsShell>
           <Alert variant="destructive">
             <AlertTitle>Submissions unavailable</AlertTitle>
             <AlertDescription>{contextResult.errorMessage}</AlertDescription>
@@ -63,9 +52,7 @@ export default async function SubmissionsPage({
     }
 
     redirect(
-      buildRedirect("/dashboard", {
-        error: "Create an organization before viewing submissions.",
-      })
+      buildFeedbackRedirect("/dashboard", "organization_required")
     )
   }
 
@@ -117,7 +104,7 @@ export default async function SubmissionsPage({
   ])
 
   return (
-    <SubmissionsShell query={query}>
+    <SubmissionsShell>
       <section className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex flex-col gap-2">
           <h1 className="text-2xl font-semibold tracking-normal">Submissions</h1>
@@ -167,25 +154,11 @@ export default async function SubmissionsPage({
 
 function SubmissionsShell({
   children,
-  query,
 }: {
   children: ReactNode
-  query: Awaited<SubmissionsSearchParams>
 }): ReactElement {
   return (
     <div className="flex flex-col gap-6">
-      {query.error && (
-        <Alert variant="destructive">
-          <AlertTitle>Submission action failed</AlertTitle>
-          <AlertDescription>{query.error}</AlertDescription>
-        </Alert>
-      )}
-      {query.message && (
-        <Alert>
-          <AlertTitle>Submission updated</AlertTitle>
-          <AlertDescription>{query.message}</AlertDescription>
-        </Alert>
-      )}
       {children}
     </div>
   )

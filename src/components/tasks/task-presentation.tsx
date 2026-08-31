@@ -1,16 +1,9 @@
 import type { ReactElement, ReactNode } from "react"
 
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import type { OrganizationRole } from "@/lib/permissions"
 import type { OrganizationMember } from "@/types/organization"
 import type { TaskReminderStatus, TaskStatus } from "@/types/task"
-
-/** Action feedback the task pages read back from their search parameters. */
-export type TaskPageFeedback = {
-  error?: string
-  message?: string
-}
 
 type BadgePresentation = {
   className?: string
@@ -99,35 +92,17 @@ export function TaskReminderStatusBadge({
 }
 
 /**
- * Wraps a task page with its shared stack spacing and action feedback.
+ * Wraps a task page with its shared stack spacing.
  *
- * @param props - Page content and the feedback encoded in search parameters.
- * @returns Page shell with any success or failure callout above the content.
+ * @param props - Page content.
+ * @returns Page shell for task workspace content.
  */
 export function TaskPageShell({
   children,
-  feedback,
 }: {
   children: ReactNode
-  feedback: TaskPageFeedback
 }): ReactElement {
-  return (
-    <div className="flex flex-col gap-6">
-      {feedback.error && (
-        <Alert variant="destructive">
-          <AlertTitle>Task action failed</AlertTitle>
-          <AlertDescription>{feedback.error}</AlertDescription>
-        </Alert>
-      )}
-      {feedback.message && (
-        <Alert>
-          <AlertTitle>Task updated</AlertTitle>
-          <AlertDescription>{feedback.message}</AlertDescription>
-        </Alert>
-      )}
-      {children}
-    </div>
-  )
+  return <div className="flex flex-col gap-6">{children}</div>
 }
 
 /**

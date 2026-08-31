@@ -20,8 +20,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { buildFeedbackRedirect } from "@/lib/action-result"
 import { formatMediumDateTime } from "@/lib/date-format"
-import { buildRedirect } from "@/lib/form-utils"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
 import { getPageErrorMessage } from "@/lib/page-errors"
 import { loadPageOrganizationContext } from "@/lib/page-organization-context"
@@ -53,25 +53,18 @@ type GeneratedDocumentEditorParams = Promise<{
   documentId: string
 }>
 
-type GeneratedDocumentEditorSearchParams = Promise<{
-  error?: string
-  message?: string
-}>
-
 /**
  * Loads the authenticated generated-document editor and signing controls.
  *
- * @param props - Document route id and optional action feedback.
+ * @param props - Document route identifier.
  * @returns A permission-aware member editor with recipients and PDF access.
  */
 export default async function GeneratedDocumentEditorPage({
   params,
-  searchParams,
 }: {
   params: GeneratedDocumentEditorParams
-  searchParams: GeneratedDocumentEditorSearchParams
 }): Promise<ReactElement> {
-  const [{ documentId }, query] = await Promise.all([params, searchParams])
+  const { documentId } = await params
   const editorPath = `/documents/${encodeURIComponent(documentId)}/edit`
   const user = await loadAuthenticatedPageUser(editorPath)
   const contextResult = await loadPageOrganizationContext({
@@ -83,7 +76,7 @@ export default async function GeneratedDocumentEditorPage({
   if (!contextResult.context) {
     if (contextResult.errorMessage) {
       return (
-        <GeneratedDocumentEditorShell query={query}>
+        <GeneratedDocumentEditorShell>
           <Alert variant="destructive">
             <AlertTitle>Document editor unavailable</AlertTitle>
             <AlertDescription>{contextResult.errorMessage}</AlertDescription>
@@ -93,9 +86,7 @@ export default async function GeneratedDocumentEditorPage({
     }
 
     redirect(
-      buildRedirect("/dashboard", {
-        error: "Create an organization before viewing documents.",
-      })
+      buildFeedbackRedirect("/dashboard", "organization_required")
     )
   }
 
@@ -126,7 +117,7 @@ export default async function GeneratedDocumentEditorPage({
 
   if (!viewResult.view) {
     return (
-      <GeneratedDocumentEditorShell query={query}>
+      <GeneratedDocumentEditorShell>
         <Alert variant="destructive">
           <AlertTitle>Generated document unavailable</AlertTitle>
           <AlertDescription>{viewResult.errorMessage}</AlertDescription>
@@ -150,7 +141,7 @@ export default async function GeneratedDocumentEditorPage({
     : "/documents"
 
   return (
-    <GeneratedDocumentEditorShell query={query}>
+    <GeneratedDocumentEditorShell>
       <DocumentOpenTracker
         documentId={view.document.id}
         organizationId={context.organization.id}
@@ -415,25 +406,11 @@ function RecipientStatusCard({
 
 function GeneratedDocumentEditorShell({
   children,
-  query,
 }: {
   children: ReactNode
-  query: Awaited<GeneratedDocumentEditorSearchParams>
 }): ReactElement {
   return (
     <div className="flex flex-col gap-6">
-      {query.error && (
-        <Alert variant="destructive">
-          <AlertTitle>Document action failed</AlertTitle>
-          <AlertDescription>{query.error}</AlertDescription>
-        </Alert>
-      )}
-      {query.message && (
-        <Alert>
-          <AlertTitle>Document updated</AlertTitle>
-          <AlertDescription>{query.message}</AlertDescription>
-        </Alert>
-      )}
       {children}
     </div>
   )

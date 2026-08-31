@@ -20,8 +20,8 @@ import {
   FieldLabel
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { buildFeedbackRedirect } from "@/lib/action-result"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
-import { buildRedirect } from "@/lib/form-utils"
 import { buildDocumentFolderPath } from "@/lib/page-document-folders"
 import { loadPageOrganizationContext } from "@/lib/page-organization-context"
 import { listDocumentWorkspace } from "@/services/document-service"
@@ -32,7 +32,6 @@ import type { DocumentTemplate } from "@/types/template"
 import { createGeneratedDocumentAction } from "../actions"
 
 type NewDocumentSearchParams = Promise<{
-  error?: string
   folderId?: string
   mode?: string
 }>
@@ -40,7 +39,7 @@ type NewDocumentSearchParams = Promise<{
 /**
  * Lets a member upload a file or create a structured document in one folder.
  *
- * @param props - Creation mode, target folder, and optional action error.
+ * @param props - Creation mode and target folder.
  * @returns Two-step document creation page.
  */
 export default async function NewDocumentPage({
@@ -56,11 +55,7 @@ export default async function NewDocumentPage({
   })
 
   if (!context) {
-    redirect(
-      buildRedirect("/dashboard", {
-        error: "Create an organization before adding documents."
-      })
-    )
+    redirect(buildFeedbackRedirect("/dashboard", "organization_required"))
   }
 
   const [workspace, templates] = await Promise.all([
@@ -115,13 +110,6 @@ export default async function NewDocumentPage({
 
   return (
     <div className="flex flex-col gap-6">
-      {params.error ? (
-        <Alert variant="destructive">
-          <AlertTitle>Document creation failed</AlertTitle>
-          <AlertDescription>{params.error}</AlertDescription>
-        </Alert>
-      ) : null}
-
       <section className="flex flex-col gap-3">
         <nav aria-label="New document folder path">
           <ol className="flex flex-wrap items-center gap-1 text-sm text-muted-foreground">

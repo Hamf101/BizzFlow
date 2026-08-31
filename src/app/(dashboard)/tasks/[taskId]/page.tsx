@@ -28,8 +28,8 @@ import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
+import { buildFeedbackRedirect } from "@/lib/action-result"
 import { formatMediumDateTime } from "@/lib/date-format"
-import { buildRedirect } from "@/lib/form-utils"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
 import { getPageErrorMessage } from "@/lib/page-errors"
 import { loadPageOrganizationContext } from "@/lib/page-organization-context"
@@ -63,10 +63,6 @@ import {
 } from "@/components/tasks/task-presentation"
 
 type TaskDetailParams = Promise<{ taskId: string }>
-type TaskDetailSearchParams = Promise<{
-  error?: string
-  message?: string
-}>
 
 type TaskTransitionPresentation = {
   icon: ComponentType<{ className?: string }>
@@ -87,17 +83,15 @@ const TASK_TRANSITION_PRESENTATIONS: Record<
 /**
  * Loads one task with its reminders and the controls the viewer may use.
  *
- * @param props - Task path identifier and optional action feedback.
+ * @param props - Task path identifier.
  * @returns Task workspace with lifecycle, assignment, and reminder controls.
  */
 export default async function TaskDetailPage({
   params,
-  searchParams,
 }: {
   params: TaskDetailParams
-  searchParams: TaskDetailSearchParams
 }): Promise<ReactElement> {
-  const [{ taskId }, query] = await Promise.all([params, searchParams])
+  const { taskId } = await params
   const detailPath = `/tasks/${encodeURIComponent(taskId)}`
   const user = await loadAuthenticatedPageUser(detailPath)
   const contextResult = await loadPageOrganizationContext({
@@ -108,11 +102,7 @@ export default async function TaskDetailPage({
 
   if (!contextResult.context) {
     redirect(
-      buildRedirect("/tasks", {
-        error:
-          contextResult.errorMessage ??
-          "Create an organization before viewing tasks.",
-      })
+      buildFeedbackRedirect("/tasks", "organization_required")
     )
   }
 
@@ -120,7 +110,7 @@ export default async function TaskDetailPage({
 
   if (!canPerformOrganizationAction(context.membership.role, "tasks:view")) {
     return (
-      <TaskPageShell feedback={query}>
+      <TaskPageShell>
         <Alert variant="destructive">
           <AlertTitle>Tasks are not shared with your role</AlertTitle>
           <AlertDescription>
@@ -160,7 +150,7 @@ export default async function TaskDetailPage({
 
   if (!result.detail) {
     return (
-      <TaskPageShell feedback={query}>
+      <TaskPageShell>
         <BackToTasksLink />
         <Alert variant="destructive">
           <AlertTitle>Task unavailable</AlertTitle>
@@ -185,7 +175,7 @@ export default async function TaskDetailPage({
     !closed
 
   return (
-    <TaskPageShell feedback={query}>
+    <TaskPageShell>
       <section className="flex flex-col gap-3">
         <BackToTasksLink />
         <div className="flex flex-wrap items-center gap-2">

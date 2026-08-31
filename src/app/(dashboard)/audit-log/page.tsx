@@ -4,7 +4,6 @@ import { cache, Suspense, type ReactElement, type ReactNode } from "react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
-import { cn } from "@/lib/utils"
 import {
   Card,
   CardContent,
@@ -12,12 +11,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { buildFeedbackRedirect } from "@/lib/action-result"
 import { formatMediumDateTime } from "@/lib/date-format"
-import { buildRedirect } from "@/lib/form-utils"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
 import { getPageErrorMessage } from "@/lib/page-errors"
 import { loadPageOrganizationContext } from "@/lib/page-organization-context"
 import { canPerformOrganizationAction } from "@/lib/permissions"
+import { cn } from "@/lib/utils"
 import { listAuditLogs, verifyAuditLogChain } from "@/services/audit-service"
 import type { AuditChainVerification, AuditLogEntry } from "@/types/audit"
 
@@ -62,19 +62,11 @@ export default async function AuditLogPage(): Promise<ReactElement> {
       )
     }
 
-    redirect(
-      buildRedirect("/dashboard", {
-        error: "Create an organization before viewing audit logs.",
-      })
-    )
+    redirect(buildFeedbackRedirect("/dashboard", "organization_required"))
   }
 
   if (!canPerformOrganizationAction(context.membership.role, "audit_logs:view")) {
-    redirect(
-      buildRedirect("/dashboard", {
-        error: "You cannot view audit logs.",
-      })
-    )
+    redirect(buildFeedbackRedirect("/dashboard", "permission_denied"))
   }
 
   const { entries, errorMessage: entriesErrorMessage } = await listAuditLogs({

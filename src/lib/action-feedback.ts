@@ -177,6 +177,20 @@ export const ACTION_FEEDBACK = {
     title: "Sample submissions ready",
     tone: "success",
   },
+  signing_invitation_resent: {
+    analyticsEvent: "action_outcome",
+    durationMs: 5_000,
+    persistent: false,
+    title: "Signing invitation resent",
+    tone: "success",
+  },
+  signing_invitations_sent: {
+    analyticsEvent: "action_outcome",
+    durationMs: 5_000,
+    persistent: false,
+    title: "Signing invitations sent",
+    tone: "success",
+  },
   starter_content_added: {
     analyticsEvent: "action_outcome",
     durationMs: 5_000,
@@ -184,11 +198,25 @@ export const ACTION_FEEDBACK = {
     title: "Starter templates ready",
     tone: "success",
   },
+  submission_assigned: {
+    analyticsEvent: "action_outcome",
+    durationMs: 5_000,
+    persistent: false,
+    title: "Submission assigned",
+    tone: "success",
+  },
   submission_created: {
     analyticsEvent: "submission_created",
     durationMs: 5_000,
     persistent: false,
     title: "Submission created",
+    tone: "success",
+  },
+  submission_review_updated: {
+    analyticsEvent: "action_outcome",
+    durationMs: 5_000,
+    persistent: false,
+    title: "Submission review updated",
     tone: "success",
   },
   submission_submitted: {
@@ -210,6 +238,13 @@ export const ACTION_FEEDBACK = {
     durationMs: 5_000,
     persistent: false,
     title: "Task created",
+    tone: "success",
+  },
+  task_status_updated: {
+    analyticsEvent: "action_outcome",
+    durationMs: 5_000,
+    persistent: false,
+    title: "Task status updated",
     tone: "success",
   },
   template_created: {

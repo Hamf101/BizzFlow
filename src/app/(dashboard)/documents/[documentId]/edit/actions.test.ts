@@ -4,21 +4,26 @@ import {
   enforceActionRateLimit,
   enforceOutboundEmailRateLimit,
 } from "@/lib/action-rate-limit"
+import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
 import {
+  DocumentSigningServiceError,
   resendDocumentSigningInvitation,
+  saveGeneratedDocumentAnswers,
   sendDocumentForSigning,
 } from "@/services/document-signing-service"
 
 import {
   resendGeneratedDocumentInvitationAction,
+  saveGeneratedDocumentAction,
   sendGeneratedDocumentAction,
 } from "./actions"
 
-const { redirectMock } = vi.hoisted(() => ({
+const { redirectMock, revalidatePathMock } = vi.hoisted(() => ({
   redirectMock: vi.fn((destination: string): never => {
     throw new Error(`NEXT_REDIRECT:${destination}`)
   }),
+  revalidatePathMock: vi.fn(),
 }))
 
 vi.mock("next/navigation", () => ({
@@ -26,8 +31,13 @@ vi.mock("next/navigation", () => ({
 }))
 
 vi.mock("next/cache", () => ({
-  revalidatePath: vi.fn(),
+  revalidatePath: revalidatePathMock,
 }))
+
+vi.mock("@/lib/auth", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/auth")>()
+  return { ...actual, getAuthenticatedUser: vi.fn() }
+})
 
 vi.mock("@/lib/page-auth", () => ({
   loadAuthenticatedPageUser: vi.fn(),
@@ -45,12 +55,17 @@ vi.mock("@/services/organization-service", () => ({
   })),
 }))
 
-vi.mock("@/services/document-signing-service", () => ({
-  DocumentSigningServiceError: class extends Error {},
-  resendDocumentSigningInvitation: vi.fn().mockResolvedValue(undefined),
-  saveGeneratedDocumentAnswers: vi.fn(),
-  sendDocumentForSigning: vi.fn().mockResolvedValue(undefined),
-}))
+vi.mock("@/services/document-signing-service", async (importOriginal) => {
+  const actual = await importOriginal<
+    typeof import("@/services/document-signing-service")
+  >()
+  return {
+    ...actual,
+    resendDocumentSigningInvitation: vi.fn().mockResolvedValue(undefined),
+    saveGeneratedDocumentAnswers: vi.fn().mockResolvedValue(undefined),
+    sendDocumentForSigning: vi.fn().mockResolvedValue(undefined),
+  }
+})
 
 const MEMBER_ID = "20000000-0000-4000-8000-000000000001"
 const ORG_ID = "10000000-0000-4000-8000-000000000001"
@@ -83,22 +98,30 @@ beforeEach(() => {
     id: MEMBER_ID,
     email: "member@example.com",
   } as never)
+  vi.mocked(getAuthenticatedUser).mockResolvedValue({
+    id: MEMBER_ID,
+    email: "member@example.com",
+  })
   vi.mocked(enforceActionRateLimit).mockResolvedValue(undefined)
   vi.mocked(enforceOutboundEmailRateLimit).mockResolvedValue(undefined)
+  vi.mocked(resendDocumentSigningInvitation).mockResolvedValue(undefined as never)
+  vi.mocked(saveGeneratedDocumentAnswers).mockResolvedValue(undefined as never)
+  vi.mocked(sendDocumentForSigning).mockResolvedValue(undefined as never)
 })
 
 describe("resendGeneratedDocumentInvitationAction", () => {
   it("budgets each recipient separately from the sending member", async () => {
     await expect(
       resendGeneratedDocumentInvitationAction(createResendForm())
-    ).rejects.toThrow("NEXT_REDIRECT:")
+    ).rejects.toThrow(
+      `NEXT_REDIRECT:${EDITOR_PATH}?feedback=signing_invitation_resent`
+    )
 
     expect(enforceActionRateLimit).toHaveBeenCalledExactlyOnceWith({
       bucket: "email_recipient",
+      feedbackCode: "retry_later",
       key: `${MEMBER_ID}:${DOCUMENT_ID}:${RECIPIENT_ID}`,
       redirectPath: EDITOR_PATH,
-      message:
-        "This invitation was resent too recently. Wait a while before trying again.",
     })
     expect(enforceOutboundEmailRateLimit).toHaveBeenCalledExactlyOnceWith({
       userId: MEMBER_ID,
@@ -109,13 +132,13 @@ describe("resendGeneratedDocumentInvitationAction", () => {
   it("throttles before the invitation is rotated and re-mailed", async () => {
     vi.mocked(enforceActionRateLimit).mockImplementation(
       async (): Promise<void> => {
-        throw new Error(`NEXT_REDIRECT:${EDITOR_PATH}?error=Resent+too+recently`)
+        throw new Error(`NEXT_REDIRECT:${EDITOR_PATH}?feedback=retry_later`)
       }
     )
 
     await expect(
       resendGeneratedDocumentInvitationAction(createResendForm())
-    ).rejects.toThrow(`NEXT_REDIRECT:${EDITOR_PATH}?error=Resent+too+recently`)
+    ).rejects.toThrow(`NEXT_REDIRECT:${EDITOR_PATH}?feedback=retry_later`)
     expect(resendDocumentSigningInvitation).not.toHaveBeenCalled()
   })
 
@@ -125,13 +148,13 @@ describe("resendGeneratedDocumentInvitationAction", () => {
     // "Unable to resend the signing invitation." instead.
     vi.mocked(enforceOutboundEmailRateLimit).mockImplementation(
       async (): Promise<void> => {
-        throw new Error(`NEXT_REDIRECT:${EDITOR_PATH}?error=Too+many+emails`)
+        throw new Error(`NEXT_REDIRECT:${EDITOR_PATH}?feedback=retry_later`)
       }
     )
 
     await expect(
       resendGeneratedDocumentInvitationAction(createResendForm())
-    ).rejects.not.toThrow(/Unable\+to\+resend/)
+    ).rejects.not.toThrow(/feedback=operation_failed/)
   })
 })
 
@@ -139,7 +162,9 @@ describe("sendGeneratedDocumentAction", () => {
   it("budgets the fan-out against the authenticated member", async () => {
     await expect(
       sendGeneratedDocumentAction(createSendForm())
-    ).rejects.toThrow("NEXT_REDIRECT:")
+    ).rejects.toThrow(
+      `NEXT_REDIRECT:${EDITOR_PATH}?feedback=signing_invitations_sent`
+    )
 
     expect(loadAuthenticatedPageUser).toHaveBeenCalledExactlyOnceWith(
       EDITOR_PATH
@@ -153,13 +178,57 @@ describe("sendGeneratedDocumentAction", () => {
   it("throttles before any recipient is mailed", async () => {
     vi.mocked(enforceOutboundEmailRateLimit).mockImplementation(
       async (): Promise<void> => {
-        throw new Error(`NEXT_REDIRECT:${EDITOR_PATH}?error=Too+many+emails`)
+        throw new Error(`NEXT_REDIRECT:${EDITOR_PATH}?feedback=retry_later`)
       }
     )
 
     await expect(sendGeneratedDocumentAction(createSendForm())).rejects.toThrow(
-      `NEXT_REDIRECT:${EDITOR_PATH}?error=Too+many+emails`
+      `NEXT_REDIRECT:${EDITOR_PATH}?feedback=retry_later`
     )
     expect(sendDocumentForSigning).not.toHaveBeenCalled()
+  })
+
+  it("maps EmailJS-adjacent service diagnostics to fixed feedback", async () => {
+    vi.mocked(sendDocumentForSigning).mockRejectedValue(
+      new DocumentSigningServiceError("EmailJS provider request detail", 500)
+    )
+
+    await expect(sendGeneratedDocumentAction(createSendForm())).rejects.toThrow(
+      `NEXT_REDIRECT:${EDITOR_PATH}?feedback=operation_failed`
+    )
+    expect(redirectMock).not.toHaveBeenCalledWith(
+      expect.stringContaining("EmailJS")
+    )
+  })
+})
+
+describe("saveGeneratedDocumentAction", () => {
+  it("saves answer values before reporting completion", async () => {
+    const formData = new FormData()
+    formData.set("documentId", DOCUMENT_ID)
+    formData.set("answer.text.client-name", "Acme")
+
+    await expect(saveGeneratedDocumentAction(formData)).rejects.toThrow(
+      `NEXT_REDIRECT:${EDITOR_PATH}?feedback=changes_saved`
+    )
+    expect(saveGeneratedDocumentAnswers).toHaveBeenCalledExactlyOnceWith({
+      actorUserId: MEMBER_ID,
+      organizationId: ORG_ID,
+      documentId: DOCUMENT_ID,
+      values: { "client-name": "Acme" },
+    })
+  })
+
+  it("preserves the editor login return path", async () => {
+    vi.mocked(getAuthenticatedUser).mockRejectedValue(
+      new AuthenticationError("Sign in to continue.")
+    )
+    const formData = new FormData()
+    formData.set("documentId", DOCUMENT_ID)
+
+    await expect(saveGeneratedDocumentAction(formData)).rejects.toThrow(
+      `NEXT_REDIRECT:/login?next=%2Fdocuments%2F${DOCUMENT_ID}%2Fedit`
+    )
+    expect(saveGeneratedDocumentAnswers).not.toHaveBeenCalled()
   })
 })

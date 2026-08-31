@@ -8,6 +8,10 @@ import {
   parseGeneratedDocumentAnswers,
 } from "@/components/documents/generated-document-form-data"
 import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
+import {
+  buildFeedbackRedirect,
+  getActionErrorFeedbackCode,
+} from "@/lib/action-result"
 import { buildRedirect, getFormString } from "@/lib/form-utils"
 import {
   canPerformOrganizationAction,
@@ -19,7 +23,6 @@ import {
   createInternalSubmissionComment,
   createInternalSubmissionDraft,
   saveInternalSubmissionDraft,
-  SubmissionServiceError,
   submitInternalSubmission,
   transitionInternalSubmission,
   type SubmissionReviewTransition,
@@ -32,9 +35,12 @@ type SubmissionActionContext = {
 }
 
 class SubmissionActionError extends Error {
-  constructor(message: string) {
+  readonly statusCode: number
+
+  constructor(message: string, statusCode = 400) {
     super(message)
     this.name = "SubmissionActionError"
+    this.statusCode = statusCode
   }
 }
 
@@ -76,7 +82,6 @@ export async function createSubmissionAction(formData: FormData): Promise<void> 
     handleSubmissionActionFailure({
       error,
       eventName: "submission_create_action_failed",
-      fallback: "Unable to create submission draft.",
       nextPath: "/submissions/new",
       startedAt,
       submissionId,
@@ -84,9 +89,7 @@ export async function createSubmissionAction(formData: FormData): Promise<void> 
   }
 
   redirect(
-    buildRedirect(getSubmissionPath(submissionId), {
-      message: "Submission draft created.",
-    })
+    buildFeedbackRedirect(getSubmissionPath(submissionId), "submission_created")
   )
 }
 
@@ -150,16 +153,13 @@ export async function assignSubmissionAction(formData: FormData): Promise<void> 
     handleSubmissionActionFailure({
       error,
       eventName: "submission_assign_action_failed",
-      fallback: "Unable to assign this submission.",
       nextPath: submissionPath,
       startedAt,
       submissionId,
     })
   }
 
-  redirect(
-    buildRedirect(submissionPath, { message: "Submission assigned." })
-  )
+  redirect(buildFeedbackRedirect(submissionPath, "submission_assigned"))
 }
 
 /**
@@ -222,7 +222,6 @@ export async function transitionSubmissionAction(
     handleSubmissionActionFailure({
       error,
       eventName: "submission_transition_action_failed",
-      fallback: "Unable to update this submission review.",
       nextPath: submissionPath,
       startedAt,
       submissionId,
@@ -230,9 +229,7 @@ export async function transitionSubmissionAction(
   }
 
   redirect(
-    buildRedirect(submissionPath, {
-      message: getTransitionSuccessMessage(transition),
-    })
+    buildFeedbackRedirect(submissionPath, "submission_review_updated")
   )
 }
 
@@ -282,14 +279,13 @@ export async function createSubmissionCommentAction(
     handleSubmissionActionFailure({
       error,
       eventName: "submission_comment_action_failed",
-      fallback: "Unable to add this comment.",
       nextPath: submissionPath,
       startedAt,
       submissionId,
     })
   }
 
-  redirect(buildRedirect(submissionPath, { message: "Comment added." }))
+  redirect(buildFeedbackRedirect(submissionPath, "comment_added"))
 }
 
 async function mutateSubmissionFromForm(
@@ -328,10 +324,6 @@ async function mutateSubmissionFromForm(
     handleSubmissionActionFailure({
       error,
       eventName: `submission_${operation}_action_failed`,
-      fallback:
-        operation === "save"
-          ? "Unable to save this submission."
-          : "Unable to submit this form.",
       nextPath: submissionPath,
       startedAt,
       submissionId,
@@ -339,12 +331,10 @@ async function mutateSubmissionFromForm(
   }
 
   redirect(
-    buildRedirect(submissionPath, {
-      message:
-        operation === "save"
-          ? "Submission changes saved."
-          : "Submission sent for review.",
-    })
+    buildFeedbackRedirect(
+      submissionPath,
+      operation === "save" ? "changes_saved" : "submission_submitted"
+    )
   )
 }
 
@@ -356,13 +346,15 @@ async function loadSubmissionActionContext(
 
   if (!context) {
     throw new SubmissionActionError(
-      "Create an organization before managing submissions."
+      "Create an organization before managing submissions.",
+      428
     )
   }
 
   if (!canPerformOrganizationAction(context.membership.role, permission)) {
     throw new SubmissionActionError(
-      "You do not have permission to perform this submission action."
+      "You do not have permission to perform this submission action.",
+      403
     )
   }
 
@@ -394,24 +386,6 @@ function parseReviewTransition(value: string): SubmissionReviewTransition {
   throw new SubmissionActionError("Choose a valid review action.")
 }
 
-function getTransitionSuccessMessage(
-  transition: SubmissionReviewTransition | null
-): string {
-  if (transition === "needs_changes") {
-    return "Changes requested."
-  }
-
-  if (transition === "approved") {
-    return "Submission approved."
-  }
-
-  if (transition === "rejected") {
-    return "Submission rejected."
-  }
-
-  return "Submission marked complete."
-}
-
 function requireIdentifier(value: string, label: string): string {
   const identifier = value.trim()
 
@@ -437,7 +411,6 @@ function revalidateSubmissionPaths(submissionId: string): void {
 function handleSubmissionActionFailure(input: {
   error: unknown
   eventName: string
-  fallback: string
   nextPath: string
   startedAt: number
   submissionId: string
@@ -446,26 +419,21 @@ function handleSubmissionActionFailure(input: {
     redirect(buildRedirect("/login", { next: input.nextPath }))
   }
 
-  const message = getSubmissionActionErrorMessage(input.error, input.fallback)
+  const reason =
+    input.error instanceof Error
+      ? input.error.message
+      : "Unknown submission action error"
   console.warn(input.eventName, {
     durationMs: Date.now() - input.startedAt,
-    reason: message,
+    reason,
     submissionId: input.submissionId,
   })
-  redirect(buildRedirect(input.nextPath, { error: message }))
-}
-
-function getSubmissionActionErrorMessage(
-  error: unknown,
-  fallback: string
-): string {
-  if (
-    error instanceof SubmissionActionError ||
-    error instanceof SubmissionServiceError ||
-    error instanceof GeneratedDocumentFormDataError
-  ) {
-    return error.message
-  }
-
-  return fallback
+  redirect(
+    buildFeedbackRedirect(
+      input.nextPath,
+      input.error instanceof GeneratedDocumentFormDataError
+        ? "invalid_input"
+        : getActionErrorFeedbackCode(input.error)
+    )
+  )
 }

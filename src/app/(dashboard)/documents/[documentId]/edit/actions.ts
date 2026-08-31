@@ -12,6 +12,10 @@ import {
   enforceOutboundEmailRateLimit,
 } from "@/lib/action-rate-limit"
 import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
+import {
+  buildFeedbackRedirect,
+  getActionErrorFeedbackCode,
+} from "@/lib/action-result"
 import { buildRedirect, getFormString } from "@/lib/form-utils"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
 import {
@@ -20,7 +24,6 @@ import {
 } from "@/lib/permissions"
 import { getCurrentOrganizationContext } from "@/services/organization-service"
 import {
-  DocumentSigningServiceError,
   resendDocumentSigningInvitation,
   saveGeneratedDocumentAnswers,
   sendDocumentForSigning,
@@ -34,9 +37,12 @@ type MemberDocumentActionContext = {
 }
 
 class MemberDocumentActionError extends Error {
-  constructor(message: string) {
+  readonly statusCode: number
+
+  constructor(message: string, statusCode = 400) {
     super(message)
     this.name = "MemberDocumentActionError"
+    this.statusCode = statusCode
   }
 }
 
@@ -72,13 +78,12 @@ export async function saveGeneratedDocumentAction(
       documentId,
       error,
       eventName: "generated_document_save_action_failed",
-      fallback: "Unable to save document answers.",
       nextPath: editorPath,
       startedAt,
     })
   }
 
-  redirect(buildRedirect(editorPath, { message: "Document answers saved." }))
+  redirect(buildFeedbackRedirect(editorPath, "changes_saved"))
 }
 
 /**
@@ -126,13 +131,12 @@ export async function sendGeneratedDocumentAction(
       documentId,
       error,
       eventName: "generated_document_send_action_failed",
-      fallback: "Unable to send signing invitations.",
       nextPath: editorPath,
       startedAt,
     })
   }
 
-  redirect(buildRedirect(editorPath, { message: "Signing invitations sent." }))
+  redirect(buildFeedbackRedirect(editorPath, "signing_invitations_sent"))
 }
 
 /**
@@ -156,10 +160,9 @@ export async function resendGeneratedDocumentInvitationAction(
   const user = await loadAuthenticatedPageUser(editorPath)
   await enforceActionRateLimit({
     bucket: "email_recipient",
+    feedbackCode: "retry_later",
     key: `${user.id}:${documentId}:${recipientId}`,
     redirectPath: editorPath,
-    message:
-      "This invitation was resent too recently. Wait a while before trying again.",
   })
   await enforceOutboundEmailRateLimit({
     userId: user.id,
@@ -186,13 +189,12 @@ export async function resendGeneratedDocumentInvitationAction(
       documentId,
       error,
       eventName: "generated_document_resend_action_failed",
-      fallback: "Unable to resend the signing invitation.",
       nextPath: editorPath,
       startedAt,
     })
   }
 
-  redirect(buildRedirect(editorPath, { message: "Signing invitation resent." }))
+  redirect(buildFeedbackRedirect(editorPath, "signing_invitation_resent"))
 }
 
 async function loadMemberActionContext(
@@ -203,13 +205,15 @@ async function loadMemberActionContext(
 
   if (!context) {
     throw new MemberDocumentActionError(
-      "Create an organization before managing documents."
+      "Create an organization before managing documents.",
+      428
     )
   }
 
   if (!canPerformOrganizationAction(context.membership.role, action)) {
     throw new MemberDocumentActionError(
-      "You do not have permission to perform this document action."
+      "You do not have permission to perform this document action.",
+      403
     )
   }
 
@@ -280,7 +284,6 @@ function handleMemberActionFailure(input: {
   documentId: string
   error: unknown
   eventName: string
-  fallback: string
   nextPath: string
   startedAt: number
 }): never {
@@ -291,23 +294,17 @@ function handleMemberActionFailure(input: {
   console.warn(input.eventName, {
     documentId: input.documentId,
     durationMs: Date.now() - input.startedAt,
-    reason: getMemberActionErrorMessage(input.error, input.fallback),
+    reason:
+      input.error instanceof Error
+        ? input.error.message
+        : "Unknown generated document action error",
   })
   redirect(
-    buildRedirect(input.nextPath, {
-      error: getMemberActionErrorMessage(input.error, input.fallback),
-    })
+    buildFeedbackRedirect(
+      input.nextPath,
+      input.error instanceof GeneratedDocumentFormDataError
+        ? "invalid_input"
+        : getActionErrorFeedbackCode(input.error)
+    )
   )
-}
-
-function getMemberActionErrorMessage(error: unknown, fallback: string): string {
-  if (
-    error instanceof DocumentSigningServiceError ||
-    error instanceof MemberDocumentActionError ||
-    error instanceof GeneratedDocumentFormDataError
-  ) {
-    return error.message
-  }
-
-  return fallback
 }

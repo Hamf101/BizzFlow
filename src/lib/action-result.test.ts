@@ -74,6 +74,7 @@ describe("getActionErrorFeedbackCode", () => {
     { error: { statusCode: 400 }, expected: "invalid_input" },
     { error: { statusCode: 403 }, expected: "permission_denied" },
     { error: { statusCode: 409 }, expected: "refresh_required" },
+    { error: { statusCode: 428 }, expected: "organization_required" },
     { error: { statusCode: 429 }, expected: "retry_later" },
     { error: { statusCode: 500 }, expected: "operation_failed" },
     { error: new Error("EmailJS provider stack"), expected: "operation_failed" },

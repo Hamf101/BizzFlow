@@ -22,8 +22,8 @@ import {
   CardHeader,
   CardTitle
 } from "@/components/ui/card"
+import { buildFeedbackRedirect } from "@/lib/action-result"
 import { formatMediumDateTime } from "@/lib/date-format"
-import { buildRedirect } from "@/lib/form-utils"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
 import { getPageErrorMessage } from "@/lib/page-errors"
 import { loadPageOrganizationContext } from "@/lib/page-organization-context"
@@ -45,25 +45,19 @@ import {
 } from "../actions"
 
 type SubmissionDetailParams = Promise<{ submissionId: string }>
-type SubmissionDetailSearchParams = Promise<{
-  error?: string
-  message?: string
-}>
 
 /**
  * Loads one internal submission with editable creator draft or read-only detail.
  *
- * @param props - Submission path identifier and optional action feedback.
+ * @param props - Submission path identifier.
  * @returns Snapshot-driven answer form with verified file-field controls.
  */
 export default async function SubmissionDetailPage({
   params,
-  searchParams
 }: {
   params: SubmissionDetailParams
-  searchParams: SubmissionDetailSearchParams
 }): Promise<ReactElement> {
-  const [{ submissionId }, query] = await Promise.all([params, searchParams])
+  const { submissionId } = await params
   const detailPath = `/submissions/${encodeURIComponent(submissionId)}`
   const user = await loadAuthenticatedPageUser(detailPath)
   const contextResult = await loadPageOrganizationContext({
@@ -74,11 +68,10 @@ export default async function SubmissionDetailPage({
 
   if (!contextResult.context) {
     redirect(
-      buildRedirect("/submissions", {
-        error:
-          contextResult.errorMessage ??
-          "Create an organization before viewing submissions."
-      })
+      buildFeedbackRedirect(
+        "/submissions",
+        contextResult.errorMessage ? "operation_failed" : "organization_required"
+      )
     )
   }
 
@@ -141,7 +134,7 @@ export default async function SubmissionDetailPage({
 
   if (!result.detail) {
     return (
-      <SubmissionDetailShell query={query}>
+      <SubmissionDetailShell>
         <Alert variant="destructive">
           <AlertTitle>Submission unavailable</AlertTitle>
           <AlertDescription>{result.errorMessage}</AlertDescription>
@@ -185,7 +178,7 @@ export default async function SubmissionDetailPage({
   })
 
   return (
-    <SubmissionDetailShell query={query}>
+    <SubmissionDetailShell>
       <section className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex flex-col gap-3">
           <Link
@@ -443,25 +436,11 @@ function SubmissionDiscussionCard({
 
 function SubmissionDetailShell({
   children,
-  query
 }: {
   children: ReactNode
-  query: Awaited<SubmissionDetailSearchParams>
 }): ReactElement {
   return (
     <div className="flex flex-col gap-6">
-      {query.error && (
-        <Alert variant="destructive">
-          <AlertTitle>Submission action failed</AlertTitle>
-          <AlertDescription>{query.error}</AlertDescription>
-        </Alert>
-      )}
-      {query.message && (
-        <Alert>
-          <AlertTitle>Submission updated</AlertTitle>
-          <AlertDescription>{query.message}</AlertDescription>
-        </Alert>
-      )}
       {children}
     </div>
   )

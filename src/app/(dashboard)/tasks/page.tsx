@@ -19,8 +19,8 @@ import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
+import { buildFeedbackRedirect } from "@/lib/action-result"
 import { formatMediumDateTime } from "@/lib/date-format"
-import { buildRedirect } from "@/lib/form-utils"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
 import { getPageErrorMessage } from "@/lib/page-errors"
 import { loadPageOrganizationContext } from "@/lib/page-organization-context"
@@ -52,8 +52,6 @@ type TaskListItem = {
 
 type TasksSearchParams = Promise<{
   assignee?: string
-  error?: string
-  message?: string
   status?: string
 }>
 
@@ -67,7 +65,7 @@ const taskFiltersSchema = z.object({
 /**
  * Lists the organization's tasks with status and assignee filters.
  *
- * @param props - Filter selection and action feedback in search parameters.
+ * @param props - Filter selection in search parameters.
  * @returns Tenant task workspace, or a user-safe access or load failure.
  */
 export default async function TasksPage({
@@ -85,7 +83,7 @@ export default async function TasksPage({
   if (!contextResult.context) {
     if (contextResult.errorMessage) {
       return (
-        <TaskPageShell feedback={query}>
+        <TaskPageShell>
           <Alert variant="destructive">
             <AlertTitle>Tasks unavailable</AlertTitle>
             <AlertDescription>{contextResult.errorMessage}</AlertDescription>
@@ -95,9 +93,7 @@ export default async function TasksPage({
     }
 
     redirect(
-      buildRedirect("/dashboard", {
-        error: "Create an organization before viewing tasks.",
-      })
+      buildFeedbackRedirect("/dashboard", "organization_required")
     )
   }
 
@@ -109,7 +105,7 @@ export default async function TasksPage({
 
   if (!canView) {
     return (
-      <TaskPageShell feedback={query}>
+      <TaskPageShell>
         <Alert variant="destructive">
           <AlertTitle>Tasks are not shared with your role</AlertTitle>
           <AlertDescription>
@@ -164,7 +160,7 @@ export default async function TasksPage({
   const internalMembers = listInternalTaskMembers(members)
 
   return (
-    <TaskPageShell feedback={query}>
+    <TaskPageShell>
       <section className="flex flex-col gap-2">
         <h1 className="text-2xl font-semibold tracking-normal">Tasks</h1>
         <p className="max-w-2xl text-sm text-muted-foreground">

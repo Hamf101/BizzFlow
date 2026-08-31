@@ -22,11 +22,16 @@ export const ACTION_FEEDBACK_CODES = [
   "resource_trashed",
   "retry_later",
   "sample_content_added",
+  "signing_invitation_resent",
+  "signing_invitations_sent",
   "starter_content_added",
+  "submission_assigned",
   "submission_created",
+  "submission_review_updated",
   "submission_submitted",
   "task_completed",
   "task_created",
+  "task_status_updated",
   "template_created",
   "template_duplicated",
   "template_published",
@@ -109,6 +114,7 @@ export function getActionErrorFeedbackCode(
   if (statusCode === 400 || statusCode === 422) return "invalid_input"
   if (statusCode === 401 || statusCode === 403) return "permission_denied"
   if (statusCode === 409) return "refresh_required"
+  if (statusCode === 428) return "organization_required"
   if (statusCode === 429) return "retry_later"
 
   return fallback
