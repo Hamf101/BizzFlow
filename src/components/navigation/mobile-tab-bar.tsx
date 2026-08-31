@@ -1,6 +1,6 @@
 "use client"
 
-import { Ellipsis } from "lucide-react"
+import { Ellipsis, XIcon } from "lucide-react"
 import { usePathname } from "next/navigation"
 import { useState, type ReactElement } from "react"
 
@@ -11,6 +11,7 @@ import {
 } from "@/components/navigation/navigation-items"
 import {
   Sheet,
+  SheetClose,
   SheetContent,
   SheetTitle,
   SheetTrigger,
@@ -79,7 +80,7 @@ export function MobileTabBar({
               <IntentPrefetchLink
                 aria-current={current ? "page" : undefined}
                 className={cn(
-                  "flex flex-col items-center justify-center gap-1 text-[10px] leading-none transition-colors",
+                  "flex flex-col items-center justify-center gap-1 text-[10px] leading-none outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/40 motion-reduce:transition-none",
                   current
                     ? "font-medium text-primary"
                     : "text-muted-foreground hover:text-foreground"
@@ -98,7 +99,7 @@ export function MobileTabBar({
             <Sheet onOpenChange={setMoreOpen} open={moreOpen}>
               <SheetTrigger
                 className={cn(
-                  "flex flex-col items-center justify-center gap-1 text-[10px] leading-none transition-colors",
+                  "flex flex-col items-center justify-center gap-1 text-[10px] leading-none outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/40 motion-reduce:transition-none",
                   overflowIsCurrent
                     ? "font-medium text-primary"
                     : "text-muted-foreground hover:text-foreground"
@@ -108,7 +109,12 @@ export function MobileTabBar({
                 More
               </SheetTrigger>
               <SheetContent>
-                <SheetTitle>Everything else</SheetTitle>
+                <div className="flex items-center justify-between gap-2">
+                  <SheetTitle>More</SheetTitle>
+                  <SheetClose aria-label="Close navigation" className="px-0">
+                    <XIcon aria-hidden="true" />
+                  </SheetClose>
+                </div>
                 {overflow.map((item: NavigationItem) => {
                   const current = isCurrent(pathname, item.href)
                   const Icon = item.icon
@@ -116,7 +122,7 @@ export function MobileTabBar({
                   return (
                     <IntentPrefetchLink
                       className={cn(
-                        "flex h-11 items-center gap-3 rounded-[10px] px-3 text-sm transition-colors",
+                        "flex h-11 items-center gap-3 rounded-[10px] px-3 text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40 motion-reduce:transition-none",
                         current
                           ? "bg-secondary font-medium text-secondary-foreground"
                           : "text-foreground hover:bg-secondary/60"

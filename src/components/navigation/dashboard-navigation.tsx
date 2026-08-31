@@ -37,7 +37,7 @@ function NavPendingIndicator({
     <Loader2
       aria-hidden="true"
       className={cn(
-        "ml-auto size-3.5 animate-spin text-muted-foreground",
+        "ml-auto size-3.5 animate-spin text-muted-foreground motion-reduce:animate-none",
         collapsed && "md:absolute md:right-1 md:bottom-1 md:ml-0 md:size-3"
       )}
     />
@@ -71,7 +71,7 @@ export function DashboardNavigation({
               aria-label={collapsed ? item.label : undefined}
               aria-current={isActive ? "page" : undefined}
               className={cn(
-                "group relative flex items-center gap-3 rounded-[8px] px-3 py-2 text-sm text-muted-foreground transition-colors",
+                "group relative flex min-h-11 items-center gap-3 rounded-[8px] px-3 py-2 text-sm text-muted-foreground transition-colors motion-reduce:transition-none",
                 "hover:bg-secondary/70 hover:text-foreground",
                 isActive && "bg-secondary text-secondary-foreground",
                 collapsed &&
@@ -95,7 +95,7 @@ export function DashboardNavigation({
               />
               <span
                 className={cn(
-                  "overflow-hidden whitespace-nowrap md:transition-[opacity,transform] md:duration-150",
+                  "overflow-hidden whitespace-nowrap motion-reduce:transform-none motion-reduce:transition-none md:transition-[opacity,transform] md:duration-150",
                   isActive && "font-medium",
                   collapsed
                     ? "md:w-0 md:-translate-x-1 md:opacity-0"
