@@ -11,7 +11,9 @@ type PageStateProps = {
 
 type PageSkeletonProps = {
   className?: string
+  context?: string
   label: string
+  variant?: "list" | "overview" | "split"
 }
 
 /**
@@ -25,31 +27,103 @@ type PageSkeletonProps = {
  */
 function PageSkeleton({
   className,
+  context,
   label,
+  variant = "list",
 }: PageSkeletonProps): ReactElement {
   return (
     <div
       aria-live="polite"
       className={cn("grid gap-6", className)}
       data-slot="page-skeleton"
+      data-variant={variant}
       role="status"
     >
       <span className="sr-only">{label}</span>
       <div
         aria-hidden="true"
-        className="grid animate-pulse gap-6 motion-reduce:animate-none"
+        className="grid animate-pulse gap-5 motion-reduce:animate-none"
         data-slot="page-skeleton-content"
       >
-        <div className="grid gap-2 border-b border-border/60 pb-5">
+        {context ? (
+          <span
+            className="font-mono text-[10px] tracking-[0.12em] text-muted-foreground uppercase"
+            data-slot="page-skeleton-context"
+          >
+            {context}
+          </span>
+        ) : null}
+        <div className="grid gap-2">
           <div className="h-7 w-44 max-w-2/3 rounded-md bg-muted" />
-          <div className="h-4 w-80 max-w-full rounded-md bg-muted/80" />
+          <div className="h-3.5 w-80 max-w-full rounded-md bg-muted/70" />
         </div>
-        <div className="grid gap-3">
-          <div className="h-11 rounded-[10px] bg-muted/70" />
-          <div className="h-11 rounded-[10px] bg-muted/55" />
-          <div className="h-11 rounded-[10px] bg-muted/40" />
-        </div>
+        <PageSkeletonGeometry variant={variant} />
       </div>
+    </div>
+  )
+}
+
+function PageSkeletonGeometry({
+  variant,
+}: {
+  variant: NonNullable<PageSkeletonProps["variant"]>
+}): ReactElement {
+  if (variant === "overview") {
+    return (
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="h-24 rounded-2xl bg-secondary/45 sm:col-span-2" />
+        <div className="h-32 rounded-2xl bg-card/45" />
+        <div className="h-32 rounded-2xl bg-card/45" />
+      </div>
+    )
+  }
+
+  if (variant === "split") {
+    return (
+      <div className="grid gap-4 lg:grid-cols-2">
+        <PageSkeletonSection />
+        <PageSkeletonSection />
+      </div>
+    )
+  }
+
+  return (
+    <div className="grid gap-4">
+      <div className="hidden h-10 w-3/5 rounded-xl bg-secondary/45 sm:block" />
+      <div className="grid rounded-2xl bg-card/35 px-3">
+        <PageSkeletonRow />
+        <PageSkeletonRow />
+        <PageSkeletonRow className="hidden sm:grid" />
+      </div>
+    </div>
+  )
+}
+
+function PageSkeletonRow({ className }: { className?: string }): ReactElement {
+  return (
+    <div
+      className={cn(
+        "grid min-h-16 grid-cols-[minmax(0,1fr)_4.5rem] items-center gap-4 border-t border-border/70 first:border-t-0 sm:grid-cols-[2.25rem_minmax(0,1fr)_4.5rem]",
+        className
+      )}
+      data-slot="page-skeleton-row"
+    >
+      <div className="hidden size-9 rounded-[10px] bg-secondary/70 sm:block" />
+      <div className="grid gap-2">
+        <div className="h-3 w-3/5 rounded-md bg-muted" />
+        <div className="hidden h-2.5 w-2/5 rounded-md bg-muted/60 sm:block" />
+      </div>
+      <div className="h-2.5 w-14 justify-self-end rounded-md bg-muted/50" />
+    </div>
+  )
+}
+
+function PageSkeletonSection(): ReactElement {
+  return (
+    <div className="grid min-h-36 content-start gap-4 rounded-2xl bg-card/40 p-5">
+      <div className="h-4 w-2/5 rounded-md bg-muted" />
+      <div className="h-3 w-4/5 rounded-md bg-muted/65" />
+      <div className="h-3 w-3/5 rounded-md bg-muted/50" />
     </div>
   )
 }
@@ -72,7 +146,7 @@ function PageStateSurface({
         tone === "empty" &&
           "min-h-44 content-center border-y border-border/60 py-10",
         tone === "error" &&
-          "border-l-2 border-destructive/45 py-2 pl-4",
+          "rounded-2xl bg-destructive/5 px-4 py-5 sm:px-5",
         className
       )}
       data-slot={slot}

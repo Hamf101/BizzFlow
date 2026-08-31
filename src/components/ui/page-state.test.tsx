@@ -80,5 +80,6 @@ describe("ErrorState", () => {
       "Documents could not be loaded. Try again."
     )
     expect(state?.querySelector("button")?.textContent).toBe("Try again")
+    expect(state?.className).not.toMatch(/border-(l|t)-/)
   })
 })
