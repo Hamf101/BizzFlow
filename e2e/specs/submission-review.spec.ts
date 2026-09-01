@@ -149,21 +149,35 @@ test.describe("submission review", () => {
     // Both can read the submission; neither may decide it. The external
     // reviewer role exists precisely to make that distinction, so a regression
     // here is a permissions failure with a customer on the other end of it.
-    const staffTitleHeadings = staff.getByRole("heading", {
+    const staffRouteHeading = staff.getByRole("heading", {
       exact: true,
       level: 1,
       name: title,
     })
-    const reviewerTitleHeadings = reviewer.getByRole("heading", {
+    const staffDocumentHeading = staff.getByRole("heading", {
+      exact: true,
+      level: 2,
+      name: title,
+    })
+    const reviewerRouteHeading = reviewer.getByRole("heading", {
       exact: true,
       level: 1,
+      name: title,
+    })
+    const reviewerDocumentHeading = reviewer.getByRole("heading", {
+      exact: true,
+      level: 2,
       name: title,
     })
 
-    await expect(staffTitleHeadings).toHaveCount(2)
-    await expect(staffTitleHeadings.first()).toBeVisible()
-    await expect(reviewerTitleHeadings).toHaveCount(2)
-    await expect(reviewerTitleHeadings.first()).toBeVisible()
+    await expect(staffRouteHeading).toHaveCount(1)
+    await expect(staffRouteHeading).toBeVisible()
+    await expect(staffDocumentHeading).toHaveCount(1)
+    await expect(staffDocumentHeading).toBeVisible()
+    await expect(reviewerRouteHeading).toHaveCount(1)
+    await expect(reviewerRouteHeading).toBeVisible()
+    await expect(reviewerDocumentHeading).toHaveCount(1)
+    await expect(reviewerDocumentHeading).toBeVisible()
 
     await expect(staff.getByRole("button", { name: "Approve" })).toBeHidden()
     await expect(reviewer.getByRole("button", { name: "Approve" })).toBeHidden()

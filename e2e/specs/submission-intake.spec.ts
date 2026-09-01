@@ -40,7 +40,9 @@ test.describe("submission intake", () => {
     await staff.getByRole("button", { name: "Create draft" }).click()
 
     await staff.waitForURL(/\/submissions\/[0-9a-f-]+(?:\?.*)?$/i)
-    await expect(staff.getByText("Submission draft created.")).toBeVisible()
+    await expect(
+      staff.getByRole("status").filter({ hasText: "Submission created" })
+    ).toBeVisible()
 
     await staff.getByLabel("Client reference").fill("REF-4417")
 

@@ -165,3 +165,88 @@ export async function expectStandaloneTargets(
 
   expect(overlaps, "Standalone control hit regions must not overlap").toEqual([])
 }
+
+/**
+ * Proves the rendered document stays inside the current viewport horizontally.
+ *
+ * @param page - Loaded page at the viewport under test.
+ * @returns Resolves when neither the document root nor body introduces overflow.
+ */
+export async function expectNoHorizontalPageClipping(
+  page: Page
+): Promise<void> {
+  const overflow = await page.evaluate(() => {
+    const rootClientWidth = document.documentElement.clientWidth
+    const offenders = [...document.body.querySelectorAll("*")].flatMap(
+      (element) => {
+        const rect = element.getBoundingClientRect()
+        const style = window.getComputedStyle(element)
+
+        if (
+          style.display === "none" ||
+          style.visibility === "hidden" ||
+          (rect.left >= -1 && rect.right <= rootClientWidth + 1)
+        ) {
+          return []
+        }
+
+        return [
+          {
+            className: element.getAttribute("class")?.slice(0, 120) ?? null,
+            label: element.getAttribute("aria-label"),
+            left: Math.round(rect.left),
+            right: Math.round(rect.right),
+            tagName: element.tagName.toLowerCase(),
+          },
+        ]
+      }
+    )
+
+    return {
+      bodyClientWidth: document.body.clientWidth,
+      bodyScrollWidth: document.body.scrollWidth,
+      offenders: offenders.slice(0, 12),
+      rootClientWidth,
+      rootScrollWidth: document.documentElement.scrollWidth,
+    }
+  })
+
+  expect(
+    overflow.rootScrollWidth,
+    `The document root must not extend beyond the viewport; offenders: ${JSON.stringify(overflow.offenders)}`
+  ).toBeLessThanOrEqual(overflow.rootClientWidth + 1)
+  expect(
+    overflow.bodyScrollWidth,
+    `The page body must not extend beyond the viewport; offenders: ${JSON.stringify(overflow.offenders)}`
+  ).toBeLessThanOrEqual(overflow.bodyClientWidth + 1)
+}
+
+/**
+ * Scrolls a primary action into view and proves it remains operable in the viewport.
+ *
+ * @param target - Visible primary action to verify.
+ * @param page - Loaded page containing the action.
+ * @returns Resolves when the action is visible, focusable, and horizontally reachable.
+ */
+export async function expectReachablePrimaryAction(
+  target: Locator,
+  page: Page
+): Promise<void> {
+  await target.scrollIntoViewIfNeeded()
+  await expect(target).toBeVisible()
+  await target.focus()
+  await expect(target).toBeFocused()
+
+  const box = await target.boundingBox()
+  const viewport = page.viewportSize()
+
+  expect(box, "The primary action needs measurable viewport geometry").not.toBeNull()
+  expect(viewport, "The test page needs an explicit viewport").not.toBeNull()
+  expect(box!.x, "The primary action must not clip off the left edge").toBeGreaterThanOrEqual(
+    -1
+  )
+  expect(
+    box!.x + box!.width,
+    "The primary action must not clip off the right edge"
+  ).toBeLessThanOrEqual(viewport!.width + 1)
+}

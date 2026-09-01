@@ -24,8 +24,12 @@ import { cn } from "@/lib/utils"
  */
 function NavPendingIndicator({
   collapsed,
+  href,
+  label,
 }: {
   collapsed: boolean
+  href: string
+  label: string
 }): ReactElement | null {
   const { pending } = useLinkStatus()
 
@@ -34,13 +38,23 @@ function NavPendingIndicator({
   }
 
   return (
-    <Loader2
-      aria-hidden="true"
-      className={cn(
-        "ml-auto size-3.5 animate-spin text-muted-foreground motion-reduce:animate-none",
-        collapsed && "md:absolute md:right-1 md:bottom-1 md:ml-0 md:size-3"
-      )}
-    />
+    <>
+      <Loader2
+        aria-hidden="true"
+        className={cn(
+          "ml-auto size-3.5 animate-spin text-muted-foreground motion-reduce:animate-none",
+          collapsed && "md:absolute md:right-1 md:bottom-1 md:ml-0 md:size-3"
+        )}
+        data-navigation-pending={href}
+      />
+      <span
+        aria-label={`Opening ${label}`}
+        className="sr-only"
+        role="status"
+      >
+        Opening {label}
+      </span>
+    </>
   )
 }
 
@@ -100,7 +114,11 @@ export function DashboardNavigation({
               >
                 {item.label}
               </span>
-              <NavPendingIndicator collapsed={collapsed} />
+              <NavPendingIndicator
+                collapsed={collapsed}
+                href={item.href}
+                label={item.label}
+              />
             </IntentPrefetchLink>
           )
 

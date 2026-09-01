@@ -40,14 +40,21 @@ test.describe("signing", () => {
 
     await page.goto(`/sign/${signingToken}`)
 
-    const titleHeadings = page.getByRole("heading", {
+    const routeHeading = page.getByRole("heading", {
       exact: true,
       level: 1,
       name: title,
     })
+    const documentHeading = page.getByRole("heading", {
+      exact: true,
+      level: 2,
+      name: title,
+    })
 
-    await expect(titleHeadings).toHaveCount(2)
-    await expect(titleHeadings.first()).toBeVisible()
+    await expect(routeHeading).toHaveCount(1)
+    await expect(routeHeading).toBeVisible()
+    await expect(documentHeading).toHaveCount(1)
+    await expect(documentHeading).toBeVisible()
     await expect(page.getByText("Signing status")).toBeVisible()
 
     await drawSignature(page, "Signature drawing area")

@@ -43,7 +43,9 @@ test.describe("onboarding", () => {
     await page.getByLabel("Organization name").fill(organizationName)
     await page.getByRole("button", { name: "Create organization" }).click()
 
-    await expect(page.getByText("Organization created.")).toBeVisible()
+    await expect(
+      page.getByRole("status").filter({ hasText: "Organization created" })
+    ).toBeVisible()
     await expect(page.getByText(organizationName)).toBeVisible()
     // The creator is the owner; every permission the app grants keys off this.
     await expect(page.getByText("owner_admin")).toBeVisible()
