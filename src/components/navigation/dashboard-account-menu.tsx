@@ -101,14 +101,14 @@ export function DashboardAccountMenu({
           className={cn(
             "min-w-0 flex-1 transition-[opacity,transform] duration-150",
             collapsed
-              ? "md:w-0 md:flex-none md:-translate-x-1 md:overflow-hidden md:opacity-0"
+              ? "w-0 flex-none -translate-x-1 overflow-hidden opacity-0"
               : "md:translate-x-0 md:opacity-100 md:delay-100"
           )}
         >
           <span className="block truncate text-sm font-medium text-foreground">
             {account.displayName}
           </span>
-          <span className="block truncate text-xs text-muted-foreground">
+          <span className="block truncate text-xs text-foreground/75">
             {account.organizationName ?? account.email}
           </span>
         </span>
@@ -117,7 +117,7 @@ export function DashboardAccountMenu({
           className={cn(
             "size-4 shrink-0 text-muted-foreground transition-[opacity,transform] duration-150 group-data-popup-open:rotate-180",
             collapsed
-              ? "md:w-0 md:-translate-x-1 md:opacity-0"
+              ? "w-0 -translate-x-1 opacity-0"
               : "md:translate-x-0 md:opacity-100 md:delay-100"
           )}
         />

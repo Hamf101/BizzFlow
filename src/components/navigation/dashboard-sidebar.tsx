@@ -67,7 +67,7 @@ export function DashboardSidebar({
           href="/dashboard"
         >
           <span className={cn(collapsed && "md:hidden")}>
-            <BizFlowWordmark />
+            <BizFlowWordmark compact />
           </span>
           <span
             className={cn(
@@ -103,12 +103,9 @@ export function DashboardSidebar({
       </div>
 
       <div className={cn("hidden md:block", collapsed && "md:hidden")}>
-        <span className="editorial-kicker text-muted-foreground">
+        <span className="editorial-kicker font-semibold text-primary">
           Workspace
         </span>
-        <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
-          Structured documents with a visible history.
-        </p>
       </div>
 
       <DashboardNavigation collapsed={collapsed} role={account.role} />

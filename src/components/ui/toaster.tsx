@@ -29,9 +29,10 @@ function showToast(
   options?: ExternalToast
 ): string | number {
   const id = options?.id ?? `bizflow-toast-${++toastSequence}`
+  const announcedTitle = <span role="status">{title}</span>
 
   void loadSonner()
-    .then(({ toast }) => toast[channel](title, { ...options, id }))
+    .then(({ toast }) => toast[channel](announcedTitle, { ...options, id }))
     .catch(() => undefined)
 
   return id

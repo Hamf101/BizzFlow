@@ -14,7 +14,7 @@ import { getActionFeedback } from "@/lib/action-feedback"
  * only through the fixed registry, then the consumed parameter is removed with a
  * history replacement while other route state and the hash remain intact.
  *
- * @returns Nothing; this component exists only for its navigation side effects.
+ * @returns Nothing; the shared toast surface owns visual and assistive feedback.
  */
 export function ActionFeedback(): null {
   const pathname = usePathname()

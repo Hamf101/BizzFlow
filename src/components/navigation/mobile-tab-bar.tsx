@@ -83,7 +83,7 @@ export function MobileTabBar({
                   "flex flex-col items-center justify-center gap-1 text-[10px] leading-none outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/40 motion-reduce:transition-none",
                   current
                     ? "font-medium text-primary"
-                    : "text-muted-foreground hover:text-foreground"
+                    : "text-foreground/80 hover:text-foreground"
                 )}
                 href={item.href}
               >
@@ -102,7 +102,7 @@ export function MobileTabBar({
                   "flex flex-col items-center justify-center gap-1 text-[10px] leading-none outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/40 motion-reduce:transition-none",
                   overflowIsCurrent
                     ? "font-medium text-primary"
-                    : "text-muted-foreground hover:text-foreground"
+                    : "text-foreground/80 hover:text-foreground"
                 )}
               >
                 <Ellipsis className="size-5" />

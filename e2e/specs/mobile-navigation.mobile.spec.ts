@@ -1,54 +1,110 @@
+import type { OrganizationRole } from "@/lib/permissions"
+
+import { expectStandaloneTargets } from "../support/accessibility"
 import { expect, test } from "../support/fixtures"
 
+type MobileRole = Extract<OrganizationRole, "owner_admin" | "manager" | "staff">
+
+const FULL_MEMBER_ROUTES = [
+  "/dashboard",
+  "/people",
+  "/documents",
+  "/templates",
+  "/submissions",
+  "/tasks",
+  "/audit-log",
+  "/settings",
+] as const
+
+const ROLE_ROUTES: ReadonlyArray<{
+  forbidden: readonly string[]
+  role: MobileRole
+  routes: readonly string[]
+}> = [
+  { forbidden: [], role: "owner_admin", routes: FULL_MEMBER_ROUTES },
+  { forbidden: [], role: "manager", routes: FULL_MEMBER_ROUTES },
+  {
+    forbidden: ["/audit-log"],
+    role: "staff",
+    routes: FULL_MEMBER_ROUTES.filter((route) => route !== "/audit-log"),
+  },
+]
+
 test.describe("mobile navigation", () => {
-  test("reaches primary and overflow workspace routes without the sidebar", async ({
-    pageAs,
-  }) => {
-    const page = await pageAs("manager")
+  for (const { forbidden, role, routes } of ROLE_ROUTES) {
+    test(`${role} reaches every authorized route and never exposes forbidden destinations`, async ({
+      pageAs,
+    }) => {
+      const page = await pageAs(role)
 
-    await page.goto("/dashboard")
+      await page.goto("/dashboard")
 
-    const navigation = page.getByRole("navigation", {
-      name: "Mobile navigation",
+      expect(await page.evaluate(() => window.innerWidth)).toBeLessThan(768)
+      await expect(page.locator("aside")).toBeHidden()
+      await expect(
+        page.getByRole("link", { name: "BizFlow dashboard" })
+      ).toBeVisible()
+      await expect(
+        page.getByRole("button", { name: /open account menu/i })
+      ).toBeVisible()
+
+      await assertForbiddenDestinationsAbsent(page, forbidden)
+
+      const navigation = page.getByRole("navigation", {
+        name: "Mobile navigation",
+      })
+      await expect(navigation).toBeVisible()
+      await expectStandaloneTargets(navigation.locator("a, button"))
+
+      const more = navigation.getByRole("button", { name: "More" })
+      await more.click()
+      const dialog = page.getByRole("dialog", { name: "More" })
+      await expect(dialog).toBeVisible()
+      await expectStandaloneTargets(dialog.locator("a, button"))
+      await page.keyboard.press("Escape")
+      await expect(dialog).toBeHidden()
+      await expect(more).toBeFocused()
+
+      for (const route of routes) {
+        await navigateThroughMobileShell(page, route)
+        await expect(page).toHaveURL(new RegExp(`${route}$`))
+        await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1)
+        await assertForbiddenDestinationsAbsent(page, forbidden)
+      }
     })
-
-    await expect(navigation).toBeVisible()
-    await expect(page.locator("aside")).toBeHidden()
-    await expect(
-      page.getByRole("link", { name: "BizFlow dashboard" })
-    ).toBeVisible()
-    await expect(
-      page.getByRole("button", { name: /open account menu/i })
-    ).toBeVisible()
-
-    await navigation.getByRole("link", { name: "Docs" }).click()
-    await expect(page).toHaveURL(/\/documents$/)
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Documents" })
-    ).toBeVisible()
-
-    await navigation.getByRole("button", { name: "More" }).click()
-    await expect(
-      page.getByRole("heading", { name: "Everything else" })
-    ).toBeVisible()
-    await page.getByRole("link", { name: "People" }).click()
-    await expect(page).toHaveURL(/\/people$/)
-    await expect(
-      page.getByRole("heading", { level: 1, name: "People" })
-    ).toBeVisible()
-
-    await navigation.getByRole("button", { name: "More" }).click()
-    await page.getByRole("link", { name: "Submissions" }).click()
-    await expect(page).toHaveURL(/\/submissions$/)
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Submissions" })
-    ).toBeVisible()
-
-    await navigation.getByRole("button", { name: "More" }).click()
-    await page.getByRole("link", { name: "Audit log" }).click()
-    await expect(page).toHaveURL(/\/audit-log$/)
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Audit Log" })
-    ).toBeVisible()
-  })
+  }
 })
+
+async function navigateThroughMobileShell(
+  page: import("@playwright/test").Page,
+  route: string
+): Promise<void> {
+  if (new URL(page.url()).pathname === route) {
+    return
+  }
+
+  const navigation = page.getByRole("navigation", {
+    name: "Mobile navigation",
+  })
+  const primaryLink = navigation.locator(`a[href="${route}"]`)
+
+  if (await primaryLink.isVisible()) {
+    await primaryLink.click()
+    return
+  }
+
+  await navigation.getByRole("button", { name: "More" }).click()
+  await page.getByRole("dialog", { name: "More" }).locator(`a[href="${route}"]`).click()
+}
+
+async function assertForbiddenDestinationsAbsent(
+  page: import("@playwright/test").Page,
+  routes: readonly string[]
+): Promise<void> {
+  for (const route of routes) {
+    await expect(page.locator(`a[href="${route}"]`)).toHaveCount(0)
+    await expect(
+      page.locator(`link[rel="prefetch"][href="${route}"]`)
+    ).toHaveCount(0)
+  }
+}

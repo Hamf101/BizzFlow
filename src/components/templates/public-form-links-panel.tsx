@@ -146,6 +146,7 @@ export function PublicFormLinksPanel({
                     )}
                   </Button>
                   <Link
+                    aria-label="Open public form in a new tab"
                     className={cn(buttonVariants({ size: "sm", variant: "ghost" }))}
                     href={`/forms/${link.token}`}
                     target="_blank"

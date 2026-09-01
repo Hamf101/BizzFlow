@@ -31,7 +31,7 @@ export function MobileTopBar({
         className="inline-flex min-h-11 min-w-11 items-center rounded-[12px] outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
         href="/dashboard"
       >
-        <BizFlowWordmark />
+        <BizFlowWordmark compact />
       </Link>
       <DashboardAccountMenu
         account={account}

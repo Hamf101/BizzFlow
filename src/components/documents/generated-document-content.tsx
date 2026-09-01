@@ -131,13 +131,13 @@ export function GeneratedDocumentContent({
         )}
 
         {renderPlan.title.length > 0 && (
-          <h1
+          <h2
             className="px-1 pt-7 font-editorial text-3xl font-semibold leading-tight"
             data-template-printed-title="true"
             style={{ color: "var(--document-primary)" }}
           >
             {renderPlan.title}
-          </h1>
+          </h2>
         )}
 
         <DocumentFlow

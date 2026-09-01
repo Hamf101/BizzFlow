@@ -71,7 +71,7 @@ export function DashboardNavigation({
               aria-label={collapsed ? item.label : undefined}
               aria-current={isActive ? "page" : undefined}
               className={cn(
-                "group relative flex min-h-11 items-center gap-3 rounded-[8px] px-3 py-2 text-sm text-muted-foreground transition-colors motion-reduce:transition-none",
+                "group relative flex min-h-11 items-center gap-3 rounded-[8px] px-3 py-2 text-sm text-foreground/80 transition-colors motion-reduce:transition-none",
                 "hover:bg-secondary/70 hover:text-foreground",
                 isActive && "bg-secondary text-secondary-foreground",
                 collapsed &&
@@ -79,16 +79,9 @@ export function DashboardNavigation({
               )}
               href={item.href}
             >
-              <span
-                aria-hidden="true"
-                className={cn(
-                  "absolute inset-y-2 left-0 w-px bg-transparent",
-                  isActive && "bg-primary"
-                )}
-              />
               <Icon
                 className={cn(
-                  "size-4 text-muted-foreground transition-colors",
+                  "size-4 text-foreground/80 transition-colors",
                   isActive && "text-primary",
                   collapsed && "md:size-5"
                 )}

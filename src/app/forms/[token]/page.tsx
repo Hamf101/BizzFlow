@@ -62,17 +62,19 @@ export default async function PublicFormPage({
     }
 
     return (
-      <div className="flex min-h-screen items-center justify-center bg-muted/20 p-4">
+      <main className="flex min-h-screen items-center justify-center bg-muted/20 p-4">
         <Card className="w-full max-w-md">
           <CardHeader>
             <div className="flex items-center gap-2 text-destructive">
               <AlertCircle className="size-5" />
-              <CardTitle>{title}</CardTitle>
+              <CardTitle>
+                <h1>{title}</h1>
+              </CardTitle>
             </div>
             <CardDescription>{description}</CardDescription>
           </CardHeader>
         </Card>
-      </div>
+      </main>
     )
   }
 
@@ -95,7 +97,7 @@ export default async function PublicFormPage({
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-muted/20 px-4 py-8">
+    <main className="flex min-h-screen flex-col bg-muted/20 px-4 py-8">
       <div className="mx-auto w-full max-w-2xl flex-1">
         {query.error && (
           <Alert className="mb-6" variant="destructive">
@@ -111,7 +113,9 @@ export default async function PublicFormPage({
                 {preview.organizationName}
               </span>
             )}
-            <CardTitle className="text-2xl">{preview.template.title}</CardTitle>
+            <CardTitle className="text-2xl">
+              <h1>{preview.template.title}</h1>
+            </CardTitle>
             {preview.template.description && (
               <CardDescription>{preview.template.description}</CardDescription>
             )}
@@ -156,6 +160,6 @@ export default async function PublicFormPage({
           </CardContent>
         </Card>
       </div>
-    </div>
+    </main>
   )
 }

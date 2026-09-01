@@ -56,21 +56,37 @@ describe("BizFlowToaster", () => {
     await vi.dynamicImportSettled()
 
     expect(toastIds.every((id) => typeof id === "string")).toBe(true)
+    expect(sonner.success.mock.calls[0]?.[0]).toMatchObject({
+      props: { children: "Saved", role: "status" },
+      type: "span",
+    })
     expect(sonner.success).toHaveBeenCalledWith(
-      "Saved",
+      expect.anything(),
       expect.objectContaining(options)
     )
     expect(sonner.error).toHaveBeenCalledWith(
-      "Could not save",
+      expect.anything(),
       expect.objectContaining(options)
     )
     expect(sonner.info).toHaveBeenCalledWith(
-      "Review needed",
+      expect.anything(),
       expect.objectContaining(options)
     )
     expect(sonner.loading).toHaveBeenCalledWith(
-      "Saving",
+      expect.anything(),
       expect.objectContaining(options)
     )
+    expect(sonner.error.mock.calls[0]?.[0]).toMatchObject({
+      props: { children: "Could not save", role: "status" },
+      type: "span",
+    })
+    expect(sonner.info.mock.calls[0]?.[0]).toMatchObject({
+      props: { children: "Review needed", role: "status" },
+      type: "span",
+    })
+    expect(sonner.loading.mock.calls[0]?.[0]).toMatchObject({
+      props: { children: "Saving", role: "status" },
+      type: "span",
+    })
   })
 })
