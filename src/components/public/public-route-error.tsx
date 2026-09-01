@@ -1,10 +1,9 @@
 "use client"
 
-import { TriangleAlert } from "lucide-react"
 import { useEffect, type ReactElement } from "react"
 
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
+import { ErrorState } from "@/components/ui/page-state"
 import { captureUnexpectedError } from "@/lib/observability"
 
 type PublicRouteErrorProps = {
@@ -44,25 +43,21 @@ export function createPublicRouteErrorBoundary(
     reset,
   }: PublicRouteErrorProps): ReactElement {
     useEffect(() => {
-      captureUnexpectedError(error, { boundary, digest: error.digest })
+      captureUnexpectedError(error, { boundary })
     }, [error])
 
     return (
       <div className={SHELLS[shell]}>
-        <div className="flex w-full max-w-md flex-col gap-4">
-          <Alert variant="destructive">
-            <TriangleAlert />
-            <AlertTitle>This page failed to load</AlertTitle>
-            <AlertDescription>
-              Something went wrong on our side. Your link has not expired — try
-              again, or ask your contact to resend it.
-            </AlertDescription>
-          </Alert>
-          <div>
-            <Button onClick={() => reset()} size="sm" variant="outline">
-              Try again
-            </Button>
-          </div>
+        <div className="w-full max-w-md">
+          <ErrorState
+            action={
+              <Button onClick={reset} size="sm" variant="secondary">
+                Try again
+              </Button>
+            }
+            description="Try again. If the problem continues, ask your contact for a new link."
+            title="This page didn’t load."
+          />
         </div>
       </div>
     )

@@ -25,6 +25,7 @@ const WIDTHS = {
 } as const
 
 type PublicPageSkeletonProps = {
+  label: string
   variant: keyof typeof SHELLS
 }
 
@@ -36,21 +37,33 @@ type PublicPageSkeletonProps = {
  * document until the server responds.
  *
  * @param props - Which route shell the skeleton should imitate.
- * @returns A pulsing placeholder sized to that shell.
+ * @returns An accessible, reduced-motion-safe placeholder sized to that shell.
  */
 export function PublicPageSkeleton({
+  label,
   variant,
 }: PublicPageSkeletonProps): ReactElement {
   return (
-    <div aria-label="Loading" className={SHELLS[variant]} role="status">
-      <div className={cn("flex w-full flex-col gap-4", WIDTHS[variant])}>
-        <div className="h-6 w-40 max-w-full animate-pulse rounded-md bg-muted" />
-        <div className="h-64 animate-pulse rounded-[14px] border border-border/60 bg-card" />
+    <div
+      aria-live="polite"
+      className={SHELLS[variant]}
+      role="status"
+    >
+      <span className="sr-only">{label}</span>
+      <div
+        aria-hidden="true"
+        className={cn(
+          "flex w-full animate-pulse flex-col gap-4 motion-reduce:animate-none",
+          WIDTHS[variant]
+        )}
+        data-slot="public-page-skeleton-content"
+      >
+        <div className="h-6 w-40 max-w-full rounded-md bg-muted" />
+        <div className="h-64 rounded-[14px] border border-border/60 bg-card" />
         {variant === "wide" && (
-          <div className="h-40 animate-pulse rounded-[14px] border border-border/60 bg-card" />
+          <div className="h-40 rounded-[14px] border border-border/60 bg-card" />
         )}
       </div>
-      <span className="sr-only">Loading page</span>
     </div>
   )
 }
