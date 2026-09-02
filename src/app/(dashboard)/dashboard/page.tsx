@@ -108,7 +108,7 @@ export default async function DashboardPage(): Promise<ReactElement> {
       <section className="flex flex-col gap-2">
         <h1 className="text-2xl font-semibold tracking-normal">Dashboard</h1>
         <p className="max-w-2xl text-sm text-muted-foreground">
-          Signed in as {user.email ?? "Authenticated user"}. Welcome to BizFlow Document Studio.
+          Logged in as {user.email ?? "Authenticated user"}. Welcome to BizFlow Document Studio.
         </p>
       </section>
 

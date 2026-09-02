@@ -56,7 +56,7 @@ export default async function AcceptInvitePage({
             className="text-sm font-medium text-primary underline-offset-4 hover:underline"
             href="/login"
           >
-            Sign in
+            Log in
           </Link>
         }
         title="Invite unavailable"
@@ -79,7 +79,7 @@ export default async function AcceptInvitePage({
       footer={
         user ? (
           <span className="text-sm text-muted-foreground">
-            Signed in as {user.email ?? "the current account"}
+            Logged in as {user.email ?? "the current account"}
           </span>
         ) : (
           <>
@@ -90,7 +90,7 @@ export default async function AcceptInvitePage({
               className="text-sm font-medium text-primary underline-offset-4 hover:underline"
               href={`/login?next=${encodeURIComponent(invitePath)}`}
             >
-              Sign in
+              Log in
             </Link>
           </>
         )
@@ -116,10 +116,10 @@ export default async function AcceptInvitePage({
         ) : (
           <div className="flex flex-col gap-3">
             <p className="text-sm text-muted-foreground">
-              Create an account or sign in with the invited email address to join.
+              Sign up or log in with the invited email address to join.
             </p>
             <Link href={`/signup?invite=${encodeURIComponent(token)}`}>
-              <Button className="w-full">Create account</Button>
+              <Button className="w-full">Sign up</Button>
             </Link>
           </div>
         )}

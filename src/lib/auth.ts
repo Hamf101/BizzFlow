@@ -41,7 +41,7 @@ export const getAuthenticatedUser = cache(
       console.warn("auth_claims_missing", {
         reason: error?.message ?? "No claims returned",
       })
-      throw new AuthenticationError("Sign in to continue.")
+      throw new AuthenticationError("Log in to continue.")
     }
 
     const claims = data.claims as Record<string, unknown>
@@ -52,7 +52,7 @@ export const getAuthenticatedUser = cache(
       console.warn("auth_claims_missing_subject", {
         hasEmail: Boolean(email),
       })
-      throw new AuthenticationError("Sign in to continue.")
+      throw new AuthenticationError("Log in to continue.")
     }
 
     return { id: userId, email }

@@ -71,7 +71,7 @@ export async function signupAction(formData: FormData): Promise<void> {
     if (parsed.data.email.trim().toLowerCase() !== invitedEmail) {
       redirect(
         buildRedirect(signupPath, {
-          error: "Create your account with the email address on the invite.",
+          error: "Sign up with the email address on the invite.",
         })
       )
     }
@@ -108,7 +108,7 @@ export async function signupAction(formData: FormData): Promise<void> {
     })
     redirect(
       buildRedirect(signupPath, {
-        error: "Unable to create account. Check your details and try again.",
+        error: "Unable to sign up. Check your details and try again.",
       })
     )
   }
@@ -121,7 +121,7 @@ export async function signupAction(formData: FormData): Promise<void> {
     buildRedirect("/login", {
       message: parsed.data.inviteToken
         ? "Confirm your account from the email we sent, then finish joining the workspace."
-        : "Confirm your account, then sign in.",
+        : "Confirm your account, then log in.",
       ...(parsed.data.inviteToken ? { next: nextPath } : {}),
     })
   )

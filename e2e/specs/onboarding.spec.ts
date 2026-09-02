@@ -29,8 +29,8 @@ test.describe("onboarding", () => {
 
     await page.goto("/signup")
     await page.getByLabel("Email").fill(email)
-    await page.getByLabel("Password").fill(password)
-    await page.getByRole("button", { name: "Create account" }).click()
+    await page.getByLabel("Password", { exact: true }).fill(password)
+    await page.getByRole("button", { name: "Sign up" }).click()
 
     // A session is returned inline when confirmations are disabled, so the app
     // redirects straight to the dashboard rather than via /login.
@@ -58,8 +58,8 @@ test.describe("onboarding", () => {
 
     await page.goto("/signup")
     await page.getByLabel("Email").fill(email)
-    await page.getByLabel("Password").fill("short")
-    await page.getByRole("button", { name: "Create account" }).click()
+    await page.getByLabel("Password", { exact: true }).fill("short")
+    await page.getByRole("button", { name: "Sign up" }).click()
 
     // The input carries minLength, so the browser blocks submission and the
     // user never leaves /signup. Asserting the URL rather than an error banner

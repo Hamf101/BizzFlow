@@ -14,8 +14,10 @@ test.describe("authentication redirects", () => {
 
     await page.goto(`/login?next=${encodeURIComponent(unsafeNextPath)}`)
     await page.getByLabel("Email").fill(tenant.users.manager.email)
-    await page.getByLabel("Password").fill(tenant.users.manager.password)
-    await page.getByRole("button", { name: "Sign in" }).click()
+    await page
+      .getByLabel("Password", { exact: true })
+      .fill(tenant.users.manager.password)
+    await page.getByRole("button", { name: "Log in" }).click()
     await page.waitForURL((url) => url.pathname === "/dashboard")
 
     const destination = new URL(page.url())

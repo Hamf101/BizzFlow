@@ -235,7 +235,7 @@ function InviteCard({ organizationId }: { organizationId: string }): ReactElemen
       <CardHeader>
         <CardTitle>Invite staff</CardTitle>
         <CardDescription>
-          Email an invite that lets a recipient create an account or sign in.
+          Email an invite that lets a recipient sign up or log in.
         </CardDescription>
       </CardHeader>
       <CardContent>

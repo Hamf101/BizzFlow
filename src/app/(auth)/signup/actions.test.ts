@@ -59,7 +59,7 @@ describe("signup invite validation", () => {
         createSignupForm("different@example.com", "invite-token")
       )
     ).rejects.toThrow(
-      "NEXT_REDIRECT:/signup?invite=invite-token&error=Create+your+account+with+the+email+address+on+the+invite."
+      "NEXT_REDIRECT:/signup?invite=invite-token&error=Sign+up+with+the+email+address+on+the+invite."
     )
   })
 
