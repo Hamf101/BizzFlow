@@ -20,6 +20,9 @@ minimumReleaseAgeExclude: []
 
 overrides:
   postcss: 8.5.23
+  # Memory-growth and stats-normalization advisories in browserslist <=4.28.6.
+  # Pinned to the reviewed 4.x release already beyond the seven-day age gate.
+  browserslist: 4.28.8
   # Transitive advisory floor: sharp inherits libvips CVEs below 0.35 (via next).
   sharp: '>=0.35.3'
   # DoS advisory GHSA-mh99-v99m-4gvg; scoped to the 5.x line used by glob 13.
