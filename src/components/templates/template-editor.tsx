@@ -910,6 +910,9 @@ export function TemplateEditor({
                 }
                 renderPlan={renderPlan}
                 selectedBlockId={canvasIsEditable ? selectedBlockId : null}
+                // Preview is where the author asks to see the finished page, so
+                // it is the one canvas that reproduces paper and brand ink.
+                surface={editorMode === "preview" ? "paper" : "screen"}
               />
             )}
           </div>

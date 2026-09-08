@@ -18,6 +18,10 @@ import {
   type TemplateWebRenderGroup
 } from "@/components/templates/template-render-groups"
 import { Button } from "@/components/ui/button"
+import {
+  resolveDocumentSurfaceInk,
+  type DocumentSurface
+} from "@/lib/document-surface"
 import { cn } from "@/lib/utils"
 import {
   shouldRenderTemplateFooter,
@@ -43,6 +47,12 @@ type TemplatePreviewProps = {
   onMoveBlock?: (blockId: string, direction: "up" | "down") => void
   onRequestInsert?: (afterBlockId: string | null) => void
   selectedBlockId?: string | null
+  /**
+   * `screen` follows the interface theme and is what an author edits against.
+   * `paper` reproduces the printed page, brand ink included, and belongs only
+   * where the author has asked to see the finished document.
+   */
+  surface?: DocumentSurface
 }
 
 /**
@@ -59,15 +69,17 @@ export function TemplatePreview({
   onDeleteBlock,
   onMoveBlock,
   onRequestInsert,
-  selectedBlockId = null
+  selectedBlockId = null,
+  surface = "screen"
 }: TemplatePreviewProps): ReactElement {
   // CSS percentage margins on every side resolve against container width.
   // Scaling points by page width therefore preserves one physical margin.
   const marginPercent =
     (renderPlan.geometry.marginPoints / renderPlan.geometry.widthPoints) * 100
+  const ink = resolveDocumentSurfaceInk(surface, renderPlan.branding)
   const paperStyle = {
-    "--template-accent": renderPlan.branding.accentColor,
-    "--template-primary": renderPlan.branding.primaryColor,
+    "--template-accent": ink.accent,
+    "--template-primary": ink.primary,
     aspectRatio: `${renderPlan.geometry.widthPoints} / ${renderPlan.geometry.heightPoints}`
   } as CSSProperties
   const printableAreaStyle = {
@@ -87,6 +99,7 @@ export function TemplatePreview({
         showEditorialGutter ? "overflow-visible" : "overflow-hidden",
         className
       )}
+      data-document-surface={surface}
       data-template-density={renderPlan.layout.density}
       data-template-footer-policy={renderPlan.layout.footerPolicy}
       data-template-header-policy={renderPlan.layout.headerPolicy}

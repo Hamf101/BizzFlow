@@ -21,6 +21,7 @@ import {
   type TemplateWebRenderGroup
 } from "@/components/templates/template-render-groups"
 import { Input } from "@/components/ui/input"
+import { resolveDocumentSurfaceInk } from "@/lib/document-surface"
 import { cn } from "@/lib/utils"
 import {
   createTemplateRenderPlan,
@@ -144,9 +145,14 @@ export function GeneratedDocumentContent({
         applyVisibleTemplateFieldValue(content, priorAnswers, fieldKey, value)
     )
   }
+  // This component is only ever an editing or review surface: every caller
+  // renders it inside the themed app, and none offers a print view. Fidelity
+  // to the author's brand colours belongs to the Studio's Preview mode and to
+  // the finalized PDF, both of which draw on real paper.
+  const ink = resolveDocumentSurfaceInk("screen", renderPlan.branding)
   const paperStyle = {
-    "--document-accent": renderPlan.branding.accentColor,
-    "--document-primary": renderPlan.branding.primaryColor,
+    "--document-accent": ink.accent,
+    "--document-primary": ink.primary,
     aspectRatio: `${renderPlan.geometry.widthPoints} / ${renderPlan.geometry.heightPoints}`
   } as CSSProperties
   // CSS percentage margins on every side resolve against container width.

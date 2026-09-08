@@ -167,3 +167,21 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/*
+ * The paper surface reproduces a printed page, so it must not follow the
+ * interface theme: the author's brand ink was chosen against paper, and a
+ * themed background moves out from under it. Redefining the surface tokens
+ * on this container makes every nested utility paper-relative, which is why
+ * the document components need no per-element overrides. Values are constant
+ * in both themes by design.
+ */
+[data-document-surface="paper"] {
+  --card: #f7f4ee;
+  --card-foreground: #2f2b33;
+  --foreground: #2f2b33;
+  --muted: #efebe3;
+  --muted-foreground: #5d5763;
+  --border: #cfc8bf;
+  --input: #cfc8bf;
+}
