@@ -217,6 +217,9 @@ export function TemplateEditor({
   const [localDraftSavedAt, setLocalDraftSavedAt] = useState<string | null>(null)
   const [localDraftRecovery, setLocalDraftRecovery] =
     useState<SavedDraft<TemplateLocalDraft> | null>(null)
+  // Test answers belong to the Studio, not to the canvas: switching modes
+  // unmounts the document view, and the author's trial run must survive it.
+  const [testAnswers, setTestAnswers] = useState<Record<string, unknown>>({})
   const [activePanel, setActivePanel] = useState<EditorPanel | null>(null)
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null)
   const [insertAfterBlockId, setInsertAfterBlockId] = useState<string | null>(
@@ -884,7 +887,10 @@ export function TemplateEditor({
           <div className="overflow-auto px-3 py-8 sm:px-6 lg:px-10 lg:py-12">
             {editorMode === "test" ? (
               <GeneratedDocumentContent
-                answers={{}}
+                answerControl={{
+                  answers: testAnswers,
+                  onChange: setTestAnswers
+                }}
                 content={displayState.content}
                 editable
                 title={displayState.title}
