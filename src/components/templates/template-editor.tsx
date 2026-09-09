@@ -37,6 +37,14 @@ import { TemplatePropertiesPanel } from "@/components/templates/template-propert
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from "@/components/ui/dialog"
 import { Field, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import {
@@ -45,6 +53,7 @@ import {
   saveLocalDraft,
   type SavedDraft
 } from "@/lib/draft-autosave"
+import { bizflowToast } from "@/components/ui/toaster"
 import { TemplateStatusBadge } from "@/lib/page-status-badges"
 import { createTemplateFlowDraftFingerprint } from "@/services/template-flow-proposal-state"
 import { createTemplateRenderPlan } from "@/services/templates/template-render-plan"
@@ -220,6 +229,9 @@ export function TemplateEditor({
   // Test answers belong to the Studio, not to the canvas: switching modes
   // unmounts the document view, and the author's trial run must survive it.
   const [testAnswers, setTestAnswers] = useState<Record<string, unknown>>({})
+  const [pendingDeleteBlockId, setPendingDeleteBlockId] = useState<string | null>(
+    null
+  )
   const [activePanel, setActivePanel] = useState<EditorPanel | null>(null)
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null)
   const [insertAfterBlockId, setInsertAfterBlockId] = useState<string | null>(
@@ -272,6 +284,17 @@ export function TemplateEditor({
     template.status === "published"
       ? qualityEvaluation.summary.criticalCount
       : validationErrorCount
+  const pendingDeleteBlock = useMemo((): TemplateBlock | null => {
+    if (!pendingDeleteBlockId) {
+      return null
+    }
+
+    return (
+      state.content.blocks.find(
+        (block: TemplateBlock): boolean => block.id === pendingDeleteBlockId
+      ) ?? null
+    )
+  }, [pendingDeleteBlockId, state.content.blocks])
   const selectedBlockValue = useMemo((): TemplateBlock | null => {
     if (!selectedBlockId) {
       return null
@@ -453,12 +476,14 @@ export function TemplateEditor({
     })
   }
 
-  function deleteBlock(blockId: string): void {
+  function requestDeleteBlock(blockId: string): void {
     const deleteEvaluation = evaluateTemplateBlockDeletion(
       state.content.blocks,
       blockId
     )
 
+    // A protected block cannot be removed at all, so asking the author to
+    // confirm would only be asking them to approve a refusal.
     if (!deleteEvaluation.success) {
       setStructureIntegrityNotice({
         message: deleteEvaluation.message,
@@ -470,12 +495,39 @@ export function TemplateEditor({
       return
     }
 
+    setPendingDeleteBlockId(blockId)
+  }
+
+  function cancelDeleteBlock(): void {
+    setPendingDeleteBlockId(null)
+  }
+
+  function confirmDeleteBlock(): void {
+    if (!pendingDeleteBlockId) {
+      return
+    }
+
+    // Deletion is the one manual edit nothing else can walk back: text can be
+    // retyped and a move can be moved again, but a removed block is gone. The
+    // state captured here is what the offered undo restores.
+    const restorePoint = state
+
     applyManualAction({
       type: "delete_block",
-      blockId
+      blockId: pendingDeleteBlockId
     })
+    setPendingDeleteBlockId(null)
     setSelectedBlockId(null)
     setActivePanel(null)
+    bizflowToast.info("Element deleted", {
+      action: {
+        label: "Undo",
+        onClick: (): void => {
+          dispatch({ type: "replace_state", value: restorePoint })
+          setStructureIntegrityNotice(null)
+        }
+      }
+    })
   }
 
   function applyFlowDraft(
@@ -869,7 +921,7 @@ export function TemplateEditor({
                         block
                       })
                     }
-                    onDelete={(): void => deleteBlock(selectedBlockId)}
+                    onDelete={(): void => requestDeleteBlock(selectedBlockId)}
                     onMove={(direction: "up" | "down"): void =>
                       moveBlock(selectedBlockId, direction)
                     }
@@ -902,7 +954,7 @@ export function TemplateEditor({
                   canvasIsEditable ? selectBlock : undefined
                 }
                 onDeleteBlock={
-                  canvasIsEditable ? deleteBlock : undefined
+                  canvasIsEditable ? requestDeleteBlock : undefined
                 }
                 onMoveBlock={canvasIsEditable ? moveBlock : undefined}
                 onRequestInsert={
@@ -1036,8 +1088,52 @@ export function TemplateEditor({
           )}
         </aside>
       </div>
+
+      <Dialog
+        onOpenChange={(open: boolean): void => {
+          if (!open) {
+            cancelDeleteBlock()
+          }
+        }}
+        open={pendingDeleteBlock !== null}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Delete this {formatBlockTypeName(pendingDeleteBlock)}?
+            </DialogTitle>
+            <DialogDescription>
+              It is removed from the working draft straight away. The saved
+              template is unchanged until you save, and documents already
+              generated from this template keep their own snapshot.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={cancelDeleteBlock} type="button" variant="outline">
+              Keep element
+            </Button>
+            <Button
+              onClick={confirmDeleteBlock}
+              type="button"
+              variant="destructive"
+            >
+              Delete element
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
+}
+
+/**
+ * Names a block type in the sentence case a confirmation prompt reads in.
+ *
+ * @param block - Block awaiting confirmation, when one is pending.
+ * @returns A human-readable type name, or a neutral fallback.
+ */
+function formatBlockTypeName(block: TemplateBlock | null): string {
+  return block ? block.type.replaceAll("_", " ") : "element"
 }
 
 function StudioModeToolbar({
