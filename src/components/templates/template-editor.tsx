@@ -1057,10 +1057,18 @@ function StudioModeToolbar({
 }): ReactElement {
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-[10px] border border-border/80 bg-card px-3 py-2.5">
-      <div aria-label="Studio mode" className="flex flex-wrap gap-1">
+      {/* One mode is active at a time, so these are exclusive choices rather
+          than three independent toggles. `aria-label` on a role-less element is
+          dropped, which left the whole group unnamed. */}
+      <div
+        aria-label="Studio mode"
+        className="flex flex-wrap gap-1"
+        role="radiogroup"
+      >
         <Button
-          aria-pressed={activeMode === "build"}
+          aria-checked={activeMode === "build"}
           onClick={(): void => onSelectMode("build")}
+          role="radio"
           size="sm"
           type="button"
           variant={activeMode === "build" ? "secondary" : "ghost"}
@@ -1069,8 +1077,9 @@ function StudioModeToolbar({
           Build
         </Button>
         <Button
-          aria-pressed={activeMode === "preview"}
+          aria-checked={activeMode === "preview"}
           onClick={(): void => onSelectMode("preview")}
+          role="radio"
           size="sm"
           type="button"
           variant={activeMode === "preview" ? "secondary" : "ghost"}
@@ -1079,8 +1088,9 @@ function StudioModeToolbar({
           Preview
         </Button>
         <Button
-          aria-pressed={activeMode === "test"}
+          aria-checked={activeMode === "test"}
           onClick={(): void => onSelectMode("test")}
+          role="radio"
           size="sm"
           type="button"
           variant={activeMode === "test" ? "secondary" : "ghost"}
@@ -1115,10 +1125,12 @@ function StudioRailTabs({
     <div
       aria-label="Studio tools"
       className="mb-3 grid grid-cols-3 gap-1 rounded-[10px] border border-border/80 bg-card p-1"
+      role="radiogroup"
     >
       <Button
-        aria-pressed={activeRail === "properties"}
+        aria-checked={activeRail === "properties"}
         onClick={(): void => onSelectRail("properties")}
+        role="radio"
         size="sm"
         type="button"
         variant={activeRail === "properties" ? "secondary" : "ghost"}
@@ -1127,8 +1139,9 @@ function StudioRailTabs({
         Properties
       </Button>
       <Button
-        aria-pressed={activeRail === "flow"}
+        aria-checked={activeRail === "flow"}
         onClick={(): void => onSelectRail("flow")}
+        role="radio"
         size="sm"
         type="button"
         variant={activeRail === "flow" ? "secondary" : "ghost"}
@@ -1136,10 +1149,19 @@ function StudioRailTabs({
         <Sparkles />
         Flow
       </Button>
+      {/* The count is part of what this control is, so it belongs in the
+          control's own name. On the badge it sat in an `aria-label` on a bare
+          span, where it is ignored and only the digit was announced. */}
       <Button
-        aria-pressed={activeRail === "checks"}
+        aria-checked={activeRail === "checks"}
+        aria-label={
+          criticalCount > 0
+            ? `Checks, ${criticalCount} critical`
+            : undefined
+        }
         className="relative"
         onClick={(): void => onSelectRail("checks")}
+        role="radio"
         size="sm"
         type="button"
         variant={activeRail === "checks" ? "secondary" : "ghost"}
@@ -1148,8 +1170,9 @@ function StudioRailTabs({
         Checks
         {criticalCount > 0 && (
           <span
-            aria-label={`${criticalCount} critical checks`}
+            aria-hidden="true"
             className="absolute -top-1 -right-1 grid min-w-4 place-items-center rounded-full bg-destructive px-1 text-[9px] leading-4 text-destructive-foreground"
+            data-critical-count={criticalCount}
           >
             {criticalCount}
           </span>
