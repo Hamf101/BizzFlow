@@ -17,6 +17,14 @@ import {
 const VALID_DRAWING_DATA_URL =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
 
+// Each case embeds fonts and renders a real PDF, which costs seconds rather
+// than milliseconds. Vitest runs files in parallel, so on a busy machine the
+// stock 5s budget expires mid-render and the failure reads as a changed
+// fingerprint — a real PDF regression is exactly what this file exists to
+// catch, so a timeout that imitates one is worse than a slow test. Only the
+// clock is relaxed here; every assertion is unchanged.
+const PDF_RENDER_TIMEOUT_MS = 30_000
+
 describe("document PDF service", () => {
   it("keeps every document block in one printable page flow", () => {
     const plans = planPdf(
@@ -612,7 +620,7 @@ describe("document PDF service", () => {
       message: "A signature or initials drawing is invalid."
     })
   })
-})
+}, PDF_RENDER_TIMEOUT_MS)
 
 function planPdf(input: RenderGeneratedDocumentPdfInput): PdfPagePlan[] {
   return createPdfPagePlans(normalizePdfInput(input))
