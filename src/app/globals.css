@@ -21,6 +21,7 @@
   --accent: #e7dfed;
   --accent-foreground: #4c4058;
   --destructive: #a24949;
+  --success: #4f7b64;
   --border: #d9d4ce;
   --input: #d9d4ce;
   --ring: #8a729a;
@@ -49,6 +50,7 @@
   --accent: #342d41;
   --accent-foreground: #e8dff4;
   --destructive: #e27e7a;
+  --success: #79b294;
   --border: #322c3d;
   --input: #342e40;
   --ring: #a890c6;
@@ -81,6 +83,7 @@
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
+  --color-success: var(--success);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -89,9 +92,9 @@
   --color-brand-ink: var(--brand-ink);
   --color-brand-vellum: var(--brand-vellum);
   --color-brand-plum: var(--brand-plum);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-editorial: var(--font-newsreader);
+  --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --font-editorial: var(--font-sans);
 }
 
 @layer base {
@@ -112,7 +115,7 @@
     min-height: 100%;
     background: var(--background);
     color: var(--foreground);
-    font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+    font-family: var(--font-sans);
     background-image:
       linear-gradient(
         to right,
@@ -128,7 +131,7 @@
   h1,
   h2,
   h3 {
-    font-family: var(--font-newsreader), Georgia, serif;
+    font-family: var(--font-sans);
     letter-spacing: -0.018em;
   }
 
@@ -140,11 +143,11 @@
 
 @layer utilities {
   .font-editorial {
-    font-family: var(--font-newsreader), Georgia, serif;
+    font-family: var(--font-sans);
   }
 
   .editorial-kicker {
-    font-family: var(--font-geist-mono), monospace;
+    font-family: var(--font-sans);
     font-size: 0.625rem;
     line-height: 1rem;
     letter-spacing: 0.16em;
