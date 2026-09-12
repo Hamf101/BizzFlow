@@ -34,6 +34,7 @@ export type MigrationFileName =
   | "20260817090000_notification_deliveries_service_role_grant.sql"
   | "20260903115718_organization_roles_and_member_access.sql"
   | "20260912194858_close_direct_tenant_table_access.sql"
+  | "20260912202419_reconcile_template_visibility_and_role_protection.sql"
 
 export const directWriteActions = ["insert", "update", "delete"] as const
 
