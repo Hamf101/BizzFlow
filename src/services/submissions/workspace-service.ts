@@ -15,6 +15,7 @@ import {
   runSubmissionOperation,
   SUBMISSION_COLUMNS,
 } from "@/services/submissions/shared"
+import { getOrganizationRoleFromSubject } from "@/lib/permissions"
 import {
   parseSubmissionRow,
   type Submission,
@@ -40,13 +41,14 @@ export async function listInternalSubmissions(
     input,
     async (): Promise<Submission[]> => {
       const client = getSubmissionClient(deps)
-      const role = await requireSubmissionPermission(
+      const permissionSubject = await requireSubmissionPermission(
         client,
         input.organizationId,
         input.actorUserId,
         "submissions:view",
         "You cannot view internal submissions."
       )
+      const role = getOrganizationRoleFromSubject(permissionSubject)
       let query = client
         .from("submissions")
         .select(SUBMISSION_COLUMNS)
@@ -100,13 +102,14 @@ export async function getInternalSubmission(
     input,
     async (): Promise<SubmissionDetail> => {
       const client = getSubmissionClient(deps)
-      const role = await requireSubmissionPermission(
+      const permissionSubject = await requireSubmissionPermission(
         client,
         input.organizationId,
         input.actorUserId,
         "submissions:view",
         "You cannot view internal submissions."
       )
+      const role = getOrganizationRoleFromSubject(permissionSubject)
       const submission = await getSubmissionById(
         client,
         input.organizationId,

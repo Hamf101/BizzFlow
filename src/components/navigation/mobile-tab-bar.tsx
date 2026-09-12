@@ -16,7 +16,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet"
-import type { OrganizationRole } from "@/lib/permissions"
+import type { OrganizationPermissionSubject } from "@/lib/permissions"
 import { cn } from "@/lib/utils"
 
 /** Height of the bar, mirrored by the layout's bottom padding. */
@@ -43,7 +43,7 @@ function isCurrent(pathname: string, href: string): boolean {
 export function MobileTabBar({
   role,
 }: {
-  role: OrganizationRole | null
+  role: OrganizationPermissionSubject | null
 }): ReactElement | null {
   const pathname = usePathname()
   const [moreOpen, setMoreOpen] = useState(false)

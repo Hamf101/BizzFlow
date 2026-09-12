@@ -108,7 +108,7 @@ export default async function TaskDetailPage({
 
   const context = contextResult.context
 
-  if (!canPerformOrganizationAction(context.membership.role, "tasks:view")) {
+  if (!canPerformOrganizationAction(context.membership, "tasks:view")) {
     return (
       <TaskPageShell>
         <Alert variant="destructive">
@@ -166,12 +166,12 @@ export default async function TaskDetailPage({
   // A closed task accepts no further changes, but a reminder left pending
   // against it still can — and should — be cancelled rather than left to fail.
   const canManageReminders = canPerformOrganizationAction(
-    context.membership.role,
+    context.membership,
     "tasks:edit"
   )
   const canEdit = canManageReminders && !closed
   const canAssign =
-    canPerformOrganizationAction(context.membership.role, "tasks:assign") &&
+    canPerformOrganizationAction(context.membership, "tasks:assign") &&
     !closed
 
   return (

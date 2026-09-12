@@ -634,7 +634,7 @@ describe("processDueTaskReminders", () => {
     expect(summary).toMatchObject({ failedCount: 1 })
     expect(deps.sendTaskEmail).not.toHaveBeenCalled()
     expect(client.tables.task_reminders[0].last_error).toBe(
-      "The reminder recipient is no longer an active member."
+      "The reminder recipient is no longer an active member with task access."
     )
   })
 
@@ -662,6 +662,86 @@ describe("processDueTaskReminders", () => {
         (row: FakeRow): boolean => row.status === "pending"
       )
     ).toHaveLength(overflowCount)
+  })
+})
+
+describe("task access for reminder and assignment recipients", () => {
+  function createNarrowedRecipientClient(
+    tasks: FakeRow[] = [createTaskRow()],
+    reminders: FakeRow[] = []
+  ): FakeSupabaseClient {
+    return new FakeSupabaseClient({
+      organization_memberships: [
+        ...createMembershipRows().filter((row: FakeRow) => row.user_id !== STAFF_ID),
+        createMembershipRow("staff", {
+          user_id: STAFF_ID,
+          role_definition: { permissions: ["people:view"] },
+        }),
+      ],
+      profiles: [createProfileRow()],
+      tasks,
+      task_reminders: reminders,
+    })
+  }
+
+  it("rejects scheduling a reminder for a member who can no longer view tasks", async () => {
+    const client = createNarrowedRecipientClient()
+
+    await expect(
+      scheduleTaskReminder(
+        {
+          actorUserId: MANAGER_ID,
+          organizationId: ORG_ID,
+          taskId: TASK_ID,
+          recipientUserId: STAFF_ID,
+          remindAt: FUTURE_AT,
+        },
+        createDeps(client, [NEW_REMINDER_ID])
+      )
+    ).rejects.toMatchObject({ statusCode: 400 })
+    expect(client.tables.task_reminders).toHaveLength(0)
+  })
+
+  it("fails a due reminder instead of sending task details to a member without task access", async () => {
+    const client = createNarrowedRecipientClient(
+      [createTaskRow()],
+      [createTaskReminderRow()]
+    )
+    const deps = createDeps(client)
+
+    const summary = await processDueTaskReminders(deps)
+
+    expect(summary).toMatchObject({ failedCount: 1 })
+    expect(deps.sendTaskEmail).not.toHaveBeenCalled()
+    expect(client.tables.task_reminders[0].last_error).toBe(
+      "The reminder recipient is no longer an active member with task access."
+    )
+  })
+
+  it("skips an assignment notice to a member without task access", async () => {
+    const client = createNarrowedRecipientClient([
+      createTaskRow({
+        assigned_to: STAFF_ID,
+        assigned_by: MANAGER_ID,
+        assigned_at: CREATED_AT,
+      }),
+    ])
+    const deps = createDeps(client)
+
+    await expect(
+      notifyTaskAssignee(
+        {
+          organizationId: ORG_ID,
+          taskId: TASK_ID,
+          assignedToUserId: STAFF_ID,
+        },
+        deps
+      )
+    ).resolves.toEqual({
+      delivered: false,
+      skippedReason: "recipient_unavailable",
+    })
+    expect(deps.sendTaskEmail).not.toHaveBeenCalled()
   })
 })
 

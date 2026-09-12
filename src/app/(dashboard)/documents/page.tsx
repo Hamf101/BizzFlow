@@ -197,7 +197,7 @@ export default async function DocumentsPage({
               folder={activeFolder}
               organizationId={context.organization.id}
               returnFolderId={activeFolder.parentFolderId}
-              role={context.membership.role}
+              role={context.membership}
               workspaceView={workspaceView}
             />
           ) : null}
@@ -219,16 +219,16 @@ export default async function DocumentsPage({
           documents={documents}
           folders={folders}
           organizationId={context.organization.id}
-          role={context.membership.role}
+          role={context.membership}
           workspaceView={workspaceView}
         />
         {workspaceView === "active" &&
         (!activeFolder || activeFolder.accessLevel === "contributor") ? (
-          <RoleGuard role={context.membership.role} action="folders:manage">
+          <RoleGuard role={context.membership} action="folders:manage">
             <CreateFolderCard
               activeFolderId={activeFolderId}
               organizationId={context.organization.id}
-              role={context.membership.role}
+              role={context.membership}
             />
           </RoleGuard>
         ) : null}
@@ -419,7 +419,7 @@ function FolderContentsCard({
   documents: AccessibleDocumentSummary[]
   folders: AccessibleDocumentFolder[]
   organizationId: string
-  role: OrganizationContext["membership"]["role"]
+  role: OrganizationContext["membership"]
   workspaceView: WorkspaceView
 }): ReactElement {
   const addDocumentHref = activeFolder
@@ -561,7 +561,7 @@ function FolderLifecycleActions({
   folder: AccessibleDocumentFolder
   organizationId: string
   returnFolderId: string | null
-  role: OrganizationContext["membership"]["role"]
+  role: OrganizationContext["membership"]
   workspaceView: WorkspaceView
 }): ReactElement | null {
   if (
@@ -683,7 +683,7 @@ function DocumentLifecycleActions({
   document: AccessibleDocumentSummary
   organizationId: string
   returnFolderId: string | null
-  role: OrganizationContext["membership"]["role"]
+  role: OrganizationContext["membership"]
   workspaceView: WorkspaceView
 }): ReactElement | null {
   // A queued purge is already irreversible, so the row offers no further action.
@@ -876,7 +876,7 @@ function CreateFolderCard({
 }: {
   activeFolderId: string | null
   organizationId: string
-  role: OrganizationContext["membership"]["role"]
+  role: OrganizationContext["membership"]
 }): ReactElement {
   return (
     <Card>

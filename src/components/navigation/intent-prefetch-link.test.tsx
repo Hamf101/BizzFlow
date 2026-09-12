@@ -33,11 +33,11 @@ describe("IntentPrefetchLink", () => {
     prefetchMock.mockClear()
   })
 
-  it("disables viewport prefetch and warms the route after pointer intent", () => {
+  it("fully prefetches visible dashboard destinations and refreshes on intent", () => {
     const link = IntentPrefetchLink({ children: "People", href: "/people" })
     const props = getRenderedLinkProps(link)
 
-    expect(props.prefetch).toBe(false)
+    expect(props.prefetch).toBe(true)
 
     props.onMouseEnter?.({
       defaultPrevented: false,

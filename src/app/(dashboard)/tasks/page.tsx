@@ -99,7 +99,7 @@ export default async function TasksPage({
 
   const context = contextResult.context
   const canView = canPerformOrganizationAction(
-    context.membership.role,
+    context.membership,
     "tasks:view"
   )
 
@@ -118,11 +118,11 @@ export default async function TasksPage({
   }
 
   const canCreate = canPerformOrganizationAction(
-    context.membership.role,
+    context.membership,
     "tasks:create"
   )
   const canAssign = canPerformOrganizationAction(
-    context.membership.role,
+    context.membership,
     "tasks:assign"
   )
   const filters = taskFiltersSchema.parse({

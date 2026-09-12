@@ -11,6 +11,7 @@ import type {
 import { TaskServiceError } from "@/services/tasks/errors"
 import {
   assertTaskIsOpenForChanges,
+  canReceiveTaskWork,
   createTaskDatabaseError,
   createTaskId,
   getTaskById,
@@ -55,7 +56,6 @@ export const TASK_REMINDER_LEASE_SECONDS = 300
 
 const RECIPIENT_REJECTION_MESSAGE =
   "Reminder recipient must be an active internal member of this organization."
-const INTERNAL_RECIPIENT_ROLES = ["owner_admin", "manager", "staff"]
 
 type TaskReminderRecipient = {
   email: string
@@ -77,6 +77,7 @@ type MembershipScopeRow = {
   org_id: string
   user_id: string
   role: string
+  role_definition?: { permissions: string[] | null } | null
   email_notifications_enabled: boolean
   sms_notifications_enabled: boolean
 }
@@ -998,7 +999,7 @@ function resolveReminderBlock(
   }
 
   if (!recipient) {
-    return "The reminder recipient is no longer an active member."
+    return "The reminder recipient is no longer an active member with task access."
   }
 
   return null
@@ -1105,7 +1106,9 @@ async function loadDueReminderContext(
         .in("id", recipientIds),
       client
         .from("organization_memberships")
-        .select("org_id,user_id,role,email_notifications_enabled,sms_notifications_enabled")
+        .select(
+          "org_id,user_id,role,email_notifications_enabled,sms_notifications_enabled,role_definition:organization_roles!organization_memberships_role_definition_fk(permissions)"
+        )
         .eq("status", "active")
         .in("user_id", recipientIds),
       loadOrganizationNotificationSettingsMap(client, organizationIds),
@@ -1143,10 +1146,7 @@ async function loadDueReminderContext(
     (membership: MembershipScopeRow): void => {
       const contact = contacts.get(membership.user_id)
 
-      if (
-        !INTERNAL_RECIPIENT_ROLES.includes(membership.role) ||
-        !contact?.email
-      ) {
+      if (!canReceiveTaskWork(membership) || !contact?.email) {
         return
       }
 
@@ -1214,7 +1214,9 @@ async function loadTaskRecipient(
 ): Promise<TaskReminderRecipient | null> {
   const { data: membershipData, error: membershipError } = await client
     .from("organization_memberships")
-    .select("role, email_notifications_enabled, sms_notifications_enabled")
+    .select(
+      "role,email_notifications_enabled,sms_notifications_enabled,role_definition:organization_roles!organization_memberships_role_definition_fk(permissions)"
+    )
     .eq("org_id", organizationId)
     .eq("user_id", userId)
     .eq("status", "active")
@@ -1224,7 +1226,7 @@ async function loadTaskRecipient(
     throw createTaskDatabaseError(membershipError, "Unable to load task permissions.")
   }
 
-  if (!membershipData || !INTERNAL_RECIPIENT_ROLES.includes(membershipData.role)) {
+  if (!membershipData || !canReceiveTaskWork(membershipData)) {
     return null
   }
 

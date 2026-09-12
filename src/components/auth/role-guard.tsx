@@ -3,11 +3,11 @@ import type { ReactElement, ReactNode } from "react"
 import {
   canPerformOrganizationAction,
   type OrganizationPermissionAction,
-  type OrganizationRole,
+  type OrganizationPermissionSubject,
 } from "@/lib/permissions"
 
 type RoleGuardProps = {
-  role: OrganizationRole
+  role: OrganizationPermissionSubject
   action: OrganizationPermissionAction
   fallback?: ReactNode
   children: ReactNode

@@ -3,8 +3,10 @@ import { randomUUID } from "node:crypto"
 import { captureUnexpectedError } from "@/lib/observability"
 import {
   canPerformOrganizationAction,
+  createOrganizationPermissionSubject,
   isOrganizationRole,
   type OrganizationPermissionAction,
+  type OrganizationPermissionSubject,
   type OrganizationRole,
 } from "@/lib/permissions"
 import { createAdminClient } from "@/lib/supabase/admin"
@@ -46,6 +48,7 @@ type SupabaseErrorLike = {
 
 type MembershipRow = {
   role: string
+  role_definition?: { permissions: string[] | null } | null
 }
 
 /**
@@ -136,10 +139,12 @@ export async function requireSubmissionPermission(
   actorUserId: string,
   action: OrganizationPermissionAction,
   rejectionMessage: string
-): Promise<OrganizationRole> {
+): Promise<OrganizationPermissionSubject> {
   const { data, error } = await client
     .from("organization_memberships")
-    .select("role")
+    .select(
+      "role,role_definition:organization_roles!organization_memberships_role_definition_fk(permissions)"
+    )
     .eq("org_id", organizationId)
     .eq("user_id", actorUserId)
     .eq("status", "active")
@@ -152,17 +157,25 @@ export async function requireSubmissionPermission(
     )
   }
 
-  const role = (data as MembershipRow | null)?.role
+  const row = data as MembershipRow | null
+  const role = row?.role
+  const subject = role
+    ? createOrganizationPermissionSubject(
+        role,
+        row?.role_definition?.permissions
+      )
+    : null
 
   if (
     !role ||
     !isOrganizationRole(role) ||
-    !canPerformOrganizationAction(role, action)
+    !subject ||
+    !canPerformOrganizationAction(subject, action)
   ) {
     throw new SubmissionServiceError(rejectionMessage, 403)
   }
 
-  return role
+  return subject
 }
 
 /**

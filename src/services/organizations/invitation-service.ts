@@ -1,4 +1,5 @@
 import {
+  canAssignOrganizationRole,
   canInviteMembers,
   getAssignableOrganizationRoles,
 } from "@/lib/permissions"
@@ -12,6 +13,7 @@ import type {
   CreateInviteInput,
   CreateInviteResult,
   OrganizationMutationDeps,
+  RevokeInviteInput,
 } from "@/services/organizations/contracts"
 import { OrganizationServiceError } from "@/services/organizations/errors"
 import {
@@ -19,9 +21,11 @@ import {
   createPendingInviteRecord,
   getActiveMembership,
   getOrganizationById,
+  getOrganizationRoleRecord,
   getPendingInviteByToken,
   getProfileByEmail,
   revokePendingInvitesForEmail,
+  revokeManageableInvite,
   revokeUndeliveredInvite,
 } from "@/services/organizations/repository"
 import {
@@ -34,9 +38,64 @@ import {
 import type {
   InvitePreview,
   OrganizationContext,
+  OrganizationInvite,
 } from "@/types/organization"
 
 const INVITE_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000
+
+/**
+ * Revokes an active or expired invite for an organization.
+ *
+ * @param input - Actor, tenant, and invite identifiers.
+ * @param deps - Optional database and audit dependencies for tests.
+ * @returns The revoked invite.
+ * @throws OrganizationServiceError when permission or tenant checks fail.
+ */
+export async function revokeInvite(
+  input: RevokeInviteInput,
+  deps: OrganizationMutationDeps = {}
+): Promise<OrganizationInvite> {
+  return runOrganizationOperation(
+    "revoke_invite",
+    {
+      actorUserId: input.actorUserId,
+      organizationId: input.organizationId,
+      inviteId: input.inviteId,
+    },
+    async (): Promise<OrganizationInvite> => {
+      const client = deps.client ?? createAdminClient()
+      const actorMembership = await getActiveMembership(
+        client,
+        input.organizationId,
+        input.actorUserId
+      )
+
+      if (!actorMembership || !canInviteMembers(actorMembership)) {
+        throw new OrganizationServiceError("You cannot delete invites.", 403)
+      }
+
+      const invite = await revokeManageableInvite(
+        client,
+        input.organizationId,
+        input.inviteId
+      )
+
+      await recordOrganizationAuditLog(
+        {
+          organizationId: input.organizationId,
+          actorUserId: input.actorUserId,
+          action: "invite.revoked",
+          targetType: "invite",
+          targetId: input.inviteId,
+          metadata: {},
+        },
+        deps.recordAuditLog
+      )
+
+      return invite
+    }
+  )
+}
 
 /**
  * Creates a pending invite for an organization.
@@ -46,31 +105,54 @@ const INVITE_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000
  * @throws OrganizationServiceError when the actor lacks permission or writes fail.
  */
 export async function createInvite(
-  input: CreateInviteInput
+  input: CreateInviteInput,
+  deps: OrganizationMutationDeps = {}
 ): Promise<CreateInviteResult> {
   return runOrganizationOperation(
     "create_invite",
     {
       actorUserId: input.actorUserId,
       organizationId: input.organizationId,
-      role: input.role,
+      roleId: input.roleId,
     },
     async (): Promise<CreateInviteResult> => {
-      const client = createAdminClient()
+      const client = deps.client ?? createAdminClient()
       const actorMembership = await getActiveMembership(
         client,
         input.organizationId,
         input.actorUserId
       )
 
-      if (!actorMembership || !canInviteMembers(actorMembership.role)) {
+      if (!actorMembership || !canInviteMembers(actorMembership)) {
         throw new OrganizationServiceError("You cannot invite members.", 403)
       }
 
-      if (!getAssignableOrganizationRoles().includes(input.role)) {
+      const roleDefinition = await getOrganizationRoleRecord(
+        client,
+        input.organizationId,
+        input.roleId
+      )
+
+      if (roleDefinition.systemKey === "owner_admin") {
         throw new OrganizationServiceError(
           "That role cannot be assigned by invite.",
           400
+        )
+      }
+
+      const role = roleDefinition.systemKey ?? "staff"
+
+      if (!getAssignableOrganizationRoles().includes(role)) {
+        throw new OrganizationServiceError(
+          "That role cannot be assigned by invite.",
+          400
+        )
+      }
+
+      if (!canAssignOrganizationRole(actorMembership, roleDefinition)) {
+        throw new OrganizationServiceError(
+          "You can only invite people to roles within your own access.",
+          403
         )
       }
 
@@ -101,10 +183,13 @@ export async function createInvite(
       const invite = await createPendingInviteRecord(client, {
         organizationId: input.organizationId,
         email,
-        role: input.role,
-        token: createInviteToken(),
+        role,
+        roleDefinitionId: roleDefinition.id,
+        token: deps.createInviteToken?.() ?? createInviteToken(),
         invitedBy: input.actorUserId,
-        expiresAt: new Date(Date.now() + INVITE_LIFETIME_MS).toISOString(),
+        expiresAt: new Date(
+          (deps.now?.() ?? new Date()).getTime() + INVITE_LIFETIME_MS
+        ).toISOString(),
       })
 
       // Email is how an invite is usually delivered, not what makes it valid.
@@ -117,7 +202,7 @@ export async function createInvite(
       let emailFailureReason: string | null = null
 
       try {
-        await sendInviteEmail({
+        await (deps.sendInviteEmail ?? sendInviteEmail)({
           inviteId: invite.id,
           organizationName: organization.name,
           recipientEmail: invite.email,
@@ -139,18 +224,22 @@ export async function createInvite(
         })
       }
 
-      await recordOrganizationAuditLog({
-        organizationId: input.organizationId,
-        actorUserId: input.actorUserId,
-        action: "invite.created",
-        targetType: "invite",
-        targetId: invite.id,
-        metadata: {
-          email: invite.email,
-          role: invite.role,
-          emailDelivered,
+      await recordOrganizationAuditLog(
+        {
+          organizationId: input.organizationId,
+          actorUserId: input.actorUserId,
+          action: "invite.created",
+          targetType: "invite",
+          targetId: invite.id,
+          metadata: {
+            email: invite.email,
+            role: invite.role,
+            roleDefinitionId: invite.roleDefinitionId ?? null,
+            emailDelivered,
+          },
         },
-      })
+        deps.recordAuditLog
+      )
 
       return { invite, emailDelivered, emailFailureReason }
     }
@@ -181,6 +270,7 @@ export async function getInvitePreview(token: string): Promise<InvitePreview> {
         organizationName: organization.name,
         email: invite.email,
         role: invite.role,
+        roleName: invite.roleName,
         expiresAt: invite.expiresAt,
       }
     }
@@ -214,6 +304,8 @@ export async function acceptInvite(
         )
       }
 
+      await requireInviterAuthority(client, invite)
+
       const acceptedMembershipId = await acceptOrganizationInvite(client, {
         inviteId: invite.id,
         token: input.token,
@@ -230,7 +322,7 @@ export async function acceptInvite(
       if (
         !membership ||
         membership.id !== acceptedMembershipId ||
-        membership.role !== invite.role
+        membership.roleDefinitionId !== invite.roleDefinitionId
       ) {
         throw new OrganizationServiceError(
           "Unable to verify accepted organization membership.",
@@ -259,4 +351,40 @@ export async function acceptInvite(
       }
     }
   )
+}
+
+/**
+ * Confirms the invite's creator could still grant it today, so narrowing or
+ * removing someone's access also withdraws the invitations they sent.
+ *
+ * @param client - Trusted Supabase client.
+ * @param invite - Pending invite being accepted.
+ * @throws OrganizationServiceError when the inviter no longer has that authority.
+ */
+async function requireInviterAuthority(
+  client: NonNullable<OrganizationMutationDeps["client"]>,
+  invite: OrganizationInvite
+): Promise<void> {
+  const inviter = invite.invitedBy
+    ? await getActiveMembership(client, invite.organizationId, invite.invitedBy)
+    : null
+  const roleDefinition =
+    inviter && invite.roleDefinitionId && canInviteMembers(inviter)
+      ? await getOrganizationRoleRecord(
+          client,
+          invite.organizationId,
+          invite.roleDefinitionId
+        )
+      : null
+
+  if (
+    !inviter ||
+    !roleDefinition ||
+    !canAssignOrganizationRole(inviter, roleDefinition)
+  ) {
+    throw new OrganizationServiceError(
+      "This invite is no longer valid. Ask for a new invite.",
+      403
+    )
+  }
 }

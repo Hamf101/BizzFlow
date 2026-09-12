@@ -4,11 +4,11 @@ import { Button } from "@/components/ui/button"
 import {
   canPerformOrganizationAction,
   type OrganizationPermissionAction,
-  type OrganizationRole,
+  type OrganizationPermissionSubject,
 } from "@/lib/permissions"
 
-type PermissionButtonProps = ComponentProps<typeof Button> & {
-  role: OrganizationRole
+type PermissionButtonProps = Omit<ComponentProps<typeof Button>, "role"> & {
+  role: OrganizationPermissionSubject
   action: OrganizationPermissionAction
   deniedMode?: "hide" | "disable"
 }

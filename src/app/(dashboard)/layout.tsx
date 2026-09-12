@@ -90,6 +90,7 @@ async function getDashboardAccount(
     displayName: getFallbackDisplayName(user.email),
     email: user.email ?? "Email unavailable",
     organizationName: null,
+    permissionSubject: null,
     role: null,
   }
 
@@ -109,6 +110,7 @@ async function getDashboardAccount(
       displayName: settings.displayName?.trim() || fallbackAccount.displayName,
       email: fallbackAccount.email,
       organizationName: context.organization.name,
+      permissionSubject: context.membership,
       role: context.membership.role,
     }
   } catch (error: unknown) {
@@ -129,6 +131,7 @@ export default async function DashboardLayout({
     displayName: "BizFlow member",
     email: "Email unavailable",
     organizationName: null,
+    permissionSubject: null,
     role: null,
   }
   let userId: string | undefined
@@ -145,13 +148,13 @@ export default async function DashboardLayout({
       <Suspense fallback={null}>
         <ActionFeedback />
       </Suspense>
-      <div className="min-h-screen bg-canvas text-foreground">
+      <div className="flex min-h-dvh flex-col bg-canvas text-foreground">
         <MobileTopBar account={account} signOutAction={signOutAction} />
-        <div className="mx-auto flex min-h-screen w-full max-w-[96rem] flex-col md:flex-row">
+        <div className="mx-auto flex w-full max-w-[96rem] flex-1 flex-col md:flex-row">
           <DashboardSidebar account={account} signOutAction={signOutAction} />
-          <div className="min-w-0 flex-1 p-3 pb-[calc(3.5rem+0.75rem+env(safe-area-inset-bottom))] md:py-4 md:pr-4 md:pb-4 md:pl-1">
-            <main className="flex min-h-full flex-col rounded-[18px] border border-border/70 bg-background shadow-[0_1px_2px_rgba(37,35,41,0.04)]">
-              <div className="min-w-0 flex-1 px-5 py-6 sm:px-7 sm:py-7">
+          <div className="flex min-w-0 flex-1 flex-col px-3 pt-3 md:pt-4 md:pr-4 md:pl-1">
+            <main className="flex flex-1 flex-col rounded-t-[18px] border-x border-t border-border/70 bg-background">
+              <div className="min-w-0 flex-1 px-5 pt-6 pb-[calc(3.5rem+1.5rem+env(safe-area-inset-bottom))] sm:px-7 sm:pt-7 sm:pb-[calc(3.5rem+1.75rem+env(safe-area-inset-bottom))] md:pb-7">
                 <Suspense fallback={<DashboardContentSkeleton />}>
                   <DashboardUserScope />
                   {children}
@@ -160,7 +163,7 @@ export default async function DashboardLayout({
             </main>
           </div>
         </div>
-        <MobileTabBar role={account.role} />
+        <MobileTabBar role={account.permissionSubject} />
       </div>
     </PostHogProvider>
   )

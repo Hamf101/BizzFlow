@@ -6,6 +6,10 @@ import { z } from "zod"
 
 import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
 import {
+  ORGANIZATION_PERMISSION_ACTIONS,
+  type OrganizationPermissionAction,
+} from "@/lib/permissions"
+import {
   buildFeedbackRedirect,
   getActionErrorFeedbackCode,
 } from "@/lib/action-result"
@@ -14,9 +18,30 @@ import {
   updateOrganizationNotificationSettings,
 } from "@/services/notification-service"
 import {
+  archiveOrganizationRole,
+  createOrganizationRole,
+  OrganizationServiceError,
+  updateOrganizationRole,
   updateProfile,
   updateNotificationPreferences,
 } from "@/services/organization-service"
+
+const SETTINGS_ACCESS_PATH = "/settings#roles-and-access"
+const permissionSchema = z.enum(ORGANIZATION_PERMISSION_ACTIONS)
+const roleNameSchema = z.string().min(2).max(60).trim()
+const roleMutationSchema = z.object({
+  organizationId: z.string().uuid(),
+  name: roleNameSchema,
+  permissions: z.array(permissionSchema),
+})
+const roleUpdateSchema = roleMutationSchema.extend({
+  roleId: z.string().uuid(),
+  permissionsLocked: z.boolean(),
+})
+const roleArchiveSchema = z.object({
+  organizationId: z.string().uuid(),
+  roleId: z.string().uuid(),
+})
 
 const updateProfileSchema = z.object({
   displayName: z.string().min(1, "Display name is required.").max(200).trim(),
@@ -120,7 +145,7 @@ const updateOrganizationSettingsSchema = z.object({
  * Updates the organization-wide notification switches.
  *
  * These silence a channel for every member, so the service requires the
- * `organization:manage` permission that only an owner holds.
+ * `organization:manage` permission, granted by default only to Owner.
  *
  * @param formData - Organization id and the two channel switches.
  */
@@ -158,4 +183,148 @@ export async function updateOrganizationNotificationSettingsAction(
 
   revalidatePath("/settings")
   redirect(buildFeedbackRedirect("/settings", "changes_saved"))
+}
+
+/**
+ * Creates a workspace-scoped custom role from selected permission outcomes.
+ *
+ * @param formData - Tenant, visible role name, and repeated permission fields.
+ * @returns Never returns; redirects to the access section with feedback.
+ */
+export async function createOrganizationRoleAction(
+  formData: FormData
+): Promise<void> {
+  const parsed = roleMutationSchema.safeParse({
+    organizationId: getFormString(formData, "organizationId"),
+    name: getFormString(formData, "name"),
+    permissions: getPermissionValues(formData),
+  })
+
+  if (!parsed.success) {
+    redirect(buildFeedbackRedirect(SETTINGS_ACCESS_PATH, "invalid_input"))
+  }
+
+  await runAuthenticatedSettingsMutation(async (actorUserId: string) => {
+    await createOrganizationRole({
+      actorUserId,
+      organizationId: parsed.data.organizationId,
+      name: parsed.data.name,
+      permissions: parsed.data.permissions,
+    })
+  })
+
+  revalidatePath("/settings")
+  revalidatePath("/people")
+  redirect(buildFeedbackRedirect(SETTINGS_ACCESS_PATH, "role_created"))
+}
+
+/**
+ * Updates a role name and its editable permission set.
+ *
+ * Owner submits a locked marker so only its visible name is sent; the service
+ * and database remain the authority that its full access cannot change.
+ *
+ * @param formData - Tenant, role, visible name, and repeated permission fields.
+ * @returns Never returns; redirects to the access section with feedback.
+ */
+export async function updateOrganizationRoleAction(
+  formData: FormData
+): Promise<void> {
+  const parsed = roleUpdateSchema.safeParse({
+    organizationId: getFormString(formData, "organizationId"),
+    roleId: getFormString(formData, "roleId"),
+    name: getFormString(formData, "name"),
+    permissions: getPermissionValues(formData),
+    permissionsLocked: getFormString(formData, "permissionsLocked") === "true",
+  })
+
+  if (!parsed.success) {
+    redirect(buildFeedbackRedirect(SETTINGS_ACCESS_PATH, "invalid_input"))
+  }
+
+  await runAuthenticatedSettingsMutation(async (actorUserId: string) => {
+    await updateOrganizationRole({
+      actorUserId,
+      organizationId: parsed.data.organizationId,
+      roleId: parsed.data.roleId,
+      name: parsed.data.name,
+      permissions: parsed.data.permissionsLocked
+        ? undefined
+        : parsed.data.permissions,
+    })
+  })
+
+  revalidatePath("/settings")
+  revalidatePath("/people")
+  redirect(buildFeedbackRedirect(SETTINGS_ACCESS_PATH, "role_updated"))
+}
+
+/**
+ * Archives an unused non-owner role while preserving audit history.
+ *
+ * @param formData - Tenant and role identifiers.
+ * @returns Never returns; redirects to the access section with feedback.
+ */
+export async function archiveOrganizationRoleAction(
+  formData: FormData
+): Promise<void> {
+  const parsed = roleArchiveSchema.safeParse({
+    organizationId: getFormString(formData, "organizationId"),
+    roleId: getFormString(formData, "roleId"),
+  })
+
+  if (!parsed.success) {
+    redirect(buildFeedbackRedirect(SETTINGS_ACCESS_PATH, "invalid_input"))
+  }
+
+  await runAuthenticatedSettingsMutation(
+    async (actorUserId: string) => {
+      await archiveOrganizationRole({
+        actorUserId,
+        organizationId: parsed.data.organizationId,
+        roleId: parsed.data.roleId,
+      })
+    },
+    "role_in_use"
+  )
+
+  revalidatePath("/settings")
+  revalidatePath("/people")
+  redirect(buildFeedbackRedirect(SETTINGS_ACCESS_PATH, "role_removed"))
+}
+
+function getPermissionValues(
+  formData: FormData
+): OrganizationPermissionAction[] {
+  return formData
+    .getAll("permissions")
+    .filter((value): value is string => typeof value === "string")
+    .filter((value): value is OrganizationPermissionAction =>
+      ORGANIZATION_PERMISSION_ACTIONS.includes(
+        value as OrganizationPermissionAction
+      )
+    )
+}
+
+async function runAuthenticatedSettingsMutation(
+  operation: (actorUserId: string) => Promise<void>,
+  conflictFeedbackCode?: "role_in_use"
+): Promise<void> {
+  try {
+    const user = await getAuthenticatedUser()
+    await operation(user.id)
+  } catch (error: unknown) {
+    if (error instanceof AuthenticationError) {
+      redirect(buildRedirect("/login", { next: "/settings" }))
+    }
+
+    const feedbackCode =
+      conflictFeedbackCode &&
+      error instanceof OrganizationServiceError &&
+      error.statusCode === 409
+        ? conflictFeedbackCode
+        : getActionErrorFeedbackCode(error)
+
+    redirect(buildFeedbackRedirect(SETTINGS_ACCESS_PATH, feedbackCode))
+  }
 }

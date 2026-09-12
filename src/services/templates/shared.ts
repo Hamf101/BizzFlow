@@ -5,9 +5,10 @@ import { ZodError } from "zod"
 import { captureUnexpectedError } from "@/lib/observability"
 import {
   canPerformOrganizationAction,
+  createOrganizationPermissionSubject,
   isOrganizationRole,
   type OrganizationPermissionAction,
-  type OrganizationRole,
+  type OrganizationPermissionSubject,
 } from "@/lib/permissions"
 import { createAdminClient } from "@/lib/supabase/admin"
 import {
@@ -39,6 +40,7 @@ type LogValue = string | number | boolean | null | undefined
 
 type MembershipRow = {
   role: string
+  role_definition?: { permissions: string[] | null } | null
 }
 
 type FolderStateRow = {
@@ -58,10 +60,12 @@ export async function requirePermission(
   actorUserId: string,
   action: OrganizationPermissionAction,
   rejectionMessage: string
-): Promise<OrganizationRole> {
+): Promise<OrganizationPermissionSubject> {
   const { data, error } = await client
     .from("organization_memberships")
-    .select("role")
+    .select(
+      "role,role_definition:organization_roles!organization_memberships_role_definition_fk(permissions)"
+    )
     .eq("org_id", organizationId)
     .eq("user_id", actorUserId)
     .eq("status", "active")
@@ -75,7 +79,8 @@ export async function requirePermission(
     throw new TemplateServiceError(rejectionMessage, 403)
   }
 
-  const role = (data as MembershipRow).role
+  const row = data as MembershipRow
+  const role = row.role
 
   if (!isOrganizationRole(role)) {
     throw new TemplateServiceError(
@@ -84,11 +89,23 @@ export async function requirePermission(
     )
   }
 
-  if (!canPerformOrganizationAction(role, action)) {
+  const subject = createOrganizationPermissionSubject(
+    role,
+    row.role_definition?.permissions
+  )
+
+  if (!subject) {
+    throw new TemplateServiceError(
+      "Database returned unsupported role permissions.",
+      500
+    )
+  }
+
+  if (!canPerformOrganizationAction(subject, action)) {
     throw new TemplateServiceError(rejectionMessage, 403)
   }
 
-  return role
+  return subject
 }
 
 export async function getTemplateById(

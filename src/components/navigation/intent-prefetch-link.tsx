@@ -19,11 +19,11 @@ export type IntentPrefetchLinkProps = Omit<
 }
 
 /**
- * Prefetches a dynamic dashboard destination only after the user signals intent.
+ * Fully prefetches a dashboard destination and refreshes it after user intent.
  *
- * Viewport prefetching is disabled because every dashboard route performs
- * tenant-scoped server reads. Warming one intended destination avoids the
- * database burst caused by rendering a full navigation list.
+ * Primary navigation contains a small, permission-filtered route set. Loading
+ * those destinations while the navigation is visible lets tab switches resolve
+ * from the client cache without showing an intermediate loading screen.
  *
  * @param props - Standard Next.js link props with a string application path.
  * @returns A client-navigation link that warms its route on hover, focus, or touch.
@@ -65,7 +65,7 @@ export function IntentPrefetchLink({
       onFocus={handleFocus}
       onMouseEnter={handleMouseEnter}
       onTouchStart={handleTouchStart}
-      prefetch={false}
+      prefetch
     />
   )
 }

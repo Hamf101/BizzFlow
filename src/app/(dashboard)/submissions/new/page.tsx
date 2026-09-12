@@ -52,7 +52,7 @@ export default async function NewSubmissionPage(): Promise<ReactElement> {
 
   if (
     !canPerformOrganizationAction(
-      context.membership.role,
+      context.membership,
       "submissions:create"
     )
   ) {

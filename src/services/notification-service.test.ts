@@ -385,6 +385,72 @@ describe("organization notification settings", () => {
     })
   })
 
+  it("honors organization:manage when an owner grants it to a custom role", async () => {
+    const client = new FakeClient({
+      organizations: [
+        { id: ORG_ID, email_notifications_enabled: true, sms_notifications_enabled: true },
+      ],
+      memberships: [
+        {
+          org_id: ORG_ID,
+          user_id: MANAGER_ID,
+          role: "staff",
+          status: "active",
+          role_definition: { permissions: ["organization:manage"] },
+        },
+      ],
+    })
+
+    await expect(
+      updateOrganizationNotificationSettings(
+        {
+          actorUserId: MANAGER_ID,
+          organizationId: ORG_ID,
+          emailNotificationsEnabled: false,
+          smsNotificationsEnabled: true,
+        },
+        createDeps(client)
+      )
+    ).resolves.toEqual({
+      emailNotificationsEnabled: false,
+      smsNotificationsEnabled: true,
+    })
+  })
+
+  it("rechecks a custom role after organization:manage is revoked", async () => {
+    const roleDefinition = { permissions: ["organization:manage"] }
+    const client = new FakeClient({
+      organizations: [
+        { id: ORG_ID, email_notifications_enabled: true, sms_notifications_enabled: true },
+      ],
+      memberships: [
+        {
+          org_id: ORG_ID,
+          user_id: MANAGER_ID,
+          role: "staff",
+          status: "active",
+          role_definition: roleDefinition,
+        },
+      ],
+    })
+    const input = {
+      actorUserId: MANAGER_ID,
+      organizationId: ORG_ID,
+      emailNotificationsEnabled: false,
+      smsNotificationsEnabled: true,
+    }
+
+    await expect(
+      updateOrganizationNotificationSettings(input, createDeps(client))
+    ).resolves.toBeDefined()
+
+    roleDefinition.permissions = []
+
+    await expect(
+      updateOrganizationNotificationSettings(input, createDeps(client))
+    ).rejects.toMatchObject({ statusCode: 403 })
+  })
+
   it("refuses a manager", async () => {
     const client = new FakeClient({
       organizations: [{ id: ORG_ID, email_notifications_enabled: true, sms_notifications_enabled: true }],

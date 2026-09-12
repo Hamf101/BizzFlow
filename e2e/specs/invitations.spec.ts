@@ -21,14 +21,28 @@ test.describe("invitations", () => {
     const password = "e2e-BizFlow-Passw0rd"
 
     await owner.goto("/people")
+    await owner.getByRole("button", { name: "Invite", exact: true }).click()
     const inviteForm = owner.locator("form").filter({
       has: owner.getByRole("button", { name: "Send invite" }),
     })
 
+    const { data: staffRole, error: staffRoleError } = await admin
+      .from("organization_roles")
+      .select("id")
+      .eq("org_id", tenant.organizationId)
+      .eq("system_key", "staff")
+      .is("archived_at", null)
+      .single()
+
+    expect(staffRoleError).toBeNull()
+    expect(staffRole?.id).toBeTruthy()
+
     await inviteForm.getByLabel("Email").fill(inviteeEmail)
-    await inviteForm.getByLabel("Role").selectOption("staff")
+    await inviteForm.getByLabel("Role").selectOption(staffRole?.id as string)
     await inviteForm.getByRole("button", { name: "Send invite" }).click()
 
+    await owner.getByRole("button", { name: "Invite", exact: true }).click()
+    await owner.getByRole("tab", { name: /Manage invites/ }).click()
     await expect(owner.getByText(inviteeEmail)).toBeVisible()
 
     // The token is generated server-side and only ever emailed, so a test has to
@@ -110,10 +124,10 @@ test.describe("invitations", () => {
     await expect(staff.getByRole("heading", { name: "People" })).toBeVisible()
 
     await expect(
-      manager.getByRole("button", { name: "Send invite" })
+      manager.getByRole("button", { name: "Invite", exact: true })
     ).toBeVisible()
     await expect(
-      staff.getByRole("button", { name: "Send invite" })
+      staff.getByRole("button", { name: "Invite", exact: true })
     ).toBeHidden()
   })
 })

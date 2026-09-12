@@ -396,7 +396,7 @@ async function loadTaskActionContext(
     )
   }
 
-  if (!canPerformOrganizationAction(context.membership.role, permission)) {
+  if (!canPerformOrganizationAction(context.membership, permission)) {
     throw new TaskActionError(
       "You do not have permission to perform this task action.",
       403

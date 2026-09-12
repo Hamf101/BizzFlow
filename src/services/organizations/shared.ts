@@ -1,13 +1,19 @@
 import { randomUUID } from "node:crypto"
 
 import { captureUnexpectedError } from "@/lib/observability"
-import { isOrganizationRole, type OrganizationRole } from "@/lib/permissions"
+import {
+  isOrganizationRole,
+  ORGANIZATION_PERMISSION_ACTIONS,
+  type OrganizationPermissionAction,
+  type OrganizationRole,
+} from "@/lib/permissions"
 import { recordAuditLog } from "@/services/audit-service"
 import type {
   InviteRow,
   LogValue,
   MembershipRow,
   OrganizationAuditLogInput,
+  OrganizationRoleRow,
   OrganizationRow,
   SupabaseErrorLike,
 } from "@/services/organizations/contracts"
@@ -18,6 +24,7 @@ import type {
   Organization,
   OrganizationInvite,
   OrganizationMembership,
+  OrganizationRoleDefinition,
 } from "@/types/organization"
 
 /**
@@ -126,12 +133,56 @@ export function mapOrganization(row: OrganizationRow): Organization {
  * @returns Membership DTO.
  */
 export function mapMembership(row: MembershipRow): OrganizationMembership {
+  const roleDefinition = row.role_definition ?? null
+  const rolePermissions = roleDefinition?.permissions?.filter(
+    (permission): permission is OrganizationPermissionAction =>
+      ORGANIZATION_PERMISSION_ACTIONS.includes(
+        permission as OrganizationPermissionAction
+      )
+  )
+
   return {
     id: row.id,
     organizationId: row.org_id,
     userId: row.user_id,
     role: parseOrganizationRole(row.role),
+    roleDefinitionId: row.role_definition_id ?? roleDefinition?.id ?? null,
+    roleName: roleDefinition?.name ?? null,
+    customPermissions: rolePermissions ?? null,
+    workspaceDisplayName: row.workspace_display_name ?? null,
     status: parseMembershipStatus(row.status),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }
+}
+
+/**
+ * Maps a tenant role row to the public role-definition DTO.
+ *
+ * @param row - Organization role database row.
+ * @returns Organization role definition.
+ */
+export function mapOrganizationRole(
+  row: OrganizationRoleRow
+): OrganizationRoleDefinition {
+  const systemKey =
+    row.system_key !== null && isOrganizationRole(row.system_key)
+      ? row.system_key
+      : null
+  const permissions = row.permissions?.filter(
+    (permission): permission is OrganizationPermissionAction =>
+      ORGANIZATION_PERMISSION_ACTIONS.includes(
+        permission as OrganizationPermissionAction
+      )
+  ) ?? null
+
+  return {
+    id: row.id,
+    organizationId: row.org_id,
+    systemKey,
+    name: row.name,
+    permissions,
+    archivedAt: row.archived_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
@@ -144,12 +195,17 @@ export function mapMembership(row: MembershipRow): OrganizationMembership {
  * @returns Invite DTO.
  */
 export function mapInvite(row: InviteRow): OrganizationInvite {
+  const roleDefinition = row.role_definition ?? null
+
   return {
     id: row.id,
     organizationId: row.org_id,
     email: row.email,
     role: parseOrganizationRole(row.role),
+    roleDefinitionId: row.role_definition_id ?? roleDefinition?.id ?? null,
+    roleName: roleDefinition?.name ?? null,
     token: row.token,
+    invitedBy: row.invited_by ?? null,
     status: parseInviteStatus(row.status),
     expiresAt: row.expires_at,
     createdAt: row.created_at,
@@ -231,6 +287,45 @@ export function createMemberRoleMutationError(
   }
 
   return createSupabaseServiceError(error, "Unable to update member role.")
+}
+
+/**
+ * Translates role-archive RPC failures into user-safe, actionable errors.
+ *
+ * @param error - Supabase RPC error.
+ * @returns A user-safe organization service error.
+ */
+export function createRoleArchiveMutationError(
+  error: unknown
+): OrganizationServiceError {
+  const errorLike = getSupabaseErrorLike(error)
+
+  if (errorLike?.code === "23503") {
+    return new OrganizationServiceError(
+      "Reassign members and active invitations before removing this role.",
+      409
+    )
+  }
+
+  if (errorLike?.code === "23514") {
+    return new OrganizationServiceError(
+      "Owner access is permanent and cannot be removed.",
+      400
+    )
+  }
+
+  if (errorLike?.code === "42501") {
+    return new OrganizationServiceError(
+      "Only an organization owner can remove access roles.",
+      403
+    )
+  }
+
+  if (errorLike?.code === "P0002") {
+    return new OrganizationServiceError("Access role was not found.", 404)
+  }
+
+  return createSupabaseServiceError(error, "Unable to remove access role.")
 }
 
 /**

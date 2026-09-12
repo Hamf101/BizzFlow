@@ -351,7 +351,7 @@ async function loadSubmissionActionContext(
     )
   }
 
-  if (!canPerformOrganizationAction(context.membership.role, permission)) {
+  if (!canPerformOrganizationAction(context.membership, permission)) {
     throw new SubmissionActionError(
       "You do not have permission to perform this submission action.",
       403

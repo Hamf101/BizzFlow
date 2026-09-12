@@ -1,8 +1,9 @@
 import { createAdminClient } from "@/lib/supabase/admin"
 import {
   canPerformOrganizationAction,
+  createOrganizationPermissionSubject,
   isOrganizationRole,
-  type OrganizationRole,
+  type OrganizationPermissionSubject,
 } from "@/lib/permissions"
 import {
   AUDIT_LOG_ACTIONS,
@@ -35,6 +36,7 @@ type AuditLogRow = {
 
 type MembershipRow = {
   role: string
+  role_definition?: { permissions: string[] | null } | null
 }
 
 type RecordAuditLogInput = {
@@ -226,10 +228,12 @@ async function getOrganizationRole(
   client: AdminClient,
   organizationId: string,
   userId: string
-): Promise<OrganizationRole | null> {
+): Promise<OrganizationPermissionSubject | null> {
   const { data, error } = await client
     .from("organization_memberships")
-    .select("role")
+    .select(
+      "role,role_definition:organization_roles!organization_memberships_role_definition_fk(permissions)"
+    )
     .eq("org_id", organizationId)
     .eq("user_id", userId)
     .eq("status", "active")
@@ -249,7 +253,19 @@ async function getOrganizationRole(
     throw new AuditServiceError("Database returned an unsupported role.", 500)
   }
 
-  return row.role
+  const subject = createOrganizationPermissionSubject(
+    row.role,
+    row.role_definition?.permissions
+  )
+
+  if (!subject) {
+    throw new AuditServiceError(
+      "Database returned unsupported role permissions.",
+      500
+    )
+  }
+
+  return subject
 }
 
 function mapAuditLog(row: AuditLogRow): AuditLogEntry {

@@ -4,10 +4,10 @@ import type { ReactElement } from "react"
 import { useFormStatus } from "react-dom"
 
 import { PermissionButton } from "@/components/auth/permission-button"
-import type { OrganizationRole } from "@/lib/permissions"
+import type { OrganizationPermissionSubject } from "@/lib/permissions"
 
 type DocumentCommentSubmitButtonProps = {
-  role: OrganizationRole
+  role: OrganizationPermissionSubject
 }
 
 /**

@@ -5,8 +5,10 @@ import { ZodError } from "zod"
 import { captureUnexpectedError } from "@/lib/observability"
 import {
   canPerformOrganizationAction,
-  isOrganizationRole,
+  createOrganizationPermissionSubject,
+  getOrganizationRoleFromSubject,
   type OrganizationPermissionAction,
+  type OrganizationPermissionSubject,
   type OrganizationRole,
 } from "@/lib/permissions"
 import { createAdminClient } from "@/lib/supabase/admin"
@@ -65,6 +67,7 @@ export type TaskMutationValues = {
 
 type MembershipRoleRow = {
   role: string
+  role_definition?: { permissions: string[] | null } | null
 }
 
 type SupabaseErrorLike = {
@@ -180,36 +183,55 @@ export async function requireTaskPermission(
   action: OrganizationPermissionAction,
   rejectionMessage: string
 ): Promise<OrganizationRole> {
-  const role = await loadActiveMembershipRole(
+  const subject = await loadActiveMembershipPermissionSubject(
     client,
     organizationId,
     actorUserId
   )
 
-  if (!role || !canPerformOrganizationAction(role, action)) {
+  if (!subject || !canPerformOrganizationAction(subject, action)) {
     throw new TaskServiceError(rejectionMessage, 403)
   }
 
-  return role
+  return getOrganizationRoleFromSubject(subject)
 }
 
-/**
- * Reads the active organization role of a member, if one exists.
- *
- * @param client - Trusted Supabase client.
- * @param organizationId - Tenant identifier.
- * @param userId - Member identifier.
- * @returns Active role, or null when the member has none.
- * @throws TaskServiceError when the membership query fails or returns junk.
- */
-export async function loadActiveMembershipRole(
+async function loadActiveMembershipPermissionSubject(
   client: TaskServiceClient,
   organizationId: string,
   userId: string
-): Promise<OrganizationRole | null> {
+): Promise<OrganizationPermissionSubject | null> {
+  const row = await loadActiveMembershipRow(client, organizationId, userId)
+
+  if (!row) {
+    return null
+  }
+
+  const subject = createOrganizationPermissionSubject(
+    row.role,
+    row.role_definition?.permissions
+  )
+
+  if (!subject) {
+    throw new TaskServiceError(
+      "Database returned unsupported organization permissions.",
+      500
+    )
+  }
+
+  return subject
+}
+
+async function loadActiveMembershipRow(
+  client: TaskServiceClient,
+  organizationId: string,
+  userId: string
+): Promise<MembershipRoleRow | null> {
   const { data, error } = await client
     .from("organization_memberships")
-    .select("role")
+    .select(
+      "role,role_definition:organization_roles!organization_memberships_role_definition_fk(permissions)"
+    )
     .eq("org_id", organizationId)
     .eq("user_id", userId)
     .eq("status", "active")
@@ -219,27 +241,34 @@ export async function loadActiveMembershipRole(
     throw createTaskDatabaseError(error, "Unable to load task permissions.")
   }
 
-  const role = (data as MembershipRoleRow | null)?.role
-
-  if (role === undefined) {
-    return null
-  }
-
-  if (!isOrganizationRole(role)) {
-    throw new TaskServiceError(
-      "Database returned an unsupported organization role.",
-      500
-    )
-  }
-
-  return role
+  return data as MembershipRoleRow | null
 }
 
 /**
- * Requires a user to be an active internal member of the tenant.
+ * Checks whether a membership may hold task work: an internal base role whose
+ * current permissions still include `tasks:view`. Assignees and reminder
+ * recipients both receive task details, so a narrowed role stops receiving
+ * them. External reviewers are outside contributors and never qualify.
  *
- * External reviewers are outside contributors, so they can never hold a task
- * assignment or receive a task reminder.
+ * @param row - Membership base role and role-definition permissions.
+ * @returns True when the member may be assigned tasks or sent task reminders.
+ */
+export function canReceiveTaskWork(row: MembershipRoleRow): boolean {
+  const subject = createOrganizationPermissionSubject(
+    row.role,
+    row.role_definition?.permissions
+  )
+
+  return (
+    subject !== null &&
+    INTERNAL_TASK_MEMBER_ROLES.includes(getOrganizationRoleFromSubject(subject)) &&
+    canPerformOrganizationAction(subject, "tasks:view")
+  )
+}
+
+/**
+ * Requires a user to be an active internal member of the tenant who can still
+ * view tasks.
  *
  * @param client - Trusted Supabase client.
  * @param organizationId - Tenant identifier.
@@ -253,9 +282,9 @@ export async function requireInternalTaskMember(
   userId: string,
   rejectionMessage: string
 ): Promise<void> {
-  const role = await loadActiveMembershipRole(client, organizationId, userId)
+  const row = await loadActiveMembershipRow(client, organizationId, userId)
 
-  if (!role || !INTERNAL_TASK_MEMBER_ROLES.includes(role)) {
+  if (!row || !canReceiveTaskWork(row)) {
     throw new TaskServiceError(rejectionMessage, 400)
   }
 }

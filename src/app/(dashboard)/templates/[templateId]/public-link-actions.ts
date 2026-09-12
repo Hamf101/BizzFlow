@@ -35,7 +35,7 @@ export async function createPublicFormLinkAction(
     if (
       !context ||
       !canPerformOrganizationAction(
-        context.membership.role,
+        context.membership,
         "templates:manage"
       )
     ) {
@@ -83,7 +83,7 @@ export async function disablePublicFormLinkAction(
     if (
       !context ||
       !canPerformOrganizationAction(
-        context.membership.role,
+        context.membership,
         "templates:manage"
       )
     ) {

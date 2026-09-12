@@ -1,7 +1,11 @@
-import type { OrganizationRole } from "@/lib/permissions"
+import type {
+  OrganizationPermissionAction,
+  OrganizationRole,
+} from "@/lib/permissions"
 import type {
   InviteRow,
   MembershipRow,
+  OrganizationRoleRow,
   OrganizationRow,
   OrganizationServiceClient,
   ProfileRow,
@@ -10,10 +14,12 @@ import { OrganizationServiceError } from "@/services/organizations/errors"
 import {
   createAcceptInviteMutationError,
   createMemberRoleMutationError,
+  createRoleArchiveMutationError,
   createSupabaseServiceError,
   mapInvite,
   mapMembership,
   mapOrganization,
+  mapOrganizationRole,
   normalizeOptionalEmail,
 } from "@/services/organizations/shared"
 import type {
@@ -21,12 +27,14 @@ import type {
   OrganizationContext,
   OrganizationInvite,
   OrganizationMembership,
+  OrganizationRoleDefinition,
 } from "@/types/organization"
 
 type CreatePendingInviteRecordInput = {
   organizationId: string
   email: string
   role: OrganizationRole
+  roleDefinitionId: string
   token: string
   invitedBy: string
   expiresAt: string
@@ -45,6 +53,17 @@ type UpdateOrganizationMemberRoleInput = {
   actorUserId: string
   role: OrganizationRole
 }
+
+type UpdateOrganizationMemberAccessRecordInput = {
+  organizationId: string
+  membershipId: string
+  actorUserId: string
+  roleDefinitionId: string
+  workspaceDisplayName: string | null
+}
+
+const MEMBERSHIP_SELECT =
+  "id,org_id,user_id,role,role_definition_id,workspace_display_name,status,created_at,updated_at,role_definition:organization_roles!organization_memberships_role_definition_fk(id,name,system_key,permissions)"
 
 /**
  * Upserts the authenticated user's server-owned profile identity.
@@ -188,6 +207,14 @@ export async function getCurrentMembershipContext(
       org_id: row.org_id,
       user_id: row.user_id,
       role: row.role,
+      role_definition_id: row.role_definition_id,
+      workspace_display_name: row.workspace_display_name,
+      role_definition: {
+        id: row.role_definition_id,
+        name: row.role_definition_name,
+        system_key: row.role_definition_system_key,
+        permissions: row.role_definition_permissions,
+      },
       status: row.status,
       created_at: row.membership_created_at,
       updated_at: row.membership_updated_at,
@@ -218,7 +245,7 @@ export async function getActiveMembership(
 ): Promise<OrganizationMembership | null> {
   const { data, error } = await client
     .from("organization_memberships")
-    .select("id,org_id,user_id,role,status,created_at,updated_at")
+    .select(MEMBERSHIP_SELECT)
     .eq("org_id", organizationId)
     .eq("user_id", userId)
     .eq("status", "active")
@@ -248,7 +275,7 @@ export async function getMembershipById(
 ): Promise<OrganizationMembership> {
   const { data, error } = await client
     .from("organization_memberships")
-    .select("id,org_id,user_id,role,status,created_at,updated_at")
+    .select(MEMBERSHIP_SELECT)
     .eq("id", membershipId)
     .single()
 
@@ -276,7 +303,7 @@ export async function listActiveMemberships(
 ): Promise<OrganizationMembership[]> {
   const { data, error } = await client
     .from("organization_memberships")
-    .select("id,org_id,user_id,role,status,created_at,updated_at")
+    .select(MEMBERSHIP_SELECT)
     .eq("org_id", organizationId)
     .eq("status", "active")
     .order("created_at", { ascending: true })
@@ -405,11 +432,12 @@ export async function createPendingInviteRecord(
       org_id: input.organizationId,
       email: input.email,
       role: input.role,
+      role_definition_id: input.roleDefinitionId,
       token: input.token,
       invited_by: input.invitedBy,
       expires_at: input.expiresAt,
     })
-    .select("id,org_id,email,role,token,status,expires_at,created_at")
+    .select("id,org_id,email,role,role_definition_id,token,status,expires_at,created_at,role_definition:organization_roles!invites_role_definition_fk(id,name,system_key)")
     .single()
 
   if (error || !data) {
@@ -426,15 +454,15 @@ export async function createPendingInviteRecord(
  * @param organizationId - Organization identifier.
  * @returns Pending invites ordered newest first.
  */
-export async function listPendingInvites(
+export async function listManageableInvites(
   client: OrganizationServiceClient,
   organizationId: string
 ): Promise<OrganizationInvite[]> {
   const { data, error } = await client
     .from("invites")
-    .select("id,org_id,email,role,token,status,expires_at,created_at")
+    .select("id,org_id,email,role,role_definition_id,token,status,expires_at,created_at,role_definition:organization_roles!invites_role_definition_fk(id,name,system_key)")
     .eq("org_id", organizationId)
-    .eq("status", "pending")
+    .in("status", ["pending", "expired"])
     .order("created_at", { ascending: false })
 
   if (error || !data) {
@@ -442,6 +470,40 @@ export async function listPendingInvites(
   }
 
   return (data as InviteRow[]).map(mapInvite)
+}
+
+/**
+ * Soft-deletes a manageable invite while preserving its audit history.
+ *
+ * @param client - Trusted Supabase client.
+ * @param organizationId - Owning tenant identifier.
+ * @param inviteId - Invite identifier.
+ * @returns The revoked invite.
+ * @throws OrganizationServiceError when the invite is missing or the write fails.
+ */
+export async function revokeManageableInvite(
+  client: OrganizationServiceClient,
+  organizationId: string,
+  inviteId: string
+): Promise<OrganizationInvite> {
+  const { data, error } = await client
+    .from("invites")
+    .update({ status: "revoked" })
+    .eq("org_id", organizationId)
+    .eq("id", inviteId)
+    .in("status", ["pending", "expired"])
+    .select("id,org_id,email,role,role_definition_id,token,status,expires_at,created_at,role_definition:organization_roles!invites_role_definition_fk(id,name,system_key)")
+    .maybeSingle()
+
+  if (error) {
+    throw createSupabaseServiceError(error, "Unable to delete invite.")
+  }
+
+  if (!data) {
+    throw new OrganizationServiceError("Invite was not found.", 404)
+  }
+
+  return mapInvite(data as InviteRow)
 }
 
 /**
@@ -458,7 +520,7 @@ export async function getPendingInviteByToken(
 ): Promise<OrganizationInvite> {
   const { data, error } = await client
     .from("invites")
-    .select("id,org_id,email,role,token,status,expires_at,created_at")
+    .select("id,org_id,email,role,role_definition_id,token,invited_by,status,expires_at,created_at,role_definition:organization_roles!invites_role_definition_fk(id,name,system_key)")
     .eq("token", token)
     .eq("status", "pending")
     .gt("expires_at", new Date().toISOString())
@@ -526,6 +588,197 @@ export async function updateOrganizationMemberRole(
   }
 
   return data
+}
+
+/**
+ * Lists active role definitions for an organization.
+ *
+ * @param client - Trusted Supabase client.
+ * @param organizationId - Owning tenant identifier.
+ * @returns Active roles in stable creation order.
+ */
+export async function listOrganizationRoleRecords(
+  client: OrganizationServiceClient,
+  organizationId: string
+): Promise<OrganizationRoleDefinition[]> {
+  const { data, error } = await client
+    .from("organization_roles")
+    .select(
+      "id,org_id,system_key,name,permissions,archived_at,created_at,updated_at"
+    )
+    .eq("org_id", organizationId)
+    .is("archived_at", null)
+    .order("created_at", { ascending: true })
+
+  if (error || !data) {
+    throw createSupabaseServiceError(error, "Unable to load access roles.")
+  }
+
+  return (data as OrganizationRoleRow[]).map(mapOrganizationRole)
+}
+
+/**
+ * Loads one active role definition inside its tenant.
+ *
+ * @param client - Trusted Supabase client.
+ * @param organizationId - Owning tenant identifier.
+ * @param roleId - Role definition identifier.
+ * @returns Active role definition.
+ * @throws OrganizationServiceError when the role is missing.
+ */
+export async function getOrganizationRoleRecord(
+  client: OrganizationServiceClient,
+  organizationId: string,
+  roleId: string
+): Promise<OrganizationRoleDefinition> {
+  const { data, error } = await client
+    .from("organization_roles")
+    .select(
+      "id,org_id,system_key,name,permissions,archived_at,created_at,updated_at"
+    )
+    .eq("org_id", organizationId)
+    .eq("id", roleId)
+    .is("archived_at", null)
+    .maybeSingle()
+
+  if (error) {
+    throw createSupabaseServiceError(error, "Unable to load access role.")
+  }
+
+  if (!data) {
+    throw new OrganizationServiceError("Access role was not found.", 404)
+  }
+
+  return mapOrganizationRole(data as OrganizationRoleRow)
+}
+
+/**
+ * Creates an editable organization role.
+ *
+ * @param client - Trusted Supabase client.
+ * @param organizationId - Owning tenant identifier.
+ * @param name - Normalized visible role name.
+ * @param permissions - Supported permission actions.
+ * @returns Created role definition.
+ */
+export async function createOrganizationRoleRecord(
+  client: OrganizationServiceClient,
+  organizationId: string,
+  name: string,
+  permissions: OrganizationPermissionAction[]
+): Promise<OrganizationRoleDefinition> {
+  const { data, error } = await client
+    .from("organization_roles")
+    .insert({
+      org_id: organizationId,
+      system_key: null,
+      name,
+      permissions,
+    })
+    .select(
+      "id,org_id,system_key,name,permissions,archived_at,created_at,updated_at"
+    )
+    .single()
+
+  if (error || !data) {
+    throw createSupabaseServiceError(error, "Unable to create access role.")
+  }
+
+  return mapOrganizationRole(data as OrganizationRoleRow)
+}
+
+/**
+ * Updates the visible name and, when allowed, access for a role.
+ *
+ * @param client - Trusted Supabase client.
+ * @param organizationId - Owning tenant identifier.
+ * @param roleId - Role definition identifier.
+ * @param values - Validated role changes.
+ * @returns Updated role definition.
+ */
+export async function updateOrganizationRoleRecord(
+  client: OrganizationServiceClient,
+  organizationId: string,
+  roleId: string,
+  values: {
+    name: string
+    permissions?: OrganizationPermissionAction[]
+  }
+): Promise<OrganizationRoleDefinition> {
+  const { data, error } = await client
+    .from("organization_roles")
+    .update(values)
+    .eq("org_id", organizationId)
+    .eq("id", roleId)
+    .is("archived_at", null)
+    .select(
+      "id,org_id,system_key,name,permissions,archived_at,created_at,updated_at"
+    )
+    .maybeSingle()
+
+  if (error) {
+    throw createSupabaseServiceError(error, "Unable to update access role.")
+  }
+
+  if (!data) {
+    throw new OrganizationServiceError("Access role was not found.", 404)
+  }
+
+  return mapOrganizationRole(data as OrganizationRoleRow)
+}
+
+/**
+ * Updates a member's workspace name and assigned role atomically.
+ *
+ * @param client - Trusted Supabase client.
+ * @param input - Tenant-scoped access update.
+ * @returns Updated membership identifier.
+ */
+export async function updateOrganizationMemberAccessRecord(
+  client: OrganizationServiceClient,
+  input: UpdateOrganizationMemberAccessRecordInput
+): Promise<string> {
+  const { data, error } = await client.rpc(
+    "update_organization_member_access",
+    {
+      target_actor_user_id: input.actorUserId,
+      target_membership_id: input.membershipId,
+      target_org_id: input.organizationId,
+      target_role_definition_id: input.roleDefinitionId,
+      target_workspace_display_name: input.workspaceDisplayName,
+    }
+  )
+
+  if (error || data !== input.membershipId) {
+    throw createMemberRoleMutationError(error)
+  }
+
+  return data
+}
+
+/**
+ * Archives an unused non-owner role through a locked database operation.
+ *
+ * @param client - Trusted Supabase client.
+ * @param organizationId - Owning tenant identifier.
+ * @param actorUserId - Owner performing the operation.
+ * @param roleId - Role definition to archive.
+ */
+export async function archiveOrganizationRoleRecord(
+  client: OrganizationServiceClient,
+  organizationId: string,
+  actorUserId: string,
+  roleId: string
+): Promise<void> {
+  const { data, error } = await client.rpc("archive_organization_role", {
+    target_actor_user_id: actorUserId,
+    target_org_id: organizationId,
+    target_role_definition_id: roleId,
+  })
+
+  if (error || data !== roleId) {
+    throw createRoleArchiveMutationError(error)
+  }
 }
 
 /**

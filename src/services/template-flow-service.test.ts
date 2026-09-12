@@ -12,6 +12,7 @@ import {
 } from "@/services/ai/errors"
 import {
   executeTemplateFlow,
+  listTemplateFlowMessages,
   type ExecuteTemplateFlowInput,
   type TemplateFlowServiceDeps
 } from "@/services/template-flow-service"
@@ -30,7 +31,129 @@ const FIELD_ID = "00000000-0000-4000-8000-000000000014"
 const TEST_PROVIDER_ID = "test-provider"
 const TEST_MODEL = "test-exact-model"
 
+type TemplateFlowRow = Record<string, unknown>
+
+class TemplateFlowQuery implements PromiseLike<{ data: unknown; error: null }> {
+  private readonly filters: Array<[string, unknown]> = []
+
+  constructor(private readonly rows: TemplateFlowRow[]) {}
+
+  select(): TemplateFlowQuery {
+    return this
+  }
+
+  eq(column: string, value: unknown): TemplateFlowQuery {
+    this.filters.push([column, value])
+    return this
+  }
+
+  async maybeSingle(): Promise<{ data: unknown; error: null }> {
+    const matches = this.rows.filter((row) =>
+      this.filters.every(([column, value]) => row[column] === value)
+    )
+    return { data: matches[0] ?? null, error: null }
+  }
+
+  then<TResult1 = { data: unknown; error: null }, TResult2 = never>(
+    onfulfilled?:
+      | ((value: { data: unknown; error: null }) => TResult1 | PromiseLike<TResult1>)
+      | null,
+    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+  ): PromiseLike<TResult1 | TResult2> {
+    return this.maybeSingle().then(onfulfilled, onrejected)
+  }
+}
+
+class TemplateFlowClient {
+  constructor(readonly tables: Record<string, TemplateFlowRow[]>) {}
+
+  from(tableName: string): TemplateFlowQuery {
+    return new TemplateFlowQuery(this.tables[tableName] ?? [])
+  }
+
+  setMembershipPermissions(permissions: string[] | null): void {
+    const membership = this.tables.organization_memberships?.[0]
+    if (membership) {
+      const roleDefinition = membership.role_definition as
+        | { permissions: string[] | null }
+        | undefined
+      if (roleDefinition) {
+        roleDefinition.permissions = permissions
+      }
+    }
+  }
+}
+
+function createAuthorizationClient(
+  permissions: string[] | null
+): TemplateFlowClient {
+  return new TemplateFlowClient({
+    organization_memberships: [
+      {
+        org_id: "org-1",
+        user_id: "user-1",
+        role: "manager",
+        status: "active",
+        role_definition: { permissions }
+      }
+    ],
+    document_templates: [
+      { id: TEMPLATE_ID, org_id: "org-1", status: "draft" }
+    ]
+  })
+}
+
 describe("template Flow service", () => {
+  it("allows a custom role with templates:manage to read Flow history", async () => {
+    await expect(
+      listTemplateFlowMessages(
+        {
+          actorUserId: "user-1",
+          organizationId: "org-1",
+          templateId: TEMPLATE_ID
+        },
+        {
+          client: createAuthorizationClient(["templates:manage"]) as never,
+          loadHistory: async (): Promise<TemplateFlowMessage[]> => []
+        }
+      )
+    ).resolves.toEqual([])
+  })
+
+  it("rechecks edited Flow permissions and denies a revoked custom grant", async () => {
+    const client = createAuthorizationClient(["templates:manage"])
+
+    await expect(
+      listTemplateFlowMessages(
+        {
+          actorUserId: "user-1",
+          organizationId: "org-1",
+          templateId: TEMPLATE_ID
+        },
+        {
+          client: client as never,
+          loadHistory: async (): Promise<TemplateFlowMessage[]> => []
+        }
+      )
+    ).resolves.toEqual([])
+
+    client.setMembershipPermissions([])
+
+    await expect(
+      listTemplateFlowMessages(
+        {
+          actorUserId: "user-1",
+          organizationId: "org-1",
+          templateId: TEMPLATE_ID
+        },
+        {
+          client: client as never,
+          loadHistory: async (): Promise<TemplateFlowMessage[]> => []
+        }
+      )
+    ).rejects.toMatchObject({ statusCode: 403 })
+  })
+
   it("stages validated edits without mutating the base and persists a proposed receipt", async () => {
     const content = createContent()
     const originalContent = structuredClone(content)

@@ -5,20 +5,23 @@ import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
 import {
   createInvite,
-  updateMemberRole,
+  revokeInvite,
+  updateMemberAccess,
   updateProfilePhone,
 } from "@/services/organization-service"
 
 import {
   createInviteAction,
-  updateMemberRoleAction,
+  revokeInviteAction,
+  updateMemberAccessAction,
   updateProfilePhoneAction,
 } from "./actions"
 
-const { redirectMock } = vi.hoisted(() => ({
+const { redirectMock, revalidatePathMock } = vi.hoisted(() => ({
   redirectMock: vi.fn((destination: string): never => {
     throw new Error(`NEXT_REDIRECT:${destination}`)
   }),
+  revalidatePathMock: vi.fn(),
 }))
 
 vi.mock("next/navigation", () => ({
@@ -26,7 +29,7 @@ vi.mock("next/navigation", () => ({
 }))
 
 vi.mock("next/cache", () => ({
-  revalidatePath: vi.fn(),
+  revalidatePath: revalidatePathMock,
 }))
 
 vi.mock("@/lib/page-auth", () => ({
@@ -56,17 +59,20 @@ vi.mock("@/services/organization-service", () => ({
       this.statusCode = statusCode
     }
   },
-  updateMemberRole: vi.fn(),
+  revokeInvite: vi.fn(),
+  updateMemberAccess: vi.fn(),
   updateProfilePhone: vi.fn(),
 }))
 
 const MEMBER_ID = "20000000-0000-4000-8000-000000000001"
 const ORG_ID = "10000000-0000-4000-8000-000000000001"
+const ROLE_ID = "50000000-0000-4000-8000-000000000001"
+const MEMBERSHIP_ID = "30000000-0000-4000-8000-000000000002"
 
 function createInviteForm(): FormData {
   const formData = new FormData()
   formData.set("organizationId", ORG_ID)
-  formData.set("role", "staff")
+  formData.set("roleDefinitionId", ROLE_ID)
   formData.set("email", "invitee@example.com")
   return formData
 }
@@ -99,6 +105,12 @@ describe("createInviteAction", () => {
     expect(enforceOutboundEmailRateLimit).toHaveBeenCalledExactlyOnceWith({
       userId: MEMBER_ID,
       redirectPath: "/people",
+    })
+    expect(createInvite).toHaveBeenCalledExactlyOnceWith({
+      actorUserId: MEMBER_ID,
+      organizationId: ORG_ID,
+      roleId: ROLE_ID,
+      email: "invitee@example.com",
     })
   })
 
@@ -147,9 +159,9 @@ describe("createInviteAction", () => {
     )
   })
 
-  it("keeps an invalid role from reaching authentication or the limiter", async () => {
+  it("keeps an invalid role id from reaching authentication or the limiter", async () => {
     const formData = createInviteForm()
-    formData.set("role", "sysadmin")
+    formData.set("roleDefinitionId", "not-a-role-id")
 
     await expect(createInviteAction(formData)).rejects.toThrow(
       "NEXT_REDIRECT:/people?feedback=invalid_input"
@@ -179,38 +191,43 @@ describe("people profile and permission actions", () => {
       id: MEMBER_ID,
       email: "member@example.com",
     } as never)
-    vi.mocked(updateMemberRole).mockResolvedValue(undefined as never)
+    vi.mocked(updateMemberAccess).mockResolvedValue(undefined as never)
+    vi.mocked(revokeInvite).mockResolvedValue(undefined as never)
     vi.mocked(updateProfilePhone).mockResolvedValue(undefined as never)
   })
 
-  it("updates a member role and reports a stable authoritative outcome", async () => {
+  it("updates a workspace name and custom role as one authoritative change", async () => {
     const formData = new FormData()
     formData.set("organizationId", ORG_ID)
-    formData.set("membershipId", "membership-2")
-    formData.set("role", "manager")
+    formData.set("membershipId", MEMBERSHIP_ID)
+    formData.set("roleDefinitionId", ROLE_ID)
+    formData.set("workspaceDisplayName", "Avery Kim")
 
-    await expect(updateMemberRoleAction(formData)).rejects.toThrow(
-      "NEXT_REDIRECT:/people?feedback=member_role_updated"
+    await expect(updateMemberAccessAction(formData)).rejects.toThrow(
+      "NEXT_REDIRECT:/people?feedback=member_access_updated"
     )
-    expect(updateMemberRole).toHaveBeenCalledExactlyOnceWith({
+    expect(updateMemberAccess).toHaveBeenCalledExactlyOnceWith({
       actorUserId: MEMBER_ID,
       organizationId: ORG_ID,
-      membershipId: "membership-2",
-      role: "manager",
+      membershipId: MEMBERSHIP_ID,
+      roleId: ROLE_ID,
+      workspaceDisplayName: "Avery Kim",
     })
+    expect(revalidatePathMock).toHaveBeenCalledWith("/people")
+    expect(revalidatePathMock).toHaveBeenCalledWith("/settings")
   })
 
-  it("rejects an invalid member role before authentication", async () => {
+  it("rejects an invalid member role id before authentication", async () => {
     const formData = new FormData()
     formData.set("organizationId", ORG_ID)
-    formData.set("membershipId", "membership-2")
-    formData.set("role", "sysadmin")
+    formData.set("membershipId", MEMBERSHIP_ID)
+    formData.set("roleDefinitionId", "sysadmin")
 
-    await expect(updateMemberRoleAction(formData)).rejects.toThrow(
+    await expect(updateMemberAccessAction(formData)).rejects.toThrow(
       "NEXT_REDIRECT:/people?feedback=invalid_input"
     )
     expect(getAuthenticatedUser).not.toHaveBeenCalled()
-    expect(updateMemberRole).not.toHaveBeenCalled()
+    expect(updateMemberAccess).not.toHaveBeenCalled()
   })
 
   it("updates the authenticated member phone without trusting a submitted user id", async () => {
@@ -226,18 +243,33 @@ describe("people profile and permission actions", () => {
     })
   })
 
+  it("revokes a tenant-scoped invite using the authenticated actor", async () => {
+    const formData = new FormData()
+    formData.set("organizationId", ORG_ID)
+    formData.set("inviteId", "invite-2")
+
+    await expect(revokeInviteAction(formData)).rejects.toThrow(
+      "NEXT_REDIRECT:/people?feedback=invite_deleted"
+    )
+    expect(revokeInvite).toHaveBeenCalledExactlyOnceWith({
+      actorUserId: MEMBER_ID,
+      organizationId: ORG_ID,
+      inviteId: "invite-2",
+    })
+  })
+
   it("preserves the People return path when authentication expires", async () => {
     vi.mocked(getAuthenticatedUser).mockRejectedValue(
       new AuthenticationError("Sign in to continue.")
     )
     const formData = new FormData()
     formData.set("organizationId", ORG_ID)
-    formData.set("membershipId", "membership-2")
-    formData.set("role", "manager")
+    formData.set("membershipId", MEMBERSHIP_ID)
+    formData.set("roleDefinitionId", ROLE_ID)
 
-    await expect(updateMemberRoleAction(formData)).rejects.toThrow(
+    await expect(updateMemberAccessAction(formData)).rejects.toThrow(
       "NEXT_REDIRECT:/login?next=%2Fpeople"
     )
-    expect(updateMemberRole).not.toHaveBeenCalled()
+    expect(updateMemberAccess).not.toHaveBeenCalled()
   })
 })

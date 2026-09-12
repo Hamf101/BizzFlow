@@ -14,6 +14,7 @@ import {
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
+import { RolesAndAccessSettings } from "@/components/settings/roles-and-access-settings"
 import { buildFeedbackRedirect } from "@/lib/action-result"
 import { formatMediumDateTime } from "@/lib/date-format"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
@@ -27,12 +28,17 @@ import {
 import type { NotificationDelivery } from "@/types/notification"
 import {
   getMemberSettings,
+  listOrganizationPeople,
   OrganizationServiceError,
   type MemberSettings,
+  type OrganizationPeople,
 } from "@/services/organization-service"
 import {
+  archiveOrganizationRoleAction,
+  createOrganizationRoleAction,
   updateNotificationPreferencesAction,
   updateOrganizationNotificationSettingsAction,
+  updateOrganizationRoleAction,
   updateProfileAction,
 } from "./actions"
 
@@ -62,12 +68,13 @@ export default async function SettingsPage(): Promise<ReactElement> {
   }
 
   const canManageOrganization = canPerformOrganizationAction(
-    context.membership.role,
+    context.membership,
     "organization:manage"
   )
 
   let settings: MemberSettings
   let organizationSettings: OrganizationNotificationSettings
+  const isOwner = context.membership.role === "owner_admin"
 
   try {
     ;[settings, organizationSettings] = await Promise.all([
@@ -95,11 +102,18 @@ export default async function SettingsPage(): Promise<ReactElement> {
   return (
     <SettingsShell>
       <section className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold tracking-normal">Settings</h1>
+        <h1 className="text-2xl font-medium tracking-normal">Settings</h1>
         <p className="max-w-2xl text-sm text-muted-foreground">
           Manage your profile and notification preferences for {context.organization.name}.
         </p>
       </section>
+
+      {isOwner ? (
+        <RolesAndAccessSection
+          actorUserId={user.id}
+          organizationId={context.organization.id}
+        />
+      ) : null}
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
@@ -256,6 +270,48 @@ export default async function SettingsPage(): Promise<ReactElement> {
         />
       )}
     </SettingsShell>
+  )
+}
+
+async function RolesAndAccessSection({
+  actorUserId,
+  organizationId,
+}: {
+  actorUserId: string
+  organizationId: string
+}): Promise<ReactElement> {
+  let people: OrganizationPeople
+
+  try {
+    people = await listOrganizationPeople(actorUserId, organizationId)
+  } catch (error: unknown) {
+    console.warn("settings_roles_and_access_load_failed", {
+      actorUserId,
+      organizationId,
+      reason: error instanceof Error ? error.message : "Unknown error",
+    })
+
+    return (
+      <Alert variant="destructive">
+        <AlertTitle>Roles and access unavailable</AlertTitle>
+        <AlertDescription>
+          {error instanceof OrganizationServiceError
+            ? error.message
+            : "Unable to load workspace roles."}
+        </AlertDescription>
+      </Alert>
+    )
+  }
+
+  return (
+    <RolesAndAccessSettings
+      archiveRoleAction={archiveOrganizationRoleAction}
+      createRoleAction={createOrganizationRoleAction}
+      members={people.members}
+      organizationId={organizationId}
+      roles={people.roles}
+      updateRoleAction={updateOrganizationRoleAction}
+    />
   )
 }
 

@@ -210,7 +210,7 @@ async function loadMemberActionContext(
     )
   }
 
-  if (!canPerformOrganizationAction(context.membership.role, action)) {
+  if (!canPerformOrganizationAction(context.membership, action)) {
     throw new MemberDocumentActionError(
       "You do not have permission to perform this document action.",
       403

@@ -183,6 +183,31 @@ describe("createTask", () => {
     ).rejects.toMatchObject({ statusCode: 400 })
   })
 
+  it("rejects an assignee whose role no longer grants task access", async () => {
+    const client = new FakeSupabaseClient({
+      organization_memberships: [
+        ...createMembershipRows().filter((row: FakeRow) => row.user_id !== STAFF_ID),
+        createMembershipRow("staff", {
+          user_id: STAFF_ID,
+          role_definition: { permissions: ["people:view"] },
+        }),
+      ],
+    })
+
+    await expect(
+      createTask(
+        {
+          actorUserId: MANAGER_ID,
+          organizationId: ORG_ID,
+          title: "Collect the deposit",
+          assignedTo: STAFF_ID,
+        },
+        createDeps(client, [NEW_TASK_ID])
+      )
+    ).rejects.toMatchObject({ statusCode: 400 })
+    expect(client.tables.tasks).toHaveLength(0)
+  })
+
   it("rejects an external reviewer creating tasks", async () => {
     const client = createClient()
 

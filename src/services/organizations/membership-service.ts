@@ -1,4 +1,5 @@
 import {
+  canPerformOrganizationAction,
   canInviteMembers,
   canUpdateMemberRole,
   getAssignableOrganizationRoles,
@@ -9,15 +10,18 @@ import type {
   OrganizationPeople,
   ProfileRow,
   UpdateMemberRoleInput,
+  UpdateMemberAccessInput,
 } from "@/services/organizations/contracts"
 import { OrganizationServiceError } from "@/services/organizations/errors"
 import {
   getActiveMembership,
   getMembershipById,
   listActiveMemberships,
-  listPendingInvites,
+  listManageableInvites,
+  listOrganizationRoleRecords,
   listProfilesByUserIds,
   updateOrganizationMemberRole,
+  updateOrganizationMemberAccessRecord,
 } from "@/services/organizations/repository"
 import {
   recordOrganizationAuditLog,
@@ -53,7 +57,10 @@ export async function listOrganizationPeople(
         userId
       )
 
-      if (!actorMembership) {
+      if (
+        !actorMembership ||
+        !canPerformOrganizationAction(actorMembership, "people:view")
+      ) {
         throw new OrganizationServiceError(
           "You do not have access to this organization.",
           403
@@ -80,16 +87,21 @@ export async function listOrganizationPeople(
               id: membership.id,
               userId: membership.userId,
               email: profile?.email ?? "Unknown email",
-              fullName: profile?.full_name ?? null,
+              fullName:
+                membership.workspaceDisplayName ?? profile?.full_name ?? null,
+              workspaceDisplayName: membership.workspaceDisplayName ?? null,
               role: membership.role,
+              roleDefinitionId: membership.roleDefinitionId ?? null,
+              roleName: membership.roleName ?? null,
               status: membership.status,
               createdAt: membership.createdAt,
             }
           }
         ),
-        pendingInvites: canInviteMembers(actorMembership.role)
-          ? await listPendingInvites(client, organizationId)
+        invites: canInviteMembers(actorMembership)
+          ? await listManageableInvites(client, organizationId)
           : [],
+        roles: await listOrganizationRoleRecords(client, organizationId),
       }
     }
   )
@@ -123,7 +135,7 @@ export async function updateMemberRole(
         input.actorUserId
       )
 
-      if (!actorMembership || !canUpdateMemberRole(actorMembership.role)) {
+      if (!actorMembership || !canUpdateMemberRole(actorMembership)) {
         throw new OrganizationServiceError(
           "You cannot update member roles.",
           403
@@ -189,6 +201,98 @@ export async function updateMemberRole(
       return updatedMembership
     }
   )
+}
+
+/**
+ * Updates a member's workspace-specific name and access role atomically.
+ *
+ * @param input - Owner, tenant, membership, role, and display-name values.
+ * @param deps - Optional database and audit dependencies for tests.
+ * @returns Verified updated membership.
+ * @throws OrganizationServiceError when authorization or validation fails.
+ */
+export async function updateMemberAccess(
+  input: UpdateMemberAccessInput,
+  deps: OrganizationMutationDeps = {}
+): Promise<OrganizationMembership> {
+  return runOrganizationOperation(
+    "update_member_access",
+    {
+      actorUserId: input.actorUserId,
+      organizationId: input.organizationId,
+      membershipId: input.membershipId,
+    },
+    async (): Promise<OrganizationMembership> => {
+      const client = deps.client ?? createAdminClient()
+      const actor = await getActiveMembership(
+        client,
+        input.organizationId,
+        input.actorUserId
+      )
+
+      if (actor?.role !== "owner_admin") {
+        throw new OrganizationServiceError(
+          "Only an organization owner can update member access.",
+          403
+        )
+      }
+
+      const workspaceDisplayName = normalizeWorkspaceDisplayName(
+        input.workspaceDisplayName
+      )
+
+      await updateOrganizationMemberAccessRecord(client, {
+        organizationId: input.organizationId,
+        membershipId: input.membershipId,
+        actorUserId: input.actorUserId,
+        roleDefinitionId: input.roleId,
+        workspaceDisplayName,
+      })
+
+      const membership = await getMembershipById(client, input.membershipId)
+
+      if (
+        membership.organizationId !== input.organizationId ||
+        membership.roleDefinitionId !== input.roleId ||
+        membership.workspaceDisplayName !== workspaceDisplayName
+      ) {
+        throw new OrganizationServiceError(
+          "Unable to verify the updated member access.",
+          500
+        )
+      }
+
+      await recordOrganizationAuditLog(
+        {
+          organizationId: input.organizationId,
+          actorUserId: input.actorUserId,
+          action: "membership.access_updated",
+          targetType: "membership",
+          targetId: input.membershipId,
+          metadata: {
+            roleDefinitionId: input.roleId,
+            workspaceDisplayName,
+          },
+        },
+        deps.recordAuditLog
+      )
+
+      return membership
+    }
+  )
+}
+
+function normalizeWorkspaceDisplayName(value: string | null): string | null {
+  const normalized = value?.trim().replace(/\s+/g, " ") || null
+
+  if (normalized !== null && normalized.length > 120) {
+    throw new OrganizationServiceError(
+      "Workspace display name must be 120 characters or fewer.",
+      400
+    )
+  }
+
+  return normalized
 }
 
 export type UpdateProfileInput = {
@@ -317,6 +421,13 @@ export async function getMemberSettings(
   )
 }
 
+/**
+ * Updates notification preferences for the actor's active tenant membership.
+ *
+ * @param input - Actor, organization, and desired channel preferences.
+ * @param deps - Optional database and clock dependencies.
+ * @throws OrganizationServiceError when membership is absent/inactive or the write fails.
+ */
 export async function updateNotificationPreferences(
   input: UpdateNotificationPreferencesInput,
   deps: OrganizationMutationDeps = {}
@@ -326,19 +437,29 @@ export async function updateNotificationPreferences(
     { userId: input.actorUserId, organizationId: input.organizationId },
     async (): Promise<void> => {
       const client = deps.client ?? createAdminClient()
-      
-      const { error } = await client
+
+      const { data, error } = await client
         .from("organization_memberships")
-        .update({ 
+        .update({
           email_notifications_enabled: input.emailNotificationsEnabled,
           sms_notifications_enabled: input.smsNotificationsEnabled,
-          updated_at: new Date().toISOString()
+          updated_at: (deps.now?.() ?? new Date()).toISOString(),
         })
         .eq("org_id", input.organizationId)
         .eq("user_id", input.actorUserId)
+        .eq("status", "active")
+        .select("id")
+        .maybeSingle()
 
       if (error) {
         throw new OrganizationServiceError("Unable to update notification preferences.", 500)
+      }
+
+      if (!data) {
+        throw new OrganizationServiceError(
+          "You do not have access to this organization.",
+          403
+        )
       }
     }
   )

@@ -148,27 +148,27 @@ export default async function SubmissionDetailPage({
   const editable =
     (submission.status === "draft" || submission.status === "needs_changes") &&
     submission.createdBy === user.id &&
-    canPerformOrganizationAction(context.membership.role, "submissions:edit")
+    canPerformOrganizationAction(context.membership, "submissions:edit")
   const canAssign = canPerformOrganizationAction(
-    context.membership.role,
+    context.membership,
     "submissions:assign"
   )
   const canReview = canPerformOrganizationAction(
-    context.membership.role,
+    context.membership,
     "submissions:review"
   )
   const canCreateTask = canPerformOrganizationAction(
-    context.membership.role,
+    context.membership,
     "tasks:create"
   )
   const canAssignTask = canPerformOrganizationAction(
-    context.membership.role,
+    context.membership,
     "tasks:assign"
   )
   const canComment =
     submission.status !== "draft" &&
     canPerformOrganizationAction(
-      context.membership.role,
+      context.membership,
       "submission_comments:create"
     )
   const fileFieldContent = buildFileFieldContent({

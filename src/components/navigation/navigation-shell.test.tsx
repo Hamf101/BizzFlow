@@ -58,7 +58,7 @@ describe("DashboardNavigation", () => {
     )
   })
 
-  it("pairs visual pending feedback with a route-specific live status", () => {
+  it("keeps navigation visually still while a destination is pending", () => {
     linkStatus.pending = true
 
     render(<DashboardNavigation role="owner_admin" />)
@@ -67,9 +67,10 @@ describe("DashboardNavigation", () => {
 
     expect(
       documentsLink?.querySelector('[data-navigation-pending="/documents"]')
-    ).not.toBeNull()
+    ).toBeNull()
     expect(
       documentsLink?.querySelector('[role="status"][aria-label="Opening Documents"]')
-    ).not.toBeNull()
+    ).toBeNull()
+    expect(documentsLink?.textContent).toBe("Documents")
   })
 })

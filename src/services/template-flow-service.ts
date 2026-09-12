@@ -3,6 +3,11 @@ import { randomUUID } from "node:crypto"
 import { z } from "zod"
 
 import {
+  canPerformOrganizationAction,
+  createOrganizationPermissionSubject,
+  isOrganizationRole
+} from "@/lib/permissions"
+import {
   createAdminClient,
   type AdminSupabaseClient
 } from "@/lib/supabase/admin"
@@ -326,6 +331,7 @@ export type TemplateFlowServiceDeps = {
     organizationId: string
     templateId: string
   }) => Promise<void>
+  client?: TemplateFlowClient
   createId?: () => string
   createTraceId?: () => string
   getAiRuntime?: () => AiRuntime
@@ -508,10 +514,11 @@ export async function executeTemplateFlow(
 }
 
 /**
- * Lists the shared, template-scoped Flow history visible to a template manager.
+ * Lists the shared, template-scoped Flow history visible to an actor with
+ * template-management permission.
  *
  * @param input - Authenticated actor and tenant-scoped template identifiers.
- * @param deps - Optional authorization and history adapters.
+ * @param deps - Optional authorization, database, and history adapters.
  * @returns Chronological conversation messages, bounded to the latest entries.
  * @throws TemplateFlowServiceError when access cannot be verified.
  */
@@ -519,10 +526,19 @@ export async function listTemplateFlowMessages(
   input: ListTemplateFlowMessagesInput,
   deps: Pick<
     TemplateFlowServiceDeps,
-    "authorizeTemplateManagement" | "loadHistory"
+    "authorizeTemplateManagement" | "client" | "loadHistory"
   > = {}
 ): Promise<TemplateFlowMessage[]> {
-  await (deps.authorizeTemplateManagement ?? requireTemplateManager)({
+  const authorizeTemplateManagement =
+    deps.authorizeTemplateManagement ??
+    ((authorizationInput: {
+      actorUserId: string
+      organizationId: string
+      templateId: string
+    }): Promise<void> =>
+      requireTemplateManagement(authorizationInput, deps.client))
+
+  await authorizeTemplateManagement({
     actorUserId: input.actorUserId,
     organizationId: input.organizationId,
     templateId: input.templateId
@@ -540,7 +556,16 @@ async function authorizeFlowRequest(
   startedAt: number
 ): Promise<void> {
   try {
-    await (deps.authorizeTemplateManagement ?? requireTemplateManager)({
+    const authorizeTemplateManagement =
+      deps.authorizeTemplateManagement ??
+      ((authorizationInput: {
+        actorUserId: string
+        organizationId: string
+        templateId: string
+      }): Promise<void> =>
+        requireTemplateManagement(authorizationInput, deps.client))
+
+    await authorizeTemplateManagement({
       actorUserId: request.actorUserId,
       organizationId: request.organizationId,
       templateId: request.templateId
@@ -2005,17 +2030,22 @@ function createFlowMessages(input: {
   ]
 }
 
-async function requireTemplateManager(input: {
-  actorUserId: string
-  organizationId: string
-  templateId: string
-}): Promise<void> {
-  const client: TemplateFlowClient = createAdminClient()
+async function requireTemplateManagement(
+  input: {
+    actorUserId: string
+    organizationId: string
+    templateId: string
+  },
+  providedClient?: TemplateFlowClient
+): Promise<void> {
+  const client: TemplateFlowClient = providedClient ?? createAdminClient()
   const [{ data: membershipData, error: membershipError }, templateResult] =
     await Promise.all([
       client
         .from("organization_memberships")
-        .select("role,status")
+        .select(
+          "role,status,role_definition:organization_roles!organization_memberships_role_definition_fk(permissions)"
+        )
         .eq("org_id", input.organizationId)
         .eq("user_id", input.actorUserId)
         .eq("status", "active")
@@ -2037,6 +2067,7 @@ async function requireTemplateManager(input: {
 
   const membership = membershipData as {
     role?: unknown
+    role_definition?: { permissions: string[] | null } | null
     status?: unknown
   } | null
   const template = templateResult.data as {
@@ -2044,12 +2075,38 @@ async function requireTemplateManager(input: {
     status?: unknown
   } | null
 
+  if (membership?.status !== "active") {
+    throw new TemplateFlowServiceError(
+      "You do not have permission to manage templates.",
+      403
+    )
+  }
+
   if (
-    membership?.status !== "active" ||
-    (membership.role !== "owner_admin" && membership.role !== "manager")
+    typeof membership.role !== "string" ||
+    !isOrganizationRole(membership.role)
   ) {
     throw new TemplateFlowServiceError(
-      "Only organization owners and managers can use Flow.",
+      "Database returned an unsupported organization role.",
+      500
+    )
+  }
+
+  const subject = createOrganizationPermissionSubject(
+    membership.role,
+    membership.role_definition?.permissions
+  )
+
+  if (!subject) {
+    throw new TemplateFlowServiceError(
+      "Database returned unsupported role permissions.",
+      500
+    )
+  }
+
+  if (!canPerformOrganizationAction(subject, "templates:manage")) {
+    throw new TemplateFlowServiceError(
+      "You do not have permission to manage templates.",
       403
     )
   }

@@ -11,7 +11,7 @@ import {
   sendEmail,
 } from "@/services/email/transport"
 
-type SendInviteEmailInput = {
+export type SendInviteEmailInput = {
   inviteId: string
   organizationName: string
   recipientEmail: string

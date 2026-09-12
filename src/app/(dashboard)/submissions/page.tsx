@@ -58,11 +58,11 @@ export default async function SubmissionsPage(): Promise<ReactElement> {
 
   const context = contextResult.context
   const canCreate = canPerformOrganizationAction(
-    context.membership.role,
+    context.membership,
     "submissions:create"
   )
   const canAssign = canPerformOrganizationAction(
-    context.membership.role,
+    context.membership,
     "submissions:assign"
   )
   const [result, members] = await Promise.all([

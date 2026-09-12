@@ -77,7 +77,7 @@ export async function createDocumentUploadUrl(
 
       if (
         !canPerformOrganizationAction(
-          actorMembership.role,
+          actorMembership,
           "document_versions:create"
         )
       ) {

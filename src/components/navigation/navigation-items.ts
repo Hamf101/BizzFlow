@@ -13,7 +13,7 @@ import type { ComponentType } from "react"
 import {
   canPerformOrganizationAction,
   type OrganizationPermissionAction,
-  type OrganizationRole,
+  type OrganizationPermissionSubject,
 } from "@/lib/permissions"
 
 /** One dashboard destination. */
@@ -99,7 +99,7 @@ const MOBILE_PRIMARY_COUNT = MOBILE_PRIMARY_HREFS.length
  * @returns Reachable destinations in sidebar order, including universal pages before setup.
  */
 export function getVisibleNavigationItems(
-  role: OrganizationRole | null
+  role: OrganizationPermissionSubject | null
 ): NavigationItem[] {
   if (!role) {
     return NAVIGATION_ITEMS.filter(
@@ -120,7 +120,9 @@ export function getVisibleNavigationItems(
  * @param role - Active organization role, or null when there is no membership.
  * @returns Bar destinations and the overflow behind "More".
  */
-export function getMobileNavigationLayout(role: OrganizationRole | null): {
+export function getMobileNavigationLayout(
+  role: OrganizationPermissionSubject | null
+): {
   primary: NavigationItem[]
   overflow: NavigationItem[]
 } {

@@ -9,8 +9,8 @@ export type OrganizationRole = (typeof ORGANIZATION_ROLES)[number]
 
 export const ORGANIZATION_PERMISSION_ACTIONS = [
   "people:view",
-  // Organization-wide settings (notification switches). Owner-only: these
-  // silence a channel for every member, so they are not a manager-level call.
+  // Organization-wide notification switches. Owner receives this by default;
+  // other roles require an explicit grant because it affects every member.
   "organization:manage",
   "members:invite",
   "members:update_role",
@@ -42,6 +42,13 @@ export const ORGANIZATION_PERMISSION_ACTIONS = [
 
 export type OrganizationPermissionAction =
   (typeof ORGANIZATION_PERMISSION_ACTIONS)[number]
+
+export type OrganizationPermissionSubject =
+  | OrganizationRole
+  | {
+      role: OrganizationRole
+      customPermissions?: readonly OrganizationPermissionAction[] | null
+    }
 
 const assignableOrganizationRoles: readonly OrganizationRole[] = [
   "manager",
@@ -116,6 +123,45 @@ export function isOrganizationRole(value: string): value is OrganizationRole {
 }
 
 /**
+ * Parses a persisted base role and optional editable permission set.
+ *
+ * Unknown roles or permission actions fail closed instead of silently falling
+ * back to broader starter-role access.
+ *
+ * @param role - Legacy base role stored for row-scope compatibility.
+ * @param permissions - Role-definition permissions, or null for protected Owner.
+ * @returns A permission subject, or null when persisted data is unsupported.
+ */
+export function createOrganizationPermissionSubject(
+  role: string,
+  permissions: readonly string[] | null | undefined
+): OrganizationPermissionSubject | null {
+  if (!isOrganizationRole(role)) {
+    return null
+  }
+
+  if (permissions === null || permissions === undefined) {
+    return role
+  }
+
+  if (
+    permissions.some(
+      (permission) =>
+        !ORGANIZATION_PERMISSION_ACTIONS.includes(
+          permission as OrganizationPermissionAction
+        )
+    )
+  ) {
+    return null
+  }
+
+  return {
+    role,
+    customPermissions: [...permissions] as OrganizationPermissionAction[],
+  }
+}
+
+/**
  * Returns the organization actions allowed for a role.
  *
  * @param role - Current member role.
@@ -128,37 +174,118 @@ export function getOrganizationRolePermissions(
 }
 
 /**
- * Checks whether a role can perform an organization action.
+ * Checks whether a role subject can perform an organization action.
  *
- * @param role - Current member role.
+ * @param subject - Current member role and optional custom permissions.
  * @param action - Organization permission action to check.
- * @returns True when the action is allowed for the role.
+ * @returns True when the action is allowed for the subject.
  */
 export function canPerformOrganizationAction(
-  role: OrganizationRole,
+  subject: OrganizationPermissionSubject,
   action: OrganizationPermissionAction
 ): boolean {
-  return permissionsByRole[role].includes(action)
+  const role = typeof subject === "string" ? subject : subject.role
+
+  if (role === "owner_admin") {
+    return true
+  }
+
+  const permissions =
+    typeof subject === "string" || subject.customPermissions === null ||
+    subject.customPermissions === undefined
+      ? permissionsByRole[role]
+      : subject.customPermissions
+
+  return permissions.includes(action)
 }
 
 /**
- * Checks whether a member role can invite users into an organization.
+ * Returns the legacy base role used for row-scope and workflow rules.
  *
- * @param role - Current member role.
- * @returns True when the role can create staff invites.
+ * @param subject - Static or editable organization permission subject.
+ * @returns The subject's persisted base role.
  */
-export function canInviteMembers(role: OrganizationRole): boolean {
-  return canPerformOrganizationAction(role, "members:invite")
+export function getOrganizationRoleFromSubject(
+  subject: OrganizationPermissionSubject
+): OrganizationRole {
+  return typeof subject === "string" ? subject : subject.role
 }
 
 /**
- * Checks whether a member role can update another member's role.
+ * Checks whether a member role subject can invite users into an organization.
  *
- * @param role - Current member role.
- * @returns True when the role can change member roles.
+ * @param subject - Current member role and optional custom permissions.
+ * @returns True when the subject can create staff invites.
  */
-export function canUpdateMemberRole(role: OrganizationRole): boolean {
-  return canPerformOrganizationAction(role, "members:update_role")
+export function canInviteMembers(
+  subject: OrganizationPermissionSubject
+): boolean {
+  return canPerformOrganizationAction(subject, "members:invite")
+}
+
+/**
+ * Checks whether a member role subject can update another member's role.
+ *
+ * @param subject - Current member role and optional custom permissions.
+ * @returns True when the subject can change member roles.
+ */
+export function canUpdateMemberRole(
+  subject: OrganizationPermissionSubject
+): boolean {
+  return canPerformOrganizationAction(subject, "members:update_role")
+}
+
+/**
+ * Base roles whose database row scope stays inside each base role's own.
+ * Custom roles run on Staff row scope, so this is what stops a Staff-scoped
+ * inviter from minting a Manager, whose policies reach tenant-wide rows.
+ */
+const assignableBaseRolesByActorRole: Record<
+  Exclude<OrganizationRole, "owner_admin">,
+  readonly OrganizationRole[]
+> = {
+  manager: ["manager", "staff", "external_reviewer"],
+  staff: ["staff"],
+  external_reviewer: ["external_reviewer"],
+}
+
+/**
+ * Checks whether an actor may hand a role definition to someone else.
+ *
+ * Owner is never assignable, and an Owner may assign every other role.
+ * Anyone else stays inside their own authority on both axes the product
+ * enforces: every permission the role grants must be one the actor currently
+ * holds, and the role's base row scope must not reach further than theirs.
+ *
+ * @param actor - The assigning member's current permission subject.
+ * @param target - The role definition being assigned.
+ * @returns True when assigning the role cannot widen the actor's own access.
+ */
+export function canAssignOrganizationRole(
+  actor: OrganizationPermissionSubject,
+  target: {
+    systemKey: OrganizationRole | null
+    permissions: readonly OrganizationPermissionAction[] | null
+  }
+): boolean {
+  if (target.systemKey === "owner_admin" || target.permissions === null) {
+    return false
+  }
+
+  const actorRole = getOrganizationRoleFromSubject(actor)
+
+  if (actorRole === "owner_admin") {
+    return true
+  }
+
+  return (
+    assignableBaseRolesByActorRole[actorRole].includes(
+      target.systemKey ?? "staff"
+    ) &&
+    target.permissions.every((permission) =>
+      canPerformOrganizationAction(actor, permission)
+    )
+  )
 }
 
 /**

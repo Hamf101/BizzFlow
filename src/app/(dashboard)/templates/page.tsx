@@ -110,7 +110,7 @@ export default async function TemplatesPage({
       return { templates: [] as DocumentTemplate[], errorMessage }
     })
   const canManage = canPerformOrganizationAction(
-    context.membership.role,
+    context.membership,
     "templates:manage"
   )
   // Always the full set, so filtering to one category never hides the others.

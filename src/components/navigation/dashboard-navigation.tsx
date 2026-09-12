@@ -1,7 +1,5 @@
 "use client"
 
-import { Loader2 } from "lucide-react"
-import { useLinkStatus } from "next/link"
 import { usePathname } from "next/navigation"
 import type { ReactElement } from "react"
 
@@ -13,50 +11,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import type { OrganizationRole } from "@/lib/permissions"
+import type { OrganizationPermissionSubject } from "@/lib/permissions"
 import { cn } from "@/lib/utils"
-
-/**
- * Shows a spinner on the link currently being navigated to, giving an immediate
- * response to the click while the destination page's server data loads.
- *
- * @returns A spinner while the parent link's navigation is pending.
- */
-function NavPendingIndicator({
-  collapsed,
-  href,
-  label,
-}: {
-  collapsed: boolean
-  href: string
-  label: string
-}): ReactElement | null {
-  const { pending } = useLinkStatus()
-
-  if (!pending) {
-    return null
-  }
-
-  return (
-    <>
-      <Loader2
-        aria-hidden="true"
-        className={cn(
-          "ml-auto size-3.5 animate-spin text-muted-foreground motion-reduce:animate-none",
-          collapsed && "md:absolute md:right-1 md:bottom-1 md:ml-0 md:size-3"
-        )}
-        data-navigation-pending={href}
-      />
-      <span
-        aria-label={`Opening ${label}`}
-        className="sr-only"
-        role="status"
-      >
-        Opening {label}
-      </span>
-    </>
-  )
-}
 
 /**
  * Renders the route-aware dashboard navigation using the Editorial Ledger style.
@@ -68,7 +24,7 @@ export function DashboardNavigation({
   role,
 }: {
   collapsed?: boolean
-  role: OrganizationRole | null
+  role: OrganizationPermissionSubject | null
 }): ReactElement {
   const pathname = usePathname()
   const navigationItems = getVisibleNavigationItems(role)
@@ -114,11 +70,6 @@ export function DashboardNavigation({
               >
                 {item.label}
               </span>
-              <NavPendingIndicator
-                collapsed={collapsed}
-                href={item.href}
-                label={item.label}
-              />
             </IntentPrefetchLink>
           )
 

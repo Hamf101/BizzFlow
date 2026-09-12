@@ -32,6 +32,7 @@ export type MigrationFileName =
   | "20260801090000_sprint_10_notification_deliveries.sql"
   | "20260803160319_document_upload_authorization_barrier.sql"
   | "20260817090000_notification_deliveries_service_role_grant.sql"
+  | "20260903115718_organization_roles_and_member_access.sql"
 
 export const directWriteActions = ["insert", "update", "delete"] as const
 

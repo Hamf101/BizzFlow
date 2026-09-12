@@ -15,6 +15,25 @@ import {
 test.use({ screenshot: "off", trace: "off", video: "off" })
 
 test.describe("representative accessibility evidence", () => {
+  test("uses the approved system sans typography without a display face", async ({
+    page,
+  }) => {
+    await page.goto("/login")
+
+    const typography = await page.locator("body").evaluate((body) => {
+      const bodyStyle = window.getComputedStyle(body)
+      const heading = body.querySelector("h1")
+
+      return {
+        body: bodyStyle.fontFamily,
+        heading: heading ? window.getComputedStyle(heading).fontFamily : null,
+      }
+    })
+
+    expect(typography.body).toContain("system-ui")
+    expect(typography.heading).toBe(typography.body)
+  })
+
   test("keeps authentication semantics and keyboard focus accessible", async ({
     page,
   }) => {
@@ -125,7 +144,7 @@ test.describe("responsive interaction evidence", () => {
     }
   })
 
-  test("shows the lab navigation proxy within 100ms and preserves it with reduced motion", async ({
+  test("keeps the current page still instead of flashing loading UI during navigation", async ({
     pageAs,
   }) => {
     const page = await pageAs("owner_admin")
@@ -146,51 +165,16 @@ test.describe("responsive interaction evidence", () => {
     })
 
     const documentsLink = page.locator('aside a[href="/documents"]')
-    const visualPending = documentsLink.locator(
-      '[data-navigation-pending="/documents"]'
-    )
-    const pendingAnnouncement = documentsLink.getByRole("status", {
-      name: "Opening Documents",
-    })
+    const navigation = documentsLink.click()
 
-    const pendingDelayMs = await documentsLink.evaluate(
-      (link, pendingSelector) =>
-        new Promise<number>((resolve, reject) => {
-          if (!(link instanceof HTMLElement)) {
-            reject(new Error("Navigation target is not interactive"))
-            return
-          }
-
-          const startedAt = performance.now()
-          const timeout = window.setTimeout(() => {
-            observer.disconnect()
-            reject(new Error("Navigation pending feedback was not rendered"))
-          }, 1_000)
-          const observer = new MutationObserver(() => {
-            if (!link.querySelector(pendingSelector)) {
-              return
-            }
-
-            window.clearTimeout(timeout)
-            observer.disconnect()
-            resolve(performance.now() - startedAt)
-          })
-
-          observer.observe(link, { childList: true, subtree: true })
-          link.click()
-        }),
-      '[data-navigation-pending="/documents"]'
+    await expect(
+      documentsLink.locator('[data-navigation-pending="/documents"]')
+    ).toHaveCount(0)
+    await expect(page.locator('[data-slot="page-skeleton-content"]')).toHaveCount(
+      0
     )
 
-    expect(pendingDelayMs, "Lab pending feedback render time").toBeLessThanOrEqual(
-      100
-    )
-    await expect(visualPending).toBeVisible()
-    await expect(pendingAnnouncement).toBeAttached()
-    const reducedAnimationSeconds = await visualPending.evaluate((element) =>
-      Number.parseFloat(window.getComputedStyle(element).animationDuration)
-    )
-    expect(reducedAnimationSeconds).toBeLessThanOrEqual(0.00001)
+    await navigation
     await expect(page).toHaveURL(/\/documents(?:\?|$)/)
   })
 })

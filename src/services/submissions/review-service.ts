@@ -16,6 +16,7 @@ import {
   requireSubmissionPermission,
   runSubmissionOperation,
 } from "@/services/submissions/shared"
+import { getOrganizationRoleFromSubject } from "@/lib/permissions"
 import {
   parseSubmissionRow,
   type Submission,
@@ -187,13 +188,14 @@ export async function createInternalSubmissionComment(
     },
     async (): Promise<SubmissionComment> => {
       const client = getSubmissionClient(deps)
-      const role = await requireSubmissionPermission(
+      const permissionSubject = await requireSubmissionPermission(
         client,
         input.organizationId,
         input.actorUserId,
         "submission_comments:create",
         "You cannot comment on internal submissions."
       )
+      const role = getOrganizationRoleFromSubject(permissionSubject)
       const submission = await getSubmissionById(
         client,
         input.organizationId,

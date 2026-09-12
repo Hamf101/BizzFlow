@@ -308,7 +308,7 @@ async function loadTemplateActionContext(): Promise<TemplateActionContext> {
   }
 
   if (
-    !canPerformOrganizationAction(context.membership.role, "templates:manage")
+    !canPerformOrganizationAction(context.membership, "templates:manage")
   ) {
     throw new TemplateActionError("You cannot manage document templates.", 403)
   }

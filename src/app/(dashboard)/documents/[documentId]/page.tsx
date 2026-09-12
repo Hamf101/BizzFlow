@@ -523,7 +523,7 @@ function DocumentCommentsCard({
         {detail.document.lifecycleState === "active" && (
           <RoleGuard
             action="document_comments:create"
-            role={context.membership.role}
+            role={context.membership}
           >
             <form action={createDocumentCommentAction} className="flex flex-col gap-3">
               <input
@@ -547,7 +547,7 @@ function DocumentCommentsCard({
                 placeholder="Share context or a review note"
                 required
               />
-              <DocumentCommentSubmitButton role={context.membership.role} />
+              <DocumentCommentSubmitButton role={context.membership} />
             </form>
           </RoleGuard>
         )}
@@ -595,7 +595,7 @@ function DocumentActionsCard({
         ) : null}
         {canContribute && document.lifecycleState === "active" ? (
           <RoleGuard
-            role={context.membership.role}
+            role={context.membership}
             action="document_versions:create"
           >
             <DocumentReplaceForm
@@ -606,7 +606,7 @@ function DocumentActionsCard({
         ) : null}
         {hasLifecycleAction ? (
           <RoleGuard
-            role={context.membership.role}
+            role={context.membership}
             action="documents:archive"
           >
             <div className="flex flex-col gap-3">
@@ -619,7 +619,7 @@ function DocumentActionsCard({
                   >
                     <PermissionButton
                       action="documents:archive"
-                      role={context.membership.role}
+                      role={context.membership}
                       type="submit"
                       variant="outline"
                     >
@@ -637,7 +637,7 @@ function DocumentActionsCard({
                   >
                     <PermissionButton
                       action="documents:archive"
-                      role={context.membership.role}
+                      role={context.membership}
                       type="submit"
                       variant="outline"
                     >
@@ -655,7 +655,7 @@ function DocumentActionsCard({
                   >
                     <PermissionButton
                       action="documents:archive"
-                      role={context.membership.role}
+                      role={context.membership}
                       type="submit"
                       variant="destructive"
                     >
@@ -677,7 +677,7 @@ function DocumentActionsCard({
                   permissionAction="documents:archive"
                   resourceKind="document"
                   resourceName={document.title}
-                  role={context.membership.role}
+                  role={context.membership}
                 />
               ) : null}
             </div>

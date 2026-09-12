@@ -230,6 +230,31 @@ describe("list audit logs", () => {
       objectCount: 1,
     })
   })
+
+  it("rechecks edited audit permissions before each tenant read", async () => {
+    const membership = {
+      role: "manager",
+      role_definition: { permissions: ["audit_logs:view"] },
+    }
+    const client = new QueuedAdminClient({
+      organization_memberships: [
+        { data: membership, error: null },
+        { data: membership, error: null },
+      ],
+      audit_logs: [{ data: [], error: null }],
+    })
+    vi.mocked(createAdminClient).mockReturnValue(client as never)
+
+    await expect(
+      listAuditLogs({ actorUserId: "manager-1", organizationId: "org-1" })
+    ).resolves.toEqual([])
+
+    membership.role_definition.permissions = []
+
+    await expect(
+      listAuditLogs({ actorUserId: "manager-1", organizationId: "org-1" })
+    ).rejects.toMatchObject({ statusCode: 403 })
+  })
 })
 
 describe("verify audit log chain", () => {

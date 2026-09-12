@@ -21,7 +21,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import type { OrganizationRole } from "@/lib/permissions"
+import type {
+  OrganizationPermissionSubject,
+  OrganizationRole,
+} from "@/lib/permissions"
 import { cn } from "@/lib/utils"
 
 export type DashboardAccount = {
@@ -29,6 +32,7 @@ export type DashboardAccount = {
   email: string
   organizationName: string | null
   role: OrganizationRole | null
+  permissionSubject: OrganizationPermissionSubject | null
 }
 
 type DashboardAccountMenuProps = {

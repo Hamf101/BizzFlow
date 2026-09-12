@@ -66,7 +66,7 @@ export default async function NewTemplatePage(): Promise<ReactElement> {
   const context = contextResult.context
 
   if (
-    !canPerformOrganizationAction(context.membership.role, "templates:manage")
+    !canPerformOrganizationAction(context.membership, "templates:manage")
   ) {
     redirect(
       buildFeedbackRedirect("/templates", "permission_denied")

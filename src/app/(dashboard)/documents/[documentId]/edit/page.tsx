@@ -31,7 +31,7 @@ import {
 } from "@/lib/page-status-badges"
 import {
   canPerformOrganizationAction,
-  type OrganizationRole,
+  type OrganizationPermissionSubject,
 } from "@/lib/permissions"
 import { cn } from "@/lib/utils"
 import { getGeneratedDocumentSigningView } from "@/services/document-signing-service"
@@ -128,11 +128,11 @@ export default async function GeneratedDocumentEditorPage({
 
   const view = viewResult.view
   const canFill =
-    canPerformOrganizationAction(context.membership.role, "documents:fill") &&
+    canPerformOrganizationAction(context.membership, "documents:fill") &&
     view.accessLevel === "contributor" &&
     view.document.lifecycleState === "active"
   const canSend =
-    canPerformOrganizationAction(context.membership.role, "documents:send") &&
+    canPerformOrganizationAction(context.membership, "documents:send") &&
     view.accessLevel === "contributor" &&
     view.document.lifecycleState === "active"
   const isCompleted = view.workflowStatus === "completed"
@@ -197,18 +197,18 @@ export default async function GeneratedDocumentEditorPage({
         <DocumentAnswersCard
           canFill={canFill}
           isCompleted={isCompleted}
-          role={context.membership.role}
+          role={context.membership}
           view={view}
         />
         <aside className="flex min-w-0 flex-col gap-6">
           <SigningOverviewCard view={view} />
           <RecipientStatusCard
             canSend={canSend}
-            role={context.membership.role}
+            role={context.membership}
             view={view}
           />
           {!isCompleted && canSend && (
-            <RoleGuard action="documents:send" role={context.membership.role}>
+            <RoleGuard action="documents:send" role={context.membership}>
               <DocumentRecipientCollection
                 action={sendGeneratedDocumentAction}
                 documentId={view.document.id}
@@ -229,7 +229,7 @@ function DocumentAnswersCard({
 }: {
   canFill: boolean
   isCompleted: boolean
-  role: OrganizationRole
+  role: OrganizationPermissionSubject
   view: GeneratedDocumentSigningView
 }): ReactElement {
   const editable = canFill && !isCompleted
@@ -319,7 +319,7 @@ function RecipientStatusCard({
   view,
 }: {
   canSend: boolean
-  role: OrganizationRole
+  role: OrganizationPermissionSubject
   view: GeneratedDocumentSigningView
 }): ReactElement {
   return (

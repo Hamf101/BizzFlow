@@ -65,7 +65,7 @@ export default async function AuditLogPage(): Promise<ReactElement> {
     redirect(buildFeedbackRedirect("/dashboard", "organization_required"))
   }
 
-  if (!canPerformOrganizationAction(context.membership.role, "audit_logs:view")) {
+  if (!canPerformOrganizationAction(context.membership, "audit_logs:view")) {
     redirect(buildFeedbackRedirect("/dashboard", "permission_denied"))
   }
 
@@ -101,7 +101,7 @@ export default async function AuditLogPage(): Promise<ReactElement> {
   }
 
   const canVerifyChain = canPerformOrganizationAction(
-    context.membership.role,
+    context.membership,
     "audit_logs:verify"
   )
 

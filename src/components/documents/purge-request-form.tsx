@@ -11,7 +11,7 @@ import {
 import { Input } from "@/components/ui/input"
 import type {
   OrganizationPermissionAction,
-  OrganizationRole,
+  OrganizationPermissionSubject,
 } from "@/lib/permissions"
 
 type PurgeRequestFormProps = {
@@ -22,7 +22,7 @@ type PurgeRequestFormProps = {
   permissionAction: OrganizationPermissionAction
   resourceKind: "document" | "folder"
   resourceName: string
-  role: OrganizationRole
+  role: OrganizationPermissionSubject
 }
 
 /**

@@ -35,15 +35,24 @@ type DatabaseOrganizationRole =
 type DatabaseMembershipStatus = "active" | "disabled"
 type DatabaseInviteStatus = "pending" | "accepted" | "revoked" | "expired"
 
+type DatabaseRelationship = {
+  foreignKeyName: string
+  columns: string[]
+  isOneToOne: boolean
+  referencedRelation: string
+  referencedColumns: string[]
+}
+
 type DatabaseTable<
   Row extends Record<string, unknown>,
   Insert extends Record<string, unknown>,
   Update extends Record<string, unknown>,
+  Relationships extends DatabaseRelationship[] = [],
 > = {
   Row: Row
   Insert: Insert
   Update: Update
-  Relationships: []
+  Relationships: Relationships
 }
 
 type ProfileRow = Record<string, unknown> & {
@@ -68,9 +77,22 @@ type MembershipRow = Record<string, unknown> & {
   org_id: string
   user_id: string
   role: DatabaseOrganizationRole
+  role_definition_id: string | null
+  workspace_display_name: string | null
   status: DatabaseMembershipStatus
   email_notifications_enabled: boolean
   sms_notifications_enabled: boolean
+  created_at: string
+  updated_at: string
+}
+
+type OrganizationRoleRow = Record<string, unknown> & {
+  id: string
+  org_id: string
+  system_key: DatabaseOrganizationRole | null
+  name: string
+  permissions: string[] | null
+  archived_at: string | null
   created_at: string
   updated_at: string
 }
@@ -80,6 +102,7 @@ type InviteRow = Record<string, unknown> & {
   org_id: string
   email: string
   role: DatabaseOrganizationRole
+  role_definition_id: string | null
   token: string
   invited_by: string | null
   status: DatabaseInviteStatus
@@ -119,6 +142,11 @@ export type CurrentOrganizationContextRow = {
   org_id: string
   user_id: string
   role: DatabaseOrganizationRole
+  role_definition_id: string
+  role_definition_name: string
+  role_definition_system_key: DatabaseOrganizationRole | null
+  role_definition_permissions: string[] | null
+  workspace_display_name: string | null
   status: DatabaseMembershipStatus
   membership_created_at: string
   membership_updated_at: string
@@ -371,12 +399,36 @@ export type AdminDatabase = {
       organization_memberships: DatabaseTable<
         MembershipRow,
         Partial<MembershipRow> & Pick<MembershipRow, "org_id" | "user_id" | "role">,
-        Partial<MembershipRow>
+        Partial<MembershipRow>,
+        [
+          {
+            foreignKeyName: "organization_memberships_role_definition_fk"
+            columns: ["org_id", "role_definition_id"]
+            isOneToOne: false
+            referencedRelation: "organization_roles"
+            referencedColumns: ["org_id", "id"]
+          },
+        ]
+      >
+      organization_roles: DatabaseTable<
+        OrganizationRoleRow,
+        Partial<OrganizationRoleRow> &
+          Pick<OrganizationRoleRow, "org_id" | "name">,
+        Partial<OrganizationRoleRow>
       >
       invites: DatabaseTable<
         InviteRow,
         Partial<InviteRow> & Pick<InviteRow, "org_id" | "email" | "role" | "token">,
-        Partial<InviteRow>
+        Partial<InviteRow>,
+        [
+          {
+            foreignKeyName: "invites_role_definition_fk"
+            columns: ["org_id", "role_definition_id"]
+            isOneToOne: false
+            referencedRelation: "organization_roles"
+            referencedColumns: ["org_id", "id"]
+          },
+        ]
       >
       audit_logs: DatabaseTable<
         AuditLogRow,
@@ -832,6 +884,24 @@ export type AdminDatabase = {
           target_membership_id: string
           target_actor_user_id: string
           target_role: DatabaseOrganizationRole
+        }
+        Returns: string
+      }
+      update_organization_member_access: {
+        Args: {
+          target_org_id: string
+          target_membership_id: string
+          target_actor_user_id: string
+          target_role_definition_id: string
+          target_workspace_display_name: string | null
+        }
+        Returns: string
+      }
+      archive_organization_role: {
+        Args: {
+          target_org_id: string
+          target_actor_user_id: string
+          target_role_definition_id: string
         }
         Returns: string
       }
