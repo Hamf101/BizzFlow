@@ -25,25 +25,44 @@ const REQUIRED_ENV_KEYS = [
   "BIZFLOW_RLS_REVIEWER_PASSWORD",
   "BIZFLOW_RLS_ACTOR_B_EMAIL",
   "BIZFLOW_RLS_ACTOR_B_PASSWORD",
-  "BIZFLOW_RLS_ACTOR_B_ORG_ID",
-  "BIZFLOW_RLS_STAFF_SUBMISSION_ID",
-  "BIZFLOW_RLS_STAFF_SUBMISSION_FILE_ID",
-  "BIZFLOW_RLS_MANAGER_SUBMISSION_ID",
-  "BIZFLOW_RLS_MANAGER_SUBMISSION_FILE_ID"
+  "BIZFLOW_RLS_ACTOR_B_ORG_ID"
 ]
 
-/** Expected submission/file visibility for each synthetic actor and exact fixture pair. */
-export const SUBMISSION_VISIBILITY_PLAN = Object.freeze([
-  { actor: "owner", fixture: "staff", visible: true },
-  { actor: "owner", fixture: "manager", visible: true },
-  { actor: "manager", fixture: "staff", visible: true },
-  { actor: "manager", fixture: "manager", visible: true },
-  { actor: "staff", fixture: "staff", visible: true },
-  { actor: "staff", fixture: "manager", visible: false },
-  { actor: "reviewer", fixture: "staff", visible: true },
-  { actor: "reviewer", fixture: "manager", visible: false },
-  { actor: "tenantB", fixture: "staff", visible: false },
-  { actor: "tenantB", fixture: "manager", visible: false }
+/**
+ * Every tenant table signed-in sessions must not read or write directly: exactly
+ * the tables 20260912194858_close_direct_tenant_table_access.sql revokes. Tenant
+ * data reaches signed-in users only through services, which check each
+ * member's current role-definition permissions.
+ */
+export const DIRECT_ACCESS_CLOSED_TABLES = Object.freeze([
+  "audit_logs",
+  "document_activity_events",
+  "document_answers",
+  "document_comments",
+  "document_recent_accesses",
+  "document_signing_recipients",
+  "document_templates",
+  "document_versions",
+  "documents",
+  "folders",
+  "generated_document_finalizations",
+  "invites",
+  "notification_deliveries",
+  "organization_memberships",
+  "organization_roles",
+  "organizations",
+  "profiles",
+  "public_form_links",
+  "resource_purge_jobs",
+  "resource_purge_receipts",
+  "resource_purge_tombstones",
+  "submission_activity_events",
+  "submission_comments",
+  "submission_files",
+  "submissions",
+  "task_reminders",
+  "tasks",
+  "template_flow_messages"
 ])
 
 /** Service-only submission RPCs that ordinary authenticated sessions must not execute. */
@@ -67,6 +86,13 @@ export const AUTHENTICATED_UPLOAD_BARRIER_RPC_NAMES = Object.freeze([
   "reconcile_document_upload_authorization_barriers"
 ])
 
+/** Row-security helpers that lost their only signed-in callers with direct access. */
+export const AUTHENTICATED_POLICY_HELPER_RPC_NAMES = Object.freeze([
+  "is_organization_member",
+  "organization_role_for",
+  "shares_organization_with_profile"
+])
+
 /** Direct Data API mutations that must remain closed on all submission workflow tables. */
 export const DIRECT_SUBMISSION_WRITE_PLAN = Object.freeze([
   { table: "submissions", operation: "insert" },
@@ -83,7 +109,14 @@ export const DIRECT_SUBMISSION_WRITE_PLAN = Object.freeze([
   { table: "submission_activity_events", operation: "delete" }
 ])
 
-export const HELP_TEXT = `BizFlow authenticated two-tenant Supabase RLS check
+/** Direct Data API mutations that must remain closed on public form links. */
+export const DIRECT_PUBLIC_LINK_WRITE_PLAN = Object.freeze([
+  { table: "public_form_links", operation: "insert" },
+  { table: "public_form_links", operation: "update" },
+  { table: "public_form_links", operation: "delete" }
+])
+
+export const HELP_TEXT = `BizFlow authenticated two-tenant Supabase direct-access check
 
 Usage:
   pnpm supabase:check:rls
@@ -104,28 +137,27 @@ Required environment:
   BIZFLOW_RLS_ACTOR_B_EMAIL            Email for a different synthetic test user
   BIZFLOW_RLS_ACTOR_B_PASSWORD         Password for actor B
   BIZFLOW_RLS_ACTOR_B_ORG_ID           A different synthetic organization containing actor B
-  BIZFLOW_RLS_STAFF_SUBMISSION_ID      Submission created by actor A in actor A's organization
-  BIZFLOW_RLS_STAFF_SUBMISSION_FILE_ID File belonging to the staff-created submission
-  BIZFLOW_RLS_MANAGER_SUBMISSION_ID    Submission created by the configured manager
-  BIZFLOW_RLS_MANAGER_SUBMISSION_FILE_ID File belonging to the manager-created submission
 
 Fixture contract:
   - All users and both organizations must be synthetic, pre-provisioned test fixtures.
   - Owner, manager, actor A, and reviewer must have exactly their named active role in actor A's organization.
-  - Actor B must be an active owner_admin, manager, or staff member only in the other organization.
-  - The two named submissions/files must already exist, be related exactly, have their named creator,
-    use an available file, and have at least one comment and one activity event.
-  - The staff-created submission must be non-draft and assigned to the configured external reviewer.
-  - The manager-created submission must not be assigned to the configured external reviewer.
-  - Actor identities, organization IDs, submission IDs, and file IDs must be distinct within each category.
+  - Actor B must be an active member only in the other organization.
+  - Actor identities and organization IDs must be distinct.
+
+What it proves:
+  - Every signed-in role in both organizations is denied direct reads of every tenant table.
+  - Direct writes to submission tables and public form links are denied.
+  - Service-only RPCs and the row-security helpers cannot be executed by signed-in sessions.
+  - Tenant data reaches signed-in users only through the service layer; custom-role grant
+    and revocation behavior is proven by the service test suite.
 
 Safety and scope:
-  - Tenant reads always use ordinary authenticated sessions and the publishable key.
+  - Every request uses an ordinary authenticated session and the publishable key.
   - The script never prints credentials, tokens, IDs, or returned row bodies.
   - No fixture rows are created, updated, or deleted.
   - Every denied insert uses fresh nonexistent foreign keys, and update/delete probes target
     fresh nonexistent IDs, so an unexpectedly open boundary still cannot mutate real fixtures.
-  - All local sessions are cleared in a finally block; fixture reads target exact configured IDs.
+  - All local sessions are cleared in a finally block.
 `
 
 /**
@@ -177,11 +209,7 @@ export function mergeEnvironment(processEnvironment, fileEnvironment) {
  *   manager: { label: string, email: string, password: string, organizationId: string },
  *   actorA: { label: string, email: string, password: string, organizationId: string },
  *   reviewer: { label: string, email: string, password: string, organizationId: string },
- *   actorB: { label: string, email: string, password: string, organizationId: string },
- *   fixtures: {
- *     staff: { label: string, organizationId: string, submissionId: string, fileId: string },
- *     manager: { label: string, organizationId: string, submissionId: string, fileId: string }
- *   }
+ *   actorB: { label: string, email: string, password: string, organizationId: string }
  * }} Validated harness configuration.
  * @throws {Error} When any required or safety-critical value is missing or invalid.
  */
@@ -207,12 +235,6 @@ export function buildConfiguration(environment) {
   const actorBEmail = environment.BIZFLOW_RLS_ACTOR_B_EMAIL.trim().toLowerCase()
   const actorAOrganizationId = environment.BIZFLOW_RLS_ACTOR_A_ORG_ID.trim()
   const actorBOrganizationId = environment.BIZFLOW_RLS_ACTOR_B_ORG_ID.trim()
-  const staffSubmissionId = environment.BIZFLOW_RLS_STAFF_SUBMISSION_ID.trim()
-  const staffFileId = environment.BIZFLOW_RLS_STAFF_SUBMISSION_FILE_ID.trim()
-  const managerSubmissionId =
-    environment.BIZFLOW_RLS_MANAGER_SUBMISSION_ID.trim()
-  const managerFileId =
-    environment.BIZFLOW_RLS_MANAGER_SUBMISSION_FILE_ID.trim()
 
   if (environment.BIZFLOW_RLS_TEST_CONFIRM !== OPT_IN_VALUE) {
     throw new Error(
@@ -238,19 +260,12 @@ export function buildConfiguration(environment) {
     )
   }
 
-  const configuredIds = [
-    actorAOrganizationId,
-    actorBOrganizationId,
-    staffSubmissionId,
-    staffFileId,
-    managerSubmissionId,
-    managerFileId
-  ]
-
-  if (configuredIds.some((identifier) => !UUID_PATTERN.test(identifier))) {
-    throw new Error(
-      "Configured organization, submission, and file IDs must be UUIDs."
+  if (
+    [actorAOrganizationId, actorBOrganizationId].some(
+      (identifier) => !UUID_PATTERN.test(identifier)
     )
+  ) {
+    throw new Error("Configured organization IDs must be UUIDs.")
   }
 
   const actorEmails = [
@@ -267,12 +282,6 @@ export function buildConfiguration(environment) {
 
   if (actorAOrganizationId === actorBOrganizationId) {
     throw new Error("The two RLS actors must use different organizations.")
-  }
-
-  if (new Set(configuredIds).size !== configuredIds.length) {
-    throw new Error(
-      "Organization, submission, and file fixture IDs must be distinct."
-    )
   }
 
   return {
@@ -307,20 +316,6 @@ export function buildConfiguration(environment) {
       email: actorBEmail,
       password: environment.BIZFLOW_RLS_ACTOR_B_PASSWORD,
       organizationId: actorBOrganizationId
-    },
-    fixtures: {
-      staff: {
-        label: "staff-created",
-        organizationId: actorAOrganizationId,
-        submissionId: staffSubmissionId,
-        fileId: staffFileId
-      },
-      manager: {
-        label: "manager-created",
-        organizationId: actorAOrganizationId,
-        submissionId: managerSubmissionId,
-        fileId: managerFileId
-      }
     }
   }
 }
@@ -382,302 +377,32 @@ async function authenticateActor(client, actor) {
 }
 
 /**
- * Require exactly one row to be visible for a targeted fixture query.
+ * Verify one signed-in actor is denied direct reads of every tenant table.
  *
- * @param {ReturnType<typeof createClient>} client - Authenticated Supabase client.
+ * @param {ReturnType<typeof createClient>} client - Ordinary authenticated Supabase client.
  * @param {string} actorLabel - Non-sensitive actor label.
- * @param {string} table - Public table name.
- * @param {string} columns - Minimal selected columns.
- * @param {Record<string, string>} filters - Exact fixture filters.
- * @param {string} assertion - Assertion identifier.
- * @returns {Promise<Record<string, unknown>>} The one visible row, used only for local assertions.
- * @throws {Error} When the query fails or does not return exactly one row.
- */
-async function expectOneVisible(
-  client,
-  actorLabel,
-  table,
-  columns,
-  filters,
-  assertion
-) {
-  const startedAt = performance.now()
-  const { data, error, status } = await client
-    .from(table)
-    .select(columns)
-    .match(filters)
-    .limit(2)
-
-  if (error) {
-    throw createSafeSupabaseError(`${actorLabel} ${assertion}`, error, status)
-  }
-
-  if (!Array.isArray(data) || data.length !== 1) {
-    throw new Error(
-      `${actorLabel} ${assertion} expected exactly one visible row; observed_count=${Array.isArray(data) ? data.length : 0}.`
-    )
-  }
-
-  logPass(actorLabel, assertion, startedAt)
-  return data[0]
-}
-
-/**
- * Require at least one workflow-evidence row to be visible for a targeted submission.
- *
- * @param {ReturnType<typeof createClient>} client - Authenticated Supabase client.
- * @param {string} actorLabel - Non-sensitive actor label.
- * @param {string} table - Public workflow evidence table name.
- * @param {Record<string, string>} filters - Exact tenant and submission filters.
- * @param {string} assertion - Assertion identifier.
  * @returns {Promise<void>}
- * @throws {Error} When the query fails or returns no matching rows.
+ * @throws {Error} When any table answers a direct read instead of PostgreSQL code 42501.
  */
-async function expectAnyVisible(client, actorLabel, table, filters, assertion) {
-  const startedAt = performance.now()
-  const { data, error, status } = await client
-    .from(table)
-    .select("id")
-    .match(filters)
-    .limit(1)
+async function expectDirectReadsDenied(client, actorLabel) {
+  for (const table of DIRECT_ACCESS_CLOSED_TABLES) {
+    const startedAt = performance.now()
+    const { data, error, status } = await client.from(table).select("*").limit(1)
 
-  if (error) {
-    throw createSafeSupabaseError(`${actorLabel} ${assertion}`, error, status)
+    if (error?.code !== "42501" || data !== null) {
+      throw new Error(
+        `${actorLabel} direct-${table}-read expected code=42501; observed status=${status ?? error?.status ?? "unknown"}, code=${error?.code ?? "none"}.`
+      )
+    }
+
+    logPass(actorLabel, `direct-${table}-read-denied`, startedAt)
   }
-
-  if (!Array.isArray(data) || data.length !== 1) {
-    throw new Error(
-      `${actorLabel} ${assertion} expected visible workflow evidence.`
-    )
-  }
-
-  logPass(actorLabel, assertion, startedAt)
-}
-
-/**
- * Require a targeted fixture row to be hidden by RLS.
- *
- * @param {ReturnType<typeof createClient>} client - Authenticated Supabase client.
- * @param {string} actorLabel - Non-sensitive actor label.
- * @param {string} table - Public table name.
- * @param {Record<string, string>} filters - Exact fixture filters.
- * @param {string} assertion - Assertion identifier.
- * @returns {Promise<void>}
- * @throws {Error} When the query fails or exposes any matching row.
- */
-async function expectHidden(client, actorLabel, table, filters, assertion) {
-  const startedAt = performance.now()
-  const { data, error, status } = await client
-    .from(table)
-    .select("id")
-    .match(filters)
-    .limit(1)
-
-  if (error) {
-    throw createSafeSupabaseError(`${actorLabel} ${assertion}`, error, status)
-  }
-
-  if (!Array.isArray(data) || data.length !== 0) {
-    throw new Error(
-      `${actorLabel} ${assertion} exposed a fixture that must be hidden.`
-    )
-  }
-
-  logPass(actorLabel, assertion, startedAt)
-}
-
-/**
- * Verify one actor's exact active organization role.
- *
- * @param {ReturnType<typeof createClient>} client - Authenticated Supabase client.
- * @param {{ label: string, organizationId: string }} actor - Synthetic actor metadata.
- * @param {string} userId - Authenticated actor identifier.
- * @param {string[]} expectedRoles - Exact roles allowed for this fixture actor.
- * @returns {Promise<void>}
- * @throws {Error} When the membership is hidden, duplicated, inactive, or has the wrong role.
- */
-async function expectActorRole(client, actor, userId, expectedRoles) {
-  const membership = await expectOneVisible(
-    client,
-    actor.label,
-    "organization_memberships",
-    "id,role",
-    {
-      org_id: actor.organizationId,
-      user_id: userId,
-      status: "active"
-    },
-    "own-active-membership-visible"
-  )
-
-  if (
-    typeof membership.role !== "string" ||
-    !expectedRoles.includes(membership.role)
-  ) {
-    throw new Error(
-      `${actor.label} does not have its required synthetic fixture role.`
-    )
-  }
-}
-
-/**
- * Require an exact submission and its exact file to be visible and correctly related.
- *
- * @param {ReturnType<typeof createClient>} client - Authenticated Supabase client.
- * @param {string} actorLabel - Non-sensitive actor label.
- * @param {{ label: string, organizationId: string, submissionId: string, fileId: string }} fixture - Exact fixture IDs.
- * @param {string} expectedCreatorId - Authenticated creator ID for fixture-integrity checks.
- * @param {string | null} expectedAssigneeId - Reviewer ID when assignment must be verified.
- * @param {string | null} forbiddenAssigneeId - Reviewer ID that must not own this fixture.
- * @returns {Promise<void>}
- * @throws {Error} When either row is hidden, duplicated, or does not match the fixture contract.
- */
-async function expectSubmissionFixtureVisible(
-  client,
-  actorLabel,
-  fixture,
-  expectedCreatorId,
-  expectedAssigneeId = null,
-  forbiddenAssigneeId = null
-) {
-  const submission = await expectOneVisible(
-    client,
-    actorLabel,
-    "submissions",
-    "id,org_id,created_by,status,assigned_to",
-    {
-      id: fixture.submissionId,
-      org_id: fixture.organizationId
-    },
-    `${fixture.label}-submission-visible`
-  )
-
-  if (submission.created_by !== expectedCreatorId) {
-    throw new Error(
-      `${fixture.label} submission does not have its configured synthetic creator.`
-    )
-  }
-
-  if (
-    expectedAssigneeId !== null &&
-    (submission.assigned_to !== expectedAssigneeId ||
-      submission.status === "draft")
-  ) {
-    throw new Error(
-      `${fixture.label} submission must be non-draft and assigned to the configured reviewer.`
-    )
-  }
-
-  if (
-    forbiddenAssigneeId !== null &&
-    submission.assigned_to === forbiddenAssigneeId
-  ) {
-    throw new Error(
-      `${fixture.label} submission must not be assigned to the reviewer fixture.`
-    )
-  }
-
-  const submissionFile = await expectOneVisible(
-    client,
-    actorLabel,
-    "submission_files",
-    "id,org_id,submission_id,status",
-    {
-      id: fixture.fileId,
-      org_id: fixture.organizationId,
-      submission_id: fixture.submissionId
-    },
-    `${fixture.label}-file-visible`
-  )
-
-  if (
-    submissionFile.org_id !== fixture.organizationId ||
-    submissionFile.submission_id !== fixture.submissionId ||
-    submissionFile.status !== "available"
-  ) {
-    throw new Error(
-      `${fixture.label} file must be available and belong to its configured submission.`
-    )
-  }
-
-  const evidenceFilters = {
-    org_id: fixture.organizationId,
-    submission_id: fixture.submissionId
-  }
-
-  await expectAnyVisible(
-    client,
-    actorLabel,
-    "submission_comments",
-    evidenceFilters,
-    `${fixture.label}-comments-visible`
-  )
-  await expectAnyVisible(
-    client,
-    actorLabel,
-    "submission_activity_events",
-    evidenceFilters,
-    `${fixture.label}-activity-visible`
-  )
-}
-
-/**
- * Require an exact submission and its exact file to be hidden.
- *
- * @param {ReturnType<typeof createClient>} client - Authenticated Supabase client.
- * @param {string} actorLabel - Non-sensitive actor label.
- * @param {{ label: string, organizationId: string, submissionId: string, fileId: string }} fixture - Exact fixture IDs.
- * @returns {Promise<void>}
- * @throws {Error} When either protected row is exposed.
- */
-async function expectSubmissionFixtureHidden(client, actorLabel, fixture) {
-  await expectHidden(
-    client,
-    actorLabel,
-    "submissions",
-    {
-      id: fixture.submissionId,
-      org_id: fixture.organizationId
-    },
-    `${fixture.label}-submission-hidden`
-  )
-  await expectHidden(
-    client,
-    actorLabel,
-    "submission_files",
-    {
-      id: fixture.fileId,
-      org_id: fixture.organizationId,
-      submission_id: fixture.submissionId
-    },
-    `${fixture.label}-file-hidden`
-  )
-  await expectHidden(
-    client,
-    actorLabel,
-    "submission_comments",
-    {
-      org_id: fixture.organizationId,
-      submission_id: fixture.submissionId
-    },
-    `${fixture.label}-comments-hidden`
-  )
-  await expectHidden(
-    client,
-    actorLabel,
-    "submission_activity_events",
-    {
-      org_id: fixture.organizationId,
-      submission_id: fixture.submissionId
-    },
-    `${fixture.label}-activity-hidden`
-  )
 }
 
 /**
  * Build null-only RPC arguments that reach validation only if EXECUTE was accidentally granted.
  *
- * @param {string} functionName - Submission mutation RPC name.
+ * @param {string} functionName - Service-only or row-security helper RPC name.
  * @returns {Record<string, null>} Exact PostgREST RPC arguments.
  * @throws {Error} When the assertion plan contains an unknown RPC.
  */
@@ -776,7 +501,10 @@ function buildDeniedRpcArguments(functionName) {
     },
     reconcile_document_upload_authorization_barriers: {
       target_conservative_until: null
-    }
+    },
+    is_organization_member: { target_org_id: null },
+    organization_role_for: { target_org_id: null },
+    shares_organization_with_profile: { target_user_id: null }
   }
   const rpcArguments = argumentsByFunction[functionName]
 
@@ -790,18 +518,19 @@ function buildDeniedRpcArguments(functionName) {
 }
 
 /**
- * Verify every service-only submission and upload-barrier RPC remains
- * unavailable to authenticated users.
+ * Verify every service-only RPC and row-security helper remains unavailable to
+ * authenticated users.
  *
  * @param {ReturnType<typeof createClient>} client - Ordinary authenticated Supabase client.
  * @param {string} actorLabel - Non-sensitive actor label.
  * @returns {Promise<void>}
  * @throws {Error} When any RPC executes or returns a non-permission failure.
  */
-async function expectAuthenticatedSubmissionRpcsDenied(client, actorLabel) {
+async function expectServiceOnlyRpcsDenied(client, actorLabel) {
   const serviceOnlyFunctionNames = [
     ...AUTHENTICATED_SUBMISSION_RPC_NAMES,
-    ...AUTHENTICATED_UPLOAD_BARRIER_RPC_NAMES
+    ...AUTHENTICATED_UPLOAD_BARRIER_RPC_NAMES,
+    ...AUTHENTICATED_POLICY_HELPER_RPC_NAMES
   ]
 
   for (const functionName of serviceOnlyFunctionNames) {
@@ -827,7 +556,7 @@ async function expectAuthenticatedSubmissionRpcsDenied(client, actorLabel) {
 /**
  * Build a constraint-safe insert probe whose fresh foreign keys prevent persistence.
  *
- * @param {"submissions" | "submission_files" | "submission_comments" | "submission_activity_events"} table - Submission table under test.
+ * @param {"submissions" | "submission_files" | "submission_comments" | "submission_activity_events" | "public_form_links"} table - Table under test.
  * @param {{ organizationId: string }} actor - Synthetic actor metadata.
  * @param {string} actorUserId - Authenticated actor identifier.
  * @returns {Record<string, unknown>} Non-persisting insert body.
@@ -857,6 +586,16 @@ function buildDeniedInsertPayload(table, actor, actorUserId) {
       revision: 1,
       created_by: actorUserId,
       updated_by: actorUserId
+    }
+  }
+
+  if (table === "public_form_links") {
+    return {
+      id: randomUUID(),
+      org_id: actor.organizationId,
+      template_id: randomUUID(),
+      token: `rls-denial-probe-${randomUUID()}`,
+      created_by: actorUserId
     }
   }
 
@@ -907,7 +646,31 @@ function buildDeniedInsertPayload(table, actor, actorUserId) {
 }
 
 /**
- * Verify direct authenticated INSERT, UPDATE, and DELETE remain denied for submission data.
+ * Build a column-valid update body so a denial comes from privileges, not from
+ * PostgREST rejecting an unknown column.
+ *
+ * @param {string} table - Table under test.
+ * @returns {Record<string, unknown>} Update body.
+ */
+function buildDeniedUpdatePayload(table) {
+  if (table === "submission_comments") {
+    return { body: "Authenticated update denial probe" }
+  }
+
+  if (table === "submission_activity_events") {
+    return { event_type: "commented" }
+  }
+
+  if (table === "public_form_links") {
+    return { max_submissions: 1 }
+  }
+
+  return { updated_at: new Date(0).toISOString() }
+}
+
+/**
+ * Verify direct authenticated INSERT, UPDATE, and DELETE remain denied for
+ * submission data and public form links.
  *
  * @param {ReturnType<typeof createClient>} client - Ordinary authenticated Supabase client.
  * @param {{ label: string, organizationId: string }} actor - Manager fixture metadata.
@@ -915,8 +678,11 @@ function buildDeniedInsertPayload(table, actor, actorUserId) {
  * @returns {Promise<void>}
  * @throws {Error} When any direct mutation is not rejected with PostgreSQL code 42501.
  */
-async function expectDirectSubmissionWritesDenied(client, actor, actorUserId) {
-  for (const probe of DIRECT_SUBMISSION_WRITE_PLAN) {
+async function expectDirectWritesDenied(client, actor, actorUserId) {
+  for (const probe of [
+    ...DIRECT_SUBMISSION_WRITE_PLAN,
+    ...DIRECT_PUBLIC_LINK_WRITE_PLAN
+  ]) {
     const startedAt = performance.now()
     let result
 
@@ -926,16 +692,9 @@ async function expectDirectSubmissionWritesDenied(client, actor, actorUserId) {
         .insert(buildDeniedInsertPayload(probe.table, actor, actorUserId))
         .select("id")
     } else if (probe.operation === "update") {
-      const updatePayload =
-        probe.table === "submission_comments"
-          ? { body: "Authenticated update denial probe" }
-          : probe.table === "submission_activity_events"
-            ? { event_type: "commented" }
-            : { updated_at: new Date(0).toISOString() }
-
       result = await client
         .from(probe.table)
-        .update(updatePayload)
+        .update(buildDeniedUpdatePayload(probe.table))
         .eq("id", randomUUID())
         .select("id")
     } else {
@@ -997,9 +756,6 @@ async function expectStaffDirectWriteDenied(client, actor) {
   }
 
   logPass(actor.label, "direct-membership-write-denied", startedAt)
-  console.log(
-    "[scope=write-denial] direct authenticated Data API boundary verified; this is not manager-versus-staff RLS evidence"
-  )
 }
 
 /**
@@ -1026,11 +782,11 @@ async function clearSession(client, actorLabel) {
 }
 
 /**
- * Execute the authenticated two-tenant RLS verification.
+ * Execute the authenticated two-tenant direct-access verification.
  *
  * @param {ReturnType<typeof buildConfiguration>} configuration - Validated harness settings.
  * @returns {Promise<void>}
- * @throws {Error} When authentication, positive visibility, isolation, or write denial fails.
+ * @throws {Error} When authentication fails or any direct read, write, or RPC is not denied.
  */
 export async function runHarness(configuration) {
   const startedAt = performance.now()
@@ -1081,137 +837,15 @@ export async function runHarness(configuration) {
       )
     }
 
-    await Promise.all([
-      expectActorRole(
-        clients.owner,
-        configuration.owner,
-        authenticatedActors.owner.id,
-        ["owner_admin"]
-      ),
-      expectActorRole(
-        clients.manager,
-        configuration.manager,
-        authenticatedActors.manager.id,
-        ["manager"]
-      ),
-      expectActorRole(
-        clients.staff,
-        configuration.actorA,
-        authenticatedActors.staff.id,
-        ["staff"]
-      ),
-      expectActorRole(
-        clients.reviewer,
-        configuration.reviewer,
-        authenticatedActors.reviewer.id,
-        ["external_reviewer"]
-      ),
-      expectActorRole(
-        clients.tenantB,
-        configuration.actorB,
-        authenticatedActors.tenantB.id,
-        ["owner_admin", "manager", "staff"]
-      )
-    ])
-
-    await expectOneVisible(
-      clients.staff,
-      configuration.actorA.label,
-      "organizations",
-      "id",
-      { id: configuration.actorA.organizationId },
-      "own-organization-visible"
-    )
-    await expectHidden(
-      clients.staff,
-      configuration.actorA.label,
-      "organizations",
-      { id: configuration.actorB.organizationId },
-      "other-organization-hidden"
-    )
-    await expectHidden(
-      clients.staff,
-      configuration.actorA.label,
-      "organization_memberships",
-      {
-        org_id: configuration.actorB.organizationId,
-        user_id: authenticatedActors.tenantB.id
-      },
-      "other-membership-hidden"
-    )
-    await expectOneVisible(
-      clients.tenantB,
-      configuration.actorB.label,
-      "organizations",
-      "id",
-      { id: configuration.actorB.organizationId },
-      "own-organization-visible"
-    )
-    await expectHidden(
-      clients.tenantB,
-      configuration.actorB.label,
-      "organizations",
-      { id: configuration.actorA.organizationId },
-      "other-organization-hidden"
-    )
-    await expectHidden(
-      clients.tenantB,
-      configuration.actorB.label,
-      "organization_memberships",
-      {
-        org_id: configuration.actorA.organizationId,
-        user_id: authenticatedActors.staff.id
-      },
-      "other-membership-hidden"
-    )
-
-    const fixtures = {
-      staff: {
-        ...configuration.fixtures.staff,
-        creatorId: authenticatedActors.staff.id
-      },
-      manager: {
-        ...configuration.fixtures.manager,
-        creatorId: authenticatedActors.manager.id
-      }
+    for (const [actorKey, actor] of Object.entries(actorDefinitions)) {
+      await expectDirectReadsDenied(clients[actorKey], actor.label)
     }
 
-    for (const assertion of SUBMISSION_VISIBILITY_PLAN) {
-      const actor = actorDefinitions[assertion.actor]
-      const fixture = fixtures[assertion.fixture]
-
-      if (assertion.visible) {
-        const expectedAssigneeId =
-          assertion.actor === "reviewer"
-            ? authenticatedActors.reviewer.id
-            : null
-        const forbiddenAssigneeId =
-          assertion.fixture === "manager"
-            ? authenticatedActors.reviewer.id
-            : null
-
-        await expectSubmissionFixtureVisible(
-          clients[assertion.actor],
-          actor.label,
-          fixture,
-          fixture.creatorId,
-          expectedAssigneeId,
-          forbiddenAssigneeId
-        )
-      } else {
-        await expectSubmissionFixtureHidden(
-          clients[assertion.actor],
-          actor.label,
-          fixture
-        )
-      }
-    }
-
-    await expectAuthenticatedSubmissionRpcsDenied(
+    await expectServiceOnlyRpcsDenied(
       clients.manager,
       configuration.manager.label
     )
-    await expectDirectSubmissionWritesDenied(
+    await expectDirectWritesDenied(
       clients.manager,
       configuration.manager,
       authenticatedActors.manager.id
@@ -1220,7 +854,7 @@ export async function runHarness(configuration) {
 
     const durationMs = Math.round(performance.now() - startedAt)
     console.log(
-      `[check=authenticated-two-tenant-rls] pass duration_ms=${durationMs}`
+      `[check=authenticated-two-tenant-direct-access] pass duration_ms=${durationMs}`
     )
   } finally {
     await Promise.all(

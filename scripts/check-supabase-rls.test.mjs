@@ -1,13 +1,17 @@
+import { readFileSync } from "node:fs"
+
 import { describe, expect, it } from "vitest"
 
 import {
+  AUTHENTICATED_POLICY_HELPER_RPC_NAMES,
   AUTHENTICATED_SUBMISSION_RPC_NAMES,
   AUTHENTICATED_UPLOAD_BARRIER_RPC_NAMES,
   buildConfiguration,
+  DIRECT_ACCESS_CLOSED_TABLES,
+  DIRECT_PUBLIC_LINK_WRITE_PLAN,
   DIRECT_SUBMISSION_WRITE_PLAN,
   HELP_TEXT,
   mergeEnvironment,
-  SUBMISSION_VISIBILITY_PLAN,
 } from "./check-supabase-rls.mjs"
 import {
   RESOURCE_PURGE_SCHEMA_CONTRACT,
@@ -15,6 +19,9 @@ import {
   SERVICE_ROLE_RPC_CHECKS,
   TABLE_CHECKS,
 } from "./check-supabase-live.mjs"
+
+const CLOSE_DIRECT_ACCESS_MIGRATION =
+  "supabase/migrations/20260912194858_close_direct_tenant_table_access.sql"
 
 const VALID_ENVIRONMENT = {
   SUPABASE_URL: "https://example.supabase.co",
@@ -32,13 +39,9 @@ const VALID_ENVIRONMENT = {
   BIZFLOW_RLS_ACTOR_B_EMAIL: "actor-b@example.invalid",
   BIZFLOW_RLS_ACTOR_B_PASSWORD: "actor-b-password",
   BIZFLOW_RLS_ACTOR_B_ORG_ID: "22222222-2222-4222-8222-222222222222",
-  BIZFLOW_RLS_STAFF_SUBMISSION_ID: "33333333-3333-4333-8333-333333333333",
-  BIZFLOW_RLS_STAFF_SUBMISSION_FILE_ID: "44444444-4444-4444-8444-444444444444",
-  BIZFLOW_RLS_MANAGER_SUBMISSION_ID: "55555555-5555-4555-8555-555555555555",
-  BIZFLOW_RLS_MANAGER_SUBMISSION_FILE_ID: "66666666-6666-4666-8666-666666666666",
 }
 
-describe("authenticated Supabase RLS harness configuration", () => {
+describe("authenticated Supabase direct-access harness configuration", () => {
   it("fails closed when the explicit synthetic-fixture opt-in is incorrect", () => {
     expect(() =>
       buildConfiguration({
@@ -75,36 +78,16 @@ describe("authenticated Supabase RLS harness configuration", () => {
     ).toThrow("different authentication user")
   })
 
-  it("requires distinct exact fixture identifiers", () => {
-    expect(() =>
-      buildConfiguration({
-        ...VALID_ENVIRONMENT,
-        BIZFLOW_RLS_MANAGER_SUBMISSION_FILE_ID:
-          VALID_ENVIRONMENT.BIZFLOW_RLS_STAFF_SUBMISSION_FILE_ID,
-      })
-    ).toThrow("fixture IDs must be distinct")
-  })
-
-  it("builds the exact same-organization actor and row fixture contract", () => {
+  it("builds the same-organization actor contract without row fixtures", () => {
     const configuration = buildConfiguration(VALID_ENVIRONMENT)
 
     expect(configuration.owner.organizationId).toBe(configuration.actorA.organizationId)
     expect(configuration.manager.organizationId).toBe(configuration.actorA.organizationId)
     expect(configuration.reviewer.organizationId).toBe(configuration.actorA.organizationId)
-    expect(configuration.fixtures).toEqual({
-      staff: {
-        label: "staff-created",
-        organizationId: VALID_ENVIRONMENT.BIZFLOW_RLS_ACTOR_A_ORG_ID,
-        submissionId: VALID_ENVIRONMENT.BIZFLOW_RLS_STAFF_SUBMISSION_ID,
-        fileId: VALID_ENVIRONMENT.BIZFLOW_RLS_STAFF_SUBMISSION_FILE_ID,
-      },
-      manager: {
-        label: "manager-created",
-        organizationId: VALID_ENVIRONMENT.BIZFLOW_RLS_ACTOR_A_ORG_ID,
-        submissionId: VALID_ENVIRONMENT.BIZFLOW_RLS_MANAGER_SUBMISSION_ID,
-        fileId: VALID_ENVIRONMENT.BIZFLOW_RLS_MANAGER_SUBMISSION_FILE_ID,
-      },
-    })
+    expect(configuration.actorB.organizationId).not.toBe(
+      configuration.actorA.organizationId
+    )
+    expect(configuration).not.toHaveProperty("fixtures")
   })
 
   it("keeps process environment values authoritative over the local file", () => {
@@ -116,31 +99,29 @@ describe("authenticated Supabase RLS harness configuration", () => {
     ).toEqual({ BIZFLOW_RLS_ACTOR_A_EMAIL: "process@example.invalid" })
   })
 
-  it("documents the no-service-role and exact non-persisting fixture contract", () => {
+  it("documents the no-service-role, non-persisting, denial-only contract", () => {
     expect(HELP_TEXT).toContain("never a secret/service-role key")
     expect(HELP_TEXT).toContain("No fixture rows are created, updated, or deleted")
     expect(HELP_TEXT).toContain("fresh nonexistent foreign keys")
-    expect(HELP_TEXT).toContain("exact configured IDs")
-    expect(HELP_TEXT).toContain("assigned to the configured external reviewer")
-    expect(HELP_TEXT).toContain("at least one comment and one activity event")
+    expect(HELP_TEXT).toContain("denied direct reads of every tenant table")
+    expect(HELP_TEXT).not.toContain("SUBMISSION_ID")
   })
 
-  it("covers the complete submission and file visibility matrix", () => {
-    expect(SUBMISSION_VISIBILITY_PLAN).toEqual([
-      { actor: "owner", fixture: "staff", visible: true },
-      { actor: "owner", fixture: "manager", visible: true },
-      { actor: "manager", fixture: "staff", visible: true },
-      { actor: "manager", fixture: "manager", visible: true },
-      { actor: "staff", fixture: "staff", visible: true },
-      { actor: "staff", fixture: "manager", visible: false },
-      { actor: "reviewer", fixture: "staff", visible: true },
-      { actor: "reviewer", fixture: "manager", visible: false },
-      { actor: "tenantB", fixture: "staff", visible: false },
-      { actor: "tenantB", fixture: "manager", visible: false },
-    ])
+  it("closes direct reads on exactly the tables the migration revokes", () => {
+    const migration = readFileSync(CLOSE_DIRECT_ACCESS_MIGRATION, "utf8")
+      .replace(/\s+/g, " ")
+      .toLowerCase()
+    const revokedTables =
+      migration
+        .match(/revoke all privileges on table (.+?) from anon, authenticated;/)?.[1]
+        .split(",")
+        .map((table) => table.trim().replace(/^public\./, "")) ?? []
+
+    expect(revokedTables.length).toBeGreaterThan(20)
+    expect([...DIRECT_ACCESS_CLOSED_TABLES].sort()).toEqual([...revokedTables].sort())
   })
 
-  it("covers all service-only RPCs and direct table mutations", () => {
+  it("covers all service-only RPCs, row-security helpers, and direct table mutations", () => {
     expect(AUTHENTICATED_SUBMISSION_RPC_NAMES).toEqual([
       "create_internal_submission_draft",
       "save_internal_submission_draft",
@@ -158,6 +139,11 @@ describe("authenticated Supabase RLS harness configuration", () => {
       "register_document_version_upload_authorization",
       "reconcile_document_upload_authorization_barriers",
     ])
+    expect(AUTHENTICATED_POLICY_HELPER_RPC_NAMES).toEqual([
+      "is_organization_member",
+      "organization_role_for",
+      "shares_organization_with_profile",
+    ])
     expect(DIRECT_SUBMISSION_WRITE_PLAN).toEqual([
       { table: "submissions", operation: "insert" },
       { table: "submissions", operation: "update" },
@@ -171,6 +157,11 @@ describe("authenticated Supabase RLS harness configuration", () => {
       { table: "submission_activity_events", operation: "insert" },
       { table: "submission_activity_events", operation: "update" },
       { table: "submission_activity_events", operation: "delete" },
+    ])
+    expect(DIRECT_PUBLIC_LINK_WRITE_PLAN).toEqual([
+      { table: "public_form_links", operation: "insert" },
+      { table: "public_form_links", operation: "update" },
+      { table: "public_form_links", operation: "delete" },
     ])
   })
 
@@ -230,6 +221,18 @@ describe("authenticated Supabase RLS harness configuration", () => {
     expect(
       SERVICE_ROLE_READ_ONLY_RPC_CHECKS[0].args.target_values.signature.length
     ).toBeGreaterThan(20_000)
+    expect(
+      SERVICE_ROLE_READ_ONLY_RPC_CHECKS[0].args.target_template_snapshot
+    ).toEqual({
+      schemaVersion: "3",
+      blocks: [
+        {
+          id: "signature-block",
+          fieldKey: "signature",
+          type: "signature_field",
+        },
+      ],
+    })
     expect(SERVICE_ROLE_READ_ONLY_RPC_CHECKS[1].args).toEqual({ p_token: null })
   })
 })

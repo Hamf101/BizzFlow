@@ -292,7 +292,14 @@ export const SERVICE_ROLE_READ_ONLY_RPC_CHECKS = [
     name: "validate_internal_submission_values",
     args: {
       target_template_snapshot: {
-        blocks: [{ fieldKey: "signature", type: "signature_field" }],
+        schemaVersion: "3",
+        blocks: [
+          {
+            id: "signature-block",
+            fieldKey: "signature",
+            type: "signature_field",
+          },
+        ],
       },
       target_values: { signature: DRAWING_PROBE_DATA_URL },
     },

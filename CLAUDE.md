@@ -42,6 +42,9 @@ Run `pnpm check` before claiming a change is done. CI runs the same gate.
    transitions, and audit/activity events live in `src/services/`.
 2. **Every tenant table carries `org_id` and has RLS.** Server code additionally enforces
    role/action permissions via `src/lib/permissions.ts`. Never rely on frontend checks alone.
+   Signed-in users have **no direct table privileges** — tenant data reaches them only through
+   services. Never grant `authenticated` a table privilege without policies that check the
+   member's current role-definition permissions.
 3. **Files: bytes in R2 (private), metadata in Postgres.** Never expose a raw R2 URL; always
    go through a signed URL minted after a permission check.
 4. **Deterministic + injectable.** Services take a `deps` object (`client`, `createId`, `now`,
