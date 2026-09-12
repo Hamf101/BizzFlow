@@ -47,6 +47,7 @@ import {
 } from "@/components/ui/dialog"
 import { Field, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { getPaperContrastRatio } from "@/lib/document-surface"
 import {
   clearLocalDraft,
   loadLocalDraft,
@@ -61,7 +62,7 @@ import {
   evaluateTemplateQuality,
   isTemplateQualityIssueSaveBlocking
 } from "@/services/templates/template-quality-service"
-import { templateContentSchema } from "@/types/template"
+import { MAX_TEMPLATE_BLOCK_COUNT, templateContentSchema } from "@/types/template"
 import type {
   DocumentTemplate,
   TemplateBlock,
@@ -449,6 +450,26 @@ export function TemplateEditor({
     })
     setSelectedBlockId(block.id)
     setActivePanel("block")
+  }
+
+  function duplicateBlock(blockId: string): void {
+    if (state.content.blocks.length >= MAX_TEMPLATE_BLOCK_COUNT) {
+      bizflowToast.info(`A template can contain up to ${MAX_TEMPLATE_BLOCK_COUNT} elements.`)
+      return
+    }
+    if (!state.content.blocks.some((block) => block.id === blockId)) return
+
+    const newBlockId = crypto.randomUUID()
+    applyManualAction({ type: "duplicate_block", blockId, newBlockId })
+    setSelectedBlockId(newBlockId)
+    setActivePanel("block")
+    // The old canvas toolbar unmounts on selection; keep keyboard focus on
+    // the newly selected copy after React has committed it.
+    requestAnimationFrame(() => {
+      document.querySelector<HTMLButtonElement>(
+        `[data-template-block-id="${newBlockId}"] button[aria-pressed="true"]`
+      )?.focus()
+    })
   }
 
   function moveBlock(blockId: string, direction: "up" | "down"): void {
@@ -922,6 +943,7 @@ export function TemplateEditor({
                       })
                     }
                     onDelete={(): void => requestDeleteBlock(selectedBlockId)}
+                    onDuplicate={(): void => duplicateBlock(selectedBlockId)}
                     onMove={(direction: "up" | "down"): void =>
                       moveBlock(selectedBlockId, direction)
                     }
@@ -957,6 +979,7 @@ export function TemplateEditor({
                   canvasIsEditable ? requestDeleteBlock : undefined
                 }
                 onMoveBlock={canvasIsEditable ? moveBlock : undefined}
+                onDuplicateBlock={canvasIsEditable ? duplicateBlock : undefined}
                 onRequestInsert={
                   canvasIsEditable ? requestInsert : undefined
                 }
@@ -1458,6 +1481,9 @@ function BrandingPanel({
   onChange: (branding: TemplateBranding) => void
 }): ReactElement {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const primaryContrast = getPaperContrastRatio(branding.primaryColor)
+  const accentContrast = getPaperContrastRatio(branding.accentColor)
+  const hasLowPaperContrast = primaryContrast < 4.5 || accentContrast < 4.5
 
   async function handleLogoChange(
     event: ChangeEvent<HTMLInputElement>
@@ -1524,6 +1550,7 @@ function BrandingPanel({
       </Field>
       <div className="grid grid-cols-2 gap-3">
         <ColorControl
+          describedBy="branding-paper-contrast"
           id="branding-primary-color"
           label="Primary"
           onChange={(primaryColor: string): void =>
@@ -1532,6 +1559,7 @@ function BrandingPanel({
           value={branding.primaryColor}
         />
         <ColorControl
+          describedBy="branding-paper-contrast"
           id="branding-accent-color"
           label="Accent"
           onChange={(accentColor: string): void =>
@@ -1540,6 +1568,23 @@ function BrandingPanel({
           value={branding.accentColor}
         />
       </div>
+      <Alert id="branding-paper-contrast" role="status" aria-atomic="true">
+        <AlertTitle>
+          {hasLowPaperContrast ? "Low paper contrast" : "Paper contrast"}
+        </AlertTitle>
+        <AlertDescription>
+          <p>
+            Primary {primaryContrast.toFixed(2)}:1 · Accent {accentContrast.toFixed(2)}:1
+            {" "}against white paper.
+          </p>
+          {hasLowPaperContrast && (
+            <p>
+              Aim for 4.5:1 for normal text. You can still save; Preview and PDF
+              keep your exact colors.
+            </p>
+          )}
+        </AlertDescription>
+      </Alert>
       <div className="grid grid-cols-2 gap-3">
         <Field>
           <FieldLabel htmlFor="branding-logo-alignment">
@@ -1605,11 +1650,13 @@ function BrandingPanel({
 }
 
 function ColorControl({
+  describedBy,
   id,
   label,
   onChange,
   value
 }: {
+  describedBy: string
   id: string
   label: string
   onChange: (value: string) => void
@@ -1619,7 +1666,7 @@ function ColorControl({
     <Field>
       <FieldLabel htmlFor={id}>{label}</FieldLabel>
       <label
-        className="flex h-9 cursor-pointer items-center gap-2 rounded-[8px] border bg-card px-2 text-xs"
+        className="flex h-9 cursor-pointer items-center gap-2 rounded-[8px] border bg-card px-2 text-xs focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/30"
         htmlFor={id}
       >
         <span
@@ -1629,6 +1676,7 @@ function ColorControl({
         />
         <span className="font-mono">{value.toUpperCase()}</span>
         <input
+          aria-describedby={describedBy}
           className="sr-only"
           id={id}
           onChange={(event: ChangeEvent<HTMLInputElement>): void =>
@@ -1676,12 +1724,14 @@ function SelectedBlockInspector({
   blocks,
   onChange,
   onDelete,
+  onDuplicate,
   onMove
 }: {
   block: TemplateBlock
   blocks: TemplateBlock[]
   onChange: (block: TemplateBlock) => void
   onDelete: () => void
+  onDuplicate: () => void
   onMove: (direction: "up" | "down") => void
 }): ReactElement {
   const index = blocks.findIndex(
@@ -1696,6 +1746,7 @@ function SelectedBlockInspector({
       canMoveUp={index > 0}
       onChange={onChange}
       onDelete={onDelete}
+      onDuplicate={onDuplicate}
       onMoveDown={(): void => onMove("down")}
       onMoveUp={(): void => onMove("up")}
     />

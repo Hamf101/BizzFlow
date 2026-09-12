@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest"
 import {
   createUniqueTemplateFieldKey,
   deleteTemplateBlock,
+  duplicateTemplateBlock,
   evaluateTemplateBlockDeletion,
   evaluateTemplateBlockMove,
   evaluateTemplateDropdownOptionEdit,
@@ -13,6 +14,7 @@ import {
   updateTemplateBlock
 } from "./template-structure"
 import {
+  MAX_TEMPLATE_BLOCK_COUNT,
   createBlankTemplateContent,
   templateContentV3Schema,
   type TemplateContentV3
@@ -28,6 +30,74 @@ const SECOND_SECTION_ID = "60000000-0000-4000-8000-000000000012"
 const GROUP_ID = "60000000-0000-4000-8000-000000000021"
 const DROPDOWN_ID = "60000000-0000-4000-8000-000000000031"
 const DROPDOWN_DEPENDENT_ID = "60000000-0000-4000-8000-000000000032"
+
+describe("duplicateTemplateBlock", () => {
+  it("copies a conditional field after its source without retargeting its condition", () => {
+    const content = createStructuredContent()
+    const copy = duplicateTemplateBlock(content, TARGET_ID, INSERTED_ID)
+    expect(copy.blocks.map((block) => block.id)).toEqual([
+      SOURCE_ID, TARGET_ID, INSERTED_ID, THIRD_FIELD_ID, SECOND_SECTION_BLOCK_ID,
+    ])
+    expect(copy.blocks[2]).toMatchObject({
+      fieldKey: "details_2",
+      visibleWhen: { sourceBlockId: SOURCE_ID, operator: "equals", value: true },
+    })
+    expect(copy.blockRules).toContainEqual({
+      blockId: INSERTED_ID, pageBreakBefore: false, keepWithNext: true,
+    })
+    expect(copy.sections).toEqual(content.sections)
+    expect(templateContentV3Schema.safeParse(copy).success).toBe(true)
+    expect(content.blocks).toHaveLength(4)
+  })
+
+  it("retains group membership when copying its last field", () => {
+    const copy = duplicateTemplateBlock(createStructuredContent(), THIRD_FIELD_ID, INSERTED_ID)
+    expect(copy.fieldGroups[0].endBlockId).toBe(INSERTED_ID)
+    expect(templateContentV3Schema.safeParse(copy).success).toBe(true)
+  })
+
+  it("preserves dropdown options and leaves existing dependents on the original", () => {
+    const content = createDropdownVisibilityContent()
+    const copy = duplicateTemplateBlock(content, DROPDOWN_ID, INSERTED_ID)
+    expect(copy.blocks[1]).toMatchObject({ fieldKey: "request_category_2" })
+    expect(copy.blocks.find((block) => block.id === DROPDOWN_DEPENDENT_ID))
+      .toEqual(content.blocks.find((block) => block.id === DROPDOWN_DEPENDENT_ID))
+    const duplicated = copy.blocks[1]
+    const original = content.blocks[0]
+    if (duplicated.type !== "dropdown_field" || original.type !== "dropdown_field") {
+      throw new Error("Expected dropdown fixtures")
+    }
+    expect(duplicated.options).toEqual(original.options)
+    duplicated.options.push("New option")
+    expect(original.options).not.toContain("New option")
+  })
+
+  it("deep copies table cells and keeps repeated copies uniquely keyed", () => {
+    const content = createStructuredContent()
+    content.blocks.push({ id: DROPDOWN_ID, type: "table", headers: ["Item"], rows: [["Original"]] })
+    const copied = duplicateTemplateBlock(content, DROPDOWN_ID, INSERTED_ID)
+    const table = copied.blocks.at(-1)!
+    if (table.type !== "table") throw new Error("Expected copied table")
+    table.rows[0][0] = "Edited copy"
+    expect(content.blocks.at(-1)).toMatchObject({ rows: [["Original"]] })
+
+    const first = duplicateTemplateBlock(createStructuredContent(), TARGET_ID, INSERTED_ID)
+    const second = duplicateTemplateBlock(first, TARGET_ID, DROPDOWN_ID)
+    expect(second.blocks[2]).toMatchObject({ fieldKey: "details_3" })
+  })
+
+  it("does not insert missing sources, duplicate ids, or blocks past the size limit", () => {
+    const content = createStructuredContent()
+    expect(duplicateTemplateBlock(content, INSERTED_ID, DROPDOWN_ID)).toBe(content)
+    expect(duplicateTemplateBlock(content, TARGET_ID, SOURCE_ID)).toBe(content)
+    content.blocks = Array.from({ length: MAX_TEMPLATE_BLOCK_COUNT }, (_, index) => ({
+      id: `60000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
+      type: "paragraph", text: "Text", alignment: "left",
+    }))
+    expect(duplicateTemplateBlock(content, content.blocks[0].id, "60000000-0000-4000-8000-000000000999"))
+      .toBe(content)
+  })
+})
 const SECOND_DROPDOWN_DEPENDENT_ID =
   "60000000-0000-4000-8000-000000000033"
 

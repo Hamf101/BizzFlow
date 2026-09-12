@@ -9,6 +9,7 @@ import {
 import {
   createUniqueTemplateFieldKey,
   deleteTemplateBlock,
+  duplicateTemplateBlock,
   insertTemplateBlock,
   moveTemplateBlock,
   updateTemplateBlock
@@ -59,6 +60,11 @@ export type TemplateEditorAction =
   | {
       type: "update_block"
       block: TemplateBlock
+    }
+  | {
+      type: "duplicate_block"
+      blockId: string
+      newBlockId: string
     }
   | {
       type: "delete_block"
@@ -126,6 +132,13 @@ export function templateEditorReducer(
       return {
         ...editableState,
         content: updateTemplateBlock(editableState.content, action.block)
+      }
+    case "duplicate_block":
+      return {
+        ...editableState,
+        content: duplicateTemplateBlock(
+          editableState.content, action.blockId, action.newBlockId
+        )
       }
     case "delete_block":
       return {

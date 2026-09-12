@@ -1,8 +1,9 @@
-import type {
-  TemplateBlock,
-  TemplateContentV3,
-  TemplateFieldGroup,
-  TemplateSection
+import {
+  MAX_TEMPLATE_BLOCK_COUNT,
+  type TemplateBlock,
+  type TemplateContentV3,
+  type TemplateFieldGroup,
+  type TemplateSection
 } from "@/types/template"
 
 type TemplateFieldBlock = Extract<TemplateBlock, { fieldKey: string }>
@@ -466,6 +467,49 @@ export function insertTemplateBlock(
     sections,
     fieldGroups
   )
+}
+
+/**
+ * Duplicates a block immediately after the original, retaining its layout rules.
+ *
+ * Existing conditions continue to refer to their original source. A copied
+ * conditional field keeps that source too, which remains earlier in the flow.
+ *
+ * @param content - Canonical editable template content.
+ * @param blockId - Source block to copy.
+ * @param newBlockId - Fresh UUID supplied by the caller.
+ * @returns New content, or the unchanged content for a missing source, id
+ * collision, or a template already at its block limit.
+ */
+export function duplicateTemplateBlock(
+  content: TemplateContentV3,
+  blockId: string,
+  newBlockId: string
+): TemplateContentV3 {
+  const source = content.blocks.find((block) => block.id === blockId)
+  if (
+    !source || content.blocks.length >= MAX_TEMPLATE_BLOCK_COUNT ||
+    content.blocks.some((block) => block.id === newBlockId)
+  ) {
+    return content
+  }
+
+  // Template blocks contain JSON values only; nested rows/options must be
+  // independent so editing the duplicate cannot change the original.
+  const block = JSON.parse(JSON.stringify(source)) as TemplateBlock
+  block.id = newBlockId
+  const inserted = insertTemplateBlock(content, blockId, block)
+  const rule = content.blockRules.find((candidate) => candidate.blockId === blockId)
+
+  return {
+    ...inserted,
+    fieldGroups: inserted.fieldGroups.map((group) =>
+      group.endBlockId === blockId ? { ...group, endBlockId: newBlockId } : group
+    ),
+    blockRules: rule
+      ? [...inserted.blockRules, { ...rule, blockId: newBlockId }]
+      : inserted.blockRules,
+  }
 }
 
 /**

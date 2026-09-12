@@ -1,6 +1,7 @@
 "use client"
 
 import {
+  Copy,
   ArrowDown,
   ArrowUp,
   Trash2,
@@ -65,6 +66,7 @@ type TemplateBlockEditorProps = {
   canMoveUp: boolean
   onChange: (block: TemplateBlock) => void
   onDelete: () => void
+  onDuplicate?: () => void
   onMoveDown: () => void
   onMoveUp: () => void
 }
@@ -82,6 +84,7 @@ export function TemplateBlockEditor({
   canMoveUp,
   onChange,
   onDelete,
+  onDuplicate,
   onMoveDown,
   onMoveUp,
 }: TemplateBlockEditorProps): ReactElement {
@@ -90,6 +93,18 @@ export function TemplateBlockEditor({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <span className="text-sm font-semibold">{BLOCK_LABELS[block.type]}</span>
         <div className="flex items-center gap-1">
+          {onDuplicate && (
+            <Button
+              aria-label={`Duplicate ${BLOCK_LABELS[block.type]}`}
+              onClick={onDuplicate}
+              size="icon-sm"
+              title="Duplicate block"
+              type="button"
+              variant="ghost"
+            >
+              <Copy />
+            </Button>
+          )}
           <Button
             aria-label={`Move ${BLOCK_LABELS[block.type]} up`}
             disabled={!canMoveUp}

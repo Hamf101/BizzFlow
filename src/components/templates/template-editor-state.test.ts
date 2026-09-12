@@ -38,6 +38,22 @@ function createState(): TemplateEditorState {
 }
 
 describe("templateEditorReducer", () => {
+  it.each(FIELD_DEFAULTS)("duplicates %s with an independent answer key", (type) => {
+    const block = { ...createTemplateBlock(type), id: FIRST_BLOCK_ID }
+    const original = templateEditorReducer(createState(), { type: "add_block", block })
+    const copied = templateEditorReducer(original, {
+      type: "duplicate_block", blockId: FIRST_BLOCK_ID, newBlockId: SECOND_BLOCK_ID,
+    })
+    expect(copied.content.blocks).toHaveLength(2)
+    const duplicate = copied.content.blocks[1]
+    expect(templateBlockSchema.safeParse(duplicate).success).toBe(true)
+    if (!("fieldKey" in block) || !("fieldKey" in duplicate)) {
+      throw new Error("Expected field fixtures")
+    }
+    expect(duplicate).toEqual({ ...block, id: SECOND_BLOCK_ID, fieldKey: `${block.fieldKey}_2` })
+    expect(original.content.blocks).toEqual([block])
+  })
+
   it("upgrades version-two content only when it first enters an edit action", () => {
     const legacyContent = parseTemplateContent({
       schemaVersion: 2,

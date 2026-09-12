@@ -34,6 +34,28 @@ afterEach(() => {
 })
 
 describe("Template Studio surfaces", () => {
+  it("duplicates from both the canvas and inspector and selects the new block", async () => {
+    await renderStudio()
+    const select = document.querySelector<HTMLButtonElement>('[aria-label="Edit heading"]')!
+    await click(select)
+    await click(document.querySelector<HTMLButtonElement>('[aria-label="Duplicate block"]')!)
+    let blocks = JSON.parse(document.querySelector<HTMLInputElement>('input[name="content"]')!.value).blocks
+    expect(blocks).toHaveLength(2)
+    expect(blocks[1]).toMatchObject({ text: "Engagement details", type: "heading" })
+    expect(blocks[1].id).not.toBe(HEADING_ID)
+    expect(document.activeElement?.closest("[data-template-block-id]")?.getAttribute("data-template-block-id"))
+      .toBe(blocks[1].id)
+    expect(document.querySelector('[aria-label="Edit heading"][aria-pressed="true"]')).not.toBeNull()
+
+    await click(document.querySelector<HTMLButtonElement>('[aria-label="Duplicate Heading"]')!)
+    blocks = JSON.parse(document.querySelector<HTMLInputElement>('input[name="content"]')!.value).blocks
+    expect(blocks).toHaveLength(3)
+    expect(new Set(blocks.map((block: { id: string }) => block.id)).size).toBe(3)
+    expect(blocks[0].id).toBe(HEADING_ID)
+    await click(getButton("Preview"))
+    expect(document.querySelector('[aria-label="Duplicate block"]')).toBeNull()
+  })
+
   it("builds against the theme rather than against brand ink", async () => {
     await renderStudio()
 
@@ -64,7 +86,53 @@ describe("Template Studio surfaces", () => {
 
     expect(requireCanvas().getAttribute("data-document-surface")).toBe("screen")
   })
+
+  it("updates paper contrast without blocking save or changing preview ink", async () => {
+    await renderStudio()
+    await click(getButton("Brand"))
+
+    const status = document.getElementById("branding-paper-contrast")
+    expect(status?.getAttribute("role")).toBe("status")
+    expect(status?.textContent).toContain("Primary")
+    expect(status?.textContent).not.toContain("Low paper contrast")
+
+    await changeColor("branding-primary-color", "#ffffff")
+    await changeColor("branding-accent-color", "#eeeeee")
+    expect(status?.textContent).toContain("Primary 1.00:1")
+    expect(status?.textContent).toContain("Accent 1.16:1")
+    expect(status?.textContent).toContain("Low paper contrast")
+    expect(status?.textContent).toContain("You can still save")
+    expect(getButton("Save draft").disabled).toBe(false)
+    expect(document.getElementById("branding-primary-color")?.getAttribute("aria-describedby"))
+      .toBe("branding-paper-contrast")
+
+    const content = document.querySelector<HTMLInputElement>('input[name="content"]')
+    expect(JSON.parse(content!.value).branding).toMatchObject({
+      primaryColor: "#ffffff",
+      accentColor: "#eeeeee",
+    })
+    await click(getButton("Preview"))
+    expect(requireCanvas().style.getPropertyValue("--template-primary")).toBe("#ffffff")
+    expect(requireCanvas().style.getPropertyValue("--template-accent")).toBe("#eeeeee")
+
+    await click(getButton("Build"))
+    await click(getButton("Brand"))
+    await changeColor("branding-primary-color", "#000000")
+    await changeColor("branding-accent-color", "#000000")
+    expect(document.getElementById("branding-paper-contrast")?.textContent)
+      .not.toContain("Low paper contrast")
+  })
 })
+
+async function changeColor(id: string, value: string): Promise<void> {
+  const input = document.getElementById(id)
+  if (!(input instanceof HTMLInputElement)) throw new Error(`Missing color ${id}`)
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value)
+    input.dispatchEvent(new Event("input", { bubbles: true }))
+    input.dispatchEvent(new Event("change", { bubbles: true }))
+  })
+}
 
 async function renderStudio(): Promise<void> {
   const container = document.createElement("div")
