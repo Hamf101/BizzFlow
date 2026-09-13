@@ -1,5 +1,11 @@
+import type { ListSort } from "@/lib/list-state"
 import type { AdminSupabaseClient } from "@/lib/supabase/admin"
-import type { TemplateContent } from "@/types/template"
+import type {
+  DocumentTemplateStatus,
+  DocumentTemplateSummary,
+  TemplateContent,
+  TemplateSortKey,
+} from "@/types/template"
 
 export type TemplateServiceClient = Pick<AdminSupabaseClient, "from" | "rpc">
 
@@ -15,6 +21,27 @@ export type ListDocumentTemplatesInput = TemplateActorInput & {
    * uncategorised templates specifically.
    */
   category?: string | null
+}
+
+/** Input for one page of the templates an actor may see. */
+export type ListTemplatePageInput = TemplateActorInput & {
+  /** A category, null for uncategorised templates, or undefined for all. */
+  category?: string | null
+  /** One-based page number. */
+  page: number
+  pageSize: number
+  /** Title search text; matched literally, ignoring case. */
+  query?: string
+  sort: ListSort<TemplateSortKey>
+  statuses?: readonly DocumentTemplateStatus[]
+}
+
+/** One page of templates and how many match its filters. */
+export type TemplatePage = {
+  page: number
+  pageSize: number
+  templates: DocumentTemplateSummary[]
+  total: number
 }
 
 export type GetDocumentTemplateInput = TemplateActorInput & {

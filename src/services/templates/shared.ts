@@ -27,6 +27,8 @@ import type {
   DocumentTemplate,
   DocumentTemplateRow,
   DocumentTemplateStatus,
+  DocumentTemplateSummary,
+  DocumentTemplateSummaryRow,
   GeneratedDocument,
   TemplateBlock,
   TemplateContent,
@@ -41,6 +43,10 @@ import { TemplateServiceError } from "./errors"
 
 export const TEMPLATE_COLUMNS =
   "id,org_id,title,description,category,status,revision,content,created_by,updated_by,published_by,archived_by,created_at,updated_at,published_at,archived_at"
+
+/** Columns the templates list reads; template content stays behind. */
+export const TEMPLATE_SUMMARY_COLUMNS =
+  "id,org_id,title,category,status,revision,created_at,updated_at"
 
 /** Longest category the `document_templates_category_check` constraint accepts. */
 export const TEMPLATE_CATEGORY_MAX_LENGTH = 40
@@ -204,6 +210,27 @@ export function mapDocumentTemplate(
     updatedAt: row.updated_at,
     publishedAt: row.published_at,
     archivedAt: row.archived_at,
+  }
+}
+
+/**
+ * Maps a templates-list row to the summary the list shows.
+ *
+ * @param row - Row read with `TEMPLATE_SUMMARY_COLUMNS`.
+ * @returns The template without its content.
+ */
+export function mapDocumentTemplateSummary(
+  row: DocumentTemplateSummaryRow
+): DocumentTemplateSummary {
+  return {
+    category: row.category ?? null,
+    createdAt: row.created_at,
+    id: row.id,
+    organizationId: row.org_id,
+    revision: row.revision,
+    status: parseDocumentTemplateStatus(row.status),
+    title: row.title,
+    updatedAt: row.updated_at,
   }
 }
 

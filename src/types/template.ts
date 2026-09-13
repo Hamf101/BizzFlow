@@ -742,7 +742,9 @@ function isFieldBlock(
   return "fieldKey" in block
 }
 
-export type DocumentTemplateStatus = "draft" | "published" | "archived"
+/** Every template lifecycle status. */
+export const DOCUMENT_TEMPLATE_STATUSES = ["draft", "published", "archived"] as const
+export type DocumentTemplateStatus = (typeof DOCUMENT_TEMPLATE_STATUSES)[number]
 export type DocumentSourceKind = "upload" | "generated"
 export type GeneratedDocumentWorkflowStatus =
   "draft" | "awaiting_signatures" | "completed"
@@ -788,6 +790,27 @@ export type DocumentTemplate = {
   publishedAt: string | null
   archivedAt: string | null
 }
+
+/** Database columns the templates list reads. */
+export type DocumentTemplateSummaryRow = Pick<
+  DocumentTemplateRow,
+  "category" | "created_at" | "id" | "org_id" | "revision" | "status" | "title" | "updated_at"
+>
+
+/** A template as the templates list shows it, without its content. */
+export type DocumentTemplateSummary = Pick<
+  DocumentTemplate,
+  "category" | "createdAt" | "id" | "organizationId" | "revision" | "status" | "title" | "updatedAt"
+>
+
+/** Orders the templates list offers. */
+export const TEMPLATE_SORT_KEYS = ["updated", "created", "title"] as const
+
+/** One way to order the templates list. */
+export type TemplateSortKey = (typeof TEMPLATE_SORT_KEYS)[number]
+
+/** Longest templates-list search, in characters. */
+export const TEMPLATE_SEARCH_MAX_LENGTH = 100
 
 /** Database row containing field answers for one generated document. */
 export type DocumentAnswerRow = Record<string, unknown> & {
