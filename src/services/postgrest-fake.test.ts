@@ -88,6 +88,11 @@ describe("PostgrestReadQuery", () => {
     ).toEqual(["c", "d"])
   })
 
+  it("matches nothing for eq with null, as SQL's = NULL does, while is() finds nulls", async () => {
+    expect(await readIds(query().select().eq("due", null))).toEqual([])
+    expect(await readIds(query().select().is("due", null))).toEqual(["a"])
+  })
+
   it("filters by comparisons, sets, and nulls", async () => {
     expect(
       await readIds(query().select().gte("due", "2026-09-02").order("id", { ascending: true }))

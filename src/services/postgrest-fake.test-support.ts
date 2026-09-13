@@ -64,8 +64,12 @@ export class PostgrestReadQuery implements PromiseLike<PostgrestFakeResult> {
     return this
   }
 
+  // SQL `=` is unknown against NULL, so eq(null) matches nothing, as it does
+  // through PostgREST; reading nulls takes is().
   eq(column: string, value: unknown): this {
-    return this.where((row: FakeRow): boolean => row[column] === value)
+    return this.where(
+      (row: FakeRow): boolean => value !== null && row[column] === value
+    )
   }
 
   // SQL `<>` is unknown for a null cell, so nulls never match.

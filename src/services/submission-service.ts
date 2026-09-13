@@ -8,10 +8,13 @@ export type {
   CreateInternalSubmissionDraftInput,
   CreateInternalSubmissionFileDownloadUrlInput,
   CreateInternalSubmissionFileDownloadUrlResponse,
+  ExportSubmissionsInput,
   GetInternalSubmissionInput,
   ListInternalSubmissionsInput,
+  ListSubmissionPageInput,
   SaveInternalSubmissionDraftInput,
   SubmissionDetail,
+  SubmissionPage,
   SubmissionServiceDeps,
   SubmitInternalSubmissionInput,
   SupersedeInternalSubmissionFileInput,
@@ -44,6 +47,7 @@ export {
 export {
   getInternalSubmission,
   listInternalSubmissions,
+  listSubmissionPage,
 } from "@/services/submissions/workspace-service"
 export {
   assignInternalSubmission,

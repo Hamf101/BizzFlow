@@ -7,6 +7,11 @@ import {
   type OrganizationPermissionSubject,
 } from "@/lib/permissions"
 import {
+  POSTGREST_BATCH_SIZE,
+  readAllInBatches,
+  readCountedPage,
+} from "@/services/postgrest-paging"
+import {
   AUDIT_LOG_ACTIONS,
   AUDIT_LOG_SORT_KEYS,
   AUDIT_LOG_TARGET_TYPES,
@@ -86,11 +91,7 @@ export type ExportAuditLogsInput = Omit<ListAuditLogPageInput, "page" | "pageSiz
 /** Largest audit export, in events; a bigger one must be narrowed first. */
 export const AUDIT_EXPORT_MAX_ENTRIES = 50_000
 
-// PostgREST answers with at most 1,000 rows (`max_rows` in supabase/config.toml).
-const AUDIT_EXPORT_BATCH_SIZE = 1_000
 const MAX_AUDIT_PAGE_SIZE = 200
-/** PostgREST's code for a counted range that starts past the last row. */
-const RANGE_NOT_SATISFIABLE = "PGRST103"
 
 /**
  * Error type raised by audit log service operations.
@@ -195,36 +196,24 @@ export async function listAuditLogPage(
   const ascending = normalizeAuditSort(input.sort).direction === "asc"
   const targetTypes = normalizeAuditTargetTypes(input.targetTypes)
   const from = (page - 1) * pageSize
-  const { count, data, error } = await filterAuditLogs(
-    client.from("audit_logs").select(AUDIT_LOG_COLUMNS, { count: "exact" }),
-    input.organizationId,
-    targetTypes
+  const { rows, total } = await readCountedPage(
+    await filterAuditLogs(
+      client.from("audit_logs").select(AUDIT_LOG_COLUMNS, { count: "exact" }),
+      input.organizationId,
+      targetTypes
+    )
+      // seq is the chain's total order per organization.
+      .order("seq", { ascending })
+      .range(from, from + pageSize - 1),
+    () => countAuditLogs(client, input.organizationId, targetTypes),
+    (): Error => new AuditServiceError("Unable to load audit logs.", 500)
   )
-    // seq is the chain's total order per organization.
-    .order("seq", { ascending })
-    .range(from, from + pageSize - 1)
-
-  // PostgREST refuses a counted range that starts past the last event (416)
-  // instead of answering with an empty page; count on its own instead, so a
-  // stale link can still be sent to the last page.
-  if (error?.code === RANGE_NOT_SATISFIABLE) {
-    return {
-      entries: [],
-      page,
-      pageSize,
-      total: await countAuditLogs(client, input.organizationId, targetTypes),
-    }
-  }
-
-  if (error || !data) {
-    throw new AuditServiceError("Unable to load audit logs.", 500)
-  }
 
   return {
-    entries: (data as AuditLogRow[]).map(mapAuditLog),
+    entries: (rows as AuditLogRow[]).map(mapAuditLog),
     page,
     pageSize,
-    total: count ?? 0,
+    total,
   }
 }
 
@@ -250,46 +239,38 @@ export async function exportAuditLogs(
   const ascending = normalizeAuditSort(input.sort).direction === "asc"
   const targetTypes = normalizeAuditTargetTypes(input.targetTypes)
   const maxEntries = deps.maxExportEntries ?? AUDIT_EXPORT_MAX_ENTRIES
-  const entries: AuditLogEntry[] = []
-
-  for (;;) {
-    const lastSeq = entries.at(-1)?.seq
-    let query = filterAuditLogs(
-      client.from("audit_logs").select(AUDIT_LOG_COLUMNS),
-      input.organizationId,
-      targetTypes
-    )
-
-    if (lastSeq !== undefined) {
-      query = ascending ? query.gt("seq", lastSeq) : query.lt("seq", lastSeq)
-    }
-
-    const { data, error } = await query
-      .order("seq", { ascending })
-      .limit(AUDIT_EXPORT_BATCH_SIZE)
-
-    if (error || !data) {
-      throw new AuditServiceError("Unable to export audit logs.", 500)
-    }
-
-    const batch = (data as AuditLogRow[]).map(mapAuditLog)
-
-    // Only an empty batch proves the end. A deployment may cap responses
-    // below the requested batch (`max_rows`), so a short batch alone does not
-    // mean nothing follows, and stopping there would truncate the export.
-    if (batch.length === 0) {
-      return entries
-    }
-
-    if (entries.length + batch.length > maxEntries) {
-      throw new AuditServiceError(
-        `This export has more than ${maxEntries.toLocaleString("en")} events. Choose a kind of record to export it in parts.`,
-        413
+  const rows = await readAllInBatches(
+    async (previous: AuditLogRow | undefined) => {
+      let query = filterAuditLogs(
+        client.from("audit_logs").select(AUDIT_LOG_COLUMNS),
+        input.organizationId,
+        targetTypes
       )
-    }
 
-    entries.push(...batch)
-  }
+      if (previous !== undefined) {
+        query = ascending
+          ? query.gt("seq", previous.seq)
+          : query.lt("seq", previous.seq)
+      }
+
+      const { data, error } = await query
+        .order("seq", { ascending })
+        .limit(POSTGREST_BATCH_SIZE)
+
+      return { data: data as AuditLogRow[] | null, error }
+    },
+    {
+      fail: (): Error => new AuditServiceError("Unable to export audit logs.", 500),
+      maxRows: maxEntries,
+      tooMany: (): Error =>
+        new AuditServiceError(
+          `This export has more than ${maxEntries.toLocaleString("en")} events. Choose a kind of record to export it in parts.`,
+          413
+        ),
+    }
+  )
+
+  return rows.map(mapAuditLog)
 }
 
 async function requireAuditView(

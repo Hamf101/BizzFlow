@@ -1,3 +1,7 @@
+import {
+  escapeLikePattern,
+  readCountedPage,
+} from "@/services/postgrest-paging"
 import type {
   AssignTaskInput,
   CreateTaskInput,
@@ -82,9 +86,6 @@ const TASK_PAGE_ORDERS: Record<
   ],
 }
 
-/** PostgREST's code for a counted range that starts past the last row. */
-const RANGE_NOT_SATISFIABLE = "PGRST103"
-
 type TaskListFilters = {
   assignedTo: string | null
   organizationId: string
@@ -122,12 +123,6 @@ function filterTaskList<TQuery>(query: TQuery, filters: TaskListFilters): TQuery
   }
 
   return filtered as unknown as TQuery
-}
-
-// `%`, `_` and the backslash would otherwise act as ILIKE syntax. PostgREST
-// also reads `*` as `%`, so an asterisk in a search can only widen it.
-function escapeLikePattern(value: string): string {
-  return value.replace(/[\\%_]/g, "\\$&")
 }
 
 async function countTaskList(
@@ -379,28 +374,14 @@ export async function listTaskPage(
       }
 
       const from = (page - 1) * pageSize
-      const { count, data, error } = await query.range(
-        from,
-        from + pageSize - 1
+      const { rows, total } = await readCountedPage(
+        await query.range(from, from + pageSize - 1),
+        () => countTaskList(client, filters),
+        (error: unknown): Error =>
+          createTaskDatabaseError(error, "Unable to load tasks.")
       )
 
-      // PostgREST refuses a counted range that starts past the last matching
-      // task (416) instead of answering with an empty page. Count on its own
-      // so a stale link can still be sent to the last page.
-      if (error?.code === RANGE_NOT_SATISFIABLE) {
-        return {
-          page,
-          pageSize,
-          tasks: [],
-          total: await countTaskList(client, filters),
-        }
-      }
-
-      if (error || !data) {
-        throw createTaskDatabaseError(error, "Unable to load tasks.")
-      }
-
-      return { page, pageSize, tasks: data.map(parseTaskRow), total: count ?? 0 }
+      return { page, pageSize, tasks: rows.map(parseTaskRow), total }
     }
   )
 }

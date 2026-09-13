@@ -1,9 +1,22 @@
+import { getOrganizationRoleFromSubject } from "@/lib/permissions"
+import { readCountedPage } from "@/services/postgrest-paging"
 import type {
   GetInternalSubmissionInput,
   ListInternalSubmissionsInput,
+  ListSubmissionPageInput,
   SubmissionDetail,
+  SubmissionPage,
+  SubmissionServiceClient,
   SubmissionServiceDeps,
 } from "@/services/submissions/contracts"
+import {
+  createSubmissionListFilters,
+  filterVisibleSubmissions,
+  normalizeSubmissionPage,
+  normalizeSubmissionPageSize,
+  normalizeSubmissionSort,
+  type SubmissionListFilters,
+} from "@/services/submissions/list-filters"
 import { listSubmissionReviewData } from "@/services/submissions/review-service"
 import {
   assertSubmissionVisible,
@@ -15,11 +28,31 @@ import {
   runSubmissionOperation,
   SUBMISSION_COLUMNS,
 } from "@/services/submissions/shared"
-import { getOrganizationRoleFromSubject } from "@/lib/permissions"
 import {
   parseSubmissionRow,
   type Submission,
+  type SubmissionSortKey,
 } from "@/types/submission"
+
+// Every ordering ends with the id, so submissions with equal values still
+// page deterministically: an offset boundary never repeats or skips one.
+const SUBMISSION_PAGE_ORDERS: Record<
+  SubmissionSortKey,
+  (ascending: boolean) => ReadonlyArray<{ ascending: boolean; column: string }>
+> = {
+  created: (ascending: boolean) => [
+    { ascending, column: "created_at" },
+    { ascending: true, column: "id" },
+  ],
+  title: (ascending: boolean) => [
+    { ascending, column: "title" },
+    { ascending: true, column: "id" },
+  ],
+  updated: (ascending: boolean) => [
+    { ascending, column: "updated_at" },
+    { ascending: true, column: "id" },
+  ],
+}
 
 /**
  * Lists submissions visible to one active internal organization member.
@@ -48,27 +81,13 @@ export async function listInternalSubmissions(
         "submissions:view",
         "You cannot view internal submissions."
       )
-      const role = getOrganizationRoleFromSubject(permissionSubject)
-      let query = client
-        .from("submissions")
-        .select(SUBMISSION_COLUMNS)
-        .eq("org_id", input.organizationId)
-
-      if (role === "staff") {
-        query = query.eq("created_by", input.actorUserId)
-      } else if (role === "external_reviewer") {
-        query = query
-          .eq("assigned_to", input.actorUserId)
-          .in("status", [
-            "submitted",
-            "in_review",
-            "needs_changes",
-            "approved",
-            "rejected",
-            "completed",
-          ])
-      }
-
+      const query = filterVisibleSubmissions(
+        client.from("submissions").select(SUBMISSION_COLUMNS),
+        createSubmissionListFilters(
+          input,
+          getOrganizationRoleFromSubject(permissionSubject)
+        )
+      )
       const { data, error } = await query.order("updated_at", {
         ascending: false,
       })
@@ -83,6 +102,86 @@ export async function listInternalSubmissions(
       return data.map(parseSubmissionRow)
     }
   )
+}
+
+/**
+ * Lists one page of the submissions an actor may see, searched, filtered,
+ * and sorted by a view.
+ *
+ * @param input - Actor, tenant, page, order, and view filters.
+ * @param deps - Optional trusted database dependency.
+ * @returns The page's submissions and how many match the view.
+ * @throws SubmissionServiceError when access, validation, or a read fails.
+ */
+export async function listSubmissionPage(
+  input: ListSubmissionPageInput,
+  deps: SubmissionServiceDeps = {}
+): Promise<SubmissionPage> {
+  return runSubmissionOperation(
+    "list_submission_page",
+    {
+      actorUserId: input.actorUserId,
+      organizationId: input.organizationId,
+      page: input.page,
+      pageSize: input.pageSize,
+    },
+    async (): Promise<SubmissionPage> => {
+      const client = getSubmissionClient(deps)
+      const permissionSubject = await requireSubmissionPermission(
+        client,
+        input.organizationId,
+        input.actorUserId,
+        "submissions:view",
+        "You cannot view internal submissions."
+      )
+      const page = normalizeSubmissionPage(input.page)
+      const pageSize = normalizeSubmissionPageSize(input.pageSize)
+      const sort = normalizeSubmissionSort(input.sort)
+      const filters = createSubmissionListFilters(
+        input,
+        getOrganizationRoleFromSubject(permissionSubject)
+      )
+      let query = filterVisibleSubmissions(
+        client.from("submissions").select(SUBMISSION_COLUMNS, { count: "exact" }),
+        filters
+      )
+
+      for (const order of SUBMISSION_PAGE_ORDERS[sort.key](
+        sort.direction === "asc"
+      )) {
+        query = query.order(order.column, { ascending: order.ascending })
+      }
+
+      const from = (page - 1) * pageSize
+      const { rows, total } = await readCountedPage(
+        await query.range(from, from + pageSize - 1),
+        () => countVisibleSubmissions(client, filters),
+        (error: unknown): Error =>
+          createSubmissionDatabaseError(error, "Unable to load internal submissions.")
+      )
+
+      return { page, pageSize, submissions: rows.map(parseSubmissionRow), total }
+    }
+  )
+}
+
+async function countVisibleSubmissions(
+  client: SubmissionServiceClient,
+  filters: SubmissionListFilters
+): Promise<number> {
+  const { count, error } = await filterVisibleSubmissions(
+    client.from("submissions").select("id", { count: "exact", head: true }),
+    filters
+  )
+
+  if (error) {
+    throw createSubmissionDatabaseError(
+      error,
+      "Unable to load internal submissions."
+    )
+  }
+
+  return count ?? 0
 }
 
 /**
