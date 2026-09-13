@@ -2,10 +2,8 @@ import { ListChecks, Plus } from "lucide-react"
 import Link from "next/link"
 import type { ReactElement } from "react"
 
-import {
-  formatTaskMemberName,
-  TaskStatusBadge,
-} from "@/components/tasks/task-presentation"
+import { formatMemberName } from "@/components/people/member-name"
+import { TaskStatusBadge } from "@/components/tasks/task-presentation"
 import { Button, buttonVariants } from "@/components/ui/button"
 import {
   Card,
@@ -93,7 +91,7 @@ export function SubmissionTaskPanel({
                     <TaskStatusBadge status={task.status} />
                   </span>
                   <span className="text-xs text-muted-foreground">
-                    {formatTaskMemberName(
+                    {formatMemberName(
                       task.assignedTo,
                       members,
                       currentUserId

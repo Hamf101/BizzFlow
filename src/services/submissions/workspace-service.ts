@@ -2,7 +2,6 @@ import { getOrganizationRoleFromSubject } from "@/lib/permissions"
 import { readCountedPage } from "@/services/postgrest-paging"
 import type {
   GetInternalSubmissionInput,
-  ListInternalSubmissionsInput,
   ListSubmissionPageInput,
   SubmissionDetail,
   SubmissionPage,
@@ -30,7 +29,6 @@ import {
 } from "@/services/submissions/shared"
 import {
   parseSubmissionRow,
-  type Submission,
   type SubmissionSortKey,
 } from "@/types/submission"
 
@@ -52,56 +50,6 @@ const SUBMISSION_PAGE_ORDERS: Record<
     { ascending, column: "updated_at" },
     { ascending: true, column: "id" },
   ],
-}
-
-/**
- * Lists submissions visible to one active internal organization member.
- *
- * Owners and managers receive every organization submission; staff receive only
- * submissions they created; external reviewers receive assigned non-drafts.
- *
- * @param input - Actor and tenant identifiers.
- * @param deps - Optional trusted database dependency.
- * @returns Visible submissions ordered by most recently updated.
- * @throws SubmissionServiceError when access or persistence fails.
- */
-export async function listInternalSubmissions(
-  input: ListInternalSubmissionsInput,
-  deps: SubmissionServiceDeps = {}
-): Promise<Submission[]> {
-  return runSubmissionOperation(
-    "list_internal_submissions",
-    input,
-    async (): Promise<Submission[]> => {
-      const client = getSubmissionClient(deps)
-      const permissionSubject = await requireSubmissionPermission(
-        client,
-        input.organizationId,
-        input.actorUserId,
-        "submissions:view",
-        "You cannot view internal submissions."
-      )
-      const query = filterVisibleSubmissions(
-        client.from("submissions").select(SUBMISSION_COLUMNS),
-        createSubmissionListFilters(
-          input,
-          getOrganizationRoleFromSubject(permissionSubject)
-        )
-      )
-      const { data, error } = await query.order("updated_at", {
-        ascending: false,
-      })
-
-      if (error || !data) {
-        throw createSubmissionDatabaseError(
-          error,
-          "Unable to load internal submissions."
-        )
-      }
-
-      return data.map(parseSubmissionRow)
-    }
-  )
 }
 
 /**

@@ -10,7 +10,6 @@ export type {
   CreateInternalSubmissionFileDownloadUrlResponse,
   ExportSubmissionsInput,
   GetInternalSubmissionInput,
-  ListInternalSubmissionsInput,
   ListSubmissionPageInput,
   SaveInternalSubmissionDraftInput,
   SubmissionDetail,
@@ -46,7 +45,6 @@ export {
 } from "@/services/submissions/file-service"
 export {
   getInternalSubmission,
-  listInternalSubmissions,
   listSubmissionPage,
 } from "@/services/submissions/workspace-service"
 export {

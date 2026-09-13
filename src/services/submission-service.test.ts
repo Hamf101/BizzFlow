@@ -11,7 +11,6 @@ import {
   expireAbandonedSubmissionFiles,
   exportInternalSubmissionsCsv,
   getInternalSubmission,
-  listInternalSubmissions,
   listSubmissionPage,
   saveInternalSubmissionDraft,
   type ListSubmissionPageInput,
@@ -68,14 +67,16 @@ describe("internal submission visibility", () => {
   it("shows every organization submission to managers and only owned rows to staff", async () => {
     const client = createClient()
 
-    const managerRows = await listInternalSubmissions(
-      { actorUserId: MANAGER_ID, organizationId: ORGANIZATION_ID },
-      { client: client as never }
-    )
-    const staffRows = await listInternalSubmissions(
-      { actorUserId: STAFF_ID, organizationId: ORGANIZATION_ID },
-      { client: client as never }
-    )
+    const managerRows = (
+      await listSubmissionPage(createPageInput(MANAGER_ID), {
+        client: client as never
+      })
+    ).submissions
+    const staffRows = (
+      await listSubmissionPage(createPageInput(STAFF_ID), {
+        client: client as never
+      })
+    ).submissions
 
     expect(managerRows.map((submission) => submission.id)).toEqual([
       OTHER_SUBMISSION_ID,
@@ -110,10 +111,11 @@ describe("internal submission visibility", () => {
       ]
     })
 
-    const externalRows = await listInternalSubmissions(
-      { actorUserId: EXTERNAL_ID, organizationId: ORGANIZATION_ID },
-      { client: client as never }
-    )
+    const externalRows = (
+      await listSubmissionPage(createPageInput(EXTERNAL_ID), {
+        client: client as never
+      })
+    ).submissions
 
     expect(externalRows.map((submission) => submission.id)).toEqual([
       SUBMISSION_ID

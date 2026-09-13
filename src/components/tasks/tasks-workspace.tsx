@@ -5,6 +5,7 @@ import type { ReactElement } from "react"
 import { ListFilterChips } from "@/components/data/list-filter-chips"
 import { ListPagination } from "@/components/data/list-pagination"
 import { ListViewMenu } from "@/components/data/list-view-menu"
+import { formatMemberName } from "@/components/people/member-name"
 import { NewTaskDialog } from "@/components/tasks/new-task-dialog"
 import {
   getTaskSearchFields,
@@ -14,10 +15,7 @@ import {
   taskListState,
   type TaskListView,
 } from "@/components/tasks/task-list-view"
-import {
-  formatTaskMemberName,
-  TaskStatusBadge,
-} from "@/components/tasks/task-presentation"
+import { TaskStatusBadge } from "@/components/tasks/task-presentation"
 import { Input } from "@/components/ui/input"
 import { formatMediumDate } from "@/lib/date-format"
 import { getLastPage } from "@/lib/list-state"
@@ -225,7 +223,7 @@ function TaskRow({
         data-slot="task-assignee"
         role="cell"
       >
-        {formatTaskMemberName(task.assignedTo, members, currentUserId)}
+        {formatMemberName(task.assignedTo, members, currentUserId)}
       </span>
       <div className="hidden md:block" role="cell">
         <TaskDue

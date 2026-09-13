@@ -129,31 +129,3 @@ export function listInternalTaskMembers(
       member.status === "active" && INTERNAL_TASK_ROLES.includes(member.role)
   )
 }
-
-/**
- * Resolves a member identifier to a display name without leaking ids.
- *
- * @param userId - Member identifier recorded on the task, if any.
- * @param members - Directory used to resolve the name.
- * @param currentUserId - Viewer identifier, rendered as "you".
- * @returns Name, email, or a safe placeholder for a removed member.
- */
-export function formatTaskMemberName(
-  userId: string | null,
-  members: OrganizationMember[],
-  currentUserId?: string
-): string {
-  if (!userId) {
-    return "Unassigned"
-  }
-
-  if (userId === currentUserId) {
-    return "You"
-  }
-
-  const member = members.find(
-    (candidate: OrganizationMember): boolean => candidate.userId === userId
-  )
-
-  return member?.fullName?.trim() || member?.email || "a former member"
-}

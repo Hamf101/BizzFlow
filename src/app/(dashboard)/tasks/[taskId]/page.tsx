@@ -53,8 +53,8 @@ import {
   transitionTaskStatusAction,
   updateTaskAction,
 } from "../actions"
+import { formatMemberName } from "@/components/people/member-name"
 import {
-  formatTaskMemberName,
   getTaskStatusLabel,
   listInternalTaskMembers,
   TaskPageShell,
@@ -185,7 +185,7 @@ export default async function TaskDetailPage({
           <TaskStatusBadge status={task.status} />
         </div>
         <p className="text-sm text-muted-foreground">
-          {formatTaskMemberName(task.assignedTo, members, user.id)} ·{" "}
+          {formatMemberName(task.assignedTo, members, user.id)} ·{" "}
           {task.dueAt
             ? `Due ${formatMediumDateTime(task.dueAt)}`
             : "No due date"}{" "}
@@ -373,7 +373,7 @@ function TaskAssignmentPanel({
           </form>
         ) : (
           <p className="text-sm text-muted-foreground">
-            {formatTaskMemberName(task.assignedTo, members, currentUserId)}
+            {formatMemberName(task.assignedTo, members, currentUserId)}
           </p>
         )}
       </CardContent>
@@ -477,7 +477,7 @@ function TaskRemindersPanel({
                     {formatMediumDateTime(reminder.remindAt)}
                   </span>
                   <span className="text-xs text-muted-foreground">
-                    {formatTaskMemberName(
+                    {formatMemberName(
                       reminder.recipientUserId,
                       members,
                       currentUserId

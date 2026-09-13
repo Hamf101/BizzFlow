@@ -46,9 +46,6 @@ export type SubmissionActorInput = {
   organizationId: string
 }
 
-/** Input for listing submissions visible to one actor. */
-export type ListInternalSubmissionsInput = SubmissionActorInput
-
 /** Input for one page of the submissions an actor may see. */
 export type ListSubmissionPageInput = SubmissionActorInput & {
   /** A member's user id, or null for submissions nobody is assigned to. */
