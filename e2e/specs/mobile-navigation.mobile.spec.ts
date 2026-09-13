@@ -1,3 +1,5 @@
+import type { Locator } from "@playwright/test"
+
 import type { OrganizationRole } from "@/lib/permissions"
 
 import { expectStandaloneTargets } from "../support/accessibility"
@@ -73,7 +75,38 @@ test.describe("mobile navigation", () => {
       }
     })
   }
+
+  test("keeps the wordmark clear of the account menu in the phone header", async ({
+    pageAs,
+  }) => {
+    const page = await pageAs("owner_admin")
+    await page.goto("/dashboard")
+
+    const header = page.getByRole("banner")
+    const [wordmark, account, bar] = await Promise.all([
+      readBox(header.getByText("BizFlow", { exact: true })),
+      readBox(header.getByRole("button", { name: /open account menu/i })),
+      readBox(header),
+    ])
+
+    // The whole wordmark ends before the account menu begins, and the menu
+    // sits at the header's right edge rather than wherever space runs out.
+    expect(wordmark.x + wordmark.width).toBeLessThanOrEqual(account.x)
+    expect(bar.x + bar.width - (account.x + account.width)).toBeLessThanOrEqual(24)
+  })
 })
+
+async function readBox(
+  locator: Locator
+): Promise<{ height: number; width: number; x: number; y: number }> {
+  const box = await locator.boundingBox()
+
+  if (!box) {
+    throw new Error("Expected a rendered element with a layout box.")
+  }
+
+  return box
+}
 
 async function navigateThroughMobileShell(
   page: import("@playwright/test").Page,
