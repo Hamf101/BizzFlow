@@ -1,4 +1,4 @@
-import { MAX_LIST_PAGE, type ListSort } from "@/lib/list-state"
+import type { ListSort } from "@/lib/list-state"
 import { createAdminClient } from "@/lib/supabase/admin"
 import {
   canPerformOrganizationAction,
@@ -6,6 +6,7 @@ import {
   isOrganizationRole,
   type OrganizationPermissionSubject,
 } from "@/lib/permissions"
+import { createListInputValidators } from "@/services/list-input"
 import {
   POSTGREST_BATCH_SIZE,
   readAllInBatches,
@@ -112,6 +113,14 @@ export class AuditServiceError extends Error {
   }
 }
 
+// The audit log has no search, so its checks leave the search limit out.
+const AUDIT_LIST_INPUT = createListInputValidators({
+  label: "Audit log",
+  maxPageSize: MAX_AUDIT_PAGE_SIZE,
+  reject: (message: string): Error => new AuditServiceError(message, 400),
+  sortKeys: AUDIT_LOG_SORT_KEYS,
+})
+
 /**
  * Records an audit event through the trusted admin client.
  *
@@ -191,9 +200,9 @@ export async function listAuditLogPage(
   const client = deps.client ?? createAdminClient()
   await requireAuditView(client, input.organizationId, input.actorUserId)
 
-  const page = normalizeAuditPage(input.page)
-  const pageSize = normalizeAuditPageSize(input.pageSize)
-  const ascending = normalizeAuditSort(input.sort).direction === "asc"
+  const page = AUDIT_LIST_INPUT.page(input.page)
+  const pageSize = AUDIT_LIST_INPUT.pageSize(input.pageSize)
+  const ascending = AUDIT_LIST_INPUT.sort(input.sort).direction === "asc"
   const targetTypes = normalizeAuditTargetTypes(input.targetTypes)
   const from = (page - 1) * pageSize
   const { rows, total } = await readCountedPage(
@@ -236,7 +245,7 @@ export async function exportAuditLogs(
   const client = deps.client ?? createAdminClient()
   await requireAuditView(client, input.organizationId, input.actorUserId)
 
-  const ascending = normalizeAuditSort(input.sort).direction === "asc"
+  const ascending = AUDIT_LIST_INPUT.sort(input.sort).direction === "asc"
   const targetTypes = normalizeAuditTargetTypes(input.targetTypes)
   const maxEntries = deps.maxExportEntries ?? AUDIT_EXPORT_MAX_ENTRIES
   const rows = await readAllInBatches(
@@ -327,42 +336,6 @@ async function countAuditLogs(
   }
 
   return count ?? 0
-}
-
-function normalizeAuditPage(value: number): number {
-  if (!Number.isInteger(value) || value < 1 || value > MAX_LIST_PAGE) {
-    throw new AuditServiceError(
-      `Audit log page must be a whole number from 1 to ${MAX_LIST_PAGE}.`,
-      400
-    )
-  }
-
-  return value
-}
-
-function normalizeAuditPageSize(value: number): number {
-  if (!Number.isInteger(value) || value < 1 || value > MAX_AUDIT_PAGE_SIZE) {
-    throw new AuditServiceError(
-      `Audit log page size must be between 1 and ${MAX_AUDIT_PAGE_SIZE}.`,
-      400
-    )
-  }
-
-  return value
-}
-
-function normalizeAuditSort(
-  value: ListSort<string>
-): ListSort<AuditLogSortKey> {
-  const key = AUDIT_LOG_SORT_KEYS.find(
-    (candidate: AuditLogSortKey): boolean => candidate === value.key
-  )
-
-  if (!key || (value.direction !== "asc" && value.direction !== "desc")) {
-    throw new AuditServiceError("Audit log order is not supported.", 400)
-  }
-
-  return { direction: value.direction, key }
 }
 
 function normalizeAuditTargetTypes(

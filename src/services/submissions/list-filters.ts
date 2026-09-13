@@ -1,5 +1,6 @@
-import { MAX_LIST_PAGE, type ListSort } from "@/lib/list-state"
+import type { ListSort } from "@/lib/list-state"
 import type { OrganizationRole } from "@/lib/permissions"
+import { createListInputValidators } from "@/services/list-input"
 import { escapeLikePattern } from "@/services/postgrest-paging"
 import { SubmissionServiceError } from "@/services/submissions/errors"
 import {
@@ -15,6 +16,16 @@ const DEFAULT_SUBMISSION_SORT: ListSort<SubmissionSortKey> = {
   direction: "desc",
   key: "updated",
 }
+
+/** Checks a submission page's untrusted page, page size, order, and search. */
+export const SUBMISSION_LIST_INPUT = createListInputValidators({
+  label: "Submission",
+  maxPageSize: MAX_SUBMISSION_PAGE_SIZE,
+  maxSearchLength: SUBMISSION_SEARCH_MAX_LENGTH,
+  reject: (message: string): Error => new SubmissionServiceError(message, 400),
+  sortKeys: SUBMISSION_SORT_KEYS,
+})
+
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -72,7 +83,7 @@ export function createSubmissionListFilters(
     actorUserId: input.actorUserId,
     assignedTo: normalizeSubmissionAssignee(input.assignedTo),
     organizationId: input.organizationId,
-    query: normalizeSubmissionSearch(input.query),
+    query: SUBMISSION_LIST_INPUT.search(input.query),
     role,
     statuses: normalizeSubmissionStatusFilter(input.statuses),
   }
@@ -123,42 +134,6 @@ export function filterVisibleSubmissions<TQuery>(
 }
 
 /**
- * Validates an untrusted one-based page number.
- *
- * @param value - Untrusted page number.
- * @returns The page number.
- * @throws SubmissionServiceError when it is not a whole number in range.
- */
-export function normalizeSubmissionPage(value: number): number {
-  if (!Number.isInteger(value) || value < 1 || value > MAX_LIST_PAGE) {
-    throw new SubmissionServiceError(
-      `Submission page must be a whole number from 1 to ${MAX_LIST_PAGE}.`,
-      400
-    )
-  }
-
-  return value
-}
-
-/**
- * Validates an untrusted page size.
- *
- * @param value - Untrusted page size.
- * @returns The page size.
- * @throws SubmissionServiceError when it is out of range.
- */
-export function normalizeSubmissionPageSize(value: number): number {
-  if (!Number.isInteger(value) || value < 1 || value > MAX_SUBMISSION_PAGE_SIZE) {
-    throw new SubmissionServiceError(
-      `Submission page size must be between 1 and ${MAX_SUBMISSION_PAGE_SIZE}.`,
-      400
-    )
-  }
-
-  return value
-}
-
-/**
  * Validates an untrusted list order; none means most recently updated first.
  *
  * @param value - Untrusted sort key and direction.
@@ -168,32 +143,9 @@ export function normalizeSubmissionPageSize(value: number): number {
 export function normalizeSubmissionSort(
   value: ListSort<string> | undefined
 ): ListSort<SubmissionSortKey> {
-  if (value === undefined) {
-    return DEFAULT_SUBMISSION_SORT
-  }
-
-  const key = SUBMISSION_SORT_KEYS.find(
-    (candidate: SubmissionSortKey): boolean => candidate === value.key
-  )
-
-  if (!key || (value.direction !== "asc" && value.direction !== "desc")) {
-    throw new SubmissionServiceError("Submission list order is not supported.", 400)
-  }
-
-  return { direction: value.direction, key }
-}
-
-function normalizeSubmissionSearch(value: string | undefined): string | null {
-  const search = value?.trim() ?? ""
-
-  if (Array.from(search).length > SUBMISSION_SEARCH_MAX_LENGTH) {
-    throw new SubmissionServiceError(
-      `Submission search must be ${SUBMISSION_SEARCH_MAX_LENGTH} characters or fewer.`,
-      400
-    )
-  }
-
-  return search === "" ? null : search
+  return value === undefined
+    ? DEFAULT_SUBMISSION_SORT
+    : SUBMISSION_LIST_INPUT.sort(value)
 }
 
 function normalizeSubmissionAssignee(

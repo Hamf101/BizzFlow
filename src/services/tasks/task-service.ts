@@ -30,9 +30,6 @@ import {
   normalizeOptionalTaskUuid,
   normalizeTaskDescription,
   normalizeTaskListLimit,
-  normalizeTaskPage,
-  normalizeTaskSearch,
-  normalizeTaskSort,
   normalizeTaskStatusFilter,
   normalizeTaskTimestamp,
   normalizeTaskTitle,
@@ -44,6 +41,7 @@ import {
   runTaskOperation,
   taskNowIso,
   TASK_COLUMNS,
+  TASK_LIST_INPUT,
   type TaskMutationValues,
 } from "@/services/tasks/shared"
 import {
@@ -349,16 +347,16 @@ export async function listTaskPage(
         "You cannot view tasks."
       )
 
-      const page = normalizeTaskPage(input.page)
-      const pageSize = normalizeTaskListLimit(input.pageSize)
-      const sort = normalizeTaskSort(input.sort)
+      const page = TASK_LIST_INPUT.page(input.page)
+      const pageSize = TASK_LIST_INPUT.pageSize(input.pageSize)
+      const sort = TASK_LIST_INPUT.sort(input.sort)
       const filters: TaskListFilters = {
         assignedTo: normalizeOptionalTaskUuid(
           input.assignedTo,
           "Task assignee filter must be a valid user id."
         ),
         organizationId: input.organizationId,
-        query: normalizeTaskSearch(input.query),
+        query: TASK_LIST_INPUT.search(input.query),
         statuses: normalizeTaskStatusFilter(input.statuses),
       }
       let query = filterTaskList(

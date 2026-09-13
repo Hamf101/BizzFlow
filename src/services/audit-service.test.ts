@@ -322,6 +322,7 @@ describe("list audit log pages", () => {
     ["a page size above the limit", { pageSize: 201 }],
     ["an unknown sort key", { sort: { direction: "desc", key: "action" } }],
     ["an unknown direction", { sort: { direction: "sideways", key: "created" } }],
+    ["an unknown sort key", { sort: { direction: "asc", key: "seq" } }],
     ["an unknown kind of record", { targetTypes: ["payment"] }],
   ])("rejects %s", async (_case, override) => {
     await expect(

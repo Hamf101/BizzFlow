@@ -11,9 +11,8 @@ import type {
 import {
   createSubmissionListFilters,
   filterVisibleSubmissions,
-  normalizeSubmissionPage,
-  normalizeSubmissionPageSize,
   normalizeSubmissionSort,
+  SUBMISSION_LIST_INPUT,
   type SubmissionListFilters,
 } from "@/services/submissions/list-filters"
 import { listSubmissionReviewData } from "@/services/submissions/review-service"
@@ -82,8 +81,8 @@ export async function listSubmissionPage(
         "submissions:view",
         "You cannot view internal submissions."
       )
-      const page = normalizeSubmissionPage(input.page)
-      const pageSize = normalizeSubmissionPageSize(input.pageSize)
+      const page = SUBMISSION_LIST_INPUT.page(input.page)
+      const pageSize = SUBMISSION_LIST_INPUT.pageSize(input.pageSize)
       const sort = normalizeSubmissionSort(input.sort)
       const filters = createSubmissionListFilters(
         input,
