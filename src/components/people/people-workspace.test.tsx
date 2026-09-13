@@ -207,7 +207,8 @@ describe("PeopleWorkspace", () => {
   it("renders the searchable directory without the old explanatory cards", () => {
     renderWorkspace()
 
-    expect(document.querySelector("h1")?.textContent).toBe("People3")
+    // A real space keeps the accessible name "People 3 members", not "People3".
+    expect(document.querySelector("h1")?.textContent).toBe("People 3")
     expect(document.querySelector('[role="table"]')?.getAttribute("aria-label")).toBe(
       "Organization members"
     )
@@ -413,7 +414,7 @@ describe("PeopleWorkspace", () => {
   it("does not expose invitation controls to roles without permission", () => {
     renderWorkspace({ actorRole: "staff", invites: [] })
 
-    expect(document.body.textContent).toContain("People3")
+    expect(document.body.textContent).toContain("People 3")
     expect(
       [...document.querySelectorAll("button")].some(
         (button) => button.textContent?.trim() === "Invite"

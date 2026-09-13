@@ -133,14 +133,16 @@ export function PeopleWorkspace({
         data-slot="people-workspace"
       >
         <div className="flex items-baseline gap-2">
+          {/* The real space keeps the accessible name "People 3 members"
+              rather than "People3 members"; the small margin keeps the gap. */}
           <h1
             className="text-2xl leading-none font-medium tracking-[-0.02em]"
             data-slot="people-heading"
           >
-            People
+            People{" "}
             <span
               aria-label={`${members.length} members`}
-              className="ml-2 text-xl font-normal text-muted-foreground"
+              className="ml-0.5 text-xl font-normal text-muted-foreground"
             >
               {members.length}
             </span>
