@@ -675,6 +675,21 @@ export type AdminDatabase = {
         }
         Returns: boolean
       }
+      submit_public_form_entry: {
+        Args: {
+          target_public_form_token: string
+          target_public_draft_token: string | null
+          target_expected_revision: number | null
+          target_submission_id: string | null
+          target_title: string | null
+          target_template_id: string | null
+          target_template_revision: number | null
+          target_template_snapshot: Record<string, unknown> | null
+          target_values: Record<string, unknown>
+          target_submitted_at: string
+        }
+        Returns: AdminSubmissionRow
+      }
       supersede_public_submission_file: {
         Args: {
           target_public_form_token: string

@@ -37,6 +37,10 @@ export type FakeTableName = (typeof KNOWN_TABLES)[number]
 export type FakeRow = Record<string, unknown>
 
 type FakeResult = { data: unknown; error: { message: string } | null }
+type FakeRpcResult = {
+  data: unknown
+  error: { code?: string; message: string } | null
+}
 
 export function createTemplateContent(): unknown {
   return templateContentV3Schema.parse({
@@ -196,6 +200,12 @@ class FakeQueryBuilder implements PromiseLike<FakeResult> {
   }
 
   async single(): Promise<FakeResult> {
+    const writeError = this.getWriteError()
+
+    if (writeError) {
+      return writeError
+    }
+
     const rows = this.run()
     return rows.length === 1
       ? { data: rows[0], error: null }
@@ -203,6 +213,12 @@ class FakeQueryBuilder implements PromiseLike<FakeResult> {
   }
 
   async maybeSingle(): Promise<FakeResult> {
+    const writeError = this.getWriteError()
+
+    if (writeError) {
+      return writeError
+    }
+
     const rows = this.run()
     return rows.length > 1
       ? { data: null, error: { message: "Expected zero or one row." } }
@@ -215,10 +231,20 @@ class FakeQueryBuilder implements PromiseLike<FakeResult> {
       | null,
     onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
   ): PromiseLike<TResult1 | TResult2> {
-    return Promise.resolve({ data: this.run(), error: null }).then(
-      onfulfilled,
-      onrejected
-    )
+    return Promise.resolve(
+      this.getWriteError() ?? { data: this.run(), error: null }
+    ).then(onfulfilled, onrejected)
+  }
+
+  private getWriteError(): FakeResult | null {
+    const writes = this.insertRows !== null || this.updateValues !== null
+
+    return writes && this.client.failingWrites.has(this.tableName)
+      ? {
+          data: null,
+          error: { message: `Writes to ${this.tableName} are failing.` },
+        }
+      : null
   }
 
   private run(): FakeRow[] {
@@ -250,6 +276,8 @@ class FakeQueryBuilder implements PromiseLike<FakeResult> {
 export class FakePublicFormClient {
   readonly tables: Record<FakeTableName, FakeRow[]>
   readonly rpcCalls: Array<{ name: string; args: Record<string, unknown> }> = []
+  /** Tables whose writes fail, standing in for a database error mid-request. */
+  readonly failingWrites = new Set<FakeTableName>()
 
   constructor(seed: Partial<Record<FakeTableName, FakeRow[]>> = {}) {
     this.tables = Object.fromEntries(
@@ -270,7 +298,7 @@ export class FakePublicFormClient {
   async rpc(
     name: string,
     args: Record<string, unknown>
-  ): Promise<{ data: unknown; error: { message: string } | null }> {
+  ): Promise<FakeRpcResult> {
     this.rpcCalls.push({ name, args })
 
     if (name === "supersede_public_submission_file") {
@@ -304,27 +332,121 @@ export class FakePublicFormClient {
       return { data: file, error: null }
     }
 
-    if (name !== "increment_public_form_link_submission_count") {
+    if (name !== "submit_public_form_entry") {
       throw new Error(`Unexpected RPC ${name}.`)
     }
 
-    const link = this.tables.public_form_links.find(
-      (row) => row.token === args.p_token && row.status === "active"
-    )
+    return this.submitPublicFormEntry(args)
+  }
 
-    if (!link) {
-      return { data: false, error: null }
+  // Mirrors submit_public_form_entry: the link is re-checked, the submission
+  // saved, and capacity claimed in one step that happens whole or not at all.
+  private submitPublicFormEntry(args: Record<string, unknown>): FakeRpcResult {
+    const link = this.tables.public_form_links.find(
+      (row) => row.token === args.target_public_form_token
+    )
+    const max = link?.max_submissions as number | null | undefined
+    const count = link?.submission_count as number
+    const expired =
+      typeof link?.expires_at === "string" &&
+      Date.parse(link.expires_at) <= Date.parse(FROZEN_NOW)
+
+    if (
+      !link ||
+      link.status !== "active" ||
+      expired ||
+      (typeof max === "number" && count >= max)
+    ) {
+      return {
+        data: null,
+        error: { code: "55000", message: "Link is not accepting submissions." },
+      }
     }
 
-    const max = link.max_submissions as number | null
-    const count = link.submission_count as number
+    if (this.failingWrites.has("submissions")) {
+      return {
+        data: null,
+        error: { code: "XX000", message: "Writes to submissions are failing." },
+      }
+    }
 
-    if (max !== null && count >= max) {
-      return { data: false, error: null }
+    const saved = args.target_public_draft_token
+      ? this.submitFakeDraft(link, args)
+      : this.insertFakeSubmission(link, args)
+
+    if ("error" in saved) {
+      return { data: null, error: saved.error }
     }
 
     link.submission_count = count + 1
-    return { data: true, error: null }
+    return { data: { ...saved.row }, error: null }
+  }
+
+  private submitFakeDraft(
+    link: FakeRow,
+    args: Record<string, unknown>
+  ): { row: FakeRow } | Pick<FakeRpcResult, "error"> {
+    const draft = this.tables.submissions.find(
+      (row) =>
+        row.public_draft_token === args.target_public_draft_token &&
+        row.public_form_link_id === link.id &&
+        row.org_id === link.org_id &&
+        row.status === "draft" &&
+        row.revision === args.target_expected_revision
+    )
+
+    if (!draft) {
+      return {
+        error: { code: "40001", message: "Public submission draft has changed." },
+      }
+    }
+
+    Object.assign(draft, {
+      values: args.target_values,
+      status: "submitted",
+      revision: (draft.revision as number) + 1,
+      public_draft_token: null,
+      updated_at: args.target_submitted_at,
+      submitted_at: args.target_submitted_at,
+    })
+    return { row: draft }
+  }
+
+  private insertFakeSubmission(
+    link: FakeRow,
+    args: Record<string, unknown>
+  ): { row: FakeRow } | Pick<FakeRpcResult, "error"> {
+    if (args.target_template_id !== link.template_id) {
+      return {
+        error: { code: "22023", message: "Submission details are invalid." },
+      }
+    }
+
+    const row: FakeRow = {
+      id: args.target_submission_id,
+      org_id: link.org_id,
+      title: String(args.target_title).trim(),
+      template_id: args.target_template_id,
+      template_revision: args.target_template_revision,
+      template_snapshot: args.target_template_snapshot,
+      values: args.target_values,
+      status: "submitted",
+      revision: 1,
+      created_by: null,
+      updated_by: null,
+      submitted_by: null,
+      assigned_to: null,
+      assigned_by: null,
+      public_form_link_id: link.id,
+      public_draft_token: null,
+      created_at: args.target_submitted_at,
+      updated_at: args.target_submitted_at,
+      submitted_at: args.target_submitted_at,
+      assigned_at: null,
+    }
+
+    this.tables.submissions.push(row)
+    return { row }
   }
 }
 

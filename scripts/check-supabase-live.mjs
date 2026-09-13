@@ -283,6 +283,21 @@ export const SERVICE_ROLE_RPC_CHECKS = [
       target_org_id: null,
     },
   },
+  {
+    name: "submit_public_form_entry",
+    args: {
+      target_public_form_token: null,
+      target_public_draft_token: null,
+      target_expected_revision: null,
+      target_submission_id: null,
+      target_title: null,
+      target_template_id: null,
+      target_template_revision: null,
+      target_template_snapshot: null,
+      target_values: null,
+      target_submitted_at: null,
+    },
+  },
 ]
 
 const DRAWING_PROBE_DATA_URL = `data:image/png;base64,${"AAAA".repeat(5_000)}`

@@ -181,6 +181,9 @@ describe("authenticated Supabase direct-access harness configuration", () => {
       // Audit-chain verification is service-role-only and probed the same
       // way (null args reach the function's 22023 validation guard).
       "verify_audit_log_chain",
+      // So is the atomic public submission, which refuses null details
+      // before it locks or writes anything.
+      "submit_public_form_entry",
     ])
     expect(SERVICE_ROLE_RPC_CHECKS.every((rpc) =>
       Object.values(rpc.args).every((value) => value === null)

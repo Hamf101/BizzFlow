@@ -1022,50 +1022,33 @@ async function loadAvailableFileFieldKeys(
 }
 
 /**
- * Transitions an allocated public draft to `submitted`.
+ * Maps a refused atomic public submission to a visitor-safe error.
+ *
+ * The database refuses the whole submission, so a refusal never uses any of
+ * the link's capacity.
  */
-async function submitPublicDraft(
-  context: {
-    draft: PublicDraft
-    normalizedValues: Record<string, unknown>
-    timestamp: string
-  },
-  deps: PublicFormServiceDeps
-): Promise<PublicSubmissionResult> {
-  const client = getClient(deps)
-  const { draft, normalizedValues, timestamp } = context
-
-  const { data, error } = await client
-    .from("submissions")
-    .update({
-      values: normalizedValues as never,
-      status: "submitted",
-      submitted_at: timestamp,
-      updated_at: timestamp,
-      revision: draft.revision + 1,
-      public_draft_token: null,
-    })
-    .eq("id", draft.id)
-    .eq("org_id", draft.organizationId)
-    .eq("status", "draft")
-    .eq("revision", draft.revision)
-    .select("id")
-    .maybeSingle()
-
-  if (error || !data) {
-    throw new PublicFormServiceError(
-      error
-        ? "Unable to save your submission. Please try again."
-        : "This form draft changed in another tab. Reload and try again.",
-      error ? 500 : 409
-    )
-  }
-
-  return {
-    submissionId: draft.id,
-    organizationId: draft.organizationId,
-    status: "submitted",
-    submittedAt: timestamp,
+function createPublicSubmissionError(
+  error: { code?: string } | null
+): PublicFormServiceError {
+  switch (error?.code) {
+    case "55000":
+      return new PublicFormServiceError(
+        "Unable to process submission. The link may have reached its limit or expired.",
+        409
+      )
+    case "40001":
+      return new PublicFormServiceError(
+        "This form draft changed in another tab. Reload and try again.",
+        409
+      )
+    case "22023":
+    case "23514":
+      return new PublicFormServiceError("Your submission is not valid.", 400)
+    default:
+      return new PublicFormServiceError(
+        "Unable to save your submission. Please try again.",
+        500
+      )
   }
 }
 
@@ -1121,61 +1104,33 @@ export async function submitPublicForm(
     throw new PublicFormServiceError("Your submission is not valid.", 400)
   }
 
-  // Claims the link's capacity atomically; the RPC re-checks status, expiry, and
-  // the max-submission ceiling in a single statement so concurrent submitters
-  // cannot exceed it.
-  const { data: countIncremented, error: incError } = await client.rpc(
-    "increment_public_form_link_submission_count",
-    { p_token: input.token }
-  )
-
-  if (incError || !countIncremented) {
-    throw new PublicFormServiceError(
-      "Unable to process submission. The link may have reached its limit or expired.",
-      409
-    )
-  }
-
+  // One database call saves the submission and claims the link's capacity
+  // together. It locks the link, re-checks status, expiry, and the ceiling,
+  // and guards a draft by its revision, so a refused or failed save never uses
+  // a slot and concurrent submitters cannot exceed the ceiling.
   const timestamp = nowIso(deps)
+  const { data, error } = await client.rpc("submit_public_form_entry", {
+    target_public_form_token: input.token,
+    target_public_draft_token: draft ? (input.draftToken ?? null) : null,
+    target_expected_revision: draft ? draft.revision : null,
+    target_submission_id: draft ? null : createId(deps),
+    target_title: draft
+      ? null
+      : input.title?.trim() || `${template.title} (Public)`,
+    target_template_id: draft ? null : template.id,
+    target_template_revision: draft ? null : template.revision,
+    target_template_snapshot: draft ? null : template.content,
+    target_values: normalizedValues,
+    target_submitted_at: timestamp,
+  })
 
-  if (draft) {
-    return submitPublicDraft({ draft, normalizedValues, timestamp }, deps)
-  }
-
-  const submissionId = createId(deps)
-  const { error: subError } = await client.from("submissions").insert({
-    id: submissionId,
-    org_id: link.organizationId,
-    title: input.title?.trim() || `${template.title} (Public)`,
-    template_id: template.id,
-    template_revision: template.revision,
-    template_snapshot: template.content as never,
-    values: normalizedValues as never,
-    status: "submitted",
-    revision: 1,
-    created_by: null,
-    updated_by: null,
-    submitted_by: null,
-    assigned_to: null,
-    assigned_by: null,
-    public_form_link_id: link.id,
-    public_draft_token: null,
-    created_at: timestamp,
-    updated_at: timestamp,
-    submitted_at: timestamp,
-    assigned_at: null,
-  } as never)
-
-  if (subError) {
-    throw new PublicFormServiceError(
-      "Unable to save your submission. Please try again.",
-      500
-    )
+  if (error || !data) {
+    throw createPublicSubmissionError(error)
   }
 
   return {
-    submissionId,
-    organizationId: link.organizationId,
+    submissionId: data.id,
+    organizationId: data.org_id,
     status: "submitted",
     submittedAt: timestamp,
   }

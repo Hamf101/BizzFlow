@@ -336,6 +336,12 @@ source .env.local
 npx supabase db query --db-url "$SUPABASE_DB_URL" --file supabase/tests/internal-submissions-live-rpc.sql
 ```
 
+The public-form smoke test does the same for anonymous submissions: a link's capacity is used only when a submission is saved, a draft is guarded by its revision, and the link's ceiling holds:
+
+```bash
+npx supabase db query --db-url "$SUPABASE_DB_URL" --file supabase/tests/public-form-submission-live-rpc.sql
+```
+
 Signed-in users have no direct Data API access to tenant tables: tenant data reaches them only through the service layer, which checks current role-definition permissions. To verify that boundary against a project, provision the isolated owner, manager, staff, external-reviewer, and other-tenant synthetic fixtures documented by the fail-closed runner:
 
 ```bash
