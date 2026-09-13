@@ -61,6 +61,12 @@ export const AUDIT_LOG_TARGET_TYPES = [
 
 export type AuditLogTargetType = (typeof AUDIT_LOG_TARGET_TYPES)[number]
 
+/** Orders the audit list offers; `created` follows the chain's sequence. */
+export const AUDIT_LOG_SORT_KEYS = ["created"] as const
+
+/** One audit list ordering key. */
+export type AuditLogSortKey = (typeof AUDIT_LOG_SORT_KEYS)[number]
+
 export type AuditMetadataValue = string | number | boolean | null
 
 export type AuditMetadata = Record<string, AuditMetadataValue>

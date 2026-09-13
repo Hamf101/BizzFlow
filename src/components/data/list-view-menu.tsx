@@ -70,7 +70,15 @@ export function ListViewMenu({
                 <DropdownMenuItem
                   aria-current={option.selected ? "true" : undefined}
                   key={option.href}
-                  render={<Link href={option.href} />}
+                  render={
+                    option.download ? (
+                      // A plain link: client navigation would try to render
+                      // the downloaded file as a page.
+                      <a download href={option.href} />
+                    ) : (
+                      <Link href={option.href} />
+                    )
+                  }
                 >
                   <Check
                     aria-hidden="true"

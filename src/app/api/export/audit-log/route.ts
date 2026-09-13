@@ -1,12 +1,16 @@
-import { NextResponse } from "next/server"
+import { NextResponse, type NextRequest } from "next/server"
 
+import {
+  auditLogListState,
+  getAuditTargetTypes,
+} from "@/components/audit/audit-log-view"
 import { getAuthenticatedUser } from "@/lib/auth"
 import { buildCsvExportFilename, createCsvDownloadResponse } from "@/lib/csv"
 import { formatAuditLogsAsCsv } from "@/services/audit-export-service"
-import { AuditServiceError, listAuditLogs } from "@/services/audit-service"
+import { AuditServiceError, exportAuditLogs } from "@/services/audit-service"
 import { getCurrentOrganizationContext } from "@/services/organization-service"
 
-export async function GET(): Promise<NextResponse> {
+export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
     const user = await getAuthenticatedUser()
     const context = await getCurrentOrganizationContext(user.id)
@@ -17,12 +21,17 @@ export async function GET(): Promise<NextResponse> {
       })
     }
 
-    // listAuditLogs enforces audit_logs:view and reads the real columns; the
-    // route only renders what it returns.
-    const logs = await listAuditLogs({
+    // The export follows the audit view it was opened from. exportAuditLogs
+    // enforces audit_logs:view and returns every matching event, or refuses
+    // an export that is too large instead of truncating it.
+    const view = auditLogListState.parse(
+      Object.fromEntries(request.nextUrl.searchParams)
+    )
+    const logs = await exportAuditLogs({
       actorUserId: user.id,
       organizationId: context.organization.id,
-      limit: 500,
+      sort: view.sort,
+      targetTypes: getAuditTargetTypes(view),
     })
 
     return createCsvDownloadResponse(

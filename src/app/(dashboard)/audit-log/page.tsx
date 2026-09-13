@@ -1,25 +1,28 @@
+import { ShieldCheck } from "lucide-react"
 import { redirect } from "next/navigation"
 import { cache, Suspense, type ReactElement, type ReactNode } from "react"
 
+import {
+  auditLogListState,
+  getAuditTargetTypes,
+} from "@/components/audit/audit-log-view"
+import { AuditLogWorkspace } from "@/components/audit/audit-log-workspace"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
-import { buttonVariants } from "@/components/ui/button"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
 import { buildFeedbackRedirect } from "@/lib/action-result"
-import { formatMediumDateTime } from "@/lib/date-format"
+import { getLastPage, type RawSearchParams } from "@/lib/list-state"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
 import { getPageErrorMessage } from "@/lib/page-errors"
 import { loadPageOrganizationContext } from "@/lib/page-organization-context"
 import { canPerformOrganizationAction } from "@/lib/permissions"
-import { cn } from "@/lib/utils"
-import { listAuditLogs, verifyAuditLogChain } from "@/services/audit-service"
-import type { AuditChainVerification, AuditLogEntry } from "@/types/audit"
+import {
+  listAuditLogPage,
+  verifyAuditLogChain,
+  type AuditLogPage,
+} from "@/services/audit-service"
+import { listOrganizationPeople } from "@/services/organization-service"
+import type { AuditChainVerification } from "@/types/audit"
+import type { OrganizationMember } from "@/types/organization"
 
 // Chain verification walks every entry for the organization, so it streams in
 // its own boundaries rather than delaying the event list. Keyed on primitives
@@ -42,7 +45,19 @@ const getCachedChainVerification = cache(
     )
 )
 
-export default async function AuditLogPage(): Promise<ReactElement> {
+/**
+ * Lists one page of the organization's audit events, narrowed, ordered, and
+ * paged by the validated URL.
+ *
+ * @param props - View state in search parameters.
+ * @returns The audit log workspace, or a user-safe access or load failure.
+ */
+export default async function AuditLogPage({
+  searchParams,
+}: {
+  searchParams: Promise<RawSearchParams>
+}): Promise<ReactElement> {
+  const query = await searchParams
   const user = await loadAuthenticatedPageUser("/audit-log")
   const { context, errorMessage: contextErrorMessage } =
     await loadPageOrganizationContext({
@@ -69,35 +84,55 @@ export default async function AuditLogPage(): Promise<ReactElement> {
     redirect(buildFeedbackRedirect("/dashboard", "permission_denied"))
   }
 
-  const { entries, errorMessage: entriesErrorMessage } = await listAuditLogs({
-    actorUserId: user.id,
-    organizationId: context.organization.id,
-  })
-    .then((entries) => ({ entries, errorMessage: null as string | null }))
-    .catch((error: unknown) => {
-      const errorMessage = getPageErrorMessage(error, "Unable to load audit logs.")
-
-      console.warn("audit_log_entries_load_failed", {
-        userId: user.id,
-        organizationId: context.organization.id,
-        reason: errorMessage,
-      })
-
-      return {
-        entries: null,
-        errorMessage,
-      }
+  const view = auditLogListState.parse(query)
+  const [result, members] = await Promise.all([
+    listAuditLogPage({
+      actorUserId: user.id,
+      organizationId: context.organization.id,
+      page: view.page,
+      pageSize: view.pageSize,
+      sort: view.sort,
+      targetTypes: getAuditTargetTypes(view),
     })
+      .then((auditPage: AuditLogPage) => ({ auditPage, errorMessage: null }))
+      .catch((error: unknown) => {
+        const errorMessage = getPageErrorMessage(
+          error,
+          "Unable to load audit logs."
+        )
 
-  if (!entries) {
+        console.warn("audit_log_entries_load_failed", {
+          userId: user.id,
+          organizationId: context.organization.id,
+          reason: errorMessage,
+        })
+
+        return { auditPage: null, errorMessage }
+      }),
+    listOrganizationPeople(user.id, context.organization.id)
+      .then((people) => people.members)
+      .catch((): OrganizationMember[] => []),
+  ])
+
+  if (result.auditPage === null) {
     return (
       <AuditLogShell>
+        <h1 className="text-2xl leading-none font-medium tracking-[-0.02em]">
+          Audit log
+        </h1>
         <Alert variant="destructive">
           <AlertTitle>Audit log unavailable</AlertTitle>
-          <AlertDescription>{entriesErrorMessage}</AlertDescription>
+          <AlertDescription>{result.errorMessage}</AlertDescription>
         </Alert>
       </AuditLogShell>
     )
+  }
+
+  const lastPage = getLastPage(result.auditPage.total, view.pageSize)
+
+  // A stale link past the end opens the last page that still has events.
+  if (view.page > lastPage) {
+    redirect(auditLogListState.href("/audit-log", view, { page: lastPage }))
   }
 
   const canVerifyChain = canPerformOrganizationAction(
@@ -107,22 +142,6 @@ export default async function AuditLogPage(): Promise<ReactElement> {
 
   return (
     <AuditLogShell>
-      <section className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex flex-col gap-2">
-          <h1 className="text-2xl font-semibold tracking-normal">Audit Log</h1>
-          <p className="max-w-2xl text-sm text-muted-foreground">
-            Review administrative events for {context.organization.name}.
-          </p>
-        </div>
-        <a
-          className={cn(buttonVariants({ variant: "outline" }))}
-          download
-          href="/api/export/audit-log"
-        >
-          Download CSV Export
-        </a>
-      </section>
-
       {canVerifyChain ? (
         <Suspense fallback={null}>
           <AuditChainFailureAlert
@@ -131,39 +150,22 @@ export default async function AuditLogPage(): Promise<ReactElement> {
           />
         </Suspense>
       ) : null}
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Recent events</CardTitle>
-          <CardDescription>
-            Server-side audit events from organization and people workflows.
-          </CardDescription>
-          {canVerifyChain ? (
+      <AuditLogWorkspace
+        entries={result.auditPage.entries}
+        integrity={
+          canVerifyChain ? (
             <Suspense fallback={null}>
               <AuditChainVerifiedBadge
                 actorUserId={user.id}
                 organizationId={context.organization.id}
               />
             </Suspense>
-          ) : null}
-        </CardHeader>
-        <CardContent>
-          {entries.length === 0 ? (
-            <Alert>
-              <AlertTitle>No audit events yet</AlertTitle>
-              <AlertDescription>
-                Organization, invite, and role changes will appear here.
-              </AlertDescription>
-            </Alert>
-          ) : (
-            <div className="flex flex-col gap-3">
-              {entries.map((entry: AuditLogEntry) => (
-                <AuditLogEntryRow entry={entry} key={entry.id} />
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+          ) : null
+        }
+        members={members}
+        total={result.auditPage.total}
+        view={view}
+      />
     </AuditLogShell>
   )
 }
@@ -204,10 +206,10 @@ async function AuditChainFailureAlert({
 }
 
 /**
- * Confirms how many entries passed the tamper-evidence check.
+ * Marks the log as verified once every entry passed the tamper-evidence check.
  *
  * @param props - Authenticated member and tenant identifiers.
- * @returns A verification badge, or nothing when the chain is not intact.
+ * @returns A quiet verified mark, or nothing when the chain is not intact.
  */
 async function AuditChainVerifiedBadge({
   actorUserId,
@@ -226,59 +228,17 @@ async function AuditChainVerifiedBadge({
   }
 
   return (
-    <Badge variant="outline">
-      Integrity verified · {verification.checkedCount}{" "}
-      {verification.checkedCount === 1 ? "entry" : "entries"}
+    <Badge className="font-normal text-muted-foreground" variant="outline">
+      <ShieldCheck aria-hidden="true" />
+      Verified
+      <span className="sr-only">
+        : the tamper-evidence check passed for {verification.checkedCount}{" "}
+        {verification.checkedCount === 1 ? "entry" : "entries"}
+      </span>
     </Badge>
   )
 }
 
-function AuditLogShell({
-  children,
-}: {
-  children: ReactNode
-}): ReactElement {
+function AuditLogShell({ children }: { children: ReactNode }): ReactElement {
   return <div className="flex flex-col gap-6">{children}</div>
-}
-
-function AuditLogEntryRow({
-  entry,
-}: {
-  entry: AuditLogEntry
-}): ReactElement {
-  return (
-    <div className="grid gap-3 rounded-lg border bg-background p-3 md:grid-cols-[minmax(0,1fr)_160px]">
-      <div className="flex min-w-0 flex-col gap-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm font-medium">{formatAction(entry.action)}</span>
-          <Badge variant="outline">{entry.targetType}</Badge>
-        </div>
-        <span className="break-words text-xs text-muted-foreground">
-          {formatMetadata(entry.metadata)}
-        </span>
-      </div>
-      <span className="text-xs text-muted-foreground md:text-right">
-        {formatMediumDateTime(entry.createdAt)}
-      </span>
-    </div>
-  )
-}
-
-function formatAction(action: string): string {
-  return action
-    .split(".")
-    .map((part: string) => part.replaceAll("_", " "))
-    .join(" ")
-}
-
-function formatMetadata(metadata: Record<string, unknown>): string {
-  const entries = Object.entries(metadata)
-
-  if (entries.length === 0) {
-    return "No metadata"
-  }
-
-  return entries
-    .map(([key, value]: [string, unknown]) => `${key}: ${String(value)}`)
-    .join(", ")
 }

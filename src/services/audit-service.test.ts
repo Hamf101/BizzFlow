@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { createAdminClient } from "@/lib/supabase/admin"
-import { listAuditLogs, verifyAuditLogChain } from "@/services/audit-service"
+import {
+  exportAuditLogs,
+  listAuditLogPage,
+  verifyAuditLogChain,
+} from "@/services/audit-service"
 import type { AuditLogAction } from "@/types/audit"
 
 vi.mock("@/lib/supabase/admin", () => ({
@@ -107,156 +111,6 @@ class QueuedAdminClient {
   }
 }
 
-function createAuditRow(action: AuditLogAction, index: number): Record<string, unknown> {
-  return {
-    id: `audit-${index}`,
-    org_id: "org-1",
-    actor_user_id: "manager-1",
-    action,
-    target_type: "submission",
-    target_id: "submission-1",
-    metadata: { revision: index + 1 },
-    seq: index + 1,
-    prev_hash: index === 0 ? null : "c".repeat(64),
-    entry_hash: "d".repeat(64),
-    created_at: `2026-07-18T12:${String(index).padStart(2, "0")}:00.000Z`,
-  }
-}
-
-describe("list audit logs", () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
-  it("maps every supported submission action and target", async () => {
-    const client = new QueuedAdminClient({
-      organization_memberships: [
-        {
-          data: { role: "manager" },
-          error: null,
-        },
-      ],
-      audit_logs: [
-        {
-          data: SUBMISSION_AUDIT_ACTIONS.map(createAuditRow),
-          error: null,
-        },
-      ],
-    })
-    vi.mocked(createAdminClient).mockReturnValue(client as never)
-
-    const entries = await listAuditLogs({
-      actorUserId: "manager-1",
-      organizationId: "org-1",
-    })
-
-    expect(entries.map((entry) => entry.action)).toEqual(SUBMISSION_AUDIT_ACTIONS)
-    expect(entries.every((entry) => entry.targetType === "submission")).toBe(true)
-    expect(entries[0]).toMatchObject({
-      seq: 1,
-      prevHash: null,
-      entryHash: "d".repeat(64),
-    })
-  })
-
-  it("rejects unknown audit actions returned by the database", async () => {
-    const client = new QueuedAdminClient({
-      organization_memberships: [
-        {
-          data: { role: "manager" },
-          error: null,
-        },
-      ],
-      audit_logs: [
-        {
-          data: [{ ...createAuditRow("submission.created", 0), action: "unknown" }],
-          error: null,
-        },
-      ],
-    })
-    vi.mocked(createAdminClient).mockReturnValue(client as never)
-
-    await expect(
-      listAuditLogs({
-        actorUserId: "manager-1",
-        organizationId: "org-1",
-      })
-    ).rejects.toMatchObject({
-      message: "Database returned an unsupported audit action.",
-      statusCode: 500,
-    })
-  })
-
-  it("maps immutable document and folder purge receipts", async () => {
-    const client = new QueuedAdminClient({
-      organization_memberships: [
-        {
-          data: { role: "owner_admin" },
-          error: null,
-        },
-      ],
-      audit_logs: [
-        {
-          data: PURGE_AUDIT_ACTIONS.map(
-            (action: AuditLogAction, index: number) => ({
-              ...createAuditRow(action, index),
-              target_type: action.startsWith("document")
-                ? "document"
-                : "folder",
-              metadata: {
-                receiptId: `receipt-${index}`,
-                objectCount: index + 1,
-              },
-            })
-          ),
-          error: null,
-        },
-      ],
-    })
-    vi.mocked(createAdminClient).mockReturnValue(client as never)
-
-    const entries = await listAuditLogs({
-      actorUserId: "owner-1",
-      organizationId: "org-1",
-    })
-
-    expect(entries.map((entry) => entry.action)).toEqual(PURGE_AUDIT_ACTIONS)
-    expect(entries.map((entry) => entry.targetType)).toEqual([
-      "document",
-      "folder",
-    ])
-    expect(entries[0]?.metadata).toEqual({
-      receiptId: "receipt-0",
-      objectCount: 1,
-    })
-  })
-
-  it("rechecks edited audit permissions before each tenant read", async () => {
-    const membership = {
-      role: "manager",
-      role_definition: { permissions: ["audit_logs:view"] },
-    }
-    const client = new QueuedAdminClient({
-      organization_memberships: [
-        { data: membership, error: null },
-        { data: membership, error: null },
-      ],
-      audit_logs: [{ data: [], error: null }],
-    })
-    vi.mocked(createAdminClient).mockReturnValue(client as never)
-
-    await expect(
-      listAuditLogs({ actorUserId: "manager-1", organizationId: "org-1" })
-    ).resolves.toEqual([])
-
-    membership.role_definition.permissions = []
-
-    await expect(
-      listAuditLogs({ actorUserId: "manager-1", organizationId: "org-1" })
-    ).rejects.toMatchObject({ statusCode: 403 })
-  })
-})
-
 describe("verify audit log chain", () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -336,5 +190,390 @@ describe("verify audit log chain", () => {
     await expect(
       verifyAuditLogChain({ actorUserId: "owner-1", organizationId: "org-1" })
     ).rejects.toMatchObject({ statusCode: 500 })
+  })
+})
+
+type AuditFakeRow = Record<string, unknown>
+
+type AuditFakeResult = {
+  count: number | null
+  data: AuditFakeRow[] | null
+  error: { code: string; message: string } | null
+}
+
+const POSTGREST_MAX_ROWS = 1_000
+
+// Row-filtering stand-in for the admin client. It applies the filters, order,
+// and ranges the service asks for, and answers the way PostgREST does at its
+// edges: at most 1,000 rows per response, and 416 (PGRST103) for a counted
+// range that starts past the last matching row.
+class AuditRowsQuery implements PromiseLike<AuditFakeResult> {
+  private readonly filters: Array<(row: AuditFakeRow) => boolean> = []
+  private ascending = true
+  private sortColumn: string | null = null
+  private bounds: { from: number; to: number } | null = null
+  private limitCount: number | null = null
+  private countRequested = false
+  private headOnly = false
+
+  constructor(
+    private readonly rows: readonly AuditFakeRow[],
+    private readonly maxRows: number
+  ) {}
+
+  select(
+    ...args: [columns?: string, options?: { count?: "exact"; head?: boolean }]
+  ): AuditRowsQuery {
+    this.countRequested = args[1]?.count === "exact"
+    this.headOnly = args[1]?.head === true
+    return this
+  }
+
+  eq(column: string, value: unknown): AuditRowsQuery {
+    this.filters.push((row: AuditFakeRow): boolean => row[column] === value)
+    return this
+  }
+
+  in(column: string, values: readonly unknown[]): AuditRowsQuery {
+    this.filters.push((row: AuditFakeRow): boolean => values.includes(row[column]))
+    return this
+  }
+
+  lt(column: string, value: number): AuditRowsQuery {
+    this.filters.push((row: AuditFakeRow): boolean => Number(row[column]) < value)
+    return this
+  }
+
+  gt(column: string, value: number): AuditRowsQuery {
+    this.filters.push((row: AuditFakeRow): boolean => Number(row[column]) > value)
+    return this
+  }
+
+  order(column: string, options: { ascending?: boolean } = {}): AuditRowsQuery {
+    this.sortColumn = column
+    this.ascending = options.ascending ?? true
+    return this
+  }
+
+  range(from: number, to: number): AuditRowsQuery {
+    this.bounds = { from, to }
+    return this
+  }
+
+  limit(count: number): AuditRowsQuery {
+    this.limitCount = count
+    return this
+  }
+
+  async maybeSingle(): Promise<{ data: AuditFakeRow | null; error: AuditFakeResult["error"] }> {
+    const result = this.execute()
+    return { data: result.data?.[0] ?? null, error: result.error }
+  }
+
+  then<TResult1 = AuditFakeResult, TResult2 = never>(
+    onfulfilled?: ((value: AuditFakeResult) => TResult1 | PromiseLike<TResult1>) | null,
+    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+  ): PromiseLike<TResult1 | TResult2> {
+    return Promise.resolve(this.execute()).then(onfulfilled, onrejected)
+  }
+
+  private execute(): AuditFakeResult {
+    const matching = this.rows.filter((row: AuditFakeRow): boolean =>
+      this.filters.every((filter): boolean => filter(row))
+    )
+
+    if (this.countRequested && this.bounds !== null && this.bounds.from > matching.length) {
+      return {
+        count: null,
+        data: null,
+        error: { code: "PGRST103", message: "Requested range not satisfiable" },
+      }
+    }
+
+    const column = this.sortColumn
+    const ordered =
+      column === null
+        ? matching
+        : [...matching].sort(
+            (left: AuditFakeRow, right: AuditFakeRow): number =>
+              (Number(left[column]) - Number(right[column])) * (this.ascending ? 1 : -1)
+          )
+    const ranged =
+      this.bounds === null ? ordered : ordered.slice(this.bounds.from, this.bounds.to + 1)
+
+    return {
+      count: this.countRequested ? matching.length : null,
+      data: this.headOnly
+        ? null
+        : ranged.slice(0, Math.min(this.limitCount ?? this.maxRows, this.maxRows)),
+      error: null,
+    }
+  }
+}
+
+class AuditRowsClient {
+  constructor(
+    private readonly tables: Record<"audit_logs" | "organization_memberships", AuditFakeRow[]>,
+    // A deployment may cap responses below the default 1,000 rows.
+    private readonly maxRows: number = POSTGREST_MAX_ROWS
+  ) {}
+
+  from(tableName: "audit_logs" | "organization_memberships"): AuditRowsQuery {
+    return new AuditRowsQuery(this.tables[tableName], this.maxRows)
+  }
+}
+
+const MANAGER_MEMBERSHIP: AuditFakeRow = {
+  org_id: "org-1",
+  role: "manager",
+  role_definition: { permissions: ["audit_logs:view"] },
+  status: "active",
+  user_id: "manager-1",
+}
+const NEWEST_FIRST = { direction: "desc", key: "created" } as const
+const OLDEST_FIRST = { direction: "asc", key: "created" } as const
+
+function createEventRow(seq: number, overrides: AuditFakeRow = {}): AuditFakeRow {
+  return {
+    action: "task.created",
+    actor_user_id: "manager-1",
+    created_at: new Date(Date.UTC(2026, 6, 18, 12) + seq * 60_000).toISOString(),
+    entry_hash: "d".repeat(64),
+    id: `audit-${seq}`,
+    metadata: {},
+    org_id: "org-1",
+    prev_hash: seq === 1 ? null : "c".repeat(64),
+    seq,
+    target_id: null,
+    target_type: "task",
+    ...overrides,
+  }
+}
+
+function createEventClient(
+  events: AuditFakeRow[],
+  membership: AuditFakeRow = MANAGER_MEMBERSHIP,
+  maxRows?: number
+): AuditRowsClient {
+  return new AuditRowsClient(
+    { audit_logs: events, organization_memberships: [membership] },
+    maxRows
+  )
+}
+
+function createEvents(count: number): AuditFakeRow[] {
+  return Array.from({ length: count }, (_, index) => createEventRow(index + 1))
+}
+
+describe("list audit log pages", () => {
+  const pageInput = {
+    actorUserId: "manager-1",
+    organizationId: "org-1",
+    page: 1,
+    pageSize: 50,
+    sort: NEWEST_FIRST,
+  }
+
+  it("returns one page newest first with the tenant's total", async () => {
+    const client = createEventClient([
+      ...createEvents(5),
+      createEventRow(6, { id: "audit-other", org_id: "org-2" }),
+    ])
+
+    const page = await listAuditLogPage(
+      { ...pageInput, page: 2, pageSize: 2 },
+      { client: client as never }
+    )
+
+    expect(page).toMatchObject({ page: 2, pageSize: 2, total: 5 })
+    expect(page.entries.map((entry) => entry.seq)).toEqual([3, 2])
+  })
+
+  it("lists oldest first when asked", async () => {
+    const page = await listAuditLogPage(
+      { ...pageInput, pageSize: 3, sort: OLDEST_FIRST },
+      { client: createEventClient(createEvents(5)) as never }
+    )
+
+    expect(page.entries.map((entry) => entry.seq)).toEqual([1, 2, 3])
+  })
+
+  it("counts only events about the chosen kinds of record", async () => {
+    const client = createEventClient([
+      createEventRow(1),
+      createEventRow(2, { action: "document.created", target_type: "document" }),
+      createEventRow(3, { action: "task_reminder.scheduled", target_type: "task_reminder" }),
+      createEventRow(4, { action: "invite.created", target_type: "invite" }),
+    ])
+
+    const page = await listAuditLogPage(
+      { ...pageInput, targetTypes: ["task", "task_reminder"] },
+      { client: client as never }
+    )
+
+    expect(page.total).toBe(2)
+    expect(page.entries.map((entry) => entry.seq)).toEqual([3, 1])
+  })
+
+  it("reports the true total for a stale page that starts past the end", async () => {
+    const page = await listAuditLogPage(
+      { ...pageInput, page: 5, pageSize: 2 },
+      { client: createEventClient(createEvents(3)) as never }
+    )
+
+    expect(page).toEqual({ entries: [], page: 5, pageSize: 2, total: 3 })
+  })
+
+  it.each([
+    ["page 0", { page: 0 }],
+    ["a page beyond the last allowed", { page: 10_001 }],
+    ["a page size of 0", { pageSize: 0 }],
+    ["a page size above the limit", { pageSize: 201 }],
+    ["an unknown sort key", { sort: { direction: "desc", key: "action" } }],
+    ["an unknown direction", { sort: { direction: "sideways", key: "created" } }],
+    ["an unknown kind of record", { targetTypes: ["payment"] }],
+  ])("rejects %s", async (_case, override) => {
+    await expect(
+      listAuditLogPage({ ...pageInput, ...override } as never, {
+        client: createEventClient(createEvents(3)) as never,
+      })
+    ).rejects.toMatchObject({ statusCode: 400 })
+  })
+
+  it("maps every supported submission action and target", async () => {
+    const client = createEventClient(
+      SUBMISSION_AUDIT_ACTIONS.map((action: AuditLogAction, index: number) =>
+        createEventRow(index + 1, { action, target_type: "submission" })
+      )
+    )
+
+    const page = await listAuditLogPage(
+      { ...pageInput, sort: OLDEST_FIRST },
+      { client: client as never }
+    )
+
+    expect(page.entries.map((entry) => entry.action)).toEqual(SUBMISSION_AUDIT_ACTIONS)
+    expect(page.entries.every((entry) => entry.targetType === "submission")).toBe(true)
+    expect(page.entries[0]).toMatchObject({
+      entryHash: "d".repeat(64),
+      prevHash: null,
+      seq: 1,
+    })
+  })
+
+  it("rejects unknown audit actions returned by the database", async () => {
+    await expect(
+      listAuditLogPage(pageInput, {
+        client: createEventClient([createEventRow(1, { action: "unknown" })]) as never,
+      })
+    ).rejects.toMatchObject({
+      message: "Database returned an unsupported audit action.",
+      statusCode: 500,
+    })
+  })
+
+  it("maps immutable document and folder purge receipts", async () => {
+    const client = createEventClient(
+      PURGE_AUDIT_ACTIONS.map((action: AuditLogAction, index: number) =>
+        createEventRow(index + 1, {
+          action,
+          metadata: { objectCount: index + 1, receiptId: `receipt-${index}` },
+          target_type: action.startsWith("document") ? "document" : "folder",
+        })
+      )
+    )
+
+    const page = await listAuditLogPage(
+      { ...pageInput, sort: OLDEST_FIRST },
+      { client: client as never }
+    )
+
+    expect(page.entries.map((entry) => entry.action)).toEqual(PURGE_AUDIT_ACTIONS)
+    expect(page.entries.map((entry) => entry.targetType)).toEqual([
+      "document",
+      "folder",
+    ])
+    expect(page.entries[0]?.metadata).toEqual({ objectCount: 1, receiptId: "receipt-0" })
+  })
+
+  it("rechecks edited audit permissions before each tenant read", async () => {
+    const membership = {
+      ...MANAGER_MEMBERSHIP,
+      role_definition: { permissions: ["audit_logs:view"] as string[] },
+    }
+    const client = createEventClient([], membership)
+
+    await expect(
+      listAuditLogPage(pageInput, { client: client as never })
+    ).resolves.toMatchObject({ entries: [], total: 0 })
+
+    membership.role_definition.permissions = []
+
+    await expect(
+      listAuditLogPage(pageInput, { client: client as never })
+    ).rejects.toMatchObject({ statusCode: 403 })
+  })
+})
+
+describe("export audit logs", () => {
+  const exportInput = {
+    actorUserId: "manager-1",
+    organizationId: "org-1",
+    sort: NEWEST_FIRST,
+  }
+
+  it("exports every matching event, newest first, across PostgREST's 1,000-row responses", async () => {
+    const entries = await exportAuditLogs(exportInput, {
+      client: createEventClient(createEvents(2_345)) as never,
+    })
+
+    expect(entries).toHaveLength(2_345)
+    expect(entries[0]?.seq).toBe(2_345)
+    expect(entries.at(-1)?.seq).toBe(1)
+    expect(new Set(entries.map((entry) => entry.seq)).size).toBe(2_345)
+  })
+
+  it("exports everything even when the server caps responses below the batch size", async () => {
+    const entries = await exportAuditLogs(exportInput, {
+      client: createEventClient(createEvents(1_234), MANAGER_MEMBERSHIP, 300) as never,
+    })
+
+    expect(entries).toHaveLength(1_234)
+    expect(new Set(entries.map((entry) => entry.seq)).size).toBe(1_234)
+  })
+
+  it("exports oldest first and only the chosen kinds of record", async () => {
+    const client = createEventClient([
+      createEventRow(1),
+      createEventRow(2, { action: "document.created", target_type: "document" }),
+      createEventRow(3),
+    ])
+
+    const entries = await exportAuditLogs(
+      { ...exportInput, sort: OLDEST_FIRST, targetTypes: ["task"] },
+      { client: client as never }
+    )
+
+    expect(entries.map((entry) => entry.seq)).toEqual([1, 3])
+  })
+
+  it("refuses an export larger than its limit instead of truncating it", async () => {
+    await expect(
+      exportAuditLogs(exportInput, {
+        client: createEventClient(createEvents(101)) as never,
+        maxExportEntries: 100,
+      })
+    ).rejects.toMatchObject({ statusCode: 413 })
+  })
+
+  it("rejects a member without the audit log permission", async () => {
+    const client = createEventClient(createEvents(1), {
+      ...MANAGER_MEMBERSHIP,
+      role_definition: { permissions: [] },
+    })
+
+    await expect(
+      exportAuditLogs(exportInput, { client: client as never })
+    ).rejects.toMatchObject({ statusCode: 403 })
   })
 })
