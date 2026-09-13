@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest"
 
 import {
+  createJpegBytes,
+  toImageDataUrl,
+} from "@/lib/image-header.test-support"
+import {
   completePublicDocumentSigning,
   getPublicDocumentSigningView,
 } from "@/services/document-signing-service"
@@ -97,6 +101,38 @@ describe("document signing drawing and signature validation", () => {
           token: TOKEN_ONE,
           values: { client_name: "Northstar Labs" },
           signatureDataUrl: TINY_DRAWING_DATA_URL,
+        },
+        { client: client as never, now: (): Date => NOW }
+      )
+    ).rejects.toMatchObject({
+      statusCode: 400,
+      message: "The drawn signature is invalid.",
+    })
+    expect(tables.document_signing_recipients[0].status).toBe("pending")
+  })
+
+  it("rejects a JPEG drawing that stops before its end marker", async () => {
+    const tables = createBaseTables()
+    tables.document_signing_recipients.push(
+      createRecipientRow(
+        RECIPIENT_ONE_ID,
+        TOKEN_ONE,
+        "Avery Morgan",
+        "avery@example.com"
+      )
+    )
+    tables.document_answers[0].workflow_status = "awaiting_signatures"
+    const client = new FakeClient(tables)
+
+    await expect(
+      completePublicDocumentSigning(
+        {
+          token: TOKEN_ONE,
+          values: { client_name: "Northstar Labs" },
+          signatureDataUrl: toImageDataUrl(
+            "jpeg",
+            createJpegBytes(400, 200, { endMarker: false })
+          ),
         },
         { client: client as never, now: (): Date => NOW }
       )

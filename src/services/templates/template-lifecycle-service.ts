@@ -23,6 +23,7 @@ import { TemplateServiceError } from "./errors"
 import { evaluateTemplateQuality } from "./template-quality-service"
 import {
   assertRevision,
+  assertTemplateImagesRenderable,
   createDatabaseError,
   createId,
   getClient,
@@ -232,6 +233,12 @@ export async function createDocumentTemplate(
         "You cannot manage document templates."
       )
 
+      const content = upgradeV2TemplateContentToV3(
+        parseTemplateContent(input.content ?? createBlankTemplateContent())
+      )
+
+      assertTemplateImagesRenderable(content)
+
       const { data, error } = await client
         .from("document_templates")
         .insert({
@@ -242,11 +249,7 @@ export async function createDocumentTemplate(
           category: normalizeCategory(input.category),
           status: "draft",
           revision: 1,
-          content: upgradeV2TemplateContentToV3(
-            parseTemplateContent(
-              input.content ?? createBlankTemplateContent()
-            )
-          ),
+          content,
           created_by: input.actorUserId,
           updated_by: input.actorUserId,
           published_by: null,
@@ -357,6 +360,10 @@ export async function updateDocumentTemplate(
 
       if (existing.status === "published") {
         assertTemplatePublishReady(nextTitle, nextDescription, nextContent)
+      }
+
+      if (hasContent) {
+        assertTemplateImagesRenderable(nextContent)
       }
 
       const { data, error } = await client

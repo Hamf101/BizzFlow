@@ -1,7 +1,10 @@
 import {
-  IMAGE_DATA_URL_PATTERN,
-  MAX_IMAGE_DATA_URL_LENGTH,
-} from "@/types/template"
+  EMBEDDED_PNG_TOO_LARGE_MESSAGE,
+  exceedsEmbeddedImageLimit,
+  parseImageDataUrl,
+  readImageDimensions,
+} from "@/lib/image-header"
+import { MAX_IMAGE_DATA_URL_LENGTH } from "@/types/template"
 
 const ALLOWED_IMAGE_TYPES = new Set<string>(["image/png", "image/jpeg"])
 
@@ -10,7 +13,8 @@ const ALLOWED_IMAGE_TYPES = new Set<string>(["image/png", "image/jpeg"])
  *
  * @param file - Browser-selected image file.
  * @returns A validated base64 PNG or JPEG data URL.
- * @throws Error when the MIME type, encoded length, or data URL format is invalid.
+ * @throws Error when the MIME type, encoded length, data URL format, or image
+ *   header is invalid, or when a PNG is too large for documents to render.
  */
 export async function readTemplateImage(file: File): Promise<string> {
   if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
@@ -30,11 +34,27 @@ export async function readTemplateImage(file: File): Promise<string> {
     throw new Error("The encoded image is too large for a template.")
   }
 
-  if (!IMAGE_DATA_URL_PATTERN.test(dataUrl)) {
+  const image = parseImageDataUrl(dataUrl)
+  const dimensions = image
+    ? readImageDimensions(decodeBase64(image.encoded), image.format)
+    : null
+
+  if (!image || !dimensions) {
     throw new Error("The selected image could not be validated.")
   }
 
+  if (exceedsEmbeddedImageLimit(image.format, dimensions)) {
+    throw new Error(EMBEDDED_PNG_TOO_LARGE_MESSAGE)
+  }
+
   return dataUrl
+}
+
+function decodeBase64(encoded: string): Uint8Array {
+  return Uint8Array.from(
+    atob(encoded),
+    (character: string): number => character.charCodeAt(0)
+  )
 }
 
 function readFileAsDataUrl(file: File): Promise<string> {

@@ -2,6 +2,13 @@ import { randomUUID } from "node:crypto"
 
 import { ZodError } from "zod"
 
+import {
+  EMBEDDED_PNG_TOO_LARGE_MESSAGE,
+  exceedsEmbeddedImageLimit,
+  MAX_DOCUMENT_PNG_PIXELS,
+  parseImageDataUrl,
+  readImageDimensions,
+} from "@/lib/image-header"
 import { captureUnexpectedError } from "@/lib/observability"
 import {
   canPerformOrganizationAction,
@@ -21,6 +28,8 @@ import type {
   DocumentTemplateRow,
   DocumentTemplateStatus,
   GeneratedDocument,
+  TemplateBlock,
+  TemplateContent,
 } from "@/types/template"
 import { parseTemplateContent } from "@/types/template"
 
@@ -290,6 +299,60 @@ export function normalizeCategory(
   }
 
   return category
+}
+
+/**
+ * Refuses template images that generated PDFs could not render.
+ *
+ * PDF rendering decodes every PNG pixel, so the per-image and per-document PNG
+ * limits apply at save as well, where the author can still replace the image.
+ * An image used more than once is decoded once, so it counts once. JPEGs only
+ * need a readable header.
+ *
+ * @param content - Canonical template content about to be saved.
+ * @throws TemplateServiceError when an image is unreadable or its PNGs are too large.
+ */
+export function assertTemplateImagesRenderable(content: TemplateContent): void {
+  const dataUrls = [
+    content.branding.logoDataUrl,
+    ...content.blocks.map((block: TemplateBlock): string | null =>
+      block.type === "image" ? block.dataUrl : null
+    ),
+  ]
+  let pngPixels = 0
+
+  for (const dataUrl of new Set(dataUrls)) {
+    if (!dataUrl) {
+      continue
+    }
+
+    const image = parseImageDataUrl(dataUrl)
+    const dimensions = image
+      ? readImageDimensions(Buffer.from(image.encoded, "base64"), image.format)
+      : null
+
+    if (!image || !dimensions) {
+      throw new TemplateServiceError(
+        "An image in this template could not be read.",
+        400
+      )
+    }
+
+    if (exceedsEmbeddedImageLimit(image.format, dimensions)) {
+      throw new TemplateServiceError(EMBEDDED_PNG_TOO_LARGE_MESSAGE, 400)
+    }
+
+    if (image.format === "png") {
+      pngPixels += dimensions.width * dimensions.height
+    }
+  }
+
+  if (pngPixels > MAX_DOCUMENT_PNG_PIXELS) {
+    throw new TemplateServiceError(
+      "This template's PNG images add up to more than 64 megapixels. Use smaller images or JPEGs.",
+      400
+    )
+  }
 }
 
 export function normalizeNullableId(

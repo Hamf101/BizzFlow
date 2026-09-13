@@ -1,6 +1,10 @@
-import { PDFDocument } from "pdf-lib"
+import { PDFDocument, PDFName } from "pdf-lib"
 import { describe, expect, it } from "vitest"
 
+import {
+  createPngBytes,
+  toImageDataUrl
+} from "@/lib/image-header.test-support"
 import {
   renderGeneratedDocumentPdf,
   type RenderGeneratedDocumentPdfInput
@@ -619,6 +623,54 @@ describe("document PDF service", () => {
       statusCode: 400,
       message: "A signature or initials drawing is invalid."
     })
+  })
+
+  it("refuses a PNG image block over 16 megapixels", async () => {
+    const input = createPdfInput({ repeatHeader: false, repeatFooter: false })
+
+    requireVersionThreeContent(input).blocks.push({
+      id: "00000000-0000-4000-8000-000000000010",
+      type: "image",
+      dataUrl: toImageDataUrl("png", createPngBytes(4_001, 4_000)),
+      altText: "Site plan",
+      caption: null,
+      alignment: "center",
+      widthPercent: 100
+    })
+
+    await expect(renderGeneratedDocumentPdf(input)).rejects.toMatchObject({
+      statusCode: 400,
+      message: "An embedded document image is too large."
+    })
+  })
+
+  it("embeds a logo repeated on every page once", async () => {
+    const input = createPdfInput({
+      longBody: true,
+      repeatHeader: true,
+      repeatFooter: false
+    })
+    const content = requireVersionThreeContent(input)
+
+    content.branding = {
+      ...content.branding,
+      logoDataUrl: toImageDataUrl("png", createPngBytes(120, 40))
+    }
+
+    const bytes = await renderGeneratedDocumentPdf({ ...input, signers: [] })
+    const pdf = await PDFDocument.load(bytes)
+    const pagesShowingAnImage = pdf
+      .getPages()
+      .filter(
+        (page): boolean =>
+          page.node.Resources()?.has(PDFName.of("XObject")) ?? false
+      )
+
+    expect(pdf.getPageCount()).toBeGreaterThan(1)
+    expect(pagesShowingAnImage).toHaveLength(pdf.getPageCount())
+    // One image object serves every page. The render's image cache is also
+    // what its PNG pixel allowance is counted from.
+    expect(bytes.toString("latin1").match(/\/Subtype \/Image/g)).toHaveLength(1)
   })
 }, PDF_RENDER_TIMEOUT_MS)
 

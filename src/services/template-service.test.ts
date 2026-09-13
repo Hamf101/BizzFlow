@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest"
 
 import {
+  createJpegBytes,
+  createPngHeaderBytes,
+  toImageDataUrl
+} from "@/lib/image-header.test-support"
+import {
   createDocumentTemplate,
   listDocumentTemplateCategories,
   createGeneratedDocument,
@@ -66,6 +71,24 @@ function createUsableTemplateContent(): TemplateContentV3 {
       alignment: "left"
     }
   ])
+}
+
+function createImageBlock(index: number, dataUrl: string): TemplateBlock {
+  return {
+    id: `50000000-0000-4000-8000-0000000002${String(index).padStart(2, "0")}`,
+    type: "image",
+    dataUrl,
+    altText: `Site photo ${index}`,
+    caption: null,
+    alignment: "center",
+    widthPercent: 100
+  }
+}
+
+function findDraftRevision(tables: FakeTables): unknown {
+  return tables.document_templates.find(
+    (row: FakeRow): boolean => row.id === DRAFT_TEMPLATE_ID
+  )?.revision
 }
 
 function createLegacyUsableTemplateContent(): TemplateContentV2 {
@@ -1010,6 +1033,137 @@ describe("template service", () => {
     ])
 
     expect(() => parseTemplateContent(content)).toThrow()
+  })
+
+  it("refuses a PNG logo over 16 megapixels when a template is created", async () => {
+    const tables = createBaseTables()
+    const content = createUsableTemplateContent()
+
+    content.branding.logoDataUrl = toImageDataUrl(
+      "png",
+      createPngHeaderBytes(4_001, 4_000)
+    )
+
+    await expect(
+      createDocumentTemplate(
+        {
+          actorUserId: MANAGER_ID,
+          organizationId: ORG_ID,
+          title: "Site survey",
+          content
+        },
+        {
+          client: new FakeClient(tables) as never,
+          createId: (): string => NEW_TEMPLATE_ID
+        }
+      )
+    ).rejects.toMatchObject({
+      statusCode: 400,
+      message:
+        "PNG images can be up to 16 megapixels. Use a smaller image or a JPEG."
+    })
+    expect(tables.document_templates).toHaveLength(2)
+  })
+
+  it("refuses template PNGs that add up to more than 64 megapixels", async () => {
+    const tables = createBaseTables()
+    const content = createContentWithBlocks(
+      [1, 2, 3, 4, 5].map(
+        (index: number): TemplateBlock =>
+          createImageBlock(
+            index,
+            toImageDataUrl("png", createPngHeaderBytes(4_000, 4_000, index))
+          )
+      )
+    )
+
+    await expect(
+      updateDocumentTemplate(
+        {
+          actorUserId: MANAGER_ID,
+          organizationId: ORG_ID,
+          templateId: DRAFT_TEMPLATE_ID,
+          expectedRevision: 1,
+          content
+        },
+        { client: new FakeClient(tables) as never }
+      )
+    ).rejects.toMatchObject({
+      statusCode: 400,
+      message:
+        "This template's PNG images add up to more than 64 megapixels. Use smaller images or JPEGs."
+    })
+    expect(findDraftRevision(tables)).toBe(1)
+  })
+
+  it("refuses a template image whose header cannot be read", async () => {
+    const tables = createBaseTables()
+
+    await expect(
+      updateDocumentTemplate(
+        {
+          actorUserId: MANAGER_ID,
+          organizationId: ORG_ID,
+          templateId: DRAFT_TEMPLATE_ID,
+          expectedRevision: 1,
+          content: createContentWithBlocks([
+            createImageBlock(1, "data:image/png;base64,aGVsbG8=")
+          ])
+        },
+        { client: new FakeClient(tables) as never }
+      )
+    ).rejects.toMatchObject({
+      statusCode: 400,
+      message: "An image in this template could not be read."
+    })
+    expect(findDraftRevision(tables)).toBe(1)
+  })
+
+  it("keeps accepting large JPEG photos, which PDFs embed without decoding", async () => {
+    const tables = createBaseTables()
+    const updated = await updateDocumentTemplate(
+      {
+        actorUserId: MANAGER_ID,
+        organizationId: ORG_ID,
+        templateId: DRAFT_TEMPLATE_ID,
+        expectedRevision: 1,
+        content: createContentWithBlocks([
+          createImageBlock(
+            1,
+            toImageDataUrl("jpeg", createJpegBytes(8_000, 6_000))
+          )
+        ])
+      },
+      { client: new FakeClient(tables) as never }
+    )
+
+    expect(updated.revision).toBe(2)
+    expect(findDraftRevision(tables)).toBe(2)
+  })
+
+  it("counts an image used in several places once, as a PDF decodes it once", async () => {
+    const tables = createBaseTables()
+    const sitePlan = toImageDataUrl("png", createPngHeaderBytes(4_000, 4_000))
+    const content = createContentWithBlocks(
+      [1, 2, 3, 4, 5].map(
+        (index: number): TemplateBlock => createImageBlock(index, sitePlan)
+      )
+    )
+
+    content.branding.logoDataUrl = sitePlan
+
+    const updated = await updateDocumentTemplate(
+      {
+        actorUserId: MANAGER_ID,
+        organizationId: ORG_ID,
+        templateId: DRAFT_TEMPLATE_ID,
+        expectedRevision: 1,
+        content
+      },
+      { client: new FakeClient(tables) as never }
+    )
+
+    expect(updated.revision).toBe(2)
   })
 
   it("rejects duplicate field keys before a template can be published", () => {
