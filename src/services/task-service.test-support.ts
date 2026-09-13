@@ -1,6 +1,10 @@
 import { vi } from "vitest"
 
 import type { OrganizationRole } from "@/lib/permissions"
+import {
+  PostgrestReadQuery,
+  type PostgrestFakeResult,
+} from "@/services/postgrest-fake.test-support"
 import type { TaskServiceDeps } from "@/services/task-service"
 
 /** Tenant identifier shared by every task fixture. */
@@ -49,20 +53,6 @@ type FakeTableName =
   | "task_reminders"
 
 type FakeTables = Record<FakeTableName, FakeRow[]>
-
-type FakeError = { code?: string; message: string }
-
-type FakeResult = {
-  count: number | null
-  data: FakeRow[] | null
-  error: FakeError | null
-}
-
-type FakeOrder = {
-  column: string
-  ascending: boolean
-  nullsFirst: boolean
-}
 
 /**
  * In-memory Supabase client used by the task service tests.
@@ -125,157 +115,36 @@ export class FakeSupabaseClient {
   }
 }
 
-class FakeQueryBuilder {
-  private readonly filters: Array<(row: FakeRow) => boolean> = []
-  private readonly orders: FakeOrder[] = []
+class FakeQueryBuilder extends PostgrestReadQuery {
   private insertRows: FakeRow[] | null = null
   private updateValues: FakeRow | null = null
-  private limitCount: number | null = null
-  private countRequested = false
-  private headOnly = false
-  private rangeBounds: { from: number; to: number } | null = null
 
   constructor(
     private readonly client: FakeSupabaseClient,
     private readonly tableName: FakeTableName
-  ) {}
-
-  select(
-    ...args: [columns?: string, options?: { count?: "exact"; head?: boolean }]
-  ): FakeQueryBuilder {
-    this.countRequested = args[1]?.count === "exact"
-    this.headOnly = args[1]?.head === true
-    return this
+  ) {
+    super(client.tables[tableName])
   }
 
-  insert(value: FakeRow | FakeRow[]): FakeQueryBuilder {
+  insert(value: FakeRow | FakeRow[]): this {
     this.insertRows = Array.isArray(value) ? value : [value]
     return this
   }
 
-  update(value: FakeRow): FakeQueryBuilder {
+  update(value: FakeRow): this {
     this.updateValues = value
     return this
   }
 
-  eq(column: string, value: unknown): FakeQueryBuilder {
-    this.filters.push((row: FakeRow): boolean => row[column] === value)
-    return this
-  }
-
-  is(column: string, value: unknown): FakeQueryBuilder {
-    return this.eq(column, value)
-  }
-
-  in(column: string, values: readonly unknown[]): FakeQueryBuilder {
-    this.filters.push((row: FakeRow): boolean => values.includes(row[column]))
-    return this
-  }
-
-  lte(column: string, value: string): FakeQueryBuilder {
-    this.filters.push((row: FakeRow): boolean => String(row[column]) <= value)
-    return this
-  }
-
-  ilike(column: string, pattern: string): FakeQueryBuilder {
-    const matcher = likePatternToRegExp(pattern)
-    this.filters.push((row: FakeRow): boolean =>
-      matcher.test(String(row[column] ?? ""))
-    )
-    return this
-  }
-
-  or(clause: string): FakeQueryBuilder {
-    const parts = clause.split(",")
-    this.filters.push((row: FakeRow): boolean => {
-      return parts.some((part: string): boolean => {
-        const subParts = part.split(".")
-        const col = subParts[0]
-        const op = subParts[1]
-        const val = subParts.slice(2).join(".")
-        if (op === "eq") {
-          return String(row[col]) === val
-        }
-        if (op === "lte") {
-          return String(row[col]) <= val
-        }
-        return false
-      })
-    })
-    return this
-  }
-
-  order(
-    column: string,
-    options: { ascending?: boolean; nullsFirst?: boolean } = {}
-  ): FakeQueryBuilder {
-    const ascending = options.ascending ?? true
-    this.orders.push({
-      column,
-      ascending,
-      nullsFirst: options.nullsFirst ?? !ascending,
-    })
-    return this
-  }
-
-  limit(count: number): FakeQueryBuilder {
-    this.limitCount = count
-    return this
-  }
-
-  range(from: number, to: number): FakeQueryBuilder {
-    this.rangeBounds = { from, to }
-    return this
-  }
-
-  async single(): Promise<{ data: FakeRow | null; error: FakeError | null }> {
-    const result = this.execute()
-
-    if (result.error) {
-      return { data: null, error: result.error }
-    }
-
-    const rows = result.data ?? []
-
-    return rows.length === 1
-      ? { data: rows[0], error: null }
-      : { data: null, error: { message: "Expected one row." } }
-  }
-
-  async maybeSingle(): Promise<{
-    data: FakeRow | null
-    error: FakeError | null
-  }> {
-    const result = this.execute()
-
-    if (result.error) {
-      return { data: null, error: result.error }
-    }
-
-    const rows = result.data ?? []
-
-    return rows.length > 1
-      ? { data: null, error: { message: "Expected zero or one row." } }
-      : { data: rows[0] ?? null, error: null }
-  }
-
-  then<TResult1 = FakeResult, TResult2 = never>(
-    onfulfilled?:
-      | ((value: FakeResult) => TResult1 | PromiseLike<TResult1>)
-      | null,
-    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
-  ): Promise<TResult1 | TResult2> {
-    return Promise.resolve(this.execute()).then(onfulfilled, onrejected)
-  }
-
-  private execute(): FakeResult {
+  // Reads are the shared PostgREST stand-in's; only writes are task-specific.
+  protected override execute(): PostgrestFakeResult {
     if (this.insertRows) {
       return this.executeInsert(this.insertRows)
     }
 
     if (this.updateValues) {
       this.client.runNextUpdateHook(this.tableName)
-      const matchingRows = this.applyFilters()
+      const matchingRows = this.matchingRows()
       const values = this.updateValues
       matchingRows.forEach((row: FakeRow): void => {
         Object.assign(row, values)
@@ -283,32 +152,10 @@ class FakeQueryBuilder {
       return { count: null, data: matchingRows, error: null }
     }
 
-    const matchingRows = this.applyFilters()
-
-    // Like PostgREST, a counted range that starts past the last matching row
-    // is refused with 416 rather than answered with an empty page; a range
-    // that starts exactly at the end is still an empty 206.
-    if (
-      this.countRequested &&
-      this.rangeBounds !== null &&
-      this.rangeBounds.from > matchingRows.length
-    ) {
-      return {
-        count: null,
-        data: null,
-        error: { code: "PGRST103", message: "Requested range not satisfiable" },
-      }
-    }
-
-    return {
-      // PostgREST counts every matching row, before the page is cut.
-      count: this.countRequested ? matchingRows.length : null,
-      data: this.headOnly ? null : this.applyOrderAndLimit(matchingRows),
-      error: null,
-    }
+    return super.execute()
   }
 
-  private executeInsert(rows: FakeRow[]): FakeResult {
+  private executeInsert(rows: FakeRow[]): PostgrestFakeResult {
     const conflict = rows.find((row: FakeRow): boolean =>
       this.hasUniqueConflict(row)
     )
@@ -340,85 +187,6 @@ class FakeQueryBuilder {
         existing.remind_at === row.remind_at
     )
   }
-
-  private applyFilters(): FakeRow[] {
-    return this.client.tables[this.tableName].filter((row: FakeRow): boolean =>
-      this.filters.every((filter: (row: FakeRow) => boolean): boolean =>
-        filter(row)
-      )
-    )
-  }
-
-  private applyOrderAndLimit(rows: FakeRow[]): FakeRow[] {
-    const orderedRows = [...rows].sort(
-      (left: FakeRow, right: FakeRow): number =>
-        this.orders.reduce(
-          (comparison: number, order: FakeOrder): number =>
-            comparison === 0
-              ? compareRowValues(left[order.column], right[order.column], order)
-              : comparison,
-          0
-        )
-    )
-
-    const pageRows =
-      this.rangeBounds === null
-        ? orderedRows
-        : orderedRows.slice(this.rangeBounds.from, this.rangeBounds.to + 1)
-
-    return this.limitCount === null
-      ? pageRows
-      : pageRows.slice(0, this.limitCount)
-  }
-}
-
-// Mirrors ILIKE as PostgREST applies it: `%` (and PostgREST's `*` alias) match
-// any run, `_` matches one character, and a backslash makes the next literal.
-function likePatternToRegExp(pattern: string): RegExp {
-  const escapeLiteral = (value: string): string =>
-    value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-  let source = ""
-
-  for (let index = 0; index < pattern.length; index += 1) {
-    const character = pattern[index] ?? ""
-
-    if (character === "\\" && index + 1 < pattern.length) {
-      index += 1
-      source += escapeLiteral(pattern[index] ?? "")
-    } else if (character === "%" || character === "*") {
-      source += ".*"
-    } else if (character === "_") {
-      source += "."
-    } else {
-      source += escapeLiteral(character)
-    }
-  }
-
-  return new RegExp(`^${source}$`, "is")
-}
-
-function compareRowValues(
-  left: unknown,
-  right: unknown,
-  order: FakeOrder
-): number {
-  const leftIsNull = left === null || left === undefined
-  const rightIsNull = right === null || right === undefined
-
-  if (leftIsNull || rightIsNull) {
-    if (leftIsNull && rightIsNull) {
-      return 0
-    }
-
-    return (leftIsNull ? -1 : 1) * (order.nullsFirst ? 1 : -1)
-  }
-
-  const comparison =
-    typeof left === "number" && typeof right === "number"
-      ? left - right
-      : String(left).localeCompare(String(right))
-
-  return order.ascending ? comparison : -comparison
 }
 
 /**

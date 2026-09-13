@@ -6,6 +6,10 @@ import {
   listAuditLogPage,
   verifyAuditLogChain,
 } from "@/services/audit-service"
+import {
+  POSTGREST_MAX_ROWS,
+  PostgrestReadQuery,
+} from "@/services/postgrest-fake.test-support"
 import type { AuditLogAction } from "@/types/audit"
 
 vi.mock("@/lib/supabase/admin", () => ({
@@ -195,122 +199,9 @@ describe("verify audit log chain", () => {
 
 type AuditFakeRow = Record<string, unknown>
 
-type AuditFakeResult = {
-  count: number | null
-  data: AuditFakeRow[] | null
-  error: { code: string; message: string } | null
-}
-
-const POSTGREST_MAX_ROWS = 1_000
-
-// Row-filtering stand-in for the admin client. It applies the filters, order,
-// and ranges the service asks for, and answers the way PostgREST does at its
-// edges: at most 1,000 rows per response, and 416 (PGRST103) for a counted
-// range that starts past the last matching row.
-class AuditRowsQuery implements PromiseLike<AuditFakeResult> {
-  private readonly filters: Array<(row: AuditFakeRow) => boolean> = []
-  private ascending = true
-  private sortColumn: string | null = null
-  private bounds: { from: number; to: number } | null = null
-  private limitCount: number | null = null
-  private countRequested = false
-  private headOnly = false
-
-  constructor(
-    private readonly rows: readonly AuditFakeRow[],
-    private readonly maxRows: number
-  ) {}
-
-  select(
-    ...args: [columns?: string, options?: { count?: "exact"; head?: boolean }]
-  ): AuditRowsQuery {
-    this.countRequested = args[1]?.count === "exact"
-    this.headOnly = args[1]?.head === true
-    return this
-  }
-
-  eq(column: string, value: unknown): AuditRowsQuery {
-    this.filters.push((row: AuditFakeRow): boolean => row[column] === value)
-    return this
-  }
-
-  in(column: string, values: readonly unknown[]): AuditRowsQuery {
-    this.filters.push((row: AuditFakeRow): boolean => values.includes(row[column]))
-    return this
-  }
-
-  lt(column: string, value: number): AuditRowsQuery {
-    this.filters.push((row: AuditFakeRow): boolean => Number(row[column]) < value)
-    return this
-  }
-
-  gt(column: string, value: number): AuditRowsQuery {
-    this.filters.push((row: AuditFakeRow): boolean => Number(row[column]) > value)
-    return this
-  }
-
-  order(column: string, options: { ascending?: boolean } = {}): AuditRowsQuery {
-    this.sortColumn = column
-    this.ascending = options.ascending ?? true
-    return this
-  }
-
-  range(from: number, to: number): AuditRowsQuery {
-    this.bounds = { from, to }
-    return this
-  }
-
-  limit(count: number): AuditRowsQuery {
-    this.limitCount = count
-    return this
-  }
-
-  async maybeSingle(): Promise<{ data: AuditFakeRow | null; error: AuditFakeResult["error"] }> {
-    const result = this.execute()
-    return { data: result.data?.[0] ?? null, error: result.error }
-  }
-
-  then<TResult1 = AuditFakeResult, TResult2 = never>(
-    onfulfilled?: ((value: AuditFakeResult) => TResult1 | PromiseLike<TResult1>) | null,
-    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
-  ): PromiseLike<TResult1 | TResult2> {
-    return Promise.resolve(this.execute()).then(onfulfilled, onrejected)
-  }
-
-  private execute(): AuditFakeResult {
-    const matching = this.rows.filter((row: AuditFakeRow): boolean =>
-      this.filters.every((filter): boolean => filter(row))
-    )
-
-    if (this.countRequested && this.bounds !== null && this.bounds.from > matching.length) {
-      return {
-        count: null,
-        data: null,
-        error: { code: "PGRST103", message: "Requested range not satisfiable" },
-      }
-    }
-
-    const column = this.sortColumn
-    const ordered =
-      column === null
-        ? matching
-        : [...matching].sort(
-            (left: AuditFakeRow, right: AuditFakeRow): number =>
-              (Number(left[column]) - Number(right[column])) * (this.ascending ? 1 : -1)
-          )
-    const ranged =
-      this.bounds === null ? ordered : ordered.slice(this.bounds.from, this.bounds.to + 1)
-
-    return {
-      count: this.countRequested ? matching.length : null,
-      data: this.headOnly
-        ? null
-        : ranged.slice(0, Math.min(this.limitCount ?? this.maxRows, this.maxRows)),
-      error: null,
-    }
-  }
-}
-
+// Reads go through the shared PostgREST stand-in, which answers the way the
+// real server does at its edges: a per-response row cap, and 416 (PGRST103)
+// for a counted range that starts past the last matching row.
 class AuditRowsClient {
   constructor(
     private readonly tables: Record<"audit_logs" | "organization_memberships", AuditFakeRow[]>,
@@ -318,8 +209,8 @@ class AuditRowsClient {
     private readonly maxRows: number = POSTGREST_MAX_ROWS
   ) {}
 
-  from(tableName: "audit_logs" | "organization_memberships"): AuditRowsQuery {
-    return new AuditRowsQuery(this.tables[tableName], this.maxRows)
+  from(tableName: "audit_logs" | "organization_memberships"): PostgrestReadQuery {
+    return new PostgrestReadQuery(this.tables[tableName], this.maxRows)
   }
 }
 

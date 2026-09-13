@@ -16,6 +16,7 @@ import {
   supersedeInternalSubmissionFile,
   transitionInternalSubmission
 } from "@/services/submission-service"
+import { PostgrestReadQuery } from "@/services/postgrest-fake.test-support"
 import { parseTemplateContent, type TemplateContent } from "@/types/template"
 
 type FakeRow = Record<string, unknown>
@@ -41,99 +42,12 @@ const ACTIVITY_ID = "80000000-0000-4000-8000-000000000001"
 const CHECKSUM = "a".repeat(64)
 const SNAPSHOT = createSnapshot()
 
-class FakeQuery implements PromiseLike<FakeResult> {
-  private readonly filters: Array<(row: FakeRow) => boolean> = []
-  private orderColumn: string | null = null
-  private orderAscending = true
-  private limitCount: number | null = null
-
-  constructor(
-    private readonly tableName: string,
-    private readonly tables: FakeTables
-  ) {}
-
-  select(): FakeQuery {
-    return this
-  }
-
-  eq(column: string, value: unknown): FakeQuery {
-    this.filters.push((row: FakeRow): boolean => row[column] === value)
-    return this
-  }
-
-  in(column: string, values: readonly unknown[]): FakeQuery {
-    this.filters.push((row: FakeRow): boolean => values.includes(row[column]))
-    return this
-  }
-
-  is(column: string, value: unknown): FakeQuery {
-    this.filters.push((row: FakeRow): boolean => row[column] === value)
-    return this
-  }
-
-  lte(column: string, value: unknown): FakeQuery {
-    this.filters.push(
-      (row: FakeRow): boolean => String(row[column]) <= String(value)
-    )
-    return this
-  }
-
-  order(column: string, options: { ascending: boolean }): FakeQuery {
-    this.orderColumn = column
-    this.orderAscending = options.ascending
-    return this
-  }
-
-  limit(value: number): FakeQuery {
-    this.limitCount = value
-    return this
-  }
-
-  async maybeSingle(): Promise<FakeResult> {
-    const rows = this.execute()
-    return {
-      data: rows.length === 1 ? rows[0] : null,
-      error:
-        rows.length > 1
-          ? Object.assign(new Error("Expected one row."), {
-              code: "PGRST116"
-            })
-          : null
-    }
-  }
-
-  then<TResult1 = FakeResult, TResult2 = never>(
-    onfulfilled?:
-      ((value: FakeResult) => TResult1 | PromiseLike<TResult1>) | null,
-    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
-  ): PromiseLike<TResult1 | TResult2> {
-    return Promise.resolve({ data: this.execute(), error: null }).then(
-      onfulfilled,
-      onrejected
-    )
-  }
-
-  private execute(): FakeRow[] {
-    let rows = (this.tables[this.tableName] ?? []).filter(
-      (row: FakeRow): boolean =>
-        this.filters.every((filter): boolean => filter(row))
-    )
-
-    if (this.orderColumn) {
-      const orderColumn = this.orderColumn
-      const direction = this.orderAscending ? 1 : -1
-      rows = [...rows].sort(
-        (left: FakeRow, right: FakeRow): number =>
-          String(left[orderColumn]).localeCompare(String(right[orderColumn])) *
-          direction
-      )
-    }
-
-    if (this.limitCount !== null) {
-      rows = rows.slice(0, this.limitCount)
-    }
-
-    return rows
+// Reads go through the shared PostgREST stand-in (filters, order, ranges,
+// counts, the per-response row cap, and 416 past the end); writes in this
+// domain go through RPCs, which each test stubs on the client.
+class FakeQuery extends PostgrestReadQuery {
+  constructor(tableName: string, tables: FakeTables) {
+    super((tables[tableName] ??= []))
   }
 }
 
