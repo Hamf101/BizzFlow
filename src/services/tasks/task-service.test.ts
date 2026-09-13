@@ -4,6 +4,7 @@ import {
   assignTask,
   createTask,
   getTask,
+  listTaskPage,
   listTasks,
   transitionTaskStatus,
   updateTask,
@@ -381,6 +382,250 @@ describe("listTasks", () => {
       listTasks(
         { actorUserId: REVIEWER_ID, organizationId: ORG_ID },
         createDeps(client)
+      )
+    ).rejects.toMatchObject({ statusCode: 403 })
+  })
+})
+
+describe("listTaskPage", () => {
+  const FOURTH_TASK_ID = "30000000-0000-4000-8000-000000000004"
+  const DUE_SOONEST = { direction: "asc", key: "due" } as const
+
+  // Four tenant tasks with distinct due dates, creation times, and titles,
+  // plus one task in another tenant that must never be counted.
+  function createPageClient(): FakeSupabaseClient {
+    return createClient([
+      createTaskRow({
+        id: TASK_ID,
+        title: "Chase references",
+        due_at: FUTURE_AT,
+        created_at: "2026-07-29T09:00:00.000Z",
+      }),
+      createTaskRow({
+        id: SECOND_TASK_ID,
+        title: "Renew insurance",
+        due_at: null,
+        created_at: "2026-07-29T10:00:00.000Z",
+      }),
+      createTaskRow({
+        id: THIRD_TASK_ID,
+        title: "Book gas safety check",
+        due_at: "2026-07-30T18:00:00.000Z",
+        created_at: "2026-07-29T11:00:00.000Z",
+      }),
+      createTaskRow({
+        id: FOURTH_TASK_ID,
+        title: "Approve inventory",
+        due_at: "2026-08-02T09:00:00.000Z",
+        created_at: "2026-07-29T12:00:00.000Z",
+      }),
+      createTaskRow({ id: NEW_TASK_ID, org_id: OTHER_ORG_ID }),
+    ])
+  }
+
+  it("returns the requested page in due-date order with the tenant's total", async () => {
+    const page = await listTaskPage(
+      {
+        actorUserId: STAFF_ID,
+        organizationId: ORG_ID,
+        page: 2,
+        pageSize: 2,
+        sort: DUE_SOONEST,
+      },
+      createDeps(createPageClient())
+    )
+
+    expect(page).toMatchObject({ page: 2, pageSize: 2, total: 4 })
+    expect(page.tasks.map((task): string => task.id)).toEqual([
+      FOURTH_TASK_ID,
+      SECOND_TASK_ID,
+    ])
+  })
+
+  it.each([
+    [
+      { direction: "desc", key: "due" },
+      [FOURTH_TASK_ID, TASK_ID, THIRD_TASK_ID, SECOND_TASK_ID],
+    ],
+    [
+      { direction: "desc", key: "created" },
+      [FOURTH_TASK_ID, THIRD_TASK_ID, SECOND_TASK_ID, TASK_ID],
+    ],
+    [
+      { direction: "asc", key: "created" },
+      [TASK_ID, SECOND_TASK_ID, THIRD_TASK_ID, FOURTH_TASK_ID],
+    ],
+    [
+      { direction: "asc", key: "title" },
+      [FOURTH_TASK_ID, THIRD_TASK_ID, TASK_ID, SECOND_TASK_ID],
+    ],
+  ] as const)("orders by %o and keeps undated tasks last", async (sort, expectedIds) => {
+    const page = await listTaskPage(
+      { actorUserId: STAFF_ID, organizationId: ORG_ID, page: 1, pageSize: 50, sort },
+      createDeps(createPageClient())
+    )
+
+    expect(page.tasks.map((task): string => task.id)).toEqual(expectedIds)
+  })
+
+  it("breaks ties by id, so a page boundary never repeats or drops a task", async () => {
+    const client = createClient([
+      createTaskRow({ id: THIRD_TASK_ID, title: "Chase references" }),
+      createTaskRow({ id: TASK_ID, title: "Chase references" }),
+      createTaskRow({ id: SECOND_TASK_ID, title: "Chase references" }),
+    ])
+    const input = {
+      actorUserId: STAFF_ID,
+      organizationId: ORG_ID,
+      pageSize: 2,
+      sort: { direction: "desc", key: "title" },
+    } as const
+
+    const first = await listTaskPage({ ...input, page: 1 }, createDeps(client))
+    const second = await listTaskPage({ ...input, page: 2 }, createDeps(client))
+
+    expect(
+      [...first.tasks, ...second.tasks].map((task): string => task.id)
+    ).toEqual([TASK_ID, SECOND_TASK_ID, THIRD_TASK_ID])
+  })
+
+  it("counts only the tasks that match the filters", async () => {
+    const client = createClient([
+      createTaskRow({ id: TASK_ID, status: "open" }),
+      createTaskRow({
+        id: SECOND_TASK_ID,
+        status: "in_progress",
+        assigned_to: STAFF_ID,
+        assigned_by: MANAGER_ID,
+        assigned_at: CREATED_AT,
+      }),
+      createTaskRow({ id: THIRD_TASK_ID, status: "in_progress" }),
+    ])
+
+    const page = await listTaskPage(
+      {
+        actorUserId: MANAGER_ID,
+        assignedTo: STAFF_ID,
+        organizationId: ORG_ID,
+        page: 1,
+        pageSize: 25,
+        sort: DUE_SOONEST,
+        statuses: ["in_progress"],
+      },
+      createDeps(client)
+    )
+
+    expect(page.total).toBe(1)
+    expect(page.tasks.map((task): string => task.id)).toEqual([SECOND_TASK_ID])
+  })
+
+  it.each([
+    ["exactly at the end", 3],
+    ["past the end, where PostgREST refuses the range", 10],
+  ])("reports the true total for a page that starts %s", async (_case, pageNumber) => {
+    const page = await listTaskPage(
+      {
+        actorUserId: STAFF_ID,
+        organizationId: ORG_ID,
+        page: pageNumber,
+        pageSize: 2,
+        sort: DUE_SOONEST,
+      },
+      createDeps(createPageClient())
+    )
+
+    expect(page).toEqual({ page: pageNumber, pageSize: 2, tasks: [], total: 4 })
+  })
+
+  it("finds tasks whose title contains the search, ignoring case", async () => {
+    const client = createClient([
+      createTaskRow({ id: TASK_ID, title: "Collect the signed lease" }),
+      createTaskRow({ id: SECOND_TASK_ID, title: "Lease renewal for Flat 3" }),
+      createTaskRow({ id: THIRD_TASK_ID, title: "Book gas safety check" }),
+    ])
+
+    const page = await listTaskPage(
+      {
+        actorUserId: STAFF_ID,
+        organizationId: ORG_ID,
+        page: 1,
+        pageSize: 25,
+        query: "LEASE",
+        sort: { direction: "asc", key: "title" },
+      },
+      createDeps(client)
+    )
+
+    expect(page.total).toBe(2)
+    expect(page.tasks.map((task): string => task.id)).toEqual([
+      TASK_ID,
+      SECOND_TASK_ID,
+    ])
+  })
+
+  it("treats percent signs and underscores in a search as plain text", async () => {
+    const client = createClient([
+      createTaskRow({ id: TASK_ID, title: "Collect 50% deposit" }),
+      createTaskRow({ id: SECOND_TASK_ID, title: "Collect 500 deposit" }),
+      createTaskRow({ id: THIRD_TASK_ID, title: "Rename file_a" }),
+      createTaskRow({ id: FOURTH_TASK_ID, title: "Rename fileXa" }),
+    ])
+    const search = (query: string): ReturnType<typeof listTaskPage> =>
+      listTaskPage(
+        {
+          actorUserId: STAFF_ID,
+          organizationId: ORG_ID,
+          page: 1,
+          pageSize: 25,
+          query,
+          sort: DUE_SOONEST,
+        },
+        createDeps(client)
+      )
+
+    expect((await search("50%")).tasks.map((task): string => task.id)).toEqual([
+      TASK_ID,
+    ])
+    expect((await search("file_a")).tasks.map((task): string => task.id)).toEqual([
+      THIRD_TASK_ID,
+    ])
+  })
+
+  it.each([
+    ["page 0", { page: 0 }],
+    ["a fractional page", { page: 1.5 }],
+    ["a page beyond the last allowed", { page: 10_001 }],
+    ["a page size above the limit", { pageSize: 500 }],
+    ["an unknown sort key", { sort: { direction: "asc", key: "priority" } }],
+    ["an unknown direction", { sort: { direction: "up", key: "due" } }],
+    ["a search longer than 100 characters", { query: "x".repeat(101) }],
+  ])("rejects %s", async (_case, override) => {
+    await expect(
+      listTaskPage(
+        {
+          actorUserId: MANAGER_ID,
+          organizationId: ORG_ID,
+          page: 1,
+          pageSize: 25,
+          sort: DUE_SOONEST,
+          ...override,
+        } as never,
+        createDeps(createPageClient())
+      )
+    ).rejects.toMatchObject({ statusCode: 400 })
+  })
+
+  it("rejects an external reviewer", async () => {
+    await expect(
+      listTaskPage(
+        {
+          actorUserId: REVIEWER_ID,
+          organizationId: ORG_ID,
+          page: 1,
+          pageSize: 25,
+          sort: DUE_SOONEST,
+        },
+        createDeps(createPageClient())
       )
     ).rejects.toMatchObject({ statusCode: 403 })
   })

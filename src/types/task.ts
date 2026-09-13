@@ -34,8 +34,17 @@ export const TASK_REMINDER_CHANNELS = ["email", "sms"] as const
  */
 export const TASK_REMINDER_ORIGINS = ["manual", "automatic"] as const
 
+/** Orders the task list offers; each ends with a stable tiebreak on id. */
+export const TASK_SORT_KEYS = ["due", "created", "title"] as const
+
+/** Longest task search the list and the service accept, in characters. */
+export const TASK_SEARCH_MAX_LENGTH = 100
+
 /** Lifecycle state of one task. */
 export type TaskStatus = (typeof TASK_STATUSES)[number]
+
+/** One task list ordering key. */
+export type TaskSortKey = (typeof TASK_SORT_KEYS)[number]
 
 /** Delivery state of one scheduled task reminder. */
 export type TaskReminderStatus = (typeof TASK_REMINDER_STATUSES)[number]

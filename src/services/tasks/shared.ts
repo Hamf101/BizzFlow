@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto"
 
 import { ZodError } from "zod"
 
+import { MAX_LIST_PAGE, type ListSort } from "@/lib/list-state"
 import { captureUnexpectedError } from "@/lib/observability"
 import {
   canPerformOrganizationAction,
@@ -25,9 +26,12 @@ import {
   parseTaskReminderRow,
   parseTaskRow,
   TaskDomainError,
+  TASK_SEARCH_MAX_LENGTH,
+  TASK_SORT_KEYS,
   TASK_STATUSES,
   type Task,
   type TaskReminder,
+  type TaskSortKey,
   type TaskStatus,
 } from "@/types/task"
 
@@ -625,6 +629,65 @@ export function normalizeTaskListLimit(value: number | undefined): number {
   }
 
   return value
+}
+
+/**
+ * Validates an untrusted one-based page number.
+ *
+ * @param value - Untrusted page number.
+ * @returns The page number.
+ * @throws TaskServiceError when the page is not a whole number in range.
+ */
+export function normalizeTaskPage(value: number): number {
+  if (!Number.isInteger(value) || value < 1 || value > MAX_LIST_PAGE) {
+    throw new TaskServiceError(
+      `Task page must be a whole number from 1 to ${MAX_LIST_PAGE}.`,
+      400
+    )
+  }
+
+  return value
+}
+
+/**
+ * Validates an untrusted task list ordering.
+ *
+ * @param value - Untrusted sort key and direction.
+ * @returns The validated ordering.
+ * @throws TaskServiceError when the key or direction is not supported.
+ */
+export function normalizeTaskSort(
+  value: ListSort<string>
+): ListSort<TaskSortKey> {
+  const key = TASK_SORT_KEYS.find(
+    (candidate: TaskSortKey): boolean => candidate === value.key
+  )
+
+  if (!key || (value.direction !== "asc" && value.direction !== "desc")) {
+    throw new TaskServiceError("Task list order is not supported.", 400)
+  }
+
+  return { direction: value.direction, key }
+}
+
+/**
+ * Validates untrusted task search text.
+ *
+ * @param value - Untrusted search text.
+ * @returns Trimmed search text, or null when there is nothing to search for.
+ * @throws TaskServiceError when the text is longer than the list accepts.
+ */
+export function normalizeTaskSearch(value: string | undefined): string | null {
+  const search = value?.trim() ?? ""
+
+  if (Array.from(search).length > TASK_SEARCH_MAX_LENGTH) {
+    throw new TaskServiceError(
+      `Task search must be ${TASK_SEARCH_MAX_LENGTH} characters or fewer.`,
+      400
+    )
+  }
+
+  return search === "" ? null : search
 }
 
 /**

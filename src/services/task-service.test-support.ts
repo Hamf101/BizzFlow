@@ -52,7 +52,11 @@ type FakeTables = Record<FakeTableName, FakeRow[]>
 
 type FakeError = { code?: string; message: string }
 
-type FakeResult = { data: FakeRow[]; error: FakeError | null }
+type FakeResult = {
+  count: number | null
+  data: FakeRow[] | null
+  error: FakeError | null
+}
 
 type FakeOrder = {
   column: string
@@ -127,13 +131,20 @@ class FakeQueryBuilder {
   private insertRows: FakeRow[] | null = null
   private updateValues: FakeRow | null = null
   private limitCount: number | null = null
+  private countRequested = false
+  private headOnly = false
+  private rangeBounds: { from: number; to: number } | null = null
 
   constructor(
     private readonly client: FakeSupabaseClient,
     private readonly tableName: FakeTableName
   ) {}
 
-  select(): FakeQueryBuilder {
+  select(
+    ...args: [columns?: string, options?: { count?: "exact"; head?: boolean }]
+  ): FakeQueryBuilder {
+    this.countRequested = args[1]?.count === "exact"
+    this.headOnly = args[1]?.head === true
     return this
   }
 
@@ -163,6 +174,14 @@ class FakeQueryBuilder {
 
   lte(column: string, value: string): FakeQueryBuilder {
     this.filters.push((row: FakeRow): boolean => String(row[column]) <= value)
+    return this
+  }
+
+  ilike(column: string, pattern: string): FakeQueryBuilder {
+    const matcher = likePatternToRegExp(pattern)
+    this.filters.push((row: FakeRow): boolean =>
+      matcher.test(String(row[column] ?? ""))
+    )
     return this
   }
 
@@ -204,6 +223,11 @@ class FakeQueryBuilder {
     return this
   }
 
+  range(from: number, to: number): FakeQueryBuilder {
+    this.rangeBounds = { from, to }
+    return this
+  }
+
   async single(): Promise<{ data: FakeRow | null; error: FakeError | null }> {
     const result = this.execute()
 
@@ -211,8 +235,10 @@ class FakeQueryBuilder {
       return { data: null, error: result.error }
     }
 
-    return result.data.length === 1
-      ? { data: result.data[0], error: null }
+    const rows = result.data ?? []
+
+    return rows.length === 1
+      ? { data: rows[0], error: null }
       : { data: null, error: { message: "Expected one row." } }
   }
 
@@ -226,9 +252,11 @@ class FakeQueryBuilder {
       return { data: null, error: result.error }
     }
 
-    return result.data.length > 1
+    const rows = result.data ?? []
+
+    return rows.length > 1
       ? { data: null, error: { message: "Expected zero or one row." } }
-      : { data: result.data[0] ?? null, error: null }
+      : { data: rows[0] ?? null, error: null }
   }
 
   then<TResult1 = FakeResult, TResult2 = never>(
@@ -252,10 +280,32 @@ class FakeQueryBuilder {
       matchingRows.forEach((row: FakeRow): void => {
         Object.assign(row, values)
       })
-      return { data: matchingRows, error: null }
+      return { count: null, data: matchingRows, error: null }
     }
 
-    return { data: this.applyOrderAndLimit(this.applyFilters()), error: null }
+    const matchingRows = this.applyFilters()
+
+    // Like PostgREST, a counted range that starts past the last matching row
+    // is refused with 416 rather than answered with an empty page; a range
+    // that starts exactly at the end is still an empty 206.
+    if (
+      this.countRequested &&
+      this.rangeBounds !== null &&
+      this.rangeBounds.from > matchingRows.length
+    ) {
+      return {
+        count: null,
+        data: null,
+        error: { code: "PGRST103", message: "Requested range not satisfiable" },
+      }
+    }
+
+    return {
+      // PostgREST counts every matching row, before the page is cut.
+      count: this.countRequested ? matchingRows.length : null,
+      data: this.headOnly ? null : this.applyOrderAndLimit(matchingRows),
+      error: null,
+    }
   }
 
   private executeInsert(rows: FakeRow[]): FakeResult {
@@ -265,6 +315,7 @@ class FakeQueryBuilder {
 
     if (conflict) {
       return {
+        count: null,
         data: [],
         error: {
           code: "23505",
@@ -274,7 +325,7 @@ class FakeQueryBuilder {
     }
 
     this.client.tables[this.tableName].push(...rows)
-    return { data: rows, error: null }
+    return { count: null, data: rows, error: null }
   }
 
   private hasUniqueConflict(row: FakeRow): boolean {
@@ -310,10 +361,40 @@ class FakeQueryBuilder {
         )
     )
 
+    const pageRows =
+      this.rangeBounds === null
+        ? orderedRows
+        : orderedRows.slice(this.rangeBounds.from, this.rangeBounds.to + 1)
+
     return this.limitCount === null
-      ? orderedRows
-      : orderedRows.slice(0, this.limitCount)
+      ? pageRows
+      : pageRows.slice(0, this.limitCount)
   }
+}
+
+// Mirrors ILIKE as PostgREST applies it: `%` (and PostgREST's `*` alias) match
+// any run, `_` matches one character, and a backslash makes the next literal.
+function likePatternToRegExp(pattern: string): RegExp {
+  const escapeLiteral = (value: string): string =>
+    value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+  let source = ""
+
+  for (let index = 0; index < pattern.length; index += 1) {
+    const character = pattern[index] ?? ""
+
+    if (character === "\\" && index + 1 < pattern.length) {
+      index += 1
+      source += escapeLiteral(pattern[index] ?? "")
+    } else if (character === "%" || character === "*") {
+      source += ".*"
+    } else if (character === "_") {
+      source += "."
+    } else {
+      source += escapeLiteral(character)
+    }
+  }
+
+  return new RegExp(`^${source}$`, "is")
 }
 
 function compareRowValues(

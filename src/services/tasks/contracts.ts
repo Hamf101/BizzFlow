@@ -1,3 +1,4 @@
+import type { ListSort } from "@/lib/list-state"
 import type { AdminSupabaseClient } from "@/lib/supabase/admin"
 import type { RecordNotificationDeliveryInput } from "@/services/notification-service"
 import type { SendSmsInput, SendSmsResult } from "@/services/sms-service"
@@ -7,7 +8,13 @@ import type {
   AuditLogTargetType,
   AuditMetadata,
 } from "@/types/audit"
-import type { Task, TaskReminder, TaskReminderChannel, TaskStatus } from "@/types/task"
+import type {
+  Task,
+  TaskReminder,
+  TaskReminderChannel,
+  TaskSortKey,
+  TaskStatus,
+} from "@/types/task"
 
 /** Narrow trusted Supabase client used by task services. */
 export type TaskServiceClient = Pick<AdminSupabaseClient, "from">
@@ -50,6 +57,26 @@ export type ListTasksInput = TaskActorInput & {
   assignedTo?: string
   submissionId?: string
   limit?: number
+}
+
+/** Input for one page of the tenant task list. */
+export type ListTaskPageInput = TaskActorInput & {
+  assignedTo?: string
+  /** One-based page number. */
+  page: number
+  pageSize: number
+  /** Title search text; matched literally, ignoring case. */
+  query?: string
+  sort: ListSort<TaskSortKey>
+  statuses?: readonly TaskStatus[]
+}
+
+/** One page of tasks and the number of tasks matching its filters. */
+export type TaskPage = {
+  page: number
+  pageSize: number
+  tasks: Task[]
+  total: number
 }
 
 /** Input for loading one tenant task with its reminders. */
