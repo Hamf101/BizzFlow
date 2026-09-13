@@ -690,6 +690,15 @@ export type AdminDatabase = {
         }
         Returns: AdminSubmissionRow
       }
+      expire_abandoned_submission_files: {
+        Args: {
+          target_batch_size: number
+        }
+        Returns: {
+          expired_drafts: number
+          expired_files: number
+        }
+      }
       supersede_public_submission_file: {
         Args: {
           target_public_form_token: string

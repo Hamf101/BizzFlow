@@ -30,6 +30,8 @@ import { isTemplateBlockVisible } from "@/types/template-visibility"
  * `submission_files.cleanup_after` is immutable once a row leaves
  * `upload_pending` (see enforce_submission_file_update), and the scheduled
  * cleanup only reclaims `superseded` objects, so this value is set once here.
+ * The nightly expiry supersedes an upload once this window has elapsed, and
+ * every file of a public draft nobody has saved or uploaded to for as long.
  */
 const PUBLIC_UPLOAD_CLEANUP_MS = 24 * 60 * 60 * 1000
 

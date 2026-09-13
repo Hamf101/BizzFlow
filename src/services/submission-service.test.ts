@@ -8,6 +8,7 @@ import {
   createInternalSubmissionComment,
   createInternalSubmissionDraft,
   createInternalSubmissionFileDownloadUrl,
+  expireAbandonedSubmissionFiles,
   exportInternalSubmissionsCsv,
   getInternalSubmission,
   listInternalSubmissions,
@@ -1081,6 +1082,50 @@ describe("internal submission file cleanup", () => {
       storageKey: buildExpectedStorageKey(FILE_ID)
     })
     expect(client.rpc).toHaveBeenCalledOnce()
+  })
+})
+
+describe("abandoned submission file expiry", () => {
+  it("expires abandoned drafts and dead uploads in one bounded database pass", async () => {
+    const client = createClient()
+
+    client.rpc.mockResolvedValue({
+      data: { expired_drafts: 2, expired_files: 5 },
+      error: null
+    })
+
+    await expect(
+      expireAbandonedSubmissionFiles({}, { client: client as never })
+    ).resolves.toEqual({ expiredDrafts: 2, expiredFiles: 5 })
+    expect(client.rpc).toHaveBeenCalledWith(
+      "expire_abandoned_submission_files",
+      { target_batch_size: 250 }
+    )
+  })
+
+  it.each([0, 1_001, 2.5])(
+    "refuses batch size %s before it reaches the database",
+    async (batchSize: number) => {
+      const client = createClient()
+
+      await expect(
+        expireAbandonedSubmissionFiles({ batchSize }, { client: client as never })
+      ).rejects.toThrow(RangeError)
+      expect(client.rpc).not.toHaveBeenCalled()
+    }
+  )
+
+  it("reports a database failure instead of a partial result", async () => {
+    const client = createClient()
+    const failure = Object.assign(new Error("connection reset"), {
+      code: "08006"
+    })
+
+    client.rpc.mockResolvedValue({ data: null, error: failure })
+
+    await expect(
+      expireAbandonedSubmissionFiles({}, { client: client as never })
+    ).rejects.toMatchObject({ statusCode: 500 })
   })
 })
 

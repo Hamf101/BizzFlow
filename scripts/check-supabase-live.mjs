@@ -298,6 +298,12 @@ export const SERVICE_ROLE_RPC_CHECKS = [
       target_submitted_at: null,
     },
   },
+  {
+    name: "expire_abandoned_submission_files",
+    args: {
+      target_batch_size: null,
+    },
+  },
 ]
 
 const DRAWING_PROBE_DATA_URL = `data:image/png;base64,${"AAAA".repeat(5_000)}`

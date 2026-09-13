@@ -3,10 +3,15 @@ import { timingSafeEqual } from "node:crypto"
 import { NextResponse } from "next/server"
 
 import { captureUnexpectedError } from "@/lib/observability"
-import { cleanupExpiredSubmissionFileObjects } from "@/services/submission-service"
+import {
+  cleanupExpiredSubmissionFileObjects,
+  expireAbandonedSubmissionFiles,
+  type SubmissionFileExpiryResult,
+} from "@/services/submission-service"
 
 /**
- * Removes expired R2 objects that may have arrived after an upload was cancelled.
+ * Expires abandoned public drafts and dead uploads, then removes the expired
+ * R2 objects they and cancelled uploads left behind.
  *
  * @param request - Vercel Cron request authenticated with `CRON_SECRET`.
  * @returns Bounded cleanup counts without exposing object keys.
@@ -33,8 +38,17 @@ export async function GET(request: Request): Promise<Response> {
   }
 
   try {
-    const result = await cleanupExpiredSubmissionFileObjects()
-    return createNoStoreResponse(result, 200)
+    const expiry = await expireAbandonedFilesOrReport(startedAt)
+    const cleanup = await cleanupExpiredSubmissionFileObjects()
+
+    if (!expiry) {
+      return createNoStoreResponse(
+        { error: "Submission file cleanup failed." },
+        500
+      )
+    }
+
+    return createNoStoreResponse({ ...expiry, ...cleanup }, 200)
   } catch (error: unknown) {
     console.error("submission_file_cleanup_cron_failed", {
       durationMs: Date.now() - startedAt,
@@ -45,6 +59,23 @@ export async function GET(request: Request): Promise<Response> {
       { error: "Submission file cleanup failed." },
       500
     )
+  }
+}
+
+// Expiry and cleanup are independent: objects superseded by earlier passes are
+// still removed when this pass's expiry fails, and the failure is reported.
+async function expireAbandonedFilesOrReport(
+  startedAt: number
+): Promise<SubmissionFileExpiryResult | null> {
+  try {
+    return await expireAbandonedSubmissionFiles()
+  } catch (error: unknown) {
+    console.error("submission_file_expiry_cron_failed", {
+      durationMs: Date.now() - startedAt,
+      reason: error instanceof Error ? error.name : "Unknown expiry error",
+    })
+    captureUnexpectedError(error, { routeName: "cron_submission_file_expiry" })
+    return null
   }
 }
 

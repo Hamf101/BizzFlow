@@ -184,6 +184,9 @@ describe("authenticated Supabase direct-access harness configuration", () => {
       // So is the atomic public submission, which refuses null details
       // before it locks or writes anything.
       "submit_public_form_entry",
+      // And the abandoned-upload expiry, which refuses a missing batch size
+      // before it selects anything.
+      "expire_abandoned_submission_files",
     ])
     expect(SERVICE_ROLE_RPC_CHECKS.every((rpc) =>
       Object.values(rpc.args).every((value) => value === null)

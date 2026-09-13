@@ -14,11 +14,18 @@ import {
 
 const DEFAULT_CLEANUP_BATCH_SIZE = 100
 const MAX_CLEANUP_BATCH_SIZE = 250
+const DEFAULT_EXPIRY_BATCH_SIZE = 250
+const MAX_EXPIRY_BATCH_SIZE = 1_000
 
 const cleanupFileRowSchema = z.object({
   id: z.string().uuid(),
   storage_key: z.string().min(1).max(1_024),
   cleanup_after: z.string().datetime({ offset: true }),
+})
+
+const expiryResultSchema = z.object({
+  expired_drafts: z.number().int().nonnegative(),
+  expired_files: z.number().int().nonnegative(),
 })
 
 type CleanupFileRow = z.infer<typeof cleanupFileRowSchema>
@@ -33,6 +40,67 @@ export type SubmissionFileCleanupResult = {
 /** Input for one scheduled superseded-object cleanup pass. */
 export type CleanupExpiredSubmissionFilesInput = {
   batchSize?: number
+}
+
+/** Summary returned by one bounded abandoned-upload expiry pass. */
+export type SubmissionFileExpiryResult = {
+  expiredDrafts: number
+  expiredFiles: number
+}
+
+/** Input for one scheduled abandoned-upload expiry pass. */
+export type ExpireAbandonedSubmissionFilesInput = {
+  batchSize?: number
+}
+
+/**
+ * Expires abandoned public drafts and uploads whose window has elapsed.
+ *
+ * One database pass clears the handle of each public draft nobody has saved or
+ * uploaded to for a day, so it can never be resumed or submitted, and hands
+ * its files and every dead upload to the superseded-object cleanup. Drafts
+ * locked by a submission in progress are left for the next pass.
+ *
+ * @param input - Optional bounded batch size.
+ * @param deps - Optional trusted database dependency.
+ * @returns How many drafts and files were expired.
+ * @throws RangeError when the batch size is out of bounds.
+ * @throws SubmissionServiceError when the database pass fails.
+ */
+export async function expireAbandonedSubmissionFiles(
+  input: ExpireAbandonedSubmissionFilesInput = {},
+  deps: SubmissionServiceDeps = {}
+): Promise<SubmissionFileExpiryResult> {
+  const startedAt = Date.now()
+  const batchSize = normalizeBatchSize(input.batchSize, {
+    defaultSize: DEFAULT_EXPIRY_BATCH_SIZE,
+    label: "Submission expiry",
+    maxSize: MAX_EXPIRY_BATCH_SIZE,
+  })
+  const client = getSubmissionClient(deps)
+  const { data, error } = await client.rpc(
+    "expire_abandoned_submission_files",
+    { target_batch_size: batchSize }
+  )
+
+  if (error || !data) {
+    throw createSubmissionDatabaseError(
+      error,
+      "Unable to expire abandoned submission files."
+    )
+  }
+
+  const expired = expiryResultSchema.parse(data)
+  const result = {
+    expiredDrafts: expired.expired_drafts,
+    expiredFiles: expired.expired_files,
+  }
+
+  console.info("submission_file_expiry_completed", {
+    ...result,
+    durationMs: Date.now() - startedAt,
+  })
+  return result
 }
 
 /**
@@ -52,7 +120,11 @@ export async function cleanupExpiredSubmissionFileObjects(
 ): Promise<SubmissionFileCleanupResult> {
   const startedAt = Date.now()
   const client = getSubmissionClient(deps)
-  const batchSize = normalizeBatchSize(input.batchSize)
+  const batchSize = normalizeBatchSize(input.batchSize, {
+    defaultSize: DEFAULT_CLEANUP_BATCH_SIZE,
+    label: "Submission cleanup",
+    maxSize: MAX_CLEANUP_BATCH_SIZE,
+  })
   const now = deps.now?.() ?? new Date()
   const rows = await listExpiredCleanupRows(client, now, batchSize)
   const deleteObject =
@@ -120,14 +192,17 @@ async function listExpiredCleanupRows(
   return cleanupFileRowSchema.array().parse(data)
 }
 
-function normalizeBatchSize(value: number | undefined): number {
+function normalizeBatchSize(
+  value: number | undefined,
+  bounds: { defaultSize: number; label: string; maxSize: number }
+): number {
   if (value === undefined) {
-    return DEFAULT_CLEANUP_BATCH_SIZE
+    return bounds.defaultSize
   }
 
-  if (!Number.isInteger(value) || value < 1 || value > MAX_CLEANUP_BATCH_SIZE) {
+  if (!Number.isInteger(value) || value < 1 || value > bounds.maxSize) {
     throw new RangeError(
-      `Submission cleanup batch size must be between 1 and ${MAX_CLEANUP_BATCH_SIZE}.`
+      `${bounds.label} batch size must be between 1 and ${bounds.maxSize}.`
     )
   }
 

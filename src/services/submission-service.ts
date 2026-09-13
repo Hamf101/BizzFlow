@@ -20,9 +20,14 @@ export type {
 } from "@/services/submissions/contracts"
 export type {
   CleanupExpiredSubmissionFilesInput,
+  ExpireAbandonedSubmissionFilesInput,
   SubmissionFileCleanupResult,
+  SubmissionFileExpiryResult,
 } from "@/services/submissions/cleanup-service"
-export { cleanupExpiredSubmissionFileObjects } from "@/services/submissions/cleanup-service"
+export {
+  cleanupExpiredSubmissionFileObjects,
+  expireAbandonedSubmissionFiles,
+} from "@/services/submissions/cleanup-service"
 export {
   createInternalSubmissionDraft,
   saveInternalSubmissionDraft,
