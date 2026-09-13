@@ -530,6 +530,9 @@ export async function getPublicDocumentSigningView(
       const token = normalizeToken(input.token)
       const recipient = await loadRecipientByToken(client, hashToken(token))
       assertRecipientLinkUsable(recipient, getSigningNow(deps.now))
+      // Checked before the link is marked viewed, which an inactive document
+      // refuses in the database.
+      await requirePublicSigningDocumentLifecycle(client, recipient, "read")
 
       const currentRecipient =
         recipient.status === "pending"
@@ -567,6 +570,12 @@ export async function completePublicDocumentSigning(
       const tokenHash = hashToken(token)
       const recipient = await loadRecipientByToken(client, tokenHash)
       assertRecipientLinkUsable(recipient, getSigningNow(deps.now))
+      // A signed recipient may still read the document; signing needs it active.
+      await requirePublicSigningDocumentLifecycle(
+        client,
+        recipient,
+        recipient.status === "signed" ? "read" : "mutation"
+      )
 
       if (recipient.status === "signed") {
         return loadPublicSigningView(client, recipient)
@@ -689,6 +698,43 @@ async function requireMemberSigningDocumentLifecycle(
   operation: "read" | "mutation",
   inactiveMessage: string
 ): Promise<void> {
+  await requireSigningDocumentLifecycle(
+    client,
+    organizationId,
+    documentId,
+    operation,
+    { inactive: inactiveMessage, unavailable: "Generated document was not found." }
+  )
+}
+
+// A private link obeys the member lifecycle rule, but a removed document must
+// look exactly like an invalid link, so its holder learns nothing more.
+async function requirePublicSigningDocumentLifecycle(
+  client: SigningServiceClient,
+  recipient: { document_id: string; org_id: string },
+  operation: "read" | "mutation"
+): Promise<void> {
+  await requireSigningDocumentLifecycle(
+    client,
+    recipient.org_id,
+    recipient.document_id,
+    operation,
+    {
+      inactive: "This document is no longer accepting signatures.",
+      unavailable: "This signing link is invalid or no longer available.",
+    }
+  )
+}
+
+// Trash and pending purge revoke every read. An archived document stays
+// readable but accepts no mutation, which the database also enforces.
+async function requireSigningDocumentLifecycle(
+  client: SigningServiceClient,
+  organizationId: string,
+  documentId: string,
+  operation: "read" | "mutation",
+  messages: { inactive: string; unavailable: string }
+): Promise<void> {
   const { data, error } = await client
     .from("documents")
     .select("lifecycle_state,archived_at")
@@ -700,29 +746,20 @@ async function requireMemberSigningDocumentLifecycle(
     throw createDatabaseError(error, "Unable to load generated document.")
   }
 
-  if (!data) {
-    throw new DocumentSigningServiceError(
-      "Generated document was not found.",
-      404
-    )
-  }
-
-  const lifecycleState = normalizeSigningDocumentLifecycle(
-    data as SigningDocumentStateRow
-  )
+  const lifecycleState = data
+    ? normalizeSigningDocumentLifecycle(data as SigningDocumentStateRow)
+    : null
 
   if (
+    lifecycleState === null ||
     lifecycleState === "trashed" ||
     lifecycleState === "purge_pending"
   ) {
-    throw new DocumentSigningServiceError(
-      "Generated document was not found.",
-      404
-    )
+    throw new DocumentSigningServiceError(messages.unavailable, 404)
   }
 
   if (operation === "mutation" && lifecycleState !== "active") {
-    throw new DocumentSigningServiceError(inactiveMessage, 409)
+    throw new DocumentSigningServiceError(messages.inactive, 409)
   }
 }
 
