@@ -18,11 +18,6 @@ jobs:
     name: Quality and security gates
     runs-on: ubuntu-latest
     timeout-minutes: 25
-    env:
-      NEXT_PUBLIC_APP_URL: http://localhost:3000
-      SUPABASE_URL: https://example.supabase.co
-      SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci
-      SUPABASE_SECRET_KEY: sb_secret_ci
     steps:
       - name: Check out source
         uses: actions/checkout@v6
@@ -39,15 +34,19 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Audit production dependencies
-        run: pnpm audit:dependencies
-
+      # The steps below are `pnpm check`, in order, one step each so a failure
+      # names its gate. scripts/ci-workflow.test.mjs keeps the two in step.
       - name: Lint
         run: pnpm lint
 
       - name: Type-check
         run: pnpm typecheck
 
+      - name: Check test integrity
+        run: pnpm check:test-integrity
+
+      # Tests set up the environment they need themselves. Ambient credentials
+      # would turn missing-configuration tests into network calls.
       - name: Test
         run: pnpm test
 
@@ -57,8 +56,21 @@ jobs:
       - name: Check for dead code
         run: pnpm check:deadcode
 
+      # The build validates configuration; these example values never reach a
+      # network.
       - name: Build
         run: pnpm build
+        env:
+          NEXT_PUBLIC_APP_URL: http://localhost:3000
+          SUPABASE_URL: https://example.supabase.co
+          SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci
+          SUPABASE_SECRET_KEY: sb_secret_ci
+
+      - name: Check route JavaScript budgets
+        run: pnpm check:route-js
+
+      - name: Audit production dependencies
+        run: pnpm audit:dependencies
 
   e2e:
     name: End-to-end journeys
@@ -92,7 +104,7 @@ jobs:
       - name: Install Playwright browser
         run: pnpm exec playwright install --with-deps chromium
 
-      # Postgres, Auth and the 33 migrations. Nothing here talks to the cloud
+      # Postgres, Auth, and every migration. Nothing here talks to the cloud
       # project, so a run needs no Supabase credentials.
       - name: Start Supabase
         run: pnpm exec supabase start
@@ -105,8 +117,10 @@ jobs:
       - name: Write E2E environment
         run: pnpm e2e:env
 
+      # The E2E launcher loads .env.e2e before compiling, so the production CSP
+      # allows the local storage origin.
       - name: Build
-        run: pnpm build
+        run: pnpm build:e2e
 
       - name: Run end-to-end journeys
         run: pnpm test:e2e

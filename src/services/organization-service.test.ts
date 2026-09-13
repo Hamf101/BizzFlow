@@ -182,6 +182,8 @@ describe("organization service setup failures", () => {
       ...originalEnv,
       SUPABASE_URL: "https://example.supabase.co",
       SUPABASE_PUBLISHABLE_KEY: "sb_publishable_test",
+      // An ambient secret key would turn this into a network call.
+      SUPABASE_SECRET_KEY: undefined,
     }
 
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})

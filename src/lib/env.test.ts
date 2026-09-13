@@ -36,12 +36,11 @@ function setIsolatedEnv(env: Partial<NodeJS.ProcessEnv>): void {
 
 describe("Supabase environment validation", () => {
   it("uses the exact current Supabase secret key name for admin access", () => {
-    process.env = {
-      ...originalEnv,
+    setIsolatedEnv({
       SUPABASE_URL: "https://example.supabase.co",
       SUPABASE_PUBLISHABLE_KEY: "sb_publishable_test",
       SUPABASE_SECRET_KEY: "sb_secret_test",
-    }
+    })
 
     expect(getAdminSupabaseEnv()).toEqual({
       SUPABASE_URL: "https://example.supabase.co",
@@ -51,22 +50,20 @@ describe("Supabase environment validation", () => {
   })
 
   it("requires the exact Supabase secret key name for admin access", () => {
-    process.env = {
-      ...originalEnv,
+    setIsolatedEnv({
       SUPABASE_URL: "https://example.supabase.co",
       SUPABASE_PUBLISHABLE_KEY: "sb_publishable_test",
-    }
+    })
 
     expect(() => getAdminSupabaseEnv()).toThrow("SUPABASE_SECRET_KEY")
   })
 
   it("does not accept removed Next.js public Supabase aliases", () => {
-    process.env = {
-      ...originalEnv,
+    setIsolatedEnv({
       NEXT_PUBLIC_SUPABASE_URL: "https://example.supabase.co",
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_test",
       SUPABASE_SECRET_KEY: "sb_secret_test",
-    }
+    })
 
     expect(() => getAdminSupabaseEnv()).toThrow("SUPABASE_URL")
   })
