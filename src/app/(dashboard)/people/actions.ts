@@ -82,8 +82,16 @@ export async function createInviteAction(formData: FormData): Promise<void> {
       console.error("create_invite_action_failed", logContext)
     }
 
+    // A conflict here means the address already belongs to an active member (a
+    // pending invite is replaced, not rejected); the generic "this item
+    // changed" prompt would not say so.
     redirect(
-      buildFeedbackRedirect("/people", getActionErrorFeedbackCode(error))
+      buildFeedbackRedirect(
+        "/people",
+        error instanceof OrganizationServiceError && error.statusCode === 409
+          ? "invite_already_member"
+          : getActionErrorFeedbackCode(error)
+      )
     )
   }
 

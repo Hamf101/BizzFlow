@@ -66,6 +66,14 @@ export const ACTION_FEEDBACK = {
     title: "Some information needs attention",
     tone: "error",
   },
+  invite_already_member: {
+    analyticsEvent: "action_outcome",
+    description: "Find them in People. No invite was sent.",
+    durationMs: 8_000,
+    persistent: true,
+    title: "That person is already a member or invited",
+    tone: "error",
+  },
   invite_created_email_failed: {
     analyticsEvent: "action_outcome",
     description: "The invite is ready. Copy its link and share it directly.",

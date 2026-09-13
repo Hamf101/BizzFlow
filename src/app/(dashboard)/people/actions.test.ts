@@ -182,6 +182,19 @@ describe("createInviteAction", () => {
       expect.stringContaining("EmailJS")
     )
   })
+
+  it("names an existing member instead of a generic refresh prompt", async () => {
+    const { OrganizationServiceError } = await import(
+      "@/services/organization-service"
+    )
+    vi.mocked(createInvite).mockRejectedValue(
+      new OrganizationServiceError("That user is already a member.", 409)
+    )
+
+    await expect(createInviteAction(createInviteForm())).rejects.toThrow(
+      "NEXT_REDIRECT:/people?feedback=invite_already_member"
+    )
+  })
 })
 
 describe("people profile and permission actions", () => {
