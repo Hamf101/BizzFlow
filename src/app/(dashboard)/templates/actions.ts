@@ -111,7 +111,10 @@ export async function updateTemplateAction(formData: FormData): Promise<void> {
 
   try {
     const actionContext = await loadTemplateActionContext()
-    const template = await persistTemplateDraft(formData, actionContext)
+    const template = await persistTemplateDraftOrConfirmUnchanged(
+      formData,
+      actionContext
+    )
 
     revalidateTemplatePaths(template.id)
     console.info("template_update_action_completed", {
@@ -146,7 +149,7 @@ export async function publishTemplateAction(formData: FormData): Promise<void> {
 
   try {
     const actionContext = await loadTemplateActionContext()
-    const savedTemplate = await persistTemplateDraftForPublish(
+    const savedTemplate = await persistTemplateDraftOrConfirmUnchanged(
       formData,
       actionContext
     )
@@ -259,7 +262,7 @@ export async function duplicateTemplateAction(formData: FormData): Promise<void>
   )
 }
 
-async function persistTemplateDraftForPublish(
+async function persistTemplateDraftOrConfirmUnchanged(
   formData: FormData,
   actionContext: TemplateActionContext
 ): Promise<DocumentTemplate> {
@@ -274,8 +277,9 @@ async function persistTemplateDraftForPublish(
       throw error
     }
 
-    // Publishing an already-saved draft is valid, but the follow-up read must
-    // still represent the exact revision submitted by the editor.
+    // Saving or publishing an already-saved draft is valid (Undo can return the
+    // editor to the saved state), but the follow-up read must still represent
+    // the exact revision submitted by the editor.
     const expectedRevision = parseExpectedRevision(
       getFormString(formData, "expectedRevision")
     )

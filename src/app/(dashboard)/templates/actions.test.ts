@@ -216,6 +216,24 @@ describe("template mutation outcomes", () => {
     )
   })
 
+  it.each([
+    ["reports an unchanged draft as saved", 1, "changes_saved"],
+    ["asks for a refresh when an unchanged draft is out of date", 2, "refresh_required"],
+  ])("%s instead of an input error", async (_case, storedRevision, feedback) => {
+    // Undo can return the editor to exactly the saved state, so Save must not
+    // answer a harmless no-op with "check your input".
+    vi.mocked(updateDocumentTemplate).mockRejectedValue(
+      new TemplateServiceError("No template changes were provided.", 400)
+    )
+    vi.mocked(getDocumentTemplate).mockResolvedValue(
+      createTemplate(storedRevision, "draft")
+    )
+
+    await expect(updateTemplateAction(createPublishFormData(1))).rejects.toThrow(
+      `NEXT_REDIRECT:/templates/${TEMPLATE_ID}/edit?feedback=${feedback}`
+    )
+  })
+
   it("archives only after the service succeeds", async () => {
     const formData = new FormData()
     formData.set("templateId", TEMPLATE_ID)
