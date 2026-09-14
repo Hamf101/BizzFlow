@@ -69,8 +69,8 @@ describe("DashboardNavigation", () => {
       documentsLink?.querySelector('[data-navigation-pending="/documents"]')
     ).toBeNull()
     expect(
-      documentsLink?.querySelector('[role="status"][aria-label="Opening Documents"]')
+      documentsLink?.querySelector('[role="status"][aria-label="Opening Files"]')
     ).toBeNull()
-    expect(documentsLink?.textContent).toBe("Documents")
+    expect(documentsLink?.textContent).toBe("Files")
   })
 })

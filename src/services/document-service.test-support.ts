@@ -14,6 +14,7 @@ type FakeTableName =
   | "document_access_grants"
   | "document_versions"
   | "document_activity_events"
+  | "document_answers"
   | "audit_logs"
 
 type FakeTables = Record<FakeTableName, FakeRow[]>
@@ -33,6 +34,7 @@ export class FakeSupabaseClient {
       document_access_grants: seed.document_access_grants ?? [],
       document_versions: seed.document_versions ?? [],
       document_activity_events: seed.document_activity_events ?? [],
+      document_answers: seed.document_answers ?? [],
       audit_logs: seed.audit_logs ?? [],
     }
   }
@@ -63,12 +65,34 @@ export class FakeSupabaseClient {
       | "get_document_access_level"
       | "get_document_access_levels"
       | "get_folder_access_level"
-      | "get_folder_access_levels",
+      | "get_folder_access_levels"
+      | "document_card_contents",
     args: Record<string, unknown>
   ): Promise<{
     data: string | boolean | FakeRow[] | null
     error: Error | null
   }> {
+    // Trimming large images is the database's job and is proven against it.
+    if (functionName === "document_card_contents") {
+      const ids = args.document_ids as string[]
+
+      return {
+        data: this.tables.documents
+          .filter(
+            (row: FakeRow): boolean =>
+              row.org_id === args.target_org_id &&
+              ids.includes(String(row.id)) &&
+              row.source_kind === "generated" &&
+              row.template_snapshot != null
+          )
+          .map((row: FakeRow): FakeRow => ({
+            content: row.template_snapshot,
+            id: row.id,
+          })),
+        error: null,
+      }
+    }
+
     if (functionName === "get_document_access_levels") {
       return {
         data: (args.target_document_ids as string[]).map(

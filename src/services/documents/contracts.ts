@@ -42,6 +42,15 @@ export type ListDocumentWorkspaceInput = {
   >
 }
 
+export type ListDocumentCardsInput = {
+  actorUserId: string
+  organizationId: string
+  /** Documents whose status a Files view shows. */
+  documentIds: readonly string[]
+  /** The ones among them whose first page the view draws. */
+  contentIds: readonly string[]
+}
+
 export type GetDocumentDetailInput = {
   actorUserId: string
   organizationId: string

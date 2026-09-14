@@ -194,7 +194,7 @@ export default async function DocumentDetailPage({
           className="text-sm font-medium text-primary underline-offset-4 hover:underline"
           href={getWorkspaceHref(detail.document.lifecycleState)}
         >
-          Back to documents
+          Back to Files
         </Link>
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="text-2xl font-semibold tracking-normal">

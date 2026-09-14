@@ -87,7 +87,7 @@ export const DashboardPageError = createDashboardRouteErrorBoundary(
 )
 export const DocumentsPageError = createDashboardRouteErrorBoundary(
   "documents",
-  "Documents"
+  "Files"
 )
 export const TemplatesPageError = createDashboardRouteErrorBoundary(
   "templates",

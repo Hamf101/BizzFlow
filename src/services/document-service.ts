@@ -8,6 +8,7 @@ export type {
   DocumentServiceDeps,
   FolderLifecycleInput,
   GetDocumentDetailInput,
+  ListDocumentCardsInput,
   ListDocumentWorkspaceInput,
   RestoreDocumentInput,
   TrashDocumentInput,
@@ -26,6 +27,8 @@ export type {
   FolderAccessRequirementInput,
   ResourceAccessOperation,
 } from "@/services/documents/access-service"
+export type { DocumentCard } from "@/services/documents/card-service"
+export { listDocumentCards } from "@/services/documents/card-service"
 export { DocumentServiceError } from "@/services/documents/errors"
 export {
   archiveDocument,

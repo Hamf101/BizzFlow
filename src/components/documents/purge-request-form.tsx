@@ -2,6 +2,7 @@ import { Trash2 } from "lucide-react"
 import type { ReactElement } from "react"
 
 import { PermissionButton } from "@/components/auth/permission-button"
+import { DialogFooter } from "@/components/ui/dialog"
 import {
   Field,
   FieldDescription,
@@ -18,6 +19,8 @@ type PurgeRequestFormProps = {
   action: (formData: FormData) => Promise<void>
   confirmationFieldName: "confirmationName" | "confirmationTitle"
   hiddenFields: Record<string, string>
+  /** Lays the form out as a dialog's body and footer instead of a framed panel. */
+  inDialog?: boolean
   inputId: string
   permissionAction: OrganizationPermissionAction
   resourceKind: "document" | "folder"
@@ -38,6 +41,7 @@ export function PurgeRequestForm({
   action,
   confirmationFieldName,
   hiddenFields,
+  inDialog = false,
   inputId,
   permissionAction,
   resourceKind,
@@ -46,11 +50,29 @@ export function PurgeRequestForm({
 }: PurgeRequestFormProps): ReactElement {
   const confirmationLabel =
     resourceKind === "document" ? "document title" : "folder name"
+  const submit = (
+    <PermissionButton
+      action={permissionAction}
+      aria-label={`Permanently delete ${resourceName}`}
+      className={inDialog ? undefined : "self-start"}
+      role={role}
+      size={inDialog ? "default" : "xs"}
+      type="submit"
+      variant="destructive"
+    >
+      <Trash2 data-icon="inline-start" />
+      Delete permanently
+    </PermissionButton>
+  )
 
   return (
     <form
       action={action}
-      className="flex flex-col gap-4 rounded-xl border border-destructive/40 bg-destructive/5 p-4"
+      className={
+        inDialog
+          ? "grid gap-5"
+          : "flex flex-col gap-4 rounded-xl border border-destructive/40 bg-destructive/5 p-4"
+      }
     >
       {Object.entries(hiddenFields).map(
         ([fieldName, fieldValue]: [string, string]): ReactElement => (
@@ -83,18 +105,7 @@ export function PurgeRequestForm({
           </FieldDescription>
         </Field>
       </FieldGroup>
-      <PermissionButton
-        action={permissionAction}
-        aria-label={`Permanently delete ${resourceName}`}
-        className="self-start"
-        role={role}
-        size="xs"
-        type="submit"
-        variant="destructive"
-      >
-        <Trash2 data-icon="inline-start" />
-        Delete permanently
-      </PermissionButton>
+      {inDialog ? <DialogFooter>{submit}</DialogFooter> : submit}
     </form>
   )
 }

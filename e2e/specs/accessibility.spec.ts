@@ -6,6 +6,7 @@ import {
   expectReachablePrimaryAction,
   expectVisibleKeyboardFocus,
 } from "../support/accessibility"
+import { retryConcurrentChange } from "../support/retry"
 import {
   seedPublicFormLink,
   seedSigningDocument,
@@ -183,7 +184,13 @@ test.describe("responsive interaction evidence", () => {
 test.describe("workspace lists stay inside the viewport", () => {
   const widths = [320, 390, 430, 768, 1024, 1440] as const
 
-  for (const path of ["/people", "/tasks", "/submissions", "/templates"] as const) {
+  for (const path of [
+    "/people",
+    "/tasks",
+    "/submissions",
+    "/templates",
+    "/documents",
+  ] as const) {
     test(`keeps ${path} inside the six viewport classes`, async ({
       admin,
       pageAs,
@@ -225,17 +232,30 @@ test.describe("workspace lists stay inside the viewport", () => {
           "published"
         )
       }
+      if (path === "/documents") {
+        const { error } = await retryConcurrentChange(() =>
+          admin.from("folders").insert({
+            created_by: owner.id,
+            name: `${title} folder`,
+            org_id: tenant.organizationId,
+            updated_by: owner.id,
+          })
+        )
+        if (error) throw error
+      }
 
       const page = await pageAs("owner_admin")
 
       await page.goto(path)
       // Streamed rows exist before they replace the loading fallback, so wait
       // until the first one is on screen and measure the list, not the fallback.
-      // Templates lays its library out as cards rather than rows.
+      // Templates lays its library out as cards, and Files starts in Icons.
       await expect(
         path === "/templates"
           ? page.locator('[data-slot="template-card"]').first()
-          : page.locator('[role="row"]').nth(1)
+          : path === "/documents"
+            ? page.locator('[data-slot="file-tile"]').first()
+            : page.locator('[role="row"]').nth(1)
       ).toBeVisible()
 
       for (const width of widths) {

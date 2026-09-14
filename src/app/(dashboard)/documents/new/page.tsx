@@ -87,7 +87,7 @@ export default async function NewDocumentPage({
           className={buttonVariants({ variant: "outline" })}
           href="/documents"
         >
-          Return to Documents
+          Return to Files
         </Link>
       </div>
     )
@@ -114,7 +114,7 @@ export default async function NewDocumentPage({
         <nav aria-label="New document folder path">
           <ol className="flex flex-wrap items-center gap-1 text-sm text-muted-foreground">
             <li>
-              <Link href="/documents">Documents</Link>
+              <Link href="/documents">Files</Link>
             </li>
             {folderPath.map((folder: DocumentFolder) => (
               <li className="flex items-center gap-1" key={folder.id}>
@@ -175,7 +175,7 @@ export default async function NewDocumentPage({
           <CardHeader>
             <CardTitle>Upload document</CardTitle>
             <CardDescription>
-              The file will be added to {activeFolder?.name ?? "Documents"}.
+              The file will be added to {activeFolder?.name ?? "Files"}.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -271,7 +271,7 @@ export default async function NewDocumentPage({
         })}
         href={locationHref}
       >
-        Back to {activeFolder?.name ?? "Documents"}
+        Back to {activeFolder?.name ?? "Files"}
       </Link>
     </div>
   )

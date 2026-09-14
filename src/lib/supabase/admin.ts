@@ -601,6 +601,13 @@ export type AdminDatabase = {
         }
         Returns: AuditChainVerificationRow[]
       }
+      document_card_contents: {
+        Args: {
+          document_ids: string[]
+          target_org_id: string
+        }
+        Returns: { content: unknown; id: string }[]
+      }
       document_template_card_contents: {
         Args: {
           target_org_id: string

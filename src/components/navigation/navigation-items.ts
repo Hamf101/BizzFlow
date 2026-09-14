@@ -47,8 +47,7 @@ export const NAVIGATION_ITEMS: readonly NavigationItem[] = [
   {
     href: "/documents",
     icon: FileText,
-    label: "Documents",
-    shortLabel: "Docs",
+    label: "Files",
     requiredAction: "documents:view",
   },
   {

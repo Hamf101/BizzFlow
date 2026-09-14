@@ -1,8 +1,16 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
+import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
 
+import {
+  FILES_LAYOUT_COOKIE,
+  FILES_LAYOUT_COOKIE_MAX_AGE,
+  FILES_PATH,
+  isFilesReturnPath,
+  parseFilesLayout,
+} from "@/components/files/file-list-view"
 import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
 import {
   buildFeedbackRedirect,
@@ -506,6 +514,32 @@ async function loadLifecycleActionContext(): Promise<{
     actorUserId: user.id,
     organizationId: context.organization.id,
   }
+}
+
+/**
+ * Remembers the layout a person picked in Files, as Finder does, and returns
+ * them to the same folder and item.
+ *
+ * @param formData - The chosen layout and the Files address to return to.
+ * @returns Never returns; redirects back to Files.
+ */
+export async function setFilesLayoutAction(formData: FormData): Promise<void> {
+  const returnTo = getFormString(formData, "returnTo")
+  const cookieStore = await cookies()
+
+  cookieStore.set(
+    FILES_LAYOUT_COOKIE,
+    parseFilesLayout(getFormString(formData, "layout")),
+    {
+      httpOnly: true,
+      maxAge: FILES_LAYOUT_COOKIE_MAX_AGE,
+      path: "/",
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+    }
+  )
+
+  redirect(isFilesReturnPath(returnTo) ? returnTo : FILES_PATH)
 }
 
 function getDocumentsReturnPath(formData: FormData): string {

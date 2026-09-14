@@ -63,7 +63,7 @@ const ROUTE_ERRORS: ReadonlyArray<{
   render: (error: Error & { digest?: string }, reset: () => void) => ReactElement
 }> = [
   { name: "Dashboard", render: (error, reset) => <DashboardError error={error} reset={reset} /> },
-  { name: "Documents", render: (error, reset) => <DocumentsError error={error} reset={reset} /> },
+  { name: "Files", render: (error, reset) => <DocumentsError error={error} reset={reset} /> },
   { name: "Templates", render: (error, reset) => <TemplatesError error={error} reset={reset} /> },
   { name: "Submissions", render: (error, reset) => <SubmissionsError error={error} reset={reset} /> },
   { name: "Tasks", render: (error, reset) => <TasksError error={error} reset={reset} /> },

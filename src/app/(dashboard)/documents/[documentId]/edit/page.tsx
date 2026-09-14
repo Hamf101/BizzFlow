@@ -157,7 +157,7 @@ export default async function GeneratedDocumentEditorPage({
             href={documentsHref}
           >
             <ArrowLeft />
-            Back to documents
+            Back to Files
           </Link>
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-2xl font-semibold tracking-normal">
