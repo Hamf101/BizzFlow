@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 
 import type { ListSort } from "@/lib/list-state"
 import {
@@ -9,7 +9,7 @@ import {
   listTemplatePage,
   type ListTemplatePageInput,
 } from "@/services/template-service"
-import type { TemplateSortKey } from "@/types/template"
+import { createBlankTemplateContent, type TemplateSortKey } from "@/types/template"
 
 const ORG_ID = "10000000-0000-4000-8000-000000000001"
 const OTHER_ORG_ID = "10000000-0000-4000-8000-000000000002"
@@ -29,6 +29,28 @@ class TemplateListClient {
 
   from(tableName: string): PostgrestReadQuery {
     return new PostgrestReadQuery(this.tables[tableName] ?? [])
+  }
+
+  // Stands in for document_template_card_contents: the requested templates of
+  // one organization, each with its stored content.
+  async rpc(
+    functionName: string,
+    args: { target_org_id: string; template_ids: string[] }
+  ): Promise<{ data: FakeRow[] | null; error: { message: string } | null }> {
+    if (functionName !== "document_template_card_contents") {
+      throw new Error(`Unexpected function ${functionName}`)
+    }
+
+    return {
+      data: (this.tables.document_templates ?? [])
+        .filter(
+          (row: FakeRow): boolean =>
+            row.org_id === args.target_org_id &&
+            args.template_ids.includes(String(row.id))
+        )
+        .map((row: FakeRow): FakeRow => ({ content: row.content, id: row.id })),
+      error: null,
+    }
   }
 }
 
@@ -116,14 +138,14 @@ const lifecycle = [
 ]
 
 describe("listTemplatePage", () => {
-  it("lists every template for managers, recently updated first, without content", async () => {
+  it("lists every template for managers, recently updated first", async () => {
     const page = await listTemplatePage(createPageInput(MANAGER_ID), createDeps(lifecycle))
 
     expect(page).toMatchObject({ page: 1, pageSize: 25, total: 4 })
     expect(page.templates.map((template): string => template.id)).toEqual(
       [1, 2, 3, 4].map(templateId)
     )
-    expect(page.templates[0]).toEqual({
+    expect(page.templates[0]).toMatchObject({
       category: null,
       createdAt: at(1),
       id: templateId(1),
@@ -133,6 +155,46 @@ describe("listTemplatePage", () => {
       title: "Template 0001",
       updatedAt: at(9_999),
     })
+  })
+
+  it("gives each card its own content, asked for once for the page and within the actor's organization", async () => {
+    const blank = createBlankTemplateContent()
+    const templates = [
+      createTemplateRow(1, { content: blank }),
+      createTemplateRow(2, { content: { blocks: "not a list", schemaVersion: 3 } }),
+      createTemplateRow(3, { content: blank, org_id: OTHER_ORG_ID }),
+    ]
+    const deps = createDeps(templates)
+    const rpc = vi.spyOn(deps.client as unknown as TemplateListClient, "rpc")
+
+    const page = await listTemplatePage(createPageInput(MANAGER_ID), deps)
+
+    expect(rpc).toHaveBeenCalledTimes(1)
+    expect(rpc).toHaveBeenCalledWith("document_template_card_contents", {
+      target_org_id: ORG_ID,
+      template_ids: [templateId(1), templateId(2)],
+    })
+    // Content that cannot be read leaves a blank page, not a broken library.
+    expect(
+      page.templates.map((template) => [template.id, template.content])
+    ).toEqual([
+      [templateId(1), blank],
+      [templateId(2), null],
+    ])
+  })
+
+  it("still lists every template when their contents cannot be read", async () => {
+    const deps = createDeps(lifecycle)
+    vi.spyOn(deps.client as unknown as TemplateListClient, "rpc").mockResolvedValue({
+      data: null,
+      error: { message: "Could not find the function" },
+    })
+
+    const page = await listTemplatePage(createPageInput(MANAGER_ID), deps)
+
+    expect(page.templates.map((template) => [template.id, template.content])).toEqual(
+      [1, 2, 3, 4].map((number: number) => [templateId(number), null])
+    )
   })
 
   it("shows members who cannot manage templates only published ones, whatever they ask for", async () => {

@@ -183,7 +183,7 @@ test.describe("responsive interaction evidence", () => {
 test.describe("workspace lists stay inside the viewport", () => {
   const widths = [320, 390, 430, 768, 1024, 1440] as const
 
-  for (const path of ["/people", "/tasks", "/submissions"] as const) {
+  for (const path of ["/people", "/tasks", "/submissions", "/templates"] as const) {
     test(`keeps ${path} inside the six viewport classes`, async ({
       admin,
       pageAs,
@@ -217,13 +217,26 @@ test.describe("workspace lists stay inside the viewport", () => {
           owner.id
         )
       }
+      if (path === "/templates") {
+        await seedTemplate(
+          admin,
+          tenant.organizationId,
+          `${title} template`,
+          "published"
+        )
+      }
 
       const page = await pageAs("owner_admin")
 
       await page.goto(path)
       // Streamed rows exist before they replace the loading fallback, so wait
       // until the first one is on screen and measure the list, not the fallback.
-      await expect(page.locator('[role="row"]').nth(1)).toBeVisible()
+      // Templates lays its library out as cards rather than rows.
+      await expect(
+        path === "/templates"
+          ? page.locator('[data-slot="template-card"]').first()
+          : page.locator('[role="row"]').nth(1)
+      ).toBeVisible()
 
       for (const width of widths) {
         await page.setViewportSize({ height: 900, width })

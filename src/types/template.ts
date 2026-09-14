@@ -803,6 +803,12 @@ export type DocumentTemplateSummary = Pick<
   "category" | "createdAt" | "id" | "organizationId" | "revision" | "status" | "title" | "updatedAt"
 >
 
+/** A template in the library, with the content its card draws its first page from. */
+export type DocumentTemplateCard = DocumentTemplateSummary & {
+  /** Large images are left behind; null when the content could not be read. */
+  content: TemplateContent | null
+}
+
 /** Orders the templates list offers. */
 export const TEMPLATE_SORT_KEYS = ["updated", "created", "title"] as const
 
@@ -811,6 +817,9 @@ export type TemplateSortKey = (typeof TEMPLATE_SORT_KEYS)[number]
 
 /** Longest templates-list search, in characters. */
 export const TEMPLATE_SEARCH_MAX_LENGTH = 100
+
+/** Longest category the `document_templates_category_check` constraint accepts. */
+export const TEMPLATE_CATEGORY_MAX_LENGTH = 40
 
 /** Database row containing field answers for one generated document. */
 export type DocumentAnswerRow = Record<string, unknown> & {

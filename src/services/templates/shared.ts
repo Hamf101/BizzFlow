@@ -33,7 +33,10 @@ import type {
   TemplateBlock,
   TemplateContent,
 } from "@/types/template"
-import { parseTemplateContent } from "@/types/template"
+import {
+  parseTemplateContent,
+  TEMPLATE_CATEGORY_MAX_LENGTH,
+} from "@/types/template"
 
 import type {
   TemplateServiceClient,
@@ -47,9 +50,6 @@ export const TEMPLATE_COLUMNS =
 /** Columns the templates list reads; template content stays behind. */
 export const TEMPLATE_SUMMARY_COLUMNS =
   "id,org_id,title,category,status,revision,created_at,updated_at"
-
-/** Longest category the `document_templates_category_check` constraint accepts. */
-export const TEMPLATE_CATEGORY_MAX_LENGTH = 40
 
 type LogValue = string | number | boolean | null | undefined
 

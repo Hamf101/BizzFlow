@@ -45,6 +45,17 @@ const USER_ID = "20000000-0000-4000-8000-000000000001"
 const ORGANIZATION_ID = "10000000-0000-4000-8000-000000000001"
 const TEMPLATE_ID = "30000000-0000-4000-8000-000000000001"
 const LINK_ID = "40000000-0000-4000-8000-000000000001"
+const LINKS_PATH = `/templates/${TEMPLATE_ID}/links`
+
+function createFormData(fields: Record<string, string>): FormData {
+  const formData = new FormData()
+
+  for (const [name, value] of Object.entries(fields)) {
+    formData.set(name, value)
+  }
+
+  return formData
+}
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -76,15 +87,16 @@ beforeEach(() => {
 })
 
 describe("public form link actions", () => {
-  it("creates a link before reporting its stable outcome", async () => {
-    const formData = new FormData()
-    formData.set("templateId", TEMPLATE_ID)
-    formData.set("expiresAt", "2026-12-31T12:00:00.000Z")
-    formData.set("maxSubmissions", "12")
-
-    await expect(createPublicFormLinkAction(formData)).rejects.toThrow(
-      "NEXT_REDIRECT:/templates?feedback=public_link_created"
-    )
+  it("creates a link and returns to the template's public links", async () => {
+    await expect(
+      createPublicFormLinkAction(
+        createFormData({
+          expiresAt: "2026-12-31T12:00:00.000Z",
+          maxSubmissions: "12",
+          templateId: TEMPLATE_ID,
+        })
+      )
+    ).rejects.toThrow(`NEXT_REDIRECT:${LINKS_PATH}?feedback=public_link_created`)
     expect(createPublicFormLink).toHaveBeenCalledExactlyOnceWith({
       actorUserId: USER_ID,
       organizationId: ORGANIZATION_ID,
@@ -92,21 +104,21 @@ describe("public form link actions", () => {
       expiresAt: "2026-12-31T12:00:00.000Z",
       maxSubmissions: 12,
     })
-    expect(revalidatePathMock).toHaveBeenCalledExactlyOnceWith("/templates")
+    expect(revalidatePathMock).toHaveBeenCalledExactlyOnceWith(LINKS_PATH)
   })
 
-  it("disables a link before reporting its stable outcome", async () => {
-    const formData = new FormData()
-    formData.set("linkId", LINK_ID)
-
-    await expect(disablePublicFormLinkAction(formData)).rejects.toThrow(
-      "NEXT_REDIRECT:/templates?feedback=public_link_disabled"
-    )
+  it("disables a link and returns to the template's public links", async () => {
+    await expect(
+      disablePublicFormLinkAction(
+        createFormData({ linkId: LINK_ID, templateId: TEMPLATE_ID })
+      )
+    ).rejects.toThrow(`NEXT_REDIRECT:${LINKS_PATH}?feedback=public_link_disabled`)
     expect(disablePublicFormLink).toHaveBeenCalledExactlyOnceWith({
       actorUserId: USER_ID,
       organizationId: ORGANIZATION_ID,
       linkId: LINK_ID,
     })
+    expect(revalidatePathMock).toHaveBeenCalledExactlyOnceWith(LINKS_PATH)
   })
 
   it("rejects a member without management permission before the service", async () => {
@@ -115,9 +127,9 @@ describe("public form link actions", () => {
       membership: { role: "staff" },
     } as never)
 
-    await expect(createPublicFormLinkAction(new FormData())).rejects.toThrow(
-      "NEXT_REDIRECT:/templates?feedback=permission_denied"
-    )
+    await expect(
+      createPublicFormLinkAction(createFormData({ templateId: TEMPLATE_ID }))
+    ).rejects.toThrow(`NEXT_REDIRECT:${LINKS_PATH}?feedback=permission_denied`)
     expect(createPublicFormLink).not.toHaveBeenCalled()
   })
 
@@ -126,21 +138,31 @@ describe("public form link actions", () => {
       new Error("private public-link persistence detail")
     )
 
-    await expect(createPublicFormLinkAction(new FormData())).rejects.toThrow(
-      "NEXT_REDIRECT:/templates?feedback=operation_failed"
-    )
+    await expect(
+      createPublicFormLinkAction(createFormData({ templateId: TEMPLATE_ID }))
+    ).rejects.toThrow(`NEXT_REDIRECT:${LINKS_PATH}?feedback=operation_failed`)
     expect(redirectMock).not.toHaveBeenCalledWith(
       expect.stringContaining("private+public-link")
     )
   })
 
-  it("preserves the template library login return path", async () => {
+  it("returns to the template's public links after signing in", async () => {
     vi.mocked(getAuthenticatedUser).mockRejectedValue(
       new AuthenticationError("Sign in to continue.")
     )
 
-    await expect(disablePublicFormLinkAction(new FormData())).rejects.toThrow(
-      "NEXT_REDIRECT:/login?next=%2Ftemplates"
-    )
+    await expect(
+      disablePublicFormLinkAction(
+        createFormData({ linkId: LINK_ID, templateId: TEMPLATE_ID })
+      )
+    ).rejects.toThrow(`NEXT_REDIRECT:/login?next=${encodeURIComponent(LINKS_PATH)}`)
+  })
+
+  it("returns to the template library when the form names no template it can link to", async () => {
+    for (const templateId of ["", "../people", `${TEMPLATE_ID}/../../people`]) {
+      await expect(
+        disablePublicFormLinkAction(createFormData({ linkId: LINK_ID, templateId }))
+      ).rejects.toThrow("NEXT_REDIRECT:/templates?feedback=public_link_disabled")
+    }
   })
 })

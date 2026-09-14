@@ -8,8 +8,12 @@ import {
   DOCUMENT_TEMPLATE_STATUSES,
   TEMPLATE_SEARCH_MAX_LENGTH,
   TEMPLATE_SORT_KEYS,
+  templateContentSchema,
+  type DocumentTemplateCard,
   type DocumentTemplateStatus,
+  type DocumentTemplateSummary,
   type DocumentTemplateSummaryRow,
+  type TemplateContent,
   type TemplateSortKey,
 } from "@/types/template"
 
@@ -71,7 +75,8 @@ type TemplateFilterQuery = {
  * sorted by a view.
  *
  * Owners and managers see every status; everyone else sees published
- * templates only. Rows leave template content behind.
+ * templates only. Each template carries the content its card draws its first
+ * page from, with large images left behind in the database.
  *
  * @param input - Actor, tenant, page, order, and view filters.
  * @param deps - Optional trusted database dependency.
@@ -132,16 +137,70 @@ export async function listTemplatePage(
           createDatabaseError(error, "Unable to load document templates.")
       )
 
+      const summaries = (rows as unknown as DocumentTemplateSummaryRow[]).map(
+        mapDocumentTemplateSummary
+      )
+      const contents = await readTemplateCardContents(
+        client,
+        input.organizationId,
+        summaries.map((summary: DocumentTemplateSummary): string => summary.id)
+      )
+
       return {
         page,
         pageSize,
-        templates: (rows as unknown as DocumentTemplateSummaryRow[]).map(
-          mapDocumentTemplateSummary
+        templates: summaries.map(
+          (summary: DocumentTemplateSummary): DocumentTemplateCard => ({
+            ...summary,
+            content: contents.get(summary.id) ?? null,
+          })
         ),
         total,
       }
     }
   )
+}
+
+/**
+ * Reads the content each card draws its first page from, with large images
+ * left behind in the database, for one page of one organization's templates.
+ *
+ * A card whose content cannot be read or parsed shows a blank page rather than
+ * taking the library down with it.
+ */
+async function readTemplateCardContents(
+  client: TemplateServiceClient,
+  organizationId: string,
+  templateIds: readonly string[]
+): Promise<Map<string, TemplateContent>> {
+  const contents = new Map<string, TemplateContent>()
+
+  if (templateIds.length === 0) {
+    return contents
+  }
+
+  const { data, error } = await client.rpc("document_template_card_contents", {
+    target_org_id: organizationId,
+    template_ids: [...templateIds],
+  })
+
+  if (error) {
+    console.warn("template_card_contents_unavailable", {
+      organizationId,
+      reason: error.message,
+    })
+    return contents
+  }
+
+  for (const row of data ?? []) {
+    const parsed = templateContentSchema.safeParse(row.content)
+
+    if (parsed.success) {
+      contents.set(row.id, parsed.data)
+    }
+  }
+
+  return contents
 }
 
 function filterVisibleTemplates<TQuery>(

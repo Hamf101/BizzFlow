@@ -1,8 +1,8 @@
 import type { ListSort } from "@/lib/list-state"
 import type { AdminSupabaseClient } from "@/lib/supabase/admin"
 import type {
+  DocumentTemplateCard,
   DocumentTemplateStatus,
-  DocumentTemplateSummary,
   TemplateContent,
   TemplateSortKey,
 } from "@/types/template"
@@ -36,11 +36,11 @@ export type ListTemplatePageInput = TemplateActorInput & {
   statuses?: readonly DocumentTemplateStatus[]
 }
 
-/** One page of templates and how many match its filters. */
+/** One page of template cards and how many match its filters. */
 export type TemplatePage = {
   page: number
   pageSize: number
-  templates: DocumentTemplateSummary[]
+  templates: DocumentTemplateCard[]
   total: number
 }
 
