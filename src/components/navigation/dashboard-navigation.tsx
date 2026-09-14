@@ -294,7 +294,13 @@ export function DashboardNavigation({
     <TooltipProvider>
       <nav
         aria-label="Primary navigation"
-        className={cn("relative flex flex-col gap-1", draft && "cursor-grabbing")}
+        className={cn(
+          "relative flex flex-col gap-1",
+          // Each tab sits in a wrapper that carries its drag and menu, so the
+          // collapsed column centres the wrappers, not the links inside them.
+          collapsed && "md:items-center",
+          draft && "cursor-grabbing"
+        )}
         ref={navigation}
       >
         {shownItems.map((item, index) => {
@@ -309,8 +315,8 @@ export function DashboardNavigation({
                 "group relative flex min-h-11 items-center gap-3 rounded-[8px] px-3 py-2 text-sm text-foreground/80 transition-colors motion-reduce:transition-none",
                 "hover:bg-secondary/70 hover:text-foreground",
                 isActive && "bg-secondary text-secondary-foreground",
-                collapsed &&
-                  "md:size-11 md:self-center md:justify-center md:p-0"
+                // The hidden label keeps no gap, so the icon sits in the middle.
+                collapsed && "md:size-11 md:justify-center md:gap-0 md:p-0"
               )}
               // The pointer drag below moves tabs; the browser's own link drag
               // would take the press away from it.
