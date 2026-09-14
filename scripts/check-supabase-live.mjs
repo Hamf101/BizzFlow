@@ -331,6 +331,23 @@ export const SERVICE_ROLE_READ_ONLY_RPC_CHECKS = [
       p_token: null,
     },
   },
+  // Empty id lists reach the execute grant without reading any tenant's rows.
+  {
+    name: "get_folder_access_levels",
+    args: {
+      target_org_id: null,
+      target_folder_ids: [],
+      target_actor_user_id: null,
+    },
+  },
+  {
+    name: "get_document_access_levels",
+    args: {
+      target_org_id: null,
+      target_document_ids: [],
+      target_actor_user_id: null,
+    },
+  },
 ]
 
 function readEnvFile() {

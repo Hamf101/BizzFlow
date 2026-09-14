@@ -573,6 +573,28 @@ export type AdminDatabase = {
         }
         Returns: DocumentAccessLevel | null
       }
+      get_document_access_levels: {
+        Args: {
+          target_org_id: string
+          target_document_ids: string[]
+          target_actor_user_id: string
+        }
+        Returns: {
+          access_level: DocumentAccessLevel | null
+          document_id: string
+        }[]
+      }
+      get_folder_access_levels: {
+        Args: {
+          target_org_id: string
+          target_folder_ids: string[]
+          target_actor_user_id: string
+        }
+        Returns: {
+          access_level: DocumentAccessLevel | null
+          folder_id: string
+        }[]
+      }
       verify_audit_log_chain: {
         Args: {
           target_org_id: string

@@ -342,6 +342,12 @@ The public-form smoke test does the same for anonymous submissions: a link's cap
 npx supabase db query --db-url "$SUPABASE_DB_URL" --file supabase/tests/public-form-submission-live-rpc.sql
 ```
 
+The bulk access smoke test checks that Files' batched access lookups answer exactly as the single lookups do for owners, managers, staff, reviewers, and outsiders, and that an oversized call is refused:
+
+```bash
+npx supabase db query --db-url "$SUPABASE_DB_URL" --file supabase/tests/resource-access-levels-live-rpc.sql
+```
+
 Signed-in users have no direct Data API access to tenant tables: tenant data reaches them only through the service layer, which checks current role-definition permissions. To verify that boundary against a project, provision the isolated owner, manager, staff, external-reviewer, and other-tenant synthetic fixtures documented by the fail-closed runner:
 
 ```bash

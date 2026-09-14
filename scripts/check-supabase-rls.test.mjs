@@ -223,6 +223,13 @@ describe("authenticated Supabase direct-access harness configuration", () => {
     expect(SERVICE_ROLE_READ_ONLY_RPC_CHECKS.map((rpc) => rpc.name)).toEqual([
       "validate_internal_submission_values",
       "increment_public_form_link_submission_count",
+      "get_folder_access_levels",
+      "get_document_access_levels",
+    ])
+    // The access probes ask about no ids, so they never read a tenant's rows.
+    expect(SERVICE_ROLE_READ_ONLY_RPC_CHECKS.slice(2).map((rpc) => rpc.args)).toEqual([
+      { target_org_id: null, target_folder_ids: [], target_actor_user_id: null },
+      { target_org_id: null, target_document_ids: [], target_actor_user_id: null },
     ])
     expect(
       SERVICE_ROLE_READ_ONLY_RPC_CHECKS[0].args.target_values.signature.length

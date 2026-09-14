@@ -186,28 +186,32 @@ describe("ACL-aware document workspace", () => {
     expect(workspace.documents.map((document) => document.id)).toEqual(
       expect.arrayContaining(["purge-document", "trashed-document"])
     )
-    expect(client.lifecycleFilters).toEqual([
-      ["trashed", "purge_pending"],
-      ["trashed", "purge_pending"],
-    ])
+    expect(client.lifecycleFilters.length).toBeGreaterThan(0)
+    expect(
+      client.lifecycleFilters.every(
+        (states: string[]): boolean =>
+          states.join() === "trashed,purge_pending"
+      )
+    ).toBe(true)
   })
 
-  it("bounds concurrent per-resource access lookups", async () => {
-    const client = new FakeWorkspaceClient({
-      organization_memberships: [createMembershipRow("manager")],
-      folders: Array.from({ length: 20 }, (_, index: number): FakeRow =>
-        createFolderRow({
-          id: `folder-${index}`,
-          name: `Folder ${String(index).padStart(2, "0")}`,
-        })
-      ),
-      documents: Array.from({ length: 20 }, (_, index: number): FakeRow =>
-        createDocumentRow({
-          id: `document-${index}`,
-          title: `Document ${String(index).padStart(2, "0")}`,
-        })
-      ),
-    })
+  it("lists every item past the response cap and asks for access a thousand at a time", async () => {
+    const client = new FakeWorkspaceClient(
+      {
+        organization_memberships: [createMembershipRow("manager")],
+        folders: Array.from({ length: 3 }, (_, index: number): FakeRow =>
+          createFolderRow({ id: `folder-${index}` })
+        ),
+        documents: Array.from({ length: 1_001 }, (_, index: number): FakeRow =>
+          createDocumentRow({
+            id: `document-${String(index).padStart(4, "0")}`,
+            title: `Document ${index}`,
+          })
+        ),
+      },
+      // A deployment may answer with fewer rows than a query asks for.
+      400
+    )
 
     const workspace = await listDocumentWorkspace(
       {
@@ -219,9 +223,20 @@ describe("ACL-aware document workspace", () => {
       }
     )
 
-    expect(workspace.folders).toHaveLength(20)
-    expect(workspace.documents).toHaveLength(20)
-    expect(client.maxConcurrentAccessRequests).toBe(8)
+    expect(workspace.folders).toHaveLength(3)
+    expect(
+      new Set(workspace.documents.map((document) => document.id)).size
+    ).toBe(1_001)
+    expect(
+      client.accessCalls.map(({ functionName, ids }) => [
+        functionName,
+        ids.length,
+      ])
+    ).toEqual([
+      ["get_folder_access_levels", 3],
+      ["get_document_access_levels", 1_000],
+      ["get_document_access_levels", 1],
+    ])
   })
 
   it("returns viewer access on trashed document detail for safe lifecycle controls", async () => {
@@ -267,43 +282,48 @@ type FakeWorkspaceTables = {
 }
 
 class FakeWorkspaceClient {
+  readonly accessCalls: Array<{ functionName: string; ids: string[] }> = []
   readonly lifecycleFilters: string[][] = []
-  maxConcurrentAccessRequests = 0
-  private readonly tables: FakeWorkspaceTables
-  private activeAccessRequests = 0
 
-  constructor(tables: FakeWorkspaceTables) {
-    this.tables = tables
-  }
+  /**
+   * @param tables - Rows the fake serves.
+   * @param maxRows - The most rows one response carries, as a deployment's
+   *   `max_rows` caps it below what a query asks for.
+   */
+  constructor(
+    private readonly tables: FakeWorkspaceTables,
+    private readonly maxRows = Number.POSITIVE_INFINITY
+  ) {}
 
   from(tableName: keyof FakeWorkspaceTables): FakeWorkspaceQuery {
     return new FakeWorkspaceQuery(
       this.tables[tableName],
-      this.lifecycleFilters
+      this.lifecycleFilters,
+      this.maxRows
     )
   }
 
   async rpc(
     functionName: string,
     args: Record<string, unknown>
-  ): Promise<{ data: string | null; error: null }> {
-    void args
-    const isAccessLookup =
-      functionName === "get_document_access_level" ||
-      functionName === "get_folder_access_level"
+  ): Promise<{ data: FakeRow[] | null; error: null }> {
+    const idColumn =
+      functionName === "get_folder_access_levels" ? "folder_id" : "document_id"
+    const ids = args[`target_${idColumn}s`]
 
-    if (isAccessLookup) {
-      this.activeAccessRequests += 1
-      this.maxConcurrentAccessRequests = Math.max(
-        this.maxConcurrentAccessRequests,
-        this.activeAccessRequests
-      )
-      await Promise.resolve()
-      this.activeAccessRequests -= 1
+    if (!Array.isArray(ids)) {
+      return { data: null, error: null }
     }
 
+    this.accessCalls.push({ functionName, ids: ids.map(String) })
+
     return {
-      data: isAccessLookup ? "contributor" : null,
+      data: ids.map(
+        (id: unknown): FakeRow => ({
+          access_level: "contributor",
+          [idColumn]: id,
+        })
+      ),
       error: null,
     }
   }
@@ -313,11 +333,25 @@ class FakeWorkspaceQuery {
   private readonly filters: Array<(row: FakeRow) => boolean> = []
   private orderColumn: string | null = null
   private orderAscending = true
+  private limitCount = Number.POSITIVE_INFINITY
 
   constructor(
     private readonly rows: FakeRow[],
-    private readonly lifecycleFilters: string[][]
+    private readonly lifecycleFilters: string[][],
+    private readonly maxRows: number
   ) {}
+
+  gt(column: string, value: unknown): FakeWorkspaceQuery {
+    this.filters.push(
+      (row: FakeRow): boolean => String(row[column]) > String(value)
+    )
+    return this
+  }
+
+  limit(count: number): FakeWorkspaceQuery {
+    this.limitCount = count
+    return this
+  }
 
   select(columns: string): FakeWorkspaceQuery {
     void columns
@@ -379,17 +413,17 @@ class FakeWorkspaceQuery {
       )
     )
 
-    if (!this.orderColumn) {
-      return rows
-    }
+    const ordered = this.orderColumn
+      ? [...rows].sort((left: FakeRow, right: FakeRow): number => {
+          const leftValue = String(left[this.orderColumn ?? ""])
+          const rightValue = String(right[this.orderColumn ?? ""])
+          return this.orderAscending
+            ? leftValue.localeCompare(rightValue)
+            : rightValue.localeCompare(leftValue)
+        })
+      : rows
 
-    return [...rows].sort((left: FakeRow, right: FakeRow): number => {
-      const leftValue = String(left[this.orderColumn ?? ""])
-      const rightValue = String(right[this.orderColumn ?? ""])
-      return this.orderAscending
-        ? leftValue.localeCompare(rightValue)
-        : rightValue.localeCompare(leftValue)
-    })
+    return ordered.slice(0, Math.min(this.limitCount, this.maxRows))
   }
 }
 

@@ -37,6 +37,7 @@ export type MigrationFileName =
   | "20260912202419_reconcile_template_visibility_and_role_protection.sql"
   | "20260913102656_atomic_public_form_submission.sql"
   | "20260913105307_expire_abandoned_submission_files.sql"
+  | "20260914114326_bulk_resource_access_levels.sql"
 
 export const directWriteActions = ["insert", "update", "delete"] as const
 

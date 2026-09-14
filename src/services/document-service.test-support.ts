@@ -61,9 +61,46 @@ export class FakeSupabaseClient {
       | "register_document_version_upload_authorization"
       | "complete_document_version"
       | "get_document_access_level"
-      | "get_folder_access_level",
+      | "get_document_access_levels"
+      | "get_folder_access_level"
+      | "get_folder_access_levels",
     args: Record<string, unknown>
-  ): Promise<{ data: string | boolean | null; error: Error | null }> {
+  ): Promise<{
+    data: string | boolean | FakeRow[] | null
+    error: Error | null
+  }> {
+    if (functionName === "get_document_access_levels") {
+      return {
+        data: (args.target_document_ids as string[]).map(
+          (documentId: string): FakeRow => ({
+            access_level: this.getEffectiveDocumentAccess(
+              String(args.target_org_id),
+              documentId,
+              String(args.target_actor_user_id)
+            ),
+            document_id: documentId,
+          })
+        ),
+        error: null,
+      }
+    }
+
+    if (functionName === "get_folder_access_levels") {
+      return {
+        data: (args.target_folder_ids as string[]).map(
+          (folderId: string): FakeRow => ({
+            access_level: this.getEffectiveFolderAccess(
+              String(args.target_org_id),
+              folderId,
+              String(args.target_actor_user_id)
+            ),
+            folder_id: folderId,
+          })
+        ),
+        error: null,
+      }
+    }
+
     if (functionName === "get_document_access_level") {
       return {
         data: this.getEffectiveDocumentAccess(
@@ -473,6 +510,16 @@ class FakeQueryBuilder {
 
   is(column: string, value: unknown): FakeQueryBuilder {
     this.filters.push((row: FakeRow) => row[column] === value)
+    return this
+  }
+
+  in(column: string, values: readonly unknown[]): FakeQueryBuilder {
+    this.filters.push((row: FakeRow) => values.includes(row[column]))
+    return this
+  }
+
+  gt(column: string, value: unknown): FakeQueryBuilder {
+    this.filters.push((row: FakeRow) => String(row[column]) > String(value))
     return this
   }
 
