@@ -4,7 +4,7 @@ import type { CSSProperties, ReactElement } from "react"
 
 import { ListFilterChips } from "@/components/data/list-filter-chips"
 import { ListPagination } from "@/components/data/list-pagination"
-import { ListViewMenu } from "@/components/data/list-view-menu"
+import { type ListSavedViews, ListViewMenu } from "@/components/data/list-view-menu"
 import { formatMemberName } from "@/components/people/member-name"
 import {
   getSubmissionSearchFields,
@@ -58,6 +58,7 @@ export function SubmissionsWorkspace({
   currentUserId,
   members,
   organizationId,
+  savedViews,
   submissions,
   total,
   view,
@@ -67,6 +68,7 @@ export function SubmissionsWorkspace({
   currentUserId: string
   members: OrganizationMember[]
   organizationId: string
+  savedViews: ListSavedViews["saved"]
   submissions: Submission[]
   total: number
   view: SubmissionListView
@@ -115,6 +117,11 @@ export function SubmissionsWorkspace({
           sections={getSubmissionViewMenuSections(view, members, {
             canFilterAssignee: canAssign,
           })}
+          views={{
+            list: "submissions",
+            query: submissionListState.toSearchParams({ ...view, page: 1 }).toString(),
+            saved: savedViews,
+          }}
         />
         {canCreate ? (
           <Link

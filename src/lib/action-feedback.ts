@@ -319,6 +319,44 @@ export const ACTION_FEEDBACK = {
     title: "Template published",
     tone: "success",
   },
+  view_deleted: {
+    analyticsEvent: "action_outcome",
+    durationMs: 5_000,
+    persistent: false,
+    title: "View deleted",
+    tone: "success",
+  },
+  view_not_renamed: {
+    analyticsEvent: "action_outcome",
+    description: "Choose a name you haven't used on this list.",
+    durationMs: 8_000,
+    persistent: true,
+    title: "View not renamed",
+    tone: "error",
+  },
+  view_not_saved: {
+    analyticsEvent: "action_outcome",
+    description:
+      "Choose a name you haven't used on this list, or delete a view first; a list keeps up to 20.",
+    durationMs: 8_000,
+    persistent: true,
+    title: "View not saved",
+    tone: "error",
+  },
+  view_renamed: {
+    analyticsEvent: "action_outcome",
+    durationMs: 5_000,
+    persistent: false,
+    title: "View renamed",
+    tone: "success",
+  },
+  view_saved: {
+    analyticsEvent: "action_outcome",
+    durationMs: 5_000,
+    persistent: false,
+    title: "View saved",
+    tone: "success",
+  },
 } as const satisfies Record<ActionFeedbackCode, ActionFeedbackDefinition>
 
 /**

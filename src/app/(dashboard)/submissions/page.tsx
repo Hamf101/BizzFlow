@@ -15,6 +15,7 @@ import { getPageErrorMessage } from "@/lib/page-errors"
 import { loadPageOrganizationContext } from "@/lib/page-organization-context"
 import { canPerformOrganizationAction } from "@/lib/permissions"
 import { listOrganizationPeople } from "@/services/organization-service"
+import { listSavedViews } from "@/services/saved-view-service"
 import {
   listSubmissionPage,
   type SubmissionPage,
@@ -65,7 +66,7 @@ export default async function SubmissionsPage({
     "submissions:assign"
   )
   const view = submissionListState.parse(query)
-  const [result, members] = await Promise.all([
+  const [result, members, savedViews] = await Promise.all([
     listSubmissionPage({
       actorUserId: user.id,
       assignedTo: getSubmissionViewAssignee(view),
@@ -108,6 +109,11 @@ export default async function SubmissionsPage({
             return [] as OrganizationMember[]
           })
       : Promise.resolve([] as OrganizationMember[]),
+    listSavedViews({
+      actorUserId: user.id,
+      list: "submissions",
+      organizationId: context.organization.id,
+    }).catch(() => []),
   ])
 
   if (result.submissionPage === null) {
@@ -143,6 +149,7 @@ export default async function SubmissionsPage({
         members={members}
         organizationId={context.organization.id}
         submissions={result.submissionPage.submissions}
+        savedViews={savedViews}
         total={result.submissionPage.total}
         view={view}
       />

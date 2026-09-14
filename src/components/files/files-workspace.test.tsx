@@ -164,6 +164,7 @@ function renderWorkspace({
       membership={membership}
       organizationId={ORG_ID}
       path={activeFolder ? [activeFolder] : []}
+      savedViews={[]}
       view={view}
     />
   )

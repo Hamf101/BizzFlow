@@ -21,6 +21,7 @@ import {
   type AuditLogPage,
 } from "@/services/audit-service"
 import { listOrganizationPeople } from "@/services/organization-service"
+import { listSavedViews } from "@/services/saved-view-service"
 import type { AuditChainVerification } from "@/types/audit"
 import type { OrganizationMember } from "@/types/organization"
 
@@ -85,7 +86,7 @@ export default async function AuditLogPage({
   }
 
   const view = auditLogListState.parse(query)
-  const [result, members] = await Promise.all([
+  const [result, members, savedViews] = await Promise.all([
     listAuditLogPage({
       actorUserId: user.id,
       organizationId: context.organization.id,
@@ -112,6 +113,11 @@ export default async function AuditLogPage({
     listOrganizationPeople(user.id, context.organization.id)
       .then((people) => people.members)
       .catch((): OrganizationMember[] => []),
+    listSavedViews({
+      actorUserId: user.id,
+      list: "audit-log",
+      organizationId: context.organization.id,
+    }).catch(() => []),
   ])
 
   if (result.auditPage === null) {
@@ -163,6 +169,7 @@ export default async function AuditLogPage({
           ) : null
         }
         members={members}
+        savedViews={savedViews}
         total={result.auditPage.total}
         view={view}
       />

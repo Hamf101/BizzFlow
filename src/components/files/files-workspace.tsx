@@ -3,7 +3,7 @@ import Link from "next/link"
 import type { ReactElement, ReactNode } from "react"
 
 import { ListFilterChips } from "@/components/data/list-filter-chips"
-import { ListViewMenu } from "@/components/data/list-view-menu"
+import { type ListSavedViews, ListViewMenu } from "@/components/data/list-view-menu"
 import { PurgeRequestForm } from "@/components/documents/purge-request-form"
 import type { FileEntry } from "@/components/files/file-entry"
 import {
@@ -102,6 +102,7 @@ export function FilesWorkspace({
   membership,
   organizationId,
   path,
+  savedViews,
   view,
 }: {
   actions: FilesWorkspaceActions
@@ -113,6 +114,7 @@ export function FilesWorkspace({
   membership: OrganizationPermissionSubject
   organizationId: string
   path: DocumentFolder[]
+  savedViews: ListSavedViews["saved"]
   view: FileListView
 }): ReactElement {
   const lifecycle = getFileLifecycleView(view)
@@ -400,6 +402,18 @@ export function FilesWorkspace({
           adjusted={isFileViewAdjusted(view)}
           label="View options"
           sections={getFileViewMenuSections(view)}
+          views={{
+            list: "documents",
+            // The item Columns or Gallery has chosen is not part of a view.
+            query: fileListState
+              .toSearchParams({
+                ...view,
+                filters: { ...view.filters, item: undefined },
+                page: 1,
+              })
+              .toString(),
+            saved: savedViews,
+          }}
         />
         {offersNew ? (
           <NewFileMenu addDocumentHref={addDocumentHref} newFolder={newFolder} />

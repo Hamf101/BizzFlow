@@ -107,15 +107,19 @@ describe("authenticated Supabase direct-access harness configuration", () => {
     expect(HELP_TEXT).not.toContain("SUBMISSION_ID")
   })
 
-  it("closes direct reads on exactly the tables the migration revokes", () => {
-    const migration = readFileSync(CLOSE_DIRECT_ACCESS_MIGRATION, "utf8")
-      .replace(/\s+/g, " ")
-      .toLowerCase()
-    const revokedTables =
-      migration
-        .match(/revoke all privileges on table (.+?) from anon, authenticated;/)?.[1]
-        .split(",")
-        .map((table) => table.trim().replace(/^public\./, "")) ?? []
+  it("closes direct reads on exactly the tables the migrations revoke", () => {
+    const revokedTables = [
+      CLOSE_DIRECT_ACCESS_MIGRATION,
+      "supabase/migrations/20260914215806_saved_list_views.sql",
+    ].flatMap(
+      (path) =>
+        readFileSync(path, "utf8")
+          .replace(/\s+/g, " ")
+          .toLowerCase()
+          .match(/revoke all privileges on table (.+?) from anon, authenticated;/)?.[1]
+          .split(",")
+          .map((table) => table.trim().replace(/^public\./, "")) ?? []
+    )
 
     expect(revokedTables.length).toBeGreaterThan(20)
     expect([...DIRECT_ACCESS_CLOSED_TABLES].sort()).toEqual([...revokedTables].sort())

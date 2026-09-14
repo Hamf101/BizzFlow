@@ -72,6 +72,7 @@ function renderWorkspace(
       internalMembers={[mara]}
       items={items}
       members={[mara]}
+      savedViews={[]}
       total={items.length}
       view={taskListState.parse(params)}
     />

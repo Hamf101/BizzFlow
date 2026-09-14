@@ -18,6 +18,7 @@ import { getPageErrorMessage } from "@/lib/page-errors"
 import { loadPageOrganizationContext } from "@/lib/page-organization-context"
 import { canPerformOrganizationAction } from "@/lib/permissions"
 import { listOrganizationPeople } from "@/services/organization-service"
+import { listSavedViews } from "@/services/saved-view-service"
 import { listTaskPage, type TaskPage } from "@/services/task-service"
 import type { OrganizationMember } from "@/types/organization"
 import { isTerminalTaskStatus, type Task } from "@/types/task"
@@ -83,7 +84,7 @@ export default async function TasksPage({
   }
 
   const view = taskListState.parse(query)
-  const [result, members] = await Promise.all([
+  const [result, members, savedViews] = await Promise.all([
     listTaskPage({
       actorUserId: user.id,
       assignedTo: view.filters.assignee,
@@ -114,6 +115,11 @@ export default async function TasksPage({
         })
         return [] as OrganizationMember[]
       }),
+    listSavedViews({
+      actorUserId: user.id,
+      list: "tasks",
+      organizationId: context.organization.id,
+    }).catch(() => []),
   ])
 
   if (result.taskPage === null) {
@@ -153,6 +159,7 @@ export default async function TasksPage({
         internalMembers={listInternalTaskMembers(members)}
         items={toTaskListItems(result.taskPage.tasks)}
         members={members}
+        savedViews={savedViews}
         total={result.taskPage.total}
         view={view}
       />

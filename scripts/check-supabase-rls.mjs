@@ -30,9 +30,10 @@ const REQUIRED_ENV_KEYS = [
 
 /**
  * Every tenant table signed-in sessions must not read or write directly: exactly
- * the tables 20260912194858_close_direct_tenant_table_access.sql revokes. Tenant
- * data reaches signed-in users only through services, which check each
- * member's current role-definition permissions.
+ * the tables 20260912194858_close_direct_tenant_table_access.sql and
+ * 20260914215806_saved_list_views.sql revoke. Tenant data reaches signed-in
+ * users only through services, which check each member's current
+ * role-definition permissions.
  */
 export const DIRECT_ACCESS_CLOSED_TABLES = Object.freeze([
   "audit_logs",
@@ -56,6 +57,7 @@ export const DIRECT_ACCESS_CLOSED_TABLES = Object.freeze([
   "resource_purge_jobs",
   "resource_purge_receipts",
   "resource_purge_tombstones",
+  "saved_list_views",
   "submission_activity_events",
   "submission_comments",
   "submission_files",

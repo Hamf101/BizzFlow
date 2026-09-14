@@ -14,6 +14,7 @@ import { loadAuthenticatedPageUser } from "@/lib/page-auth"
 import { getPageErrorMessage } from "@/lib/page-errors"
 import { loadPageOrganizationContext } from "@/lib/page-organization-context"
 import { canPerformOrganizationAction } from "@/lib/permissions"
+import { listSavedViews } from "@/services/saved-view-service"
 import {
   listDocumentTemplateCategories,
   listTemplatePage,
@@ -66,7 +67,7 @@ export default async function TemplatesPage({
     "templates:manage"
   )
   const view = templateListState.parse(query)
-  const [result, categories] = await Promise.all([
+  const [result, categories, savedViews] = await Promise.all([
     listTemplatePage({
       actorUserId: user.id,
       category: getTemplateViewCategory(view),
@@ -100,6 +101,11 @@ export default async function TemplatesPage({
       actorUserId: user.id,
       organizationId: context.organization.id,
     }).catch((): string[] => []),
+    listSavedViews({
+      actorUserId: user.id,
+      list: "templates",
+      organizationId: context.organization.id,
+    }).catch(() => []),
   ])
 
   if (result.templatePage === null) {
@@ -130,6 +136,7 @@ export default async function TemplatesPage({
         categories={categories}
         duplicateAction={duplicateTemplateAction}
         templates={result.templatePage.templates}
+        savedViews={savedViews}
         total={result.templatePage.total}
         view={view}
       />

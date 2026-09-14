@@ -4,7 +4,7 @@ import type { ReactElement } from "react"
 
 import { ListFilterChips } from "@/components/data/list-filter-chips"
 import { ListPagination } from "@/components/data/list-pagination"
-import { ListViewMenu } from "@/components/data/list-view-menu"
+import { type ListSavedViews, ListViewMenu } from "@/components/data/list-view-menu"
 import { formatMemberName } from "@/components/people/member-name"
 import { NewTaskDialog } from "@/components/tasks/new-task-dialog"
 import {
@@ -48,6 +48,7 @@ export function TasksWorkspace({
   internalMembers,
   items,
   members,
+  savedViews,
   total,
   view,
 }: {
@@ -58,6 +59,7 @@ export function TasksWorkspace({
   internalMembers: OrganizationMember[]
   items: TaskListItem[]
   members: OrganizationMember[]
+  savedViews: ListSavedViews["saved"]
   total: number
   view: TaskListView
 }): ReactElement {
@@ -102,6 +104,11 @@ export function TasksWorkspace({
           adjusted={isTaskViewAdjusted(view)}
           label="View options"
           sections={getTaskViewMenuSections(view, internalMembers)}
+          views={{
+            list: "tasks",
+            query: taskListState.toSearchParams({ ...view, page: 1 }).toString(),
+            saved: savedViews,
+          }}
         />
         {canCreate ? (
           <NewTaskDialog

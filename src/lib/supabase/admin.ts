@@ -419,6 +419,14 @@ export type AdminDatabase = {
           Pick<OrganizationRoleRow, "org_id" | "name">,
         Partial<OrganizationRoleRow>
       >
+      saved_list_views: DatabaseTable<
+        import("@/types/saved-view").SavedViewRecord,
+        Pick<
+          import("@/types/saved-view").SavedViewRecord,
+          "list" | "name" | "org_id" | "query" | "user_id"
+        >,
+        Partial<Pick<import("@/types/saved-view").SavedViewRecord, "name">>
+      >
       invites: DatabaseTable<
         InviteRow,
         Partial<InviteRow> & Pick<InviteRow, "org_id" | "email" | "role" | "token">,

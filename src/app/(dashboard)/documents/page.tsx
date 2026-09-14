@@ -24,6 +24,7 @@ import {
   listDocumentWorkspace,
   type DocumentCard,
 } from "@/services/document-service"
+import { listSavedViews } from "@/services/saved-view-service"
 import type { AccessibleDocumentFolder, DocumentWorkspace } from "@/types/document"
 
 import {
@@ -131,11 +132,18 @@ export default async function FilesPage({
   }
 
   const path = buildDocumentFolderPath(activeFolder, workspace.folders)
-  const cards = await loadCards(
-    user.id,
-    context.organization.id,
-    getCardRequest(layout, view, workspace.folders, workspace.documents, path)
-  )
+  const [cards, savedViews] = await Promise.all([
+    loadCards(
+      user.id,
+      context.organization.id,
+      getCardRequest(layout, view, workspace.folders, workspace.documents, path)
+    ),
+    listSavedViews({
+      actorUserId: user.id,
+      list: "documents",
+      organizationId: context.organization.id,
+    }).catch(() => []),
+  ])
 
   return (
     <FilesShell>
@@ -160,6 +168,7 @@ export default async function FilesPage({
         membership={context.membership}
         organizationId={context.organization.id}
         path={path}
+        savedViews={savedViews}
         view={view}
       />
     </FilesShell>

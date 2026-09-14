@@ -42,6 +42,11 @@ export const ACTION_FEEDBACK_CODES = [
   "template_created",
   "template_duplicated",
   "template_published",
+  "view_deleted",
+  "view_not_renamed",
+  "view_not_saved",
+  "view_renamed",
+  "view_saved",
 ] as const
 
 export type ActionFeedbackCode = (typeof ACTION_FEEDBACK_CODES)[number]

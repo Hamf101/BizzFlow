@@ -90,6 +90,7 @@ function renderWorkspace(
       currentUserId={VIEWER_ID}
       members={[mara]}
       organizationId={ORG_ID}
+      savedViews={[]}
       submissions={submissions}
       total={overrides.total ?? submissions.length}
       view={overrides.view ?? submissionListState.parse({})}

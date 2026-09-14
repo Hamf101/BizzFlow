@@ -10,7 +10,7 @@ import {
 } from "@/components/audit/audit-log-view"
 import { ListFilterChips } from "@/components/data/list-filter-chips"
 import { ListPagination } from "@/components/data/list-pagination"
-import { ListViewMenu } from "@/components/data/list-view-menu"
+import { type ListSavedViews, ListViewMenu } from "@/components/data/list-view-menu"
 import { formatMediumDateTime } from "@/lib/date-format"
 import { getLastPage } from "@/lib/list-state"
 import type { AuditLogEntry } from "@/types/audit"
@@ -31,6 +31,7 @@ export function AuditLogWorkspace({
   entries,
   integrity,
   members,
+  savedViews,
   total,
   view,
 }: {
@@ -38,6 +39,7 @@ export function AuditLogWorkspace({
   /** Tamper-check mark shown beside the title, when the viewer may verify. */
   integrity: ReactNode
   members: OrganizationMember[]
+  savedViews: ListSavedViews["saved"]
   total: number
   view: AuditLogView
 }): ReactElement {
@@ -62,6 +64,11 @@ export function AuditLogWorkspace({
             adjusted={isAuditViewAdjusted(view)}
             label="View options"
             sections={getAuditViewMenuSections(view)}
+            views={{
+              list: "audit-log",
+              query: auditLogListState.toSearchParams({ ...view, page: 1 }).toString(),
+              saved: savedViews,
+            }}
           />
         </div>
       </div>

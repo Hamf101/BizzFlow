@@ -4,7 +4,7 @@ import type { CSSProperties, ReactElement } from "react"
 
 import { ListFilterChips } from "@/components/data/list-filter-chips"
 import { ListPagination } from "@/components/data/list-pagination"
-import { ListViewMenu } from "@/components/data/list-view-menu"
+import { type ListSavedViews, ListViewMenu } from "@/components/data/list-view-menu"
 import {
   getTemplateSearchFields,
   getTemplateStatusOptions,
@@ -52,6 +52,7 @@ export function TemplatesWorkspace({
   canManage,
   categories,
   duplicateAction,
+  savedViews,
   templates,
   total,
   view,
@@ -59,6 +60,7 @@ export function TemplatesWorkspace({
   canManage: boolean
   categories: string[]
   duplicateAction: (formData: FormData) => Promise<void>
+  savedViews: ListSavedViews["saved"]
   templates: DocumentTemplateCard[]
   total: number
   view: TemplateListView
@@ -117,6 +119,11 @@ export function TemplatesWorkspace({
           adjusted={isTemplateViewAdjusted(view)}
           label="View options"
           sections={getTemplateViewMenuSections(view, categories)}
+          views={{
+            list: "templates",
+            query: templateListState.toSearchParams({ ...view, page: 1 }).toString(),
+            saved: savedViews,
+          }}
         />
         {canManage ? (
           <Link

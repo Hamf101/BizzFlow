@@ -56,6 +56,7 @@ function renderWorkspace(
       entries={entries}
       integrity={null}
       members={[mara]}
+      savedViews={[]}
       total={entries.length}
       view={auditLogListState.parse(params)}
     />

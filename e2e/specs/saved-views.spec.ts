@@ -1,0 +1,52 @@
+import { expect, test, uniqueName } from "../support/fixtures"
+import { waitForHydration } from "../support/hydration"
+
+test("saves a list's settings as a view, reopens, renames, and deletes it", async ({
+  pageAs,
+}) => {
+  // Staff keep views too. Both device projects save views for the same member
+  // at once, so each run's view is a search for its own unique name: their
+  // settings never match, and neither run can take the other's view as its own.
+  const page = await pageAs("staff")
+  const name = uniqueName("Search view")
+  const renamed = `${name} renamed`
+  const query = new URLSearchParams({ q: name }).toString()
+  const viewOptions = page.getByRole("button", { exact: true, name: "View options" })
+  const viewItem = (label: string) =>
+    page.getByRole("menuitem", { exact: true, name: label })
+
+  await page.goto(`/tasks?${query}`)
+  await waitForHydration(viewOptions)
+  await viewOptions.click()
+  await page.getByRole("menuitem", { name: "Save this view…" }).click()
+  await page.getByRole("dialog").getByLabel("Name").fill(name)
+  await page.getByRole("button", { name: "Save view" }).click()
+  await expect(page.getByText("View saved")).toBeVisible()
+
+  // From the list's default settings, the menu leads back to the view.
+  await page.goto("/tasks")
+  await waitForHydration(viewOptions)
+  await viewOptions.click()
+  await viewItem(name).click()
+  await expect(page).toHaveURL(
+    new RegExp(`/tasks\\?${query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`)
+  )
+
+  await viewOptions.click()
+  await expect(viewItem(name)).toHaveAttribute("aria-current", "true")
+  await page.getByRole("menuitem", { name: "Rename this view…" }).click()
+  const nameField = page.getByRole("dialog").getByLabel("Name")
+  await expect(nameField).toHaveValue(name)
+  await nameField.fill(renamed)
+  await page.getByRole("button", { name: "Rename view" }).click()
+  await expect(page.getByText("View renamed")).toBeVisible()
+
+  await viewOptions.click()
+  await expect(viewItem(renamed)).toHaveAttribute("aria-current", "true")
+  await page.getByRole("menuitem", { name: "Delete this view" }).click()
+  await expect(page.getByText("View deleted")).toBeVisible()
+
+  await viewOptions.click()
+  await expect(viewItem(renamed)).toHaveCount(0)
+  await expect(page.getByRole("menuitem", { name: "Save this view…" })).toBeVisible()
+})

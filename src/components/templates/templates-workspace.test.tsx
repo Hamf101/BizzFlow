@@ -87,6 +87,7 @@ function renderWorkspace(
       canManage={overrides.canManage ?? true}
       categories={["Leasing"]}
       duplicateAction={duplicateAction}
+      savedViews={[]}
       templates={templates}
       total={overrides.total ?? templates.length}
       view={overrides.view ?? templateListState.parse({})}
