@@ -5,6 +5,7 @@ import type {
   ListSubmissionPageInput,
   SubmissionDetail,
   SubmissionPage,
+  SubmissionPreview,
   SubmissionServiceClient,
   SubmissionServiceDeps,
 } from "@/services/submissions/contracts"
@@ -28,6 +29,7 @@ import {
 } from "@/services/submissions/shared"
 import {
   parseSubmissionRow,
+  type Submission,
   type SubmissionSortKey,
 } from "@/types/submission"
 
@@ -148,20 +150,7 @@ export async function getInternalSubmission(
     input,
     async (): Promise<SubmissionDetail> => {
       const client = getSubmissionClient(deps)
-      const permissionSubject = await requireSubmissionPermission(
-        client,
-        input.organizationId,
-        input.actorUserId,
-        "submissions:view",
-        "You cannot view internal submissions."
-      )
-      const role = getOrganizationRoleFromSubject(permissionSubject)
-      const submission = await getSubmissionById(
-        client,
-        input.organizationId,
-        input.submissionId
-      )
-      assertSubmissionVisible(role, submission, input.actorUserId)
+      const { role, submission } = await loadVisibleSubmission(client, input)
       const [files, reviewData] = await Promise.all([
         listSubmissionFiles(
           client,
@@ -181,4 +170,63 @@ export async function getInternalSubmission(
       return { submission, files, ...reviewData }
     }
   )
+}
+
+/**
+ * Loads what the list's hover preview draws for one visible submission: its
+ * title, the template snapshot it was written against, and its answers.
+ * Files, comments, and activity stay on the submission's own page.
+ *
+ * @param input - Actor, tenant, and submission identifiers.
+ * @param deps - Optional trusted database dependency.
+ * @returns The submission's title, snapshot, and answers.
+ * @throws SubmissionServiceError when access is denied or the row is absent.
+ */
+export async function getInternalSubmissionPreview(
+  input: GetInternalSubmissionInput,
+  deps: SubmissionServiceDeps = {}
+): Promise<SubmissionPreview> {
+  return runSubmissionOperation(
+    "get_internal_submission_preview",
+    input,
+    async (): Promise<SubmissionPreview> => {
+      const { submission } = await loadVisibleSubmission(
+        getSubmissionClient(deps),
+        input
+      )
+
+      return {
+        answers: submission.values,
+        content: submission.templateSnapshot,
+        title: submission.title,
+      }
+    }
+  )
+}
+
+// The detail page and the preview must never disagree about who may see a
+// submission, so both come through this one check.
+async function loadVisibleSubmission(
+  client: SubmissionServiceClient,
+  input: GetInternalSubmissionInput
+): Promise<{
+  role: ReturnType<typeof getOrganizationRoleFromSubject>
+  submission: Submission
+}> {
+  const permissionSubject = await requireSubmissionPermission(
+    client,
+    input.organizationId,
+    input.actorUserId,
+    "submissions:view",
+    "You cannot view internal submissions."
+  )
+  const role = getOrganizationRoleFromSubject(permissionSubject)
+  const submission = await getSubmissionById(
+    client,
+    input.organizationId,
+    input.submissionId
+  )
+  assertSubmissionVisible(role, submission, input.actorUserId)
+
+  return { role, submission }
 }

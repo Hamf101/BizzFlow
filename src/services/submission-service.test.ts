@@ -11,6 +11,7 @@ import {
   expireAbandonedSubmissionFiles,
   exportInternalSubmissionsCsv,
   getInternalSubmission,
+  getInternalSubmissionPreview,
   listSubmissionPage,
   saveInternalSubmissionDraft,
   type ListSubmissionPageInput,
@@ -172,6 +173,39 @@ describe("internal submission visibility", () => {
         toStatus: "in_review"
       })
     ])
+  })
+})
+
+describe("internal submission preview", () => {
+  it("previews exactly the title, snapshot, and answers a member may open, and nothing of the rest", async () => {
+    const client = createClient()
+    const input = {
+      actorUserId: MANAGER_ID,
+      organizationId: ORGANIZATION_ID,
+      submissionId: SUBMISSION_ID
+    }
+
+    const [preview, detail] = await Promise.all([
+      getInternalSubmissionPreview(input, { client: client as never }),
+      getInternalSubmission(input, { client: client as never })
+    ])
+
+    // Only what the pages draw; files, comments, and activity stay behind.
+    expect(preview).toEqual({
+      answers: detail.submission.values,
+      content: detail.submission.templateSnapshot,
+      title: detail.submission.title
+    })
+    await expect(
+      getInternalSubmissionPreview(
+        {
+          actorUserId: STAFF_ID,
+          organizationId: ORGANIZATION_ID,
+          submissionId: OTHER_SUBMISSION_ID
+        },
+        { client: client as never }
+      )
+    ).rejects.toMatchObject({ statusCode: 404 })
   })
 })
 

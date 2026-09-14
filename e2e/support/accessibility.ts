@@ -26,6 +26,20 @@ type TargetBox = {
 export async function expectNoActionableAxeViolations(
   page: Page
 ): Promise<void> {
+  // Judge the page as it rests: a list still rising in is momentarily paler
+  // than it will be. Only finite animations are awaited, so a spinner or a
+  // loading pulse cannot hold the scan up.
+  await page.evaluate(() =>
+    Promise.all(
+      document
+        .getAnimations()
+        .filter(
+          (animation: Animation): boolean =>
+            animation.effect?.getComputedTiming().iterations !== Infinity
+        )
+        .map((animation: Animation) => animation.finished.catch(() => undefined))
+    ).then(() => undefined)
+  )
   const results = await new AxeBuilder({ page }).analyze()
   const actionable = results.violations.filter((violation) =>
     ACTIONABLE_IMPACTS.has(violation.impact ?? "")

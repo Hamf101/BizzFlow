@@ -89,6 +89,7 @@ function renderWorkspace(
       canCreate={overrides.canCreate ?? true}
       currentUserId={VIEWER_ID}
       members={[mara]}
+      organizationId={ORG_ID}
       submissions={submissions}
       total={overrides.total ?? submissions.length}
       view={overrides.view ?? submissionListState.parse({})}
@@ -145,7 +146,7 @@ describe("SubmissionsWorkspace", () => {
     expect(form?.querySelector('input[name="q"]')?.getAttribute("value")).toBe("old")
   })
 
-  it("lists each submission by its title, linked to it, with its status and assignee", () => {
+  it("lists each submission by its title, linked to it, with how far it has come and its assignee", () => {
     renderWorkspace()
 
     const links = [
@@ -159,7 +160,10 @@ describe("SubmissionsWorkspace", () => {
     expect(links[1]?.getAttribute("href")).toBe(
       `/submissions/${SECOND_SUBMISSION_ID}`
     )
-    expect(readCells("submission-status")).toEqual(["Draft", "In review"])
+    expect(readCells("submission-status")).toEqual([
+      "Draft · step 1 of 5",
+      "In review · step 3 of 5",
+    ])
     expect(readCells("submission-assignee")).toEqual(["Unassigned", "Mara Bell"])
   })
 
@@ -171,7 +175,7 @@ describe("SubmissionsWorkspace", () => {
       [...document.querySelectorAll('[role="columnheader"]')].map(
         (header: Element) => header.textContent
       )
-    ).toEqual(["Submission", "Status", "Updated"])
+    ).toEqual(["Submission", "Progress", "Updated"])
   })
 
   it("offers a new submission only to members who can start one", () => {

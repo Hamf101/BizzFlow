@@ -1,6 +1,6 @@
 import { Plus, Search } from "lucide-react"
 import Link from "next/link"
-import type { ReactElement } from "react"
+import type { CSSProperties, ReactElement } from "react"
 
 import { ListFilterChips } from "@/components/data/list-filter-chips"
 import { ListPagination } from "@/components/data/list-pagination"
@@ -14,7 +14,11 @@ import {
   submissionListState,
   type SubmissionListView,
 } from "@/components/submissions/submission-list-view"
-import { SubmissionStatusBadge } from "@/components/submissions/submission-status-badge"
+import {
+  SubmissionProgress,
+  SubmissionStatusMark,
+} from "@/components/submissions/submission-progress"
+import { SubmissionTitlePreview } from "@/components/submissions/submission-title-preview"
 import { buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { formatMediumDate } from "@/lib/date-format"
@@ -29,15 +33,21 @@ import {
 const SUBMISSIONS_PATH = "/submissions"
 
 // People who assign reviews see an assignee column; everyone else does not.
+// Below `lg` a row keeps its title and its track, and the rest folds away.
 const GRID_WITH_ASSIGNEE =
-  "md:grid-cols-[minmax(16rem,1.6fr)_minmax(7rem,.6fr)_minmax(9rem,.8fr)_minmax(8rem,.7fr)]"
+  "lg:grid-cols-[minmax(14rem,1.6fr)_minmax(8.5rem,.8fr)_minmax(8rem,.7fr)_minmax(6rem,.5fr)]"
 const GRID_WITHOUT_ASSIGNEE =
-  "md:grid-cols-[minmax(16rem,1.8fr)_minmax(7rem,.6fr)_minmax(8rem,.7fr)]"
+  "lg:grid-cols-[minmax(14rem,1.8fr)_minmax(8.5rem,.8fr)_minmax(6rem,.5fr)]"
+
+/** Rows rise in one after another; later rows share the last step's delay. */
+const MAX_STAGGERED_ROWS = 10
+const ROW_STAGGER_MS = 25
 
 /**
  * Renders the Submissions workspace in the People pattern: a quiet front with
- * search, status pills, and title-first rows, and every other tool — order,
- * assignee, export — kept behind the view menu until it is wanted.
+ * search, status pills, and rows that lead with each submission's status and
+ * show how far it has come, and every other tool — order, assignee, export —
+ * kept behind the view menu until it is wanted.
  *
  * @param props - The current view, its page of submissions, members, and access.
  * @returns The Submissions workspace.
@@ -47,6 +57,7 @@ export function SubmissionsWorkspace({
   canCreate,
   currentUserId,
   members,
+  organizationId,
   submissions,
   total,
   view,
@@ -55,6 +66,7 @@ export function SubmissionsWorkspace({
   canCreate: boolean
   currentUserId: string
   members: OrganizationMember[]
+  organizationId: string
   submissions: Submission[]
   total: number
   view: SubmissionListView
@@ -119,6 +131,7 @@ export function SubmissionsWorkspace({
       </div>
 
       <ListFilterChips
+        glide
         label="Filter submissions by status"
         options={getSubmissionStatusOptions(view)}
       />
@@ -143,23 +156,31 @@ export function SubmissionsWorkspace({
         >
           <div
             className={cn(
-              "hidden gap-4 px-3 py-2 text-[11px] font-normal tracking-[0.08em] text-muted-foreground uppercase md:grid",
+              "hidden gap-4 px-3 py-2 text-[11px] font-normal tracking-[0.08em] text-muted-foreground uppercase lg:grid",
               grid
             )}
             role="row"
           >
-            <span role="columnheader">Submission</span>
-            <span role="columnheader">Status</span>
+            {/* Every row leads with its status mark, so the heading starts
+                where the titles do. */}
+            <span className="pl-[42px]" role="columnheader">
+              Submission
+            </span>
+            <span role="columnheader">Progress</span>
             {canAssign ? <span role="columnheader">Assignee</span> : null}
-            <span role="columnheader">Updated</span>
+            <span className="text-right" role="columnheader">
+              Updated
+            </span>
           </div>
-          {submissions.map((submission: Submission) => (
+          {submissions.map((submission: Submission, index: number) => (
             <SubmissionRow
               canAssign={canAssign}
               currentUserId={currentUserId}
               grid={grid}
+              index={index}
               key={submission.id}
               members={members}
+              organizationId={organizationId}
               submission={submission}
             />
           ))}
@@ -193,59 +214,69 @@ function SubmissionRow({
   canAssign,
   currentUserId,
   grid,
+  index,
   members,
+  organizationId,
   submission,
 }: {
   canAssign: boolean
   currentUserId: string
   grid: string
+  index: number
   members: OrganizationMember[]
+  organizationId: string
   submission: Submission
 }): ReactElement {
   const updated = formatMediumDate(submission.updatedAt)
+  const riseDelay = {
+    "--row-delay": `${Math.min(index, MAX_STAGGERED_ROWS) * ROW_STAGGER_MS}ms`,
+  } as CSSProperties
 
   return (
     <div
       className={cn(
-        "grid min-h-14 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-[12px] px-1 py-2 transition-colors hover:bg-card/65 md:gap-4 md:px-3",
+        "grid min-h-14 grid-cols-[minmax(0,1fr)_6rem] items-center gap-3 rounded-[12px] px-1 py-2 transition-[background-color,translate] duration-200 hover:bg-card/65 data-[previewing=true]:bg-card/65 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-1 motion-safe:fill-mode-backwards motion-safe:[--tw-animation-delay:var(--row-delay)] motion-safe:hover:-translate-y-px lg:gap-4 lg:px-3",
         grid
       )}
       data-slot="submission-row"
       role="row"
+      style={riseDelay}
     >
-      <div className="flex min-w-0 flex-col gap-0.5" role="cell">
-        <Link
-          className="w-fit max-w-full truncate rounded-[6px] text-sm font-medium text-foreground outline-none hover:text-primary focus-visible:ring-2 focus-visible:ring-ring/35"
-          href={`/submissions/${encodeURIComponent(submission.id)}`}
-        >
-          {submission.title}
-        </Link>
-        <span
-          className="text-xs text-muted-foreground tabular-nums md:hidden"
-          data-slot="submission-updated-compact"
-        >
-          <span className="sr-only">Updated </span>
-          {updated}
-        </span>
+      <div className="flex min-w-0 items-center gap-3" role="cell">
+        <SubmissionStatusMark status={submission.status} />
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <SubmissionTitlePreview
+            href={`/submissions/${encodeURIComponent(submission.id)}`}
+            organizationId={organizationId}
+            submissionId={submission.id}
+            title={submission.title}
+          />
+          <span
+            className="text-xs text-muted-foreground tabular-nums lg:hidden"
+            data-slot="submission-updated-compact"
+          >
+            <span className="sr-only">Updated </span>
+            {updated}
+          </span>
+        </div>
       </div>
-      <div
-        className="justify-self-end md:justify-self-start"
-        data-slot="submission-status"
-        role="cell"
-      >
-        <SubmissionStatusBadge status={submission.status} />
+      <div className="min-w-0" data-slot="submission-status" role="cell">
+        <SubmissionProgress status={submission.status} />
       </div>
       {canAssign ? (
         <span
-          className="hidden truncate text-sm text-muted-foreground md:block"
+          className="hidden min-w-0 items-center gap-2 text-sm text-muted-foreground lg:flex"
           data-slot="submission-assignee"
           role="cell"
         >
-          {formatMemberName(submission.assignedTo, members, currentUserId)}
+          <AssigneeInitials assignedTo={submission.assignedTo} members={members} />
+          <span className="truncate">
+            {formatMemberName(submission.assignedTo, members, currentUserId)}
+          </span>
         </span>
       ) : null}
       <span
-        className="hidden text-sm text-muted-foreground tabular-nums md:block"
+        className="hidden text-right text-sm text-muted-foreground tabular-nums lg:block"
         data-slot="submission-updated"
         role="cell"
       >
@@ -253,4 +284,40 @@ function SubmissionRow({
       </span>
     </div>
   )
+}
+
+// The name beside the circle is what gets read out, so the initials are drawn
+// from an attribute and never become text of their own.
+function AssigneeInitials({
+  assignedTo,
+  members,
+}: {
+  assignedTo: string | null
+  members: OrganizationMember[]
+}): ReactElement {
+  const member = members.find(
+    (candidate: OrganizationMember) => candidate.userId === assignedTo
+  )
+
+  return (
+    <span
+      aria-hidden="true"
+      className={cn(
+        "grid size-6 shrink-0 place-items-center rounded-full text-[10px] font-medium before:content-[attr(data-initials)]",
+        assignedTo === null
+          ? "border border-dashed border-border"
+          : "bg-secondary text-secondary-foreground"
+      )}
+      data-initials={member ? getInitials(member.fullName || member.email) : ""}
+    />
+  )
+}
+
+function getInitials(name: string): string {
+  return name
+    .split(/[\s@._-]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part: string) => part.charAt(0).toUpperCase())
+    .join("")
 }

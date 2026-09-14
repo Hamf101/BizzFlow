@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   completeInternalSubmissionFile: vi.fn(),
   createInternalSubmissionFileDownloadUrl: vi.fn(),
   getAuthenticatedUser: vi.fn(),
+  getInternalSubmissionPreview: vi.fn(),
   readTrustedJsonObject: vi.fn(),
   supersedeInternalSubmissionFile: vi.fn(),
 }))
@@ -39,6 +40,7 @@ vi.mock("@/services/submission-service", () => ({
   completeInternalSubmissionFile: mocks.completeInternalSubmissionFile,
   createInternalSubmissionFileDownloadUrl:
     mocks.createInternalSubmissionFileDownloadUrl,
+  getInternalSubmissionPreview: mocks.getInternalSubmissionPreview,
   supersedeInternalSubmissionFile: mocks.supersedeInternalSubmissionFile,
 }))
 
@@ -49,6 +51,7 @@ import { POST as allocateFile } from "./[submissionId]/files/upload-url/route"
 import { POST as completeFile } from "./[submissionId]/files/[fileId]/complete/route"
 import { POST as downloadFile } from "./[submissionId]/files/[fileId]/download-url/route"
 import { POST as supersedeFile } from "./[submissionId]/files/[fileId]/supersede/route"
+import { POST as previewSubmission } from "./[submissionId]/preview/route"
 
 const actor = { id: "11111111-1111-4111-8111-111111111111" }
 const organizationId = "22222222-2222-4222-8222-222222222222"
@@ -197,6 +200,33 @@ describe("submission file routes", () => {
 
     expect(response.status).toBe(401)
     expect(mocks.completeInternalSubmissionFile).not.toHaveBeenCalled()
+  })
+})
+
+describe("submission preview route", () => {
+  it("returns a visible submission's pages for the signed-in member, never cached", async () => {
+    const preview = {
+      answers: { client_reference: "REF-4417" },
+      content: { schemaVersion: 3 },
+      title: "Lease renewal",
+    }
+    mocks.readTrustedJsonObject.mockResolvedValue({ organizationId })
+    mocks.getInternalSubmissionPreview.mockResolvedValue(preview)
+
+    const response = await previewSubmission(createJsonRequest(), {
+      params: Promise.resolve({ submissionId }),
+    })
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get("cache-control")).toBe(
+      "private, no-store, max-age=0"
+    )
+    await expect(response.json()).resolves.toEqual(preview)
+    expect(mocks.getInternalSubmissionPreview).toHaveBeenCalledWith({
+      actorUserId: actor.id,
+      organizationId,
+      submissionId,
+    })
   })
 })
 

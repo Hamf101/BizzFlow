@@ -141,6 +141,7 @@ export default async function SubmissionsPage({
         )}
         currentUserId={user.id}
         members={members}
+        organizationId={context.organization.id}
         submissions={result.submissionPage.submissions}
         total={result.submissionPage.total}
         view={view}

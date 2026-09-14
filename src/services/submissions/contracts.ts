@@ -40,6 +40,13 @@ export type SubmissionDetail = {
   activity: SubmissionActivityEvent[]
 }
 
+/** What the list's hover preview draws for one visible submission, and no more. */
+export type SubmissionPreview = {
+  answers: SubmissionAnswers
+  content: Submission["templateSnapshot"]
+  title: string
+}
+
 /** Actor and tenant identifiers shared by submission calls. */
 export type SubmissionActorInput = {
   actorUserId: string

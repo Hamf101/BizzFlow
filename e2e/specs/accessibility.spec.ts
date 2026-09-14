@@ -9,6 +9,7 @@ import {
 import {
   seedPublicFormLink,
   seedSigningDocument,
+  seedSubmission,
   seedTemplate,
 } from "../support/seed"
 
@@ -182,7 +183,7 @@ test.describe("responsive interaction evidence", () => {
 test.describe("workspace lists stay inside the viewport", () => {
   const widths = [320, 390, 430, 768, 1024, 1440] as const
 
-  for (const path of ["/people", "/tasks"] as const) {
+  for (const path of ["/people", "/tasks", "/submissions"] as const) {
     test(`keeps ${path} inside the six viewport classes`, async ({
       admin,
       pageAs,
@@ -200,6 +201,21 @@ test.describe("workspace lists stay inside the viewport", () => {
           updated_by: owner.id,
         })
         if (error) throw error
+      }
+      if (path === "/submissions") {
+        const template = await seedTemplate(
+          admin,
+          tenant.organizationId,
+          `${title} template`,
+          "published"
+        )
+        await seedSubmission(
+          admin,
+          tenant.organizationId,
+          template,
+          `${title} submission`,
+          owner.id
+        )
       }
 
       const page = await pageAs("owner_admin")

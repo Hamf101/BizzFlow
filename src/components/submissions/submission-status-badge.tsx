@@ -38,3 +38,13 @@ export function SubmissionStatusBadge({
     <Badge variant={presentation.variant}>{presentation.label}</Badge>
   )
 }
+
+/**
+ * Names a submission status the way every submission screen spells it.
+ *
+ * @param status - Current submission review status.
+ * @returns The status's human-readable label.
+ */
+export function getSubmissionStatusLabel(status: SubmissionStatus): string {
+  return SUBMISSION_STATUS_PRESENTATIONS[status].label
+}

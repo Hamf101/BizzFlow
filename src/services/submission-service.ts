@@ -14,6 +14,7 @@ export type {
   SaveInternalSubmissionDraftInput,
   SubmissionDetail,
   SubmissionPage,
+  SubmissionPreview,
   SubmissionServiceDeps,
   SubmitInternalSubmissionInput,
   SupersedeInternalSubmissionFileInput,
@@ -45,6 +46,7 @@ export {
 } from "@/services/submissions/file-service"
 export {
   getInternalSubmission,
+  getInternalSubmissionPreview,
   listSubmissionPage,
 } from "@/services/submissions/workspace-service"
 export {
