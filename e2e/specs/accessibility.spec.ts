@@ -178,3 +178,41 @@ test.describe("responsive interaction evidence", () => {
     await expect(page).toHaveURL(/\/documents(?:\?|$)/)
   })
 })
+
+test.describe("workspace lists stay inside the viewport", () => {
+  const widths = [320, 390, 430, 768, 1024, 1440] as const
+
+  for (const path of ["/people", "/tasks"] as const) {
+    test(`keeps ${path} inside the six viewport classes`, async ({
+      admin,
+      pageAs,
+      tenant,
+    }) => {
+      const title = uniqueName("Viewport")
+      const owner = tenant.users.owner_admin
+
+      // A list draws its columns only once it has a row, so each gets one.
+      if (path === "/tasks") {
+        const { error } = await admin.from("tasks").insert({
+          created_by: owner.id,
+          org_id: tenant.organizationId,
+          title: `${title} task`,
+          updated_by: owner.id,
+        })
+        if (error) throw error
+      }
+
+      const page = await pageAs("owner_admin")
+
+      await page.goto(path)
+      // Streamed rows exist before they replace the loading fallback, so wait
+      // until the first one is on screen and measure the list, not the fallback.
+      await expect(page.locator('[role="row"]').nth(1)).toBeVisible()
+
+      for (const width of widths) {
+        await page.setViewportSize({ height: 900, width })
+        await expectNoHorizontalPageClipping(page)
+      }
+    })
+  }
+})

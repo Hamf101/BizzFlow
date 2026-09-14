@@ -30,7 +30,7 @@ export type TaskListItem = {
 }
 
 const TASK_GRID =
-  "md:grid-cols-[minmax(16rem,1.6fr)_minmax(7rem,.6fr)_minmax(9rem,.8fr)_minmax(8rem,.7fr)]"
+  "lg:grid-cols-[minmax(14rem,1.6fr)_minmax(7rem,.6fr)_minmax(9rem,.8fr)_minmax(8rem,.7fr)]"
 
 /**
  * Renders the Tasks workspace in the People pattern: a quiet front with
@@ -137,7 +137,7 @@ export function TasksWorkspace({
         >
           <div
             className={cn(
-              "hidden gap-4 px-3 py-2 text-[11px] font-normal tracking-[0.08em] text-muted-foreground uppercase md:grid",
+              "hidden gap-4 px-3 py-2 text-[11px] font-normal tracking-[0.08em] text-muted-foreground uppercase lg:grid",
               TASK_GRID
             )}
             role="row"
@@ -191,7 +191,7 @@ function TaskRow({
   return (
     <div
       className={cn(
-        "grid min-h-14 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-[12px] px-1 py-2 transition-colors hover:bg-card/65 md:gap-4 md:px-3",
+        "grid min-h-14 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-[12px] px-1 py-2 transition-colors hover:bg-card/65 lg:gap-4 lg:px-3",
         TASK_GRID
       )}
       data-slot="task-row"
@@ -205,27 +205,27 @@ function TaskRow({
           {task.title}
         </Link>
         <TaskDue
-          className="text-xs md:hidden"
+          className="text-xs lg:hidden"
           dueAt={task.dueAt}
           overdue={overdue}
           slot="task-due-compact"
         />
       </div>
       <div
-        className="justify-self-end md:justify-self-start"
+        className="justify-self-end lg:justify-self-start"
         data-slot="task-status"
         role="cell"
       >
         <TaskStatusBadge status={task.status} />
       </div>
       <span
-        className="hidden truncate text-sm text-muted-foreground md:block"
+        className="hidden truncate text-sm text-muted-foreground lg:block"
         data-slot="task-assignee"
         role="cell"
       >
         {formatMemberName(task.assignedTo, members, currentUserId)}
       </span>
-      <div className="hidden md:block" role="cell">
+      <div className="hidden lg:block" role="cell">
         <TaskDue
           className="text-sm"
           dueAt={task.dueAt}

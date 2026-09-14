@@ -288,7 +288,7 @@ function MemberDirectory({
       role="table"
     >
       <div
-        className="hidden grid-cols-[minmax(16rem,1.5fr)_minmax(9rem,.75fr)_minmax(8rem,.65fr)_3rem] gap-4 px-3 py-2 text-[11px] font-normal tracking-[0.08em] text-muted-foreground uppercase md:grid"
+        className="hidden grid-cols-[minmax(16rem,1.5fr)_minmax(9rem,.75fr)_minmax(8rem,.65fr)_3rem] gap-4 px-3 py-2 text-[11px] font-normal tracking-[0.08em] text-muted-foreground uppercase lg:grid"
         role="row"
       >
         <span role="columnheader">Member</span>
@@ -334,7 +334,7 @@ function MemberRow({
 
   return (
     <div
-      className="grid min-h-16 grid-cols-[minmax(0,1fr)_auto_2.5rem] items-center gap-2 rounded-[12px] px-1 py-2 transition-colors hover:bg-card/65 md:grid-cols-[minmax(16rem,1.5fr)_minmax(9rem,.75fr)_minmax(8rem,.65fr)_3rem] md:gap-4 md:px-3 md:py-3"
+      className="grid min-h-16 grid-cols-[minmax(0,1fr)_auto_2.5rem] items-center gap-2 rounded-[12px] px-1 py-2 transition-colors hover:bg-card/65 lg:grid-cols-[minmax(16rem,1.5fr)_minmax(9rem,.75fr)_minmax(8rem,.65fr)_3rem] lg:gap-4 lg:px-3 lg:py-3"
       role="row"
     >
       <div className="flex min-w-0 items-center gap-3" role="cell">
@@ -347,12 +347,12 @@ function MemberRow({
         <MemberProfilePreview member={member} name={memberLabel} />
       </div>
 
-      <div className="justify-self-end md:justify-self-start" role="cell">
+      <div className="justify-self-end lg:justify-self-start" role="cell">
         <RoleBadge label={getMemberRoleName(member)} />
       </div>
 
       <span
-        className="hidden text-sm text-muted-foreground md:block"
+        className="hidden text-sm text-muted-foreground lg:block"
         role="cell"
       >
         {formatMediumDate(member.createdAt)}
