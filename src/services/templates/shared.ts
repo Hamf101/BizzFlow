@@ -22,6 +22,10 @@ import {
   mapGeneratedDocumentRow,
   type GeneratedDocumentRow,
 } from "@/services/generated-documents/generated-document-persistence"
+import {
+  CONCURRENT_CHANGE_MESSAGE,
+  isSerializationFailure,
+} from "@/services/serialization-retry"
 import type {
   DocumentSourceKind,
   DocumentTemplate,
@@ -432,6 +436,11 @@ export function createDatabaseError(
   fallbackMessage: string
 ): TemplateServiceError {
   const errorLike = getSupabaseErrorLike(error)
+
+  // A write that kept meeting a colleague's is worth trying again.
+  if (isSerializationFailure(errorLike)) {
+    return new TemplateServiceError(CONCURRENT_CHANGE_MESSAGE, 409)
+  }
 
   if (errorLike?.code === "23505") {
     return new TemplateServiceError("A conflicting record already exists.", 409)

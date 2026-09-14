@@ -49,6 +49,43 @@ export class FakeSupabaseClient {
     return new FakeQueryBuilder(this, tableName)
   }
 
+  /** Insert failures still to answer, in the order they were asked for. */
+  private readonly insertFailures: Array<{
+    error: Error & { code: string }
+    tableName: FakeTableName
+  }> = []
+
+  /**
+   * Makes the next inserts into a table fail as the database would, for the
+   * `.single()` reads the services use.
+   *
+   * @param tableName - Table whose inserts fail.
+   * @param code - PostgreSQL error code to answer with.
+   * @param times - How many inserts in a row fail.
+   */
+  failNextInserts(tableName: FakeTableName, code: string, times = 1): void {
+    for (let index = 0; index < times; index += 1) {
+      this.insertFailures.push({
+        error: Object.assign(new Error(`Fake ${code} on ${tableName}.`), { code }),
+        tableName,
+      })
+    }
+  }
+
+  /**
+   * Takes the next pending insert failure for a table, if one is waiting.
+   *
+   * @param tableName - Table being inserted into.
+   * @returns The error to answer with, or null to insert normally.
+   */
+  takeInsertFailure(tableName: FakeTableName): (Error & { code: string }) | null {
+    const index = this.insertFailures.findIndex(
+      (failure: { tableName: FakeTableName }): boolean => failure.tableName === tableName
+    )
+
+    return index < 0 ? null : (this.insertFailures.splice(index, 1)[0]?.error ?? null)
+  }
+
   /**
    * Emulates the document lifecycle RPCs used by the service layer.
    *
@@ -562,6 +599,14 @@ class FakeQueryBuilder {
   }
 
   async single(): Promise<{ data: FakeRow | null; error: Error | null }> {
+    const failure = this.insertRows
+      ? this.client.takeInsertFailure(this.tableName)
+      : null
+
+    if (failure) {
+      return { data: null, error: failure }
+    }
+
     const rows = this.execute()
 
     if (rows.length !== 1) {

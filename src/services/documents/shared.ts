@@ -16,6 +16,10 @@ import type {
   LogValue,
 } from "@/services/documents/contracts"
 import { DocumentServiceError } from "@/services/documents/errors"
+import {
+  CONCURRENT_CHANGE_MESSAGE,
+  isSerializationFailure,
+} from "@/services/serialization-retry"
 import type {
   DocumentFolder,
   DocumentLifecycleState,
@@ -391,6 +395,11 @@ export function createSupabaseServiceError(
 
   if (setupMessage) {
     return new DocumentServiceError(setupMessage, 500)
+  }
+
+  // A write that kept meeting a colleague's is worth trying again.
+  if (isSerializationFailure(error)) {
+    return new DocumentServiceError(CONCURRENT_CHANGE_MESSAGE, 409)
   }
 
   return new DocumentServiceError(fallbackMessage, fallbackStatusCode)

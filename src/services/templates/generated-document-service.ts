@@ -8,6 +8,7 @@ import {
   requireFolderAccess,
 } from "@/services/documents/access-service"
 import { DocumentServiceError } from "@/services/documents/errors"
+import { retrySerializationFailure } from "@/services/serialization-retry"
 import {
   createBlankTemplateContent,
   parseTemplateContent,
@@ -152,26 +153,30 @@ export async function createGeneratedDocument(
       )
         ? normalizeDescription(input.description)
         : (template?.description ?? null)
-      const { data, error } = await client
-        .from("documents")
-        .insert({
-          id: documentId,
-          org_id: input.organizationId,
-          folder_id: folderId,
-          title,
-          description,
-          current_version_id: null,
-          source_kind: "generated",
-          template_id: template?.id ?? null,
-          template_revision: template?.revision ?? null,
-          template_snapshot: snapshot,
-          created_by: input.actorUserId,
-          updated_by: input.actorUserId,
-          archived_by: null,
-          archived_at: null
-        })
-        .select(GENERATED_DOCUMENT_COLUMNS)
-        .single()
+      // The insert takes the folder tree's lock without waiting, so a
+      // colleague's write at the same instant asks for a retry.
+      const { data, error } = await retrySerializationFailure(() =>
+        client
+          .from("documents")
+          .insert({
+            id: documentId,
+            org_id: input.organizationId,
+            folder_id: folderId,
+            title,
+            description,
+            current_version_id: null,
+            source_kind: "generated",
+            template_id: template?.id ?? null,
+            template_revision: template?.revision ?? null,
+            template_snapshot: snapshot,
+            created_by: input.actorUserId,
+            updated_by: input.actorUserId,
+            archived_by: null,
+            archived_at: null
+          })
+          .select(GENERATED_DOCUMENT_COLUMNS)
+          .single()
+      )
 
       if (error || !data) {
         throw createDatabaseError(error, "Unable to create generated document.")

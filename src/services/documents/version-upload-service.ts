@@ -35,6 +35,7 @@ import {
   normalizeOriginalFilename,
   requireMatchingStorageKey,
 } from "@/services/documents/version-shared"
+import { retrySerializationFailure } from "@/services/serialization-retry"
 import type {
   CreateDocumentUploadUrlResponse,
   DocumentRow,
@@ -322,11 +323,15 @@ async function insertDocument(
     archived_at: string | null
   }
 ): Promise<DocumentSummary> {
-  const { data, error } = await client
-    .from("documents")
-    .insert(row)
-    .select("id,org_id,folder_id,title,description,current_version_id,source_kind,template_id,template_revision,lifecycle_state,created_by,updated_by,archived_by,archived_at,trashed_by,trashed_at,purge_after,pre_trash_lifecycle_state,trash_operation_id,created_at,updated_at")
-    .single()
+  // The insert takes the folder tree's lock without waiting, so a colleague's
+  // write at the same instant asks for a retry.
+  const { data, error } = await retrySerializationFailure(() =>
+    client
+      .from("documents")
+      .insert(row)
+      .select("id,org_id,folder_id,title,description,current_version_id,source_kind,template_id,template_revision,lifecycle_state,created_by,updated_by,archived_by,archived_at,trashed_by,trashed_at,purge_after,pre_trash_lifecycle_state,trash_operation_id,created_at,updated_at")
+      .single()
+  )
 
   if (error || !data) {
     throw createSupabaseServiceError(error, "Unable to create document.")

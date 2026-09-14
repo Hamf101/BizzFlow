@@ -31,6 +31,7 @@ import {
   POSTGREST_BATCH_SIZE,
   readAllInBatches,
 } from "@/services/postgrest-paging"
+import { retrySerializationFailure } from "@/services/serialization-retry"
 import type {
   AccessibleDocumentFolder,
   AccessibleDocumentSummary,
@@ -95,20 +96,24 @@ export async function createFolder(
         await requireActiveFolder(client, input.organizationId, parentFolderId)
       }
 
-      const { data, error } = await client
-        .from("folders")
-        .insert({
-          id: folderId,
-          org_id: input.organizationId,
-          parent_folder_id: parentFolderId,
-          name: normalizeFolderName(input.name),
-          created_by: input.actorUserId,
-          updated_by: input.actorUserId,
-          archived_by: null,
-          archived_at: null,
-        })
-        .select("id,org_id,parent_folder_id,name,lifecycle_state,created_by,updated_by,archived_by,archived_at,trashed_by,trashed_at,purge_after,pre_trash_lifecycle_state,trash_operation_id,created_at,updated_at")
-        .single()
+      // The insert takes the folder tree's lock without waiting, so a
+      // colleague's write at the same instant asks for a retry.
+      const { data, error } = await retrySerializationFailure(() =>
+        client
+          .from("folders")
+          .insert({
+            id: folderId,
+            org_id: input.organizationId,
+            parent_folder_id: parentFolderId,
+            name: normalizeFolderName(input.name),
+            created_by: input.actorUserId,
+            updated_by: input.actorUserId,
+            archived_by: null,
+            archived_at: null,
+          })
+          .select("id,org_id,parent_folder_id,name,lifecycle_state,created_by,updated_by,archived_by,archived_at,trashed_by,trashed_at,purge_after,pre_trash_lifecycle_state,trash_operation_id,created_at,updated_at")
+          .single()
+      )
 
       if (error || !data) {
         throw createSupabaseServiceError(error, "Unable to create folder.")

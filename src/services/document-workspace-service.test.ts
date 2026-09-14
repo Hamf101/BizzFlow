@@ -275,6 +275,34 @@ describe("ACL-aware document workspace", () => {
   })
 })
 
+describe("folder creation beside a colleague's write", () => {
+  it("creates the folder once the database stops asking for a retry, and asks the member to try again when it never does", async () => {
+    const client = new FakeSupabaseClient({
+      organization_memberships: [createMembershipRow("manager")],
+    })
+    client.failNextInserts("folders", "40001")
+
+    await expect(
+      createFolder(
+        { actorUserId: "user-1", name: "Leases", organizationId: "org-1" },
+        createDeps(client, ["folder-1"])
+      )
+    ).resolves.toMatchObject({ id: "folder-1", name: "Leases" })
+
+    client.failNextInserts("folders", "40001", 4)
+
+    await expect(
+      createFolder(
+        { actorUserId: "user-1", name: "Deeds", organizationId: "org-1" },
+        createDeps(client, ["folder-2"])
+      )
+    ).rejects.toMatchObject({ statusCode: 409 })
+    expect(client.tables.folders.map((folder: FakeRow) => folder.name)).toEqual([
+      "Leases",
+    ])
+  })
+})
+
 type FakeWorkspaceTables = {
   organization_memberships: FakeRow[]
   folders: FakeRow[]
