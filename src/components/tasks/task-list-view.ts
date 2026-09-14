@@ -1,15 +1,13 @@
 import { z } from "zod"
 
-import type {
-  ListOption,
-  ListOptionSection,
+import {
+  createSortSection,
+  type ListOption,
+  type ListOptionSection,
+  type ListSortOption,
 } from "@/components/data/list-option"
 import { getTaskStatusLabel } from "@/components/tasks/task-presentation"
-import {
-  defineListState,
-  formatListSort,
-  type ListSort,
-} from "@/lib/list-state"
+import { defineListState, formatListSort } from "@/lib/list-state"
 import type { OrganizationMember } from "@/types/organization"
 import {
   TASK_SEARCH_MAX_LENGTH,
@@ -40,10 +38,7 @@ export type TaskListView = ReturnType<typeof taskListState.parse>
 
 const DEFAULT_TASK_VIEW = taskListState.parse({})
 
-const TASK_SORT_OPTIONS: ReadonlyArray<{
-  label: string
-  sort: ListSort<TaskSortKey>
-}> = [
+const TASK_SORT_OPTIONS: ReadonlyArray<ListSortOption<TaskSortKey>> = [
   { label: "Due date, soonest first", sort: { direction: "asc", key: "due" } },
   { label: "Due date, latest first", sort: { direction: "desc", key: "due" } },
   { label: "Newest first", sort: { direction: "desc", key: "created" } },
@@ -89,16 +84,9 @@ export function getTaskViewMenuSections(
   members: readonly OrganizationMember[]
 ): ListOptionSection[] {
   return [
-    {
-      label: "Sort",
-      options: TASK_SORT_OPTIONS.map(
-        ({ label, sort }): ListOption => ({
-          href: taskListState.href(TASKS_PATH, view, { sort }),
-          label,
-          selected: formatListSort(view.sort) === formatListSort(sort),
-        })
-      ),
-    },
+    createSortSection(TASK_SORT_OPTIONS, view.sort, (sort): string =>
+      taskListState.href(TASKS_PATH, view, { sort })
+    ),
     {
       label: "Assignee",
       options: [

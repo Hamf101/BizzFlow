@@ -1,19 +1,16 @@
 import { z } from "zod"
 
-import type {
-  ListOption,
-  ListOptionSection,
-} from "@/components/data/list-option"
 import {
-  defineListState,
-  formatListSort,
-  type ListSort,
-} from "@/lib/list-state"
+  createSortSection,
+  RECORD_SORT_OPTIONS,
+  type ListOption,
+  type ListOptionSection,
+} from "@/components/data/list-option"
+import { defineListState, formatListSort } from "@/lib/list-state"
 import type { OrganizationMember } from "@/types/organization"
 import {
   SUBMISSION_SEARCH_MAX_LENGTH,
   SUBMISSION_SORT_KEYS,
-  type SubmissionSortKey,
   type SubmissionStatus,
 } from "@/types/submission"
 
@@ -62,18 +59,6 @@ export const submissionListState = defineListState({
 export type SubmissionListView = ReturnType<typeof submissionListState.parse>
 
 const DEFAULT_SUBMISSION_VIEW = submissionListState.parse({})
-
-const SUBMISSION_SORT_OPTIONS: ReadonlyArray<{
-  label: string
-  sort: ListSort<SubmissionSortKey>
-}> = [
-  { label: "Recently updated", sort: { direction: "desc", key: "updated" } },
-  { label: "Least recently updated", sort: { direction: "asc", key: "updated" } },
-  { label: "Newest first", sort: { direction: "desc", key: "created" } },
-  { label: "Oldest first", sort: { direction: "asc", key: "created" } },
-  { label: "Title, A to Z", sort: { direction: "asc", key: "title" } },
-  { label: "Title, Z to A", sort: { direction: "desc", key: "title" } },
-]
 
 /**
  * Reads the lifecycle states a view's status pill stands for.
@@ -144,16 +129,9 @@ export function getSubmissionViewMenuSections(
   members: readonly OrganizationMember[],
   options: { canFilterAssignee: boolean }
 ): ListOptionSection[] {
-  const sort: ListOptionSection = {
-    label: "Sort",
-    options: SUBMISSION_SORT_OPTIONS.map(
-      ({ label, sort: option }): ListOption => ({
-        href: submissionListState.href(SUBMISSIONS_PATH, view, { sort: option }),
-        label,
-        selected: formatListSort(view.sort) === formatListSort(option),
-      })
-    ),
-  }
+  const sort = createSortSection(RECORD_SORT_OPTIONS, view.sort, (option): string =>
+    submissionListState.href(SUBMISSIONS_PATH, view, { sort: option })
+  )
   const exportSection: ListOptionSection = {
     label: "Export",
     options: [
