@@ -16,7 +16,7 @@ export default function AuthLayout({
   children: React.ReactNode
 }>) {
   return (
-    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-canvas px-4 py-10">
+    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-canvas px-4 py-10" data-ground="canvas">
       <div
         aria-hidden="true"
         className="pointer-events-none absolute left-1/2 top-[38%] h-[360px] w-[600px] -translate-x-1/2 -translate-y-1/2"

@@ -148,7 +148,7 @@ export default async function DashboardLayout({
       <Suspense fallback={null}>
         <ActionFeedback />
       </Suspense>
-      <div className="flex min-h-dvh flex-col bg-canvas text-foreground">
+      <div className="flex min-h-dvh flex-col bg-canvas text-foreground" data-ground="canvas">
         <MobileTopBar account={account} signOutAction={signOutAction} />
         <div className="mx-auto flex w-full max-w-[96rem] flex-1 flex-col md:flex-row">
           <DashboardSidebar account={account} signOutAction={signOutAction} />
