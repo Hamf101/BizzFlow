@@ -28,6 +28,7 @@ import type {
 import { cn } from "@/lib/utils"
 
 export type DashboardAccount = {
+  navigation?: { organizationId: string; preferences: import("@/types/navigation").NavigationPreferences }
   displayName: string
   email: string
   organizationName: string | null

@@ -1,5 +1,6 @@
 export const AUDIT_LOG_ACTIONS = [
   "organization.created",
+  "organization.navigation_renamed",
   "invite.created",
   "invite.accepted",
   "invite.revoked",

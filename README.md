@@ -356,3 +356,12 @@ pnpm supabase:check:rls
 ```
 
 This runner uses ordinary publishable-key user sessions for tenant reads. It does not treat the service-role smoke test as authorization proof, create fixtures, or print credentials, tokens, fixture IDs, or returned row bodies. See `.env.example` and `pnpm supabase:check:rls --help` for the exact synthetic-only fixture keys.
+
+### Customize workspace navigation
+
+Right-click a sidebar tab and choose **Rename** to change its name for the workspace
+(owner only; 1–40 characters). Drag a tab to reorder it, or use its actions menu
+(**Move up** / **Move down**) or **Alt + Arrow Up/Down** while it has focus.
+Order is saved separately for each member and workspace, including across devices.
+Custom names and saved order also appear in mobile navigation. Apply database
+migrations before deploying: navigation uses workspace labels and membership order.

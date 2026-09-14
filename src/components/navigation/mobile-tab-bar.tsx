@@ -4,6 +4,8 @@ import { Ellipsis, XIcon } from "lucide-react"
 import { usePathname } from "next/navigation"
 import { useState, type ReactElement } from "react"
 
+import { useNavigationPreferences } from "./navigation-preferences-provider"
+
 import { IntentPrefetchLink } from "@/components/navigation/intent-prefetch-link"
 import {
   getMobileNavigationLayout,
@@ -47,7 +49,8 @@ export function MobileTabBar({
 }): ReactElement | null {
   const pathname = usePathname()
   const [moreOpen, setMoreOpen] = useState(false)
-  const { primary, overflow } = getMobileNavigationLayout(role)
+  const customization = useNavigationPreferences()
+  const { primary, overflow } = getMobileNavigationLayout(role, customization?.preferences)
 
   if (primary.length === 0) {
     return null
@@ -88,7 +91,7 @@ export function MobileTabBar({
                 href={item.href}
               >
                 <Icon className="size-5" />
-                {item.shortLabel ?? item.label}
+                <span className="max-w-full truncate px-1">{item.shortLabel ?? item.label}</span>
               </IntentPrefetchLink>
             </li>
           )

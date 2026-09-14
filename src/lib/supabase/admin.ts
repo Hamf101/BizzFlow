@@ -64,6 +64,8 @@ type ProfileRow = Record<string, unknown> & {
 }
 
 type OrganizationRow = Record<string, unknown> & {
+  navigation_labels: import("@/types/navigation").NavigationPreferences["labels"]
+  navigation_revision: number
   id: string
   name: string
   slug: string
@@ -73,6 +75,7 @@ type OrganizationRow = Record<string, unknown> & {
 }
 
 type MembershipRow = Record<string, unknown> & {
+  navigation_order: string[]
   id: string
   org_id: string
   user_id: string

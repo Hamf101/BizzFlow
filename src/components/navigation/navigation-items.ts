@@ -1,14 +1,15 @@
 import {
   ClipboardCheck,
-  FileText,
+  Folder,
+  Inbox,
   LayoutDashboard,
+  LayoutTemplate,
   ListChecks,
-  ScrollText,
-  SendToBack,
   Settings,
   Users,
 } from "lucide-react"
 import type { ComponentType } from "react"
+import type { NavigationPreferences } from "@/types/navigation"
 
 import {
   canPerformOrganizationAction,
@@ -46,19 +47,19 @@ export const NAVIGATION_ITEMS: readonly NavigationItem[] = [
   },
   {
     href: "/documents",
-    icon: FileText,
+    icon: Folder,
     label: "Files",
     requiredAction: "documents:view",
   },
   {
     href: "/templates",
-    icon: ScrollText,
+    icon: LayoutTemplate,
     label: "Templates",
     requiredAction: "templates:view",
   },
   {
     href: "/submissions",
-    icon: SendToBack,
+    icon: Inbox,
     label: "Submissions",
     shortLabel: "Subs",
     requiredAction: "submissions:view",
@@ -98,7 +99,8 @@ const MOBILE_PRIMARY_COUNT = MOBILE_PRIMARY_HREFS.length
  * @returns Reachable destinations in sidebar order, including universal pages before setup.
  */
 export function getVisibleNavigationItems(
-  role: OrganizationPermissionSubject | null
+  role: OrganizationPermissionSubject | null,
+  preferences?: Pick<NavigationPreferences, "labels" | "order">
 ): NavigationItem[] {
   if (!role) {
     return NAVIGATION_ITEMS.filter(
@@ -106,11 +108,17 @@ export function getVisibleNavigationItems(
     )
   }
 
-  return NAVIGATION_ITEMS.filter(
-    (item: NavigationItem): boolean =>
-      !item.requiredAction ||
-      canPerformOrganizationAction(role, item.requiredAction)
-  )
+  const visible = NAVIGATION_ITEMS.filter(
+    (item: NavigationItem): boolean => !item.requiredAction || canPerformOrganizationAction(role, item.requiredAction)
+  ).map((item) => {
+    const label = preferences?.labels[item.href as keyof NavigationPreferences["labels"]]
+    return label ? { ...item, label, shortLabel: label } : item
+  })
+  const order = preferences?.order ?? []
+  return visible.sort((a, b) => {
+    const rank = (href: string): number => { const index = order.indexOf(href); return index < 0 ? order.length : index }
+    return rank(a.href) - rank(b.href)
+  })
 }
 
 /**
@@ -120,12 +128,14 @@ export function getVisibleNavigationItems(
  * @returns Bar destinations and the overflow behind "More".
  */
 export function getMobileNavigationLayout(
-  role: OrganizationPermissionSubject | null
+  role: OrganizationPermissionSubject | null,
+  preferences?: Pick<NavigationPreferences, "labels" | "order">
 ): {
   primary: NavigationItem[]
   overflow: NavigationItem[]
 } {
-  const visible = getVisibleNavigationItems(role)
+  const visible = getVisibleNavigationItems(role, preferences)
+  if (preferences?.order.length) return { primary: visible.slice(0, MOBILE_PRIMARY_COUNT), overflow: visible.slice(MOBILE_PRIMARY_COUNT) }
   const preferred = visible.filter((item: NavigationItem): boolean =>
     MOBILE_PRIMARY_HREFS.includes(item.href)
   )

@@ -1,3 +1,5 @@
+import { NavigationPreferencesProvider } from "@/components/navigation/navigation-preferences-provider"
+import { getNavigationPreferences } from "@/services/navigation-service"
 import * as Sentry from "@sentry/nextjs"
 import { redirect } from "next/navigation"
 import { Suspense, type ReactElement, type ReactNode } from "react"
@@ -106,7 +108,12 @@ async function getDashboardAccount(
       organizationId: context.organization.id,
     })
 
+    const preferences = await getNavigationPreferences({ actorUserId: user.id, organizationId: context.organization.id }).catch((error: unknown) => {
+      console.warn("dashboard_navigation_load_failed", { userId: user.id, organizationId: context.organization.id, reason: error instanceof Error ? error.message : "Unknown error" })
+      return undefined
+    })
     return {
+      navigation: preferences ? { organizationId: context.organization.id, preferences } : undefined,
       displayName: settings.displayName?.trim() || fallbackAccount.displayName,
       email: fallbackAccount.email,
       organizationName: context.organization.name,
@@ -145,6 +152,7 @@ export default async function DashboardLayout({
 
   return (
     <PostHogProvider userId={userId}>
+      <NavigationPreferencesProvider key={`${userId}:${account.navigation?.organizationId}`} organizationId={account.navigation?.organizationId} initialPreferences={account.navigation?.preferences}>
       <Suspense fallback={null}>
         <ActionFeedback />
       </Suspense>
@@ -165,6 +173,7 @@ export default async function DashboardLayout({
         </div>
         <MobileTabBar role={account.permissionSubject} />
       </div>
+      </NavigationPreferencesProvider>
     </PostHogProvider>
   )
 }
