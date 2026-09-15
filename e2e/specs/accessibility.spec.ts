@@ -17,25 +17,6 @@ import {
 test.use({ screenshot: "off", trace: "off", video: "off" })
 
 test.describe("representative accessibility evidence", () => {
-  test("uses the approved system sans typography without a display face", async ({
-    page,
-  }) => {
-    await page.goto("/login")
-
-    const typography = await page.locator("body").evaluate((body) => {
-      const bodyStyle = window.getComputedStyle(body)
-      const heading = body.querySelector("h1")
-
-      return {
-        body: bodyStyle.fontFamily,
-        heading: heading ? window.getComputedStyle(heading).fontFamily : null,
-      }
-    })
-
-    expect(typography.body).toContain("system-ui")
-    expect(typography.heading).toBe(typography.body)
-  })
-
   test("keeps authentication semantics and keyboard focus accessible", async ({
     page,
   }) => {

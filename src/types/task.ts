@@ -58,9 +58,6 @@ export type TaskReminderOrigin = (typeof TASK_REMINDER_ORIGINS)[number]
 /** Zod contract for a persisted task lifecycle state. */
 export const taskStatusSchema = z.enum(TASK_STATUSES)
 
-/** Zod contract for a persisted task reminder delivery state. */
-export const taskReminderStatusSchema = z.enum(TASK_REMINDER_STATUSES)
-
 /** Zod contract for a persisted task reminder delivery channel. */
 export const taskReminderChannelSchema = z.enum(TASK_REMINDER_CHANNELS)
 

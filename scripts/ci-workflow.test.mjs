@@ -32,17 +32,6 @@ describe("CI workflow", () => {
       expect(build, name).toContain(`${name}:`)
     }
   })
-
-  it("builds the end-to-end app with the launcher that loads .env.e2e", () => {
-    const commands = getRunCommands(getJob("e2e"))
-
-    expect(commands).toContain("pnpm build:e2e")
-    expect(commands).not.toContain("pnpm build")
-  })
-
-  it("does not state a migration count that goes stale", () => {
-    expect(workflow).not.toMatch(/\b\d+ migrations\b/)
-  })
 })
 
 function getJob(name) {

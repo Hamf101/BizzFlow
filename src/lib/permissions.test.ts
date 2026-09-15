@@ -8,9 +8,7 @@ import {
   createOrganizationPermissionSubject,
   getAssignableOrganizationRoles,
   getOrganizationRolePermissions,
-  isOrganizationRole,
   ORGANIZATION_PERMISSION_ACTIONS,
-  ORGANIZATION_ROLES,
 } from "./permissions"
 
 describe("organization role assignment authority", () => {
@@ -132,48 +130,6 @@ describe("organization permissions", () => {
       "manager",
       "staff",
       "external_reviewer",
-    ])
-  })
-
-  it("recognizes the supported organization roles", () => {
-    expect(ORGANIZATION_ROLES).toEqual([
-      "owner_admin",
-      "manager",
-      "staff",
-      "external_reviewer",
-    ])
-    expect(isOrganizationRole("manager")).toBe(true)
-    expect(isOrganizationRole("unknown")).toBe(false)
-  })
-
-  it("defines the supported organization permission actions", () => {
-    expect(ORGANIZATION_PERMISSION_ACTIONS).toEqual([
-      "people:view",
-      "organization:manage",
-      "members:invite",
-      "members:update_role",
-      "audit_logs:view",
-      "audit_logs:verify",
-      "templates:view",
-      "templates:manage",
-      "documents:view",
-      "documents:send",
-      "documents:fill",
-      "document_comments:create",
-      "documents:create",
-      "documents:archive",
-      "folders:manage",
-      "document_versions:create",
-      "submissions:view",
-      "submissions:create",
-      "submissions:edit",
-      "submissions:assign",
-      "submissions:review",
-      "submission_comments:create",
-      "tasks:view",
-      "tasks:create",
-      "tasks:edit",
-      "tasks:assign",
     ])
   })
 

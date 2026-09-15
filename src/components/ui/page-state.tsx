@@ -128,29 +128,29 @@ function PageSkeletonSection(): ReactElement {
   )
 }
 
-function PageStateSurface({
+/**
+ * Renders a safe recoverable-error message and caller-owned recovery action.
+ *
+ * This surface accepts display copy rather than an exception object. Capturing and
+ * redacting the original error remains the responsibility of the route boundary.
+ *
+ * @param props - Safe title, optional explanation, action, and layout classes.
+ * @returns An announced inline recovery state.
+ */
+function ErrorState({
   action,
   className,
   description,
-  slot,
   title,
-  tone,
-}: PageStateProps & {
-  slot: "empty-state" | "error-state"
-  tone: "empty" | "error"
-}): ReactElement {
+}: PageStateProps): ReactElement {
   return (
     <section
       className={cn(
-        "grid gap-3 text-left",
-        tone === "empty" &&
-          "min-h-44 content-center border-y border-border/60 py-10",
-        tone === "error" &&
-          "rounded-2xl bg-destructive/5 px-4 py-5 sm:px-5",
+        "grid gap-3 text-left rounded-2xl bg-destructive/5 px-4 py-5 sm:px-5",
         className
       )}
-      data-slot={slot}
-      role={tone === "error" ? "alert" : undefined}
+      data-slot="error-state"
+      role="alert"
     >
       <div className="grid max-w-xl gap-1.5">
         <h2 className="text-lg leading-snug font-semibold text-balance">
@@ -174,28 +174,5 @@ function PageStateSurface({
   )
 }
 
-/**
- * Renders a specific empty collection message and caller-authorized next action.
- *
- * @param props - Safe title, optional explanation, action, and layout classes.
- * @returns A quiet, content-first empty state.
- */
-function EmptyState(props: PageStateProps): ReactElement {
-  return <PageStateSurface {...props} slot="empty-state" tone="empty" />
-}
-
-/**
- * Renders a safe recoverable-error message and caller-owned recovery action.
- *
- * This surface accepts display copy rather than an exception object. Capturing and
- * redacting the original error remains the responsibility of the route boundary.
- *
- * @param props - Safe title, optional explanation, action, and layout classes.
- * @returns An announced inline recovery state.
- */
-function ErrorState(props: PageStateProps): ReactElement {
-  return <PageStateSurface {...props} slot="error-state" tone="error" />
-}
-
-export { EmptyState, ErrorState, PageSkeleton }
+export { ErrorState, PageSkeleton }
 export type { PageSkeletonProps, PageStateProps }
