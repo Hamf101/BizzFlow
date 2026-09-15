@@ -40,6 +40,11 @@ import {
   FileRowMenu,
   type FileLifecycleAction,
 } from "@/components/files/file-row-menu"
+import {
+  FileSelection,
+  SelectedCount,
+  type SelectableFile,
+} from "@/components/files/file-selection"
 import { FilesLayoutSwitch } from "@/components/files/files-layout-switch"
 import { NewFileMenu, type NewFolderForm } from "@/components/files/new-file-menu"
 import { Input } from "@/components/ui/input"
@@ -80,12 +85,20 @@ type Location = {
   folders: AccessibleDocumentFolder[]
 }
 
+/** What each lifecycle state lets a manager do, in menu order. */
+const LIFECYCLE_LABELS: Record<DocumentLifecycleState, FileLifecycleAction["label"][]> = {
+  active: ["Archive", "Move to Trash"],
+  archived: ["Restore", "Move to Trash"],
+  purge_pending: [],
+  trashed: ["Restore"],
+}
+
 /**
  * Renders Files: a quiet front with search, order, and New, lifecycle pills
  * beside Finder's four-way layout switch, the folder path, and the open folder
  * in the chosen layout — Icons, List, Columns, or Gallery. Each item's
  * lifecycle actions sit behind its menu, offered only where the member may
- * manage that item.
+ * manage that item; in List and Icons, a selection of items shares them.
  *
  * @param props - The view and layout, the lifecycle view's folders and
  *   documents with their cards, the open folder and its path, the member's
@@ -177,6 +190,7 @@ export function FilesWorkspace({
           },
           fields
         )}
+        itemId={folder.id}
         name={folder.name}
         purgeForm={
           folder.lifecycleState === "trashed" ? (
@@ -215,6 +229,7 @@ export function FilesWorkspace({
           },
           fields
         )}
+        itemId={document.id}
         name={document.title}
         purgeForm={
           document.lifecycleState === "trashed" ? (
@@ -292,6 +307,30 @@ export function FilesWorkspace({
   }
 
   const entries = toEntries(location, openFolder, layout === "gallery" ? "choose" : "open")
+  // What each shown item allows, in the order shown, so a selection offers
+  // only what all of its items allow.
+  const selectable: SelectableFile[] = [
+    ...location.folders.map(
+      (folder: AccessibleDocumentFolder): SelectableFile => ({
+        id: folder.id,
+        kind: "folder",
+        labels:
+          canManageFolders && isManageable(folder)
+            ? LIFECYCLE_LABELS[folder.lifecycleState]
+            : [],
+      })
+    ),
+    ...location.documents.map(
+      (document: AccessibleDocumentSummary): SelectableFile => ({
+        id: document.id,
+        kind: "document",
+        labels:
+          canManageDocuments && isManageable(document)
+            ? LIFECYCLE_LABELS[document.lifecycleState]
+            : [],
+      })
+    ),
+  ]
   const chosenId = getChosenItemId(view, location, layout)
   const chosen = entries.find((entry: FileEntry): boolean => entry.id === chosenId) ?? null
   const empty = (
@@ -357,93 +396,101 @@ export function FilesWorkspace({
   }
 
   return (
-    <section className="flex flex-col gap-5" data-slot="files-workspace">
-      {/* The real space keeps the accessible name "Files 12 items" rather
-          than "Files12 items". */}
-      <h1 className="text-2xl leading-none font-medium tracking-[-0.02em]">
-        Files{" "}
-        <span
-          aria-label={`${total} ${total === 1 ? "item" : "items"}`}
-          className="ml-0.5 text-xl font-normal text-muted-foreground"
+    <FileSelection
+      items={selectable}
+      // Another folder, lifecycle view, or search starts a fresh selection.
+      key={fileListState.href(FILES_PATH, view)}
+      lifecycle={lifecycle}
+    >
+      <section className="flex flex-col gap-5" data-slot="files-workspace">
+        {/* The real space keeps the accessible name "Files 12 items" rather
+            than "Files12 items". */}
+        <h1 className="text-2xl leading-none font-medium tracking-[-0.02em]">
+          Files{" "}
+          <span
+            aria-label={`${total} ${total === 1 ? "item" : "items"}`}
+            className="ml-0.5 text-xl font-normal text-muted-foreground"
+          >
+            {total}
+          </span>
+          <SelectedCount />
+        </h1>
+
+        <div
+          className={cn(
+            "grid gap-2",
+            offersNew
+              ? "grid-cols-[minmax(0,1fr)_auto_auto]"
+              : "grid-cols-[minmax(0,1fr)_auto]"
+          )}
         >
-          {total}
-        </span>
-      </h1>
+          <form action={FILES_PATH} className="min-w-0" role="search">
+            {getFileSearchFields(view).map(([name, value]) => (
+              <input key={name} name={name} type="hidden" value={value} />
+            ))}
+            <label className="relative block min-w-0">
+              <Search
+                aria-hidden="true"
+                className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground"
+              />
+              <Input
+                aria-label="Search files"
+                className="h-11 rounded-[12px] bg-card pl-10 md:h-11"
+                defaultValue={view.query}
+                maxLength={FILE_SEARCH_MAX_LENGTH}
+                name="q"
+                placeholder="Search files…"
+                type="search"
+              />
+            </label>
+          </form>
+          <ListViewMenu
+            adjusted={isFileViewAdjusted(view)}
+            label="View options"
+            sections={getFileViewMenuSections(view)}
+            views={{
+              list: "documents",
+              // The item Columns or Gallery has chosen is not part of a view.
+              query: fileListState
+                .toSearchParams({
+                  ...view,
+                  filters: { ...view.filters, item: undefined },
+                  page: 1,
+                })
+                .toString(),
+              saved: savedViews,
+            }}
+          />
+          {offersNew ? (
+            <NewFileMenu addDocumentHref={addDocumentHref} newFolder={newFolder} />
+          ) : null}
+        </div>
 
-      <div
-        className={cn(
-          "grid gap-2",
-          offersNew
-            ? "grid-cols-[minmax(0,1fr)_auto_auto]"
-            : "grid-cols-[minmax(0,1fr)_auto]"
-        )}
-      >
-        <form action={FILES_PATH} className="min-w-0" role="search">
-          {getFileSearchFields(view).map(([name, value]) => (
-            <input key={name} name={name} type="hidden" value={value} />
-          ))}
-          <label className="relative block min-w-0">
-            <Search
-              aria-hidden="true"
-              className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground"
-            />
-            <Input
-              aria-label="Search files"
-              className="h-11 rounded-[12px] bg-card pl-10 md:h-11"
-              defaultValue={view.query}
-              maxLength={FILE_SEARCH_MAX_LENGTH}
-              name="q"
-              placeholder="Search files…"
-              type="search"
-            />
-          </label>
-        </form>
-        <ListViewMenu
-          adjusted={isFileViewAdjusted(view)}
-          label="View options"
-          sections={getFileViewMenuSections(view)}
-          views={{
-            list: "documents",
-            // The item Columns or Gallery has chosen is not part of a view.
-            query: fileListState
-              .toSearchParams({
-                ...view,
-                filters: { ...view.filters, item: undefined },
-                page: 1,
-              })
-              .toString(),
-            saved: savedViews,
-          }}
-        />
-        {offersNew ? (
-          <NewFileMenu addDocumentHref={addDocumentHref} newFolder={newFolder} />
+        <div className="flex items-center justify-between gap-3">
+          <ListFilterChips
+            glide
+            label="Show files by state"
+            options={getFileLifecycleOptions(view)}
+          />
+          <FilesLayoutSwitch
+            action={actions.setLayout}
+            current={layout}
+            returnTo={fileListState.href(FILES_PATH, view)}
+          />
+        </div>
+
+        {path.length > 0 ? (
+          // Columns draws the path itself where it has room.
+          <FolderPath
+            className={layout === "columns" ? "lg:hidden" : undefined}
+            path={path}
+            view={view}
+          />
         ) : null}
-      </div>
 
-      <div className="flex items-center justify-between gap-3">
-        <ListFilterChips
-          glide
-          label="Show files by state"
-          options={getFileLifecycleOptions(view)}
-        />
-        <FilesLayoutSwitch
-          action={actions.setLayout}
-          current={layout}
-          returnTo={fileListState.href(FILES_PATH, view)}
-        />
-      </div>
-
-      {path.length > 0 ? (
-        // Columns draws the path itself where it has room.
-        <FolderPath
-          className={layout === "columns" ? "lg:hidden" : undefined}
-          path={path}
-          view={view}
-        />
-      ) : null}
-
-      {renderLayout()}
-    </section>
+        {renderLayout()}
+      </section>
+    </FileSelection>
   )
 }
 
@@ -520,23 +567,19 @@ function lifecycleActions(
   forms: LifecycleForms,
   fields: Readonly<Record<string, string>>
 ): FileLifecycleAction[] {
-  if (lifecycleState === "active") {
-    return [
-      { fields, formAction: forms.archive, label: "Archive" },
-      { fields, formAction: forms.trash, label: "Move to Trash" },
-    ]
+  const formFor: Record<FileLifecycleAction["label"], FormAction> = {
+    Archive: forms.archive,
+    "Move to Trash": forms.trash,
+    Restore: forms.restore,
   }
 
-  if (lifecycleState === "archived") {
-    return [
-      { fields, formAction: forms.restore, label: "Restore" },
-      { fields, formAction: forms.trash, label: "Move to Trash" },
-    ]
-  }
-
-  return lifecycleState === "trashed"
-    ? [{ fields, formAction: forms.restore, label: "Restore" }]
-    : []
+  return LIFECYCLE_LABELS[lifecycleState].map(
+    (label: FileLifecycleAction["label"]): FileLifecycleAction => ({
+      fields,
+      formAction: formFor[label],
+      label,
+    })
+  )
 }
 
 function describeEmptyLocation(

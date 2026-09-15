@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache"
 import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
+import { z } from "zod"
 
 import {
   FILES_LAYOUT_COOKIE,
@@ -494,6 +495,92 @@ async function runResourcePurgeAction(
   }
 
   redirect(buildFeedbackRedirect(config.returnPath, "deletion_queued"))
+}
+
+// ponytail: one request changes at most 500 folders and 500 documents, one at a
+// time, and a larger selection fails whole. Chunk it on the client, or move the
+// loop into one database call, once folders that large need bulk changes.
+const fileLifecycleChangeSchema = z.object({
+  change: z.enum(["archive", "restore", "trash"]),
+  documentIds: z.array(z.string().uuid()).max(500),
+  folderIds: z.array(z.string().uuid()).max(500),
+})
+
+/** One lifecycle change for several of the Files selection's items at once. */
+export type FileLifecycleChange = z.infer<typeof fileLifecycleChangeSchema>
+
+/** Which items changed, so the page can offer Undo, and how many could not. */
+export type FileLifecycleResult = {
+  documentIds: string[]
+  failed: number
+  folderIds: string[]
+}
+
+const FOLDER_CHANGES = {
+  archive: archiveFolder,
+  restore: restoreFolder,
+  trash: trashFolder,
+} as const
+const DOCUMENT_CHANGES = {
+  archive: archiveDocument,
+  restore: restoreDocument,
+  trash: trashDocument,
+} as const
+
+/**
+ * Changes several files at once for the Files selection. Each item goes
+ * through the same checks and audit trail as a single change; one that fails
+ * is counted and the rest still change, so the page can say what happened and
+ * offer Undo for exactly what moved.
+ *
+ * @param input - The change, and the selected folders and documents.
+ * @returns The items that changed and how many could not.
+ */
+export async function changeFilesLifecycleAction(
+  input: FileLifecycleChange
+): Promise<FileLifecycleResult> {
+  const { change, documentIds, folderIds } = fileLifecycleChangeSchema.parse(input)
+  let actor: { actorUserId: string; organizationId: string }
+
+  try {
+    actor = await loadLifecycleActionContext()
+  } catch (error: unknown) {
+    if (error instanceof AuthenticationError) {
+      redirect(buildRedirect("/login", { next: "/documents" }))
+    }
+
+    throw error
+  }
+
+  const result: FileLifecycleResult = { documentIds: [], failed: 0, folderIds: [] }
+  const failed = (kind: string, error: unknown): void => {
+    result.failed += 1
+    logDocumentActionFailure(`bulk_${change}_${kind}_failed`, {
+      organizationId: actor.organizationId,
+      reason: error instanceof Error ? error.message : `Unknown ${kind} error`,
+    })
+  }
+
+  for (const folderId of folderIds) {
+    try {
+      await FOLDER_CHANGES[change]({ ...actor, folderId })
+      result.folderIds.push(folderId)
+    } catch (error: unknown) {
+      failed("folder", error)
+    }
+  }
+
+  for (const documentId of documentIds) {
+    try {
+      await DOCUMENT_CHANGES[change]({ ...actor, documentId })
+      result.documentIds.push(documentId)
+    } catch (error: unknown) {
+      failed("document", error)
+    }
+  }
+
+  revalidatePath("/documents")
+  return result
 }
 
 async function loadLifecycleActionContext(): Promise<{

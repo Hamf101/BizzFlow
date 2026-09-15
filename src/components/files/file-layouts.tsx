@@ -8,6 +8,7 @@ import {
   StatusDot,
   type FileEntry,
 } from "@/components/files/file-entry"
+import { SelectableFileItem } from "@/components/files/file-selection"
 import { cn } from "@/lib/utils"
 
 // Below `lg` a row keeps its name, its date under it, and its menu.
@@ -41,7 +42,8 @@ function describeCount(count: number): string {
 
 /**
  * Rows in the People pattern: each name first, then when it changed and what
- * it is, with its status dot beside the name.
+ * it is, with its status dot beside the name. A ⌘-, Ctrl-, or Shift-click
+ * selects a row instead of opening it.
  *
  * @param props - The open folder's entries and the chosen one.
  * @returns The List layout.
@@ -82,16 +84,17 @@ export function FileListLayout({
         const Icon = entry.kind === "folder" ? Folder : FileText
 
         return (
-          <div
+          <SelectableFileItem
             className={cn(
               "grid min-h-12 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-[12px] px-1 py-1.5 transition-colors hover:bg-card/65 lg:gap-4 lg:px-3",
               RISE,
               LIST_GRID,
               entry.id === selected && "bg-secondary/70"
             )}
-            data-slot="file-row"
+            itemId={entry.id}
             key={entry.id}
             role="row"
+            slot="file-row"
             style={riseDelay(index)}
           >
             <div className="flex min-w-0 items-center gap-3" role="cell">
@@ -141,7 +144,7 @@ export function FileListLayout({
               {/* Holds the menu's place, so every row's columns line up. */}
               {entry.menu ?? <span aria-hidden="true" className="block size-8" />}
             </div>
-          </div>
+          </SelectableFileItem>
         )
       })}
     </div>
@@ -150,7 +153,8 @@ export function FileListLayout({
 
 /**
  * Things on a desk: folders and pages with their names underneath. The name's
- * link covers the whole tile, and the tile's menu shows on hover or focus.
+ * link covers the whole tile, and the tile's menu shows on hover or focus. A
+ * ⌘-, Ctrl-, or Shift-click selects a tile instead of opening it.
  *
  * @param props - The open folder's entries, the chosen one, and extra classes.
  * @returns The Icons layout.
@@ -174,14 +178,16 @@ export function FileIconsLayout({
       data-slot="file-icons"
     >
       {entries.map((entry: FileEntry, index: number) => (
-        <li
+        <SelectableFileItem
+          as="li"
           className={cn(
             "group/tile relative grid min-w-0 content-start justify-items-center gap-1.5 rounded-[12px] px-1 pt-2.5 pb-2 text-center transition-colors hover:bg-card/65 sm:px-1.5",
             RISE,
             entry.id === selected && "bg-secondary/70"
           )}
-          data-slot="file-tile"
+          itemId={entry.id}
           key={entry.id}
+          slot="file-tile"
           style={riseDelay(index)}
         >
           <span className="grid h-[70px] w-[58px] items-end justify-items-center sm:h-[86px] sm:w-[72px]">
@@ -209,7 +215,7 @@ export function FileIconsLayout({
               {entry.menu}
             </div>
           ) : null}
-        </li>
+        </SelectableFileItem>
       ))}
     </ul>
   )
