@@ -25,7 +25,6 @@ pnpm typecheck                # tsc --noEmit
 pnpm lint                     # eslint
 pnpm check:duplication        # jscpd — the 3% duplication budget
 pnpm check                    # FULL gate: lint + typecheck + test + duplication + build + audit
-pnpm supabase:check:rls       # credentialed RLS fixture (needs .env.local opt-in)
 
 pnpm e2e:up                   # local Supabase + MinIO, then write .env.e2e (needs Docker)
 pnpm test:e2e                 # Playwright: the six pilot journeys

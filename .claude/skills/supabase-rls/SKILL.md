@@ -4,9 +4,9 @@ description: >-
   BizFlow Supabase multi-tenant security and RLS conventions. Use when writing SQL migrations,
   RLS policies, or database access that must be tenant-isolated — org_id scoping, the
   closed direct-access posture for signed-in users, the organization_memberships policy
-  pattern, the four roles, and the credentialed direct-access runner
-  (scripts/check-supabase-rls.mjs). Points to the vendored Supabase skills for general
-  Postgres/Supabase guidance.
+  pattern, the four roles, and the migration security test
+  (supabase/tests/migration-security.test.ts). Points to the vendored Supabase skills for
+  general Postgres/Supabase guidance.
 ---
 
 # BizFlow Supabase RLS & tenancy
@@ -98,19 +98,16 @@ or base row scope.
 - Create migration files with `supabase migration new <name>` (never hand-name them). Iterate
   schema with `execute_sql` / `supabase db query`, then generate the migration when stable — see
   the vendored Supabase skill for the exact commit flow and `supabase db advisors`.
-- `supabase/tests/close-direct-tenant-table-access-migration.test.ts` fails if any later
-  migration grants `authenticated` a table privilege, or if a table ever granted to it is left
-  out of the revoke list.
-- **Prove the boundary with the credentialed runner:**
-  ```bash
-  pnpm supabase:check:rls
-  ```
-  `scripts/check-supabase-rls.mjs` signs in as real fixture users across two orgs (owner,
-  manager, staff, reviewer, actor B) and asserts every role is denied direct reads of every
-  tenant table, direct writes to submission tables and public form links, and service-only and
-  row-security-helper RPCs. It is opt-in — requires the `BIZFLOW_RLS_*` env keys and
-  `BIZFLOW_RLS_TEST_CONFIRM` in `.env.local`; it no-ops without them. Custom-role grant and
-  revocation behavior is proven by service tests, not by this runner.
+- `supabase/tests/migration-security.test.ts` reads every migration, old and new, and fails if
+  a table is left without enabled and forced RLS, if `authenticated` keeps or regains a table
+  privilege, or if any non-trigger function stays executable by `public`, `anon`, or
+  `authenticated`. A new migration needs no test of its own for that posture: revoke execute
+  on each new function `from public, anon, authenticated` and the test stays green.
+- `pnpm supabase:check` smoke-tests the live project with the service-role key after a hosted
+  apply: tables, forced RLS on the purge tables, and the service-only functions' grants. It is
+  not authorization proof for member sessions; the closed grants are.
+- Behavior of individual SQL functions is proven against a real database by the
+  `supabase/tests/*-live-rpc.sql` scripts (see README) and end to end by the Playwright suite.
 - Any new tenant table needs a service test proving cross-org and permission denial (`403/404`).
 
 ## Client selection

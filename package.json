@@ -13,7 +13,6 @@
     "lint": "eslint",
     "test": "vitest run",
     "supabase:check": "node scripts/check-supabase-live.mjs",
-    "supabase:check:rls": "node scripts/check-supabase-rls.mjs",
     "supabase:check:audit-chain": "node scripts/verify-audit-chain.mjs",
     "typecheck": "tsc --noEmit",
     "check": "pnpm lint && pnpm typecheck && pnpm check:test-integrity && pnpm test && pnpm check:duplication && pnpm check:deadcode && pnpm build && pnpm check:route-js && pnpm audit:dependencies",

@@ -348,14 +348,7 @@ The bulk access smoke test checks that Files' batched access lookups answer exac
 npx supabase db query --db-url "$SUPABASE_DB_URL" --file supabase/tests/resource-access-levels-live-rpc.sql
 ```
 
-Signed-in users have no direct Data API access to tenant tables: tenant data reaches them only through the service layer, which checks current role-definition permissions. To verify that boundary against a project, provision the isolated owner, manager, staff, external-reviewer, and other-tenant synthetic fixtures documented by the fail-closed runner:
-
-```bash
-pnpm supabase:check:rls --help
-pnpm supabase:check:rls
-```
-
-This runner uses ordinary publishable-key user sessions for tenant reads. It does not treat the service-role smoke test as authorization proof, create fixtures, or print credentials, tokens, fixture IDs, or returned row bodies. See `.env.example` and `pnpm supabase:check:rls --help` for the exact synthetic-only fixture keys.
+Signed-in users have no direct Data API access to tenant tables: tenant data reaches them only through the service layer, which checks current role-definition permissions. `supabase/tests/migration-security.test.ts`, part of `pnpm test`, reads every migration and fails if a table lacks forced row-level security, if signed-in users regain a table privilege, or if a function stays executable by them.
 
 ### Customize workspace navigation
 
