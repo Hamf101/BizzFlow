@@ -8,7 +8,7 @@ import {
   type FileLifecycleChange,
   type FileLifecycleResult,
 } from "@/app/(dashboard)/documents/actions"
-import { useFileSelection } from "@/components/files/file-selection"
+import { useFileSelection, useOpensOnRightClick } from "@/components/files/file-selection"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -161,6 +161,64 @@ export function FileRowMenu({
     })
   }
 
+  // The same items open from the ⋯ button and, in List and Icons, from a
+  // right-click anywhere on the row or tile.
+  const opensOnRightClick = useOpensOnRightClick()
+  const items = targets ? (
+    bulkLabels.length > 0 ? (
+      bulkLabels.map((label: LifecycleLabel) => {
+        const Icon = ACTION_ICONS[label]
+
+        return (
+          <DropdownMenuItem
+            key={label}
+            onClick={() => runBulk(label)}
+            variant={label === "Move to Trash" ? "destructive" : "default"}
+          >
+            <Icon aria-hidden="true" />
+            {describeBulk(label, targets.length)}
+          </DropdownMenuItem>
+        )
+      })
+    ) : (
+      <DropdownMenuItem disabled>No change fits every selected item</DropdownMenuItem>
+    )
+  ) : (
+    <>
+      {actions.map((action: FileLifecycleAction) => {
+        const Icon = ACTION_ICONS[action.label]
+
+        return (
+          <form action={action.formAction} key={action.label}>
+            {Object.entries(action.fields).map(([fieldName, value]) => (
+              <input key={fieldName} name={fieldName} type="hidden" value={value} />
+            ))}
+            {/* The menu stays open until the page moves on, so closing it
+                cannot unmount this form mid-submit. */}
+            <DropdownMenuItem
+              closeOnClick={false}
+              nativeButton
+              render={<button className="w-full" type="submit" />}
+              variant={action.label === "Move to Trash" ? "destructive" : "default"}
+            >
+              <Icon aria-hidden="true" />
+              {action.label}
+            </DropdownMenuItem>
+          </form>
+        )
+      })}
+      {purgeForm ? (
+        <>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={() => setPurging(true)} variant="destructive">
+            <Trash2 aria-hidden="true" />
+            Delete permanently…
+          </DropdownMenuItem>
+        </>
+      ) : null}
+    </>
+  )
+
   return (
     <>
       <DropdownMenu>
@@ -178,65 +236,12 @@ export function FileRowMenu({
           }
         />
         <DropdownMenuContent align="end" className="w-52">
-          {targets ? (
-            bulkLabels.length > 0 ? (
-              bulkLabels.map((label: LifecycleLabel) => {
-                const Icon = ACTION_ICONS[label]
-
-                return (
-                  <DropdownMenuItem
-                    key={label}
-                    onClick={() => runBulk(label)}
-                    variant={label === "Move to Trash" ? "destructive" : "default"}
-                  >
-                    <Icon aria-hidden="true" />
-                    {describeBulk(label, targets.length)}
-                  </DropdownMenuItem>
-                )
-              })
-            ) : (
-              <DropdownMenuItem disabled>No change fits every selected item</DropdownMenuItem>
-            )
-          ) : (
-            <>
-              {actions.map((action: FileLifecycleAction) => {
-                const Icon = ACTION_ICONS[action.label]
-
-                return (
-                  <form action={action.formAction} key={action.label}>
-                    {Object.entries(action.fields).map(([fieldName, value]) => (
-                      <input key={fieldName} name={fieldName} type="hidden" value={value} />
-                    ))}
-                    {/* The menu stays open until the page moves on, so closing it
-                        cannot unmount this form mid-submit. */}
-                    <DropdownMenuItem
-                      closeOnClick={false}
-                      nativeButton
-                      render={<button className="w-full" type="submit" />}
-                      variant={action.label === "Move to Trash" ? "destructive" : "default"}
-                    >
-                      <Icon aria-hidden="true" />
-                      {action.label}
-                    </DropdownMenuItem>
-                  </form>
-                )
-              })}
-              {purgeForm ? (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={() => setPurging(true)}
-                    variant="destructive"
-                  >
-                    <Trash2 aria-hidden="true" />
-                    Delete permanently…
-                  </DropdownMenuItem>
-                </>
-              ) : null}
-            </>
-          )}
+          {items}
         </DropdownMenuContent>
       </DropdownMenu>
+      {opensOnRightClick ? (
+        <DropdownMenuContent className="w-52">{items}</DropdownMenuContent>
+      ) : null}
       {purgeForm ? (
         <Dialog onOpenChange={setPurging} open={purging}>
           <DialogContent>

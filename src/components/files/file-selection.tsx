@@ -12,6 +12,7 @@ import {
 } from "react"
 
 import type { FileLifecycleAction } from "@/components/files/file-row-menu"
+import { ContextMenu, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { cn } from "@/lib/utils"
 
 /** One item the open folder shows, with the changes its member may make. */
@@ -26,17 +27,21 @@ type FileSelectionState = {
   extend: (id: string) => void
   items: readonly SelectableFile[]
   lifecycle: "active" | "archived" | "trash"
+  only: (id: string) => void
   selectAll: () => void
   selected: ReadonlySet<string>
   toggle: (id: string) => void
 }
 
 const FileSelectionContext = createContext<FileSelectionState | null>(null)
+// True inside a List row or an Icons tile, whose right-click opens its menu.
+const OpensOnRightClickContext = createContext(false)
 
 /**
  * Keeps the open folder's selection the way Finder does: ⌘- or Ctrl-click
  * adds or removes an item, Shift-click adds the run from the last one, ⌘A
- * takes the whole folder, and Escape clears. A plain click still opens.
+ * takes the whole folder, Escape clears, and a right-click outside the
+ * selection selects only that item. A plain click still opens.
  *
  * @param props - The folder's items in the order shown, and its lifecycle view.
  * @returns The selection around the workspace.
@@ -76,6 +81,12 @@ export function FileSelection({
     setSelected((current: ReadonlySet<string>) => new Set([...current, ...run]))
   }
 
+  // An item that leaves the folder leaves the selection with it.
+  const present = new Set(items.map((item: SelectableFile) => item.id))
+  const current: ReadonlySet<string> = new Set(
+    [...selected].filter((id: string) => present.has(id))
+  )
+
   return (
     <FileSelectionContext.Provider
       value={{
@@ -86,8 +97,12 @@ export function FileSelection({
         extend,
         items,
         lifecycle,
-        selectAll: () => setSelected(new Set(items.map((item: SelectableFile) => item.id))),
-        selected,
+        only: (id: string) => {
+          setSelected(new Set([id]))
+          setAnchor(id)
+        },
+        selectAll: () => setSelected(new Set(present)),
+        selected: current,
         toggle,
       }}
     >
@@ -103,6 +118,15 @@ export function FileSelection({
  */
 export function useFileSelection(): FileSelectionState | null {
   return useContext(FileSelectionContext)
+}
+
+/**
+ * Says whether a menu sits in a row or tile that also opens it on right-click.
+ *
+ * @returns True inside a List row or an Icons tile.
+ */
+export function useOpensOnRightClick(): boolean {
+  return useContext(OpensOnRightClickContext)
 }
 
 /**
@@ -126,7 +150,8 @@ export function SelectedCount(): ReactElement {
 
 /**
  * A List row or an Icons tile that joins the selection on a ⌘-, Ctrl-, or
- * Shift-click, and takes ⌘A and Escape while focus is inside it.
+ * Shift-click, takes ⌘A and Escape while focus is inside it, and opens its
+ * item's menu on right-click.
  *
  * @param props - The element to draw, its item, and its own attributes.
  * @returns The row or tile.
@@ -182,21 +207,34 @@ export function SelectableFileItem({
     }
   }
 
+  function handleContextMenu(): void {
+    // The menu acts on the selection, so an item outside it becomes the selection.
+    if (selection && !isSelected) {
+      selection.only(itemId)
+    }
+  }
+
   return (
-    <Element
-      // Rows carry their state; a list item cannot, so a tile says it instead.
-      aria-selected={Element === "div" && isSelected ? true : undefined}
-      // A selected item keeps its tint under the pointer.
-      className={cn(className, isSelected && "bg-secondary/70 hover:bg-secondary/70")}
-      data-selected={isSelected || undefined}
-      data-slot={slot}
-      onClickCapture={handleClick}
-      onKeyDown={handleKeyDown}
-      role={role}
-      style={style}
-    >
-      {children}
-      {Element === "li" && isSelected ? <span className="sr-only">Selected</span> : null}
-    </Element>
+    <ContextMenu>
+      <ContextMenuTrigger
+        // Rows carry their state; a list item cannot, so a tile says it instead.
+        aria-selected={Element === "div" && isSelected ? true : undefined}
+        // A selected item keeps its tint under the pointer.
+        className={cn(className, isSelected && "bg-secondary/70 hover:bg-secondary/70")}
+        data-selected={isSelected || undefined}
+        data-slot={slot}
+        onClickCapture={handleClick}
+        onContextMenu={handleContextMenu}
+        onKeyDown={handleKeyDown}
+        render={<Element />}
+        role={role}
+        style={style}
+      >
+        <OpensOnRightClickContext.Provider value={true}>
+          {children}
+        </OpensOnRightClickContext.Provider>
+        {Element === "li" && isSelected ? <span className="sr-only">Selected</span> : null}
+      </ContextMenuTrigger>
+    </ContextMenu>
   )
 }
