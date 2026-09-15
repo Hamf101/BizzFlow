@@ -23,7 +23,7 @@
     "e2e:env": "node scripts/write-e2e-env.mjs",
     "check:duplication": "jscpd src --format typescript,tsx --min-lines 5 --min-tokens 50 --mode strict --ignore '**/*.test.ts,**/*.test.tsx' --threshold 3 --reporters console --no-colors --no-tips",
     "check:deadcode": "knip --include files,dependencies,exports,unlisted,unresolved",
-    "check:test-integrity": "node scripts/test-integrity.mjs",
+    "check:test-integrity": "grep -rnE '(^|[^[:alnum:]_.])(describe|it|test)(\\.describe)?\\.(only|skip|todo)\\(' src e2e scripts supabase --include='*.test.ts' --include='*.test.tsx' --include='*.test.mjs' --include='*.spec.ts'; test $? -eq 1",
     "check:route-js": "node scripts/check-route-js-budget.mjs",
     "audit:dependencies": "corepack pnpm audit --prod --audit-level=moderate"
   },

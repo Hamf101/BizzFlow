@@ -9,6 +9,8 @@ export default defineConfig({
     },
   },
   test: {
+    // A test that makes no assertion fails instead of passing silently.
+    expect: { requireAssertions: true },
     // e2e/ holds Playwright specs. They use the same `.spec.ts` suffix but a
     // different runner, and Vitest importing them throws on test.describe.
     exclude: [
