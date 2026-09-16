@@ -93,10 +93,10 @@ export async function createGeneratedDocumentAction(
   let organizationId = "unavailable"
   const folderId = getFormString(formData, "folderId")
   const templateId = getFormString(formData, "templateId")
-  const returnPath = buildRedirect("/documents/new", {
-    mode: "create",
-    ...(folderId ? { folderId } : {}),
-  })
+  const returnPath = buildRedirect(
+    "/documents/new",
+    folderId ? { folderId } : {}
+  )
   let createdDocumentId: string
 
   try {
