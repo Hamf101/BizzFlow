@@ -166,27 +166,6 @@ export function useOpensOnRightClick(): boolean {
 }
 
 /**
- * Says how many items are selected, beside the title, once any are.
- *
- * @returns A polite live region holding the count.
- */
-export function SelectedCount(): ReactElement {
-  const selection = useContext(FileSelectionContext)
-  // While a phone selects, the bar pinned over the top bar shows the count.
-  const count = selection && !selection.phoneSelecting ? selection.selected.size : 0
-
-  return (
-    <span
-      aria-live="polite"
-      className="ml-2 text-base font-normal tracking-normal text-muted-foreground"
-      data-slot="file-selected-count"
-    >
-      {count > 0 ? `· ${count} selected` : null}
-    </span>
-  )
-}
-
-/**
  * A List row or an Icons tile that joins the selection on a ⌘-, Ctrl-, or
  * Shift-click, takes ⌘A and Escape while focus is inside it, and opens its
  * item's menu on right-click. On a phone, press and hold selects it instead,

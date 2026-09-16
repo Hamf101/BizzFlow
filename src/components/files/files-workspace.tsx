@@ -42,12 +42,11 @@ import {
 } from "@/components/files/file-row-menu"
 import {
   FileSelection,
-  SelectedCount,
   type SelectableFile,
 } from "@/components/files/file-selection"
 import { FilesLayoutSwitch } from "@/components/files/files-layout-switch"
 import { NewFileMenu, type NewFolderForm } from "@/components/files/new-file-menu"
-import { PhoneSelectionBars } from "@/components/files/phone-selection"
+import { SelectionBar } from "@/components/files/selection-bar"
 import { Input } from "@/components/ui/input"
 import { formatMediumDate } from "@/lib/date-format"
 import {
@@ -414,7 +413,6 @@ export function FilesWorkspace({
           >
             {total}
           </span>
-          <SelectedCount />
         </h1>
 
         <div
@@ -491,7 +489,7 @@ export function FilesWorkspace({
 
         {renderLayout()}
       </section>
-      <PhoneSelectionBars />
+      <SelectionBar />
     </FileSelection>
   )
 }

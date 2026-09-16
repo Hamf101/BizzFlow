@@ -38,7 +38,9 @@ test("selects files with modifier clicks, archives them together, and undoes it"
       .click({ modifiers: ["ControlOrMeta"] })
   }
   await expect(page).toHaveURL(/\/documents$/)
-  await expect(page.getByRole("heading", { level: 1 })).toContainText("2 selected")
+  // The selection floats in a bar with its count and the changes it allows.
+  const bar = page.getByRole("group", { name: "Selection" })
+  await expect(bar).toContainText("2 selected")
 
   // Either selected item's menu acts on both, and closing it keeps them.
   const actions = tile(names[1]).getByRole("button", { name: `Actions for ${names[1]}` })
@@ -47,10 +49,10 @@ test("selects files with modifier clicks, archives them together, and undoes it"
   await expect(page.getByRole("menuitem", { name: "Archive 2 items" })).toBeVisible()
   await page.keyboard.press("Escape")
   await expect(page.getByRole("menu")).toHaveCount(0)
-  await expect(page.getByRole("heading", { level: 1 })).toContainText("2 selected")
-  await actions.click()
-  await page.getByRole("menuitem", { name: "Archive 2 items" }).click()
+  await expect(bar).toContainText("2 selected")
+  await bar.getByRole("button", { name: "Archive 2 items" }).click()
   await expect(page.getByText("2 items archived")).toBeVisible()
+  await expect(bar).toBeHidden()
   await expect(tile(names[0])).toHaveCount(0)
   await expect(tile(names[1])).toHaveCount(0)
 
@@ -86,7 +88,7 @@ test("right-click acts on the selection, or selects the item it lands on", async
       .locator('[data-slot="file-tile"]')
       .filter({ has: page.getByRole("link", { exact: true, name }) })
   const link = (name: string) => tile(name).getByRole("link", { exact: true, name })
-  const heading = page.getByRole("heading", { level: 1 })
+  const bar = page.getByRole("group", { name: "Selection" })
 
   await page.goto("/documents")
   await waitForHydration(tile(names[0]))
@@ -99,7 +101,7 @@ test("right-click acts on the selection, or selects the item it lands on", async
   await expect(page.getByRole("menuitem", { name: "Move 2 items to Trash" })).toBeVisible()
   await page.keyboard.press("Escape")
   await expect(page.getByRole("menu")).toHaveCount(0)
-  await expect(heading).toContainText("2 selected")
+  await expect(bar).toContainText("2 selected")
 
   await link(names[0]).click({ button: "right" })
   await page.getByRole("menuitem", { name: "Move 2 items to Trash" }).click()
@@ -111,9 +113,9 @@ test("right-click acts on the selection, or selects the item it lands on", async
 
   // Outside the selection, a right-click selects only the item it lands on.
   await link(names[2]).click({ button: "right" })
-  await expect(heading).toContainText("1 selected")
+  await expect(bar).toContainText("1 selected")
   await page.getByRole("menuitem", { exact: true, name: "Archive" }).click()
   await expect(tile(names[2])).toHaveCount(0)
   // An item that leaves the folder leaves the selection with it.
-  await expect(heading).not.toContainText("selected")
+  await expect(bar).toBeHidden()
 })

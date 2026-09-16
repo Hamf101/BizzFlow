@@ -76,8 +76,8 @@ test("a phone selects by press and hold, ticks with taps, and acts from the bar"
       page
         .locator('[data-slot="file-tile"]')
         .filter({ has: page.getByRole("link", { exact: true, name }) })
-    const bar = page.getByRole("navigation", { name: "Selection actions" })
-    const oneSelected = page.getByText("1 selected", { exact: true })
+    const bar = page.getByRole("group", { name: "Selection" })
+    const oneSelected = bar.getByText("1 selected", { exact: true })
 
     await page.goto(`/documents?folderId=${parent.id}`)
     await waitForHydration(tile(names[0]))
@@ -93,7 +93,7 @@ test("a phone selects by press and hold, ticks with taps, and acts from the bar"
 
     // Taps now tick items instead of opening them.
     await tile(names[1]).getByRole("link", { exact: true, name: names[1] }).tap()
-    await expect(page.getByText("2 selected", { exact: true })).toBeVisible()
+    await expect(bar.getByText("2 selected", { exact: true })).toBeVisible()
     await expect(page).toHaveURL(new RegExp(`folderId=${parent.id}$`))
 
     await bar.getByRole("button", { name: "Archive 2 items" }).tap()
@@ -104,11 +104,10 @@ test("a phone selects by press and hold, ticks with taps, and acts from the bar"
     await expect(tile(names[0])).toBeVisible()
     await expect(tile(names[1])).toBeVisible()
 
-    // Done stops selecting and gives the tabs back.
+    // The bar's cross stops selecting.
     await pressAndHold(page, tile(names[2]), oneSelected)
-    await page.getByRole("button", { name: "Done" }).tap()
+    await bar.getByRole("button", { name: "Clear selection" }).tap()
     await expect(bar).toBeHidden()
-    await expect(oneSelected).toBeHidden()
   } finally {
     await page.context().close()
   }
