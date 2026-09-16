@@ -2,6 +2,7 @@ import { ChevronRight, FileText, Folder } from "lucide-react"
 import Link from "next/link"
 import type { CSSProperties, ReactElement } from "react"
 
+import { ColumnsScroller } from "@/components/files/columns-scroller"
 import {
   FileArt,
   FileDetails,
@@ -238,7 +239,7 @@ export function FileColumnsLayout({
   folder: string
 }): ReactElement {
   return (
-    <div
+    <ColumnsScroller
       className="flex min-h-[380px] overflow-x-auto rounded-[12px] border border-border bg-card/55"
       data-slot="file-columns"
     >
@@ -302,7 +303,7 @@ export function FileColumnsLayout({
           </>
         ) : null}
       </div>
-    </div>
+    </ColumnsScroller>
   )
 }
 

@@ -86,8 +86,8 @@ test("switches Files between Finder's views, remembers the choice, and follows t
   await expect(tile.locator('[data-slot="template-page"]')).toBeVisible()
   await expect(tile).toContainText("Awaiting signatures")
 
-  if ((viewport?.width ?? 1280) < 1024) {
-    // A narrow screen offers Icons and List only.
+  if ((viewport?.width ?? 1280) < 768) {
+    // A phone offers Icons and List only.
     await expect(layoutButton("Columns")).toBeHidden()
     await layoutButton("List").click()
     await expectLayout("List")

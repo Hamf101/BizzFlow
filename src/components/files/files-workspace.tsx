@@ -340,9 +340,9 @@ export function FilesWorkspace({
       {describeEmptyLocation(view, lifecycle, activeFolder)}
     </p>
   )
-  // Columns and Gallery need width; narrower screens show Icons instead.
+  // Columns and Gallery need width; phones show Icons instead.
   const icons = (
-    <FileIconsLayout className="lg:hidden" entries={entries} selected={chosenId} />
+    <FileIconsLayout className="md:hidden" entries={entries} selected={chosenId} />
   )
 
   function renderLayout(): ReactNode {
@@ -366,10 +366,10 @@ export function FilesWorkspace({
 
       return (
         <>
-          <div className="hidden lg:block">
+          <div className="hidden md:block">
             <FileColumnsLayout chosen={chosen} columns={columns} folder={folderPath} />
           </div>
-          <div className="lg:hidden">{total === 0 ? empty : icons}</div>
+          <div className="md:hidden">{total === 0 ? empty : icons}</div>
         </>
       )
     }
@@ -385,7 +385,7 @@ export function FilesWorkspace({
     if (layout === "gallery" && chosen) {
       return (
         <>
-          <div className="hidden lg:block">
+          <div className="hidden md:block">
             <FileGalleryLayout chosen={chosen} entries={entries} folder={folderPath} />
           </div>
           {icons}
@@ -483,7 +483,7 @@ export function FilesWorkspace({
         {path.length > 0 ? (
           // Columns draws the path itself where it has room.
           <FolderPath
-            className={layout === "columns" ? "lg:hidden" : undefined}
+            className={layout === "columns" ? "md:hidden" : undefined}
             path={path}
             view={view}
           />

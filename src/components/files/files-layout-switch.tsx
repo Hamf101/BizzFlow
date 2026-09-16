@@ -14,7 +14,7 @@ const LAYOUT_LOOKS: Record<
   list: { icon: List, label: "List" },
 }
 
-/** Columns and Gallery need width, so narrower screens offer Icons and List. */
+/** Columns and Gallery need width, so phones offer Icons and List. */
 function needsWidth(layout: FilesLayout): boolean {
   return layout === "columns" || layout === "gallery"
 }
@@ -54,11 +54,11 @@ export function FilesLayoutSwitch({
               className={cn(
                 "grid h-[26px] w-[30px] place-items-center rounded-[7px] text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/35",
                 layout === current && "bg-secondary text-secondary-foreground",
-                needsWidth(layout) && "max-lg:hidden",
+                needsWidth(layout) && "max-md:hidden",
                 // Where Columns or Gallery cannot fit, Icons stands in for them.
                 layout === "icons" &&
                   needsWidth(current) &&
-                  "max-lg:bg-secondary max-lg:text-secondary-foreground"
+                  "max-md:bg-secondary max-md:text-secondary-foreground"
               )}
               key={layout}
               name="layout"
