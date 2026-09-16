@@ -1,5 +1,6 @@
 "use client"
 
+import { Check } from "lucide-react"
 import {
   createContext,
   type CSSProperties,
@@ -8,7 +9,9 @@ import {
   type ReactElement,
   type ReactNode,
   useContext,
+  useRef,
   useState,
+  useSyncExternalStore,
 } from "react"
 
 import type { FileLifecycleAction } from "@/components/files/file-row-menu"
@@ -25,9 +28,15 @@ export type SelectableFile = {
 type FileSelectionState = {
   clear: () => void
   extend: (id: string) => void
+  /** Press and hold: adds the item, and on a phone starts selecting. */
+  hold: (id: string) => void
   items: readonly SelectableFile[]
   lifecycle: "active" | "archived" | "trash"
+  /** The screen is phone-narrow, where the tab bar shows. */
+  narrow: boolean
   only: (id: string) => void
+  /** A phone selects after a press and hold: taps tick, the bar holds actions. */
+  phoneSelecting: boolean
   selectAll: () => void
   selected: ReadonlySet<string>
   toggle: (id: string) => void
@@ -37,11 +46,21 @@ const FileSelectionContext = createContext<FileSelectionState | null>(null)
 // True inside a List row or an Icons tile, whose right-click opens its menu.
 const OpensOnRightClickContext = createContext(false)
 
+// The widths that show the phone's tab bar, as Tailwind's `max-md` does.
+const NARROW = "(width < 48rem)"
+
+function subscribeToWidth(onChange: () => void): () => void {
+  const query = window.matchMedia(NARROW)
+  query.addEventListener("change", onChange)
+  return () => query.removeEventListener("change", onChange)
+}
+
 /**
  * Keeps the open folder's selection the way Finder does: ⌘- or Ctrl-click
  * adds or removes an item, Shift-click adds the run from the last one, ⌘A
  * takes the whole folder, Escape clears, and a right-click outside the
- * selection selects only that item. A plain click still opens.
+ * selection selects only that item. On a phone, press and hold starts a
+ * selection and taps then tick items until Done. A plain click still opens.
  *
  * @param props - The folder's items in the order shown, and its lifecycle view.
  * @returns The selection around the workspace.
@@ -57,6 +76,14 @@ export function FileSelection({
 }): ReactElement {
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set())
   const [anchor, setAnchor] = useState<string | null>(null)
+  // A press and hold began this selection, which is what puts a phone into
+  // selecting; a mouse selection on a narrow window stays as on a desktop.
+  const [byHold, setByHold] = useState(false)
+  const narrow = useSyncExternalStore(
+    subscribeToWidth,
+    () => window.matchMedia(NARROW).matches,
+    () => false
+  )
 
   function toggle(id: string): void {
     setSelected((current: ReadonlySet<string>) => {
@@ -93,14 +120,23 @@ export function FileSelection({
         clear: () => {
           setSelected(new Set())
           setAnchor(null)
+          setByHold(false)
         },
         extend,
+        hold: (id: string) => {
+          setSelected((previous: ReadonlySet<string>) => new Set([...previous, id]))
+          setAnchor(id)
+          setByHold(true)
+        },
         items,
         lifecycle,
+        narrow,
         only: (id: string) => {
           setSelected(new Set([id]))
           setAnchor(id)
+          setByHold(false)
         },
+        phoneSelecting: narrow && byHold && current.size > 0,
         selectAll: () => setSelected(new Set(present)),
         selected: current,
         toggle,
@@ -135,7 +171,9 @@ export function useOpensOnRightClick(): boolean {
  * @returns A polite live region holding the count.
  */
 export function SelectedCount(): ReactElement {
-  const count = useContext(FileSelectionContext)?.selected.size ?? 0
+  const selection = useContext(FileSelectionContext)
+  // While a phone selects, the bar pinned over the top bar shows the count.
+  const count = selection && !selection.phoneSelecting ? selection.selected.size : 0
 
   return (
     <span
@@ -151,7 +189,8 @@ export function SelectedCount(): ReactElement {
 /**
  * A List row or an Icons tile that joins the selection on a ⌘-, Ctrl-, or
  * Shift-click, takes ⌘A and Escape while focus is inside it, and opens its
- * item's menu on right-click.
+ * item's menu on right-click. On a phone, press and hold selects it instead,
+ * and while the phone selects, a tap ticks it behind a round check.
  *
  * @param props - The element to draw, its item, and its own attributes.
  * @returns The row or tile.
@@ -175,19 +214,36 @@ export function SelectableFileItem({
 }): ReactElement {
   const selection = useContext(FileSelectionContext)
   const isSelected = selection?.selected.has(itemId) ?? false
+  const ticking = selection?.phoneSelecting ?? false
+  // What last pressed this item, and whether that press was held to select it,
+  // so the click that ends the hold is not taken for a tap.
+  const pointer = useRef("mouse")
+  const held = useRef(false)
 
   function handleClick(event: MouseEvent<HTMLElement>): void {
-    const adds = event.metaKey || event.ctrlKey
-
-    if (!selection || (!adds && !event.shiftKey)) {
+    if (!selection) {
       return
     }
 
-    // A modified click selects instead of opening.
+    const adds = event.metaKey || event.ctrlKey
+    // While a phone selects, a tap ticks or unticks instead of opening.
+    const taps = ticking && pointer.current === "touch"
+
+    if (!adds && !event.shiftKey && !taps) {
+      return
+    }
+
+    // A modified click or a tap selects instead of opening.
     event.preventDefault()
     event.stopPropagation()
 
-    if (adds) {
+    if (taps) {
+      if (held.current) {
+        held.current = false
+      } else {
+        selection.toggle(itemId)
+      }
+    } else if (adds) {
       selection.toggle(itemId)
     } else {
       selection.extend(itemId)
@@ -208,6 +264,11 @@ export function SelectableFileItem({
   }
 
   function handleContextMenu(): void {
+    // A phone's press and hold is handled when the menu tries to open.
+    if (pointer.current === "touch" && selection?.narrow) {
+      return
+    }
+
     // The menu acts on the selection, so an item outside it becomes the selection.
     if (selection && !isSelected) {
       selection.only(itemId)
@@ -215,17 +276,34 @@ export function SelectableFileItem({
   }
 
   return (
-    <ContextMenu>
+    <ContextMenu
+      onOpenChange={(open, details) => {
+        // On a phone, press and hold selects instead of opening the menu.
+        if (open && pointer.current === "touch" && selection?.narrow) {
+          details.cancel()
+          held.current = true
+          selection.hold(itemId)
+        }
+      }}
+    >
       <ContextMenuTrigger
         // Rows carry their state; a list item cannot, so a tile says it instead.
         aria-selected={Element === "div" && isSelected ? true : undefined}
         // A selected item keeps its tint under the pointer.
-        className={cn(className, isSelected && "bg-secondary/70 hover:bg-secondary/70")}
+        className={cn(
+          className,
+          isSelected && "bg-secondary/70 hover:bg-secondary/70",
+          ticking && "relative"
+        )}
         data-selected={isSelected || undefined}
         data-slot={slot}
         onClickCapture={handleClick}
         onContextMenu={handleContextMenu}
         onKeyDown={handleKeyDown}
+        onPointerDown={(event) => {
+          pointer.current = event.pointerType
+          held.current = false
+        }}
         render={<Element />}
         role={role}
         style={style}
@@ -233,6 +311,21 @@ export function SelectableFileItem({
         <OpensOnRightClickContext.Provider value={true}>
           {children}
         </OpensOnRightClickContext.Provider>
+        {ticking ? (
+          <span
+            aria-hidden="true"
+            className={cn(
+              "pointer-events-none absolute grid size-[22px] place-items-center rounded-full border-[1.5px] md:hidden",
+              Element === "li" ? "top-2 left-2" : "top-1/2 left-0.5 -translate-y-1/2",
+              isSelected
+                ? "border-primary bg-primary text-primary-foreground"
+                : "border-muted-foreground/45 bg-background"
+            )}
+            data-slot="file-check"
+          >
+            {isSelected ? <Check className="size-3.5" strokeWidth={3} /> : null}
+          </span>
+        ) : null}
         {Element === "li" && isSelected ? <span className="sr-only">Selected</span> : null}
       </ContextMenuTrigger>
     </ContextMenu>

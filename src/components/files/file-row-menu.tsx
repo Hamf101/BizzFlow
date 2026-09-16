@@ -8,7 +8,11 @@ import {
   type FileLifecycleChange,
   type FileLifecycleResult,
 } from "@/app/(dashboard)/documents/actions"
-import { useFileSelection, useOpensOnRightClick } from "@/components/files/file-selection"
+import {
+  type SelectableFile,
+  useFileSelection,
+  useOpensOnRightClick,
+} from "@/components/files/file-selection"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -24,6 +28,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { bizflowToast } from "@/components/ui/toaster"
+import { cn } from "@/lib/utils"
 
 /** One lifecycle change a row offers, posted to its server action. */
 export type FileLifecycleAction = {
@@ -35,7 +40,8 @@ export type FileLifecycleAction = {
 type LifecycleLabel = FileLifecycleAction["label"]
 type Change = FileLifecycleChange["change"]
 
-const ACTION_ICONS = {
+/** Each lifecycle change's icon, shared by the menus and the phone's bar. */
+export const ACTION_ICONS = {
   Archive,
   "Move to Trash": Trash2,
   Restore: RotateCcw,
@@ -53,8 +59,17 @@ const DONE: Record<Change, string> = {
   trash: "moved to Trash",
 }
 
-function describeBulk(label: LifecycleLabel, count: number): string {
-  return label === "Move to Trash" ? `Move ${count} items to Trash` : `${label} ${count} items`
+/**
+ * Names a change across several items, such as "Move 3 items to Trash".
+ *
+ * @param label - The change.
+ * @param count - How many items it covers.
+ * @returns The change's name with its count.
+ */
+export function describeBulk(label: LifecycleLabel, count: number): string {
+  const items = `${count} ${count === 1 ? "item" : "items"}`
+
+  return label === "Move to Trash" ? `Move ${items} to Trash` : `${label} ${items}`
 }
 
 // Undo puts things back where they were: a restore from Archived or Trash
@@ -105,40 +120,20 @@ function announce(
 }
 
 /**
- * Keeps one folder's or document's lifecycle actions behind a quiet button:
- * archive, restore, and move to Trash, and in Trash a permanent deletion that
- * first asks for the item's exact name in a dialog. When the item is part of a
- * selection, the menu acts on every selected item instead, offering only what
- * all of them allow; deleting for good stays one item at a time.
+ * Offers the lifecycle changes every one of the given items allows, and runs
+ * one of them across all of the items with an Undo toast.
  *
- * @param props - The item, its name, its lifecycle actions, and its purge form.
- * @returns The row's action button, its menu, and the purge dialog.
+ * @param targets - The items to change together, or null for none.
+ * @returns The changes they share, in menu order, and a way to run one.
  */
-export function FileRowMenu({
-  actions,
-  itemId,
-  name,
-  purgeForm,
-}: {
-  actions: readonly FileLifecycleAction[]
-  itemId: string
-  name: string
-  purgeForm?: ReactNode
-}): ReactElement {
-  const [purging, setPurging] = useState(false)
-  const [, startTransition] = useTransition()
+export function useSelectionChanges(targets: readonly SelectableFile[] | null): {
+  labels: LifecycleLabel[]
+  run: (label: LifecycleLabel) => void
+} {
   const selection = useFileSelection()
-  const targets =
-    selection && selection.selected.size > 1 && selection.selected.has(itemId)
-      ? selection.items.filter((item) => selection.selected.has(item.id))
-      : null
-  const bulkLabels = targets
-    ? BULK_ORDER.filter((label: LifecycleLabel) =>
-        targets.every((item) => item.labels.includes(label))
-      )
-    : []
+  const [, startTransition] = useTransition()
 
-  function runBulk(label: LifecycleLabel): void {
+  function run(label: LifecycleLabel): void {
     if (!selection || !targets) {
       return
     }
@@ -161,18 +156,56 @@ export function FileRowMenu({
     })
   }
 
+  return {
+    labels: targets
+      ? BULK_ORDER.filter((label: LifecycleLabel) =>
+          targets.every((item) => item.labels.includes(label))
+        )
+      : [],
+    run,
+  }
+}
+
+/**
+ * Keeps one folder's or document's lifecycle actions behind a quiet button:
+ * archive, restore, and move to Trash, and in Trash a permanent deletion that
+ * first asks for the item's exact name in a dialog. When the item is part of a
+ * selection, the menu acts on every selected item instead, offering only what
+ * all of them allow; deleting for good stays one item at a time.
+ *
+ * @param props - The item, its name, its lifecycle actions, and its purge form.
+ * @returns The row's action button, its menu, and the purge dialog.
+ */
+export function FileRowMenu({
+  actions,
+  itemId,
+  name,
+  purgeForm,
+}: {
+  actions: readonly FileLifecycleAction[]
+  itemId: string
+  name: string
+  purgeForm?: ReactNode
+}): ReactElement {
+  const [purging, setPurging] = useState(false)
+  const selection = useFileSelection()
+  const targets =
+    selection && selection.selected.size > 1 && selection.selected.has(itemId)
+      ? selection.items.filter((item) => selection.selected.has(item.id))
+      : null
+  const bulk = useSelectionChanges(targets)
   // The same items open from the ⋯ button and, in List and Icons, from a
   // right-click anywhere on the row or tile.
   const opensOnRightClick = useOpensOnRightClick()
   const items = targets ? (
-    bulkLabels.length > 0 ? (
-      bulkLabels.map((label: LifecycleLabel) => {
+    bulk.labels.length > 0 ? (
+      bulk.labels.map((label: LifecycleLabel) => {
         const Icon = ACTION_ICONS[label]
 
         return (
           <DropdownMenuItem
             key={label}
-            onClick={() => runBulk(label)}
+            onClick={() => bulk.run(label)}
             variant={label === "Move to Trash" ? "destructive" : "default"}
           >
             <Icon aria-hidden="true" />
@@ -226,7 +259,11 @@ export function FileRowMenu({
           render={
             <Button
               aria-label={`Actions for ${name}`}
-              className="size-8 rounded-[8px] text-muted-foreground"
+              className={cn(
+                "size-8 rounded-[8px] text-muted-foreground",
+                // While a phone selects, its bar holds the actions.
+                selection?.phoneSelecting && "invisible"
+              )}
               size="icon"
               type="button"
               variant="ghost"
