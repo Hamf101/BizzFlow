@@ -1,6 +1,6 @@
 "use client"
 
-import { Check, SlidersHorizontal } from "lucide-react"
+import { Check, ChevronDown, SlidersHorizontal } from "lucide-react"
 import Link from "next/link"
 import { Fragment, type ReactElement, useId, useRef, useState } from "react"
 
@@ -108,7 +108,7 @@ export function ListViewMenu({
                   <OptionItem
                     key={view.id}
                     option={{
-                      href: view.query ? `/${views.list}?${view.query}` : `/${views.list}`,
+                      href: viewHref(views.list, view.query),
                       label: view.name,
                       selected: view === current,
                     }}
@@ -203,6 +203,61 @@ export function ListViewMenu({
       ) : null}
     </>
   )
+}
+
+/**
+ * A list's title. Once there are saved views, it opens a menu of them, and a
+ * saved view that is showing puts its own name in the title.
+ *
+ * @param props - The list's own name and its saved views.
+ * @returns The title, or the title as a menu of views.
+ */
+export function ListViewTitle({
+  title,
+  views,
+}: {
+  title: string
+  views: ListSavedViews
+}): ReactElement {
+  if (views.saved.length === 0) {
+    return <>{title}</>
+  }
+
+  const current = views.saved.find(
+    (view: SavedView): boolean => view.query === views.query
+  )
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger className="-ml-1.5 inline-flex items-center gap-1 rounded-[9px] px-1.5 py-0.5 outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/35 data-popup-open:bg-muted">
+        {current?.name ?? title}
+        <ChevronDown aria-hidden="true" className="size-4 text-muted-foreground" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-60">
+        <OptionItem
+          option={{
+            href: viewHref(views.list, ""),
+            label: title,
+            selected: !current && views.query === "",
+          }}
+        />
+        {views.saved.map((view: SavedView) => (
+          <OptionItem
+            key={view.id}
+            option={{
+              href: viewHref(views.list, view.query),
+              label: view.name,
+              selected: view === current,
+            }}
+          />
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+function viewHref(list: SavedViewList, query: string): string {
+  return query ? `/${list}?${query}` : `/${list}`
 }
 
 function OptionItem({ option }: { option: ListOption }): ReactElement {

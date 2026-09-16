@@ -22,15 +22,20 @@ test("saves a list's settings as a view, reopens, renames, and deletes it", asyn
   await page.getByRole("dialog").getByLabel("Name").fill(name)
   await page.getByRole("button", { name: "Save view" }).click()
   await expect(page.getByText("View saved")).toBeVisible()
+  // The open view names the list.
+  const heading = page.getByRole("heading", { level: 1 })
+  await expect(heading).toContainText(name)
 
-  // From the list's default settings, the menu leads back to the view.
+  // From the list's default settings, the title's menu leads back to the view.
   await page.goto("/tasks")
-  await waitForHydration(viewOptions)
-  await viewOptions.click()
+  const titleMenu = heading.getByRole("button")
+  await waitForHydration(titleMenu)
+  await titleMenu.click()
   await viewItem(name).click()
   await expect(page).toHaveURL(
     new RegExp(`/tasks\\?${query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`)
   )
+  await expect(heading).toContainText(name)
 
   await viewOptions.click()
   await expect(viewItem(name)).toHaveAttribute("aria-current", "true")
@@ -45,6 +50,7 @@ test("saves a list's settings as a view, reopens, renames, and deletes it", asyn
   await expect(viewItem(renamed)).toHaveAttribute("aria-current", "true")
   await page.getByRole("menuitem", { name: "Delete this view" }).click()
   await expect(page.getByText("View deleted")).toBeVisible()
+  await expect(heading).not.toContainText(renamed)
 
   await viewOptions.click()
   await expect(viewItem(renamed)).toHaveCount(0)

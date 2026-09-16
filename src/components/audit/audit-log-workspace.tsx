@@ -10,7 +10,7 @@ import {
 } from "@/components/audit/audit-log-view"
 import { ListFilterChips } from "@/components/data/list-filter-chips"
 import { ListPagination } from "@/components/data/list-pagination"
-import { type ListSavedViews, ListViewMenu } from "@/components/data/list-view-menu"
+import { type ListSavedViews, ListViewMenu, ListViewTitle } from "@/components/data/list-view-menu"
 import { formatMediumDateTime } from "@/lib/date-format"
 import { getLastPage } from "@/lib/list-state"
 import type { AuditLogEntry } from "@/types/audit"
@@ -45,12 +45,18 @@ export function AuditLogWorkspace({
 }): ReactElement {
   const lastPage = getLastPage(total, view.pageSize)
 
+  const listViews: ListSavedViews = {
+    list: "audit-log",
+    query: auditLogListState.toSearchParams({ ...view, page: 1 }).toString(),
+    saved: savedViews,
+  }
+
   return (
     <section className="flex flex-col gap-5" data-slot="audit-log-workspace">
       <div className="flex items-center justify-between gap-3">
         {/* The real space keeps the accessible name "Audit log 2 events". */}
         <h1 className="text-2xl leading-none font-medium tracking-[-0.02em]">
-          Audit log{" "}
+          <ListViewTitle title="Audit log" views={listViews} />{" "}
           <span
             aria-label={`${total} ${total === 1 ? "event" : "events"}`}
             className="ml-0.5 text-xl font-normal text-muted-foreground"
@@ -64,11 +70,7 @@ export function AuditLogWorkspace({
             adjusted={isAuditViewAdjusted(view)}
             label="View options"
             sections={getAuditViewMenuSections(view)}
-            views={{
-              list: "audit-log",
-              query: auditLogListState.toSearchParams({ ...view, page: 1 }).toString(),
-              saved: savedViews,
-            }}
+            views={listViews}
           />
         </div>
       </div>

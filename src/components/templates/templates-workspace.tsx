@@ -4,7 +4,7 @@ import type { CSSProperties, ReactElement } from "react"
 
 import { ListFilterChips } from "@/components/data/list-filter-chips"
 import { ListPagination } from "@/components/data/list-pagination"
-import { type ListSavedViews, ListViewMenu } from "@/components/data/list-view-menu"
+import { type ListSavedViews, ListViewMenu, ListViewTitle } from "@/components/data/list-view-menu"
 import {
   getTemplateSearchFields,
   getTemplateStatusOptions,
@@ -73,12 +73,18 @@ export function TemplatesWorkspace({
   // home does; filtered views and later pages keep to what they show.
   const offersNew = canManage && !filtered && view.page === 1
 
+  const listViews: ListSavedViews = {
+    list: "templates",
+    query: templateListState.toSearchParams({ ...view, page: 1 }).toString(),
+    saved: savedViews,
+  }
+
   return (
     <section className="flex flex-col gap-5" data-slot="templates-workspace">
       {/* The real space keeps the accessible name "Templates 12 templates"
           rather than "Templates12 templates". */}
       <h1 className="text-2xl leading-none font-medium tracking-[-0.02em]">
-        Templates{" "}
+        <ListViewTitle title="Templates" views={listViews} />{" "}
         <span
           aria-label={`${total} ${total === 1 ? "template" : "templates"}`}
           className="ml-0.5 text-xl font-normal text-muted-foreground"
@@ -119,11 +125,7 @@ export function TemplatesWorkspace({
           adjusted={isTemplateViewAdjusted(view)}
           label="View options"
           sections={getTemplateViewMenuSections(view, categories)}
-          views={{
-            list: "templates",
-            query: templateListState.toSearchParams({ ...view, page: 1 }).toString(),
-            saved: savedViews,
-          }}
+          views={listViews}
         />
         {canManage ? (
           <Link

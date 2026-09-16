@@ -4,7 +4,7 @@ import type { ReactElement } from "react"
 
 import { ListFilterChips } from "@/components/data/list-filter-chips"
 import { ListPagination } from "@/components/data/list-pagination"
-import { type ListSavedViews, ListViewMenu } from "@/components/data/list-view-menu"
+import { type ListSavedViews, ListViewMenu, ListViewTitle } from "@/components/data/list-view-menu"
 import { formatMemberName } from "@/components/people/member-name"
 import { NewTaskDialog } from "@/components/tasks/new-task-dialog"
 import {
@@ -65,12 +65,18 @@ export function TasksWorkspace({
 }): ReactElement {
   const lastPage = getLastPage(total, view.pageSize)
 
+  const listViews: ListSavedViews = {
+    list: "tasks",
+    query: taskListState.toSearchParams({ ...view, page: 1 }).toString(),
+    saved: savedViews,
+  }
+
   return (
     <section className="flex flex-col gap-5" data-slot="tasks-workspace">
       {/* The real space keeps the accessible name "Tasks 55 tasks" rather
           than "Tasks55 tasks"; the small margin keeps the visual gap. */}
       <h1 className="text-2xl leading-none font-medium tracking-[-0.02em]">
-        Tasks{" "}
+        <ListViewTitle title="Tasks" views={listViews} />{" "}
         <span
           aria-label={`${total} ${total === 1 ? "task" : "tasks"}`}
           className="ml-0.5 text-xl font-normal text-muted-foreground"
@@ -104,11 +110,7 @@ export function TasksWorkspace({
           adjusted={isTaskViewAdjusted(view)}
           label="View options"
           sections={getTaskViewMenuSections(view, internalMembers)}
-          views={{
-            list: "tasks",
-            query: taskListState.toSearchParams({ ...view, page: 1 }).toString(),
-            saved: savedViews,
-          }}
+          views={listViews}
         />
         {canCreate ? (
           <NewTaskDialog

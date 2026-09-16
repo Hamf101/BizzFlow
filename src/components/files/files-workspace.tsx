@@ -3,7 +3,7 @@ import Link from "next/link"
 import type { ReactElement, ReactNode } from "react"
 
 import { ListFilterChips } from "@/components/data/list-filter-chips"
-import { type ListSavedViews, ListViewMenu } from "@/components/data/list-view-menu"
+import { type ListSavedViews, ListViewMenu, ListViewTitle } from "@/components/data/list-view-menu"
 import { PurgeRequestForm } from "@/components/documents/purge-request-form"
 import type { FileEntry } from "@/components/files/file-entry"
 import {
@@ -395,6 +395,19 @@ export function FilesWorkspace({
     return <FileIconsLayout entries={entries} selected={chosenId} />
   }
 
+  const listViews: ListSavedViews = {
+    list: "documents",
+    // The item Columns or Gallery has chosen is not part of a view.
+    query: fileListState
+      .toSearchParams({
+        ...view,
+        filters: { ...view.filters, item: undefined },
+        page: 1,
+      })
+      .toString(),
+    saved: savedViews,
+  }
+
   return (
     <FileSelection
       items={selectable}
@@ -406,7 +419,7 @@ export function FilesWorkspace({
         {/* The real space keeps the accessible name "Files 12 items" rather
             than "Files12 items". */}
         <h1 className="text-2xl leading-none font-medium tracking-[-0.02em]">
-          Files{" "}
+          <ListViewTitle title="Files" views={listViews} />{" "}
           <span
             aria-label={`${total} ${total === 1 ? "item" : "items"}`}
             className="ml-0.5 text-xl font-normal text-muted-foreground"
@@ -447,18 +460,7 @@ export function FilesWorkspace({
             adjusted={isFileViewAdjusted(view)}
             label="View options"
             sections={getFileViewMenuSections(view)}
-            views={{
-              list: "documents",
-              // The item Columns or Gallery has chosen is not part of a view.
-              query: fileListState
-                .toSearchParams({
-                  ...view,
-                  filters: { ...view.filters, item: undefined },
-                  page: 1,
-                })
-                .toString(),
-              saved: savedViews,
-            }}
+            views={listViews}
           />
           {offersNew ? (
             <NewFileMenu addDocumentHref={addDocumentHref} newFolder={newFolder} />

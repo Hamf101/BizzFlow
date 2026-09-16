@@ -4,7 +4,7 @@ import type { CSSProperties, ReactElement } from "react"
 
 import { ListFilterChips } from "@/components/data/list-filter-chips"
 import { ListPagination } from "@/components/data/list-pagination"
-import { type ListSavedViews, ListViewMenu } from "@/components/data/list-view-menu"
+import { type ListSavedViews, ListViewMenu, ListViewTitle } from "@/components/data/list-view-menu"
 import { formatMemberName } from "@/components/people/member-name"
 import {
   getSubmissionSearchFields,
@@ -76,12 +76,18 @@ export function SubmissionsWorkspace({
   const lastPage = getLastPage(total, view.pageSize)
   const grid = canAssign ? GRID_WITH_ASSIGNEE : GRID_WITHOUT_ASSIGNEE
 
+  const listViews: ListSavedViews = {
+    list: "submissions",
+    query: submissionListState.toSearchParams({ ...view, page: 1 }).toString(),
+    saved: savedViews,
+  }
+
   return (
     <section className="flex flex-col gap-5" data-slot="submissions-workspace">
       {/* The real space keeps the accessible name "Submissions 12
           submissions" rather than "Submissions12 submissions". */}
       <h1 className="text-2xl leading-none font-medium tracking-[-0.02em]">
-        Submissions{" "}
+        <ListViewTitle title="Submissions" views={listViews} />{" "}
         <span
           aria-label={`${total} ${total === 1 ? "submission" : "submissions"}`}
           className="ml-0.5 text-xl font-normal text-muted-foreground"
@@ -117,11 +123,7 @@ export function SubmissionsWorkspace({
           sections={getSubmissionViewMenuSections(view, members, {
             canFilterAssignee: canAssign,
           })}
-          views={{
-            list: "submissions",
-            query: submissionListState.toSearchParams({ ...view, page: 1 }).toString(),
-            saved: savedViews,
-          }}
+          views={listViews}
         />
         {canCreate ? (
           <Link
