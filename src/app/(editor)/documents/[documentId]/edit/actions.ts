@@ -23,10 +23,12 @@ import {
   type OrganizationPermissionAction,
 } from "@/lib/permissions"
 import { getCurrentOrganizationContext } from "@/services/organization-service"
+import type { SaveResult } from "@/components/editor/use-autosave"
 import {
   resendDocumentSigningInvitation,
   saveGeneratedDocumentAnswers,
   sendDocumentForSigning,
+  updateGeneratedDocumentContent,
 } from "@/services/document-signing-service"
 import type { DocumentRecipientInput } from "@/types/signing"
 import type { OrganizationContext } from "@/types/organization"
@@ -46,18 +48,48 @@ class MemberDocumentActionError extends Error {
   }
 }
 
+/** A draft's title and page, as the editor saves them while they change. */
+export type DocumentContentInput = {
+  content: unknown
+  documentId: string
+  /** The document's version when the editor last loaded or saved it. */
+  expectedUpdatedAt: string
+  title: string
+}
+
 /**
- * Saves the member's generated-document answer patch.
+ * Saves a draft's title and page from the editor, without leaving the page.
  *
- * @param formData - Generated document id and namespaced answer fields.
- * @returns Never returns; redirects with success or typed error feedback.
+ * @param input - The document, the version the editor holds, and the page.
+ * @returns The version to save from next, or why the save was refused.
  */
-export async function saveGeneratedDocumentAction(
-  formData: FormData
-): Promise<void> {
+export async function saveDocumentContentAction(input: DocumentContentInput): Promise<SaveResult> {
+  try {
+    const actionContext = await loadMemberActionContext("documents:fill")
+    const saved = await updateGeneratedDocumentContent({
+      actorUserId: actionContext.actorUserId,
+      organizationId: actionContext.context.organization.id,
+      documentId: requireIdentifier(input.documentId, "Document id"),
+      expectedUpdatedAt: input.expectedUpdatedAt,
+      title: input.title,
+      content: input.content,
+    })
+
+    revalidatePath("/documents")
+    return { ok: true, version: saved.updatedAt }
+  } catch (error: unknown) {
+    return toSaveFailure(error, "generated_document_content_save_failed", input.documentId)
+  }
+}
+
+/**
+ * Saves the answers typed into a document's fields, without leaving the page.
+ *
+ * @param formData - The document id and its namespaced answer fields.
+ * @returns A result the editor shows as its save status.
+ */
+export async function saveDocumentAnswersAction(formData: FormData): Promise<SaveResult> {
   const documentId = getFormString(formData, "documentId")
-  const editorPath = getDocumentEditorPath(documentId)
-  const startedAt = Date.now()
 
   try {
     const actionContext = await loadMemberActionContext("documents:fill")
@@ -67,23 +99,35 @@ export async function saveGeneratedDocumentAction(
       documentId: requireIdentifier(documentId, "Document id"),
       values: parseGeneratedDocumentAnswers(formData),
     })
-    revalidateDocumentEditor(documentId)
-    console.info("generated_document_save_action_completed", {
-      documentId,
-      durationMs: Date.now() - startedAt,
-      organizationId: actionContext.context.organization.id,
-    })
+
+    return { ok: true, version: "answers" }
   } catch (error: unknown) {
-    handleMemberActionFailure({
-      documentId,
-      error,
-      eventName: "generated_document_save_action_failed",
-      nextPath: editorPath,
-      startedAt,
-    })
+    return toSaveFailure(error, "generated_document_answers_save_failed", documentId)
+  }
+}
+
+function toSaveFailure(error: unknown, eventName: string, documentId: string): SaveResult {
+  if (error instanceof AuthenticationError) {
+    return { message: "Sign in again to keep saving.", ok: false, status: 401 }
   }
 
-  redirect(buildFeedbackRedirect(editorPath, "changes_saved"))
+  const statusCode =
+    error instanceof GeneratedDocumentFormDataError
+      ? 400
+      : typeof (error as { statusCode?: unknown }).statusCode === "number"
+        ? (error as { statusCode: number }).statusCode
+        : 500
+
+  console.warn(eventName, {
+    documentId,
+    reason: error instanceof Error ? error.message : "Unknown generated document save error",
+  })
+
+  return {
+    message: statusCode === 500 ? "The document could not be saved." : (error as Error).message,
+    ok: false,
+    status: statusCode,
+  }
 }
 
 /**

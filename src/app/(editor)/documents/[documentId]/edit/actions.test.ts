@@ -15,7 +15,7 @@ import {
 
 import {
   resendGeneratedDocumentInvitationAction,
-  saveGeneratedDocumentAction,
+  saveDocumentAnswersAction,
   sendGeneratedDocumentAction,
 } from "./actions"
 
@@ -202,15 +202,13 @@ describe("sendGeneratedDocumentAction", () => {
   })
 })
 
-describe("saveGeneratedDocumentAction", () => {
-  it("saves answer values before reporting completion", async () => {
+describe("saveDocumentAnswersAction", () => {
+  it("saves answer values and reports the save to the editor", async () => {
     const formData = new FormData()
     formData.set("documentId", DOCUMENT_ID)
     formData.set("answer.text.client-name", "Acme")
 
-    await expect(saveGeneratedDocumentAction(formData)).rejects.toThrow(
-      `NEXT_REDIRECT:${EDITOR_PATH}?feedback=changes_saved`
-    )
+    await expect(saveDocumentAnswersAction(formData)).resolves.toEqual({ ok: true, version: "answers" })
     expect(saveGeneratedDocumentAnswers).toHaveBeenCalledExactlyOnceWith({
       actorUserId: MEMBER_ID,
       organizationId: ORG_ID,
@@ -219,16 +217,12 @@ describe("saveGeneratedDocumentAction", () => {
     })
   })
 
-  it("preserves the editor login return path", async () => {
-    vi.mocked(getAuthenticatedUser).mockRejectedValue(
-      new AuthenticationError("Sign in to continue.")
-    )
+  it("asks a signed-out member to sign in again, saving nothing", async () => {
+    vi.mocked(getAuthenticatedUser).mockRejectedValue(new AuthenticationError("Sign in to continue."))
     const formData = new FormData()
     formData.set("documentId", DOCUMENT_ID)
 
-    await expect(saveGeneratedDocumentAction(formData)).rejects.toThrow(
-      `NEXT_REDIRECT:/login?next=%2Fdocuments%2F${DOCUMENT_ID}%2Fedit`
-    )
+    await expect(saveDocumentAnswersAction(formData)).resolves.toMatchObject({ ok: false, status: 401 })
     expect(saveGeneratedDocumentAnswers).not.toHaveBeenCalled()
   })
 })

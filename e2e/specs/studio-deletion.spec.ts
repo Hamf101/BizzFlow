@@ -2,7 +2,7 @@ import { expect, test, uniqueName } from "../support/fixtures"
 import { waitForHydration } from "../support/hydration"
 import { seedTemplate } from "../support/seed"
 
-test("asks before deleting an element, restores it with Undo, and saves either outcome", async ({
+test("deletes a selected element with Undo, and the draft saves what is left by itself", async ({
   admin,
   pageAs,
   tenant,
@@ -14,59 +14,32 @@ test("asks before deleting an element, restores it with Undo, and saves either o
   }
   await page.goto(`/templates/${template.id}/edit`)
 
-  const textField = page.getByRole("button", { name: "Edit text field", exact: true })
-  const confirmation = page.getByRole("dialog", { name: /Delete this/ })
-  const saved = async (): Promise<{ revision: number; textFieldKeys: string[] }> => {
+  const textField = page.locator('[data-block-type="text_field"]')
+  const savedKeys = async (): Promise<string[]> => {
     const { data, error } = await admin
       .from("document_templates")
-      .select("revision,content")
+      .select("content")
       .eq("id", template.id)
       .eq("org_id", tenant.organizationId)
       .single()
     if (error) throw error
-    return {
-      revision: data.revision,
-      textFieldKeys: data.content.blocks
-        .filter((block: { type: string }) => block.type === "text_field")
-        .map((block: { fieldKey: string }) => block.fieldKey),
-    }
-  }
-  const saveDraft = async (): Promise<void> => {
-    await page.getByRole("button", { name: "Save draft", exact: true }).click()
-    // Saving redirects back to the editor; wait for the announced outcome so
-    // the next step acts on the reloaded editor, not the page being replaced.
-    await expect(page.getByRole("status").filter({ hasText: "Changes saved" })).toBeVisible()
-  }
-  const requestDeletion = async (): Promise<void> => {
-    await textField.click()
-    await page.getByRole("button", { name: "Close inspector", exact: true }).click()
-    await page.getByRole("button", { name: "Delete block", exact: true }).click()
-    await expect(confirmation).toBeVisible()
+    return data.content.blocks
+      .filter((block: { type: string }) => block.type === "text_field")
+      .map((block: { fieldKey: string }) => block.fieldKey)
   }
 
   await expect(textField).toHaveCount(1)
   await waitForHydration(textField)
 
-  await requestDeletion()
-  await confirmation.getByRole("button", { name: "Keep element", exact: true }).click()
-  await expect(confirmation).toBeHidden()
+  // Clicking an element selects it; Delete takes it away and Undo brings it back.
+  await textField.click({ position: { x: 4, y: 4 } })
+  await page.keyboard.press("Delete")
+  await expect(textField).toHaveCount(0)
+  await page.locator("[data-sonner-toast]").getByRole("button", { name: "Undo", exact: true }).click()
   await expect(textField).toHaveCount(1)
 
-  await page.getByRole("button", { name: "Delete block", exact: true }).click()
-  await confirmation.getByRole("button", { name: "Delete element", exact: true }).click()
+  await textField.click({ position: { x: 4, y: 4 } })
+  await page.getByRole("toolbar", { name: "Block" }).getByRole("button", { name: "Delete", exact: true }).click()
   await expect(textField).toHaveCount(0)
-
-  await page.getByRole("button", { name: "Undo", exact: true }).click()
-  await expect(textField).toHaveCount(1)
-
-  // Undo returned the draft to exactly the saved state: saving reports success
-  // and writes nothing, so the revision does not move.
-  await saveDraft()
-  expect(await saved()).toEqual({ revision: 1, textFieldKeys: ["client_reference"] })
-
-  await requestDeletion()
-  await confirmation.getByRole("button", { name: "Delete element", exact: true }).click()
-  await expect(textField).toHaveCount(0)
-  await page.getByRole("button", { name: "Save draft", exact: true }).click()
-  await expect.poll(saved).toEqual({ revision: 2, textFieldKeys: [] })
+  await expect.poll(savedKeys, { timeout: 15_000 }).toEqual([])
 })

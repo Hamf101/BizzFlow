@@ -514,7 +514,14 @@ function getGeneratedPaginationStyle({
   }
 }
 
-function GeneratedBlock({
+/**
+ * Renders one block of a generated document: static content as printed, and
+ * each field as its answer control, or its saved answer when read only.
+ *
+ * @param props - The block, the answers, and whether it can be filled.
+ * @returns The block.
+ */
+export function GeneratedBlock({
   answers,
   block,
   editable,

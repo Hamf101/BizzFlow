@@ -32,8 +32,13 @@ export const ROUTE_BUDGETS = [
     ceilingKiB: 265,
   },
   {
-    label: "Template Studio editor",
-    route: "/(dashboard)/templates/[templateId]/edit/page",
+    label: "Template editor",
+    route: "/(editor)/templates/[templateId]/edit/page",
+    ceilingKiB: 290,
+  },
+  {
+    label: "Document editor",
+    route: "/(editor)/documents/[documentId]/edit/page",
     ceilingKiB: 290,
   },
 ]

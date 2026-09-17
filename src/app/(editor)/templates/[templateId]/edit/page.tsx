@@ -23,8 +23,8 @@ import type { TemplateFlowMessage } from "@/types/template-flow"
 import {
   archiveTemplateAction,
   publishTemplateAction,
-  updateTemplateAction,
-} from "../../actions"
+  saveTemplateDraftAction,
+} from "@/app/(dashboard)/templates/actions"
 
 type EditTemplateParams = Promise<{
   templateId: string
@@ -136,16 +136,14 @@ export default async function EditTemplatePage({
   }).catch((): string[] => [])
 
   return (
-    <EditTemplateShell>
-      <TemplateEditor
-        archiveAction={archiveTemplateAction}
-        categorySuggestions={categorySuggestions}
-        publishAction={publishTemplateAction}
-        saveAction={updateTemplateAction}
-        initialFlowMessages={initialFlowMessages}
-        template={templateResult.template}
-      />
-    </EditTemplateShell>
+    <TemplateEditor
+      archiveAction={archiveTemplateAction}
+      categorySuggestions={categorySuggestions}
+      initialFlowMessages={initialFlowMessages}
+      publishAction={publishTemplateAction}
+      saveDraftAction={saveTemplateDraftAction}
+      template={templateResult.template}
+    />
   )
 }
 
@@ -155,15 +153,17 @@ function EditTemplateShell({
   children: ReactElement
 }): ReactElement {
   return (
-    <div className="flex flex-col gap-6">
-      <Link
-        className={cn(buttonVariants({ size: "sm", variant: "ghost" }), "w-fit")}
-        href="/templates"
-      >
-        <ArrowLeft />
-        Back to templates
-      </Link>
-      {children}
+    <div className="grid min-h-dvh place-items-center bg-canvas p-6">
+      <div className="grid w-full max-w-md gap-4">
+        {children}
+        <Link
+          className={cn(buttonVariants({ variant: "outline" }), "justify-self-start")}
+          href="/templates"
+        >
+          <ArrowLeft />
+          Back to templates
+        </Link>
+      </div>
     </div>
   )
 }

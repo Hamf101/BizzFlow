@@ -1,4 +1,5 @@
 import { expect, test, uniqueName } from "../support/fixtures"
+import { waitForHydration } from "../support/hydration"
 import { seedTemplate } from "../support/seed"
 
 /**
@@ -25,7 +26,9 @@ test.describe("submission intake", () => {
     const manager = await pageAs("manager")
 
     await manager.goto(`/templates/${template.id}/edit`)
-    await manager.getByRole("button", { name: /save & publish/i }).click()
+    const publish = manager.getByRole("button", { name: "Publish", exact: true })
+    await waitForHydration(publish)
+    await publish.click()
 
     // Only published templates are offered when starting a submission, so the
     // next step doubles as proof that publishing took effect.

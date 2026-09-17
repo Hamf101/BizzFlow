@@ -20,6 +20,7 @@ import {
   TemplateServiceError,
   updateDocumentTemplate,
 } from "@/services/template-service"
+import type { SaveResult } from "@/components/editor/use-autosave"
 import {
   createEmptyDocumentContent,
   parseTemplateContent,
@@ -134,6 +135,72 @@ export async function updateTemplateAction(formData: FormData): Promise<void> {
   }
 
   redirect(buildFeedbackRedirect(editorPath, "changes_saved"))
+}
+
+/** A template as the editor saves it while it changes. */
+export type TemplateDraftInput = {
+  category: string
+  content: unknown
+  description: string
+  /** The revision the editor last loaded or saved. */
+  expectedRevision: number
+  templateId: string
+  title: string
+}
+
+/**
+ * Saves a template from the editor as it changes, without leaving the page.
+ * A save from an older revision is refused, so nobody's work is overwritten.
+ *
+ * @param input - The template's fields and the revision the editor holds.
+ * @returns The new revision, or why the save was refused.
+ */
+export async function saveTemplateDraftAction(input: TemplateDraftInput): Promise<SaveResult> {
+  try {
+    const actionContext = await loadTemplateActionContext()
+    let content: TemplateContent
+
+    try {
+      content = parseTemplateContent(input.content)
+    } catch {
+      return { message: "Some blocks are incomplete. Fix them to save.", ok: false, status: 400 }
+    }
+
+    const template = await updateDocumentTemplate({
+      actorUserId: actionContext.actorUserId,
+      organizationId: actionContext.context.organization.id,
+      templateId: requireTemplateId(input.templateId),
+      expectedRevision: input.expectedRevision,
+      title: input.title,
+      description: input.description || null,
+      category: input.category || null,
+      content,
+    })
+
+    revalidateTemplatePaths(template.id)
+    return { ok: true, version: String(template.revision) }
+  } catch (error: unknown) {
+    if (error instanceof TemplateServiceError && error.message === "No template changes were provided.") {
+      return { ok: true, version: String(input.expectedRevision) }
+    }
+
+    if (error instanceof AuthenticationError) {
+      return { message: "Sign in again to keep saving.", ok: false, status: 401 }
+    }
+
+    const statusCode =
+      error instanceof TemplateServiceError || error instanceof TemplateActionError ? error.statusCode : 500
+
+    logTemplateActionFailure("template_draft_save_failed", {
+      reason: getUnknownErrorMessage(error),
+      templateId: input.templateId,
+    })
+    return {
+      message: statusCode === 500 ? "The template could not be saved." : (error as Error).message,
+      ok: false,
+      status: statusCode,
+    }
+  }
 }
 
 /**

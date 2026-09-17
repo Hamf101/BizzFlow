@@ -1,4 +1,5 @@
 import { expect, test, uniqueName } from "../support/fixtures"
+import { waitForHydration } from "../support/hydration"
 import { seedTemplate } from "../support/seed"
 
 test("warns about paper contrast while saving exact brand colors", async ({
@@ -12,7 +13,9 @@ test("warns about paper contrast while saving exact brand colors", async ({
     await page.setViewportSize(testInfo.project.use.viewport)
   }
   await page.goto(`/templates/${template.id}/edit`)
-  await page.getByRole("button", { name: "Brand", exact: true }).click()
+  const brand = page.getByRole("button", { name: "Brand", exact: true })
+  await waitForHydration(brand)
+  await brand.click()
 
   const status = page.locator("#branding-paper-contrast")
   await expect(status).toContainText("Paper contrast")
@@ -21,9 +24,6 @@ test("warns about paper contrast while saving exact brand colors", async ({
   await expect(status).toContainText("Low paper contrast")
   await expect(status).toContainText("Primary 1.00:1")
   await expect(status).toContainText("Accent 1.16:1")
-  await expect(page.getByRole("button", { name: "Save draft", exact: true })).toBeEnabled()
-  await expect(status).toBeVisible()
-  await status.scrollIntoViewIfNeeded()
   await status.evaluate((element) => element.scrollIntoView({ block: "center" }))
   const bounds = await status.boundingBox()
   expect(bounds).not.toBeNull()
@@ -31,7 +31,7 @@ test("warns about paper contrast while saving exact brand colors", async ({
   expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(page.viewportSize()!.width)
   await status.screenshot({ path: testInfo.outputPath("paper-contrast.png") })
 
-  await page.getByRole("button", { name: "Save draft", exact: true }).click()
+  // Low contrast warns but never blocks: the draft saves the exact colors.
   await expect.poll(async () => {
     const { data, error } = await admin.from("document_templates")
       .select("content")
@@ -40,19 +40,21 @@ test("warns about paper contrast while saving exact brand colors", async ({
       .single()
     if (error) throw error
     return data.content.branding
-  }).toMatchObject({ primaryColor: "#ffffff", accentColor: "#eeeeee" })
+  }, { timeout: 15_000 }).toMatchObject({ primaryColor: "#ffffff", accentColor: "#eeeeee" })
 
   await page.reload()
-  await page.getByRole("radio", { name: "Preview", exact: true }).click()
-  const preview = page.getByRole("article", { name: "Template preview" })
-  await expect(preview).toHaveAttribute("data-document-surface", "paper")
-  expect(await preview.evaluate((element) => ({
-    primary: (element as HTMLElement).style.getPropertyValue("--template-primary"),
-    accent: (element as HTMLElement).style.getPropertyValue("--template-accent"),
+  const preview = page.getByRole("radio", { name: "Preview", exact: true })
+  await waitForHydration(preview)
+  await preview.click()
+  const pages = page.locator('[data-slot="editor-pages"]')
+  await expect(pages).toHaveAttribute("data-document-surface", "paper")
+  expect(await pages.evaluate((element) => ({
+    primary: (element as HTMLElement).style.getPropertyValue("--doc-primary"),
+    accent: (element as HTMLElement).style.getPropertyValue("--doc-accent"),
   }))).toEqual({ primary: "#ffffff", accent: "#eeeeee" })
 })
 
-test("duplicates fields through canvas and inspector with unique saved field keys", async ({
+test("duplicates fields from the toolbar and from settings with unique saved field keys", async ({
   admin, pageAs, tenant,
 }, testInfo) => {
   const template = await seedTemplate(admin, tenant.organizationId, uniqueName("Duplicate"))
@@ -61,15 +63,19 @@ test("duplicates fields through canvas and inspector with unique saved field key
     await page.setViewportSize(testInfo.project.use.viewport)
   }
   await page.goto(`/templates/${template.id}/edit`)
-  await page.getByRole("button", { name: "Edit text field", exact: true }).click()
-  await page.getByRole("button", { name: "Close inspector", exact: true }).click()
-  await page.getByRole("button", { name: "Duplicate block", exact: true }).click({ timeout: 10_000 })
-  await expect(page.getByRole("button", { name: "Edit text field", exact: true })).toHaveCount(2)
-  await expect(page.locator('[data-template-block-id] button[aria-pressed="true"]:focus')).toHaveCount(1)
+  const textFields = page.locator('[data-block-type="text_field"]')
+  const toolbar = page.getByRole("toolbar", { name: "Block" })
+  await waitForHydration(textFields.first())
+
+  await textFields.first().click({ position: { x: 4, y: 4 } })
+  await toolbar.getByRole("button", { name: "Duplicate", exact: true }).click()
+  await expect(textFields).toHaveCount(2)
+
+  // The copy is selected, so its settings rename it and copy it once more.
+  await toolbar.getByRole("button", { name: "Settings", exact: true }).click()
   await page.getByLabel("Label", { exact: true }).fill("Copied reference")
   await page.getByRole("button", { name: "Duplicate Text field", exact: true }).click()
-  await expect(page.getByRole("button", { name: "Edit text field", exact: true })).toHaveCount(3)
-  await page.getByRole("button", { name: "Save draft", exact: true }).click()
+  await expect(textFields).toHaveCount(3)
 
   await expect.poll(async () => {
     const { data, error } = await admin.from("document_templates")
@@ -78,7 +84,7 @@ test("duplicates fields through canvas and inspector with unique saved field key
     return data.content.blocks
       .filter((block: { type: string }) => block.type === "text_field")
       .map((block: { fieldKey: string; label: string }) => ({ fieldKey: block.fieldKey, label: block.label }))
-  }).toEqual([
+  }, { timeout: 15_000 }).toEqual([
     { fieldKey: "client_reference", label: "Client reference" },
     { fieldKey: "client_reference_2", label: "Copied reference" },
     { fieldKey: "client_reference_2_2", label: "Copied reference" },

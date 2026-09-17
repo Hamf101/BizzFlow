@@ -3,7 +3,6 @@ import type { ReactElement } from "react"
 import { Badge } from "@/components/ui/badge"
 import type {
   DocumentSigningRecipientStatus,
-  DocumentTemplateStatus,
   GeneratedDocumentWorkflowStatus,
 } from "@/types/template"
 
@@ -51,24 +50,3 @@ export function SigningRecipientStatusBadge({
   return <Badge variant="outline">Pending</Badge>
 }
 
-/**
- * Displays a template's lifecycle state with consistent badge styling.
- *
- * @param props - Current template lifecycle status.
- * @returns Status badge for draft, published, or archived state.
- */
-export function TemplateStatusBadge({
-  status,
-}: {
-  status: DocumentTemplateStatus
-}): ReactElement {
-  if (status === "published") {
-    return <Badge>Published</Badge>
-  }
-
-  if (status === "archived") {
-    return <Badge variant="destructive">Archived</Badge>
-  }
-
-  return <Badge variant="secondary">Draft</Badge>
-}
