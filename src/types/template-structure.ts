@@ -409,24 +409,10 @@ export function insertTemplateBlock(
     ...content.blocks.slice(insertIndex)
   ]
 
+  // The first block of an empty page starts no section: a section prints its
+  // label, and a blank page should print only what its author writes.
   if (content.blocks.length === 0) {
-    return reconcileTemplateStructure(
-      content,
-      blocks,
-      [
-        {
-          section: {
-            id: normalizedBlock.id,
-            label: "Section 1",
-            startBlockId: normalizedBlock.id,
-            pageBreakBefore: false,
-            keepTogether: false
-          },
-          startIndex: 0
-        }
-      ],
-      []
-    )
+    return reconcileTemplateStructure(content, blocks, [], [])
   }
 
   const sections = getIndexedSections(content).map(
@@ -824,7 +810,8 @@ function repairSections(
   blocks: readonly TemplateBlock[],
   indexedSections: readonly IndexedSection[]
 ): TemplateSection[] {
-  if (blocks.length === 0) {
+  // Content without sections is one implicit, unlabeled section.
+  if (blocks.length === 0 || indexedSections.length === 0) {
     return []
   }
 

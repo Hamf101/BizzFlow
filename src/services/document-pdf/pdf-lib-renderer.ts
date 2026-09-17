@@ -92,6 +92,11 @@ export async function renderPdfLibDocument(
       pageIndex + 1,
       pages.length
     )
+
+    // Drawn on the page the content was designed on, then printed on its paper.
+    if (input.renderPlan.geometry.scale !== 1) {
+      page.scale(input.renderPlan.geometry.scale, input.renderPlan.geometry.scale)
+    }
   }
 
   // pdf-lib refreshes the modification date while pages and resources change,

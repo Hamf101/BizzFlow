@@ -39,7 +39,7 @@ import {
   createGeneratedDocument,
   TemplateServiceError,
 } from "@/services/template-service"
-import { createBlankTemplateContent } from "@/types/template"
+import { createEmptyDocumentContent } from "@/types/template"
 
 /**
  * Handles folder creation from the Documents page.
@@ -111,7 +111,7 @@ export async function createGeneratedDocumentAction(
     }
 
     organizationId = context.organization.id
-    const blankContent = templateId ? undefined : createBlankTemplateContent()
+    const blankContent = templateId ? undefined : createEmptyDocumentContent()
 
     if (blankContent) {
       blankContent.branding.organizationName = context.organization.name

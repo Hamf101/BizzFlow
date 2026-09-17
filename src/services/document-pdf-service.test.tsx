@@ -13,6 +13,7 @@ import { createPdfPagePlans } from "@/services/document-pdf/planner"
 import { normalizePdfInput } from "@/services/document-pdf/shared"
 import type { PdfFlowItem, PdfPagePlan } from "@/services/document-pdf/types"
 import { createPdfLayoutMetrics } from "@/services/document-pdf/layout"
+import { resizeTemplateLayout } from "@/services/templates/template-render-plan"
 import {
   createBlankTemplateContent,
   type TemplateContent
@@ -532,6 +533,38 @@ describe("document PDF service", () => {
     })
     expect(renderedPage.getWidth()).toBe(792)
     expect(renderedPage.getHeight()).toBe(612)
+  })
+
+  it("prints a resized page at its new paper size with the original layout scaled up", { timeout: PDF_RENDER_TIMEOUT_MS }, async () => {
+    const input = createPdfInput({ repeatHeader: false, repeatFooter: false })
+    const content = requireVersionThreeContent(input)
+    const a4 = normalizePdfInput(input)
+    const a4Metrics = createPdfLayoutMetrics(a4.renderPlan.geometry, a4.renderPlan.layout)
+    const a4Pages = createPdfPagePlans(a4)
+
+    content.layout = resizeTemplateLayout(content.layout, { pageSize: "A3" })
+
+    const a3 = normalizePdfInput(input)
+    const rendered = await PDFDocument.load(await renderGeneratedDocumentPdf(input))
+
+    // Laid out exactly as on A4, then printed on A3.
+    const a3Metrics = createPdfLayoutMetrics(a3.renderPlan.geometry, a3.renderPlan.layout)
+    expect(a3Metrics.pageCapacity).toBe(a4Metrics.pageCapacity)
+    expect(a3Metrics.contentWidth).toBeCloseTo(a4Metrics.contentWidth, 2)
+    expect(createPdfPagePlans(a3)).toEqual(a4Pages)
+    expect(rendered.getPageCount()).toBe(a4Pages.length)
+    expect(rendered.getPage(0).getWidth()).toBeCloseTo(841.89, 1)
+    expect(rendered.getPage(0).getHeight()).toBeCloseTo(1190.55, 1)
+  })
+
+  it("leaves the title out of a document that prints none", () => {
+    const input = createPdfInput({ repeatHeader: false, repeatFooter: false })
+    const content = requireVersionThreeContent(input)
+    content.layout = { ...content.layout, printedTitle: { mode: "none" } }
+
+    const pages = createPdfPagePlans(normalizePdfInput(input))
+
+    expect(pages.flatMap((page) => page.items).some((item) => item.kind === "title")).toBe(false)
   })
 
   it("keeps the established default A4 planning measurements", () => {

@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest"
 import { TemplatePreview } from "@/components/templates/template-preview"
 import {
   createTemplateRenderPlan,
+  resizeTemplateLayout,
   shouldRenderTemplateFooter,
   shouldRenderTemplateHeader
 } from "@/services/templates/template-render-plan"
@@ -46,7 +47,8 @@ describe("template render plan", () => {
       heightPoints: 612,
       marginPoints: 56,
       contentWidthPoints: 896,
-      contentHeightPoints: 500
+      contentHeightPoints: 500,
+      scale: 1
     })
     expect(shouldRenderTemplateHeader(plan.layout, 2)).toBe(true)
     expect(shouldRenderTemplateFooter(plan.layout, 1)).toBe(true)
@@ -326,6 +328,33 @@ describe("template render plan", () => {
     expect(selectionEnd).toBeGreaterThan(selectionStart)
     expect(toolbarStart).toBeGreaterThan(selectionEnd)
     expect(markup).not.toContain('role="button"')
+  })
+
+  it("keeps content in proportion on new paper, and at its size when the page only turns", () => {
+    const content = createStructuredContent()
+    const plan = (layout: TemplateContentV3["layout"]) =>
+      createTemplateRenderPlan({ title: "Lease", content: { ...content, layout }, mode: "final" })
+    const a4 = plan(content.layout)
+    const a3Layout = resizeTemplateLayout(content.layout, { pageSize: "A3" })
+    const a3 = plan(a3Layout)
+
+    // The design page is unchanged, so every line and page break stays put and
+    // the whole page prints larger.
+    expect(a3.geometry.scale).toBeCloseTo(841.89 / 595.28, 3)
+    expect(a3.geometry.widthPoints).toBeCloseTo(a4.geometry.widthPoints, 0)
+    expect(a3.geometry.heightPoints).toBeCloseTo(a4.geometry.heightPoints, 0)
+    expect(a3.geometry.marginPoints).toBe(a4.geometry.marginPoints)
+
+    // Turning the page keeps text at its size, and going back undoes the scale.
+    expect(plan(resizeTemplateLayout(content.layout, { orientation: "landscape" })).geometry.scale).toBe(1)
+    expect(resizeTemplateLayout(a3Layout, { pageSize: "A4" })).toEqual(content.layout)
+  })
+
+  it("prints no title when the layout asks for none", () => {
+    const content = createStructuredContent()
+    content.layout = { ...content.layout, printedTitle: { mode: "none" } }
+
+    expect(createTemplateRenderPlan({ title: "Lease", content, mode: "final" }).title).toBe("")
   })
 
   it("rejects invalid one-based page numbers by omitting repeated regions", () => {

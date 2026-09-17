@@ -11,13 +11,18 @@ import { getVisibleTemplateBlocks } from "@/types/template-visibility"
 /** Rendering contexts supported by the shared template projection. */
 export type TemplateRenderMode = "build" | "preview" | "test" | "final"
 
-/** Physical page geometry resolved from version-three layout controls. */
+/**
+ * Page geometry resolved from version-three layout controls, in design points:
+ * the page the content is laid out on. Multiplying by `scale` gives the paper.
+ */
 export type TemplatePageGeometry = Readonly<{
   widthPoints: number
   heightPoints: number
   marginPoints: number
   contentWidthPoints: number
   contentHeightPoints: number
+  /** Physical points per design point. */
+  scale: number
 }>
 
 /** One canonical block decorated with its structural rendering metadata. */
@@ -187,17 +192,29 @@ function resolveTemplateLayout(content: TemplateContent): TemplateLayout {
 }
 
 function resolvePrintedTitle(title: string, layout: TemplateLayout): string {
+  if (layout.printedTitle.mode === "none") {
+    return ""
+  }
+
   return layout.printedTitle.mode === "custom"
     ? layout.printedTitle.text
     : title.trim()
 }
 
-function resolvePageGeometry(layout: TemplateLayout): TemplatePageGeometry {
+/**
+ * Resolves the page a layout lays content on, in design points, with the
+ * scale that prints it on its paper.
+ *
+ * @param layout - Version-three layout controls.
+ * @returns The design page and its scale.
+ */
+export function resolvePageGeometry(layout: TemplateLayout): TemplatePageGeometry {
   const [portraitWidth, portraitHeight] = PAGE_SIZE_POINTS[layout.pageSize]
+  const scale = layout.contentScale ?? 1
   const widthPoints =
-    layout.orientation === "landscape" ? portraitHeight : portraitWidth
+    (layout.orientation === "landscape" ? portraitHeight : portraitWidth) / scale
   const heightPoints =
-    layout.orientation === "landscape" ? portraitWidth : portraitHeight
+    (layout.orientation === "landscape" ? portraitWidth : portraitHeight) / scale
   const marginPoints = MARGIN_POINTS[layout.marginPreset]
 
   return {
@@ -205,8 +222,42 @@ function resolvePageGeometry(layout: TemplateLayout): TemplatePageGeometry {
     heightPoints,
     marginPoints,
     contentWidthPoints: widthPoints - marginPoints * 2,
-    contentHeightPoints: heightPoints - marginPoints * 2
+    contentHeightPoints: heightPoints - marginPoints * 2,
+    scale
   }
+}
+
+/**
+ * Moves content to other paper or turns the page without breaking it. New
+ * paper scales the content with the paper's short side, so the page looks the
+ * same, only bigger or smaller. Turning the page keeps text at its size.
+ *
+ * @param layout - The layout the content was made on.
+ * @param change - The new paper size, orientation, or both.
+ * @returns The layout with the change and the scale that keeps it in proportion.
+ */
+export function resizeTemplateLayout(
+  layout: TemplateLayout,
+  change: Partial<Pick<TemplateLayout, "orientation" | "pageSize">>
+): TemplateLayout {
+  const pageSize = change.pageSize ?? layout.pageSize
+  const shortSide = (size: TemplateLayout["pageSize"]): number =>
+    Math.min(...PAGE_SIZE_POINTS[size])
+  const scale =
+    ((layout.contentScale ?? 1) * shortSide(pageSize)) /
+    shortSide(layout.pageSize)
+  // Six decimals keep a round trip back to the original paper exact, and the
+  // design page within a hundredth of a point of the one it was made on.
+  const contentScale = Math.min(4, Math.max(0.25, Math.round(scale * 1e6) / 1e6))
+  const resized: TemplateLayout = { ...layout, ...change, contentScale }
+
+  // A scale of 1 is the default, so content that returns to its paper is saved
+  // exactly as it was made.
+  if (contentScale === 1) {
+    delete resized.contentScale
+  }
+
+  return resized
 }
 
 function createStructureIndex(

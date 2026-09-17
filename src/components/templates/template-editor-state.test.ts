@@ -152,10 +152,8 @@ describe("templateEditorReducer", () => {
     })
     expect(deleted.content.blocks).toHaveLength(1)
     expect(deleted.content.blocks[0]?.id).toBe(FIRST_BLOCK_ID)
-    expect(deleted.content).toMatchObject({
-      schemaVersion: 3,
-      sections: [{ id: FIRST_BLOCK_ID, startBlockId: FIRST_BLOCK_ID }]
-    })
+    // Blocks added to an empty page print no invented "Section 1" label.
+    expect(deleted.content).toMatchObject({ schemaVersion: 3, sections: [] })
   })
 
   it("inserts a block at a requested editorial gutter position", () => {

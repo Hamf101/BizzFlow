@@ -21,7 +21,7 @@ import {
   updateDocumentTemplate,
 } from "@/services/template-service"
 import {
-  createBlankTemplateContent,
+  createEmptyDocumentContent,
   parseTemplateContent,
   type DocumentTemplate,
   type TemplateContent,
@@ -55,7 +55,7 @@ export async function createTemplateAction(formData: FormData): Promise<void> {
 
   try {
     const actionContext = await loadTemplateActionContext()
-    const content = createBlankTemplateContent()
+    const content = createEmptyDocumentContent()
     content.branding.organizationName = actionContext.context.organization.name
     const template = await createDocumentTemplate({
       actorUserId: actionContext.actorUserId,

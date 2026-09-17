@@ -97,6 +97,8 @@ export function getPdfColumnWidth(metrics: PdfLayoutMetrics): number {
   return (metrics.contentWidth - metrics.columnGap) / 2
 }
 
+// Paper sizes are rounded to the point, so A4 scaled to A3 and back lands a
+// tenth of a point off; a quarter point still means the same page.
 function approximatelyEqual(left: number, right: number): boolean {
-  return Math.abs(left - right) < 0.01
+  return Math.abs(left - right) < 0.25
 }

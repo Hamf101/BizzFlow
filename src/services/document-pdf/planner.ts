@@ -206,12 +206,17 @@ function createPdfPaginationUnits(
   metrics: PdfLayoutMetrics
 ): PdfPaginationUnit[] {
   const units: PdfPaginationUnit[] = [
-    {
-      item: { kind: "title", title: input.renderPlan.title },
-      pageBreakBefore: false,
-      keepTogetherKeys: [],
-      keepWithNext: false
-    },
+    // A document that prints no title starts with its content.
+    ...(input.renderPlan.title.length > 0
+      ? [
+          {
+            item: { kind: "title", title: input.renderPlan.title },
+            pageBreakBefore: false,
+            keepTogetherKeys: [],
+            keepWithNext: false
+          } satisfies PdfPaginationUnit
+        ]
+      : []),
     ...createBlockPaginationUnits(input, metrics)
   ]
 

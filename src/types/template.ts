@@ -240,7 +240,8 @@ export const templateLayoutSchema = z
             mode: z.literal("custom"),
             text: z.string().trim().min(1).max(500)
           })
-          .strict()
+          .strict(),
+        z.object({ mode: z.literal("none") }).strict()
       ])
       .default({ mode: "linked" }),
     headerPolicy: z
@@ -249,7 +250,13 @@ export const templateLayoutSchema = z
     footerPolicy: z
       .enum(["first_page", "all_pages", "none"])
       .default("all_pages"),
-    pageNumbering: z.enum(["none", "page_x_of_y"]).default("page_x_of_y")
+    pageNumbering: z.enum(["none", "page_x_of_y"]).default("page_x_of_y"),
+    /**
+     * Physical points per design point. Content is laid out on the page it was
+     * designed on and printed at this scale, so moving to bigger or smaller
+     * paper keeps every line and page break where it was. Absent means 1.
+     */
+    contentScale: z.number().min(0.25).max(4).optional()
   })
   .strict()
 
@@ -931,6 +938,28 @@ export function upgradeV2TemplateContentToV3(
     fieldGroups: [],
     blockRules: []
   })
+}
+
+/**
+ * Creates the empty page a new template or document starts from: nothing is
+ * printed on it, not even the title, a header, a footer or page numbers, until
+ * someone adds them.
+ *
+ * @returns Fresh version-three content with an empty A4 portrait page.
+ */
+export function createEmptyDocumentContent(): TemplateContentV3 {
+  const content = createBlankTemplateContent()
+
+  return {
+    ...content,
+    layout: {
+      ...content.layout,
+      printedTitle: { mode: "none" },
+      headerPolicy: "none",
+      footerPolicy: "none",
+      pageNumbering: "none"
+    }
+  }
 }
 
 /**
