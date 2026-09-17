@@ -18,6 +18,16 @@ export type SaveGeneratedDocumentAnswersInput =
     values: Record<string, unknown>
   }
 
+/** A draft's own title and page, saved from the editor. */
+export type UpdateGeneratedDocumentContentInput =
+  GetGeneratedDocumentSigningViewInput & {
+    /** The document's `updatedAt` when the editor last loaded or saved it. */
+    expectedUpdatedAt: string
+    title: string
+    /** Untrusted content, validated before it is stored. */
+    content: unknown
+  }
+
 /** Signing recipients submitted by an authorized organization member. */
 export type SendDocumentForSigningInput =
   GetGeneratedDocumentSigningViewInput & {
