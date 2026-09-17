@@ -351,7 +351,7 @@ describe("AI environment validation", () => {
     expect(getAiEnv()).toEqual({
       AI_PROVIDER: "gemini",
       AI_MODEL: "gemini-3.6-flash",
-      AI_TIMEOUT_MS: 30000,
+      AI_TIMEOUT_MS: 90000,
     })
   })
 
@@ -395,7 +395,7 @@ describe("AI environment validation", () => {
     expect(getAiEnv()).toEqual({
       AI_PROVIDER: "unknown-provider",
       AI_MODEL: "provider-model-v1",
-      AI_TIMEOUT_MS: 30000,
+      AI_TIMEOUT_MS: 90000,
     })
   })
 
@@ -423,7 +423,7 @@ describe("AI environment validation", () => {
     expect(() => getGeminiEnv()).toThrow("GEMINI_API_KEY")
   })
 
-  it.each(["999", "60001", "1.5", "not-a-number"])(
+  it.each(["999", "120001", "1.5", "not-a-number"])(
     "rejects invalid AI timeout %s",
     (timeoutMs: string) => {
       setIsolatedEnv({

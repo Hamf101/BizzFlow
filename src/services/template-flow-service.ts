@@ -1008,7 +1008,7 @@ function throwFlowProviderError(
 
   if (providerError.code === AI_PROVIDER_ERROR_CODES.REQUEST_TIMEOUT) {
     throw new TemplateFlowServiceError(
-      "Flow timed out. Try a shorter request.",
+      "Flow took too long to answer. Try again.",
       504
     )
   }

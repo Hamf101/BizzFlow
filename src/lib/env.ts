@@ -44,9 +44,11 @@ const aiEnvSchema = z.object({
     .regex(/^[a-z][a-z0-9_-]*$/)
     .default("gemini"),
   AI_MODEL: z.string().trim().min(1),
+  // A Flow turn that builds a form has taken Gemini 12-43 seconds, and its
+  // longest answer (8,192 tokens) takes longer still.
   AI_TIMEOUT_MS: z.preprocess(
     parseIntegerEnvValue,
-    z.number().int().min(1000).max(60000).default(30000)
+    z.number().int().min(1000).max(120000).default(90000)
   )
 })
 

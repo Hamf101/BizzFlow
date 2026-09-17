@@ -43,7 +43,9 @@ import type {
   TemplateFlowResult
 } from "@/types/template-flow"
 
-const REQUEST_TIMEOUT_MS = 45_000
+// The server bounds every AI call itself (two at most per turn), so this only
+// catches a connection that never answers, and must outlast the longest turn.
+const REQUEST_TIMEOUT_MS = 300_000
 const STARTER_PROMPTS = [
   "Create a clear client intake form",
   "Organize this into a professional agreement",
@@ -212,7 +214,7 @@ export function TemplateFlowPanel({
     } catch (error: unknown) {
       const reason =
         error instanceof DOMException && error.name === "AbortError"
-          ? "Flow took too long to respond. Try a shorter request."
+          ? "Flow took too long to answer. Try again."
           : error instanceof Error
             ? error.message
             : "Unable to reach Flow."
