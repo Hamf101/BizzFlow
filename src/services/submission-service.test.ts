@@ -5,6 +5,7 @@ import {
   assignInternalSubmission,
   cleanupExpiredSubmissionFileObjects,
   completeInternalSubmissionFile,
+  countSubmissionsByStatus,
   createInternalSubmissionComment,
   createInternalSubmissionDraft,
   createInternalSubmissionFileDownloadUrl,
@@ -391,6 +392,41 @@ describe("submission list pages", () => {
     ])
     expect(reviewer.total).toBe(1)
     expect(manager.total).toBe(3)
+  })
+
+  it("counts each status within what the member may see, and only recent updates when asked", async () => {
+    const client = createClient({
+      submissions: [
+        createNumberedSubmissionRow(1),
+        createNumberedSubmissionRow(2, { created_by: OTHER_STAFF_ID }),
+        createAssignedSubmissionRow({ id: getNumberedSubmissionId(3) }),
+        createAssignedSubmissionRow({
+          id: getNumberedSubmissionId(4),
+          status: "completed",
+          updated_at: "2026-06-30T23:59:00.000Z"
+        }),
+        createAssignedSubmissionRow({
+          id: getNumberedSubmissionId(5),
+          status: "completed",
+          updated_at: "2026-07-01T00:00:00.000Z"
+        })
+      ]
+    })
+    const count = (actorUserId: string, updatedSince?: string) =>
+      countSubmissionsByStatus(
+        {
+          actorUserId,
+          organizationId: ORGANIZATION_ID,
+          statuses: ["draft", "in_review", "completed"],
+          updatedSince
+        },
+        { client: client as never }
+      )
+
+    await expect(count(MANAGER_ID)).resolves.toEqual({ completed: 2, draft: 2, in_review: 1 })
+    await expect(count(STAFF_ID)).resolves.toEqual({ completed: 2, draft: 1, in_review: 1 })
+    await expect(count(EXTERNAL_ID)).resolves.toEqual({ completed: 2, draft: 0, in_review: 1 })
+    await expect(count(MANAGER_ID, "2026-07-01T00:00:00.000Z")).resolves.toMatchObject({ completed: 1 })
   })
 
   it("answers a page past the end with no rows and the true total", async () => {

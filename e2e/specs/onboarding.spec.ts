@@ -46,9 +46,23 @@ test.describe("onboarding", () => {
     await expect(
       page.getByRole("status").filter({ hasText: "Organization created" })
     ).toBeVisible()
-    await expect(page.getByText(organizationName)).toBeVisible()
+    await expect(page.getByRole("main").getByText(organizationName, { exact: true })).toBeVisible()
+    await expect(page.getByRole("region", { name: "Waiting on you" })).toBeVisible()
+
     // The creator is the owner; every permission the app grants keys off this.
-    await expect(page.getByText("owner_admin")).toBeVisible()
+    const organization = await admin
+      .from("organizations")
+      .select("id")
+      .eq("name", organizationName)
+      .single()
+    if (organization.error) throw organization.error
+    const membership = await admin
+      .from("organization_memberships")
+      .select("role")
+      .eq("org_id", organization.data.id)
+      .single()
+    if (membership.error) throw membership.error
+    expect(membership.data.role).toBe("owner_admin")
 
     await cleanUp(admin, email, organizationName)
   })

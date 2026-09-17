@@ -66,6 +66,13 @@ export type ListSubmissionPageInput = SubmissionActorInput & {
   statuses?: readonly SubmissionStatus[]
 }
 
+/** Input for counting the submissions an actor may see in each status. */
+export type CountSubmissionsByStatusInput = SubmissionActorInput & {
+  statuses: readonly SubmissionStatus[]
+  /** Counts only submissions updated at or after this moment, such as the month's start. */
+  updatedSince?: string
+}
+
 /** One page of submissions and how many match its filters. */
 export type SubmissionPage = {
   page: number

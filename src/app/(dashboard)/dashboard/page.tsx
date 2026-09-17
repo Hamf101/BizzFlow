@@ -1,15 +1,19 @@
-import Link from "next/link"
 import type { ReactElement } from "react"
 
+import { DashboardHome } from "@/components/dashboard/dashboard-home"
+import {
+  buildQueue,
+  describeActivity,
+  describeRecentFiles,
+  selectDueThisWeek,
+} from "@/components/dashboard/dashboard-view"
 import { OnboardingChecklist } from "@/components/dashboard/onboarding-checklist"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
@@ -21,22 +25,37 @@ import {
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
+import { getPageErrorMessage } from "@/lib/page-errors"
 import { loadPageOrganizationContext } from "@/lib/page-organization-context"
 import {
+  canPerformOrganizationAction,
+  getOrganizationRoleFromSubject,
+  type OrganizationPermissionAction,
+} from "@/lib/permissions"
+import { listAuditLogPage } from "@/services/audit-service"
+import { listDocumentCards, listRecentDocuments } from "@/services/document-service"
+import {
   getOnboardingProgress,
-  type OnboardingProgress,
+  listOrganizationPeople,
 } from "@/services/organization-service"
-
+import { countSubmissionsByStatus, listSubmissionPage } from "@/services/submission-service"
+import { listTaskPage } from "@/services/task-service"
 import {
   SAMPLE_SUBMISSION_COUNT,
   STARTER_TEMPLATES,
 } from "@/services/templates/starter-templates"
+import type { GeneratedDocumentWorkflowStatus } from "@/types/template"
 
 import {
   createOrganizationAction,
   seedSampleSubmissionsAction,
   seedStarterTemplatesAction,
 } from "./actions"
+
+// ponytail: the queue ranks the first page of each source (20 submissions per
+// kind, 50 open tasks, the 20 documents you generated most recently); page
+// through them when an organization outgrows that.
+const PAGE = 20
 
 export default async function DashboardPage(): Promise<ReactElement> {
   const user = await loadAuthenticatedPageUser("/dashboard")
@@ -45,35 +64,223 @@ export default async function DashboardPage(): Promise<ReactElement> {
       userId: user.id,
       failureEvent: "dashboard_context_load_failed",
     })
+  const now = new Date()
+  const today = new Intl.DateTimeFormat("en", {
+    day: "numeric",
+    month: "long",
+    weekday: "long",
+  }).format(now)
 
-  // Derived from real tenant data; a failure degrades to "not yet done" rather
-  // than breaking the dashboard.
-  const progress: OnboardingProgress = context
-    ? await getOnboardingProgress(context.organization.id).catch(
-        (error: unknown) => {
-          console.warn("dashboard_onboarding_progress_failed", {
-            organizationId: context.organization.id,
-            reason: error instanceof Error ? error.message : "Unknown error",
-          })
-          return {
-            hasInvitedMembers: false,
-            hasPublishedTemplate: false,
-            hasSubmission: false,
-          }
-        }
-      )
-    : {
-        hasInvitedMembers: false,
-        hasPublishedTemplate: false,
-        hasSubmission: false,
-      }
+  if (!context) {
+    return (
+      <div className="flex flex-col gap-6">
+        <h1 className="text-2xl leading-none font-medium tracking-[-0.02em]">Dashboard</h1>
+
+        {contextErrorMessage && (
+          <Alert variant="destructive">
+            <AlertTitle>Supabase setup incomplete</AlertTitle>
+            <AlertDescription>{contextErrorMessage}</AlertDescription>
+          </Alert>
+        )}
+
+        {!contextErrorMessage && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Create organization</CardTitle>
+              <CardDescription>
+                Start the tenant workspace that will own forms, documents, tasks,
+                and submissions.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form action={createOrganizationAction} className="flex flex-col gap-5">
+                <FieldGroup>
+                  <Field>
+                    <FieldLabel htmlFor="name">Organization name</FieldLabel>
+                    <Input
+                      id="name"
+                      name="name"
+                      type="text"
+                      minLength={2}
+                      maxLength={120}
+                      required
+                    />
+                    <FieldDescription>
+                      Use the business name your staff will recognize.
+                    </FieldDescription>
+                  </Field>
+                </FieldGroup>
+                <Button type="submit">Create organization</Button>
+              </form>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    )
+  }
+
+  const organizationId = context.organization.id
+  const actor = { actorUserId: user.id, organizationId }
+  const can = (action: OrganizationPermissionAction): boolean =>
+    canPerformOrganizationAction(context.membership, action)
+  const role = getOrganizationRoleFromSubject(context.membership)
+  const canReview = can("submissions:review")
+
+  // Each block degrades to empty on its own, so one failing read never takes
+  // the whole home page down.
+  function orEmpty<T>(event: string, read: () => Promise<T>, fallback: T): Promise<T> {
+    return read().catch((error: unknown) => {
+      console.warn(event, {
+        organizationId,
+        reason: getPageErrorMessage(error, "Unavailable."),
+        userId: user.id,
+      })
+      return fallback
+    })
+  }
+
+  const [progress, members, tasks, reviews, own, counts, files, activity] = await Promise.all([
+    orEmpty("dashboard_onboarding_progress_failed", () => getOnboardingProgress(organizationId), {
+      hasInvitedMembers: false,
+      hasPublishedTemplate: false,
+      hasSubmission: false,
+    }),
+    orEmpty(
+      "dashboard_people_load_failed",
+      async () => (await listOrganizationPeople(user.id, organizationId)).members,
+      []
+    ),
+    can("tasks:view")
+      ? orEmpty(
+          "dashboard_tasks_load_failed",
+          async () =>
+            (
+              await listTaskPage({
+                ...actor,
+                page: 1,
+                pageSize: 50,
+                sort: { direction: "asc", key: "due" },
+                statuses: ["open", "in_progress"],
+              })
+            ).tasks,
+          []
+        )
+      : null,
+    canReview
+      ? orEmpty(
+          "dashboard_reviews_load_failed",
+          async () =>
+            (
+              await listSubmissionPage({
+                ...actor,
+                page: 1,
+                pageSize: PAGE,
+                sort: { direction: "asc", key: "updated" },
+                statuses: ["submitted", "in_review"],
+              })
+            ).submissions,
+          []
+        )
+      : [],
+    can("submissions:view")
+      ? orEmpty(
+          "dashboard_own_submissions_load_failed",
+          async () =>
+            (
+              await listSubmissionPage({
+                ...actor,
+                page: 1,
+                pageSize: PAGE,
+                sort: { direction: "desc", key: "updated" },
+                statuses: ["needs_changes", "draft"],
+              })
+            ).submissions,
+          []
+        )
+      : [],
+    can("submissions:view")
+      ? orEmpty(
+          "dashboard_workflow_load_failed",
+          async () => {
+            const [active, completed] = await Promise.all([
+              countSubmissionsByStatus({
+                ...actor,
+                // External reviewers never see drafts, so theirs would always read 0.
+                statuses: [
+                  ...(role === "external_reviewer" ? [] : (["draft"] as const)),
+                  "submitted",
+                  "in_review",
+                  "needs_changes",
+                  "approved",
+                ],
+              }),
+              countSubmissionsByStatus({
+                ...actor,
+                statuses: ["completed"],
+                updatedSince: new Date(now.getFullYear(), now.getMonth(), 1).toISOString(),
+              }),
+            ])
+            return { ...active, ...completed }
+          },
+          {}
+        )
+      : null,
+    can("documents:view")
+      ? orEmpty(
+          "dashboard_files_load_failed",
+          async () => {
+            const [recent, generated] = await Promise.all([
+              listRecentDocuments({ ...actor, limit: 3 }),
+              listRecentDocuments({ ...actor, generatedBy: user.id, limit: PAGE }),
+            ])
+            const documentIds = [
+              ...new Set(
+                [...recent, ...generated]
+                  .filter((document) => document.sourceKind === "generated")
+                  .map((document) => document.id)
+              ),
+            ]
+            const cards = documentIds.length
+              ? await listDocumentCards({ ...actor, contentIds: [], documentIds })
+              : []
+            const statuses = new Map<string, GeneratedDocumentWorkflowStatus | null>(
+              cards.map((card) => [card.id, card.workflowStatus])
+            )
+
+            return {
+              awaitingSignatures: generated.filter(
+                (document) => statuses.get(document.id) === "awaiting_signatures"
+              ),
+              recent,
+              statuses,
+            }
+          },
+          null
+        )
+      : null,
+    can("audit_logs:view")
+      ? orEmpty(
+          "dashboard_activity_load_failed",
+          async () =>
+            (
+              await listAuditLogPage({
+                ...actor,
+                page: 1,
+                pageSize: 5,
+                sort: { direction: "desc", key: "created" },
+              })
+            ).entries,
+          []
+        )
+      : null,
+  ])
 
   const onboardingSteps = [
     {
       id: "org",
       title: "Create Organization Workspace",
       description: "Establish tenant boundaries for document security.",
-      completed: Boolean(context),
+      completed: true,
       href: "/dashboard",
       actionText: "Setup Org",
     },
@@ -105,95 +312,50 @@ export default async function DashboardPage(): Promise<ReactElement> {
 
   return (
     <div className="flex flex-col gap-6">
-      <section className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold tracking-normal">Dashboard</h1>
-        <p className="max-w-2xl text-sm text-muted-foreground">
-          Logged in as {user.email ?? "Authenticated user"}. Welcome to BizFlow Document Studio.
+      <header className="flex flex-col gap-2">
+        <h1 className="text-2xl leading-none font-medium tracking-[-0.02em]">Dashboard</h1>
+        <p className="text-[13px] text-muted-foreground">
+          {today} · <span>{context.organization.name}</span>
         </p>
-      </section>
+      </header>
 
-      {contextErrorMessage && (
-        <Alert variant="destructive">
-          <AlertTitle>Supabase setup incomplete</AlertTitle>
-          <AlertDescription>{contextErrorMessage}</AlertDescription>
-        </Alert>
-      )}
+      {onboardingSteps.some((step) => !step.completed) ? (
+        <OnboardingChecklist
+          sampleAction={seedSampleSubmissionsAction}
+          sampleActionLabel={`Add ${SAMPLE_SUBMISSION_COUNT} sample submissions`}
+          seedAction={seedStarterTemplatesAction}
+          seedActionLabel={`Add ${STARTER_TEMPLATES.length} starter templates`}
+          steps={onboardingSteps}
+        />
+      ) : null}
 
-      {!context && !contextErrorMessage && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Create organization</CardTitle>
-            <CardDescription>
-              Start the tenant workspace that will own forms, documents, tasks,
-              and submissions.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form action={createOrganizationAction} className="flex flex-col gap-5">
-              <FieldGroup>
-                <Field>
-                  <FieldLabel htmlFor="name">Organization name</FieldLabel>
-                  <Input
-                    id="name"
-                    name="name"
-                    type="text"
-                    minLength={2}
-                    maxLength={120}
-                    required
-                  />
-                  <FieldDescription>
-                    Use the business name your staff will recognize.
-                  </FieldDescription>
-                </Field>
-              </FieldGroup>
-              <Button type="submit">Create organization</Button>
-            </form>
-          </CardContent>
-        </Card>
-      )}
-
-      {context && (
-        <>
-          <OnboardingChecklist
-            sampleAction={seedSampleSubmissionsAction}
-            sampleActionLabel={`Add ${SAMPLE_SUBMISSION_COUNT} sample submissions`}
-            seedAction={seedStarterTemplatesAction}
-            seedActionLabel={`Add ${STARTER_TEMPLATES.length} starter templates`}
-            steps={onboardingSteps}
-          />
-
-          <Card>
-            <CardHeader>
-              <CardTitle>{context.organization.name}</CardTitle>
-              <CardDescription>
-                Current workspace for forms, documents, tasks, and reminders.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-3 text-sm md:grid-cols-3">
-              <div className="flex flex-col gap-1 rounded-lg border bg-background p-3">
-                <span className="text-muted-foreground">Role</span>
-                <Badge variant="secondary">{context.membership.role}</Badge>
-              </div>
-              <div className="flex flex-col gap-1 rounded-lg border bg-background p-3">
-                <span className="text-muted-foreground">Slug</span>
-                <span className="font-medium">{context.organization.slug}</span>
-              </div>
-              <div className="flex flex-col gap-1 rounded-lg border bg-background p-3">
-                <span className="text-muted-foreground">Status</span>
-                <Badge variant="outline">{context.membership.status}</Badge>
-              </div>
-            </CardContent>
-            <CardFooter>
-              <Link
-                className="text-sm font-medium text-primary underline-offset-4 hover:underline"
-                href="/people"
-              >
-                Manage people
-              </Link>
-            </CardFooter>
-          </Card>
-        </>
-      )}
+      <DashboardHome
+        activity={activity ? describeActivity(activity, members, user.id, now) : null}
+        dueThisWeek={tasks ? selectDueThisWeek(tasks, members, user.id, now) : null}
+        queue={buildQueue({
+          actorUserId: user.id,
+          awaitingSignatures: files?.awaitingSignatures ?? [],
+          canReview,
+          members,
+          now,
+          submissions: [...reviews, ...own],
+          tasks: tasks ?? [],
+        })}
+        recentFiles={files ? describeRecentFiles(files.recent, files.statuses, now) : null}
+        workflow={
+          counts
+            ? {
+                counts,
+                scope:
+                  role === "staff"
+                    ? "Your submissions"
+                    : role === "external_reviewer"
+                      ? "Assigned to you"
+                      : "All submissions",
+              }
+            : null
+        }
+      />
     </div>
   )
 }

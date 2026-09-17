@@ -4,6 +4,7 @@ export type {
   AssignInternalSubmissionInput,
   CompleteInternalSubmissionFileInput,
   CompleteInternalSubmissionFileResponse,
+  CountSubmissionsByStatusInput,
   CreateInternalSubmissionCommentInput,
   CreateInternalSubmissionDraftInput,
   CreateInternalSubmissionFileDownloadUrlInput,
@@ -45,6 +46,7 @@ export {
   supersedeInternalSubmissionFile,
 } from "@/services/submissions/file-service"
 export {
+  countSubmissionsByStatus,
   getInternalSubmission,
   getInternalSubmissionPreview,
   listSubmissionPage,

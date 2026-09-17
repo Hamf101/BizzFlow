@@ -42,6 +42,15 @@ export type ListDocumentWorkspaceInput = {
   >
 }
 
+/** Input for the documents a member changed or opened most recently. */
+export type ListRecentDocumentsInput = {
+  actorUserId: string
+  organizationId: string
+  /** Only generated documents this member created, such as those they sent. */
+  generatedBy?: string
+  limit: number
+}
+
 export type ListDocumentCardsInput = {
   actorUserId: string
   organizationId: string

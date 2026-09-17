@@ -10,6 +10,7 @@ export type {
   GetDocumentDetailInput,
   ListDocumentCardsInput,
   ListDocumentWorkspaceInput,
+  ListRecentDocumentsInput,
   RestoreDocumentInput,
   TrashDocumentInput,
 } from "@/services/documents/contracts"
@@ -41,6 +42,7 @@ export {
   createFolder,
   getDocumentDetail,
   listDocumentWorkspace,
+  listRecentDocuments,
 } from "@/services/documents/workspace-service"
 export {
   archiveFolder,

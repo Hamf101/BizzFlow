@@ -49,9 +49,10 @@ test.describe("representative accessibility evidence", () => {
 
     await page.goto("/dashboard?feedback=changes_saved")
 
-    const announcement = page.getByRole("status")
+    // The page may still be streaming in behind its own "Loading page" status,
+    // so find the announcement by what it says.
+    const announcement = page.getByRole("status").filter({ hasText: "Changes saved" })
     await expect(announcement).toBeVisible()
-    await expect(announcement).toContainText("Changes saved")
   })
 
   test("keeps tokenized public routes accessible without recording their URLs", async ({

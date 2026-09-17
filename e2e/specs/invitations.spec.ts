@@ -102,7 +102,7 @@ test.describe("invitations", () => {
       await expect(
         dashboard.getByText(tenant.organizationName, { exact: true })
       ).toBeVisible()
-      await expect(dashboard.getByText("staff", { exact: true })).toBeVisible()
+      await expect(dashboard.getByRole("region", { name: "Waiting on you" })).toBeVisible()
     } finally {
       await context.close()
 

@@ -1,6 +1,7 @@
 import { getOrganizationRoleFromSubject } from "@/lib/permissions"
 import { readCountedPage } from "@/services/postgrest-paging"
 import type {
+  CountSubmissionsByStatusInput,
   GetInternalSubmissionInput,
   ListSubmissionPageInput,
   SubmissionDetail,
@@ -31,6 +32,7 @@ import {
   parseSubmissionRow,
   type Submission,
   type SubmissionSortKey,
+  type SubmissionStatus,
 } from "@/types/submission"
 
 // Every ordering ends with the id, so submissions with equal values still
@@ -110,6 +112,57 @@ export async function listSubmissionPage(
       )
 
       return { page, pageSize, submissions: rows.map(parseSubmissionRow), total }
+    }
+  )
+}
+
+/**
+ * Counts the submissions an actor may see in each of the given statuses, so a
+ * glance shows where work stands without loading any of it.
+ *
+ * @param input - Actor, tenant, the statuses to count, and optionally a moment
+ *   before which updates are left out.
+ * @param deps - Optional trusted database dependency.
+ * @returns How many visible submissions sit in each status.
+ * @throws SubmissionServiceError when access or a read fails.
+ */
+export async function countSubmissionsByStatus(
+  input: CountSubmissionsByStatusInput,
+  deps: SubmissionServiceDeps = {}
+): Promise<Partial<Record<SubmissionStatus, number>>> {
+  return runSubmissionOperation(
+    "count_submissions_by_status",
+    { actorUserId: input.actorUserId, organizationId: input.organizationId },
+    async (): Promise<Partial<Record<SubmissionStatus, number>>> => {
+      const client = getSubmissionClient(deps)
+      const role = getOrganizationRoleFromSubject(
+        await requireSubmissionPermission(
+          client,
+          input.organizationId,
+          input.actorUserId,
+          "submissions:view",
+          "You cannot view internal submissions."
+        )
+      )
+      const counts = await Promise.all(
+        input.statuses.map(async (status: SubmissionStatus) => {
+          const selected = client
+            .from("submissions")
+            .select("id", { count: "exact", head: true })
+          const { count, error } = await filterVisibleSubmissions(
+            input.updatedSince ? selected.gte("updated_at", input.updatedSince) : selected,
+            createSubmissionListFilters({ ...input, statuses: [status] }, role)
+          )
+
+          if (error) {
+            throw createSubmissionDatabaseError(error, "Unable to count internal submissions.")
+          }
+
+          return [status, count ?? 0] as const
+        })
+      )
+
+      return Object.fromEntries(counts)
     }
   )
 }

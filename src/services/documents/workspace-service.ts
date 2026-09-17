@@ -11,6 +11,7 @@ import type {
   DocumentServiceDeps,
   GetDocumentDetailInput,
   ListDocumentWorkspaceInput,
+  ListRecentDocumentsInput,
 } from "@/services/documents/contracts"
 import { DocumentServiceError } from "@/services/documents/errors"
 import {
@@ -50,6 +51,9 @@ import type {
  * than cut short, so a missing file never passes for a deleted one.
  */
 const MAX_WORKSPACE_ROWS = 10_000
+
+const DOCUMENT_COLUMNS =
+  "id,org_id,folder_id,title,description,current_version_id,source_kind,template_id,template_revision,lifecycle_state,created_by,updated_by,archived_by,archived_at,trashed_by,trashed_at,purge_after,pre_trash_lifecycle_state,trash_operation_id,created_at,updated_at"
 
 /**
  * Creates a tenant-scoped folder.
@@ -216,8 +220,7 @@ export async function listDocumentWorkspace(
             : folder
       )
       const documentRows = await readWorkspaceRows<DocumentRow>(client, {
-        columns:
-          "id,org_id,folder_id,title,description,current_version_id,source_kind,template_id,template_revision,lifecycle_state,created_by,updated_by,archived_by,archived_at,trashed_by,trashed_at,purge_after,pre_trash_lifecycle_state,trash_operation_id,created_at,updated_at",
+        columns: DOCUMENT_COLUMNS,
         lifecycleStates,
         organizationId: input.organizationId,
         table: "documents",
@@ -263,6 +266,81 @@ export async function listDocumentWorkspace(
           ): number => second.createdAt.localeCompare(first.createdAt)
         ),
       }
+    }
+  )
+}
+
+/**
+ * Lists the active documents a member may open, most recently changed first,
+ * without reading the whole workspace.
+ *
+ * @param input - Actor, organization, how many, and optionally only the
+ *   generated documents one member created.
+ * @param deps - Optional service dependencies for tests.
+ * @returns Up to `limit` documents, each with the member's access. Where a
+ *   document is filed is left out, since its folder may be hidden from them.
+ * @throws DocumentServiceError when the actor lacks access or reads fail.
+ */
+export async function listRecentDocuments(
+  input: ListRecentDocumentsInput,
+  deps: DocumentServiceDeps = {}
+): Promise<AccessibleDocumentSummary[]> {
+  return runDocumentOperation(
+    "list_recent_documents",
+    {
+      actorUserId: input.actorUserId,
+      organizationId: input.organizationId,
+      limit: input.limit,
+    },
+    async (): Promise<AccessibleDocumentSummary[]> => {
+      const client = getClient(deps)
+
+      await requirePermission(
+        client,
+        input.organizationId,
+        input.actorUserId,
+        "documents:view",
+        "You cannot view documents."
+      )
+
+      let query = client
+        .from("documents")
+        .select(DOCUMENT_COLUMNS)
+        .eq("org_id", input.organizationId)
+        .eq("lifecycle_state", "active")
+
+      if (input.generatedBy) {
+        query = query.eq("created_by", input.generatedBy).eq("source_kind", "generated")
+      }
+
+      // ponytail: reads three times the limit and keeps what the member may
+      // open, so someone shut out of most new documents sees fewer; page on
+      // when that matters.
+      const { data, error } = await query
+        .order("updated_at", { ascending: false })
+        .limit(input.limit * 3)
+
+      if (error) {
+        throw createSupabaseServiceError(error, "Unable to load documents.")
+      }
+
+      const rows = (data ?? []) as unknown as DocumentRow[]
+      const access = await getEffectiveDocumentAccessLevels(
+        {
+          actorUserId: input.actorUserId,
+          ids: rows.map((row: DocumentRow): string => row.id),
+          organizationId: input.organizationId,
+        },
+        client
+      )
+
+      return rows
+        .flatMap((row: DocumentRow): AccessibleDocumentSummary[] => {
+          const accessLevel = access.get(row.id)
+
+          return accessLevel ? [{ ...mapDocument(row), accessLevel, folderId: null }] : []
+        })
+        .slice(0, input.limit)
     }
   )
 }

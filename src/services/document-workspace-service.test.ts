@@ -4,6 +4,7 @@ import {
   createFolder,
   getDocumentDetail,
   listDocumentWorkspace,
+  listRecentDocuments,
 } from "@/services/document-service"
 import {
   createDeps,
@@ -272,6 +273,34 @@ describe("ACL-aware document workspace", () => {
       accessLevel: "viewer",
     })
     expect(detail.versions).toHaveLength(1)
+  })
+})
+
+describe("recent documents", () => {
+  it("lists only what the member may open, newest first, and hides where it is filed", async () => {
+    const client = new FakeSupabaseClient({
+      organization_memberships: [createMembershipRow("staff")],
+      documents: [
+        createDocumentRow({ id: "old-shared", created_by: "user-2", updated_at: "2026-07-01T09:00:00.000Z" }),
+        createDocumentRow({ id: "new-private", created_by: "user-2", updated_at: "2026-07-03T09:00:00.000Z" }),
+        createDocumentRow({ id: "new-shared", created_by: "user-2", folder_id: "hidden-folder", updated_at: "2026-07-02T09:00:00.000Z" }),
+        createDocumentRow({ id: "mine-sent", source_kind: "generated", updated_at: "2026-06-30T09:00:00.000Z" }),
+        createDocumentRow({ id: "trashed-shared", created_by: "user-2", lifecycle_state: "trashed", updated_at: "2026-07-04T09:00:00.000Z" }),
+      ],
+      document_access_grants: [
+        createDocumentGrant("old-shared"),
+        createDocumentGrant("new-shared"),
+        createDocumentGrant("trashed-shared"),
+      ],
+    })
+    const list = (input: { generatedBy?: string; limit: number }) =>
+      listRecentDocuments({ actorUserId: "user-1", organizationId: "org-1", ...input }, createDeps(client))
+
+    expect((await list({ limit: 2 })).map((document) => [document.id, document.folderId])).toEqual([
+      ["new-shared", null],
+      ["old-shared", null],
+    ])
+    expect((await list({ generatedBy: "user-1", limit: 5 })).map((document) => document.id)).toEqual(["mine-sent"])
   })
 })
 
