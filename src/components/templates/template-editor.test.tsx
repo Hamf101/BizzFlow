@@ -59,6 +59,35 @@ it("keeps a trial run's answers when the author edits or previews and comes back
   expect(nameInput().value).toBe("Ada Lovelace")
 })
 
+it("asks Flow with only the title, description and content its request accepts", async () => {
+  const fetchFlow = vi.fn(async () => ({ json: async () => ({ error: "Stop here." }), ok: false }))
+  vi.stubGlobal("fetch", fetchFlow)
+  const container = document.body.appendChild(document.createElement("div"))
+  const root = createRoot(container)
+  roots.push(root)
+
+  await act(async () => {
+    root.render(
+      <TemplateEditor
+        archiveAction={vi.fn()}
+        initialFlowMessages={[]}
+        publishAction={vi.fn()}
+        saveDraftAction={vi.fn(async () => ({ ok: true as const, version: "1" }))}
+        template={createTemplate()}
+      />
+    )
+  })
+
+  const prompt = [...document.querySelectorAll<HTMLButtonElement>("button")].find(
+    (button) => button.textContent?.trim() === "Explain the structure of this document"
+  )
+  await act(async () => prompt?.click())
+
+  const [, request] = fetchFlow.mock.calls[0] as unknown as [string, { body: string }]
+  expect(Object.keys(JSON.parse(request.body).draft).sort()).toEqual(["content", "description", "title"])
+  vi.unstubAllGlobals()
+})
+
 async function chooseMode(name: string): Promise<void> {
   const radio = [...document.querySelectorAll<HTMLButtonElement>('[role="radio"]')].find(
     (candidate) => candidate.textContent?.trim() === name

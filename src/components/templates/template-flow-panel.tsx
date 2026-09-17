@@ -28,7 +28,10 @@ import { BizFlowMark } from "@/components/brand/bizflow-mark"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
-import { createTemplateFlowDraftFingerprint } from "@/services/template-flow-proposal-state"
+import {
+  createTemplateFlowDraftFingerprint,
+  toTemplateFlowDraft
+} from "@/services/template-flow-proposal-state"
 import { templateContentSchema } from "@/types/template"
 import type {
   TemplateFlowDraft,
@@ -153,7 +156,7 @@ export function TemplateFlowPanel({
       const response = await fetch("/api/templates/flow", {
         body: JSON.stringify({
           templateId,
-          draft,
+          draft: toTemplateFlowDraft(draft),
           instruction: trimmedInstruction
         }),
         headers: { "Content-Type": "application/json" },
