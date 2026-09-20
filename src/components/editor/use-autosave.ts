@@ -53,7 +53,10 @@ export function useAutosave<Value>({
   const run = useCallback(async (): Promise<boolean> => {
     window.clearTimeout(timerRef.current)
 
-    if (runningRef.current) {
+    // Wait out every save already running, not only the one found first: two
+    // callers that resume together must not send one version twice, which the
+    // server would answer with a conflict that stops saving for good.
+    while (runningRef.current) {
       await runningRef.current
     }
 

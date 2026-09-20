@@ -26,6 +26,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { bizflowToast } from "@/components/ui/toaster"
 import { formatMediumDateTime } from "@/lib/date-format"
 import { SigningRecipientStatusBadge } from "@/lib/page-status-badges"
 import { cn } from "@/lib/utils"
@@ -68,7 +69,10 @@ export function DocumentEditor({
   const document = view.document
   const completed = view.workflowStatus === "completed"
   const writable = canFill && view.workflowStatus === "draft" && view.recipients.length === 0
-  const fillable = canFill && !completed
+  // Answers stand as they were signed: once anyone has signed, only the
+  // remaining signers can still fill what is theirs.
+  const signedCount = view.recipients.filter((recipient) => recipient.status === "signed").length
+  const fillable = canFill && !completed && signedCount === 0
   const initial = useMemo(
     (): DocumentPage => ({ content: upgradeV2TemplateContentToV3(document.templateSnapshot), title: document.title }),
     [document]
@@ -79,6 +83,7 @@ export function DocumentEditor({
   const [drawings, setDrawings] = useState(0)
   const [sending, setSending] = useState(false)
   const [savedPage, setSavedPage] = useState(initial)
+  const [savedAnswers, setSavedAnswers] = useState<Record<string, unknown>>(view.answers)
   const formRef = useRef<HTMLFormElement>(null)
   const controller = useEditorController({
     change: (update, coalesceKey) =>
@@ -108,22 +113,34 @@ export function DocumentEditor({
   const answered = useAutosave<{ answers: Record<string, unknown>; drawings: number }>({
     enabled: fillable,
     initialVersion: "answers",
-    save: async () => {
+    save: async (value) => {
       // New fields reach the server before their answers do.
       await content.flush()
 
       const formData = new FormData(formRef.current ?? undefined)
       formData.set("documentId", document.id)
 
-      return saveAnswersAction(formData)
+      const result = await saveAnswersAction(formData)
+
+      if (result.ok) {
+        setSavedAnswers(value.answers)
+      }
+
+      return result
     },
     value: { answers, drawings },
   })
-  const recovery = useLocalRecovery({ key: `document:${document.id}`, saved: savedPage, value: page })
+  // The copy kept on this device holds the answers as well as the page, so a
+  // closed tab never loses what someone typed into the fields. Drawings live
+  // in the page itself and are drawn again.
+  const recovery = useLocalRecovery({
+    key: `document:${document.id}`,
+    saved: { answers: savedAnswers, page: savedPage },
+    value: { answers, page },
+  })
   const settingsBlock = page.content.blocks.find((block) => block.id === controller.settingsBlockId) ?? null
   const settingsIndex = settingsBlock ? page.content.blocks.indexOf(settingsBlock) : -1
   const geometry = resolvePageGeometry(page.content.layout)
-  const signed = view.recipients.filter((recipient) => recipient.status === "signed").length
   const saveStatus = [content.status, answered.status].find((status) => status !== "saved") ?? "saved"
   const pdfHref = `/api/documents/${encodeURIComponent(document.id)}/pdf`
 
@@ -176,8 +193,16 @@ export function DocumentEditor({
   ]
 
   async function openSend(): Promise<void> {
-    await content.flush()
-    await answered.flush()
+    // Signers must receive what the sender sees, so a save that did not land
+    // stops the send rather than sending the stored copy.
+    const pageSaved = await content.flush()
+    const answersSaved = await answered.flush()
+
+    if (!pageSaved || !answersSaved) {
+      bizflowToast.error("Couldn't save, so nothing was sent.")
+      return
+    }
+
     setSending(true)
   }
 
@@ -187,7 +212,7 @@ export function DocumentEditor({
         backHref={backHref}
         backLabel="Back to Files"
         banner={
-          recovery.recovery && writable ? (
+          recovery.recovery && (writable || fillable) ? (
             <EditorNotice
               actions={[
                 {
@@ -196,7 +221,8 @@ export function DocumentEditor({
                     const data = recovery.restore()
 
                     if (data) {
-                      history.set(() => data)
+                      history.set(() => data.page)
+                      setAnswers(data.answers)
                     }
                   },
                 },
@@ -218,7 +244,7 @@ export function DocumentEditor({
                 className="h-9 shrink-0 rounded-full border border-border px-3 text-[13px] whitespace-nowrap outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/40"
                 data-slot="signing-progress"
               >
-                {signed} of {view.recipients.length} signed
+                {signedCount} of {view.recipients.length} signed
               </PopoverTrigger>
               <PopoverContent align="end" className="w-[min(22rem,calc(100vw-2rem))]">
                 <ul className="grid gap-2">
