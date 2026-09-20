@@ -78,6 +78,9 @@ import {
   type TemplateContent,
 } from "@/types/template"
 
+const SIGNED_ANSWERS_MESSAGE =
+  "Someone has already signed. Send it again to change the answers."
+
 type PendingInvitation = {
   id: string
   token: string
@@ -185,6 +188,17 @@ export async function saveGeneratedDocumentAnswers(
           "Completed documents cannot be changed.",
           409
         )
+      }
+
+      // A signature stands for the answers as they were signed, so the last
+      // word belongs to the signers from here on.
+      if (
+        view.recipients.some(
+          (recipient: DocumentSigningRecipient): boolean =>
+            recipient.status === "signed"
+        )
+      ) {
+        throw new DocumentSigningServiceError(SIGNED_ANSWERS_MESSAGE, 409)
       }
 
       const content = view.document.templateSnapshot
@@ -315,6 +329,51 @@ export async function updateGeneratedDocumentContent(
       return { title, updatedAt: String((data as { updated_at: unknown }).updated_at) }
     }
   )
+}
+
+/**
+ * Keeps a signature meaningful: once anyone has signed, an answer that already
+ * had a value stays as it was signed. Whoever signs next may still fill what
+ * was left empty.
+ *
+ * @param view - Every signer's status and the answers as stored.
+ * @param recipientId - The signer submitting these answers.
+ * @param patch - The answers they would change.
+ * @throws DocumentSigningServiceError when a signed answer would change.
+ */
+function assertSignedAnswersUnchanged(
+  view: {
+    answers: Record<string, unknown>
+    signers: readonly PublicSignerStatus[]
+  },
+  recipientId: string,
+  patch: Record<string, unknown>
+): void {
+  const signedAlready = view.signers.some(
+    (signer: PublicSignerStatus): boolean =>
+      signer.id !== recipientId && signer.status === "signed"
+  )
+
+  if (!signedAlready) {
+    return
+  }
+
+  const rewritesSigned = Object.entries(patch).some(
+    ([fieldKey, value]: [string, unknown]): boolean => {
+      const signedValue = view.answers[fieldKey]
+
+      return (
+        signedValue !== undefined &&
+        signedValue !== null &&
+        signedValue !== "" &&
+        !Object.is(signedValue, value)
+      )
+    }
+  )
+
+  if (rewritesSigned) {
+    throw new DocumentSigningServiceError(SIGNED_ANSWERS_MESSAGE, 409)
+  }
 }
 
 function parseDocumentContent(value: unknown): TemplateContent {
@@ -716,6 +775,7 @@ export async function completePublicDocumentSigning(
         view.answers,
         changedAnswerPatch
       )
+      assertSignedAnswersUnchanged(view, recipient.id, answerPatch)
       const effectiveValues = pruneHiddenAnswerValues(
         view.document.templateSnapshot,
         { ...view.answers, ...answerPatch }
