@@ -17,6 +17,9 @@ export default defineConfig({
       "**/node_modules/**",
       "**/.claude/**",
       "**/.next/**",
+      // artifacts/ is local-only scratch: audits keep throwaway reproductions
+      // there, and they go stale the moment the bug they reproduce is fixed.
+      "artifacts/**",
       "e2e/**",
     ],
   },
