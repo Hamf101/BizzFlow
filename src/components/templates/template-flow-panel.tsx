@@ -24,7 +24,6 @@ import {
   useState
 } from "react"
 
-import { BizFlowMark } from "@/components/brand/bizflow-mark"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -308,25 +307,6 @@ export function TemplateFlowPanel({
       aria-label="Flow document assistant"
       className="flex min-h-[36rem] flex-col overflow-hidden rounded-[10px] border border-primary/15 bg-secondary/70 shadow-[0_8px_30px_rgba(37,35,41,0.07)] xl:sticky xl:top-5 xl:h-[calc(100vh-2.5rem)] xl:max-h-[52rem]"
     >
-      <header className="flex items-center justify-between gap-3 border-b border-primary/10 px-4 py-3.5">
-        <div className="flex items-center gap-2.5">
-          <span className="grid size-8 place-items-center rounded-[8px] border border-primary/15 bg-card text-primary">
-            <BizFlowMark className="size-5" />
-          </span>
-          <div>
-            <h2 className="font-editorial text-lg font-semibold leading-none">
-              Flow
-            </h2>
-            <p className="mt-1 font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground">
-              Conversation · proposal ledger
-            </p>
-          </div>
-        </div>
-        <span className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-          <span className="size-1.5 rounded-full bg-primary/70" />
-          Document aware
-        </span>
-      </header>
 
       <div
         aria-live="polite"
@@ -389,15 +369,12 @@ export function TemplateFlowPanel({
         className="border-t border-primary/10 bg-card/75 p-3"
         onSubmit={handleSubmit}
       >
-        <label
-          className="editorial-kicker mb-2 block text-muted-foreground"
-          htmlFor="flow-composer"
-        >
-          Tell Flow what to create or change
+        <label className="sr-only" htmlFor="flow-composer">
+          Ask Flow
         </label>
         <div className="relative">
           <textarea
-            aria-describedby="flow-composer-hint"
+            aria-describedby={pendingProposal ? "flow-composer-hint" : undefined}
             className="min-h-24 w-full resize-none rounded-[8px] border border-primary/15 bg-card px-3 py-2.5 pr-12 text-sm leading-relaxed outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 disabled:opacity-60"
             disabled={isLoading || pendingProposal !== null}
             id="flow-composer"
@@ -406,7 +383,7 @@ export function TemplateFlowPanel({
               setInstruction(event.target.value)
             }
             onKeyDown={handleComposerKeyDown}
-            placeholder="Ask a question, create a document, or reorganize what is here…"
+            placeholder="Ask Flow to create or change something…"
             value={instruction}
           />
           <Button
@@ -423,14 +400,14 @@ export function TemplateFlowPanel({
             <Send />
           </Button>
         </div>
-        <p
-          className="mt-1.5 text-[10px] text-muted-foreground"
-          id="flow-composer-hint"
-        >
-          {pendingProposal
-            ? "Apply all or reject all before asking Flow for another change"
-            : "Enter to send · Shift + Enter for a new line"}
-        </p>
+        {pendingProposal ? (
+          <p
+            className="mt-1.5 text-[10px] text-muted-foreground"
+            id="flow-composer-hint"
+          >
+            Apply or reject the proposal first
+          </p>
+        ) : null}
       </form>
     </aside>
   )
@@ -474,7 +451,7 @@ function FlowPendingProposalReceipt({
 
       {proposal.qualityIssues.length > 0 && (
         <div className="border-b border-primary/10 px-3 py-2.5">
-          <p className="text-[11px] font-medium">Deterministic review</p>
+          <p className="text-[11px] font-medium">Checks</p>
           <ul className="mt-1.5 space-y-1.5">
             {proposal.qualityIssues.map(
               (issue: TemplateFlowQualityIssue, index: number) => (
@@ -519,16 +496,9 @@ function FlowEmptyState({
 }): ReactElement {
   return (
     <div className="flex min-h-full flex-col justify-center py-6">
-      <span className="editorial-kicker text-primary">
-        Start with a thought
-      </span>
-      <h3 className="mt-2 max-w-xs font-editorial text-2xl font-semibold leading-tight">
-        Chat with the document, then review every proposal.
+      <h3 className="max-w-xs font-editorial text-2xl font-semibold leading-tight">
+        Ask Flow to build or change this document.
       </h3>
-      <p className="mt-2 max-w-sm text-sm leading-relaxed text-muted-foreground">
-        Ask questions, create content, or reorganize the draft. Flow records a
-        ledger when it prepares a reviewable batch.
-      </p>
       <div className="mt-5 flex flex-col gap-2">
         {STARTER_PROMPTS.map((prompt: string) => (
           <button

@@ -48,17 +48,17 @@ export default async function PublicFormPage({
 
   if (!preview.valid || !preview.template) {
     let title = "Form unavailable"
-    let description = "This public form link is invalid or no longer exists."
+    let description = "This link is invalid or no longer exists."
 
     if (preview.invalidReason === "expired") {
-      title = "Form link expired"
-      description = "This form link has expired. Please request an updated link from the organization."
+      title = "Link expired"
+      description = "Ask the sender for a new one."
     } else if (preview.invalidReason === "disabled") {
-      title = "Form link disabled"
-      description = "This form link has been deactivated by the organization."
+      title = "Link turned off"
+      description = "Ask the sender for a new one."
     } else if (preview.invalidReason === "max_submissions_reached") {
-      title = "Submission limit reached"
-      description = "This form has received the maximum allowed number of public submissions."
+      title = "No longer accepting responses"
+      description = "This form reached its limit."
     }
 
     return (
@@ -153,7 +153,7 @@ export default async function PublicFormPage({
                 </Button>
                 <div className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
                   <ShieldCheck className="size-3.5" />
-                  <span>Secure public form powered by BizFlow</span>
+                  <span>Secured by BizFlow</span>
                 </div>
               </div>
             </form>

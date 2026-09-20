@@ -6,7 +6,6 @@ import type { ReactElement } from "react"
 import { BizFlowWordmark } from "@/components/brand/bizflow-mark"
 import { PublicDocumentSigningForm } from "@/components/documents/public-document-signing-form"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Badge } from "@/components/ui/badge"
 import {
   Card,
   CardContent,
@@ -101,7 +100,7 @@ export default async function PublicSigningPage({
           </CardContent>
           <CardFooter>
             <span className="text-xs text-muted-foreground">
-              Ask the document sender to resend your invitation.
+              Ask the sender to resend it.
             </span>
           </CardFooter>
         </Card>
@@ -126,8 +125,7 @@ export default async function PublicSigningPage({
           {view.document.title}
         </h1>
         <p className="text-sm text-muted-foreground">
-          {view.organizationName} invited {view.recipient.name} ({view.recipient.email})
-          to review and complete this document.
+          {view.organizationName} sent this to {view.recipient.name} ({view.recipient.email})
         </p>
       </section>
 
@@ -135,24 +133,19 @@ export default async function PublicSigningPage({
         <Alert className="mx-auto w-full max-w-6xl">
           <CheckCircle2 />
           <AlertTitle>All parties have signed</AlertTitle>
-          <AlertDescription>
-            This document is complete and its answers are read only.
-          </AlertDescription>
         </Alert>
       ) : isRecipientSigned ? (
         <Alert className="mx-auto w-full max-w-6xl">
           <CheckCircle2 />
           <AlertTitle>Your signature is recorded</AlertTitle>
-          <AlertDescription>
-            The document is still waiting for one or more other parties.
-          </AlertDescription>
+          <AlertDescription>Waiting on the other signers.</AlertDescription>
         </Alert>
       ) : (
         <Alert className="mx-auto w-full max-w-6xl">
           <AlertTitle>Review before signing</AlertTitle>
           <AlertDescription>
-            Shared answers may be completed by any recipient. Your signature is
-            recorded only after you submit the acknowledgement below.
+            Anyone on this document can fill the answers. Your signature is
+            recorded when you submit below.
           </AlertDescription>
         </Alert>
       )}
@@ -221,7 +214,7 @@ function PublicSigningStatusCard({
       </CardContent>
       <CardFooter>
         <span className="text-xs text-muted-foreground">
-          Co-signer email addresses and drawings are never shown on this page.
+          Other signers&apos; details stay private.
         </span>
       </CardFooter>
     </Card>
@@ -238,9 +231,8 @@ function PublicSigningShell({
   return (
     <main className="min-h-screen bg-background px-4 py-8 text-foreground sm:py-12">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
-        <div className="flex items-center justify-between gap-4 border-b pb-4">
+        <div className="border-b pb-4">
           <BizFlowWordmark />
-          <Badge variant="secondary">Private access</Badge>
         </div>
         {query.error && (
           <Alert variant="destructive">

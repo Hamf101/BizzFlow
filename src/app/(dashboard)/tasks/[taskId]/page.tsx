@@ -113,9 +113,7 @@ export default async function TaskDetailPage({
       <TaskPageShell>
         <Alert variant="destructive">
           <AlertTitle>Tasks are not shared with your role</AlertTitle>
-          <AlertDescription>
-            Ask an owner or manager for access if you need to track this work.
-          </AlertDescription>
+          <AlertDescription>Ask an owner for access.</AlertDescription>
         </Alert>
       </TaskPageShell>
     )
@@ -188,8 +186,7 @@ export default async function TaskDetailPage({
           {formatMemberName(task.assignedTo, members, user.id)} ·{" "}
           {task.dueAt
             ? `Due ${formatMediumDateTime(task.dueAt)}`
-            : "No due date"}{" "}
-          · Revision {task.revision}
+            : "No due date"}
         </p>
         {task.submissionId && (
           <Link
@@ -210,11 +207,11 @@ export default async function TaskDetailPage({
           <AlertTitle>
             {task.status === "completed" ? "Task complete" : "Task cancelled"}
           </AlertTitle>
-          <AlertDescription>
-            {task.completedAt
-              ? `Completed ${formatMediumDateTime(task.completedAt)}. This task is now a read-only record.`
-              : "This task is closed and kept as a read-only record."}
-          </AlertDescription>
+          {task.completedAt ? (
+            <AlertDescription>
+              {`Completed ${formatMediumDateTime(task.completedAt)}.`}
+            </AlertDescription>
+          ) : null}
         </Alert>
       )}
 
@@ -267,9 +264,6 @@ function TaskLifecyclePanel({
     <Card>
       <CardHeader>
         <CardTitle>Status</CardTitle>
-        <CardDescription>
-          Only the moves allowed by the task workflow are offered here.
-        </CardDescription>
         <CardAction>
           <TaskStatusBadge status={task.status} />
         </CardAction>
@@ -331,11 +325,11 @@ function TaskAssignmentPanel({
     <Card>
       <CardHeader>
         <CardTitle>Assignment</CardTitle>
-        <CardDescription>
-          {task.assignedAt
-            ? `Handed over ${formatMediumDateTime(task.assignedAt)}.`
-            : "Nobody owns this task yet."}
-        </CardDescription>
+        {task.assignedAt ? (
+          <CardDescription>
+            {`Handed over ${formatMediumDateTime(task.assignedAt)}.`}
+          </CardDescription>
+        ) : null}
       </CardHeader>
       <CardContent>
         {canAssign ? (
@@ -366,9 +360,7 @@ function TaskAssignmentPanel({
                   Save
                 </Button>
               </div>
-              <FieldDescription>
-                Choosing a new member emails them the handover.
-              </FieldDescription>
+              <FieldDescription>Emails the new assignee.</FieldDescription>
             </Field>
           </form>
         ) : (
@@ -386,10 +378,6 @@ function TaskDetailsPanel({ task }: { task: Task }): ReactElement {
     <Card>
       <CardHeader>
         <CardTitle>Details</CardTitle>
-        <CardDescription>
-          Saving checks the revision above, so concurrent edits never overwrite
-          each other silently.
-        </CardDescription>
       </CardHeader>
       <CardContent>
         <form action={updateTaskAction} className="flex flex-col gap-4">
@@ -428,7 +416,7 @@ function TaskDetailsPanel({ task }: { task: Task }): ReactElement {
           </Field>
           <Button className="w-fit" type="submit" variant="outline">
             <Save />
-            Save details
+            Save
           </Button>
         </form>
       </CardContent>
@@ -455,16 +443,10 @@ function TaskRemindersPanel({
     <Card>
       <CardHeader>
         <CardTitle>Reminders</CardTitle>
-        <CardDescription>
-          Scheduled email nudges. Each instant is delivered once, even if the
-          scheduler runs twice.
-        </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-5">
         {reminders.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            No reminders are scheduled for this task.
-          </p>
+          <p className="text-sm text-muted-foreground">No reminders yet.</p>
         ) : (
           <ul className="flex flex-col gap-2">
             {reminders.map((reminder: TaskReminder) => (
@@ -540,7 +522,7 @@ function TaskRemindersPanel({
               </Select>
             </Field>
             <Field>
-              <FieldLabel htmlFor="reminder-channel">Notification Channel</FieldLabel>
+              <FieldLabel htmlFor="reminder-channel">Channel</FieldLabel>
               <Select
                 defaultValue="email"
                 id="reminder-channel"
@@ -561,9 +543,7 @@ function TaskRemindersPanel({
                 required
                 type="datetime-local"
               />
-              <FieldDescription>
-                Must be in the future. Delivery runs every fifteen minutes.
-              </FieldDescription>
+              <FieldDescription>Runs every 15 minutes.</FieldDescription>
             </Field>
             <Button className="w-fit" type="submit" variant="outline">
               <BellPlus />

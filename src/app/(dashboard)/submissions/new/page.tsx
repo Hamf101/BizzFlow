@@ -10,11 +10,10 @@ import { buttonVariants } from "@/components/ui/button"
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
+import { Field, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { buildFeedbackRedirect } from "@/lib/action-result"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
@@ -122,9 +121,6 @@ export default async function NewSubmissionPage(): Promise<ReactElement> {
         <Card className="max-w-2xl">
           <CardHeader>
             <CardTitle>Draft details</CardTitle>
-            <CardDescription>
-              You can save answers and upload supporting files after creation.
-            </CardDescription>
           </CardHeader>
           <CardContent>
             <form action={createSubmissionAction} className="flex flex-col gap-5">
@@ -138,9 +134,6 @@ export default async function NewSubmissionPage(): Promise<ReactElement> {
                   name="title"
                   required
                 />
-                <FieldDescription>
-                  Use a title that will make this submission easy to find.
-                </FieldDescription>
               </Field>
               <Field>
                 <FieldLabel htmlFor="submission-template">Template</FieldLabel>

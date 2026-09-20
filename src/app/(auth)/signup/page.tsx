@@ -54,7 +54,7 @@ export default async function SignupPage({
       description={
         invite
           ? `Sign up with ${invite.email} to join ${invite.organizationName}.`
-          : "Start an organization workspace for document collection and review."
+          : undefined
       }
       footer={
         <>
@@ -108,11 +108,7 @@ export default async function SignupPage({
               required
               minLength={8}
             />
-            <FieldDescription>
-              {invite
-                ? "Use at least 8 characters. Confirm your email, then accept the workspace invite."
-                : "Use at least 8 characters. Organization setup comes next."}
-            </FieldDescription>
+            <FieldDescription>At least 8 characters.</FieldDescription>
           </Field>
         </FieldGroup>
         <Button type="submit" className="w-full">

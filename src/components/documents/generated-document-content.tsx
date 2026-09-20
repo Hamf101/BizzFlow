@@ -697,7 +697,7 @@ export function GeneratedBlock({
         <AnswerFieldFrame block={block}>
           {fileFieldContent[block.fieldKey] ?? (
             <div className="rounded-lg border border-dashed border-border px-4 py-5 text-sm text-muted-foreground">
-              File uploads are available only in internal submissions.
+              Uploads are only in submissions.
             </div>
           )}
         </AnswerFieldFrame>

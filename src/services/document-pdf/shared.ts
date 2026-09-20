@@ -132,7 +132,7 @@ export function formatFieldValue(
   value: unknown
 ): string {
   if (block.type === "file_field") {
-    return "File uploads are available only in internal submissions."
+    return "Uploads are only in submissions."
   }
 
   if (block.type === "checkbox_field") {

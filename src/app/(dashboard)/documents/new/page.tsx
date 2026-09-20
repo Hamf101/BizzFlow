@@ -64,9 +64,7 @@ export default async function NewDocumentPage({
       <div className="flex flex-col gap-4">
         <Alert variant="destructive">
           <AlertTitle>Folder unavailable</AlertTitle>
-          <AlertDescription>
-            Choose an active folder before adding a document.
-          </AlertDescription>
+          <AlertDescription>Choose an active folder first.</AlertDescription>
         </Alert>
         <Link
           className={buttonVariants({ variant: "outline" })}

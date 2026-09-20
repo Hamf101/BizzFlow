@@ -127,13 +127,13 @@ export function DocumentReplaceForm({
           required
           type="file"
         />
-        <FieldDescription>
-          {pendingReplacement
-            ? pendingReplacement.uploadCompleted
-              ? "The file is uploaded. Retry completion without creating another version."
-              : "The version is reserved. Retry the same upload without creating another version."
-            : "The current file stays in version history."}
-        </FieldDescription>
+        {pendingReplacement ? (
+          <FieldDescription>
+            {pendingReplacement.uploadCompleted
+              ? "Already uploaded — retry to finish it."
+              : "Retry the same upload to finish it."}
+          </FieldDescription>
+        ) : null}
       </Field>
 
       {errorMessage && (

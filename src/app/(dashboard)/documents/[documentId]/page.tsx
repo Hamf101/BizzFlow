@@ -15,7 +15,6 @@ import { Badge } from "@/components/ui/badge"
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
@@ -220,7 +219,7 @@ export default async function DocumentDetailPage({
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="contents lg:flex lg:flex-col lg:gap-4">
           <div className="order-1 lg:order-0">
-            <DocumentMetadataCard context={context} detail={detail} />
+            <DocumentMetadataCard detail={detail} />
           </div>
           <div className="order-3 lg:order-0">
             <VersionListCard
@@ -273,23 +272,16 @@ function DocumentDetailShell({
 }
 
 function DocumentMetadataCard({
-  context,
   detail,
 }: {
-  context: OrganizationContext
   detail: DocumentDetail
 }): ReactElement {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Metadata</CardTitle>
-        <CardDescription>{context.organization.name}</CardDescription>
+        <CardTitle>Details</CardTitle>
       </CardHeader>
       <CardContent className="grid gap-3 text-sm md:grid-cols-3">
-        <MetadataItem
-          label="Lifecycle"
-          value={getLifecycleLabel(detail.document.lifecycleState)}
-        />
         <MetadataItem
           label="Your access"
           value={
@@ -306,12 +298,6 @@ function DocumentMetadataCard({
           label="Updated"
           value={formatMediumDateTime(detail.document.updatedAt)}
         />
-        <MetadataItem
-          label="Current version"
-          value={detail.document.currentVersionId ? "Available" : "Pending"}
-        />
-        <MetadataItem label="Document id" value={detail.document.id} />
-        <MetadataItem label="Folder id" value={detail.document.folderId ?? "No folder"} />
         {detail.document.archivedAt ? (
           <MetadataItem
             label="Archived"
@@ -365,14 +351,10 @@ function VersionListCard({
     <Card>
       <CardHeader>
         <CardTitle>Versions</CardTitle>
-        <CardDescription>File history for this document.</CardDescription>
       </CardHeader>
       <CardContent>
         {versions.length === 0 ? (
-          <Alert>
-            <AlertTitle>No versions yet</AlertTitle>
-            <AlertDescription>No file metadata is available.</AlertDescription>
-          </Alert>
+          <p className="text-sm text-muted-foreground">No versions yet.</p>
         ) : (
           <div className="flex flex-col gap-3">
             {versions.map((version: DocumentVersion) => (
@@ -434,7 +416,6 @@ function DocumentActivityCard({
     <Card>
       <CardHeader>
         <CardTitle>Activity</CardTitle>
-        <CardDescription>Recent changes to this document.</CardDescription>
       </CardHeader>
       <CardContent>
         {errorMessage ? (
@@ -482,7 +463,6 @@ function DocumentCommentsCard({
     <Card>
       <CardHeader>
         <CardTitle>Comments</CardTitle>
-        <CardDescription>Keep document discussion with the file.</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         {errorMessage ? (
@@ -536,7 +516,7 @@ function DocumentCommentsCard({
                 type="hidden"
                 value={detail.document.id}
               />
-              <label className="text-sm font-medium" htmlFor="document-comment">
+              <label className="sr-only" htmlFor="document-comment">
                 Add comment
               </label>
               <textarea
@@ -544,7 +524,7 @@ function DocumentCommentsCard({
                 id="document-comment"
                 maxLength={2000}
                 name="body"
-                placeholder="Share context or a review note"
+                placeholder="Add a note"
                 required
               />
               <DocumentCommentSubmitButton role={context.membership} />
@@ -575,15 +555,6 @@ function DocumentActionsCard({
     <Card>
       <CardHeader>
         <CardTitle>Actions</CardTitle>
-        <CardDescription>
-          {!canDownload &&
-          (document.lifecycleState === "trashed" ||
-            document.lifecycleState === "purge_pending")
-            ? "Downloads and collaboration are unavailable in this lifecycle state."
-            : canContribute
-            ? "Download or manage this document according to its lifecycle."
-            : "Your viewer access includes downloads and comments."}
-        </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         {canDownload ? (

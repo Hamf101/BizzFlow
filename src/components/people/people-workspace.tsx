@@ -647,7 +647,7 @@ function InviteForm({
   if (assignableRoles.length === 0) {
     return (
       <p className="rounded-[12px] py-8 text-center text-sm text-muted-foreground">
-        No role fits within your access yet. Ask an owner to send this invite.
+        No role you can invite yet. Ask an owner.
       </p>
     )
   }
@@ -707,9 +707,6 @@ function InviteForm({
               </option>
             ))}
           </Select>
-          <FieldDescription className="max-sm:hidden">
-            Roles can be changed later.
-          </FieldDescription>
         </Field>
       </FieldGroup>
 

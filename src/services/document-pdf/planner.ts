@@ -909,7 +909,7 @@ function estimateBlockHeight(
         13
       )
       const noticeHeight = estimateWrappedTextHeight(
-        "File uploads are available only in internal submissions.",
+        "Uploads are only in submissions.",
         scalePdfCharacterEstimate(88, availableWidth),
         15
       )

@@ -25,7 +25,7 @@ type DrawnSignatureFieldProps = {
  * @returns Responsive canvas with a hidden form value and clear control.
  */
 export function DrawnSignatureField({
-  description = "Draw inside the box using a mouse, trackpad, finger, or stylus.",
+  description = "Draw with a mouse, finger, or stylus.",
   label,
   name,
   required = false,
@@ -146,11 +146,6 @@ export function DrawnSignatureField({
       />
       <input name={name} type="hidden" value={dataUrl} />
       <FieldDescription>{description}</FieldDescription>
-      {required && !dataUrl ? (
-        <p className="text-xs text-muted-foreground">
-          A drawing is required before submission.
-        </p>
-      ) : null}
     </Field>
   )
 }

@@ -85,11 +85,11 @@ export function PublicDocumentSigningForm({
       <Card className="min-w-0">
         <CardHeader>
           <CardTitle>Document</CardTitle>
-          <CardDescription>
-            {editable
-              ? "Complete any outstanding fields, then sign below."
-              : "This submitted document is read only."}
-          </CardDescription>
+          {editable ? (
+            <CardDescription>
+              Fill anything missing, then sign below.
+            </CardDescription>
+          ) : null}
           <CardAction>
             <Badge variant="outline">{editable ? "Editable" : "Read only"}</Badge>
           </CardAction>
@@ -105,21 +105,12 @@ export function PublicDocumentSigningForm({
             title={view.document.title}
           />
         </CardContent>
-        <CardFooter>
-          <span className="text-xs text-muted-foreground">
-            The document uses the immutable template snapshot selected by the
-            sender.
-          </span>
-        </CardFooter>
       </Card>
 
       {editable && (
         <Card>
           <CardHeader>
-            <CardTitle>Signing acknowledgement</CardTitle>
-            <CardDescription>
-              A drawn signature is a basic acknowledgement for this workflow.
-            </CardDescription>
+            <CardTitle>Sign</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-5">
             <DrawnSignatureField
@@ -129,9 +120,7 @@ export function PublicDocumentSigningForm({
             />
             <DrawnSignatureField
               description={
-                requiresInitials
-                  ? "Required because this document contains a required initials field."
-                  : "Optional. Add initials if this document calls for them."
+                requiresInitials ? "Required for this document." : "Optional."
               }
               label="Initials"
               name="initialsDataUrl"
@@ -140,8 +129,8 @@ export function PublicDocumentSigningForm({
             <Alert>
               <AlertTitle>Basic electronic acknowledgement</AlertTitle>
               <AlertDescription>
-                This MVP drawing is not a qualified or regulated electronic
-                signature product.
+                A drawing here is a basic acknowledgement, not a qualified or
+                regulated electronic signature.
               </AlertDescription>
             </Alert>
           </CardContent>

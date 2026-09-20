@@ -17,7 +17,6 @@ import {
   Card,
   CardAction,
   CardContent,
-  CardDescription,
   CardFooter,
   CardHeader,
   CardTitle
@@ -197,10 +196,6 @@ export default async function SubmissionDetailPage({
             </h1>
             <SubmissionStatusBadge status={submission.status} />
           </div>
-          <p className="text-sm text-muted-foreground">
-            Template revision {submission.templateRevision} · Submission
-            revision {submission.revision}
-          </p>
           {submission.assignedAt && (
             <p className="text-sm text-muted-foreground">
               Assigned to{" "}
@@ -217,8 +212,7 @@ export default async function SubmissionDetailPage({
         <Alert>
           <AlertTitle>Waiting for review</AlertTitle>
           <AlertDescription>
-            Submitted {formatMediumDateTime(submission.submittedAt)}. A manager
-            can assign the review when it is ready to begin.
+            Submitted {formatMediumDateTime(submission.submittedAt)}.
           </AlertDescription>
         </Alert>
       )}
@@ -226,10 +220,6 @@ export default async function SubmissionDetailPage({
       {submission.status === "in_review" && (
         <Alert>
           <AlertTitle>Review in progress</AlertTitle>
-          <AlertDescription>
-            The assigned reviewer can add context, while the assigned owner or
-            manager records the binding outcome.
-          </AlertDescription>
         </Alert>
       )}
 
@@ -238,8 +228,8 @@ export default async function SubmissionDetailPage({
           <AlertTitle>Changes requested</AlertTitle>
           <AlertDescription>
             {editable
-              ? "Update the answers or files below, then resubmit for another review."
-              : "Only the team member who created this submission can make the requested changes."}
+              ? "Update the answers or files below, then resubmit."
+              : "Only the person who started it can make these changes."}
           </AlertDescription>
         </Alert>
       )}
@@ -247,37 +237,26 @@ export default async function SubmissionDetailPage({
       {submission.status === "approved" && (
         <Alert>
           <AlertTitle>Submission approved</AlertTitle>
-          <AlertDescription>
-            The review is approved and ready to be marked complete after any
-            remaining follow-up work.
-          </AlertDescription>
         </Alert>
       )}
 
       {submission.status === "rejected" && (
         <Alert variant="destructive">
           <AlertTitle>Submission rejected</AlertTitle>
-          <AlertDescription>
-            The review history below includes the reviewer&apos;s decision note.
-          </AlertDescription>
         </Alert>
       )}
 
       {submission.status === "completed" && (
         <Alert>
           <AlertTitle>Submission complete</AlertTitle>
-          <AlertDescription>
-            This review is closed. Its answers, files, discussion, and activity
-            remain available as a read-only record.
-          </AlertDescription>
         </Alert>
       )}
 
       {submission.status === "draft" && !editable && (
         <Alert>
-          <AlertTitle>Read-only team draft</AlertTitle>
+          <AlertTitle>Read-only draft</AlertTitle>
           <AlertDescription>
-            Only the team member who created this draft can change or submit it.
+            Only the person who started it can change or submit it.
           </AlertDescription>
         </Alert>
       )}
@@ -285,11 +264,6 @@ export default async function SubmissionDetailPage({
       <Card className="min-w-0">
         <CardHeader>
           <CardTitle>Submission form</CardTitle>
-          <CardDescription>
-            {editable
-              ? "Save progress at any time. Required fields and verified uploads are enforced when you submit."
-              : "This view uses the exact template snapshot saved with the submission."}
-          </CardDescription>
           <CardAction>
             <Badge variant="outline">
               {editable ? "Editable" : "Read only"}
@@ -314,10 +288,6 @@ export default async function SubmissionDetailPage({
           </form>
         </CardContent>
         <CardFooter className="flex-wrap justify-between gap-3">
-          <span className="text-xs text-muted-foreground">
-            Files are private, create-only objects verified by the server before
-            submission.
-          </span>
           {editable && (
             <div className="flex flex-wrap gap-2">
               <Button
@@ -397,9 +367,6 @@ function SubmissionDiscussionCard({
     <Card>
       <CardHeader>
         <CardTitle>Discussion</CardTitle>
-        <CardDescription>
-          Add context without changing the binding review decision.
-        </CardDescription>
       </CardHeader>
       <CardContent>
         {canComment ? (
@@ -408,7 +375,7 @@ function SubmissionDiscussionCard({
             className="flex flex-col gap-3"
           >
             <input name="submissionId" type="hidden" value={submissionId} />
-            <label className="text-sm font-medium" htmlFor="submission-comment">
+            <label className="sr-only" htmlFor="submission-comment">
               Add comment
             </label>
             <textarea
@@ -416,7 +383,7 @@ function SubmissionDiscussionCard({
               id="submission-comment"
               maxLength={2_000}
               name="body"
-              placeholder="Share an update or review context"
+              placeholder="Add a comment"
               required
             />
             <Button className="w-fit" type="submit" variant="outline">

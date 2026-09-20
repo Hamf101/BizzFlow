@@ -8,7 +8,6 @@ import { Button, buttonVariants } from "@/components/ui/button"
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
@@ -67,9 +66,6 @@ export function SubmissionTaskPanel({
           <ListChecks className="size-4 text-muted-foreground" />
           Follow-up tasks
         </CardTitle>
-        <CardDescription>
-          Track the work this submission created without leaving the review.
-        </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         {errorMessage ? (

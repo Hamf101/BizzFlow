@@ -116,7 +116,7 @@ export default async function AcceptInvitePage({
         ) : (
           <div className="flex flex-col gap-3">
             <p className="text-sm text-muted-foreground">
-              Sign up or log in with the invited email address to join.
+              Sign up with the invited email to join.
             </p>
             <Link href={`/signup?invite=${encodeURIComponent(token)}`}>
               <Button className="w-full">Sign up</Button>

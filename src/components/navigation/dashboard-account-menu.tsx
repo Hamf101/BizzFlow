@@ -156,11 +156,11 @@ export function DashboardAccountMenu({
 
         <DropdownMenuItem render={<Link href="/settings" />}>
           <Settings aria-hidden="true" />
-          Profile & preferences
+          Settings
         </DropdownMenuItem>
         <DropdownMenuItem render={<Link href="/people" />}>
           <Users aria-hidden="true" />
-          People & permissions
+          People
         </DropdownMenuItem>
         <DropdownMenuItem onClick={toggleTheme}>
           {isDark ? (

@@ -153,9 +153,6 @@ export function RolesAndAccessSettings({
               {roles.length}
             </span>
           </div>
-          <p className="text-sm text-muted-foreground">
-            Set role names and permissions for this workspace.
-          </p>
         </div>
         <NewRoleDialog
           action={createRoleAction}
@@ -220,9 +217,9 @@ function RoleEditorDialog({
       <DialogContent className="max-h-[calc(100dvh-2rem)] grid-rows-[auto_minmax(0,1fr)] overflow-hidden sm:aspect-square sm:max-w-xl">
         <DialogHeader>
           <DialogTitle className="font-medium">Edit role</DialogTitle>
-          <DialogDescription>
+          <DialogDescription className={isOwner ? undefined : "sr-only"}>
             {isOwner
-              ? "Owner keeps full access. Only its visible name can change."
+              ? "Owner keeps full access; only its name can change."
               : "Change this role's name, access, or availability."}
           </DialogDescription>
         </DialogHeader>
@@ -301,9 +298,7 @@ function NewRoleDialog({
       <DialogContent className="max-h-[calc(100dvh-2rem)] grid-rows-[auto_minmax(0,1fr)] overflow-hidden sm:aspect-square sm:max-w-xl">
         <DialogHeader>
           <DialogTitle className="font-medium">Create role</DialogTitle>
-          <DialogDescription>
-            New roles start with no access. Add only what this role needs.
-          </DialogDescription>
+          <DialogDescription>Starts with no access.</DialogDescription>
         </DialogHeader>
         <form
           action={action}

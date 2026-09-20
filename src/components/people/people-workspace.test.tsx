@@ -453,8 +453,6 @@ describe("PeopleWorkspace", () => {
     expect(
       document.querySelector('[role="dialog"] select[name="roleDefinitionId"]')
     ).toBeNull()
-    expect(document.body.textContent).toContain(
-      "No role fits within your access yet."
-    )
+    expect(document.body.textContent).toContain("No role you can invite yet.")
   })
 })

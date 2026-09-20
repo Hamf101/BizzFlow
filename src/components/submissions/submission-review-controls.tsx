@@ -11,7 +11,6 @@ import { Textarea } from "@/components/ui/textarea"
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
@@ -71,9 +70,6 @@ export function SubmissionReviewControls({
     <Card>
       <CardHeader>
         <CardTitle>Review</CardTitle>
-        <CardDescription>
-          Assign a reviewer, then record the binding outcome here.
-        </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-5">
         {canAssign && assignmentOpen && (
@@ -121,10 +117,6 @@ export function SubmissionReviewControls({
                     : "Assign"}
               </Button>
             </div>
-            <p className="text-xs text-muted-foreground">
-              Assigning a submitted item starts its review. External reviewers
-              can view and comment, but cannot record a binding decision.
-            </p>
           </form>
         )}
 

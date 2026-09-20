@@ -7,7 +7,6 @@ import {
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
@@ -46,9 +45,6 @@ export function SubmissionActivityTimeline({
     <Card>
       <CardHeader>
         <CardTitle>Activity</CardTitle>
-        <CardDescription>
-          Assignment, review decisions, and discussion in one history.
-        </CardDescription>
       </CardHeader>
       <CardContent>
         {activity.length === 0 ? (

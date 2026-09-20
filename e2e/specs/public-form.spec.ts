@@ -38,7 +38,7 @@ test.describe("public form", () => {
     await page.getByRole("button", { name: "Submit form" }).click()
 
     await page.waitForURL(/\/forms\/.+\/success/)
-    await expect(page.getByText("Submission Received")).toBeVisible()
+    await expect(page.getByText("Submission received")).toBeVisible()
 
     await context.close()
 

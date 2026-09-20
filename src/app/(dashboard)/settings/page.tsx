@@ -11,7 +11,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
+import { Field, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
 import { RolesAndAccessSettings } from "@/components/settings/roles-and-access-settings"
@@ -103,8 +103,8 @@ export default async function SettingsPage(): Promise<ReactElement> {
     <SettingsShell>
       <section className="flex flex-col gap-2">
         <h1 className="text-2xl font-medium tracking-normal">Settings</h1>
-        <p className="max-w-2xl text-sm text-muted-foreground">
-          Manage your profile and notification preferences for {context.organization.name}.
+        <p className="text-[13px] text-muted-foreground">
+          {context.organization.name}
         </p>
       </section>
 
@@ -119,14 +119,11 @@ export default async function SettingsPage(): Promise<ReactElement> {
         <Card>
           <CardHeader>
             <CardTitle>Profile</CardTitle>
-            <CardDescription>
-              Update your personal information.
-            </CardDescription>
           </CardHeader>
           <CardContent>
             <form action={updateProfileAction} className="flex flex-col gap-4">
               <Field>
-                <FieldLabel htmlFor="displayName">Display Name</FieldLabel>
+                <FieldLabel htmlFor="displayName">Name</FieldLabel>
                 <Input
                   id="displayName"
                   name="displayName"
@@ -135,7 +132,7 @@ export default async function SettingsPage(): Promise<ReactElement> {
                 />
               </Field>
               <Field>
-                <FieldLabel htmlFor="phoneNumber">Phone Number</FieldLabel>
+                <FieldLabel htmlFor="phoneNumber">Phone</FieldLabel>
                 <Input
                   id="phoneNumber"
                   name="phoneNumber"
@@ -143,12 +140,9 @@ export default async function SettingsPage(): Promise<ReactElement> {
                   placeholder="+14155552671"
                   type="tel"
                 />
-                <FieldDescription>
-                  Include country code (e.g. +14155552671).
-                </FieldDescription>
               </Field>
               <Button type="submit" variant="outline" className="w-fit">
-                Save profile
+                Save
               </Button>
             </form>
           </CardContent>
@@ -156,10 +150,7 @@ export default async function SettingsPage(): Promise<ReactElement> {
 
         <Card>
           <CardHeader>
-            <CardTitle>Notification Preferences</CardTitle>
-            <CardDescription>
-              Choose how you want to be notified about tasks.
-            </CardDescription>
+            <CardTitle>Notifications</CardTitle>
           </CardHeader>
           <CardContent>
             <form action={updateNotificationPreferencesAction} className="flex flex-col gap-6">
@@ -167,8 +158,7 @@ export default async function SettingsPage(): Promise<ReactElement> {
               
               <div className="flex items-center justify-between gap-4">
                 <div className="flex flex-col gap-0.5">
-                  <FieldLabel htmlFor="emailNotificationsEnabled" className="text-base">Email Notifications</FieldLabel>
-                  <FieldDescription>Receive task assignments and reminders via email.</FieldDescription>
+                  <FieldLabel htmlFor="emailNotificationsEnabled" className="text-base">Email</FieldLabel>
                 </div>
                 <Switch
                   id="emailNotificationsEnabled"
@@ -179,8 +169,7 @@ export default async function SettingsPage(): Promise<ReactElement> {
 
               <div className="flex items-center justify-between gap-4">
                 <div className="flex flex-col gap-0.5">
-                  <FieldLabel htmlFor="smsNotificationsEnabled" className="text-base">SMS Notifications</FieldLabel>
-                  <FieldDescription>Receive task assignments and reminders via SMS.</FieldDescription>
+                  <FieldLabel htmlFor="smsNotificationsEnabled" className="text-base">SMS</FieldLabel>
                 </div>
                 <Switch
                   id="smsNotificationsEnabled"
@@ -190,7 +179,7 @@ export default async function SettingsPage(): Promise<ReactElement> {
               </div>
 
               <Button type="submit" variant="outline" className="w-fit">
-                Save preferences
+                Save
               </Button>
             </form>
           </CardContent>
@@ -202,9 +191,8 @@ export default async function SettingsPage(): Promise<ReactElement> {
           <CardHeader>
             <CardTitle>Organization notifications</CardTitle>
             <CardDescription>
-              Workspace-wide switches for {context.organization.name}. Turning a
-              channel off here silences it for every member, whatever their own
-              preference says.
+              Off here silences the channel for everyone, whatever their own
+              settings say.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -224,11 +212,8 @@ export default async function SettingsPage(): Promise<ReactElement> {
                     htmlFor="orgEmailNotificationsEnabled"
                     className="text-base"
                   >
-                    Email for the whole workspace
+                    Email
                   </FieldLabel>
-                  <FieldDescription>
-                    Allow BizFlow to email any member of this organization.
-                  </FieldDescription>
                 </div>
                 <Switch
                   id="orgEmailNotificationsEnabled"
@@ -243,11 +228,8 @@ export default async function SettingsPage(): Promise<ReactElement> {
                     htmlFor="orgSmsNotificationsEnabled"
                     className="text-base"
                   >
-                    SMS for the whole workspace
+                    SMS
                   </FieldLabel>
-                  <FieldDescription>
-                    Allow BizFlow to text any member of this organization.
-                  </FieldDescription>
                 </div>
                 <Switch
                   id="orgSmsNotificationsEnabled"
@@ -257,7 +239,7 @@ export default async function SettingsPage(): Promise<ReactElement> {
               </div>
 
               <Button type="submit" variant="outline" className="w-fit">
-                Save organization settings
+                Save
               </Button>
             </form>
           </CardContent>
@@ -345,8 +327,7 @@ function NotificationActivityCard({
       <CardHeader>
         <CardTitle>Recent notification activity</CardTitle>
         <CardDescription>
-          The last ten delivery attempts. Message content, phone numbers, and
-          email addresses are deliberately not recorded.
+          The last ten attempts. Message content is never recorded.
         </CardDescription>
       </CardHeader>
       <CardContent>

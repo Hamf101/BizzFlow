@@ -3,12 +3,7 @@ import Link from "next/link"
 import { PasswordInput } from "@/components/auth/password-input"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
-import {
-  Field,
-  FieldDescription,
-  FieldGroup,
-  FieldLabel,
-} from "@/components/ui/field"
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { AuthPageCard } from "@/lib/page-auth-card"
 
@@ -77,9 +72,6 @@ export default async function LoginPage({
               required
               minLength={8}
             />
-            <FieldDescription>
-              Use the password associated with your workspace invite.
-            </FieldDescription>
           </Field>
         </FieldGroup>
         <Button type="submit" className="w-full">
