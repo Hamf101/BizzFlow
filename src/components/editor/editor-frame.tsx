@@ -177,7 +177,7 @@ export function EditorFrame<Mode extends string>({
         {extra}
         <Button
           aria-label="Undo"
-          className="size-10 max-sm:hidden"
+          className="size-9 md:size-10"
           disabled={!canUndo}
           onClick={onUndo}
           size="icon"
@@ -189,7 +189,7 @@ export function EditorFrame<Mode extends string>({
         </Button>
         <Button
           aria-label="Redo"
-          className="size-10 max-sm:hidden"
+          className="size-9 md:size-10"
           disabled={!canRedo}
           onClick={onRedo}
           size="icon"
