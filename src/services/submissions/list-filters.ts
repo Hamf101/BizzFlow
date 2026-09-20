@@ -44,6 +44,8 @@ export type SubmissionListFilters = {
   actorUserId: string
   /** A member's user id, null for unassigned, or undefined for anyone. */
   assignedTo: string | null | undefined
+  /** The member who started them, or undefined for anyone's. */
+  createdBy: string | undefined
   organizationId: string
   query: string | null
   role: OrganizationRole
@@ -73,6 +75,7 @@ export function createSubmissionListFilters(
   input: {
     actorUserId: string
     assignedTo?: string | null
+    createdBy?: string
     organizationId: string
     query?: string
     statuses?: readonly string[]
@@ -82,6 +85,7 @@ export function createSubmissionListFilters(
   return {
     actorUserId: input.actorUserId,
     assignedTo: normalizeSubmissionAssignee(input.assignedTo),
+    createdBy: normalizeSubmissionMember(input.createdBy, "author"),
     organizationId: input.organizationId,
     query: SUBMISSION_LIST_INPUT.search(input.query),
     role,
@@ -120,6 +124,10 @@ export function filterVisibleSubmissions<TQuery>(
     filtered = filtered.in("status", filters.statuses)
   }
 
+  if (filters.createdBy !== undefined) {
+    filtered = filtered.eq("created_by", filters.createdBy)
+  }
+
   if (filters.assignedTo === null) {
     filtered = filtered.is("assigned_to", null)
   } else if (filters.assignedTo !== undefined) {
@@ -151,13 +159,20 @@ export function normalizeSubmissionSort(
 function normalizeSubmissionAssignee(
   value: string | null | undefined
 ): string | null | undefined {
-  if (value === null || value === undefined) {
+  return value === null ? value : normalizeSubmissionMember(value, "assignee")
+}
+
+function normalizeSubmissionMember(
+  value: string | undefined,
+  filterName: "assignee" | "author"
+): string | undefined {
+  if (value === undefined) {
     return value
   }
 
   if (!UUID_PATTERN.test(value)) {
     throw new SubmissionServiceError(
-      "Submission assignee filter must be a valid user id.",
+      `Submission ${filterName} filter must be a valid user id.`,
       400
     )
   }

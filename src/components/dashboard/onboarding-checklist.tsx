@@ -9,7 +9,6 @@ import { Button, buttonVariants } from "@/components/ui/button"
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
@@ -18,7 +17,6 @@ import { cn } from "@/lib/utils"
 export type OnboardingStep = {
   id: string
   title: string
-  description: string
   completed: boolean
   href: string
   actionText: string
@@ -46,14 +44,11 @@ export function OnboardingChecklist({
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2">
             <Sparkles className="size-5 text-primary" />
-            <CardTitle>Getting Started with BizFlow</CardTitle>
+            <CardTitle>Getting started</CardTitle>
           </div>
-          <CardDescription>
-            Complete these setup tasks to get your organization workflow-ready.
-          </CardDescription>
         </div>
         <Badge variant={isAllDone ? "default" : "secondary"}>
-          {completedCount} / {steps.length} Completed
+          {completedCount} / {steps.length}
         </Badge>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
@@ -66,7 +61,7 @@ export function OnboardingChecklist({
               key={step.id}
             >
               {step.completed ? (
-                <CheckCircle2 className="size-5 text-emerald-500 mt-0.5 shrink-0" />
+                <CheckCircle2 className="size-5 text-success mt-0.5 shrink-0" />
               ) : (
                 <Circle className="size-5 text-muted-foreground mt-0.5 shrink-0" />
               )}
@@ -78,9 +73,6 @@ export function OnboardingChecklist({
                 >
                   {step.title}
                 </span>
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                  {step.description}
-                </p>
                 {!step.completed && (
                   <div className="pt-2">
                     <Link

@@ -127,19 +127,26 @@ export default async function DashboardPage(): Promise<ReactElement> {
   const canReview = can("submissions:review")
 
   // Each block degrades to empty on its own, so one failing read never takes
-  // the whole home page down.
-  function orEmpty<T>(event: string, read: () => Promise<T>, fallback: T): Promise<T> {
-    return read().catch((error: unknown) => {
+  // the whole home page down. Each says whether it answered, so the page can
+  // tell an outage from an empty day.
+  async function orEmpty<T>(
+    event: string,
+    read: () => Promise<T>,
+    fallback: T
+  ): Promise<{ ok: boolean; value: T }> {
+    try {
+      return { ok: true, value: await read() }
+    } catch (error: unknown) {
       console.warn(event, {
         organizationId,
         reason: getPageErrorMessage(error, "Unavailable."),
         userId: user.id,
       })
-      return fallback
-    })
+      return { ok: false, value: fallback }
+    }
   }
 
-  const [progress, members, tasks, reviews, own, counts, files, activity] = await Promise.all([
+  const answers = await Promise.all([
     orEmpty("dashboard_onboarding_progress_failed", () => getOnboardingProgress(organizationId), {
       hasInvitedMembers: false,
       hasPublishedTemplate: false,
@@ -181,7 +188,7 @@ export default async function DashboardPage(): Promise<ReactElement> {
             ).submissions,
           []
         )
-      : [],
+      : { ok: true, value: [] },
     can("submissions:view")
       ? orEmpty(
           "dashboard_own_submissions_load_failed",
@@ -191,13 +198,14 @@ export default async function DashboardPage(): Promise<ReactElement> {
                 ...actor,
                 page: 1,
                 pageSize: PAGE,
+                createdBy: user.id,
                 sort: { direction: "desc", key: "updated" },
                 statuses: ["needs_changes", "draft"],
               })
             ).submissions,
           []
         )
-      : [],
+      : { ok: true, value: [] },
     can("submissions:view")
       ? orEmpty(
           "dashboard_workflow_load_failed",
@@ -275,38 +283,37 @@ export default async function DashboardPage(): Promise<ReactElement> {
       : null,
   ])
 
+  const [progress, members, tasks, reviews, own, counts, files, activity] = answers
+  const unavailable = answers.some((answer) => answer !== null && !answer.ok)
+
   const onboardingSteps = [
     {
       id: "org",
-      title: "Create Organization Workspace",
-      description: "Establish tenant boundaries for document security.",
+      title: "Create a workspace",
       completed: true,
       href: "/dashboard",
-      actionText: "Setup Org",
+      actionText: "Create",
     },
     {
       id: "people",
-      title: "Invite Team Members",
-      description: "Add staff and assign workspace roles.",
-      completed: progress.hasInvitedMembers,
+      title: "Invite your team",
+      completed: progress.value.hasInvitedMembers,
       href: "/people",
-      actionText: "Invite Members",
+      actionText: "Invite",
     },
     {
       id: "template",
-      title: "Publish Form Template",
-      description: "Create fillable guided document templates.",
-      completed: progress.hasPublishedTemplate,
+      title: "Publish a template",
+      completed: progress.value.hasPublishedTemplate,
       href: "/templates/new",
-      actionText: "New Template",
+      actionText: "New template",
     },
     {
       id: "submission",
-      title: "Submit & Review Work",
-      description: "Collect files and process review decisions.",
-      completed: progress.hasSubmission,
+      title: "Collect a submission",
+      completed: progress.value.hasSubmission,
       href: "/submissions",
-      actionText: "View Submissions",
+      actionText: "Open submissions",
     },
   ]
 
@@ -330,22 +337,23 @@ export default async function DashboardPage(): Promise<ReactElement> {
       ) : null}
 
       <DashboardHome
-        activity={activity ? describeActivity(activity, members, user.id, now) : null}
-        dueThisWeek={tasks ? selectDueThisWeek(tasks, members, user.id, now) : null}
+        activity={activity ? describeActivity(activity.value, members.value, user.id, now) : null}
+        degraded={unavailable}
+        dueThisWeek={tasks ? selectDueThisWeek(tasks.value, members.value, user.id, now) : null}
         queue={buildQueue({
           actorUserId: user.id,
-          awaitingSignatures: files?.awaitingSignatures ?? [],
+          awaitingSignatures: files?.value?.awaitingSignatures ?? [],
           canReview,
-          members,
+          members: members.value,
           now,
-          submissions: [...reviews, ...own],
-          tasks: tasks ?? [],
+          submissions: [...reviews.value, ...own.value],
+          tasks: tasks?.value ?? [],
         })}
-        recentFiles={files ? describeRecentFiles(files.recent, files.statuses, now) : null}
+        recentFiles={files?.value ? describeRecentFiles(files.value.recent, files.value.statuses, now) : null}
         workflow={
           counts
             ? {
-                counts,
+                counts: counts.value,
                 scope:
                   role === "staff"
                     ? "Your submissions"

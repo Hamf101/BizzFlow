@@ -53,12 +53,15 @@ export type WorkflowSummary = Readonly<{ counts: Partial<Record<SubmissionStatus
  */
 export function DashboardHome({
   activity,
+  degraded,
   dueThisWeek,
   queue,
   recentFiles,
   workflow,
 }: {
   activity: readonly ActivityRow[] | null
+  /** True when something the page reads did not answer. */
+  degraded: boolean
   dueThisWeek: readonly DueTask[] | null
   queue: readonly QueueItem[]
   recentFiles: readonly RecentFile[] | null
@@ -69,7 +72,9 @@ export function DashboardHome({
       <Block count={queue.length} title="Waiting on you">
         <div className="overflow-hidden rounded-[14px] border border-border bg-card shadow-sm">
           {queue.length === 0 ? (
-            <p className="px-4 py-6 text-sm text-muted-foreground">Nothing is waiting on you.</p>
+            <p className="px-4 py-6 text-sm text-muted-foreground">
+              {degraded ? "Some of this didn't load." : "Nothing is waiting on you."}
+            </p>
           ) : (
             <ul className="divide-y divide-border">
               {queue.slice(0, QUEUE_LIMIT).map((item: QueueItem, index: number) => (
@@ -77,6 +82,11 @@ export function DashboardHome({
               ))}
             </ul>
           )}
+          {degraded && queue.length > 0 ? (
+            <p className="border-t border-border px-3.5 py-2.5 text-[13px] text-muted-foreground">
+              Some of this didn&apos;t load.
+            </p>
+          ) : null}
           {activity && activity.length > 0 ? (
             <details className="border-t border-border max-md:hidden">
               <summary

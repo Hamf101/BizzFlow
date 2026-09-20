@@ -394,6 +394,26 @@ describe("submission list pages", () => {
     expect(manager.total).toBe(3)
   })
 
+  it("keeps a page to the submissions one member started", async () => {
+    const client = createClient({
+      submissions: [
+        createNumberedSubmissionRow(1),
+        createNumberedSubmissionRow(2, { created_by: OTHER_STAFF_ID, updated_by: OTHER_STAFF_ID }),
+        createNumberedSubmissionRow(3),
+      ],
+    })
+
+    const page = await listSubmissionPage(createPageInput(MANAGER_ID, { createdBy: STAFF_ID }), {
+      client: client as never,
+    })
+
+    expect(page.submissions.map((submission) => submission.id)).toEqual([
+      getNumberedSubmissionId(1),
+      getNumberedSubmissionId(3),
+    ])
+    expect(page.total).toBe(2)
+  })
+
   it("counts each status within what the member may see, and only recent updates when asked", async () => {
     const client = createClient({
       submissions: [

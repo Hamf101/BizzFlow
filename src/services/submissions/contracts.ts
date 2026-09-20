@@ -57,6 +57,8 @@ export type SubmissionActorInput = {
 export type ListSubmissionPageInput = SubmissionActorInput & {
   /** A member's user id, or null for submissions nobody is assigned to. */
   assignedTo?: string | null
+  /** Only the submissions this member started. */
+  createdBy?: string
   /** One-based page number. */
   page: number
   pageSize: number
