@@ -14,6 +14,10 @@ test("saves a list's settings as a view, reopens, renames, and deletes it", asyn
   const viewOptions = page.getByRole("button", { exact: true, name: "View options" })
   const viewItem = (label: string) =>
     page.getByRole("menuitem", { exact: true, name: label })
+  // The title's menu can still be mounted while the view options open, and
+  // both list the same views, so these read the options' own group.
+  const savedView = (label: string) =>
+    page.getByLabel("Views").getByRole("menuitem", { exact: true, name: label })
 
   await page.goto(`/tasks?${query}`)
   await waitForHydration(viewOptions)
@@ -38,7 +42,7 @@ test("saves a list's settings as a view, reopens, renames, and deletes it", asyn
   await expect(heading).toContainText(name)
 
   await viewOptions.click()
-  await expect(viewItem(name)).toHaveAttribute("aria-current", "true")
+  await expect(savedView(name)).toHaveAttribute("aria-current", "true")
   await page.getByRole("menuitem", { name: "Rename this view…" }).click()
   const nameField = page.getByRole("dialog").getByLabel("Name")
   await expect(nameField).toHaveValue(name)
@@ -47,12 +51,12 @@ test("saves a list's settings as a view, reopens, renames, and deletes it", asyn
   await expect(page.getByText("View renamed")).toBeVisible()
 
   await viewOptions.click()
-  await expect(viewItem(renamed)).toHaveAttribute("aria-current", "true")
+  await expect(savedView(renamed)).toHaveAttribute("aria-current", "true")
   await page.getByRole("menuitem", { name: "Delete this view" }).click()
   await expect(page.getByText("View deleted")).toBeVisible()
   await expect(heading).not.toContainText(renamed)
 
   await viewOptions.click()
-  await expect(viewItem(renamed)).toHaveCount(0)
+  await expect(savedView(renamed)).toHaveCount(0)
   await expect(page.getByRole("menuitem", { name: "Save this view…" })).toBeVisible()
 })
