@@ -1,9 +1,10 @@
-import { Plus, Search } from "lucide-react"
+import { Plus } from "lucide-react"
 import Link from "next/link"
 import type { CSSProperties, ReactElement } from "react"
 
 import { ListFilterChips } from "@/components/data/list-filter-chips"
 import { ListPagination } from "@/components/data/list-pagination"
+import { ListSearch } from "@/components/data/list-search"
 import { type ListSavedViews, ListViewMenu, ListViewTitle } from "@/components/data/list-view-menu"
 import { formatMemberName } from "@/components/people/member-name"
 import {
@@ -20,7 +21,6 @@ import {
 } from "@/components/submissions/submission-progress"
 import { SubmissionTitlePreview } from "@/components/submissions/submission-title-preview"
 import { buttonVariants } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { formatMediumDate } from "@/lib/date-format"
 import { getLastPage } from "@/lib/list-state"
 import { cn } from "@/lib/utils"
@@ -97,26 +97,14 @@ export function SubmissionsWorkspace({
       </h1>
 
       <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-2">
-        <form action={SUBMISSIONS_PATH} className="min-w-0" role="search">
-          {getSubmissionSearchFields(view).map(([name, value]) => (
-            <input key={name} name={name} type="hidden" value={value} />
-          ))}
-          <label className="relative block min-w-0">
-            <Search
-              aria-hidden="true"
-              className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground"
-            />
-            <Input
-              aria-label="Search submissions"
-              className="h-11 rounded-[12px] bg-card pl-10 md:h-11"
-              defaultValue={view.query}
-              maxLength={SUBMISSION_SEARCH_MAX_LENGTH}
-              name="q"
-              placeholder="Search submissions…"
-              type="search"
-            />
-          </label>
-        </form>
+        <ListSearch
+          fields={getSubmissionSearchFields(view)}
+          label="Search submissions"
+          maxLength={SUBMISSION_SEARCH_MAX_LENGTH}
+          path={SUBMISSIONS_PATH}
+          placeholder="Search submissions…"
+          query={view.query}
+        />
         <ListViewMenu
           adjusted={isSubmissionViewAdjusted(view)}
           label="View options"

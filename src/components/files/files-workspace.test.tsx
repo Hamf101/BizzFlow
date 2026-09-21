@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { renderToStaticMarkup } from "react-dom/server"
-import { afterEach, describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 
 import {
   fileListState,
@@ -18,6 +18,10 @@ import type {
   AccessibleDocumentSummary,
 } from "@/types/document"
 import { createBlankTemplateContent } from "@/types/template"
+
+// The search box moves to the searched list through the router; rendering it
+// to markup only needs the hook to answer.
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }))
 
 const ORG_ID = "10000000-0000-4000-8000-000000000001"
 const CONTRACTS_ID = "40000000-0000-4000-8000-000000000001"

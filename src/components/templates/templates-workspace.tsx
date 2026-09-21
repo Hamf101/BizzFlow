@@ -1,9 +1,10 @@
-import { Plus, Search } from "lucide-react"
+import { Plus } from "lucide-react"
 import Link from "next/link"
 import type { CSSProperties, ReactElement } from "react"
 
 import { ListFilterChips } from "@/components/data/list-filter-chips"
 import { ListPagination } from "@/components/data/list-pagination"
+import { ListSearch } from "@/components/data/list-search"
 import { type ListSavedViews, ListViewMenu, ListViewTitle } from "@/components/data/list-view-menu"
 import {
   getTemplateSearchFields,
@@ -16,7 +17,6 @@ import {
 import { TemplatePageThumbnail } from "@/components/templates/template-page-thumbnail"
 import { TemplateRowMenu } from "@/components/templates/template-row-menu"
 import { buttonVariants } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { formatMediumDate } from "@/lib/date-format"
 import { getLastPage } from "@/lib/list-state"
 import { cn } from "@/lib/utils"
@@ -101,26 +101,14 @@ export function TemplatesWorkspace({
             : "grid-cols-[minmax(0,1fr)_auto]"
         )}
       >
-        <form action={TEMPLATES_PATH} className="min-w-0" role="search">
-          {getTemplateSearchFields(view).map(([name, value]) => (
-            <input key={name} name={name} type="hidden" value={value} />
-          ))}
-          <label className="relative block min-w-0">
-            <Search
-              aria-hidden="true"
-              className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground"
-            />
-            <Input
-              aria-label="Search templates"
-              className="h-11 rounded-[12px] bg-card pl-10 md:h-11"
-              defaultValue={view.query}
-              maxLength={TEMPLATE_SEARCH_MAX_LENGTH}
-              name="q"
-              placeholder="Search templates…"
-              type="search"
-            />
-          </label>
-        </form>
+        <ListSearch
+          fields={getTemplateSearchFields(view)}
+          label="Search templates"
+          maxLength={TEMPLATE_SEARCH_MAX_LENGTH}
+          path={TEMPLATES_PATH}
+          placeholder="Search templates…"
+          query={view.query}
+        />
         <ListViewMenu
           adjusted={isTemplateViewAdjusted(view)}
           label="View options"

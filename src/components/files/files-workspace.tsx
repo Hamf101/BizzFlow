@@ -1,8 +1,9 @@
-import { ChevronRight, Search } from "lucide-react"
+import { ChevronRight } from "lucide-react"
 import Link from "next/link"
 import type { ReactElement, ReactNode } from "react"
 
 import { ListFilterChips } from "@/components/data/list-filter-chips"
+import { ListSearch } from "@/components/data/list-search"
 import { type ListSavedViews, ListViewMenu, ListViewTitle } from "@/components/data/list-view-menu"
 import { PurgeRequestForm } from "@/components/documents/purge-request-form"
 import type { FileEntry } from "@/components/files/file-entry"
@@ -48,7 +49,6 @@ import { FilesLayoutSwitch } from "@/components/files/files-layout-switch"
 import type { MoveDestination } from "@/components/files/move-to-dialog"
 import { NewFileMenu, type NewFolderForm } from "@/components/files/new-file-menu"
 import { SelectionBar } from "@/components/files/selection-bar"
-import { Input } from "@/components/ui/input"
 import { formatMediumDate } from "@/lib/date-format"
 import {
   canPerformOrganizationAction,
@@ -453,26 +453,14 @@ export function FilesWorkspace({
               : "grid-cols-[minmax(0,1fr)_auto]"
           )}
         >
-          <form action={FILES_PATH} className="min-w-0" role="search">
-            {getFileSearchFields(view).map(([name, value]) => (
-              <input key={name} name={name} type="hidden" value={value} />
-            ))}
-            <label className="relative block min-w-0">
-              <Search
-                aria-hidden="true"
-                className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground"
-              />
-              <Input
-                aria-label="Search files"
-                className="h-11 rounded-[12px] bg-card pl-10 md:h-11"
-                defaultValue={view.query}
-                maxLength={FILE_SEARCH_MAX_LENGTH}
-                name="q"
-                placeholder="Search files…"
-                type="search"
-              />
-            </label>
-          </form>
+          <ListSearch
+            fields={getFileSearchFields(view)}
+            label="Search files"
+            maxLength={FILE_SEARCH_MAX_LENGTH}
+            path={FILES_PATH}
+            placeholder="Search files…"
+            query={view.query}
+          />
           <ListViewMenu
             adjusted={isFileViewAdjusted(view)}
             label="View options"

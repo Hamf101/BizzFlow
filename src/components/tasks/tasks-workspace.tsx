@@ -1,9 +1,9 @@
-import { Search } from "lucide-react"
 import Link from "next/link"
 import type { ReactElement } from "react"
 
 import { ListFilterChips } from "@/components/data/list-filter-chips"
 import { ListPagination } from "@/components/data/list-pagination"
+import { ListSearch } from "@/components/data/list-search"
 import { type ListSavedViews, ListViewMenu, ListViewTitle } from "@/components/data/list-view-menu"
 import { formatMemberName } from "@/components/people/member-name"
 import { NewTaskDialog } from "@/components/tasks/new-task-dialog"
@@ -16,7 +16,6 @@ import {
   type TaskListView,
 } from "@/components/tasks/task-list-view"
 import { TaskStatusBadge } from "@/components/tasks/task-presentation"
-import { Input } from "@/components/ui/input"
 import { formatMediumDate } from "@/lib/date-format"
 import { getLastPage } from "@/lib/list-state"
 import { cn } from "@/lib/utils"
@@ -86,26 +85,14 @@ export function TasksWorkspace({
       </h1>
 
       <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-2">
-        <form action="/tasks" className="min-w-0" role="search">
-          {getTaskSearchFields(view).map(([name, value]) => (
-            <input key={name} name={name} type="hidden" value={value} />
-          ))}
-          <label className="relative block min-w-0">
-            <Search
-              aria-hidden="true"
-              className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground"
-            />
-            <Input
-              aria-label="Search tasks"
-              className="h-11 rounded-[12px] bg-card pl-10 md:h-11"
-              defaultValue={view.query}
-              maxLength={TASK_SEARCH_MAX_LENGTH}
-              name="q"
-              placeholder="Search tasks…"
-              type="search"
-            />
-          </label>
-        </form>
+        <ListSearch
+          fields={getTaskSearchFields(view)}
+          label="Search tasks"
+          maxLength={TASK_SEARCH_MAX_LENGTH}
+          path="/tasks"
+          placeholder="Search tasks…"
+          query={view.query}
+        />
         <ListViewMenu
           adjusted={isTaskViewAdjusted(view)}
           label="View options"
