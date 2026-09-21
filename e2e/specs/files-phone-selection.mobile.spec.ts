@@ -104,8 +104,21 @@ test("a phone selects by press and hold, ticks with taps, and acts from the bar"
     await expect(tile(names[0])).toBeVisible()
     await expect(tile(names[1])).toBeVisible()
 
-    // The bar's cross stops selecting.
+    // The selection waits while the member looks elsewhere, and the phone is
+    // still ticking on the way back: the next tap chooses rather than opens.
     await pressAndHold(page, tile(names[2]), oneSelected)
+    await page
+      .getByRole("navigation", { name: "Folder path" })
+      .getByRole("link", { exact: true, name: "Files" })
+      .tap()
+    await expect(page).toHaveURL(/\/documents$/)
+    await page.goBack()
+    await expect(oneSelected).toBeVisible()
+    await tile(names[3]).getByRole("link", { exact: true, name: names[3] }).tap()
+    await expect(bar.getByText("2 selected", { exact: true })).toBeVisible()
+    await expect(page).toHaveURL(new RegExp(`folderId=${parent.id}$`))
+
+    // The bar's cross stops selecting, and leaves nothing to come back to.
     await bar.getByRole("button", { name: "Clear selection" }).tap()
     await expect(bar).toBeHidden()
   } finally {

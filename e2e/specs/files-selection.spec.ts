@@ -169,3 +169,51 @@ test("keeps a selection through a search, and starts fresh in another view", asy
   await page.goto("/documents?view=archived")
   await expect(bar).toBeHidden()
 })
+
+test("keeps a selection when you open something and come back", async ({
+  admin,
+  pageAs,
+  tenant,
+}) => {
+  const owner = tenant.users.owner_admin
+  const names = [uniqueName("Revisited A"), uniqueName("Revisited B")]
+
+  for (const name of names) {
+    const { error } = await retryConcurrentChange(() =>
+      admin.from("folders").insert({
+        created_by: owner.id,
+        name,
+        org_id: tenant.organizationId,
+        updated_by: owner.id,
+      })
+    )
+    if (error) throw error
+  }
+
+  const page = await pageAs("owner_admin")
+  const tile = (name: string) =>
+    page
+      .locator('[data-slot="file-tile"]')
+      .filter({ has: page.getByRole("link", { exact: true, name }) })
+  const bar = page.getByRole("group", { name: "Selection" })
+
+  await page.goto("/documents")
+  await waitForHydration(tile(names[0]))
+
+  for (const name of names) {
+    await tile(name)
+      .getByRole("link", { exact: true, name })
+      .click({ modifiers: ["ControlOrMeta"] })
+  }
+  await expect(bar).toContainText("2 selected")
+
+  // Opening one of them leaves the list, which holds its own selection.
+  await tile(names[0]).getByRole("link", { exact: true, name: names[0] }).click()
+  await expect(page).toHaveURL(/[?&]folderId=/)
+  await expect(bar).toBeHidden()
+
+  // Coming back finds the selection as it was left.
+  await page.goBack()
+  await expect(page).toHaveURL(/\/documents$/)
+  await expect(bar).toContainText("2 selected")
+})

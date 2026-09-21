@@ -9,6 +9,7 @@ import {
   type ReactElement,
   type ReactNode,
   useContext,
+  useEffect,
   useRef,
   useState,
   useSyncExternalStore,
@@ -62,6 +63,12 @@ function subscribeToWidth(onChange: () => void): () => void {
   return () => query.removeEventListener("change", onChange)
 }
 
+// A navigation unmounts the workspace, so each list's selection waits here
+// until the member comes back to it. Only the effect below writes, so nothing
+// is ever kept on the server, and a cleared selection is dropped rather than
+// held. A reload starts fresh, which is what reloading means.
+const remembered = new Map<string, { byHold: boolean; selected: ReadonlySet<string> }>()
+
 /**
  * Keeps the open folder's selection the way Finder does: ⌘- or Ctrl-click
  * adds or removes an item, Shift-click adds the run from the last one, ⌘A
@@ -88,16 +95,27 @@ export function FileSelection({
   lifecycle: FileSelectionState["lifecycle"]
   shown: readonly string[]
 }): ReactElement {
-  const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set())
+  const here = `${folderId ?? ""}:${lifecycle}`
+  const [selected, setSelected] = useState<ReadonlySet<string>>(
+    () => remembered.get(here)?.selected ?? new Set()
+  )
   const [anchor, setAnchor] = useState<string | null>(null)
   // A press and hold began this selection, which is what puts a phone into
   // selecting; a mouse selection on a narrow window stays as on a desktop.
-  const [byHold, setByHold] = useState(false)
+  const [byHold, setByHold] = useState(() => remembered.get(here)?.byHold ?? false)
   const narrow = useSyncExternalStore(
     subscribeToWidth,
     () => window.matchMedia(NARROW).matches,
     () => false
   )
+
+  useEffect(() => {
+    if (selected.size === 0) {
+      remembered.delete(here)
+    } else {
+      remembered.set(here, { byHold, selected })
+    }
+  }, [byHold, here, selected])
 
   function toggle(id: string): void {
     setSelected((current: ReadonlySet<string>) => {
