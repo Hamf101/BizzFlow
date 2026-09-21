@@ -10,6 +10,14 @@
 # Tags are pinned deliberately. MinIO's community images stopped at the
 # 2025-09-07 release when the project shifted focus to its commercial build, so
 # "latest" is not a moving target anyway — but pinning keeps CI reproducible.
+# Fixed, so every checkout shares one MinIO rather than starting its own:
+# without it Compose names the project after the directory, and the
+# verification copy next door would run a second, identical container.
+# Deliberately not "BizzFlow", the Supabase CLI's project: `pnpm e2e:down`
+# runs `docker compose down -v`, which would then take the database volume
+# with it.
+name: bizzflow-e2e
+
 services:
   minio:
     image: minio/minio:RELEASE.2025-09-07T16-13-09Z

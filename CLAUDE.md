@@ -90,12 +90,17 @@ Playwright covers the six journeys a pilot actually walks. It runs against a **f
 stack** — no cloud credentials, in CI or on your machine:
 
 - **Postgres + Auth:** `supabase start`, which applies every migration in `supabase/migrations`.
-  `supabase/config.toml` disables Realtime, Studio and Supabase Storage (nothing uses them) and
-  raises the sign-in rate limit, which the stock 30-per-5-minutes would otherwise trip mid-suite.
+  `supabase/config.toml` raises the sign-in rate limit, which the stock 30-per-5-minutes would
+  otherwise trip mid-suite, and turns off everything nothing here uses: Realtime, Studio,
+  Supabase Storage, the Deno edge runtime (no `supabase/functions`), and Logflare analytics
+  with the Vector shipper that only feeds it. Five containers run, not eight.
 - **Object storage:** MinIO via `docker-compose.e2e.yml`. The R2 client already speaks the S3 API
   with `forcePathStyle`, so only the endpoint and credentials change. The setup project asserts
   the backend honours `IfNoneMatch: "*"` before any spec runs — completed documents depend on
-  create-only writes for immutability.
+  create-only writes for immutability. The Compose project is named `bizzflow-e2e` rather than
+  taken from the directory, so a second checkout verifying beside this one shares the container
+  instead of starting an identical second one, and `pnpm e2e:up` honours `PORT`, so that
+  checkout runs on its own port and leaves 3000 to the maintainer's preview.
 - **Fixture:** `global.setup.ts` seeds one organization with a member per role and caches a
   signed-in browser state for each, so specs switch actors without re-authenticating. Specs share
   that tenant and run in parallel, so **every record a spec creates must use `uniqueName()`**.
