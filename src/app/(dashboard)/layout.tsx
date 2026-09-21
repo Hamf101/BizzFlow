@@ -103,15 +103,20 @@ async function getDashboardAccount(
       return fallbackAccount
     }
 
-    const settings = await getMemberSettings({
-      actorUserId: user.id,
-      organizationId: context.organization.id,
-    })
+    // Both only need the organization, so the shell waits for one round trip
+    // rather than three. Navigation keeps its own catch: a lost preference
+    // leaves the default tabs, while a lost setting drops to the fallback.
+    const [settings, preferences] = await Promise.all([
+      getMemberSettings({
+        actorUserId: user.id,
+        organizationId: context.organization.id,
+      }),
+      getNavigationPreferences({ actorUserId: user.id, organizationId: context.organization.id }).catch((error: unknown) => {
+        console.warn("dashboard_navigation_load_failed", { userId: user.id, organizationId: context.organization.id, reason: error instanceof Error ? error.message : "Unknown error" })
+        return undefined
+      }),
+    ])
 
-    const preferences = await getNavigationPreferences({ actorUserId: user.id, organizationId: context.organization.id }).catch((error: unknown) => {
-      console.warn("dashboard_navigation_load_failed", { userId: user.id, organizationId: context.organization.id, reason: error instanceof Error ? error.message : "Unknown error" })
-      return undefined
-    })
     return {
       navigation: preferences ? { organizationId: context.organization.id, preferences } : undefined,
       displayName: settings.displayName?.trim() || fallbackAccount.displayName,
