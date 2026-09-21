@@ -11,6 +11,8 @@ export type {
   ListDocumentCardsInput,
   ListDocumentWorkspaceInput,
   ListRecentDocumentsInput,
+  MoveDocumentInput,
+  MoveFolderInput,
   RestoreDocumentInput,
   TrashDocumentInput,
 } from "@/services/documents/contracts"
@@ -51,6 +53,7 @@ export {
   trashDocument,
   trashFolder,
 } from "@/services/documents/lifecycle-service"
+export { moveDocument, moveFolder } from "@/services/documents/move-service"
 export {
   processDueResourcePurges,
   requestDocumentPurge,

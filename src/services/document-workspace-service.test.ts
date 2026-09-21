@@ -9,6 +9,7 @@ import {
 import {
   createDeps,
   createDocumentRow,
+  createFolderRow,
   createMembershipRow,
   createVersionRow,
   FakeSupabaseClient,
@@ -309,7 +310,7 @@ describe("folder creation beside a colleague's write", () => {
     const client = new FakeSupabaseClient({
       organization_memberships: [createMembershipRow("manager")],
     })
-    client.failNextInserts("folders", "40001")
+    client.failNextWrites("folders", "40001")
 
     await expect(
       createFolder(
@@ -318,7 +319,7 @@ describe("folder creation beside a colleague's write", () => {
       )
     ).resolves.toMatchObject({ id: "folder-1", name: "Leases" })
 
-    client.failNextInserts("folders", "40001", 4)
+    client.failNextWrites("folders", "40001", 4)
 
     await expect(
       createFolder(
@@ -481,28 +482,6 @@ class FakeWorkspaceQuery {
       : rows
 
     return ordered.slice(0, Math.min(this.limitCount, this.maxRows))
-  }
-}
-
-function createFolderRow(overrides: FakeRow = {}): FakeRow {
-  return {
-    id: "folder-1",
-    org_id: "org-1",
-    parent_folder_id: null,
-    name: "Client files",
-    lifecycle_state: "active",
-    created_by: "user-1",
-    updated_by: "user-1",
-    archived_by: null,
-    archived_at: null,
-    trashed_by: null,
-    trashed_at: null,
-    purge_after: null,
-    pre_trash_lifecycle_state: null,
-    trash_operation_id: null,
-    created_at: "2026-07-28T12:00:00.000Z",
-    updated_at: "2026-07-28T12:00:00.000Z",
-    ...overrides,
   }
 }
 

@@ -56,14 +56,14 @@ export class FakeSupabaseClient {
   }> = []
 
   /**
-   * Makes the next inserts into a table fail as the database would, for the
+   * Makes the next writes to a table fail as the database would, for the
    * `.single()` reads the services use.
    *
-   * @param tableName - Table whose inserts fail.
+   * @param tableName - Table whose inserts or updates fail.
    * @param code - PostgreSQL error code to answer with.
-   * @param times - How many inserts in a row fail.
+   * @param times - How many writes in a row fail.
    */
-  failNextInserts(tableName: FakeTableName, code: string, times = 1): void {
+  failNextWrites(tableName: FakeTableName, code: string, times = 1): void {
     for (let index = 0; index < times; index += 1) {
       this.insertFailures.push({
         error: Object.assign(new Error(`Fake ${code} on ${tableName}.`), { code }),
@@ -73,12 +73,12 @@ export class FakeSupabaseClient {
   }
 
   /**
-   * Takes the next pending insert failure for a table, if one is waiting.
+   * Takes the next pending write failure for a table, if one is waiting.
    *
-   * @param tableName - Table being inserted into.
-   * @returns The error to answer with, or null to insert normally.
+   * @param tableName - Table being written to.
+   * @returns The error to answer with, or null to write normally.
    */
-  takeInsertFailure(tableName: FakeTableName): (Error & { code: string }) | null {
+  takeWriteFailure(tableName: FakeTableName): (Error & { code: string }) | null {
     const index = this.insertFailures.findIndex(
       (failure: { tableName: FakeTableName }): boolean => failure.tableName === tableName
     )
@@ -599,9 +599,10 @@ class FakeQueryBuilder {
   }
 
   async single(): Promise<{ data: FakeRow | null; error: Error | null }> {
-    const failure = this.insertRows
-      ? this.client.takeInsertFailure(this.tableName)
-      : null
+    const failure =
+      this.insertRows || this.updateValues
+        ? this.client.takeWriteFailure(this.tableName)
+        : null
 
     if (failure) {
       return { data: null, error: failure }
@@ -737,6 +738,34 @@ export function createMembershipRow(role: OrganizationRole): FakeRow {
     status: "active",
     created_at: "2026-07-09T11:00:00.000Z",
     updated_at: "2026-07-09T11:00:00.000Z",
+  }
+}
+
+/**
+ * Builds a folder database row with optional overrides.
+ *
+ * @param overrides - Values that replace the default folder fixture.
+ * @returns Folder database row.
+ */
+export function createFolderRow(overrides: FakeRow = {}): FakeRow {
+  return {
+    id: "folder-1",
+    org_id: "org-1",
+    parent_folder_id: null,
+    name: "Client files",
+    lifecycle_state: "active",
+    created_by: "user-1",
+    updated_by: "user-1",
+    archived_by: null,
+    archived_at: null,
+    trashed_by: null,
+    trashed_at: null,
+    purge_after: null,
+    pre_trash_lifecycle_state: null,
+    trash_operation_id: null,
+    created_at: "2026-07-28T12:00:00.000Z",
+    updated_at: "2026-07-28T12:00:00.000Z",
+    ...overrides,
   }
 }
 

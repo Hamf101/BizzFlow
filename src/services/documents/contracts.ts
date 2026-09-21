@@ -104,6 +104,22 @@ export type RestoreDocumentInput = ArchiveDocumentInput
 
 export type TrashDocumentInput = ArchiveDocumentInput
 
+export type MoveDocumentInput = {
+  actorUserId: string
+  organizationId: string
+  documentId: string
+  /** The destination folder, or null for the top level. */
+  folderId: string | null
+}
+
+export type MoveFolderInput = {
+  actorUserId: string
+  organizationId: string
+  folderId: string
+  /** The destination parent folder, or null for the top level. */
+  parentFolderId: string | null
+}
+
 export type FolderLifecycleInput = {
   actorUserId: string
   organizationId: string
