@@ -322,10 +322,12 @@ export function FilesWorkspace({
   }
 
   const entries = toEntries(location, openFolder, layout === "gallery" ? "choose" : "open")
-  // What each shown item allows, in the order shown, so a selection offers
-  // only what all of its items allow.
+  // What everything in the folder allows, so a selection narrowed by a search
+  // still offers only what all of its items allow — including the ones the
+  // search is hiding.
+  const inFolder = selectLocation(view, folders, documents, { search: false })
   const selectable: SelectableFile[] = [
-    ...location.folders.map(
+    ...inFolder.folders.map(
       (folder: AccessibleDocumentFolder): SelectableFile => ({
         id: folder.id,
         kind: "folder",
@@ -335,7 +337,7 @@ export function FilesWorkspace({
             : [],
       })
     ),
-    ...location.documents.map(
+    ...inFolder.documents.map(
       (document: AccessibleDocumentSummary): SelectableFile => ({
         id: document.id,
         kind: "document",
@@ -428,9 +430,11 @@ export function FilesWorkspace({
       destinations={destinations}
       folderId={openFolder}
       items={selectable}
-      // Another folder, lifecycle view, or search starts a fresh selection.
-      key={fileListState.href(FILES_PATH, view)}
+      // Another folder or lifecycle view starts a fresh selection; a search,
+      // a different order, or a later page narrows the same one.
+      key={`${openFolder ?? ""}:${lifecycle}`}
       lifecycle={lifecycle}
+      shown={entries.map((entry: FileEntry): string => entry.id)}
     >
       <section className="flex flex-col gap-5" data-slot="files-workspace">
         {/* The real space keeps the accessible name "Files 12 items" rather

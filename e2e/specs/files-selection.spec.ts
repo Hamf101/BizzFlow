@@ -119,3 +119,53 @@ test("right-click acts on the selection, or selects the item it lands on", async
   // An item that leaves the folder leaves the selection with it.
   await expect(bar).toBeHidden()
 })
+
+test("keeps a selection through a search, and starts fresh in another view", async ({
+  admin,
+  pageAs,
+  tenant,
+}) => {
+  const owner = tenant.users.owner_admin
+  const shared = uniqueName("Kept")
+  const names = [`${shared} kept here`, uniqueName("Kept elsewhere")]
+
+  for (const name of names) {
+    const { error } = await retryConcurrentChange(() =>
+      admin.from("folders").insert({
+        created_by: owner.id,
+        name,
+        org_id: tenant.organizationId,
+        updated_by: owner.id,
+      })
+    )
+    if (error) throw error
+  }
+
+  const page = await pageAs("owner_admin")
+  const tile = (name: string) =>
+    page
+      .locator('[data-slot="file-tile"]')
+      .filter({ has: page.getByRole("link", { exact: true, name }) })
+  const bar = page.getByRole("group", { name: "Selection" })
+
+  await page.goto("/documents")
+  await waitForHydration(tile(names[0]))
+
+  for (const name of names) {
+    await tile(name)
+      .getByRole("link", { exact: true, name })
+      .click({ modifiers: ["ControlOrMeta"] })
+  }
+  await expect(bar).toContainText("2 selected")
+
+  // The search narrows what is shown; both stay chosen.
+  await page.getByLabel("Search files").fill(shared)
+  await page.getByLabel("Search files").press("Enter")
+  await expect(page).toHaveURL(/[?&]q=/)
+  await expect(tile(names[1])).toHaveCount(0)
+  await expect(bar).toContainText("2 selected")
+
+  // Another lifecycle view is another list.
+  await page.goto("/documents?view=archived")
+  await expect(bar).toBeHidden()
+})

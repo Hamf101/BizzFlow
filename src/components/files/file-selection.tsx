@@ -44,6 +44,8 @@ type FileSelectionState = {
   phoneSelecting: boolean
   selectAll: () => void
   selected: ReadonlySet<string>
+  /** The items drawn here, in order: what a run and ⌘A cover. */
+  shown: readonly string[]
   toggle: (id: string) => void
 }
 
@@ -63,11 +65,12 @@ function subscribeToWidth(onChange: () => void): () => void {
 /**
  * Keeps the open folder's selection the way Finder does: ⌘- or Ctrl-click
  * adds or removes an item, Shift-click adds the run from the last one, ⌘A
- * takes the whole folder, Escape clears, and a right-click outside the
+ * takes what the folder shows, Escape clears, and a right-click outside the
  * selection selects only that item. On a phone, press and hold starts a
  * selection and taps then tick items until Done. A plain click still opens.
  *
- * @param props - The folder's items in the order shown, and its lifecycle view.
+ * @param props - Everything in the folder, the ids it draws in order, and its
+ *   lifecycle view.
  * @returns The selection around the workspace.
  */
 export function FileSelection({
@@ -76,12 +79,14 @@ export function FileSelection({
   folderId,
   items,
   lifecycle,
+  shown,
 }: {
   children: ReactNode
   destinations: readonly MoveDestination[]
   folderId: string | null
   items: readonly SelectableFile[]
   lifecycle: FileSelectionState["lifecycle"]
+  shown: readonly string[]
 }): ReactElement {
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set())
   const [anchor, setAnchor] = useState<string | null>(null)
@@ -104,20 +109,20 @@ export function FileSelection({
   }
 
   function extend(id: string): void {
-    const ids = items.map((item: SelectableFile) => item.id)
-    const from = anchor === null ? -1 : ids.indexOf(anchor)
-    const to = ids.indexOf(id)
+    const from = anchor === null ? -1 : shown.indexOf(anchor)
+    const to = shown.indexOf(id)
 
     if (from < 0 || to < 0) {
       toggle(id)
       return
     }
 
-    const run = ids.slice(Math.min(from, to), Math.max(from, to) + 1)
+    const run = shown.slice(Math.min(from, to), Math.max(from, to) + 1)
     setSelected((current: ReadonlySet<string>) => new Set([...current, ...run]))
   }
 
-  // An item that leaves the folder leaves the selection with it.
+  // An item that leaves the folder leaves the selection with it. A search
+  // narrows what is drawn, not what is in the folder, so it keeps them both.
   const present = new Set(items.map((item: SelectableFile) => item.id))
   const current: ReadonlySet<string> = new Set(
     [...selected].filter((id: string) => present.has(id))
@@ -148,8 +153,9 @@ export function FileSelection({
           setByHold(false)
         },
         phoneSelecting: narrow && byHold && current.size > 0,
-        selectAll: () => setSelected(new Set(present)),
+        selectAll: () => setSelected(new Set(shown)),
         selected: current,
+        shown,
         toggle,
       }}
     >
