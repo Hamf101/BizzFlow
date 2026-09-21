@@ -31,6 +31,7 @@ import {
 } from "@/services/documents/shared"
 import {
   type BatchResponse,
+  escapeLikePattern,
   POSTGREST_BATCH_SIZE,
   readAllInBatches,
 } from "@/services/postgrest-paging"
@@ -232,9 +233,11 @@ type ScopedDocumentRow = {
  * The database applies the member's access while it reads, so neither a
  * document they may not open nor a folder they are not looking at is ever
  * carried back. A document whose folder they cannot see is listed at the top
- * of Files rather than disclosing where it is filed.
+ * of Files rather than disclosing where it is filed. A search looks through
+ * the whole lifecycle view instead of those folders.
  *
- * @param input - Actor, organization, lifecycle view, and the folders drawn.
+ * @param input - Actor, organization, lifecycle view, the folders drawn, and
+ *   what is being searched for.
  * @param deps - Optional service dependencies for tests.
  * @returns Those folders' documents, newest first, each with its access.
  * @throws DocumentServiceError when the actor lacks access or reads fail.
@@ -251,9 +254,14 @@ export async function listFolderDocuments(
       lifecycleState: input.lifecycleState ?? "active",
       folderCount: input.folderIds.length,
       includeRoot: input.includeRoot,
+      searching: Boolean(input.query),
     },
     async (): Promise<AccessibleDocumentSummary[]> => {
-      if (input.folderIds.length === 0 && !input.includeRoot) {
+      const query = input.query?.trim()
+        ? `%${escapeLikePattern(input.query.trim())}%`
+        : null
+
+      if (query === null && input.folderIds.length === 0 && !input.includeRoot) {
         return []
       }
 
@@ -281,6 +289,7 @@ export async function listFolderDocuments(
               ...getLifecycleStates(input.lifecycleState),
             ],
             target_org_id: input.organizationId,
+            target_query: query,
             // Only the top of Files takes in what sits elsewhere.
             target_visible_folder_ids: input.includeRoot
               ? [...input.visibleFolderIds]
@@ -298,7 +307,9 @@ export async function listFolderDocuments(
           maxRows: MAX_WORKSPACE_ROWS,
           tooMany: (): Error =>
             new DocumentServiceError(
-              "This folder holds more documents than can be listed at once.",
+              query === null
+                ? "This folder holds more documents than can be listed at once."
+                : "Too many files match this search. Narrow it down.",
               413
             ),
         }

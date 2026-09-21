@@ -132,6 +132,100 @@ describe("ACL-aware document workspace", () => {
     })
   })
 
+  it("never lists another organization's files", async () => {
+    const client = new FakeSupabaseClient({
+      organization_memberships: [
+        createMembershipRow("owner_admin"),
+        { ...createMembershipRow("owner_admin"), id: "membership-other", org_id: "org-2" },
+      ],
+      folders: [
+        createFolderRow({ id: "folder-shared-id" }),
+        createFolderRow({ id: "folder-shared-id", org_id: "org-2", name: "Theirs" }),
+      ],
+      documents: [
+        createDocumentRow({ folder_id: "folder-shared-id", id: "ours" }),
+        createDocumentRow({
+          folder_id: "folder-shared-id",
+          id: "theirs",
+          org_id: "org-2",
+          title: "Their lease",
+        }),
+      ],
+    })
+    const deps = createDeps(client)
+    const ours = {
+      actorUserId: "user-1",
+      folderIds: ["folder-shared-id"],
+      includeRoot: true,
+      organizationId: "org-1",
+      visibleFolderIds: ["folder-shared-id"],
+    }
+
+    await expect(
+      listWorkspaceFolders({ actorUserId: "user-1", organizationId: "org-1" }, deps).then(
+        (folders) => folders.map((folder) => folder.name)
+      )
+    ).resolves.toEqual(["Client files"])
+    await expect(
+      listFolderDocuments(ours, deps).then((documents) =>
+        documents.map((document) => document.id)
+      )
+    ).resolves.toEqual(["ours"])
+    // Not even by name: a search is scoped to the organization too.
+    await expect(
+      listFolderDocuments({ ...ours, query: "lease" }, deps).then((documents) =>
+        documents.map((document) => document.id)
+      )
+    ).resolves.toEqual([])
+  })
+
+  it("searches the whole view, and only what the member may open", async () => {
+    const client = new FakeSupabaseClient({
+      organization_memberships: [createMembershipRow("staff")],
+      folders: [
+        createFolderRow({ id: "folder-open", name: "Open" }),
+        createFolderRow({ id: "folder-private", name: "Private", created_by: "user-2" }),
+      ],
+      documents: [
+        createDocumentRow({ id: "document-here", folder_id: "folder-open", title: "Lease here" }),
+        createDocumentRow({
+          created_by: "user-2",
+          folder_id: "folder-private",
+          id: "document-away",
+          title: "Lease renewal",
+        }),
+        createDocumentRow({
+          created_by: "user-2",
+          folder_id: "folder-private",
+          id: "document-secret",
+          title: "Lease nobody shared",
+        }),
+      ],
+      document_access_grants: [createDocumentGrant("document-away")],
+    })
+    const deps = createDeps(client)
+
+    const found = await listFolderDocuments(
+      {
+        actorUserId: "user-1",
+        folderIds: ["folder-open"],
+        includeRoot: false,
+        organizationId: "org-1",
+        query: "lease",
+        visibleFolderIds: ["folder-open"],
+      },
+      deps
+    )
+
+    // Filed elsewhere, so only a search reaches it; and only with a grant.
+    expect(found.map((document) => document.id).sort()).toEqual([
+      "document-away",
+      "document-here",
+    ])
+    // It is in a folder this member cannot see, so where stays hidden.
+    expect(found.find((document) => document.id === "document-away")?.folderId).toBeNull()
+  })
+
   it("exposes effective access and lists at the top what its folder hides", async () => {
     const client = new FakeSupabaseClient({
       organization_memberships: [createMembershipRow("manager")],

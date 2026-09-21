@@ -50,6 +50,7 @@ import type { MoveDestination } from "@/components/files/move-to-dialog"
 import { NewFileMenu, type NewFolderForm } from "@/components/files/new-file-menu"
 import { SelectionBar } from "@/components/files/selection-bar"
 import { formatMediumDate } from "@/lib/date-format"
+import { buildDocumentFolderPath } from "@/lib/page-document-folders"
 import {
   canPerformOrganizationAction,
   type OrganizationPermissionSubject,
@@ -172,6 +173,40 @@ export function FilesWorkspace({
   const folderPath = ["Files", ...path.map((folder: DocumentFolder) => folder.name)].join(
     " › "
   )
+  // A search reaches the whole view, so a result says where it is filed
+  // instead of when it changed. Trash keeps saying how long it has left.
+  const searching = view.query !== ""
+  // Whole folders of results share a path, and walking it costs a pass over
+  // every folder, so each one is walked once.
+  const paths = new Map<string | null, string>()
+  const filedIn = (parentFolderId: string | null): string | null => {
+    if (!searching || lifecycle === "trash") {
+      return null
+    }
+
+    const known = paths.get(parentFolderId)
+
+    if (known !== undefined) {
+      return known
+    }
+
+    const parent = parentFolderId
+      ? (folders.find(
+          (folder: AccessibleDocumentFolder): boolean =>
+            folder.id === parentFolderId
+        ) ?? null)
+      : null
+    const filed = [
+      "Files",
+      ...buildDocumentFolderPath(parent, folders).map(
+        (folder: DocumentFolder): string => folder.name
+      ),
+    ].join(" › ")
+
+    paths.set(parentFolderId, filed)
+
+    return filed
+  }
   // Items move only among active folders the member may add to.
   const destinations: MoveDestination[] =
     lifecycle === "active"
@@ -275,7 +310,8 @@ export function FilesWorkspace({
       ...at.folders.map(
         (folder: AccessibleDocumentFolder): FileEntry => ({
           content: null,
-          count: counts.get(folder.id) ?? 0,
+          // Counting only what a search matched would say the wrong number.
+          count: searching ? null : (counts.get(folder.id) ?? 0),
           extension: null,
           href: getFolderHref(view, folder.id),
           id: folder.id,
@@ -286,7 +322,7 @@ export function FilesWorkspace({
           note:
             lifecycle === "trash"
               ? describeTrashNote(folder.lifecycleState, folder.purgeAfter)
-              : null,
+              : filedIn(folder.parentFolderId),
           selectHref:
             folderChoice === "open"
               ? getFolderHref(view, folder.id)
@@ -312,7 +348,7 @@ export function FilesWorkspace({
           note:
             lifecycle === "trash"
               ? describeTrashNote(document.lifecycleState, document.purgeAfter)
-              : null,
+              : filedIn(document.folderId),
           selectHref: getItemHref(view, document.id, where),
           status: describeWorkflowStatus(card?.workflowStatus ?? null),
           type: describeDocumentKind(document),

@@ -55,6 +55,8 @@ export type ListFolderDocumentsInput = ListWorkspaceFoldersInput & {
    * them, and drawing uses the same set.
    */
   visibleFolderIds: readonly string[]
+  /** A search, which looks through the whole view rather than those folders. */
+  query?: string
 }
 
 /** Input for the documents a member changed or opened most recently. */

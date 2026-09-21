@@ -383,8 +383,9 @@ export function getDocumentHref(document: AccessibleDocumentSummary): string {
 }
 
 /**
- * Picks the current location's folders and documents, narrowed by the search
- * and put in the view's order. Folders come first, as in a file manager.
+ * Picks what the view lists: the open folder's folders and documents, or —
+ * while a search is on — everything it matches, wherever it is filed. Put in
+ * the view's order, folders first, as in a file manager.
  *
  * @param view - Current Files view.
  * @param folders - Every folder the member may see in this lifecycle view.
@@ -418,11 +419,15 @@ export function selectLocation(
         byName(first.name, second.name)
       : byName(first.name, second.name) * direction
 
+  // A search reaches the whole view; without one, only this folder.
+  const here = (parentId: string | null): boolean =>
+    query !== "" || parentId === location
+
   return {
     documents: documents
       .filter(
         (document: AccessibleDocumentSummary): boolean =>
-          document.folderId === location && matches(document.title)
+          here(document.folderId) && matches(document.title)
       )
       .sort((first, second) =>
         order(
@@ -433,7 +438,7 @@ export function selectLocation(
     folders: folders
       .filter(
         (folder: AccessibleDocumentFolder): boolean =>
-          folder.parentFolderId === location && matches(folder.name)
+          here(folder.parentFolderId) && matches(folder.name)
       )
       .sort(order),
   }

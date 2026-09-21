@@ -614,6 +614,7 @@ export type AdminDatabase = {
           target_folder_ids: string[]
           target_include_root: boolean
           target_visible_folder_ids: string[]
+          target_query: string | null
           after_document_id: string | null
           row_limit: number
         }

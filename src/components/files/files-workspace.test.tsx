@@ -188,6 +188,12 @@ function readNames(attribute?: "href"): Array<string | null | undefined> {
   )
 }
 
+function readNotes(): Array<string | null> {
+  return [...document.querySelectorAll('[data-slot="file-retention"]')].map(
+    (note: Element): string | null => note.textContent
+  )
+}
+
 function readActionTargets(): string[] {
   return [
     ...document.querySelectorAll('button[aria-label^="Actions for "]'),
@@ -204,7 +210,7 @@ function hasNewButton(): boolean {
 }
 
 describe("FilesWorkspace", () => {
-  it("lists only the open location, folders first, in the chosen order, and narrows by search", () => {
+  it("lists the open location, folders first, and reaches the whole view when searched", () => {
     renderWorkspace()
 
     expect(document.querySelector("h1")?.textContent).toBe("Files 4")
@@ -240,6 +246,12 @@ describe("FilesWorkspace", () => {
     renderWorkspace({ params: { folderId: CONTRACTS_ID, q: "nda" } })
 
     expect(readNames()).toEqual(["Mutual NDA"])
+
+    // A search reaches the whole view, and each result says where it is filed.
+    renderWorkspace({ params: { q: "nda" } })
+
+    expect(readNames()).toEqual(["Mutual NDA"])
+    expect(readNotes()).toEqual(["Files › Contracts"])
   })
 
   it("offers each item's actions only where the member may manage it", () => {

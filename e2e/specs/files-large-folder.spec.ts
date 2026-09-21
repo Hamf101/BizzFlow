@@ -63,4 +63,15 @@ test("lists every document in a folder that holds more than one response's worth
   await expect(
     page.getByRole("link", { exact: true, name: `${name} ${DOCUMENTS}` })
   ).toHaveCount(1)
+
+  // The same folder found by searching the whole view from the top of Files:
+  // every document plus the folder itself, with access applied per row.
+  const searched = Date.now()
+  await page.goto(`/documents?q=${encodeURIComponent(name)}`)
+  await expect(page.getByRole("heading", { level: 1 })).toHaveAccessibleName(
+    `Files ${DOCUMENTS + 1} items`
+  )
+  console.log(
+    `files-large-folder: ${DOCUMENTS} documents searched in ${Date.now() - searched} ms (${testInfo.project.name})`
+  )
 })

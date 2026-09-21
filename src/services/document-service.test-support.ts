@@ -112,6 +112,12 @@ export class FakeSupabaseClient {
     const lifecycleStates = args.target_lifecycle_states as string[]
     const visibleFolderIds = new Set(args.target_visible_folder_ids as string[])
     const after = args.after_document_id as string | null
+    const query = args.target_query as string | null
+    // `%…%` around the pattern the caller escaped, as `ilike` reads it.
+    const wanted = query
+      ?.slice(1, -1)
+      .replace(/\\(.)/g, "$1")
+      .toLowerCase()
 
     return this.tables.documents
       .filter(
@@ -119,10 +125,12 @@ export class FakeSupabaseClient {
           row.org_id === args.target_org_id &&
           lifecycleStates.includes(String(row.lifecycle_state)) &&
           (after === null || String(row.id) > after) &&
-          (folderIds.includes(String(row.folder_id)) ||
-            (args.target_include_root === true &&
-              (row.folder_id == null ||
-                !visibleFolderIds.has(String(row.folder_id)))))
+          (wanted === undefined
+            ? folderIds.includes(String(row.folder_id)) ||
+              (args.target_include_root === true &&
+                (row.folder_id == null ||
+                  !visibleFolderIds.has(String(row.folder_id))))
+            : String(row.title).toLowerCase().includes(wanted))
       )
       .map((row: FakeRow): FakeRow => ({
         access_level: this.getEffectiveDocumentAccess(

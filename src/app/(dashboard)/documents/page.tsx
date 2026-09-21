@@ -214,6 +214,7 @@ async function loadFiles(input: {
         organizationId,
         lifecycleState,
         ...getDocumentScope(layout, view, folders, path),
+        query: view.query,
         visibleFolderIds: folders.map(
           (folder: AccessibleDocumentFolder): string => folder.id
         ),
