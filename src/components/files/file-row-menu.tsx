@@ -1,6 +1,6 @@
 "use client"
 
-import { Archive, Ellipsis, RotateCcw, Trash2 } from "lucide-react"
+import { Archive, Ellipsis, FolderInput, RotateCcw, Trash2 } from "lucide-react"
 import { type ReactElement, type ReactNode, useState, useTransition } from "react"
 
 import {
@@ -13,6 +13,7 @@ import {
   useFileSelection,
   useOpensOnRightClick,
 } from "@/components/files/file-selection"
+import { MoveToDialog } from "@/components/files/move-to-dialog"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -187,6 +188,7 @@ export function FileRowMenu({
   name: string
   purgeForm?: ReactNode
 }): ReactElement {
+  const [moving, setMoving] = useState(false)
   const [purging, setPurging] = useState(false)
   const selection = useFileSelection()
   const targets =
@@ -194,30 +196,45 @@ export function FileRowMenu({
       ? selection.items.filter((item) => selection.selected.has(item.id))
       : null
   const bulk = useSelectionChanges(targets)
+  // Only active items move, which is exactly where Archive is offered.
+  const item = selection?.items.find((entry: SelectableFile) => entry.id === itemId) ?? null
+  const moves = targets
+    ? bulk.labels.includes("Archive")
+    : (item?.labels.includes("Archive") ?? false)
+  const moveTo = moves ? (
+    <DropdownMenuItem onClick={() => setMoving(true)}>
+      <FolderInput aria-hidden="true" />
+      Move to…
+    </DropdownMenuItem>
+  ) : null
   // The same items open from the ⋯ button and, in List and Icons, from a
   // right-click anywhere on the row or tile.
   const opensOnRightClick = useOpensOnRightClick()
   const items = targets ? (
     bulk.labels.length > 0 ? (
-      bulk.labels.map((label: LifecycleLabel) => {
-        const Icon = ACTION_ICONS[label]
+      <>
+        {moveTo}
+        {bulk.labels.map((label: LifecycleLabel) => {
+          const Icon = ACTION_ICONS[label]
 
-        return (
-          <DropdownMenuItem
-            key={label}
-            onClick={() => bulk.run(label)}
-            variant={label === "Move to Trash" ? "destructive" : "default"}
-          >
-            <Icon aria-hidden="true" />
-            {describeBulk(label, targets.length)}
-          </DropdownMenuItem>
-        )
-      })
+          return (
+            <DropdownMenuItem
+              key={label}
+              onClick={() => bulk.run(label)}
+              variant={label === "Move to Trash" ? "destructive" : "default"}
+            >
+              <Icon aria-hidden="true" />
+              {describeBulk(label, targets.length)}
+            </DropdownMenuItem>
+          )
+        })}
+      </>
     ) : (
       <DropdownMenuItem disabled>No change fits every selected item</DropdownMenuItem>
     )
   ) : (
     <>
+      {moveTo}
       {actions.map((action: FileLifecycleAction) => {
         const Icon = ACTION_ICONS[action.label]
 
@@ -278,6 +295,15 @@ export function FileRowMenu({
       </DropdownMenu>
       {opensOnRightClick ? (
         <DropdownMenuContent className="w-52">{items}</DropdownMenuContent>
+      ) : null}
+      {moves && selection ? (
+        <MoveToDialog
+          destinations={selection.destinations}
+          folderId={selection.folderId}
+          items={targets ?? (item ? [item] : [])}
+          onOpenChange={setMoving}
+          open={moving}
+        />
       ) : null}
       {purgeForm ? (
         <Dialog onOpenChange={setPurging} open={purging}>

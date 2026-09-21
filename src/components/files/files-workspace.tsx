@@ -45,6 +45,7 @@ import {
   type SelectableFile,
 } from "@/components/files/file-selection"
 import { FilesLayoutSwitch } from "@/components/files/files-layout-switch"
+import type { MoveDestination } from "@/components/files/move-to-dialog"
 import { NewFileMenu, type NewFolderForm } from "@/components/files/new-file-menu"
 import { SelectionBar } from "@/components/files/selection-bar"
 import { Input } from "@/components/ui/input"
@@ -171,6 +172,20 @@ export function FilesWorkspace({
   const folderPath = ["Files", ...path.map((folder: DocumentFolder) => folder.name)].join(
     " › "
   )
+  // Items move only among active folders the member may add to.
+  const destinations: MoveDestination[] =
+    lifecycle === "active"
+      ? folders
+          .filter(
+            (folder: AccessibleDocumentFolder): boolean =>
+              folder.accessLevel === "contributor" && folder.lifecycleState === "active"
+          )
+          .map((folder: AccessibleDocumentFolder): MoveDestination => ({
+            id: folder.id,
+            name: folder.name,
+            parentFolderId: folder.parentFolderId,
+          }))
+      : []
 
   function folderMenu(folder: AccessibleDocumentFolder): ReactNode {
     if (!canManageFolders || !isManageable(folder)) {
@@ -410,6 +425,8 @@ export function FilesWorkspace({
 
   return (
     <FileSelection
+      destinations={destinations}
+      folderId={openFolder}
       items={selectable}
       // Another folder, lifecycle view, or search starts a fresh selection.
       key={fileListState.href(FILES_PATH, view)}

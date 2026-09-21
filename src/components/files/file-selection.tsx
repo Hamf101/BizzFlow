@@ -15,6 +15,7 @@ import {
 } from "react"
 
 import type { FileLifecycleAction } from "@/components/files/file-row-menu"
+import type { MoveDestination } from "@/components/files/move-to-dialog"
 import { ContextMenu, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { cn } from "@/lib/utils"
 
@@ -27,9 +28,13 @@ export type SelectableFile = {
 
 type FileSelectionState = {
   clear: () => void
+  /** Every folder the member may move items into, for "Move to…". */
+  destinations: readonly MoveDestination[]
   extend: (id: string) => void
   /** Press and hold: adds the item, and on a phone starts selecting. */
   hold: (id: string) => void
+  /** The folder these items are in, or null at the top level. */
+  folderId: string | null
   items: readonly SelectableFile[]
   lifecycle: "active" | "archived" | "trash"
   /** The screen is phone-narrow, where the tab bar shows. */
@@ -67,10 +72,14 @@ function subscribeToWidth(onChange: () => void): () => void {
  */
 export function FileSelection({
   children,
+  destinations,
+  folderId,
   items,
   lifecycle,
 }: {
   children: ReactNode
+  destinations: readonly MoveDestination[]
+  folderId: string | null
   items: readonly SelectableFile[]
   lifecycle: FileSelectionState["lifecycle"]
 }): ReactElement {
@@ -122,7 +131,9 @@ export function FileSelection({
           setAnchor(null)
           setByHold(false)
         },
+        destinations,
         extend,
+        folderId,
         hold: (id: string) => {
           setSelected((previous: ReadonlySet<string>) => new Set([...previous, id]))
           setAnchor(id)

@@ -1,6 +1,6 @@
 "use client"
 
-import { X } from "lucide-react"
+import { FolderInput, X } from "lucide-react"
 import { type ReactElement, useLayoutEffect, useState } from "react"
 
 import {
@@ -10,6 +10,7 @@ import {
   useSelectionChanges,
 } from "@/components/files/file-row-menu"
 import { useFileSelection } from "@/components/files/file-selection"
+import { MoveToDialog } from "@/components/files/move-to-dialog"
 import { cn } from "@/lib/utils"
 
 type Shown = { count: number; labels: FileLifecycleAction["label"][] }
@@ -33,6 +34,9 @@ export function SelectionBar(): ReactElement {
     : []
   const open = targets.length > 0
   const { labels, run } = useSelectionChanges(open ? targets : null)
+  const [moving, setMoving] = useState(false)
+  // Only active items move, which is exactly where Archive is offered.
+  const moves = labels.includes("Archive")
   // What the bar last showed, so it keeps its words while it sinks away.
   const [shown, setShown] = useState<Shown>({ count: 0, labels: [] })
 
@@ -79,6 +83,17 @@ export function SelectionBar(): ReactElement {
       <p aria-live="polite" className="mr-2 font-medium">
         {shown.count} selected
       </p>
+      {moves ? (
+        <button
+          aria-label={`Move ${shown.count} ${shown.count === 1 ? "item" : "items"}`}
+          className={BUTTON}
+          onClick={() => setMoving(true)}
+          type="button"
+        >
+          <FolderInput aria-hidden="true" className="size-4 opacity-80" />
+          <span className="max-md:hidden">Move</span>
+        </button>
+      ) : null}
       {shown.labels.map((label: FileLifecycleAction["label"]) => {
         const Icon = ACTION_ICONS[label]
 
@@ -104,6 +119,15 @@ export function SelectionBar(): ReactElement {
       >
         <X aria-hidden="true" className="size-4 opacity-85" />
       </button>
+      {selection && moves ? (
+        <MoveToDialog
+          destinations={selection.destinations}
+          folderId={selection.folderId}
+          items={targets}
+          onOpenChange={setMoving}
+          open={moving}
+        />
+      ) : null}
     </div>
   )
 }

@@ -24,6 +24,8 @@ import {
   archiveFolder,
   createFolder,
   DocumentServiceError,
+  moveDocument,
+  moveFolder,
   requestDocumentPurge,
   requestFolderPurge,
   restoreDocument,
@@ -573,6 +575,79 @@ export async function changeFilesLifecycleAction(
   for (const documentId of documentIds) {
     try {
       await DOCUMENT_CHANGES[change]({ ...actor, documentId })
+      result.documentIds.push(documentId)
+    } catch (error: unknown) {
+      failed("document", error)
+    }
+  }
+
+  revalidatePath("/documents")
+  return result
+}
+
+// ponytail: one request moves at most 500 folders and 500 documents, one at a
+// time, like the lifecycle changes beside it. Chunk it on the client once a
+// folder that large needs moving.
+const fileMoveSchema = z.object({
+  destinationFolderId: z.string().uuid().nullable(),
+  documentIds: z.array(z.string().uuid()).max(500),
+  folderIds: z.array(z.string().uuid()).max(500),
+})
+
+/** Where the Files selection should go. */
+export type FileMove = z.infer<typeof fileMoveSchema>
+
+/** Which items moved, so the page can offer Undo, and how many could not. */
+export type FileMoveResult = {
+  documentIds: string[]
+  failed: number
+  folderIds: string[]
+}
+
+/**
+ * Moves several of the Files selection's items into one folder, or out to the
+ * top level. Each item goes through the same checks and audit trail as a
+ * single move; one that fails is counted and the rest still move, so the page
+ * can say what happened and offer Undo for exactly what moved.
+ *
+ * @param input - The destination, and the selected folders and documents.
+ * @returns The items that moved and how many could not.
+ */
+export async function moveFilesAction(input: FileMove): Promise<FileMoveResult> {
+  const { destinationFolderId, documentIds, folderIds } = fileMoveSchema.parse(input)
+  let actor: { actorUserId: string; organizationId: string }
+
+  try {
+    actor = await loadLifecycleActionContext()
+  } catch (error: unknown) {
+    if (error instanceof AuthenticationError) {
+      redirect(buildRedirect("/login", { next: "/documents" }))
+    }
+
+    throw error
+  }
+
+  const result: FileMoveResult = { documentIds: [], failed: 0, folderIds: [] }
+  const failed = (kind: string, error: unknown): void => {
+    result.failed += 1
+    logDocumentActionFailure(`bulk_move_${kind}_failed`, {
+      organizationId: actor.organizationId,
+      reason: error instanceof Error ? error.message : `Unknown ${kind} error`,
+    })
+  }
+
+  for (const folderId of folderIds) {
+    try {
+      await moveFolder({ ...actor, folderId, parentFolderId: destinationFolderId })
+      result.folderIds.push(folderId)
+    } catch (error: unknown) {
+      failed("folder", error)
+    }
+  }
+
+  for (const documentId of documentIds) {
+    try {
+      await moveDocument({ ...actor, documentId, folderId: destinationFolderId })
       result.documentIds.push(documentId)
     } catch (error: unknown) {
       failed("document", error)
