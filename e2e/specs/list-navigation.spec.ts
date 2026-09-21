@@ -230,3 +230,113 @@ test("returns to a list where it was left, filters and all", async ({
     .poll(async () => page.evaluate(() => window.scrollY))
     .toBeGreaterThan(left / 2)
 })
+
+/**
+ * What one more pass over the tabs may cost a settled session.
+ *
+ * Both ceilings were set from measurement rather than taste. A clean session
+ * spends about 40 KiB and under 8 nodes a pass here; a page tree retained on every
+ * visit spends 282 nodes, and an object kept on every visit 118 KiB. The
+ * numbers below sit between the two. Live listeners are reported and not
+ * enforced: a leaked listener costs about one a pass, which the unleaked
+ * range already covers, so a budget there would only flake.
+ */
+const PASS_BUDGET = { heapKib: 75, nodes: 40 } as const
+
+test("a long session neither grows without bound nor works behind your back", async ({
+  pageAs,
+}, testInfo) => {
+  test.setTimeout(180_000)
+  const page = await pageAs("owner_admin")
+  const cdp = await page.context().newCDPSession(page)
+  await cdp.send("Performance.enable")
+
+  /**
+   * Reads what the page holds, after a forced collection so that an unhurried
+   * collector does not read as a leak.
+   *
+   * @returns Bytes on the JavaScript heap, live listeners, and live nodes.
+   */
+  async function measure(): Promise<{
+    heap: number
+    listeners: number
+    nodes: number
+  }> {
+    await cdp.send("HeapProfiler.collectGarbage")
+    const { metrics } = await cdp.send("Performance.getMetrics")
+    const read = (name: string): number =>
+      metrics.find((metric: { name: string }): boolean => metric.name === name)
+        ?.value ?? 0
+
+    return {
+      heap: read("JSHeapUsedSize"),
+      listeners: read("JSEventListeners"),
+      nodes: read("Nodes"),
+    }
+  }
+
+  /**
+   * Moves through every tab this viewport offers, the given number of times.
+   *
+   * @param rounds - How many passes over the tabs to make.
+   */
+  async function walk(rounds: number): Promise<void> {
+    for (let round = 0; round < rounds; round += 1) {
+      for (const tab of TABS) {
+        await timeSwitch(page, tab)
+      }
+    }
+  }
+
+  // Starting away from the first tab keeps every switch a real one.
+  await page.goto("/submissions")
+  await expect(page.getByRole("heading", { level: 1 })).toContainText(
+    "Submissions"
+  )
+
+  // Five passes settle the router cache and each list's first render, so the
+  // baseline is what a session holds once nothing about it is new.
+  const passes = 20
+  await walk(5)
+  const settled = await measure()
+  await walk(passes)
+  const later = await measure()
+
+  const perPass = {
+    heapKib: (later.heap - settled.heap) / 1024 / passes,
+    nodes: (later.nodes - settled.nodes) / passes,
+  }
+  // A budget is what one member's machine does, so it only holds when the
+  // machine is theirs; the parallel suite reports the numbers instead.
+  const enforced = testInfo.config.workers === 1
+
+  console.log(
+    `list-navigation (${testInfo.project.name}): settled at ` +
+      `${Math.round(settled.heap / 1024)} KiB, ${settled.listeners} listeners, ` +
+      `${settled.nodes} nodes; after ${passes} more passes ` +
+      `${Math.round(later.heap / 1024)} KiB, ${later.listeners} listeners, ` +
+      `${later.nodes} nodes. Each pass: ${perPass.heapKib.toFixed(1)} KiB ` +
+      `(budget ${PASS_BUDGET.heapKib}), ${perPass.nodes.toFixed(1)} nodes ` +
+      `(budget ${PASS_BUDGET.nodes}). ` +
+      `${enforced ? "Budgets enforced" : "Reported only: the suite is sharing this machine"}.`
+  )
+
+  if (enforced) {
+    expect(perPass.heapKib).toBeLessThan(PASS_BUDGET.heapKib)
+    expect(perPass.nodes).toBeLessThan(PASS_BUDGET.nodes)
+  }
+
+  // Nothing works behind the member's back: a list that has finished loading
+  // stops asking. Anything it still wanted has a moment before the window.
+  const origin = new URL(page.url()).origin
+  const asked: string[] = []
+  await page.waitForTimeout(1_000)
+  page.on("request", (request) => {
+    if (request.url().startsWith(origin)) {
+      asked.push(new URL(request.url()).pathname)
+    }
+  })
+  await page.waitForTimeout(3_000)
+
+  expect(asked).toEqual([])
+})
