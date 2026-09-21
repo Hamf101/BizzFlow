@@ -255,7 +255,15 @@ export async function requireFolderAccess(
   return accessLevel
 }
 
-function parseAccessLevel(
+/**
+ * Reads one access level the database answered with.
+ *
+ * @param value - The answered level.
+ * @param resourceName - Which resource it belongs to, for the error.
+ * @returns The level, or null when the actor has none.
+ * @throws DocumentServiceError when the database answers an unknown level.
+ */
+export function parseAccessLevel(
   value: unknown,
   resourceName: "document" | "folder"
 ): DocumentAccessLevel | null {

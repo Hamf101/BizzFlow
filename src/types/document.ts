@@ -131,11 +131,6 @@ export type DocumentVersion = {
   updatedAt: string
 }
 
-export type DocumentWorkspace = {
-  folders: AccessibleDocumentFolder[]
-  documents: AccessibleDocumentSummary[]
-}
-
 export type DocumentDetail = {
   document: AccessibleDocumentSummary
   versions: DocumentVersion[]

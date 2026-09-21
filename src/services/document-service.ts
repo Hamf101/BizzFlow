@@ -9,8 +9,9 @@ export type {
   FolderLifecycleInput,
   GetDocumentDetailInput,
   ListDocumentCardsInput,
-  ListDocumentWorkspaceInput,
+  ListFolderDocumentsInput,
   ListRecentDocumentsInput,
+  ListWorkspaceFoldersInput,
   MoveDocumentInput,
   MoveFolderInput,
   RestoreDocumentInput,
@@ -43,8 +44,9 @@ export {
 export {
   createFolder,
   getDocumentDetail,
-  listDocumentWorkspace,
+  listFolderDocuments,
   listRecentDocuments,
+  listWorkspaceFolders,
 } from "@/services/documents/workspace-service"
 export {
   archiveFolder,

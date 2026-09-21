@@ -25,7 +25,21 @@ type FakeTables = Record<FakeTableName, FakeRow[]>
 export class FakeSupabaseClient {
   readonly tables: FakeTables
 
-  constructor(seed: Partial<FakeTables> = {}) {
+  /** Every RPC the services asked for, in order, with its arguments. */
+  readonly rpcCalls: Array<{
+    args: Record<string, unknown>
+    functionName: string
+  }> = []
+
+  /**
+   * @param seed - Rows the fake serves.
+   * @param maxRows - The most rows one response carries, as a deployment's
+   *   `max_rows` caps it below what a query asks for.
+   */
+  constructor(
+    seed: Partial<FakeTables> = {},
+    readonly maxRows = Number.POSITIVE_INFINITY
+  ) {
     this.tables = {
       organization_memberships: seed.organization_memberships ?? [],
       folders: seed.folders ?? [],
@@ -87,6 +101,47 @@ export class FakeSupabaseClient {
   }
 
   /**
+   * Answers one keyset batch of the documents a Files view draws, with the
+   * actor's effective access applied, as the database function does.
+   *
+   * @param args - The RPC arguments the service sent.
+   * @returns Rows of `{ document, access_level }`, by id.
+   */
+  private listWorkspaceDocuments(args: Record<string, unknown>): FakeRow[] {
+    const folderIds = args.target_folder_ids as string[]
+    const lifecycleStates = args.target_lifecycle_states as string[]
+    const visibleFolderIds = new Set(args.target_visible_folder_ids as string[])
+    const after = args.after_document_id as string | null
+
+    return this.tables.documents
+      .filter(
+        (row: FakeRow): boolean =>
+          row.org_id === args.target_org_id &&
+          lifecycleStates.includes(String(row.lifecycle_state)) &&
+          (after === null || String(row.id) > after) &&
+          (folderIds.includes(String(row.folder_id)) ||
+            (args.target_include_root === true &&
+              (row.folder_id == null ||
+                !visibleFolderIds.has(String(row.folder_id)))))
+      )
+      .map((row: FakeRow): FakeRow => ({
+        access_level: this.getEffectiveDocumentAccess(
+          String(args.target_org_id),
+          String(row.id),
+          String(args.target_actor_user_id)
+        ),
+        document: row,
+      }))
+      .filter((row: FakeRow): boolean => row.access_level !== null)
+      .sort((left: FakeRow, right: FakeRow): number =>
+        String((left.document as FakeRow).id).localeCompare(
+          String((right.document as FakeRow).id)
+        )
+      )
+      .slice(0, Math.min(args.row_limit as number, this.maxRows))
+  }
+
+  /**
    * Emulates the document lifecycle RPCs used by the service layer.
    *
    * @param functionName - RPC function to execute.
@@ -103,12 +158,19 @@ export class FakeSupabaseClient {
       | "get_document_access_levels"
       | "get_folder_access_level"
       | "get_folder_access_levels"
-      | "document_card_contents",
+      | "document_card_contents"
+      | "list_workspace_documents",
     args: Record<string, unknown>
   ): Promise<{
     data: string | boolean | FakeRow[] | null
     error: Error | null
   }> {
+    this.rpcCalls.push({ args, functionName })
+
+    if (functionName === "list_workspace_documents") {
+      return { data: this.listWorkspaceDocuments(args), error: null }
+    }
+
     // Trimming large images is the database's job and is proven against it.
     if (functionName === "document_card_contents") {
       const ids = args.document_ids as string[]
@@ -679,11 +741,10 @@ class FakeQueryBuilder {
       })
     }
 
-    if (this.limitCount !== null) {
-      rows = rows.slice(0, this.limitCount)
-    }
-
-    return rows
+    return rows.slice(
+      0,
+      Math.min(this.limitCount ?? Number.POSITIVE_INFINITY, this.client.maxRows)
+    )
   }
 
   private withTimestamps(row: FakeRow): FakeRow {

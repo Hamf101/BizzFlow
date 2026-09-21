@@ -7,9 +7,12 @@ import {
   FILES_LAYOUT_COOKIE,
   fileListState,
   getCardRequest,
+  getDocumentScope,
   getFolderHref,
   getWorkspaceLifecycleState,
   parseFilesLayout,
+  type FileListView,
+  type FilesLayout,
 } from "@/components/files/file-list-view"
 import { FilesWorkspace } from "@/components/files/files-workspace"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -21,11 +24,16 @@ import { getPageErrorMessage } from "@/lib/page-errors"
 import { loadPageOrganizationContext } from "@/lib/page-organization-context"
 import {
   listDocumentCards,
-  listDocumentWorkspace,
+  listFolderDocuments,
+  listWorkspaceFolders,
   type DocumentCard,
 } from "@/services/document-service"
 import { listSavedViews } from "@/services/saved-view-service"
-import type { AccessibleDocumentFolder, DocumentWorkspace } from "@/types/document"
+import type {
+  AccessibleDocumentFolder,
+  AccessibleDocumentSummary,
+  DocumentFolder,
+} from "@/types/document"
 
 import {
   archiveDocumentAction,
@@ -77,41 +85,25 @@ export default async function FilesPage({
     redirect(buildFeedbackRedirect("/dashboard", "organization_required"))
   }
 
-  let workspace: DocumentWorkspace
+  const loaded = await loadFiles({
+    actorUserId: user.id,
+    layout,
+    organizationId: context.organization.id,
+    view,
+  })
 
-  try {
-    workspace = await listDocumentWorkspace({
-      actorUserId: user.id,
-      organizationId: context.organization.id,
-      lifecycleState: getWorkspaceLifecycleState(view),
-    })
-  } catch (error: unknown) {
-    const errorMessage = getPageErrorMessage(error, "Unable to load documents.")
-
-    console.warn("documents_workspace_load_failed", {
-      organizationId: context.organization.id,
-      reason: errorMessage,
-      userId: user.id,
-    })
-
+  if ("error" in loaded) {
     return (
       <FilesShell>
         <Alert variant="destructive">
           <AlertTitle>Files unavailable</AlertTitle>
-          <AlertDescription>{errorMessage}</AlertDescription>
+          <AlertDescription>{loaded.error}</AlertDescription>
         </Alert>
       </FilesShell>
     )
   }
 
-  const activeFolder = view.filters.folderId
-    ? (workspace.folders.find(
-        (folder: AccessibleDocumentFolder): boolean =>
-          folder.id === view.filters.folderId
-      ) ?? null)
-    : null
-
-  if (view.filters.folderId && !activeFolder) {
+  if ("missingFolder" in loaded) {
     return (
       <FilesShell>
         <Alert variant="destructive">
@@ -121,22 +113,18 @@ export default async function FilesPage({
             lifecycle view.
           </AlertDescription>
         </Alert>
-        <Link
-          className="text-sm font-medium underline"
-          href={getFolderHref(view, null)}
-        >
+        <Link className="text-sm font-medium underline" href={getFolderHref(view, null)}>
           Return to Files
         </Link>
       </FilesShell>
     )
   }
 
-  const path = buildDocumentFolderPath(activeFolder, workspace.folders)
   const [cards, savedViews] = await Promise.all([
     loadCards(
       user.id,
       context.organization.id,
-      getCardRequest(layout, view, workspace.folders, workspace.documents, path)
+      getCardRequest(layout, view, loaded.folders, loaded.documents, loaded.path)
     ),
     listSavedViews({
       actorUserId: user.id,
@@ -160,19 +148,90 @@ export default async function FilesPage({
           trashDocument: trashDocumentAction,
           trashFolder: trashFolderAction,
         }}
-        activeFolder={activeFolder}
+        activeFolder={loaded.activeFolder}
         cards={cards}
-        documents={workspace.documents}
-        folders={workspace.folders}
+        documents={loaded.documents}
+        folders={loaded.folders}
         layout={layout}
         membership={context.membership}
         organizationId={context.organization.id}
-        path={path}
+        path={loaded.path}
         savedViews={savedViews}
         view={view}
       />
     </FilesShell>
   )
+}
+
+/** One Files view: its folders, the documents it draws, and where it is. */
+type LoadedFiles = {
+  activeFolder: AccessibleDocumentFolder | null
+  documents: AccessibleDocumentSummary[]
+  folders: AccessibleDocumentFolder[]
+  path: DocumentFolder[]
+}
+
+/**
+ * Reads the view's folders, settles which one is open, then reads only the
+ * documents that view draws.
+ *
+ * @param input - Actor, organization, layout, and the validated view.
+ * @returns The view's contents, the folder it asked for being gone, or a
+ *   user-safe reason the read failed.
+ */
+async function loadFiles(input: {
+  actorUserId: string
+  layout: FilesLayout
+  organizationId: string
+  view: FileListView
+}): Promise<LoadedFiles | { error: string } | { missingFolder: true }> {
+  const { actorUserId, layout, organizationId, view } = input
+  const lifecycleState = getWorkspaceLifecycleState(view)
+
+  try {
+    const folders = await listWorkspaceFolders({
+      actorUserId,
+      organizationId,
+      lifecycleState,
+    })
+    const activeFolder = view.filters.folderId
+      ? (folders.find(
+          (folder: AccessibleDocumentFolder): boolean =>
+            folder.id === view.filters.folderId
+        ) ?? null)
+      : null
+
+    if (view.filters.folderId && !activeFolder) {
+      return { missingFolder: true }
+    }
+
+    const path = buildDocumentFolderPath(activeFolder, folders)
+
+    return {
+      activeFolder,
+      documents: await listFolderDocuments({
+        actorUserId,
+        organizationId,
+        lifecycleState,
+        ...getDocumentScope(layout, view, folders, path),
+        visibleFolderIds: folders.map(
+          (folder: AccessibleDocumentFolder): string => folder.id
+        ),
+      }),
+      folders,
+      path,
+    }
+  } catch (error: unknown) {
+    const errorMessage = getPageErrorMessage(error, "Unable to load documents.")
+
+    console.warn("documents_workspace_load_failed", {
+      organizationId,
+      reason: errorMessage,
+      userId: actorUserId,
+    })
+
+    return { error: errorMessage }
+  }
 }
 
 // Statuses and pages only decorate the folder, so a failed read leaves the

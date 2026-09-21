@@ -2,6 +2,7 @@ import { recordDocumentAuditLog } from "@/services/documents/audit"
 import {
   getEffectiveDocumentAccessLevels,
   getEffectiveFolderAccessLevels,
+  parseAccessLevel,
   requireDocumentAccess,
   requireFolderAccess,
 } from "@/services/documents/access-service"
@@ -10,8 +11,9 @@ import type {
   DocumentServiceClient,
   DocumentServiceDeps,
   GetDocumentDetailInput,
-  ListDocumentWorkspaceInput,
+  ListFolderDocumentsInput,
   ListRecentDocumentsInput,
+  ListWorkspaceFoldersInput,
 } from "@/services/documents/contracts"
 import { DocumentServiceError } from "@/services/documents/errors"
 import {
@@ -42,13 +44,13 @@ import type {
   DocumentRow,
   DocumentVersion,
   DocumentVersionRow,
-  DocumentWorkspace,
   FolderRow,
 } from "@/types/document"
 
 /**
- * Most folders, or documents, one lifecycle view lists. More is refused rather
- * than cut short, so a missing file never passes for a deleted one.
+ * Most folders one lifecycle view lists, or documents one Files view draws.
+ * More is refused rather than cut short, so a missing file never passes for a
+ * deleted one.
  */
 const MAX_WORKSPACE_ROWS = 10_000
 
@@ -143,25 +145,28 @@ export async function createFolder(
 }
 
 /**
- * Lists accessible folders and documents for one lifecycle workspace view.
+ * Lists the folders of one lifecycle view the member may see.
  *
- * @param input - Actor and organization identifiers.
+ * A folder whose parent is hidden from them is listed at the top of Files, so
+ * the view never strands it out of reach.
+ *
+ * @param input - Actor, organization, and which lifecycle view.
  * @param deps - Optional service dependencies for tests.
- * @returns Workspace folders and active documents.
+ * @returns The visible folders, by name.
  * @throws DocumentServiceError when the actor lacks access or reads fail.
  */
-export async function listDocumentWorkspace(
-  input: ListDocumentWorkspaceInput,
+export async function listWorkspaceFolders(
+  input: ListWorkspaceFoldersInput,
   deps: DocumentServiceDeps = {}
-): Promise<DocumentWorkspace> {
+): Promise<AccessibleDocumentFolder[]> {
   return runDocumentOperation(
-    "list_document_workspace",
+    "list_workspace_folders",
     {
       actorUserId: input.actorUserId,
       organizationId: input.organizationId,
       lifecycleState: input.lifecycleState ?? "active",
     },
-    async (): Promise<DocumentWorkspace> => {
+    async (): Promise<AccessibleDocumentFolder[]> => {
       const client = getClient(deps)
 
       await requirePermission(
@@ -171,16 +176,11 @@ export async function listDocumentWorkspace(
         "documents:view",
         "You cannot view documents."
       )
-      const lifecycleState = input.lifecycleState ?? "active"
-      const lifecycleStates =
-        lifecycleState === "trashed"
-          ? (["trashed", "purge_pending"] as const)
-          : [lifecycleState]
 
       const folderRows = await readWorkspaceRows<FolderRow>(client, {
         columns:
           "id,org_id,parent_folder_id,name,lifecycle_state,created_by,updated_by,archived_by,archived_at,trashed_by,trashed_at,purge_after,pre_trash_lifecycle_state,trash_operation_id,created_at,updated_at",
-        lifecycleStates,
+        lifecycleStates: getLifecycleStates(input.lifecycleState),
         organizationId: input.organizationId,
         table: "folders",
       })
@@ -204,45 +204,117 @@ export async function listDocumentWorkspace(
             second: AccessibleDocumentFolder
           ): number => first.name.localeCompare(second.name)
         )
-
       const visibleFolderIds = new Set(
         visibleFolders.map(
           (folder: AccessibleDocumentFolder): string => folder.id
         )
       )
-      const normalizedFolders = visibleFolders.map(
-        (
-          folder: AccessibleDocumentFolder
-        ): AccessibleDocumentFolder =>
-          folder.parentFolderId &&
-          !visibleFolderIds.has(folder.parentFolderId)
+
+      return visibleFolders.map(
+        (folder: AccessibleDocumentFolder): AccessibleDocumentFolder =>
+          folder.parentFolderId && !visibleFolderIds.has(folder.parentFolderId)
             ? { ...folder, parentFolderId: null }
             : folder
       )
-      const documentRows = await readWorkspaceRows<DocumentRow>(client, {
-        columns: DOCUMENT_COLUMNS,
-        lifecycleStates,
-        organizationId: input.organizationId,
-        table: "documents",
-      })
-      const documentAccess = await getEffectiveDocumentAccessLevels(
-        {
-          actorUserId: input.actorUserId,
-          ids: documentRows.map((row: DocumentRow): string => row.id),
-          organizationId: input.organizationId,
-        },
-        client
+    }
+  )
+}
+
+/** One document the database answered with, and what the member may do. */
+type ScopedDocumentRow = {
+  access_level: unknown
+  document: DocumentRow
+}
+
+/**
+ * Lists the documents filed in the folders a Files view draws, newest first.
+ *
+ * The database applies the member's access while it reads, so neither a
+ * document they may not open nor a folder they are not looking at is ever
+ * carried back. A document whose folder they cannot see is listed at the top
+ * of Files rather than disclosing where it is filed.
+ *
+ * @param input - Actor, organization, lifecycle view, and the folders drawn.
+ * @param deps - Optional service dependencies for tests.
+ * @returns Those folders' documents, newest first, each with its access.
+ * @throws DocumentServiceError when the actor lacks access or reads fail.
+ */
+export async function listFolderDocuments(
+  input: ListFolderDocumentsInput,
+  deps: DocumentServiceDeps = {}
+): Promise<AccessibleDocumentSummary[]> {
+  return runDocumentOperation(
+    "list_folder_documents",
+    {
+      actorUserId: input.actorUserId,
+      organizationId: input.organizationId,
+      lifecycleState: input.lifecycleState ?? "active",
+      folderCount: input.folderIds.length,
+      includeRoot: input.includeRoot,
+    },
+    async (): Promise<AccessibleDocumentSummary[]> => {
+      if (input.folderIds.length === 0 && !input.includeRoot) {
+        return []
+      }
+
+      const client = getClient(deps)
+
+      await requirePermission(
+        client,
+        input.organizationId,
+        input.actorUserId,
+        "documents:view",
+        "You cannot view documents."
       )
-      const documents = documentRows.flatMap(
-        (row: DocumentRow): AccessibleDocumentSummary[] => {
-          const accessLevel = documentAccess.get(row.id)
+
+      const rows = await readAllInBatches<ScopedDocumentRow>(
+        async (
+          previous: ScopedDocumentRow | undefined
+        ): Promise<BatchResponse<ScopedDocumentRow>> => {
+          const { data, error } = await client.rpc("list_workspace_documents", {
+            after_document_id: previous?.document.id ?? null,
+            row_limit: POSTGREST_BATCH_SIZE,
+            target_actor_user_id: input.actorUserId,
+            target_folder_ids: [...input.folderIds],
+            target_include_root: input.includeRoot,
+            target_lifecycle_states: [
+              ...getLifecycleStates(input.lifecycleState),
+            ],
+            target_org_id: input.organizationId,
+            // Only the top of Files takes in what sits elsewhere.
+            target_visible_folder_ids: input.includeRoot
+              ? [...input.visibleFolderIds]
+              : [],
+          })
+
+          return {
+            data: data as unknown as ScopedDocumentRow[] | null,
+            error,
+          }
+        },
+        {
+          fail: (error: unknown): Error =>
+            createSupabaseServiceError(error, "Unable to load documents."),
+          maxRows: MAX_WORKSPACE_ROWS,
+          tooMany: (): Error =>
+            new DocumentServiceError(
+              "This folder holds more documents than can be listed at once.",
+              413
+            ),
+        }
+      )
+      const visibleFolderIds = new Set(input.visibleFolderIds)
+
+      return rows
+        .flatMap((row: ScopedDocumentRow): AccessibleDocumentSummary[] => {
+          const accessLevel = parseAccessLevel(row.access_level, "document")
 
           if (!accessLevel) {
             return []
           }
 
           const document: AccessibleDocumentSummary = {
-            ...mapDocument(row),
+            ...mapDocument(row.document),
             accessLevel,
           }
 
@@ -253,21 +325,24 @@ export async function listDocumentWorkspace(
               ? { ...document, folderId: null }
               : document,
           ]
-        }
-      )
-
-      return {
-        folders: normalizedFolders,
+        })
         // Newest first, as the workspace has always answered.
-        documents: documents.sort(
+        .sort(
           (
             first: AccessibleDocumentSummary,
             second: AccessibleDocumentSummary
           ): number => second.createdAt.localeCompare(first.createdAt)
-        ),
-      }
+        )
     }
   )
+}
+
+function getLifecycleStates(
+  lifecycleState: ListWorkspaceFoldersInput["lifecycleState"]
+): readonly DocumentLifecycleState[] {
+  return lifecycleState === "trashed"
+    ? (["trashed", "purge_pending"] as const)
+    : [lifecycleState ?? "active"]
 }
 
 /**
@@ -422,8 +497,8 @@ async function listDocumentVersions(
 }
 
 /**
- * Reads every folder or document in some lifecycle states, one keyset batch
- * after another, so a deployment's response cap never cuts the list short.
+ * Reads every folder in some lifecycle states, one keyset batch after another,
+ * so a deployment's response cap never cuts the list short.
  *
  * @param client - Injected Supabase service client.
  * @param source - The table, its columns, the organization, and the states.
@@ -436,7 +511,7 @@ async function readWorkspaceRows<TRow extends { id: string }>(
     columns: string
     lifecycleStates: readonly DocumentLifecycleState[]
     organizationId: string
-    table: "documents" | "folders"
+    table: "folders"
   }
 ): Promise<TRow[]> {
   return readAllInBatches(

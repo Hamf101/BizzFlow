@@ -250,6 +250,44 @@ export function getColumnLevels(
 }
 
 /**
+ * Names the folders a layout reads: the ones it lists, and the ones whose
+ * contents it counts on a folder tile.
+ *
+ * @param layout - The layout being drawn.
+ * @param view - Current Files view.
+ * @param folders - Every folder the member may see in this lifecycle view.
+ * @param path - The open folder's path, outermost first.
+ * @returns The folders to read, and whether the top of Files is among them.
+ */
+export function getDocumentScope(
+  layout: FilesLayout,
+  view: FileListView,
+  folders: readonly { id: string; parentFolderId: string | null }[],
+  path: readonly { id: string }[]
+): { folderIds: string[]; includeRoot: boolean } {
+  const drawn = new Set<string | null>(
+    layout === "columns"
+      ? getColumnLevels(path)
+      : [view.filters.folderId ?? null]
+  )
+
+  return {
+    folderIds: [
+      ...new Set([
+        ...[...drawn].filter((level: string | null): level is string => level !== null),
+        // A folder tile counts what is filed directly inside it.
+        ...folders
+          .filter((folder: { parentFolderId: string | null }): boolean =>
+            drawn.has(folder.parentFolderId)
+          )
+          .map((folder: { id: string }): string => folder.id),
+      ]),
+    ],
+    includeRoot: drawn.has(null),
+  }
+}
+
+/**
  * Picks the item Columns and Gallery show: the chosen one while it sits in
  * the open folder. Otherwise Gallery starts at the folder's first document,
  * and the other layouts show no choice.

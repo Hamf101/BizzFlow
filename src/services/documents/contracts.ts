@@ -33,13 +33,28 @@ export type CreateFolderInput = {
   parentFolderId?: string | null
 }
 
-export type ListDocumentWorkspaceInput = {
+/** Input for one lifecycle view's folders. */
+export type ListWorkspaceFoldersInput = {
   actorUserId: string
   organizationId: string
   lifecycleState?: Extract<
     DocumentLifecycleState,
     "active" | "archived" | "trashed"
   >
+}
+
+/** Input for the documents filed in the folders a Files view draws. */
+export type ListFolderDocumentsInput = ListWorkspaceFoldersInput & {
+  /** Folders whose documents the view lists or counts. */
+  folderIds: readonly string[]
+  /** Whether the view also draws the top of Files. */
+  includeRoot: boolean
+  /**
+   * Every folder the member may see in this view. The top of Files takes in
+   * the documents filed anywhere else, so it lists them rather than stranding
+   * them, and drawing uses the same set.
+   */
+  visibleFolderIds: readonly string[]
 }
 
 /** Input for the documents a member changed or opened most recently. */

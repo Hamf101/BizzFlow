@@ -3,8 +3,9 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import {
   createFolder,
   getDocumentDetail,
-  listDocumentWorkspace,
+  listFolderDocuments,
   listRecentDocuments,
+  listWorkspaceFolders,
 } from "@/services/document-service"
 import {
   createDeps,
@@ -34,7 +35,7 @@ describe("document service setup failures", () => {
     }
 
     await expect(
-      listDocumentWorkspace({
+      listWorkspaceFolders({
         actorUserId: "user-1",
         organizationId: "org-1",
       })
@@ -71,7 +72,67 @@ describe("document service permissions", () => {
 })
 
 describe("ACL-aware document workspace", () => {
-  it("exposes effective access and promotes items whose parent is absent from the view", async () => {
+  it("reads the folders a view draws, never a sibling's documents", async () => {
+    const client = new FakeSupabaseClient({
+      organization_memberships: [createMembershipRow("manager")],
+      folders: [
+        createFolderRow({ id: "folder-open", name: "Open" }),
+        createFolderRow({
+          id: "folder-inside",
+          name: "Inside",
+          parent_folder_id: "folder-open",
+        }),
+        createFolderRow({ id: "folder-sibling", name: "Sibling" }),
+      ],
+      documents: [
+        createDocumentRow({ id: "document-here", folder_id: "folder-open" }),
+        createDocumentRow({
+          id: "document-counted",
+          folder_id: "folder-inside",
+        }),
+        createDocumentRow({
+          id: "document-elsewhere",
+          folder_id: "folder-sibling",
+        }),
+        createDocumentRow({ id: "document-loose" }),
+      ],
+    })
+    const deps = createDeps(client)
+    const folders = await listWorkspaceFolders(
+      { actorUserId: "user-1", organizationId: "org-1" },
+      deps
+    )
+
+    const documents = await listFolderDocuments(
+      {
+        actorUserId: "user-1",
+        // What Files draws with "Open" open: the folder, and the subfolder
+        // whose contents its tile counts.
+        folderIds: ["folder-open", "folder-inside"],
+        includeRoot: false,
+        organizationId: "org-1",
+        visibleFolderIds: folders.map(
+          (folder: { id: string }): string => folder.id
+        ),
+      },
+      deps
+    )
+
+    expect(documents.map((document) => document.id).sort()).toEqual([
+      "document-counted",
+      "document-here",
+    ])
+    expect(
+      client.rpcCalls.find(
+        ({ functionName }) => functionName === "list_workspace_documents"
+      )?.args
+    ).toMatchObject({
+      target_folder_ids: ["folder-open", "folder-inside"],
+      target_include_root: false,
+    })
+  })
+
+  it("exposes effective access and lists at the top what its folder hides", async () => {
     const client = new FakeSupabaseClient({
       organization_memberships: [createMembershipRow("manager")],
       folders: [
@@ -114,23 +175,34 @@ describe("ACL-aware document workspace", () => {
         createDocumentGrant("document-2"),
       ],
     })
-
-    const workspace = await listDocumentWorkspace(
-      {
-        actorUserId: "user-1",
-        organizationId: "org-1",
-      },
-      createDeps(client)
+    const deps = createDeps(client)
+    const folders = await listWorkspaceFolders(
+      { actorUserId: "user-1", organizationId: "org-1" },
+      deps
+    )
+    const visibleFolderIds = folders.map(
+      (folder: { id: string }): string => folder.id
     )
 
-    expect(workspace.folders).toEqual([
+    expect(folders).toEqual([
       expect.objectContaining({
         id: "visible-child",
         parentFolderId: null,
         accessLevel: "viewer",
       }),
     ])
-    expect(workspace.documents).toEqual(
+    await expect(
+      listFolderDocuments(
+        {
+          actorUserId: "user-1",
+          folderIds: visibleFolderIds,
+          includeRoot: true,
+          organizationId: "org-1",
+          visibleFolderIds,
+        },
+        deps
+      )
+    ).resolves.toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           id: "document-1",
@@ -146,66 +218,54 @@ describe("ACL-aware document workspace", () => {
     )
   })
 
-  it("includes both recoverable and purge-pending resources in Trash", async () => {
-    const client = new FakeWorkspaceClient({
+  it("includes both recoverable and purge-pending resources in Trash, and nothing active", async () => {
+    const client = new FakeSupabaseClient({
       organization_memberships: [createMembershipRow("manager")],
       folders: [
-        createFolderRow({
-          id: "trashed-folder",
-          lifecycle_state: "trashed",
-        }),
-        createFolderRow({
-          id: "purge-folder",
-          lifecycle_state: "purge_pending",
-        }),
+        createFolderRow({ id: "trashed-folder", lifecycle_state: "trashed" }),
+        createFolderRow({ id: "purge-folder", lifecycle_state: "purge_pending" }),
+        createFolderRow({ id: "active-folder" }),
       ],
       documents: [
-        createDocumentRow({
-          id: "trashed-document",
-          lifecycle_state: "trashed",
-        }),
+        createDocumentRow({ id: "trashed-document", lifecycle_state: "trashed" }),
         createDocumentRow({
           id: "purge-document",
           lifecycle_state: "purge_pending",
         }),
+        createDocumentRow({ id: "active-document" }),
       ],
     })
-
-    const workspace = await listDocumentWorkspace(
-      {
-        actorUserId: "user-1",
-        organizationId: "org-1",
-        lifecycleState: "trashed",
-      },
-      {
-        client: client as never,
-      }
+    const deps = createDeps(client)
+    const trash = {
+      actorUserId: "user-1",
+      lifecycleState: "trashed",
+      organizationId: "org-1",
+    } as const
+    const folders = await listWorkspaceFolders(trash, deps)
+    const visibleFolderIds = folders.map(
+      (folder: { id: string }): string => folder.id
     )
 
-    expect(workspace.folders.map((folder) => folder.id)).toEqual(
-      expect.arrayContaining(["purge-folder", "trashed-folder"])
-    )
-    expect(workspace.documents.map((document) => document.id)).toEqual(
-      expect.arrayContaining(["purge-document", "trashed-document"])
-    )
-    expect(client.lifecycleFilters.length).toBeGreaterThan(0)
-    expect(
-      client.lifecycleFilters.every(
-        (states: string[]): boolean =>
-          states.join() === "trashed,purge_pending"
-      )
-    ).toBe(true)
+    expect(visibleFolderIds.slice().sort()).toEqual([
+      "purge-folder",
+      "trashed-folder",
+    ])
+    await expect(
+      listFolderDocuments(
+        { ...trash, folderIds: visibleFolderIds, includeRoot: true, visibleFolderIds },
+        deps
+      ).then((documents) => documents.map((document) => document.id).sort())
+    ).resolves.toEqual(["purge-document", "trashed-document"])
   })
 
-  it("lists every item past the response cap and asks for access a thousand at a time", async () => {
-    const client = new FakeWorkspaceClient(
+  it("lists every document in a folder past the response cap", async () => {
+    const client = new FakeSupabaseClient(
       {
         organization_memberships: [createMembershipRow("manager")],
-        folders: Array.from({ length: 3 }, (_, index: number): FakeRow =>
-          createFolderRow({ id: `folder-${index}` })
-        ),
+        folders: [createFolderRow({ id: "folder-1" })],
         documents: Array.from({ length: 1_001 }, (_, index: number): FakeRow =>
           createDocumentRow({
+            folder_id: "folder-1",
             id: `document-${String(index).padStart(4, "0")}`,
             title: `Document ${index}`,
           })
@@ -215,30 +275,23 @@ describe("ACL-aware document workspace", () => {
       400
     )
 
-    const workspace = await listDocumentWorkspace(
+    const documents = await listFolderDocuments(
       {
         actorUserId: "user-1",
+        folderIds: ["folder-1"],
+        includeRoot: false,
         organizationId: "org-1",
+        visibleFolderIds: ["folder-1"],
       },
-      {
-        client: client as never,
-      }
+      createDeps(client)
     )
 
-    expect(workspace.folders).toHaveLength(3)
+    expect(new Set(documents.map((document) => document.id)).size).toBe(1_001)
     expect(
-      new Set(workspace.documents.map((document) => document.id)).size
-    ).toBe(1_001)
-    expect(
-      client.accessCalls.map(({ functionName, ids }) => [
-        functionName,
-        ids.length,
-      ])
-    ).toEqual([
-      ["get_folder_access_levels", 3],
-      ["get_document_access_levels", 1_000],
-      ["get_document_access_levels", 1],
-    ])
+      client.rpcCalls.filter(
+        ({ functionName }) => functionName === "list_workspace_documents"
+      )
+    ).toHaveLength(4)
   })
 
   it("returns viewer access on trashed document detail for safe lifecycle controls", async () => {
@@ -332,158 +385,6 @@ describe("folder creation beside a colleague's write", () => {
     ])
   })
 })
-
-type FakeWorkspaceTables = {
-  organization_memberships: FakeRow[]
-  folders: FakeRow[]
-  documents: FakeRow[]
-}
-
-class FakeWorkspaceClient {
-  readonly accessCalls: Array<{ functionName: string; ids: string[] }> = []
-  readonly lifecycleFilters: string[][] = []
-
-  /**
-   * @param tables - Rows the fake serves.
-   * @param maxRows - The most rows one response carries, as a deployment's
-   *   `max_rows` caps it below what a query asks for.
-   */
-  constructor(
-    private readonly tables: FakeWorkspaceTables,
-    private readonly maxRows = Number.POSITIVE_INFINITY
-  ) {}
-
-  from(tableName: keyof FakeWorkspaceTables): FakeWorkspaceQuery {
-    return new FakeWorkspaceQuery(
-      this.tables[tableName],
-      this.lifecycleFilters,
-      this.maxRows
-    )
-  }
-
-  async rpc(
-    functionName: string,
-    args: Record<string, unknown>
-  ): Promise<{ data: FakeRow[] | null; error: null }> {
-    const idColumn =
-      functionName === "get_folder_access_levels" ? "folder_id" : "document_id"
-    const ids = args[`target_${idColumn}s`]
-
-    if (!Array.isArray(ids)) {
-      return { data: null, error: null }
-    }
-
-    this.accessCalls.push({ functionName, ids: ids.map(String) })
-
-    return {
-      data: ids.map(
-        (id: unknown): FakeRow => ({
-          access_level: "contributor",
-          [idColumn]: id,
-        })
-      ),
-      error: null,
-    }
-  }
-}
-
-class FakeWorkspaceQuery {
-  private readonly filters: Array<(row: FakeRow) => boolean> = []
-  private orderColumn: string | null = null
-  private orderAscending = true
-  private limitCount = Number.POSITIVE_INFINITY
-
-  constructor(
-    private readonly rows: FakeRow[],
-    private readonly lifecycleFilters: string[][],
-    private readonly maxRows: number
-  ) {}
-
-  gt(column: string, value: unknown): FakeWorkspaceQuery {
-    this.filters.push(
-      (row: FakeRow): boolean => String(row[column]) > String(value)
-    )
-    return this
-  }
-
-  limit(count: number): FakeWorkspaceQuery {
-    this.limitCount = count
-    return this
-  }
-
-  select(columns: string): FakeWorkspaceQuery {
-    void columns
-    return this
-  }
-
-  eq(column: string, value: unknown): FakeWorkspaceQuery {
-    this.filters.push((row: FakeRow): boolean => row[column] === value)
-    return this
-  }
-
-  in(column: string, values: readonly unknown[]): FakeWorkspaceQuery {
-    this.filters.push(
-      (row: FakeRow): boolean => values.includes(row[column])
-    )
-
-    if (column === "lifecycle_state") {
-      this.lifecycleFilters.push(values.map(String))
-    }
-
-    return this
-  }
-
-  order(
-    column: string,
-    options: { ascending?: boolean } = {}
-  ): FakeWorkspaceQuery {
-    this.orderColumn = column
-    this.orderAscending = options.ascending ?? true
-    return this
-  }
-
-  async maybeSingle(): Promise<{ data: FakeRow | null; error: null }> {
-    return {
-      data: this.execute()[0] ?? null,
-      error: null,
-    }
-  }
-
-  then<TResult1 = { data: FakeRow[]; error: null }, TResult2 = never>(
-    onfulfilled?:
-      | ((
-          value: { data: FakeRow[]; error: null }
-        ) => TResult1 | PromiseLike<TResult1>)
-      | null,
-    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
-  ): Promise<TResult1 | TResult2> {
-    return Promise.resolve({ data: this.execute(), error: null }).then(
-      onfulfilled,
-      onrejected
-    )
-  }
-
-  private execute(): FakeRow[] {
-    const rows = this.rows.filter((row: FakeRow): boolean =>
-      this.filters.every(
-        (filter: (candidate: FakeRow) => boolean): boolean =>
-          filter(row)
-      )
-    )
-
-    const ordered = this.orderColumn
-      ? [...rows].sort((left: FakeRow, right: FakeRow): number => {
-          const leftValue = String(left[this.orderColumn ?? ""])
-          const rightValue = String(right[this.orderColumn ?? ""])
-          return this.orderAscending
-            ? leftValue.localeCompare(rightValue)
-            : rightValue.localeCompare(leftValue)
-        })
-      : rows
-
-    return ordered.slice(0, Math.min(this.limitCount, this.maxRows))
-  }
-}
 
 function createDocumentGrant(documentId: string): FakeRow {
   return {

@@ -606,6 +606,22 @@ export type AdminDatabase = {
           folder_id: string
         }[]
       }
+      list_workspace_documents: {
+        Args: {
+          target_org_id: string
+          target_actor_user_id: string
+          target_lifecycle_states: string[]
+          target_folder_ids: string[]
+          target_include_root: boolean
+          target_visible_folder_ids: string[]
+          after_document_id: string | null
+          row_limit: number
+        }
+        Returns: {
+          access_level: DocumentAccessLevel | null
+          document: DocumentRow
+        }[]
+      }
       verify_audit_log_chain: {
         Args: {
           target_org_id: string

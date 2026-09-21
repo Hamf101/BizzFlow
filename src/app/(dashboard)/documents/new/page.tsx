@@ -10,7 +10,7 @@ import { buildFeedbackRedirect } from "@/lib/action-result"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
 import { buildDocumentFolderPath } from "@/lib/page-document-folders"
 import { loadPageOrganizationContext } from "@/lib/page-organization-context"
-import { listDocumentWorkspace } from "@/services/document-service"
+import { listWorkspaceFolders } from "@/services/document-service"
 import { listDocumentTemplates } from "@/services/template-service"
 import type { DocumentFolder } from "@/types/document"
 import type { DocumentTemplate } from "@/types/template"
@@ -43,8 +43,8 @@ export default async function NewDocumentPage({
     redirect(buildFeedbackRedirect("/dashboard", "organization_required"))
   }
 
-  const [workspace, templates] = await Promise.all([
-    listDocumentWorkspace({
+  const [folders, templates] = await Promise.all([
+    listWorkspaceFolders({
       actorUserId: user.id,
       organizationId: context.organization.id
     }),
@@ -54,7 +54,7 @@ export default async function NewDocumentPage({
     })
   ])
   const activeFolder = params.folderId
-    ? (workspace.folders.find(
+    ? (folders.find(
         (folder: DocumentFolder): boolean => folder.id === params.folderId
       ) ?? null)
     : null
@@ -83,7 +83,7 @@ export default async function NewDocumentPage({
         (block): boolean => block.type === "file_field"
       )
   )
-  const folderPath = buildDocumentFolderPath(activeFolder, workspace.folders)
+  const folderPath = buildDocumentFolderPath(activeFolder, folders)
 
   return (
     <div className="flex min-h-[70dvh] flex-col items-center justify-center md:min-h-[calc(100dvh-4.5rem)] gap-8 text-center">
