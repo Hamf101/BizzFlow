@@ -68,6 +68,17 @@ export function loadPostHog(): Promise<PostHogClient | null> {
   return posthogPromise
 }
 
+/**
+ * Which document, folder, submission, task, or template someone opened is the
+ * organization's business, not the analytics provider's; only the shape of the
+ * route leaves.
+ *
+ * ponytail: every identifier a dashboard address carries is a UUID today. Widen
+ * this if a route ever takes some other opaque value.
+ */
+const RESOURCE_ID =
+  /\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?=\/|$)/gi
+
 function normalizeAnalyticsProperties(
   properties: AnalyticsEventProperties | undefined
 ): AnalyticsEventProperties | undefined {
@@ -78,7 +89,12 @@ function normalizeAnalyticsProperties(
       ? { outcomeCode: properties.outcomeCode }
       : {}),
     ...(properties.route
-      ? { route: properties.route.split(/[?#]/, 1)[0] || "/" }
+      ? {
+          route:
+            properties.route
+              .split(/[?#]/, 1)[0]
+              ?.replace(RESOURCE_ID, "/:id") || "/",
+        }
       : {}),
   }
 

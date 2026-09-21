@@ -76,7 +76,7 @@ describe("PostHog lazy lifecycle", () => {
     await expect(failed.loadPostHog()).resolves.toBeNull()
   })
 
-  it("captures only stable events and strips query or hash data from routes", async () => {
+  it("captures only stable events and keeps tenant data out of routes", async () => {
     mocks.getPosthogEnv.mockReturnValue({
       key: "phc_test",
       host: "https://analytics.example.com",
@@ -91,6 +91,16 @@ describe("PostHog lazy lifecycle", () => {
     expect(mocks.posthog.capture).toHaveBeenCalledWith("action_outcome", {
       outcomeCode: "template_published",
       route: "/templates",
+    })
+
+    // Which document, submission, or task someone opened is theirs, not the
+    // analytics provider's.
+    await capturePostHogEvent("$pageview", {
+      route: "/documents/0f8d4a2c-1c44-4f2e-9a1b-7b2e6d5c3a10/edit",
+    })
+
+    expect(mocks.posthog.capture).toHaveBeenLastCalledWith("$pageview", {
+      route: "/documents/:id/edit",
     })
   })
 
