@@ -1,4 +1,4 @@
-import { ChevronRight, Clock, FileText, Inbox, type LucideIcon, MessageSquare, PenLine } from "lucide-react"
+import { ChevronRight, FileText } from "lucide-react"
 import Link from "next/link"
 import type { ReactElement, ReactNode } from "react"
 
@@ -6,36 +6,12 @@ import {
   type ActivityRow,
   type DueTask,
   type QueueItem,
-  type QueueKind,
-  type QueueTone,
   type RecentFile,
   WORKFLOW_STAGES,
 } from "@/components/dashboard/dashboard-view"
+import { QueueList } from "@/components/dashboard/queue-list"
 import { cn } from "@/lib/utils"
 import type { SubmissionStatus } from "@/types/submission"
-
-const QUEUE_LIMIT = 8
-const PHONE_QUEUE_LIMIT = 4
-
-const KIND_ICONS: Record<QueueKind, LucideIcon> = {
-  "Awaiting signatures": PenLine,
-  Draft: FileText,
-  "Needs changes": MessageSquare,
-  "Overdue task": Clock,
-  Review: Inbox,
-}
-
-const TONE_ICON: Record<QueueTone, string> = {
-  critical: "bg-destructive/12 text-destructive",
-  quiet: "bg-muted text-muted-foreground",
-  you: "bg-primary/12 text-primary",
-}
-
-const TONE_TEXT: Record<QueueTone, string> = {
-  critical: "text-destructive",
-  quiet: "text-muted-foreground",
-  you: "text-primary",
-}
 
 const ROW_LINK =
   "outline-none transition-colors hover:bg-muted/45 focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-inset"
@@ -76,40 +52,12 @@ export function DashboardHome({
               {degraded ? "Some of this didn't load." : "Nothing is waiting on you."}
             </p>
           ) : (
-            <ul className="divide-y divide-border">
-              {queue.slice(0, QUEUE_LIMIT).map((item: QueueItem, index: number) => (
-                <QueueRow hideOnPhone={index >= PHONE_QUEUE_LIMIT} item={item} key={`${item.kind}-${item.id}`} />
-              ))}
-            </ul>
+            <QueueList items={queue} />
           )}
           {degraded && queue.length > 0 ? (
             <p className="border-t border-border px-3.5 py-2.5 text-[13px] text-muted-foreground">
               Some of this didn&apos;t load.
             </p>
-          ) : null}
-          {activity && activity.length > 0 ? (
-            <details className="border-t border-border max-md:hidden">
-              <summary
-                className={cn(
-                  ROW_LINK,
-                  "flex cursor-pointer list-none justify-between px-3.5 py-3 text-[13px] text-muted-foreground [&::-webkit-details-marker]:hidden"
-                )}
-              >
-                <span>Recent activity</span>
-                <span className="tabular-nums">{activity.length}</span>
-              </summary>
-              <ul className="divide-y divide-border px-3.5 pb-2">
-                {activity.map((row: ActivityRow) => (
-                  <li className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 py-2 text-[13px]" key={row.id}>
-                    <span className="min-w-0 truncate">
-                      {row.text}
-                      {row.actor ? <span className="text-muted-foreground"> · {row.actor}</span> : null}
-                    </span>
-                    <span className="whitespace-nowrap text-muted-foreground">{row.when}</span>
-                  </li>
-                ))}
-              </ul>
-            </details>
           ) : null}
         </div>
       </Block>
@@ -135,6 +83,13 @@ export function DashboardHome({
                     </Link>
                   </li>
                 ))}
+                {dueThisWeek.length > 5 ? (
+                  <li>
+                    <Link className={cn(ROW_LINK, "block px-3.5 py-2.5 text-[13px] text-muted-foreground")} href="/tasks">
+                      Show all in Tasks
+                    </Link>
+                  </li>
+                ) : null}
               </ul>
             )}
           </Block>
@@ -163,6 +118,29 @@ export function DashboardHome({
               </ul>
             )}
           </Block>
+        ) : null}
+
+        {activity && activity.length > 0 ? (
+          <details className="group max-md:hidden">
+            <summary className="flex cursor-pointer list-none items-center gap-1.5 text-sm font-medium outline-none hover:text-primary focus-visible:ring-2 focus-visible:ring-ring/40 [&::-webkit-details-marker]:hidden">
+              Recent activity
+              <ChevronRight
+                aria-hidden="true"
+                className="size-3.5 text-muted-foreground transition-transform group-open:rotate-90"
+              />
+            </summary>
+            <ul className="mt-1.5 divide-y divide-border">
+              {activity.map((row: ActivityRow) => (
+                <li className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 py-2 text-[13px]" key={row.id}>
+                  <span className="min-w-0 truncate">
+                    {row.text}
+                    {row.actor ? <span className="text-muted-foreground"> · {row.actor}</span> : null}
+                  </span>
+                  <span className="whitespace-nowrap text-muted-foreground">{row.when}</span>
+                </li>
+              ))}
+            </ul>
+          </details>
         ) : null}
       </div>
     </div>
@@ -196,43 +174,6 @@ function Block({
   )
 }
 
-function QueueRow({ hideOnPhone, item }: { hideOnPhone: boolean; item: QueueItem }): ReactElement {
-  const Icon = KIND_ICONS[item.kind]
-  const when = cn("text-[13px] text-muted-foreground tabular-nums", item.tone === "critical" && "text-destructive")
-
-  return (
-    <li className={cn(hideOnPhone && "max-md:hidden")}>
-      <Link
-        className={cn(
-          ROW_LINK,
-          "grid grid-cols-[30px_minmax(0,1fr)_auto] items-center gap-2.5 px-3 py-2.5 md:grid-cols-[34px_minmax(0,1fr)_auto_auto] md:gap-3 md:px-3.5 md:py-3"
-        )}
-        href={item.href}
-      >
-        <span className={cn("grid size-[30px] place-items-center rounded-[10px] md:size-[34px]", TONE_ICON[item.tone])}>
-          <Icon aria-hidden="true" className="size-[15px] md:size-[17px]" />
-        </span>
-        <span className="grid min-w-0">
-          <span className={cn("text-[11px] font-semibold tracking-[0.06em] uppercase", TONE_TEXT[item.tone])}>
-            {item.kind}
-          </span>
-          <span className="truncate text-sm font-medium">{item.title}</span>
-          {item.context ? <span className="truncate text-[13px] text-muted-foreground">{item.context}</span> : null}
-          <span className={cn(when, "md:hidden")}>{item.when}</span>
-        </span>
-        <span className={cn(when, "hidden whitespace-nowrap md:block")}>{item.when}</span>
-        <span
-          aria-hidden="true"
-          className="hidden rounded-[10px] border border-border bg-card px-3 py-1.5 text-[13px] font-medium whitespace-nowrap md:inline-flex"
-        >
-          {item.action}
-        </span>
-        <ChevronRight aria-hidden="true" className="size-4 text-muted-foreground md:hidden" />
-      </Link>
-    </li>
-  )
-}
-
 function Workflow({ workflow }: { workflow: WorkflowSummary }): ReactElement {
   const stages = WORKFLOW_STAGES.filter((stage) => stage.status in workflow.counts).map((stage) => ({
     ...stage,
@@ -246,7 +187,10 @@ function Workflow({ workflow }: { workflow: WorkflowSummary }): ReactElement {
         {stages.map((stage) => (
           <li key={stage.status}>
             <Link
-              className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 text-[13px] outline-none hover:text-primary focus-visible:ring-2 focus-visible:ring-ring/40"
+              className={cn(
+                "grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 text-[13px] outline-none hover:text-primary focus-visible:ring-2 focus-visible:ring-ring/40",
+                stage.count === 0 && "text-muted-foreground"
+              )}
               href={`/submissions?status=${stage.filter}`}
             >
               <span>{stage.label}</span>
@@ -275,8 +219,9 @@ function Workflow({ workflow }: { workflow: WorkflowSummary }): ReactElement {
               <span
                 className={cn(
                   "text-lg font-medium tabular-nums",
-                  stage.tone === "warn" && "text-destructive",
-                  stage.tone === "done" && "text-success"
+                  stage.count > 0 && stage.tone === "warn" && "text-destructive",
+                  stage.count > 0 && stage.tone === "done" && "text-success",
+                  stage.count === 0 && "text-muted-foreground"
                 )}
               >
                 {stage.count}

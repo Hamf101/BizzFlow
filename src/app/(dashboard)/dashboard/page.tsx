@@ -339,7 +339,7 @@ export default async function DashboardPage(): Promise<ReactElement> {
       <DashboardHome
         activity={activity ? describeActivity(activity.value, members.value, user.id, now) : null}
         degraded={unavailable}
-        dueThisWeek={tasks ? selectDueThisWeek(tasks.value, members.value, user.id, now) : null}
+        dueThisWeek={tasks ? selectDueThisWeek(tasks.value, members.value, user.id, now, can("tasks:assign")) : null}
         queue={buildQueue({
           actorUserId: user.id,
           awaitingSignatures: files?.value?.awaitingSignatures ?? [],

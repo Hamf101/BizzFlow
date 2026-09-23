@@ -59,10 +59,12 @@ describe("the dashboard queue", () => {
     expect(
       buildQueue({ actorUserId: ME, awaitingSignatures: [], canReview: false, members: MEMBERS, now: NOW, submissions, tasks: [] })
     ).toEqual([])
-    expect(selectDueThisWeek(tasks, MEMBERS, ME, NOW).map((task) => [task.id, task.assignee, task.due])).toEqual([
+    expect(selectDueThisWeek(tasks, MEMBERS, ME, NOW, true).map((task) => [task.id, task.assignee, task.due])).toEqual([
       ["theos-thursday", "Theo Miles", "Thu, Sep 17"],
       ["mine-tuesday", "You", "Tue, Sep 22"],
     ])
+    // Someone who cannot hand out tasks has no use for the team's deadlines.
+    expect(selectDueThisWeek(tasks, MEMBERS, ME, NOW, false).map((task) => task.id)).toEqual(["mine-tuesday"])
     expect(relativeDay("2026-09-02T12:00:00.000Z", NOW)).toBe("Sep 2")
   })
 })

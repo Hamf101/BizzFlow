@@ -161,20 +161,28 @@ export function buildQueue(input: QueueInput): QueueItem[] {
  * @param members - Members, to name who each task is for.
  * @param actorUserId - The viewer, who is called "You".
  * @param now - The moment the page loaded.
+ * @param team - True for those who hand out tasks and so watch everyone's
+ *   week; everyone else sees only their own.
  * @returns The week's tasks, ready to draw.
  */
 export function selectDueThisWeek(
   tasks: readonly Task[],
   members: readonly OrganizationMember[],
   actorUserId: string,
-  now: Date
+  now: Date,
+  team: boolean
 ): DueTask[] {
   const end = now.getTime() + WEEK_DAYS * DAY_MS
 
   return tasks
     .filter((task) => {
       const due = task.dueAt ? Date.parse(task.dueAt) : Number.NaN
-      return !isTerminalTaskStatus(task.status) && due >= now.getTime() && due < end
+      return (
+        (team || task.assignedTo === actorUserId) &&
+        !isTerminalTaskStatus(task.status) &&
+        due >= now.getTime() &&
+        due < end
+      )
     })
     .sort(byOldest((task: Task) => task.dueAt ?? ""))
     .map((task) => ({
