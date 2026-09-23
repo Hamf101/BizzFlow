@@ -304,6 +304,21 @@ export const SERVICE_ROLE_RPC_CHECKS = [
       target_batch_size: null,
     },
   },
+  // A zero row limit is refused before any document is read.
+  {
+    name: "list_workspace_documents",
+    args: {
+      after_document_id: null,
+      row_limit: 0,
+      target_actor_user_id: null,
+      target_folder_ids: [],
+      target_include_root: false,
+      target_lifecycle_states: [],
+      target_org_id: null,
+      target_query: null,
+      target_visible_folder_ids: [],
+    },
+  },
 ]
 
 const DRAWING_PROBE_DATA_URL = `data:image/png;base64,${"AAAA".repeat(5_000)}`
