@@ -207,9 +207,15 @@ export function EditorFrame<Mode extends string>({
           <ModeSwitch mode={mode} modes={modes} narrow={false} onChange={onModeChange} />
         </div>
       ) : null}
-      <div className="relative min-h-0 flex-1">
+      {/* An open panel takes its own column on a laptop, so it never covers the
+          page; Fit follows because the scroll area's width changes. */}
+      <div className="group/stage relative min-h-0 flex-1">
         {banner}
-        <div className="absolute inset-0 overflow-auto" data-slot="editor-scroll" ref={scrollRef}>
+        <div
+          className="absolute inset-0 overflow-auto md:group-has-[[data-slot=editor-panel]:not([hidden])]/stage:right-[23.5rem]"
+          data-slot="editor-scroll"
+          ref={scrollRef}
+        >
           <div className={cn("flex min-h-full justify-center", narrow ? "pb-28" : "px-6 pt-6 pb-24")}>
             {children({ narrow, zoom })}
           </div>
@@ -217,7 +223,7 @@ export function EditorFrame<Mode extends string>({
         {dock(narrow)}
         {narrow ? null : (
           <div
-            className="absolute right-4 bottom-4 z-20 flex items-center gap-0.5 rounded-full border border-border bg-popover p-1 text-[13px] shadow-md"
+            className="absolute right-4 bottom-4 z-20 flex items-center gap-0.5 rounded-full border border-border bg-popover p-1 text-[13px] shadow-md md:group-has-[[data-slot=editor-panel]:not([hidden])]/stage:right-[24.5rem]"
             data-slot="editor-zoom"
           >
             <button

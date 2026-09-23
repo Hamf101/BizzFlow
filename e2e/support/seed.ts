@@ -4,6 +4,8 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 
 import { createBlankTemplateContent } from "@/types/template"
 
+import { retryConcurrentChange } from "./retry"
+
 /**
  * Record seeding for journeys that need a starting point rather than a subject.
  *
@@ -174,19 +176,21 @@ export async function seedSigningDocument(
   createdByUserId: string,
   signer: { email: string; name: string }
 ): Promise<SeededSigningDocument> {
-  const { data: document, error: documentError } = await client
-    .from("documents")
-    .insert({
-      created_by: createdByUserId,
-      org_id: organizationId,
-      source_kind: "generated",
-      template_id: template.id,
-      template_revision: 1,
-      template_snapshot: template.content,
-      title,
-    })
-    .select("id")
-    .single()
+  const { data: document, error: documentError } = await retryConcurrentChange(() =>
+    client
+      .from("documents")
+      .insert({
+        created_by: createdByUserId,
+        org_id: organizationId,
+        source_kind: "generated",
+        template_id: template.id,
+        template_revision: 1,
+        template_snapshot: template.content,
+        title,
+      })
+      .select("id")
+      .single()
+  )
 
   if (documentError) {
     throw new Error(`Could not seed document: ${documentError.message}`)

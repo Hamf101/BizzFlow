@@ -45,11 +45,18 @@ import type {
 // The server bounds every AI call itself (two at most per turn), so this only
 // catches a connection that never answers, and must outlast the longest turn.
 const REQUEST_TIMEOUT_MS = 300_000
-const STARTER_PROMPTS = [
-  "Create a clear client intake form",
-  "Organize this into a professional agreement",
-  "Explain the structure of this document"
-] as const
+const TEMPLATE_STARTER: FlowStarter = {
+  heading: "Ask Flow to build or change this document.",
+  placeholder: "Ask Flow to create or change something…",
+  prompts: [
+    "Create a clear client intake form",
+    "Organize this into a professional agreement",
+    "Explain the structure of this document"
+  ]
+}
+
+/** What an empty conversation offers: a line, a few first messages, and the box's hint. */
+export type FlowStarter = Readonly<{ heading: string; placeholder: string; prompts: readonly string[] }>
 
 type TemplateFlowPanelProps = {
   canUndo: boolean
@@ -73,7 +80,12 @@ type TemplateFlowPanelProps = {
   onRejectProposal?: (proposal: TemplateFlowProposal) => void
   onUndo: () => void
   pendingProposal?: TemplateFlowProposal | null
-  templateId: string
+  /** Where turns go; a document's Flow answers at its own route. */
+  endpoint?: string
+  /** The empty conversation's line and first messages, for what is open. */
+  starter?: FlowStarter
+  /** Sent with each turn to the template route, which reads it from the body. */
+  templateId?: string
 }
 
 /**
@@ -94,6 +106,8 @@ export function TemplateFlowPanel({
   onRejectProposal,
   onUndo,
   pendingProposal: controlledPendingProposal,
+  endpoint = "/api/templates/flow",
+  starter = TEMPLATE_STARTER,
   templateId
 }: TemplateFlowPanelProps): ReactElement {
   const [messages, setMessages] =
@@ -154,7 +168,7 @@ export function TemplateFlowPanel({
     const startedAt = performance.now()
 
     try {
-      const response = await fetch("/api/templates/flow", {
+      const response = await fetch(endpoint, {
         body: JSON.stringify({
           templateId,
           draft: toTemplateFlowDraft(draft),
@@ -208,7 +222,7 @@ export function TemplateFlowPanel({
         durationMs: Math.round(performance.now() - startedAt),
         operationCount: result.proposal?.operations.length ?? 0,
         proposalId: result.proposal?.id ?? null,
-        templateId
+        endpoint
       })
     } catch (error: unknown) {
       const reason =
@@ -221,7 +235,7 @@ export function TemplateFlowPanel({
       console.warn("template_flow_response_failed", {
         durationMs: Math.round(performance.now() - startedAt),
         reason,
-        templateId
+        endpoint
       })
       setErrorMessage(reason)
       setInstruction(trimmedInstruction)
@@ -314,7 +328,7 @@ export function TemplateFlowPanel({
         ref={timelineRef}
       >
         {messages.length === 0 ? (
-          <FlowEmptyState onSelectPrompt={submitMessage} />
+          <FlowEmptyState onSelectPrompt={submitMessage} starter={starter} />
         ) : (
           <ol className="flex flex-col gap-5">
             {messages.map((message: TemplateFlowMessage) => (
@@ -383,7 +397,7 @@ export function TemplateFlowPanel({
               setInstruction(event.target.value)
             }
             onKeyDown={handleComposerKeyDown}
-            placeholder="Ask Flow to create or change something…"
+            placeholder={starter.placeholder}
             value={instruction}
           />
           <Button
@@ -490,17 +504,19 @@ function FlowPendingProposalReceipt({
 }
 
 function FlowEmptyState({
-  onSelectPrompt
+  onSelectPrompt,
+  starter
 }: {
   onSelectPrompt: (prompt: string) => Promise<void>
+  starter: FlowStarter
 }): ReactElement {
   return (
     <div className="flex min-h-full flex-col justify-center py-6">
       <h3 className="max-w-xs font-editorial text-2xl font-semibold leading-tight">
-        Ask Flow to build or change this document.
+        {starter.heading}
       </h3>
       <div className="mt-5 flex flex-col gap-2">
-        {STARTER_PROMPTS.map((prompt: string) => (
+        {starter.prompts.map((prompt: string) => (
           <button
             className="group flex items-center justify-between gap-3 rounded-[8px] border border-primary/10 bg-card/65 px-3 py-2.5 text-left text-sm transition-colors hover:border-primary/25 hover:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
             key={prompt}

@@ -1,5 +1,6 @@
 import { expect, test, uniqueName } from "../support/fixtures"
 import { waitForHydration } from "../support/hydration"
+import { seedSigningDocument, seedTemplate } from "../support/seed"
 
 test("writes on a blank document's own page, adds a field with /, and keeps it all", async ({
   admin,
@@ -50,4 +51,39 @@ test("writes on a blank document's own page, adds a field with /, and keeps it a
   await page.reload()
   await expect(page.getByText("Dear tenant,", { exact: true })).toBeVisible()
   await expect(page.locator('[data-block-type="signature_field"]')).toBeVisible()
+})
+
+test("Flow is within reach wherever a document or a template is open", async ({
+  admin,
+  pageAs,
+  tenant,
+}, testInfo) => {
+  const page = await pageAs("owner_admin")
+  if (testInfo.project.use.viewport) {
+    await page.setViewportSize(testInfo.project.use.viewport)
+  }
+  const template = await seedTemplate(admin, tenant.organizationId, uniqueName("Flow reach"), "published")
+  const { documentId } = await seedSigningDocument(
+    admin,
+    tenant.organizationId,
+    template,
+    uniqueName("Sent lease"),
+    tenant.users.owner_admin.id,
+    { email: "signer@example.test", name: "Sam Signer" }
+  )
+  const flow = page.getByRole("navigation", { name: "Editor tools" }).getByRole("button", { name: "Flow" })
+
+  // Out for signature the words can no longer change, and Flow still answers.
+  await page.goto(`/documents/${documentId}/edit`)
+  await waitForHydration(flow)
+  await flow.click()
+  await expect(page.getByLabel("Ask Flow")).toBeVisible()
+
+  // Preview used to put the dock away, and Flow with it.
+  await page.goto(`/templates/${template.id}/edit`)
+  const preview = page.getByRole("radio", { name: "Preview" })
+  await waitForHydration(preview)
+  await preview.click()
+  await flow.click()
+  await expect(page.getByLabel("Ask Flow")).toBeVisible()
 })

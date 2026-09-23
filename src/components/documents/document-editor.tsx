@@ -1,6 +1,6 @@
 "use client"
 
-import { Download, Files, MoreHorizontal, Palette, Plus, Send, TextCursorInput } from "lucide-react"
+import { Download, Files, MoreHorizontal, Palette, Plus, Send, Sparkles, TextCursorInput } from "lucide-react"
 import { type ReactElement, useMemo, useRef, useState } from "react"
 
 import type { DocumentContentInput } from "@/app/(editor)/documents/[documentId]/edit/actions"
@@ -17,6 +17,7 @@ import { useEditorHistory } from "@/components/editor/use-editor-history"
 import { useLocalRecovery } from "@/components/editor/use-local-recovery"
 import { TemplateBlockEditor } from "@/components/templates/template-block-editor"
 import { TemplateBrandingPanel } from "@/components/templates/template-branding-panel"
+import { type FlowStarter, TemplateFlowPanel } from "@/components/templates/template-flow-panel"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import {
@@ -30,12 +31,27 @@ import { bizflowToast } from "@/components/ui/toaster"
 import { formatMediumDateTime } from "@/lib/date-format"
 import { SigningRecipientStatusBadge } from "@/lib/page-status-badges"
 import { cn } from "@/lib/utils"
+import { createTemplateFlowDraftFingerprint } from "@/services/template-flow-proposal-state"
 import { resolvePageGeometry } from "@/services/templates/template-render-plan"
 import type { DocumentSigningRecipient, GeneratedDocumentSigningView } from "@/types/signing"
 import { type TemplateContentV3, upgradeV2TemplateContentToV3 } from "@/types/template"
+import type { TemplateFlowProposal } from "@/types/template-flow"
 import { applyVisibleTemplateFieldValue } from "@/types/template-visibility"
 
 type DocumentPage = { content: TemplateContentV3; title: string }
+
+const DRAFT_STARTER: FlowStarter = {
+  heading: "Ask Flow to change this document.",
+  placeholder: "Ask Flow to change something…",
+  prompts: ["Tighten the wording", "Add a place to sign at the end", "What's missing before I send it?"],
+}
+
+// Once sent, the words are fixed, so Flow explains rather than offers edits.
+const SENT_STARTER: FlowStarter = {
+  heading: "Ask Flow about this document.",
+  placeholder: "Ask Flow about this document…",
+  prompts: ["Summarise this document", "Explain it in plain words", "What does a signer agree to?"],
+}
 
 type DocumentEditorProps = {
   backHref: string
@@ -84,7 +100,16 @@ export function DocumentEditor({
   const [sending, setSending] = useState(false)
   const [savedPage, setSavedPage] = useState(initial)
   const [savedAnswers, setSavedAnswers] = useState<Record<string, unknown>>(view.answers)
+  const [proposal, setProposal] = useState<TemplateFlowProposal | null>(null)
+  const [flowUndo, setFlowUndo] = useState<{ messageId: string; page: DocumentPage } | null>(null)
+  const [flowOpen, setFlowOpen] = useState(false)
   const formRef = useRef<HTMLFormElement>(null)
+  const flowDraft = useMemo(() => ({ content: page.content, description: "", title: page.title }), [page])
+  const suggested = useMemo(
+    () => (proposal ? upgradeV2TemplateContentToV3(proposal.candidateDraft.content) : page.content),
+    [page.content, proposal]
+  )
+  const preview = useEditorController({ change: () => undefined, content: suggested, undo: () => undefined })
   const controller = useEditorController({
     change: (update, coalesceKey) =>
       history.set((current) => ({ ...current, content: update(current.content) }), coalesceKey),
@@ -192,6 +217,27 @@ export function DocumentEditor({
     },
   ]
 
+  const flowTool: DockTool = {
+    icon: Sparkles,
+    id: "flow",
+    label: "Flow",
+    onOpen: () => setFlowOpen((open) => !open),
+  }
+
+  function applyProposal(next: TemplateFlowProposal, messageId: string): void {
+    if (next.status !== "pending" || next.baseDraftFingerprint !== createTemplateFlowDraftFingerprint(flowDraft)) {
+      setProposal({ ...next, status: "stale" })
+      return
+    }
+
+    setFlowUndo({ messageId, page })
+    history.set(() => ({
+      content: upgradeV2TemplateContentToV3(next.candidateDraft.content),
+      title: next.candidateDraft.title,
+    }))
+    setProposal(null)
+  }
+
   async function openSend(): Promise<void> {
     // Signers must receive what the sender sees, so a save that did not land
     // stops the send rather than sending the stored copy.
@@ -232,11 +278,28 @@ export function DocumentEditor({
               Unsaved changes from{" "}
               {new Date(recovery.recovery.savedAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}
             </EditorNotice>
+          ) : proposal ? (
+            <EditorNotice
+              actions={
+                proposal.status === "pending" && writable
+                  ? [
+                      { label: "Apply", onClick: () => applyProposal(proposal, proposal.id) },
+                      { label: "Reject", onClick: () => setProposal(null) },
+                    ]
+                  : [{ label: "Dismiss", onClick: () => setProposal(null) }]
+              }
+            >
+              {proposal.status === "stale"
+                ? "Flow's suggestion is out of date"
+                : writable
+                  ? "Flow's suggestion"
+                  : "Flow's suggestion · this document can no longer change"}
+            </EditorNotice>
           ) : null
         }
         canRedo={history.canRedo}
         canUndo={history.canUndo}
-        dock={(narrow) => (writable ? <EditorDock narrow={narrow} tools={tools} /> : null)}
+        dock={(narrow) => <EditorDock narrow={narrow} tools={writable && !proposal ? [...tools, flowTool] : [flowTool]} />}
         extra={
           view.recipients.length > 0 ? (
             <Popover>
@@ -304,26 +367,52 @@ export function DocumentEditor({
         onUndo={history.undo}
         pageWidthPoints={geometry.widthPoints * geometry.scale}
         panel={(narrow) => (
-          <EditorSidePanel
-            narrow={narrow}
-            onClose={controller.closeSettings}
-            open={settingsBlock !== null}
-            title="Settings"
-          >
-            {settingsBlock ? (
-              <TemplateBlockEditor
-                block={settingsBlock}
-                blocks={page.content.blocks}
-                canMoveDown={settingsIndex < page.content.blocks.length - 1}
-                canMoveUp={settingsIndex > 0}
-                onChange={(block) => controller.updateBlock(block)}
-                onDelete={() => controller.remove(settingsBlock.id)}
-                onDuplicate={() => controller.duplicate(settingsBlock.id)}
-                onMoveDown={() => controller.move(settingsBlock.id, "down")}
-                onMoveUp={() => controller.move(settingsBlock.id, "up")}
+          <>
+            <EditorSidePanel
+              narrow={narrow}
+              onClose={controller.closeSettings}
+              open={settingsBlock !== null}
+              title="Settings"
+            >
+              {settingsBlock ? (
+                <TemplateBlockEditor
+                  block={settingsBlock}
+                  blocks={page.content.blocks}
+                  canMoveDown={settingsIndex < page.content.blocks.length - 1}
+                  canMoveUp={settingsIndex > 0}
+                  onChange={(block) => controller.updateBlock(block)}
+                  onDelete={() => controller.remove(settingsBlock.id)}
+                  onDuplicate={() => controller.duplicate(settingsBlock.id)}
+                  onMoveDown={() => controller.move(settingsBlock.id, "down")}
+                  onMoveUp={() => controller.move(settingsBlock.id, "up")}
+                />
+              ) : null}
+            </EditorSidePanel>
+            <EditorSidePanel keepMounted narrow={narrow} onClose={() => setFlowOpen(false)} open={flowOpen} title="Flow">
+              <TemplateFlowPanel
+                canUndo={flowUndo !== null}
+                draft={flowDraft}
+                endpoint={`/api/documents/${encodeURIComponent(document.id)}/flow`}
+                initialMessages={[]}
+                lastAppliedMessageId={flowUndo?.messageId ?? null}
+                onApplyProposal={applyProposal}
+                onProposalReceived={(next) => {
+                  setProposal(next)
+                  controller.select(null)
+                }}
+                onProposalStale={setProposal}
+                onRejectProposal={() => setProposal(null)}
+                onUndo={() => {
+                  if (flowUndo) {
+                    history.set(() => flowUndo.page)
+                    setFlowUndo(null)
+                  }
+                }}
+                pendingProposal={proposal}
+                starter={writable ? DRAFT_STARTER : SENT_STARTER}
               />
-            ) : null}
-          </EditorSidePanel>
+            </EditorSidePanel>
+          </>
         )}
         primary={
           completed ? (
@@ -340,7 +429,7 @@ export function DocumentEditor({
         }
         saveStatus={writable || fillable ? saveStatus : null}
         title={page.title}
-        titleEditable={writable}
+        titleEditable={writable && !proposal}
       >
         {({ narrow, zoom }) => (
           <form
@@ -351,16 +440,16 @@ export function DocumentEditor({
             <EditorCanvas
               allowFiles={false}
               answers={answers}
-              controller={controller}
-              designable={writable}
-              documentTitle={page.title}
-              fields={fillable ? "fill" : "read"}
+              controller={proposal ? preview : controller}
+              designable={writable && !proposal}
+              documentTitle={proposal ? proposal.candidateDraft.title : page.title}
+              fields={fillable && !proposal ? "fill" : "read"}
               narrow={narrow}
               onAnswerChange={(fieldKey, value) =>
                 setAnswers((current) => applyVisibleTemplateFieldValue(page.content, current, fieldKey, value))
               }
-              surface="screen"
-              textEditable={writable}
+              surface={proposal ? "paper" : "screen"}
+              textEditable={writable && !proposal}
               zoom={zoom}
             />
           </form>

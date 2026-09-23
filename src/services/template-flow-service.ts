@@ -22,6 +22,10 @@ import {
   AiProviderError
 } from "@/services/ai/errors"
 import { createAiRuntime } from "@/services/ai/provider-factory"
+import {
+  DocumentSigningServiceError,
+  getGeneratedDocumentSigningView
+} from "@/services/document-signing-service"
 import { createTemplateFlowDraftFingerprint } from "@/services/template-flow-proposal-state"
 import {
   createTemplateFlowResponseSchema,
@@ -319,6 +323,22 @@ export type ExecuteTemplateFlowInput = {
   instruction: unknown
 }
 
+export type ExecuteDocumentFlowInput = {
+  actorUserId: string
+  organizationId: string
+  documentId: string
+  draft: unknown
+  instruction: unknown
+}
+
+export type DocumentFlowServiceDeps = TemplateFlowServiceDeps & {
+  authorizeDocument?: (input: {
+    actorUserId: string
+    organizationId: string
+    documentId: string
+  }) => Promise<void>
+}
+
 export type ListTemplateFlowMessagesInput = {
   actorUserId: string
   organizationId: string
@@ -511,6 +531,57 @@ export async function executeTemplateFlow(
     needsConfirmation: providerResult.confirmationQuestion !== null,
     persistenceWarning
   }
+}
+
+/**
+ * Completes one Flow turn about a generated document's own page. It is the
+ * same Flow that edits templates, open to anyone who may open the document;
+ * applying a suggestion goes through the document's own save, which keeps the
+ * draft-only and edit-access rules.
+ *
+ * @param input - Actor, tenant, document, the page the editor holds, and the message.
+ * @param deps - Optional document authorization and the template Flow dependencies.
+ * @returns A staged candidate batch and the turn's messages.
+ * @throws TemplateFlowServiceError when the document cannot be opened or Flow fails.
+ */
+export async function executeDocumentFlow(
+  input: ExecuteDocumentFlowInput,
+  deps: DocumentFlowServiceDeps = {}
+): Promise<TemplateFlowResult> {
+  const { actorUserId, documentId, organizationId } = input
+
+  // The id comes from the URL; a malformed one is simply not a document.
+  if (!z.string().uuid().safeParse(documentId).success) {
+    throw new TemplateFlowServiceError("Generated document was not found.", 404)
+  }
+
+  try {
+    await (
+      deps.authorizeDocument ??
+      (async (subject): Promise<void> => {
+        await getGeneratedDocumentSigningView(subject)
+      })
+    )({ actorUserId, documentId, organizationId })
+  } catch (error: unknown) {
+    if (error instanceof DocumentSigningServiceError) {
+      throw new TemplateFlowServiceError(error.message, error.statusCode)
+    }
+
+    throw error
+  }
+
+  // Flow keys a turn by what it edits, so the document's id rides in
+  // `templateId`. ponytail: the conversation lives in the editor's tab; keep
+  // it per document once someone needs it back after a reload.
+  return executeTemplateFlow(
+    { actorUserId, draft: input.draft, instruction: input.instruction, organizationId, templateId: documentId },
+    {
+      ...deps,
+      authorizeTemplateManagement: async (): Promise<void> => {},
+      loadHistory: async (): Promise<TemplateFlowMessage[]> => [],
+      persistMessages: async (): Promise<void> => {}
+    }
+  )
 }
 
 /**

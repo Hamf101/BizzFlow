@@ -357,7 +357,10 @@ export function TemplateEditor({
         }
         canRedo={history.canRedo}
         canUndo={history.canUndo}
-        dock={(narrow) => (mode === "edit" && !proposal ? <EditorDock narrow={narrow} tools={tools} /> : null)}
+        dock={(narrow) => (
+          // Flow stays within reach in every mode; the other tools need Edit.
+          <EditorDock narrow={narrow} tools={mode === "edit" && !proposal ? tools : tools.filter((tool) => tool.id === "flow")} />
+        )}
         menu={
           <DropdownMenu>
             <DropdownMenuTrigger

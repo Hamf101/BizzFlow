@@ -10,7 +10,9 @@ import {
   AI_PROVIDER_ERROR_CODES,
   AiProviderError
 } from "@/services/ai/errors"
+import { DocumentSigningServiceError } from "@/services/document-signing-service"
 import {
+  executeDocumentFlow,
   executeTemplateFlow,
   listTemplateFlowMessages,
   type ExecuteTemplateFlowInput,
@@ -1020,6 +1022,81 @@ describe("template Flow service", () => {
       statusCode: 502,
       message: "Flow returned changes that failed validation."
     })
+  })
+})
+
+describe("document Flow", () => {
+  const DOCUMENT_ID = "00000000-0000-4000-8000-000000000020"
+
+  function documentInput(instruction: string): Parameters<typeof executeDocumentFlow>[0] {
+    return {
+      actorUserId: "user-1",
+      documentId: DOCUMENT_ID,
+      draft: { title: "Lease, Flat 3B", description: "", content: createContent() },
+      instruction,
+      organizationId: "org-1"
+    }
+  }
+
+  it("proposes changes to the document's own page and keeps the turn out of template history", async () => {
+    const aiProvider = createTestAiProvider([
+      flowProviderResult({
+        assistantMessage: "I tightened the introduction.",
+        needsConfirmation: false,
+        confirmationQuestion: "",
+        operations: [
+          {
+            type: "update_block",
+            summary: "Condensed introduction",
+            payload: {
+              blockId: PARAGRAPH_ID,
+              block: { type: "paragraph", text: "A concise introduction.", alignment: "left" }
+            }
+          }
+        ]
+      })
+    ])
+    const authorizeDocument = vi.fn(async (): Promise<void> => {})
+    const loadHistory = vi.fn(async (): Promise<TemplateFlowMessage[]> => [])
+    const persistMessages = vi.fn(async (): Promise<void> => {})
+
+    const result = await executeDocumentFlow(
+      documentInput("Make the introduction more concise."),
+      { ...createDependencies({ aiProvider, loadHistory, persistMessages }), authorizeDocument }
+    )
+
+    expect(authorizeDocument).toHaveBeenCalledWith({
+      actorUserId: "user-1",
+      documentId: DOCUMENT_ID,
+      organizationId: "org-1"
+    })
+    expect(result.proposal?.candidateDraft.title).toBe("Lease, Flat 3B")
+    expect(result.proposal?.candidateDraft.content.blocks).toContainEqual(
+      expect.objectContaining({ id: PARAGRAPH_ID, text: "A concise introduction." })
+    )
+    // A document is not a template: its turns never reach a template's shared history.
+    expect(loadHistory).not.toHaveBeenCalled()
+    expect(persistMessages).not.toHaveBeenCalled()
+  })
+
+  it("tells someone who cannot open the document nothing, before any provider is asked", async () => {
+    const aiProvider = createTestAiProvider([flowProviderResult(successfulFlowPayload())])
+
+    await expect(
+      executeDocumentFlow(documentInput("Summarise this."), {
+        ...createDependencies({ aiProvider }),
+        authorizeDocument: async (): Promise<void> => {
+          throw new DocumentSigningServiceError("Generated document was not found.", 404)
+        }
+      })
+    ).rejects.toMatchObject({ message: "Generated document was not found.", statusCode: 404 })
+    await expect(
+      executeDocumentFlow(
+        { ...documentInput("Summarise this."), documentId: "not-a-document" },
+        createDependencies({ aiProvider })
+      )
+    ).rejects.toMatchObject({ statusCode: 404 })
+    expect(readProviderRequests(aiProvider)).toHaveLength(0)
   })
 })
 
