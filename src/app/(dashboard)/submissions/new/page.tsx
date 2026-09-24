@@ -6,6 +6,7 @@ import { redirect } from "next/navigation"
 import type { ReactElement } from "react"
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Select } from "@/components/ui/select"
 import { buttonVariants } from "@/components/ui/button"
 import {
   Card,
@@ -137,8 +138,7 @@ export default async function NewSubmissionPage(): Promise<ReactElement> {
               </Field>
               <Field>
                 <FieldLabel htmlFor="submission-template">Template</FieldLabel>
-                <select
-                  className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                <Select
                   id="submission-template"
                   name="templateId"
                   required
@@ -151,7 +151,7 @@ export default async function NewSubmissionPage(): Promise<ReactElement> {
                       </option>
                     )
                   )}
-                </select>
+                </Select>
               </Field>
               <button className={cn(buttonVariants(), "w-fit")} type="submit">
                 Create draft

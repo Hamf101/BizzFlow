@@ -21,6 +21,7 @@ import {
   type TemplateWebRenderGroup
 } from "@/components/templates/template-render-groups"
 import { Input } from "@/components/ui/input"
+import { Select } from "@/components/ui/select"
 import { resolveDocumentSurfaceInk } from "@/lib/document-surface"
 import { cn } from "@/lib/utils"
 import {
@@ -669,8 +670,7 @@ export function GeneratedBlock({
           labelFor={editable ? block.id : undefined}
         >
           {editable ? (
-            <select
-              className="h-8 w-full rounded-lg border border-input bg-card px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
+            <Select
               id={block.id}
               name={getGeneratedDocumentAnswerName("text", block.fieldKey)}
               onChange={(event: ChangeEvent<HTMLSelectElement>): void =>
@@ -686,7 +686,7 @@ export function GeneratedBlock({
                   {option}
                 </option>
               ))}
-            </select>
+            </Select>
           ) : (
             <ReadOnlyAnswer value={readStringAnswer(answers, block.fieldKey)} />
           )}

@@ -13,6 +13,7 @@ import {
 } from "@/components/templates/template-static-block"
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { Select } from "@/components/ui/select"
 import { createTemplateRenderPlan } from "@/services/templates/template-render-plan"
 import type { TemplateBlock, TemplateContent } from "@/types/template"
 
@@ -279,8 +280,7 @@ function PublicFormFieldBlock({
       return (
         <Field data-public-form-field-key={block.fieldKey}>
           <PublicFormFieldLabel block={block} />
-          <select
-            className="h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/50"
+          <Select
             id={block.id}
             name={fieldName}
             onChange={(event: ChangeEvent<HTMLSelectElement>): void =>
@@ -297,7 +297,7 @@ function PublicFormFieldBlock({
                 {option}
               </option>
             ))}
-          </select>
+          </Select>
           <PublicFormFieldHelpText block={block} />
         </Field>
       )
