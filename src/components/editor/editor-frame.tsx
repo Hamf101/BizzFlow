@@ -25,7 +25,9 @@ import { cn } from "@/lib/utils"
 import type { EditorLayout } from "@/types/editor-layout"
 
 const ZOOM_STEPS = [0.5, 0.67, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2] as const
-const NARROW = "(width < 48rem)"
+// Phones, and touch tablets held upright: a page shrunk to fit their width
+// would leave text and targets too small for a finger.
+const NARROW = "(width < 48rem), (pointer: coarse) and (width < 64rem)"
 
 // Where the dock and zoom start: the dock upright at the left, the zoom at the
 // bottom right.
@@ -243,7 +245,10 @@ export function EditorFrame<Mode extends string>({
       <div className="group/stage relative min-h-0 flex-1">
         {banner}
         <div
-          className="absolute inset-0 overflow-auto md:group-has-[[data-slot=editor-panel]:not([hidden])]/stage:right-[23.5rem]"
+          className={cn(
+            "absolute inset-0 overflow-auto",
+            !narrow && "group-has-[[data-slot=editor-panel]:not([hidden])]/stage:right-[23.5rem]"
+          )}
           data-slot="editor-scroll"
           ref={scrollRef}
         >

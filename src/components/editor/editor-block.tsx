@@ -408,7 +408,7 @@ function BlockToolbar({ actions, block }: { actions: CanvasActions; block: Templ
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
-              <Button className="h-10 gap-1 px-2 font-normal md:h-8" size="sm" type="button" variant="ghost">
+              <Button className="h-10 gap-1 px-2 font-normal md:pointer-fine:h-8" size="sm" type="button" variant="ghost">
                 {describeLine(block)}
                 <ChevronDown aria-hidden="true" className="size-3.5 text-muted-foreground" />
               </Button>
@@ -435,7 +435,7 @@ function BlockToolbar({ actions, block }: { actions: CanvasActions; block: Templ
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
-              <Button aria-label="Align" className="size-10 md:size-8" size="icon-sm" title="Align" type="button" variant="ghost">
+              <Button aria-label="Align" className="size-10 md:pointer-fine:size-8" size="icon-sm" title="Align" type="button" variant="ghost">
                 {block.alignment === "center" ? <AlignCenter /> : block.alignment === "right" ? <AlignRight /> : <AlignLeft />}
               </Button>
             }
@@ -505,7 +505,7 @@ function ToolButton({
     <Button
       aria-label={label}
       aria-pressed={pressed}
-      className={cn("size-10 md:size-8", pressed && "bg-secondary text-secondary-foreground")}
+      className={cn("size-10 md:pointer-fine:size-8", pressed && "bg-secondary text-secondary-foreground")}
       disabled={disabled}
       onClick={onClick}
       size="icon-sm"

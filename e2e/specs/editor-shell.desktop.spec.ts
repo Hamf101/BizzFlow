@@ -1,5 +1,8 @@
+import { devices } from "@playwright/test"
+
 import { expect, test, uniqueName } from "../support/fixtures"
 import { waitForHydration } from "../support/hydration"
+import { authStatePath } from "../support/paths"
 import { seedTemplate } from "../support/seed"
 
 test("the mode switch moves with the arrow keys and keeps one tab stop", async ({ admin, pageAs, tenant }) => {
@@ -19,6 +22,26 @@ test("the mode switch moves with the arrow keys and keeps one tab stop", async (
   await expect(page.locator('[role="radiogroup"] [tabindex="0"]')).toHaveCount(1)
   await page.keyboard.press("ArrowLeft")
   await expect(edit).toBeChecked()
+})
+
+test("a touch tablet held upright gets the phone's canvas, not a shrunken page", async ({
+  admin,
+  browser,
+  tenant,
+}) => {
+  const template = await seedTemplate(admin, tenant.organizationId, uniqueName("Tablet"))
+  const context = await browser.newContext({ ...devices["iPad Mini"], storageState: authStatePath("owner_admin") })
+  const page = await context.newPage()
+
+  await page.goto(`/templates/${template.id}/edit`)
+  const dock = page.getByRole("navigation", { name: "Editor tools" })
+  await waitForHydration(dock.getByRole("button").first())
+
+  // The dock rests at the bottom and the page is not scaled down to fit.
+  const box = await dock.boundingBox()
+  expect(box && box.y > (page.viewportSize()?.height ?? 0) / 2).toBe(true)
+  await expect(page.locator('[data-slot="editor-zoom"]')).toHaveCount(0)
+  await context.close()
 })
 
 test("the dock stays where it was dragged and laid flat, on the next visit too", async ({

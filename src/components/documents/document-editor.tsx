@@ -453,6 +453,8 @@ export function DocumentEditor({
       >
         {({ narrow, zoom }) => (
           <form
+            // Only gathers the answers: the canvas inside sizes itself.
+            className="contents"
             onPointerUp={() => setDrawings((count) => count + 1)}
             onSubmit={(event) => event.preventDefault()}
             ref={formRef}
