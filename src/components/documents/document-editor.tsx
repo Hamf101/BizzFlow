@@ -1,10 +1,12 @@
 "use client"
 
-import { Download, Files, MoreHorizontal, Palette, Plus, Send, Sparkles, TextCursorInput } from "lucide-react"
+import { Download, Files, MoreHorizontal, Palette, Plus, Send, TextCursorInput } from "lucide-react"
 import { type ReactElement, useMemo, useRef, useState } from "react"
 
 import type { DocumentContentInput } from "@/app/(editor)/documents/[documentId]/edit/actions"
 import { DocumentRecipientCollection } from "@/components/documents/document-recipient-collection"
+import { FlowMark } from "@/components/brand/flow-mark"
+import { useFlowHandoff } from "@/components/flow/flow-handoff"
 import { findInsertChoices } from "@/components/editor/block-catalog"
 import { EditorCanvas } from "@/components/editor/editor-canvas"
 import { normalizeContentForSave } from "@/components/editor/editor-content"
@@ -103,6 +105,13 @@ export function DocumentEditor({
   const [proposal, setProposal] = useState<TemplateFlowProposal | null>(null)
   const [flowUndo, setFlowUndo] = useState<{ messageId: string; page: DocumentPage } | null>(null)
   const [flowOpen, setFlowOpen] = useState(false)
+  const [carried, setCarried] = useState<string | null>(null)
+
+  // A request made from a workspace page opens Flow here and carries on.
+  useFlowHandoff((request) => {
+    setFlowOpen(true)
+    setCarried(request)
+  })
   const formRef = useRef<HTMLFormElement>(null)
   const flowDraft = useMemo(() => ({ content: page.content, description: "", title: page.title }), [page])
   const suggested = useMemo(
@@ -218,7 +227,7 @@ export function DocumentEditor({
   ]
 
   const flowTool: DockTool = {
-    icon: Sparkles,
+    icon: FlowMark,
     id: "flow",
     label: "Flow",
     onOpen: () => setFlowOpen((open) => !open),
@@ -408,6 +417,7 @@ export function DocumentEditor({
                     setFlowUndo(null)
                   }
                 }}
+                autoSend={carried}
                 pendingProposal={proposal}
                 starter={writable ? DRAFT_STARTER : SENT_STARTER}
               />

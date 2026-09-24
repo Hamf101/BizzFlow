@@ -6,6 +6,7 @@ import { Suspense, type ReactElement, type ReactNode } from "react"
 
 import { PostHogProvider } from "@/components/analytics/posthog-provider"
 import { DashboardContentSkeleton } from "@/components/dashboard/dashboard-content-skeleton"
+import { FlowLauncher } from "@/components/flow/flow-launcher"
 import type { DashboardAccount } from "@/components/navigation/dashboard-account-menu"
 import { MobileTabBar } from "@/components/navigation/mobile-tab-bar"
 import { MobileTopBar } from "@/components/navigation/mobile-top-bar"
@@ -167,7 +168,7 @@ export default async function DashboardLayout({
           <DashboardSidebar account={account} signOutAction={signOutAction} />
           <div className="flex min-w-0 flex-1 flex-col px-3 pt-3 md:pt-4 md:pr-4 md:pl-1">
             <main className="flex flex-1 flex-col rounded-t-[18px] border-x border-t border-border/70 bg-background">
-              <div className="min-w-0 flex-1 px-5 pt-6 pb-[calc(3.5rem+1.5rem+env(safe-area-inset-bottom))] sm:px-7 sm:pt-7 sm:pb-[calc(3.5rem+1.75rem+env(safe-area-inset-bottom))] md:pb-7">
+              <div className="min-w-0 flex-1 px-5 pt-6 pb-[calc(8.25rem+env(safe-area-inset-bottom))] sm:px-7 sm:pt-7 md:pb-20">
                 <Suspense fallback={<DashboardContentSkeleton />}>
                   <DashboardUserScope />
                   {children}
@@ -177,6 +178,7 @@ export default async function DashboardLayout({
           </div>
         </div>
         <MobileTabBar role={account.permissionSubject} />
+        {account.navigation?.organizationId ? <FlowLauncher /> : null}
       </div>
       </NavigationPreferencesProvider>
     </PostHogProvider>

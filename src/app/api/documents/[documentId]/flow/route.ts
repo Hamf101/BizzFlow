@@ -1,11 +1,8 @@
 import { NextResponse } from "next/server"
 
-import { createTemplateRouteErrorResponse } from "@/app/api/templates/_utils"
-import { getAuthenticatedUser } from "@/lib/auth"
-import { checkRateLimit } from "@/lib/rate-limit"
+import { createTemplateRouteErrorResponse, startFlowTurn } from "@/app/api/templates/_utils"
 import { readTrustedJsonObject } from "@/lib/request-security"
-import { getCurrentOrganizationContext } from "@/services/organization-service"
-import { executeDocumentFlow, TemplateFlowServiceError } from "@/services/template-flow-service"
+import { executeDocumentFlow } from "@/services/template-flow-service"
 
 /**
  * Completes one Flow chat turn about a generated document's own page.
@@ -19,25 +16,15 @@ export async function POST(
   context: { params: Promise<{ documentId: string }> }
 ): Promise<Response> {
   try {
-    const user = await getAuthenticatedUser()
-    const organization = await getCurrentOrganizationContext(user.id)
-
-    if (!organization) {
-      throw new TemplateFlowServiceError("Create or join an organization before using Flow.", 403)
-    }
-
-    // The same two buckets as template Flow: one spend ceiling for every surface.
-    await checkRateLimit("ai_flow", `${organization.organization.id}:${user.id}`)
-    await checkRateLimit("ai_flow_daily", organization.organization.id)
-
+    const { organizationId, userId } = await startFlowTurn()
     const { documentId } = await context.params
     const body = await readTrustedJsonObject(request)
     const result = await executeDocumentFlow({
-      actorUserId: user.id,
+      actorUserId: userId,
       documentId,
       draft: body.draft,
       instruction: body.instruction,
-      organizationId: organization.organization.id,
+      organizationId,
     })
 
     return NextResponse.json(result)

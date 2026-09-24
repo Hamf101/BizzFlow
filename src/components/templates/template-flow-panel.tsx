@@ -19,6 +19,7 @@ import {
   type KeyboardEvent,
   type ReactElement,
   useEffect,
+  useEffectEvent,
   useMemo,
   useRef,
   useState
@@ -80,6 +81,8 @@ type TemplateFlowPanelProps = {
   onRejectProposal?: (proposal: TemplateFlowProposal) => void
   onUndo: () => void
   pendingProposal?: TemplateFlowProposal | null
+  /** A request carried in from elsewhere, sent once when it arrives. */
+  autoSend?: string | null
   /** Where turns go; a document's Flow answers at its own route. */
   endpoint?: string
   /** The empty conversation's line and first messages, for what is open. */
@@ -106,6 +109,7 @@ export function TemplateFlowPanel({
   onRejectProposal,
   onUndo,
   pendingProposal: controlledPendingProposal,
+  autoSend = null,
   endpoint = "/api/templates/flow",
   starter = TEMPLATE_STARTER,
   templateId
@@ -140,6 +144,19 @@ export function TemplateFlowPanel({
   useEffect((): void => {
     draftRef.current = draft
   }, [draft])
+
+  const carried = useRef<string | null>(null)
+  const sendCarried = useEffectEvent((message: string): void => {
+    void submitMessage(message)
+  })
+
+  useEffect((): void => {
+    // The ref keeps a development double-run from sending it twice.
+    if (autoSend && carried.current !== autoSend) {
+      carried.current = autoSend
+      sendCarried(autoSend)
+    }
+  }, [autoSend])
 
   useEffect((): void => {
     const timeline = timelineRef.current

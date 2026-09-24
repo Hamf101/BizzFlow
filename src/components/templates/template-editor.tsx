@@ -9,13 +9,14 @@ import {
   MoreHorizontal,
   Palette,
   Plus,
-  Sparkles,
   TextCursorInput,
 } from "lucide-react"
 import Link from "next/link"
 import { type ReactElement, useMemo, useRef, useState, useTransition } from "react"
 
 import type { TemplateDraftInput } from "@/app/(dashboard)/templates/actions"
+import { FlowMark } from "@/components/brand/flow-mark"
+import { useFlowHandoff } from "@/components/flow/flow-handoff"
 import { findInsertChoices } from "@/components/editor/block-catalog"
 import { EditorCanvas } from "@/components/editor/editor-canvas"
 import { normalizeContentForSave } from "@/components/editor/editor-content"
@@ -115,6 +116,13 @@ export function TemplateEditor({
   const [proposal, setProposal] = useState<TemplateFlowProposal | null>(null)
   const [flowUndo, setFlowUndo] = useState<{ messageId: string; state: TemplateEditorState } | null>(null)
   const [flowOpen, setFlowOpen] = useState(false)
+  const [carried, setCarried] = useState<string | null>(null)
+
+  // A request made from a workspace page opens Flow here and carries on.
+  useFlowHandoff((request) => {
+    setFlowOpen(true)
+    setCarried(request)
+  })
   const [detailsOpen, setDetailsOpen] = useState(false)
   const [savedState, setSavedState] = useState(initial)
   const [, startTransition] = useTransition()
@@ -289,7 +297,7 @@ export function TemplateEditor({
       label: "Brand",
     },
     {
-      icon: Sparkles,
+      icon: FlowMark,
       id: "flow",
       label: "Flow",
       onOpen: () => setFlowOpen((open) => !open),
@@ -442,6 +450,7 @@ export function TemplateEditor({
                     setFlowUndo(null)
                   }
                 }}
+                autoSend={carried}
                 pendingProposal={proposal}
                 templateId={template.id}
               />
