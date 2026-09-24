@@ -13,6 +13,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { DateTimePicker } from "@/components/ui/date-picker"
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { formatMediumDate } from "@/lib/date-format"
@@ -67,7 +68,7 @@ export function PublicFormLinksPanel({
             <div className="grid gap-4 sm:grid-cols-2">
               <Field>
                 <FieldLabel htmlFor="link-expires-at">Expires</FieldLabel>
-                <Input id="link-expires-at" name="expiresAt" type="datetime-local" />
+                <DateTimePicker id="link-expires-at" name="expiresAt" />
                 <FieldDescription>Leave empty for never.</FieldDescription>
               </Field>
               <Field>

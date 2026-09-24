@@ -24,6 +24,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { DateTimePicker } from "@/components/ui/date-picker"
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
@@ -404,11 +405,10 @@ function TaskDetailsPanel({ task }: { task: Task }): ReactElement {
           </Field>
           <Field>
             <FieldLabel htmlFor="task-due">Due (UTC)</FieldLabel>
-            <Input
+            <DateTimePicker
               defaultValue={toDateTimeLocalValue(task.dueAt)}
               id="task-due"
               name="dueAt"
-              type="datetime-local"
             />
             <FieldDescription>
               Leave empty to remove the due date.
@@ -537,11 +537,10 @@ function TaskRemindersPanel({
               <FieldLabel htmlFor="reminder-remind-at">
                 Remind at (UTC)
               </FieldLabel>
-              <Input
+              <DateTimePicker
                 id="reminder-remind-at"
                 name="remindAt"
                 required
-                type="datetime-local"
               />
               <FieldDescription>Runs every 15 minutes.</FieldDescription>
             </Field>

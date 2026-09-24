@@ -20,6 +20,7 @@ import {
   groupTemplateRenderBlocks,
   type TemplateWebRenderGroup
 } from "@/components/templates/template-render-groups"
+import { DatePicker } from "@/components/ui/date-picker"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
 import { formatDateAnswer } from "@/lib/date-format"
@@ -595,14 +596,11 @@ export function GeneratedBlock({
           labelFor={editable ? block.id : undefined}
         >
           {editable ? (
-            <Input
-              className="border-input"
+            <DatePicker
+              format={block.dateFormat}
               id={block.id}
               name={getGeneratedDocumentAnswerName("text", block.fieldKey)}
-              onChange={(event: ChangeEvent<HTMLInputElement>): void =>
-                onAnswerChange(block.fieldKey, event.target.value)
-              }
-              type="date"
+              onChange={(value: string): void => onAnswerChange(block.fieldKey, value)}
               value={readStringAnswer(answers, block.fieldKey)}
             />
           ) : (
