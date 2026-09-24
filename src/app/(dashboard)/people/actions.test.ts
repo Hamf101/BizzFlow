@@ -1,15 +1,27 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { enforceOutboundEmailRateLimit } from "@/lib/action-rate-limit"
+import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
-import { createInvite } from "@/services/organization-service"
+import {
+  createInvite,
+  revokeInvite,
+  updateMemberAccess,
+  updateProfilePhone,
+} from "@/services/organization-service"
 
-import { createInviteAction } from "./actions"
+import {
+  createInviteAction,
+  revokeInviteAction,
+  updateMemberAccessAction,
+  updateProfilePhoneAction,
+} from "./actions"
 
-const { redirectMock } = vi.hoisted(() => ({
+const { redirectMock, revalidatePathMock } = vi.hoisted(() => ({
   redirectMock: vi.fn((destination: string): never => {
     throw new Error(`NEXT_REDIRECT:${destination}`)
   }),
+  revalidatePathMock: vi.fn(),
 }))
 
 vi.mock("next/navigation", () => ({
@@ -17,12 +29,17 @@ vi.mock("next/navigation", () => ({
 }))
 
 vi.mock("next/cache", () => ({
-  revalidatePath: vi.fn(),
+  revalidatePath: revalidatePathMock,
 }))
 
 vi.mock("@/lib/page-auth", () => ({
   loadAuthenticatedPageUser: vi.fn(),
 }))
+
+vi.mock("@/lib/auth", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/auth")>()
+  return { ...actual, getAuthenticatedUser: vi.fn() }
+})
 
 vi.mock("@/lib/action-rate-limit", () => ({
   enforceOutboundEmailRateLimit: vi.fn().mockResolvedValue(undefined),
@@ -34,17 +51,28 @@ vi.mock("@/services/organization-service", () => ({
     emailDelivered: true,
     emailFailureReason: null,
   }),
-  OrganizationServiceError: class extends Error {},
-  updateMemberRole: vi.fn(),
+  OrganizationServiceError: class extends Error {
+    readonly statusCode: number
+
+    constructor(message: string, statusCode: number) {
+      super(message)
+      this.statusCode = statusCode
+    }
+  },
+  revokeInvite: vi.fn(),
+  updateMemberAccess: vi.fn(),
+  updateProfilePhone: vi.fn(),
 }))
 
 const MEMBER_ID = "20000000-0000-4000-8000-000000000001"
 const ORG_ID = "10000000-0000-4000-8000-000000000001"
+const ROLE_ID = "50000000-0000-4000-8000-000000000001"
+const MEMBERSHIP_ID = "30000000-0000-4000-8000-000000000002"
 
 function createInviteForm(): FormData {
   const formData = new FormData()
   formData.set("organizationId", ORG_ID)
-  formData.set("role", "staff")
+  formData.set("roleDefinitionId", ROLE_ID)
   formData.set("email", "invitee@example.com")
   return formData
 }
@@ -53,6 +81,10 @@ describe("createInviteAction", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(loadAuthenticatedPageUser).mockResolvedValue({
+      id: MEMBER_ID,
+      email: "member@example.com",
+    } as never)
+    vi.mocked(getAuthenticatedUser).mockResolvedValue({
       id: MEMBER_ID,
       email: "member@example.com",
     } as never)
@@ -66,13 +98,19 @@ describe("createInviteAction", () => {
 
   it("enforces the outbound email budget for the authenticated member", async () => {
     await expect(createInviteAction(createInviteForm())).rejects.toThrow(
-      "NEXT_REDIRECT:/people?message=Invite+email+sent."
+      "NEXT_REDIRECT:/people?feedback=invite_email_sent"
     )
 
     expect(loadAuthenticatedPageUser).toHaveBeenCalledExactlyOnceWith("/people")
     expect(enforceOutboundEmailRateLimit).toHaveBeenCalledExactlyOnceWith({
       userId: MEMBER_ID,
       redirectPath: "/people",
+    })
+    expect(createInvite).toHaveBeenCalledExactlyOnceWith({
+      actorUserId: MEMBER_ID,
+      organizationId: ORG_ID,
+      roleId: ROLE_ID,
+      email: "invitee@example.com",
     })
   })
 
@@ -86,19 +124,22 @@ describe("createInviteAction", () => {
     } as never)
 
     await expect(createInviteAction(createInviteForm())).rejects.toThrow(
-      /NEXT_REDIRECT:\/people\?message=Invite\+created/
+      "NEXT_REDIRECT:/people?feedback=invite_created_email_failed"
+    )
+    expect(redirectMock).not.toHaveBeenCalledWith(
+      expect.stringContaining("provider+refused")
     )
   })
 
   it("throttles before the invite is created", async () => {
     vi.mocked(enforceOutboundEmailRateLimit).mockImplementation(
       async (): Promise<void> => {
-        throw new Error("NEXT_REDIRECT:/people?error=Too+many+emails")
+        throw new Error("NEXT_REDIRECT:/people?feedback=retry_later")
       }
     )
 
     await expect(createInviteAction(createInviteForm())).rejects.toThrow(
-      "NEXT_REDIRECT:/people?error=Too+many+emails"
+      "NEXT_REDIRECT:/people?feedback=retry_later"
     )
     expect(createInvite).not.toHaveBeenCalled()
   })
@@ -109,23 +150,139 @@ describe("createInviteAction", () => {
     // "Unable to create invite."
     vi.mocked(enforceOutboundEmailRateLimit).mockImplementation(
       async (): Promise<void> => {
-        throw new Error("NEXT_REDIRECT:/people?error=Too+many+emails")
+        throw new Error("NEXT_REDIRECT:/people?feedback=retry_later")
       }
     )
 
     await expect(createInviteAction(createInviteForm())).rejects.not.toThrow(
-      /Unable\+to\+create\+invite/
+      /feedback=operation_failed/
     )
   })
 
-  it("keeps an invalid role from reaching authentication or the limiter", async () => {
+  it("keeps an invalid role id from reaching authentication or the limiter", async () => {
     const formData = createInviteForm()
-    formData.set("role", "sysadmin")
+    formData.set("roleDefinitionId", "not-a-role-id")
 
     await expect(createInviteAction(formData)).rejects.toThrow(
-      "NEXT_REDIRECT:/people?error=Choose+a+valid+role."
+      "NEXT_REDIRECT:/people?feedback=invalid_input"
     )
     expect(loadAuthenticatedPageUser).not.toHaveBeenCalled()
     expect(enforceOutboundEmailRateLimit).not.toHaveBeenCalled()
+  })
+
+  it("maps invite service copy to a fixed failure code", async () => {
+    vi.mocked(createInvite).mockRejectedValue(
+      new Error("EmailJS request id and provider diagnostics")
+    )
+
+    await expect(createInviteAction(createInviteForm())).rejects.toThrow(
+      "NEXT_REDIRECT:/people?feedback=operation_failed"
+    )
+    expect(redirectMock).not.toHaveBeenCalledWith(
+      expect.stringContaining("EmailJS")
+    )
+  })
+
+  it("names an existing member instead of a generic refresh prompt", async () => {
+    const { OrganizationServiceError } = await import(
+      "@/services/organization-service"
+    )
+    vi.mocked(createInvite).mockRejectedValue(
+      new OrganizationServiceError("That user is already a member.", 409)
+    )
+
+    await expect(createInviteAction(createInviteForm())).rejects.toThrow(
+      "NEXT_REDIRECT:/people?feedback=invite_already_member"
+    )
+  })
+})
+
+describe("people profile and permission actions", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(getAuthenticatedUser).mockResolvedValue({
+      id: MEMBER_ID,
+      email: "member@example.com",
+    } as never)
+    vi.mocked(updateMemberAccess).mockResolvedValue(undefined as never)
+    vi.mocked(revokeInvite).mockResolvedValue(undefined as never)
+    vi.mocked(updateProfilePhone).mockResolvedValue(undefined as never)
+  })
+
+  it("updates a workspace name and custom role as one authoritative change", async () => {
+    const formData = new FormData()
+    formData.set("organizationId", ORG_ID)
+    formData.set("membershipId", MEMBERSHIP_ID)
+    formData.set("roleDefinitionId", ROLE_ID)
+    formData.set("workspaceDisplayName", "Avery Kim")
+
+    await expect(updateMemberAccessAction(formData)).rejects.toThrow(
+      "NEXT_REDIRECT:/people?feedback=member_access_updated"
+    )
+    expect(updateMemberAccess).toHaveBeenCalledExactlyOnceWith({
+      actorUserId: MEMBER_ID,
+      organizationId: ORG_ID,
+      membershipId: MEMBERSHIP_ID,
+      roleId: ROLE_ID,
+      workspaceDisplayName: "Avery Kim",
+    })
+    expect(revalidatePathMock).toHaveBeenCalledWith("/people")
+    expect(revalidatePathMock).toHaveBeenCalledWith("/settings")
+  })
+
+  it("rejects an invalid member role id before authentication", async () => {
+    const formData = new FormData()
+    formData.set("organizationId", ORG_ID)
+    formData.set("membershipId", MEMBERSHIP_ID)
+    formData.set("roleDefinitionId", "sysadmin")
+
+    await expect(updateMemberAccessAction(formData)).rejects.toThrow(
+      "NEXT_REDIRECT:/people?feedback=invalid_input"
+    )
+    expect(getAuthenticatedUser).not.toHaveBeenCalled()
+    expect(updateMemberAccess).not.toHaveBeenCalled()
+  })
+
+  it("updates the authenticated member phone without trusting a submitted user id", async () => {
+    const formData = new FormData()
+    formData.set("phoneNumber", "+14155552671")
+
+    await expect(updateProfilePhoneAction(formData)).rejects.toThrow(
+      "NEXT_REDIRECT:/people?feedback=changes_saved"
+    )
+    expect(updateProfilePhone).toHaveBeenCalledExactlyOnceWith({
+      actorUserId: MEMBER_ID,
+      phoneNumber: "+14155552671",
+    })
+  })
+
+  it("revokes a tenant-scoped invite using the authenticated actor", async () => {
+    const formData = new FormData()
+    formData.set("organizationId", ORG_ID)
+    formData.set("inviteId", "invite-2")
+
+    await expect(revokeInviteAction(formData)).rejects.toThrow(
+      "NEXT_REDIRECT:/people?feedback=invite_deleted"
+    )
+    expect(revokeInvite).toHaveBeenCalledExactlyOnceWith({
+      actorUserId: MEMBER_ID,
+      organizationId: ORG_ID,
+      inviteId: "invite-2",
+    })
+  })
+
+  it("preserves the People return path when authentication expires", async () => {
+    vi.mocked(getAuthenticatedUser).mockRejectedValue(
+      new AuthenticationError("Sign in to continue.")
+    )
+    const formData = new FormData()
+    formData.set("organizationId", ORG_ID)
+    formData.set("membershipId", MEMBERSHIP_ID)
+    formData.set("roleDefinitionId", ROLE_ID)
+
+    await expect(updateMemberAccessAction(formData)).rejects.toThrow(
+      "NEXT_REDIRECT:/login?next=%2Fpeople"
+    )
+    expect(updateMemberAccess).not.toHaveBeenCalled()
   })
 })

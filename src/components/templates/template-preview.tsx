@@ -2,6 +2,7 @@ import {
   ArrowDown,
   ArrowUp,
   Check,
+  Copy,
   Plus,
   Settings2,
   Trash2
@@ -18,6 +19,10 @@ import {
   type TemplateWebRenderGroup
 } from "@/components/templates/template-render-groups"
 import { Button } from "@/components/ui/button"
+import {
+  resolveDocumentSurfaceInk,
+  type DocumentSurface
+} from "@/lib/document-surface"
 import { cn } from "@/lib/utils"
 import {
   shouldRenderTemplateFooter,
@@ -40,9 +45,16 @@ type TemplatePreviewProps = {
   changedBlockIds?: ReadonlySet<string>
   onBlockSelect?: (blockId: string) => void
   onDeleteBlock?: (blockId: string) => void
+  onDuplicateBlock?: (blockId: string) => void
   onMoveBlock?: (blockId: string, direction: "up" | "down") => void
   onRequestInsert?: (afterBlockId: string | null) => void
   selectedBlockId?: string | null
+  /**
+   * `screen` follows the interface theme and is what an author edits against.
+   * `paper` reproduces the printed page, brand ink included, and belongs only
+   * where the author has asked to see the finished document.
+   */
+  surface?: DocumentSurface
 }
 
 /**
@@ -57,17 +69,20 @@ export function TemplatePreview({
   changedBlockIds = EMPTY_CHANGED_BLOCK_IDS,
   onBlockSelect,
   onDeleteBlock,
+  onDuplicateBlock,
   onMoveBlock,
   onRequestInsert,
-  selectedBlockId = null
+  selectedBlockId = null,
+  surface = "screen"
 }: TemplatePreviewProps): ReactElement {
   // CSS percentage margins on every side resolve against container width.
   // Scaling points by page width therefore preserves one physical margin.
   const marginPercent =
     (renderPlan.geometry.marginPoints / renderPlan.geometry.widthPoints) * 100
+  const ink = resolveDocumentSurfaceInk(surface, renderPlan.branding)
   const paperStyle = {
-    "--template-accent": renderPlan.branding.accentColor,
-    "--template-primary": renderPlan.branding.primaryColor,
+    "--template-accent": ink.accent,
+    "--template-primary": ink.primary,
     aspectRatio: `${renderPlan.geometry.widthPoints} / ${renderPlan.geometry.heightPoints}`
   } as CSSProperties
   const printableAreaStyle = {
@@ -87,6 +102,7 @@ export function TemplatePreview({
         showEditorialGutter ? "overflow-visible" : "overflow-hidden",
         className
       )}
+      data-document-surface={surface}
       data-template-density={renderPlan.layout.density}
       data-template-footer-policy={renderPlan.layout.footerPolicy}
       data-template-header-policy={renderPlan.layout.headerPolicy}
@@ -119,6 +135,7 @@ export function TemplatePreview({
           changedBlockIds={changedBlockIds}
           onBlockSelect={onBlockSelect}
           onDeleteBlock={onDeleteBlock}
+          onDuplicateBlock={onDuplicateBlock}
           onMoveBlock={onMoveBlock}
           onRequestInsert={onRequestInsert}
           selectedBlockId={selectedBlockId}
@@ -263,6 +280,7 @@ function PreviewFlow({
   density,
   onBlockSelect,
   onDeleteBlock,
+  onDuplicateBlock,
   onMoveBlock,
   onRequestInsert,
   sections,
@@ -274,6 +292,7 @@ function PreviewFlow({
   density: TemplateLayout["density"]
   onBlockSelect?: (blockId: string) => void
   onDeleteBlock?: (blockId: string) => void
+  onDuplicateBlock?: (blockId: string) => void
   onMoveBlock?: (blockId: string, direction: "up" | "down") => void
   onRequestInsert?: (afterBlockId: string | null) => void
   sections: readonly TemplateRenderSection[]
@@ -343,6 +362,7 @@ function PreviewFlow({
               key={section.id ?? `implicit-section-${index}`}
               onBlockSelect={onBlockSelect}
               onDeleteBlock={onDeleteBlock}
+              onDuplicateBlock={onDuplicateBlock}
               onMoveBlock={onMoveBlock}
               onRequestInsert={onRequestInsert}
               section={section}
@@ -364,6 +384,7 @@ function PreviewSection({
   density,
   onBlockSelect,
   onDeleteBlock,
+  onDuplicateBlock,
   onMoveBlock,
   onRequestInsert,
   section,
@@ -377,6 +398,7 @@ function PreviewSection({
   density: TemplateLayout["density"]
   onBlockSelect?: (blockId: string) => void
   onDeleteBlock?: (blockId: string) => void
+  onDuplicateBlock?: (blockId: string) => void
   onMoveBlock?: (blockId: string, direction: "up" | "down") => void
   onRequestInsert?: (afterBlockId: string | null) => void
   section: TemplateRenderSection
@@ -421,6 +443,7 @@ function PreviewSection({
           key={group.id ?? `ungrouped-${group.blocks[0]?.block.id}`}
           onBlockSelect={onBlockSelect}
           onDeleteBlock={onDeleteBlock}
+          onDuplicateBlock={onDuplicateBlock}
           onMoveBlock={onMoveBlock}
           onRequestInsert={onRequestInsert}
           sectionBreaksBefore={section.pageBreakBefore}
@@ -442,6 +465,7 @@ function PreviewFieldGroup({
   isFirstInSection,
   onBlockSelect,
   onDeleteBlock,
+  onDuplicateBlock,
   onMoveBlock,
   onRequestInsert,
   sectionBreaksBefore,
@@ -457,6 +481,7 @@ function PreviewFieldGroup({
   isFirstInSection: boolean
   onBlockSelect?: (blockId: string) => void
   onDeleteBlock?: (blockId: string) => void
+  onDuplicateBlock?: (blockId: string) => void
   onMoveBlock?: (blockId: string, direction: "up" | "down") => void
   onRequestInsert?: (afterBlockId: string | null) => void
   sectionBreaksBefore: boolean
@@ -519,6 +544,7 @@ function PreviewFieldGroup({
                 key={renderBlock.block.id}
                 onBlockSelect={onBlockSelect}
                 onDeleteBlock={onDeleteBlock}
+                onDuplicateBlock={onDuplicateBlock}
                 onMoveBlock={onMoveBlock}
                 onRequestInsert={onRequestInsert}
                 renderBlock={renderBlock}
@@ -541,6 +567,7 @@ function PreviewBlockRow({
   contentPadding,
   onBlockSelect,
   onDeleteBlock,
+  onDuplicateBlock,
   onMoveBlock,
   onRequestInsert,
   renderBlock,
@@ -554,6 +581,7 @@ function PreviewBlockRow({
   contentPadding: string
   onBlockSelect?: (blockId: string) => void
   onDeleteBlock?: (blockId: string) => void
+  onDuplicateBlock?: (blockId: string) => void
   onMoveBlock?: (blockId: string, direction: "up" | "down") => void
   onRequestInsert?: (afterBlockId: string | null) => void
   renderBlock: TemplateRenderBlock
@@ -599,6 +627,7 @@ function PreviewBlockRow({
           changed={changed}
           onBlockSelect={onBlockSelect}
           onDeleteBlock={onDeleteBlock}
+          onDuplicateBlock={onDuplicateBlock}
           onMoveBlock={onMoveBlock}
           selected={selected}
         />
@@ -745,6 +774,7 @@ function EditablePreviewBlock({
   changed,
   onBlockSelect,
   onDeleteBlock,
+  onDuplicateBlock,
   onMoveBlock,
   selected
 }: {
@@ -754,6 +784,7 @@ function EditablePreviewBlock({
   changed: boolean
   onBlockSelect?: (blockId: string) => void
   onDeleteBlock?: (blockId: string) => void
+  onDuplicateBlock?: (blockId: string) => void
   onMoveBlock?: (blockId: string, direction: "up" | "down") => void
   selected: boolean
 }): ReactElement {
@@ -783,7 +814,8 @@ function EditablePreviewBlock({
         </button>
       )}
       {selected && (
-        <div className="absolute -top-10 right-0 z-20 flex items-center gap-0.5 rounded-[7px] border border-border bg-card p-1 text-secondary-foreground shadow-[0_4px_14px_rgba(37,35,41,0.09)]">
+        // Keep controls inside the block so narrow canvas overflow cannot clip them.
+        <div className="relative z-20 mb-1 ml-auto flex w-fit items-center gap-0.5 rounded-[7px] border border-border bg-card p-1 text-secondary-foreground shadow-[0_4px_14px_rgba(37,35,41,0.09)]">
           <Button
             aria-label="Edit block settings"
             onClick={selectBlock}
@@ -826,6 +858,18 @@ function EditablePreviewBlock({
           >
             <Trash2 />
           </Button>
+          {onDuplicateBlock && (
+            <Button
+              aria-label="Duplicate block"
+              onClick={(): void => onDuplicateBlock(block.id)}
+              size="icon-xs"
+              title="Duplicate"
+              type="button"
+              variant="ghost"
+            >
+              <Copy />
+            </Button>
+          )}
         </div>
       )}
       <div

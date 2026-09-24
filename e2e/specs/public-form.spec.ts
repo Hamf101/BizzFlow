@@ -38,7 +38,7 @@ test.describe("public form", () => {
     await page.getByRole("button", { name: "Submit form" }).click()
 
     await page.waitForURL(/\/forms\/.+\/success/)
-    await expect(page.getByText("Submission Received")).toBeVisible()
+    await expect(page.getByText("Submission received")).toBeVisible()
 
     await context.close()
 
@@ -55,6 +55,18 @@ test.describe("public form", () => {
         return count ?? 0
       })
       .toBeGreaterThan(0)
+
+    await expect
+      .poll(async (): Promise<number | undefined> => {
+        const { data } = await admin
+          .from("public_form_links")
+          .select("submission_count")
+          .eq("token", token)
+          .single()
+
+        return data?.submission_count as number | undefined
+      })
+      .toBe(1)
   })
 
   test("refuses a disabled link", async ({ admin, browser, tenant }) => {

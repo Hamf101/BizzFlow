@@ -23,6 +23,7 @@ import type {
   SaveGeneratedDocumentAnswersInput,
   SendDocumentForSigningInput,
   SigningServiceClient,
+  UpdateGeneratedDocumentContentInput,
 } from "@/services/document-signing/contracts"
 import {
   normalizeOptionalDrawing,
@@ -70,7 +71,15 @@ import type {
   PublicSignerStatus,
   SendDocumentForSigningResult,
 } from "@/types/signing"
-import type { DocumentSigningRecipientRow } from "@/types/template"
+import {
+  MAX_TEMPLATE_CONTENT_JSON_LENGTH,
+  parseTemplateContent,
+  type DocumentSigningRecipientRow,
+  type TemplateContent,
+} from "@/types/template"
+
+const SIGNED_ANSWERS_MESSAGE =
+  "Someone has already signed. Send it again to change the answers."
 
 type PendingInvitation = {
   id: string
@@ -181,6 +190,17 @@ export async function saveGeneratedDocumentAnswers(
         )
       }
 
+      // A signature stands for the answers as they were signed, so the last
+      // word belongs to the signers from here on.
+      if (
+        view.recipients.some(
+          (recipient: DocumentSigningRecipient): boolean =>
+            recipient.status === "signed"
+        )
+      ) {
+        throw new DocumentSigningServiceError(SIGNED_ANSWERS_MESSAGE, 409)
+      }
+
       const content = view.document.templateSnapshot
       const normalizedPatch = await normalizeAnswerPatch(
         collectFields(content),
@@ -214,6 +234,158 @@ export async function saveGeneratedDocumentAnswers(
       )
     }
   )
+}
+
+/**
+ * Saves a draft's own title and page. Content can change only until the
+ * document is sent for signing, so every signer sees what they were sent, and
+ * only from the latest copy, so a save never overwrites someone else's.
+ *
+ * @param input - Actor, document, the version the editor holds, and the page.
+ * @param deps - Optional injected database dependency for tests.
+ * @returns The saved title and the version to save from next.
+ * @throws DocumentSigningServiceError for access, a sent document, a stale
+ *   copy, or invalid content.
+ */
+export async function updateGeneratedDocumentContent(
+  input: UpdateGeneratedDocumentContentInput,
+  deps: DocumentSigningServiceDeps = {}
+): Promise<{ title: string; updatedAt: string }> {
+  return runSigningOperation(
+    "update_generated_document_content",
+    {
+      actorUserId: input.actorUserId,
+      organizationId: input.organizationId,
+      documentId: input.documentId,
+    },
+    async (): Promise<{ title: string; updatedAt: string }> => {
+      const client = resolveSigningClient(deps.client)
+
+      await requireMemberDocumentAccess(
+        client,
+        input.organizationId,
+        input.documentId,
+        input.actorUserId,
+        "contributor",
+        "mutation",
+        "documents:fill",
+        "You cannot edit this document."
+      )
+      await requireMemberSigningDocumentLifecycle(
+        client,
+        input.organizationId,
+        input.documentId,
+        "mutation",
+        "Archived documents cannot be changed."
+      )
+
+      const title = input.title.trim()
+      const content = parseDocumentContent(input.content)
+
+      if (title.length === 0 || title.length > 180) {
+        throw new DocumentSigningServiceError(
+          "Give the document a title of up to 180 characters.",
+          400
+        )
+      }
+
+      const view = await loadGeneratedDocumentView(
+        client,
+        input.organizationId,
+        input.documentId
+      )
+
+      if (view.workflowStatus !== "draft" || view.recipients.length > 0) {
+        throw new DocumentSigningServiceError(
+          "This document was sent for signing, so its content can no longer change.",
+          409
+        )
+      }
+
+      const { data, error } = await client
+        .from("documents")
+        .update({
+          title,
+          template_snapshot: content,
+          updated_by: input.actorUserId,
+        })
+        .eq("id", input.documentId)
+        .eq("org_id", input.organizationId)
+        .eq("updated_at", input.expectedUpdatedAt)
+        .select("updated_at")
+        .maybeSingle()
+
+      if (error) {
+        throw createDatabaseError(error, "Unable to save the document.")
+      }
+
+      if (!data) {
+        throw new DocumentSigningServiceError(
+          "This document changed since it was opened. Reload to see the latest version.",
+          409
+        )
+      }
+
+      return { title, updatedAt: String((data as { updated_at: unknown }).updated_at) }
+    }
+  )
+}
+
+/**
+ * Keeps a signature meaningful: once anyone has signed, an answer that already
+ * had a value stays as it was signed. Whoever signs next may still fill what
+ * was left empty.
+ *
+ * @param view - Every signer's status and the answers as stored.
+ * @param recipientId - The signer submitting these answers.
+ * @param patch - The answers they would change.
+ * @throws DocumentSigningServiceError when a signed answer would change.
+ */
+function assertSignedAnswersUnchanged(
+  view: {
+    answers: Record<string, unknown>
+    signers: readonly PublicSignerStatus[]
+  },
+  recipientId: string,
+  patch: Record<string, unknown>
+): void {
+  const signedAlready = view.signers.some(
+    (signer: PublicSignerStatus): boolean =>
+      signer.id !== recipientId && signer.status === "signed"
+  )
+
+  if (!signedAlready) {
+    return
+  }
+
+  const rewritesSigned = Object.entries(patch).some(
+    ([fieldKey, value]: [string, unknown]): boolean => {
+      const signedValue = view.answers[fieldKey]
+
+      return (
+        signedValue !== undefined &&
+        signedValue !== null &&
+        signedValue !== "" &&
+        !Object.is(signedValue, value)
+      )
+    }
+  )
+
+  if (rewritesSigned) {
+    throw new DocumentSigningServiceError(SIGNED_ANSWERS_MESSAGE, 409)
+  }
+}
+
+function parseDocumentContent(value: unknown): TemplateContent {
+  if (JSON.stringify(value ?? null).length > MAX_TEMPLATE_CONTENT_JSON_LENGTH) {
+    throw new DocumentSigningServiceError("The document is too large to save.", 400)
+  }
+
+  try {
+    return parseTemplateContent(value)
+  } catch {
+    throw new DocumentSigningServiceError("The document content is invalid.", 400)
+  }
 }
 
 /**
@@ -530,6 +702,9 @@ export async function getPublicDocumentSigningView(
       const token = normalizeToken(input.token)
       const recipient = await loadRecipientByToken(client, hashToken(token))
       assertRecipientLinkUsable(recipient, getSigningNow(deps.now))
+      // Checked before the link is marked viewed, which an inactive document
+      // refuses in the database.
+      await requirePublicSigningDocumentLifecycle(client, recipient, "read")
 
       const currentRecipient =
         recipient.status === "pending"
@@ -567,6 +742,12 @@ export async function completePublicDocumentSigning(
       const tokenHash = hashToken(token)
       const recipient = await loadRecipientByToken(client, tokenHash)
       assertRecipientLinkUsable(recipient, getSigningNow(deps.now))
+      // A signed recipient may still read the document; signing needs it active.
+      await requirePublicSigningDocumentLifecycle(
+        client,
+        recipient,
+        recipient.status === "signed" ? "read" : "mutation"
+      )
 
       if (recipient.status === "signed") {
         return loadPublicSigningView(client, recipient)
@@ -594,6 +775,7 @@ export async function completePublicDocumentSigning(
         view.answers,
         changedAnswerPatch
       )
+      assertSignedAnswersUnchanged(view, recipient.id, answerPatch)
       const effectiveValues = pruneHiddenAnswerValues(
         view.document.templateSnapshot,
         { ...view.answers, ...answerPatch }
@@ -689,6 +871,43 @@ async function requireMemberSigningDocumentLifecycle(
   operation: "read" | "mutation",
   inactiveMessage: string
 ): Promise<void> {
+  await requireSigningDocumentLifecycle(
+    client,
+    organizationId,
+    documentId,
+    operation,
+    { inactive: inactiveMessage, unavailable: "Generated document was not found." }
+  )
+}
+
+// A private link obeys the member lifecycle rule, but a removed document must
+// look exactly like an invalid link, so its holder learns nothing more.
+async function requirePublicSigningDocumentLifecycle(
+  client: SigningServiceClient,
+  recipient: { document_id: string; org_id: string },
+  operation: "read" | "mutation"
+): Promise<void> {
+  await requireSigningDocumentLifecycle(
+    client,
+    recipient.org_id,
+    recipient.document_id,
+    operation,
+    {
+      inactive: "This document is no longer accepting signatures.",
+      unavailable: "This signing link is invalid or no longer available.",
+    }
+  )
+}
+
+// Trash and pending purge revoke every read. An archived document stays
+// readable but accepts no mutation, which the database also enforces.
+async function requireSigningDocumentLifecycle(
+  client: SigningServiceClient,
+  organizationId: string,
+  documentId: string,
+  operation: "read" | "mutation",
+  messages: { inactive: string; unavailable: string }
+): Promise<void> {
   const { data, error } = await client
     .from("documents")
     .select("lifecycle_state,archived_at")
@@ -700,29 +919,20 @@ async function requireMemberSigningDocumentLifecycle(
     throw createDatabaseError(error, "Unable to load generated document.")
   }
 
-  if (!data) {
-    throw new DocumentSigningServiceError(
-      "Generated document was not found.",
-      404
-    )
-  }
-
-  const lifecycleState = normalizeSigningDocumentLifecycle(
-    data as SigningDocumentStateRow
-  )
+  const lifecycleState = data
+    ? normalizeSigningDocumentLifecycle(data as SigningDocumentStateRow)
+    : null
 
   if (
+    lifecycleState === null ||
     lifecycleState === "trashed" ||
     lifecycleState === "purge_pending"
   ) {
-    throw new DocumentSigningServiceError(
-      "Generated document was not found.",
-      404
-    )
+    throw new DocumentSigningServiceError(messages.unavailable, 404)
   }
 
   if (operation === "mutation" && lifecycleState !== "active") {
-    throw new DocumentSigningServiceError(inactiveMessage, 409)
+    throw new DocumentSigningServiceError(messages.inactive, 409)
   }
 }
 

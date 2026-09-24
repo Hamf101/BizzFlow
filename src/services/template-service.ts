@@ -6,8 +6,10 @@ export type {
   GetDocumentTemplateInput,
   ListDocumentTemplatesInput,
   ListRecentDocumentsInput,
+  ListTemplatePageInput,
   PublishDocumentTemplateInput,
   RecordDocumentRecentAccessInput,
+  TemplatePage,
   TemplateServiceDeps,
   UpdateDocumentTemplateInput,
 } from "./templates/contracts"
@@ -22,7 +24,9 @@ export {
   createDocumentTemplate,
   duplicateDocumentTemplate,
   getDocumentTemplate,
+  listDocumentTemplateCategories,
   listDocumentTemplates,
   publishDocumentTemplate,
   updateDocumentTemplate,
 } from "./templates/template-lifecycle-service"
+export { listTemplatePage } from "./templates/template-list-service"

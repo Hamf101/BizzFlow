@@ -1,0 +1,261 @@
+import { expect, test, uniqueName } from "../support/fixtures"
+import {
+  expectNoActionableAxeViolations,
+  expectNoHorizontalPageClipping,
+  expectPrimaryRouteSemantics,
+  expectReachablePrimaryAction,
+  expectVisibleKeyboardFocus,
+} from "../support/accessibility"
+import { retryConcurrentChange } from "../support/retry"
+import {
+  seedPublicFormLink,
+  seedSigningDocument,
+  seedSubmission,
+  seedTemplate,
+} from "../support/seed"
+
+test.use({ screenshot: "off", trace: "off", video: "off" })
+
+test.describe("representative accessibility evidence", () => {
+  test("keeps authentication semantics and keyboard focus accessible", async ({
+    page,
+  }) => {
+    await page.goto("/login")
+
+    await expectPrimaryRouteSemantics(page)
+    await expectVisibleKeyboardFocus(page)
+    await expectNoActionableAxeViolations(page)
+  })
+
+  test("keeps representative role routes accessible", async ({ pageAs }) => {
+    const routes = [
+      { path: "/dashboard", role: "owner_admin" },
+      { path: "/documents", role: "owner_admin" },
+      { path: "/templates", role: "manager" },
+      { path: "/tasks", role: "staff" },
+    ] as const
+
+    for (const route of routes) {
+      const page = await pageAs(route.role)
+
+      await page.goto(route.path)
+      await expectPrimaryRouteSemantics(page)
+      await expectNoActionableAxeViolations(page)
+    }
+  })
+
+  // An archived template's page picture is drawn faded; the picture's text
+  // must not count as the page's own text when contrast is judged.
+  test("keeps Templates accessible with an archived template on it", async ({ admin, pageAs, tenant }) => {
+    const title = uniqueName("Archived lease")
+    await seedTemplate(admin, tenant.organizationId, title, "archived")
+    const page = await pageAs("manager")
+
+    await page.goto("/templates")
+    await expect(page.locator('[data-slot="template-title"]', { hasText: title })).toBeVisible()
+    await expectNoActionableAxeViolations(page)
+  })
+
+  test("announces fixed live action feedback", async ({ pageAs }) => {
+    const page = await pageAs("owner_admin")
+
+    await page.goto("/dashboard?feedback=changes_saved")
+
+    // The page may still be streaming in behind its own "Loading page" status,
+    // so find the announcement by what it says.
+    const announcement = page.getByRole("status").filter({ hasText: "Changes saved" })
+    await expect(announcement).toBeVisible()
+  })
+
+  test("keeps tokenized public routes accessible without recording their URLs", async ({
+    admin,
+    page,
+    tenant,
+  }) => {
+    const template = await seedTemplate(
+      admin,
+      tenant.organizationId,
+      uniqueName("Accessible public"),
+      "published"
+    )
+    const publicToken = await seedPublicFormLink(
+      admin,
+      tenant.organizationId,
+      template.id
+    )
+    const { signingToken } = await seedSigningDocument(
+      admin,
+      tenant.organizationId,
+      template,
+      uniqueName("Accessible signing"),
+      tenant.users.manager.id,
+      { email: "accessible-signer@e2e.bizflow.test", name: "Morgan Lee" }
+    )
+
+    await page.goto(`/forms/${publicToken}`)
+    await expectPrimaryRouteSemantics(page)
+    await expectNoActionableAxeViolations(page)
+
+    await page.goto(`/sign/${signingToken}`)
+    await expectPrimaryRouteSemantics(page)
+    await expectNoActionableAxeViolations(page)
+  })
+})
+
+test.describe("responsive interaction evidence", () => {
+  test("keeps the approved shell stable across the six viewport classes", async ({
+    pageAs,
+  }) => {
+    const page = await pageAs("owner_admin")
+    const viewports = [320, 390, 430, 768, 1024, 1440] as const
+
+    await page.goto("/templates")
+    await expect(page.getByRole("link", { name: "Create template" })).toBeVisible()
+
+    for (const width of viewports) {
+      await page.setViewportSize({ height: 900, width })
+
+      const desktopSidebar = page.locator("aside")
+      const mobileHeader = page.locator("header").first()
+      const mobileNavigation = page.getByRole("navigation", {
+        name: "Mobile navigation",
+      })
+      const primaryAction = page.getByRole("link", { name: "Create template" })
+
+      await expectNoHorizontalPageClipping(page)
+      await expectReachablePrimaryAction(primaryAction, page)
+
+      if (width < 768) {
+        await expect(desktopSidebar).toBeHidden()
+        await expect(mobileHeader).toBeVisible()
+        await expect(mobileNavigation).toBeVisible()
+        await expect(mobileHeader).toHaveCSS("position", "sticky")
+        await expect(mobileNavigation).toHaveCSS("position", "fixed")
+        await expect(mobileNavigation).toHaveCSS("bottom", "0px")
+      } else {
+        await expect(desktopSidebar).toBeVisible()
+        await expect(mobileHeader).toBeHidden()
+        await expect(mobileNavigation).toBeHidden()
+      }
+    }
+  })
+
+  test("keeps the current page still instead of flashing loading UI during navigation", async ({
+    pageAs,
+  }) => {
+    const page = await pageAs("owner_admin")
+    await page.setViewportSize({ height: 900, width: 1024 })
+    await page.emulateMedia({ reducedMotion: "reduce" })
+    await page.goto("/dashboard")
+    await page.route("**/*", async (route) => {
+      const requestUrl = new URL(route.request().url())
+
+      if (
+        route.request().method() === "GET" &&
+        requestUrl.pathname === "/documents"
+      ) {
+        await new Promise((resolve) => setTimeout(resolve, 450))
+      }
+
+      await route.continue()
+    })
+
+    const documentsLink = page.locator('aside a[href="/documents"]')
+    const navigation = documentsLink.click()
+
+    await expect(
+      documentsLink.locator('[data-navigation-pending="/documents"]')
+    ).toHaveCount(0)
+    await expect(page.locator('[data-slot="page-skeleton-content"]')).toHaveCount(
+      0
+    )
+
+    await navigation
+    await expect(page).toHaveURL(/\/documents(?:\?|$)/)
+  })
+})
+
+test.describe("workspace lists stay inside the viewport", () => {
+  const widths = [320, 390, 430, 768, 1024, 1440] as const
+
+  for (const path of [
+    "/people",
+    "/tasks",
+    "/submissions",
+    "/templates",
+    "/documents",
+  ] as const) {
+    test(`keeps ${path} inside the six viewport classes`, async ({
+      admin,
+      pageAs,
+      tenant,
+    }) => {
+      const title = uniqueName("Viewport")
+      const owner = tenant.users.owner_admin
+
+      // A list draws its columns only once it has a row, so each gets one.
+      if (path === "/tasks") {
+        const { error } = await admin.from("tasks").insert({
+          created_by: owner.id,
+          org_id: tenant.organizationId,
+          title: `${title} task`,
+          updated_by: owner.id,
+        })
+        if (error) throw error
+      }
+      if (path === "/submissions") {
+        const template = await seedTemplate(
+          admin,
+          tenant.organizationId,
+          `${title} template`,
+          "published"
+        )
+        await seedSubmission(
+          admin,
+          tenant.organizationId,
+          template,
+          `${title} submission`,
+          owner.id
+        )
+      }
+      if (path === "/templates") {
+        await seedTemplate(
+          admin,
+          tenant.organizationId,
+          `${title} template`,
+          "published"
+        )
+      }
+      if (path === "/documents") {
+        const { error } = await retryConcurrentChange(() =>
+          admin.from("folders").insert({
+            created_by: owner.id,
+            name: `${title} folder`,
+            org_id: tenant.organizationId,
+            updated_by: owner.id,
+          })
+        )
+        if (error) throw error
+      }
+
+      const page = await pageAs("owner_admin")
+
+      await page.goto(path)
+      // Streamed rows exist before they replace the loading fallback, so wait
+      // until the first one is on screen and measure the list, not the fallback.
+      // Templates lays its library out as cards, and Files starts in Icons.
+      await expect(
+        path === "/templates"
+          ? page.locator('[data-slot="template-card"]').first()
+          : path === "/documents"
+            ? page.locator('[data-slot="file-tile"]').first()
+            : page.locator('[role="row"]').nth(1)
+      ).toBeVisible()
+
+      for (const width of widths) {
+        await page.setViewportSize({ height: 900, width })
+        await expectNoHorizontalPageClipping(page)
+      }
+    })
+  }
+})

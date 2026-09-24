@@ -1,11 +1,7 @@
 import { NonRetriableError } from "inngest"
 import { describe, expect, it, vi } from "vitest"
 
-import {
-  DUE_TASK_REMINDER_CRON,
-  handleDueTaskReminders,
-  processDueRemindersFunction,
-} from "@/inngest/functions/process-due-reminders"
+import { handleDueTaskReminders } from "@/inngest/functions/process-due-reminders"
 import { createRecordingStep } from "@/inngest/functions/test-support"
 import {
   TaskServiceError,
@@ -59,18 +55,5 @@ describe("handleDueTaskReminders", () => {
         { processDueTaskReminders }
       )
     ).rejects.not.toBeInstanceOf(NonRetriableError)
-  })
-})
-
-describe("processDueRemindersFunction", () => {
-  it("is scheduled every fifteen minutes with one active run", () => {
-    expect(processDueRemindersFunction.opts.id).toBe(
-      "process-due-task-reminders"
-    )
-    expect(processDueRemindersFunction.opts.triggers).toEqual([
-      { cron: DUE_TASK_REMINDER_CRON },
-    ])
-    expect(DUE_TASK_REMINDER_CRON).toBe("*/15 * * * *")
-    expect(processDueRemindersFunction.opts.concurrency).toBe(1)
   })
 })

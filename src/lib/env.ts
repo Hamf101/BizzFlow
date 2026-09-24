@@ -13,16 +13,26 @@ const appUrlSchema = z.object({
   NEXT_PUBLIC_APP_URL: z.string().url(),
 })
 
-const resendEnvSchema = z.object({
-  RESEND_API_KEY: z.string().min(1),
-  RESEND_FROM_EMAIL: z.string().email(),
-  RESEND_REPLY_TO_EMAIL: z.preprocess(
+const sharedEmailEnvShape = {
+  EMAIL_REPLY_TO_EMAIL: z.preprocess(
     emptyStringToUndefined,
     z.string().email().optional()
   ),
-  RESEND_TIMEOUT_MS: z.preprocess(
+  EMAIL_TIMEOUT_MS: z.preprocess(
     parseIntegerEnvValue,
     z.number().int().min(1000).max(60000).default(10000)
+  ),
+}
+
+const emailJsEmailEnvSchema = z.object({
+  EMAIL_PROVIDER: z.literal("emailjs"),
+  ...sharedEmailEnvShape,
+  EMAILJS_SERVICE_ID: z.string().trim().min(1),
+  EMAILJS_TEMPLATE_ID: z.string().trim().min(1),
+  EMAILJS_PUBLIC_KEY: z.string().trim().min(1),
+  EMAILJS_PRIVATE_KEY: z.preprocess(
+    emptyStringToUndefined,
+    z.string().trim().min(1).optional()
   ),
 })
 
@@ -34,9 +44,11 @@ const aiEnvSchema = z.object({
     .regex(/^[a-z][a-z0-9_-]*$/)
     .default("gemini"),
   AI_MODEL: z.string().trim().min(1),
+  // A Flow turn that builds a form has taken Gemini 12-43 seconds, and its
+  // longest answer (8,192 tokens) takes longer still.
   AI_TIMEOUT_MS: z.preprocess(
     parseIntegerEnvValue,
-    z.number().int().min(1000).max(60000).default(30000)
+    z.number().int().min(1000).max(120000).default(90000)
   )
 })
 
@@ -139,7 +151,16 @@ export type AdminSupabaseEnv = PublicSupabaseEnv & {
 }
 
 export type AppUrlEnv = z.infer<typeof appUrlSchema>
-export type ResendEnv = z.infer<typeof resendEnvSchema>
+export type EmailJsEmailEnv = z.infer<typeof emailJsEmailEnvSchema>
+export type EmailEnv = EmailJsEmailEnv
+/** Dormant Resend adapter configuration retained for later reactivation. */
+export type ResendEmailEnv = {
+  EMAIL_PROVIDER: "resend"
+  EMAIL_REPLY_TO_EMAIL?: string
+  EMAIL_TIMEOUT_MS: number
+  RESEND_API_KEY: string
+  RESEND_FROM_EMAIL: string
+}
 export type AiEnv = z.infer<typeof aiEnvSchema>
 export type GeminiEnv = z.infer<typeof geminiEnvSchema>
 export type R2Env = z.infer<typeof r2EnvSchema>
@@ -296,16 +317,25 @@ export function getAppUrlEnv(): AppUrlEnv {
 }
 
 /**
- * Reads and validates the server-side Resend configuration.
+ * Reads and validates the active server-side EmailJS configuration.
  *
- * @returns Resend API key, sender, reply address, and timeout.
+ * Transactional delivery is temporarily pinned to EmailJS while the Resend
+ * sender is unavailable. A stale EMAIL_PROVIDER value cannot reactivate the
+ * dormant Resend adapter.
+ *
+ * @returns The validated EmailJS delivery configuration.
  * @throws Error when required email-delivery values are missing or invalid.
  */
-export function getResendEnv(): ResendEnv {
-  const result = resendEnvSchema.safeParse(process.env)
+export function getEmailEnv(): EmailEnv {
+  const result = emailJsEmailEnvSchema.safeParse({
+    ...process.env,
+    EMAIL_PROVIDER: "emailjs",
+  })
 
   if (!result.success) {
-    throw new Error(`Invalid Resend environment: ${formatEnvError(result.error)}`)
+    throw new Error(
+      `Invalid email environment: ${formatEnvError(result.error)}`
+    )
   }
 
   return result.data

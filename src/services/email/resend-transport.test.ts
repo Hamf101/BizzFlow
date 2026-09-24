@@ -1,16 +1,17 @@
 import { describe, expect, it, vi } from "vitest"
 
-import type { ResendEnv } from "@/lib/env"
+import type { ResendEmailEnv } from "@/lib/env"
 import {
   EmailTransportError,
-  sendResendEmail,
   type SendEmailInput,
-} from "@/services/email/resend-transport"
+} from "@/services/email/contracts"
+import { sendResendEmail } from "@/services/email/resend-transport"
 
-const environment: ResendEnv = {
+const environment: ResendEmailEnv = {
+  EMAIL_PROVIDER: "resend",
+  EMAIL_TIMEOUT_MS: 2500,
   RESEND_API_KEY: "re-test-key",
   RESEND_FROM_EMAIL: "docs@example.com",
-  RESEND_TIMEOUT_MS: 2500,
 }
 
 function createInput(overrides: Partial<SendEmailInput> = {}): SendEmailInput {

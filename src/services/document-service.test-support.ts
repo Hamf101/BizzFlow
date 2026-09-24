@@ -14,6 +14,7 @@ type FakeTableName =
   | "document_access_grants"
   | "document_versions"
   | "document_activity_events"
+  | "document_answers"
   | "audit_logs"
 
 type FakeTables = Record<FakeTableName, FakeRow[]>
@@ -24,7 +25,21 @@ type FakeTables = Record<FakeTableName, FakeRow[]>
 export class FakeSupabaseClient {
   readonly tables: FakeTables
 
-  constructor(seed: Partial<FakeTables> = {}) {
+  /** Every RPC the services asked for, in order, with its arguments. */
+  readonly rpcCalls: Array<{
+    args: Record<string, unknown>
+    functionName: string
+  }> = []
+
+  /**
+   * @param seed - Rows the fake serves.
+   * @param maxRows - The most rows one response carries, as a deployment's
+   *   `max_rows` caps it below what a query asks for.
+   */
+  constructor(
+    seed: Partial<FakeTables> = {},
+    readonly maxRows = Number.POSITIVE_INFINITY
+  ) {
     this.tables = {
       organization_memberships: seed.organization_memberships ?? [],
       folders: seed.folders ?? [],
@@ -33,6 +48,7 @@ export class FakeSupabaseClient {
       document_access_grants: seed.document_access_grants ?? [],
       document_versions: seed.document_versions ?? [],
       document_activity_events: seed.document_activity_events ?? [],
+      document_answers: seed.document_answers ?? [],
       audit_logs: seed.audit_logs ?? [],
     }
   }
@@ -45,6 +61,92 @@ export class FakeSupabaseClient {
    */
   from(tableName: FakeTableName): FakeQueryBuilder {
     return new FakeQueryBuilder(this, tableName)
+  }
+
+  /** Insert failures still to answer, in the order they were asked for. */
+  private readonly insertFailures: Array<{
+    error: Error & { code: string }
+    tableName: FakeTableName
+  }> = []
+
+  /**
+   * Makes the next writes to a table fail as the database would, for the
+   * `.single()` reads the services use.
+   *
+   * @param tableName - Table whose inserts or updates fail.
+   * @param code - PostgreSQL error code to answer with.
+   * @param times - How many writes in a row fail.
+   */
+  failNextWrites(tableName: FakeTableName, code: string, times = 1): void {
+    for (let index = 0; index < times; index += 1) {
+      this.insertFailures.push({
+        error: Object.assign(new Error(`Fake ${code} on ${tableName}.`), { code }),
+        tableName,
+      })
+    }
+  }
+
+  /**
+   * Takes the next pending write failure for a table, if one is waiting.
+   *
+   * @param tableName - Table being written to.
+   * @returns The error to answer with, or null to write normally.
+   */
+  takeWriteFailure(tableName: FakeTableName): (Error & { code: string }) | null {
+    const index = this.insertFailures.findIndex(
+      (failure: { tableName: FakeTableName }): boolean => failure.tableName === tableName
+    )
+
+    return index < 0 ? null : (this.insertFailures.splice(index, 1)[0]?.error ?? null)
+  }
+
+  /**
+   * Answers one keyset batch of the documents a Files view draws, with the
+   * actor's effective access applied, as the database function does.
+   *
+   * @param args - The RPC arguments the service sent.
+   * @returns Rows of `{ document, access_level }`, by id.
+   */
+  private listWorkspaceDocuments(args: Record<string, unknown>): FakeRow[] {
+    const folderIds = args.target_folder_ids as string[]
+    const lifecycleStates = args.target_lifecycle_states as string[]
+    const visibleFolderIds = new Set(args.target_visible_folder_ids as string[])
+    const after = args.after_document_id as string | null
+    const query = args.target_query as string | null
+    // `%…%` around the pattern the caller escaped, as `ilike` reads it.
+    const wanted = query
+      ?.slice(1, -1)
+      .replace(/\\(.)/g, "$1")
+      .toLowerCase()
+
+    return this.tables.documents
+      .filter(
+        (row: FakeRow): boolean =>
+          row.org_id === args.target_org_id &&
+          lifecycleStates.includes(String(row.lifecycle_state)) &&
+          (after === null || String(row.id) > after) &&
+          (wanted === undefined
+            ? folderIds.includes(String(row.folder_id)) ||
+              (args.target_include_root === true &&
+                (row.folder_id == null ||
+                  !visibleFolderIds.has(String(row.folder_id))))
+            : String(row.title).toLowerCase().includes(wanted))
+      )
+      .map((row: FakeRow): FakeRow => ({
+        access_level: this.getEffectiveDocumentAccess(
+          String(args.target_org_id),
+          String(row.id),
+          String(args.target_actor_user_id)
+        ),
+        document: row,
+      }))
+      .filter((row: FakeRow): boolean => row.access_level !== null)
+      .sort((left: FakeRow, right: FakeRow): number =>
+        String((left.document as FakeRow).id).localeCompare(
+          String((right.document as FakeRow).id)
+        )
+      )
+      .slice(0, Math.min(args.row_limit as number, this.maxRows))
   }
 
   /**
@@ -61,9 +163,75 @@ export class FakeSupabaseClient {
       | "register_document_version_upload_authorization"
       | "complete_document_version"
       | "get_document_access_level"
-      | "get_folder_access_level",
+      | "get_document_access_levels"
+      | "get_folder_access_level"
+      | "get_folder_access_levels"
+      | "document_card_contents"
+      | "list_workspace_documents",
     args: Record<string, unknown>
-  ): Promise<{ data: string | boolean | null; error: Error | null }> {
+  ): Promise<{
+    data: string | boolean | FakeRow[] | null
+    error: Error | null
+  }> {
+    this.rpcCalls.push({ args, functionName })
+
+    if (functionName === "list_workspace_documents") {
+      return { data: this.listWorkspaceDocuments(args), error: null }
+    }
+
+    // Trimming large images is the database's job and is proven against it.
+    if (functionName === "document_card_contents") {
+      const ids = args.document_ids as string[]
+
+      return {
+        data: this.tables.documents
+          .filter(
+            (row: FakeRow): boolean =>
+              row.org_id === args.target_org_id &&
+              ids.includes(String(row.id)) &&
+              row.source_kind === "generated" &&
+              row.template_snapshot != null
+          )
+          .map((row: FakeRow): FakeRow => ({
+            content: row.template_snapshot,
+            id: row.id,
+          })),
+        error: null,
+      }
+    }
+
+    if (functionName === "get_document_access_levels") {
+      return {
+        data: (args.target_document_ids as string[]).map(
+          (documentId: string): FakeRow => ({
+            access_level: this.getEffectiveDocumentAccess(
+              String(args.target_org_id),
+              documentId,
+              String(args.target_actor_user_id)
+            ),
+            document_id: documentId,
+          })
+        ),
+        error: null,
+      }
+    }
+
+    if (functionName === "get_folder_access_levels") {
+      return {
+        data: (args.target_folder_ids as string[]).map(
+          (folderId: string): FakeRow => ({
+            access_level: this.getEffectiveFolderAccess(
+              String(args.target_org_id),
+              folderId,
+              String(args.target_actor_user_id)
+            ),
+            folder_id: folderId,
+          })
+        ),
+        error: null,
+      }
+    }
+
     if (functionName === "get_document_access_level") {
       return {
         data: this.getEffectiveDocumentAccess(
@@ -476,6 +644,16 @@ class FakeQueryBuilder {
     return this
   }
 
+  in(column: string, values: readonly unknown[]): FakeQueryBuilder {
+    this.filters.push((row: FakeRow) => values.includes(row[column]))
+    return this
+  }
+
+  gt(column: string, value: unknown): FakeQueryBuilder {
+    this.filters.push((row: FakeRow) => String(row[column]) > String(value))
+    return this
+  }
+
   order(
     column: string,
     options: { ascending?: boolean } = {}
@@ -491,6 +669,15 @@ class FakeQueryBuilder {
   }
 
   async single(): Promise<{ data: FakeRow | null; error: Error | null }> {
+    const failure =
+      this.insertRows || this.updateValues
+        ? this.client.takeWriteFailure(this.tableName)
+        : null
+
+    if (failure) {
+      return { data: null, error: failure }
+    }
+
     const rows = this.execute()
 
     if (rows.length !== 1) {
@@ -562,11 +749,10 @@ class FakeQueryBuilder {
       })
     }
 
-    if (this.limitCount !== null) {
-      rows = rows.slice(0, this.limitCount)
-    }
-
-    return rows
+    return rows.slice(
+      0,
+      Math.min(this.limitCount ?? Number.POSITIVE_INFINITY, this.client.maxRows)
+    )
   }
 
   private withTimestamps(row: FakeRow): FakeRow {
@@ -621,6 +807,34 @@ export function createMembershipRow(role: OrganizationRole): FakeRow {
     status: "active",
     created_at: "2026-07-09T11:00:00.000Z",
     updated_at: "2026-07-09T11:00:00.000Z",
+  }
+}
+
+/**
+ * Builds a folder database row with optional overrides.
+ *
+ * @param overrides - Values that replace the default folder fixture.
+ * @returns Folder database row.
+ */
+export function createFolderRow(overrides: FakeRow = {}): FakeRow {
+  return {
+    id: "folder-1",
+    org_id: "org-1",
+    parent_folder_id: null,
+    name: "Client files",
+    lifecycle_state: "active",
+    created_by: "user-1",
+    updated_by: "user-1",
+    archived_by: null,
+    archived_at: null,
+    trashed_by: null,
+    trashed_at: null,
+    purge_after: null,
+    pre_trash_lifecycle_state: null,
+    trash_operation_id: null,
+    created_at: "2026-07-28T12:00:00.000Z",
+    updated_at: "2026-07-28T12:00:00.000Z",
+    ...overrides,
   }
 }
 

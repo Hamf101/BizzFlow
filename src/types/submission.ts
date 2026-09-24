@@ -168,6 +168,26 @@ export type SubmissionStatus =
   | "rejected"
   | "completed"
 
+/** Every submission lifecycle state, in workflow order. */
+export const SUBMISSION_STATUSES = [
+  "draft",
+  "submitted",
+  "in_review",
+  "needs_changes",
+  "approved",
+  "rejected",
+  "completed",
+] as const satisfies readonly SubmissionStatus[]
+
+/** Orders a submission list can use. */
+export const SUBMISSION_SORT_KEYS = ["updated", "created", "title"] as const
+
+/** One submission list order. */
+export type SubmissionSortKey = (typeof SUBMISSION_SORT_KEYS)[number]
+
+/** Longest submission title search, in characters. */
+export const SUBMISSION_SEARCH_MAX_LENGTH = 100
+
 /** Storage-verification states for a single submission file. */
 export type SubmissionFileStatus = "upload_pending" | "available"
 

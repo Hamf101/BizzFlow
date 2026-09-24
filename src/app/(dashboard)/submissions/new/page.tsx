@@ -10,13 +10,12 @@ import { buttonVariants } from "@/components/ui/button"
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
+import { Field, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import { buildRedirect } from "@/lib/form-utils"
+import { buildFeedbackRedirect } from "@/lib/action-result"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
 import { getPageErrorMessage } from "@/lib/page-errors"
 import { loadPageOrganizationContext } from "@/lib/page-organization-context"
@@ -27,20 +26,12 @@ import type { DocumentTemplate } from "@/types/template"
 
 import { createSubmissionAction } from "../actions"
 
-type NewSubmissionSearchParams = Promise<{ error?: string }>
-
 /**
  * Presents published organization templates that can start an internal draft.
  *
- * @param props - Optional creation error encoded in search parameters.
  * @returns Published-template selection and submission title form.
  */
-export default async function NewSubmissionPage({
-  searchParams,
-}: {
-  searchParams: NewSubmissionSearchParams
-}): Promise<ReactElement> {
-  const query = await searchParams
+export default async function NewSubmissionPage(): Promise<ReactElement> {
   const user = await loadAuthenticatedPageUser("/submissions/new")
   const contextResult = await loadPageOrganizationContext({
     userId: user.id,
@@ -49,11 +40,10 @@ export default async function NewSubmissionPage({
 
   if (!contextResult.context) {
     redirect(
-      buildRedirect("/submissions", {
-        error:
-          contextResult.errorMessage ??
-          "Create an organization before starting a submission.",
-      })
+      buildFeedbackRedirect(
+        "/submissions",
+        contextResult.errorMessage ? "operation_failed" : "organization_required"
+      )
     )
   }
 
@@ -61,14 +51,12 @@ export default async function NewSubmissionPage({
 
   if (
     !canPerformOrganizationAction(
-      context.membership.role,
+      context.membership,
       "submissions:create"
     )
   ) {
     redirect(
-      buildRedirect("/submissions", {
-        error: "You do not have permission to start submissions.",
-      })
+      buildFeedbackRedirect("/submissions", "permission_denied")
     )
   }
 
@@ -114,12 +102,6 @@ export default async function NewSubmissionPage({
         </p>
       </section>
 
-      {query.error && (
-        <Alert variant="destructive">
-          <AlertTitle>Could not start submission</AlertTitle>
-          <AlertDescription>{query.error}</AlertDescription>
-        </Alert>
-      )}
       {templateResult.errorMessage && (
         <Alert variant="destructive">
           <AlertTitle>Templates unavailable</AlertTitle>
@@ -139,9 +121,6 @@ export default async function NewSubmissionPage({
         <Card className="max-w-2xl">
           <CardHeader>
             <CardTitle>Draft details</CardTitle>
-            <CardDescription>
-              You can save answers and upload supporting files after creation.
-            </CardDescription>
           </CardHeader>
           <CardContent>
             <form action={createSubmissionAction} className="flex flex-col gap-5">
@@ -155,9 +134,6 @@ export default async function NewSubmissionPage({
                   name="title"
                   required
                 />
-                <FieldDescription>
-                  Use a title that will make this submission easy to find.
-                </FieldDescription>
               </Field>
               <Field>
                 <FieldLabel htmlFor="submission-template">Template</FieldLabel>

@@ -4,6 +4,8 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 
 import { createBlankTemplateContent } from "@/types/template"
 
+import { retryConcurrentChange } from "./retry"
+
 /**
  * Record seeding for journeys that need a starting point rather than a subject.
  *
@@ -30,14 +32,15 @@ export type SeededTemplate = {
  * @param client - Service-role client.
  * @param organizationId - Owning organization.
  * @param title - Template title, unique per run.
- * @param status - `draft` to publish through the UI, `published` to skip ahead.
+ * @param status - `draft` to publish through the UI, `published` to skip ahead,
+ *   `archived` for one already put away.
  * @returns Handles for the template and its field keys.
  */
 export async function seedTemplate(
   client: SupabaseClient,
   organizationId: string,
   title: string,
-  status: "draft" | "published" = "draft"
+  status: "archived" | "draft" | "published" = "draft"
 ): Promise<SeededTemplate> {
   const textFieldKey = "client_reference"
   const fileFieldKey = "supporting_document"
@@ -86,6 +89,7 @@ export async function seedTemplate(
       status,
       title,
       ...(status === "published" ? { published_at: new Date().toISOString() } : {}),
+      ...(status === "archived" ? { archived_at: new Date().toISOString() } : {}),
     })
     .select("id")
     .single()
@@ -162,6 +166,7 @@ export type SeededSigningDocument = {
  * @param organizationId - Owning organization.
  * @param template - Template the document was generated from.
  * @param title - Document title, unique per run.
+ * @param createdByUserId - Member who owns the generated document.
  * @param signer - Recipient name and email.
  * @returns The document id and the plaintext signing token.
  */
@@ -170,20 +175,24 @@ export async function seedSigningDocument(
   organizationId: string,
   template: SeededTemplate,
   title: string,
+  createdByUserId: string,
   signer: { email: string; name: string }
 ): Promise<SeededSigningDocument> {
-  const { data: document, error: documentError } = await client
-    .from("documents")
-    .insert({
-      org_id: organizationId,
-      source_kind: "generated",
-      template_id: template.id,
-      template_revision: 1,
-      template_snapshot: template.content,
-      title,
-    })
-    .select("id")
-    .single()
+  const { data: document, error: documentError } = await retryConcurrentChange(() =>
+    client
+      .from("documents")
+      .insert({
+        created_by: createdByUserId,
+        org_id: organizationId,
+        source_kind: "generated",
+        template_id: template.id,
+        template_revision: 1,
+        template_snapshot: template.content,
+        title,
+      })
+      .select("id")
+      .single()
+  )
 
   if (documentError) {
     throw new Error(`Could not seed document: ${documentError.message}`)

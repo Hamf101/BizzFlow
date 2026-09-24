@@ -121,6 +121,15 @@ describe("template Flow proposal state", () => {
     expect(secondState.pendingProposal?.id).toBe("proposal-1")
   })
 
+  it("identifies a draft by what Flow reads, so the editor's own fields never make a proposal look stale", () => {
+    const draft = createDraft("Original")
+    const editorState = { ...draft, category: "Operations" }
+
+    expect(createTemplateFlowDraftFingerprint(editorState)).toBe(
+      createTemplateFlowDraftFingerprint(draft)
+    )
+  })
+
   it("fingerprints equivalent object key orders identically", () => {
     const draft = createDraft("Original")
     const reorderedDraft = {

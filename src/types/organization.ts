@@ -1,4 +1,7 @@
-import type { OrganizationRole } from "@/lib/permissions"
+import type {
+  OrganizationPermissionAction,
+  OrganizationRole,
+} from "@/lib/permissions"
 
 export type MembershipStatus = "active" | "disabled"
 export type InviteStatus = "pending" | "accepted" | "revoked" | "expired"
@@ -17,6 +20,10 @@ export type OrganizationMembership = {
   organizationId: string
   userId: string
   role: OrganizationRole
+  roleDefinitionId?: string | null
+  roleName?: string | null
+  customPermissions?: OrganizationPermissionAction[] | null
+  workspaceDisplayName?: string | null
   status: MembershipStatus
   emailNotificationsEnabled?: boolean
   smsNotificationsEnabled?: boolean
@@ -34,10 +41,24 @@ export type OrganizationMember = {
   userId: string
   email: string
   fullName: string | null
+  workspaceDisplayName?: string | null
   phoneNumber?: string | null
   role: OrganizationRole
+  roleDefinitionId?: string | null
+  roleName?: string | null
   status: MembershipStatus
   createdAt: string
+}
+
+export type OrganizationRoleDefinition = {
+  id: string
+  organizationId: string
+  systemKey: OrganizationRole | null
+  name: string
+  permissions: OrganizationPermissionAction[] | null
+  archivedAt: string | null
+  createdAt: string
+  updatedAt: string
 }
 
 export type OrganizationInvite = {
@@ -45,7 +66,10 @@ export type OrganizationInvite = {
   organizationId: string
   email: string
   role: OrganizationRole
+  roleDefinitionId?: string | null
+  roleName?: string | null
   token: string
+  invitedBy?: string | null
   status: InviteStatus
   expiresAt: string
   createdAt: string
@@ -56,5 +80,6 @@ export type InvitePreview = {
   organizationName: string
   email: string
   role: OrganizationRole
+  roleName?: string | null
   expiresAt: string
 }

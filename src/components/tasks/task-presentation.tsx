@@ -1,16 +1,9 @@
 import type { ReactElement, ReactNode } from "react"
 
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import type { OrganizationRole } from "@/lib/permissions"
 import type { OrganizationMember } from "@/types/organization"
 import type { TaskReminderStatus, TaskStatus } from "@/types/task"
-
-/** Action feedback the task pages read back from their search parameters. */
-export type TaskPageFeedback = {
-  error?: string
-  message?: string
-}
 
 type BadgePresentation = {
   className?: string
@@ -49,15 +42,14 @@ const TASK_REMINDER_STATUS_PRESENTATIONS: Record<
     label: "Cancelled",
     variant: "ghost",
   },
+  // Sync bookkeeping. listTaskReminders filters these out, so this exists to
+  // keep the map exhaustive rather than to be rendered.
+  superseded: {
+    className: "text-muted-foreground",
+    label: "Replaced",
+    variant: "ghost",
+  },
 }
-
-/** Shared native-select styling matching the themed input control. */
-export const TASK_SELECT_CLASS_NAME =
-  "h-8 w-full rounded-[8px] border border-input bg-card px-2.5 py-1 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
-
-/** Shared textarea styling matching the themed input control. */
-export const TASK_TEXTAREA_CLASS_NAME =
-  "min-h-20 w-full resize-y rounded-[8px] border border-input bg-card px-2.5 py-2 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
 
 /**
  * Renders one task lifecycle state with a stable label and tone.
@@ -100,35 +92,17 @@ export function TaskReminderStatusBadge({
 }
 
 /**
- * Wraps a task page with its shared stack spacing and action feedback.
+ * Wraps a task page with its shared stack spacing.
  *
- * @param props - Page content and the feedback encoded in search parameters.
- * @returns Page shell with any success or failure callout above the content.
+ * @param props - Page content.
+ * @returns Page shell for task workspace content.
  */
 export function TaskPageShell({
   children,
-  feedback,
 }: {
   children: ReactNode
-  feedback: TaskPageFeedback
 }): ReactElement {
-  return (
-    <div className="flex flex-col gap-6">
-      {feedback.error && (
-        <Alert variant="destructive">
-          <AlertTitle>Task action failed</AlertTitle>
-          <AlertDescription>{feedback.error}</AlertDescription>
-        </Alert>
-      )}
-      {feedback.message && (
-        <Alert>
-          <AlertTitle>Task updated</AlertTitle>
-          <AlertDescription>{feedback.message}</AlertDescription>
-        </Alert>
-      )}
-      {children}
-    </div>
-  )
+  return <div className="flex flex-col gap-6">{children}</div>
 }
 
 /**
@@ -154,32 +128,4 @@ export function listInternalTaskMembers(
     (member: OrganizationMember): boolean =>
       member.status === "active" && INTERNAL_TASK_ROLES.includes(member.role)
   )
-}
-
-/**
- * Resolves a member identifier to a display name without leaking ids.
- *
- * @param userId - Member identifier recorded on the task, if any.
- * @param members - Directory used to resolve the name.
- * @param currentUserId - Viewer identifier, rendered as "you".
- * @returns Name, email, or a safe placeholder for a removed member.
- */
-export function formatTaskMemberName(
-  userId: string | null,
-  members: OrganizationMember[],
-  currentUserId?: string
-): string {
-  if (!userId) {
-    return "Unassigned"
-  }
-
-  if (userId === currentUserId) {
-    return "You"
-  }
-
-  const member = members.find(
-    (candidate: OrganizationMember): boolean => candidate.userId === userId
-  )
-
-  return member?.fullName?.trim() || member?.email || "a former member"
 }

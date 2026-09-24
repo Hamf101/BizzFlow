@@ -30,7 +30,7 @@ export function OfflineDraftBanner(): ReactElement | null {
   if (!isOffline) return null
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 max-w-md animate-in fade-in slide-in-from-bottom-5">
+    <div className="fixed right-4 bottom-[calc(3.5rem+1rem+env(safe-area-inset-bottom))] z-50 max-w-md md:bottom-4 animate-in fade-in slide-in-from-bottom-5">
       <Alert variant="destructive">
         <WifiOff className="size-4" />
         <AlertTitle className="flex items-center gap-2">

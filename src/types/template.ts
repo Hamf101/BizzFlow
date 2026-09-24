@@ -240,7 +240,8 @@ export const templateLayoutSchema = z
             mode: z.literal("custom"),
             text: z.string().trim().min(1).max(500)
           })
-          .strict()
+          .strict(),
+        z.object({ mode: z.literal("none") }).strict()
       ])
       .default({ mode: "linked" }),
     headerPolicy: z
@@ -249,7 +250,13 @@ export const templateLayoutSchema = z
     footerPolicy: z
       .enum(["first_page", "all_pages", "none"])
       .default("all_pages"),
-    pageNumbering: z.enum(["none", "page_x_of_y"]).default("page_x_of_y")
+    pageNumbering: z.enum(["none", "page_x_of_y"]).default("page_x_of_y"),
+    /**
+     * Physical points per design point. Content is laid out on the page it was
+     * designed on and printed at this scale, so moving to bigger or smaller
+     * paper keeps every line and page break where it was. Absent means 1.
+     */
+    contentScale: z.number().min(0.25).max(4).optional()
   })
   .strict()
 
@@ -346,24 +353,13 @@ export const templateContentSchema = z.union([
 
 export type HeadingBlock = z.infer<typeof headingBlockSchema>
 export type ParagraphBlock = z.infer<typeof paragraphBlockSchema>
-export type BulletListBlock = z.infer<typeof bulletListBlockSchema>
-export type NumberedListBlock = z.infer<typeof numberedListBlockSchema>
-export type ImageBlock = z.infer<typeof imageBlockSchema>
-export type TableBlock = z.infer<typeof tableBlockSchema>
-export type DividerBlock = z.infer<typeof dividerBlockSchema>
-export type TextFieldBlock = z.infer<typeof textFieldBlockSchema>
-export type DateFieldBlock = z.infer<typeof dateFieldBlockSchema>
 export type CheckboxFieldBlock = z.infer<typeof checkboxFieldBlockSchema>
 export type DropdownFieldBlock = z.infer<typeof dropdownFieldBlockSchema>
-export type InitialsFieldBlock = z.infer<typeof initialsFieldBlockSchema>
-export type SignatureFieldBlock = z.infer<typeof signatureFieldBlockSchema>
-export type FileFieldBlock = z.infer<typeof fileFieldBlockSchema>
 export type TemplateBlock = z.infer<typeof templateBlockSchema>
 export type TemplateBranding = z.infer<typeof templateBrandingSchema>
 export type TemplateLayout = z.infer<typeof templateLayoutSchema>
 export type TemplateSection = z.infer<typeof templateSectionSchema>
 export type TemplateFieldGroup = z.infer<typeof templateFieldGroupSchema>
-export type TemplateBlockRule = z.infer<typeof templateBlockRuleSchema>
 export type TemplateContentV2 = z.infer<typeof templateContentV2Schema>
 export type TemplateContentV3 = z.infer<typeof templateContentV3Schema>
 export type TemplateContent = z.infer<typeof templateContentSchema>
@@ -742,7 +738,9 @@ function isFieldBlock(
   return "fieldKey" in block
 }
 
-export type DocumentTemplateStatus = "draft" | "published" | "archived"
+/** Every template lifecycle status. */
+export const DOCUMENT_TEMPLATE_STATUSES = ["draft", "published", "archived"] as const
+export type DocumentTemplateStatus = (typeof DOCUMENT_TEMPLATE_STATUSES)[number]
 export type DocumentSourceKind = "upload" | "generated"
 export type GeneratedDocumentWorkflowStatus =
   "draft" | "awaiting_signatures" | "completed"
@@ -754,6 +752,7 @@ export type DocumentTemplateRow = Record<string, unknown> & {
   org_id: string
   title: string
   description: string | null
+  category: string | null
   status: DocumentTemplateStatus
   revision: number
   content: TemplateContent
@@ -773,6 +772,8 @@ export type DocumentTemplate = {
   organizationId: string
   title: string
   description: string | null
+  /** Optional grouping label; null is a legitimate state, not a backfill gap. */
+  category: string | null
   status: DocumentTemplateStatus
   revision: number
   content: TemplateContent
@@ -785,6 +786,36 @@ export type DocumentTemplate = {
   publishedAt: string | null
   archivedAt: string | null
 }
+
+/** Database columns the templates list reads. */
+export type DocumentTemplateSummaryRow = Pick<
+  DocumentTemplateRow,
+  "category" | "created_at" | "id" | "org_id" | "revision" | "status" | "title" | "updated_at"
+>
+
+/** A template as the templates list shows it, without its content. */
+export type DocumentTemplateSummary = Pick<
+  DocumentTemplate,
+  "category" | "createdAt" | "id" | "organizationId" | "revision" | "status" | "title" | "updatedAt"
+>
+
+/** A template in the library, with the content its card draws its first page from. */
+export type DocumentTemplateCard = DocumentTemplateSummary & {
+  /** Large images are left behind; null when the content could not be read. */
+  content: TemplateContent | null
+}
+
+/** Orders the templates list offers. */
+export const TEMPLATE_SORT_KEYS = ["updated", "created", "title"] as const
+
+/** One way to order the templates list. */
+export type TemplateSortKey = (typeof TEMPLATE_SORT_KEYS)[number]
+
+/** Longest templates-list search, in characters. */
+export const TEMPLATE_SEARCH_MAX_LENGTH = 100
+
+/** Longest category the `document_templates_category_check` constraint accepts. */
+export const TEMPLATE_CATEGORY_MAX_LENGTH = 40
 
 /** Database row containing field answers for one generated document. */
 export type DocumentAnswerRow = Record<string, unknown> & {
@@ -907,6 +938,28 @@ export function upgradeV2TemplateContentToV3(
     fieldGroups: [],
     blockRules: []
   })
+}
+
+/**
+ * Creates the empty page a new template or document starts from: nothing is
+ * printed on it, not even the title, a header, a footer or page numbers, until
+ * someone adds them.
+ *
+ * @returns Fresh version-three content with an empty A4 portrait page.
+ */
+export function createEmptyDocumentContent(): TemplateContentV3 {
+  const content = createBlankTemplateContent()
+
+  return {
+    ...content,
+    layout: {
+      ...content.layout,
+      printedTitle: { mode: "none" },
+      headerPolicy: "none",
+      footerPolicy: "none",
+      pageNumbering: "none"
+    }
+  }
 }
 
 /**

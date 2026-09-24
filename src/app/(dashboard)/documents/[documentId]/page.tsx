@@ -15,12 +15,11 @@ import { Badge } from "@/components/ui/badge"
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { buildFeedbackRedirect } from "@/lib/action-result"
 import { formatMediumDateTime } from "@/lib/date-format"
-import { buildRedirect } from "@/lib/form-utils"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
 import { getPageErrorMessage } from "@/lib/page-errors"
 import { loadPageOrganizationContext } from "@/lib/page-organization-context"
@@ -48,20 +47,12 @@ type DocumentDetailParams = Promise<{
   documentId: string
 }>
 
-type DocumentDetailSearchParams = Promise<{
-  error?: string
-  message?: string
-}>
-
 export default async function DocumentDetailPage({
   params,
-  searchParams,
 }: {
   params: DocumentDetailParams
-  searchParams: DocumentDetailSearchParams
 }): Promise<ReactElement> {
   const { documentId } = await params
-  const query = await searchParams
   const user = await loadAuthenticatedPageUser(`/documents/${documentId}`)
   const { context, errorMessage: contextErrorMessage } =
     await loadPageOrganizationContext({
@@ -73,7 +64,7 @@ export default async function DocumentDetailPage({
   if (!context) {
     if (contextErrorMessage) {
       return (
-        <DocumentDetailShell params={query}>
+        <DocumentDetailShell>
           <Alert variant="destructive">
             <AlertTitle>Supabase setup incomplete</AlertTitle>
             <AlertDescription>{contextErrorMessage}</AlertDescription>
@@ -83,9 +74,7 @@ export default async function DocumentDetailPage({
     }
 
     redirect(
-      buildRedirect("/dashboard", {
-        error: "Create an organization before viewing documents.",
-      })
+      buildFeedbackRedirect("/dashboard", "organization_required")
     )
   }
 
@@ -116,7 +105,7 @@ export default async function DocumentDetailPage({
 
   if (!detail) {
     return (
-      <DocumentDetailShell params={query}>
+      <DocumentDetailShell>
         <Alert variant="destructive">
           <AlertTitle>Document unavailable</AlertTitle>
           <AlertDescription>{detailErrorMessage}</AlertDescription>
@@ -192,7 +181,7 @@ export default async function DocumentDetailPage({
       ]
 
   return (
-    <DocumentDetailShell params={query}>
+    <DocumentDetailShell>
       {detail.document.lifecycleState === "active" ? (
         <DocumentOpenTracker
           documentId={detail.document.id}
@@ -204,7 +193,7 @@ export default async function DocumentDetailPage({
           className="text-sm font-medium text-primary underline-offset-4 hover:underline"
           href={getWorkspaceHref(detail.document.lifecycleState)}
         >
-          Back to documents
+          Back to Files
         </Link>
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="text-2xl font-semibold tracking-normal">
@@ -230,7 +219,7 @@ export default async function DocumentDetailPage({
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="contents lg:flex lg:flex-col lg:gap-4">
           <div className="order-1 lg:order-0">
-            <DocumentMetadataCard context={context} detail={detail} />
+            <DocumentMetadataCard detail={detail} />
           </div>
           <div className="order-3 lg:order-0">
             <VersionListCard
@@ -272,50 +261,27 @@ export default async function DocumentDetailPage({
 
 function DocumentDetailShell({
   children,
-  params,
 }: {
   children: ReactNode
-  params: Awaited<DocumentDetailSearchParams>
 }): ReactElement {
   return (
     <div className="flex flex-col gap-6">
-      {params.error && (
-        <Alert variant="destructive">
-          <AlertTitle>Document action failed</AlertTitle>
-          <AlertDescription>{params.error}</AlertDescription>
-        </Alert>
-      )}
-
-      {params.message && (
-        <Alert>
-          <AlertTitle>Document updated</AlertTitle>
-          <AlertDescription>{params.message}</AlertDescription>
-        </Alert>
-      )}
-
       {children}
     </div>
   )
 }
 
 function DocumentMetadataCard({
-  context,
   detail,
 }: {
-  context: OrganizationContext
   detail: DocumentDetail
 }): ReactElement {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Metadata</CardTitle>
-        <CardDescription>{context.organization.name}</CardDescription>
+        <CardTitle>Details</CardTitle>
       </CardHeader>
       <CardContent className="grid gap-3 text-sm md:grid-cols-3">
-        <MetadataItem
-          label="Lifecycle"
-          value={getLifecycleLabel(detail.document.lifecycleState)}
-        />
         <MetadataItem
           label="Your access"
           value={
@@ -332,12 +298,6 @@ function DocumentMetadataCard({
           label="Updated"
           value={formatMediumDateTime(detail.document.updatedAt)}
         />
-        <MetadataItem
-          label="Current version"
-          value={detail.document.currentVersionId ? "Available" : "Pending"}
-        />
-        <MetadataItem label="Document id" value={detail.document.id} />
-        <MetadataItem label="Folder id" value={detail.document.folderId ?? "No folder"} />
         {detail.document.archivedAt ? (
           <MetadataItem
             label="Archived"
@@ -391,14 +351,10 @@ function VersionListCard({
     <Card>
       <CardHeader>
         <CardTitle>Versions</CardTitle>
-        <CardDescription>File history for this document.</CardDescription>
       </CardHeader>
       <CardContent>
         {versions.length === 0 ? (
-          <Alert>
-            <AlertTitle>No versions yet</AlertTitle>
-            <AlertDescription>No file metadata is available.</AlertDescription>
-          </Alert>
+          <p className="text-sm text-muted-foreground">No versions yet.</p>
         ) : (
           <div className="flex flex-col gap-3">
             {versions.map((version: DocumentVersion) => (
@@ -460,7 +416,6 @@ function DocumentActivityCard({
     <Card>
       <CardHeader>
         <CardTitle>Activity</CardTitle>
-        <CardDescription>Recent changes to this document.</CardDescription>
       </CardHeader>
       <CardContent>
         {errorMessage ? (
@@ -508,7 +463,6 @@ function DocumentCommentsCard({
     <Card>
       <CardHeader>
         <CardTitle>Comments</CardTitle>
-        <CardDescription>Keep document discussion with the file.</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         {errorMessage ? (
@@ -549,7 +503,7 @@ function DocumentCommentsCard({
         {detail.document.lifecycleState === "active" && (
           <RoleGuard
             action="document_comments:create"
-            role={context.membership.role}
+            role={context.membership}
           >
             <form action={createDocumentCommentAction} className="flex flex-col gap-3">
               <input
@@ -562,7 +516,7 @@ function DocumentCommentsCard({
                 type="hidden"
                 value={detail.document.id}
               />
-              <label className="text-sm font-medium" htmlFor="document-comment">
+              <label className="sr-only" htmlFor="document-comment">
                 Add comment
               </label>
               <textarea
@@ -570,10 +524,10 @@ function DocumentCommentsCard({
                 id="document-comment"
                 maxLength={2000}
                 name="body"
-                placeholder="Share context or a review note"
+                placeholder="Add a note"
                 required
               />
-              <DocumentCommentSubmitButton role={context.membership.role} />
+              <DocumentCommentSubmitButton role={context.membership} />
             </form>
           </RoleGuard>
         )}
@@ -601,15 +555,6 @@ function DocumentActionsCard({
     <Card>
       <CardHeader>
         <CardTitle>Actions</CardTitle>
-        <CardDescription>
-          {!canDownload &&
-          (document.lifecycleState === "trashed" ||
-            document.lifecycleState === "purge_pending")
-            ? "Downloads and collaboration are unavailable in this lifecycle state."
-            : canContribute
-            ? "Download or manage this document according to its lifecycle."
-            : "Your viewer access includes downloads and comments."}
-        </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         {canDownload ? (
@@ -621,7 +566,7 @@ function DocumentActionsCard({
         ) : null}
         {canContribute && document.lifecycleState === "active" ? (
           <RoleGuard
-            role={context.membership.role}
+            role={context.membership}
             action="document_versions:create"
           >
             <DocumentReplaceForm
@@ -632,7 +577,7 @@ function DocumentActionsCard({
         ) : null}
         {hasLifecycleAction ? (
           <RoleGuard
-            role={context.membership.role}
+            role={context.membership}
             action="documents:archive"
           >
             <div className="flex flex-col gap-3">
@@ -645,7 +590,7 @@ function DocumentActionsCard({
                   >
                     <PermissionButton
                       action="documents:archive"
-                      role={context.membership.role}
+                      role={context.membership}
                       type="submit"
                       variant="outline"
                     >
@@ -663,7 +608,7 @@ function DocumentActionsCard({
                   >
                     <PermissionButton
                       action="documents:archive"
-                      role={context.membership.role}
+                      role={context.membership}
                       type="submit"
                       variant="outline"
                     >
@@ -681,7 +626,7 @@ function DocumentActionsCard({
                   >
                     <PermissionButton
                       action="documents:archive"
-                      role={context.membership.role}
+                      role={context.membership}
                       type="submit"
                       variant="destructive"
                     >
@@ -703,7 +648,7 @@ function DocumentActionsCard({
                   permissionAction="documents:archive"
                   resourceKind="document"
                   resourceName={document.title}
-                  role={context.membership.role}
+                  role={context.membership}
                 />
               ) : null}
             </div>

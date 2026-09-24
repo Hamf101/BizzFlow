@@ -17,6 +17,9 @@ export const TASK_REMINDER_STATUSES = [
   "sent",
   "failed",
   "cancelled",
+  // Displaced by the automatic sync and revivable. Distinct from `cancelled`,
+  // which records a member choosing to stop a reminder and is final.
+  "superseded",
 ] as const
 
 /** Delivery channels available to task reminders. */
@@ -31,8 +34,17 @@ export const TASK_REMINDER_CHANNELS = ["email", "sms"] as const
  */
 export const TASK_REMINDER_ORIGINS = ["manual", "automatic"] as const
 
+/** Orders the task list offers; each ends with a stable tiebreak on id. */
+export const TASK_SORT_KEYS = ["due", "created", "title"] as const
+
+/** Longest task search the list and the service accept, in characters. */
+export const TASK_SEARCH_MAX_LENGTH = 100
+
 /** Lifecycle state of one task. */
 export type TaskStatus = (typeof TASK_STATUSES)[number]
+
+/** One task list ordering key. */
+export type TaskSortKey = (typeof TASK_SORT_KEYS)[number]
 
 /** Delivery state of one scheduled task reminder. */
 export type TaskReminderStatus = (typeof TASK_REMINDER_STATUSES)[number]
@@ -45,9 +57,6 @@ export type TaskReminderOrigin = (typeof TASK_REMINDER_ORIGINS)[number]
 
 /** Zod contract for a persisted task lifecycle state. */
 export const taskStatusSchema = z.enum(TASK_STATUSES)
-
-/** Zod contract for a persisted task reminder delivery state. */
-export const taskReminderStatusSchema = z.enum(TASK_REMINDER_STATUSES)
 
 /** Zod contract for a persisted task reminder delivery channel. */
 export const taskReminderChannelSchema = z.enum(TASK_REMINDER_CHANNELS)
@@ -159,7 +168,7 @@ const taskReminderRowShape = {
 export const taskReminderSchema = z.union([
   z.object({
     ...taskReminderRowShape,
-    status: z.enum(["pending", "failed", "cancelled"]),
+    status: z.enum(["pending", "failed", "cancelled", "superseded"]),
     sent_at: z.null(),
   }),
   z.object({

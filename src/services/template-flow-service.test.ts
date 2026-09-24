@@ -10,8 +10,11 @@ import {
   AI_PROVIDER_ERROR_CODES,
   AiProviderError
 } from "@/services/ai/errors"
+import { DocumentSigningServiceError } from "@/services/document-signing-service"
 import {
+  executeDocumentFlow,
   executeTemplateFlow,
+  listTemplateFlowMessages,
   type ExecuteTemplateFlowInput,
   type TemplateFlowServiceDeps
 } from "@/services/template-flow-service"
@@ -30,7 +33,129 @@ const FIELD_ID = "00000000-0000-4000-8000-000000000014"
 const TEST_PROVIDER_ID = "test-provider"
 const TEST_MODEL = "test-exact-model"
 
+type TemplateFlowRow = Record<string, unknown>
+
+class TemplateFlowQuery implements PromiseLike<{ data: unknown; error: null }> {
+  private readonly filters: Array<[string, unknown]> = []
+
+  constructor(private readonly rows: TemplateFlowRow[]) {}
+
+  select(): TemplateFlowQuery {
+    return this
+  }
+
+  eq(column: string, value: unknown): TemplateFlowQuery {
+    this.filters.push([column, value])
+    return this
+  }
+
+  async maybeSingle(): Promise<{ data: unknown; error: null }> {
+    const matches = this.rows.filter((row) =>
+      this.filters.every(([column, value]) => row[column] === value)
+    )
+    return { data: matches[0] ?? null, error: null }
+  }
+
+  then<TResult1 = { data: unknown; error: null }, TResult2 = never>(
+    onfulfilled?:
+      | ((value: { data: unknown; error: null }) => TResult1 | PromiseLike<TResult1>)
+      | null,
+    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+  ): PromiseLike<TResult1 | TResult2> {
+    return this.maybeSingle().then(onfulfilled, onrejected)
+  }
+}
+
+class TemplateFlowClient {
+  constructor(readonly tables: Record<string, TemplateFlowRow[]>) {}
+
+  from(tableName: string): TemplateFlowQuery {
+    return new TemplateFlowQuery(this.tables[tableName] ?? [])
+  }
+
+  setMembershipPermissions(permissions: string[] | null): void {
+    const membership = this.tables.organization_memberships?.[0]
+    if (membership) {
+      const roleDefinition = membership.role_definition as
+        | { permissions: string[] | null }
+        | undefined
+      if (roleDefinition) {
+        roleDefinition.permissions = permissions
+      }
+    }
+  }
+}
+
+function createAuthorizationClient(
+  permissions: string[] | null
+): TemplateFlowClient {
+  return new TemplateFlowClient({
+    organization_memberships: [
+      {
+        org_id: "org-1",
+        user_id: "user-1",
+        role: "manager",
+        status: "active",
+        role_definition: { permissions }
+      }
+    ],
+    document_templates: [
+      { id: TEMPLATE_ID, org_id: "org-1", status: "draft" }
+    ]
+  })
+}
+
 describe("template Flow service", () => {
+  it("allows a custom role with templates:manage to read Flow history", async () => {
+    await expect(
+      listTemplateFlowMessages(
+        {
+          actorUserId: "user-1",
+          organizationId: "org-1",
+          templateId: TEMPLATE_ID
+        },
+        {
+          client: createAuthorizationClient(["templates:manage"]) as never,
+          loadHistory: async (): Promise<TemplateFlowMessage[]> => []
+        }
+      )
+    ).resolves.toEqual([])
+  })
+
+  it("rechecks edited Flow permissions and denies a revoked custom grant", async () => {
+    const client = createAuthorizationClient(["templates:manage"])
+
+    await expect(
+      listTemplateFlowMessages(
+        {
+          actorUserId: "user-1",
+          organizationId: "org-1",
+          templateId: TEMPLATE_ID
+        },
+        {
+          client: client as never,
+          loadHistory: async (): Promise<TemplateFlowMessage[]> => []
+        }
+      )
+    ).resolves.toEqual([])
+
+    client.setMembershipPermissions([])
+
+    await expect(
+      listTemplateFlowMessages(
+        {
+          actorUserId: "user-1",
+          organizationId: "org-1",
+          templateId: TEMPLATE_ID
+        },
+        {
+          client: client as never,
+          loadHistory: async (): Promise<TemplateFlowMessage[]> => []
+        }
+      )
+    ).rejects.toMatchObject({ statusCode: 403 })
+  })
+
   it("stages validated edits without mutating the base and persists a proposed receipt", async () => {
     const content = createContent()
     const originalContent = structuredClone(content)
@@ -897,6 +1022,81 @@ describe("template Flow service", () => {
       statusCode: 502,
       message: "Flow returned changes that failed validation."
     })
+  })
+})
+
+describe("document Flow", () => {
+  const DOCUMENT_ID = "00000000-0000-4000-8000-000000000020"
+
+  function documentInput(instruction: string): Parameters<typeof executeDocumentFlow>[0] {
+    return {
+      actorUserId: "user-1",
+      documentId: DOCUMENT_ID,
+      draft: { title: "Lease, Flat 3B", description: "", content: createContent() },
+      instruction,
+      organizationId: "org-1"
+    }
+  }
+
+  it("proposes changes to the document's own page and keeps the turn out of template history", async () => {
+    const aiProvider = createTestAiProvider([
+      flowProviderResult({
+        assistantMessage: "I tightened the introduction.",
+        needsConfirmation: false,
+        confirmationQuestion: "",
+        operations: [
+          {
+            type: "update_block",
+            summary: "Condensed introduction",
+            payload: {
+              blockId: PARAGRAPH_ID,
+              block: { type: "paragraph", text: "A concise introduction.", alignment: "left" }
+            }
+          }
+        ]
+      })
+    ])
+    const authorizeDocument = vi.fn(async (): Promise<void> => {})
+    const loadHistory = vi.fn(async (): Promise<TemplateFlowMessage[]> => [])
+    const persistMessages = vi.fn(async (): Promise<void> => {})
+
+    const result = await executeDocumentFlow(
+      documentInput("Make the introduction more concise."),
+      { ...createDependencies({ aiProvider, loadHistory, persistMessages }), authorizeDocument }
+    )
+
+    expect(authorizeDocument).toHaveBeenCalledWith({
+      actorUserId: "user-1",
+      documentId: DOCUMENT_ID,
+      organizationId: "org-1"
+    })
+    expect(result.proposal?.candidateDraft.title).toBe("Lease, Flat 3B")
+    expect(result.proposal?.candidateDraft.content.blocks).toContainEqual(
+      expect.objectContaining({ id: PARAGRAPH_ID, text: "A concise introduction." })
+    )
+    // A document is not a template: its turns never reach a template's shared history.
+    expect(loadHistory).not.toHaveBeenCalled()
+    expect(persistMessages).not.toHaveBeenCalled()
+  })
+
+  it("tells someone who cannot open the document nothing, before any provider is asked", async () => {
+    const aiProvider = createTestAiProvider([flowProviderResult(successfulFlowPayload())])
+
+    await expect(
+      executeDocumentFlow(documentInput("Summarise this."), {
+        ...createDependencies({ aiProvider }),
+        authorizeDocument: async (): Promise<void> => {
+          throw new DocumentSigningServiceError("Generated document was not found.", 404)
+        }
+      })
+    ).rejects.toMatchObject({ message: "Generated document was not found.", statusCode: 404 })
+    await expect(
+      executeDocumentFlow(
+        { ...documentInput("Summarise this."), documentId: "not-a-document" },
+        createDependencies({ aiProvider })
+      )
+    ).rejects.toMatchObject({ statusCode: 404 })
+    expect(readProviderRequests(aiProvider)).toHaveLength(0)
   })
 })
 

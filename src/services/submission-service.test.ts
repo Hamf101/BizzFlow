@@ -5,16 +5,22 @@ import {
   assignInternalSubmission,
   cleanupExpiredSubmissionFileObjects,
   completeInternalSubmissionFile,
+  countSubmissionsByStatus,
   createInternalSubmissionComment,
   createInternalSubmissionDraft,
   createInternalSubmissionFileDownloadUrl,
+  expireAbandonedSubmissionFiles,
+  exportInternalSubmissionsCsv,
   getInternalSubmission,
-  listInternalSubmissions,
+  getInternalSubmissionPreview,
+  listSubmissionPage,
   saveInternalSubmissionDraft,
+  type ListSubmissionPageInput,
   submitInternalSubmission,
   supersedeInternalSubmissionFile,
   transitionInternalSubmission
 } from "@/services/submission-service"
+import { PostgrestReadQuery } from "@/services/postgrest-fake.test-support"
 import { parseTemplateContent, type TemplateContent } from "@/types/template"
 
 type FakeRow = Record<string, unknown>
@@ -40,99 +46,12 @@ const ACTIVITY_ID = "80000000-0000-4000-8000-000000000001"
 const CHECKSUM = "a".repeat(64)
 const SNAPSHOT = createSnapshot()
 
-class FakeQuery implements PromiseLike<FakeResult> {
-  private readonly filters: Array<(row: FakeRow) => boolean> = []
-  private orderColumn: string | null = null
-  private orderAscending = true
-  private limitCount: number | null = null
-
-  constructor(
-    private readonly tableName: string,
-    private readonly tables: FakeTables
-  ) {}
-
-  select(): FakeQuery {
-    return this
-  }
-
-  eq(column: string, value: unknown): FakeQuery {
-    this.filters.push((row: FakeRow): boolean => row[column] === value)
-    return this
-  }
-
-  in(column: string, values: readonly unknown[]): FakeQuery {
-    this.filters.push((row: FakeRow): boolean => values.includes(row[column]))
-    return this
-  }
-
-  is(column: string, value: unknown): FakeQuery {
-    this.filters.push((row: FakeRow): boolean => row[column] === value)
-    return this
-  }
-
-  lte(column: string, value: unknown): FakeQuery {
-    this.filters.push(
-      (row: FakeRow): boolean => String(row[column]) <= String(value)
-    )
-    return this
-  }
-
-  order(column: string, options: { ascending: boolean }): FakeQuery {
-    this.orderColumn = column
-    this.orderAscending = options.ascending
-    return this
-  }
-
-  limit(value: number): FakeQuery {
-    this.limitCount = value
-    return this
-  }
-
-  async maybeSingle(): Promise<FakeResult> {
-    const rows = this.execute()
-    return {
-      data: rows.length === 1 ? rows[0] : null,
-      error:
-        rows.length > 1
-          ? Object.assign(new Error("Expected one row."), {
-              code: "PGRST116"
-            })
-          : null
-    }
-  }
-
-  then<TResult1 = FakeResult, TResult2 = never>(
-    onfulfilled?:
-      ((value: FakeResult) => TResult1 | PromiseLike<TResult1>) | null,
-    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
-  ): PromiseLike<TResult1 | TResult2> {
-    return Promise.resolve({ data: this.execute(), error: null }).then(
-      onfulfilled,
-      onrejected
-    )
-  }
-
-  private execute(): FakeRow[] {
-    let rows = (this.tables[this.tableName] ?? []).filter(
-      (row: FakeRow): boolean =>
-        this.filters.every((filter): boolean => filter(row))
-    )
-
-    if (this.orderColumn) {
-      const orderColumn = this.orderColumn
-      const direction = this.orderAscending ? 1 : -1
-      rows = [...rows].sort(
-        (left: FakeRow, right: FakeRow): number =>
-          String(left[orderColumn]).localeCompare(String(right[orderColumn])) *
-          direction
-      )
-    }
-
-    if (this.limitCount !== null) {
-      rows = rows.slice(0, this.limitCount)
-    }
-
-    return rows
+// Reads go through the shared PostgREST stand-in (filters, order, ranges,
+// counts, the per-response row cap, and 416 past the end); writes in this
+// domain go through RPCs, which each test stubs on the client.
+class FakeQuery extends PostgrestReadQuery {
+  constructor(tableName: string, tables: FakeTables) {
+    super((tables[tableName] ??= []))
   }
 }
 
@@ -150,14 +69,16 @@ describe("internal submission visibility", () => {
   it("shows every organization submission to managers and only owned rows to staff", async () => {
     const client = createClient()
 
-    const managerRows = await listInternalSubmissions(
-      { actorUserId: MANAGER_ID, organizationId: ORGANIZATION_ID },
-      { client: client as never }
-    )
-    const staffRows = await listInternalSubmissions(
-      { actorUserId: STAFF_ID, organizationId: ORGANIZATION_ID },
-      { client: client as never }
-    )
+    const managerRows = (
+      await listSubmissionPage(createPageInput(MANAGER_ID), {
+        client: client as never
+      })
+    ).submissions
+    const staffRows = (
+      await listSubmissionPage(createPageInput(STAFF_ID), {
+        client: client as never
+      })
+    ).submissions
 
     expect(managerRows.map((submission) => submission.id)).toEqual([
       OTHER_SUBMISSION_ID,
@@ -192,10 +113,11 @@ describe("internal submission visibility", () => {
       ]
     })
 
-    const externalRows = await listInternalSubmissions(
-      { actorUserId: EXTERNAL_ID, organizationId: ORGANIZATION_ID },
-      { client: client as never }
-    )
+    const externalRows = (
+      await listSubmissionPage(createPageInput(EXTERNAL_ID), {
+        client: client as never
+      })
+    ).submissions
 
     expect(externalRows.map((submission) => submission.id)).toEqual([
       SUBMISSION_ID
@@ -252,6 +174,361 @@ describe("internal submission visibility", () => {
         toStatus: "in_review"
       })
     ])
+  })
+})
+
+describe("internal submission preview", () => {
+  it("previews exactly the title, snapshot, and answers a member may open, and nothing of the rest", async () => {
+    const client = createClient()
+    const input = {
+      actorUserId: MANAGER_ID,
+      organizationId: ORGANIZATION_ID,
+      submissionId: SUBMISSION_ID
+    }
+
+    const [preview, detail] = await Promise.all([
+      getInternalSubmissionPreview(input, { client: client as never }),
+      getInternalSubmission(input, { client: client as never })
+    ])
+
+    // Only what the pages draw; files, comments, and activity stay behind.
+    expect(preview).toEqual({
+      answers: detail.submission.values,
+      content: detail.submission.templateSnapshot,
+      title: detail.submission.title
+    })
+    await expect(
+      getInternalSubmissionPreview(
+        {
+          actorUserId: STAFF_ID,
+          organizationId: ORGANIZATION_ID,
+          submissionId: OTHER_SUBMISSION_ID
+        },
+        { client: client as never }
+      )
+    ).rejects.toMatchObject({ statusCode: 404 })
+  })
+})
+
+describe("internal submission csv export", () => {
+  it("renders a header row and one escaped row per visible submission", async () => {
+    const client = createClient({
+      submissions: [createSubmissionRow({ title: 'Vendor "Northstar", Inc.' })]
+    })
+
+    const csv = await exportInternalSubmissionsCsv(
+      { actorUserId: MANAGER_ID, organizationId: ORGANIZATION_ID },
+      { client: client as never }
+    )
+
+    expect(csv.split("\n")).toEqual([
+      '"Submission ID","Title","Status","Template ID","Created At","Submitted At","Updated At"',
+      `"${SUBMISSION_ID}","Vendor ""Northstar"", Inc.","draft","${TEMPLATE_ID}","2026-07-18T15:00:00.000Z","","2026-07-18T16:00:00.000Z"`
+    ])
+  })
+
+  // The export used to run its own admin query in the route handler, so any
+  // holder of submissions:view received every organization row.
+  it("applies the same role scoping as the submissions list", async () => {
+    const client = createClient()
+
+    const managerCsv = await exportInternalSubmissionsCsv(
+      { actorUserId: MANAGER_ID, organizationId: ORGANIZATION_ID },
+      { client: client as never }
+    )
+    const staffCsv = await exportInternalSubmissionsCsv(
+      { actorUserId: STAFF_ID, organizationId: ORGANIZATION_ID },
+      { client: client as never }
+    )
+
+    expect(managerCsv).toContain(OTHER_SUBMISSION_ID)
+    expect(staffCsv).toContain(SUBMISSION_ID)
+    expect(staffCsv).not.toContain(OTHER_SUBMISSION_ID)
+  })
+
+  it("rejects an actor with no active membership", async () => {
+    const client = createClient({ organization_memberships: [] })
+
+    await expect(
+      exportInternalSubmissionsCsv(
+        { actorUserId: MANAGER_ID, organizationId: ORGANIZATION_ID },
+        { client: client as never }
+      )
+    ).rejects.toMatchObject({ statusCode: 403 })
+  })
+
+  it("exports every visible submission, past the per-response row cap", async () => {
+    const client = createClient({ submissions: createSubmissionRows(1_234) })
+
+    const lines = (
+      await exportInternalSubmissionsCsv(
+        { actorUserId: MANAGER_ID, organizationId: ORGANIZATION_ID },
+        { client: client as never }
+      )
+    ).split("\n")
+
+    expect(lines).toHaveLength(1_235)
+    expect(lines[1]).toContain(getNumberedSubmissionId(1))
+    expect(lines.at(-1)).toContain(getNumberedSubmissionId(1_234))
+  })
+
+  it("refuses an export larger than its limit instead of truncating it", async () => {
+    const client = createClient({ submissions: createSubmissionRows(11) })
+
+    await expect(
+      exportInternalSubmissionsCsv(
+        { actorUserId: MANAGER_ID, organizationId: ORGANIZATION_ID },
+        { client: client as never, maxExportRows: 10 } as never
+      )
+    ).rejects.toMatchObject({ statusCode: 413 })
+  })
+
+  it("exports only what the view shows, in the view's order", async () => {
+    const submitted = {
+      status: "submitted",
+      submitted_by: STAFF_ID,
+      submitted_at: "2026-07-18T10:00:00.000Z"
+    }
+    const client = createClient({
+      submissions: [
+        createNumberedSubmissionRow(1, { ...submitted, title: "Charlie" }),
+        createNumberedSubmissionRow(2, { ...submitted, title: "Alpha" }),
+        createNumberedSubmissionRow(3, { title: "Bravo" })
+      ]
+    })
+
+    const lines = (
+      await exportInternalSubmissionsCsv(
+        {
+          actorUserId: MANAGER_ID,
+          organizationId: ORGANIZATION_ID,
+          sort: { direction: "asc", key: "title" },
+          statuses: ["submitted"]
+        } as never,
+        { client: client as never }
+      )
+    ).split("\n")
+
+    expect(lines.slice(1).map((line: string): string => line.slice(1, 37))).toEqual([
+      getNumberedSubmissionId(2),
+      getNumberedSubmissionId(1)
+    ])
+  })
+})
+
+describe("submission list pages", () => {
+  it("pages what a manager can see, latest update first", async () => {
+    const client = createClient({ submissions: createSubmissionRows(55) })
+
+    const page = await listSubmissionPage(
+      createPageInput(MANAGER_ID, { page: 2 }),
+      { client: client as never }
+    )
+
+    expect(page).toMatchObject({ page: 2, pageSize: 25, total: 55 })
+    expect(page.submissions.map((submission) => submission.id)).toEqual(
+      [...Array(25).keys()].map((index: number): string =>
+        getNumberedSubmissionId(26 + index)
+      )
+    )
+  })
+
+  it("breaks ties by id, so a page boundary never repeats or skips a row", async () => {
+    const tied = { updated_at: "2026-07-18T12:00:00.000Z" }
+    const client = createClient({
+      submissions: [
+        createNumberedSubmissionRow(3, tied),
+        createNumberedSubmissionRow(1, tied),
+        createNumberedSubmissionRow(2, tied)
+      ]
+    })
+    const input = createPageInput(MANAGER_ID, { pageSize: 2 })
+
+    const first = await listSubmissionPage(input, { client: client as never })
+    const second = await listSubmissionPage(
+      { ...input, page: 2 },
+      { client: client as never }
+    )
+
+    expect(
+      [...first.submissions, ...second.submissions].map(
+        (submission) => submission.id
+      )
+    ).toEqual([1, 2, 3].map(getNumberedSubmissionId))
+  })
+
+  it("keeps staff to their own submissions and reviewers to assigned non-drafts", async () => {
+    const client = createClient({
+      submissions: [
+        createNumberedSubmissionRow(1),
+        createNumberedSubmissionRow(2, {
+          created_by: OTHER_STAFF_ID,
+          updated_by: OTHER_STAFF_ID
+        }),
+        createAssignedSubmissionRow({
+          id: getNumberedSubmissionId(3),
+          updated_at: "2026-07-18T11:00:00.000Z"
+        })
+      ]
+    })
+
+    const staff = await listSubmissionPage(createPageInput(STAFF_ID), {
+      client: client as never
+    })
+    const reviewer = await listSubmissionPage(createPageInput(EXTERNAL_ID), {
+      client: client as never
+    })
+    const manager = await listSubmissionPage(createPageInput(MANAGER_ID), {
+      client: client as never
+    })
+
+    expect(staff.submissions.map((submission) => submission.id)).toEqual([
+      getNumberedSubmissionId(1),
+      getNumberedSubmissionId(3)
+    ])
+    expect(staff.total).toBe(2)
+    expect(reviewer.submissions.map((submission) => submission.id)).toEqual([
+      getNumberedSubmissionId(3)
+    ])
+    expect(reviewer.total).toBe(1)
+    expect(manager.total).toBe(3)
+  })
+
+  it("keeps a page to the submissions one member started", async () => {
+    const client = createClient({
+      submissions: [
+        createNumberedSubmissionRow(1),
+        createNumberedSubmissionRow(2, { created_by: OTHER_STAFF_ID, updated_by: OTHER_STAFF_ID }),
+        createNumberedSubmissionRow(3),
+      ],
+    })
+
+    const page = await listSubmissionPage(createPageInput(MANAGER_ID, { createdBy: STAFF_ID }), {
+      client: client as never,
+    })
+
+    expect(page.submissions.map((submission) => submission.id)).toEqual([
+      getNumberedSubmissionId(1),
+      getNumberedSubmissionId(3),
+    ])
+    expect(page.total).toBe(2)
+  })
+
+  it("counts each status within what the member may see, and only recent updates when asked", async () => {
+    const client = createClient({
+      submissions: [
+        createNumberedSubmissionRow(1),
+        createNumberedSubmissionRow(2, { created_by: OTHER_STAFF_ID }),
+        createAssignedSubmissionRow({ id: getNumberedSubmissionId(3) }),
+        createAssignedSubmissionRow({
+          id: getNumberedSubmissionId(4),
+          status: "completed",
+          updated_at: "2026-06-30T23:59:00.000Z"
+        }),
+        createAssignedSubmissionRow({
+          id: getNumberedSubmissionId(5),
+          status: "completed",
+          updated_at: "2026-07-01T00:00:00.000Z"
+        })
+      ]
+    })
+    const count = (actorUserId: string, updatedSince?: string) =>
+      countSubmissionsByStatus(
+        {
+          actorUserId,
+          organizationId: ORGANIZATION_ID,
+          statuses: ["draft", "in_review", "completed"],
+          updatedSince
+        },
+        { client: client as never }
+      )
+
+    await expect(count(MANAGER_ID)).resolves.toEqual({ completed: 2, draft: 2, in_review: 1 })
+    await expect(count(STAFF_ID)).resolves.toEqual({ completed: 2, draft: 1, in_review: 1 })
+    await expect(count(EXTERNAL_ID)).resolves.toEqual({ completed: 2, draft: 0, in_review: 1 })
+    await expect(count(MANAGER_ID, "2026-07-01T00:00:00.000Z")).resolves.toMatchObject({ completed: 1 })
+  })
+
+  it("answers a page past the end with no rows and the true total", async () => {
+    const client = createClient({ submissions: createSubmissionRows(3) })
+
+    await expect(
+      listSubmissionPage(createPageInput(MANAGER_ID, { page: 5 }), {
+        client: client as never
+      })
+    ).resolves.toMatchObject({ page: 5, submissions: [], total: 3 })
+  })
+
+  it("filters by status, literal title text, and assignee", async () => {
+    const client = createClient({
+      submissions: [
+        createNumberedSubmissionRow(1, {
+          status: "submitted",
+          submitted_by: STAFF_ID,
+          submitted_at: "2026-07-18T10:00:00.000Z",
+          title: "Refund, 50% off"
+        }),
+        createNumberedSubmissionRow(2, { title: "Order of 500 units" }),
+        createAssignedSubmissionRow({
+          id: getNumberedSubmissionId(3),
+          title: "Vendor review",
+          updated_at: "2026-07-18T11:00:00.000Z"
+        })
+      ]
+    })
+    const ids = async (
+      overrides: Partial<ListSubmissionPageInput>
+    ): Promise<string[]> =>
+      (
+        await listSubmissionPage(createPageInput(MANAGER_ID, overrides), {
+          client: client as never
+        })
+      ).submissions.map((submission) => submission.id)
+
+    expect(await ids({ statuses: ["submitted"] })).toEqual([
+      getNumberedSubmissionId(1)
+    ])
+    expect(await ids({ query: "50%" })).toEqual([getNumberedSubmissionId(1)])
+    expect(await ids({ assignedTo: EXTERNAL_ID })).toEqual([
+      getNumberedSubmissionId(3)
+    ])
+    expect(await ids({ assignedTo: null })).toEqual([
+      getNumberedSubmissionId(1),
+      getNumberedSubmissionId(2)
+    ])
+  })
+
+  it.each([
+    { label: "page 0", overrides: { page: 0 } },
+    { label: "page 10,001", overrides: { page: 10_001 } },
+    { label: "a page size of 0", overrides: { pageSize: 0 } },
+    { label: "a page size of 101", overrides: { pageSize: 101 } },
+    {
+      label: "an unknown order",
+      overrides: { sort: { direction: "asc", key: "priority" } }
+    },
+    { label: "a search over 100 characters", overrides: { query: "x".repeat(101) } },
+    { label: "an assignee that is not a user id", overrides: { assignedTo: "someone" } },
+    { label: "an unknown status", overrides: { statuses: ["archived"] } }
+  ])("refuses $label", async ({ overrides }) => {
+    const client = createClient()
+
+    await expect(
+      listSubmissionPage(
+        { ...createPageInput(MANAGER_ID), ...overrides } as never,
+        { client: client as never }
+      )
+    ).rejects.toMatchObject({ statusCode: 400 })
+  })
+
+  it("refuses an actor with no active membership", async () => {
+    const client = createClient({ organization_memberships: [] })
+
+    await expect(
+      listSubmissionPage(createPageInput(MANAGER_ID), {
+        client: client as never
+      })
+    ).rejects.toMatchObject({ statusCode: 403 })
   })
 })
 
@@ -1121,6 +1398,50 @@ describe("internal submission file cleanup", () => {
   })
 })
 
+describe("abandoned submission file expiry", () => {
+  it("expires abandoned drafts and dead uploads in one bounded database pass", async () => {
+    const client = createClient()
+
+    client.rpc.mockResolvedValue({
+      data: { expired_drafts: 2, expired_files: 5 },
+      error: null
+    })
+
+    await expect(
+      expireAbandonedSubmissionFiles({}, { client: client as never })
+    ).resolves.toEqual({ expiredDrafts: 2, expiredFiles: 5 })
+    expect(client.rpc).toHaveBeenCalledWith(
+      "expire_abandoned_submission_files",
+      { target_batch_size: 250 }
+    )
+  })
+
+  it.each([0, 1_001, 2.5])(
+    "refuses batch size %s before it reaches the database",
+    async (batchSize: number) => {
+      const client = createClient()
+
+      await expect(
+        expireAbandonedSubmissionFiles({ batchSize }, { client: client as never })
+      ).rejects.toThrow(RangeError)
+      expect(client.rpc).not.toHaveBeenCalled()
+    }
+  )
+
+  it("reports a database failure instead of a partial result", async () => {
+    const client = createClient()
+    const failure = Object.assign(new Error("connection reset"), {
+      code: "08006"
+    })
+
+    client.rpc.mockResolvedValue({ data: null, error: failure })
+
+    await expect(
+      expireAbandonedSubmissionFiles({}, { client: client as never })
+    ).rejects.toMatchObject({ statusCode: 500 })
+  })
+})
+
 function createClient(overrides: Partial<FakeTables> = {}): FakeClient {
   return new FakeClient({
     organization_memberships: [
@@ -1182,6 +1503,45 @@ function createSubmissionRow(overrides: FakeRow = {}): FakeRow {
     updated_at: "2026-07-18T16:00:00.000Z",
     submitted_at: null,
     assigned_at: null,
+    ...overrides
+  }
+}
+
+// Row 1 is the most recently updated, and ids rise with the row number.
+function createSubmissionRows(count: number, overrides: FakeRow = {}): FakeRow[] {
+  return [...Array(count).keys()].map(
+    (index: number): FakeRow => createNumberedSubmissionRow(index + 1, overrides)
+  )
+}
+
+function createNumberedSubmissionRow(
+  rowNumber: number,
+  overrides: FakeRow = {}
+): FakeRow {
+  return createSubmissionRow({
+    id: getNumberedSubmissionId(rowNumber),
+    title: `Submission ${String(rowNumber).padStart(4, "0")}`,
+    updated_at: new Date(
+      Date.UTC(2026, 6, 18, 12) - rowNumber * 60_000
+    ).toISOString(),
+    ...overrides
+  })
+}
+
+function getNumberedSubmissionId(rowNumber: number): string {
+  return `41000000-0000-4000-8000-${String(rowNumber).padStart(12, "0")}`
+}
+
+function createPageInput(
+  actorUserId: string,
+  overrides: Partial<ListSubmissionPageInput> = {}
+): ListSubmissionPageInput {
+  return {
+    actorUserId,
+    organizationId: ORGANIZATION_ID,
+    page: 1,
+    pageSize: 25,
+    sort: { direction: "desc", key: "updated" },
     ...overrides
   }
 }

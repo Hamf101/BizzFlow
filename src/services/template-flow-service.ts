@@ -3,6 +3,11 @@ import { randomUUID } from "node:crypto"
 import { z } from "zod"
 
 import {
+  canPerformOrganizationAction,
+  createOrganizationPermissionSubject,
+  isOrganizationRole
+} from "@/lib/permissions"
+import {
   createAdminClient,
   type AdminSupabaseClient
 } from "@/lib/supabase/admin"
@@ -17,6 +22,10 @@ import {
   AiProviderError
 } from "@/services/ai/errors"
 import { createAiRuntime } from "@/services/ai/provider-factory"
+import {
+  DocumentSigningServiceError,
+  getGeneratedDocumentSigningView
+} from "@/services/document-signing-service"
 import { createTemplateFlowDraftFingerprint } from "@/services/template-flow-proposal-state"
 import {
   createTemplateFlowResponseSchema,
@@ -314,6 +323,22 @@ export type ExecuteTemplateFlowInput = {
   instruction: unknown
 }
 
+export type ExecuteDocumentFlowInput = {
+  actorUserId: string
+  organizationId: string
+  documentId: string
+  draft: unknown
+  instruction: unknown
+}
+
+export type DocumentFlowServiceDeps = TemplateFlowServiceDeps & {
+  authorizeDocument?: (input: {
+    actorUserId: string
+    organizationId: string
+    documentId: string
+  }) => Promise<void>
+}
+
 export type ListTemplateFlowMessagesInput = {
   actorUserId: string
   organizationId: string
@@ -326,6 +351,7 @@ export type TemplateFlowServiceDeps = {
     organizationId: string
     templateId: string
   }) => Promise<void>
+  client?: TemplateFlowClient
   createId?: () => string
   createTraceId?: () => string
   getAiRuntime?: () => AiRuntime
@@ -508,10 +534,62 @@ export async function executeTemplateFlow(
 }
 
 /**
- * Lists the shared, template-scoped Flow history visible to a template manager.
+ * Completes one Flow turn about a generated document's own page. It is the
+ * same Flow that edits templates, open to anyone who may open the document;
+ * applying a suggestion goes through the document's own save, which keeps the
+ * draft-only and edit-access rules.
+ *
+ * @param input - Actor, tenant, document, the page the editor holds, and the message.
+ * @param deps - Optional document authorization and the template Flow dependencies.
+ * @returns A staged candidate batch and the turn's messages.
+ * @throws TemplateFlowServiceError when the document cannot be opened or Flow fails.
+ */
+export async function executeDocumentFlow(
+  input: ExecuteDocumentFlowInput,
+  deps: DocumentFlowServiceDeps = {}
+): Promise<TemplateFlowResult> {
+  const { actorUserId, documentId, organizationId } = input
+
+  // The id comes from the URL; a malformed one is simply not a document.
+  if (!z.string().uuid().safeParse(documentId).success) {
+    throw new TemplateFlowServiceError("Generated document was not found.", 404)
+  }
+
+  try {
+    await (
+      deps.authorizeDocument ??
+      (async (subject): Promise<void> => {
+        await getGeneratedDocumentSigningView(subject)
+      })
+    )({ actorUserId, documentId, organizationId })
+  } catch (error: unknown) {
+    if (error instanceof DocumentSigningServiceError) {
+      throw new TemplateFlowServiceError(error.message, error.statusCode)
+    }
+
+    throw error
+  }
+
+  // Flow keys a turn by what it edits, so the document's id rides in
+  // `templateId`. ponytail: the conversation lives in the editor's tab; keep
+  // it per document once someone needs it back after a reload.
+  return executeTemplateFlow(
+    { actorUserId, draft: input.draft, instruction: input.instruction, organizationId, templateId: documentId },
+    {
+      ...deps,
+      authorizeTemplateManagement: async (): Promise<void> => {},
+      loadHistory: async (): Promise<TemplateFlowMessage[]> => [],
+      persistMessages: async (): Promise<void> => {}
+    }
+  )
+}
+
+/**
+ * Lists the shared, template-scoped Flow history visible to an actor with
+ * template-management permission.
  *
  * @param input - Authenticated actor and tenant-scoped template identifiers.
- * @param deps - Optional authorization and history adapters.
+ * @param deps - Optional authorization, database, and history adapters.
  * @returns Chronological conversation messages, bounded to the latest entries.
  * @throws TemplateFlowServiceError when access cannot be verified.
  */
@@ -519,10 +597,19 @@ export async function listTemplateFlowMessages(
   input: ListTemplateFlowMessagesInput,
   deps: Pick<
     TemplateFlowServiceDeps,
-    "authorizeTemplateManagement" | "loadHistory"
+    "authorizeTemplateManagement" | "client" | "loadHistory"
   > = {}
 ): Promise<TemplateFlowMessage[]> {
-  await (deps.authorizeTemplateManagement ?? requireTemplateManager)({
+  const authorizeTemplateManagement =
+    deps.authorizeTemplateManagement ??
+    ((authorizationInput: {
+      actorUserId: string
+      organizationId: string
+      templateId: string
+    }): Promise<void> =>
+      requireTemplateManagement(authorizationInput, deps.client))
+
+  await authorizeTemplateManagement({
     actorUserId: input.actorUserId,
     organizationId: input.organizationId,
     templateId: input.templateId
@@ -540,7 +627,16 @@ async function authorizeFlowRequest(
   startedAt: number
 ): Promise<void> {
   try {
-    await (deps.authorizeTemplateManagement ?? requireTemplateManager)({
+    const authorizeTemplateManagement =
+      deps.authorizeTemplateManagement ??
+      ((authorizationInput: {
+        actorUserId: string
+        organizationId: string
+        templateId: string
+      }): Promise<void> =>
+        requireTemplateManagement(authorizationInput, deps.client))
+
+    await authorizeTemplateManagement({
       actorUserId: request.actorUserId,
       organizationId: request.organizationId,
       templateId: request.templateId
@@ -983,7 +1079,7 @@ function throwFlowProviderError(
 
   if (providerError.code === AI_PROVIDER_ERROR_CODES.REQUEST_TIMEOUT) {
     throw new TemplateFlowServiceError(
-      "Flow timed out. Try a shorter request.",
+      "Flow took too long to answer. Try again.",
       504
     )
   }
@@ -2005,17 +2101,22 @@ function createFlowMessages(input: {
   ]
 }
 
-async function requireTemplateManager(input: {
-  actorUserId: string
-  organizationId: string
-  templateId: string
-}): Promise<void> {
-  const client: TemplateFlowClient = createAdminClient()
+async function requireTemplateManagement(
+  input: {
+    actorUserId: string
+    organizationId: string
+    templateId: string
+  },
+  providedClient?: TemplateFlowClient
+): Promise<void> {
+  const client: TemplateFlowClient = providedClient ?? createAdminClient()
   const [{ data: membershipData, error: membershipError }, templateResult] =
     await Promise.all([
       client
         .from("organization_memberships")
-        .select("role,status")
+        .select(
+          "role,status,role_definition:organization_roles!organization_memberships_role_definition_fk(permissions)"
+        )
         .eq("org_id", input.organizationId)
         .eq("user_id", input.actorUserId)
         .eq("status", "active")
@@ -2037,6 +2138,7 @@ async function requireTemplateManager(input: {
 
   const membership = membershipData as {
     role?: unknown
+    role_definition?: { permissions: string[] | null } | null
     status?: unknown
   } | null
   const template = templateResult.data as {
@@ -2044,12 +2146,38 @@ async function requireTemplateManager(input: {
     status?: unknown
   } | null
 
+  if (membership?.status !== "active") {
+    throw new TemplateFlowServiceError(
+      "You do not have permission to manage templates.",
+      403
+    )
+  }
+
   if (
-    membership?.status !== "active" ||
-    (membership.role !== "owner_admin" && membership.role !== "manager")
+    typeof membership.role !== "string" ||
+    !isOrganizationRole(membership.role)
   ) {
     throw new TemplateFlowServiceError(
-      "Only organization owners and managers can use Flow.",
+      "Database returned an unsupported organization role.",
+      500
+    )
+  }
+
+  const subject = createOrganizationPermissionSubject(
+    membership.role,
+    membership.role_definition?.permissions
+  )
+
+  if (!subject) {
+    throw new TemplateFlowServiceError(
+      "Database returned unsupported role permissions.",
+      500
+    )
+  }
+
+  if (!canPerformOrganizationAction(subject, "templates:manage")) {
+    throw new TemplateFlowServiceError(
+      "You do not have permission to manage templates.",
       403
     )
   }

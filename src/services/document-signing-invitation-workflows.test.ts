@@ -386,4 +386,101 @@ describe("document signing invitation, token, and public workflows", () => {
       true
     )
   })
+
+  it.each([
+    ["trashed", { lifecycle_state: "trashed", trashed_at: "2026-07-17T19:30:00.000Z" }],
+    [
+      "waiting to be purged",
+      {
+        lifecycle_state: "purge_pending",
+        purge_after: "2026-08-16T19:30:00.000Z",
+        trashed_at: "2026-07-17T19:30:00.000Z",
+      },
+    ],
+  ])("closes already-used signing links once the document is %s", async (_case, documentState) => {
+    const tables = createBaseTables()
+    tables.document_signing_recipients.push(
+      createRecipientRow(RECIPIENT_ONE_ID, TOKEN_ONE, "Avery Morgan", "avery@example.com"),
+      createRecipientRow(RECIPIENT_TWO_ID, TOKEN_TWO, "Jordan Lee", "jordan@example.com")
+    )
+    tables.document_answers[0].workflow_status = "awaiting_signatures"
+    const client = new FakeClient(tables)
+    const deps = { client: client as never, now: (): Date => NOW }
+
+    // While the document is live, one recipient opens their link and the other signs.
+    await getPublicDocumentSigningView({ token: TOKEN_ONE }, deps)
+    await completePublicDocumentSigning(
+      {
+        signatureDataUrl: DRAWING_DATA_URL,
+        token: TOKEN_TWO,
+        values: { client_name: "Northstar Labs" },
+      },
+      deps
+    )
+    Object.assign(tables.documents[0], documentState)
+    const unavailable = {
+      message: "This signing link is invalid or no longer available.",
+      statusCode: 404,
+    }
+
+    await expect(
+      getPublicDocumentSigningView({ token: TOKEN_ONE }, deps)
+    ).rejects.toMatchObject(unavailable)
+    await expect(
+      getPublicDocumentSigningView({ token: TOKEN_TWO }, deps)
+    ).rejects.toMatchObject(unavailable)
+    await expect(
+      completePublicDocumentSigning(
+        { signatureDataUrl: DRAWING_DATA_URL, token: TOKEN_TWO, values: {} },
+        deps
+      )
+    ).rejects.toMatchObject(unavailable)
+  })
+
+  it("refuses a first visit to a trashed document without marking the link viewed", async () => {
+    const tables = createBaseTables()
+    tables.documents[0].lifecycle_state = "trashed"
+    tables.documents[0].trashed_at = "2026-07-17T19:30:00.000Z"
+    tables.document_signing_recipients.push(
+      createRecipientRow(RECIPIENT_ONE_ID, TOKEN_ONE, "Avery Morgan", "avery@example.com")
+    )
+    const client = new FakeClient(tables)
+
+    await expect(
+      getPublicDocumentSigningView(
+        { token: TOKEN_ONE },
+        { client: client as never, now: (): Date => NOW }
+      )
+    ).rejects.toMatchObject({ statusCode: 404 })
+    // In the database a trigger refuses to mark it viewed; the link is refused first.
+    expect(tables.document_signing_recipients[0].status).toBe("pending")
+  })
+
+  it("keeps an archived document readable through its link but closed to signing", async () => {
+    const tables = createBaseTables()
+    tables.document_signing_recipients.push(
+      createRecipientRow(RECIPIENT_ONE_ID, TOKEN_ONE, "Avery Morgan", "avery@example.com")
+    )
+    tables.document_answers[0].values = { client_name: "Northstar Labs" }
+    tables.document_answers[0].workflow_status = "awaiting_signatures"
+    const client = new FakeClient(tables)
+    const deps = { client: client as never, now: (): Date => NOW }
+    await getPublicDocumentSigningView({ token: TOKEN_ONE }, deps)
+    tables.documents[0].lifecycle_state = "archived"
+    tables.documents[0].archived_at = "2026-07-17T19:30:00.000Z"
+
+    const view = await getPublicDocumentSigningView({ token: TOKEN_ONE }, deps)
+
+    expect(view.answers).toEqual({ client_name: "Northstar Labs" })
+    await expect(
+      completePublicDocumentSigning(
+        { signatureDataUrl: DRAWING_DATA_URL, token: TOKEN_ONE, values: {} },
+        deps
+      )
+    ).rejects.toMatchObject({
+      message: "This document is no longer accepting signatures.",
+      statusCode: 409,
+    })
+    expect(tables.document_signing_recipients[0].status).toBe("viewed")
+  })
 })

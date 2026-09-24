@@ -12,6 +12,7 @@ export type {
   ResendDocumentSigningInvitationInput,
   SaveGeneratedDocumentAnswersInput,
   SendDocumentForSigningInput,
+  UpdateGeneratedDocumentContentInput,
 } from "@/services/document-signing/contracts"
 export { DocumentSigningServiceError } from "@/services/document-signing/errors"
 export {
@@ -21,4 +22,5 @@ export {
   resendDocumentSigningInvitation,
   saveGeneratedDocumentAnswers,
   sendDocumentForSigning,
+  updateGeneratedDocumentContent,
 } from "@/services/document-signing/workflows"

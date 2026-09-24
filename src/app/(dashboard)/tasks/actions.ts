@@ -6,6 +6,11 @@ import { z } from "zod"
 
 import { publishTaskAssigned } from "@/inngest/publish-task-assigned"
 import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
+import {
+  buildFeedbackRedirect,
+  getActionErrorFeedbackCode,
+  type ActionFeedbackCode,
+} from "@/lib/action-result"
 import { buildRedirect, getFormString } from "@/lib/form-utils"
 import {
   canPerformOrganizationAction,
@@ -17,7 +22,6 @@ import {
   cancelTaskReminder,
   createTask,
   scheduleTaskReminder,
-  TaskServiceError,
   transitionTaskStatus,
   updateTask,
   type TaskServiceDeps,
@@ -39,14 +43,17 @@ type TaskActionContext = {
 type TaskActionRun = (context: TaskActionContext) => Promise<string>
 
 class TaskActionError extends Error {
+  readonly statusCode: number
+
   /**
    * Creates a user-safe rejection raised by a task server action.
    *
    * @param message - Description shown to the member who submitted the form.
    */
-  constructor(message: string) {
+  constructor(message: string, statusCode = 400) {
     super(message)
     this.name = "TaskActionError"
+    this.statusCode = statusCode
   }
 }
 
@@ -129,9 +136,8 @@ export async function createTaskAction(formData: FormData): Promise<void> {
   await runTaskAction({
     errorPath: getSubmissionPath(submissionId) ?? TASKS_PATH,
     eventName: "task_create_action",
-    fallback: "Unable to create this task.",
     permission: "tasks:create",
-    successMessage: "Task created.",
+    successCode: "task_created",
     run: async (context: TaskActionContext): Promise<string> => {
       const input = parseTaskActionInput(createTaskSchema, {
         assignedTo: getFormString(formData, "assignedTo"),
@@ -170,9 +176,8 @@ export async function updateTaskAction(formData: FormData): Promise<void> {
   await runTaskAction({
     errorPath: taskPath,
     eventName: "task_update_action",
-    fallback: "Unable to update this task.",
     permission: "tasks:edit",
-    successMessage: "Task details saved.",
+    successCode: "changes_saved",
     run: async (context: TaskActionContext): Promise<string> => {
       const input = parseTaskActionInput(updateTaskSchema, {
         description: getFormString(formData, "description"),
@@ -208,9 +213,8 @@ export async function assignTaskAction(formData: FormData): Promise<void> {
   await runTaskAction({
     errorPath: taskPath,
     eventName: "task_assign_action",
-    fallback: "Unable to change this task assignment.",
     permission: "tasks:assign",
-    successMessage: "Task assignment saved.",
+    successCode: "changes_saved",
     run: async (context: TaskActionContext): Promise<string> => {
       const input = parseTaskActionInput(assignTaskSchema, {
         assignedTo: getFormString(formData, "assignedTo"),
@@ -247,9 +251,8 @@ export async function transitionTaskStatusAction(
   await runTaskAction({
     errorPath: taskPath,
     eventName: "task_transition_action",
-    fallback: "Unable to update this task status.",
     permission: "tasks:edit",
-    successMessage: "Task status updated.",
+    successCode: "task_status_updated",
     run: async (context: TaskActionContext): Promise<string> => {
       const input = parseTaskActionInput(transitionTaskSchema, {
         expectedRevision: getFormString(formData, "expectedRevision"),
@@ -283,9 +286,8 @@ export async function scheduleTaskReminderAction(
   await runTaskAction({
     errorPath: taskPath,
     eventName: "task_reminder_schedule_action",
-    fallback: "Unable to schedule this reminder.",
     permission: "tasks:edit",
-    successMessage: "Reminder scheduled.",
+    successCode: "changes_saved",
     run: async (context: TaskActionContext): Promise<string> => {
       const input = parseTaskActionInput(scheduleReminderSchema, {
         channel: getFormString(formData, "channel"),
@@ -321,9 +323,8 @@ export async function cancelTaskReminderAction(
   await runTaskAction({
     errorPath: taskPath,
     eventName: "task_reminder_cancel_action",
-    fallback: "Unable to cancel this reminder.",
     permission: "tasks:edit",
-    successMessage: "Reminder cancelled.",
+    successCode: "changes_saved",
     run: async (context: TaskActionContext): Promise<string> => {
       const input = parseTaskActionInput(cancelReminderSchema, {
         reminderId: getFormString(formData, "reminderId"),
@@ -344,10 +345,9 @@ export async function cancelTaskReminderAction(
 async function runTaskAction(input: {
   errorPath: string
   eventName: string
-  fallback: string
   permission: OrganizationPermissionAction
   run: TaskActionRun
-  successMessage: string
+  successCode: ActionFeedbackCode
 }): Promise<never> {
   const startedAt = Date.now()
   let successPath = input.errorPath
@@ -368,15 +368,18 @@ async function runTaskAction(input: {
       redirect(buildRedirect("/login", { next: input.errorPath }))
     }
 
-    const reason = getTaskActionErrorMessage(error, input.fallback)
+    const reason =
+      error instanceof Error ? error.message : "Unknown task action error"
     console.warn(`${input.eventName}_failed`, {
       durationMs: Date.now() - startedAt,
       reason,
     })
-    redirect(buildRedirect(input.errorPath, { error: reason }))
+    redirect(
+      buildFeedbackRedirect(input.errorPath, getActionErrorFeedbackCode(error))
+    )
   }
 
-  redirect(buildRedirect(successPath, { message: input.successMessage }))
+  redirect(buildFeedbackRedirect(successPath, input.successCode))
 }
 
 async function loadTaskActionContext(
@@ -387,12 +390,16 @@ async function loadTaskActionContext(
     await getCurrentOrganizationContext(user.id)
 
   if (!context) {
-    throw new TaskActionError("Create an organization before managing tasks.")
+    throw new TaskActionError(
+      "Create an organization before managing tasks.",
+      428
+    )
   }
 
-  if (!canPerformOrganizationAction(context.membership.role, permission)) {
+  if (!canPerformOrganizationAction(context.membership, permission)) {
     throw new TaskActionError(
-      "You do not have permission to perform this task action."
+      "You do not have permission to perform this task action.",
+      403
     )
   }
 
@@ -412,12 +419,6 @@ function parseTaskActionInput<TValue>(
   }
 
   return result.data
-}
-
-function getTaskActionErrorMessage(error: unknown, fallback: string): string {
-  return error instanceof TaskActionError || error instanceof TaskServiceError
-    ? error.message
-    : fallback
 }
 
 function toNullableValue(value: string): string | null {

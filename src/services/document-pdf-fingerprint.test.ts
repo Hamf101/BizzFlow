@@ -51,6 +51,14 @@ const EXPECTED_CONTENT_STREAM_SHA256: readonly string[] = [
   "fcfc5f264e9fa33f1b83549e2c82c2f7de10b578a4d4ffe5a6bb596404c4cbad"
 ]
 
+// Each case embeds fonts and renders a real PDF, which costs seconds rather
+// than milliseconds. Vitest runs files in parallel, so on a busy machine the
+// stock 5s budget expires mid-render and the failure reads as a changed
+// fingerprint — a real PDF regression is exactly what this file exists to
+// catch, so a timeout that imitates one is worse than a slow test. Only the
+// clock is relaxed here; every assertion is unchanged.
+const PDF_RENDER_TIMEOUT_MS = 30_000
+
 describe("generated document PDF fingerprint", () => {
   it("renders byte-identical output for identical input", async () => {
     const [first, second] = await Promise.all([
@@ -89,7 +97,7 @@ describe("generated document PDF fingerprint", () => {
     expect(document.getCreationDate()?.getTime()).toBe(expected)
     expect(document.getModificationDate()?.getTime()).toBe(expected)
   })
-})
+}, PDF_RENDER_TIMEOUT_MS)
 
 /**
  * Renders the shared sample document with a frozen metadata timestamp.

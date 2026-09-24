@@ -1,15 +1,28 @@
 import type { PDFImage } from "pdf-lib"
 
+import {
+  exceedsEmbeddedImageLimit,
+  MAX_DOCUMENT_PNG_PIXELS,
+  parseImageDataUrl,
+  readImageDimensions,
+} from "@/lib/image-header"
+
 import { DocumentPdfServiceError } from "./errors"
 import type { PdfLibRenderContext } from "./pdf-lib-types"
 
 /**
  * Embeds and caches a PNG or JPEG data URL in the active PDF document.
  *
+ * The header is read before pdf-lib sees the bytes. pdf-lib decodes every PNG
+ * pixel into memory and keeps it until the PDF is saved, so a PNG over the
+ * per-image limit, or one that would take this render past its PNG allowance,
+ * is refused before anything is allocated. JPEGs are embedded as compressed
+ * data and cost no decoding.
+ *
  * @param context - Active pdf-lib render state.
- * @param dataUrl - Valid image data URL.
+ * @param dataUrl - PNG or JPEG data URL.
  * @returns Embedded pdf-lib image.
- * @throws DocumentPdfServiceError when the image cannot be decoded.
+ * @throws DocumentPdfServiceError when the image is unreadable or too large.
  */
 export async function embedPdfLibImage(
   context: PdfLibRenderContext,
@@ -21,28 +34,47 @@ export async function embedPdfLibImage(
     return cached
   }
 
-  const separatorIndex = dataUrl.indexOf(",")
+  const image = parseImageDataUrl(dataUrl)
 
-  if (separatorIndex < 0) {
+  if (!image) {
+    throw createInvalidImageError()
+  }
+
+  const bytes = Buffer.from(image.encoded, "base64")
+  const dimensions = readImageDimensions(bytes, image.format)
+
+  if (!dimensions) {
+    throw createInvalidImageError()
+  }
+
+  if (exceedsEmbeddedImageLimit(image.format, dimensions)) {
     throw new DocumentPdfServiceError(
-      "An embedded document image is invalid.",
+      "An embedded document image is too large.",
       400
     )
   }
 
-  const bytes = Buffer.from(dataUrl.slice(separatorIndex + 1), "base64")
-
-  try {
-    const image = dataUrl.startsWith("data:image/png")
-      ? await context.document.embedPng(bytes)
-      : await context.document.embedJpg(bytes)
-    context.imageCache.set(dataUrl, image)
-    return image
-  } catch {
+  if (
+    image.format === "png" &&
+    countDecodedPngPixels(context.imageCache) +
+      dimensions.width * dimensions.height >
+      MAX_DOCUMENT_PNG_PIXELS
+  ) {
     throw new DocumentPdfServiceError(
-      "An embedded document image is invalid.",
+      "This document's images are too large to include in a PDF.",
       400
     )
+  }
+
+  try {
+    const embedded =
+      image.format === "png"
+        ? await context.document.embedPng(bytes)
+        : await context.document.embedJpg(bytes)
+    context.imageCache.set(dataUrl, embedded)
+    return embedded
+  } catch {
+    throw createInvalidImageError()
   }
 }
 
@@ -69,4 +101,27 @@ export function fitPdfImage(
     height: image.height * scale,
     width: image.width * scale,
   }
+}
+
+// The render's cache holds every image decoded so far, once each, so its PNG
+// entries are exactly the pixels this render has allocated.
+function countDecodedPngPixels(
+  imageCache: ReadonlyMap<string, PDFImage>
+): number {
+  let pixels = 0
+
+  for (const [dataUrl, image] of imageCache) {
+    if (dataUrl.startsWith("data:image/png;")) {
+      pixels += image.width * image.height
+    }
+  }
+
+  return pixels
+}
+
+function createInvalidImageError(): DocumentPdfServiceError {
+  return new DocumentPdfServiceError(
+    "An embedded document image is invalid.",
+    400
+  )
 }

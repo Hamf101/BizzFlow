@@ -1,3 +1,4 @@
+import type { ListSort } from "@/lib/list-state"
 import type { AdminSupabaseClient } from "@/lib/supabase/admin"
 import type {
   createSafeSubmissionFilename,
@@ -16,6 +17,8 @@ import type {
   Submission,
   SubmissionAnswers,
   SubmissionFile,
+  SubmissionSortKey,
+  SubmissionStatus,
 } from "@/types/submission"
 import type {
   SubmissionActivityEvent,
@@ -37,14 +40,54 @@ export type SubmissionDetail = {
   activity: SubmissionActivityEvent[]
 }
 
+/** What the list's hover preview draws for one visible submission, and no more. */
+export type SubmissionPreview = {
+  answers: SubmissionAnswers
+  content: Submission["templateSnapshot"]
+  title: string
+}
+
 /** Actor and tenant identifiers shared by submission calls. */
 export type SubmissionActorInput = {
   actorUserId: string
   organizationId: string
 }
 
-/** Input for listing submissions visible to one actor. */
-export type ListInternalSubmissionsInput = SubmissionActorInput
+/** Input for one page of the submissions an actor may see. */
+export type ListSubmissionPageInput = SubmissionActorInput & {
+  /** A member's user id, or null for submissions nobody is assigned to. */
+  assignedTo?: string | null
+  /** Only the submissions this member started. */
+  createdBy?: string
+  /** One-based page number. */
+  page: number
+  pageSize: number
+  /** Title search text; matched literally, ignoring case. */
+  query?: string
+  sort: ListSort<SubmissionSortKey>
+  statuses?: readonly SubmissionStatus[]
+}
+
+/** Input for counting the submissions an actor may see in each status. */
+export type CountSubmissionsByStatusInput = SubmissionActorInput & {
+  statuses: readonly SubmissionStatus[]
+  /** Counts only submissions updated at or after this moment, such as the month's start. */
+  updatedSince?: string
+}
+
+/** One page of submissions and how many match its filters. */
+export type SubmissionPage = {
+  page: number
+  pageSize: number
+  submissions: Submission[]
+  total: number
+}
+
+/** Input for exporting every visible submission that matches a view. */
+export type ExportSubmissionsInput = SubmissionActorInput &
+  Partial<
+    Pick<ListSubmissionPageInput, "assignedTo" | "query" | "sort" | "statuses">
+  >
 
 /** Input for loading one visible submission. */
 export type GetInternalSubmissionInput = SubmissionActorInput & {
@@ -155,6 +198,8 @@ export type SubmissionServiceDeps = {
   verifySubmissionUpload?: typeof verifySubmissionUpload
   deleteSubmissionStorageObject?: typeof deleteSubmissionStorageObject
   createSignedSubmissionDownloadUrl?: typeof createSignedSubmissionDownloadUrl
+  /** Largest submissions export; tests lower it. */
+  maxExportRows?: number
 }
 
 /** Full normalized values sent to mutation RPCs. */

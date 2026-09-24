@@ -580,12 +580,7 @@ describe("submitPublicForm", () => {
     )
 
     expect(result.status).toBe("submitted")
-    expect(client.rpcCalls).toEqual([
-      {
-        name: "increment_public_form_link_submission_count",
-        args: { p_token: PUBLIC_TOKEN },
-      },
-    ])
+    expect(client.tables.public_form_links[0].submission_count).toBe(1)
 
     const submission = client.tables.submissions[0]
     expect(submission).toMatchObject({
@@ -681,6 +676,7 @@ describe("submitPublicForm", () => {
       public_draft_token: null,
       revision: 4,
     })
+    expect(client.tables.public_form_links[0].submission_count).toBe(1)
   })
 
   it("refuses to submit a stale public draft revision", async () => {
@@ -725,6 +721,90 @@ describe("submitPublicForm", () => {
       full_name: "Ada",
       agreed: false,
     })
+  })
+
+  it("uses one slot when one draft is submitted twice at once", async () => {
+    const client = seedValidLink({
+      public_form_links: [createLinkRow({ max_submissions: 2 })],
+      submissions: [createDraftRow()],
+    })
+    const input = {
+      token: PUBLIC_TOKEN,
+      draftToken: DRAFT_TOKEN,
+      expectedRevision: 1,
+      values: { full_name: "Ada Lovelace", agreed: "true" },
+    }
+
+    const results = await Promise.allSettled([
+      submitPublicForm(input, createDeps(client)),
+      submitPublicForm(input, createDeps(client)),
+    ])
+
+    expect(results.map((result) => result.status).sort()).toEqual([
+      "fulfilled",
+      "rejected",
+    ])
+    expect(
+      results.find((result) => result.status === "rejected")
+    ).toMatchObject({ reason: { statusCode: 409 } })
+    expect(client.tables.submissions).toHaveLength(1)
+    expect(client.tables.public_form_links[0].submission_count).toBe(1)
+  })
+
+  it("lets only one of two racing visitors take a link's last slot", async () => {
+    const client = seedValidLink({
+      public_form_links: [createLinkRow({ max_submissions: 1 })],
+    })
+    const input = {
+      token: PUBLIC_TOKEN,
+      values: { full_name: "Ada Lovelace", agreed: "true" },
+    }
+
+    const results = await Promise.allSettled([
+      submitPublicForm(
+        input,
+        createDeps(client, ["40000000-0000-4000-8000-000000000002"])
+      ),
+      submitPublicForm(
+        input,
+        createDeps(client, ["40000000-0000-4000-8000-000000000003"])
+      ),
+    ])
+
+    expect(results.map((result) => result.status).sort()).toEqual([
+      "fulfilled",
+      "rejected",
+    ])
+    expect(
+      results.find((result) => result.status === "rejected")
+    ).toMatchObject({ reason: { statusCode: 409 } })
+    expect(client.tables.submissions).toHaveLength(1)
+    expect(client.tables.public_form_links[0].submission_count).toBe(1)
+  })
+
+  it.each([
+    { label: "a new submission", draftInput: {} },
+    {
+      label: "a draft",
+      draftInput: { draftToken: DRAFT_TOKEN, expectedRevision: 1 },
+    },
+  ])("keeps the link's slot when saving $label fails", async ({ draftInput }) => {
+    const client = seedValidLink({ submissions: [createDraftRow()] })
+
+    client.failingWrites.add("submissions")
+
+    await expect(
+      submitPublicForm(
+        {
+          token: PUBLIC_TOKEN,
+          values: { full_name: "Ada Lovelace", agreed: "true" },
+          ...draftInput,
+        },
+        createDeps(client, ["40000000-0000-4000-8000-000000000002"])
+      )
+    ).rejects.toMatchObject({ statusCode: 500 })
+    expect(client.tables.public_form_links[0].submission_count).toBe(0)
+    expect(client.tables.submissions).toMatchObject([{ status: "draft" }])
   })
 })
 

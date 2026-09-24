@@ -1,11 +1,17 @@
+import { NavigationPreferencesProvider } from "@/components/navigation/navigation-preferences-provider"
+import { getNavigationPreferences } from "@/services/navigation-service"
 import * as Sentry from "@sentry/nextjs"
 import { redirect } from "next/navigation"
 import { Suspense, type ReactElement, type ReactNode } from "react"
 
 import { PostHogProvider } from "@/components/analytics/posthog-provider"
 import { DashboardContentSkeleton } from "@/components/dashboard/dashboard-content-skeleton"
+import { FlowLauncher } from "@/components/flow/flow-launcher"
 import type { DashboardAccount } from "@/components/navigation/dashboard-account-menu"
+import { MobileTabBar } from "@/components/navigation/mobile-tab-bar"
+import { MobileTopBar } from "@/components/navigation/mobile-top-bar"
 import { DashboardSidebar } from "@/components/navigation/dashboard-sidebar"
+import { ActionFeedback } from "@/components/ui/action-feedback"
 import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
 import { captureUnexpectedError } from "@/lib/observability"
 import { createClient } from "@/lib/supabase/server"
@@ -87,6 +93,7 @@ async function getDashboardAccount(
     displayName: getFallbackDisplayName(user.email),
     email: user.email ?? "Email unavailable",
     organizationName: null,
+    permissionSubject: null,
     role: null,
   }
 
@@ -97,15 +104,26 @@ async function getDashboardAccount(
       return fallbackAccount
     }
 
-    const settings = await getMemberSettings({
-      actorUserId: user.id,
-      organizationId: context.organization.id,
-    })
+    // Both only need the organization, so the shell waits for one round trip
+    // rather than three. Navigation keeps its own catch: a lost preference
+    // leaves the default tabs, while a lost setting drops to the fallback.
+    const [settings, preferences] = await Promise.all([
+      getMemberSettings({
+        actorUserId: user.id,
+        organizationId: context.organization.id,
+      }),
+      getNavigationPreferences({ actorUserId: user.id, organizationId: context.organization.id }).catch((error: unknown) => {
+        console.warn("dashboard_navigation_load_failed", { userId: user.id, organizationId: context.organization.id, reason: error instanceof Error ? error.message : "Unknown error" })
+        return undefined
+      }),
+    ])
 
     return {
+      navigation: preferences ? { organizationId: context.organization.id, preferences } : undefined,
       displayName: settings.displayName?.trim() || fallbackAccount.displayName,
       email: fallbackAccount.email,
       organizationName: context.organization.name,
+      permissionSubject: context.membership,
       role: context.membership.role,
     }
   } catch (error: unknown) {
@@ -126,6 +144,7 @@ export default async function DashboardLayout({
     displayName: "BizFlow member",
     email: "Email unavailable",
     organizationName: null,
+    permissionSubject: null,
     role: null,
   }
   let userId: string | undefined
@@ -139,12 +158,17 @@ export default async function DashboardLayout({
 
   return (
     <PostHogProvider userId={userId}>
-      <div className="min-h-screen bg-canvas text-foreground">
-        <div className="mx-auto flex min-h-screen w-full max-w-[96rem] flex-col md:flex-row">
+      <NavigationPreferencesProvider key={`${userId}:${account.navigation?.organizationId}`} organizationId={account.navigation?.organizationId} initialPreferences={account.navigation?.preferences}>
+      <Suspense fallback={null}>
+        <ActionFeedback />
+      </Suspense>
+      <div className="flex min-h-dvh flex-col bg-canvas text-foreground" data-ground="canvas">
+        <MobileTopBar account={account} signOutAction={signOutAction} />
+        <div className="mx-auto flex w-full max-w-[96rem] flex-1 flex-col md:flex-row">
           <DashboardSidebar account={account} signOutAction={signOutAction} />
-          <div className="min-w-0 flex-1 p-3 md:py-4 md:pr-4 md:pl-1">
-            <main className="flex min-h-full flex-col rounded-[18px] border border-border/70 bg-background shadow-[0_1px_2px_rgba(37,35,41,0.04)]">
-              <div className="min-w-0 flex-1 px-5 py-6 sm:px-7 sm:py-7">
+          <div className="flex min-w-0 flex-1 flex-col px-3 pt-3 md:pt-4 md:pr-4 md:pl-1">
+            <main className="flex flex-1 flex-col rounded-t-[18px] border-x border-t border-border/70 bg-background">
+              <div className="min-w-0 flex-1 px-5 pt-6 pb-[calc(8.25rem+env(safe-area-inset-bottom))] sm:px-7 sm:pt-7 md:pb-20">
                 <Suspense fallback={<DashboardContentSkeleton />}>
                   <DashboardUserScope />
                   {children}
@@ -153,7 +177,10 @@ export default async function DashboardLayout({
             </main>
           </div>
         </div>
+        <MobileTabBar role={account.permissionSubject} />
+        {account.navigation?.organizationId ? <FlowLauncher /> : null}
       </div>
+      </NavigationPreferencesProvider>
     </PostHogProvider>
   )
 }

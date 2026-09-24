@@ -33,6 +33,7 @@ import {
   requireSubmissionPermission,
   runSubmissionOperation
 } from "@/services/submissions/shared"
+import { getOrganizationRoleFromSubject } from "@/lib/permissions"
 import {
   parseSubmissionFileRow,
   type Submission,
@@ -416,13 +417,14 @@ export async function createInternalSubmissionFileDownloadUrl(
     input,
     async (): Promise<CreateInternalSubmissionFileDownloadUrlResponse> => {
       const client = getSubmissionClient(deps)
-      const role = await requireSubmissionPermission(
+      const permissionSubject = await requireSubmissionPermission(
         client,
         input.organizationId,
         input.actorUserId,
         "submissions:view",
         "You cannot download internal submission files."
       )
+      const role = getOrganizationRoleFromSubject(permissionSubject)
       const submission = await getSubmissionById(
         client,
         input.organizationId,

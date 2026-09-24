@@ -46,11 +46,9 @@ export function PublicFormLinksPanel({
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2">
             <Link2 className="size-4 text-primary" />
-            <CardTitle>Public Form Links</CardTitle>
+            <CardTitle>Public links</CardTitle>
           </div>
-          <CardDescription>
-            Shareable links that allow external users to submit responses without an account.
-          </CardDescription>
+          <CardDescription>No account needed to submit.</CardDescription>
         </div>
         <Button
           onClick={() => setShowCreateForm(!showCreateForm)}
@@ -68,12 +66,12 @@ export function PublicFormLinksPanel({
             <input name="templateId" type="hidden" value={templateId} />
             <div className="grid gap-4 sm:grid-cols-2">
               <Field>
-                <FieldLabel htmlFor="link-expires-at">Expiration Date (Optional)</FieldLabel>
+                <FieldLabel htmlFor="link-expires-at">Expires</FieldLabel>
                 <Input id="link-expires-at" name="expiresAt" type="datetime-local" />
-                <FieldDescription>Leave empty for no expiration.</FieldDescription>
+                <FieldDescription>Leave empty for never.</FieldDescription>
               </Field>
               <Field>
-                <FieldLabel htmlFor="link-max-submissions">Max Submissions (Optional)</FieldLabel>
+                <FieldLabel htmlFor="link-max-submissions">Max submissions</FieldLabel>
                 <Input
                   id="link-max-submissions"
                   min={1}
@@ -81,7 +79,7 @@ export function PublicFormLinksPanel({
                   placeholder="e.g. 100"
                   type="number"
                 />
-                <FieldDescription>Limit total responses accepted.</FieldDescription>
+                <FieldDescription>Leave empty for no limit.</FieldDescription>
               </Field>
             </div>
             <div className="flex justify-end gap-2 pt-2">
@@ -94,9 +92,7 @@ export function PublicFormLinksPanel({
         )}
 
         {links.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-2">
-            No public links generated yet for this template.
-          </p>
+          <p className="text-sm text-muted-foreground py-2">No links yet.</p>
         ) : (
           <div className="flex flex-col gap-3">
             {links.map((link: PublicFormLink) => (
@@ -106,7 +102,13 @@ export function PublicFormLinksPanel({
               >
                 <div className="flex min-w-0 flex-col gap-1">
                   <div className="flex items-center gap-2">
-                    <span className="font-mono text-xs font-medium text-foreground">
+                    {/* The token is 55 characters with nothing to break on,
+                        which is the one real horizontal overflow at 375px.
+                        Truncate for display; Copy still yields the full URL. */}
+                    <span
+                      className="min-w-0 truncate font-mono text-xs font-medium text-foreground"
+                      title={`/forms/${link.token}`}
+                    >
                       /forms/{link.token}
                     </span>
                     <Badge variant={link.status === "active" ? "default" : "secondary"}>
@@ -140,6 +142,7 @@ export function PublicFormLinksPanel({
                     )}
                   </Button>
                   <Link
+                    aria-label="Open public form in a new tab"
                     className={cn(buttonVariants({ size: "sm", variant: "ghost" }))}
                     href={`/forms/${link.token}`}
                     target="_blank"

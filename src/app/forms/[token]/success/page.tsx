@@ -14,17 +14,15 @@ export default function PublicFormSuccessPage(): ReactElement {
     <div className="flex min-h-screen items-center justify-center bg-muted/20 p-4">
       <Card className="w-full max-w-md text-center shadow-sm">
         <CardHeader className="flex flex-col items-center gap-3">
-          <div className="flex size-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400">
+          <div className="flex size-12 items-center justify-center rounded-full bg-success/12 text-success">
             <CheckCircle2 className="size-7" />
           </div>
-          <CardTitle className="text-xl">Submission Received</CardTitle>
-          <CardDescription>
-            Thank you! Your response has been securely submitted and recorded.
-          </CardDescription>
+          <CardTitle className="text-xl">Submission received</CardTitle>
+          <CardDescription>Thanks — we have your response.</CardDescription>
         </CardHeader>
         <CardContent>
           <p className="text-xs text-muted-foreground">
-            You may close this browser window.
+            You can close this window.
           </p>
         </CardContent>
       </Card>

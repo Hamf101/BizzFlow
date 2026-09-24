@@ -9,6 +9,7 @@ import {
 import {
   createUniqueTemplateFieldKey,
   deleteTemplateBlock,
+  duplicateTemplateBlock,
   insertTemplateBlock,
   moveTemplateBlock,
   updateTemplateBlock
@@ -35,6 +36,7 @@ const PLACEHOLDER_IMAGE_DATA_URL =
 export type TemplateEditorState = {
   title: string
   description: string
+  category: string
   content: TemplateContent
 }
 
@@ -46,6 +48,7 @@ export type TemplateEditorAction =
   | { type: "replace_state"; value: TemplateEditorState }
   | { type: "set_title"; value: string }
   | { type: "set_description"; value: string }
+  | { type: "set_category"; value: string }
   | { type: "set_branding"; value: TemplateBranding }
   | { type: "set_layout"; value: TemplateLayout }
   | { type: "add_block"; block: TemplateBlock }
@@ -57,6 +60,11 @@ export type TemplateEditorAction =
   | {
       type: "update_block"
       block: TemplateBlock
+    }
+  | {
+      type: "duplicate_block"
+      blockId: string
+      newBlockId: string
     }
   | {
       type: "delete_block"
@@ -90,6 +98,8 @@ export function templateEditorReducer(
       return { ...editableState, title: action.value }
     case "set_description":
       return { ...editableState, description: action.value }
+    case "set_category":
+      return { ...editableState, category: action.value }
     case "set_branding":
       return {
         ...editableState,
@@ -122,6 +132,13 @@ export function templateEditorReducer(
       return {
         ...editableState,
         content: updateTemplateBlock(editableState.content, action.block)
+      }
+    case "duplicate_block":
+      return {
+        ...editableState,
+        content: duplicateTemplateBlock(
+          editableState.content, action.blockId, action.newBlockId
+        )
       }
     case "delete_block":
       return {

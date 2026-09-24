@@ -35,15 +35,24 @@ type DatabaseOrganizationRole =
 type DatabaseMembershipStatus = "active" | "disabled"
 type DatabaseInviteStatus = "pending" | "accepted" | "revoked" | "expired"
 
+type DatabaseRelationship = {
+  foreignKeyName: string
+  columns: string[]
+  isOneToOne: boolean
+  referencedRelation: string
+  referencedColumns: string[]
+}
+
 type DatabaseTable<
   Row extends Record<string, unknown>,
   Insert extends Record<string, unknown>,
   Update extends Record<string, unknown>,
+  Relationships extends DatabaseRelationship[] = [],
 > = {
   Row: Row
   Insert: Insert
   Update: Update
-  Relationships: []
+  Relationships: Relationships
 }
 
 type ProfileRow = Record<string, unknown> & {
@@ -55,6 +64,8 @@ type ProfileRow = Record<string, unknown> & {
 }
 
 type OrganizationRow = Record<string, unknown> & {
+  navigation_labels: import("@/types/navigation").NavigationPreferences["labels"]
+  navigation_revision: number
   id: string
   name: string
   slug: string
@@ -64,13 +75,27 @@ type OrganizationRow = Record<string, unknown> & {
 }
 
 type MembershipRow = Record<string, unknown> & {
+  navigation_order: string[]
   id: string
   org_id: string
   user_id: string
   role: DatabaseOrganizationRole
+  role_definition_id: string | null
+  workspace_display_name: string | null
   status: DatabaseMembershipStatus
   email_notifications_enabled: boolean
   sms_notifications_enabled: boolean
+  created_at: string
+  updated_at: string
+}
+
+type OrganizationRoleRow = Record<string, unknown> & {
+  id: string
+  org_id: string
+  system_key: DatabaseOrganizationRole | null
+  name: string
+  permissions: string[] | null
+  archived_at: string | null
   created_at: string
   updated_at: string
 }
@@ -80,6 +105,7 @@ type InviteRow = Record<string, unknown> & {
   org_id: string
   email: string
   role: DatabaseOrganizationRole
+  role_definition_id: string | null
   token: string
   invited_by: string | null
   status: DatabaseInviteStatus
@@ -119,6 +145,11 @@ export type CurrentOrganizationContextRow = {
   org_id: string
   user_id: string
   role: DatabaseOrganizationRole
+  role_definition_id: string
+  role_definition_name: string
+  role_definition_system_key: DatabaseOrganizationRole | null
+  role_definition_permissions: string[] | null
+  workspace_display_name: string | null
   status: DatabaseMembershipStatus
   membership_created_at: string
   membership_updated_at: string
@@ -249,7 +280,7 @@ type AdminTaskReminderRow = Record<string, unknown> & {
   remind_at: string
   channel: "email" | "sms"
   origin: "manual" | "automatic"
-  status: "pending" | "sent" | "failed" | "cancelled"
+  status: "pending" | "sent" | "failed" | "cancelled" | "superseded"
   attempt_count: number
   last_error: string | null
   sent_at: string | null
@@ -371,12 +402,44 @@ export type AdminDatabase = {
       organization_memberships: DatabaseTable<
         MembershipRow,
         Partial<MembershipRow> & Pick<MembershipRow, "org_id" | "user_id" | "role">,
-        Partial<MembershipRow>
+        Partial<MembershipRow>,
+        [
+          {
+            foreignKeyName: "organization_memberships_role_definition_fk"
+            columns: ["org_id", "role_definition_id"]
+            isOneToOne: false
+            referencedRelation: "organization_roles"
+            referencedColumns: ["org_id", "id"]
+          },
+        ]
+      >
+      organization_roles: DatabaseTable<
+        OrganizationRoleRow,
+        Partial<OrganizationRoleRow> &
+          Pick<OrganizationRoleRow, "org_id" | "name">,
+        Partial<OrganizationRoleRow>
+      >
+      saved_list_views: DatabaseTable<
+        import("@/types/saved-view").SavedViewRecord,
+        Pick<
+          import("@/types/saved-view").SavedViewRecord,
+          "list" | "name" | "org_id" | "query" | "user_id"
+        >,
+        Partial<Pick<import("@/types/saved-view").SavedViewRecord, "name">>
       >
       invites: DatabaseTable<
         InviteRow,
         Partial<InviteRow> & Pick<InviteRow, "org_id" | "email" | "role" | "token">,
-        Partial<InviteRow>
+        Partial<InviteRow>,
+        [
+          {
+            foreignKeyName: "invites_role_definition_fk"
+            columns: ["org_id", "role_definition_id"]
+            isOneToOne: false
+            referencedRelation: "organization_roles"
+            referencedColumns: ["org_id", "id"]
+          },
+        ]
       >
       audit_logs: DatabaseTable<
         AuditLogRow,
@@ -521,11 +584,64 @@ export type AdminDatabase = {
         }
         Returns: DocumentAccessLevel | null
       }
+      get_document_access_levels: {
+        Args: {
+          target_org_id: string
+          target_document_ids: string[]
+          target_actor_user_id: string
+        }
+        Returns: {
+          access_level: DocumentAccessLevel | null
+          document_id: string
+        }[]
+      }
+      get_folder_access_levels: {
+        Args: {
+          target_org_id: string
+          target_folder_ids: string[]
+          target_actor_user_id: string
+        }
+        Returns: {
+          access_level: DocumentAccessLevel | null
+          folder_id: string
+        }[]
+      }
+      list_workspace_documents: {
+        Args: {
+          target_org_id: string
+          target_actor_user_id: string
+          target_lifecycle_states: string[]
+          target_folder_ids: string[]
+          target_include_root: boolean
+          target_visible_folder_ids: string[]
+          target_query: string | null
+          after_document_id: string | null
+          row_limit: number
+        }
+        Returns: {
+          access_level: DocumentAccessLevel | null
+          document: DocumentRow
+        }[]
+      }
       verify_audit_log_chain: {
         Args: {
           target_org_id: string
         }
         Returns: AuditChainVerificationRow[]
+      }
+      document_card_contents: {
+        Args: {
+          document_ids: string[]
+          target_org_id: string
+        }
+        Returns: { content: unknown; id: string }[]
+      }
+      document_template_card_contents: {
+        Args: {
+          target_org_id: string
+          template_ids: string[]
+        }
+        Returns: { content: unknown; id: string }[]
       }
       archive_document: {
         Args: {
@@ -622,6 +738,30 @@ export type AdminDatabase = {
           p_token: string
         }
         Returns: boolean
+      }
+      submit_public_form_entry: {
+        Args: {
+          target_public_form_token: string
+          target_public_draft_token: string | null
+          target_expected_revision: number | null
+          target_submission_id: string | null
+          target_title: string | null
+          target_template_id: string | null
+          target_template_revision: number | null
+          target_template_snapshot: Record<string, unknown> | null
+          target_values: Record<string, unknown>
+          target_submitted_at: string
+        }
+        Returns: AdminSubmissionRow
+      }
+      expire_abandoned_submission_files: {
+        Args: {
+          target_batch_size: number
+        }
+        Returns: {
+          expired_drafts: number
+          expired_files: number
+        }
       }
       supersede_public_submission_file: {
         Args: {
@@ -832,6 +972,24 @@ export type AdminDatabase = {
           target_membership_id: string
           target_actor_user_id: string
           target_role: DatabaseOrganizationRole
+        }
+        Returns: string
+      }
+      update_organization_member_access: {
+        Args: {
+          target_org_id: string
+          target_membership_id: string
+          target_actor_user_id: string
+          target_role_definition_id: string
+          target_workspace_display_name: string | null
+        }
+        Returns: string
+      }
+      archive_organization_role: {
+        Args: {
+          target_org_id: string
+          target_actor_user_id: string
+          target_role_definition_id: string
         }
         Returns: string
       }

@@ -21,14 +21,19 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import type { OrganizationRole } from "@/lib/permissions"
+import type {
+  OrganizationPermissionSubject,
+  OrganizationRole,
+} from "@/lib/permissions"
 import { cn } from "@/lib/utils"
 
 export type DashboardAccount = {
+  navigation?: { organizationId: string; preferences: import("@/types/navigation").NavigationPreferences }
   displayName: string
   email: string
   organizationName: string | null
   role: OrganizationRole | null
+  permissionSubject: OrganizationPermissionSubject | null
 }
 
 type DashboardAccountMenuProps = {
@@ -90,7 +95,8 @@ export function DashboardAccountMenu({
         className={cn(
           "group flex w-full items-center gap-2.5 rounded-[12px] border border-transparent p-2 text-left outline-none transition-colors",
           "hover:border-border hover:bg-card focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/35 data-popup-open:border-border data-popup-open:bg-card",
-          collapsed && "md:justify-center md:px-1.5"
+          // The hidden name and chevron keep no gaps, so the avatar centres.
+          collapsed && "md:justify-center md:gap-0 md:px-1.5"
         )}
         title={collapsed ? account.displayName : undefined}
       >
@@ -101,14 +107,14 @@ export function DashboardAccountMenu({
           className={cn(
             "min-w-0 flex-1 transition-[opacity,transform] duration-150",
             collapsed
-              ? "md:w-0 md:flex-none md:-translate-x-1 md:overflow-hidden md:opacity-0"
+              ? "w-0 flex-none -translate-x-1 overflow-hidden opacity-0"
               : "md:translate-x-0 md:opacity-100 md:delay-100"
           )}
         >
           <span className="block truncate text-sm font-medium text-foreground">
             {account.displayName}
           </span>
-          <span className="block truncate text-xs text-muted-foreground">
+          <span className="block truncate text-xs text-foreground/75">
             {account.organizationName ?? account.email}
           </span>
         </span>
@@ -117,7 +123,7 @@ export function DashboardAccountMenu({
           className={cn(
             "size-4 shrink-0 text-muted-foreground transition-[opacity,transform] duration-150 group-data-popup-open:rotate-180",
             collapsed
-              ? "md:w-0 md:-translate-x-1 md:opacity-0"
+              ? "w-0 -translate-x-1 opacity-0"
               : "md:translate-x-0 md:opacity-100 md:delay-100"
           )}
         />
@@ -150,11 +156,11 @@ export function DashboardAccountMenu({
 
         <DropdownMenuItem render={<Link href="/settings" />}>
           <Settings aria-hidden="true" />
-          Profile & preferences
+          Settings
         </DropdownMenuItem>
         <DropdownMenuItem render={<Link href="/people" />}>
           <Users aria-hidden="true" />
-          People & permissions
+          People
         </DropdownMenuItem>
         <DropdownMenuItem onClick={toggleTheme}>
           {isDark ? (

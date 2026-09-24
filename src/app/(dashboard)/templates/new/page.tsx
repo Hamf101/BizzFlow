@@ -5,40 +5,24 @@ import type { ReactElement } from "react"
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button, buttonVariants } from "@/components/ui/button"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle
-} from "@/components/ui/card"
+import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import { Field, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import { buildRedirect } from "@/lib/form-utils"
+import { buildFeedbackRedirect } from "@/lib/action-result"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
 import { loadPageOrganizationContext } from "@/lib/page-organization-context"
 import { canPerformOrganizationAction } from "@/lib/permissions"
 import { cn } from "@/lib/utils"
+import { listDocumentTemplateCategories } from "@/services/template-service"
 
 import { createTemplateAction } from "../actions"
-
-type NewTemplateSearchParams = Promise<{
-  error?: string
-}>
 
 /**
  * Collects initial template metadata before creating a draft revision.
  *
- * @param props - Optional action error encoded in search parameters.
  * @returns A manager-only create form.
  */
-export default async function NewTemplatePage({
-  searchParams
-}: {
-  searchParams: NewTemplateSearchParams
-}): Promise<ReactElement> {
-  const params = await searchParams
+export default async function NewTemplatePage(): Promise<ReactElement> {
   const user = await loadAuthenticatedPageUser("/templates/new")
   const contextResult = await loadPageOrganizationContext({
     userId: user.id,
@@ -68,62 +52,33 @@ export default async function NewTemplatePage({
 
   if (!contextResult.context) {
     redirect(
-      buildRedirect("/dashboard", {
-        error: "Create an organization before managing templates."
-      })
+      buildFeedbackRedirect("/dashboard", "organization_required")
     )
   }
 
   const context = contextResult.context
 
   if (
-    !canPerformOrganizationAction(context.membership.role, "templates:manage")
+    !canPerformOrganizationAction(context.membership, "templates:manage")
   ) {
     redirect(
-      buildRedirect("/templates", {
-        error: "You cannot create document templates."
-      })
+      buildFeedbackRedirect("/templates", "permission_denied")
     )
   }
 
+  // Suggestions only — the field stays free text so a new category never needs
+  // a code change. An empty list simply means nothing is categorised yet.
+  const categorySuggestions = await listDocumentTemplateCategories({
+    actorUserId: user.id,
+    organizationId: context.organization.id
+  }).catch((): string[] => [])
+
   return (
-    <div className="flex flex-col gap-6">
-      {params.error && (
-        <Alert variant="destructive">
-          <AlertTitle>Template could not be created</AlertTitle>
-          <AlertDescription>{params.error}</AlertDescription>
-        </Alert>
-      )}
-
-      <div className="flex flex-col gap-3">
-        <Link
-          className={cn(
-            buttonVariants({ size: "sm", variant: "ghost" }),
-            "w-fit"
-          )}
-          href="/templates"
-        >
-          <ArrowLeft />
-          Back to templates
-        </Link>
-        <div className="flex flex-col gap-2">
-          <h1 className="text-2xl font-semibold tracking-normal">
-            Create a template
-          </h1>
-          <p className="max-w-2xl text-sm text-muted-foreground">
-            Start with one blank document flow, then add content anywhere inside
-            the printable page boundary.
-          </p>
-        </div>
-      </div>
-
-      <Card className="max-w-2xl">
-        <CardHeader>
-          <CardTitle>Template details</CardTitle>
-          <CardDescription>
-            The new template stays private as a draft until you publish it.
-          </CardDescription>
-        </CardHeader>
+    <div className="flex min-h-[70dvh] flex-col items-center justify-center md:min-h-[calc(100dvh-4.5rem)] gap-6">
+      <h1 className="text-2xl font-semibold tracking-normal">
+        Create a template
+      </h1>
+      <Card className="w-full max-w-md">
         <CardContent>
           <form
             action={createTemplateAction}
@@ -137,9 +92,24 @@ export default async function NewTemplatePage({
                 id="new-template-title"
                 maxLength={180}
                 name="title"
-                placeholder="For example: New client agreement"
+                placeholder="New client agreement"
                 required
               />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="new-template-category">Category</FieldLabel>
+              <Input
+                id="new-template-category"
+                list="template-category-suggestions"
+                maxLength={40}
+                name="category"
+                placeholder="Operations"
+              />
+              <datalist id="template-category-suggestions">
+                {categorySuggestions.map((category: string) => (
+                  <option key={category} value={category} />
+                ))}
+              </datalist>
             </Field>
             <Field>
               <FieldLabel htmlFor="new-template-description">
@@ -150,12 +120,11 @@ export default async function NewTemplatePage({
                 id="new-template-description"
                 maxLength={2_000}
                 name="description"
-                placeholder="Explain when organization members should use this template."
               />
             </Field>
           </form>
         </CardContent>
-        <CardFooter className="justify-end gap-2">
+        <CardFooter className="justify-center gap-2">
           <Link
             className={cn(buttonVariants({ variant: "ghost" }))}
             href="/templates"
@@ -164,7 +133,7 @@ export default async function NewTemplatePage({
           </Link>
           <Button form="new-template-form" type="submit">
             <Plus />
-            Create draft
+            Create
           </Button>
         </CardFooter>
       </Card>

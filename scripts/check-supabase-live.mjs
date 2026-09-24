@@ -75,6 +75,11 @@ export const TABLE_CHECKS = [
       "id,org_id,document_id,status,storage_key,render_input_sha256,pdf_sha256,byte_size,document_version_id,created_at,finalized_at",
   },
   {
+    name: "public_form_links",
+    select:
+      "id,org_id,template_id,token,status,expires_at,max_submissions,submission_count,created_by,created_at,updated_at",
+  },
+  {
     name: "submissions",
     select:
       "id,org_id,title,template_id,template_revision,template_snapshot,values,status,revision,created_by,updated_by,submitted_by,assigned_to,assigned_by,created_at,updated_at,submitted_at,assigned_at",
@@ -278,6 +283,42 @@ export const SERVICE_ROLE_RPC_CHECKS = [
       target_org_id: null,
     },
   },
+  {
+    name: "submit_public_form_entry",
+    args: {
+      target_public_form_token: null,
+      target_public_draft_token: null,
+      target_expected_revision: null,
+      target_submission_id: null,
+      target_title: null,
+      target_template_id: null,
+      target_template_revision: null,
+      target_template_snapshot: null,
+      target_values: null,
+      target_submitted_at: null,
+    },
+  },
+  {
+    name: "expire_abandoned_submission_files",
+    args: {
+      target_batch_size: null,
+    },
+  },
+  // A zero row limit is refused before any document is read.
+  {
+    name: "list_workspace_documents",
+    args: {
+      after_document_id: null,
+      row_limit: 0,
+      target_actor_user_id: null,
+      target_folder_ids: [],
+      target_include_root: false,
+      target_lifecycle_states: [],
+      target_org_id: null,
+      target_query: null,
+      target_visible_folder_ids: [],
+    },
+  },
 ]
 
 const DRAWING_PROBE_DATA_URL = `data:image/png;base64,${"AAAA".repeat(5_000)}`
@@ -287,9 +328,39 @@ export const SERVICE_ROLE_READ_ONLY_RPC_CHECKS = [
     name: "validate_internal_submission_values",
     args: {
       target_template_snapshot: {
-        blocks: [{ fieldKey: "signature", type: "signature_field" }],
+        schemaVersion: "3",
+        blocks: [
+          {
+            id: "signature-block",
+            fieldKey: "signature",
+            type: "signature_field",
+          },
+        ],
       },
       target_values: { signature: DRAWING_PROBE_DATA_URL },
+    },
+  },
+  {
+    name: "increment_public_form_link_submission_count",
+    args: {
+      p_token: null,
+    },
+  },
+  // Empty id lists reach the execute grant without reading any tenant's rows.
+  {
+    name: "get_folder_access_levels",
+    args: {
+      target_org_id: null,
+      target_folder_ids: [],
+      target_actor_user_id: null,
+    },
+  },
+  {
+    name: "get_document_access_levels",
+    args: {
+      target_org_id: null,
+      target_document_ids: [],
+      target_actor_user_id: null,
     },
   },
 ]

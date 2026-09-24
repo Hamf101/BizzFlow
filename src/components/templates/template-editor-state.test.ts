@@ -32,11 +32,28 @@ function createState(): TemplateEditorState {
   return {
     title: "Agreement",
     description: "Reusable agreement",
+    category: "Operations",
     content: createBlankTemplateContent()
   }
 }
 
 describe("templateEditorReducer", () => {
+  it.each(FIELD_DEFAULTS)("duplicates %s with an independent answer key", (type) => {
+    const block = { ...createTemplateBlock(type), id: FIRST_BLOCK_ID }
+    const original = templateEditorReducer(createState(), { type: "add_block", block })
+    const copied = templateEditorReducer(original, {
+      type: "duplicate_block", blockId: FIRST_BLOCK_ID, newBlockId: SECOND_BLOCK_ID,
+    })
+    expect(copied.content.blocks).toHaveLength(2)
+    const duplicate = copied.content.blocks[1]
+    expect(templateBlockSchema.safeParse(duplicate).success).toBe(true)
+    if (!("fieldKey" in block) || !("fieldKey" in duplicate)) {
+      throw new Error("Expected field fixtures")
+    }
+    expect(duplicate).toEqual({ ...block, id: SECOND_BLOCK_ID, fieldKey: `${block.fieldKey}_2` })
+    expect(original.content.blocks).toEqual([block])
+  })
+
   it("upgrades version-two content only when it first enters an edit action", () => {
     const legacyContent = parseTemplateContent({
       schemaVersion: 2,
@@ -60,6 +77,7 @@ describe("templateEditorReducer", () => {
     const initialState: TemplateEditorState = {
       title: "Legacy draft",
       description: "",
+      category: "",
       content: legacyContent
     }
 
@@ -134,10 +152,8 @@ describe("templateEditorReducer", () => {
     })
     expect(deleted.content.blocks).toHaveLength(1)
     expect(deleted.content.blocks[0]?.id).toBe(FIRST_BLOCK_ID)
-    expect(deleted.content).toMatchObject({
-      schemaVersion: 3,
-      sections: [{ id: FIRST_BLOCK_ID, startBlockId: FIRST_BLOCK_ID }]
-    })
+    // Blocks added to an empty page print no invented "Section 1" label.
+    expect(deleted.content).toMatchObject({ schemaVersion: 3, sections: [] })
   })
 
   it("inserts a block at a requested editorial gutter position", () => {

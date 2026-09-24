@@ -14,6 +14,7 @@ import type {
   GetDocumentTemplateInput,
   ListDocumentTemplatesInput,
   PublishDocumentTemplateInput,
+  TemplateActorInput,
   TemplateServiceDeps,
   UpdateDocumentTemplateInput,
   DuplicateDocumentTemplateInput,
@@ -22,11 +23,13 @@ import { TemplateServiceError } from "./errors"
 import { evaluateTemplateQuality } from "./template-quality-service"
 import {
   assertRevision,
+  assertTemplateImagesRenderable,
   createDatabaseError,
   createId,
   getClient,
   getTemplateById,
   mapDocumentTemplate,
+  normalizeCategory,
   normalizeDescription,
   normalizeTitle,
   nowIso,
@@ -39,8 +42,10 @@ import {
  * Lists templates visible to an active organization member.
  *
  * Managers and owners receive every status; staff receive published templates only.
+ * An `input.category` of `null` selects the uncategorised templates; omitting the
+ * key entirely returns every category.
  *
- * @param input - Actor and organization identifiers.
+ * @param input - Actor, organization, and optional category filter.
  * @param deps - Optional injected dependencies for tests.
  * @returns Visible templates ordered by most recently updated.
  * @throws TemplateServiceError when permission or database access fails.
@@ -51,7 +56,11 @@ export async function listDocumentTemplates(
 ): Promise<DocumentTemplate[]> {
   return runTemplateOperation(
     "list_document_templates",
-    input,
+    {
+      actorUserId: input.actorUserId,
+      organizationId: input.organizationId,
+      category: input.category,
+    },
     async (): Promise<DocumentTemplate[]> => {
       const client = getClient(deps)
       const role = await requirePermission(
@@ -70,6 +79,16 @@ export async function listDocumentTemplates(
         query = query.eq("status", "published")
       }
 
+      // hasOwnProperty, not a truthiness test: `null` is the meaningful
+      // "uncategorised only" filter and would otherwise read as "no filter".
+      if (Object.prototype.hasOwnProperty.call(input, "category")) {
+        const category = normalizeCategory(input.category)
+        query =
+          category === null
+            ? query.is("category", null)
+            : query.eq("category", category)
+      }
+
       const { data, error } = await query.order("updated_at", {
         ascending: false,
       })
@@ -79,6 +98,66 @@ export async function listDocumentTemplates(
       }
 
       return (data as DocumentTemplateRow[]).map(mapDocumentTemplate)
+    }
+  )
+}
+
+/**
+ * Lists the distinct categories in use across the actor's visible templates.
+ *
+ * Drives the filter control, which needs every available option even while a
+ * filter is applied — so this deliberately does not take one.
+ *
+ * @param input - Actor and organization identifiers.
+ * @param deps - Optional injected dependencies for tests.
+ * @returns Distinct categories, alphabetically ordered, excluding uncategorised.
+ * @throws TemplateServiceError when permission or database access fails.
+ */
+export async function listDocumentTemplateCategories(
+  input: TemplateActorInput,
+  deps: TemplateServiceDeps = {}
+): Promise<string[]> {
+  return runTemplateOperation(
+    "list_document_template_categories",
+    input,
+    async (): Promise<string[]> => {
+      const client = getClient(deps)
+      const role = await requirePermission(
+        client,
+        input.organizationId,
+        input.actorUserId,
+        "templates:view",
+        "You cannot view document templates."
+      )
+      let query = client
+        .from("document_templates")
+        .select("category")
+        .eq("org_id", input.organizationId)
+
+      if (!canPerformOrganizationAction(role, "templates:manage")) {
+        query = query.eq("status", "published")
+      }
+
+      const { data, error } = await query
+
+      if (error || !data) {
+        throw createDatabaseError(
+          error,
+          "Unable to load document template categories."
+        )
+      }
+
+      const categories = new Set<string>()
+
+      for (const row of data as { category: string | null }[]) {
+        if (typeof row.category === "string" && row.category.length > 0) {
+          categories.add(row.category)
+        }
+      }
+
+      return Array.from(categories).sort((left: string, right: string): number =>
+        left.localeCompare(right)
+      )
     }
   )
 }
@@ -154,6 +233,12 @@ export async function createDocumentTemplate(
         "You cannot manage document templates."
       )
 
+      const content = upgradeV2TemplateContentToV3(
+        parseTemplateContent(input.content ?? createBlankTemplateContent())
+      )
+
+      assertTemplateImagesRenderable(content)
+
       const { data, error } = await client
         .from("document_templates")
         .insert({
@@ -161,13 +246,10 @@ export async function createDocumentTemplate(
           org_id: input.organizationId,
           title: normalizeTitle(input.title),
           description: normalizeDescription(input.description),
+          category: normalizeCategory(input.category),
           status: "draft",
           revision: 1,
-          content: upgradeV2TemplateContentToV3(
-            parseTemplateContent(
-              input.content ?? createBlankTemplateContent()
-            )
-          ),
+          content,
           created_by: input.actorUserId,
           updated_by: input.actorUserId,
           published_by: null,
@@ -241,9 +323,13 @@ export async function updateDocumentTemplate(
         input,
         "description"
       )
+      const hasCategory = Object.prototype.hasOwnProperty.call(
+        input,
+        "category"
+      )
       const hasContent = input.content !== undefined
 
-      if (!hasTitle && !hasDescription && !hasContent) {
+      if (!hasTitle && !hasDescription && !hasCategory && !hasContent) {
         throw new TemplateServiceError("No template changes were provided.", 400)
       }
 
@@ -253,6 +339,9 @@ export async function updateDocumentTemplate(
       const nextDescription = hasDescription
         ? normalizeDescription(input.description)
         : existing.description
+      const nextCategory = hasCategory
+        ? normalizeCategory(input.category)
+        : existing.category
       const parsedExistingContent = parseTemplateContent(existing.content)
       const proposedContent = hasContent
         ? parseTemplateContent(input.content)
@@ -261,6 +350,7 @@ export async function updateDocumentTemplate(
       if (
         nextTitle === existing.title &&
         nextDescription === existing.description &&
+        nextCategory === existing.category &&
         JSON.stringify(proposedContent) === JSON.stringify(parsedExistingContent)
       ) {
         throw new TemplateServiceError("No template changes were provided.", 400)
@@ -272,11 +362,16 @@ export async function updateDocumentTemplate(
         assertTemplatePublishReady(nextTitle, nextDescription, nextContent)
       }
 
+      if (hasContent) {
+        assertTemplateImagesRenderable(nextContent)
+      }
+
       const { data, error } = await client
         .from("document_templates")
         .update({
           title: nextTitle,
           description: nextDescription,
+          category: nextCategory,
           content: nextContent,
           revision: existing.revision + 1,
           updated_by: input.actorUserId,
@@ -528,6 +623,7 @@ export async function duplicateDocumentTemplate(
           org_id: input.organizationId,
           title: normalizeTitle(`${baseTitle}${COPY_SUFFIX}`),
           description: existing.description,
+          category: existing.category,
           status: "draft",
           revision: 1,
           content: upgradeV2TemplateContentToV3(newContent),

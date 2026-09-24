@@ -105,11 +105,13 @@ async function signIn(
 
   await page.goto("/login")
   await page.getByLabel("Email").fill(user.email)
-  await page.getByLabel("Password").fill(user.password)
-  await page.getByRole("button", { name: /sign in/i }).click()
+  await page.getByLabel("Password", { exact: true }).fill(user.password)
+  await page.getByRole("button", { name: /log in/i }).click()
 
   await page.waitForURL(/\/dashboard/, { timeout: 30_000 })
-  await expect(page.getByText(tenant.organizationName)).toBeVisible()
+  await expect(
+    page.getByRole("main").getByText(tenant.organizationName, { exact: true })
+  ).toBeVisible()
 }
 
 /**

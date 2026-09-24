@@ -14,14 +14,16 @@ describe("invite email service", () => {
     vi.restoreAllMocks()
   })
 
-  it("sends a Resend email containing the encoded invite URL", async () => {
+  it("sends an EmailJS message containing the branded encoded invite URL", async () => {
     process.env = {
       ...originalEnv,
       NEXT_PUBLIC_APP_URL: "https://app.example.com",
-      RESEND_API_KEY: "re-test-key",
-      RESEND_FROM_EMAIL: "docs@example.com",
-      RESEND_REPLY_TO_EMAIL: "support@example.com",
-      RESEND_TIMEOUT_MS: "2500",
+      EMAIL_PROVIDER: "emailjs",
+      EMAILJS_SERVICE_ID: "service_buy2dql",
+      EMAILJS_TEMPLATE_ID: "template_d6o6c8p",
+      EMAILJS_PUBLIC_KEY: "public-test-key",
+      EMAILJS_PRIVATE_KEY: "private-test-key",
+      EMAIL_TIMEOUT_MS: "2500",
     }
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ id: "email-9" }), { status: 200 })
@@ -37,13 +39,10 @@ describe("invite email service", () => {
     })
 
     expect(fetchMock).toHaveBeenCalledWith(
-      "https://api.resend.com/emails",
+      "https://api.emailjs.com/api/v1.0/email/send",
       expect.objectContaining({
         method: "POST",
-        headers: expect.objectContaining({
-          Authorization: "Bearer re-test-key",
-          "Idempotency-Key": "organization-invite/invite-123",
-        }),
+        headers: { "Content-Type": "application/json" },
         signal: expect.any(AbortSignal),
       })
     )
@@ -51,28 +50,40 @@ describe("invite email service", () => {
     const body = JSON.parse(String(request.body)) as Record<string, unknown>
 
     expect(body).toMatchObject({
-      from: "docs@example.com",
-      to: ["member@example.com"],
-      reply_to: "support@example.com",
+      service_id: "service_buy2dql",
+      template_id: "template_d6o6c8p",
+      user_id: "public-test-key",
+      accessToken: "private-test-key",
     })
-    expect(String(body.html)).toContain("North &amp; Co.")
-    expect(String(body.html)).toContain(
+    const templateParams = body.template_params as Record<string, unknown>
+
+    expect(templateParams).not.toHaveProperty("reply_to")
+    expect(String(templateParams.message_html)).toContain("North &amp; Co.")
+    expect(String(templateParams.message_html)).toContain(
       "https://app.example.com/accept-invite/invite%20token"
     )
-    expect(String(body.html)).toContain("Accept invitation")
-    expect(String(body.html)).toContain("background-color:#171717")
-    expect(String(body.html)).toContain("<!doctype html>")
-    expect(String(body.html)).toContain("Sent securely by BizFlow Docs.")
+    expect(String(templateParams.message_html)).toContain("Accept invitation")
+    expect(String(templateParams.message_html)).toContain(
+      "background-color:#635273"
+    )
+    expect(String(templateParams.message_html)).toContain("<!doctype html>")
+    expect(String(templateParams.message_html)).toContain(
+      "Sent securely by BizFlow Docs."
+    )
   })
 
-  it("returns a user-safe error when Resend rejects delivery", async () => {
+  it("returns a user-safe error when EmailJS rejects delivery", async () => {
     process.env = {
       ...originalEnv,
       NEXT_PUBLIC_APP_URL: "https://app.example.com",
-      RESEND_API_KEY: "re-test-key",
-      RESEND_FROM_EMAIL: "docs@example.com",
+      EMAILJS_SERVICE_ID: "service_buy2dql",
+      EMAILJS_TEMPLATE_ID: "template_d6o6c8p",
+      EMAILJS_PUBLIC_KEY: "public-test-key",
     }
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 422 })))
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response(null, { status: 400 }))
+    )
     vi.spyOn(console, "error").mockImplementation(() => {})
 
     await expect(
@@ -84,19 +95,20 @@ describe("invite email service", () => {
       })
     ).rejects.toMatchObject({
       message:
-        "Unable to send the invite email. The email provider rejected the " +
-        "message. Check that RESEND_FROM_EMAIL is a verified sender and the " +
-        "recipient address is valid.",
+        "Unable to send the invite email. EmailJS rejected the message. " +
+        "Check the service, template fields, and recipient address.",
       statusCode: 502,
     } satisfies Partial<InviteEmailServiceError>)
   })
 
-  it("names the sandbox-sender cause when Resend refuses the request", async () => {
+  it("names the account-key cause when EmailJS refuses the request", async () => {
     process.env = {
       ...originalEnv,
       NEXT_PUBLIC_APP_URL: "https://app.example.com",
-      RESEND_API_KEY: "re-test-key",
-      RESEND_FROM_EMAIL: "onboarding@resend.dev",
+      EMAILJS_SERVICE_ID: "service_buy2dql",
+      EMAILJS_TEMPLATE_ID: "template_d6o6c8p",
+      EMAILJS_PUBLIC_KEY: "public-test-key",
+      EMAILJS_PRIVATE_KEY: "private-test-key",
     }
     vi.stubGlobal(
       "fetch",
@@ -112,7 +124,7 @@ describe("invite email service", () => {
         token: "invite-token",
       })
     ).rejects.toMatchObject({
-      message: expect.stringContaining("onboarding@resend.dev"),
+      message: expect.stringContaining("public and private account keys"),
       statusCode: 502,
     })
   })
@@ -121,8 +133,10 @@ describe("invite email service", () => {
     process.env = {
       ...originalEnv,
       NEXT_PUBLIC_APP_URL: "https://app.example.com",
-      RESEND_API_KEY: "re-test-key",
-      RESEND_FROM_EMAIL: "docs@example.com",
+      EMAILJS_SERVICE_ID: "service_buy2dql",
+      EMAILJS_TEMPLATE_ID: "template_d6o6c8p",
+      EMAILJS_PUBLIC_KEY: "public-test-key",
+      EMAILJS_PRIVATE_KEY: "private-test-key",
     }
     const errorLog = vi.spyOn(console, "error").mockImplementation(() => {})
     vi.stubGlobal(
@@ -148,6 +162,6 @@ describe("invite email service", () => {
     expect(JSON.stringify(errorLog.mock.calls)).not.toContain(
       "private-invite-token"
     )
-    expect(JSON.stringify(errorLog.mock.calls)).not.toContain("re-test-key")
+    expect(JSON.stringify(errorLog.mock.calls)).not.toContain("private-test-key")
   })
 })

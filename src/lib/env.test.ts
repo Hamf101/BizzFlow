@@ -6,8 +6,8 @@ import {
   getAppUrlEnv,
   getFileUploadPolicyEnv,
   getGeminiEnv,
+  getEmailEnv,
   getR2Env,
-  getResendEnv,
   getSentryEnv,
   getUpstashRedisEnv,
   isUpstashRedisEnvConfigured,
@@ -36,12 +36,11 @@ function setIsolatedEnv(env: Partial<NodeJS.ProcessEnv>): void {
 
 describe("Supabase environment validation", () => {
   it("uses the exact current Supabase secret key name for admin access", () => {
-    process.env = {
-      ...originalEnv,
+    setIsolatedEnv({
       SUPABASE_URL: "https://example.supabase.co",
       SUPABASE_PUBLISHABLE_KEY: "sb_publishable_test",
       SUPABASE_SECRET_KEY: "sb_secret_test",
-    }
+    })
 
     expect(getAdminSupabaseEnv()).toEqual({
       SUPABASE_URL: "https://example.supabase.co",
@@ -51,22 +50,20 @@ describe("Supabase environment validation", () => {
   })
 
   it("requires the exact Supabase secret key name for admin access", () => {
-    process.env = {
-      ...originalEnv,
+    setIsolatedEnv({
       SUPABASE_URL: "https://example.supabase.co",
       SUPABASE_PUBLISHABLE_KEY: "sb_publishable_test",
-    }
+    })
 
     expect(() => getAdminSupabaseEnv()).toThrow("SUPABASE_SECRET_KEY")
   })
 
   it("does not accept removed Next.js public Supabase aliases", () => {
-    process.env = {
-      ...originalEnv,
+    setIsolatedEnv({
       NEXT_PUBLIC_SUPABASE_URL: "https://example.supabase.co",
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_test",
       SUPABASE_SECRET_KEY: "sb_secret_test",
-    }
+    })
 
     expect(() => getAdminSupabaseEnv()).toThrow("SUPABASE_URL")
   })
@@ -88,40 +85,90 @@ describe("application URL validation", () => {
   })
 })
 
-describe("Resend environment validation", () => {
-  it("drops a blank reply-to and defaults the request timeout", () => {
+describe("email environment validation", () => {
+  it("pins transactional delivery to EmailJS when the selector is omitted", () => {
     setIsolatedEnv({
-      RESEND_API_KEY: "re-test-key",
-      RESEND_FROM_EMAIL: "docs@example.com",
-      RESEND_REPLY_TO_EMAIL: "  ",
+      EMAILJS_SERVICE_ID: "service_buy2dql",
+      EMAILJS_TEMPLATE_ID: "template_d6o6c8p",
+      EMAILJS_PUBLIC_KEY: "public-test-key",
+      EMAILJS_PRIVATE_KEY: "private-test-key",
     })
 
-    expect(getResendEnv()).toEqual({
-      RESEND_API_KEY: "re-test-key",
-      RESEND_FROM_EMAIL: "docs@example.com",
-      RESEND_TIMEOUT_MS: 10000,
+    expect(getEmailEnv()).toEqual({
+      EMAIL_PROVIDER: "emailjs",
+      EMAIL_TIMEOUT_MS: 10000,
+      EMAILJS_SERVICE_ID: "service_buy2dql",
+      EMAILJS_TEMPLATE_ID: "template_d6o6c8p",
+      EMAILJS_PUBLIC_KEY: "public-test-key",
+      EMAILJS_PRIVATE_KEY: "private-test-key",
     })
   })
 
-  it("requires a valid sender address", () => {
+  it("keeps Resend disabled even when a stale selector remains deployed", () => {
     setIsolatedEnv({
-      RESEND_API_KEY: "re-test-key",
-      RESEND_FROM_EMAIL: "not-an-email",
+      EMAIL_PROVIDER: "resend",
+      EMAILJS_SERVICE_ID: "service_buy2dql",
+      EMAILJS_TEMPLATE_ID: "template_d6o6c8p",
+      EMAILJS_PUBLIC_KEY: "public-test-key",
     })
 
-    expect(() => getResendEnv()).toThrow("RESEND_FROM_EMAIL")
+    expect(getEmailEnv()).toMatchObject({
+      EMAIL_PROVIDER: "emailjs",
+      EMAILJS_TEMPLATE_ID: "template_d6o6c8p",
+    })
+  })
+
+  it("loads the selected EmailJS account and template without a reply-to", () => {
+    setIsolatedEnv({
+      EMAIL_PROVIDER: "emailjs",
+      EMAILJS_SERVICE_ID: "service_buy2dql",
+      EMAILJS_TEMPLATE_ID: "template_d6o6c8p",
+      EMAILJS_PUBLIC_KEY: "public-test-key",
+      EMAILJS_PRIVATE_KEY: "private-test-key",
+      EMAIL_TIMEOUT_MS: "2500",
+    })
+
+    expect(getEmailEnv()).toEqual({
+      EMAIL_PROVIDER: "emailjs",
+      EMAILJS_SERVICE_ID: "service_buy2dql",
+      EMAILJS_TEMPLATE_ID: "template_d6o6c8p",
+      EMAILJS_PUBLIC_KEY: "public-test-key",
+      EMAILJS_PRIVATE_KEY: "private-test-key",
+      EMAIL_TIMEOUT_MS: 2500,
+    })
+  })
+
+  it("requires the public EmailJS account key", () => {
+    setIsolatedEnv({
+      EMAIL_PROVIDER: "emailjs",
+      EMAILJS_SERVICE_ID: "service_buy2dql",
+      EMAILJS_TEMPLATE_ID: "template_d6o6c8p",
+      EMAILJS_PRIVATE_KEY: "private-test-key",
+    })
+
+    expect(() => getEmailEnv()).toThrow("EMAILJS_PUBLIC_KEY")
+  })
+
+  it("does not accept Resend credentials in place of EmailJS configuration", () => {
+    setIsolatedEnv({
+      RESEND_API_KEY: "re-test-key",
+      RESEND_FROM_EMAIL: "docs@example.com",
+    })
+
+    expect(() => getEmailEnv()).toThrow("EMAILJS_SERVICE_ID")
   })
 
   it.each(["999", "60001", "1.5", "not-a-number"])(
-    "rejects invalid Resend timeout %s",
+    "rejects invalid email timeout %s",
     (timeoutMs: string) => {
       setIsolatedEnv({
-        RESEND_API_KEY: "re-test-key",
-        RESEND_FROM_EMAIL: "docs@example.com",
-        RESEND_TIMEOUT_MS: timeoutMs,
+        EMAILJS_SERVICE_ID: "service_buy2dql",
+        EMAILJS_TEMPLATE_ID: "template_d6o6c8p",
+        EMAILJS_PUBLIC_KEY: "public-test-key",
+        EMAIL_TIMEOUT_MS: timeoutMs,
       })
 
-      expect(() => getResendEnv()).toThrow("RESEND_TIMEOUT_MS")
+      expect(() => getEmailEnv()).toThrow("EMAIL_TIMEOUT_MS")
     }
   )
 })
@@ -304,7 +351,7 @@ describe("AI environment validation", () => {
     expect(getAiEnv()).toEqual({
       AI_PROVIDER: "gemini",
       AI_MODEL: "gemini-3.6-flash",
-      AI_TIMEOUT_MS: 30000,
+      AI_TIMEOUT_MS: 90000,
     })
   })
 
@@ -348,7 +395,7 @@ describe("AI environment validation", () => {
     expect(getAiEnv()).toEqual({
       AI_PROVIDER: "unknown-provider",
       AI_MODEL: "provider-model-v1",
-      AI_TIMEOUT_MS: 30000,
+      AI_TIMEOUT_MS: 90000,
     })
   })
 
@@ -376,7 +423,7 @@ describe("AI environment validation", () => {
     expect(() => getGeminiEnv()).toThrow("GEMINI_API_KEY")
   })
 
-  it.each(["999", "60001", "1.5", "not-a-number"])(
+  it.each(["999", "120001", "1.5", "not-a-number"])(
     "rejects invalid AI timeout %s",
     (timeoutMs: string) => {
       setIsolatedEnv({

@@ -8,7 +8,12 @@ export type {
   DocumentServiceDeps,
   FolderLifecycleInput,
   GetDocumentDetailInput,
-  ListDocumentWorkspaceInput,
+  ListDocumentCardsInput,
+  ListFolderDocumentsInput,
+  ListRecentDocumentsInput,
+  ListWorkspaceFoldersInput,
+  MoveDocumentInput,
+  MoveFolderInput,
   RestoreDocumentInput,
   TrashDocumentInput,
 } from "@/services/documents/contracts"
@@ -26,6 +31,8 @@ export type {
   FolderAccessRequirementInput,
   ResourceAccessOperation,
 } from "@/services/documents/access-service"
+export type { DocumentCard } from "@/services/documents/card-service"
+export { listDocumentCards } from "@/services/documents/card-service"
 export { DocumentServiceError } from "@/services/documents/errors"
 export {
   archiveDocument,
@@ -37,7 +44,9 @@ export {
 export {
   createFolder,
   getDocumentDetail,
-  listDocumentWorkspace,
+  listFolderDocuments,
+  listRecentDocuments,
+  listWorkspaceFolders,
 } from "@/services/documents/workspace-service"
 export {
   archiveFolder,
@@ -46,6 +55,7 @@ export {
   trashDocument,
   trashFolder,
 } from "@/services/documents/lifecycle-service"
+export { moveDocument, moveFolder } from "@/services/documents/move-service"
 export {
   processDueResourcePurges,
   requestDocumentPurge,

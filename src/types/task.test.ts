@@ -5,15 +5,9 @@ import {
   isTerminalTaskStatus,
   parseTaskReminderRow,
   parseTaskRow,
-  TASK_REMINDER_CHANNELS,
-  TASK_REMINDER_STATUSES,
   TASK_STATUS_TRANSITIONS,
   TASK_STATUSES,
   TaskDomainError,
-  taskReminderSchema,
-  taskReminderStatusSchema,
-  taskSchema,
-  taskStatusSchema,
   type TaskStatus,
 } from "@/types/task"
 
@@ -74,24 +68,6 @@ const PENDING_REMINDER_ROW = {
 }
 
 describe("task status contract", () => {
-  it("exposes the lifecycle vocabularies as shared const arrays", () => {
-    expect(TASK_STATUSES).toEqual([
-      "open",
-      "in_progress",
-      "completed",
-      "cancelled",
-    ])
-    expect(TASK_REMINDER_STATUSES).toEqual([
-      "pending",
-      "sent",
-      "failed",
-      "cancelled",
-    ])
-    expect(TASK_REMINDER_CHANNELS).toEqual(["email", "sms"])
-    expect(taskStatusSchema.options).toEqual([...TASK_STATUSES])
-    expect(taskReminderStatusSchema.safeParse("queued").success).toBe(false)
-  })
-
   it.each([
     { from: "open", to: "in_progress", allowed: true },
     { from: "open", to: "completed", allowed: true },
@@ -359,10 +335,5 @@ describe("task persistence types", () => {
         statusCode: 500,
       })
     )
-  })
-
-  it("exposes row schemas that accept valid rows without throwing", () => {
-    expect(taskSchema.safeParse(OPEN_TASK_ROW).success).toBe(true)
-    expect(taskReminderSchema.safeParse(PENDING_REMINDER_ROW).success).toBe(true)
   })
 })

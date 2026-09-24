@@ -1,6 +1,10 @@
 import { vi } from "vitest"
 
 import type { OrganizationRole } from "@/lib/permissions"
+import {
+  PostgrestReadQuery,
+  type PostgrestFakeResult,
+} from "@/services/postgrest-fake.test-support"
 import type { TaskServiceDeps } from "@/services/task-service"
 
 /** Tenant identifier shared by every task fixture. */
@@ -49,16 +53,6 @@ type FakeTableName =
   | "task_reminders"
 
 type FakeTables = Record<FakeTableName, FakeRow[]>
-
-type FakeError = { code?: string; message: string }
-
-type FakeResult = { data: FakeRow[]; error: FakeError | null }
-
-type FakeOrder = {
-  column: string
-  ascending: boolean
-  nullsFirst: boolean
-}
 
 /**
  * In-memory Supabase client used by the task service tests.
@@ -121,150 +115,54 @@ export class FakeSupabaseClient {
   }
 }
 
-class FakeQueryBuilder {
-  private readonly filters: Array<(row: FakeRow) => boolean> = []
-  private readonly orders: FakeOrder[] = []
+class FakeQueryBuilder extends PostgrestReadQuery {
   private insertRows: FakeRow[] | null = null
   private updateValues: FakeRow | null = null
-  private limitCount: number | null = null
 
   constructor(
     private readonly client: FakeSupabaseClient,
     private readonly tableName: FakeTableName
-  ) {}
-
-  select(): FakeQueryBuilder {
-    return this
+  ) {
+    super(client.tables[tableName])
   }
 
-  insert(value: FakeRow | FakeRow[]): FakeQueryBuilder {
+  insert(value: FakeRow | FakeRow[]): this {
     this.insertRows = Array.isArray(value) ? value : [value]
     return this
   }
 
-  update(value: FakeRow): FakeQueryBuilder {
+  update(value: FakeRow): this {
     this.updateValues = value
     return this
   }
 
-  eq(column: string, value: unknown): FakeQueryBuilder {
-    this.filters.push((row: FakeRow): boolean => row[column] === value)
-    return this
-  }
-
-  is(column: string, value: unknown): FakeQueryBuilder {
-    return this.eq(column, value)
-  }
-
-  in(column: string, values: readonly unknown[]): FakeQueryBuilder {
-    this.filters.push((row: FakeRow): boolean => values.includes(row[column]))
-    return this
-  }
-
-  lte(column: string, value: string): FakeQueryBuilder {
-    this.filters.push((row: FakeRow): boolean => String(row[column]) <= value)
-    return this
-  }
-
-  or(clause: string): FakeQueryBuilder {
-    const parts = clause.split(",")
-    this.filters.push((row: FakeRow): boolean => {
-      return parts.some((part: string): boolean => {
-        const subParts = part.split(".")
-        const col = subParts[0]
-        const op = subParts[1]
-        const val = subParts.slice(2).join(".")
-        if (op === "eq") {
-          return String(row[col]) === val
-        }
-        if (op === "lte") {
-          return String(row[col]) <= val
-        }
-        return false
-      })
-    })
-    return this
-  }
-
-  order(
-    column: string,
-    options: { ascending?: boolean; nullsFirst?: boolean } = {}
-  ): FakeQueryBuilder {
-    const ascending = options.ascending ?? true
-    this.orders.push({
-      column,
-      ascending,
-      nullsFirst: options.nullsFirst ?? !ascending,
-    })
-    return this
-  }
-
-  limit(count: number): FakeQueryBuilder {
-    this.limitCount = count
-    return this
-  }
-
-  async single(): Promise<{ data: FakeRow | null; error: FakeError | null }> {
-    const result = this.execute()
-
-    if (result.error) {
-      return { data: null, error: result.error }
-    }
-
-    return result.data.length === 1
-      ? { data: result.data[0], error: null }
-      : { data: null, error: { message: "Expected one row." } }
-  }
-
-  async maybeSingle(): Promise<{
-    data: FakeRow | null
-    error: FakeError | null
-  }> {
-    const result = this.execute()
-
-    if (result.error) {
-      return { data: null, error: result.error }
-    }
-
-    return result.data.length > 1
-      ? { data: null, error: { message: "Expected zero or one row." } }
-      : { data: result.data[0] ?? null, error: null }
-  }
-
-  then<TResult1 = FakeResult, TResult2 = never>(
-    onfulfilled?:
-      | ((value: FakeResult) => TResult1 | PromiseLike<TResult1>)
-      | null,
-    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
-  ): Promise<TResult1 | TResult2> {
-    return Promise.resolve(this.execute()).then(onfulfilled, onrejected)
-  }
-
-  private execute(): FakeResult {
+  // Reads are the shared PostgREST stand-in's; only writes are task-specific.
+  protected override execute(): PostgrestFakeResult {
     if (this.insertRows) {
       return this.executeInsert(this.insertRows)
     }
 
     if (this.updateValues) {
       this.client.runNextUpdateHook(this.tableName)
-      const matchingRows = this.applyFilters()
+      const matchingRows = this.matchingRows()
       const values = this.updateValues
       matchingRows.forEach((row: FakeRow): void => {
         Object.assign(row, values)
       })
-      return { data: matchingRows, error: null }
+      return { count: null, data: matchingRows, error: null }
     }
 
-    return { data: this.applyOrderAndLimit(this.applyFilters()), error: null }
+    return super.execute()
   }
 
-  private executeInsert(rows: FakeRow[]): FakeResult {
+  private executeInsert(rows: FakeRow[]): PostgrestFakeResult {
     const conflict = rows.find((row: FakeRow): boolean =>
       this.hasUniqueConflict(row)
     )
 
     if (conflict) {
       return {
+        count: null,
         data: [],
         error: {
           code: "23505",
@@ -274,7 +172,7 @@ class FakeQueryBuilder {
     }
 
     this.client.tables[this.tableName].push(...rows)
-    return { data: rows, error: null }
+    return { count: null, data: rows, error: null }
   }
 
   private hasUniqueConflict(row: FakeRow): boolean {
@@ -289,55 +187,6 @@ class FakeQueryBuilder {
         existing.remind_at === row.remind_at
     )
   }
-
-  private applyFilters(): FakeRow[] {
-    return this.client.tables[this.tableName].filter((row: FakeRow): boolean =>
-      this.filters.every((filter: (row: FakeRow) => boolean): boolean =>
-        filter(row)
-      )
-    )
-  }
-
-  private applyOrderAndLimit(rows: FakeRow[]): FakeRow[] {
-    const orderedRows = [...rows].sort(
-      (left: FakeRow, right: FakeRow): number =>
-        this.orders.reduce(
-          (comparison: number, order: FakeOrder): number =>
-            comparison === 0
-              ? compareRowValues(left[order.column], right[order.column], order)
-              : comparison,
-          0
-        )
-    )
-
-    return this.limitCount === null
-      ? orderedRows
-      : orderedRows.slice(0, this.limitCount)
-  }
-}
-
-function compareRowValues(
-  left: unknown,
-  right: unknown,
-  order: FakeOrder
-): number {
-  const leftIsNull = left === null || left === undefined
-  const rightIsNull = right === null || right === undefined
-
-  if (leftIsNull || rightIsNull) {
-    if (leftIsNull && rightIsNull) {
-      return 0
-    }
-
-    return (leftIsNull ? -1 : 1) * (order.nullsFirst ? 1 : -1)
-  }
-
-  const comparison =
-    typeof left === "number" && typeof right === "number"
-      ? left - right
-      : String(left).localeCompare(String(right))
-
-  return order.ascending ? comparison : -comparison
 }
 
 /**

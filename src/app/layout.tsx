@@ -1,24 +1,9 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Newsreader } from "next/font/google";
 import "./globals.css";
 
 import { OfflineDraftBanner } from "@/components/ui/offline-draft-banner";
+import { BizFlowToaster } from "@/components/ui/toaster";
 import { ThemeProvider } from "@/components/theme/theme-provider";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
-const newsreader = Newsreader({
-  variable: "--font-newsreader",
-  subsets: ["latin"],
-});
 
 export const metadata: Metadata = {
   title: {
@@ -37,7 +22,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} ${newsreader.variable} h-full antialiased`}
+      className="h-full antialiased"
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col">
@@ -49,6 +34,7 @@ export default function RootLayout({
         >
           {children}
           <OfflineDraftBanner />
+          <BizFlowToaster />
         </ThemeProvider>
       </body>
     </html>

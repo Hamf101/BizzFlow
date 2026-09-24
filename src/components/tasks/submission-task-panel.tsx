@@ -2,22 +2,19 @@ import { ListChecks, Plus } from "lucide-react"
 import Link from "next/link"
 import type { ReactElement } from "react"
 
-import {
-  formatTaskMemberName,
-  TASK_SELECT_CLASS_NAME,
-  TASK_TEXTAREA_CLASS_NAME,
-  TaskStatusBadge,
-} from "@/components/tasks/task-presentation"
+import { formatMemberName } from "@/components/people/member-name"
+import { TaskStatusBadge } from "@/components/tasks/task-presentation"
 import { Button, buttonVariants } from "@/components/ui/button"
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { Select } from "@/components/ui/select"
+import { Textarea } from "@/components/ui/textarea"
 import { formatMediumDateTime } from "@/lib/date-format"
 import { cn } from "@/lib/utils"
 import type { OrganizationMember } from "@/types/organization"
@@ -69,9 +66,6 @@ export function SubmissionTaskPanel({
           <ListChecks className="size-4 text-muted-foreground" />
           Follow-up tasks
         </CardTitle>
-        <CardDescription>
-          Track the work this submission created without leaving the review.
-        </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         {errorMessage ? (
@@ -93,7 +87,7 @@ export function SubmissionTaskPanel({
                     <TaskStatusBadge status={task.status} />
                   </span>
                   <span className="text-xs text-muted-foreground">
-                    {formatTaskMemberName(
+                    {formatMemberName(
                       task.assignedTo,
                       members,
                       currentUserId
@@ -131,8 +125,7 @@ export function SubmissionTaskPanel({
                   <FieldLabel htmlFor="submission-task-description">
                     Description
                   </FieldLabel>
-                  <textarea
-                    className={TASK_TEXTAREA_CLASS_NAME}
+                  <Textarea
                     id="submission-task-description"
                     maxLength={5_000}
                     name="description"
@@ -158,8 +151,7 @@ export function SubmissionTaskPanel({
                       <FieldLabel htmlFor="submission-task-assignee">
                         Assignee
                       </FieldLabel>
-                      <select
-                        className={TASK_SELECT_CLASS_NAME}
+                      <Select
                         defaultValue=""
                         id="submission-task-assignee"
                         name="assignedTo"
@@ -170,7 +162,7 @@ export function SubmissionTaskPanel({
                             {member.fullName?.trim() || member.email}
                           </option>
                         ))}
-                      </select>
+                      </Select>
                       <FieldDescription>
                         Emailed when the task is handed over.
                       </FieldDescription>

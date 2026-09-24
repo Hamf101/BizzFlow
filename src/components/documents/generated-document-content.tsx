@@ -21,6 +21,7 @@ import {
   type TemplateWebRenderGroup
 } from "@/components/templates/template-render-groups"
 import { Input } from "@/components/ui/input"
+import { resolveDocumentSurfaceInk } from "@/lib/document-surface"
 import { cn } from "@/lib/utils"
 import {
   createTemplateRenderPlan,
@@ -45,8 +46,22 @@ import {
 
 import { getGeneratedDocumentAnswerName } from "./generated-document-form-data"
 
-type GeneratedDocumentContentProps = {
+/**
+ * Hands answer ownership to the caller so it survives this component's mount.
+ *
+ * Supplying a control makes the component fully controlled: it renders exactly
+ * the answers it is given and reports every edit instead of storing one.
+ */
+export type GeneratedDocumentAnswerControl = Readonly<{
   answers: Record<string, unknown>
+  onChange: (answers: Record<string, unknown>) => void
+}>
+
+type GeneratedDocumentContentProps = {
+  /** Present when the caller owns answer state across mounts. */
+  answerControl?: GeneratedDocumentAnswerControl
+  /** Seed answers for the uncontrolled component. Ignored beside `answerControl`. */
+  answers?: Record<string, unknown>
   content: TemplateContent
   editable: boolean
   fileFieldContent?: Readonly<Record<string, ReactNode>>
@@ -63,7 +78,8 @@ type GeneratedDocumentContentProps = {
  * @returns A paper-like generated document suitable for member and public forms.
  */
 export function GeneratedDocumentContent({
-  answers,
+  answerControl,
+  answers = {},
   content,
   editable,
   fileFieldContent = {},
@@ -72,10 +88,29 @@ export function GeneratedDocumentContent({
   recipientSigned = false,
   title
 }: GeneratedDocumentContentProps): ReactElement {
-  const [currentAnswers, setCurrentAnswers] =
+  // Server-rendered call sites post answers through FormData and cannot own
+  // React state, so the uncontrolled path stays the default.
+  const [uncontrolledAnswers, setUncontrolledAnswers] =
     useState<Record<string, unknown>>(() =>
       pruneHiddenTemplateFieldValues(content, answers)
     )
+  const ownedAnswers = answerControl?.answers
+  const currentAnswers = useMemo((): Record<string, unknown> => {
+    if (!ownedAnswers) {
+      return uncontrolledAnswers
+    }
+
+    const visibleAnswers = pruneHiddenTemplateFieldValues(content, ownedAnswers)
+
+    // Pruning only ever drops keys, so an equal key count means an equal map.
+    // Returning the caller's own object then keeps identity stable, which stops
+    // an owner that also observes `onAnswersChange` from looping on two equal
+    // objects.
+    return Object.keys(visibleAnswers).length ===
+      Object.keys(ownedAnswers).length
+      ? ownedAnswers
+      : visibleAnswers
+  }, [content, ownedAnswers, uncontrolledAnswers])
 
   useEffect((): void => {
     onAnswersChange?.(currentAnswers)
@@ -91,9 +126,33 @@ export function GeneratedDocumentContent({
       }),
     [content, currentAnswers, editable, title]
   )
+
+  function applyAnswer(fieldKey: string, value: unknown): void {
+    if (answerControl) {
+      answerControl.onChange(
+        applyVisibleTemplateFieldValue(
+          content,
+          answerControl.answers,
+          fieldKey,
+          value
+        )
+      )
+      return
+    }
+
+    setUncontrolledAnswers(
+      (priorAnswers: Record<string, unknown>): Record<string, unknown> =>
+        applyVisibleTemplateFieldValue(content, priorAnswers, fieldKey, value)
+    )
+  }
+  // This component is only ever an editing or review surface: every caller
+  // renders it inside the themed app, and none offers a print view. Fidelity
+  // to the author's brand colours belongs to the Studio's Preview mode and to
+  // the finalized PDF, both of which draw on real paper.
+  const ink = resolveDocumentSurfaceInk("screen", renderPlan.branding)
   const paperStyle = {
-    "--document-accent": renderPlan.branding.accentColor,
-    "--document-primary": renderPlan.branding.primaryColor,
+    "--document-accent": ink.accent,
+    "--document-primary": ink.primary,
     aspectRatio: `${renderPlan.geometry.widthPoints} / ${renderPlan.geometry.heightPoints}`
   } as CSSProperties
   // CSS percentage margins on every side resolve against container width.
@@ -131,13 +190,13 @@ export function GeneratedDocumentContent({
         )}
 
         {renderPlan.title.length > 0 && (
-          <h1
+          <h2
             className="px-1 pt-7 font-editorial text-3xl font-semibold leading-tight"
             data-template-printed-title="true"
             style={{ color: "var(--document-primary)" }}
           >
             {renderPlan.title}
-          </h1>
+          </h2>
         )}
 
         <DocumentFlow
@@ -145,19 +204,7 @@ export function GeneratedDocumentContent({
           editable={editable}
           fileFieldContent={fileFieldContent}
           renderPlan={renderPlan}
-          onAnswerChange={(fieldKey: string, value: unknown): void =>
-            setCurrentAnswers(
-              (
-                priorAnswers: Record<string, unknown>
-              ): Record<string, unknown> =>
-                applyVisibleTemplateFieldValue(
-                  content,
-                  priorAnswers,
-                  fieldKey,
-                  value
-                )
-            )
-          }
+          onAnswerChange={applyAnswer}
           recipientSigned={recipientSigned}
           recipientSigning={recipientSigning}
         />
@@ -467,7 +514,14 @@ function getGeneratedPaginationStyle({
   }
 }
 
-function GeneratedBlock({
+/**
+ * Renders one block of a generated document: static content as printed, and
+ * each field as its answer control, or its saved answer when read only.
+ *
+ * @param props - The block, the answers, and whether it can be filled.
+ * @returns The block.
+ */
+export function GeneratedBlock({
   answers,
   block,
   editable,
@@ -643,7 +697,7 @@ function GeneratedBlock({
         <AnswerFieldFrame block={block}>
           {fileFieldContent[block.fieldKey] ?? (
             <div className="rounded-lg border border-dashed border-border px-4 py-5 text-sm text-muted-foreground">
-              File uploads are available only in internal submissions.
+              Uploads are only in submissions.
             </div>
           )}
         </AnswerFieldFrame>

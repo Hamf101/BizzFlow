@@ -4,14 +4,18 @@ export type {
   AssignInternalSubmissionInput,
   CompleteInternalSubmissionFileInput,
   CompleteInternalSubmissionFileResponse,
+  CountSubmissionsByStatusInput,
   CreateInternalSubmissionCommentInput,
   CreateInternalSubmissionDraftInput,
   CreateInternalSubmissionFileDownloadUrlInput,
   CreateInternalSubmissionFileDownloadUrlResponse,
+  ExportSubmissionsInput,
   GetInternalSubmissionInput,
-  ListInternalSubmissionsInput,
+  ListSubmissionPageInput,
   SaveInternalSubmissionDraftInput,
   SubmissionDetail,
+  SubmissionPage,
+  SubmissionPreview,
   SubmissionServiceDeps,
   SubmitInternalSubmissionInput,
   SupersedeInternalSubmissionFileInput,
@@ -20,15 +24,21 @@ export type {
 } from "@/services/submissions/contracts"
 export type {
   CleanupExpiredSubmissionFilesInput,
+  ExpireAbandonedSubmissionFilesInput,
   SubmissionFileCleanupResult,
+  SubmissionFileExpiryResult,
 } from "@/services/submissions/cleanup-service"
-export { cleanupExpiredSubmissionFileObjects } from "@/services/submissions/cleanup-service"
+export {
+  cleanupExpiredSubmissionFileObjects,
+  expireAbandonedSubmissionFiles,
+} from "@/services/submissions/cleanup-service"
 export {
   createInternalSubmissionDraft,
   saveInternalSubmissionDraft,
   submitInternalSubmission,
 } from "@/services/submissions/draft-service"
 export { SubmissionServiceError } from "@/services/submissions/errors"
+export { exportInternalSubmissionsCsv } from "@/services/submissions/export-service"
 export {
   allocateInternalSubmissionFile,
   completeInternalSubmissionFile,
@@ -36,8 +46,10 @@ export {
   supersedeInternalSubmissionFile,
 } from "@/services/submissions/file-service"
 export {
+  countSubmissionsByStatus,
   getInternalSubmission,
-  listInternalSubmissions,
+  getInternalSubmissionPreview,
+  listSubmissionPage,
 } from "@/services/submissions/workspace-service"
 export {
   assignInternalSubmission,

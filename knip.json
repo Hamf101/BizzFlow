@@ -1,13 +1,14 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "entry": [
+    "e2e/**/*.{ts,tsx}",
     "src/**/*.test.{ts,tsx}",
     "scripts/**/*.{mjs,ts,tsx}",
     "supabase/tests/**/*.test.ts",
     "src/sentry.server.config.ts",
     "src/sentry.edge.config.ts"
   ],
-  "project": ["src/**/*.{ts,tsx}"],
+  "project": ["e2e/**/*.{ts,tsx}", "src/**/*.{ts,tsx}"],
   "ignore": ["src/components/ui/field.tsx"],
   "ignoreDependencies": ["dejavu-fonts-ttf", "tailwindcss", "tw-animate-css"],
   "ignoreExportsUsedInFile": true

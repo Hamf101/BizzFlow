@@ -2,18 +2,35 @@
 
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
+import { z } from "zod"
 
 import { enforceOutboundEmailRateLimit } from "@/lib/action-rate-limit"
+import {
+  buildFeedbackRedirect,
+  getActionErrorFeedbackCode,
+  type ActionFeedbackCode,
+} from "@/lib/action-result"
 import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
 import { buildRedirect, getFormString } from "@/lib/form-utils"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
-import { isOrganizationRole } from "@/lib/permissions"
 import {
   createInvite,
   OrganizationServiceError,
-  updateMemberRole,
+  revokeInvite,
+  updateMemberAccess,
   updateProfilePhone,
 } from "@/services/organization-service"
+
+const inviteSchema = z.object({
+  organizationId: z.string().uuid(),
+  roleDefinitionId: z.string().uuid(),
+})
+const memberAccessSchema = z.object({
+  organizationId: z.string().uuid(),
+  membershipId: z.string().uuid(),
+  roleDefinitionId: z.string().uuid(),
+  workspaceDisplayName: z.string().max(120).trim(),
+})
 
 /**
  * Handles staff invite creation from the People page.
@@ -23,10 +40,13 @@ import {
  */
 export async function createInviteAction(formData: FormData): Promise<void> {
   const organizationId = getFormString(formData, "organizationId")
-  const role = getFormString(formData, "role")
+  const parsed = inviteSchema.safeParse({
+    organizationId,
+    roleDefinitionId: getFormString(formData, "roleDefinitionId"),
+  })
 
-  if (!isOrganizationRole(role)) {
-    redirect(buildRedirect("/people", { error: "Choose a valid role." }))
+  if (!parsed.success) {
+    redirect(buildFeedbackRedirect("/people", "invalid_input"))
   }
 
   // Both calls reject by throwing (a redirect), so they must stay outside the
@@ -37,21 +57,18 @@ export async function createInviteAction(formData: FormData): Promise<void> {
     redirectPath: "/people",
   })
 
-  let successMessage = "Invite email sent."
+  let successCode: ActionFeedbackCode = "invite_email_sent"
 
   try {
     const result = await createInvite({
       actorUserId: user.id,
-      organizationId,
+      organizationId: parsed.data.organizationId,
       email: getFormString(formData, "email"),
-      role,
+      roleId: parsed.data.roleDefinitionId,
     })
 
     if (!result.emailDelivered) {
-      successMessage =
-        "Invite created, but the email could not be sent. " +
-        "Copy its link below and share it directly. " +
-        (result.emailFailureReason ?? "")
+      successCode = "invite_created_email_failed"
     }
   } catch (error: unknown) {
     const logContext = {
@@ -65,39 +82,49 @@ export async function createInviteAction(formData: FormData): Promise<void> {
       console.error("create_invite_action_failed", logContext)
     }
 
+    // A conflict here means the address already belongs to an active member (a
+    // pending invite is replaced, not rejected); the generic "this item
+    // changed" prompt would not say so.
     redirect(
-      buildRedirect("/people", {
-        error: getActionErrorMessage(error, "Unable to create invite."),
-      })
+      buildFeedbackRedirect(
+        "/people",
+        error instanceof OrganizationServiceError && error.statusCode === 409
+          ? "invite_already_member"
+          : getActionErrorFeedbackCode(error)
+      )
     )
   }
 
   revalidatePath("/people")
-  redirect(buildRedirect("/people", { message: successMessage }))
+  redirect(buildFeedbackRedirect("/people", successCode))
 }
 
 /**
- * Handles member role updates from the People page.
+ * Handles workspace display-name and role updates from the People page.
  *
  * @param formData - Submitted role update form data.
  * @returns Never returns; redirects to People with status.
  */
-export async function updateMemberRoleAction(formData: FormData): Promise<void> {
-  const organizationId = getFormString(formData, "organizationId")
-  const membershipId = getFormString(formData, "membershipId")
-  const role = getFormString(formData, "role")
+export async function updateMemberAccessAction(formData: FormData): Promise<void> {
+  const parsed = memberAccessSchema.safeParse({
+    organizationId: getFormString(formData, "organizationId"),
+    membershipId: getFormString(formData, "membershipId"),
+    roleDefinitionId: getFormString(formData, "roleDefinitionId"),
+    workspaceDisplayName: getFormString(formData, "workspaceDisplayName"),
+  })
 
-  if (!isOrganizationRole(role)) {
-    redirect(buildRedirect("/people", { error: "Choose a valid role." }))
+  if (!parsed.success) {
+    redirect(buildFeedbackRedirect("/people", "invalid_input"))
   }
 
   try {
     const user = await getAuthenticatedUser()
-    await updateMemberRole({
+    await updateMemberAccess({
       actorUserId: user.id,
-      organizationId,
-      membershipId,
-      role,
+      organizationId: parsed.data.organizationId,
+      membershipId: parsed.data.membershipId,
+      roleId: parsed.data.roleDefinitionId,
+      workspaceDisplayName: parsed.data.workspaceDisplayName || null,
     })
   } catch (error: unknown) {
     if (error instanceof AuthenticationError) {
@@ -105,26 +132,56 @@ export async function updateMemberRoleAction(formData: FormData): Promise<void> 
     }
 
     const logContext = {
-      organizationId,
-      membershipId,
-      reason: error instanceof Error ? error.message : "Unknown role update error",
+      organizationId: parsed.data.organizationId,
+      membershipId: parsed.data.membershipId,
+      reason: error instanceof Error ? error.message : "Unknown member access update error",
     }
 
     if (error instanceof OrganizationServiceError) {
-      console.warn("update_member_role_action_failed", logContext)
+      console.warn("update_member_access_action_failed", logContext)
     } else {
-      console.error("update_member_role_action_failed", logContext)
+      console.error("update_member_access_action_failed", logContext)
     }
 
     redirect(
-      buildRedirect("/people", {
-        error: getActionErrorMessage(error, "Unable to update member role."),
-      })
+      buildFeedbackRedirect("/people", getActionErrorFeedbackCode(error))
     )
   }
 
   revalidatePath("/people")
-  redirect(buildRedirect("/people", { message: "Member role updated." }))
+  revalidatePath("/settings")
+  redirect(buildFeedbackRedirect("/people", "member_access_updated"))
+}
+
+/**
+ * Handles soft deletion of an active or expired organization invite.
+ *
+ * @param formData - Submitted tenant and invite identifiers.
+ * @returns Never returns; redirects to People with status.
+ */
+export async function revokeInviteAction(formData: FormData): Promise<void> {
+  const organizationId = getFormString(formData, "organizationId")
+  const inviteId = getFormString(formData, "inviteId")
+
+  try {
+    const user = await getAuthenticatedUser()
+    await revokeInvite({
+      actorUserId: user.id,
+      organizationId,
+      inviteId,
+    })
+  } catch (error: unknown) {
+    if (error instanceof AuthenticationError) {
+      redirect(buildRedirect("/login", { next: "/people" }))
+    }
+
+    redirect(
+      buildFeedbackRedirect("/people", getActionErrorFeedbackCode(error))
+    )
+  }
+
+  revalidatePath("/people")
+  redirect(buildFeedbackRedirect("/people", "invite_deleted"))
 }
 
 /**
@@ -148,20 +205,10 @@ export async function updateProfilePhoneAction(formData: FormData): Promise<void
     }
 
     redirect(
-      buildRedirect("/people", {
-        error: getActionErrorMessage(error, "Unable to update phone number."),
-      })
+      buildFeedbackRedirect("/people", getActionErrorFeedbackCode(error))
     )
   }
 
   revalidatePath("/people")
-  redirect(buildRedirect("/people", { message: "Phone number updated." }))
-}
-
-function getActionErrorMessage(error: unknown, fallback: string): string {
-  if (error instanceof OrganizationServiceError) {
-    return error.message
-  }
-
-  return fallback
+  redirect(buildFeedbackRedirect("/people", "changes_saved"))
 }

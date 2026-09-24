@@ -19,7 +19,10 @@ export default defineConfig({
   // Never let a `test.only` slip into main.
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 2 : undefined,
+  // Axe scans and the role/route matrix are intentionally read-heavy. Keeping
+  // local and CI runs at two workers prevents the shared Supabase fixture from
+  // becoming the bottleneck and turning healthy journeys into timeout flakes.
+  workers: 2,
   reporter: process.env.CI
     ? [["github"], ["html", { open: "never" }]]
     : [["list"], ["html", { open: "never" }]],
@@ -40,6 +43,7 @@ export default defineConfig({
       name: "chromium",
       dependencies: ["setup"],
       use: { ...devices["Desktop Chrome"] },
+      testIgnore: /.*\.mobile\.spec\.ts/,
       testMatch: /.*\.spec\.ts/,
     },
     {

@@ -4,6 +4,10 @@ import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 
 import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
+import {
+  buildFeedbackRedirect,
+  getActionErrorFeedbackCode,
+} from "@/lib/action-result"
 import { buildRedirect, getFormString } from "@/lib/form-utils"
 import { canPerformOrganizationAction } from "@/lib/permissions"
 import { getCurrentOrganizationContext } from "@/services/organization-service"
@@ -16,8 +20,9 @@ import {
   TemplateServiceError,
   updateDocumentTemplate,
 } from "@/services/template-service"
+import type { SaveResult } from "@/components/editor/use-autosave"
 import {
-  createBlankTemplateContent,
+  createEmptyDocumentContent,
   parseTemplateContent,
   type DocumentTemplate,
   type TemplateContent,
@@ -30,9 +35,12 @@ type TemplateActionContext = {
 }
 
 class TemplateActionError extends Error {
-  constructor(message: string) {
+  readonly statusCode: number
+
+  constructor(message: string, statusCode = 400) {
     super(message)
     this.name = "TemplateActionError"
+    this.statusCode = statusCode
   }
 }
 
@@ -48,13 +56,14 @@ export async function createTemplateAction(formData: FormData): Promise<void> {
 
   try {
     const actionContext = await loadTemplateActionContext()
-    const content = createBlankTemplateContent()
+    const content = createEmptyDocumentContent()
     content.branding.organizationName = actionContext.context.organization.name
     const template = await createDocumentTemplate({
       actorUserId: actionContext.actorUserId,
       organizationId: actionContext.context.organization.id,
       title: getFormString(formData, "title"),
       description: getFormString(formData, "description") || null,
+      category: getFormString(formData, "category") || null,
       content,
     })
 
@@ -75,19 +84,18 @@ export async function createTemplateAction(formData: FormData): Promise<void> {
       reason: getUnknownErrorMessage(error),
     })
     redirect(
-      buildRedirect("/templates/new", {
-        error: getTemplateActionErrorMessage(
-          error,
-          "Unable to create document template."
-        ),
-      })
+      buildFeedbackRedirect(
+        "/templates/new",
+        getActionErrorFeedbackCode(error)
+      )
     )
   }
 
   redirect(
-    buildRedirect(`/templates/${createdTemplateId}/edit`, {
-      message: "Template draft created.",
-    })
+    buildFeedbackRedirect(
+      `/templates/${createdTemplateId}/edit`,
+      "template_created"
+    )
   )
 }
 
@@ -104,7 +112,10 @@ export async function updateTemplateAction(formData: FormData): Promise<void> {
 
   try {
     const actionContext = await loadTemplateActionContext()
-    const template = await persistTemplateDraft(formData, actionContext)
+    const template = await persistTemplateDraftOrConfirmUnchanged(
+      formData,
+      actionContext
+    )
 
     revalidateTemplatePaths(template.id)
     console.info("template_update_action_completed", {
@@ -120,11 +131,76 @@ export async function updateTemplateAction(formData: FormData): Promise<void> {
       nextPath: editorPath,
       startedAt,
       templateId,
-      fallback: "Unable to save document template.",
     })
   }
 
-  redirect(buildRedirect(editorPath, { message: "Template saved." }))
+  redirect(buildFeedbackRedirect(editorPath, "changes_saved"))
+}
+
+/** A template as the editor saves it while it changes. */
+export type TemplateDraftInput = {
+  category: string
+  content: unknown
+  description: string
+  /** The revision the editor last loaded or saved. */
+  expectedRevision: number
+  templateId: string
+  title: string
+}
+
+/**
+ * Saves a template from the editor as it changes, without leaving the page.
+ * A save from an older revision is refused, so nobody's work is overwritten.
+ *
+ * @param input - The template's fields and the revision the editor holds.
+ * @returns The new revision, or why the save was refused.
+ */
+export async function saveTemplateDraftAction(input: TemplateDraftInput): Promise<SaveResult> {
+  try {
+    const actionContext = await loadTemplateActionContext()
+    let content: TemplateContent
+
+    try {
+      content = parseTemplateContent(input.content)
+    } catch {
+      return { message: "Some blocks are incomplete. Fix them to save.", ok: false, status: 400 }
+    }
+
+    const template = await updateDocumentTemplate({
+      actorUserId: actionContext.actorUserId,
+      organizationId: actionContext.context.organization.id,
+      templateId: requireTemplateId(input.templateId),
+      expectedRevision: input.expectedRevision,
+      title: input.title,
+      description: input.description || null,
+      category: input.category || null,
+      content,
+    })
+
+    revalidateTemplatePaths(template.id)
+    return { ok: true, version: String(template.revision) }
+  } catch (error: unknown) {
+    if (error instanceof TemplateServiceError && error.message === "No template changes were provided.") {
+      return { ok: true, version: String(input.expectedRevision) }
+    }
+
+    if (error instanceof AuthenticationError) {
+      return { message: "Sign in again to keep saving.", ok: false, status: 401 }
+    }
+
+    const statusCode =
+      error instanceof TemplateServiceError || error instanceof TemplateActionError ? error.statusCode : 500
+
+    logTemplateActionFailure("template_draft_save_failed", {
+      reason: getUnknownErrorMessage(error),
+      templateId: input.templateId,
+    })
+    return {
+      message: statusCode === 500 ? "The template could not be saved." : (error as Error).message,
+      ok: false,
+      status: statusCode,
+    }
+  }
 }
 
 /**
@@ -140,7 +216,7 @@ export async function publishTemplateAction(formData: FormData): Promise<void> {
 
   try {
     const actionContext = await loadTemplateActionContext()
-    const savedTemplate = await persistTemplateDraftForPublish(
+    const savedTemplate = await persistTemplateDraftOrConfirmUnchanged(
       formData,
       actionContext
     )
@@ -164,11 +240,10 @@ export async function publishTemplateAction(formData: FormData): Promise<void> {
       nextPath: editorPath,
       startedAt,
       templateId,
-      fallback: "Unable to publish document template.",
     })
   }
 
-  redirect(buildRedirect(editorPath, { message: "Template published." }))
+  redirect(buildFeedbackRedirect(editorPath, "template_published"))
 }
 
 /**
@@ -203,11 +278,10 @@ export async function archiveTemplateAction(formData: FormData): Promise<void> {
       nextPath: editorPath,
       startedAt,
       templateId,
-      fallback: "Unable to archive document template.",
     })
   }
 
-  redirect(buildRedirect("/templates", { message: "Template archived." }))
+  redirect(buildFeedbackRedirect("/templates", "resource_archived"))
 }
 
 /**
@@ -244,18 +318,18 @@ export async function duplicateTemplateAction(formData: FormData): Promise<void>
       nextPath: "/templates", // Fallback path if duplication fails
       startedAt,
       templateId,
-      fallback: "Unable to duplicate document template.",
     })
   }
 
   redirect(
-    buildRedirect(`/templates/${createdTemplateId}/edit`, {
-      message: "Template duplicated.",
-    })
+    buildFeedbackRedirect(
+      `/templates/${createdTemplateId}/edit`,
+      "template_duplicated"
+    )
   )
 }
 
-async function persistTemplateDraftForPublish(
+async function persistTemplateDraftOrConfirmUnchanged(
   formData: FormData,
   actionContext: TemplateActionContext
 ): Promise<DocumentTemplate> {
@@ -270,8 +344,9 @@ async function persistTemplateDraftForPublish(
       throw error
     }
 
-    // Publishing an already-saved draft is valid, but the follow-up read must
-    // still represent the exact revision submitted by the editor.
+    // Saving or publishing an already-saved draft is valid (Undo can return the
+    // editor to the saved state), but the follow-up read must still represent
+    // the exact revision submitted by the editor.
     const expectedRevision = parseExpectedRevision(
       getFormString(formData, "expectedRevision")
     )
@@ -298,14 +373,15 @@ async function loadTemplateActionContext(): Promise<TemplateActionContext> {
 
   if (!context) {
     throw new TemplateActionError(
-      "Create an organization before managing document templates."
+      "Create an organization before managing document templates.",
+      403
     )
   }
 
   if (
-    !canPerformOrganizationAction(context.membership.role, "templates:manage")
+    !canPerformOrganizationAction(context.membership, "templates:manage")
   ) {
-    throw new TemplateActionError("You cannot manage document templates.")
+    throw new TemplateActionError("You cannot manage document templates.", 403)
   }
 
   return { actorUserId: user.id, context }
@@ -328,6 +404,7 @@ async function persistTemplateDraft(
     expectedRevision,
     title: getFormString(formData, "title"),
     description: getFormString(formData, "description") || null,
+    category: getFormString(formData, "category") || null,
     content,
   })
 }
@@ -377,7 +454,6 @@ function revalidateTemplatePaths(templateId: string): void {
 function handleTemplateActionFailure(input: {
   error: unknown
   eventName: string
-  fallback: string
   nextPath: string
   startedAt: number
   templateId: string
@@ -392,9 +468,10 @@ function handleTemplateActionFailure(input: {
     templateId: input.templateId,
   })
   redirect(
-    buildRedirect(input.nextPath, {
-      error: getTemplateActionErrorMessage(input.error, input.fallback),
-    })
+    buildFeedbackRedirect(
+      input.nextPath,
+      getActionErrorFeedbackCode(input.error)
+    )
   )
 }
 
@@ -403,14 +480,6 @@ function logTemplateActionFailure(
   context: Record<string, string | number>
 ): void {
   console.warn(eventName, context)
-}
-
-function getTemplateActionErrorMessage(error: unknown, fallback: string): string {
-  if (error instanceof TemplateServiceError || error instanceof TemplateActionError) {
-    return error.message
-  }
-
-  return fallback
 }
 
 function getUnknownErrorMessage(error: unknown): string {

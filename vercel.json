@@ -4,6 +4,7 @@
   "installCommand": "corepack pnpm install",
   "buildCommand": "corepack pnpm build",
   "devCommand": "corepack pnpm dev",
+  "regions": ["cle1"],
   "crons": [
     {
       "path": "/api/cron/submission-file-cleanup",

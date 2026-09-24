@@ -1,6 +1,6 @@
 "use client"
 
-import { CheckCircle2, Circle, Sparkles } from "lucide-react"
+import { CheckCircle2, Circle, FlaskConical, Sparkles } from "lucide-react"
 import Link from "next/link"
 import type { ReactElement } from "react"
 
@@ -9,7 +9,6 @@ import { Button, buttonVariants } from "@/components/ui/button"
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
@@ -18,17 +17,22 @@ import { cn } from "@/lib/utils"
 export type OnboardingStep = {
   id: string
   title: string
-  description: string
   completed: boolean
   href: string
   actionText: string
 }
 
 export function OnboardingChecklist({
+  sampleAction,
+  sampleActionLabel,
   seedAction,
+  seedActionLabel,
   steps,
 }: {
+  sampleAction?: () => Promise<void>
+  sampleActionLabel?: string
   seedAction?: () => Promise<void>
+  seedActionLabel?: string
   steps: OnboardingStep[]
 }): ReactElement {
   const completedCount = steps.filter((s) => s.completed).length
@@ -40,14 +44,11 @@ export function OnboardingChecklist({
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2">
             <Sparkles className="size-5 text-primary" />
-            <CardTitle>Getting Started with BizFlow</CardTitle>
+            <CardTitle>Getting started</CardTitle>
           </div>
-          <CardDescription>
-            Complete these setup tasks to get your organization workflow-ready.
-          </CardDescription>
         </div>
         <Badge variant={isAllDone ? "default" : "secondary"}>
-          {completedCount} / {steps.length} Completed
+          {completedCount} / {steps.length}
         </Badge>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
@@ -60,7 +61,7 @@ export function OnboardingChecklist({
               key={step.id}
             >
               {step.completed ? (
-                <CheckCircle2 className="size-5 text-emerald-500 mt-0.5 shrink-0" />
+                <CheckCircle2 className="size-5 text-success mt-0.5 shrink-0" />
               ) : (
                 <Circle className="size-5 text-muted-foreground mt-0.5 shrink-0" />
               )}
@@ -72,9 +73,6 @@ export function OnboardingChecklist({
                 >
                   {step.title}
                 </span>
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                  {step.description}
-                </p>
                 {!step.completed && (
                   <div className="pt-2">
                     <Link
@@ -90,13 +88,25 @@ export function OnboardingChecklist({
           ))}
         </div>
 
-        {seedAction && (
-          <form action={seedAction} className="pt-2 flex justify-end">
-            <Button size="sm" type="submit" variant="secondary">
-              <Sparkles className="mr-1.5 size-3.5" />
-              Seed 4 Starter Templates
-            </Button>
-          </form>
+        {(seedAction || sampleAction) && (
+          <div className="flex flex-wrap justify-end gap-2 pt-2">
+            {seedAction && (
+              <form action={seedAction}>
+                <Button size="sm" type="submit" variant="secondary">
+                  <Sparkles className="mr-1.5 size-3.5" />
+                  {seedActionLabel ?? "Add starter templates"}
+                </Button>
+              </form>
+            )}
+            {sampleAction && (
+              <form action={sampleAction}>
+                <Button size="sm" type="submit" variant="outline">
+                  <FlaskConical className="mr-1.5 size-3.5" />
+                  {sampleActionLabel ?? "Add sample submissions"}
+                </Button>
+              </form>
+            )}
+          </div>
         )}
       </CardContent>
     </Card>

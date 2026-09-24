@@ -1,15 +1,31 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
+import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
+import { z } from "zod"
 
+import {
+  FILES_LAYOUT_COOKIE,
+  FILES_LAYOUT_COOKIE_MAX_AGE,
+  FILES_PATH,
+  isFilesReturnPath,
+  parseFilesLayout,
+} from "@/components/files/file-list-view"
 import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
+import {
+  buildFeedbackRedirect,
+  getActionErrorFeedbackCode,
+  type ActionFeedbackCode,
+} from "@/lib/action-result"
 import { buildRedirect, getFormString } from "@/lib/form-utils"
 import {
   archiveDocument,
   archiveFolder,
   createFolder,
   DocumentServiceError,
+  moveDocument,
+  moveFolder,
   requestDocumentPurge,
   requestFolderPurge,
   restoreDocument,
@@ -19,14 +35,13 @@ import {
 } from "@/services/document-service"
 import {
   createDocumentComment,
-  DocumentCommentServiceError,
 } from "@/services/document-comment-service"
 import { getCurrentOrganizationContext } from "@/services/organization-service"
 import {
   createGeneratedDocument,
   TemplateServiceError,
 } from "@/services/template-service"
-import { createBlankTemplateContent } from "@/types/template"
+import { createEmptyDocumentContent } from "@/types/template"
 
 /**
  * Handles folder creation from the Documents page.
@@ -61,13 +76,11 @@ export async function createFolderAction(formData: FormData): Promise<void> {
     })
 
     redirect(
-      buildRedirect(returnPath, {
-        error: getActionErrorMessage(error, "Unable to create folder."),
-      })
+      buildFeedbackRedirect(returnPath, getActionErrorFeedbackCode(error))
     )
   }
 
-  redirect(buildRedirect(returnPath, { message: "Folder created." }))
+  redirect(buildFeedbackRedirect(returnPath, "folder_created"))
 }
 
 /**
@@ -82,10 +95,10 @@ export async function createGeneratedDocumentAction(
   let organizationId = "unavailable"
   const folderId = getFormString(formData, "folderId")
   const templateId = getFormString(formData, "templateId")
-  const returnPath = buildRedirect("/documents/new", {
-    mode: "create",
-    ...(folderId ? { folderId } : {}),
-  })
+  const returnPath = buildRedirect(
+    "/documents/new",
+    folderId ? { folderId } : {}
+  )
   let createdDocumentId: string
 
   try {
@@ -100,7 +113,7 @@ export async function createGeneratedDocumentAction(
     }
 
     organizationId = context.organization.id
-    const blankContent = templateId ? undefined : createBlankTemplateContent()
+    const blankContent = templateId ? undefined : createEmptyDocumentContent()
 
     if (blankContent) {
       blankContent.branding.organizationName = context.organization.name
@@ -128,16 +141,16 @@ export async function createGeneratedDocumentAction(
         error instanceof Error ? error.message : "Unknown generated document error",
     })
     redirect(
-      buildRedirect(returnPath, {
-        error: getActionErrorMessage(
-          error,
-          "Unable to create editable document."
-        ),
-      })
+      buildFeedbackRedirect(returnPath, getActionErrorFeedbackCode(error))
     )
   }
 
-  redirect(`/documents/${encodeURIComponent(createdDocumentId)}/edit`)
+  redirect(
+    buildFeedbackRedirect(
+      `/documents/${encodeURIComponent(createdDocumentId)}/edit`,
+      "document_created"
+    )
+  )
 }
 
 /**
@@ -150,8 +163,7 @@ export async function archiveDocumentAction(formData: FormData): Promise<void> {
   return runDocumentLifecycleAction(formData, {
     operation: archiveDocument,
     failureEvent: "archive_document_action_failed",
-    fallbackError: "Unable to archive document.",
-    successMessage: "Document archived.",
+    successCode: "resource_archived",
   })
 }
 
@@ -165,8 +177,7 @@ export async function restoreDocumentAction(formData: FormData): Promise<void> {
   return runDocumentLifecycleAction(formData, {
     operation: restoreDocument,
     failureEvent: "restore_document_action_failed",
-    fallbackError: "Unable to restore document.",
-    successMessage: "Document restored.",
+    successCode: "resource_restored",
   })
 }
 
@@ -180,8 +191,7 @@ export async function trashDocumentAction(formData: FormData): Promise<void> {
   return runDocumentLifecycleAction(formData, {
     operation: trashDocument,
     failureEvent: "trash_document_action_failed",
-    fallbackError: "Unable to move document to Trash.",
-    successMessage: "Document moved to Trash.",
+    successCode: "resource_trashed",
   })
 }
 
@@ -195,8 +205,7 @@ export async function archiveFolderAction(formData: FormData): Promise<void> {
   return runFolderLifecycleAction(formData, {
     operation: archiveFolder,
     failureEvent: "archive_folder_action_failed",
-    fallbackError: "Unable to archive folder.",
-    successMessage: "Folder archived.",
+    successCode: "resource_archived",
   })
 }
 
@@ -210,8 +219,7 @@ export async function restoreFolderAction(formData: FormData): Promise<void> {
   return runFolderLifecycleAction(formData, {
     operation: restoreFolder,
     failureEvent: "restore_folder_action_failed",
-    fallbackError: "Unable to restore folder.",
-    successMessage: "Folder restored.",
+    successCode: "resource_restored",
   })
 }
 
@@ -225,8 +233,7 @@ export async function trashFolderAction(formData: FormData): Promise<void> {
   return runFolderLifecycleAction(formData, {
     operation: trashFolder,
     failureEvent: "trash_folder_action_failed",
-    fallbackError: "Unable to move folder to Trash.",
-    successMessage: "Folder moved to Trash.",
+    successCode: "resource_trashed",
   })
 }
 
@@ -321,13 +328,11 @@ export async function createDocumentCommentAction(
     })
 
     redirect(
-      buildRedirect(detailPath, {
-        error: getActionErrorMessage(error, "Unable to add comment."),
-      })
+      buildFeedbackRedirect(detailPath, getActionErrorFeedbackCode(error))
     )
   }
 
-  redirect(buildRedirect(detailPath, { message: "Comment added." }))
+  redirect(buildFeedbackRedirect(detailPath, "comment_added"))
 }
 
 function logDocumentActionFailure(
@@ -354,8 +359,7 @@ type FolderLifecycleOperation = (input: {
 type LifecycleActionConfig<Operation> = {
   operation: Operation
   failureEvent: string
-  fallbackError: string
-  successMessage: string
+  successCode: ActionFeedbackCode
 }
 
 async function runDocumentLifecycleAction(
@@ -397,13 +401,11 @@ async function runDocumentLifecycleAction(
     })
 
     redirect(
-      buildRedirect(returnPath, {
-        error: getActionErrorMessage(error, config.fallbackError),
-      })
+      buildFeedbackRedirect(returnPath, getActionErrorFeedbackCode(error))
     )
   }
 
-  redirect(buildRedirect(returnPath, { message: config.successMessage }))
+  redirect(buildFeedbackRedirect(returnPath, config.successCode))
 }
 
 async function runFolderLifecycleAction(
@@ -438,13 +440,11 @@ async function runFolderLifecycleAction(
     })
 
     redirect(
-      buildRedirect(returnPath, {
-        error: getActionErrorMessage(error, config.fallbackError),
-      })
+      buildFeedbackRedirect(returnPath, getActionErrorFeedbackCode(error))
     )
   }
 
-  redirect(buildRedirect(returnPath, { message: config.successMessage }))
+  redirect(buildFeedbackRedirect(returnPath, config.successCode))
 }
 
 type ResourcePurgeActionScope = {
@@ -489,20 +489,173 @@ async function runResourcePurgeAction(
     })
 
     redirect(
-      buildRedirect(config.returnPath, {
-        error: getActionErrorMessage(
-          error,
-          "Unable to queue permanent deletion."
-        ),
-      })
+      buildFeedbackRedirect(
+        config.returnPath,
+        getActionErrorFeedbackCode(error)
+      )
     )
   }
 
-  redirect(
-    buildRedirect(config.returnPath, {
-      message: "Permanent deletion queued.",
+  redirect(buildFeedbackRedirect(config.returnPath, "deletion_queued"))
+}
+
+// ponytail: one request changes at most 500 folders and 500 documents, one at a
+// time, and a larger selection fails whole. Chunk it on the client, or move the
+// loop into one database call, once folders that large need bulk changes.
+const fileLifecycleChangeSchema = z.object({
+  change: z.enum(["archive", "restore", "trash"]),
+  documentIds: z.array(z.string().uuid()).max(500),
+  folderIds: z.array(z.string().uuid()).max(500),
+})
+
+/** One lifecycle change for several of the Files selection's items at once. */
+export type FileLifecycleChange = z.infer<typeof fileLifecycleChangeSchema>
+
+/** Which items changed, so the page can offer Undo, and how many could not. */
+export type FileLifecycleResult = {
+  documentIds: string[]
+  failed: number
+  folderIds: string[]
+}
+
+const FOLDER_CHANGES = {
+  archive: archiveFolder,
+  restore: restoreFolder,
+  trash: trashFolder,
+} as const
+const DOCUMENT_CHANGES = {
+  archive: archiveDocument,
+  restore: restoreDocument,
+  trash: trashDocument,
+} as const
+
+/**
+ * Changes several files at once for the Files selection. Each item goes
+ * through the same checks and audit trail as a single change; one that fails
+ * is counted and the rest still change, so the page can say what happened and
+ * offer Undo for exactly what moved.
+ *
+ * @param input - The change, and the selected folders and documents.
+ * @returns The items that changed and how many could not.
+ */
+export async function changeFilesLifecycleAction(
+  input: FileLifecycleChange
+): Promise<FileLifecycleResult> {
+  const { change, documentIds, folderIds } = fileLifecycleChangeSchema.parse(input)
+  let actor: { actorUserId: string; organizationId: string }
+
+  try {
+    actor = await loadLifecycleActionContext()
+  } catch (error: unknown) {
+    if (error instanceof AuthenticationError) {
+      redirect(buildRedirect("/login", { next: "/documents" }))
+    }
+
+    throw error
+  }
+
+  const result: FileLifecycleResult = { documentIds: [], failed: 0, folderIds: [] }
+  const failed = (kind: string, error: unknown): void => {
+    result.failed += 1
+    logDocumentActionFailure(`bulk_${change}_${kind}_failed`, {
+      organizationId: actor.organizationId,
+      reason: error instanceof Error ? error.message : `Unknown ${kind} error`,
     })
-  )
+  }
+
+  for (const folderId of folderIds) {
+    try {
+      await FOLDER_CHANGES[change]({ ...actor, folderId })
+      result.folderIds.push(folderId)
+    } catch (error: unknown) {
+      failed("folder", error)
+    }
+  }
+
+  for (const documentId of documentIds) {
+    try {
+      await DOCUMENT_CHANGES[change]({ ...actor, documentId })
+      result.documentIds.push(documentId)
+    } catch (error: unknown) {
+      failed("document", error)
+    }
+  }
+
+  revalidatePath("/documents")
+  return result
+}
+
+// ponytail: one request moves at most 500 folders and 500 documents, one at a
+// time, like the lifecycle changes beside it. Chunk it on the client once a
+// folder that large needs moving.
+const fileMoveSchema = z.object({
+  destinationFolderId: z.string().uuid().nullable(),
+  documentIds: z.array(z.string().uuid()).max(500),
+  folderIds: z.array(z.string().uuid()).max(500),
+})
+
+/** Where the Files selection should go. */
+export type FileMove = z.infer<typeof fileMoveSchema>
+
+/** Which items moved, so the page can offer Undo, and how many could not. */
+export type FileMoveResult = {
+  documentIds: string[]
+  failed: number
+  folderIds: string[]
+}
+
+/**
+ * Moves several of the Files selection's items into one folder, or out to the
+ * top level. Each item goes through the same checks and audit trail as a
+ * single move; one that fails is counted and the rest still move, so the page
+ * can say what happened and offer Undo for exactly what moved.
+ *
+ * @param input - The destination, and the selected folders and documents.
+ * @returns The items that moved and how many could not.
+ */
+export async function moveFilesAction(input: FileMove): Promise<FileMoveResult> {
+  const { destinationFolderId, documentIds, folderIds } = fileMoveSchema.parse(input)
+  let actor: { actorUserId: string; organizationId: string }
+
+  try {
+    actor = await loadLifecycleActionContext()
+  } catch (error: unknown) {
+    if (error instanceof AuthenticationError) {
+      redirect(buildRedirect("/login", { next: "/documents" }))
+    }
+
+    throw error
+  }
+
+  const result: FileMoveResult = { documentIds: [], failed: 0, folderIds: [] }
+  const failed = (kind: string, error: unknown): void => {
+    result.failed += 1
+    logDocumentActionFailure(`bulk_move_${kind}_failed`, {
+      organizationId: actor.organizationId,
+      reason: error instanceof Error ? error.message : `Unknown ${kind} error`,
+    })
+  }
+
+  for (const folderId of folderIds) {
+    try {
+      await moveFolder({ ...actor, folderId, parentFolderId: destinationFolderId })
+      result.folderIds.push(folderId)
+    } catch (error: unknown) {
+      failed("folder", error)
+    }
+  }
+
+  for (const documentId of documentIds) {
+    try {
+      await moveDocument({ ...actor, documentId, folderId: destinationFolderId })
+      result.documentIds.push(documentId)
+    } catch (error: unknown) {
+      failed("document", error)
+    }
+  }
+
+  revalidatePath("/documents")
+  return result
 }
 
 async function loadLifecycleActionContext(): Promise<{
@@ -525,6 +678,32 @@ async function loadLifecycleActionContext(): Promise<{
   }
 }
 
+/**
+ * Remembers the layout a person picked in Files, as Finder does, and returns
+ * them to the same folder and item.
+ *
+ * @param formData - The chosen layout and the Files address to return to.
+ * @returns Never returns; redirects back to Files.
+ */
+export async function setFilesLayoutAction(formData: FormData): Promise<void> {
+  const returnTo = getFormString(formData, "returnTo")
+  const cookieStore = await cookies()
+
+  cookieStore.set(
+    FILES_LAYOUT_COOKIE,
+    parseFilesLayout(getFormString(formData, "layout")),
+    {
+      httpOnly: true,
+      maxAge: FILES_LAYOUT_COOKIE_MAX_AGE,
+      path: "/",
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+    }
+  )
+
+  redirect(isFilesReturnPath(returnTo) ? returnTo : FILES_PATH)
+}
+
 function getDocumentsReturnPath(formData: FormData): string {
   const returnFolderId = getFormString(formData, "returnFolderId")
   const returnView = getFormString(formData, "returnView")
@@ -537,20 +716,4 @@ function getDocumentsReturnPath(formData: FormData): string {
     ...(safeView === "active" ? {} : { view: safeView }),
     ...(returnFolderId ? { folderId: returnFolderId } : {}),
   })
-}
-
-function getActionErrorMessage(error: unknown, fallback: string): string {
-  if (error instanceof DocumentServiceError) {
-    return error.message
-  }
-
-  if (error instanceof DocumentCommentServiceError) {
-    return error.message
-  }
-
-  if (error instanceof TemplateServiceError) {
-    return error.message
-  }
-
-  return fallback
 }

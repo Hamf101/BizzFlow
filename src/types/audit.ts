@@ -1,17 +1,25 @@
 export const AUDIT_LOG_ACTIONS = [
   "organization.created",
+  "organization.navigation_renamed",
   "invite.created",
   "invite.accepted",
+  "invite.revoked",
   "membership.role_updated",
+  "organization_role.created",
+  "organization_role.updated",
+  "organization_role.archived",
+  "membership.access_updated",
   "folder.created",
   "folder.archived",
   "folder.restored",
   "folder.trashed",
+  "folder.moved",
   "folder.purged",
   "document.created",
   "document.archived",
   "document.restored",
   "document.trashed",
+  "document.moved",
   "document.purged",
   "document.access_granted",
   "document.access_revoked",
@@ -44,6 +52,7 @@ export const AUDIT_LOG_TARGET_TYPES = [
   "organization",
   "invite",
   "membership",
+  "organization_role",
   "folder",
   "document",
   "document_version",
@@ -54,6 +63,12 @@ export const AUDIT_LOG_TARGET_TYPES = [
 ] as const
 
 export type AuditLogTargetType = (typeof AUDIT_LOG_TARGET_TYPES)[number]
+
+/** Orders the audit list offers; `created` follows the chain's sequence. */
+export const AUDIT_LOG_SORT_KEYS = ["created"] as const
+
+/** One audit list ordering key. */
+export type AuditLogSortKey = (typeof AUDIT_LOG_SORT_KEYS)[number]
 
 export type AuditMetadataValue = string | number | boolean | null
 

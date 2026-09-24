@@ -1,11 +1,19 @@
 import type { AdminSupabaseClient } from "@/lib/supabase/admin"
-import type { OrganizationRole } from "@/lib/permissions"
+import type { SendInviteEmailInput } from "@/services/invite-email-service"
+import type {
+  OrganizationPermissionAction,
+  OrganizationRole,
+} from "@/lib/permissions"
 import type {
   AuditLogAction,
   AuditLogTargetType,
   AuditMetadata,
 } from "@/types/audit"
-import type { OrganizationInvite, OrganizationMember } from "@/types/organization"
+import type {
+  OrganizationInvite,
+  OrganizationMember,
+  OrganizationRoleDefinition,
+} from "@/types/organization"
 
 export type OrganizationServiceClient = AdminSupabaseClient
 
@@ -38,7 +46,26 @@ export type MembershipRow = {
   org_id: string
   user_id: string
   role: string
+  role_definition_id?: string | null
+  workspace_display_name?: string | null
+  role_definition?: {
+    id: string
+    name: string
+    system_key: string | null
+    permissions: string[] | null
+  } | null
   status: string
+  created_at: string
+  updated_at: string
+}
+
+export type OrganizationRoleRow = {
+  id: string
+  org_id: string
+  system_key: string | null
+  name: string
+  permissions: string[] | null
+  archived_at: string | null
   created_at: string
   updated_at: string
 }
@@ -48,7 +75,14 @@ export type InviteRow = {
   org_id: string
   email: string
   role: string
+  role_definition_id?: string | null
+  role_definition?: {
+    id: string
+    name: string
+    system_key: string | null
+  } | null
   token: string
+  invited_by?: string | null
   status: string
   expires_at: string
   created_at: string
@@ -64,7 +98,13 @@ export type CreateInviteInput = {
   actorUserId: string
   organizationId: string
   email: string
-  role: OrganizationRole
+  roleId: string
+}
+
+export type RevokeInviteInput = {
+  actorUserId: string
+  organizationId: string
+  inviteId: string
 }
 
 /**
@@ -92,6 +132,35 @@ export type UpdateMemberRoleInput = {
   role: OrganizationRole
 }
 
+export type CreateOrganizationRoleInput = {
+  actorUserId: string
+  organizationId: string
+  name: string
+  permissions: OrganizationPermissionAction[]
+}
+
+export type UpdateOrganizationRoleInput = {
+  actorUserId: string
+  organizationId: string
+  roleId: string
+  name: string
+  permissions?: OrganizationPermissionAction[]
+}
+
+export type ArchiveOrganizationRoleInput = {
+  actorUserId: string
+  organizationId: string
+  roleId: string
+}
+
+export type UpdateMemberAccessInput = {
+  actorUserId: string
+  organizationId: string
+  membershipId: string
+  roleId: string
+  workspaceDisplayName: string | null
+}
+
 export type OrganizationAuditLogInput = {
   organizationId: string
   actorUserId: string | null
@@ -103,10 +172,14 @@ export type OrganizationAuditLogInput = {
 
 export type OrganizationMutationDeps = {
   client?: OrganizationServiceClient
+  createInviteToken?: () => string
+  now?: () => Date
   recordAuditLog?: (input: OrganizationAuditLogInput) => Promise<unknown>
+  sendInviteEmail?: (input: SendInviteEmailInput) => Promise<void>
 }
 
 export type OrganizationPeople = {
   members: OrganizationMember[]
-  pendingInvites: OrganizationInvite[]
+  invites: OrganizationInvite[]
+  roles: OrganizationRoleDefinition[]
 }

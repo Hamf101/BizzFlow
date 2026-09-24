@@ -129,8 +129,8 @@ export function canAcceptTemplateFlowProposal(
 /**
  * Produces a stable, compact fingerprint for stale-proposal comparisons.
  *
- * The fingerprint covers the complete draft, including embedded image bytes,
- * without retaining a second serialized copy of those bytes.
+ * The fingerprint covers everything Flow reads of the draft, including
+ * embedded image bytes, without retaining a second serialized copy of them.
  *
  * @param draft - Draft whose exact accepted state should be identified.
  * @returns Versioned dual-32-bit fingerprint with serialized length.
@@ -138,7 +138,9 @@ export function canAcceptTemplateFlowProposal(
 export function createTemplateFlowDraftFingerprint(
   draft: TemplateFlowDraft
 ): string {
-  const serializedDraft = JSON.stringify(toCanonicalJsonValue(draft))
+  const serializedDraft = JSON.stringify(
+    toCanonicalJsonValue(toTemplateFlowDraft(draft))
+  )
   let firstHash = FNV_32_OFFSET_BASIS
   let secondHash = SECOND_HASH_OFFSET
 
@@ -155,6 +157,21 @@ export function createTemplateFlowDraftFingerprint(
   return `flow-draft-v1:${serializedDraft.length}:${firstHash
     .toString(16)
     .padStart(8, "0")}${secondHash.toString(16).padStart(8, "0")}`
+}
+
+/**
+ * Keeps only what Flow reads and writes of a draft. The editor's own state
+ * carries more, such as the category, which Flow's request refuses.
+ *
+ * @param draft - A draft, or editor state holding one.
+ * @returns The title, description, and content alone.
+ */
+export function toTemplateFlowDraft(draft: TemplateFlowDraft): TemplateFlowDraft {
+  return {
+    content: draft.content,
+    description: draft.description,
+    title: draft.title
+  }
 }
 
 function stageProposal(

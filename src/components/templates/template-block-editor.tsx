@@ -1,6 +1,7 @@
 "use client"
 
 import {
+  Copy,
   ArrowDown,
   ArrowUp,
   Trash2,
@@ -65,6 +66,7 @@ type TemplateBlockEditorProps = {
   canMoveUp: boolean
   onChange: (block: TemplateBlock) => void
   onDelete: () => void
+  onDuplicate?: () => void
   onMoveDown: () => void
   onMoveUp: () => void
 }
@@ -82,6 +84,7 @@ export function TemplateBlockEditor({
   canMoveUp,
   onChange,
   onDelete,
+  onDuplicate,
   onMoveDown,
   onMoveUp,
 }: TemplateBlockEditorProps): ReactElement {
@@ -90,6 +93,18 @@ export function TemplateBlockEditor({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <span className="text-sm font-semibold">{BLOCK_LABELS[block.type]}</span>
         <div className="flex items-center gap-1">
+          {onDuplicate && (
+            <Button
+              aria-label={`Duplicate ${BLOCK_LABELS[block.type]}`}
+              onClick={onDuplicate}
+              size="icon-sm"
+              title="Duplicate block"
+              type="button"
+              variant="ghost"
+            >
+              <Copy />
+            </Button>
+          )}
           <Button
             aria-label={`Move ${BLOCK_LABELS[block.type]} up`}
             disabled={!canMoveUp}
@@ -138,7 +153,7 @@ function BlockFields({
   block: TemplateBlock
   blocks: readonly TemplateBlock[]
   onChange: (block: TemplateBlock) => void
-}): ReactElement {
+}): ReactElement | null {
   switch (block.type) {
     case "heading":
       return (
@@ -230,7 +245,7 @@ function BlockFields({
         <div className="grid gap-4">
           <Field>
             <FieldLabel htmlFor={`${block.id}-table-headers`}>
-              Column headings, separated by | characters
+              Headings, separated by |
             </FieldLabel>
             <Input
               id={`${block.id}-table-headers`}
@@ -247,7 +262,7 @@ function BlockFields({
           </Field>
           <Field>
             <FieldLabel htmlFor={`${block.id}-table-rows`}>
-              Rows, one per line with cells separated by | characters
+              Rows, one per line, cells separated by |
             </FieldLabel>
             <textarea
               className={cn(CONTROL_CLASS_NAME, "min-h-28 resize-y font-mono")}
@@ -266,11 +281,7 @@ function BlockFields({
         </div>
       )
     case "divider":
-      return (
-        <p className="text-sm text-muted-foreground">
-          The divider creates a full-width rule in this region.
-        </p>
-      )
+      return null
     case "text_field":
       return (
         <FieldBlockFields block={block} blocks={blocks} onChange={onChange}>
@@ -427,9 +438,6 @@ function DropdownOptionsField({
         </div>
       )}
       <div className="flex items-center justify-between gap-3">
-        <p className="text-xs text-muted-foreground">
-          Apply the full list together so visibility rules stay consistent.
-        </p>
         <Button
           disabled={!hasChanges || !optionEdit.success}
           onClick={applyOptions}
@@ -750,7 +758,7 @@ function VisibilityFields({
         </select>
         {availableSources.length === 0 && (
           <p className="text-xs text-muted-foreground">
-            Add an earlier checkbox or configured dropdown to create a rule.
+            Add a checkbox or dropdown above first.
           </p>
         )}
       </Field>

@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto"
 import { captureUnexpectedError } from "@/lib/observability"
 import {
   canPerformOrganizationAction,
+  createOrganizationPermissionSubject,
   isOrganizationRole,
   type OrganizationPermissionAction,
   type OrganizationRole,
@@ -15,6 +16,10 @@ import type {
   LogValue,
 } from "@/services/documents/contracts"
 import { DocumentServiceError } from "@/services/documents/errors"
+import {
+  CONCURRENT_CHANGE_MESSAGE,
+  isSerializationFailure,
+} from "@/services/serialization-retry"
 import type {
   DocumentFolder,
   DocumentLifecycleState,
@@ -39,6 +44,7 @@ type MembershipRow = {
   org_id: string
   user_id: string
   role: string
+  role_definition?: { permissions: string[] | null } | null
   status: string
   created_at: string
   updated_at: string
@@ -144,7 +150,7 @@ export async function requirePermission(
     actorUserId
   )
 
-  if (!membership || !canPerformOrganizationAction(membership.role, action)) {
+  if (!membership || !canPerformOrganizationAction(membership, action)) {
     throw new DocumentServiceError(rejectionMessage, 403)
   }
 
@@ -391,6 +397,11 @@ export function createSupabaseServiceError(
     return new DocumentServiceError(setupMessage, 500)
   }
 
+  // A write that kept meeting a colleague's is worth trying again.
+  if (isSerializationFailure(error)) {
+    return new DocumentServiceError(CONCURRENT_CHANGE_MESSAGE, 409)
+  }
+
   return new DocumentServiceError(fallbackMessage, fallbackStatusCode)
 }
 
@@ -415,7 +426,9 @@ async function getActiveMembership(
 ): Promise<OrganizationMembership | null> {
   const { data, error } = await client
     .from("organization_memberships")
-    .select("id,org_id,user_id,role,status,created_at,updated_at")
+    .select(
+      "id,org_id,user_id,role,status,created_at,updated_at,role_definition:organization_roles!organization_memberships_role_definition_fk(permissions)"
+    )
     .eq("org_id", organizationId)
     .eq("user_id", userId)
     .eq("status", "active")
@@ -432,11 +445,24 @@ async function getActiveMembership(
 }
 
 function mapMembership(row: MembershipRow): OrganizationMembership {
+  const subject = createOrganizationPermissionSubject(
+    row.role,
+    row.role_definition?.permissions
+  )
+  if (!subject) {
+    throw new DocumentServiceError(
+      "Database returned unsupported role permissions.",
+      500
+    )
+  }
+
   return {
     id: row.id,
     organizationId: row.org_id,
     userId: row.user_id,
     role: parseOrganizationRole(row.role),
+    customPermissions:
+      typeof subject === "string" ? null : [...(subject.customPermissions ?? [])],
     status: parseMembershipStatus(row.status),
     createdAt: row.created_at,
     updatedAt: row.updated_at,

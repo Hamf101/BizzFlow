@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest"
 
 import {
+  createJpegBytes,
+  createPngHeaderBytes,
+  toImageDataUrl
+} from "@/lib/image-header.test-support"
+import {
   createDocumentTemplate,
+  listDocumentTemplateCategories,
   createGeneratedDocument,
   listDocumentTemplates,
   listRecentDocuments,
@@ -40,6 +46,7 @@ const DRAFT_TEMPLATE_ID = "30000000-0000-4000-8000-000000000002"
 const DOCUMENT_ID = "40000000-0000-4000-8000-000000000001"
 const SECOND_DOCUMENT_ID = "40000000-0000-4000-8000-000000000002"
 const CREATED_DOCUMENT_ID = "40000000-0000-4000-8000-000000000003"
+const NEW_TEMPLATE_ID = "30000000-0000-4000-8000-000000000098"
 
 function createContentWithBlocks(
   blocks: readonly TemplateBlock[]
@@ -64,6 +71,24 @@ function createUsableTemplateContent(): TemplateContentV3 {
       alignment: "left"
     }
   ])
+}
+
+function createImageBlock(index: number, dataUrl: string): TemplateBlock {
+  return {
+    id: `50000000-0000-4000-8000-0000000002${String(index).padStart(2, "0")}`,
+    type: "image",
+    dataUrl,
+    altText: `Site photo ${index}`,
+    caption: null,
+    alignment: "center",
+    widthPercent: 100
+  }
+}
+
+function findDraftRevision(tables: FakeTables): unknown {
+  return tables.document_templates.find(
+    (row: FakeRow): boolean => row.id === DRAFT_TEMPLATE_ID
+  )?.revision
 }
 
 function createLegacyUsableTemplateContent(): TemplateContentV2 {
@@ -332,6 +357,7 @@ function createTemplateRow(
     org_id: ORG_ID,
     title: status === "draft" ? "Draft handbook" : "Published handbook",
     description: null,
+    category: null,
     status,
     revision: 1,
     content,
@@ -384,6 +410,131 @@ function createBaseTables(): FakeTables {
     document_recent_accesses: []
   }
 }
+
+describe("template categories", () => {
+  function createCategorizedTables(): FakeTables {
+    const tables = createBaseTables()
+    tables.document_templates = [
+      { ...createTemplateRow(TEMPLATE_ID, "published"), category: "Safety" },
+      {
+        ...createTemplateRow(DRAFT_TEMPLATE_ID, "draft"),
+        category: "Operations"
+      },
+      {
+        ...createTemplateRow(SECOND_DOCUMENT_ID, "published"),
+        category: null
+      }
+    ]
+    return tables
+  }
+
+  it("filters the library to one category", async () => {
+    const client = new FakeClient(createCategorizedTables())
+
+    const templates = await listDocumentTemplates(
+      {
+        actorUserId: MANAGER_ID,
+        organizationId: ORG_ID,
+        category: "Safety"
+      },
+      { client: client as never }
+    )
+
+    expect(templates.map((template) => template.id)).toEqual([TEMPLATE_ID])
+    expect(templates[0]?.category).toBe("Safety")
+  })
+
+  it("treats a null category as the uncategorised filter, not as no filter", async () => {
+    const client = new FakeClient(createCategorizedTables())
+
+    const templates = await listDocumentTemplates(
+      { actorUserId: MANAGER_ID, organizationId: ORG_ID, category: null },
+      { client: client as never }
+    )
+
+    expect(templates.map((template) => template.id)).toEqual([
+      SECOND_DOCUMENT_ID
+    ])
+  })
+
+  it("returns every category when the key is omitted", async () => {
+    const client = new FakeClient(createCategorizedTables())
+
+    const templates = await listDocumentTemplates(
+      { actorUserId: MANAGER_ID, organizationId: ORG_ID },
+      { client: client as never }
+    )
+
+    expect(templates).toHaveLength(3)
+  })
+
+  it("lists distinct categories alphabetically, excluding uncategorised", async () => {
+    const client = new FakeClient(createCategorizedTables())
+
+    const categories = await listDocumentTemplateCategories(
+      { actorUserId: MANAGER_ID, organizationId: ORG_ID },
+      { client: client as never }
+    )
+
+    expect(categories).toEqual(["Operations", "Safety"])
+  })
+
+  it("hides a draft template's category from a member who cannot manage templates", async () => {
+    const client = new FakeClient(createCategorizedTables())
+
+    const categories = await listDocumentTemplateCategories(
+      { actorUserId: STAFF_ID, organizationId: ORG_ID },
+      { client: client as never }
+    )
+
+    // "Operations" belongs to the draft, which staff cannot see at all.
+    expect(categories).toEqual(["Safety"])
+  })
+
+  it("persists a trimmed category and rejects one over the column limit", async () => {
+    const client = new FakeClient(createBaseTables())
+
+    const created = await createDocumentTemplate(
+      {
+        actorUserId: MANAGER_ID,
+        organizationId: ORG_ID,
+        title: "Categorised",
+        category: "  Field   Operations  "
+      },
+      { client: client as never, createId: () => NEW_TEMPLATE_ID }
+    )
+
+    expect(created.category).toBe("Field Operations")
+
+    await expect(
+      createDocumentTemplate(
+        {
+          actorUserId: MANAGER_ID,
+          organizationId: ORG_ID,
+          title: "Too long",
+          category: "x".repeat(41)
+        },
+        { client: client as never, createId: () => NEW_TEMPLATE_ID }
+      )
+    ).rejects.toMatchObject({ statusCode: 400 })
+  })
+
+  it("stores a whitespace-only category as uncategorised", async () => {
+    const client = new FakeClient(createBaseTables())
+
+    const created = await createDocumentTemplate(
+      {
+        actorUserId: MANAGER_ID,
+        organizationId: ORG_ID,
+        title: "Blank category",
+        category: "   "
+      },
+      { client: client as never, createId: () => NEW_TEMPLATE_ID }
+    )
+
+    expect(created.category).toBeNull()
+  })
+})
 
 describe("template service", () => {
   it("upgrades supplied legacy content when a new editable template is created", async () => {
@@ -882,6 +1033,137 @@ describe("template service", () => {
     ])
 
     expect(() => parseTemplateContent(content)).toThrow()
+  })
+
+  it("refuses a PNG logo over 16 megapixels when a template is created", async () => {
+    const tables = createBaseTables()
+    const content = createUsableTemplateContent()
+
+    content.branding.logoDataUrl = toImageDataUrl(
+      "png",
+      createPngHeaderBytes(4_001, 4_000)
+    )
+
+    await expect(
+      createDocumentTemplate(
+        {
+          actorUserId: MANAGER_ID,
+          organizationId: ORG_ID,
+          title: "Site survey",
+          content
+        },
+        {
+          client: new FakeClient(tables) as never,
+          createId: (): string => NEW_TEMPLATE_ID
+        }
+      )
+    ).rejects.toMatchObject({
+      statusCode: 400,
+      message:
+        "PNG images can be up to 16 megapixels. Use a smaller image or a JPEG."
+    })
+    expect(tables.document_templates).toHaveLength(2)
+  })
+
+  it("refuses template PNGs that add up to more than 64 megapixels", async () => {
+    const tables = createBaseTables()
+    const content = createContentWithBlocks(
+      [1, 2, 3, 4, 5].map(
+        (index: number): TemplateBlock =>
+          createImageBlock(
+            index,
+            toImageDataUrl("png", createPngHeaderBytes(4_000, 4_000, index))
+          )
+      )
+    )
+
+    await expect(
+      updateDocumentTemplate(
+        {
+          actorUserId: MANAGER_ID,
+          organizationId: ORG_ID,
+          templateId: DRAFT_TEMPLATE_ID,
+          expectedRevision: 1,
+          content
+        },
+        { client: new FakeClient(tables) as never }
+      )
+    ).rejects.toMatchObject({
+      statusCode: 400,
+      message:
+        "This template's PNG images add up to more than 64 megapixels. Use smaller images or JPEGs."
+    })
+    expect(findDraftRevision(tables)).toBe(1)
+  })
+
+  it("refuses a template image whose header cannot be read", async () => {
+    const tables = createBaseTables()
+
+    await expect(
+      updateDocumentTemplate(
+        {
+          actorUserId: MANAGER_ID,
+          organizationId: ORG_ID,
+          templateId: DRAFT_TEMPLATE_ID,
+          expectedRevision: 1,
+          content: createContentWithBlocks([
+            createImageBlock(1, "data:image/png;base64,aGVsbG8=")
+          ])
+        },
+        { client: new FakeClient(tables) as never }
+      )
+    ).rejects.toMatchObject({
+      statusCode: 400,
+      message: "An image in this template could not be read."
+    })
+    expect(findDraftRevision(tables)).toBe(1)
+  })
+
+  it("keeps accepting large JPEG photos, which PDFs embed without decoding", async () => {
+    const tables = createBaseTables()
+    const updated = await updateDocumentTemplate(
+      {
+        actorUserId: MANAGER_ID,
+        organizationId: ORG_ID,
+        templateId: DRAFT_TEMPLATE_ID,
+        expectedRevision: 1,
+        content: createContentWithBlocks([
+          createImageBlock(
+            1,
+            toImageDataUrl("jpeg", createJpegBytes(8_000, 6_000))
+          )
+        ])
+      },
+      { client: new FakeClient(tables) as never }
+    )
+
+    expect(updated.revision).toBe(2)
+    expect(findDraftRevision(tables)).toBe(2)
+  })
+
+  it("counts an image used in several places once, as a PDF decodes it once", async () => {
+    const tables = createBaseTables()
+    const sitePlan = toImageDataUrl("png", createPngHeaderBytes(4_000, 4_000))
+    const content = createContentWithBlocks(
+      [1, 2, 3, 4, 5].map(
+        (index: number): TemplateBlock => createImageBlock(index, sitePlan)
+      )
+    )
+
+    content.branding.logoDataUrl = sitePlan
+
+    const updated = await updateDocumentTemplate(
+      {
+        actorUserId: MANAGER_ID,
+        organizationId: ORG_ID,
+        templateId: DRAFT_TEMPLATE_ID,
+        expectedRevision: 1,
+        content
+      },
+      { client: new FakeClient(tables) as never }
+    )
+
+    expect(updated.revision).toBe(2)
   })
 
   it("rejects duplicate field keys before a template can be published", () => {

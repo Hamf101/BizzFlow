@@ -2,26 +2,45 @@ import { randomUUID } from "node:crypto"
 
 import { ZodError } from "zod"
 
+import {
+  EMBEDDED_PNG_TOO_LARGE_MESSAGE,
+  exceedsEmbeddedImageLimit,
+  MAX_DOCUMENT_PNG_PIXELS,
+  parseImageDataUrl,
+  readImageDimensions,
+} from "@/lib/image-header"
 import { captureUnexpectedError } from "@/lib/observability"
 import {
   canPerformOrganizationAction,
+  createOrganizationPermissionSubject,
   isOrganizationRole,
   type OrganizationPermissionAction,
-  type OrganizationRole,
+  type OrganizationPermissionSubject,
 } from "@/lib/permissions"
 import { createAdminClient } from "@/lib/supabase/admin"
 import {
   mapGeneratedDocumentRow,
   type GeneratedDocumentRow,
 } from "@/services/generated-documents/generated-document-persistence"
+import {
+  CONCURRENT_CHANGE_MESSAGE,
+  isSerializationFailure,
+} from "@/services/serialization-retry"
 import type {
   DocumentSourceKind,
   DocumentTemplate,
   DocumentTemplateRow,
   DocumentTemplateStatus,
+  DocumentTemplateSummary,
+  DocumentTemplateSummaryRow,
   GeneratedDocument,
+  TemplateBlock,
+  TemplateContent,
 } from "@/types/template"
-import { parseTemplateContent } from "@/types/template"
+import {
+  parseTemplateContent,
+  TEMPLATE_CATEGORY_MAX_LENGTH,
+} from "@/types/template"
 
 import type {
   TemplateServiceClient,
@@ -30,12 +49,17 @@ import type {
 import { TemplateServiceError } from "./errors"
 
 export const TEMPLATE_COLUMNS =
-  "id,org_id,title,description,status,revision,content,created_by,updated_by,published_by,archived_by,created_at,updated_at,published_at,archived_at"
+  "id,org_id,title,description,category,status,revision,content,created_by,updated_by,published_by,archived_by,created_at,updated_at,published_at,archived_at"
+
+/** Columns the templates list reads; template content stays behind. */
+export const TEMPLATE_SUMMARY_COLUMNS =
+  "id,org_id,title,category,status,revision,created_at,updated_at"
 
 type LogValue = string | number | boolean | null | undefined
 
 type MembershipRow = {
   role: string
+  role_definition?: { permissions: string[] | null } | null
 }
 
 type FolderStateRow = {
@@ -55,10 +79,12 @@ export async function requirePermission(
   actorUserId: string,
   action: OrganizationPermissionAction,
   rejectionMessage: string
-): Promise<OrganizationRole> {
+): Promise<OrganizationPermissionSubject> {
   const { data, error } = await client
     .from("organization_memberships")
-    .select("role")
+    .select(
+      "role,role_definition:organization_roles!organization_memberships_role_definition_fk(permissions)"
+    )
     .eq("org_id", organizationId)
     .eq("user_id", actorUserId)
     .eq("status", "active")
@@ -72,7 +98,8 @@ export async function requirePermission(
     throw new TemplateServiceError(rejectionMessage, 403)
   }
 
-  const role = (data as MembershipRow).role
+  const row = data as MembershipRow
+  const role = row.role
 
   if (!isOrganizationRole(role)) {
     throw new TemplateServiceError(
@@ -81,11 +108,23 @@ export async function requirePermission(
     )
   }
 
-  if (!canPerformOrganizationAction(role, action)) {
+  const subject = createOrganizationPermissionSubject(
+    role,
+    row.role_definition?.permissions
+  )
+
+  if (!subject) {
+    throw new TemplateServiceError(
+      "Database returned unsupported role permissions.",
+      500
+    )
+  }
+
+  if (!canPerformOrganizationAction(subject, action)) {
     throw new TemplateServiceError(rejectionMessage, 403)
   }
 
-  return role
+  return subject
 }
 
 export async function getTemplateById(
@@ -163,6 +202,7 @@ export function mapDocumentTemplate(
     organizationId: row.org_id,
     title: row.title,
     description: row.description,
+    category: row.category ?? null,
     status: parseDocumentTemplateStatus(row.status),
     revision: row.revision,
     content: parseTemplateContent(row.content),
@@ -174,6 +214,27 @@ export function mapDocumentTemplate(
     updatedAt: row.updated_at,
     publishedAt: row.published_at,
     archivedAt: row.archived_at,
+  }
+}
+
+/**
+ * Maps a templates-list row to the summary the list shows.
+ *
+ * @param row - Row read with `TEMPLATE_SUMMARY_COLUMNS`.
+ * @returns The template without its content.
+ */
+export function mapDocumentTemplateSummary(
+  row: DocumentTemplateSummaryRow
+): DocumentTemplateSummary {
+  return {
+    category: row.category ?? null,
+    createdAt: row.created_at,
+    id: row.id,
+    organizationId: row.org_id,
+    revision: row.revision,
+    status: parseDocumentTemplateStatus(row.status),
+    title: row.title,
+    updatedAt: row.updated_at,
   }
 }
 
@@ -237,6 +298,94 @@ export function normalizeDescription(
   return description
 }
 
+/**
+ * Normalizes an author-supplied category to what the check constraint accepts.
+ *
+ * Whitespace-only input becomes `null` rather than a blank category, because
+ * `document_templates_category_check` rejects untrimmed values and an
+ * uncategorised template is a legitimate state.
+ *
+ * @param value - Raw category from a form or seed definition.
+ * @returns A trimmed category, or null when none was supplied.
+ * @throws TemplateServiceError when the category is too long.
+ */
+export function normalizeCategory(
+  value: string | null | undefined
+): string | null {
+  if (value === null || value === undefined) {
+    return null
+  }
+
+  const category = value.trim().replace(/\s+/g, " ")
+
+  if (category.length === 0) {
+    return null
+  }
+
+  if (category.length > TEMPLATE_CATEGORY_MAX_LENGTH) {
+    throw new TemplateServiceError(
+      `Category cannot exceed ${TEMPLATE_CATEGORY_MAX_LENGTH} characters.`,
+      400
+    )
+  }
+
+  return category
+}
+
+/**
+ * Refuses template images that generated PDFs could not render.
+ *
+ * PDF rendering decodes every PNG pixel, so the per-image and per-document PNG
+ * limits apply at save as well, where the author can still replace the image.
+ * An image used more than once is decoded once, so it counts once. JPEGs only
+ * need a readable header.
+ *
+ * @param content - Canonical template content about to be saved.
+ * @throws TemplateServiceError when an image is unreadable or its PNGs are too large.
+ */
+export function assertTemplateImagesRenderable(content: TemplateContent): void {
+  const dataUrls = [
+    content.branding.logoDataUrl,
+    ...content.blocks.map((block: TemplateBlock): string | null =>
+      block.type === "image" ? block.dataUrl : null
+    ),
+  ]
+  let pngPixels = 0
+
+  for (const dataUrl of new Set(dataUrls)) {
+    if (!dataUrl) {
+      continue
+    }
+
+    const image = parseImageDataUrl(dataUrl)
+    const dimensions = image
+      ? readImageDimensions(Buffer.from(image.encoded, "base64"), image.format)
+      : null
+
+    if (!image || !dimensions) {
+      throw new TemplateServiceError(
+        "An image in this template could not be read.",
+        400
+      )
+    }
+
+    if (exceedsEmbeddedImageLimit(image.format, dimensions)) {
+      throw new TemplateServiceError(EMBEDDED_PNG_TOO_LARGE_MESSAGE, 400)
+    }
+
+    if (image.format === "png") {
+      pngPixels += dimensions.width * dimensions.height
+    }
+  }
+
+  if (pngPixels > MAX_DOCUMENT_PNG_PIXELS) {
+    throw new TemplateServiceError(
+      "This template's PNG images add up to more than 64 megapixels. Use smaller images or JPEGs.",
+      400
+    )
+  }
+}
+
 export function normalizeNullableId(
   value: string | null | undefined
 ): string | null {
@@ -287,6 +436,11 @@ export function createDatabaseError(
   fallbackMessage: string
 ): TemplateServiceError {
   const errorLike = getSupabaseErrorLike(error)
+
+  // A write that kept meeting a colleague's is worth trying again.
+  if (isSerializationFailure(errorLike)) {
+    return new TemplateServiceError(CONCURRENT_CHANGE_MESSAGE, 409)
+  }
 
   if (errorLike?.code === "23505") {
     return new TemplateServiceError("A conflicting record already exists.", 409)

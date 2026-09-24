@@ -1,6 +1,5 @@
 export {
   listNotificationDeliveries,
-  NotificationServiceError,
   recordNotificationDelivery,
   type ListNotificationDeliveriesInput,
   type NotificationAuditLogInput,

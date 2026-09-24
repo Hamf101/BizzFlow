@@ -1,6 +1,6 @@
 "use client"
 
-import { Plus, Send, Trash2 } from "lucide-react"
+import { Plus, Send, X } from "lucide-react"
 import {
   type ChangeEvent,
   type ReactElement,
@@ -10,14 +10,6 @@ import {
 import { useFormStatus } from "react-dom"
 
 import { Button } from "@/components/ui/button"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
 import { Field, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 
@@ -38,7 +30,7 @@ type DocumentRecipientCollectionProps = {
  * Collects one or more unordered recipients before starting a signing batch.
  *
  * @param props - Authenticated send action and generated document id.
- * @returns A dynamic, accessible recipient collection form.
+ * @returns The recipients' names and emails, and Send.
  */
 export function DocumentRecipientCollection({
   action,
@@ -90,88 +82,69 @@ export function DocumentRecipientCollection({
   )
 
   return (
-    <form action={action}>
+    <form action={action} className="grid gap-4">
       <input name="documentId" type="hidden" value={documentId} />
       <input name="recipients" type="hidden" value={serializedRecipients} />
-      <Card>
-        <CardHeader>
-          <CardTitle>Send for signing</CardTitle>
-          <CardDescription>
-            Invite up to {MAX_RECIPIENTS} recipients. They may sign in any order.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-
-          {recipients.map((recipient: RecipientDraft, index: number) => (
-            <fieldset
-              className="flex flex-col gap-3 rounded-lg border bg-background p-3"
-              key={recipient.clientId}
-            >
-              <legend className="px-1 text-sm font-semibold">
-                Recipient {index + 1}
-              </legend>
-              <Field>
-                <FieldLabel htmlFor={`${recipient.clientId}-name`}>Name</FieldLabel>
-                <Input
-                  autoComplete="name"
-                  id={`${recipient.clientId}-name`}
-                  maxLength={160}
-                  onChange={(event: ChangeEvent<HTMLInputElement>): void =>
-                    updateRecipient(recipient.clientId, { name: event.target.value })
-                  }
-                  required
-                  value={recipient.name}
-                />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor={`${recipient.clientId}-email`}>Email</FieldLabel>
-                <Input
-                  autoComplete="email"
-                  id={`${recipient.clientId}-email`}
-                  maxLength={320}
-                  onChange={(event: ChangeEvent<HTMLInputElement>): void =>
-                    updateRecipient(recipient.clientId, { email: event.target.value })
-                  }
-                  required
-                  type="email"
-                  value={recipient.email}
-                />
-              </Field>
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <span className="text-xs text-muted-foreground">
-                  Signature required
-                </span>
-                <Button
-                  disabled={recipients.length === 1}
-                  onClick={(): void => removeRecipient(recipient.clientId)}
-                  size="sm"
-                  type="button"
-                  variant="ghost"
-                >
-                  <Trash2 />
-                  Remove
-                </Button>
-              </div>
-            </fieldset>
-          ))}
-
-          <Button
-            disabled={recipients.length >= MAX_RECIPIENTS}
-            onClick={addRecipient}
-            type="button"
-            variant="outline"
+      <div className="grid gap-3">
+        {recipients.map((recipient: RecipientDraft, index: number) => (
+          <div
+            className="grid items-end gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)_auto]"
+            key={recipient.clientId}
           >
-            <Plus />
-            Add recipient
-          </Button>
-        </CardContent>
-        <CardFooter className="justify-between gap-3">
-          <span className="text-xs text-muted-foreground">
-            Each recipient receives a private link that expires in seven days.
-          </span>
-          <SendRecipientsButton />
-        </CardFooter>
-      </Card>
+            <Field>
+              <FieldLabel htmlFor={`${recipient.clientId}-name`}>Name</FieldLabel>
+              <Input
+                autoComplete="name"
+                id={`${recipient.clientId}-name`}
+                maxLength={160}
+                onChange={(event: ChangeEvent<HTMLInputElement>): void =>
+                  updateRecipient(recipient.clientId, { name: event.target.value })
+                }
+                required
+                value={recipient.name}
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor={`${recipient.clientId}-email`}>Email</FieldLabel>
+              <Input
+                autoComplete="email"
+                id={`${recipient.clientId}-email`}
+                maxLength={320}
+                onChange={(event: ChangeEvent<HTMLInputElement>): void =>
+                  updateRecipient(recipient.clientId, { email: event.target.value })
+                }
+                required
+                type="email"
+                value={recipient.email}
+              />
+            </Field>
+            <Button
+              aria-label={`Remove recipient ${index + 1}`}
+              className="max-sm:justify-self-end"
+              disabled={recipients.length === 1}
+              onClick={(): void => removeRecipient(recipient.clientId)}
+              size="icon"
+              title="Remove"
+              type="button"
+              variant="ghost"
+            >
+              <X />
+            </Button>
+          </div>
+        ))}
+      </div>
+      <div className="flex items-center justify-between gap-3">
+        <Button
+          disabled={recipients.length >= MAX_RECIPIENTS}
+          onClick={addRecipient}
+          type="button"
+          variant="ghost"
+        >
+          <Plus />
+          Add recipient
+        </Button>
+        <SendRecipientsButton />
+      </div>
     </form>
   )
 }
@@ -182,7 +155,7 @@ function SendRecipientsButton(): ReactElement {
   return (
     <Button disabled={pending} type="submit">
       <Send />
-      {pending ? "Sending…" : "Send invitations"}
+      {pending ? "Sending…" : "Send"}
     </Button>
   )
 }

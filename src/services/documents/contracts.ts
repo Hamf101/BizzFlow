@@ -33,13 +33,48 @@ export type CreateFolderInput = {
   parentFolderId?: string | null
 }
 
-export type ListDocumentWorkspaceInput = {
+/** Input for one lifecycle view's folders. */
+export type ListWorkspaceFoldersInput = {
   actorUserId: string
   organizationId: string
   lifecycleState?: Extract<
     DocumentLifecycleState,
     "active" | "archived" | "trashed"
   >
+}
+
+/** Input for the documents filed in the folders a Files view draws. */
+export type ListFolderDocumentsInput = ListWorkspaceFoldersInput & {
+  /** Folders whose documents the view lists or counts. */
+  folderIds: readonly string[]
+  /** Whether the view also draws the top of Files. */
+  includeRoot: boolean
+  /**
+   * Every folder the member may see in this view. The top of Files takes in
+   * the documents filed anywhere else, so it lists them rather than stranding
+   * them, and drawing uses the same set.
+   */
+  visibleFolderIds: readonly string[]
+  /** A search, which looks through the whole view rather than those folders. */
+  query?: string
+}
+
+/** Input for the documents a member changed or opened most recently. */
+export type ListRecentDocumentsInput = {
+  actorUserId: string
+  organizationId: string
+  /** Only generated documents this member created, such as those they sent. */
+  generatedBy?: string
+  limit: number
+}
+
+export type ListDocumentCardsInput = {
+  actorUserId: string
+  organizationId: string
+  /** Documents whose status a Files view shows. */
+  documentIds: readonly string[]
+  /** The ones among them whose first page the view draws. */
+  contentIds: readonly string[]
 }
 
 export type GetDocumentDetailInput = {
@@ -85,6 +120,22 @@ export type ArchiveDocumentInput = {
 export type RestoreDocumentInput = ArchiveDocumentInput
 
 export type TrashDocumentInput = ArchiveDocumentInput
+
+export type MoveDocumentInput = {
+  actorUserId: string
+  organizationId: string
+  documentId: string
+  /** The destination folder, or null for the top level. */
+  folderId: string | null
+}
+
+export type MoveFolderInput = {
+  actorUserId: string
+  organizationId: string
+  folderId: string
+  /** The destination parent folder, or null for the top level. */
+  parentFolderId: string | null
+}
 
 export type FolderLifecycleInput = {
   actorUserId: string

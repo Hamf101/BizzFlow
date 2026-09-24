@@ -19,16 +19,19 @@ import {
   type KeyboardEvent,
   type ReactElement,
   useEffect,
+  useEffectEvent,
   useMemo,
   useRef,
   useState
 } from "react"
 
-import { BizFlowMark } from "@/components/brand/bizflow-mark"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
-import { createTemplateFlowDraftFingerprint } from "@/services/template-flow-proposal-state"
+import {
+  createTemplateFlowDraftFingerprint,
+  toTemplateFlowDraft
+} from "@/services/template-flow-proposal-state"
 import { templateContentSchema } from "@/types/template"
 import type {
   TemplateFlowDraft,
@@ -40,12 +43,21 @@ import type {
   TemplateFlowResult
 } from "@/types/template-flow"
 
-const REQUEST_TIMEOUT_MS = 45_000
-const STARTER_PROMPTS = [
-  "Create a clear client intake form",
-  "Organize this into a professional agreement",
-  "Explain the structure of this document"
-] as const
+// The server bounds every AI call itself (two at most per turn), so this only
+// catches a connection that never answers, and must outlast the longest turn.
+const REQUEST_TIMEOUT_MS = 300_000
+const TEMPLATE_STARTER: FlowStarter = {
+  heading: "Ask Flow to build or change this document.",
+  placeholder: "Ask Flow to create or change something…",
+  prompts: [
+    "Create a clear client intake form",
+    "Organize this into a professional agreement",
+    "Explain the structure of this document"
+  ]
+}
+
+/** What an empty conversation offers: a line, a few first messages, and the box's hint. */
+export type FlowStarter = Readonly<{ heading: string; placeholder: string; prompts: readonly string[] }>
 
 type TemplateFlowPanelProps = {
   canUndo: boolean
@@ -69,7 +81,14 @@ type TemplateFlowPanelProps = {
   onRejectProposal?: (proposal: TemplateFlowProposal) => void
   onUndo: () => void
   pendingProposal?: TemplateFlowProposal | null
-  templateId: string
+  /** A request carried in from elsewhere, sent once when it arrives. */
+  autoSend?: string | null
+  /** Where turns go; a document's Flow answers at its own route. */
+  endpoint?: string
+  /** The empty conversation's line and first messages, for what is open. */
+  starter?: FlowStarter
+  /** Sent with each turn to the template route, which reads it from the body. */
+  templateId?: string
 }
 
 /**
@@ -90,6 +109,9 @@ export function TemplateFlowPanel({
   onRejectProposal,
   onUndo,
   pendingProposal: controlledPendingProposal,
+  autoSend = null,
+  endpoint = "/api/templates/flow",
+  starter = TEMPLATE_STARTER,
   templateId
 }: TemplateFlowPanelProps): ReactElement {
   const [messages, setMessages] =
@@ -123,6 +145,19 @@ export function TemplateFlowPanel({
     draftRef.current = draft
   }, [draft])
 
+  const carried = useRef<string | null>(null)
+  const sendCarried = useEffectEvent((message: string): void => {
+    void submitMessage(message)
+  })
+
+  useEffect((): void => {
+    // The ref keeps a development double-run from sending it twice.
+    if (autoSend && carried.current !== autoSend) {
+      carried.current = autoSend
+      sendCarried(autoSend)
+    }
+  }, [autoSend])
+
   useEffect((): void => {
     const timeline = timelineRef.current
 
@@ -150,10 +185,10 @@ export function TemplateFlowPanel({
     const startedAt = performance.now()
 
     try {
-      const response = await fetch("/api/templates/flow", {
+      const response = await fetch(endpoint, {
         body: JSON.stringify({
           templateId,
-          draft,
+          draft: toTemplateFlowDraft(draft),
           instruction: trimmedInstruction
         }),
         headers: { "Content-Type": "application/json" },
@@ -204,12 +239,12 @@ export function TemplateFlowPanel({
         durationMs: Math.round(performance.now() - startedAt),
         operationCount: result.proposal?.operations.length ?? 0,
         proposalId: result.proposal?.id ?? null,
-        templateId
+        endpoint
       })
     } catch (error: unknown) {
       const reason =
         error instanceof DOMException && error.name === "AbortError"
-          ? "Flow took too long to respond. Try a shorter request."
+          ? "Flow took too long to answer. Try again."
           : error instanceof Error
             ? error.message
             : "Unable to reach Flow."
@@ -217,7 +252,7 @@ export function TemplateFlowPanel({
       console.warn("template_flow_response_failed", {
         durationMs: Math.round(performance.now() - startedAt),
         reason,
-        templateId
+        endpoint
       })
       setErrorMessage(reason)
       setInstruction(trimmedInstruction)
@@ -303,25 +338,6 @@ export function TemplateFlowPanel({
       aria-label="Flow document assistant"
       className="flex min-h-[36rem] flex-col overflow-hidden rounded-[10px] border border-primary/15 bg-secondary/70 shadow-[0_8px_30px_rgba(37,35,41,0.07)] xl:sticky xl:top-5 xl:h-[calc(100vh-2.5rem)] xl:max-h-[52rem]"
     >
-      <header className="flex items-center justify-between gap-3 border-b border-primary/10 px-4 py-3.5">
-        <div className="flex items-center gap-2.5">
-          <span className="grid size-8 place-items-center rounded-[8px] border border-primary/15 bg-card text-primary">
-            <BizFlowMark className="size-5" />
-          </span>
-          <div>
-            <h2 className="font-editorial text-lg font-semibold leading-none">
-              Flow
-            </h2>
-            <p className="mt-1 font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground">
-              Conversation · proposal ledger
-            </p>
-          </div>
-        </div>
-        <span className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-          <span className="size-1.5 rounded-full bg-primary/70" />
-          Document aware
-        </span>
-      </header>
 
       <div
         aria-live="polite"
@@ -329,7 +345,7 @@ export function TemplateFlowPanel({
         ref={timelineRef}
       >
         {messages.length === 0 ? (
-          <FlowEmptyState onSelectPrompt={submitMessage} />
+          <FlowEmptyState onSelectPrompt={submitMessage} starter={starter} />
         ) : (
           <ol className="flex flex-col gap-5">
             {messages.map((message: TemplateFlowMessage) => (
@@ -384,15 +400,12 @@ export function TemplateFlowPanel({
         className="border-t border-primary/10 bg-card/75 p-3"
         onSubmit={handleSubmit}
       >
-        <label
-          className="editorial-kicker mb-2 block text-muted-foreground"
-          htmlFor="flow-composer"
-        >
-          Tell Flow what to create or change
+        <label className="sr-only" htmlFor="flow-composer">
+          Ask Flow
         </label>
         <div className="relative">
           <textarea
-            aria-describedby="flow-composer-hint"
+            aria-describedby={pendingProposal ? "flow-composer-hint" : undefined}
             className="min-h-24 w-full resize-none rounded-[8px] border border-primary/15 bg-card px-3 py-2.5 pr-12 text-sm leading-relaxed outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 disabled:opacity-60"
             disabled={isLoading || pendingProposal !== null}
             id="flow-composer"
@@ -401,7 +414,7 @@ export function TemplateFlowPanel({
               setInstruction(event.target.value)
             }
             onKeyDown={handleComposerKeyDown}
-            placeholder="Ask a question, create a document, or reorganize what is here…"
+            placeholder={starter.placeholder}
             value={instruction}
           />
           <Button
@@ -418,14 +431,14 @@ export function TemplateFlowPanel({
             <Send />
           </Button>
         </div>
-        <p
-          className="mt-1.5 text-[10px] text-muted-foreground"
-          id="flow-composer-hint"
-        >
-          {pendingProposal
-            ? "Apply all or reject all before asking Flow for another change"
-            : "Enter to send · Shift + Enter for a new line"}
-        </p>
+        {pendingProposal ? (
+          <p
+            className="mt-1.5 text-[10px] text-muted-foreground"
+            id="flow-composer-hint"
+          >
+            Apply or reject the proposal first
+          </p>
+        ) : null}
       </form>
     </aside>
   )
@@ -469,7 +482,7 @@ function FlowPendingProposalReceipt({
 
       {proposal.qualityIssues.length > 0 && (
         <div className="border-b border-primary/10 px-3 py-2.5">
-          <p className="text-[11px] font-medium">Deterministic review</p>
+          <p className="text-[11px] font-medium">Checks</p>
           <ul className="mt-1.5 space-y-1.5">
             {proposal.qualityIssues.map(
               (issue: TemplateFlowQualityIssue, index: number) => (
@@ -508,24 +521,19 @@ function FlowPendingProposalReceipt({
 }
 
 function FlowEmptyState({
-  onSelectPrompt
+  onSelectPrompt,
+  starter
 }: {
   onSelectPrompt: (prompt: string) => Promise<void>
+  starter: FlowStarter
 }): ReactElement {
   return (
     <div className="flex min-h-full flex-col justify-center py-6">
-      <span className="editorial-kicker text-primary">
-        Start with a thought
-      </span>
-      <h3 className="mt-2 max-w-xs font-editorial text-2xl font-semibold leading-tight">
-        Chat with the document, then review every proposal.
+      <h3 className="max-w-xs font-editorial text-2xl font-semibold leading-tight">
+        {starter.heading}
       </h3>
-      <p className="mt-2 max-w-sm text-sm leading-relaxed text-muted-foreground">
-        Ask questions, create content, or reorganize the draft. Flow records a
-        ledger when it prepares a reviewable batch.
-      </p>
       <div className="mt-5 flex flex-col gap-2">
-        {STARTER_PROMPTS.map((prompt: string) => (
+        {starter.prompts.map((prompt: string) => (
           <button
             className="group flex items-center justify-between gap-3 rounded-[8px] border border-primary/10 bg-card/65 px-3 py-2.5 text-left text-sm transition-colors hover:border-primary/25 hover:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
             key={prompt}

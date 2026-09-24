@@ -1,5 +1,6 @@
 import Link from "next/link"
 
+import { PasswordInput } from "@/components/auth/password-input"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import {
@@ -38,7 +39,7 @@ export default async function SignupPage({
             className="text-sm font-medium text-primary underline-offset-4 hover:underline"
             href="/login"
           >
-            Sign in
+            Log in
           </Link>
         }
         title="Invite unavailable"
@@ -52,8 +53,8 @@ export default async function SignupPage({
     <AuthPageCard
       description={
         invite
-          ? `Create an account for ${invite.email} to join ${invite.organizationName}.`
-          : "Start an organization workspace for document collection and review."
+          ? `Sign up with ${invite.email} to join ${invite.organizationName}.`
+          : undefined
       }
       footer={
         <>
@@ -68,12 +69,12 @@ export default async function SignupPage({
                 : "/login"
             }
           >
-            Sign in
+            Log in
           </Link>
         </>
       }
       footerClassName="justify-between gap-3"
-      title={invite ? "Create your account" : "Create your BizFlow account"}
+      title="Sign up for BizFlow"
     >
       <form action={signupAction} className="flex flex-col gap-5">
         {params.invite && (
@@ -81,7 +82,7 @@ export default async function SignupPage({
         )}
         {params.error && (
           <Alert variant="destructive">
-            <AlertTitle>Unable to create account</AlertTitle>
+            <AlertTitle>Unable to sign up</AlertTitle>
             <AlertDescription>{params.error}</AlertDescription>
           </Alert>
         )}
@@ -100,23 +101,18 @@ export default async function SignupPage({
           </Field>
           <Field>
             <FieldLabel htmlFor="password">Password</FieldLabel>
-            <Input
+            <PasswordInput
               id="password"
               name="password"
-              type="password"
               autoComplete="new-password"
               required
               minLength={8}
             />
-            <FieldDescription>
-              {invite
-                ? "Use at least 8 characters. Confirm your email, then accept the workspace invite."
-                : "Use at least 8 characters. Organization setup comes next."}
-            </FieldDescription>
+            <FieldDescription>At least 8 characters.</FieldDescription>
           </Field>
         </FieldGroup>
         <Button type="submit" className="w-full">
-          Create account
+          Sign up
         </Button>
       </form>
     </AuthPageCard>

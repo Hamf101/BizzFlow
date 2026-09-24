@@ -1,5 +1,10 @@
 import { PDFDocument } from "pdf-lib"
 
+import {
+  parseImageDataUrl,
+  readImageDimensions,
+  type EmbeddedImageFormat,
+} from "@/lib/image-header"
 import { DocumentSigningServiceError } from "@/services/document-signing/errors"
 
 const MAX_DRAWING_DATA_URL_LENGTH = 2_800_000
@@ -7,17 +12,13 @@ const MIN_DRAWING_IMAGE_WIDTH = 16
 const MIN_DRAWING_IMAGE_HEIGHT = 8
 const MAX_DRAWING_IMAGE_DIMENSION = 4_096
 const MAX_DRAWING_IMAGE_PIXELS = 4_194_304
-const DRAWING_DATA_URL_PATTERN =
-  /^data:image\/(png|jpeg);base64,([A-Za-z0-9+/]+={0,2})$/
 
 /** Validated drawing shape stored in signing records. */
 export type DrawingData = { dataUrl: string }
 
-type DrawingImageFormat = "jpeg" | "png"
-
 type DrawingImageMetadata = {
   bytes: Buffer
-  format: DrawingImageFormat
+  format: EmbeddedImageFormat
   height: number
   width: number
 }
@@ -98,7 +99,7 @@ export function getDrawingDataUrl(
 
   if (
     value.dataUrl.length > MAX_DRAWING_DATA_URL_LENGTH ||
-    !DRAWING_DATA_URL_PATTERN.test(value.dataUrl)
+    !parseImageDataUrl(value.dataUrl)
   ) {
     return null
   }
@@ -107,126 +108,37 @@ export function getDrawingDataUrl(
 }
 
 function decodeDrawingImage(value: string, label: string): DrawingImageMetadata {
-  const match = DRAWING_DATA_URL_PATTERN.exec(value)
+  const image = parseImageDataUrl(value)
 
-  if (!match) {
+  if (!image || image.encoded.length % 4 !== 0) {
     throw createInvalidDrawingError(label)
   }
 
-  const format = match[1] as DrawingImageFormat
-  const encodedBytes = match[2]
+  const bytes = Buffer.from(image.encoded, "base64")
 
-  if (encodedBytes.length % 4 !== 0) {
+  if (bytes.length === 0 || bytes.toString("base64") !== image.encoded) {
     throw createInvalidDrawingError(label)
   }
 
-  const bytes = Buffer.from(encodedBytes, "base64")
-
-  if (bytes.length === 0 || bytes.toString("base64") !== encodedBytes) {
-    throw createInvalidDrawingError(label)
-  }
-
+  // A drawing is a complete canvas export, so a JPEG must also end cleanly.
   const dimensions =
-    format === "png"
-      ? readPngDimensions(bytes, label)
-      : readJpegDimensions(bytes, label)
+    image.format === "jpeg" && !endsWithJpegEndMarker(bytes)
+      ? null
+      : readImageDimensions(bytes, image.format)
+
+  if (!dimensions) {
+    throw createInvalidDrawingError(label)
+  }
 
   assertDrawingDimensions(dimensions.width, dimensions.height, label)
-  return { bytes, format, ...dimensions }
+  return { bytes, format: image.format, ...dimensions }
 }
 
-function readPngDimensions(
-  bytes: Buffer,
-  label: string
-): Pick<DrawingImageMetadata, "height" | "width"> {
-  const pngSignature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])
-  const hasValidHeader =
-    bytes.length >= 33 &&
-    bytes.subarray(0, pngSignature.length).equals(pngSignature) &&
-    bytes.readUInt32BE(8) === 13 &&
-    bytes.subarray(12, 16).toString("ascii") === "IHDR"
-
-  if (!hasValidHeader) {
-    throw createInvalidDrawingError(label)
-  }
-
-  return {
-    width: bytes.readUInt32BE(16),
-    height: bytes.readUInt32BE(20),
-  }
-}
-
-function readJpegDimensions(
-  bytes: Buffer,
-  label: string
-): Pick<DrawingImageMetadata, "height" | "width"> {
-  if (
-    bytes.length < 4 ||
-    bytes[0] !== 0xff ||
-    bytes[1] !== 0xd8 ||
-    bytes[bytes.length - 2] !== 0xff ||
-    bytes[bytes.length - 1] !== 0xd9
-  ) {
-    throw createInvalidDrawingError(label)
-  }
-
-  let offset = 2
-
-  while (offset < bytes.length - 1) {
-    if (bytes[offset] !== 0xff) {
-      offset += 1
-      continue
-    }
-
-    while (offset < bytes.length && bytes[offset] === 0xff) {
-      offset += 1
-    }
-
-    const marker = bytes[offset]
-    offset += 1
-
-    if (marker === undefined || marker === 0xd9 || marker === 0xda) {
-      break
-    }
-
-    if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd8)) {
-      continue
-    }
-
-    if (offset + 2 > bytes.length) {
-      throw createInvalidDrawingError(label)
-    }
-
-    const segmentLength = bytes.readUInt16BE(offset)
-
-    if (segmentLength < 2 || offset + segmentLength > bytes.length) {
-      throw createInvalidDrawingError(label)
-    }
-
-    if (isJpegStartOfFrameMarker(marker)) {
-      if (segmentLength < 7) {
-        throw createInvalidDrawingError(label)
-      }
-
-      return {
-        height: bytes.readUInt16BE(offset + 3),
-        width: bytes.readUInt16BE(offset + 5),
-      }
-    }
-
-    offset += segmentLength
-  }
-
-  throw createInvalidDrawingError(label)
-}
-
-function isJpegStartOfFrameMarker(marker: number): boolean {
+function endsWithJpegEndMarker(bytes: Buffer): boolean {
   return (
-    marker >= 0xc0 &&
-    marker <= 0xcf &&
-    marker !== 0xc4 &&
-    marker !== 0xc8 &&
-    marker !== 0xcc
+    bytes.length >= 4 &&
+    bytes[bytes.length - 2] === 0xff &&
+    bytes[bytes.length - 1] === 0xd9
   )
 }
 

@@ -1,4 +1,5 @@
 import type { AdminSupabaseClient } from "@/lib/supabase/admin"
+import { FakeSupabaseClient, type FakeRow } from "@/services/document-service.test-support"
 import type { FinalizeGeneratedDocumentPdfInput } from "@/services/generated-document-finalization/contracts"
 import { createSupabaseFinalizationPersistence } from "@/services/generated-document-finalization/persistence"
 import { describe, expect, it, vi } from "vitest"
@@ -63,7 +64,7 @@ describe("generated document finalization Supabase persistence", () => {
     expect(database.queryCalls).toEqual([
       {
         relation: "organization_memberships",
-        columns: "id,org_id,user_id,role,status,created_at,updated_at",
+        columns: "id,org_id,user_id,role,status,created_at,updated_at,role_definition:organization_roles!organization_memberships_role_definition_fk(permissions)",
         filters: [
           ["org_id", ORGANIZATION_ID],
           ["user_id", ACTOR_ID],
@@ -79,6 +80,46 @@ describe("generated document finalization Supabase persistence", () => {
         ],
       },
     ])
+  })
+
+  it("rechecks a custom role grant and revocation on every finalization request", async () => {
+    const roleDefinition = { permissions: [] as string[] }
+    const client = createAccessClient({ role_definition: roleDefinition })
+    const persistence = createSupabaseFinalizationPersistence(client as never)
+
+    await expect(persistence.requireViewPermission(input)).rejects.toMatchObject({ statusCode: 404 })
+    roleDefinition.permissions.push("documents:view")
+    await expect(persistence.requireViewPermission(input)).resolves.toBeUndefined()
+    roleDefinition.permissions.length = 0
+    await expect(persistence.requireViewPermission(input)).rejects.toMatchObject({ statusCode: 404 })
+  })
+
+  it("keeps owner finalization access when the role definition has no grants", async () => {
+    const client = createAccessClient({ role: "owner_admin", role_definition: { permissions: [] } })
+
+    await expect(createSupabaseFinalizationPersistence(client as never).requireViewPermission(input))
+      .resolves.toBeUndefined()
+  })
+
+  it.each([
+    ["inactive membership", { status: "inactive" }],
+    ["membership in another organization", { org_id: "other-org" }],
+    ["another member's permission", { user_id: "other-user" }],
+  ])("hides finalization from an actor with %s", async (_name, membership) => {
+    const client = createAccessClient(membership)
+
+    await expect(createSupabaseFinalizationPersistence(client as never).requireViewPermission(input))
+      .rejects.toMatchObject({ statusCode: 404 })
+  })
+
+  it.each([
+    ["a document outside the organization", { org_id: "other-org" }],
+    ["a private document without an ACL grant", { created_by: "other-user" }],
+  ])("hides finalization for %s despite an organization grant", async (_name, document) => {
+    const client = createAccessClient({}, document)
+
+    await expect(createSupabaseFinalizationPersistence(client as never).requireViewPermission(input))
+      .rejects.toMatchObject({ statusCode: 404 })
   })
 
   it("hides finalization state when the actor lacks document access", async () => {
@@ -304,6 +345,30 @@ describe("generated document finalization Supabase persistence", () => {
 type DatabaseResult = {
   data: unknown
   error: { code?: string; message?: string } | null
+}
+
+function createAccessClient(membership: FakeRow = {}, document: FakeRow = {}): FakeSupabaseClient {
+  return new FakeSupabaseClient({
+    organization_memberships: [{
+      id: "60000000-0000-4000-8000-000000000001",
+      org_id: ORGANIZATION_ID,
+      user_id: ACTOR_ID,
+      role: "manager",
+      role_definition: { permissions: ["documents:view"] },
+      status: "active",
+      created_at: "2026-07-18T07:00:00.000Z",
+      updated_at: "2026-07-18T07:00:00.000Z",
+      ...membership,
+    }],
+    documents: [{
+      id: DOCUMENT_ID,
+      org_id: ORGANIZATION_ID,
+      created_by: ACTOR_ID,
+      lifecycle_state: "active",
+      archived_at: null,
+      ...document,
+    }],
+  })
 }
 
 type QueryCall = {

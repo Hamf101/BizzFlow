@@ -2,22 +2,32 @@
 
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
+import { z } from "zod"
 
 import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
+import {
+  buildFeedbackRedirect,
+  getActionErrorFeedbackCode,
+} from "@/lib/action-result"
 import { buildRedirect, getFormString } from "@/lib/form-utils"
 import { canPerformOrganizationAction } from "@/lib/permissions"
 import { getCurrentOrganizationContext } from "@/services/organization-service"
 import {
   createPublicFormLink,
   disablePublicFormLink,
-  PublicFormServiceError,
 } from "@/services/public-form-service"
+
+class PublicLinkActionError extends Error {
+  readonly statusCode = 403
+}
+
+const templateIdSchema = z.string().uuid()
 
 export async function createPublicFormLinkAction(
   formData: FormData
 ): Promise<void> {
   const templateId = getFormString(formData, "templateId")
-  const templatePath = "/templates"
+  const linksPath = getPublicLinksPath(templateId)
   const expiresAt = getFormString(formData, "expiresAt")
   const maxSubmissionsRaw = getFormString(formData, "maxSubmissions")
 
@@ -28,14 +38,12 @@ export async function createPublicFormLinkAction(
     if (
       !context ||
       !canPerformOrganizationAction(
-        context.membership.role,
+        context.membership,
         "templates:manage"
       )
     ) {
-      redirect(
-        buildRedirect(templatePath, {
-          error: "You do not have permission to manage public form links.",
-        })
+      throw new PublicLinkActionError(
+        "You do not have permission to manage public form links."
       )
     }
 
@@ -51,28 +59,25 @@ export async function createPublicFormLinkAction(
       maxSubmissions: Number.isNaN(maxSubmissions) ? null : maxSubmissions,
     })
 
-    revalidatePath(templatePath)
+    revalidatePath(linksPath)
   } catch (error: unknown) {
     if (error instanceof AuthenticationError) {
-      redirect(buildRedirect("/login", { next: templatePath }))
+      redirect(buildRedirect("/login", { next: linksPath }))
     }
 
-    const message =
-      error instanceof PublicFormServiceError
-        ? error.message
-        : "Unable to create public form link."
-
-    redirect(buildRedirect(templatePath, { error: message }))
+    redirect(
+      buildFeedbackRedirect(linksPath, getActionErrorFeedbackCode(error))
+    )
   }
 
-  redirect(buildRedirect(templatePath, { message: "Public form link created." }))
+  redirect(buildFeedbackRedirect(linksPath, "public_link_created"))
 }
 
 export async function disablePublicFormLinkAction(
   formData: FormData
 ): Promise<void> {
   const linkId = getFormString(formData, "linkId")
-  const templatePath = "/templates"
+  const linksPath = getPublicLinksPath(getFormString(formData, "templateId"))
 
   try {
     const user = await getAuthenticatedUser()
@@ -81,14 +86,12 @@ export async function disablePublicFormLinkAction(
     if (
       !context ||
       !canPerformOrganizationAction(
-        context.membership.role,
+        context.membership,
         "templates:manage"
       )
     ) {
-      redirect(
-        buildRedirect(templatePath, {
-          error: "You do not have permission to manage public form links.",
-        })
+      throw new PublicLinkActionError(
+        "You do not have permission to manage public form links."
       )
     }
 
@@ -98,19 +101,30 @@ export async function disablePublicFormLinkAction(
       linkId,
     })
 
-    revalidatePath(templatePath)
+    revalidatePath(linksPath)
   } catch (error: unknown) {
     if (error instanceof AuthenticationError) {
-      redirect(buildRedirect("/login", { next: templatePath }))
+      redirect(buildRedirect("/login", { next: linksPath }))
     }
 
-    const message =
-      error instanceof PublicFormServiceError
-        ? error.message
-        : "Unable to disable public form link."
-
-    redirect(buildRedirect(templatePath, { error: message }))
+    redirect(
+      buildFeedbackRedirect(linksPath, getActionErrorFeedbackCode(error))
+    )
   }
 
-  redirect(buildRedirect(templatePath, { message: "Public form link disabled." }))
+  redirect(buildFeedbackRedirect(linksPath, "public_link_disabled"))
+}
+
+/**
+ * Chooses where a public-link action lands afterwards: the template's public
+ * links, or the template library when the form names no template id. Only a
+ * real id may shape the path, so a crafted value cannot steer the redirect.
+ *
+ * @param templateId - Untrusted template id from the form.
+ * @returns A path inside the templates area.
+ */
+function getPublicLinksPath(templateId: string): string {
+  return templateIdSchema.safeParse(templateId).success
+    ? `/templates/${templateId}/links`
+    : "/templates"
 }

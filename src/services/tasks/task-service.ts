@@ -1,10 +1,16 @@
+import {
+  escapeLikePattern,
+  readCountedPage,
+} from "@/services/postgrest-paging"
 import type {
   AssignTaskInput,
   CreateTaskInput,
   GetTaskInput,
+  ListTaskPageInput,
   ListTasksInput,
   TaskAssignedNotification,
   TaskDetail,
+  TaskPage,
   TaskServiceClient,
   TaskServiceDeps,
   TransitionTaskStatusInput,
@@ -35,6 +41,7 @@ import {
   runTaskOperation,
   taskNowIso,
   TASK_COLUMNS,
+  TASK_LIST_INPUT,
   type TaskMutationValues,
 } from "@/services/tasks/shared"
 import {
@@ -42,11 +49,95 @@ import {
   parseTaskRow,
   TASK_STATUSES,
   type Task,
+  type TaskSortKey,
   type TaskStatus,
 } from "@/types/task"
 
 const ASSIGNEE_REJECTION_MESSAGE =
   "Task assignee must be an active internal member of this organization."
+
+type TaskPageOrder = {
+  ascending: boolean
+  column: "created_at" | "due_at" | "id" | "title"
+  nullsFirst?: boolean
+}
+
+// Every ordering ends with the id, so tasks with equal values still page
+// deterministically: an offset boundary never repeats or skips a task.
+const TASK_PAGE_ORDERS: Record<
+  TaskSortKey,
+  (ascending: boolean) => readonly TaskPageOrder[]
+> = {
+  created: (ascending: boolean): readonly TaskPageOrder[] => [
+    { ascending, column: "created_at" },
+    { ascending: true, column: "id" },
+  ],
+  // Undated tasks stay last in both directions.
+  due: (ascending: boolean): readonly TaskPageOrder[] => [
+    { ascending, column: "due_at", nullsFirst: false },
+    { ascending: false, column: "created_at" },
+    { ascending: true, column: "id" },
+  ],
+  title: (ascending: boolean): readonly TaskPageOrder[] => [
+    { ascending, column: "title" },
+    { ascending: true, column: "id" },
+  ],
+}
+
+type TaskListFilters = {
+  assignedTo: string | null
+  organizationId: string
+  /** Title search text, matched literally and without regard to case. */
+  query: string | null
+  statuses: readonly TaskStatus[] | null
+}
+
+// Filters go through a minimal view of the query builder. Relating
+// PostgREST's generated builder type to any interface makes the compiler
+// expand the whole schema and give up (TS2589); every filter returns the same
+// builder at runtime, so the caller's own type comes back unchanged.
+type TaskFilterQuery = {
+  eq(column: string, value: string): TaskFilterQuery
+  ilike(column: string, pattern: string): TaskFilterQuery
+  in(column: string, values: readonly string[]): TaskFilterQuery
+}
+
+function filterTaskList<TQuery>(query: TQuery, filters: TaskListFilters): TQuery {
+  let filtered = (query as unknown as TaskFilterQuery).eq(
+    "org_id",
+    filters.organizationId
+  )
+
+  if (filters.statuses !== null) {
+    filtered = filtered.in("status", filters.statuses)
+  }
+
+  if (filters.assignedTo !== null) {
+    filtered = filtered.eq("assigned_to", filters.assignedTo)
+  }
+
+  if (filters.query !== null) {
+    filtered = filtered.ilike("title", `%${escapeLikePattern(filters.query)}%`)
+  }
+
+  return filtered as unknown as TQuery
+}
+
+async function countTaskList(
+  client: TaskServiceClient,
+  filters: TaskListFilters
+): Promise<number> {
+  const { count, error } = await filterTaskList(
+    client.from("tasks").select("id", { count: "exact", head: true }),
+    filters
+  )
+
+  if (error) {
+    throw createTaskDatabaseError(error, "Unable to load tasks.")
+  }
+
+  return count ?? 0
+}
 
 /**
  * Creates a task, optionally linked to a submission and pre-assigned.
@@ -201,18 +292,12 @@ export async function listTasks(
         input.submissionId,
         "Task submission filter must be a valid submission id."
       )
-      let query = client
-        .from("tasks")
-        .select(TASK_COLUMNS)
-        .eq("org_id", input.organizationId)
-
-      if (statuses !== null) {
-        query = query.in("status", statuses)
-      }
-
-      if (assignedTo !== null) {
-        query = query.eq("assigned_to", assignedTo)
-      }
+      let query = filterTaskList(client.from("tasks").select(TASK_COLUMNS), {
+        assignedTo,
+        organizationId: input.organizationId,
+        query: null,
+        statuses,
+      })
 
       if (submissionId !== null) {
         query = query.eq("submission_id", submissionId)
@@ -228,6 +313,73 @@ export async function listTasks(
       }
 
       return data.map(parseTaskRow)
+    }
+  )
+}
+
+/**
+ * Lists one page of tenant tasks in a supported order, with the matching total.
+ *
+ * @param input - Actor, tenant, filters, ordering, and page.
+ * @param deps - Optional trusted database dependency.
+ * @returns The page's tasks and how many tasks match the filters.
+ * @throws TaskServiceError when access, validation, or the query fails.
+ */
+export async function listTaskPage(
+  input: ListTaskPageInput,
+  deps: TaskServiceDeps = {}
+): Promise<TaskPage> {
+  return runTaskOperation(
+    "list_task_page",
+    {
+      actorUserId: input.actorUserId,
+      organizationId: input.organizationId,
+      page: input.page,
+      pageSize: input.pageSize,
+    },
+    async (): Promise<TaskPage> => {
+      const client = getTaskClient(deps)
+      await requireTaskPermission(
+        client,
+        input.organizationId,
+        input.actorUserId,
+        "tasks:view",
+        "You cannot view tasks."
+      )
+
+      const page = TASK_LIST_INPUT.page(input.page)
+      const pageSize = TASK_LIST_INPUT.pageSize(input.pageSize)
+      const sort = TASK_LIST_INPUT.sort(input.sort)
+      const filters: TaskListFilters = {
+        assignedTo: normalizeOptionalTaskUuid(
+          input.assignedTo,
+          "Task assignee filter must be a valid user id."
+        ),
+        organizationId: input.organizationId,
+        query: TASK_LIST_INPUT.search(input.query),
+        statuses: normalizeTaskStatusFilter(input.statuses),
+      }
+      let query = filterTaskList(
+        client.from("tasks").select(TASK_COLUMNS, { count: "exact" }),
+        filters
+      )
+
+      for (const order of TASK_PAGE_ORDERS[sort.key](sort.direction === "asc")) {
+        query = query.order(order.column, {
+          ascending: order.ascending,
+          nullsFirst: order.nullsFirst,
+        })
+      }
+
+      const from = (page - 1) * pageSize
+      const { rows, total } = await readCountedPage(
+        await query.range(from, from + pageSize - 1),
+        () => countTaskList(client, filters),
+        (error: unknown): Error =>
+          createTaskDatabaseError(error, "Unable to load tasks.")
+      )
+
+      return { page, pageSize, tasks: rows.map(parseTaskRow), total }
     }
   )
 }

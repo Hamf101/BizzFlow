@@ -31,7 +31,7 @@ MVP non-goals:
 - Database and auth: Supabase PostgreSQL, Supabase Auth, and Postgres RLS.
 - Storage: Cloudflare R2 private buckets with signed URLs.
 - Background jobs: Inngest.
-- Notifications: Resend for transactional email and Termii for initial SMS support.
+- Notifications: EmailJS for transactional email and Termii for initial SMS support.
 - Offline: deferred; no PWA, service-worker, IndexedDB/Dexie, or desktop-runtime dependency is part of the current cloud build.
 - Monitoring and analytics: Sentry plus PostHog or an internal event table.
 - Hosting: Vercel, Supabase, Cloudflare R2, and Inngest.
@@ -103,7 +103,7 @@ Expected variable groups:
 - Cloudflare R2: `CLOUDFLARE_R2_ACCOUNT_ID`, `CLOUDFLARE_R2_ACCESS_KEY_ID`, `CLOUDFLARE_R2_SECRET_ACCESS_KEY`, `CLOUDFLARE_R2_BUCKET_NAME`, `CLOUDFLARE_R2_ENDPOINT`, `CLOUDFLARE_R2_REGION`, and `CLOUDFLARE_R2_SIGNED_URL_TTL_SECONDS`.
 - File uploads: `FILE_UPLOAD_MAX_BYTES` and `FILE_UPLOAD_ALLOWED_MIME_TYPES`.
 - Inngest: event key and signing key.
-- Resend: server-only `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, optional `RESEND_REPLY_TO_EMAIL`, and `RESEND_TIMEOUT_MS` for invitations and document signing links.
+- Email: server-only EmailJS credentials, optional `EMAIL_REPLY_TO_EMAIL`, and `EMAIL_TIMEOUT_MS` for invitations, signing links, task assignments, and reminders. `EMAIL_PROVIDER=emailjs` documents the temporarily pinned provider.
 - AI Flow: server-only `AI_PROVIDER`, `AI_MODEL`, `AI_TIMEOUT_MS`, and the selected adapter's credential (currently `GEMINI_API_KEY`) for stateless, schema-validated document editing.
 - SMS: Termii credentials, with Africa's Talking placeholders reserved for a later provider switch.
 - Rate limiting: `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN`; when unset, limits are disabled (local dev, CI).
@@ -147,17 +147,25 @@ curl -X POST http://localhost:3000/api/templates/flow \
   }'
 ```
 
-## Invite email setup
+## Transactional email setup
 
-Inviting a person sends a Resend email containing a one-time BizFlow invite URL. The same server-side Resend transport delivers private, seven-day document signing links without exposing those tokens to browser code.
+Inviting a person sends an email containing a one-time BizFlow invite URL. The same server-side provider-neutral transport delivers private, seven-day document signing links, task assignments, and reminders without exposing tokens or provider credentials to browser code.
 
-Resend setup:
+Transactional delivery is temporarily pinned to EmailJS in code. A missing or stale `EMAIL_PROVIDER` value cannot route mail through Resend. Keep `EMAIL_PROVIDER=emailjs` in deployed environments to document the active provider. `EMAIL_TIMEOUT_MS` defaults to 10 seconds, and `EMAIL_REPLY_TO_EMAIL` can remain empty until a monitored reply address is available.
 
-1. Create an API key in the Resend dashboard and store it in server-only `RESEND_API_KEY`.
-2. Verify the sending domain (DNS records shown in the Resend dashboard) for the address in `RESEND_FROM_EMAIL`. Before domain verification, `onboarding@resend.dev` works as the sender but only delivers to the Resend account owner's address.
-3. Optionally set `RESEND_REPLY_TO_EMAIL` for recipient replies.
+EmailJS setup:
 
-The application owns the full branded HTML document (`wrapEmailDocument` in `src/services/email/html.ts`) and passes it to Resend verbatim, along with a plain-text body. Each send uses its delivery reference as the `Idempotency-Key` header, so a retried request can never double-send, and the reference traces the message back to its invite or signing recipient without exposing raw tokens.
+1. Configure server-only `EMAILJS_SERVICE_ID`, `EMAILJS_TEMPLATE_ID`, and `EMAILJS_PUBLIC_KEY`. If private-key authorization is enabled under Account → Security, also configure `EMAILJS_PRIVATE_KEY`.
+2. In the selected EmailJS template, set **To Email** to `{{to_email}}`, **Subject** to `{{subject}}`, and the content source to `{{{message_html}}}`. Triple braces are required so the already-escaped application HTML is rendered instead of displayed as text.
+3. Use the connected service's default From Email. Set the dashboard's From Name to the desired sender label. Leave Reply To empty when `EMAIL_REPLY_TO_EMAIL` is not configured.
+
+The EmailJS REST API permits one request per second. BizFlow serializes sends within each running application instance so multi-recipient signing invitations do not burst through that limit. EmailJS receives the internal delivery reference for tracing, but unlike Resend it does not provide an equivalent idempotency-key guarantee.
+
+Paused Resend adapter:
+
+The standalone Resend adapter remains in the repository for later reactivation after sender-domain verification. It is not imported by the active shared transport, and Resend credentials are not read by runtime email configuration.
+
+The application owns the full branded HTML document (`wrapEmailDocument` in `src/services/email/html.ts`) and passes it to EmailJS along with a plain-text body. EmailJS receives the delivery reference for tracing without exposing raw tokens.
 
 Recipients can create an account from the invite URL or sign in with an existing account. For account-confirmation links to return the recipient to their invite, add the deployed callback URL (for example, `https://app.example.com/auth/callback`) to Supabase Auth's Redirect URLs. The Supabase Site URL should be the deployed application origin.
 
@@ -328,11 +336,25 @@ source .env.local
 npx supabase db query --db-url "$SUPABASE_DB_URL" --file supabase/tests/internal-submissions-live-rpc.sql
 ```
 
-For effective submission RLS verification, provision the isolated owner, manager, staff, external-reviewer, and other-tenant synthetic fixtures documented by the fail-closed runner:
+The public-form smoke test does the same for anonymous submissions: a link's capacity is used only when a submission is saved, a draft is guarded by its revision, and the link's ceiling holds:
 
 ```bash
-pnpm supabase:check:rls --help
-pnpm supabase:check:rls
+npx supabase db query --db-url "$SUPABASE_DB_URL" --file supabase/tests/public-form-submission-live-rpc.sql
 ```
 
-This runner uses ordinary publishable-key user sessions for tenant reads. It does not treat the service-role smoke test as authorization proof, create fixtures, or print credentials, tokens, fixture IDs, or returned row bodies. See `.env.example` and `pnpm supabase:check:rls --help` for the exact synthetic-only fixture keys.
+The bulk access smoke test checks that Files' batched access lookups answer exactly as the single lookups do for owners, managers, staff, reviewers, and outsiders, and that an oversized call is refused:
+
+```bash
+npx supabase db query --db-url "$SUPABASE_DB_URL" --file supabase/tests/resource-access-levels-live-rpc.sql
+```
+
+Signed-in users have no direct Data API access to tenant tables: tenant data reaches them only through the service layer, which checks current role-definition permissions. `supabase/tests/migration-security.test.ts`, part of `pnpm test`, reads every migration and fails if a table lacks forced row-level security, if signed-in users regain a table privilege, or if a function stays executable by them.
+
+### Customize workspace navigation
+
+Right-click a sidebar tab and choose **Rename** to change its name for the workspace
+(owner only; 1–40 characters). Drag a tab to reorder it, or use its actions menu
+(**Move up** / **Move down**) or **Alt + Arrow Up/Down** while it has focus.
+Order is saved separately for each member and workspace, including across devices.
+Custom names and saved order also appear in mobile navigation. Apply database
+migrations before deploying: navigation uses workspace labels and membership order.

@@ -1,3 +1,7 @@
+import {
+  canPerformOrganizationAction,
+  createOrganizationPermissionSubject,
+} from "@/lib/permissions"
 import { createAdminClient } from "@/lib/supabase/admin"
 import type {
   NotificationServiceClient,
@@ -98,8 +102,9 @@ export type UpdateOrganizationNotificationSettingsInput = {
 /**
  * Updates an organization's notification switches.
  *
- * These silence a channel for every member, so the caller must hold
- * `organization:manage`, which only `owner_admin` has.
+ * These silence a channel for every member, so the caller must hold the
+ * `organization:manage` permission. Owners receive it by default; an owner
+ * may explicitly grant it to a custom role.
  *
  * @param input - Actor, tenant, and the requested switch positions.
  * @param deps - Optional database and audit dependencies.
@@ -114,7 +119,9 @@ export async function updateOrganizationNotificationSettings(
 
   const { data: membership, error: membershipError } = await client
     .from("organization_memberships")
-    .select("role")
+    .select(
+      "role,role_definition:organization_roles!organization_memberships_role_definition_fk(permissions)"
+    )
     .eq("org_id", input.organizationId)
     .eq("user_id", input.actorUserId)
     .eq("status", "active")
@@ -127,11 +134,23 @@ export async function updateOrganizationNotificationSettings(
     )
   }
 
-  const role = (membership as { role?: string } | null)?.role
+  const membershipRow = membership as {
+    role?: string
+    role_definition?: { permissions?: readonly string[] | null } | null
+  } | null
+  const subject = membershipRow?.role
+    ? createOrganizationPermissionSubject(
+        membershipRow.role,
+        membershipRow.role_definition?.permissions
+      )
+    : null
 
-  if (role !== "owner_admin") {
+  if (
+    !subject ||
+    !canPerformOrganizationAction(subject, "organization:manage")
+  ) {
     throw new NotificationServiceError(
-      "Only an organization owner can change notification settings.",
+      "You do not have permission to change organization notification settings.",
       403
     )
   }

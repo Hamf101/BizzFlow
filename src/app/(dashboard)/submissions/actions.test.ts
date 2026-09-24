@@ -1,17 +1,24 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-import { getAuthenticatedUser } from "@/lib/auth"
+import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
 import type { OrganizationRole } from "@/lib/permissions"
 import { getCurrentOrganizationContext } from "@/services/organization-service"
 import {
   assignInternalSubmission,
+  createInternalSubmissionDraft,
   createInternalSubmissionComment,
+  saveInternalSubmissionDraft,
+  SubmissionServiceError,
+  submitInternalSubmission,
   transitionInternalSubmission,
 } from "@/services/submission-service"
 
 import {
   assignSubmissionAction,
+  createSubmissionAction,
   createSubmissionCommentAction,
+  saveSubmissionAction,
+  submitSubmissionAction,
   transitionSubmissionAction,
 } from "./actions"
 
@@ -51,6 +58,9 @@ vi.mock("@/services/submission-service", async (importOriginal) => {
     ...actual,
     assignInternalSubmission: vi.fn(),
     createInternalSubmissionComment: vi.fn(),
+    createInternalSubmissionDraft: vi.fn(),
+    saveInternalSubmissionDraft: vi.fn(),
+    submitInternalSubmission: vi.fn(),
     transitionInternalSubmission: vi.fn(),
   }
 })
@@ -65,6 +75,11 @@ describe("submission review actions", () => {
     mockOrganizationContext("manager")
     vi.spyOn(console, "info").mockImplementation(() => {})
     vi.spyOn(console, "warn").mockImplementation(() => {})
+    vi.mocked(createInternalSubmissionDraft).mockResolvedValue({
+      id: SUBMISSION_ID,
+    } as never)
+    vi.mocked(saveInternalSubmissionDraft).mockResolvedValue(undefined as never)
+    vi.mocked(submitInternalSubmission).mockResolvedValue(undefined as never)
   })
 
   afterEach(() => {
@@ -77,7 +92,7 @@ describe("submission review actions", () => {
     formData.set("organizationId", "untrusted-organization")
 
     await expect(assignSubmissionAction(formData)).rejects.toThrow(
-      `NEXT_REDIRECT:/submissions/${SUBMISSION_ID}?message=Submission+assigned.`
+      `NEXT_REDIRECT:/submissions/${SUBMISSION_ID}?feedback=submission_assigned`
     )
 
     expect(assignInternalSubmission).toHaveBeenCalledWith({
@@ -99,7 +114,7 @@ describe("submission review actions", () => {
     formData.set("targetStatus", "approved")
 
     await expect(transitionSubmissionAction(formData)).rejects.toThrow(
-      `NEXT_REDIRECT:/submissions/${SUBMISSION_ID}?error=You+do+not+have+permission+to+perform+this+submission+action.`
+      `NEXT_REDIRECT:/submissions/${SUBMISSION_ID}?feedback=permission_denied`
     )
 
     expect(transitionInternalSubmission).not.toHaveBeenCalled()
@@ -110,7 +125,7 @@ describe("submission review actions", () => {
     formData.set("targetStatus", "rejected")
 
     await expect(transitionSubmissionAction(formData)).rejects.toThrow(
-      `NEXT_REDIRECT:/submissions/${SUBMISSION_ID}?error=Add+a+note+explaining+why+the+submission+was+rejected.`
+      `NEXT_REDIRECT:/submissions/${SUBMISSION_ID}?feedback=invalid_input`
     )
 
     expect(transitionInternalSubmission).not.toHaveBeenCalled()
@@ -121,7 +136,7 @@ describe("submission review actions", () => {
     formData.set("targetStatus", "approved")
 
     await expect(transitionSubmissionAction(formData)).rejects.toThrow(
-      `NEXT_REDIRECT:/submissions/${SUBMISSION_ID}?message=Submission+approved.`
+      `NEXT_REDIRECT:/submissions/${SUBMISSION_ID}?feedback=submission_review_updated`
     )
 
     expect(transitionInternalSubmission).toHaveBeenCalledWith({
@@ -140,7 +155,7 @@ describe("submission review actions", () => {
     formData.set("body", "Please confirm the effective date.")
 
     await expect(createSubmissionCommentAction(formData)).rejects.toThrow(
-      `NEXT_REDIRECT:/submissions/${SUBMISSION_ID}?message=Comment+added.`
+      `NEXT_REDIRECT:/submissions/${SUBMISSION_ID}?feedback=comment_added`
     )
 
     expect(createInternalSubmissionComment).toHaveBeenCalledWith({
@@ -149,6 +164,99 @@ describe("submission review actions", () => {
       submissionId: SUBMISSION_ID,
       body: "Please confirm the effective date.",
     })
+  })
+
+  it("maps submission service details to a fixed conflict outcome", async () => {
+    vi.mocked(assignInternalSubmission).mockRejectedValue(
+      new SubmissionServiceError("Private revision and tenant detail", 409)
+    )
+    const formData = createSubmissionFormData()
+    formData.set("assignedTo", ASSIGNEE_USER_ID)
+
+    await expect(assignSubmissionAction(formData)).rejects.toThrow(
+      `NEXT_REDIRECT:/submissions/${SUBMISSION_ID}?feedback=refresh_required`
+    )
+    expect(redirectMock).not.toHaveBeenCalledWith(
+      expect.stringContaining("Private+revision")
+    )
+  })
+})
+
+describe("submission draft actions", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(getAuthenticatedUser).mockResolvedValue({
+      id: ACTOR_USER_ID,
+      email: "staff@example.com",
+    })
+    mockOrganizationContext("staff")
+    vi.mocked(createInternalSubmissionDraft).mockResolvedValue({
+      id: SUBMISSION_ID,
+    } as never)
+    vi.mocked(saveInternalSubmissionDraft).mockResolvedValue(undefined as never)
+    vi.mocked(submitInternalSubmission).mockResolvedValue(undefined as never)
+    vi.spyOn(console, "info").mockImplementation(() => {})
+    vi.spyOn(console, "warn").mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it("creates a draft and preserves the service-returned id", async () => {
+    const formData = new FormData()
+    formData.set("submissionId", SUBMISSION_ID)
+    formData.set("templateId", "50000000-0000-4000-8000-000000000001")
+    formData.set("title", "Quarterly review")
+
+    await expect(createSubmissionAction(formData)).rejects.toThrow(
+      `NEXT_REDIRECT:/submissions/${SUBMISSION_ID}?feedback=submission_created`
+    )
+    expect(createInternalSubmissionDraft).toHaveBeenCalledExactlyOnceWith({
+      actorUserId: ACTOR_USER_ID,
+      organizationId: ORGANIZATION_ID,
+      submissionId: SUBMISSION_ID,
+      templateId: "50000000-0000-4000-8000-000000000001",
+      title: "Quarterly review",
+    })
+  })
+
+  it.each([
+    {
+      action: saveSubmissionAction,
+      feedback: "changes_saved",
+      operation: saveInternalSubmissionDraft,
+    },
+    {
+      action: submitSubmissionAction,
+      feedback: "submission_submitted",
+      operation: submitInternalSubmission,
+    },
+  ])("persists answer changes before reporting $feedback", async ({ action, feedback, operation }) => {
+    const formData = createSubmissionFormData()
+    formData.set("answer.text.client-name", "Acme")
+
+    await expect(action(formData)).rejects.toThrow(
+      `NEXT_REDIRECT:/submissions/${SUBMISSION_ID}?feedback=${feedback}`
+    )
+    expect(operation).toHaveBeenCalledExactlyOnceWith({
+      actorUserId: ACTOR_USER_ID,
+      organizationId: ORGANIZATION_ID,
+      submissionId: SUBMISSION_ID,
+      expectedRevision: 3,
+      values: { "client-name": "Acme" },
+    })
+  })
+
+  it("preserves the submission login return path", async () => {
+    vi.mocked(getAuthenticatedUser).mockRejectedValue(
+      new AuthenticationError("Sign in to continue.")
+    )
+
+    await expect(saveSubmissionAction(createSubmissionFormData())).rejects.toThrow(
+      `NEXT_REDIRECT:/login?next=%2Fsubmissions%2F${SUBMISSION_ID}`
+    )
+    expect(saveInternalSubmissionDraft).not.toHaveBeenCalled()
   })
 })
 

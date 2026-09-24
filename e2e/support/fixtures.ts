@@ -76,8 +76,8 @@ export async function signInAs(
 ): Promise<void> {
   await page.goto("/login")
   await page.getByLabel("Email").fill(email)
-  await page.getByLabel("Password").fill(password)
-  await page.getByRole("button", { name: "Sign in" }).click()
+  await page.getByLabel("Password", { exact: true }).fill(password)
+  await page.getByRole("button", { name: "Log in" }).click()
   await page.waitForURL(/\/dashboard/)
 }
 

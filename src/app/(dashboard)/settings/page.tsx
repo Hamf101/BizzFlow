@@ -11,11 +11,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
+import { Field, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
+import { RolesAndAccessSettings } from "@/components/settings/roles-and-access-settings"
+import { buildFeedbackRedirect } from "@/lib/action-result"
 import { formatMediumDateTime } from "@/lib/date-format"
-import { buildRedirect } from "@/lib/form-utils"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
 import { loadPageOrganizationContext } from "@/lib/page-organization-context"
 import { canPerformOrganizationAction } from "@/lib/permissions"
@@ -27,26 +28,21 @@ import {
 import type { NotificationDelivery } from "@/types/notification"
 import {
   getMemberSettings,
+  listOrganizationPeople,
   OrganizationServiceError,
   type MemberSettings,
+  type OrganizationPeople,
 } from "@/services/organization-service"
 import {
+  archiveOrganizationRoleAction,
+  createOrganizationRoleAction,
   updateNotificationPreferencesAction,
   updateOrganizationNotificationSettingsAction,
+  updateOrganizationRoleAction,
   updateProfileAction,
 } from "./actions"
 
-type SettingsSearchParams = Promise<{
-  error?: string
-  message?: string
-}>
-
-export default async function SettingsPage({
-  searchParams,
-}: {
-  searchParams: SettingsSearchParams
-}): Promise<ReactElement> {
-  const params = await searchParams
+export default async function SettingsPage(): Promise<ReactElement> {
   const user = await loadAuthenticatedPageUser("/settings")
   const { context, errorMessage: contextErrorMessage } =
     await loadPageOrganizationContext({
@@ -57,7 +53,7 @@ export default async function SettingsPage({
   if (!context) {
     if (contextErrorMessage) {
       return (
-        <SettingsShell params={params}>
+        <SettingsShell>
           <Alert variant="destructive">
             <AlertTitle>Supabase setup incomplete</AlertTitle>
             <AlertDescription>{contextErrorMessage}</AlertDescription>
@@ -67,19 +63,18 @@ export default async function SettingsPage({
     }
 
     redirect(
-      buildRedirect("/dashboard", {
-        error: "Create an organization before managing settings.",
-      })
+      buildFeedbackRedirect("/dashboard", "organization_required")
     )
   }
 
   const canManageOrganization = canPerformOrganizationAction(
-    context.membership.role,
+    context.membership,
     "organization:manage"
   )
 
   let settings: MemberSettings
   let organizationSettings: OrganizationNotificationSettings
+  const isOwner = context.membership.role === "owner_admin"
 
   try {
     ;[settings, organizationSettings] = await Promise.all([
@@ -91,7 +86,7 @@ export default async function SettingsPage({
     ])
   } catch (error: unknown) {
     return (
-      <SettingsShell params={params}>
+      <SettingsShell>
         <Alert variant="destructive">
           <AlertTitle>Settings unavailable</AlertTitle>
           <AlertDescription>
@@ -105,26 +100,30 @@ export default async function SettingsPage({
   }
 
   return (
-    <SettingsShell params={params}>
+    <SettingsShell>
       <section className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold tracking-normal">Settings</h1>
-        <p className="max-w-2xl text-sm text-muted-foreground">
-          Manage your profile and notification preferences for {context.organization.name}.
+        <h1 className="text-2xl font-medium tracking-normal">Settings</h1>
+        <p className="text-[13px] text-muted-foreground">
+          {context.organization.name}
         </p>
       </section>
+
+      {isOwner ? (
+        <RolesAndAccessSection
+          actorUserId={user.id}
+          organizationId={context.organization.id}
+        />
+      ) : null}
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle>Profile</CardTitle>
-            <CardDescription>
-              Update your personal information.
-            </CardDescription>
           </CardHeader>
           <CardContent>
             <form action={updateProfileAction} className="flex flex-col gap-4">
               <Field>
-                <FieldLabel htmlFor="displayName">Display Name</FieldLabel>
+                <FieldLabel htmlFor="displayName">Name</FieldLabel>
                 <Input
                   id="displayName"
                   name="displayName"
@@ -133,7 +132,7 @@ export default async function SettingsPage({
                 />
               </Field>
               <Field>
-                <FieldLabel htmlFor="phoneNumber">Phone Number</FieldLabel>
+                <FieldLabel htmlFor="phoneNumber">Phone</FieldLabel>
                 <Input
                   id="phoneNumber"
                   name="phoneNumber"
@@ -141,12 +140,9 @@ export default async function SettingsPage({
                   placeholder="+14155552671"
                   type="tel"
                 />
-                <FieldDescription>
-                  Include country code (e.g. +14155552671).
-                </FieldDescription>
               </Field>
               <Button type="submit" variant="outline" className="w-fit">
-                Save profile
+                Save
               </Button>
             </form>
           </CardContent>
@@ -154,10 +150,7 @@ export default async function SettingsPage({
 
         <Card>
           <CardHeader>
-            <CardTitle>Notification Preferences</CardTitle>
-            <CardDescription>
-              Choose how you want to be notified about tasks.
-            </CardDescription>
+            <CardTitle>Notifications</CardTitle>
           </CardHeader>
           <CardContent>
             <form action={updateNotificationPreferencesAction} className="flex flex-col gap-6">
@@ -165,8 +158,7 @@ export default async function SettingsPage({
               
               <div className="flex items-center justify-between gap-4">
                 <div className="flex flex-col gap-0.5">
-                  <FieldLabel htmlFor="emailNotificationsEnabled" className="text-base">Email Notifications</FieldLabel>
-                  <FieldDescription>Receive task assignments and reminders via email.</FieldDescription>
+                  <FieldLabel htmlFor="emailNotificationsEnabled" className="text-base">Email</FieldLabel>
                 </div>
                 <Switch
                   id="emailNotificationsEnabled"
@@ -177,8 +169,7 @@ export default async function SettingsPage({
 
               <div className="flex items-center justify-between gap-4">
                 <div className="flex flex-col gap-0.5">
-                  <FieldLabel htmlFor="smsNotificationsEnabled" className="text-base">SMS Notifications</FieldLabel>
-                  <FieldDescription>Receive task assignments and reminders via SMS.</FieldDescription>
+                  <FieldLabel htmlFor="smsNotificationsEnabled" className="text-base">SMS</FieldLabel>
                 </div>
                 <Switch
                   id="smsNotificationsEnabled"
@@ -188,7 +179,7 @@ export default async function SettingsPage({
               </div>
 
               <Button type="submit" variant="outline" className="w-fit">
-                Save preferences
+                Save
               </Button>
             </form>
           </CardContent>
@@ -200,9 +191,8 @@ export default async function SettingsPage({
           <CardHeader>
             <CardTitle>Organization notifications</CardTitle>
             <CardDescription>
-              Workspace-wide switches for {context.organization.name}. Turning a
-              channel off here silences it for every member, whatever their own
-              preference says.
+              Off here silences the channel for everyone, whatever their own
+              settings say.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -222,11 +212,8 @@ export default async function SettingsPage({
                     htmlFor="orgEmailNotificationsEnabled"
                     className="text-base"
                   >
-                    Email for the whole workspace
+                    Email
                   </FieldLabel>
-                  <FieldDescription>
-                    Allow BizFlow to email any member of this organization.
-                  </FieldDescription>
                 </div>
                 <Switch
                   id="orgEmailNotificationsEnabled"
@@ -241,11 +228,8 @@ export default async function SettingsPage({
                     htmlFor="orgSmsNotificationsEnabled"
                     className="text-base"
                   >
-                    SMS for the whole workspace
+                    SMS
                   </FieldLabel>
-                  <FieldDescription>
-                    Allow BizFlow to text any member of this organization.
-                  </FieldDescription>
                 </div>
                 <Switch
                   id="orgSmsNotificationsEnabled"
@@ -255,7 +239,7 @@ export default async function SettingsPage({
               </div>
 
               <Button type="submit" variant="outline" className="w-fit">
-                Save organization settings
+                Save
               </Button>
             </form>
           </CardContent>
@@ -268,6 +252,48 @@ export default async function SettingsPage({
         />
       )}
     </SettingsShell>
+  )
+}
+
+async function RolesAndAccessSection({
+  actorUserId,
+  organizationId,
+}: {
+  actorUserId: string
+  organizationId: string
+}): Promise<ReactElement> {
+  let people: OrganizationPeople
+
+  try {
+    people = await listOrganizationPeople(actorUserId, organizationId)
+  } catch (error: unknown) {
+    console.warn("settings_roles_and_access_load_failed", {
+      actorUserId,
+      organizationId,
+      reason: error instanceof Error ? error.message : "Unknown error",
+    })
+
+    return (
+      <Alert variant="destructive">
+        <AlertTitle>Roles and access unavailable</AlertTitle>
+        <AlertDescription>
+          {error instanceof OrganizationServiceError
+            ? error.message
+            : "Unable to load workspace roles."}
+        </AlertDescription>
+      </Alert>
+    )
+  }
+
+  return (
+    <RolesAndAccessSettings
+      archiveRoleAction={archiveOrganizationRoleAction}
+      createRoleAction={createOrganizationRoleAction}
+      members={people.members}
+      organizationId={organizationId}
+      roles={people.roles}
+      updateRoleAction={updateOrganizationRoleAction}
+    />
   )
 }
 
@@ -301,8 +327,7 @@ function NotificationActivityCard({
       <CardHeader>
         <CardTitle>Recent notification activity</CardTitle>
         <CardDescription>
-          The last ten delivery attempts. Message content, phone numbers, and
-          email addresses are deliberately not recorded.
+          The last ten attempts. Message content is never recorded.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -353,27 +378,11 @@ function NotificationActivityCard({
 
 function SettingsShell({
   children,
-  params,
 }: {
   children: ReactNode
-  params: Awaited<SettingsSearchParams>
 }): ReactElement {
   return (
     <div className="flex flex-col gap-6">
-      {params.error && (
-        <Alert variant="destructive">
-          <AlertTitle>Settings update failed</AlertTitle>
-          <AlertDescription>{params.error}</AlertDescription>
-        </Alert>
-      )}
-
-      {params.message && (
-        <Alert>
-          <AlertTitle>Settings updated</AlertTitle>
-          <AlertDescription>{params.message}</AlertDescription>
-        </Alert>
-      )}
-
       {children}
     </div>
   )

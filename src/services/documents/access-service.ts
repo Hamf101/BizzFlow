@@ -86,6 +86,109 @@ export async function getEffectiveFolderAccess(
   return parseAccessLevel(data, "folder")
 }
 
+/** Most ids one bulk access lookup accepts; the database refuses more. */
+const ACCESS_LEVELS_PER_CALL = 1_000
+
+export type BulkAccessLookupInput = {
+  actorUserId: string
+  ids: readonly string[]
+  organizationId: string
+}
+
+/**
+ * Loads the actor's effective access to many documents, a thousand per call.
+ *
+ * @param input - Organization, actor, and the documents' ids.
+ * @param client - Injected Supabase service client.
+ * @returns The level of each document the actor can reach; the rest are absent.
+ * @throws DocumentServiceError when a lookup fails or returns invalid data.
+ */
+export async function getEffectiveDocumentAccessLevels(
+  input: BulkAccessLookupInput,
+  client: DocumentServiceClient
+): Promise<Map<string, DocumentAccessLevel>> {
+  return collectAccessLevels(input.ids, "document", async (ids: string[]) => {
+    const { data, error } = await client.rpc("get_document_access_levels", {
+      target_org_id: input.organizationId,
+      target_document_ids: ids,
+      target_actor_user_id: input.actorUserId,
+    })
+
+    return {
+      error,
+      rows:
+        data?.map((row) => ({
+          accessLevel: row.access_level,
+          id: row.document_id,
+        })) ?? null,
+    }
+  })
+}
+
+/**
+ * Loads the actor's effective access to many folders, a thousand per call.
+ *
+ * @param input - Organization, actor, and the folders' ids.
+ * @param client - Injected Supabase service client.
+ * @returns The level of each folder the actor can reach; the rest are absent.
+ * @throws DocumentServiceError when a lookup fails or returns invalid data.
+ */
+export async function getEffectiveFolderAccessLevels(
+  input: BulkAccessLookupInput,
+  client: DocumentServiceClient
+): Promise<Map<string, DocumentAccessLevel>> {
+  return collectAccessLevels(input.ids, "folder", async (ids: string[]) => {
+    const { data, error } = await client.rpc("get_folder_access_levels", {
+      target_org_id: input.organizationId,
+      target_folder_ids: ids,
+      target_actor_user_id: input.actorUserId,
+    })
+
+    return {
+      error,
+      rows:
+        data?.map((row) => ({
+          accessLevel: row.access_level,
+          id: row.folder_id,
+        })) ?? null,
+    }
+  })
+}
+
+async function collectAccessLevels(
+  ids: readonly string[],
+  resourceName: "document" | "folder",
+  lookUp: (batch: string[]) => Promise<{
+    error: unknown
+    rows: Array<{ accessLevel: unknown; id: string }> | null
+  }>
+): Promise<Map<string, DocumentAccessLevel>> {
+  const levels = new Map<string, DocumentAccessLevel>()
+
+  for (let start = 0; start < ids.length; start += ACCESS_LEVELS_PER_CALL) {
+    const { error, rows } = await lookUp(
+      ids.slice(start, start + ACCESS_LEVELS_PER_CALL)
+    )
+
+    if (error || !rows) {
+      throw createSupabaseServiceError(
+        error,
+        `Unable to load ${resourceName} access.`
+      )
+    }
+
+    for (const row of rows) {
+      const accessLevel = parseAccessLevel(row.accessLevel, resourceName)
+
+      if (accessLevel) {
+        levels.set(row.id, accessLevel)
+      }
+    }
+  }
+
+  return levels
+}
+
 /**
  * Requires document-level access and, when supplied, an organization permission.
  *
@@ -152,7 +255,15 @@ export async function requireFolderAccess(
   return accessLevel
 }
 
-function parseAccessLevel(
+/**
+ * Reads one access level the database answered with.
+ *
+ * @param value - The answered level.
+ * @param resourceName - Which resource it belongs to, for the error.
+ * @returns The level, or null when the actor has none.
+ * @throws DocumentServiceError when the database answers an unknown level.
+ */
+export function parseAccessLevel(
   value: unknown,
   resourceName: "document" | "folder"
 ): DocumentAccessLevel | null {

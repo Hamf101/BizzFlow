@@ -7,6 +7,14 @@ import {
 } from "@/services/notification-service"
 import { isNotificationChannelEnabled } from "@/types/notification"
 
+// Production callers pass no deps, so the only way to prove the audit event
+// actually fires is to watch the module the service falls back to.
+const recordAuditLogSpy = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
+
+vi.mock("@/services/audit-service", () => ({
+  recordAuditLog: recordAuditLogSpy,
+}))
+
 const ORG_ID = "10000000-0000-4000-8000-000000000001"
 const OWNER_ID = "20000000-0000-4000-8000-000000000001"
 const MANAGER_ID = "20000000-0000-4000-8000-000000000002"
@@ -177,6 +185,56 @@ describe("recordNotificationDelivery", () => {
     )
   })
 
+  // Regression: emission used to be wrapped in `if (deps.recordAuditLog)` with
+  // no fallback. Every production call site passes a single argument, so deps
+  // was always {} and notification.sent/.failed/.suppressed never reached the
+  // audit log — while tests, which inject a fake, all passed.
+  it("writes the audit event when no recordAuditLog dependency is injected", async () => {
+    recordAuditLogSpy.mockClear()
+    const client = new FakeClient()
+
+    await recordNotificationDelivery(
+      {
+        organizationId: ORG_ID,
+        recipientUserId: OWNER_ID,
+        channel: "sms",
+        purpose: "task_assigned",
+        reference: "task-assigned/2",
+        status: "suppressed",
+      },
+      { client: client as never, createId: () => DELIVERY_ID, now: () => new Date(NOW) }
+    )
+
+    expect(recordAuditLogSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "notification.suppressed",
+        organizationId: ORG_ID,
+        targetType: "notification",
+      })
+    )
+  })
+
+  it("keeps a delivery that was written when the audit write fails", async () => {
+    recordAuditLogSpy.mockClear()
+    recordAuditLogSpy.mockRejectedValueOnce(new Error("audit chain unavailable"))
+    const client = new FakeClient()
+
+    const delivery = await recordNotificationDelivery(
+      {
+        organizationId: ORG_ID,
+        recipientUserId: OWNER_ID,
+        channel: "email",
+        purpose: "task_assigned",
+        reference: "task-assigned/3",
+        status: "sent",
+      },
+      { client: client as never, createId: () => DELIVERY_ID, now: () => new Date(NOW) }
+    )
+
+    expect(delivery).toMatchObject({ status: "sent" })
+    expect(client.tables.notification_deliveries).toHaveLength(1)
+  })
+
   it("stores no message content, phone number, or email address", async () => {
     const client = new FakeClient()
 
@@ -325,6 +383,72 @@ describe("organization notification settings", () => {
       emailNotificationsEnabled: true,
       smsNotificationsEnabled: false,
     })
+  })
+
+  it("honors organization:manage when an owner grants it to a custom role", async () => {
+    const client = new FakeClient({
+      organizations: [
+        { id: ORG_ID, email_notifications_enabled: true, sms_notifications_enabled: true },
+      ],
+      memberships: [
+        {
+          org_id: ORG_ID,
+          user_id: MANAGER_ID,
+          role: "staff",
+          status: "active",
+          role_definition: { permissions: ["organization:manage"] },
+        },
+      ],
+    })
+
+    await expect(
+      updateOrganizationNotificationSettings(
+        {
+          actorUserId: MANAGER_ID,
+          organizationId: ORG_ID,
+          emailNotificationsEnabled: false,
+          smsNotificationsEnabled: true,
+        },
+        createDeps(client)
+      )
+    ).resolves.toEqual({
+      emailNotificationsEnabled: false,
+      smsNotificationsEnabled: true,
+    })
+  })
+
+  it("rechecks a custom role after organization:manage is revoked", async () => {
+    const roleDefinition = { permissions: ["organization:manage"] }
+    const client = new FakeClient({
+      organizations: [
+        { id: ORG_ID, email_notifications_enabled: true, sms_notifications_enabled: true },
+      ],
+      memberships: [
+        {
+          org_id: ORG_ID,
+          user_id: MANAGER_ID,
+          role: "staff",
+          status: "active",
+          role_definition: roleDefinition,
+        },
+      ],
+    })
+    const input = {
+      actorUserId: MANAGER_ID,
+      organizationId: ORG_ID,
+      emailNotificationsEnabled: false,
+      smsNotificationsEnabled: true,
+    }
+
+    await expect(
+      updateOrganizationNotificationSettings(input, createDeps(client))
+    ).resolves.toBeDefined()
+
+    roleDefinition.permissions = []
+
+    await expect(
+      updateOrganizationNotificationSettings(input, createDeps(client))
+    ).rejects.toMatchObject({ statusCode: 403 })
   })
 
   it("refuses a manager", async () => {

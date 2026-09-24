@@ -48,31 +48,33 @@ export default async function PublicFormPage({
 
   if (!preview.valid || !preview.template) {
     let title = "Form unavailable"
-    let description = "This public form link is invalid or no longer exists."
+    let description = "This link is invalid or no longer exists."
 
     if (preview.invalidReason === "expired") {
-      title = "Form link expired"
-      description = "This form link has expired. Please request an updated link from the organization."
+      title = "Link expired"
+      description = "Ask the sender for a new one."
     } else if (preview.invalidReason === "disabled") {
-      title = "Form link disabled"
-      description = "This form link has been deactivated by the organization."
+      title = "Link turned off"
+      description = "Ask the sender for a new one."
     } else if (preview.invalidReason === "max_submissions_reached") {
-      title = "Submission limit reached"
-      description = "This form has received the maximum allowed number of public submissions."
+      title = "No longer accepting responses"
+      description = "This form reached its limit."
     }
 
     return (
-      <div className="flex min-h-screen items-center justify-center bg-muted/20 p-4">
+      <main className="flex min-h-screen items-center justify-center bg-muted/20 p-4">
         <Card className="w-full max-w-md">
           <CardHeader>
             <div className="flex items-center gap-2 text-destructive">
               <AlertCircle className="size-5" />
-              <CardTitle>{title}</CardTitle>
+              <CardTitle>
+                <h1>{title}</h1>
+              </CardTitle>
             </div>
             <CardDescription>{description}</CardDescription>
           </CardHeader>
         </Card>
-      </div>
+      </main>
     )
   }
 
@@ -95,7 +97,7 @@ export default async function PublicFormPage({
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-muted/20 px-4 py-8">
+    <main className="flex min-h-screen flex-col bg-muted/20 px-4 py-8">
       <div className="mx-auto w-full max-w-2xl flex-1">
         {query.error && (
           <Alert className="mb-6" variant="destructive">
@@ -111,7 +113,9 @@ export default async function PublicFormPage({
                 {preview.organizationName}
               </span>
             )}
-            <CardTitle className="text-2xl">{preview.template.title}</CardTitle>
+            <CardTitle className="text-2xl">
+              <h1>{preview.template.title}</h1>
+            </CardTitle>
             {preview.template.description && (
               <CardDescription>{preview.template.description}</CardDescription>
             )}
@@ -149,13 +153,13 @@ export default async function PublicFormPage({
                 </Button>
                 <div className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
                   <ShieldCheck className="size-3.5" />
-                  <span>Secure public form powered by BizFlow</span>
+                  <span>Secured by BizFlow</span>
                 </div>
               </div>
             </form>
           </CardContent>
         </Card>
       </div>
-    </div>
+    </main>
   )
 }

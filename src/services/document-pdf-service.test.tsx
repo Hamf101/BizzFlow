@@ -1,6 +1,10 @@
-import { PDFDocument } from "pdf-lib"
+import { PDFDocument, PDFName } from "pdf-lib"
 import { describe, expect, it } from "vitest"
 
+import {
+  createPngBytes,
+  toImageDataUrl
+} from "@/lib/image-header.test-support"
 import {
   renderGeneratedDocumentPdf,
   type RenderGeneratedDocumentPdfInput
@@ -9,6 +13,7 @@ import { createPdfPagePlans } from "@/services/document-pdf/planner"
 import { normalizePdfInput } from "@/services/document-pdf/shared"
 import type { PdfFlowItem, PdfPagePlan } from "@/services/document-pdf/types"
 import { createPdfLayoutMetrics } from "@/services/document-pdf/layout"
+import { resizeTemplateLayout } from "@/services/templates/template-render-plan"
 import {
   createBlankTemplateContent,
   type TemplateContent
@@ -16,6 +21,14 @@ import {
 
 const VALID_DRAWING_DATA_URL =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+
+// Each case embeds fonts and renders a real PDF, which costs seconds rather
+// than milliseconds. Vitest runs files in parallel, so on a busy machine the
+// stock 5s budget expires mid-render and the failure reads as a changed
+// fingerprint — a real PDF regression is exactly what this file exists to
+// catch, so a timeout that imitates one is worse than a slow test. Only the
+// clock is relaxed here; every assertion is unchanged.
+const PDF_RENDER_TIMEOUT_MS = 30_000
 
 describe("document PDF service", () => {
   it("keeps every document block in one printable page flow", () => {
@@ -522,6 +535,38 @@ describe("document PDF service", () => {
     expect(renderedPage.getHeight()).toBe(612)
   })
 
+  it("prints a resized page at its new paper size with the original layout scaled up", { timeout: PDF_RENDER_TIMEOUT_MS }, async () => {
+    const input = createPdfInput({ repeatHeader: false, repeatFooter: false })
+    const content = requireVersionThreeContent(input)
+    const a4 = normalizePdfInput(input)
+    const a4Metrics = createPdfLayoutMetrics(a4.renderPlan.geometry, a4.renderPlan.layout)
+    const a4Pages = createPdfPagePlans(a4)
+
+    content.layout = resizeTemplateLayout(content.layout, { pageSize: "A3" })
+
+    const a3 = normalizePdfInput(input)
+    const rendered = await PDFDocument.load(await renderGeneratedDocumentPdf(input))
+
+    // Laid out exactly as on A4, then printed on A3.
+    const a3Metrics = createPdfLayoutMetrics(a3.renderPlan.geometry, a3.renderPlan.layout)
+    expect(a3Metrics.pageCapacity).toBe(a4Metrics.pageCapacity)
+    expect(a3Metrics.contentWidth).toBeCloseTo(a4Metrics.contentWidth, 2)
+    expect(createPdfPagePlans(a3)).toEqual(a4Pages)
+    expect(rendered.getPageCount()).toBe(a4Pages.length)
+    expect(rendered.getPage(0).getWidth()).toBeCloseTo(841.89, 1)
+    expect(rendered.getPage(0).getHeight()).toBeCloseTo(1190.55, 1)
+  })
+
+  it("leaves the title out of a document that prints none", () => {
+    const input = createPdfInput({ repeatHeader: false, repeatFooter: false })
+    const content = requireVersionThreeContent(input)
+    content.layout = { ...content.layout, printedTitle: { mode: "none" } }
+
+    const pages = createPdfPagePlans(normalizePdfInput(input))
+
+    expect(pages.flatMap((page) => page.items).some((item) => item.kind === "title")).toBe(false)
+  })
+
   it("keeps the established default A4 planning measurements", () => {
     const normalized = normalizePdfInput(
       createPdfInput({ repeatHeader: true, repeatFooter: true })
@@ -612,7 +657,55 @@ describe("document PDF service", () => {
       message: "A signature or initials drawing is invalid."
     })
   })
-})
+
+  it("refuses a PNG image block over 16 megapixels", async () => {
+    const input = createPdfInput({ repeatHeader: false, repeatFooter: false })
+
+    requireVersionThreeContent(input).blocks.push({
+      id: "00000000-0000-4000-8000-000000000010",
+      type: "image",
+      dataUrl: toImageDataUrl("png", createPngBytes(4_001, 4_000)),
+      altText: "Site plan",
+      caption: null,
+      alignment: "center",
+      widthPercent: 100
+    })
+
+    await expect(renderGeneratedDocumentPdf(input)).rejects.toMatchObject({
+      statusCode: 400,
+      message: "An embedded document image is too large."
+    })
+  })
+
+  it("embeds a logo repeated on every page once", async () => {
+    const input = createPdfInput({
+      longBody: true,
+      repeatHeader: true,
+      repeatFooter: false
+    })
+    const content = requireVersionThreeContent(input)
+
+    content.branding = {
+      ...content.branding,
+      logoDataUrl: toImageDataUrl("png", createPngBytes(120, 40))
+    }
+
+    const bytes = await renderGeneratedDocumentPdf({ ...input, signers: [] })
+    const pdf = await PDFDocument.load(bytes)
+    const pagesShowingAnImage = pdf
+      .getPages()
+      .filter(
+        (page): boolean =>
+          page.node.Resources()?.has(PDFName.of("XObject")) ?? false
+      )
+
+    expect(pdf.getPageCount()).toBeGreaterThan(1)
+    expect(pagesShowingAnImage).toHaveLength(pdf.getPageCount())
+    // One image object serves every page. The render's image cache is also
+    // what its PNG pixel allowance is counted from.
+    expect(bytes.toString("latin1").match(/\/Subtype \/Image/g)).toHaveLength(1)
+  })
+}, PDF_RENDER_TIMEOUT_MS)
 
 function planPdf(input: RenderGeneratedDocumentPdfInput): PdfPagePlan[] {
   return createPdfPagePlans(normalizePdfInput(input))

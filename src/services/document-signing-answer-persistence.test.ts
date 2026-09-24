@@ -304,6 +304,71 @@ describe("document signing answer persistence", () => {
     })
   })
 
+  it("freezes an answer once a signer has agreed to it, for members and for later signers", async () => {
+    const secondRecipientId = "40000000-0000-4000-8000-000000000002"
+    const secondToken = "token_two_abcdefghijklmnopqrstuvwxyz123456"
+    const signedTables = () => {
+      const tables = createBaseTables()
+      tables.document_signing_recipients.push(
+        {
+          ...createRecipientRow(RECIPIENT_ONE_ID, TOKEN_ONE, "Avery Morgan", "avery@example.com"),
+          signed_at: "2026-07-17T19:30:00.000Z",
+          status: "signed",
+        },
+        createRecipientRow(secondRecipientId, secondToken, "Jordan Reyes", "jordan@example.com")
+      )
+      tables.document_answers[0].values = { client_name: "As signed" }
+      tables.document_answers[0].workflow_status = "awaiting_signatures"
+      return tables
+    }
+
+    const memberTables = signedTables()
+    const memberClient = new FakeClient(memberTables)
+    await expect(
+      saveGeneratedDocumentAnswers(
+        {
+          actorUserId: MANAGER_ID,
+          documentId: DOCUMENT_ID,
+          organizationId: ORG_ID,
+          values: { client_name: "Changed after signing" },
+        },
+        { client: memberClient as never }
+      )
+    ).rejects.toMatchObject({ statusCode: 409 })
+    expect(memberTables.document_answers[0].values).toEqual({ client_name: "As signed" })
+
+    const signerTables = signedTables()
+    const signerClient = new FakeClient(signerTables)
+    await expect(
+      completePublicDocumentSigning(
+        {
+          baselineValues: { client_name: "As signed" },
+          signatureDataUrl: DRAWING_DATA_URL,
+          token: secondToken,
+          values: { client_name: "Changed after signing" },
+        },
+        { client: signerClient as never, now: (): Date => NOW }
+      )
+    ).rejects.toMatchObject({ statusCode: 409 })
+    expect(signerTables.document_answers[0].values).toEqual({ client_name: "As signed" })
+
+    // Signing on without changing what was agreed still completes.
+    const completingTables = signedTables()
+    const completingClient = new FakeClient(completingTables)
+    const completed = await completePublicDocumentSigning(
+      {
+        baselineValues: { client_name: "As signed" },
+        signatureDataUrl: DRAWING_DATA_URL,
+        token: secondToken,
+        values: { client_name: "As signed" },
+      },
+      { client: completingClient as never, now: (): Date => NOW }
+    )
+
+    expect(completed.workflowStatus).toBe("completed")
+    expect(completingTables.document_answers[0].values).toEqual({ client_name: "As signed" })
+  })
+
   it("prunes a stale hidden value at read and across controller patches", async () => {
     const tables = createBaseTables()
     tables.documents[0].template_snapshot = createConditionalSigningSnapshot()
