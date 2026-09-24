@@ -67,6 +67,7 @@ const BUCKET_CONFIGS: Readonly<Record<RateLimitBucket, BucketConfig>> = {
 export type LimiterDecision = {
   success: boolean
   reset: number
+  reason?: string
 }
 
 /** Minimal limiter contract so tests never construct real Upstash clients. */
@@ -140,6 +141,12 @@ export function createRateLimitCheck(deps: RateLimitDeps = {}): CheckRateLimit {
 
     try {
       decision = await limiter.limit(`${bucket}:${key}`)
+
+      // Upstash answers a check that ran out of time as allowed. That is an
+      // unreachable limiter, so each bucket's fail mode decides instead.
+      if (decision.reason === "timeout") {
+        throw new Error("Rate limiter timed out.")
+      }
     } catch (error: unknown) {
       console.error("rate_limit_check_failed", {
         bucket,
@@ -215,6 +222,8 @@ function createDefaultLimiter(bucket: RateLimitBucket): LimiterLike | null {
     ),
     prefix: "bizflow:rate-limit",
     ephemeralCache: new Map(),
+    // The library's default wait is 5 seconds before it gives up.
+    timeout: 1_000,
   })
 }
 

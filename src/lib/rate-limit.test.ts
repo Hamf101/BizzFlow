@@ -90,6 +90,22 @@ describe("createRateLimitCheck", () => {
     ).rejects.toBeInstanceOf(RateLimitError)
   })
 
+  it("treats a limiter that timed out as unavailable, so only spend-bearing buckets deny", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    // Upstash resolves a check that ran out of time as allowed, marked "timeout".
+    const check = createRateLimitCheck({
+      createLimiter: () => ({
+        limit: vi.fn().mockResolvedValue({ reason: "timeout", reset: 0, success: true }),
+      }),
+    })
+
+    await expect(check("ai_flow_daily", "org-1")).rejects.toMatchObject({
+      statusCode: 429,
+      retryAfterSeconds: 30,
+    } satisfies Partial<RateLimitError>)
+    await expect(check("auth", "1.2.3.4")).resolves.toBeUndefined()
+  })
+
   it("allows fail-closed buckets when no limiter is configured at all", async () => {
     const check = createRateLimitCheck({ createLimiter: () => null })
 
