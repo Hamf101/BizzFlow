@@ -399,7 +399,7 @@ export function DocumentEditor({
                   blocks={page.content.blocks}
                   canMoveDown={settingsIndex < page.content.blocks.length - 1}
                   canMoveUp={settingsIndex > 0}
-                  onChange={(block) => controller.updateBlock(block)}
+                  onChange={(block) => controller.updateBlock(block, `settings:${block.id}`)}
                   onDelete={() => controller.remove(settingsBlock.id)}
                   onDuplicate={() => controller.duplicate(settingsBlock.id)}
                   onMoveDown={() => controller.move(settingsBlock.id, "down")}

@@ -82,6 +82,45 @@ export function isTemplateFieldBlock(
   return "fieldKey" in block
 }
 
+/** The shape every field key takes: lower snake_case, starting with a letter. */
+export const FIELD_KEY_PATTERN = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/
+
+/**
+ * Gives every field a valid key the author never sees. Keys are generated, so
+ * one typed by hand while keys were still editable, or repeated, is rebuilt
+ * from what it was; content whose keys are all good comes back untouched.
+ * Only templates are rebuilt: a document's answers are filed under its keys.
+ *
+ * @param content - A template's content.
+ * @returns The content, with every key valid and unique.
+ */
+export function withGeneratedFieldKeys<Content extends TemplateContentV3>(content: Content): Content {
+  let blocks = content.blocks
+
+  for (const [index, block] of content.blocks.entries()) {
+    if (!isTemplateFieldBlock(block)) {
+      continue
+    }
+
+    // The first field to use a key keeps it; later ones are renamed.
+    const repeated = blocks
+      .slice(0, index)
+      .some((other: TemplateBlock): boolean => isTemplateFieldBlock(other) && other.fieldKey === block.fieldKey)
+
+    if (FIELD_KEY_PATTERN.test(block.fieldKey) && !repeated) {
+      continue
+    }
+
+    const fieldKey = createUniqueTemplateFieldKey(block.fieldKey, blocks, block.id)
+    blocks = blocks.map(
+      (candidate: TemplateBlock): TemplateBlock =>
+        candidate.id === block.id && isTemplateFieldBlock(candidate) ? { ...candidate, fieldKey } : candidate
+    )
+  }
+
+  return blocks === content.blocks ? content : { ...content, blocks }
+}
+
 /**
  * Creates a lower snake_case key without changing existing field keys.
  *

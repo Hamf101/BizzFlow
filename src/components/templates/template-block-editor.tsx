@@ -1,24 +1,35 @@
 "use client"
 
 import {
-  Copy,
   ArrowDown,
   ArrowUp,
+  Copy,
+  ImageUp,
+  Plus,
   Trash2,
+  X,
 } from "lucide-react"
 import Image from "next/image"
 import {
   type ChangeEvent,
+  type KeyboardEvent,
   type ReactElement,
   type ReactNode,
-  useEffect,
   useRef,
   useState,
 } from "react"
 
-import { Button } from "@/components/ui/button"
-import { Field, FieldLabel } from "@/components/ui/field"
+import { Button, buttonVariants } from "@/components/ui/button"
+import { Field, FieldLabel, FieldLegend } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { Segmented } from "@/components/ui/segmented"
+import { Select } from "@/components/ui/select"
+import {
+  type DateFormat,
+  formatDateAnswer,
+  MONTH_NAMES,
+  toIsoDate,
+} from "@/lib/date-format"
 import { cn } from "@/lib/utils"
 import type { TemplateBlock } from "@/types/template"
 import { evaluateTemplateDropdownOptionEdit } from "@/types/template-structure"
@@ -44,6 +55,22 @@ const BLOCK_LABELS: Record<TemplateBlock["type"], string> = {
   signature_field: "Signature field",
   file_field: "File upload",
 }
+
+// How answers are stored, and how a field without a format has always printed them.
+const STORED_DATE_FORMAT: DateFormat = { month: "number", order: "ymd", separator: "-" }
+
+const DATE_ORDERS = [
+  { label: "Day first", value: "dmy" },
+  { label: "Month first", value: "mdy" },
+  { label: "Year first", value: "ymd" },
+] as const
+
+const DATE_SEPARATORS = [
+  { label: "/", value: "/" },
+  { label: ".", value: "." },
+  { label: "-", value: "-" },
+  { label: "Space", value: " " },
+] as const
 
 type TemplateFieldBlock = Extract<
   TemplateBlock,
@@ -140,7 +167,8 @@ export function TemplateBlockEditor({
         </div>
       </div>
 
-      <BlockFields block={block} blocks={blocks} onChange={onChange} />
+      {/* Keyed, so options still being written never carry over to another block. */}
+      <BlockFields block={block} blocks={blocks} key={block.id} onChange={onChange} />
     </div>
   )
 }
@@ -172,8 +200,7 @@ function BlockFields({
           </Field>
           <Field>
             <FieldLabel htmlFor={`${block.id}-heading-level`}>Level</FieldLabel>
-            <select
-              className={CONTROL_CLASS_NAME}
+            <Select
               id={`${block.id}-heading-level`}
               onChange={(event: ChangeEvent<HTMLSelectElement>): void =>
                 onChange({
@@ -186,7 +213,7 @@ function BlockFields({
               <option value={1}>Heading 1</option>
               <option value={2}>Heading 2</option>
               <option value={3}>Heading 3</option>
-            </select>
+            </Select>
           </Field>
           <AlignmentField
             id={`${block.id}-heading-alignment`}
@@ -285,23 +312,21 @@ function BlockFields({
     case "text_field":
       return (
         <FieldBlockFields block={block} blocks={blocks} onChange={onChange}>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <TemplatePlaceholderField
-              blockId={block.id}
-              onChange={(placeholder: string | null): void =>
-                onChange({ ...block, placeholder })
-              }
-              value={block.placeholder}
-            />
-            <CheckboxControl
-              checked={block.multiline}
-              id={`${block.id}-multiline`}
-              label="Allow multiple lines"
-              onChange={(multiline: boolean): void =>
-                onChange({ ...block, multiline })
-              }
-            />
-          </div>
+          <PlaceholderField
+            blockId={block.id}
+            onChange={(placeholder: string | null): void =>
+              onChange({ ...block, placeholder })
+            }
+            value={block.placeholder}
+          />
+          <CheckboxControl
+            checked={block.multiline}
+            id={`${block.id}-multiline`}
+            label="Allow multiple lines"
+            onChange={(multiline: boolean): void =>
+              onChange({ ...block, multiline })
+            }
+          />
         </FieldBlockFields>
       )
     case "checkbox_field":
@@ -320,24 +345,22 @@ function BlockFields({
     case "dropdown_field":
       return (
         <FieldBlockFields block={block} blocks={blocks} onChange={onChange}>
-          <div className="grid gap-4">
-            <TemplatePlaceholderField
-              blockId={block.id}
-              onChange={(placeholder: string | null): void =>
-                onChange({ ...block, placeholder })
-              }
-              value={block.placeholder}
-            />
-            <DropdownOptionsField
-              block={block}
-              blocks={blocks}
-              key={block.id}
-              onChange={onChange}
-            />
-          </div>
+          <PlaceholderField
+            blockId={block.id}
+            onChange={(placeholder: string | null): void =>
+              onChange({ ...block, placeholder })
+            }
+            value={block.placeholder}
+          />
+          <OptionsField block={block} blocks={blocks} onChange={onChange} />
         </FieldBlockFields>
       )
     case "date_field":
+      return (
+        <FieldBlockFields block={block} blocks={blocks} onChange={onChange}>
+          <DateFormatField block={block} onChange={onChange} />
+        </FieldBlockFields>
+      )
     case "initials_field":
     case "signature_field":
     case "file_field":
@@ -347,7 +370,63 @@ function BlockFields({
   }
 }
 
-function DropdownOptionsField({
+function DateFormatField({
+  block,
+  onChange,
+}: {
+  block: Extract<TemplateBlock, { type: "date_field" }>
+  onChange: (block: TemplateBlock) => void
+}): ReactElement {
+  // Examples use today, so every choice reads as a real date.
+  const [today] = useState<string>(() => toIsoDate(new Date()))
+  const monthName = MONTH_NAMES[Number(today.slice(5, 7)) - 1] ?? ""
+  const months = [
+    { label: today.slice(5, 7), value: "number" },
+    { label: monthName.slice(0, 3), value: "short" },
+    { label: monthName, value: "long" },
+  ] as const
+  const format = block.dateFormat ?? STORED_DATE_FORMAT
+
+  function change(dateFormat: DateFormat): void {
+    onChange({ ...block, dateFormat })
+  }
+
+  return (
+    <fieldset className="grid gap-2">
+      <FieldLegend variant="label">Date format</FieldLegend>
+      <p aria-live="polite" className="text-sm font-medium tabular-nums">
+        {formatDateAnswer(today, format)}
+      </p>
+      <Segmented
+        label="Order"
+        onChange={(order) => change({ ...format, order })}
+        options={DATE_ORDERS}
+        value={format.order}
+      />
+      <Segmented
+        label="Month"
+        onChange={(month) => change({ ...format, month })}
+        options={months}
+        value={format.month}
+      />
+      {format.month === "number" ? (
+        <Segmented
+          label="Separator"
+          onChange={(separator) => change({ ...format, separator })}
+          options={DATE_SEPARATORS}
+          value={format.separator}
+        />
+      ) : null}
+    </fieldset>
+  )
+}
+
+/**
+ * A dropdown's options, each in its own input. A change reaches the page as
+ * it is typed, unless it would break the document: then the list keeps what
+ * was typed and says why, and the saved options stay as they were.
+ */
+function OptionsField({
   block,
   blocks,
   onChange,
@@ -356,103 +435,133 @@ function DropdownOptionsField({
   blocks: readonly TemplateBlock[]
   onChange: (block: TemplateBlock) => void
 }): ReactElement {
-  const committedValue = block.options.join("\n")
-  const lastCommittedValueRef = useRef<string>(committedValue)
-  const [draftValue, setDraftValue] = useState<string>(committedValue)
-  const hasChanges = draftValue !== committedValue
-  const optionEdit = evaluateTemplateDropdownOptionEdit(
-    blocks,
-    block.id,
-    draftValue.split("\n")
-  )
-  const errorMessage =
-    hasChanges && !optionEdit.success ? optionEdit.message : null
-  const dependentLabels =
-    hasChanges && !optionEdit.success
-      ? optionEdit.dependentBlockIds.flatMap(
-          (dependentBlockId: string): string[] => {
-            const dependent = blocks.find(
-              (candidate: TemplateBlock): boolean =>
-                candidate.id === dependentBlockId
-            )
+  const [draft, setDraft] = useState<readonly string[]>(block.options)
+  const [seen, setSeen] = useState<readonly string[]>(block.options)
+  const edit = evaluateTemplateDropdownOptionEdit(blocks, block.id, filled(draft))
 
-            return dependent && "label" in dependent ? [dependent.label] : []
-          },
-        )
-      : []
+  // Undo or Flow changed the options: show theirs, unless this list says the same.
+  if (block.options !== seen) {
+    setSeen(block.options)
 
-  useEffect((): void => {
-    if (committedValue === lastCommittedValueRef.current) {
-      return
+    if (!edit.success || !sameOptions(edit.options, block.options)) {
+      setDraft(block.options)
     }
-
-    lastCommittedValueRef.current = committedValue
-    setDraftValue(committedValue)
-  }, [committedValue])
-
-  function handleOptionsChange(event: ChangeEvent<HTMLTextAreaElement>): void {
-    setDraftValue(event.target.value)
   }
 
-  function applyOptions(): void {
-    if (!optionEdit.success || !hasChanges) {
-      return
+  function change(next: readonly string[]): void {
+    const nextEdit = evaluateTemplateDropdownOptionEdit(blocks, block.id, filled(next))
+
+    setDraft(next)
+
+    if (nextEdit.success && !sameOptions(nextEdit.options, block.options)) {
+      onChange({ ...block, options: nextEdit.options })
     }
-
-    const normalizedValue = optionEdit.options.join("\n")
-
-    lastCommittedValueRef.current = normalizedValue
-    setDraftValue(normalizedValue)
-    onChange({
-      ...block,
-      options: optionEdit.options,
-    })
   }
 
-  const errorId = `${block.id}-options-error`
+  const affected = edit.success
+    ? []
+    : edit.dependentBlockIds.flatMap((id: string): string[] => {
+        const dependent = blocks.find((candidate: TemplateBlock): boolean => candidate.id === id)
+
+        return dependent && "label" in dependent ? [dependent.label] : []
+      })
 
   return (
-    <Field>
-      <FieldLabel htmlFor={`${block.id}-options`}>
-        Options, one per line
-      </FieldLabel>
-      <textarea
-        aria-describedby={errorMessage ? errorId : undefined}
-        aria-invalid={errorMessage !== null}
-        className={cn(CONTROL_CLASS_NAME, "min-h-24 resize-y")}
-        id={`${block.id}-options`}
-        maxLength={24_100}
-        onChange={handleOptionsChange}
-        value={draftValue}
-      />
-      {errorMessage && (
-        <div
-          className="grid gap-1 text-xs leading-relaxed text-destructive"
-          id={errorId}
-          role="alert"
-        >
-          <p>{errorMessage}</p>
-          {dependentLabels.length > 0 && (
-            <p>Affected fields: {dependentLabels.join(", ")}.</p>
-          )}
+    <fieldset className="grid gap-2">
+      <FieldLegend variant="label">Options</FieldLegend>
+      <OptionList onChange={change} options={draft} />
+      {edit.success ? null : (
+        <div className="grid gap-1 text-xs leading-relaxed text-destructive" role="alert">
+          <p>{edit.message}</p>
+          {affected.length > 0 ? <p>Affected fields: {affected.join(", ")}.</p> : null}
         </div>
       )}
-      <div className="flex items-center justify-between gap-3">
-        <Button
-          disabled={!hasChanges || !optionEdit.success}
-          onClick={applyOptions}
-          size="xs"
-          type="button"
-          variant="outline"
-        >
-          Apply options
-        </Button>
-      </div>
-    </Field>
+    </fieldset>
   )
 }
 
-function TemplatePlaceholderField({
+// Options still being written are empty; they are not options yet.
+function filled(options: readonly string[]): string[] {
+  return options.filter((option: string): boolean => option.trim().length > 0)
+}
+
+function sameOptions(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((option: string, index: number): boolean => option === right[index])
+}
+
+/**
+ * A dropdown's options as a list of their own inputs. Enter on a filled
+ * option starts the next one.
+ */
+function OptionList({
+  onChange,
+  options,
+}: {
+  onChange: (options: readonly string[]) => void
+  options: readonly string[]
+}): ReactElement {
+  const list = useRef<HTMLDivElement>(null)
+
+  function focusOption(index: number): void {
+    requestAnimationFrame(() => list.current?.querySelectorAll("input")[index]?.focus())
+  }
+
+  function add(at: number): void {
+    onChange([...options.slice(0, at), "", ...options.slice(at)])
+    focusOption(at)
+  }
+
+  return (
+    <div className="grid gap-1.5" ref={list}>
+      {options.map((option: string, index: number) => (
+        // Options may repeat or be blank while being written, so their place names them.
+        <div className="flex items-center gap-1" key={index}>
+          <Input
+            aria-label={`Option ${index + 1}`}
+            maxLength={240}
+            onChange={(event: ChangeEvent<HTMLInputElement>): void =>
+              onChange(options.map((candidate: string, at: number) =>
+                at === index ? event.target.value : candidate
+              ))
+            }
+            onKeyDown={(event: KeyboardEvent<HTMLInputElement>): void => {
+              if (event.key === "Enter" && option.trim()) {
+                event.preventDefault()
+                add(index + 1)
+              }
+            }}
+            value={option}
+          />
+          <Button
+            aria-label={`Remove option ${index + 1}`}
+            onClick={(): void => {
+              onChange(options.filter((_: string, at: number): boolean => at !== index))
+              focusOption(Math.max(0, index - 1))
+            }}
+            size="icon-sm"
+            title="Remove"
+            type="button"
+            variant="ghost"
+          >
+            <X />
+          </Button>
+        </div>
+      ))}
+      <Button
+        className="justify-self-start"
+        onClick={(): void => add(options.length)}
+        size="sm"
+        type="button"
+        variant="ghost"
+      >
+        <Plus />
+        Add option
+      </Button>
+    </div>
+  )
+}
+
+function PlaceholderField({
   blockId,
   onChange,
   value,
@@ -484,6 +593,7 @@ function ImageFields({
   onChange: (block: TemplateBlock) => void
 }): ReactElement {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const altTextMissing = block.altText.trim().length === 0
 
   async function handleFileChange(
     event: ChangeEvent<HTMLInputElement>
@@ -514,8 +624,8 @@ function ImageFields({
   }
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2">
-      <div className="flex items-center justify-center rounded-lg border bg-muted/30 p-3 sm:row-span-3">
+    <div className="grid gap-4">
+      <div className="grid justify-items-center gap-2 rounded-lg border bg-muted/30 p-3">
         <Image
           alt={block.altText}
           className="h-auto max-h-44 w-auto max-w-full rounded object-contain"
@@ -524,25 +634,33 @@ function ImageFields({
           unoptimized
           width={480}
         />
-      </div>
-      <Field>
-        <FieldLabel htmlFor={`${block.id}-image-file`}>PNG or JPEG</FieldLabel>
-        <Input
-          accept="image/png,image/jpeg"
-          aria-describedby={errorMessage ? `${block.id}-image-error` : undefined}
-          id={`${block.id}-image-file`}
-          onChange={handleFileChange}
-          type="file"
-        />
+        <label
+          className={cn(
+            buttonVariants({ size: "sm", variant: "ghost" }),
+            "cursor-pointer has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring/35"
+          )}
+        >
+          <ImageUp />
+          Replace
+          <input
+            accept="image/png,image/jpeg"
+            aria-describedby={errorMessage ? `${block.id}-image-error` : undefined}
+            className="sr-only"
+            onChange={handleFileChange}
+            type="file"
+          />
+        </label>
         {errorMessage && (
-          <p className="text-sm text-destructive" id={`${block.id}-image-error`}>
+          <p className="text-sm text-destructive" id={`${block.id}-image-error`} role="alert">
             {errorMessage}
           </p>
         )}
-      </Field>
+      </div>
       <Field>
         <FieldLabel htmlFor={`${block.id}-alt-text`}>Alternative text</FieldLabel>
         <Input
+          aria-describedby={altTextMissing ? `${block.id}-alt-text-error` : undefined}
+          aria-invalid={altTextMissing}
           id={`${block.id}-alt-text`}
           maxLength={500}
           onChange={(event: ChangeEvent<HTMLInputElement>): void =>
@@ -551,6 +669,11 @@ function ImageFields({
           required
           value={block.altText}
         />
+        {altTextMissing ? (
+          <p className="text-xs text-destructive" id={`${block.id}-alt-text-error`}>
+            Describe the picture for people who cannot see it.
+          </p>
+        ) : null}
       </Field>
       <Field>
         <FieldLabel htmlFor={`${block.id}-caption`}>Caption</FieldLabel>
@@ -603,8 +726,7 @@ function AlignmentField({
   return (
     <Field>
       <FieldLabel htmlFor={id}>Alignment</FieldLabel>
-      <select
-        className={CONTROL_CLASS_NAME}
+      <Select
         id={id}
         onChange={(event: ChangeEvent<HTMLSelectElement>): void =>
           onChange(event.target.value as "left" | "center" | "right")
@@ -614,7 +736,7 @@ function AlignmentField({
         <option value="left">Left</option>
         <option value="center">Center</option>
         <option value="right">Right</option>
-      </select>
+      </Select>
     </Field>
   )
 }
@@ -630,35 +752,29 @@ function FieldBlockFields({
   children?: ReactNode
   onChange: (block: TemplateBlock) => void
 }): ReactElement {
+  const labelMissing = block.label.trim().length === 0
+
   return (
     <div className="grid gap-4">
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field>
-          <FieldLabel htmlFor={`${block.id}-field-label`}>Label</FieldLabel>
-          <Input
-            id={`${block.id}-field-label`}
-            maxLength={160}
-            onChange={(event: ChangeEvent<HTMLInputElement>): void =>
-              onChange({ ...block, label: event.target.value })
-            }
-            required
-            value={block.label}
-          />
-        </Field>
-        <Field>
-          <FieldLabel htmlFor={`${block.id}-field-key`}>Field key</FieldLabel>
-          <Input
-            id={`${block.id}-field-key`}
-            maxLength={80}
-            onChange={(event: ChangeEvent<HTMLInputElement>): void =>
-              onChange({ ...block, fieldKey: event.target.value })
-            }
-            pattern="[A-Za-z][A-Za-z0-9_-]{0,79}"
-            required
-            value={block.fieldKey}
-          />
-        </Field>
-      </div>
+      <Field>
+        <FieldLabel htmlFor={`${block.id}-field-label`}>Label</FieldLabel>
+        <Input
+          aria-describedby={labelMissing ? `${block.id}-field-label-error` : undefined}
+          aria-invalid={labelMissing}
+          id={`${block.id}-field-label`}
+          maxLength={160}
+          onChange={(event: ChangeEvent<HTMLInputElement>): void =>
+            onChange({ ...block, label: event.target.value })
+          }
+          required
+          value={block.label}
+        />
+        {labelMissing ? (
+          <p className="text-xs text-destructive" id={`${block.id}-field-label-error`}>
+            A field needs a label.
+          </p>
+        ) : null}
+      </Field>
       <Field>
         <FieldLabel htmlFor={`${block.id}-help-text`}>Help text</FieldLabel>
         <Input
@@ -685,7 +801,7 @@ function FieldBlockFields({
 function VisibilityFields({
   block,
   blocks,
-  onChange
+  onChange,
 }: {
   block: TemplateFieldBlock
   blocks: readonly TemplateBlock[]
@@ -694,7 +810,7 @@ function VisibilityFields({
   const blockIndex = blocks.findIndex(
     (candidate: TemplateBlock): boolean => candidate.id === block.id
   )
-  const availableSources = blocks.slice(0, Math.max(0, blockIndex)).filter(
+  const sources = blocks.slice(0, Math.max(0, blockIndex)).filter(
     (
       candidate: TemplateBlock
     ): candidate is Extract<
@@ -704,33 +820,23 @@ function VisibilityFields({
       candidate.type === "checkbox_field" ||
       (candidate.type === "dropdown_field" && candidate.options.length > 0)
   )
-  const selectedSource = availableSources.find(
-    (candidate): boolean =>
-      candidate.id === block.visibleWhen?.sourceBlockId
-  )
   const condition = block.visibleWhen
+  const source = sources.find(
+    (candidate): boolean => candidate.id === condition?.sourceBlockId
+  )
 
   function selectSource(sourceBlockId: string): void {
-    if (!sourceBlockId) {
-      onChange({ ...block, visibleWhen: undefined })
-      return
-    }
-
-    const source = availableSources.find(
-      (candidate): boolean => candidate.id === sourceBlockId
-    )
-
-    if (!source) {
-      return
-    }
+    const next = sources.find((candidate): boolean => candidate.id === sourceBlockId)
 
     onChange({
       ...block,
-      visibleWhen: {
-        sourceBlockId: source.id,
-        operator: "equals",
-        value: source.type === "checkbox_field" ? true : source.options[0]
-      }
+      visibleWhen: next
+        ? {
+            sourceBlockId: next.id,
+            operator: "equals",
+            value: next.type === "checkbox_field" ? true : (next.options[0] ?? ""),
+          }
+        : undefined,
     })
   }
 
@@ -741,65 +847,60 @@ function VisibilityFields({
         <FieldLabel htmlFor={`${block.id}-visibility-source`}>
           Show this field when
         </FieldLabel>
-        <select
-          className={CONTROL_CLASS_NAME}
+        <Select
           id={`${block.id}-visibility-source`}
           onChange={(event: ChangeEvent<HTMLSelectElement>): void =>
             selectSource(event.target.value)
           }
-          value={block.visibleWhen?.sourceBlockId ?? ""}
+          value={condition?.sourceBlockId ?? ""}
         >
           <option value="">Always visible</option>
-          {availableSources.map((source) => (
-            <option key={source.id} value={source.id}>
-              {source.label}
+          {sources.map((candidate) => (
+            <option key={candidate.id} value={candidate.id}>
+              {candidate.label}
             </option>
           ))}
-        </select>
-        {availableSources.length === 0 && (
+        </Select>
+        {sources.length === 0 && (
           <p className="text-xs text-muted-foreground">
             Add a checkbox or dropdown above first.
           </p>
         )}
       </Field>
-      {selectedSource && condition && (
+      {source && condition ? (
         <Field>
-          <FieldLabel htmlFor={`${block.id}-visibility-value`}>
-            Equals
-          </FieldLabel>
-          <select
-            className={CONTROL_CLASS_NAME}
+          <FieldLabel htmlFor={`${block.id}-visibility-value`}>Equals</FieldLabel>
+          <Select
             id={`${block.id}-visibility-value`}
             onChange={(event: ChangeEvent<HTMLSelectElement>): void =>
               onChange({
                 ...block,
                 visibleWhen: {
-                  sourceBlockId: condition.sourceBlockId,
-                  operator: "equals",
+                  ...condition,
                   value:
-                    selectedSource.type === "checkbox_field"
+                    source.type === "checkbox_field"
                       ? event.target.value === "true"
-                      : event.target.value
-                }
+                      : event.target.value,
+                },
               })
             }
             value={String(condition.value)}
           >
-            {selectedSource.type === "checkbox_field" ? (
+            {source.type === "checkbox_field" ? (
               <>
                 <option value="true">Checked</option>
                 <option value="false">Unchecked</option>
               </>
             ) : (
-              selectedSource.options.map((option: string) => (
+              source.options.map((option: string) => (
                 <option key={option} value={option}>
                   {option}
                 </option>
               ))
             )}
-          </select>
+          </Select>
         </Field>
-      )}
+      ) : null}
     </fieldset>
   )
 }

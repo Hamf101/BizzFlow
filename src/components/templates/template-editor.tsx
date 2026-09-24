@@ -62,6 +62,7 @@ import {
   upgradeV2TemplateContentToV3,
 } from "@/types/template"
 import type { TemplateFlowMessage, TemplateFlowProposal } from "@/types/template-flow"
+import { withGeneratedFieldKeys } from "@/types/template-structure"
 import { applyVisibleTemplateFieldValue } from "@/types/template-visibility"
 
 type Mode = "edit" | "preview" | "test"
@@ -104,7 +105,8 @@ export function TemplateEditor({
   const initial = useMemo(
     (): TemplateEditorState => ({
       category: template.category ?? "",
-      content: upgradeV2TemplateContentToV3(template.content),
+      // Field keys are ours to keep valid; a template never shows or asks for one.
+      content: withGeneratedFieldKeys(upgradeV2TemplateContentToV3(template.content)),
       description: template.description ?? "",
       title: template.title,
     }),
@@ -434,7 +436,7 @@ export function TemplateEditor({
                   blocks={content.blocks}
                   canMoveDown={settingsIndex < content.blocks.length - 1}
                   canMoveUp={settingsIndex > 0}
-                  onChange={(block) => controller.updateBlock(block)}
+                  onChange={(block) => controller.updateBlock(block, `settings:${block.id}`)}
                   onDelete={() => controller.remove(settingsBlock.id)}
                   onDuplicate={() => controller.duplicate(settingsBlock.id)}
                   onMoveDown={() => controller.move(settingsBlock.id, "down")}
