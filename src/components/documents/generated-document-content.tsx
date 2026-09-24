@@ -22,6 +22,7 @@ import {
 } from "@/components/templates/template-render-groups"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
+import { formatDateAnswer } from "@/lib/date-format"
 import { resolveDocumentSurfaceInk } from "@/lib/document-surface"
 import { cn } from "@/lib/utils"
 import {
@@ -605,7 +606,7 @@ export function GeneratedBlock({
               value={readStringAnswer(answers, block.fieldKey)}
             />
           ) : (
-            <ReadOnlyAnswer value={readStringAnswer(answers, block.fieldKey)} />
+            <ReadOnlyAnswer value={formatDateAnswer(readStringAnswer(answers, block.fieldKey), block.dateFormat)} />
           )}
         </AnswerFieldFrame>
       )

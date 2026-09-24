@@ -1,5 +1,11 @@
 import { z } from "zod"
 
+import {
+  DATE_MONTH_STYLES,
+  DATE_ORDERS,
+  DATE_SEPARATORS,
+  type DateFormat
+} from "@/lib/date-format"
 import type { DocumentLifecycleState } from "@/types/document"
 
 /** Maximum encoded length accepted for an embedded PNG or JPEG image. */
@@ -124,11 +130,21 @@ export const textFieldBlockSchema = z
   })
   .strict()
 
+/** How a date is written, built from three choices the author makes. */
+export const dateFormatSchema = z
+  .object({
+    order: z.enum(DATE_ORDERS),
+    separator: z.enum(DATE_SEPARATORS),
+    month: z.enum(DATE_MONTH_STYLES)
+  })
+  .strict() satisfies z.ZodType<DateFormat>
+
 /** Date input block. */
 export const dateFieldBlockSchema = z
   .object({
     ...fieldBlockShape,
-    type: z.literal("date_field")
+    type: z.literal("date_field"),
+    dateFormat: dateFormatSchema.optional()
   })
   .strict()
 

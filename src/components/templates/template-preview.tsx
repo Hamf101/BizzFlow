@@ -31,6 +31,7 @@ import {
   type TemplateRenderPlan,
   type TemplateRenderSection
 } from "@/services/templates/template-render-plan"
+import { describeDateFormat } from "@/lib/date-format"
 import type {
   TemplateBlock,
   TemplateBranding,
@@ -955,7 +956,7 @@ function PreviewBlock({ block }: { block: TemplateBlock }): ReactElement {
           required={block.required}
         >
           <div className="rounded-sm border border-border px-3 py-2 text-sm text-muted-foreground">
-            MM / DD / YYYY
+            {describeDateFormat(block.dateFormat)}
           </div>
         </PreviewField>
       )

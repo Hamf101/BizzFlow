@@ -36,6 +36,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
+import { describeDateFormat } from "@/lib/date-format"
 import type { TemplateBlock } from "@/types/template"
 
 export type LineBlock = Extract<TemplateBlock, { type: "heading" | "paragraph" }>
@@ -347,7 +348,7 @@ function DesignField({ block }: { block: FieldBlock }): ReactElement {
     case "date_field":
       answer = (
         <span className={cn(box, "flex items-center justify-between py-[0.45em]")}>
-          dd / mm / yyyy
+          {describeDateFormat(block.dateFormat)}
           <CalendarDays aria-hidden="true" className="size-[1.1em]" />
         </span>
       )

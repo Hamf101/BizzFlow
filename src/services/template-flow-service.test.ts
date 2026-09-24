@@ -1025,6 +1025,50 @@ describe("template Flow service", () => {
   })
 })
 
+describe("Flow and date formats", () => {
+  it("keeps a date field's format when Flow rewrites the field without one", async () => {
+    const content = createContent()
+    content.blocks = [
+      {
+        dateFormat: { month: "number", order: "dmy", separator: "/" },
+        fieldKey: "move_in",
+        helpText: null,
+        id: FIELD_ID,
+        label: "Move-in date",
+        required: false,
+        type: "date_field",
+      },
+    ]
+    const aiProvider = createTestAiProvider([
+      flowProviderResult({
+        assistantMessage: "The move-in date is now required.",
+        needsConfirmation: false,
+        confirmationQuestion: "",
+        operations: [
+          {
+            type: "update_block",
+            summary: "Required the move-in date",
+            payload: {
+              blockId: FIELD_ID,
+              block: { type: "date_field", fieldKey: "move_in", label: "Move-in date", required: true, helpText: null },
+            },
+          },
+        ],
+      }),
+    ])
+
+    const result = await executeTemplateFlow(
+      createInput(content, "Make the move-in date required."),
+      createDependencies({ aiProvider })
+    )
+
+    expect(result.proposal?.candidateDraft.content.blocks[0]).toMatchObject({
+      dateFormat: { month: "number", order: "dmy", separator: "/" },
+      required: true,
+    })
+  })
+})
+
 describe("document Flow", () => {
   const DOCUMENT_ID = "00000000-0000-4000-8000-000000000020"
 

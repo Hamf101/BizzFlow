@@ -1146,7 +1146,7 @@ function createFlowPayloadContract(): string {
     'table {"type":"table","headers":["Header"],"rows":[["Cell"]]};',
     'divider {"type":"divider"};',
     'text_field {"type":"text_field","fieldKey":"stable_key","label":"Label","required":true,"helpText":null,"placeholder":null,"multiline":false,"visibleWhen":{"sourceBlockId":"earlier-dropdown-or-checkbox-uuid","operator":"equals","value":"Other"}};',
-    'date_field {"type":"date_field","fieldKey":"stable_key","label":"Label","required":true,"helpText":null,"visibleWhen":optional};',
+    'date_field {"type":"date_field","fieldKey":"stable_key","label":"Label","required":true,"helpText":null,"dateFormat":optional {"order":"dmy"|"mdy"|"ymd","separator":"/"|"."|"-"|" ","month":"number"|"short"|"long"},"visibleWhen":optional};',
     'initials_field {"type":"initials_field","fieldKey":"stable_key","label":"Label","required":true,"helpText":null,"visibleWhen":optional};',
     'signature_field {"type":"signature_field","fieldKey":"stable_key","label":"Label","required":true,"helpText":null,"visibleWhen":optional};',
     'file_field {"type":"file_field","fieldKey":"stable_key","label":"Label","required":true,"helpText":null,"visibleWhen":optional};',
@@ -1930,6 +1930,15 @@ function applyUpdateBlockOperation(
       payload.block.visibleWhen === undefined
     ) {
       candidate.visibleWhen = existingBlock.visibleWhen
+    }
+
+    // A date's format is the author's regional choice; Flow keeps it unless asked.
+    if (
+      existingBlock.type === "date_field" &&
+      payload.block.type === "date_field" &&
+      payload.block.dateFormat === undefined
+    ) {
+      candidate.dateFormat = existingBlock.dateFormat
     }
   }
 
