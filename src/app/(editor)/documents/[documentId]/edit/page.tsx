@@ -14,7 +14,10 @@ import { loadPageOrganizationContext } from "@/lib/page-organization-context"
 import { canPerformOrganizationAction } from "@/lib/permissions"
 import { cn } from "@/lib/utils"
 import { getGeneratedDocumentSigningView } from "@/services/document-signing-service"
+import { getEditorLayout } from "@/services/editor-layout-service"
+import type { EditorLayout } from "@/types/editor-layout"
 import type { GeneratedDocumentSigningView } from "@/types/signing"
+import { saveEditorLayoutAction } from "@/app/(editor)/editor-layout-actions"
 
 import {
   resendGeneratedDocumentInvitationAction,
@@ -110,6 +113,8 @@ export default async function GeneratedDocumentEditorPage({
     canPerformOrganizationAction(context.membership, "documents:send") &&
     view.accessLevel === "contributor" &&
     view.document.lifecycleState === "active"
+  // Where the tools were left; without it they start at home.
+  const editorLayout = await getEditorLayout({ actorUserId: user.id }).catch((): EditorLayout => ({}))
   const backHref = view.document.folderId
     ? `/documents?folderId=${encodeURIComponent(view.document.folderId)}`
     : "/documents"
@@ -121,6 +126,7 @@ export default async function GeneratedDocumentEditorPage({
         backHref={backHref}
         canFill={canFill}
         canSend={canSend}
+        editorLayout={{ initial: editorLayout, save: saveEditorLayoutAction }}
         resendAction={resendGeneratedDocumentInvitationAction}
         saveAnswersAction={saveDocumentAnswersAction}
         saveContentAction={saveDocumentContentAction}

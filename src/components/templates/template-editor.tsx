@@ -21,7 +21,7 @@ import { findInsertChoices } from "@/components/editor/block-catalog"
 import { EditorCanvas } from "@/components/editor/editor-canvas"
 import { normalizeContentForSave } from "@/components/editor/editor-content"
 import { type DockTool, EditorDock, InsertTiles } from "@/components/editor/editor-dock"
-import { EditorFrame, EditorNotice, EditorSidePanel } from "@/components/editor/editor-frame"
+import { EditorFrame, type EditorLayoutStore, EditorNotice, EditorSidePanel } from "@/components/editor/editor-frame"
 import { PageSetupPanel } from "@/components/editor/page-setup-panel"
 import { type SaveResult, useAutosave } from "@/components/editor/use-autosave"
 import { useEditorController } from "@/components/editor/use-editor-controller"
@@ -76,6 +76,8 @@ type TemplateEditorProps = {
   archiveAction: (formData: FormData) => Promise<void>
   /** Categories already in use in this tenant, offered as suggestions. */
   categorySuggestions?: readonly string[]
+  /** Where this person keeps the dock and zoom. */
+  editorLayout?: EditorLayoutStore
   initialFlowMessages: TemplateFlowMessage[]
   publishAction: (formData: FormData) => Promise<void>
   saveDraftAction: (input: TemplateDraftInput) => Promise<SaveResult>
@@ -93,6 +95,7 @@ type TemplateEditorProps = {
 export function TemplateEditor({
   archiveAction,
   categorySuggestions = [],
+  editorLayout,
   initialFlowMessages,
   publishAction,
   saveDraftAction,
@@ -365,10 +368,15 @@ export function TemplateEditor({
         }
         canRedo={history.canRedo}
         canUndo={history.canUndo}
-        dock={(narrow) => (
+        dock={(narrow, orientation) => (
           // Flow stays within reach in every mode; the other tools need Edit.
-          <EditorDock narrow={narrow} tools={mode === "edit" && !proposal ? tools : tools.filter((tool) => tool.id === "flow")} />
+          <EditorDock
+            narrow={narrow}
+            orientation={orientation}
+            tools={mode === "edit" && !proposal ? tools : tools.filter((tool) => tool.id === "flow")}
+          />
         )}
+        layout={editorLayout}
         menu={
           <DropdownMenu>
             <DropdownMenuTrigger

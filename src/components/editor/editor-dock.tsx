@@ -20,25 +20,34 @@ export type DockTool = Readonly<{
   wide?: boolean
 }>
 
+/** Which way the dock runs: a column, or a row. */
+export type DockOrientation = "upright" | "flat"
+
 /**
- * The editor's tools in a slim floating dock: down the left of the canvas on
- * a laptop, along the bottom on a phone. Each tool opens beside the dock and
- * closes when it has done its job, so the page stays clear.
+ * The editor's tools in a slim floating dock, upright or flat, wherever the
+ * editor places it. Each tool opens beside the dock and closes when it has
+ * done its job, so the page stays clear.
  *
- * @param props - The tools, and whether the screen is phone-narrow.
+ * @param props - The tools, which way the dock runs, and whether the screen is phone-narrow.
  * @returns The dock.
  */
-export function EditorDock({ narrow, tools }: { narrow: boolean; tools: readonly DockTool[] }): ReactElement {
+export function EditorDock({
+  narrow,
+  orientation,
+  tools,
+}: {
+  narrow: boolean
+  orientation: DockOrientation
+  tools: readonly DockTool[]
+}): ReactElement {
   const [open, setOpen] = useState<string | null>(null)
 
   return (
     <nav
       aria-label="Editor tools"
       className={cn(
-        "absolute z-20 flex gap-1 rounded-[16px] border border-border bg-popover p-1.5 shadow-lg",
-        narrow
-          ? "bottom-[calc(1rem+env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2"
-          : "top-1/2 left-4 -translate-y-1/2 flex-col"
+        "flex gap-1 rounded-[16px] border border-border bg-popover p-1.5 shadow-lg",
+        orientation === "upright" && "flex-col"
       )}
       data-slot="editor-dock"
     >
@@ -59,13 +68,13 @@ export function EditorDock({ narrow, tools }: { narrow: boolean; tools: readonly
           </>
         )
         const buttonClass =
-          "relative grid size-11 place-items-center rounded-[12px] text-foreground/80 outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40 data-popup-open:bg-secondary data-popup-open:text-secondary-foreground md:size-10"
+          "relative grid size-11 place-items-center rounded-[12px] text-foreground/80 outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40 data-popup-open:bg-secondary data-popup-open:text-secondary-foreground"
 
         if (!tool.content) {
           return (
             <button
               aria-label={tool.label}
-              className={buttonClass}
+              className={cn(buttonClass, !narrow && "size-10")}
               key={tool.id}
               onClick={tool.onOpen}
               title={tool.label}
@@ -86,7 +95,7 @@ export function EditorDock({ narrow, tools }: { narrow: boolean; tools: readonly
           >
             <PopoverTrigger
               aria-label={tool.badge ? `${tool.label}, ${tool.badge}` : tool.label}
-              className={buttonClass}
+              className={cn(buttonClass, !narrow && "size-10")}
               title={tool.label}
             >
               {face}
@@ -94,7 +103,7 @@ export function EditorDock({ narrow, tools }: { narrow: boolean; tools: readonly
             <PopoverContent
               align="center"
               className={cn(tool.wide ? "w-[min(26rem,calc(100vw-2rem))]" : "w-[min(19rem,calc(100vw-2rem))]")}
-              side={narrow ? "top" : "right"}
+              side={orientation === "upright" ? "right" : "top"}
               sideOffset={12}
             >
               <PopoverTitle className="px-1 pb-2.5 text-sm font-medium">{tool.label}</PopoverTitle>

@@ -54,6 +54,8 @@ export default defineConfig({
       name: "mobile-chrome",
       dependencies: ["setup"],
       use: { ...devices["Pixel 7"] },
+      // Laptop-only behaviour, such as the editor's free-moving dock.
+      testIgnore: /.*\.desktop\.spec\.ts/,
       testMatch: /.*\.spec\.ts/,
     },
   ],
