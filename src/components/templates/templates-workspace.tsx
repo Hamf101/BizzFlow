@@ -147,7 +147,7 @@ export function TemplatesWorkspace({
       ) : (
         <ul
           aria-label="Templates"
-          className="grid grid-cols-2 gap-2.5 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4"
+          className="grid grid-cols-2 gap-2.5 sm:grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] sm:gap-4 xl:grid-cols-[repeat(auto-fill,minmax(14rem,1fr))]"
           data-slot="template-library"
         >
           {offersNew ? <NewTemplateTile /> : null}

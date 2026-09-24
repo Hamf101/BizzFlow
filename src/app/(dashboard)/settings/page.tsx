@@ -381,8 +381,9 @@ function SettingsShell({
 }: {
   children: ReactNode
 }): ReactElement {
+  // Forms read best at a steady width, however wide the screen.
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex max-w-5xl flex-col gap-6">
       {children}
     </div>
   )
