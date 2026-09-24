@@ -2,12 +2,12 @@ import { expect, test, uniqueName } from "../support/fixtures"
 import { waitForHydration } from "../support/hydration"
 import { seedTemplate } from "../support/seed"
 
-test("warns about paper contrast while saving exact brand colors", async ({
+test("saves the exact brand colors picked, and prints the page with them", async ({
   admin,
   pageAs,
   tenant,
 }, testInfo) => {
-  const template = await seedTemplate(admin, tenant.organizationId, uniqueName("Contrast"))
+  const template = await seedTemplate(admin, tenant.organizationId, uniqueName("Brand"))
   const page = await pageAs("owner_admin")
   if (testInfo.project.use.viewport) {
     await page.setViewportSize(testInfo.project.use.viewport)
@@ -17,21 +17,15 @@ test("warns about paper contrast while saving exact brand colors", async ({
   await waitForHydration(brand)
   await brand.click()
 
-  const status = page.locator("#branding-paper-contrast")
-  await expect(status).toContainText("Paper contrast")
-  await page.locator("#branding-primary-color").fill("#ffffff")
-  await page.locator("#branding-accent-color").fill("#eeeeee")
-  await expect(status).toContainText("Low paper contrast")
-  await expect(status).toContainText("Primary 1.00:1")
-  await expect(status).toContainText("Accent 1.16:1")
-  await status.evaluate((element) => element.scrollIntoView({ block: "center" }))
-  const bounds = await status.boundingBox()
-  expect(bounds).not.toBeNull()
-  expect(bounds!.x).toBeGreaterThanOrEqual(0)
-  expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(page.viewportSize()!.width)
-  await status.screenshot({ path: testInfo.outputPath("paper-contrast.png") })
+  for (const [name, color] of [["Primary", "#ffffff"], ["Accent", "#eeeeee"]]) {
+    const swatch = page.getByRole("button", { name, exact: true })
+    await swatch.click()
+    await page.getByRole("dialog", { name }).getByLabel("Hex code").fill(color)
+    // Pressing the swatch again closes its picker.
+    await swatch.click()
+  }
 
-  // Low contrast warns but never blocks: the draft saves the exact colors.
+  // Any colour saves as picked, even one that is hard to read on paper.
   await expect.poll(async () => {
     const { data, error } = await admin.from("document_templates")
       .select("content")

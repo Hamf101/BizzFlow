@@ -220,7 +220,7 @@ export function DocumentEditor({
       content: () => (
         <TemplateBrandingPanel
           branding={page.content.branding}
-          onChange={(branding) => controller.change((current) => ({ ...current, branding }))}
+          onChange={(branding) => controller.change((current) => ({ ...current, branding }), "branding")}
         />
       ),
       icon: Palette,

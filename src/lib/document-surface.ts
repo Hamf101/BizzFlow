@@ -17,31 +17,6 @@ export type DocumentSurfaceInk = Readonly<{
 }>
 
 /**
- * Measures brand ink against white paper in the exported PDF.
- *
- * Uses WCAG sRGB relative luminance; keep full precision when comparing a
- * threshold and round only the displayed ratio.
- * https://www.w3.org/WAI/WCAG21/Understanding/contrast-minimum.html
- *
- * @param color - Six-digit hex color validated by the template branding schema.
- * @returns Contrast against white, from 1 (white) to 21 (black).
- */
-export function getPaperContrastRatio(color: string): number {
-  const linearChannels = [1, 3, 5].map((offset) => {
-    const channel = Number.parseInt(color.slice(offset, offset + 2), 16) / 255
-    return channel <= 0.04045
-      ? channel / 12.92
-      : ((channel + 0.055) / 1.055) ** 2.4
-  })
-  const luminance =
-    0.2126 * linearChannels[0] +
-    0.7152 * linearChannels[1] +
-    0.0722 * linearChannels[2]
-
-  return 1.05 / (luminance + 0.05)
-}
-
-/**
  * Resolves the ink a document should be drawn with on one surface.
  *
  * Brand colours are absolute and were picked against a light page. Applying

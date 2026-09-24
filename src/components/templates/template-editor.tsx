@@ -294,7 +294,7 @@ export function TemplateEditor({
       content: () => (
         <TemplateBrandingPanel
           branding={content.branding}
-          onChange={(branding) => controller.change((current) => ({ ...current, branding }))}
+          onChange={(branding) => controller.change((current) => ({ ...current, branding }), "branding")}
         />
       ),
       icon: Palette,
