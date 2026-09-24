@@ -48,7 +48,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Field, FieldLabel } from "@/components/ui/field"
-import { Input } from "@/components/ui/input"
+import { SuggestInput } from "@/components/ui/suggest-input"
 import { bizflowToast } from "@/components/ui/toaster"
 import { createTemplateFlowDraftFingerprint } from "@/services/template-flow-proposal-state"
 import { resolvePageGeometry } from "@/services/templates/template-render-plan"
@@ -497,18 +497,13 @@ export function TemplateEditor({
           <div className="grid gap-4">
             <Field>
               <FieldLabel htmlFor="template-category">Category</FieldLabel>
-              <Input
+              <SuggestInput
                 id="template-category"
-                list="template-category-suggestions"
                 maxLength={40}
-                onChange={(event) => history.set((current) => ({ ...current, category: event.target.value }), "category")}
+                onChange={(category: string) => history.set((current) => ({ ...current, category }), "category")}
+                suggestions={categorySuggestions}
                 value={state.category}
               />
-              <datalist id="template-category-suggestions">
-                {categorySuggestions.map((category) => (
-                  <option key={category} value={category} />
-                ))}
-              </datalist>
             </Field>
             <Field>
               <FieldLabel htmlFor="template-description">Description</FieldLabel>
