@@ -44,6 +44,18 @@ test.describe("representative accessibility evidence", () => {
     }
   })
 
+  // An archived template's page picture is drawn faded; the picture's text
+  // must not count as the page's own text when contrast is judged.
+  test("keeps Templates accessible with an archived template on it", async ({ admin, pageAs, tenant }) => {
+    const title = uniqueName("Archived lease")
+    await seedTemplate(admin, tenant.organizationId, title, "archived")
+    const page = await pageAs("manager")
+
+    await page.goto("/templates")
+    await expect(page.locator('[data-slot="template-title"]', { hasText: title })).toBeVisible()
+    await expectNoActionableAxeViolations(page)
+  })
+
   test("announces fixed live action feedback", async ({ pageAs }) => {
     const page = await pageAs("owner_admin")
 

@@ -32,14 +32,15 @@ export type SeededTemplate = {
  * @param client - Service-role client.
  * @param organizationId - Owning organization.
  * @param title - Template title, unique per run.
- * @param status - `draft` to publish through the UI, `published` to skip ahead.
+ * @param status - `draft` to publish through the UI, `published` to skip ahead,
+ *   `archived` for one already put away.
  * @returns Handles for the template and its field keys.
  */
 export async function seedTemplate(
   client: SupabaseClient,
   organizationId: string,
   title: string,
-  status: "draft" | "published" = "draft"
+  status: "archived" | "draft" | "published" = "draft"
 ): Promise<SeededTemplate> {
   const textFieldKey = "client_reference"
   const fileFieldKey = "supporting_document"
@@ -88,6 +89,7 @@ export async function seedTemplate(
       status,
       title,
       ...(status === "published" ? { published_at: new Date().toISOString() } : {}),
+      ...(status === "archived" ? { archived_at: new Date().toISOString() } : {}),
     })
     .select("id")
     .single()

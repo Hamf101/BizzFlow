@@ -67,11 +67,14 @@ export function TemplatePageThumbnail({
   const page = plan?.geometry ?? DEFAULT_PAGE
 
   return (
-    // The card's title names the page, so its picture stays out of the
-    // accessibility tree.
+    // A picture of a page, not text on this one: the card's title names it,
+    // and the words drawn inside are part of the picture, too small to read.
+    // `inert` keeps them out of focus, find-in-page, the accessibility tree,
+    // and contrast checks, however the picture is dimmed.
     <div
       aria-hidden="true"
       className={cn(PAPER_FRAME, PAGE_SIZES[size].frame, className)}
+      inert
       data-document-surface="paper"
       data-slot="template-page"
       style={{ aspectRatio: `${page.widthPoints} / ${page.heightPoints}` }}
