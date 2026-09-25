@@ -12,6 +12,8 @@ export type AiJsonSchema = Record<string, unknown>
 
 /** Token usage reported by an AI provider, or null when it was omitted. */
 export type AiTokenUsage = {
+  /** Input tokens the provider reused from earlier calls, billed at a discount. */
+  cachedTokens?: number | null
   inputTokens: number | null
   outputTokens: number | null
   totalTokens: number | null

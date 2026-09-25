@@ -519,6 +519,7 @@ export async function executeTemplateFlow(
     // Spend signal: hard-bounded upstream calls plus billed tokens when the
     // provider reports them. This is the only per-turn cost record kept here.
     upstreamCalls: providerResult.upstreamCalls,
+    cachedTokens: providerResult.usage.cachedTokens ?? null,
     inputTokens: providerResult.usage.inputTokens,
     outputTokens: providerResult.usage.outputTokens,
     totalTokens: providerResult.usage.totalTokens,
@@ -712,16 +713,19 @@ async function requestFlowProvider(input: {
 
   const systemInstruction = createFlowSystemInstruction()
   const responseSchema = createTemplateFlowResponseSchema()
-  const initialPrompt = JSON.stringify({
+  // The draft, the largest part and the same from one message to the next,
+  // leads, so Gemini can reuse what an earlier call read at a discount.
+  const request = {
+    currentDraft: buildFlowDocumentContext(input.request.draft),
     conversation: input.history
       .slice(-MAX_FLOW_HISTORY_MESSAGES)
       .map((message: TemplateFlowMessage) => ({
         role: message.role,
         content: message.content
       })),
-    userMessage: input.request.instruction,
-    currentDraft: buildFlowDocumentContext(input.request.draft)
-  })
+    userMessage: input.request.instruction
+  }
+  const initialPrompt = JSON.stringify(request)
   const usageReports: AiTokenUsage[] = []
   let currentPrompt = initialPrompt
   let upstreamCalls = 0
@@ -816,7 +820,7 @@ async function requestFlowProvider(input: {
 
     if (providerCall < FLOW_MAX_UPSTREAM_CALLS) {
       currentPrompt = createFlowRepairPrompt({
-        initialPrompt,
+        request,
         invalidResponse: result.text,
         issueCode: validationFailure.issueCode,
         issuePath: validationFailure.issuePath
@@ -985,13 +989,14 @@ function readFlowParseIssue(error: z.ZodError): FlowProviderParseResult {
 }
 
 function createFlowRepairPrompt(input: {
-  initialPrompt: string
+  request: Record<string, unknown>
   invalidResponse: string
   issueCode: string
   issuePath: string
 }): string {
+  // The first prompt, repeated as the opening, which the provider can reuse.
   return JSON.stringify({
-    originalRequest: input.initialPrompt,
+    ...input.request,
     semanticRepair: {
       instruction:
         "Return one corrected response that follows the response schema and operation payload contracts exactly.",
@@ -1009,6 +1014,9 @@ function createFlowRepairPrompt(input: {
 
 function aggregateTokenUsage(usages: AiTokenUsage[]): AiTokenUsage {
   return {
+    cachedTokens: sumReportedUsage(
+      usages.map((usage: AiTokenUsage): number | null => usage.cachedTokens ?? null)
+    ),
     inputTokens: sumReportedUsage(
       usages.map((usage: AiTokenUsage): number | null => usage.inputTokens)
     ),

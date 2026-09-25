@@ -600,6 +600,7 @@ describe("template Flow service", () => {
         text: "not-json",
         traceId: "initial-invalid-trace",
         usage: {
+          cachedTokens: 0,
           inputTokens: 100,
           outputTokens: 20,
           totalTokens: 120
@@ -609,6 +610,7 @@ describe("template Flow service", () => {
         ...flowProviderResult(successfulFlowPayload()),
         traceId: "repair-success-trace",
         usage: {
+          cachedTokens: 90,
           inputTokens: 140,
           outputTokens: 30,
           totalTokens: 170
@@ -631,6 +633,10 @@ describe("template Flow service", () => {
         { provider: TEST_PROVIDER_ID, model: TEST_MODEL }
       ])
       expect(requests[1]?.input).toContain("semanticRepair")
+      // The draft, the largest part, leads, and a repair repeats the first
+      // prompt as its opening, so the provider can reuse what it already read.
+      expect(Object.keys(JSON.parse(requests[0]?.input ?? "{}"))[0]).toBe("currentDraft")
+      expect(requests[1]?.input.startsWith(requests[0]?.input.slice(0, -1) ?? "?")).toBe(true)
       expect(infoSpy).toHaveBeenCalledWith(
         "template_flow_turn_completed",
         expect.objectContaining({
@@ -638,6 +644,7 @@ describe("template Flow service", () => {
           model: TEST_MODEL,
           traceId: "repair-success-trace",
           upstreamCalls: 2,
+          cachedTokens: 90,
           inputTokens: 240,
           outputTokens: 50,
           totalTokens: 290
