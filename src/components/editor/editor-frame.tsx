@@ -119,13 +119,22 @@ export function EditorFrame<Mode extends string>({
   const fit = available > 0 ? clamp((available - 176) / pageWidth, 0.3, 1) : 1
   const zoom = narrow ? 1 : (chosenZoom ?? fit)
 
+  const saving = useRef<Promise<void>>(Promise.resolve())
+
   function keep(next: EditorLayout): void {
     setLayout(next)
-    void layoutStore?.save(next).then((result) => {
-      if (result.error) {
-        bizflowToast.error(result.error)
-      }
-    })
+    // One save at a time, in order, so an older layout never lands after a
+    // newer one; Next.js does this today, but only as a detail it may change.
+    saving.current = saving.current
+      .then(async () => {
+        const result = await layoutStore?.save(next)
+
+        if (result?.error) {
+          bizflowToast.error(result.error)
+        }
+      })
+      // A save that fails outright mustn't stop the ones after it.
+      .catch(() => undefined)
   }
 
   useEffect(() => {
