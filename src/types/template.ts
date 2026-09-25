@@ -45,7 +45,9 @@ export const templateImageAssetSchema = z
     width: z.number().int().min(1).max(30_000),
     height: z.number().int().min(1).max(30_000),
     // Where the viewer can see it now: signed for each page, never stored.
-    url: z.string().url().optional()
+    url: z.string().url().optional(),
+    // In the editors, where they can download the original: never stored either.
+    originalUrl: z.string().url().optional()
   })
   .strict()
 

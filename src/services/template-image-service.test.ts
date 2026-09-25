@@ -2,9 +2,10 @@ import type { GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3"
 import { describe, expect, it, vi } from "vitest"
 
 import {
-  createTemplateImageOriginalUrl,
   createTemplateImageUpload,
   readTemplateImage,
+  requireStoredImages,
+  withTemplateImageOriginals,
   withTemplateImageUrls,
 } from "@/services/template-image-service"
 import { createBlankTemplateContent } from "@/types/template"
@@ -123,15 +124,40 @@ describe("showing and printing a picture", () => {
     expect(await at("2026-09-24T11:01:00Z")).not.toEqual(early)
   })
 
-  it("downloads the original only for a member, and as a file", async () => {
-    const { deps, signed } = harness("staff")
-    const url = await createTemplateImageOriginalUrl({ actorUserId: ACTOR_ID, assetId: ASSET_ID, organizationId: ORG_ID, type: "png" }, deps)
+  it("offers each original as a download only where asked for, never on the pages everyone sees", async () => {
+    const { deps, signed } = harness()
 
-    expect(url).toContain(`organizations/${ORG_ID}/images/${ASSET_ID}/original`)
-    expect(signed[0]?.command.input).toMatchObject({ ResponseContentDisposition: 'attachment; filename="picture.png"' })
-    await expect(
-      createTemplateImageOriginalUrl({ actorUserId: ACTOR_ID, assetId: ASSET_ID, organizationId: ORG_ID, type: "png" }, harness(null).deps)
-    ).rejects.toMatchObject({ statusCode: 403 })
+    expect((await withTemplateImageUrls(content, ORG_ID, deps)).blocks[0]).not.toHaveProperty("asset.originalUrl")
+    expect((await withTemplateImageOriginals(content, ORG_ID, deps)).blocks[0]).toMatchObject({
+      asset: {
+        originalUrl: expect.stringContaining(`organizations/${ORG_ID}/images/${ASSET_ID}/original`),
+        url: expect.stringContaining(`organizations/${ORG_ID}/images/${ASSET_ID}/display`),
+      },
+    })
+    expect(signed.map(({ command }) => command.input)).toContainEqual(
+      expect.objectContaining({ ResponseContentDisposition: 'attachment; filename="picture.jpg"' })
+    )
+  })
+
+  it("saves a new picture only once its shown copies are stored, and doesn't recheck the ones already saved", async () => {
+    const heads: string[] = []
+    // What the store holds for each copy: the print copy never arrived.
+    const store = (key: string) => (key.endsWith("/print") ? null : { ContentLength: 40_000, ContentType: "image/jpeg" })
+    const send = vi.fn(async (command: GetObjectCommand) => {
+      const key = String(command.input.Key)
+      heads.push(key)
+      const stored = store(key)
+      if (!stored) throw Object.assign(new Error("Not Found"), { name: "NotFound" })
+      return stored
+    })
+    const deps = { r2Client: { send } as never, r2Env: R2_ENV }
+
+    await expect(requireStoredImages(content, null, ORG_ID, deps)).rejects.toMatchObject({ statusCode: 400 })
+    heads.length = 0
+    await expect(requireStoredImages(content, content, ORG_ID, deps)).resolves.toBeUndefined()
+    expect(heads).toEqual([])
+    const whole = { r2Client: { send: vi.fn(async () => ({ ContentLength: 40_000, ContentType: "image/jpeg" })) } as never, r2Env: R2_ENV }
+    await expect(requireStoredImages(content, null, ORG_ID, whole)).resolves.toBeUndefined()
   })
 
   it("prints every picture from its print copy", async () => {

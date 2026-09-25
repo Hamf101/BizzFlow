@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto"
 
-import { GetObjectCommand, PutObjectCommand, type S3Client } from "@aws-sdk/client-s3"
+import { GetObjectCommand, HeadObjectCommand, PutObjectCommand, type S3Client } from "@aws-sdk/client-s3"
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
 
 import { getR2Env, type R2Env } from "@/lib/env"
@@ -20,6 +20,11 @@ import { IMAGE_COPY_MAX_BYTES, type ImageCopy, mapImageAssets } from "@/types/te
 const DISPLAY_URL_SECONDS = 12 * 60 * 60
 const UPLOAD_URL_SECONDS = 15 * 60
 const CONTENT_TYPES: Record<TemplateImageAsset["type"], string> = { jpeg: "image/jpeg", png: "image/png" }
+// What each shown copy may be stored as: PDFs embed PNG and JPEG only.
+const SHOWN_COPY_TYPES: Record<"display" | "print", readonly string[]> = {
+  display: ["image/jpeg", "image/png", "image/webp"],
+  print: ["image/jpeg", "image/png"],
+}
 
 /** Error raised when a picture cannot be stored or shown. */
 export class TemplateImageServiceError extends Error {
@@ -118,7 +123,14 @@ export async function createTemplateImageUpload(
     }))
   )
 
-  return { asset: { ...asset, url: await signDisplayUrl(input.organizationId, asset.id, deps) }, uploads }
+  return {
+    asset: {
+      ...asset,
+      originalUrl: await signImageUrl(input.organizationId, asset, "original", deps),
+      url: await signImageUrl(input.organizationId, asset, "display", deps),
+    },
+    uploads,
+  }
 }
 
 /**
@@ -136,46 +148,73 @@ export async function withTemplateImageUrls<Content extends TemplateContent>(
   organizationId: string,
   deps: TemplateImageDeps = {}
 ): Promise<Content> {
-  const ids = new Set<string>()
-  mapImageAssets(content, (asset) => {
-    ids.add(asset.id)
-    return asset
-  })
-
-  if (ids.size === 0) {
-    return content
-  }
-
-  const urls = new Map(
-    await Promise.all([...ids].map(async (id) => [id, await signDisplayUrl(organizationId, id, deps)] as const))
-  )
-
-  return mapImageAssets(content, (asset) => ({ ...asset, url: urls.get(asset.id) }))
+  return signImages(content, organizationId, deps, false)
 }
 
 /**
- * A link that downloads a picture exactly as it was uploaded.
+ * As {@link withTemplateImageUrls}, with a download of each original too. For
+ * the editors only, after their own access checks: an original is exactly as
+ * uploaded, with whatever the camera recorded, such as where a photo was taken.
  *
- * @param input - Who asks, the workspace, and the picture.
- * @param deps - Injected client and storage for tests.
- * @returns A short-lived download link.
- * @throws TemplateImageServiceError 403 for someone outside the workspace.
+ * @param content - Content the viewer may see.
+ * @param organizationId - The workspace that stores its pictures.
+ * @param deps - Injected clock and storage for tests.
+ * @returns The content with a display address and a download on every stored picture.
  */
-export async function createTemplateImageOriginalUrl(
-  input: { actorUserId: string; assetId: string; organizationId: string; type: TemplateImageAsset["type"] },
+export async function withTemplateImageOriginals<Content extends TemplateContent>(
+  content: Content,
+  organizationId: string,
   deps: TemplateImageDeps = {}
-): Promise<string> {
-  await requireMember(input.organizationId, input.actorUserId, deps)
-  const { bucket, client, env, sign } = storage(deps)
+): Promise<Content> {
+  return signImages(content, organizationId, deps, true)
+}
 
-  return sign(
-    client as S3Client,
-    new GetObjectCommand({
-      Bucket: bucket,
-      Key: imageKey(input.organizationId, input.assetId, "original"),
-      ResponseContentDisposition: `attachment; filename="picture.${input.type === "png" ? "png" : "jpg"}"`,
-    }),
-    { expiresIn: env.CLOUDFLARE_R2_SIGNED_URL_TTL_SECONDS }
+/**
+ * Confirms each picture new to some content finished uploading: its display
+ * and print copies are in the workspace's store, each the kind of file it
+ * should be. Pictures the content already had were checked when they arrived.
+ *
+ * @param content - Content about to be saved.
+ * @param previous - The content as last saved, if there is any.
+ * @param organizationId - The workspace that stores its pictures.
+ * @param deps - Injected storage for tests.
+ * @throws TemplateImageServiceError 400 for a picture with a copy missing or of the wrong kind.
+ */
+export async function requireStoredImages(
+  content: TemplateContent,
+  previous: TemplateContent | null,
+  organizationId: string,
+  deps: Pick<TemplateImageDeps, "r2Client" | "r2Env"> = {}
+): Promise<void> {
+  const saved = new Set(previous ? storedImages(previous).map((asset) => asset.id) : [])
+  const fresh = new Set(storedImages(content).map((asset) => asset.id).filter((id) => !saved.has(id)))
+
+  if (fresh.size === 0) {
+    return
+  }
+
+  const { bucket, client } = storage(deps)
+  await Promise.all(
+    [...fresh].flatMap((id) =>
+      (["display", "print"] as const).map(async (copy) => {
+        const stored = await client
+          .send(new HeadObjectCommand({ Bucket: bucket, Key: imageKey(organizationId, id, copy) }))
+          .catch((error: unknown) => {
+            if ((error as { name?: string }).name === "NotFound") {
+              return null
+            }
+            throw error
+          })
+
+        if (
+          !stored?.ContentLength ||
+          stored.ContentLength > IMAGE_COPY_MAX_BYTES[copy] ||
+          !SHOWN_COPY_TYPES[copy].includes(stored.ContentType ?? "")
+        ) {
+          throw new TemplateImageServiceError("A picture didn't finish uploading. Add it again.", 400)
+        }
+      })
+    )
   )
 }
 
@@ -205,18 +244,70 @@ export async function readTemplateImage(
   return result.Body.transformToByteArray()
 }
 
+function storedImages(content: TemplateContent): TemplateImageAsset[] {
+  const assets: TemplateImageAsset[] = []
+  mapImageAssets(content, (asset) => {
+    assets.push(asset)
+    return asset
+  })
+
+  return assets
+}
+
 function imageKey(organizationId: string, assetId: string, copy: ImageCopy): string {
   return ["organizations", organizationId, "images", assetId, copy].join("/")
 }
 
-async function signDisplayUrl(organizationId: string, assetId: string, deps: TemplateImageDeps): Promise<string> {
+async function signImages<Content extends TemplateContent>(
+  content: Content,
+  organizationId: string,
+  deps: TemplateImageDeps,
+  originals: boolean
+): Promise<Content> {
+  const assets = new Map(storedImages(content).map((asset) => [asset.id, asset]))
+
+  if (assets.size === 0) {
+    return content
+  }
+
+  const signed = new Map(
+    await Promise.all(
+      [...assets.values()].map(
+        async (asset) =>
+          [
+            asset.id,
+            {
+              url: await signImageUrl(organizationId, asset, "display", deps),
+              ...(originals && { originalUrl: await signImageUrl(organizationId, asset, "original", deps) }),
+            },
+          ] as const
+      )
+    )
+  )
+
+  return mapImageAssets(content, (asset) => ({ ...asset, ...signed.get(asset.id) }))
+}
+
+async function signImageUrl(
+  organizationId: string,
+  asset: Pick<TemplateImageAsset, "id" | "type">,
+  copy: "display" | "original",
+  deps: TemplateImageDeps
+): Promise<string> {
   const { bucket, client, sign } = storage(deps)
   const signingDate = new Date((deps.now ?? (() => new Date()))())
   signingDate.setUTCMinutes(0, 0, 0)
 
   return sign(
     client as S3Client,
-    new GetObjectCommand({ Bucket: bucket, Key: imageKey(organizationId, assetId, "display") }),
+    new GetObjectCommand({
+      Bucket: bucket,
+      Key: imageKey(organizationId, asset.id, copy),
+      // An original downloads as a file rather than opening in the tab.
+      ...(copy === "original" && {
+        ResponseContentDisposition: `attachment; filename="picture.${asset.type === "png" ? "png" : "jpg"}"`,
+      }),
+    }),
     { expiresIn: DISPLAY_URL_SECONDS, signingDate }
   )
 }
@@ -227,7 +318,6 @@ function storage(deps: TemplateImageDeps) {
   return {
     bucket: env.CLOUDFLARE_R2_BUCKET_NAME,
     client: deps.r2Client ?? createR2Client(env),
-    env,
     sign: deps.sign ?? getSignedUrl,
   }
 }

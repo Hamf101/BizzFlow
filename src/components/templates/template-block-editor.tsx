@@ -35,7 +35,7 @@ import { cn } from "@/lib/utils"
 import type { TemplateBlock } from "@/types/template"
 import { imageSource } from "@/types/template-images"
 import { evaluateTemplateDropdownOptionEdit } from "@/types/template-structure"
-import { downloadImageOriginalAction, requestImageUploadAction } from "@/app/(editor)/image-actions"
+import { requestImageUploadAction } from "@/app/(editor)/image-actions"
 
 import { storeTemplateImage } from "./template-image"
 
@@ -630,16 +630,6 @@ function ImageFields({
     }
   }
 
-  async function downloadOriginal(asset: NonNullable<typeof block.asset>): Promise<void> {
-    const result = await downloadImageOriginalAction({ id: asset.id, type: asset.type })
-
-    if ("url" in result) {
-      window.location.assign(result.url)
-    } else {
-      setErrorMessage(result.error)
-    }
-  }
-
   return (
     <div className="grid gap-4">
       <div className="grid justify-items-center gap-2 rounded-lg border bg-muted/30 p-3">
@@ -672,16 +662,11 @@ function ImageFields({
               type="file"
             />
           </label>
-          {block.asset ? (
-            <Button
-              onClick={(): void => void downloadOriginal(block.asset as NonNullable<typeof block.asset>)}
-              size="sm"
-              type="button"
-              variant="ghost"
-            >
+          {block.asset?.originalUrl ? (
+            <a className={buttonVariants({ size: "sm", variant: "ghost" })} href={block.asset.originalUrl}>
               <Download />
               Download original
-            </Button>
+            </a>
           ) : null}
         </div>
         {errorMessage && (

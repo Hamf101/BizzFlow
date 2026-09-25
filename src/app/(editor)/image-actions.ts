@@ -6,11 +6,7 @@ import type { ImageUploadGrant, ImageUploadRequest } from "@/components/template
 import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
 import { checkRateLimit, RateLimitError } from "@/lib/rate-limit"
 import { getCurrentOrganizationContext } from "@/services/organization-service"
-import {
-  createTemplateImageOriginalUrl,
-  createTemplateImageUpload,
-  TemplateImageServiceError,
-} from "@/services/template-image-service"
+import { createTemplateImageUpload, TemplateImageServiceError } from "@/services/template-image-service"
 
 const copySchema = z.object({
   bytes: z.number().int().positive(),
@@ -22,7 +18,6 @@ const requestSchema = z.object({
   type: z.enum(["png", "jpeg"]),
   width: z.number().int().min(1).max(30_000),
 })
-const originalSchema = z.object({ id: z.string().uuid(), type: z.enum(["png", "jpeg"]) })
 
 /**
  * Makes room for a picture in the signed-in person's workspace.
@@ -44,35 +39,6 @@ export async function requestImageUploadAction(request: ImageUploadRequest): Pro
     return await createTemplateImageUpload({ ...parsed, actorUserId: user.id, organizationId: context.organization.id })
   } catch (error: unknown) {
     return { error: describeFailure(error, "image_upload_action_failed") }
-  }
-}
-
-/**
- * A link that downloads a picture exactly as it was uploaded.
- *
- * @param image - The stored picture's id and format.
- * @returns The download link, or an error to show.
- */
-export async function downloadImageOriginalAction(image: { id: string; type: "jpeg" | "png" }): Promise<{ error: string } | { url: string }> {
-  try {
-    const parsed = originalSchema.parse(image)
-    const user = await getAuthenticatedUser()
-    const context = await getCurrentOrganizationContext(user.id)
-
-    if (!context) {
-      return { error: "Join a workspace to download pictures." }
-    }
-
-    return {
-      url: await createTemplateImageOriginalUrl({
-        actorUserId: user.id,
-        assetId: parsed.id,
-        organizationId: context.organization.id,
-        type: parsed.type,
-      }),
-    }
-  } catch (error: unknown) {
-    return { error: describeFailure(error, "image_original_action_failed") }
   }
 }
 

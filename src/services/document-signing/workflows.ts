@@ -77,6 +77,7 @@ import {
   type DocumentSigningRecipientRow,
   type TemplateContent,
 } from "@/types/template"
+import { requireStoredImages, TemplateImageServiceError } from "@/services/template-image-service"
 import { withoutImageUrls } from "@/types/template-images"
 
 const SIGNED_ANSWERS_MESSAGE =
@@ -302,6 +303,13 @@ export async function updateGeneratedDocumentContent(
           409
         )
       }
+
+      await requireStoredImages(content, view.document.templateSnapshot, input.organizationId).catch((error: unknown) => {
+        // A picture that didn't finish uploading is the author's to fix, not a fault here.
+        throw error instanceof TemplateImageServiceError
+          ? new DocumentSigningServiceError(error.message, error.statusCode)
+          : error
+      })
 
       const { data, error } = await client
         .from("documents")

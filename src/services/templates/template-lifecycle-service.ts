@@ -37,6 +37,7 @@ import {
   runTemplateOperation,
   TEMPLATE_COLUMNS,
 } from "./shared"
+import { requireStoredImages, TemplateImageServiceError } from "@/services/template-image-service"
 import { withoutImageUrls } from "@/types/template-images"
 
 /**
@@ -240,6 +241,7 @@ export async function createDocumentTemplate(
       )
 
       assertTemplateImagesRenderable(content)
+      await requireStoredImages(content, null, input.organizationId).catch(asTemplateError)
 
       const { data, error } = await client
         .from("document_templates")
@@ -366,6 +368,7 @@ export async function updateDocumentTemplate(
 
       if (hasContent) {
         assertTemplateImagesRenderable(nextContent)
+        await requireStoredImages(nextContent, parsedExistingContent, input.organizationId).catch(asTemplateError)
       }
 
       const { data, error } = await client
@@ -646,4 +649,9 @@ export async function duplicateDocumentTemplate(
       return mapDocumentTemplate(data as DocumentTemplateRow)
     }
   )
+}
+
+// A picture that didn't finish uploading is the author's to fix, not a fault here.
+function asTemplateError(error: unknown): never {
+  throw error instanceof TemplateImageServiceError ? new TemplateServiceError(error.message, error.statusCode) : error
 }
