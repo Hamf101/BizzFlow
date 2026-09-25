@@ -123,8 +123,10 @@ export function AuthBackdrop(): ReactElement {
       <div className="auth-grid absolute -inset-10" />
       <svg
         // Centred behind the card: as tall as a wide screen allows, and on a
-        // phone or tablet held upright, about two thirds of the height.
-        className="auth-fold absolute top-0 left-1/2 h-full w-[max(100vw,110svh)] -translate-x-1/2"
+        // phone or tablet held upright, about two thirds of the height. It
+        // draws past its own box, out to the screen's edge, so leaning never
+        // shows where the box ends.
+        className="auth-fold absolute top-0 left-1/2 h-full w-[max(100vw,110svh)] -translate-x-1/2 overflow-visible"
         data-whole={step === 4 || undefined}
         preserveAspectRatio="xMidYMid meet"
         viewBox="-500 -350 1000 700"
