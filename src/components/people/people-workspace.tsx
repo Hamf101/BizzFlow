@@ -15,6 +15,7 @@ import {
   type ReactElement,
 } from "react"
 
+import { getMemberDisplayName, getMemberRoleName } from "@/components/people/member-name"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -52,8 +53,8 @@ import {
   canAssignOrganizationRole,
   canInviteMembers,
   getOrganizationRoleFromSubject,
+  ORGANIZATION_ROLE_LABELS,
   type OrganizationPermissionSubject,
-  type OrganizationRole,
 } from "@/lib/permissions"
 import { cn } from "@/lib/utils"
 import type {
@@ -77,13 +78,6 @@ type PeopleWorkspaceProps = {
   roles: OrganizationRoleDefinition[]
   revokeInviteAction: ServerFormAction
   updateMemberAccessAction: ServerFormAction
-}
-
-const roleLabels: Record<OrganizationRole, string> = {
-  external_reviewer: "External reviewer",
-  manager: "Manager",
-  owner_admin: "Owner admin",
-  staff: "Staff",
 }
 
 /**
@@ -808,7 +802,7 @@ function InviteItem({
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium">{invite.email}</p>
         <p className="mt-1 text-xs text-muted-foreground">
-          {invite.roleName ?? roleLabels[invite.role]} · {state === "active" ? "expires" : "expired"}{" "}
+          {invite.roleName ?? ORGANIZATION_ROLE_LABELS[invite.role]} · {state === "active" ? "expires" : "expired"}{" "}
           {formatMediumDate(invite.expiresAt)}
         </p>
       </div>
@@ -905,28 +899,6 @@ function RoleBadge({ label }: { label: string }): ReactElement {
       {label}
     </Badge>
   )
-}
-
-function getMemberRoleName(member: OrganizationMember): string {
-  return member.roleName ?? roleLabels[member.role]
-}
-
-function getMemberDisplayName(member: OrganizationMember): string {
-  const explicitName =
-    member.workspaceDisplayName?.trim() || member.fullName?.trim()
-  if (explicitName) {
-    return explicitName
-  }
-
-  const emailName = member.email
-    .split("@", 1)[0]
-    .split("+", 1)[0]
-    .replace(/[._-]+/g, " ")
-    .trim()
-
-  return emailName
-    ? emailName.replace(/\b[a-z]/g, (character) => character.toLocaleUpperCase())
-    : "Member"
 }
 
 function getRoleFilterDetails(

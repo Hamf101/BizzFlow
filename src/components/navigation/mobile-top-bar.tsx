@@ -1,3 +1,4 @@
+import { Search } from "lucide-react"
 import Link from "next/link"
 import type { ReactElement } from "react"
 
@@ -6,6 +7,8 @@ import {
   DashboardAccountMenu,
   type DashboardAccount,
 } from "@/components/navigation/dashboard-account-menu"
+import { WorkspaceSearchTrigger } from "@/components/search/workspace-search"
+import { buttonVariants } from "@/components/ui/button"
 
 /**
  * Compact header shown only below `md`, where the sidebar is hidden.
@@ -36,7 +39,15 @@ export function MobileTopBar({
       {/* The menu's trigger fills its container. Unwrapped, it took every
           pixel the wordmark gave up and drew the avatar over "BizFlow"; in a
           wrapper sized to its content it sits at the right edge instead. */}
-      <div className="shrink-0">
+      <div className="flex shrink-0 items-center gap-1">
+        {account.permissionSubject ? (
+          <WorkspaceSearchTrigger
+            aria-label="Search"
+            className={buttonVariants({ size: "icon", variant: "ghost" })}
+          >
+            <Search aria-hidden="true" className="size-5" />
+          </WorkspaceSearchTrigger>
+        ) : null}
         <DashboardAccountMenu
           account={account}
           collapsed

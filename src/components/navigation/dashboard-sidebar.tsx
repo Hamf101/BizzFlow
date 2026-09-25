@@ -1,6 +1,6 @@
 "use client"
 
-import { PanelLeftClose } from "lucide-react"
+import { PanelLeftClose, Search } from "lucide-react"
 import Link from "next/link"
 import { useState, type MouseEvent, type ReactElement } from "react"
 
@@ -10,6 +10,7 @@ import {
   type DashboardAccount,
 } from "@/components/navigation/dashboard-account-menu"
 import { DashboardNavigation } from "@/components/navigation/dashboard-navigation"
+import { SearchShortcut, WorkspaceSearchTrigger } from "@/components/search/workspace-search"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
@@ -107,10 +108,31 @@ export function DashboardSidebar({
         </span>
       </div>
 
-      <DashboardNavigation
-        collapsed={collapsed}
-        role={account.permissionSubject}
-      />
+      <div className="flex flex-col gap-1">
+        {account.permissionSubject ? (
+          // Drawn as a tab, so it keeps the tabs' square and place.
+          <WorkspaceSearchTrigger
+            aria-label={collapsed ? "Search" : undefined}
+            className={cn(
+              "flex h-11 items-center rounded-[8px] pr-3 text-sm text-foreground/80 outline-none transition-colors hover:bg-secondary/70 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40 motion-reduce:transition-none",
+              collapsed && "md:w-11 md:pr-0"
+            )}
+            title={collapsed ? "Search" : undefined}
+          >
+            <span className="grid size-11 shrink-0 place-items-center">
+              <Search aria-hidden="true" className="size-5" />
+            </span>
+            <span className={cn("flex-1 truncate text-left", collapsed && "md:hidden")}>
+              Search
+            </span>
+            <SearchShortcut className={cn(collapsed && "md:hidden")} />
+          </WorkspaceSearchTrigger>
+        ) : null}
+        <DashboardNavigation
+          collapsed={collapsed}
+          role={account.permissionSubject}
+        />
+      </div>
 
       <div className="mt-auto border-t border-border/70 pt-3">
         <DashboardAccountMenu

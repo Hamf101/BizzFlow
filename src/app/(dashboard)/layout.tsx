@@ -11,6 +11,7 @@ import type { DashboardAccount } from "@/components/navigation/dashboard-account
 import { MobileTabBar } from "@/components/navigation/mobile-tab-bar"
 import { MobileTopBar } from "@/components/navigation/mobile-top-bar"
 import { DashboardSidebar } from "@/components/navigation/dashboard-sidebar"
+import { WorkspaceSearch } from "@/components/search/workspace-search"
 import { ActionFeedback } from "@/components/ui/action-feedback"
 import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
 import { captureUnexpectedError } from "@/lib/observability"
@@ -180,6 +181,9 @@ export default async function DashboardLayout({
         </div>
         <MobileTabBar role={account.permissionSubject} />
         {account.navigation?.organizationId ? <FlowLauncher /> : null}
+        {/* Beside the sidebar rather than in a boundary of its own, so its
+            buttons never come alive before the search they open. */}
+        {account.permissionSubject ? <WorkspaceSearch role={account.permissionSubject} /> : null}
       </div>
       </NavigationPreferencesProvider>
     </PostHogProvider>

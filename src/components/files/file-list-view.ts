@@ -374,7 +374,9 @@ export function getCardRequest(
  * @param document - The document to open.
  * @returns The document's page or editor link.
  */
-export function getDocumentHref(document: AccessibleDocumentSummary): string {
+export function getDocumentHref(
+  document: Pick<AccessibleDocumentSummary, "id" | "lifecycleState" | "sourceKind">
+): string {
   const documentId = encodeURIComponent(document.id)
 
   return document.sourceKind === "generated" && document.lifecycleState === "active"
