@@ -35,7 +35,6 @@ supabase/.temp/
 .agent/
 .claude/
 .cursor/
-.github/
 .serena/
 .agents/
 AGENTS.md

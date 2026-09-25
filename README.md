@@ -37,7 +37,7 @@ MVP non-goals:
 
 ## Local Development
 
-Install Node.js 22 and the pnpm version specified in `package.json`, then run:
+Install Node.js 24 and the pnpm version specified in `package.json`, then run:
 
 ```bash
 pnpm install --frozen-lockfile
@@ -48,7 +48,7 @@ pnpm dev
 
 The app runs at `http://localhost:3000`. Configure your own Supabase project and private R2 bucket using the sections below, and apply the database migrations before using the app. Optional integrations require their own credentials.
 
-Personal editor/agent settings, local environments, generated files, and `.github/` workflows are excluded from Git. Configure those tools yourself if needed. Shared build/test configuration, the dependency lockfile, and the credential-free `.env.example` stay versioned so fresh clones can be installed and checked. Run `pnpm check` locally before pushing; the repository does not ship a GitHub Actions workflow. Next.js regenerates its type declarations during development, builds, and `pnpm typecheck`.
+Personal editor/agent settings, local environments, and generated files are excluded from Git. Configure those tools yourself if needed. Shared build/test configuration, the dependency lockfile, and the credential-free `.env.example` stay versioned so fresh clones can be installed and checked. Run `pnpm check` locally before pushing; CI runs the same gate, and the end-to-end journeys, on every pull request and push to `main`. Next.js regenerates its type declarations during development, builds, and `pnpm typecheck`.
 
 Example authenticated API calls:
 
