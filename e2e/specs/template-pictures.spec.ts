@@ -77,7 +77,7 @@ test("stores an uploaded logo beside the document, shows it to a signer, prints 
   await page.getByRole("toolbar", { name: "Block" }).getByRole("button", { name: "Settings", exact: true }).click()
   const [download] = await Promise.all([
     page.waitForEvent("download"),
-    page.getByRole("button", { name: "Download original" }).click(),
+    page.getByRole("link", { name: "Download original" }).click(),
   ])
   expect(download.suggestedFilename()).toBe("picture.png")
   expect(readFileSync((await download.path())!).equals(logo)).toBe(true)
