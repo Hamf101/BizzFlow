@@ -1,15 +1,10 @@
 import Link from "next/link"
 import { redirect } from "next/navigation"
 
-import { PasswordInput } from "@/components/auth/password-input"
+import { NewPasswordFields } from "@/components/auth/new-password-fields"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
-import {
-  Field,
-  FieldDescription,
-  FieldGroup,
-  FieldLabel,
-} from "@/components/ui/field"
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { buildAcceptInvitePath } from "@/lib/auth-redirects"
 import { AuthPageCard } from "@/lib/page-auth-card"
@@ -91,17 +86,7 @@ export default async function SignupPage({
               required
             />
           </Field>
-          <Field>
-            <FieldLabel htmlFor="password">Password</FieldLabel>
-            <PasswordInput
-              id="password"
-              name="password"
-              autoComplete="new-password"
-              required
-              minLength={8}
-            />
-            <FieldDescription>At least 8 characters.</FieldDescription>
-          </Field>
+          <NewPasswordFields />
         </FieldGroup>
         <Button type="submit" className="w-full">
           Sign up

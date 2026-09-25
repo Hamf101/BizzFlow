@@ -1,15 +1,11 @@
 import Link from "next/link"
 import type { ReactElement } from "react"
 
+import { NewPasswordFields } from "@/components/auth/new-password-fields"
 import { PasswordInput } from "@/components/auth/password-input"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
-import {
-  Field,
-  FieldDescription,
-  FieldGroup,
-  FieldLabel,
-} from "@/components/ui/field"
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
 import { buildAcceptInvitePath } from "@/lib/auth-redirects"
@@ -156,8 +152,8 @@ export default async function AcceptInvitePage({
             <FieldLabel htmlFor="email">Email</FieldLabel>
             <Input id="email" type="email" autoComplete="username" value={preview.email} readOnly />
           </Field>
-          <Field>
-            {existing ? (
+          {existing ? (
+            <Field>
               <div className="flex items-center justify-between gap-3">
                 <FieldLabel htmlFor="password">Password</FieldLabel>
                 <Link
@@ -167,18 +163,11 @@ export default async function AcceptInvitePage({
                   Forgot password?
                 </Link>
               </div>
-            ) : (
-              <FieldLabel htmlFor="password">Choose a password</FieldLabel>
-            )}
-            <PasswordInput
-              id="password"
-              name="password"
-              autoComplete={existing ? "current-password" : "new-password"}
-              required
-              minLength={8}
-            />
-            {!existing && <FieldDescription>At least 8 characters.</FieldDescription>}
-          </Field>
+              <PasswordInput id="password" name="password" autoComplete="current-password" required minLength={8} />
+            </Field>
+          ) : (
+            <NewPasswordFields label="Choose a password" />
+          )}
         </FieldGroup>
         <Button type="submit" className="w-full">
           {title}

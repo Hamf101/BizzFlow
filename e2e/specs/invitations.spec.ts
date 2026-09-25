@@ -56,6 +56,7 @@ test.describe("invitations", () => {
     try {
       await page.goto(`/accept-invite/${invite?.token as string}`)
       await page.getByLabel("Choose a password").fill(password)
+      await page.getByLabel("Confirm password").fill(password)
       await page.getByRole("button", { name: join }).click()
       await page.waitForURL(/\/dashboard/)
       await expect(page.getByRole("status").filter({ hasText: "You joined the workspace" })).toBeVisible()

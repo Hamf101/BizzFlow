@@ -17,6 +17,7 @@ import {
   getInvitePreview,
   OrganizationServiceError,
 } from "@/services/organization-service"
+import { newPasswordSchema } from "@/types/password"
 
 const joinSchema = z.object({
   account: z.enum(["existing", "new"]),
@@ -60,7 +61,7 @@ export async function acceptInviteAction(formData: FormData): Promise<void> {
  * Joins the workspace in one step from a signed-out browser: opens an account
  * for someone new, or signs in someone who already has one, then accepts.
  *
- * @param formData - The invite token, a password, and whether they have an account.
+ * @param formData - The invite token, whether they have an account, and a password (twice when new).
  * @returns Never returns; redirects to the dashboard or back with the reason.
  */
 export async function joinWithPasswordAction(formData: FormData): Promise<void> {
@@ -80,6 +81,12 @@ export async function joinWithPasswordAction(formData: FormData): Promise<void> 
   }
 
   const { account, password } = parsed.data
+  // Someone new chooses a password here, so it meets every rule and is typed twice.
+  const chosen = account === "new" && newPasswordSchema.safeParse({ confirm: getFormString(formData, "confirm"), password })
+
+  if (chosen && !chosen.success) {
+    back(chosen.error.issues[0]?.message ?? "Check the password and try again.", account)
+  }
 
   await enforceActionRateLimit({
     bucket: "auth",

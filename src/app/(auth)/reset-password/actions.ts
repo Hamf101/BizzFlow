@@ -2,22 +2,15 @@
 
 import { headers } from "next/headers"
 import { redirect } from "next/navigation"
-import { z } from "zod"
 
 import { buildFeedbackRedirect } from "@/lib/action-result"
 import { enforceActionRateLimit } from "@/lib/action-rate-limit"
 import { getClientIp } from "@/lib/client-ip"
 import { buildRedirect, getFormString } from "@/lib/form-utils"
 import { createClient } from "@/lib/supabase/server"
+import { newPasswordSchema } from "@/types/password"
 
 const EXPIRED = "This link has expired or was already used. Ask for a new one."
-
-const resetSchema = z
-  .object({
-    confirm: z.string(),
-    password: z.string().min(8, "Use at least 8 characters."),
-  })
-  .refine((value) => value.password === value.confirm, "The two passwords don't match.")
 
 /**
  * Saves a new password. The emailed link's one-time token is spent here, on
@@ -32,7 +25,7 @@ export async function resetPasswordAction(formData: FormData): Promise<void> {
   const tokenHash = getFormString(formData, "token_hash")
   const back = (error: string): string =>
     buildRedirect("/reset-password", tokenHash ? { error, token_hash: tokenHash } : { error })
-  const parsed = resetSchema.safeParse({
+  const parsed = newPasswordSchema.safeParse({
     confirm: getFormString(formData, "confirm"),
     password: getFormString(formData, "password"),
   })

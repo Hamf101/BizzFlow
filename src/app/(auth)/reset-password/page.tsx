@@ -1,9 +1,9 @@
 import Link from "next/link"
 
-import { PasswordInput } from "@/components/auth/password-input"
+import { NewPasswordFields } from "@/components/auth/new-password-fields"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button, buttonVariants } from "@/components/ui/button"
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
+import { FieldGroup } from "@/components/ui/field"
 import { getAuthenticatedUser } from "@/lib/auth"
 import { AuthPageCard } from "@/lib/page-auth-card"
 import { cn } from "@/lib/utils"
@@ -56,14 +56,7 @@ export default async function ResetPasswordPage({
           </Alert>
         )}
         <FieldGroup>
-          <Field>
-            <FieldLabel htmlFor="password">New password</FieldLabel>
-            <PasswordInput autoComplete="new-password" id="password" minLength={8} name="password" required />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="confirm">Confirm new password</FieldLabel>
-            <PasswordInput autoComplete="new-password" id="confirm" minLength={8} name="confirm" required />
-          </Field>
+          <NewPasswordFields confirmLabel="Confirm new password" label="New password" />
         </FieldGroup>
         <Button className="w-full" type="submit">
           Save password

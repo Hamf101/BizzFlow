@@ -30,6 +30,7 @@ test.describe("onboarding", () => {
     await page.goto("/signup")
     await page.getByLabel("Email").fill(email)
     await page.getByLabel("Password", { exact: true }).fill(password)
+    await page.getByLabel("Confirm password").fill(password)
     await page.getByRole("button", { name: "Sign up" }).click()
 
     // A session is returned inline when confirmations are disabled, so the app
@@ -97,18 +98,25 @@ test.describe("onboarding", () => {
     }
   })
 
-  test("refuses a password below the minimum length", async ({ page }) => {
-    const email = `short-${Date.now().toString(36)}@e2e.bizflow.test`
-
+  test("refuses a weak password, and two passwords that don't match", async ({ page }) => {
     await page.goto("/signup")
-    await page.getByLabel("Email").fill(email)
-    await page.getByLabel("Password", { exact: true }).fill("short")
+    await page.getByLabel("Email").fill(`weak-${Date.now().toString(36)}@e2e.bizflow.test`)
+    await page.getByLabel("Password", { exact: true }).fill("longbutweak")
+    await page.getByLabel("Confirm password").fill("longbutweak")
     await page.getByRole("button", { name: "Sign up" }).click()
 
-    // The input carries minLength, so the browser blocks submission and the
-    // user never leaves /signup. Asserting the URL rather than an error banner
-    // keeps this true whether the guard is client- or server-side.
+    // The form holds until the password meets every rule. Asserting the URL
+    // rather than a message keeps this true whether the browser or the
+    // server stops it.
     await expect(page).toHaveURL(/\/signup/)
+    await expect(page.getByRole("heading", { name: "Sign up for BizFlow" })).toBeVisible()
+
+    await page.getByLabel("Password", { exact: true }).fill("e2e-BizFlow-Passw0rd")
+    await page.getByLabel("Confirm password").fill("e2e-BizFlow-Passw0rd?")
+    await expect(page.getByText("The passwords don't match.")).toBeVisible()
+    await page.getByRole("button", { name: "Sign up" }).click()
+    await expect(page).toHaveURL(/\/signup/)
+    await expect(page.getByRole("heading", { name: "Sign up for BizFlow" })).toBeVisible()
   })
 })
 

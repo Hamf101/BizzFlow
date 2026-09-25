@@ -60,7 +60,7 @@ describe("signing up", () => {
     vi.mocked(emailConfirmationRequired).mockResolvedValue(true)
 
     await expect(signupAction(createSignupForm("new@example.com"))).rejects.toThrow("NEXT_REDIRECT:/signup?sent=1")
-    expect(emailSignupConfirmation).toHaveBeenCalledWith({ email: "new@example.com", password: "correct-horse-battery-staple" })
+    expect(emailSignupConfirmation).toHaveBeenCalledWith({ email: "new@example.com", password: "Correct-horse-battery-5taple" })
     expect(signUp).not.toHaveBeenCalled()
   })
 
@@ -83,11 +83,28 @@ describe("signing up", () => {
     await expect(signupAction(createSignupForm("new@example.com"))).rejects.toThrow("NEXT_REDIRECT:/welcome")
     expect(emailSignupConfirmation).not.toHaveBeenCalled()
   })
+
+  it("refuses a weak password, or two that differ, even when the browser's own check is skipped", async () => {
+    const signUp = vi.fn()
+    vi.mocked(createClient).mockResolvedValue({ auth: { signUp } } as never)
+    vi.mocked(emailConfirmationRequired).mockResolvedValue(true)
+    const weak = createSignupForm("new@example.com")
+    weak.set("password", "correct-horse-battery-staple")
+    weak.set("confirm", "correct-horse-battery-staple")
+    const differ = createSignupForm("new@example.com")
+    differ.set("confirm", "Correct-horse-battery-5tapl")
+
+    await expect(signupAction(weak)).rejects.toThrow("NEXT_REDIRECT:/signup?error=Choose+a+password")
+    await expect(signupAction(differ)).rejects.toThrow("NEXT_REDIRECT:/signup?error=The+two+passwords+don%27t+match.")
+    expect(emailSignupConfirmation).not.toHaveBeenCalled()
+    expect(signUp).not.toHaveBeenCalled()
+  })
 })
 
 function createSignupForm(email: string): FormData {
   const formData = new FormData()
   formData.set("email", email)
-  formData.set("password", "correct-horse-battery-staple")
+  formData.set("password", "Correct-horse-battery-5taple")
+  formData.set("confirm", "Correct-horse-battery-5taple")
   return formData
 }

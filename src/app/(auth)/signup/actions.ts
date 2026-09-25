@@ -16,32 +16,27 @@ import {
   emailSignupConfirmation,
   SignupServiceError,
 } from "@/services/signup-service"
+import { newPasswordSchema } from "@/types/password"
 
-const signupSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(8),
-})
+const signupSchema = z.object({ email: z.string().email("Enter a valid email.") }).and(newPasswordSchema)
 
 /**
  * Creates an account. Where the project asks people to confirm their address,
  * the link goes out through the app's own email; otherwise the account signs
  * straight in.
  *
- * @param formData - Signup email and password.
+ * @param formData - Signup email, and the password twice.
  * @returns Never returns; redirects to naming the workspace, the check-your-email page, or an error.
  */
 export async function signupAction(formData: FormData): Promise<void> {
   const parsed = signupSchema.safeParse({
+    confirm: getFormString(formData, "confirm"),
     email: getFormString(formData, "email"),
     password: getFormString(formData, "password"),
   })
 
   if (!parsed.success) {
-    redirect(
-      buildRedirect("/signup", {
-        error: "Enter a valid email and a password with at least 8 characters.",
-      })
-    )
+    redirect(buildRedirect("/signup", { error: parsed.error.issues[0]?.message ?? "Check the form and try again." }))
   }
 
   await enforceActionRateLimit({
