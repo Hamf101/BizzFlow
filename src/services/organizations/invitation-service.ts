@@ -362,7 +362,7 @@ export async function acceptInvite(
  * @param input - The invite token and the password they chose.
  * @param deps - Optional database client for tests.
  * @returns The invited address, and whether an account already used it.
- * @throws OrganizationServiceError 404 for an invite that is gone, 400 for a password the provider refuses.
+ * @throws OrganizationServiceError 404 for an invite that is gone, 403 for one its sender can no longer grant, 400 for a password the provider refuses.
  */
 export async function createInvitedAccount(
   input: { password: string; token: string },
@@ -374,6 +374,8 @@ export async function createInvitedAccount(
     async () => {
       const client = deps.client ?? createAdminClient()
       const invite = await getPendingInviteByToken(client, input.token)
+      // An invite that can't be accepted opens no account.
+      await requireInviterAuthority(client, invite)
       const { error } = await client.auth.admin.createUser({
         email: invite.email,
         email_confirm: true,
