@@ -96,7 +96,7 @@ export function DashboardAccountMenu({
           "group flex w-full items-center gap-2.5 rounded-[12px] border border-transparent p-2 text-left outline-none transition-colors",
           "hover:border-border hover:bg-card focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/35 data-popup-open:border-border data-popup-open:bg-card",
           // The hidden name and chevron keep no gaps, so the avatar centres.
-          collapsed && "md:justify-center md:gap-0 md:px-1.5"
+          collapsed && "md:justify-center md:gap-0 md:px-1"
         )}
         title={collapsed ? account.displayName : undefined}
       >

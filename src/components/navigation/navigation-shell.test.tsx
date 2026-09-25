@@ -53,9 +53,7 @@ describe("DashboardNavigation", () => {
       "/settings",
     ])
     expect(links[0]?.getAttribute("aria-current")).toBe("page")
-    expect(links.every((link) => link.className.includes("min-h-11"))).toBe(
-      true
-    )
+    expect(links.every((link) => link.classList.contains("h-11"))).toBe(true)
   })
 
   it("keeps navigation visually still while a destination is pending", () => {

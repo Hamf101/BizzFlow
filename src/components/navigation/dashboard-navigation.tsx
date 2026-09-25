@@ -312,24 +312,25 @@ export function DashboardNavigation({
               aria-current={isActive ? "page" : undefined}
               aria-label={collapsed ? item.label : undefined}
               className={cn(
-                "group relative flex min-h-11 items-center gap-3 rounded-[8px] px-3 py-2 text-sm text-foreground/80 transition-colors motion-reduce:transition-none",
+                "group relative flex h-11 items-center rounded-[8px] pr-3 text-sm text-foreground/80 transition-colors motion-reduce:transition-none",
                 "hover:bg-secondary/70 hover:text-foreground",
                 isActive && "bg-secondary text-secondary-foreground",
-                // The hidden label keeps no gap, so the icon sits in the middle.
-                collapsed && "md:size-11 md:justify-center md:gap-0 md:p-0"
+                collapsed && "md:w-11 md:pr-0"
               )}
               // The pointer drag below moves tabs; the browser's own link drag
               // would take the press away from it.
               draggable={false}
               href={item.href}
             >
-              <Icon
-                className={cn(
-                  "size-4 text-foreground/80 transition-colors",
-                  isActive && "text-primary",
-                  collapsed && "md:size-5"
-                )}
-              />
+              {/* The same square, icon and place whether the rail is open or not. */}
+              <span className="grid size-11 shrink-0 place-items-center">
+                <Icon
+                  className={cn(
+                    "size-5 text-foreground/80 transition-colors",
+                    isActive && "text-primary"
+                  )}
+                />
+              </span>
               <span
                 className={cn(
                   "truncate motion-reduce:transform-none motion-reduce:transition-none md:transition-[opacity,transform] md:duration-150",
