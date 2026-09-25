@@ -14,6 +14,7 @@ import {
   renameNavigationSchema,
   type NavigationPreferences,
 } from "@/types/navigation"
+import { loadActiveMembership } from "@/services/organizations/active-membership"
 
 type Actor = { actorUserId: string; organizationId: string }
 type NavigationMembership = { role: string; navigation_order: string[] }
@@ -22,12 +23,7 @@ async function requireMember(
   client: OrganizationServiceClient,
   input: Actor,
 ): Promise<NavigationMembership> {
-  const { data, error } = await client.from("organization_memberships")
-    .select("role,navigation_order")
-    .eq("org_id", input.organizationId)
-    .eq("user_id", input.actorUserId)
-    .eq("status", "active")
-    .maybeSingle()
+  const { data, error } = await loadActiveMembership(client, input.organizationId, input.actorUserId)
   if (error) {
     throw createSupabaseServiceError(error, "Unable to load navigation preferences.")
   }

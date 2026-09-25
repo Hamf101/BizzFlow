@@ -43,7 +43,7 @@ export default defineConfig({
       name: "chromium",
       dependencies: ["setup"],
       use: { ...devices["Desktop Chrome"] },
-      testIgnore: /.*\.mobile\.spec\.ts/,
+      testIgnore: [/.*\.mobile\.spec\.ts/, /.*\.budget\.spec\.ts/],
       testMatch: /.*\.spec\.ts/,
     },
     {
@@ -55,8 +55,16 @@ export default defineConfig({
       dependencies: ["setup"],
       use: { ...devices["Pixel 7"] },
       // Laptop-only behaviour, such as the editor's free-moving dock.
-      testIgnore: /.*\.desktop\.spec\.ts/,
+      testIgnore: [/.*\.desktop\.spec\.ts/, /.*\.budget\.spec\.ts/],
       testMatch: /.*\.spec\.ts/,
+    },
+    {
+      // Counts database requests per page, so it runs once everything else has
+      // finished and nothing else is using the database.
+      name: "budget",
+      dependencies: ["chromium", "mobile-chrome"],
+      use: { ...devices["Desktop Chrome"] },
+      testMatch: /.*\.budget\.spec\.ts/,
     },
   ],
   webServer: {

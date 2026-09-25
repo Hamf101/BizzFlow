@@ -47,6 +47,7 @@ import type {
   TemplateServiceDeps,
 } from "./contracts"
 import { TemplateServiceError } from "./errors"
+import { loadActiveMembership } from "@/services/organizations/active-membership"
 
 export const TEMPLATE_COLUMNS =
   "id,org_id,title,description,category,status,revision,content,created_by,updated_by,published_by,archived_by,created_at,updated_at,published_at,archived_at"
@@ -80,15 +81,7 @@ export async function requirePermission(
   action: OrganizationPermissionAction,
   rejectionMessage: string
 ): Promise<OrganizationPermissionSubject> {
-  const { data, error } = await client
-    .from("organization_memberships")
-    .select(
-      "role,role_definition:organization_roles!organization_memberships_role_definition_fk(permissions)"
-    )
-    .eq("org_id", organizationId)
-    .eq("user_id", actorUserId)
-    .eq("status", "active")
-    .maybeSingle()
+  const { data, error } = await loadActiveMembership(client, organizationId, actorUserId)
 
   if (error) {
     throw createDatabaseError(error, "Unable to load document permissions.")

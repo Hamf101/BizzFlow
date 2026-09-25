@@ -17,6 +17,7 @@ import {
   type SavedView,
   type SavedViewList,
 } from "@/types/saved-view"
+import { loadActiveMembership } from "@/services/organizations/active-membership"
 
 type Actor = { actorUserId: string; organizationId: string }
 
@@ -30,12 +31,7 @@ async function requireActiveMember(
   client: OrganizationServiceClient,
   input: Actor,
 ): Promise<void> {
-  const { data, error } = await client.from("organization_memberships")
-    .select("id")
-    .eq("org_id", input.organizationId)
-    .eq("user_id", input.actorUserId)
-    .eq("status", "active")
-    .maybeSingle()
+  const { data, error } = await loadActiveMembership(client, input.organizationId, input.actorUserId)
   if (error) throw createSupabaseServiceError(error, "Unable to load saved views.")
   if (!data) {
     throw new OrganizationServiceError("You do not have access to this workspace.", 403)
