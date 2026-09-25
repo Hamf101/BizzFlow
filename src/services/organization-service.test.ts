@@ -5,6 +5,7 @@ import {
   acceptInvite,
   archiveOrganizationRole,
   createInvite,
+  createInvitedAccount,
   createOrganizationRole,
   getCurrentOrganizationContext,
   getMemberSettings,
@@ -768,6 +769,55 @@ describe("organization service atomic mutations", () => {
         },
       ],
     })
+  })
+})
+
+describe("joining through an invite without an account", () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  function inviteClient(invite: Record<string, unknown> | null, created: { error: { code: string } | null }) {
+    const createUser = vi.fn(async () => ({ data: { user: null }, ...created }))
+    const client = Object.assign(
+      new QueuedAdminClient({ invites: [{ data: invite, error: null }] }),
+      { auth: { admin: { createUser } } }
+    )
+
+    return { client: client as never, createUser }
+  }
+
+  it("opens a confirmed account for the address the invite was sent to", async () => {
+    vi.spyOn(console, "info").mockImplementation(() => {})
+    const { client, createUser } = inviteClient(createInviteRow(), { error: null })
+
+    await expect(
+      createInvitedAccount({ password: "long-enough-secret", token: INVITE_TOKEN }, { client })
+    ).resolves.toEqual({ email: "member@example.com", existing: false })
+    expect(createUser).toHaveBeenCalledWith({
+      email: "member@example.com",
+      email_confirm: true,
+      password: "long-enough-secret",
+    })
+  })
+
+  it("says so when the address already has an account, rather than making a second", async () => {
+    vi.spyOn(console, "info").mockImplementation(() => {})
+    const { client } = inviteClient(createInviteRow(), { error: { code: "email_exists" } })
+
+    await expect(
+      createInvitedAccount({ password: "long-enough-secret", token: INVITE_TOKEN }, { client })
+    ).resolves.toEqual({ email: "member@example.com", existing: true })
+  })
+
+  it("opens nothing for an invite that is used, withdrawn, or expired", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {})
+    const { client, createUser } = inviteClient(null, { error: null })
+
+    await expect(
+      createInvitedAccount({ password: "long-enough-secret", token: INVITE_TOKEN }, { client })
+    ).rejects.toMatchObject({ statusCode: 404 })
+    expect(createUser).not.toHaveBeenCalled()
   })
 })
 

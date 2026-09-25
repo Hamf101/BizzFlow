@@ -62,7 +62,7 @@ describe("invite email service", () => {
     expect(String(templateParams.message_html)).toContain(
       "https://app.example.com/accept-invite/invite%20token"
     )
-    expect(String(templateParams.message_html)).toContain("Accept invitation")
+    expect(String(templateParams.message_html)).toContain("Join the workspace")
     expect(String(templateParams.message_html)).toContain(
       "background-color:#635273"
     )

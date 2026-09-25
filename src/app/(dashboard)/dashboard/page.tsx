@@ -326,7 +326,8 @@ export default async function DashboardPage(): Promise<ReactElement> {
         </p>
       </header>
 
-      {onboardingSteps.some((step) => !step.completed) ? (
+      {/* Setting up is for those who can; a new staff member starts at their own work. */}
+      {can("templates:manage") && onboardingSteps.some((step) => !step.completed) ? (
         <OnboardingChecklist
           sampleAction={seedSampleSubmissionsAction}
           sampleActionLabel={`Add ${SAMPLE_SUBMISSION_COUNT} sample submissions`}

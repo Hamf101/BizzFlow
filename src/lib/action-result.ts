@@ -7,6 +7,7 @@ export const ACTION_FEEDBACK_CODES = [
   "document_uploaded",
   "folder_created",
   "invalid_input",
+  "invite_accepted",
   "invite_already_member",
   "invite_created_email_failed",
   "invite_email_sent",

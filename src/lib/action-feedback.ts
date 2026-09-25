@@ -66,6 +66,13 @@ export const ACTION_FEEDBACK = {
     title: "Some information needs attention",
     tone: "error",
   },
+  invite_accepted: {
+    analyticsEvent: "action_outcome",
+    durationMs: 5_000,
+    persistent: false,
+    title: "You joined the workspace",
+    tone: "success",
+  },
   invite_already_member: {
     analyticsEvent: "action_outcome",
     description: "Find them in People. No invite was sent.",
