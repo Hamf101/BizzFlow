@@ -16,6 +16,7 @@ export const ACTION_FEEDBACK_CODES = [
   "operation_failed",
   "organization_created",
   "organization_required",
+  "password_updated",
   "permission_denied",
   "public_link_created",
   "public_link_disabled",

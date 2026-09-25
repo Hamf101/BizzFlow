@@ -125,6 +125,13 @@ export const ACTION_FEEDBACK = {
     title: "Organization created",
     tone: "success",
   },
+  password_updated: {
+    analyticsEvent: "action_outcome",
+    durationMs: 5_000,
+    persistent: false,
+    title: "Password updated",
+    tone: "success",
+  },
   organization_required: {
     analyticsEvent: "action_outcome",
     description: "Set up your workspace from the dashboard to continue.",

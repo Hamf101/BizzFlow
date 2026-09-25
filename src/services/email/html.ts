@@ -59,3 +59,31 @@ export function wrapEmailDocument(input: {
     "</html>",
   ].join("")
 }
+
+/**
+ * The body of an email that asks for one thing: a heading, a line on why, a
+ * button, the link written out for when the button doesn't work, and a note.
+ *
+ * @param input - Plain text for each part, and the link the button opens.
+ * @returns An escaped body fragment for {@link wrapEmailDocument}.
+ */
+export function createActionEmailHtml(input: {
+  action: string
+  body: string
+  heading: string
+  note: string
+  url: string
+}): string {
+  const safeUrl = escapeHtml(input.url)
+
+  return [
+    `<h1 style="margin:0 0 16px;color:#252329;font-family:Arial,Helvetica,sans-serif;font-size:24px;font-weight:700;line-height:32px;">${escapeHtml(input.heading)}</h1>`,
+    `<p style="margin:0 0 24px;color:#706a72;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:24px;">${escapeHtml(input.body)}</p>`,
+    '<table role="presentation" border="0" cellpadding="0" cellspacing="0" style="margin:0 0 24px;border-collapse:separate;"><tr><td style="border-radius:8px;background-color:#635273;">',
+    `<a href="${safeUrl}" target="_blank" style="display:inline-block;padding:12px 20px;color:#fffdfc;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:700;line-height:20px;text-decoration:none;">${escapeHtml(input.action)}</a>`,
+    "</td></tr></table>",
+    '<p style="margin:0 0 8px;color:#706a72;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;">If the button does not work, copy and paste this link into your browser:</p>',
+    `<p style="margin:0 0 24px;overflow-wrap:anywhere;word-break:break-word;"><a href="${safeUrl}" target="_blank" style="color:#635273;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;text-decoration:underline;">${safeUrl}</a></p>`,
+    `<p style="margin:0;padding-top:20px;border-top:1px solid #c9c2bb;color:#706a72;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;">${escapeHtml(input.note)}</p>`,
+  ].join("")
+}
