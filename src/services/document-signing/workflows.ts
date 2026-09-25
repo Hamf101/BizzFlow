@@ -77,6 +77,7 @@ import {
   type DocumentSigningRecipientRow,
   type TemplateContent,
 } from "@/types/template"
+import { withoutImageUrls } from "@/types/template-images"
 
 const SIGNED_ANSWERS_MESSAGE =
   "Someone has already signed. Send it again to change the answers."
@@ -280,7 +281,7 @@ export async function updateGeneratedDocumentContent(
       )
 
       const title = input.title.trim()
-      const content = parseDocumentContent(input.content)
+      const content = withoutImageUrls(parseDocumentContent(input.content))
 
       if (title.length === 0 || title.length > 180) {
         throw new DocumentSigningServiceError(

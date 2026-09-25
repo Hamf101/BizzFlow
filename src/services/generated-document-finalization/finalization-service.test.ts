@@ -89,7 +89,8 @@ describe("generated document finalization service", () => {
         documentId: DOCUMENT_ID,
         workflowStatus: "completed",
         metadataTimestamp: "2026-07-18T07:08:09.000Z",
-      })
+      }),
+      { readImage: expect.any(Function) }
     )
     expect(storage.store).toHaveBeenCalledWith(
       expect.objectContaining({

@@ -198,6 +198,7 @@ function createVersionTwoContent(): TemplateContentV2 {
     schemaVersion: 2,
     branding: {
       organizationName: "",
+      logoAsset: null,
       logoDataUrl: null,
       logoAlignment: "left",
       logoWidthPercent: 24,

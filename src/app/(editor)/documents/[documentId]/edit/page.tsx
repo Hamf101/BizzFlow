@@ -15,6 +15,7 @@ import { canPerformOrganizationAction } from "@/lib/permissions"
 import { cn } from "@/lib/utils"
 import { getGeneratedDocumentSigningView } from "@/services/document-signing-service"
 import { getEditorLayout } from "@/services/editor-layout-service"
+import { withTemplateImageUrls } from "@/services/template-image-service"
 import type { EditorLayout } from "@/types/editor-layout"
 import type { GeneratedDocumentSigningView } from "@/types/signing"
 import { saveEditorLayoutAction } from "@/app/(editor)/editor-layout-actions"
@@ -74,8 +75,15 @@ export default async function GeneratedDocumentEditorPage({
     organizationId: context.organization.id,
     documentId,
   })
-    .then((view: GeneratedDocumentSigningView) => ({
-      view,
+    .then(async (view: GeneratedDocumentSigningView) => ({
+      // Pictures get addresses this person can load, now their access is checked.
+      view: {
+        ...view,
+        document: {
+          ...view.document,
+          templateSnapshot: await withTemplateImageUrls(view.document.templateSnapshot, view.document.organizationId),
+        },
+      },
       errorMessage: null as string | null,
     }))
     .catch((error: unknown) => {

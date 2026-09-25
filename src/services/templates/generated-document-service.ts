@@ -43,6 +43,7 @@ import {
   requireTenantDocument,
   runTemplateOperation
 } from "./shared"
+import { withoutImageUrls } from "@/types/template-images"
 
 type RecentDocumentRow = Record<string, unknown> & {
   id: string
@@ -132,8 +133,8 @@ export async function createGeneratedDocument(
         }
       }
 
-      const snapshot = parseTemplateContent(
-        template?.content ?? input.content ?? createBlankTemplateContent()
+      const snapshot = withoutImageUrls(
+        parseTemplateContent(template?.content ?? input.content ?? createBlankTemplateContent())
       )
 
       if (containsFileField(snapshot)) {

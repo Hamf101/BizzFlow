@@ -18,6 +18,7 @@ import {
   getDocumentTemplate,
   listDocumentTemplateCategories,
 } from "@/services/template-service"
+import { withTemplateImageUrls } from "@/services/template-image-service"
 import type { EditorLayout } from "@/types/editor-layout"
 import type { DocumentTemplate } from "@/types/template"
 import type { TemplateFlowMessage } from "@/types/template-flow"
@@ -85,8 +86,9 @@ export default async function EditTemplatePage({
     organizationId: context.organization.id,
     templateId,
   })
-    .then((template: DocumentTemplate) => ({
-      template,
+    .then(async (template: DocumentTemplate) => ({
+      // Pictures get addresses this person can load, now their access is checked.
+      template: { ...template, content: await withTemplateImageUrls(template.content, template.organizationId) },
       errorMessage: null as string | null,
     }))
     .catch((error: unknown) => {

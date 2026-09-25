@@ -465,6 +465,42 @@ describe("template Flow service", () => {
     expect(content.branding.logoDataUrl).toBe("data:image/png;base64,aGVsbG8=")
   })
 
+  it("knows a stored logo is there without seeing its address, and removes it when asked", async () => {
+    const content = createContent()
+    content.branding.logoDataUrl = null
+    content.branding.logoAsset = {
+      height: 200,
+      id: "00000000-0000-4000-8000-0000000000a1",
+      type: "png",
+      url: "https://r2.example.com/logo-display?signature=secret",
+      width: 600
+    }
+    const aiProvider = createTestAiProvider([
+      flowProviderResult({
+        assistantMessage: "I removed the logo.",
+        needsConfirmation: false,
+        confirmationQuestion: "",
+        operations: [
+          {
+            type: "set_branding",
+            summary: "Removed logo",
+            payload: { removeLogo: true }
+          }
+        ]
+      })
+    ])
+
+    const result = await executeTemplateFlow(
+      createInput(content, "Remove the logo."),
+      createDependencies({ aiProvider })
+    )
+
+    const prompt = readProviderRequests(aiProvider)[0]?.input ?? ""
+    expect(JSON.parse(prompt).currentDraft.branding.hasLogo).toBe(true)
+    expect(prompt).not.toContain("r2.example.com")
+    expect(result.proposal?.candidateDraft.content.branding.logoAsset).toBeNull()
+  })
+
   it("uses the configured provider and exact model without fallback", async () => {
     const aiProvider = createTestAiProvider([
       flowProviderResult(successfulFlowPayload())

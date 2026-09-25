@@ -9,6 +9,7 @@ import {
   getGeneratedDocumentSigningView,
   DocumentSigningServiceError,
 } from "@/services/document-signing-service"
+import { readTemplateImage } from "@/services/template-image-service"
 
 import type {
   FinalizeGeneratedDocumentPdfInput,
@@ -158,12 +159,16 @@ export async function finalizeGeneratedDocumentPdf(
       return result
     }
 
-    const pdf = await (deps.renderPdf ?? renderGeneratedDocumentPdf)({
-      ...canonicalRender.input,
-      metadataTimestamp: normalizeFinalizationMetadataTimestamp(
-        prepared.createdAt
-      ),
-    })
+    const pdf = await (deps.renderPdf ?? renderGeneratedDocumentPdf)(
+      {
+        ...canonicalRender.input,
+        metadataTimestamp: normalizeFinalizationMetadataTimestamp(
+          prepared.createdAt
+        ),
+      },
+      // Stored pictures never change once uploaded, so the final PDF stays reproducible.
+      { readImage: (asset) => readTemplateImage(input.organizationId, asset) }
+    )
 
     if (pdf.length < 1) {
       throw new GeneratedDocumentFinalizationServiceError(

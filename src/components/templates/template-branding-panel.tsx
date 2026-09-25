@@ -4,7 +4,8 @@ import { ImageUp } from "lucide-react"
 import Image from "next/image"
 import { type ChangeEvent, type ReactElement, useState } from "react"
 
-import { readTemplateImage } from "@/components/templates/template-image"
+import { requestImageUploadAction } from "@/app/(editor)/image-actions"
+import { storeTemplateImage } from "@/components/templates/template-image"
 import { Select } from "@/components/ui/select"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { ColorWheel } from "@/components/ui/color-wheel"
@@ -13,6 +14,7 @@ import { Input } from "@/components/ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
 import type { TemplateBranding } from "@/types/template"
+import { imageSource } from "@/types/template-images"
 
 // Colours that read clearly on white paper, starting with the defaults. Kept in
 // lower case, as the picker stores them.
@@ -45,6 +47,8 @@ export function TemplateBrandingPanel({
   onChange: (branding: TemplateBranding) => void
 }): ReactElement {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [uploading, setUploading] = useState(false)
+  const logo = imageSource(branding.logoAsset, branding.logoDataUrl)
 
   async function handleLogoChange(
     event: ChangeEvent<HTMLInputElement>
@@ -56,10 +60,11 @@ export function TemplateBrandingPanel({
     }
 
     setErrorMessage(null)
+    setUploading(true)
 
     try {
-      const logoDataUrl = await readTemplateImage(file)
-      onChange({ ...branding, logoDataUrl })
+      const logoAsset = await storeTemplateImage(file, requestImageUploadAction)
+      onChange({ ...branding, logoAsset, logoDataUrl: null })
     } catch (error: unknown) {
       const reason =
         error instanceof Error ? error.message : "Unable to read logo."
@@ -70,24 +75,25 @@ export function TemplateBrandingPanel({
       })
       setErrorMessage(reason)
     } finally {
+      setUploading(false)
       event.target.value = ""
     }
   }
 
   return (
     <div className="grid gap-4">
-      {branding.logoDataUrl && (
+      {logo && (
         <div className="flex items-center justify-between gap-3 rounded-[8px] border bg-muted/30 p-3">
           <Image
             alt="Current organization logo"
             className="h-auto max-h-10 w-auto max-w-28 object-contain"
             height={40}
-            src={branding.logoDataUrl}
+            src={logo}
             unoptimized
             width={112}
           />
           <Button
-            onClick={(): void => onChange({ ...branding, logoDataUrl: null })}
+            onClick={(): void => onChange({ ...branding, logoAsset: null, logoDataUrl: null })}
             size="sm"
             type="button"
             variant="ghost"
@@ -175,9 +181,10 @@ export function TemplateBrandingPanel({
           )}
         >
           <ImageUp />
-          {branding.logoDataUrl ? "Replace logo" : "Upload logo"}
+          {uploading ? "Uploading…" : logo ? "Replace logo" : "Upload logo"}
           <input
             accept="image/png,image/jpeg"
+            disabled={uploading}
             aria-describedby={errorMessage ? "branding-logo-error" : "branding-logo-hint"}
             className="sr-only"
             id="branding-logo"

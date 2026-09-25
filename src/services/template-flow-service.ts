@@ -1204,7 +1204,9 @@ function buildFlowDocumentContext(
       organizationName: draft.content.branding.organizationName,
       primaryColor: draft.content.branding.primaryColor,
       accentColor: draft.content.branding.accentColor,
-      hasLogo: draft.content.branding.logoDataUrl !== null,
+      hasLogo:
+        draft.content.branding.logoAsset !== null ||
+        draft.content.branding.logoDataUrl !== null,
       logoAlignment: draft.content.branding.logoAlignment,
       logoWidthPercent: draft.content.branding.logoWidthPercent
     },
@@ -1815,6 +1817,7 @@ function applyBrandingOperation(
     draft.content.branding.logoWidthPercent = payload.logoWidthPercent
   }
   if (payload.removeLogo === true) {
+    draft.content.branding.logoAsset = null
     draft.content.branding.logoDataUrl = null
   }
 }

@@ -955,7 +955,7 @@ function estimateBrandingHeight(content: TemplateContent): number {
 
 function hasBranding(content: TemplateContent): boolean {
   return Boolean(
-    content.branding.logoDataUrl || content.branding.organizationName
+    content.branding.logoAsset || content.branding.logoDataUrl || content.branding.organizationName
   )
 }
 

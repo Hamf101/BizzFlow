@@ -4,6 +4,7 @@ import {
   escapeLikePattern,
   readCountedPage,
 } from "@/services/postgrest-paging"
+import { withTemplateImageUrls } from "@/services/template-image-service"
 import {
   DOCUMENT_TEMPLATE_STATUSES,
   TEMPLATE_SEARCH_MAX_LENGTH,
@@ -200,7 +201,12 @@ async function readTemplateCardContents(
     }
   }
 
-  return contents
+  // Cards draw stored pictures from addresses signed for this viewer.
+  return new Map(
+    await Promise.all(
+      [...contents].map(async ([id, content]) => [id, await withTemplateImageUrls(content, organizationId)] as const)
+    )
+  )
 }
 
 function filterVisibleTemplates<TQuery>(

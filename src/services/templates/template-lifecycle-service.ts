@@ -37,6 +37,7 @@ import {
   runTemplateOperation,
   TEMPLATE_COLUMNS,
 } from "./shared"
+import { withoutImageUrls } from "@/types/template-images"
 
 /**
  * Lists templates visible to an active organization member.
@@ -233,8 +234,9 @@ export async function createDocumentTemplate(
         "You cannot manage document templates."
       )
 
-      const content = upgradeV2TemplateContentToV3(
-        parseTemplateContent(input.content ?? createBlankTemplateContent())
+      // Signed picture addresses expire; only the pictures themselves are kept.
+      const content = withoutImageUrls(
+        upgradeV2TemplateContentToV3(parseTemplateContent(input.content ?? createBlankTemplateContent()))
       )
 
       assertTemplateImagesRenderable(content)
@@ -356,7 +358,7 @@ export async function updateDocumentTemplate(
         throw new TemplateServiceError("No template changes were provided.", 400)
       }
 
-      const nextContent = upgradeV2TemplateContentToV3(proposedContent)
+      const nextContent = withoutImageUrls(upgradeV2TemplateContentToV3(proposedContent))
 
       if (existing.status === "published") {
         assertTemplatePublishReady(nextTitle, nextDescription, nextContent)

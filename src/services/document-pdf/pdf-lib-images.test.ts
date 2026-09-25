@@ -112,6 +112,36 @@ describe("embedPdfLibImage", () => {
   })
 })
 
+describe("stored pictures", () => {
+  const PICTURE = { height: 20, id: "40000000-0000-4000-8000-000000000001", type: "png" as const, width: 40 }
+
+  it("prints a stored picture from its print copy, reading it once however often it appears", async () => {
+    const readImage = vi.fn(async () => new Uint8Array(createPngBytes(40, 20)))
+    const context = {
+      document: await PDFDocument.create(),
+      imageCache: new Map<string, PDFImage>(),
+      readImage,
+    } as unknown as PdfLibRenderContext
+
+    const first = await embedPdfLibImage(context, { asset: PICTURE })
+    const again = await embedPdfLibImage(context, { asset: { ...PICTURE, url: "https://r2.example.com/display" } })
+
+    expect([first.width, first.height]).toEqual([40, 20])
+    expect(again).toBe(first)
+    expect(readImage).toHaveBeenCalledExactlyOnceWith(PICTURE)
+  })
+
+  it("refuses a print copy too large to decode, and a render that cannot read pictures", async () => {
+    const render = createStubRender()
+
+    await expect(
+      embedPdfLibImage({ ...render.context, readImage: async () => new Uint8Array(createPngHeaderBytes(4_001, 4_000)) }, { asset: PICTURE })
+    ).rejects.toMatchObject({ statusCode: 400 })
+    expect(render.embedPng).not.toHaveBeenCalled()
+    await expect(embedPdfLibImage(render.context, { asset: PICTURE })).rejects.toMatchObject({ statusCode: 500 })
+  })
+})
+
 function createPngDataUrl(width: number, height: number, salt = 0): string {
   return toImageDataUrl("png", createPngHeaderBytes(width, height, salt))
 }

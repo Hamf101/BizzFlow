@@ -4,6 +4,7 @@ import {
   ArrowDown,
   ArrowUp,
   Copy,
+  Download,
   ImageUp,
   Plus,
   Trash2,
@@ -32,9 +33,11 @@ import {
 } from "@/lib/date-format"
 import { cn } from "@/lib/utils"
 import type { TemplateBlock } from "@/types/template"
+import { imageSource } from "@/types/template-images"
 import { evaluateTemplateDropdownOptionEdit } from "@/types/template-structure"
+import { downloadImageOriginalAction, requestImageUploadAction } from "@/app/(editor)/image-actions"
 
-import { readTemplateImage } from "./template-image"
+import { storeTemplateImage } from "./template-image"
 
 const CONTROL_CLASS_NAME =
   "w-full rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
@@ -593,7 +596,9 @@ function ImageFields({
   onChange: (block: TemplateBlock) => void
 }): ReactElement {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [uploading, setUploading] = useState(false)
   const altTextMissing = block.altText.trim().length === 0
+  const source = imageSource(block.asset, block.dataUrl)
 
   async function handleFileChange(
     event: ChangeEvent<HTMLInputElement>
@@ -605,10 +610,11 @@ function ImageFields({
     }
 
     setErrorMessage(null)
+    setUploading(true)
 
     try {
-      const dataUrl = await readTemplateImage(file)
-      onChange({ ...block, dataUrl })
+      const asset = await storeTemplateImage(file, requestImageUploadAction)
+      onChange({ ...block, asset, dataUrl: undefined })
     } catch (error: unknown) {
       const reason = error instanceof Error ? error.message : "Unable to read image."
 
@@ -619,37 +625,65 @@ function ImageFields({
       })
       setErrorMessage(reason)
     } finally {
+      setUploading(false)
       event.target.value = ""
+    }
+  }
+
+  async function downloadOriginal(asset: NonNullable<typeof block.asset>): Promise<void> {
+    const result = await downloadImageOriginalAction({ id: asset.id, type: asset.type })
+
+    if ("url" in result) {
+      window.location.assign(result.url)
+    } else {
+      setErrorMessage(result.error)
     }
   }
 
   return (
     <div className="grid gap-4">
       <div className="grid justify-items-center gap-2 rounded-lg border bg-muted/30 p-3">
-        <Image
-          alt={block.altText}
-          className="h-auto max-h-44 w-auto max-w-full rounded object-contain"
-          height={320}
-          src={block.dataUrl}
-          unoptimized
-          width={480}
-        />
-        <label
-          className={cn(
-            buttonVariants({ size: "sm", variant: "ghost" }),
-            "cursor-pointer has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring/35"
-          )}
-        >
-          <ImageUp />
-          Replace
-          <input
-            accept="image/png,image/jpeg"
-            aria-describedby={errorMessage ? `${block.id}-image-error` : undefined}
-            className="sr-only"
-            onChange={handleFileChange}
-            type="file"
+        {source ? (
+          <Image
+            alt={block.altText}
+            className="h-auto max-h-44 w-auto max-w-full rounded object-contain"
+            height={block.asset?.height ?? 320}
+            src={source}
+            unoptimized
+            width={block.asset?.width ?? 480}
           />
-        </label>
+        ) : null}
+        <div className="flex flex-wrap justify-center gap-1">
+          <label
+            className={cn(
+              buttonVariants({ size: "sm", variant: "ghost" }),
+              "cursor-pointer has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring/35",
+              uploading && "pointer-events-none opacity-60"
+            )}
+          >
+            <ImageUp />
+            {uploading ? "Uploading…" : "Replace"}
+            <input
+              accept="image/png,image/jpeg"
+              disabled={uploading}
+              aria-describedby={errorMessage ? `${block.id}-image-error` : undefined}
+              className="sr-only"
+              onChange={handleFileChange}
+              type="file"
+            />
+          </label>
+          {block.asset ? (
+            <Button
+              onClick={(): void => void downloadOriginal(block.asset as NonNullable<typeof block.asset>)}
+              size="sm"
+              type="button"
+              variant="ghost"
+            >
+              <Download />
+              Download original
+            </Button>
+          ) : null}
+        </div>
         {errorMessage && (
           <p className="text-sm text-destructive" id={`${block.id}-image-error`} role="alert">
             {errorMessage}

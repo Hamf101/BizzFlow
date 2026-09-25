@@ -23,10 +23,13 @@ export function buildContentSecurityPolicy(
     "wss://*.supabase.co",
     "https://*.r2.cloudflarestorage.com",
   ])
+  // Stored pictures load from the file store, through addresses it signed.
+  const imageSources = new Set<string>(["'self'", "data:", "blob:", "https://*.r2.cloudflarestorage.com"])
   const r2Origin = getHttpOrigin(input.r2Endpoint)
 
   if (r2Origin) {
     connectSources.add(r2Origin)
+    imageSources.add(r2Origin)
   }
 
   if (input.posthogKey?.trim()) {
@@ -46,7 +49,7 @@ export function buildContentSecurityPolicy(
     "default-src 'self'",
     `script-src 'self' 'unsafe-inline'${input.isProduction ? "" : " 'unsafe-eval'"}`,
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: blob:",
+    `img-src ${Array.from(imageSources).join(" ")}`,
     "font-src 'self' data:",
     `connect-src ${Array.from(connectSources).join(" ")}`,
     "worker-src 'self' blob:",

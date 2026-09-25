@@ -37,6 +37,7 @@ import type {
   TemplateBranding,
   TemplateLayout
 } from "@/types/template"
+import { imageSource } from "@/types/template-images"
 
 const EMPTY_CHANGED_BLOCK_IDS: ReadonlySet<string> = new Set<string>()
 
@@ -196,7 +197,9 @@ function TemplateBrandHeader({
   branding: TemplateBranding
   showEditorialGutter: boolean
 }): ReactElement | null {
-  if (!branding.logoDataUrl && !branding.organizationName) {
+  const logo = imageSource(branding.logoAsset, branding.logoDataUrl)
+
+  if (!logo && !branding.organizationName) {
     return null
   }
 
@@ -219,12 +222,12 @@ function TemplateBrandHeader({
           branding.logoAlignment === "right" && "items-end text-right"
         )}
       >
-        {branding.logoDataUrl && (
+        {logo && (
           <Image
             alt={`${branding.organizationName || "Organization"} logo`}
             className="h-auto max-h-16 object-contain"
             height={96}
-            src={branding.logoDataUrl}
+            src={logo}
             style={{ width: `${branding.logoWidthPercent}%` }}
             unoptimized
             width={480}

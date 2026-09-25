@@ -48,6 +48,7 @@ import {
 } from "@/types/template-visibility"
 
 import { getGeneratedDocumentAnswerName } from "./generated-document-form-data"
+import { imageSource } from "@/types/template-images"
 
 /**
  * Hands answer ownership to the caller so it survives this component's mount.
@@ -225,7 +226,9 @@ function GeneratedBrandHeader({
 }: {
   branding: TemplateBranding
 }): ReactElement | null {
-  if (!branding.logoDataUrl && !branding.organizationName) {
+  const logo = imageSource(branding.logoAsset, branding.logoDataUrl)
+
+  if (!logo && !branding.organizationName) {
     return null
   }
 
@@ -239,12 +242,12 @@ function GeneratedBrandHeader({
       )}
       data-template-brand-header="true"
     >
-      {branding.logoDataUrl && (
+      {logo && (
         <Image
           alt={`${branding.organizationName || "Organization"} logo`}
           className="h-auto max-h-16 object-contain"
           height={96}
-          src={branding.logoDataUrl}
+          src={logo}
           style={{ width: `${branding.logoWidthPercent}%` }}
           unoptimized
           width={480}

@@ -2,9 +2,13 @@ import { DocumentPdfServiceError } from "./document-pdf/errors"
 import { createPdfPagePlans } from "./document-pdf/planner"
 import { renderPdfLibDocument } from "./document-pdf/pdf-lib-renderer"
 import { normalizePdfInput } from "./document-pdf/shared"
+import type { PdfLibRenderContext } from "./document-pdf/pdf-lib-types"
 import type { RenderGeneratedDocumentPdfInput } from "./document-pdf/types"
 
 export { DocumentPdfServiceError } from "./document-pdf/errors"
+
+/** Reads stored pictures' print copies, for documents that have them. */
+export type RenderGeneratedDocumentPdfOptions = { readImage?: PdfLibRenderContext["readImage"] }
 export type {
   DocumentPdfSigner,
   RenderGeneratedDocumentPdfInput,
@@ -14,18 +18,20 @@ export type {
  * Renders an immutable guided document snapshot to a PDF buffer.
  *
  * @param input - Generated document snapshot, answers, workflow, and signer state.
+ * @param options - Reads stored pictures' print copies, for documents that have them.
  * @returns Complete PDF bytes suitable for download or private storage.
  * @throws DocumentPdfServiceError when validation or rendering fails.
  */
 export async function renderGeneratedDocumentPdf(
-  input: RenderGeneratedDocumentPdfInput
+  input: RenderGeneratedDocumentPdfInput,
+  options: RenderGeneratedDocumentPdfOptions = {}
 ): Promise<Buffer> {
   const startedAt = performance.now()
 
   try {
     const normalizedInput = normalizePdfInput(input)
     const pages = createPdfPagePlans(normalizedInput)
-    const buffer = await renderPdfLibDocument(normalizedInput, pages)
+    const buffer = await renderPdfLibDocument(normalizedInput, pages, options.readImage)
 
     console.info("generated_document_pdf_rendered", {
       documentId: input.documentId,

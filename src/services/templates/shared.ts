@@ -36,6 +36,7 @@ import type {
   GeneratedDocument,
   TemplateBlock,
   TemplateContent,
+  TemplateImageAsset,
 } from "@/types/template"
 import {
   parseTemplateContent,
@@ -48,6 +49,7 @@ import type {
 } from "./contracts"
 import { TemplateServiceError } from "./errors"
 import { loadActiveMembership } from "@/services/organizations/active-membership"
+import { mapImageAssets, PRINT_MAX_WIDTH } from "@/types/template-images"
 
 export const TEMPLATE_COLUMNS =
   "id,org_id,title,description,category,status,revision,content,created_by,updated_by,published_by,archived_by,created_at,updated_at,published_at,archived_at"
@@ -340,10 +342,21 @@ export function assertTemplateImagesRenderable(content: TemplateContent): void {
   const dataUrls = [
     content.branding.logoDataUrl,
     ...content.blocks.map((block: TemplateBlock): string | null =>
-      block.type === "image" ? block.dataUrl : null
+      block.type === "image" ? (block.dataUrl ?? null) : null
     ),
   ]
-  let pngPixels = 0
+  const storedPngs = new Map<string, TemplateImageAsset>()
+  mapImageAssets(content, (asset) => {
+    if (asset.type === "png") {
+      storedPngs.set(asset.id, asset)
+    }
+    return asset
+  })
+  // A stored picture prints from its print copy, no wider than print needs.
+  let pngPixels = [...storedPngs.values()].reduce((total, asset) => {
+    const fit = Math.min(1, PRINT_MAX_WIDTH / asset.width)
+    return total + Math.round(asset.width * fit) * Math.round(asset.height * fit)
+  }, 0)
 
   for (const dataUrl of new Set(dataUrls)) {
     if (!dataUrl) {
