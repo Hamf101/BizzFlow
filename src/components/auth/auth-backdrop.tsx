@@ -47,6 +47,20 @@ const FACETS: ReadonlyArray<{ at: number; corners: [Corner, Corner, Corner]; str
 
 const FLAP: [Point, Point, Point] = [[90, -230], [90, -140], [180, -140]]
 const WAVES = [-20, 70]
+// How often the facets' tones move on.
+const DRIFT_STEP_MS = 250
+// How far the grid and the page move at full lean: the page further, so it reads as nearer.
+const LEANS = [
+  [".auth-grid", -8],
+  [".auth-fold", -22],
+] as const
+// Where the backdrop leans on its own until a cursor or tilt arrives, and how far through it gets there.
+const DRIFT = [
+  [-0.6, -0.3, 0],
+  [0.4, 0.5, 0.35],
+  [0.7, -0.4, 0.7],
+  [-0.3, 0.6, 1],
+] as const
 
 type Point = readonly [number, number]
 
@@ -111,15 +125,30 @@ export function AuthBackdrop(): ReactElement {
 
     // The pieces are drawn in the same order as CENTERS; the waves, last, are
     // lines across the page rather than pieces of it.
-    const pieces = [...figure.current.querySelectorAll(".auth-fold-piece")]
-    return playFoldLoops(
-      figure.current,
+    const drawn = figure.current
+    const pieces = [...drawn.querySelectorAll(".auth-fold-piece")]
+    const stop = playFoldLoops(
+      drawn,
       pieces.map((element, index) => ({ center: CENTERS[index]!, element, line: index > FACETS.length }))
     )
+    // Moves the held tones on, each nudge too small to see (globals.css).
+    const started = performance.now()
+    const drift = window.setInterval(() => {
+      for (const animation of drawn.getAnimations({ subtree: true })) {
+        if (animation instanceof CSSAnimation && animation.animationName === "auth-fold-drift") {
+          animation.currentTime = performance.now() - started
+        }
+      }
+    }, DRIFT_STEP_MS)
+
+    return () => {
+      stop()
+      clearInterval(drift)
+    }
   }, [step])
 
   return (
-    <div aria-hidden="true" className="auth-backdrop pointer-events-none absolute inset-0" data-idle="" ref={ground}>
+    <div aria-hidden="true" className="auth-backdrop pointer-events-none absolute inset-0" ref={ground}>
       <div className="auth-grid absolute -inset-10" />
       <svg
         // Centred behind the card: as tall as a wide screen allows, and on a
@@ -171,10 +200,12 @@ export function AuthBackdrop(): ReactElement {
 
 /**
  * Leans the backdrop toward the cursor, or the way a phone or tablet is
- * tilted. Until either arrives it drifts on its own (`auth-lean`), which is all
- * an iPhone gets, since reading its tilt needs a permission prompt.
+ * tilted. Until either arrives it drifts on its own, which is all an iPhone
+ * gets, since reading its tilt needs a permission prompt. Every move is an
+ * animation of the grid and the page themselves, so the browser moves them
+ * without redrawing, even while its time goes to another window.
  *
- * @param ground - The backdrop, which carries the lean as CSS variables.
+ * @param ground - The backdrop, holding the grid and the page.
  * @returns A cleanup that stops listening.
  */
 function lean(ground: HTMLElement | null): (() => void) | undefined {
@@ -182,13 +213,29 @@ function lean(ground: HTMLElement | null): (() => void) | undefined {
     return undefined
   }
 
+  const movers = LEANS.map(([selector, reach]) => ({ element: ground.querySelector(selector)!, reach }))
+  const at = (reach: number, x: number, y: number): string =>
+    `translate3d(${(x * reach).toFixed(2)}px, ${(y * reach).toFixed(2)}px, 0)`
+  let moving = movers.map(({ element, reach }) =>
+    element.animate(
+      DRIFT.map(([x, y, offset]) => ({ easing: "ease-in-out", offset, transform: at(reach, x, y) })),
+      { direction: "alternate", duration: 24_000, iterations: Infinity }
+    )
+  )
   let frame = 0
   const toward = (x: number, y: number): void => {
     cancelAnimationFrame(frame)
     frame = requestAnimationFrame(() => {
-      delete ground.dataset.idle
-      ground.style.setProperty("--lean-x", clamp(x).toFixed(3))
-      ground.style.setProperty("--lean-y", clamp(y).toFixed(3))
+      // From wherever it has got to, its own drift included.
+      const from = movers.map(({ element }) => getComputedStyle(element).transform)
+      moving.forEach((animation) => animation.cancel())
+      moving = movers.map(({ element, reach }, index) =>
+        element.animate([{ transform: from[index] }, { transform: at(reach, clamp(x), clamp(y)) }], {
+          duration: 900,
+          easing: "cubic-bezier(0.2, 0.8, 0.2, 1)",
+          fill: "forwards",
+        })
+      )
     })
   }
   const onPointer = (event: PointerEvent): void => {
@@ -208,6 +255,7 @@ function lean(ground: HTMLElement | null): (() => void) | undefined {
 
   return () => {
     cancelAnimationFrame(frame)
+    moving.forEach((animation) => animation.cancel())
     removeEventListener("pointermove", onPointer)
     removeEventListener("deviceorientation", onTilt)
   }

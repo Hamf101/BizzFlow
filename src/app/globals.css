@@ -217,33 +217,7 @@
  * The dot grid and the page lean toward the cursor or a tilted phone, the page
  * further, so it reads as nearer.
  */
-@property --lean-x {
-  syntax: "<number>";
-  inherits: true;
-  initial-value: 0;
-}
-
-@property --lean-y {
-  syntax: "<number>";
-  inherits: true;
-  initial-value: 0;
-}
-
 @layer components {
-  .auth-backdrop[data-idle] {
-    animation: auth-lean 24s ease-in-out infinite alternate;
-  }
-
-  .auth-grid,
-  .auth-fold {
-    transition: transform 0.9s cubic-bezier(0.2, 0.8, 0.2, 1);
-  }
-
-  /* While drifting on its own, the lean is already smooth. */
-  .auth-backdrop[data-idle] :is(.auth-grid, .auth-fold) {
-    transition: none;
-  }
-
   .auth-grid {
     background-image: radial-gradient(
       circle,
@@ -251,11 +225,6 @@
       transparent 1.6px
     );
     background-size: 62px 62px;
-    transform: translate3d(calc(var(--lean-x) * -8px), calc(var(--lean-y) * -8px), 0);
-  }
-
-  .auth-fold {
-    transform: translate3d(calc(var(--lean-x) * -22px), calc(var(--lean-y) * -22px), 0);
   }
 
   .auth-fold-float {
@@ -295,8 +264,13 @@
     transform: none;
   }
 
+  /*
+   * Held still and moved on a few times a second (auth-backdrop.tsx): a colour
+   * that changed every frame would have the page redrawn every frame, and the
+   * pieces stutter whenever the browser gives its time to another window.
+   */
   .auth-fold[data-whole] .auth-fold-facet {
-    animation: auth-fold-drift 16s ease-in-out calc(var(--i) * -1.7s) infinite alternate;
+    animation: auth-fold-drift 16s ease-in-out calc(var(--i) * -1.7s) infinite alternate paused;
   }
 
   .auth-fold-wave {
@@ -315,28 +289,6 @@
   .auth-fold-wave[data-on="true"] {
     opacity: 1;
     stroke-dashoffset: 0;
-  }
-}
-
-@keyframes auth-lean {
-  0% {
-    --lean-x: -0.6;
-    --lean-y: -0.3;
-  }
-
-  35% {
-    --lean-x: 0.4;
-    --lean-y: 0.5;
-  }
-
-  70% {
-    --lean-x: 0.7;
-    --lean-y: -0.4;
-  }
-
-  100% {
-    --lean-x: -0.3;
-    --lean-y: 0.6;
   }
 }
 
