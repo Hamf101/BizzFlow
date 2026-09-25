@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest"
 
+import { formatDateAnswer } from "@/lib/date-format"
+
 import {
   createBlankTemplateContent,
   MAX_TEMPLATE_BLOCK_COUNT,
@@ -196,6 +198,7 @@ function createVersionTwoContent(): TemplateContentV2 {
     schemaVersion: 2,
     branding: {
       organizationName: "",
+      logoAsset: null,
       logoDataUrl: null,
       logoAlignment: "left",
       logoWidthPercent: 24,
@@ -280,3 +283,52 @@ function createConditionalContent() {
 
   return content
 }
+
+describe("date field formats", () => {
+  it("writes a stored date in any order, separator and month style, and leaves anything else alone", () => {
+    const write = (order: "dmy" | "mdy" | "ymd", separator: "/" | "." | "-" | " ", month: "number" | "short" | "long") =>
+      formatDateAnswer("2026-09-02", { month, order, separator })
+
+    expect([
+      write("dmy", "/", "number"),
+      write("mdy", "/", "number"),
+      write("ymd", "-", "number"),
+      write("dmy", ".", "number"),
+      write("dmy", " ", "long"),
+      write("mdy", " ", "short"),
+      write("ymd", " ", "long"),
+    ]).toEqual([
+      "02/09/2026",
+      "09/02/2026",
+      "2026-09-02",
+      "02.09.2026",
+      "2 September 2026",
+      "Sep 2, 2026",
+      "2026 September 2",
+    ])
+    // A field saved before formats existed prints as it always has.
+    expect(formatDateAnswer("2026-09-02", undefined)).toBe("2026-09-02")
+    expect(formatDateAnswer("", { month: "number", order: "dmy", separator: "/" })).toBe("")
+    expect(formatDateAnswer("next Tuesday", { month: "number", order: "dmy", separator: "/" })).toBe("next Tuesday")
+  })
+
+  it("keeps a date field's format through a save", () => {
+    const content = createBlankTemplateContent()
+    const saved = parseTemplateContent({
+      ...content,
+      blocks: [
+        {
+          dateFormat: { month: "number", order: "dmy", separator: "/" },
+          fieldKey: "move_in",
+          helpText: null,
+          id: FIRST_BLOCK_ID,
+          label: "Move-in date",
+          required: true,
+          type: "date_field",
+        },
+      ],
+    })
+
+    expect(saved.blocks[0]).toMatchObject({ dateFormat: { month: "number", order: "dmy", separator: "/" }, type: "date_field" })
+  })
+})

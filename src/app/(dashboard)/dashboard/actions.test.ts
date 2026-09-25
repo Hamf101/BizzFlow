@@ -109,26 +109,36 @@ describe("createOrganizationAction", () => {
     })
   })
 
-  it("maps service copy to a fixed conflict outcome", async () => {
+  it("keeps service detail out of the address, and sends the person back to name their workspace", async () => {
     vi.mocked(createOrganization).mockRejectedValue(
       new OrganizationServiceError("Private duplicate organization detail", 409)
     )
 
     await expect(createOrganizationAction(new FormData())).rejects.toThrow(
-      "NEXT_REDIRECT:/dashboard?feedback=refresh_required"
+      "NEXT_REDIRECT:/welcome?error=Unable+to+create+the+workspace.+Try+again."
     )
     expect(redirectMock).not.toHaveBeenCalledWith(
       expect.stringContaining("Private+duplicate")
     )
   })
 
-  it("preserves the dashboard login return path", async () => {
+  it("shows the name rule where the name was typed", async () => {
+    vi.mocked(createOrganization).mockRejectedValue(
+      new OrganizationServiceError("Workspace name must be between 2 and 120 characters.", 400)
+    )
+
+    await expect(createOrganizationAction(new FormData())).rejects.toThrow(
+      "NEXT_REDIRECT:/welcome?error=Workspace+name+must+be+between+2+and+120+characters."
+    )
+  })
+
+  it("returns to naming the workspace after logging in", async () => {
     vi.mocked(getAuthenticatedUser).mockRejectedValue(
       new AuthenticationError("Sign in to continue.")
     )
 
     await expect(createOrganizationAction(new FormData())).rejects.toThrow(
-      "NEXT_REDIRECT:/login?next=%2Fdashboard"
+      "NEXT_REDIRECT:/login?next=%2Fwelcome"
     )
   })
 })

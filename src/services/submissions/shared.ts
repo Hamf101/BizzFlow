@@ -30,6 +30,7 @@ import {
   type SubmissionFileStatus,
 } from "@/types/submission"
 import { SubmissionReviewDomainError } from "@/types/submission-review"
+import { loadActiveMembership } from "@/services/organizations/active-membership"
 
 /** Columns required by the canonical submission row parser. */
 export const SUBMISSION_COLUMNS =
@@ -140,15 +141,7 @@ export async function requireSubmissionPermission(
   action: OrganizationPermissionAction,
   rejectionMessage: string
 ): Promise<OrganizationPermissionSubject> {
-  const { data, error } = await client
-    .from("organization_memberships")
-    .select(
-      "role,role_definition:organization_roles!organization_memberships_role_definition_fk(permissions)"
-    )
-    .eq("org_id", organizationId)
-    .eq("user_id", actorUserId)
-    .eq("status", "active")
-    .maybeSingle()
+  const { data, error } = await loadActiveMembership(client, organizationId, actorUserId)
 
   if (error) {
     throw createSubmissionDatabaseError(

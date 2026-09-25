@@ -24,6 +24,7 @@ import {
   getCurrentOrganizationContext,
   OrganizationServiceError,
 } from "@/services/organization-service"
+import { readTemplateImage } from "@/services/template-image-service"
 
 type GeneratedDocumentPdfRouteContext = {
   params: Promise<{ documentId: string }>
@@ -108,6 +109,8 @@ export async function GET(
         signatureDataUrl: recipient.signatureDataUrl,
         initialsDataUrl: recipient.initialsDataUrl,
       })),
+    }, {
+      readImage: (asset) => readTemplateImage(organizationContext.organization.id, asset),
     })
 
     return new Response(new Uint8Array(pdf), {

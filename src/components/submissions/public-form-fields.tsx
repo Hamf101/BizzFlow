@@ -11,8 +11,10 @@ import {
   isStaticTemplateBlock,
   TemplateStaticBlock
 } from "@/components/templates/template-static-block"
+import { DatePicker } from "@/components/ui/date-picker"
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { Select } from "@/components/ui/select"
 import { createTemplateRenderPlan } from "@/services/templates/template-render-plan"
 import type { TemplateBlock, TemplateContent } from "@/types/template"
 
@@ -232,14 +234,12 @@ function PublicFormFieldBlock({
       return (
         <Field data-public-form-field-key={block.fieldKey}>
           <PublicFormFieldLabel block={block} />
-          <Input
+          <DatePicker
+            format={block.dateFormat}
             id={block.id}
             name={fieldName}
-            onChange={(event: ChangeEvent<HTMLInputElement>): void =>
-              onAnswerChange(block.fieldKey, event.target.value)
-            }
+            onChange={(value: string): void => onAnswerChange(block.fieldKey, value)}
             required={block.required}
-            type="date"
             value={readStringAnswer(answers, block.fieldKey)}
           />
           <PublicFormFieldHelpText block={block} />
@@ -279,8 +279,7 @@ function PublicFormFieldBlock({
       return (
         <Field data-public-form-field-key={block.fieldKey}>
           <PublicFormFieldLabel block={block} />
-          <select
-            className="h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/50"
+          <Select
             id={block.id}
             name={fieldName}
             onChange={(event: ChangeEvent<HTMLSelectElement>): void =>
@@ -297,7 +296,7 @@ function PublicFormFieldBlock({
                 {option}
               </option>
             ))}
-          </select>
+          </Select>
           <PublicFormFieldHelpText block={block} />
         </Field>
       )

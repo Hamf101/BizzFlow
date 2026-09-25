@@ -1,3 +1,5 @@
+import { cache } from "react"
+
 import { createAdminClient } from "@/lib/supabase/admin"
 import type {
   CreateOrganizationInput,
@@ -70,14 +72,15 @@ export async function createOrganization(
 }
 
 /**
- * Loads the first active organization context for an authenticated user.
+ * Loads the first active organization context for an authenticated user. A
+ * page's layout and body both need it, so one render reads it once.
  *
  * @param userId - Authenticated Supabase user id.
  * @param deps - Optional injected client for tests.
  * @returns Current organization context, or null when the user has none.
  * @throws OrganizationServiceError when Supabase reads fail.
  */
-export async function getCurrentOrganizationContext(
+export const getCurrentOrganizationContext = cache(async function getCurrentOrganizationContext(
   userId: string,
   deps: OrganizationMutationDeps = {}
 ): Promise<OrganizationContext | null> {
@@ -90,4 +93,4 @@ export async function getCurrentOrganizationContext(
       return getCurrentMembershipContext(client, userId)
     }
   )
-}
+})

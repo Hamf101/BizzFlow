@@ -8,7 +8,7 @@ import type { CreateDocumentUploadUrlResponse } from "@/types/document"
  * A 412 response is accepted because a retry may follow an earlier successful PUT.
  *
  * @param uploadUrl - Short-lived signed object-storage URL.
- * @param file - Browser file whose type and size were signed by the server.
+ * @param file - Browser file or blob whose type and size were signed by the server.
  * @param failureMessage - User-safe error for storage failures.
  * @param contentType - Optional canonical MIME type when the browser omits it.
  * @returns A promise that resolves after the object is present.
@@ -16,7 +16,7 @@ import type { CreateDocumentUploadUrlResponse } from "@/types/document"
  */
 export async function uploadFileToSignedUrl(
   uploadUrl: string,
-  file: File,
+  file: Blob,
   failureMessage: string,
   contentType: string = file.type
 ): Promise<void> {

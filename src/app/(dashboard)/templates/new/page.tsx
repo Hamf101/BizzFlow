@@ -8,6 +8,7 @@ import { Button, buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import { Field, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { SuggestInput } from "@/components/ui/suggest-input"
 import { buildFeedbackRedirect } from "@/lib/action-result"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
 import { loadPageOrganizationContext } from "@/lib/page-organization-context"
@@ -98,18 +99,13 @@ export default async function NewTemplatePage(): Promise<ReactElement> {
             </Field>
             <Field>
               <FieldLabel htmlFor="new-template-category">Category</FieldLabel>
-              <Input
+              <SuggestInput
                 id="new-template-category"
-                list="template-category-suggestions"
                 maxLength={40}
                 name="category"
                 placeholder="Operations"
+                suggestions={categorySuggestions}
               />
-              <datalist id="template-category-suggestions">
-                {categorySuggestions.map((category: string) => (
-                  <option key={category} value={category} />
-                ))}
-              </datalist>
             </Field>
             <Field>
               <FieldLabel htmlFor="new-template-description">

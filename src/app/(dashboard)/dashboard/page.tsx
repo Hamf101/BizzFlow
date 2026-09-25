@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation"
 import type { ReactElement } from "react"
 
 import { DashboardHome } from "@/components/dashboard/dashboard-home"
@@ -9,21 +10,6 @@ import {
 } from "@/components/dashboard/dashboard-view"
 import { OnboardingChecklist } from "@/components/dashboard/onboarding-checklist"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Button } from "@/components/ui/button"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
-import {
-  Field,
-  FieldDescription,
-  FieldGroup,
-  FieldLabel,
-} from "@/components/ui/field"
-import { Input } from "@/components/ui/input"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
 import { getPageErrorMessage } from "@/lib/page-errors"
 import { loadPageOrganizationContext } from "@/lib/page-organization-context"
@@ -47,7 +33,6 @@ import {
 import type { GeneratedDocumentWorkflowStatus } from "@/types/template"
 
 import {
-  createOrganizationAction,
   seedSampleSubmissionsAction,
   seedStarterTemplatesAction,
 } from "./actions"
@@ -72,49 +57,17 @@ export default async function DashboardPage(): Promise<ReactElement> {
   }).format(now)
 
   if (!context) {
+    if (!contextErrorMessage) {
+      redirect("/welcome")
+    }
+
     return (
       <div className="flex flex-col gap-6">
         <h1 className="text-2xl leading-none font-medium tracking-[-0.02em]">Dashboard</h1>
-
-        {contextErrorMessage && (
-          <Alert variant="destructive">
-            <AlertTitle>Supabase setup incomplete</AlertTitle>
-            <AlertDescription>{contextErrorMessage}</AlertDescription>
-          </Alert>
-        )}
-
-        {!contextErrorMessage && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Create organization</CardTitle>
-              <CardDescription>
-                Start the tenant workspace that will own forms, documents, tasks,
-                and submissions.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form action={createOrganizationAction} className="flex flex-col gap-5">
-                <FieldGroup>
-                  <Field>
-                    <FieldLabel htmlFor="name">Organization name</FieldLabel>
-                    <Input
-                      id="name"
-                      name="name"
-                      type="text"
-                      minLength={2}
-                      maxLength={120}
-                      required
-                    />
-                    <FieldDescription>
-                      Use the business name your staff will recognize.
-                    </FieldDescription>
-                  </Field>
-                </FieldGroup>
-                <Button type="submit">Create organization</Button>
-              </form>
-            </CardContent>
-          </Card>
-        )}
+        <Alert variant="destructive">
+          <AlertTitle>Unable to load your workspace</AlertTitle>
+          <AlertDescription>{contextErrorMessage}</AlertDescription>
+        </Alert>
       </div>
     )
   }
@@ -326,7 +279,8 @@ export default async function DashboardPage(): Promise<ReactElement> {
         </p>
       </header>
 
-      {onboardingSteps.some((step) => !step.completed) ? (
+      {/* Setting up is for those who can; a new staff member starts at their own work. */}
+      {can("templates:manage") && onboardingSteps.some((step) => !step.completed) ? (
         <OnboardingChecklist
           sampleAction={seedSampleSubmissionsAction}
           sampleActionLabel={`Add ${SAMPLE_SUBMISSION_COUNT} sample submissions`}

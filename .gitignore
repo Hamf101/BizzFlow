@@ -5,6 +5,7 @@ node_modules/
 .next/
 out/
 tsconfig.tsbuildinfo
+next-env.d.ts
 
 # Production builds
 dist/
@@ -32,8 +33,12 @@ supabase/.temp/
 # Agent guides, planning notes, spikes, audits, threat models, and
 # verification evidence. None of it is meaningful to an outside reader.
 .agent/
+.claude/
+.cursor/
+.serena/
 .agents/
 AGENTS.md
+CLAUDE.md
 .planning/
 artifacts/
 skills-lock.json
@@ -56,9 +61,6 @@ temp/
 
 # OS files
 .DS_Store
-
-# Claude Code local settings
-.claude/settings.local.json
 
 # ZCode local session directory
 .zcode/

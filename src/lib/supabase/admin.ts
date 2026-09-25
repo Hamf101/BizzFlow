@@ -1,3 +1,5 @@
+import { cache } from "react"
+
 import {
   createClient as createSupabaseClient,
   type SupabaseClient,
@@ -1005,7 +1007,7 @@ export type AdminSupabaseClient = SupabaseClient<AdminDatabase>
  * @returns Typed Supabase admin client for server-only data access.
  * @throws Error when required Supabase environment variables are missing.
  */
-export function createAdminClient(): AdminSupabaseClient {
+export const createAdminClient = cache((): AdminSupabaseClient => {
   const env = getAdminSupabaseEnv()
 
   return createSupabaseClient<AdminDatabase>(
@@ -1018,4 +1020,4 @@ export function createAdminClient(): AdminSupabaseClient {
       },
     }
   )
-}
+})

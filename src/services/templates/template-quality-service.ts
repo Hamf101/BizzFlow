@@ -4,6 +4,7 @@ import {
   type TemplateBlock,
   type TemplateContent
 } from "@/types/template"
+import { FIELD_KEY_PATTERN } from "@/types/template-structure"
 
 import { createTemplateRenderPlan } from "./template-render-plan"
 
@@ -60,7 +61,6 @@ export type TemplateQualityEvaluation = Readonly<{
 }>
 
 const NEEDS_INPUT_PATTERN = /\bneeds\s+input\s*:/i
-const SNAKE_CASE_FIELD_KEY_PATTERN = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/
 const PLACEHOLDER_CHOICE_PATTERN =
   /^(?:option|choice)\s*(?:[-_#]\s*)?(?:\d+|[a-z]|one|two|three|four|five)$/i
 const MAX_TEMPLATE_TITLE_LENGTH = 180
@@ -330,7 +330,7 @@ export function evaluateTemplateQuality(
   const invalidFieldKeyIds = fieldBlocks
     .filter(
       (block): boolean =>
-        !SNAKE_CASE_FIELD_KEY_PATTERN.test(block.fieldKey)
+        !FIELD_KEY_PATTERN.test(block.fieldKey)
     )
     .map((block): string => block.id)
 

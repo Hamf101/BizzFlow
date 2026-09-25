@@ -13,13 +13,32 @@ import {
 } from "react"
 
 import { POINT_PX } from "@/components/editor/editor-canvas"
+import type { DockOrientation } from "@/components/editor/editor-dock"
+import { FloatingTool, type Spot } from "@/components/editor/floating-tool"
 import type { AutosaveStatus } from "@/components/editor/use-autosave"
 import { Button, buttonVariants } from "@/components/ui/button"
+import { DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu"
+import { Segmented } from "@/components/ui/segmented"
 import { Sheet, SheetClose, SheetContent, SheetTitle } from "@/components/ui/sheet"
+import { bizflowToast } from "@/components/ui/toaster"
 import { cn } from "@/lib/utils"
+import type { EditorLayout } from "@/types/editor-layout"
 
 const ZOOM_STEPS = [0.5, 0.67, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2] as const
-const NARROW = "(width < 48rem)"
+// Phones, and touch tablets held upright: a page shrunk to fit their width
+// would leave text and targets too small for a finger.
+const NARROW = "(width < 48rem), (pointer: coarse) and (width < 64rem)"
+
+// Where the dock and zoom start: the dock upright at the left, the zoom at the
+// bottom right.
+const DOCK_HOME: Spot = { x: 0, y: 0.5 }
+const ZOOM_HOME: Spot = { x: 1, y: 1 }
+
+/** Where a person keeps the floating tools, and how to keep a change. */
+export type EditorLayoutStore = Readonly<{
+  initial: EditorLayout
+  save: (layout: EditorLayout) => Promise<{ error?: string }>
+}>
 
 /** One of the editor's modes, such as Edit, Preview and Test. */
 export type EditorMode<Value extends string> = Readonly<{ label: string; value: Value }>
@@ -31,8 +50,10 @@ type EditorFrameProps<Mode extends string> = {
   canRedo: boolean
   canUndo: boolean
   children: (view: { narrow: boolean; zoom: number }) => ReactNode
-  dock: (narrow: boolean) => ReactNode
+  dock: (narrow: boolean, orientation: DockOrientation) => ReactNode
   extra?: ReactNode
+  /** Where the tools were left last time; without it they start at home each visit. */
+  layout?: EditorLayoutStore
   menu?: ReactNode
   mode?: Mode
   modes?: readonly EditorMode<Mode>[]
@@ -67,6 +88,7 @@ export function EditorFrame<Mode extends string>({
   children,
   dock,
   extra,
+  layout: layoutStore,
   menu,
   mode,
   modes,
@@ -88,12 +110,32 @@ export function EditorFrame<Mode extends string>({
     () => false
   )
   const scrollRef = useRef<HTMLDivElement>(null)
+  const [layout, setLayout] = useState<EditorLayout>(layoutStore?.initial ?? {})
+  const orientation = layout.dock?.orientation ?? "upright"
   const [available, setAvailable] = useState(0)
   const [chosenZoom, setChosenZoom] = useState<number | null>(null)
   const pageWidth = pageWidthPoints * POINT_PX
   // Fit keeps the page clear of the dock on either side.
   const fit = available > 0 ? clamp((available - 176) / pageWidth, 0.3, 1) : 1
   const zoom = narrow ? 1 : (chosenZoom ?? fit)
+
+  const saving = useRef<Promise<void>>(Promise.resolve())
+
+  function keep(next: EditorLayout): void {
+    setLayout(next)
+    // One save at a time, in order, so an older layout never lands after a
+    // newer one; Next.js does this today, but only as a detail it may change.
+    saving.current = saving.current
+      .then(async () => {
+        const result = await layoutStore?.save(next)
+
+        if (result?.error) {
+          bizflowToast.error(result.error)
+        }
+      })
+      // A save that fails outright mustn't stop the ones after it.
+      .catch(() => undefined)
+  }
 
   useEffect(() => {
     const element = scrollRef.current
@@ -171,8 +213,8 @@ export function EditorFrame<Mode extends string>({
         />
         <SaveStatus onRetry={onRetrySave} status={saveStatus} />
         <span className="grow" />
-        {modes && mode && onModeChange ? (
-          <ModeSwitch mode={mode} modes={modes} narrow={narrow} onChange={onModeChange} />
+        {!narrow && modes && mode && onModeChange ? (
+          <Segmented className="absolute left-1/2 -translate-x-1/2" label="Mode" onChange={onModeChange} options={modes} value={mode} />
         ) : null}
         {extra}
         <Button
@@ -204,7 +246,7 @@ export function EditorFrame<Mode extends string>({
       </header>
       {narrow && modes && mode && onModeChange ? (
         <div className="flex justify-center pb-2">
-          <ModeSwitch mode={mode} modes={modes} narrow={false} onChange={onModeChange} />
+          <Segmented label="Mode" onChange={onModeChange} options={modes} value={mode} />
         </div>
       ) : null}
       {/* An open panel takes its own column on a laptop, so it never covers the
@@ -212,7 +254,10 @@ export function EditorFrame<Mode extends string>({
       <div className="group/stage relative min-h-0 flex-1">
         {banner}
         <div
-          className="absolute inset-0 overflow-auto md:group-has-[[data-slot=editor-panel]:not([hidden])]/stage:right-[23.5rem]"
+          className={cn(
+            "absolute inset-0 overflow-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+            !narrow && "group-has-[[data-slot=editor-panel]:not([hidden])]/stage:right-[23.5rem]"
+          )}
           data-slot="editor-scroll"
           ref={scrollRef}
         >
@@ -220,41 +265,89 @@ export function EditorFrame<Mode extends string>({
             {children({ narrow, zoom })}
           </div>
         </div>
-        {dock(narrow)}
-        {narrow ? null : (
-          <div
-            className="absolute right-4 bottom-4 z-20 flex items-center gap-0.5 rounded-full border border-border bg-popover p-1 text-[13px] shadow-md md:group-has-[[data-slot=editor-panel]:not([hidden])]/stage:right-[24.5rem]"
-            data-slot="editor-zoom"
-          >
-            <button
-              aria-label="Zoom out"
-              className="grid size-8 place-items-center rounded-full outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/40"
-              onClick={() => setChosenZoom(stepZoom(zoom, -1))}
-              title="Zoom out"
-              type="button"
-            >
-              <Minus aria-hidden="true" className="size-3.5" />
-            </button>
-            <button
-              aria-label={chosenZoom === null ? `Zoom ${Math.round(zoom * 100)}%, fitted` : `Zoom ${Math.round(zoom * 100)}%, fit to window`}
-              className="h-8 min-w-12 rounded-full px-1.5 tabular-nums outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/40"
-              onClick={() => setChosenZoom(null)}
-              title="Fit"
-              type="button"
-            >
-              {Math.round(zoom * 100)}%
-            </button>
-            <button
-              aria-label="Zoom in"
-              className="grid size-8 place-items-center rounded-full outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/40"
-              onClick={() => setChosenZoom(stepZoom(zoom, 1))}
-              title="Zoom in"
-              type="button"
-            >
-              <Plus aria-hidden="true" className="size-3.5" />
-            </button>
-          </div>
-        )}
+        {/* The tools float over the canvas, clear of an open panel. */}
+        <div
+          className={cn(
+            "pointer-events-none absolute inset-0 z-20",
+            !narrow && "group-has-[[data-slot=editor-panel]:not([hidden])]/stage:right-[23.5rem]"
+          )}
+          data-slot="editor-tools"
+        >
+          {narrow ? (
+            <div className="pointer-events-auto absolute bottom-[calc(1rem+env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2">
+              {dock(true, "flat")}
+            </div>
+          ) : (
+            <>
+              <FloatingTool
+                menu={
+                  <>
+                    <DropdownMenuItem
+                      onClick={() =>
+                        keep({
+                          ...layout,
+                          dock: { ...(layout.dock ?? DOCK_HOME), orientation: orientation === "upright" ? "flat" : "upright" },
+                        })
+                      }
+                    >
+                      {orientation === "upright" ? "Lay flat" : "Stand upright"}
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem disabled={!layout.dock} onClick={() => keep({ ...layout, dock: undefined })}>
+                      Put back
+                    </DropdownMenuItem>
+                  </>
+                }
+                onMove={(spot: Spot) => keep({ ...layout, dock: { ...spot, orientation } })}
+                spot={layout.dock ?? DOCK_HOME}
+              >
+                {dock(false, orientation)}
+              </FloatingTool>
+              <FloatingTool
+                menu={
+                  <DropdownMenuItem disabled={!layout.zoom} onClick={() => keep({ ...layout, zoom: undefined })}>
+                    Put back
+                  </DropdownMenuItem>
+                }
+                onMove={(spot: Spot) => keep({ ...layout, zoom: spot })}
+                spot={layout.zoom ?? ZOOM_HOME}
+              >
+                <div
+                  className="flex items-center gap-0.5 rounded-full border border-border bg-popover p-1 text-[13px] shadow-md"
+                  data-slot="editor-zoom"
+                >
+                  <button
+                    aria-label="Zoom out"
+                    className="grid size-8 place-items-center rounded-full outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/40"
+                    onClick={() => setChosenZoom(stepZoom(zoom, -1))}
+                    title="Zoom out"
+                    type="button"
+                  >
+                    <Minus aria-hidden="true" className="size-3.5" />
+                  </button>
+                  <button
+                    aria-label={chosenZoom === null ? `Zoom ${Math.round(zoom * 100)}%, fitted` : `Zoom ${Math.round(zoom * 100)}%, fit to window`}
+                    className="h-8 min-w-12 rounded-full px-1.5 tabular-nums outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/40"
+                    onClick={() => setChosenZoom(null)}
+                    title="Fit"
+                    type="button"
+                  >
+                    {Math.round(zoom * 100)}%
+                  </button>
+                  <button
+                    aria-label="Zoom in"
+                    className="grid size-8 place-items-center rounded-full outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/40"
+                    onClick={() => setChosenZoom(stepZoom(zoom, 1))}
+                    title="Zoom in"
+                    type="button"
+                  >
+                    <Plus aria-hidden="true" className="size-3.5" />
+                  </button>
+                </div>
+              </FloatingTool>
+            </>
+          )}
+        </div>
         {panel?.(narrow)}
       </div>
     </div>
@@ -405,67 +498,6 @@ function SaveStatus({
         </button>
       ) : null}
     </span>
-  )
-}
-
-function ModeSwitch<Mode extends string>({
-  mode,
-  modes,
-  narrow,
-  onChange,
-}: {
-  mode: Mode
-  modes: readonly EditorMode<Mode>[]
-  narrow: boolean
-  onChange: (mode: Mode) => void
-}): ReactElement | null {
-  if (narrow) {
-    return null
-  }
-
-  function handleKey(event: KeyboardEvent<HTMLDivElement>): void {
-    const index = modes.findIndex((candidate) => candidate.value === mode)
-    const step = event.key === "ArrowRight" || event.key === "ArrowDown" ? 1 : event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 0
-
-    if (step === 0) {
-      return
-    }
-
-    event.preventDefault()
-    const group = event.currentTarget
-    const next = modes[(index + step + modes.length) % modes.length]
-
-    if (next) {
-      onChange(next.value)
-      requestAnimationFrame(() => group.querySelector<HTMLElement>(`[data-mode="${next.value}"]`)?.focus())
-    }
-  }
-
-  return (
-    <div
-      aria-label="Mode"
-      className="inline-flex rounded-[11px] border border-border bg-card/70 p-0.5 md:absolute md:left-1/2 md:-translate-x-1/2"
-      onKeyDown={handleKey}
-      role="radiogroup"
-    >
-      {modes.map((candidate) => (
-        <button
-          aria-checked={candidate.value === mode}
-          className={cn(
-            "h-8 rounded-[9px] px-3 text-[13px] text-muted-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40",
-            candidate.value === mode && "bg-card text-foreground shadow-sm"
-          )}
-          data-mode={candidate.value}
-          key={candidate.value}
-          onClick={() => onChange(candidate.value)}
-          role="radio"
-          tabIndex={candidate.value === mode ? 0 : -1}
-          type="button"
-        >
-          {candidate.label}
-        </button>
-      ))}
-    </div>
   )
 }
 

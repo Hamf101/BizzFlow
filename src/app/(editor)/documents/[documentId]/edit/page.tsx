@@ -14,7 +14,11 @@ import { loadPageOrganizationContext } from "@/lib/page-organization-context"
 import { canPerformOrganizationAction } from "@/lib/permissions"
 import { cn } from "@/lib/utils"
 import { getGeneratedDocumentSigningView } from "@/services/document-signing-service"
+import { getEditorLayout } from "@/services/editor-layout-service"
+import { withTemplateImageOriginals } from "@/services/template-image-service"
+import type { EditorLayout } from "@/types/editor-layout"
 import type { GeneratedDocumentSigningView } from "@/types/signing"
+import { saveEditorLayoutAction } from "@/app/(editor)/editor-layout-actions"
 
 import {
   resendGeneratedDocumentInvitationAction,
@@ -71,8 +75,15 @@ export default async function GeneratedDocumentEditorPage({
     organizationId: context.organization.id,
     documentId,
   })
-    .then((view: GeneratedDocumentSigningView) => ({
-      view,
+    .then(async (view: GeneratedDocumentSigningView) => ({
+      // Pictures get addresses this person can load, now their access is checked.
+      view: {
+        ...view,
+        document: {
+          ...view.document,
+          templateSnapshot: await withTemplateImageOriginals(view.document.templateSnapshot, view.document.organizationId),
+        },
+      },
       errorMessage: null as string | null,
     }))
     .catch((error: unknown) => {
@@ -110,6 +121,8 @@ export default async function GeneratedDocumentEditorPage({
     canPerformOrganizationAction(context.membership, "documents:send") &&
     view.accessLevel === "contributor" &&
     view.document.lifecycleState === "active"
+  // Where the tools were left; without it they start at home.
+  const editorLayout = await getEditorLayout({ actorUserId: user.id }).catch((): EditorLayout => ({}))
   const backHref = view.document.folderId
     ? `/documents?folderId=${encodeURIComponent(view.document.folderId)}`
     : "/documents"
@@ -121,6 +134,7 @@ export default async function GeneratedDocumentEditorPage({
         backHref={backHref}
         canFill={canFill}
         canSend={canSend}
+        editorLayout={{ initial: editorLayout, save: saveEditorLayoutAction }}
         resendAction={resendGeneratedDocumentInvitationAction}
         saveAnswersAction={saveDocumentAnswersAction}
         saveContentAction={saveDocumentContentAction}

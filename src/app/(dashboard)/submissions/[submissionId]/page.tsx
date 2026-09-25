@@ -32,6 +32,7 @@ import { listOrganizationPeople } from "@/services/organization-service"
 import { getInternalSubmission } from "@/services/submission-service"
 import type { SubmissionDetail } from "@/services/submission-service"
 import { listTasks } from "@/services/task-service"
+import { withTemplateImageUrls } from "@/services/template-image-service"
 import type { OrganizationMember } from "@/types/organization"
 import type { SubmissionFile } from "@/types/submission"
 import type { Task } from "@/types/task"
@@ -81,8 +82,15 @@ export default async function SubmissionDetailPage({
       organizationId: context.organization.id,
       submissionId
     })
-      .then((detail: SubmissionDetail) => ({
-        detail,
+      .then(async (detail: SubmissionDetail) => ({
+        // Pictures get addresses this person can load, now their access is checked.
+        detail: {
+          ...detail,
+          submission: {
+            ...detail.submission,
+            templateSnapshot: await withTemplateImageUrls(detail.submission.templateSnapshot, detail.submission.organizationId)
+          }
+        },
         errorMessage: null as string | null
       }))
       .catch((error: unknown) => ({

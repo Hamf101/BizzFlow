@@ -1,5 +1,11 @@
 import { z } from "zod"
 
+import {
+  DATE_MONTH_STYLES,
+  DATE_ORDERS,
+  DATE_SEPARATORS,
+  type DateFormat
+} from "@/lib/date-format"
 import type { DocumentLifecycleState } from "@/types/document"
 
 /** Maximum encoded length accepted for an embedded PNG or JPEG image. */
@@ -25,6 +31,25 @@ const imageDataUrlSchema = z
   .string()
   .max(MAX_IMAGE_DATA_URL_LENGTH)
   .regex(IMAGE_DATA_URL_PATTERN)
+
+/**
+ * A picture kept in the workspace's private file store instead of inside the
+ * document: its id, and the original's format and size in pixels. Pages show
+ * a lighter copy and PDFs print a print-sized one; the original stays as
+ * uploaded, for download.
+ */
+export const templateImageAssetSchema = z
+  .object({
+    id: z.string().uuid(),
+    type: z.enum(["png", "jpeg"]),
+    width: z.number().int().min(1).max(30_000),
+    height: z.number().int().min(1).max(30_000),
+    // Where the viewer can see it now: signed for each page, never stored.
+    url: z.string().url().optional(),
+    // In the editors, where they can download the original: never stored either.
+    originalUrl: z.string().url().optional()
+  })
+  .strict()
 
 /** Conditional display rule supported by version-three fillable fields. */
 export const templateFieldVisibilitySchema = z
@@ -83,12 +108,13 @@ export const numberedListBlockSchema = z
   })
   .strict()
 
-/** Embedded PNG or JPEG image block. */
+/** Image block: a stored picture, or one embedded before pictures were stored. */
 export const imageBlockSchema = z
   .object({
     id: blockIdSchema,
     type: z.literal("image"),
-    dataUrl: imageDataUrlSchema,
+    asset: templateImageAssetSchema.optional(),
+    dataUrl: imageDataUrlSchema.optional(),
     altText: z.string().trim().min(1).max(500),
     caption: z.string().trim().max(500).nullable().default(null),
     alignment: z.enum(["left", "center", "right"]).default("center"),
@@ -124,11 +150,21 @@ export const textFieldBlockSchema = z
   })
   .strict()
 
+/** How a date is written, built from three choices the author makes. */
+export const dateFormatSchema = z
+  .object({
+    order: z.enum(DATE_ORDERS),
+    separator: z.enum(DATE_SEPARATORS),
+    month: z.enum(DATE_MONTH_STYLES)
+  })
+  .strict() satisfies z.ZodType<DateFormat>
+
 /** Date input block. */
 export const dateFieldBlockSchema = z
   .object({
     ...fieldBlockShape,
-    type: z.literal("date_field")
+    type: z.literal("date_field"),
+    dateFormat: dateFormatSchema.optional()
   })
   .strict()
 
@@ -197,6 +233,7 @@ export const templateBlockSchema = z.discriminatedUnion("type", [
 export const templateBrandingSchema = z
   .object({
     organizationName: z.string().trim().max(160).default(""),
+    logoAsset: templateImageAssetSchema.nullable().default(null),
     logoDataUrl: imageDataUrlSchema.nullable().default(null),
     logoAlignment: z.enum(["left", "center", "right"]).default("left"),
     logoWidthPercent: z.number().int().min(10).max(60).default(24),
@@ -214,6 +251,7 @@ const templateBlocksSchema = z
 
 const templateBrandingDefault = {
   organizationName: "",
+  logoAsset: null,
   logoDataUrl: null,
   logoAlignment: "left",
   logoWidthPercent: 24,
@@ -357,6 +395,7 @@ export type CheckboxFieldBlock = z.infer<typeof checkboxFieldBlockSchema>
 export type DropdownFieldBlock = z.infer<typeof dropdownFieldBlockSchema>
 export type TemplateBlock = z.infer<typeof templateBlockSchema>
 export type TemplateBranding = z.infer<typeof templateBrandingSchema>
+export type TemplateImageAsset = z.infer<typeof templateImageAssetSchema>
 export type TemplateLayout = z.infer<typeof templateLayoutSchema>
 export type TemplateSection = z.infer<typeof templateSectionSchema>
 export type TemplateFieldGroup = z.infer<typeof templateFieldGroupSchema>
@@ -380,6 +419,14 @@ function validateCanonicalBlocks(
 
   for (const [blockIndex, block] of content.blocks.entries()) {
     const blockPath = ["blocks", blockIndex]
+
+    if (block.type === "image" && Boolean(block.asset) === Boolean(block.dataUrl)) {
+      context.addIssue({
+        code: "custom",
+        message: "An image block needs exactly one picture.",
+        path: blockPath
+      })
+    }
 
     if (blockIds.has(block.id)) {
       context.addIssue({

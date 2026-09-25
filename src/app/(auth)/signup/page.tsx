@@ -1,25 +1,20 @@
 import Link from "next/link"
+import { redirect } from "next/navigation"
 
-import { PasswordInput } from "@/components/auth/password-input"
+import { NewPasswordFields } from "@/components/auth/new-password-fields"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
-import {
-  Field,
-  FieldDescription,
-  FieldGroup,
-  FieldLabel,
-} from "@/components/ui/field"
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { buildAcceptInvitePath } from "@/lib/auth-redirects"
 import { AuthPageCard } from "@/lib/page-auth-card"
-import { getInvitePreview } from "@/services/organization-service"
-import type { InvitePreview } from "@/types/organization"
 
 import { signupAction } from "./actions"
 
 type SignupSearchParams = Promise<{
   error?: string
   invite?: string
+  sent?: string
 }>
 
 export default async function SignupPage({
@@ -28,34 +23,35 @@ export default async function SignupPage({
   searchParams: SignupSearchParams
 }) {
   const params = await searchParams
-  const invite = await loadInvite(params.invite)
 
-  if (params.invite && !invite) {
+  // Invites are answered on their own page now; older links still land there.
+  if (params.invite) {
+    redirect(buildAcceptInvitePath(params.invite))
+  }
+
+  if (params.sent) {
     return (
       <AuthPageCard
-        description="This invite link is invalid, expired, or already accepted."
+        description="We sent you a link to confirm your email address. Open it on this device or any other to finish signing up."
         footer={
-          <Link
-            className="text-sm font-medium text-primary underline-offset-4 hover:underline"
-            href="/login"
-          >
-            Log in
-          </Link>
+          <>
+            <span className="text-sm text-muted-foreground">Wrong address?</span>
+            <Link
+              className="text-sm font-medium text-primary underline-offset-4 hover:underline"
+              href="/signup"
+            >
+              Sign up again
+            </Link>
+          </>
         }
-        title="Invite unavailable"
+        footerClassName="justify-between gap-3"
+        title="Check your email"
       />
     )
   }
 
-  const invitePath = params.invite ? buildAcceptInvitePath(params.invite) : null
-
   return (
     <AuthPageCard
-      description={
-        invite
-          ? `Sign up with ${invite.email} to join ${invite.organizationName}.`
-          : undefined
-      }
       footer={
         <>
           <span className="text-sm text-muted-foreground">
@@ -63,11 +59,7 @@ export default async function SignupPage({
           </span>
           <Link
             className="text-sm font-medium text-primary underline-offset-4 hover:underline"
-            href={
-              invitePath
-                ? `/login?next=${encodeURIComponent(invitePath)}`
-                : "/login"
-            }
+            href="/login"
           >
             Log in
           </Link>
@@ -77,9 +69,6 @@ export default async function SignupPage({
       title="Sign up for BizFlow"
     >
       <form action={signupAction} className="flex flex-col gap-5">
-        {params.invite && (
-          <input type="hidden" name="inviteToken" value={params.invite} />
-        )}
         {params.error && (
           <Alert variant="destructive">
             <AlertTitle>Unable to sign up</AlertTitle>
@@ -95,21 +84,9 @@ export default async function SignupPage({
               type="email"
               autoComplete="email"
               required
-              defaultValue={invite?.email ?? ""}
-              readOnly={Boolean(invite)}
             />
           </Field>
-          <Field>
-            <FieldLabel htmlFor="password">Password</FieldLabel>
-            <PasswordInput
-              id="password"
-              name="password"
-              autoComplete="new-password"
-              required
-              minLength={8}
-            />
-            <FieldDescription>At least 8 characters.</FieldDescription>
-          </Field>
+          <NewPasswordFields />
         </FieldGroup>
         <Button type="submit" className="w-full">
           Sign up
@@ -117,20 +94,4 @@ export default async function SignupPage({
       </form>
     </AuthPageCard>
   )
-}
-
-async function loadInvite(token: string | undefined): Promise<InvitePreview | null> {
-  if (!token) {
-    return null
-  }
-
-  try {
-    return await getInvitePreview(token)
-  } catch (error: unknown) {
-    console.warn("signup_invite_preview_load_failed", {
-      tokenLength: token.length,
-      reason: error instanceof Error ? error.message : "Unknown invite error",
-    })
-    return null
-  }
 }

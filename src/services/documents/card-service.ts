@@ -10,6 +10,7 @@ import {
   requirePermission,
   runDocumentOperation,
 } from "@/services/documents/shared"
+import { withTemplateImageUrls } from "@/services/template-image-service"
 import {
   templateContentSchema,
   type GeneratedDocumentWorkflowStatus,
@@ -169,5 +170,10 @@ async function readCardContents(
     }
   }
 
-  return contents
+  // Cards draw stored pictures from addresses signed for this viewer.
+  return new Map(
+    await Promise.all(
+      [...contents].map(async ([id, content]) => [id, await withTemplateImageUrls(content, organizationId)] as const)
+    )
+  )
 }

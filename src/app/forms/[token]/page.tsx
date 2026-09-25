@@ -18,6 +18,7 @@ import {
   getPublicFormLinkByToken,
   type PublicFormDraftState,
 } from "@/services/public-form-service"
+import { withTemplateImageUrls } from "@/services/template-image-service"
 import type { TemplateContent } from "@/types/template"
 
 import { submitPublicFormAction } from "./actions"
@@ -79,7 +80,10 @@ export default async function PublicFormPage({
   }
 
   const templateContent = preview.template.content as TemplateContent | null
-  const content = templateContent ?? null
+  // The link was checked above, so its pictures get addresses the visitor can load.
+  const content = templateContent
+    ? await withTemplateImageUrls(templateContent, preview.template.organizationId)
+    : null
   const cookieStore = await cookies()
   const storedDraftToken =
     cookieStore.get(PUBLIC_FORM_DRAFT_COOKIE_NAME)?.value ?? null

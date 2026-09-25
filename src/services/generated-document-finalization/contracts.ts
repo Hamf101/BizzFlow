@@ -2,7 +2,10 @@ import type { S3Client } from "@aws-sdk/client-s3"
 
 import type { R2Env } from "@/lib/env"
 import type { AdminSupabaseClient } from "@/lib/supabase/admin"
-import type { RenderGeneratedDocumentPdfInput } from "@/services/document-pdf-service"
+import type {
+  RenderGeneratedDocumentPdfInput,
+  RenderGeneratedDocumentPdfOptions,
+} from "@/services/document-pdf-service"
 import type { GeneratedDocumentSigningView } from "@/types/signing"
 
 /** Identifiers required to finalize one completed generated document. */
@@ -90,7 +93,8 @@ export type GeneratedDocumentSigningViewLoader = (
 
 /** Focused renderer for an immutable generated-document snapshot. */
 export type GeneratedDocumentFinalPdfRenderer = (
-  input: RenderGeneratedDocumentPdfInput
+  input: RenderGeneratedDocumentPdfInput,
+  options?: RenderGeneratedDocumentPdfOptions
 ) => Promise<Buffer>
 
 /** Injectable dependencies for deterministic finalization and focused tests. */

@@ -6,12 +6,14 @@ import {
   parseImageDataUrl,
   readImageDimensions,
 } from "@/lib/image-header"
+import type { TemplateImageAsset } from "@/types/template"
 
 import { DocumentPdfServiceError } from "./errors"
 import type { PdfLibRenderContext } from "./pdf-lib-types"
 
 /**
- * Embeds and caches a PNG or JPEG data URL in the active PDF document.
+ * Embeds and caches a picture in the active PDF document: a stored picture's
+ * print copy, or the data of one embedded before pictures were stored.
  *
  * The header is read before pdf-lib sees the bytes. pdf-lib decodes every PNG
  * pixel into memory and keeps it until the PDF is saved, so a PNG over the
@@ -20,27 +22,30 @@ import type { PdfLibRenderContext } from "./pdf-lib-types"
  * data and cost no decoding.
  *
  * @param context - Active pdf-lib render state.
- * @param dataUrl - PNG or JPEG data URL.
+ * @param picture - An embedded PNG or JPEG data URL, such as a drawn
+ *   signature, or a block or logo's stored or embedded picture.
  * @returns Embedded pdf-lib image.
  * @throws DocumentPdfServiceError when the image is unreadable or too large.
  */
 export async function embedPdfLibImage(
   context: PdfLibRenderContext,
-  dataUrl: string
+  picture: string | { asset?: TemplateImageAsset | null; dataUrl?: string | null }
 ): Promise<PDFImage> {
-  const cached = context.imageCache.get(dataUrl)
+  const { asset, dataUrl } = typeof picture === "string" ? { asset: null, dataUrl: picture } : picture
+  const cacheKey = asset ? `asset:${asset.id}` : (dataUrl ?? "")
+  const cached = context.imageCache.get(cacheKey)
 
   if (cached) {
     return cached
   }
 
-  const image = parseImageDataUrl(dataUrl)
+  const image = asset ? await readStoredImage(context, asset) : parseEmbeddedImage(dataUrl)
 
   if (!image) {
     throw createInvalidImageError()
   }
 
-  const bytes = Buffer.from(image.encoded, "base64")
+  const { bytes } = image
   const dimensions = readImageDimensions(bytes, image.format)
 
   if (!dimensions) {
@@ -71,7 +76,7 @@ export async function embedPdfLibImage(
       image.format === "png"
         ? await context.document.embedPng(bytes)
         : await context.document.embedJpg(bytes)
-    context.imageCache.set(dataUrl, embedded)
+    context.imageCache.set(cacheKey, embedded)
     return embedded
   } catch {
     throw createInvalidImageError()
@@ -124,4 +129,27 @@ function createInvalidImageError(): DocumentPdfServiceError {
     "An embedded document image is invalid.",
     400
   )
+}
+
+type PdfImageBytes = { bytes: Buffer; format: "jpeg" | "png" }
+
+function parseEmbeddedImage(dataUrl: string | null | undefined): PdfImageBytes | null {
+  const image = dataUrl ? parseImageDataUrl(dataUrl) : null
+
+  return image ? { bytes: Buffer.from(image.encoded, "base64"), format: image.format } : null
+}
+
+async function readStoredImage(
+  context: PdfLibRenderContext,
+  asset: TemplateImageAsset
+): Promise<PdfImageBytes | null> {
+  if (!context.readImage) {
+    throw new DocumentPdfServiceError("This document's pictures could not be loaded.", 500)
+  }
+
+  const bytes = Buffer.from(await context.readImage(asset))
+  // The print copy is a PNG or a JPEG; its first bytes say which.
+  const format = bytes[0] === 0x89 && bytes[1] === 0x50 ? "png" : bytes[0] === 0xff && bytes[1] === 0xd8 ? "jpeg" : null
+
+  return format ? { bytes, format } : null
 }

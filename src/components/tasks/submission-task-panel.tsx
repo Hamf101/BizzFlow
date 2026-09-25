@@ -11,6 +11,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { DateTimePicker } from "@/components/ui/date-picker"
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
@@ -137,11 +138,7 @@ export function SubmissionTaskPanel({
                     <FieldLabel htmlFor="submission-task-due">
                       Due (UTC)
                     </FieldLabel>
-                    <Input
-                      id="submission-task-due"
-                      name="dueAt"
-                      type="datetime-local"
-                    />
+                    <DateTimePicker id="submission-task-due" name="dueAt" />
                     <FieldDescription>
                       The assignee is reminded when this falls due.
                     </FieldDescription>

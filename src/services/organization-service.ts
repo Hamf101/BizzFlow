@@ -16,6 +16,7 @@ export { OrganizationServiceError } from "@/services/organizations/errors"
 export {
   acceptInvite,
   createInvite,
+  createInvitedAccount,
   getInvitePreview,
   revokeInvite,
 } from "@/services/organizations/invitation-service"

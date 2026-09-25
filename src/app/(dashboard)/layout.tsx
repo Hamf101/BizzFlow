@@ -26,7 +26,8 @@ async function signOutAction(): Promise<void> {
   "use server"
 
   const supabase = await createClient()
-  await supabase.auth.signOut()
+  // This device only; the person stays logged in everywhere else.
+  await supabase.auth.signOut({ scope: "local" })
   redirect("/login")
 }
 
@@ -164,7 +165,7 @@ export default async function DashboardLayout({
       </Suspense>
       <div className="flex min-h-dvh flex-col bg-canvas text-foreground" data-ground="canvas">
         <MobileTopBar account={account} signOutAction={signOutAction} />
-        <div className="mx-auto flex w-full max-w-[96rem] flex-1 flex-col md:flex-row">
+        <div className="flex w-full flex-1 flex-col md:flex-row">
           <DashboardSidebar account={account} signOutAction={signOutAction} />
           <div className="flex min-w-0 flex-1 flex-col px-3 pt-3 md:pt-4 md:pr-4 md:pl-1">
             <main className="flex flex-1 flex-col rounded-t-[18px] border-x border-t border-border/70 bg-background">

@@ -1,6 +1,11 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 
-import { getInvitePreview } from "@/services/organization-service"
+import { createClient } from "@/lib/supabase/server"
+import {
+  emailConfirmationRequired,
+  emailSignupConfirmation,
+  SignupServiceError,
+} from "@/services/signup-service"
 
 import { signupAction } from "./actions"
 
@@ -22,10 +27,6 @@ vi.mock("@/lib/action-rate-limit", () => ({
   enforceActionRateLimit: vi.fn().mockResolvedValue(undefined),
 }))
 
-vi.mock("@/services/organization-service", () => ({
-  getInvitePreview: vi.fn(),
-}))
-
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(),
 }))
@@ -36,49 +37,74 @@ vi.mock("@/lib/env", () => ({
   })),
 }))
 
-describe("signup invite validation", () => {
+vi.mock("@/lib/rate-limit", () => ({
+  checkRateLimit: vi.fn().mockResolvedValue(undefined),
+  hashRateLimitKeyPart: (value: string) => `hash:${value}`,
+  RateLimitError: class extends Error {},
+}))
+
+vi.mock("@/services/signup-service", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/services/signup-service")>()),
+  emailConfirmationRequired: vi.fn(),
+  emailSignupConfirmation: vi.fn(),
+}))
+
+describe("signing up", () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
 
-  afterEach(() => {
-    vi.restoreAllMocks()
+  it("emails the confirmation through the app's own email and says to check it, leaving Supabase's mailer out", async () => {
+    const signUp = vi.fn()
+    vi.mocked(createClient).mockResolvedValue({ auth: { signUp } } as never)
+    vi.mocked(emailConfirmationRequired).mockResolvedValue(true)
+
+    await expect(signupAction(createSignupForm("new@example.com"))).rejects.toThrow("NEXT_REDIRECT:/signup?sent=1")
+    expect(emailSignupConfirmation).toHaveBeenCalledWith({ email: "new@example.com", password: "Correct-horse-battery-5taple" })
+    expect(signUp).not.toHaveBeenCalled()
   })
 
-  it("preserves the invite token when the signup email does not match", async () => {
-    vi.mocked(getInvitePreview).mockResolvedValue({
-      id: "invite-1",
-      organizationName: "Acme",
-      email: "invited@example.com",
-      role: "staff",
-      expiresAt: "2026-07-24T12:00:00.000Z",
-    })
+  it("shows why when the confirmation email can't go out", async () => {
+    vi.mocked(emailConfirmationRequired).mockResolvedValue(true)
+    vi.mocked(emailSignupConfirmation).mockRejectedValue(
+      new SignupServiceError("We couldn't send the confirmation email. Try again.", 502)
+    )
 
-    await expect(
-      signupAction(
-        createSignupForm("different@example.com", "invite-token")
-      )
-    ).rejects.toThrow(
-      "NEXT_REDIRECT:/signup?invite=invite-token&error=Sign+up+with+the+email+address+on+the+invite."
+    await expect(signupAction(createSignupForm("new@example.com"))).rejects.toThrow(
+      "NEXT_REDIRECT:/signup?error=We+couldn%27t+send+the+confirmation+email.+Try+again."
     )
   })
 
-  it("uses the unavailable message only when invite lookup fails", async () => {
-    vi.mocked(getInvitePreview).mockRejectedValue(new Error("Invite expired"))
-    vi.spyOn(console, "warn").mockImplementation(() => {})
+  it("starts straight away, by naming the workspace, where the project skips confirmation", async () => {
+    const signUp = vi.fn(async () => ({ data: { session: { access_token: "session" }, user: { id: "user-1" } }, error: null }))
+    vi.mocked(createClient).mockResolvedValue({ auth: { signUp } } as never)
+    vi.mocked(emailConfirmationRequired).mockResolvedValue(false)
 
-    await expect(
-      signupAction(createSignupForm("invited@example.com", "expired-token"))
-    ).rejects.toThrow(
-      "NEXT_REDIRECT:/signup?error=This+invite+is+no+longer+available."
-    )
+    await expect(signupAction(createSignupForm("new@example.com"))).rejects.toThrow("NEXT_REDIRECT:/welcome")
+    expect(emailSignupConfirmation).not.toHaveBeenCalled()
+  })
+
+  it("refuses a weak password, or two that differ, even when the browser's own check is skipped", async () => {
+    const signUp = vi.fn()
+    vi.mocked(createClient).mockResolvedValue({ auth: { signUp } } as never)
+    vi.mocked(emailConfirmationRequired).mockResolvedValue(true)
+    const weak = createSignupForm("new@example.com")
+    weak.set("password", "correct-horse-battery-staple")
+    weak.set("confirm", "correct-horse-battery-staple")
+    const differ = createSignupForm("new@example.com")
+    differ.set("confirm", "Correct-horse-battery-5tapl")
+
+    await expect(signupAction(weak)).rejects.toThrow("NEXT_REDIRECT:/signup?error=Choose+a+password")
+    await expect(signupAction(differ)).rejects.toThrow("NEXT_REDIRECT:/signup?error=The+two+passwords+don%27t+match.")
+    expect(emailSignupConfirmation).not.toHaveBeenCalled()
+    expect(signUp).not.toHaveBeenCalled()
   })
 })
 
-function createSignupForm(email: string, inviteToken: string): FormData {
+function createSignupForm(email: string): FormData {
   const formData = new FormData()
   formData.set("email", email)
-  formData.set("password", "correct-horse-battery-staple")
-  formData.set("inviteToken", inviteToken)
+  formData.set("password", "Correct-horse-battery-5taple")
+  formData.set("confirm", "Correct-horse-battery-5taple")
   return formData
 }

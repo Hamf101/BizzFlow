@@ -354,6 +354,52 @@ export async function acceptInvite(
 }
 
 /**
+ * Opens an account for someone joining through an invite. The invite reached
+ * their inbox, which proves the address just as a confirmation email would, so
+ * the account starts confirmed and they can join straight away. The address is
+ * always the invite's own, never one typed in.
+ *
+ * @param input - The invite token and the password they chose.
+ * @param deps - Optional database client for tests.
+ * @returns The invited address, and whether an account already used it.
+ * @throws OrganizationServiceError 404 for an invite that is gone, 403 for one its sender can no longer grant, 400 for a password the provider refuses.
+ */
+export async function createInvitedAccount(
+  input: { password: string; token: string },
+  deps: Pick<OrganizationMutationDeps, "client"> = {}
+): Promise<{ email: string; existing: boolean }> {
+  return runOrganizationOperation(
+    "create_invited_account",
+    { tokenLength: input.token.length },
+    async () => {
+      const client = deps.client ?? createAdminClient()
+      const invite = await getPendingInviteByToken(client, input.token)
+      // An invite that can't be accepted opens no account.
+      await requireInviterAuthority(client, invite)
+      const { error } = await client.auth.admin.createUser({
+        email: invite.email,
+        email_confirm: true,
+        password: input.password,
+      })
+
+      if (error?.code === "email_exists") {
+        return { email: invite.email, existing: true }
+      }
+
+      if (error?.code === "weak_password") {
+        throw new OrganizationServiceError("Choose a longer or less common password.", 400)
+      }
+
+      if (error) {
+        throw new OrganizationServiceError("Unable to create your account.", 500)
+      }
+
+      return { email: invite.email, existing: false }
+    }
+  )
+}
+
+/**
  * Confirms the invite's creator could still grant it today, so narrowing or
  * removing someone's access also withdraws the invitations they sent.
  *

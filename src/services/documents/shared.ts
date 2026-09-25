@@ -31,6 +31,7 @@ import type {
   FolderRow,
 } from "@/types/document"
 import type { OrganizationMembership } from "@/types/organization"
+import { loadActiveMembership } from "@/services/organizations/active-membership"
 
 type SupabaseErrorLike = {
   code?: string
@@ -424,15 +425,7 @@ async function getActiveMembership(
   organizationId: string,
   userId: string
 ): Promise<OrganizationMembership | null> {
-  const { data, error } = await client
-    .from("organization_memberships")
-    .select(
-      "id,org_id,user_id,role,status,created_at,updated_at,role_definition:organization_roles!organization_memberships_role_definition_fk(permissions)"
-    )
-    .eq("org_id", organizationId)
-    .eq("user_id", userId)
-    .eq("status", "active")
-    .maybeSingle()
+  const { data, error } = await loadActiveMembership(client, organizationId, userId)
 
   if (error) {
     throw createSupabaseServiceError(

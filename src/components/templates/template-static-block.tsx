@@ -3,6 +3,7 @@ import type { CSSProperties, ReactElement } from "react"
 
 import { cn } from "@/lib/utils"
 import type { HeadingBlock, TemplateBlock } from "@/types/template"
+import { imageSource } from "@/types/template-images"
 
 type StaticTemplateBlock = Extract<
   TemplateBlock,
@@ -88,7 +89,9 @@ export function TemplateStaticBlock({
           ))}
         </ol>
       )
-    case "image":
+    case "image": {
+      const source = imageSource(block.asset, block.dataUrl)
+
       return (
         <figure
           className={cn(
@@ -98,15 +101,25 @@ export function TemplateStaticBlock({
             block.alignment === "right" && "items-end"
           )}
         >
-          <Image
-            alt={block.altText}
-            className="h-auto max-w-full rounded-sm object-contain"
-            height={600}
-            src={block.dataUrl}
-            style={{ width: `${block.widthPercent}%` }}
-            unoptimized
-            width={800}
-          />
+          {source ? (
+            <Image
+              alt={block.altText}
+              className="h-auto max-w-full rounded-sm object-contain"
+              height={block.asset?.height ?? 600}
+              src={source}
+              style={{ width: `${block.widthPercent}%` }}
+              unoptimized
+              width={block.asset?.width ?? 800}
+            />
+          ) : (
+            // A stored picture this page was not given an address for.
+            <div
+              aria-label={block.altText}
+              className="aspect-video max-w-full rounded-sm bg-muted"
+              role="img"
+              style={{ width: `${block.widthPercent}%` }}
+            />
+          )}
           {block.caption && (
             <figcaption className="text-xs text-muted-foreground">
               {block.caption}
@@ -114,6 +127,7 @@ export function TemplateStaticBlock({
           )}
         </figure>
       )
+    }
     case "table":
       return (
         <div className="overflow-x-auto rounded-sm border border-border">

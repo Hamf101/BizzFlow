@@ -23,6 +23,7 @@ import {
   type AuditLogTargetType,
   type AuditMetadata,
 } from "@/types/audit"
+import { loadActiveMembership } from "@/services/organizations/active-membership"
 
 type AdminClient = ReturnType<typeof createAdminClient>
 
@@ -414,15 +415,7 @@ async function getOrganizationRole(
   organizationId: string,
   userId: string
 ): Promise<OrganizationPermissionSubject | null> {
-  const { data, error } = await client
-    .from("organization_memberships")
-    .select(
-      "role,role_definition:organization_roles!organization_memberships_role_definition_fk(permissions)"
-    )
-    .eq("org_id", organizationId)
-    .eq("user_id", userId)
-    .eq("status", "active")
-    .maybeSingle()
+  const { data, error } = await loadActiveMembership(client, organizationId, userId)
 
   if (error) {
     throw new AuditServiceError("Unable to load audit permissions.", 500)

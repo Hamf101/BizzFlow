@@ -136,9 +136,9 @@ function createInviteEmailHtml(
 
   return [
     `<h1 style="margin:0 0 16px;color:#252329;font-family:Arial,Helvetica,sans-serif;font-size:24px;font-weight:700;line-height:32px;">You&#39;ve been invited to ${safeOrganizationName}</h1>`,
-    '<p style="margin:0 0 24px;color:#706a72;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:24px;">Sign up for BizFlow Docs or log in to join the workspace.</p>',
+    '<p style="margin:0 0 24px;color:#706a72;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:24px;">Choose a password to join, or log in if you already use BizFlow Docs.</p>',
     '<table role="presentation" border="0" cellpadding="0" cellspacing="0" style="margin:0 0 24px;border-collapse:separate;"><tr><td style="border-radius:8px;background-color:#635273;">',
-    `<a href="${safeInvitationUrl}" target="_blank" style="display:inline-block;padding:12px 20px;color:#fffdfc;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:700;line-height:20px;text-decoration:none;">Accept invitation</a>`,
+    `<a href="${safeInvitationUrl}" target="_blank" style="display:inline-block;padding:12px 20px;color:#fffdfc;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:700;line-height:20px;text-decoration:none;">Join the workspace</a>`,
     "</td></tr></table>",
     '<p style="margin:0 0 8px;color:#706a72;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;">If the button does not work, copy and paste this link into your browser:</p>',
     `<p style="margin:0 0 24px;overflow-wrap:anywhere;word-break:break-word;"><a href="${safeInvitationUrl}" target="_blank" style="color:#635273;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;text-decoration:underline;">${safeInvitationUrl}</a></p>`,
@@ -150,5 +150,5 @@ function createInviteEmailText(
   organizationName: string,
   invitationUrl: string
 ): string {
-  return `You've been invited to ${organizationName} on BizFlow Docs. Sign up or log in to join the workspace: ${invitationUrl}`
+  return `You've been invited to ${organizationName} on BizFlow Docs. Choose a password to join, or log in if you already use BizFlow Docs: ${invitationUrl}`
 }

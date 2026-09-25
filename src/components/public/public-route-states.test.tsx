@@ -10,7 +10,6 @@ const captureUnexpectedError = vi.hoisted(() => vi.fn())
 vi.mock("@/lib/observability", () => ({ captureUnexpectedError }))
 
 import AcceptInviteError from "@/app/(auth)/accept-invite/[token]/error"
-import AcceptInviteLoading from "@/app/(auth)/accept-invite/[token]/loading"
 import PublicFormError from "@/app/forms/[token]/error"
 import PublicFormLoading from "@/app/forms/[token]/loading"
 import PublicSigningError from "@/app/sign/[token]/error"
@@ -60,11 +59,6 @@ const PUBLIC_LOADING_STATES: ReadonlyArray<{
   name: string
   render: () => ReactElement
 }> = [
-  {
-    label: "Loading invitation",
-    name: "invitation",
-    render: () => <AcceptInviteLoading />,
-  },
   {
     label: "Loading form",
     name: "public form",

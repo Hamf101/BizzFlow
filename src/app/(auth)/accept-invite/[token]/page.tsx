@@ -1,24 +1,30 @@
 import Link from "next/link"
 import type { ReactElement } from "react"
 
+import { NewPasswordFields } from "@/components/auth/new-password-fields"
+import { PasswordInput } from "@/components/auth/password-input"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
+import { Input } from "@/components/ui/input"
 import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
 import { buildAcceptInvitePath } from "@/lib/auth-redirects"
-import { formatMediumDate } from "@/lib/date-format"
 import { AuthPageCard } from "@/lib/page-auth-card"
 import type { OrganizationRole } from "@/lib/permissions"
 import { getInvitePreview } from "@/services/organization-service"
-import type { InvitePreview } from "@/types/organization"
 
-import { acceptInviteAction } from "./actions"
+import {
+  acceptInviteAction,
+  joinWithPasswordAction,
+  switchInviteAccountAction,
+} from "./actions"
 
 type AcceptInviteParams = Promise<{
   token: string
 }>
 
 type AcceptInviteSearchParams = Promise<{
+  account?: string
   error?: string
 }>
 
@@ -29,6 +35,12 @@ const roleLabels: Record<OrganizationRole, string> = {
   external_reviewer: "External reviewer",
 }
 
+const linkClassName = "text-sm font-medium text-primary underline-offset-4 hover:underline"
+
+/**
+ * One page answers an invite: someone new chooses a password, someone with an
+ * account enters theirs, and someone signed in joins with one press.
+ */
 export default async function AcceptInvitePage({
   params,
   searchParams,
@@ -50,80 +62,117 @@ export default async function AcceptInvitePage({
   if (!preview) {
     return (
       <AuthPageCard
-        description="This invite link is invalid, expired, or already accepted."
+        description="It may have expired, been used already, or been withdrawn. Ask the person who invited you to send a new one."
         footer={
-          <Link
-            className="text-sm font-medium text-primary underline-offset-4 hover:underline"
-            href="/login"
-          >
+          <Link className={linkClassName} href="/login">
             Log in
           </Link>
         }
-        title="Invite unavailable"
-      >
-        <Alert variant="destructive">
-          <AlertTitle>Unable to load invite</AlertTitle>
-          <AlertDescription>
-            Ask the workspace owner for a new invite.
-          </AlertDescription>
-        </Alert>
-      </AuthPageCard>
+        title="This invite no longer works"
+      />
     )
   }
 
   const user = await loadInviteUser()
+  const title = `Join ${preview.organizationName}`
+  const role = preview.roleName ?? roleLabels[preview.role]
+  const problem = query.error ? (
+    <Alert variant="destructive">
+      <AlertTitle>Unable to join yet</AlertTitle>
+      <AlertDescription>{query.error}</AlertDescription>
+    </Alert>
+  ) : null
+  const tokenField = <input type="hidden" name="token" value={token} />
 
+  if (user && user.email?.toLowerCase() !== preview.email) {
+    return (
+      <AuthPageCard
+        description={`This invite is for ${preview.email}. Log out to join with that address.`}
+        footer={<span className="text-sm text-muted-foreground">Logged in as {user.email ?? "another account"}</span>}
+        title={title}
+      >
+        <form action={switchInviteAccountAction}>
+          {tokenField}
+          <Button type="submit" className="w-full">
+            Log out and continue
+          </Button>
+        </form>
+      </AuthPageCard>
+    )
+  }
+
+  if (user) {
+    return (
+      <AuthPageCard
+        description={`You're invited to join as ${role}.`}
+        footer={<span className="text-sm text-muted-foreground">Logged in as {preview.email}</span>}
+        title={title}
+      >
+        <form action={acceptInviteAction} className="flex flex-col gap-5">
+          {tokenField}
+          {problem}
+          <Button type="submit" className="w-full">
+            {title}
+          </Button>
+        </form>
+      </AuthPageCard>
+    )
+  }
+
+  const existing = query.account === "existing"
   return (
     <AuthPageCard
-      description={`Join ${preview.organizationName} with the invited email address.`}
+      description={`You're invited to join as ${role}.`}
       footer={
-        user ? (
-          <span className="text-sm text-muted-foreground">
-            Logged in as {user.email ?? "the current account"}
-          </span>
+        existing ? (
+          <>
+            <span className="text-sm text-muted-foreground">New to BizFlow?</span>
+            <Link className={linkClassName} href={invitePath}>
+              Choose a password instead
+            </Link>
+          </>
         ) : (
           <>
-            <span className="text-sm text-muted-foreground">
-              Already have an account?
-            </span>
-            <Link
-              className="text-sm font-medium text-primary underline-offset-4 hover:underline"
-              href={`/login?next=${encodeURIComponent(invitePath)}`}
-            >
-              Log in
+            <span className="text-sm text-muted-foreground">Already use BizFlow?</span>
+            <Link className={linkClassName} href={`${invitePath}?account=existing`}>
+              Log in instead
             </Link>
           </>
         )
       }
       footerClassName="justify-between gap-3"
-      title="Accept invite"
+      title={title}
     >
-      <div className="flex flex-col gap-5">
-        {query.error && (
-          <Alert variant="destructive">
-            <AlertTitle>Unable to accept invite</AlertTitle>
-            <AlertDescription>{query.error}</AlertDescription>
-          </Alert>
-        )}
-        <InviteSummary preview={preview} />
-        {user ? (
-          <form action={acceptInviteAction}>
-            <input type="hidden" name="token" value={token} />
-            <Button type="submit" className="w-full">
-              Accept invite
-            </Button>
-          </form>
-        ) : (
-          <div className="flex flex-col gap-3">
-            <p className="text-sm text-muted-foreground">
-              Sign up with the invited email to join.
-            </p>
-            <Link href={`/signup?invite=${encodeURIComponent(token)}`}>
-              <Button className="w-full">Sign up</Button>
-            </Link>
-          </div>
-        )}
-      </div>
+      <form action={joinWithPasswordAction} className="flex flex-col gap-5">
+        {tokenField}
+        <input type="hidden" name="account" value={existing ? "existing" : "new"} />
+        {problem}
+        <FieldGroup>
+          <Field>
+            <FieldLabel htmlFor="email">Email</FieldLabel>
+            <Input id="email" type="email" autoComplete="username" value={preview.email} readOnly />
+          </Field>
+          {existing ? (
+            <Field>
+              <div className="flex items-center justify-between gap-3">
+                <FieldLabel htmlFor="password">Password</FieldLabel>
+                <Link
+                  className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+                  href="/forgot-password"
+                >
+                  Forgot password?
+                </Link>
+              </div>
+              <PasswordInput id="password" name="password" autoComplete="current-password" required minLength={8} />
+            </Field>
+          ) : (
+            <NewPasswordFields label="Choose a password" />
+          )}
+        </FieldGroup>
+        <Button type="submit" className="w-full">
+          {title}
+        </Button>
+      </form>
     </AuthPageCard>
   )
 }
@@ -142,33 +191,4 @@ async function loadInviteUser(): Promise<{ email: string | null } | null> {
     })
     return null
   }
-}
-
-function InviteSummary({ preview }: { preview: InvitePreview }): ReactElement {
-  return (
-    <div className="flex flex-col gap-3 rounded-lg border bg-background p-3 text-sm">
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-muted-foreground">Organization</span>
-        <span className="font-medium">{preview.organizationName}</span>
-      </div>
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-muted-foreground">Email</span>
-        <span className="font-medium">{preview.email}</span>
-      </div>
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-muted-foreground">Role</span>
-        <Badge variant="secondary">{formatRole(preview.role)}</Badge>
-      </div>
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-muted-foreground">Expires</span>
-        <span className="font-medium">
-          {formatMediumDate(preview.expiresAt)}
-        </span>
-      </div>
-    </div>
-  )
-}
-
-function formatRole(role: OrganizationRole): string {
-  return roleLabels[role]
 }

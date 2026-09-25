@@ -1,3 +1,6 @@
+import type { SupabaseClient } from "@supabase/supabase-js"
+
+import { chooseOption } from "../support/choose"
 import { expect, signInAs, test } from "../support/fixtures"
 
 /**
@@ -26,19 +29,8 @@ test.describe("invitations", () => {
       has: owner.getByRole("button", { name: "Send invite" }),
     })
 
-    const { data: staffRole, error: staffRoleError } = await admin
-      .from("organization_roles")
-      .select("id")
-      .eq("org_id", tenant.organizationId)
-      .eq("system_key", "staff")
-      .is("archived_at", null)
-      .single()
-
-    expect(staffRoleError).toBeNull()
-    expect(staffRole?.id).toBeTruthy()
-
     await inviteForm.getByLabel("Email").fill(inviteeEmail)
-    await inviteForm.getByLabel("Role").selectOption(staffRole?.id as string)
+    await chooseOption(inviteForm.getByLabel("Role"), "Staff")
     await inviteForm.getByRole("button", { name: "Send invite" }).click()
 
     await owner.getByRole("button", { name: "Invite", exact: true }).click()
@@ -56,38 +48,25 @@ test.describe("invitations", () => {
 
     expect(invite?.token).toBeTruthy()
 
-    // The invite flow supports an existing account signing in to accept; the
-    // account is created directly so the spec tests acceptance, not signup.
-    const { data: created, error: createUserError } =
-      await admin.auth.admin.createUser({
-        email: inviteeEmail,
-        email_confirm: true,
-        password,
-      })
-
-    expect(createUserError).toBeNull()
-    expect(created.user).toBeTruthy()
-
-    if (!created.user) {
-      throw new Error("Supabase did not return the created invitee user.")
-    }
-
-    const createdUser = created.user
-
+    // A new person answers in one step: the invite proved their address.
     const context = await browser.newContext()
     const page = await context.newPage()
+    const join = `Join ${tenant.organizationName}`
 
     try {
-      await signInAs(page, inviteeEmail, password)
       await page.goto(`/accept-invite/${invite?.token as string}`)
-      await page.getByRole("button", { name: "Accept invite" }).click()
-      await page.waitForURL(/\/dashboard\?message=Invite\+accepted\./)
+      await page.getByLabel("Choose a password").fill(password)
+      await page.getByLabel("Confirm password").fill(password)
+      await page.getByRole("button", { name: join }).click()
+      await page.waitForURL(/\/dashboard/)
+      await expect(page.getByRole("status").filter({ hasText: "You joined the workspace" })).toBeVisible()
 
+      const inviteeId = await joinedUserId(admin, inviteeEmail)
       const { data: membership, error: membershipError } = await admin
         .from("organization_memberships")
         .select("org_id,role,status")
         .eq("org_id", tenant.organizationId)
-        .eq("user_id", createdUser.id)
+        .eq("user_id", inviteeId)
         .single()
 
       expect(membershipError).toBeNull()
@@ -99,14 +78,79 @@ test.describe("invitations", () => {
 
       const dashboard = page.getByRole("main")
 
-      await expect(
-        dashboard.getByText(tenant.organizationName, { exact: true })
-      ).toBeVisible()
+      await expect(dashboard.getByText(tenant.organizationName, { exact: true })).toBeVisible()
       await expect(dashboard.getByRole("region", { name: "Waiting on you" })).toBeVisible()
+      // Setting the workspace up is the owner's job, not a new staff member's.
+      await expect(dashboard.getByText("Getting started")).toBeHidden()
+    } finally {
+      await context.close()
+      await admin.auth.admin.deleteUser(await joinedUserId(admin, inviteeEmail)).catch(() => {})
+    }
+  })
+
+  test("someone logged in as another account switches, then joins with the account they already have", async ({
+    admin,
+    browser,
+    tenant,
+  }) => {
+    const suffix = Date.now().toString(36)
+    const inviteeEmail = `existing-${suffix}@e2e.bizflow.test`
+    const otherEmail = `other-${suffix}@e2e.bizflow.test`
+    const password = "e2e-BizFlow-Passw0rd"
+    const token = `e2e-invite-${suffix}`
+
+    const userIds: string[] = []
+
+    for (const email of [inviteeEmail, otherEmail]) {
+      const { data, error } = await admin.auth.admin.createUser({ email, email_confirm: true, password })
+      expect(error).toBeNull()
+      userIds.push(data.user?.id as string)
+    }
+
+    const { data: staffRole } = await admin
+      .from("organization_roles")
+      .select("id")
+      .eq("org_id", tenant.organizationId)
+      .eq("system_key", "staff")
+      .single()
+    const { error: inviteError } = await admin.from("invites").insert({
+      email: inviteeEmail,
+      expires_at: new Date(Date.now() + 86_400_000).toISOString(),
+      invited_by: tenant.users.owner_admin.id,
+      org_id: tenant.organizationId,
+      role: "staff",
+      role_definition_id: staffRole?.id,
+      status: "pending",
+      token,
+    })
+    expect(inviteError).toBeNull()
+
+    const context = await browser.newContext()
+    const page = await context.newPage()
+
+    try {
+      await signInAs(page, otherEmail, password)
+      await page.goto(`/accept-invite/${token}`)
+      await page.getByRole("button", { name: "Log out and continue" }).click()
+      await page.getByRole("link", { name: "Log in instead" }).click()
+      await page.getByLabel("Password", { exact: true }).fill(password)
+      await page.getByRole("button", { name: `Join ${tenant.organizationName}` }).click()
+      await page.waitForURL(/\/dashboard/)
+      await expect(page.getByRole("status").filter({ hasText: "You joined the workspace" })).toBeVisible()
+
+      const { data: membership } = await admin
+        .from("organization_memberships")
+        .select("status")
+        .eq("org_id", tenant.organizationId)
+        .eq("user_id", userIds[0])
+        .single()
+      expect(membership?.status).toBe("active")
     } finally {
       await context.close()
 
-      await admin.auth.admin.deleteUser(createdUser.id)
+      for (const id of userIds) {
+        await admin.auth.admin.deleteUser(id)
+      }
     }
   })
 
@@ -131,3 +175,10 @@ test.describe("invitations", () => {
     ).toBeHidden()
   })
 })
+
+/** Accepting an invite records the member's profile, which is how a spec finds an account the app opened. */
+async function joinedUserId(admin: SupabaseClient, email: string): Promise<string> {
+  const { data, error } = await admin.from("profiles").select("id").eq("email", email).single()
+  if (error) throw error
+  return data.id as string
+}

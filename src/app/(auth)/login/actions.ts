@@ -62,7 +62,16 @@ export async function loginAction(formData: FormData): Promise<void> {
       errorCode: error.code ?? "auth_error",
       statusCode: error.status,
     })
-    redirect(buildRedirect("/login", { error: "Invalid email or password." }))
+    redirect(
+      buildRedirect("/login", {
+        error:
+          error.code === "email_not_confirmed"
+            ? "Confirm your email first: open the link we sent when you signed up."
+            : "Invalid email or password.",
+        // A mistyped password shouldn't lose where they were headed.
+        ...(parsed.data.next ? { next: parsed.data.next } : {}),
+      })
+    )
   }
 
   redirect(getSafeNextPath(parsed.data.next, "/dashboard"))

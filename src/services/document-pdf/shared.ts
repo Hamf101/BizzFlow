@@ -1,3 +1,4 @@
+import { formatDateAnswer } from "@/lib/date-format"
 import { createTemplateRenderPlan } from "@/services/templates/template-render-plan"
 import {
   parseTemplateContent,
@@ -141,7 +142,9 @@ export function formatFieldValue(
   }
 
   if (typeof value === "string" && value.trim().length > 0) {
-    return value.trim().slice(0, 20_000)
+    const text = value.trim().slice(0, 20_000)
+
+    return block.type === "date_field" ? formatDateAnswer(text, block.dateFormat) : text
   }
 
   return "Not completed"

@@ -465,6 +465,42 @@ describe("template Flow service", () => {
     expect(content.branding.logoDataUrl).toBe("data:image/png;base64,aGVsbG8=")
   })
 
+  it("knows a stored logo is there without seeing its address, and removes it when asked", async () => {
+    const content = createContent()
+    content.branding.logoDataUrl = null
+    content.branding.logoAsset = {
+      height: 200,
+      id: "00000000-0000-4000-8000-0000000000a1",
+      type: "png",
+      url: "https://r2.example.com/logo-display?signature=secret",
+      width: 600
+    }
+    const aiProvider = createTestAiProvider([
+      flowProviderResult({
+        assistantMessage: "I removed the logo.",
+        needsConfirmation: false,
+        confirmationQuestion: "",
+        operations: [
+          {
+            type: "set_branding",
+            summary: "Removed logo",
+            payload: { removeLogo: true }
+          }
+        ]
+      })
+    ])
+
+    const result = await executeTemplateFlow(
+      createInput(content, "Remove the logo."),
+      createDependencies({ aiProvider })
+    )
+
+    const prompt = readProviderRequests(aiProvider)[0]?.input ?? ""
+    expect(JSON.parse(prompt).currentDraft.branding.hasLogo).toBe(true)
+    expect(prompt).not.toContain("r2.example.com")
+    expect(result.proposal?.candidateDraft.content.branding.logoAsset).toBeNull()
+  })
+
   it("uses the configured provider and exact model without fallback", async () => {
     const aiProvider = createTestAiProvider([
       flowProviderResult(successfulFlowPayload())
@@ -593,6 +629,59 @@ describe("template Flow service", () => {
     expect(readProviderRequests(aiProvider)).toHaveLength(1)
   })
 
+  it("recovers from a temporary provider outage with a proposal on the same model", async () => {
+    const content = createContent()
+    const original = structuredClone(content)
+    const aiProvider = createTestAiProvider([
+      temporaryProviderOutage(),
+      flowProviderResult({
+        ...successfulFlowPayload(),
+        operations: [{ type: "set_title", summary: "Updated title", payload: { value: "Customer intake" } }],
+      }),
+    ])
+    const persistMessages = vi.fn(async (): Promise<void> => {})
+    const result = await executeTemplateFlow(
+      createInput(content, "Rename this to Customer intake."),
+      createDependencies({ aiProvider, persistMessages })
+    )
+
+    expect(result.proposal?.candidateDraft.title).toBe("Customer intake")
+    expect(content).toEqual(original)
+    expect(persistMessages).toHaveBeenCalledTimes(1)
+    expect(readProviderRequests(aiProvider)).toHaveLength(2)
+    expect(readProviderRequests(aiProvider)[1]).toEqual(readProviderRequests(aiProvider)[0])
+  })
+
+  it.each(["outage", "invalid output"])("stops after two calls when an outage is followed by %s", async (failure) => {
+    const aiProvider = createTestAiProvider([
+      temporaryProviderOutage(),
+      failure === "outage"
+        ? temporaryProviderOutage()
+        : { ...flowProviderResult(successfulFlowPayload()), text: "not-json" },
+    ])
+    const persistMessages = vi.fn(async (): Promise<void> => {})
+
+    await expect(executeTemplateFlow(
+      createInput(createBlankTemplateContent(), "Create an agreement."),
+      createDependencies({ aiProvider, persistMessages })
+    )).rejects.toMatchObject({ statusCode: failure === "outage" ? 503 : 502 })
+    expect(readProviderRequests(aiProvider)).toHaveLength(2)
+    expect(persistMessages).not.toHaveBeenCalled()
+  })
+
+  it("does not retry an outage after spending the remaining call on semantic repair", async () => {
+    const aiProvider = createTestAiProvider([
+      { ...flowProviderResult(successfulFlowPayload()), text: "not-json" },
+      temporaryProviderOutage(),
+    ])
+
+    await expect(executeTemplateFlow(
+      createInput(createBlankTemplateContent(), "Create an agreement."),
+      createDependencies({ aiProvider })
+    )).rejects.toMatchObject({ statusCode: 503 })
+    expect(readProviderRequests(aiProvider)).toHaveLength(2)
+  })
+
   it("performs one bounded semantic repair on the same model", async () => {
     const aiProvider = createTestAiProvider([
       {
@@ -600,6 +689,7 @@ describe("template Flow service", () => {
         text: "not-json",
         traceId: "initial-invalid-trace",
         usage: {
+          cachedTokens: 0,
           inputTokens: 100,
           outputTokens: 20,
           totalTokens: 120
@@ -609,6 +699,7 @@ describe("template Flow service", () => {
         ...flowProviderResult(successfulFlowPayload()),
         traceId: "repair-success-trace",
         usage: {
+          cachedTokens: 90,
           inputTokens: 140,
           outputTokens: 30,
           totalTokens: 170
@@ -631,6 +722,10 @@ describe("template Flow service", () => {
         { provider: TEST_PROVIDER_ID, model: TEST_MODEL }
       ])
       expect(requests[1]?.input).toContain("semanticRepair")
+      // The draft, the largest part, leads, and a repair repeats the first
+      // prompt as its opening, so the provider can reuse what it already read.
+      expect(Object.keys(JSON.parse(requests[0]?.input ?? "{}"))[0]).toBe("currentDraft")
+      expect(requests[1]?.input.startsWith(requests[0]?.input.slice(0, -1) ?? "?")).toBe(true)
       expect(infoSpy).toHaveBeenCalledWith(
         "template_flow_turn_completed",
         expect.objectContaining({
@@ -638,6 +733,7 @@ describe("template Flow service", () => {
           model: TEST_MODEL,
           traceId: "repair-success-trace",
           upstreamCalls: 2,
+          cachedTokens: 90,
           inputTokens: 240,
           outputTokens: 50,
           totalTokens: 290
@@ -1025,6 +1121,50 @@ describe("template Flow service", () => {
   })
 })
 
+describe("Flow and date formats", () => {
+  it("keeps a date field's format when Flow rewrites the field without one", async () => {
+    const content = createContent()
+    content.blocks = [
+      {
+        dateFormat: { month: "number", order: "dmy", separator: "/" },
+        fieldKey: "move_in",
+        helpText: null,
+        id: FIELD_ID,
+        label: "Move-in date",
+        required: false,
+        type: "date_field",
+      },
+    ]
+    const aiProvider = createTestAiProvider([
+      flowProviderResult({
+        assistantMessage: "The move-in date is now required.",
+        needsConfirmation: false,
+        confirmationQuestion: "",
+        operations: [
+          {
+            type: "update_block",
+            summary: "Required the move-in date",
+            payload: {
+              blockId: FIELD_ID,
+              block: { type: "date_field", fieldKey: "move_in", label: "Move-in date", required: true, helpText: null },
+            },
+          },
+        ],
+      }),
+    ])
+
+    const result = await executeTemplateFlow(
+      createInput(content, "Make the move-in date required."),
+      createDependencies({ aiProvider })
+    )
+
+    expect(result.proposal?.candidateDraft.content.blocks[0]).toMatchObject({
+      dateFormat: { month: "number", order: "dmy", separator: "/" },
+      required: true,
+    })
+  })
+})
+
 describe("document Flow", () => {
   const DOCUMENT_ID = "00000000-0000-4000-8000-000000000020"
 
@@ -1368,6 +1508,18 @@ function rawFlowProviderResult(
       totalTokens: null
     }
   }
+}
+
+function temporaryProviderOutage(): AiProviderError {
+  return new AiProviderError({
+    code: AI_PROVIDER_ERROR_CODES.UPSTREAM_UNAVAILABLE,
+    message: "Provider temporarily unavailable.",
+    model: { provider: TEST_PROVIDER_ID, model: TEST_MODEL },
+    provider: TEST_PROVIDER_ID,
+    retryable: true,
+    statusCode: 503,
+    traceId: "provider-outage-trace",
+  })
 }
 
 function successfulFlowPayload(): TestFlowPayload {

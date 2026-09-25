@@ -41,6 +41,24 @@ describe("authentication callback redirects", () => {
     )
   })
 
+  it("sends someone who confirmed on another device to log in, then on to where they were going", async () => {
+    process.env.NEXT_PUBLIC_APP_URL = "https://app.example.com"
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    vi.mocked(createClient).mockResolvedValue({
+      auth: {
+        exchangeCodeForSession: vi.fn().mockResolvedValue({ error: { message: "code verifier missing" } }),
+      },
+    } as never)
+
+    const response = await GET(
+      new NextRequest("https://app.example.com/auth/callback?code=code-1&next=/dashboard")
+    )
+
+    expect(response.headers.get("location")).toBe(
+      "https://app.example.com/login?confirmed=1&next=%2Fdashboard"
+    )
+  })
+
   it("fails closed when the canonical application URL is missing", async () => {
     delete process.env.NEXT_PUBLIC_APP_URL
     vi.spyOn(console, "error").mockImplementation(() => {})

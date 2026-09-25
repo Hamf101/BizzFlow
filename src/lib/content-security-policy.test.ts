@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest"
 import { buildContentSecurityPolicy } from "@/lib/content-security-policy"
 
 describe("buildContentSecurityPolicy", () => {
-  it("allows the configured object-storage origin for browser uploads", () => {
+  it("allows the configured object-storage origin for uploads and stored pictures", () => {
     const policy = buildContentSecurityPolicy({
       appUrl: "http://localhost:3000",
       isProduction: true,
@@ -13,6 +13,9 @@ describe("buildContentSecurityPolicy", () => {
     expect(policy).toContain(
       "connect-src 'self' https://*.supabase.co wss://*.supabase.co " +
         "https://*.r2.cloudflarestorage.com http://127.0.0.1:9000"
+    )
+    expect(policy).toContain(
+      "img-src 'self' data: blob: https://*.r2.cloudflarestorage.com http://127.0.0.1:9000"
     )
     expect(policy).not.toContain("upgrade-insecure-requests")
   })

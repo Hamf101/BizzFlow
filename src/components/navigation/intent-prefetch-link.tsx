@@ -1,14 +1,14 @@
 "use client"
 
 import Link from "next/link"
-import { useRouter } from "next/navigation"
-import type {
-  ComponentProps,
-  FocusEvent,
-  MouseEvent,
-  ReactElement,
-  SyntheticEvent,
-  TouchEvent,
+import {
+  type ComponentProps,
+  type FocusEvent,
+  type MouseEvent,
+  type ReactElement,
+  type SyntheticEvent,
+  type TouchEvent,
+  useState,
 } from "react"
 
 export type IntentPrefetchLinkProps = Omit<
@@ -19,14 +19,13 @@ export type IntentPrefetchLinkProps = Omit<
 }
 
 /**
- * Fully prefetches a dashboard destination and refreshes it after user intent.
- *
- * Primary navigation contains a small, permission-filtered route set. Loading
- * those destinations while the navigation is visible lets tab switches resolve
- * from the client cache without showing an intermediate loading screen.
+ * A dashboard destination that loads in full once someone heads for it, on
+ * hover, focus or touch. A tab that is merely on screen loads nothing, so a
+ * page view pays for one page rather than every tab in the navigation, while
+ * the tab someone reaches for still opens without a loading state.
  *
  * @param props - Standard Next.js link props with a string application path.
- * @returns A client-navigation link that warms its route on hover, focus, or touch.
+ * @returns A client-navigation link that loads its route on intent.
  */
 export function IntentPrefetchLink({
   href,
@@ -35,37 +34,31 @@ export function IntentPrefetchLink({
   onTouchStart,
   ...props
 }: IntentPrefetchLinkProps): ReactElement {
-  const router = useRouter()
+  const [intent, setIntent] = useState(false)
 
-  function prefetchRoute(event: SyntheticEvent<HTMLAnchorElement>): void {
+  function notice(event: SyntheticEvent<HTMLAnchorElement>): void {
     if (!event.defaultPrevented) {
-      router.prefetch(href)
+      setIntent(true)
     }
-  }
-
-  function handleFocus(event: FocusEvent<HTMLAnchorElement>): void {
-    onFocus?.(event)
-    prefetchRoute(event)
-  }
-
-  function handleMouseEnter(event: MouseEvent<HTMLAnchorElement>): void {
-    onMouseEnter?.(event)
-    prefetchRoute(event)
-  }
-
-  function handleTouchStart(event: TouchEvent<HTMLAnchorElement>): void {
-    onTouchStart?.(event)
-    prefetchRoute(event)
   }
 
   return (
     <Link
       {...props}
       href={href}
-      onFocus={handleFocus}
-      onMouseEnter={handleMouseEnter}
-      onTouchStart={handleTouchStart}
-      prefetch
+      onFocus={(event: FocusEvent<HTMLAnchorElement>): void => {
+        onFocus?.(event)
+        notice(event)
+      }}
+      onMouseEnter={(event: MouseEvent<HTMLAnchorElement>): void => {
+        onMouseEnter?.(event)
+        notice(event)
+      }}
+      onTouchStart={(event: TouchEvent<HTMLAnchorElement>): void => {
+        onTouchStart?.(event)
+        notice(event)
+      }}
+      prefetch={intent}
     />
   )
 }

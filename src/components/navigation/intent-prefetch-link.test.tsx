@@ -1,76 +1,63 @@
-import type {
-  FocusEvent,
-  MouseEvent,
-  ReactElement,
-  TouchEvent,
-} from "react"
-import { beforeEach, describe, expect, it, vi } from "vitest"
+// @vitest-environment jsdom
 
-const { prefetchMock } = vi.hoisted(() => ({
-  prefetchMock: vi.fn(),
-}))
+import { act } from "react"
+import { createRoot } from "react-dom/client"
+import { afterEach, expect, it, vi } from "vitest"
 
-vi.mock("next/link", () => ({ default: "a" }))
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({ prefetch: prefetchMock }),
-}))
+vi.mock("next/link", async () => {
+  const { createElement } = await import("react")
+
+  return {
+    // Shows what the link asks Next.js to load ahead.
+    default: ({ prefetch, ...props }: { prefetch?: boolean }) =>
+      createElement("a", { ...props, "data-prefetch": String(prefetch) }),
+  }
+})
 
 import { IntentPrefetchLink } from "./intent-prefetch-link"
 
-type RenderedLinkProps = {
-  onFocus?: (event: FocusEvent<HTMLAnchorElement>) => void
-  onMouseEnter?: (event: MouseEvent<HTMLAnchorElement>) => void
-  onTouchStart?: (event: TouchEvent<HTMLAnchorElement>) => void
-  prefetch?: boolean
+;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+afterEach(() => {
+  document.body.replaceChildren()
+})
+
+async function renderLink(onMouseEnter = vi.fn()): Promise<HTMLAnchorElement> {
+  const container = document.body.appendChild(document.createElement("div"))
+
+  await act(async () =>
+    createRoot(container).render(
+      <IntentPrefetchLink href="/people" onMouseEnter={onMouseEnter}>
+        People
+      </IntentPrefetchLink>
+    )
+  )
+
+  return container.querySelector("a") as HTMLAnchorElement
 }
 
-function getRenderedLinkProps(link: ReactElement): RenderedLinkProps {
-  return link.props as RenderedLinkProps
-}
+it.each([
+  ["hovered", new MouseEvent("mouseover", { bubbles: true })],
+  ["focused", new FocusEvent("focusin", { bubbles: true })],
+  ["touched", new Event("touchstart", { bubbles: true })],
+])("loads nothing ahead until the link is %s, then the whole route", async (_intent, event) => {
+  const link = await renderLink()
+  expect(link.dataset.prefetch).toBe("false")
 
-describe("IntentPrefetchLink", () => {
-  beforeEach(() => {
-    prefetchMock.mockClear()
+  act(() => {
+    link.dispatchEvent(event)
   })
 
-  it("fully prefetches visible dashboard destinations and refreshes on intent", () => {
-    const link = IntentPrefetchLink({ children: "People", href: "/people" })
-    const props = getRenderedLinkProps(link)
+  expect(link.dataset.prefetch).toBe("true")
+})
 
-    expect(props.prefetch).toBe(true)
+it("still runs a caller's own handler", async () => {
+  const onMouseEnter = vi.fn()
+  const link = await renderLink(onMouseEnter)
 
-    props.onMouseEnter?.({
-      defaultPrevented: false,
-    } as MouseEvent<HTMLAnchorElement>)
-
-    expect(prefetchMock).toHaveBeenCalledExactlyOnceWith("/people")
+  act(() => {
+    link.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }))
   })
 
-  it.each([
-    ["onFocus", {} as FocusEvent<HTMLAnchorElement>],
-    ["onTouchStart", {} as TouchEvent<HTMLAnchorElement>],
-  ] as const)("warms the route on %s", (handlerName, event) => {
-    const link = IntentPrefetchLink({ children: "Tasks", href: "/tasks" })
-    const props = getRenderedLinkProps(link)
-
-    props[handlerName]?.(event as never)
-
-    expect(prefetchMock).toHaveBeenCalledExactlyOnceWith("/tasks")
-  })
-
-  it("preserves a caller's event handler", () => {
-    const onMouseEnter = vi.fn()
-    const event = { defaultPrevented: false } as MouseEvent<HTMLAnchorElement>
-    const link = IntentPrefetchLink({
-      children: "Settings",
-      href: "/settings",
-      onMouseEnter,
-    })
-    const props = getRenderedLinkProps(link)
-
-    props.onMouseEnter?.(event)
-
-    expect(onMouseEnter).toHaveBeenCalledExactlyOnceWith(event)
-    expect(prefetchMock).toHaveBeenCalledExactlyOnceWith("/settings")
-  })
+  expect(onMouseEnter).toHaveBeenCalledOnce()
 })

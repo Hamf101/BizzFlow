@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "engines": {
-    "node": "22.x"
+    "node": "24.x"
   },
   "scripts": {
     "dev": "next dev",
@@ -14,7 +14,7 @@
     "test": "vitest run",
     "supabase:check": "node scripts/check-supabase-live.mjs",
     "supabase:check:audit-chain": "node scripts/verify-audit-chain.mjs",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "next typegen && tsc --noEmit",
     "check": "pnpm lint && pnpm typecheck && pnpm check:test-integrity && pnpm test && pnpm check:duplication && pnpm check:deadcode && pnpm build && pnpm check:route-js && pnpm audit:dependencies",
     "check:e2e": "pnpm build:e2e && pnpm test:e2e",
     "test:e2e": "playwright test",
@@ -58,7 +58,7 @@
     "@axe-core/playwright": "4.13.0",
     "@playwright/test": "1.62.1",
     "@tailwindcss/postcss": "^4.3.3",
-    "@types/node": "^22",
+    "@types/node": "^24.13.5",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "eslint": "^9.39.5",

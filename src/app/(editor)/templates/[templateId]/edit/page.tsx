@@ -12,11 +12,14 @@ import { getPageErrorMessage } from "@/lib/page-errors"
 import { loadPageOrganizationContext } from "@/lib/page-organization-context"
 import { canPerformOrganizationAction } from "@/lib/permissions"
 import { cn } from "@/lib/utils"
+import { getEditorLayout } from "@/services/editor-layout-service"
 import { listTemplateFlowMessages } from "@/services/template-flow-service"
 import {
   getDocumentTemplate,
   listDocumentTemplateCategories,
 } from "@/services/template-service"
+import { withTemplateImageOriginals } from "@/services/template-image-service"
+import type { EditorLayout } from "@/types/editor-layout"
 import type { DocumentTemplate } from "@/types/template"
 import type { TemplateFlowMessage } from "@/types/template-flow"
 
@@ -25,6 +28,7 @@ import {
   publishTemplateAction,
   saveTemplateDraftAction,
 } from "@/app/(dashboard)/templates/actions"
+import { saveEditorLayoutAction } from "@/app/(editor)/editor-layout-actions"
 
 type EditTemplateParams = Promise<{
   templateId: string
@@ -82,8 +86,9 @@ export default async function EditTemplatePage({
     organizationId: context.organization.id,
     templateId,
   })
-    .then((template: DocumentTemplate) => ({
-      template,
+    .then(async (template: DocumentTemplate) => ({
+      // Pictures get addresses this person can load, now their access is checked.
+      template: { ...template, content: await withTemplateImageOriginals(template.content, template.organizationId) },
       errorMessage: null as string | null,
     }))
     .catch((error: unknown) => {
@@ -134,11 +139,14 @@ export default async function EditTemplatePage({
     actorUserId: user.id,
     organizationId: context.organization.id,
   }).catch((): string[] => [])
+  // Where the tools were left; without it they start at home.
+  const editorLayout = await getEditorLayout({ actorUserId: user.id }).catch((): EditorLayout => ({}))
 
   return (
     <TemplateEditor
       archiveAction={archiveTemplateAction}
       categorySuggestions={categorySuggestions}
+      editorLayout={{ initial: editorLayout, save: saveEditorLayoutAction }}
       initialFlowMessages={initialFlowMessages}
       publishAction={publishTemplateAction}
       saveDraftAction={saveTemplateDraftAction}

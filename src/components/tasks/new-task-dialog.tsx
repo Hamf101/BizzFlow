@@ -12,6 +12,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import { DateTimePicker } from "@/components/ui/date-picker"
 import { Field, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
@@ -67,7 +68,7 @@ export function NewTaskDialog({
           <div className="flex flex-col gap-4 sm:flex-row">
             <Field className="sm:flex-1">
               <FieldLabel htmlFor="new-task-due">Due (UTC)</FieldLabel>
-              <Input id="new-task-due" name="dueAt" type="datetime-local" />
+              <DateTimePicker id="new-task-due" name="dueAt" />
             </Field>
             {canAssign ? (
               <Field className="sm:flex-1">

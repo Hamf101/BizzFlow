@@ -22,6 +22,7 @@ import {
   SigningWorkflowBadge,
 } from "@/lib/page-status-badges"
 import { getPublicDocumentSigningView } from "@/services/document-signing-service"
+import { withTemplateImageUrls } from "@/services/template-image-service"
 import type {
   PublicDocumentSigningView,
   PublicSignerStatus,
@@ -59,8 +60,15 @@ export default async function PublicSigningPage({
   const [{ token }, query] = await Promise.all([params, searchParams])
   const viewResult = (await isSigningViewAllowed())
     ? await getPublicDocumentSigningView({ token })
-        .then((view: PublicDocumentSigningView) => ({
-          view,
+        .then(async (view: PublicDocumentSigningView) => ({
+          // The token was checked, so its pictures get addresses the signer can load.
+          view: {
+            ...view,
+            document: {
+              ...view.document,
+              templateSnapshot: await withTemplateImageUrls(view.document.templateSnapshot, view.document.organizationId),
+            },
+          },
           errorMessage: null as string | null,
         }))
         .catch((error: unknown) => {

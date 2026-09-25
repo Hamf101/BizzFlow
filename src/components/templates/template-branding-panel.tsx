@@ -1,19 +1,40 @@
 "use client"
 
+import { ImageUp } from "lucide-react"
 import Image from "next/image"
 import { type ChangeEvent, type ReactElement, useState } from "react"
 
-import { readTemplateImage } from "@/components/templates/template-image"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Button } from "@/components/ui/button"
+import { requestImageUploadAction } from "@/app/(editor)/image-actions"
+import { storeTemplateImage } from "@/components/templates/template-image"
+import { Select } from "@/components/ui/select"
+import { Button, buttonVariants } from "@/components/ui/button"
+import { ColorWheel } from "@/components/ui/color-wheel"
 import { Field, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import { getPaperContrastRatio } from "@/lib/document-surface"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { cn } from "@/lib/utils"
 import type { TemplateBranding } from "@/types/template"
+import { imageSource } from "@/types/template-images"
+
+// Colours that read clearly on white paper, starting with the defaults. Kept in
+// lower case, as the picker stores them.
+const PAPER_COLORS = [
+  "#252329",
+  "#635273",
+  "#1f3a5f",
+  "#1d4e89",
+  "#0f5257",
+  "#2e5e3e",
+  "#4d5a1e",
+  "#8a4b08",
+  "#9b2c2c",
+  "#8c2155",
+  "#5b3a8e",
+  "#475569"
+] as const
 
 /**
- * The document's brand: its logo, organization name and colours, with how
- * well the colours read on white paper.
+ * The document's brand: its logo, organization name and colours.
  *
  * @param props - The branding and how to change it.
  * @returns The brand controls.
@@ -26,9 +47,8 @@ export function TemplateBrandingPanel({
   onChange: (branding: TemplateBranding) => void
 }): ReactElement {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
-  const primaryContrast = getPaperContrastRatio(branding.primaryColor)
-  const accentContrast = getPaperContrastRatio(branding.accentColor)
-  const hasLowPaperContrast = primaryContrast < 4.5 || accentContrast < 4.5
+  const [uploading, setUploading] = useState(false)
+  const logo = imageSource(branding.logoAsset, branding.logoDataUrl)
 
   async function handleLogoChange(
     event: ChangeEvent<HTMLInputElement>
@@ -40,10 +60,11 @@ export function TemplateBrandingPanel({
     }
 
     setErrorMessage(null)
+    setUploading(true)
 
     try {
-      const logoDataUrl = await readTemplateImage(file)
-      onChange({ ...branding, logoDataUrl })
+      const logoAsset = await storeTemplateImage(file, requestImageUploadAction)
+      onChange({ ...branding, logoAsset, logoDataUrl: null })
     } catch (error: unknown) {
       const reason =
         error instanceof Error ? error.message : "Unable to read logo."
@@ -54,24 +75,25 @@ export function TemplateBrandingPanel({
       })
       setErrorMessage(reason)
     } finally {
+      setUploading(false)
       event.target.value = ""
     }
   }
 
   return (
     <div className="grid gap-4">
-      {branding.logoDataUrl && (
+      {logo && (
         <div className="flex items-center justify-between gap-3 rounded-[8px] border bg-muted/30 p-3">
           <Image
             alt="Current organization logo"
             className="h-auto max-h-10 w-auto max-w-28 object-contain"
             height={40}
-            src={branding.logoDataUrl}
+            src={logo}
             unoptimized
             width={112}
           />
           <Button
-            onClick={(): void => onChange({ ...branding, logoDataUrl: null })}
+            onClick={(): void => onChange({ ...branding, logoAsset: null, logoDataUrl: null })}
             size="sm"
             type="button"
             variant="ghost"
@@ -95,7 +117,6 @@ export function TemplateBrandingPanel({
       </Field>
       <div className="grid grid-cols-2 gap-3">
         <ColorControl
-          describedBy="branding-paper-contrast"
           id="branding-primary-color"
           label="Primary"
           onChange={(primaryColor: string): void =>
@@ -104,7 +125,6 @@ export function TemplateBrandingPanel({
           value={branding.primaryColor}
         />
         <ColorControl
-          describedBy="branding-paper-contrast"
           id="branding-accent-color"
           label="Accent"
           onChange={(accentColor: string): void =>
@@ -113,30 +133,12 @@ export function TemplateBrandingPanel({
           value={branding.accentColor}
         />
       </div>
-      <Alert id="branding-paper-contrast" role="status" aria-atomic="true">
-        <AlertTitle>
-          {hasLowPaperContrast ? "Low paper contrast" : "Paper contrast"}
-        </AlertTitle>
-        <AlertDescription>
-          <p>
-            Primary {primaryContrast.toFixed(2)}:1 · Accent {accentContrast.toFixed(2)}:1
-            {" "}against white paper.
-          </p>
-          {hasLowPaperContrast && (
-            <p>
-              Aim for 4.5:1 for normal text. You can still save; Preview and PDF
-              keep your exact colors.
-            </p>
-          )}
-        </AlertDescription>
-      </Alert>
       <div className="grid grid-cols-2 gap-3">
         <Field>
           <FieldLabel htmlFor="branding-logo-alignment">
             Logo position
           </FieldLabel>
-          <select
-            className="h-9 w-full rounded-[8px] border border-input bg-card px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
+          <Select
             id="branding-logo-alignment"
             onChange={(event: ChangeEvent<HTMLSelectElement>): void =>
               onChange({
@@ -149,7 +151,7 @@ export function TemplateBrandingPanel({
             <option value="left">Left</option>
             <option value="center">Center</option>
             <option value="right">Right</option>
-          </select>
+          </Select>
         </Field>
         <Field>
           <FieldLabel htmlFor="branding-logo-width">
@@ -171,21 +173,34 @@ export function TemplateBrandingPanel({
           />
         </Field>
       </div>
-      <Field>
-        <FieldLabel htmlFor="branding-logo">PNG or JPEG logo</FieldLabel>
-        <Input
-          accept="image/png,image/jpeg"
-          aria-describedby={errorMessage ? "branding-logo-error" : undefined}
-          id="branding-logo"
-          onChange={handleLogoChange}
-          type="file"
-        />
+      <div className="grid gap-1.5">
+        <label
+          className={cn(
+            buttonVariants({ size: "sm", variant: "outline" }),
+            "w-fit cursor-pointer has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring/35"
+          )}
+        >
+          <ImageUp />
+          {uploading ? "Uploading…" : logo ? "Replace logo" : "Upload logo"}
+          <input
+            accept="image/png,image/jpeg"
+            disabled={uploading}
+            aria-describedby={errorMessage ? "branding-logo-error" : "branding-logo-hint"}
+            className="sr-only"
+            id="branding-logo"
+            onChange={handleLogoChange}
+            type="file"
+          />
+        </label>
+        <p className="text-xs text-muted-foreground" id="branding-logo-hint">
+          PNG or JPEG
+        </p>
         {errorMessage && (
-          <p className="text-sm text-destructive" id="branding-logo-error">
+          <p className="text-sm text-destructive" id="branding-logo-error" role="alert">
             {errorMessage}
           </p>
         )}
-      </Field>
+      </div>
       <p className="text-xs leading-relaxed text-muted-foreground">
         Flow can reposition and resize an existing logo, but it preserves the
         image unless you explicitly ask to remove it.
@@ -195,42 +210,73 @@ export function TemplateBrandingPanel({
 }
 
 function ColorControl({
-  describedBy,
   id,
   label,
   onChange,
   value
 }: {
-  describedBy: string
   id: string
   label: string
   onChange: (value: string) => void
   value: string
 }): ReactElement {
+  // What is typed, which only becomes the colour once it is a whole hex code.
+  const [typed, setTyped] = useState(value)
+
+  function choose(color: string): void {
+    setTyped(color)
+    onChange(color)
+  }
+
   return (
     <Field>
       <FieldLabel htmlFor={id}>{label}</FieldLabel>
-      <label
-        className="flex h-9 cursor-pointer items-center gap-2 rounded-[8px] border bg-card px-2 text-xs focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/30"
-        htmlFor={id}
-      >
-        <span
-          aria-hidden="true"
-          className="size-5 rounded-[5px] border"
-          style={{ backgroundColor: value }}
-        />
-        <span className="font-mono">{value.toUpperCase()}</span>
-        <input
-          aria-describedby={describedBy}
-          className="sr-only"
+      <Popover onOpenChange={(open: boolean): void => (open ? setTyped(value) : undefined)}>
+        <PopoverTrigger
+          className="flex h-9 items-center gap-2 rounded-[8px] border bg-card px-2 text-xs outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 data-popup-open:border-ring"
           id={id}
-          onChange={(event: ChangeEvent<HTMLInputElement>): void =>
-            onChange(event.target.value)
-          }
-          type="color"
-          value={value}
-        />
-      </label>
+        >
+          <span
+            aria-hidden="true"
+            className="size-5 rounded-[5px] border"
+            style={{ backgroundColor: value }}
+          />
+          <span className="font-mono">{value.toUpperCase()}</span>
+        </PopoverTrigger>
+        <PopoverContent align="start" aria-label={label} className="grid w-60 gap-3">
+          <ColorWheel label={label} onChange={choose} value={value} />
+          <div className="grid grid-cols-6 gap-2">
+            {PAPER_COLORS.map((color: string) => (
+              <button
+                aria-label={color}
+                aria-pressed={color === value.toLowerCase()}
+                className="size-7 rounded-[7px] border outline-none ring-offset-2 ring-offset-popover focus-visible:ring-2 focus-visible:ring-ring/50 aria-pressed:ring-2 aria-pressed:ring-foreground/70"
+                key={color}
+                onClick={(): void => choose(color)}
+                style={{ backgroundColor: color }}
+                type="button"
+              />
+            ))}
+          </div>
+          <Input
+            aria-label="Hex code"
+            className="font-mono uppercase"
+            maxLength={7}
+            onChange={(event: ChangeEvent<HTMLInputElement>): void => {
+              const next = event.target.value.startsWith("#")
+                ? event.target.value
+                : `#${event.target.value}`
+
+              setTyped(next)
+
+              if (/^#[0-9a-f]{6}$/i.test(next)) {
+                onChange(next.toLowerCase())
+              }
+            }}
+            value={typed}
+          />
+        </PopoverContent>
+      </Popover>
     </Field>
   )
 }

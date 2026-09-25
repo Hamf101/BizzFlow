@@ -11,7 +11,8 @@ import {
   insertTemplateBlock,
   moveTemplateBlock,
   moveTemplateBlockAfter,
-  updateTemplateBlock
+  updateTemplateBlock,
+  withGeneratedFieldKeys
 } from "./template-structure"
 import {
   MAX_TEMPLATE_BLOCK_COUNT,
@@ -679,3 +680,27 @@ function createDropdownVisibilityContent(): TemplateContentV3 {
 
   return content
 }
+
+describe("generated field keys", () => {
+  it("rebuilds keys typed by hand or repeated, and leaves good ones alone", () => {
+    const keyed = (id: string, fieldKey: string) => ({
+      fieldKey,
+      helpText: null,
+      id,
+      label: "Label",
+      multiline: false,
+      placeholder: null,
+      required: false,
+      type: "text_field" as const
+    })
+    const content = createBlankTemplateContent()
+    content.blocks = [keyed(SOURCE_ID, "Client-Name"), keyed(TARGET_ID, "email"), keyed(THIRD_FIELD_ID, "email")]
+
+    expect(
+      withGeneratedFieldKeys(content).blocks.map((block) => ("fieldKey" in block ? block.fieldKey : null))
+    ).toEqual(["client_name", "email", "email_2"])
+
+    const good = { ...content, blocks: [keyed(SOURCE_ID, "client_name")] }
+    expect(withGeneratedFieldKeys(good)).toBe(good)
+  })
+})

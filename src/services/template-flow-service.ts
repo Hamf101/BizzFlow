@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto"
+import { setTimeout as delay } from "node:timers/promises"
 
 import { z } from "zod"
 
@@ -519,6 +520,7 @@ export async function executeTemplateFlow(
     // Spend signal: hard-bounded upstream calls plus billed tokens when the
     // provider reports them. This is the only per-turn cost record kept here.
     upstreamCalls: providerResult.upstreamCalls,
+    cachedTokens: providerResult.usage.cachedTokens ?? null,
     inputTokens: providerResult.usage.inputTokens,
     outputTokens: providerResult.usage.outputTokens,
     totalTokens: providerResult.usage.totalTokens,
@@ -712,16 +714,19 @@ async function requestFlowProvider(input: {
 
   const systemInstruction = createFlowSystemInstruction()
   const responseSchema = createTemplateFlowResponseSchema()
-  const initialPrompt = JSON.stringify({
+  // The draft, the largest part and the same from one message to the next,
+  // leads, so Gemini can reuse what an earlier call read at a discount.
+  const request = {
+    currentDraft: buildFlowDocumentContext(input.request.draft),
     conversation: input.history
       .slice(-MAX_FLOW_HISTORY_MESSAGES)
       .map((message: TemplateFlowMessage) => ({
         role: message.role,
         content: message.content
       })),
-    userMessage: input.request.instruction,
-    currentDraft: buildFlowDocumentContext(input.request.draft)
-  })
+    userMessage: input.request.instruction
+  }
+  const initialPrompt = JSON.stringify(request)
   const usageReports: AiTokenUsage[] = []
   let currentPrompt = initialPrompt
   let upstreamCalls = 0
@@ -744,6 +749,29 @@ async function requestFlowProvider(input: {
         traceId: input.traceId
       })
     } catch (error: unknown) {
+      // A transient outage uses the same remaining call as a semantic repair;
+      // it must never expand the two-call budget or switch models.
+      upstreamCalls += 1
+      if (
+        error instanceof AiProviderError &&
+        error.code === AI_PROVIDER_ERROR_CODES.UPSTREAM_UNAVAILABLE &&
+        error.retryable &&
+        providerCall < FLOW_MAX_UPSTREAM_CALLS &&
+        upstreamCalls < FLOW_MAX_UPSTREAM_CALLS
+      ) {
+        console.warn("template_flow_provider_retrying", JSON.stringify({
+          templateId: input.request.templateId,
+          organizationId: input.request.organizationId,
+          provider: model.provider,
+          model: model.model,
+          providerStatusCode: error.statusCode,
+          traceId: error.traceId,
+          upstreamCalls,
+          durationMs: Math.round(performance.now() - input.startedAt),
+        }))
+        await delay(1_000)
+        continue
+      }
       throwFlowProviderError(error, input, model)
     }
 
@@ -816,7 +844,7 @@ async function requestFlowProvider(input: {
 
     if (providerCall < FLOW_MAX_UPSTREAM_CALLS) {
       currentPrompt = createFlowRepairPrompt({
-        initialPrompt,
+        request,
         invalidResponse: result.text,
         issueCode: validationFailure.issueCode,
         issuePath: validationFailure.issuePath
@@ -985,13 +1013,14 @@ function readFlowParseIssue(error: z.ZodError): FlowProviderParseResult {
 }
 
 function createFlowRepairPrompt(input: {
-  initialPrompt: string
+  request: Record<string, unknown>
   invalidResponse: string
   issueCode: string
   issuePath: string
 }): string {
+  // The first prompt, repeated as the opening, which the provider can reuse.
   return JSON.stringify({
-    originalRequest: input.initialPrompt,
+    ...input.request,
     semanticRepair: {
       instruction:
         "Return one corrected response that follows the response schema and operation payload contracts exactly.",
@@ -1009,6 +1038,9 @@ function createFlowRepairPrompt(input: {
 
 function aggregateTokenUsage(usages: AiTokenUsage[]): AiTokenUsage {
   return {
+    cachedTokens: sumReportedUsage(
+      usages.map((usage: AiTokenUsage): number | null => usage.cachedTokens ?? null)
+    ),
     inputTokens: sumReportedUsage(
       usages.map((usage: AiTokenUsage): number | null => usage.inputTokens)
     ),
@@ -1075,7 +1107,14 @@ function throwFlowProviderError(
     )
   }
 
-  console.error("template_flow_provider_failed", logContext)
+  console.error("template_flow_provider_failed", JSON.stringify(logContext))
+
+  if (providerError.code === AI_PROVIDER_ERROR_CODES.UPSTREAM_UNAVAILABLE) {
+    throw new TemplateFlowServiceError(
+      "Flow's AI service is temporarily unavailable. Your document is unchanged. Try sending your message again shortly.",
+      503
+    )
+  }
 
   if (providerError.code === AI_PROVIDER_ERROR_CODES.REQUEST_TIMEOUT) {
     throw new TemplateFlowServiceError(
@@ -1146,7 +1185,7 @@ function createFlowPayloadContract(): string {
     'table {"type":"table","headers":["Header"],"rows":[["Cell"]]};',
     'divider {"type":"divider"};',
     'text_field {"type":"text_field","fieldKey":"stable_key","label":"Label","required":true,"helpText":null,"placeholder":null,"multiline":false,"visibleWhen":{"sourceBlockId":"earlier-dropdown-or-checkbox-uuid","operator":"equals","value":"Other"}};',
-    'date_field {"type":"date_field","fieldKey":"stable_key","label":"Label","required":true,"helpText":null,"visibleWhen":optional};',
+    'date_field {"type":"date_field","fieldKey":"stable_key","label":"Label","required":true,"helpText":null,"dateFormat":optional {"order":"dmy"|"mdy"|"ymd","separator":"/"|"."|"-"|" ","month":"number"|"short"|"long"},"visibleWhen":optional};',
     'initials_field {"type":"initials_field","fieldKey":"stable_key","label":"Label","required":true,"helpText":null,"visibleWhen":optional};',
     'signature_field {"type":"signature_field","fieldKey":"stable_key","label":"Label","required":true,"helpText":null,"visibleWhen":optional};',
     'file_field {"type":"file_field","fieldKey":"stable_key","label":"Label","required":true,"helpText":null,"visibleWhen":optional};',
@@ -1196,7 +1235,9 @@ function buildFlowDocumentContext(
       organizationName: draft.content.branding.organizationName,
       primaryColor: draft.content.branding.primaryColor,
       accentColor: draft.content.branding.accentColor,
-      hasLogo: draft.content.branding.logoDataUrl !== null,
+      hasLogo:
+        draft.content.branding.logoAsset !== null ||
+        draft.content.branding.logoDataUrl !== null,
       logoAlignment: draft.content.branding.logoAlignment,
       logoWidthPercent: draft.content.branding.logoWidthPercent
     },
@@ -1807,6 +1848,7 @@ function applyBrandingOperation(
     draft.content.branding.logoWidthPercent = payload.logoWidthPercent
   }
   if (payload.removeLogo === true) {
+    draft.content.branding.logoAsset = null
     draft.content.branding.logoDataUrl = null
   }
 }
@@ -1930,6 +1972,15 @@ function applyUpdateBlockOperation(
       payload.block.visibleWhen === undefined
     ) {
       candidate.visibleWhen = existingBlock.visibleWhen
+    }
+
+    // A date's format is the author's regional choice; Flow keeps it unless asked.
+    if (
+      existingBlock.type === "date_field" &&
+      payload.block.type === "date_field" &&
+      payload.block.dateFormat === undefined
+    ) {
+      candidate.dateFormat = existingBlock.dateFormat
     }
   }
 

@@ -20,7 +20,10 @@ import {
   groupTemplateRenderBlocks,
   type TemplateWebRenderGroup
 } from "@/components/templates/template-render-groups"
+import { DatePicker } from "@/components/ui/date-picker"
 import { Input } from "@/components/ui/input"
+import { Select } from "@/components/ui/select"
+import { formatDateAnswer } from "@/lib/date-format"
 import { resolveDocumentSurfaceInk } from "@/lib/document-surface"
 import { cn } from "@/lib/utils"
 import {
@@ -45,6 +48,7 @@ import {
 } from "@/types/template-visibility"
 
 import { getGeneratedDocumentAnswerName } from "./generated-document-form-data"
+import { imageSource } from "@/types/template-images"
 
 /**
  * Hands answer ownership to the caller so it survives this component's mount.
@@ -222,7 +226,9 @@ function GeneratedBrandHeader({
 }: {
   branding: TemplateBranding
 }): ReactElement | null {
-  if (!branding.logoDataUrl && !branding.organizationName) {
+  const logo = imageSource(branding.logoAsset, branding.logoDataUrl)
+
+  if (!logo && !branding.organizationName) {
     return null
   }
 
@@ -236,12 +242,12 @@ function GeneratedBrandHeader({
       )}
       data-template-brand-header="true"
     >
-      {branding.logoDataUrl && (
+      {logo && (
         <Image
           alt={`${branding.organizationName || "Organization"} logo`}
           className="h-auto max-h-16 object-contain"
           height={96}
-          src={branding.logoDataUrl}
+          src={logo}
           style={{ width: `${branding.logoWidthPercent}%` }}
           unoptimized
           width={480}
@@ -593,18 +599,15 @@ export function GeneratedBlock({
           labelFor={editable ? block.id : undefined}
         >
           {editable ? (
-            <Input
-              className="border-input"
+            <DatePicker
+              format={block.dateFormat}
               id={block.id}
               name={getGeneratedDocumentAnswerName("text", block.fieldKey)}
-              onChange={(event: ChangeEvent<HTMLInputElement>): void =>
-                onAnswerChange(block.fieldKey, event.target.value)
-              }
-              type="date"
+              onChange={(value: string): void => onAnswerChange(block.fieldKey, value)}
               value={readStringAnswer(answers, block.fieldKey)}
             />
           ) : (
-            <ReadOnlyAnswer value={readStringAnswer(answers, block.fieldKey)} />
+            <ReadOnlyAnswer value={formatDateAnswer(readStringAnswer(answers, block.fieldKey), block.dateFormat)} />
           )}
         </AnswerFieldFrame>
       )
@@ -669,8 +672,7 @@ export function GeneratedBlock({
           labelFor={editable ? block.id : undefined}
         >
           {editable ? (
-            <select
-              className="h-8 w-full rounded-lg border border-input bg-card px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
+            <Select
               id={block.id}
               name={getGeneratedDocumentAnswerName("text", block.fieldKey)}
               onChange={(event: ChangeEvent<HTMLSelectElement>): void =>
@@ -686,7 +688,7 @@ export function GeneratedBlock({
                   {option}
                 </option>
               ))}
-            </select>
+            </Select>
           ) : (
             <ReadOnlyAnswer value={readStringAnswer(answers, block.fieldKey)} />
           )}

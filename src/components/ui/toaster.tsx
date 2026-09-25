@@ -1,6 +1,7 @@
 "use client"
 
 import dynamic from "next/dynamic"
+import { usePathname } from "next/navigation"
 import { type ReactElement, type ReactNode, useEffect } from "react"
 import type { ExternalToast, ToasterProps } from "sonner"
 
@@ -103,6 +104,9 @@ function describeInvalidField(
  * @returns The configured Sonner toaster using Editorial Ledger tokens.
  */
 export function BizFlowToaster(): ReactElement<ToasterProps> {
+  // An editor's top bar holds its title and actions; notices drop below it.
+  const inEditor = /\/(documents|templates)\/[^/]+\/edit$/.test(usePathname() ?? "")
+
   useEffect(() => {
     // One submission fires `invalid` at every bad field; the first one speaks.
     let reported = false
@@ -142,6 +146,8 @@ export function BizFlowToaster(): ReactElement<ToasterProps> {
     <DeferredToaster
       closeButton
       duration={5_000}
+      mobileOffset={inEditor ? { top: 64 } : undefined}
+      offset={inEditor ? { top: 64 } : undefined}
       position="top-center"
       richColors={false}
       toastOptions={{

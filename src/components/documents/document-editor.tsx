@@ -11,7 +11,7 @@ import { findInsertChoices } from "@/components/editor/block-catalog"
 import { EditorCanvas } from "@/components/editor/editor-canvas"
 import { normalizeContentForSave } from "@/components/editor/editor-content"
 import { type DockTool, EditorDock, InsertTiles } from "@/components/editor/editor-dock"
-import { EditorFrame, EditorNotice, EditorSidePanel } from "@/components/editor/editor-frame"
+import { EditorFrame, type EditorLayoutStore, EditorNotice, EditorSidePanel } from "@/components/editor/editor-frame"
 import { PageSetupPanel } from "@/components/editor/page-setup-panel"
 import { type SaveResult, useAutosave } from "@/components/editor/use-autosave"
 import { useEditorController } from "@/components/editor/use-editor-controller"
@@ -59,6 +59,8 @@ type DocumentEditorProps = {
   backHref: string
   canFill: boolean
   canSend: boolean
+  /** Where this person keeps the dock and zoom. */
+  editorLayout?: EditorLayoutStore
   resendAction: (formData: FormData) => Promise<void>
   saveAnswersAction: (formData: FormData) => Promise<SaveResult>
   saveContentAction: (input: DocumentContentInput) => Promise<SaveResult>
@@ -78,6 +80,7 @@ export function DocumentEditor({
   backHref,
   canFill,
   canSend,
+  editorLayout,
   resendAction,
   saveAnswersAction,
   saveContentAction,
@@ -217,7 +220,7 @@ export function DocumentEditor({
       content: () => (
         <TemplateBrandingPanel
           branding={page.content.branding}
-          onChange={(branding) => controller.change((current) => ({ ...current, branding }))}
+          onChange={(branding) => controller.change((current) => ({ ...current, branding }), "branding")}
         />
       ),
       icon: Palette,
@@ -308,7 +311,14 @@ export function DocumentEditor({
         }
         canRedo={history.canRedo}
         canUndo={history.canUndo}
-        dock={(narrow) => <EditorDock narrow={narrow} tools={writable && !proposal ? [...tools, flowTool] : [flowTool]} />}
+        dock={(narrow, orientation) => (
+          <EditorDock
+            narrow={narrow}
+            orientation={orientation}
+            tools={writable && !proposal ? [...tools, flowTool] : [flowTool]}
+          />
+        )}
+        layout={editorLayout}
         extra={
           view.recipients.length > 0 ? (
             <Popover>
@@ -389,7 +399,7 @@ export function DocumentEditor({
                   blocks={page.content.blocks}
                   canMoveDown={settingsIndex < page.content.blocks.length - 1}
                   canMoveUp={settingsIndex > 0}
-                  onChange={(block) => controller.updateBlock(block)}
+                  onChange={(block) => controller.updateBlock(block, `settings:${block.id}`)}
                   onDelete={() => controller.remove(settingsBlock.id)}
                   onDuplicate={() => controller.duplicate(settingsBlock.id)}
                   onMoveDown={() => controller.move(settingsBlock.id, "down")}
@@ -443,6 +453,8 @@ export function DocumentEditor({
       >
         {({ narrow, zoom }) => (
           <form
+            // Only gathers the answers: the canvas inside sizes itself.
+            className="contents"
             onPointerUp={() => setDrawings((count) => count + 1)}
             onSubmit={(event) => event.preventDefault()}
             ref={formRef}

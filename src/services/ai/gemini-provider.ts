@@ -164,6 +164,7 @@ function readGeminiUsage(
   usage: Interactions.Interaction["usage"]
 ): AiTokenUsage {
   return {
+    cachedTokens: readOptionalCount(usage?.total_cached_tokens),
     inputTokens: readOptionalCount(usage?.total_input_tokens),
     outputTokens: readOptionalCount(usage?.total_output_tokens),
     totalTokens: readOptionalCount(usage?.total_tokens),

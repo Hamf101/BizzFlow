@@ -1,3 +1,4 @@
+import { chooseOption } from "../support/choose"
 import { expect, test, uniqueName } from "../support/fixtures"
 import { waitForHydration } from "../support/hydration"
 import { seedTemplate } from "../support/seed"
@@ -39,7 +40,7 @@ test.describe("submission intake", () => {
 
     await staff.goto("/submissions/new")
     await staff.getByLabel("Title").fill(submissionTitle)
-    await staff.getByLabel("Template").selectOption(template.id)
+    await chooseOption(staff.getByLabel("Template"), template.title)
     await staff.getByRole("button", { name: "Create draft" }).click()
 
     await staff.waitForURL(/\/submissions\/[0-9a-f-]+(?:\?.*)?$/i)

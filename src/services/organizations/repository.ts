@@ -29,6 +29,7 @@ import type {
   OrganizationMembership,
   OrganizationRoleDefinition,
 } from "@/types/organization"
+import { loadActiveMembership } from "@/services/organizations/active-membership"
 
 type CreatePendingInviteRecordInput = {
   organizationId: string
@@ -243,13 +244,7 @@ export async function getActiveMembership(
   organizationId: string,
   userId: string
 ): Promise<OrganizationMembership | null> {
-  const { data, error } = await client
-    .from("organization_memberships")
-    .select(MEMBERSHIP_SELECT)
-    .eq("org_id", organizationId)
-    .eq("user_id", userId)
-    .eq("status", "active")
-    .maybeSingle()
+  const { data, error } = await loadActiveMembership(client, organizationId, userId)
 
   if (error) {
     throw createSupabaseServiceError(

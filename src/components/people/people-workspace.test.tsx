@@ -186,6 +186,25 @@ async function click(button: HTMLButtonElement): Promise<void> {
   })
 }
 
+// Opens a themed select, whose menu loads on the first press, and reads the
+// choices it offers.
+async function openChoices(trigger: Element | null): Promise<string[]> {
+  if (!(trigger instanceof HTMLButtonElement)) {
+    throw new Error("Expected a select trigger.")
+  }
+
+  await act(async () => {
+    trigger.click()
+    await import("@/components/ui/select-menu")
+  })
+  await act(async () => {
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+  })
+  return [...document.querySelectorAll('[role="option"]')].map(
+    (option) => option.textContent?.trim() ?? ""
+  )
+}
+
 async function enterSearch(value: string): Promise<void> {
   const input = document.querySelector('input[aria-label="Search people"]')
 
@@ -296,23 +315,18 @@ describe("PeopleWorkspace", () => {
     expect(document.body.textContent).not.toContain("Unnamed member")
   })
 
-  it("uses a compact role selector on mobile without duplicating the desktop filters", () => {
+  it("uses a compact role selector on mobile without duplicating the desktop filters", async () => {
     renderWorkspace()
 
     const desktopFilters = document.querySelector('[data-slot="desktop-role-filters"]')
     const mobileFilter = document.querySelector('[data-slot="mobile-role-filter"]')
 
     expect(desktopFilters?.className).toContain("max-md:hidden")
-    expect(mobileFilter).toBeInstanceOf(HTMLSelectElement)
     expect(mobileFilter?.className).toContain("md:hidden")
     expect(
       document.querySelector('a[href="/settings#roles-and-access"]')?.className
     ).toContain("whitespace-nowrap")
-    expect(
-      [...(mobileFilter as HTMLSelectElement).options].map((option) =>
-        option.textContent?.trim()
-      )
-    ).toEqual([
+    expect(await openChoices(mobileFilter)).toEqual([
       "All roles · 3",
       "Owner · 1",
       "Operations lead · 1",
@@ -364,11 +378,10 @@ describe("PeopleWorkspace", () => {
     await click(trigger)
 
     const displayName = document.querySelector('input[name="workspaceDisplayName"]')
-    const role = document.querySelector('select[name="roleDefinitionId"]')
+    const role = document.querySelector('input[name="roleDefinitionId"]')
     expect(displayName).toBeInstanceOf(HTMLInputElement)
     expect((displayName as HTMLInputElement).value).toBe("Mara Bell")
-    expect(role).toBeInstanceOf(HTMLSelectElement)
-    expect((role as HTMLSelectElement).value).toBe(MANAGER_ROLE_ID)
+    expect((role as HTMLInputElement | null)?.value).toBe(MANAGER_ROLE_ID)
     expect(document.body.textContent).toContain("Operations lead")
   })
 
@@ -434,13 +447,9 @@ describe("PeopleWorkspace", () => {
 
     await click(getButton("Invite"))
 
-    const picker = document.querySelector(
-      '[role="dialog"] select[name="roleDefinitionId"]'
-    )
-    expect(picker).toBeInstanceOf(HTMLSelectElement)
-    expect(
-      [...(picker as HTMLSelectElement).options].map((option) => option.value)
-    ).toEqual([STAFF_ROLE_ID])
+    const picked = document.querySelector('[role="dialog"] input[name="roleDefinitionId"]')
+    expect((picked as HTMLInputElement | null)?.value).toBe(STAFF_ROLE_ID)
+    expect(await openChoices(document.querySelector("#invite-role"))).toEqual(["Staff"])
   })
 
   it("explains when no role fits within the inviter's access", async () => {
@@ -451,7 +460,7 @@ describe("PeopleWorkspace", () => {
     await click(getButton("Invite"))
 
     expect(
-      document.querySelector('[role="dialog"] select[name="roleDefinitionId"]')
+      document.querySelector('[role="dialog"] input[name="roleDefinitionId"]')
     ).toBeNull()
     expect(document.body.textContent).toContain("No role you can invite yet.")
   })

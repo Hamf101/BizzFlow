@@ -19,6 +19,7 @@ describe("Gemini AI provider", () => {
         output_text: '{"result":"ok"}',
         status: "completed",
         usage: {
+          total_cached_tokens: 64,
           total_input_tokens: 120,
           total_output_tokens: 30,
           total_tokens: 150,
@@ -70,6 +71,7 @@ describe("Gemini AI provider", () => {
       traceId: "interaction-trace-1",
       upstreamCalls: 1,
       usage: {
+        cachedTokens: 64,
         inputTokens: 120,
         outputTokens: 30,
         totalTokens: 150,

@@ -37,6 +37,8 @@ import {
   runTemplateOperation,
   TEMPLATE_COLUMNS,
 } from "./shared"
+import { requireStoredImages, TemplateImageServiceError } from "@/services/template-image-service"
+import { withoutImageUrls } from "@/types/template-images"
 
 /**
  * Lists templates visible to an active organization member.
@@ -233,11 +235,13 @@ export async function createDocumentTemplate(
         "You cannot manage document templates."
       )
 
-      const content = upgradeV2TemplateContentToV3(
-        parseTemplateContent(input.content ?? createBlankTemplateContent())
+      // Signed picture addresses expire; only the pictures themselves are kept.
+      const content = withoutImageUrls(
+        upgradeV2TemplateContentToV3(parseTemplateContent(input.content ?? createBlankTemplateContent()))
       )
 
       assertTemplateImagesRenderable(content)
+      await requireStoredImages(content, null, input.organizationId).catch(asTemplateError)
 
       const { data, error } = await client
         .from("document_templates")
@@ -356,7 +360,7 @@ export async function updateDocumentTemplate(
         throw new TemplateServiceError("No template changes were provided.", 400)
       }
 
-      const nextContent = upgradeV2TemplateContentToV3(proposedContent)
+      const nextContent = withoutImageUrls(upgradeV2TemplateContentToV3(proposedContent))
 
       if (existing.status === "published") {
         assertTemplatePublishReady(nextTitle, nextDescription, nextContent)
@@ -364,6 +368,7 @@ export async function updateDocumentTemplate(
 
       if (hasContent) {
         assertTemplateImagesRenderable(nextContent)
+        await requireStoredImages(nextContent, parsedExistingContent, input.organizationId).catch(asTemplateError)
       }
 
       const { data, error } = await client
@@ -644,4 +649,9 @@ export async function duplicateDocumentTemplate(
       return mapDocumentTemplate(data as DocumentTemplateRow)
     }
   )
+}
+
+// A picture that didn't finish uploading is the author's to fix, not a fault here.
+function asTemplateError(error: unknown): never {
+  throw error instanceof TemplateImageServiceError ? new TemplateServiceError(error.message, error.statusCode) : error
 }

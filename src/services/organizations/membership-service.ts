@@ -31,6 +31,7 @@ import type {
   OrganizationMember,
   OrganizationMembership,
 } from "@/types/organization"
+import { loadActiveMembership } from "@/services/organizations/active-membership"
 
 /**
  * Loads organization members and pending invites for the People page.
@@ -388,13 +389,7 @@ export async function getMemberSettings(
           .select("full_name,phone_number")
           .eq("id", input.actorUserId)
           .maybeSingle(),
-        client
-          .from("organization_memberships")
-          .select("email_notifications_enabled,sms_notifications_enabled")
-          .eq("org_id", input.organizationId)
-          .eq("user_id", input.actorUserId)
-          .eq("status", "active")
-          .maybeSingle(),
+        loadActiveMembership(client, input.organizationId, input.actorUserId),
       ])
 
       if (profileResult.error || membershipResult.error) {

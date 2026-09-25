@@ -1,3 +1,4 @@
+import { chooseOption } from "../support/choose"
 import { expect, test, uniqueName } from "../support/fixtures"
 import { seedSubmission, seedTemplate } from "../support/seed"
 
@@ -41,9 +42,7 @@ test.describe("submission review", () => {
 
     // Assigning a submitted item is what starts its review — there is no
     // separate "begin" control.
-    await manager
-      .getByRole("combobox", { name: "Reviewer" })
-      .selectOption({ value: tenant.users.manager.id })
+    await chooseOption(manager.getByRole("combobox", { name: "Reviewer" }), /^E2E manager/)
     await manager.getByRole("button", { name: /start review/i }).click()
 
     await expectStatus(admin, submissionId, "in_review")
@@ -60,9 +59,7 @@ test.describe("submission review", () => {
     await expectStatus(admin, submissionId, "submitted")
 
     await manager.goto(`/submissions/${submissionId}`)
-    await manager
-      .getByRole("combobox", { name: "Reviewer" })
-      .selectOption({ value: tenant.users.manager.id })
+    await chooseOption(manager.getByRole("combobox", { name: "Reviewer" }), /^E2E manager/)
     await manager.getByRole("button", { name: /start review/i }).click()
     await manager.getByRole("button", { name: "Approve" }).click()
 
@@ -96,9 +93,7 @@ test.describe("submission review", () => {
     const manager = await pageAs("manager")
 
     await manager.goto(`/submissions/${submissionId}`)
-    await manager
-      .getByRole("combobox", { name: "Reviewer" })
-      .selectOption({ value: tenant.users.manager.id })
+    await chooseOption(manager.getByRole("combobox", { name: "Reviewer" }), /^E2E manager/)
     await manager.getByRole("button", { name: /start review/i }).click()
 
     // Note deliberately left blank.

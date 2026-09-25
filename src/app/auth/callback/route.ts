@@ -30,6 +30,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     )
   }
 
+  const next = redirectUrl.pathname + redirectUrl.search
+  const loginUrl = new URL("/login", redirectUrl)
+
   if (code) {
     try {
       const supabase = await createClient()
@@ -47,10 +50,15 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         reason: error instanceof Error ? error.message : "Unknown environment error",
       })
     }
+
+    // A code only comes back once the email is confirmed. Opened on another
+    // device, it can't sign in there, so the person logs in to carry on.
+    loginUrl.searchParams.set("confirmed", "1")
+  } else {
+    loginUrl.searchParams.set("error", "That link has expired or was already used. Log in, or sign up again for a new one.")
   }
 
-  redirectUrl.pathname = "/login"
-  redirectUrl.searchParams.set("error", "Unable to confirm the authentication link.")
+  loginUrl.searchParams.set("next", next)
 
-  return NextResponse.redirect(redirectUrl)
+  return NextResponse.redirect(loginUrl)
 }

@@ -20,10 +20,10 @@ import {
 } from "@/services/templates/starter-templates"
 
 /**
- * Handles organization creation from the dashboard setup form.
+ * Creates the new account's workspace, the last step of signing up.
  *
- * @param formData - Submitted organization form data.
- * @returns Never returns; redirects to the dashboard with status.
+ * @param formData - Submitted workspace name.
+ * @returns Never returns; redirects to the dashboard, or back to /welcome with the reason.
  */
 export async function createOrganizationAction(formData: FormData): Promise<void> {
   try {
@@ -35,7 +35,7 @@ export async function createOrganizationAction(formData: FormData): Promise<void
     })
   } catch (error: unknown) {
     if (error instanceof AuthenticationError) {
-      redirect(buildRedirect("/login", { next: "/dashboard" }))
+      redirect(buildRedirect("/login", { next: "/welcome" }))
     }
 
     const reason =
@@ -48,8 +48,14 @@ export async function createOrganizationAction(formData: FormData): Promise<void
       console.error("create_organization_action_failed", logContext)
     }
 
+    // Only the name rule is written for people; other detail stays in the logs.
     redirect(
-      buildFeedbackRedirect("/dashboard", getActionErrorFeedbackCode(error))
+      buildRedirect("/welcome", {
+        error:
+          error instanceof OrganizationServiceError && error.statusCode === 400
+            ? error.message
+            : "Unable to create the workspace. Try again.",
+      })
     )
   }
 

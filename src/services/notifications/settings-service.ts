@@ -8,6 +8,7 @@ import type {
   NotificationServiceDeps,
 } from "@/services/notifications/delivery-service"
 import { NotificationServiceError } from "@/services/notifications/delivery-service"
+import { loadActiveMembership } from "@/services/organizations/active-membership"
 
 /** Organization-wide notification switches. */
 export type OrganizationNotificationSettings = {
@@ -117,15 +118,7 @@ export async function updateOrganizationNotificationSettings(
 ): Promise<OrganizationNotificationSettings> {
   const client = deps.client ?? createAdminClient()
 
-  const { data: membership, error: membershipError } = await client
-    .from("organization_memberships")
-    .select(
-      "role,role_definition:organization_roles!organization_memberships_role_definition_fk(permissions)"
-    )
-    .eq("org_id", input.organizationId)
-    .eq("user_id", input.actorUserId)
-    .eq("status", "active")
-    .maybeSingle()
+  const { data: membership, error: membershipError } = await loadActiveMembership(client, input.organizationId, input.actorUserId)
 
   if (membershipError) {
     throw new NotificationServiceError(

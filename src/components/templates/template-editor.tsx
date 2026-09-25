@@ -21,7 +21,7 @@ import { findInsertChoices } from "@/components/editor/block-catalog"
 import { EditorCanvas } from "@/components/editor/editor-canvas"
 import { normalizeContentForSave } from "@/components/editor/editor-content"
 import { type DockTool, EditorDock, InsertTiles } from "@/components/editor/editor-dock"
-import { EditorFrame, EditorNotice, EditorSidePanel } from "@/components/editor/editor-frame"
+import { EditorFrame, type EditorLayoutStore, EditorNotice, EditorSidePanel } from "@/components/editor/editor-frame"
 import { PageSetupPanel } from "@/components/editor/page-setup-panel"
 import { type SaveResult, useAutosave } from "@/components/editor/use-autosave"
 import { useEditorController } from "@/components/editor/use-editor-controller"
@@ -48,7 +48,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Field, FieldLabel } from "@/components/ui/field"
-import { Input } from "@/components/ui/input"
+import { SuggestInput } from "@/components/ui/suggest-input"
 import { bizflowToast } from "@/components/ui/toaster"
 import { createTemplateFlowDraftFingerprint } from "@/services/template-flow-proposal-state"
 import { resolvePageGeometry } from "@/services/templates/template-render-plan"
@@ -62,6 +62,7 @@ import {
   upgradeV2TemplateContentToV3,
 } from "@/types/template"
 import type { TemplateFlowMessage, TemplateFlowProposal } from "@/types/template-flow"
+import { withGeneratedFieldKeys } from "@/types/template-structure"
 import { applyVisibleTemplateFieldValue } from "@/types/template-visibility"
 
 type Mode = "edit" | "preview" | "test"
@@ -76,6 +77,8 @@ type TemplateEditorProps = {
   archiveAction: (formData: FormData) => Promise<void>
   /** Categories already in use in this tenant, offered as suggestions. */
   categorySuggestions?: readonly string[]
+  /** Where this person keeps the dock and zoom. */
+  editorLayout?: EditorLayoutStore
   initialFlowMessages: TemplateFlowMessage[]
   publishAction: (formData: FormData) => Promise<void>
   saveDraftAction: (input: TemplateDraftInput) => Promise<SaveResult>
@@ -93,6 +96,7 @@ type TemplateEditorProps = {
 export function TemplateEditor({
   archiveAction,
   categorySuggestions = [],
+  editorLayout,
   initialFlowMessages,
   publishAction,
   saveDraftAction,
@@ -101,7 +105,8 @@ export function TemplateEditor({
   const initial = useMemo(
     (): TemplateEditorState => ({
       category: template.category ?? "",
-      content: upgradeV2TemplateContentToV3(template.content),
+      // Field keys are ours to keep valid; a template never shows or asks for one.
+      content: withGeneratedFieldKeys(upgradeV2TemplateContentToV3(template.content)),
       description: template.description ?? "",
       title: template.title,
     }),
@@ -289,7 +294,7 @@ export function TemplateEditor({
       content: () => (
         <TemplateBrandingPanel
           branding={content.branding}
-          onChange={(branding) => controller.change((current) => ({ ...current, branding }))}
+          onChange={(branding) => controller.change((current) => ({ ...current, branding }), "branding")}
         />
       ),
       icon: Palette,
@@ -365,10 +370,15 @@ export function TemplateEditor({
         }
         canRedo={history.canRedo}
         canUndo={history.canUndo}
-        dock={(narrow) => (
+        dock={(narrow, orientation) => (
           // Flow stays within reach in every mode; the other tools need Edit.
-          <EditorDock narrow={narrow} tools={mode === "edit" && !proposal ? tools : tools.filter((tool) => tool.id === "flow")} />
+          <EditorDock
+            narrow={narrow}
+            orientation={orientation}
+            tools={mode === "edit" && !proposal ? tools : tools.filter((tool) => tool.id === "flow")}
+          />
         )}
+        layout={editorLayout}
         menu={
           <DropdownMenu>
             <DropdownMenuTrigger
@@ -426,7 +436,7 @@ export function TemplateEditor({
                   blocks={content.blocks}
                   canMoveDown={settingsIndex < content.blocks.length - 1}
                   canMoveUp={settingsIndex > 0}
-                  onChange={(block) => controller.updateBlock(block)}
+                  onChange={(block) => controller.updateBlock(block, `settings:${block.id}`)}
                   onDelete={() => controller.remove(settingsBlock.id)}
                   onDuplicate={() => controller.duplicate(settingsBlock.id)}
                   onMoveDown={() => controller.move(settingsBlock.id, "down")}
@@ -497,18 +507,13 @@ export function TemplateEditor({
           <div className="grid gap-4">
             <Field>
               <FieldLabel htmlFor="template-category">Category</FieldLabel>
-              <Input
+              <SuggestInput
                 id="template-category"
-                list="template-category-suggestions"
                 maxLength={40}
-                onChange={(event) => history.set((current) => ({ ...current, category: event.target.value }), "category")}
+                onChange={(category: string) => history.set((current) => ({ ...current, category }), "category")}
+                suggestions={categorySuggestions}
                 value={state.category}
               />
-              <datalist id="template-category-suggestions">
-                {categorySuggestions.map((category) => (
-                  <option key={category} value={category} />
-                ))}
-              </datalist>
             </Field>
             <Field>
               <FieldLabel htmlFor="template-description">Description</FieldLabel>

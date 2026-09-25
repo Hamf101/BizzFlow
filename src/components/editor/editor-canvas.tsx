@@ -51,6 +51,7 @@ import {
   insertTemplateBlock,
   updateTemplateBlock,
 } from "@/types/template-structure"
+import { imageSource } from "@/types/template-images"
 
 /** CSS pixels in a printed point: a page at 100% is its paper's real size. */
 export const POINT_PX = 4 / 3
@@ -133,7 +134,8 @@ export function EditorCanvas({
   const pageHeight = plan.geometry.heightPoints * point
   const margin = plan.geometry.marginPoints * point
   const blockGap = { balanced: 11, comfortable: 16, compact: 7 }[plan.layout.density] * point
-  const hasBranding = Boolean(plan.branding.logoDataUrl || plan.branding.organizationName)
+  const logo = imageSource(plan.branding.logoAsset, plan.branding.logoDataUrl)
+  const hasBranding = Boolean(logo || plan.branding.organizationName)
   const rootRef = useRef<HTMLDivElement>(null)
   const unitElements = useRef(new Map<string, HTMLElement>())
   const headerRef = useRef<HTMLDivElement>(null)
@@ -654,11 +656,11 @@ export function EditorCanvas({
                 ref={page === 0 ? headerRef : undefined}
                 style={{ paddingBottom: 10 * point, paddingInline: margin, top: margin }}
               >
-                {plan.branding.logoDataUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element -- a data URL the author uploaded
+                {logo ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- the author's own picture, already sized
                   <img
                     alt={`${plan.branding.organizationName || "Organization"} logo`}
-                    src={plan.branding.logoDataUrl}
+                    src={logo}
                     style={{ maxHeight: 34 * point, width: `${plan.branding.logoWidthPercent}%`, objectFit: "contain", objectPosition: plan.branding.logoAlignment }}
                   />
                 ) : null}

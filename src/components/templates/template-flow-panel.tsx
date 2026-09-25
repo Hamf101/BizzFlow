@@ -3,13 +3,13 @@
 import {
   ArrowDownToLine,
   ArrowRight,
+  ArrowUp,
   AlertTriangle,
   Check,
   LoaderCircle,
   Move,
   PencilLine,
   RotateCcw,
-  Send,
   Trash2,
   X
 } from "lucide-react"
@@ -417,19 +417,18 @@ export function TemplateFlowPanel({
             placeholder={starter.placeholder}
             value={instruction}
           />
-          <Button
+          <button
             aria-label="Send message to Flow"
-            className="absolute right-2 bottom-2"
+            className="absolute right-2 bottom-2.5 grid size-8 place-items-center rounded-full text-primary outline-none transition-opacity hover:opacity-75 disabled:opacity-35 focus-visible:ring-2 focus-visible:ring-ring/40"
             disabled={
               isLoading ||
               pendingProposal !== null ||
               instruction.trim().length < 2
             }
-            size="icon"
             type="submit"
           >
-            <Send />
-          </Button>
+            <ArrowUp aria-hidden="true" className="size-5" />
+          </button>
         </div>
         {pendingProposal ? (
           <p

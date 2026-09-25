@@ -51,7 +51,8 @@ let bundledPdfFontsPromise: Promise<{
  */
 export async function renderPdfLibDocument(
   input: NormalizedPdfInput,
-  pages: PdfPagePlan[]
+  pages: PdfPagePlan[],
+  readImage?: PdfLibRenderContext["readImage"]
 ): Promise<Buffer> {
   const document = await PDFDocument.create()
   const imageCache = new Map<string, PDFImage>()
@@ -82,6 +83,7 @@ export async function renderPdfLibDocument(
       imageCache,
       layout,
       page,
+      readImage,
       regularFont,
       workflowStatus: input.workflowStatus
     }
@@ -254,7 +256,9 @@ async function drawPdfLibBranding(
   const { branding } = context.content
   const { contentWidth, margin } = context.layout
 
-  if (!branding.logoDataUrl && !branding.organizationName) {
+  const hasLogo = Boolean(branding.logoAsset || branding.logoDataUrl)
+
+  if (!hasLogo && !branding.organizationName) {
     return topY
   }
 
@@ -263,8 +267,8 @@ async function drawPdfLibBranding(
   let logoWidth = 0
   let logoX = margin
 
-  if (branding.logoDataUrl) {
-    const logo = await embedPdfLibImage(context, branding.logoDataUrl)
+  if (hasLogo) {
+    const logo = await embedPdfLibImage(context, { asset: branding.logoAsset, dataUrl: branding.logoDataUrl })
     const size = fitPdfImage(
       logo,
       availableWidth * (branding.logoWidthPercent / 100),
@@ -288,7 +292,7 @@ async function drawPdfLibBranding(
 
   if (branding.organizationName) {
     const sideBySide =
-      branding.logoDataUrl !== null && branding.logoAlignment === "left"
+      hasLogo && branding.logoAlignment === "left"
     const textX = sideBySide ? logoX + logoWidth + 10 : margin
     const textWidth = sideBySide
       ? margin + availableWidth - textX
@@ -462,7 +466,7 @@ async function drawPdfLibContentImage(
   topY: number,
   frame: PdfContentFrame
 ): Promise<number> {
-  const image = await embedPdfLibImage(context, block.dataUrl)
+  const image = await embedPdfLibImage(context, block)
   const maximumWidth = frame.width * (block.widthPercent / 100)
   const maximumHeight = Math.min(260, context.layout.pageCapacity * 0.72)
   const size = fitPdfImage(image, maximumWidth, maximumHeight)

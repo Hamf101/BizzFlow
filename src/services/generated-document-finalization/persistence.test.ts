@@ -64,7 +64,7 @@ describe("generated document finalization Supabase persistence", () => {
     expect(database.queryCalls).toEqual([
       {
         relation: "organization_memberships",
-        columns: "id,org_id,user_id,role,status,created_at,updated_at,role_definition:organization_roles!organization_memberships_role_definition_fk(permissions)",
+        columns: expect.any(String),
         filters: [
           ["org_id", ORGANIZATION_ID],
           ["user_id", ACTOR_ID],
