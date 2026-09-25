@@ -103,8 +103,10 @@ export function EditableText({
       className={cn(
         "min-w-0 break-words whitespace-pre-wrap outline-none",
         editable && "cursor-text",
+        // Laid over the line rather than written in it, so the caret waits
+        // where typing starts and an emptied line keeps one line's height.
         placeholder &&
-          "data-[empty=true]:before:pointer-events-none data-[empty=true]:before:text-muted-foreground/55 data-[empty=true]:before:content-[attr(data-placeholder)]",
+          "relative min-h-[1lh] data-[empty=true]:before:pointer-events-none data-[empty=true]:before:absolute data-[empty=true]:before:inset-x-0 data-[empty=true]:before:text-muted-foreground/55 data-[empty=true]:before:content-[attr(data-placeholder)]",
         className
       )}
       contentEditable={editable ? "plaintext-only" : undefined}
