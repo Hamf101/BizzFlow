@@ -441,6 +441,7 @@ export function TemplateEditor({
                   onDuplicate={() => controller.duplicate(settingsBlock.id)}
                   onMoveDown={() => controller.move(settingsBlock.id, "down")}
                   onMoveUp={() => controller.move(settingsBlock.id, "up")}
+                  pictureSource={{ templateId: template.id }}
                 />
               ) : null}
             </EditorSidePanel>

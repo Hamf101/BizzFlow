@@ -404,6 +404,7 @@ export function DocumentEditor({
                   onDuplicate={() => controller.duplicate(settingsBlock.id)}
                   onMoveDown={() => controller.move(settingsBlock.id, "down")}
                   onMoveUp={() => controller.move(settingsBlock.id, "up")}
+                  pictureSource={{ documentId: document.id }}
                 />
               ) : null}
             </EditorSidePanel>
