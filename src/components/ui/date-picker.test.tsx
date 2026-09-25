@@ -4,7 +4,7 @@ import { act, type ReactElement, useState } from "react"
 import { createRoot } from "react-dom/client"
 import { afterEach, expect, it } from "vitest"
 
-import { DatePicker } from "./date-picker"
+import { DatePicker, DateTimePicker } from "./date-picker"
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -65,4 +65,18 @@ it("steps to the end of a shorter month, lays weeks out from Monday, and posts t
   await act(async () => stepped.click())
   expect(document.getElementById("moved-in")?.textContent).toBe("28/02/2026")
   expect(new FormData(document.querySelector("form") as HTMLFormElement).get("movedIn")).toBe("2026-02-28")
+})
+
+it("holds a form whose required day and time are still empty, before the calendar is ever opened", async () => {
+  const host = document.createElement("div")
+  document.body.append(host)
+  await act(async () =>
+    createRoot(host).render(
+      <form>
+        <DateTimePicker id="remind-at" name="remindAt" required />
+      </form>
+    )
+  )
+
+  expect(document.querySelector("form")!.checkValidity()).toBe(false)
 })

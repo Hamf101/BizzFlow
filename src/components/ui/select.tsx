@@ -152,7 +152,8 @@ export function FieldFace({
         <span className={cn("min-w-0 truncate", placeholder && "text-muted-foreground")}>{label}</span>
         {icon}
       </button>
-      {name ? (
+      {/* Carries the value into the form, and lets `required` stop an empty one even unnamed. */}
+      {name || required ? (
         <input
           aria-hidden="true"
           className="sr-only"
