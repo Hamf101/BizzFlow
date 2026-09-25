@@ -14,10 +14,14 @@ import {
   Trash2,
 } from "lucide-react"
 import {
+  createContext,
+  type CSSProperties,
+  Fragment,
   type KeyboardEvent,
   type MouseEvent,
   type ReactElement,
   type ReactNode,
+  useContext,
   useEffect,
   useRef,
 } from "react"
@@ -77,6 +81,19 @@ const HEADING_STYLE = {
  * @param props - The block and what the canvas lends it.
  * @returns The block, with its toolbar while selected.
  */
+/**
+ * The space left before each part of a block that starts a new page — a line
+ * of a paragraph, a list item, a table row — keyed as the canvas measured it.
+ * Empty on a phone, where the writing reflows instead of filling pages.
+ */
+export const PageBreaks = createContext<Readonly<Record<string, number>>>({})
+
+/**
+ * Folds every one of those spaces away while the canvas measures, so each
+ * block reports its own height rather than the last layout's.
+ */
+export const PAGE_BREAKS_FOLDED = { "--page-space-display": "none", "--page-space-scale": "0" } as const
+
 export function CanvasBlock({
   actions,
   block,
@@ -173,6 +190,8 @@ export function CanvasBlock({
 }
 
 function BlockBody({ actions, block }: { actions: CanvasActions; block: TemplateBlock }): ReactElement {
+  const breaks = useContext(PageBreaks)
+
   switch (block.type) {
     case "heading":
       return (
@@ -192,18 +211,21 @@ function BlockBody({ actions, block }: { actions: CanvasActions; block: Template
       )
     case "paragraph":
       return (
-        <EditableText
-          as="p"
-          caretKey={block.id}
-          editable={actions.textEditable}
-          label="Text"
-          onChange={(text, caret) => actions.onLineInput(block, text, caret)}
-          onFocus={() => actions.controller.setActiveBlockId(block.id)}
-          onKeyDown={(event, caret) => actions.onLineKeyDown(event, caret, block)}
-          placeholder={actions.placeholderFor(block.id)}
-          style={{ lineHeight: 1.5, minHeight: "1.5em", textAlign: block.alignment }}
-          value={block.text}
-        />
+        <>
+          <LineBreaks blockId={block.id} />
+          <EditableText
+            as="p"
+            caretKey={block.id}
+            editable={actions.textEditable}
+            label="Text"
+            onChange={(text, caret) => actions.onLineInput(block, text, caret)}
+            onFocus={() => actions.controller.setActiveBlockId(block.id)}
+            onKeyDown={(event, caret) => actions.onLineKeyDown(event, caret, block)}
+            placeholder={actions.placeholderFor(block.id)}
+            style={{ lineHeight: 1.5, minHeight: "1.5em", textAlign: block.alignment }}
+            value={block.text}
+          />
+        </>
       )
     case "bullet_list":
     case "numbered_list": {
@@ -225,6 +247,7 @@ function BlockBody({ actions, block }: { actions: CanvasActions; block: Template
               onFocus={() => actions.controller.setActiveBlockId(block.id)}
               onKeyDown={(event, caret) => actions.onListKeyDown(event, caret, block, index)}
               placeholder="List item"
+              style={spaceBefore(breaks[`${block.id}:${index}`])}
               value={item}
             />
           ))}
@@ -258,31 +281,39 @@ function BlockBody({ actions, block }: { actions: CanvasActions; block: Template
           </thead>
           <tbody>
             {block.rows.map((row: string[], rowIndex: number) => (
-              <tr key={rowIndex}>
-                {row.map((cell: string, column: number) => (
-                  <EditableText
-                    as="td"
-                    caretKey={`${block.id}:${rowIndex}-${column}`}
-                    className="border border-border px-[0.6em] py-[0.4em] align-top"
-                    editable={actions.textEditable}
-                    key={column}
-                    label={`Row ${rowIndex + 1}, column ${column + 1}`}
-                    onChange={(text) =>
-                      actions.controller.updateBlock(
-                        {
-                          ...block,
-                          rows: block.rows.map((values, r) =>
-                            r === rowIndex ? values.map((value, c) => (c === column ? text : value)) : values
-                          ),
-                        },
-                        `table:${block.id}`
-                      )
-                    }
-                    onKeyDown={preventEnter}
-                    value={cell}
-                  />
-                ))}
-              </tr>
+              <Fragment key={rowIndex}>
+                {breaks[`${block.id}:row${rowIndex}`] ? (
+                  <tr aria-hidden="true" style={{ display: "var(--page-space-display, table-row)" }}>
+                    <td colSpan={block.headers.length} style={{ border: 0, height: breaks[`${block.id}:row${rowIndex}`], padding: 0 }} />
+                  </tr>
+                ) : null}
+                {/* The first row stays with the heading row, so a page never ends between them. */}
+                <tr data-row-key={rowIndex > 0 ? `${block.id}:row${rowIndex}` : undefined}>
+                  {row.map((cell: string, column: number) => (
+                    <EditableText
+                      as="td"
+                      caretKey={`${block.id}:${rowIndex}-${column}`}
+                      className="border border-border px-[0.6em] py-[0.4em] align-top"
+                      editable={actions.textEditable}
+                      key={column}
+                      label={`Row ${rowIndex + 1}, column ${column + 1}`}
+                      onChange={(text) =>
+                        actions.controller.updateBlock(
+                          {
+                            ...block,
+                            rows: block.rows.map((values, r) =>
+                              r === rowIndex ? values.map((value, c) => (c === column ? text : value)) : values
+                            ),
+                          },
+                          `table:${block.id}`
+                        )
+                      }
+                      onKeyDown={preventEnter}
+                      value={cell}
+                    />
+                  ))}
+                </tr>
+              </Fragment>
             ))}
           </tbody>
         </table>
@@ -311,6 +342,44 @@ function BlockBody({ actions, block }: { actions: CanvasActions; block: Template
         />
       )
   }
+}
+
+function spaceBefore(space: number | undefined): CSSProperties | undefined {
+  return space ? { marginTop: `calc(var(--page-space-scale, 1) * ${space}px)` } : undefined
+}
+
+/**
+ * Moves the lines of a paragraph that start a new page down onto it without
+ * touching the text: a zero-width float stands in for the lines above each
+ * break, and a full-width one under it is the gap the lines below must clear.
+ *
+ * @param props - The paragraph.
+ * @returns The floats, or nothing when the paragraph sits on one page.
+ */
+function LineBreaks({ blockId }: { blockId: string }): ReactElement | null {
+  const breaks = useContext(PageBreaks)
+  const lines = Object.entries(breaks)
+    .filter(([key]) => key.startsWith(`${blockId}@`))
+    .map(([key, space]) => ({ at: Number(key.slice(blockId.length + 1)), space }))
+    .sort((one, other) => one.at - other.at)
+  const float = (height: number, width: number | string): CSSProperties => ({
+    clear: "left",
+    display: "var(--page-space-display, block)",
+    float: "left",
+    height,
+    width,
+  })
+
+  return lines.length > 0 ? (
+    <>
+      {lines.map(({ at, space }, index) => (
+        <Fragment key={at}>
+          <span aria-hidden="true" style={float(at - (lines[index - 1]?.at ?? 0), 0)} />
+          <span aria-hidden="true" style={float(space, "100%")} />
+        </Fragment>
+      ))}
+    </>
+  ) : null
 }
 
 /**

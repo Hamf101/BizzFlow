@@ -26,6 +26,8 @@ import {
   isList,
   type LineBlock,
   type ListBlock,
+  PAGE_BREAKS_FOLDED,
+  PageBreaks,
 } from "@/components/editor/editor-block"
 import {
   convertTextBlock,
@@ -33,7 +35,7 @@ import {
   readMarkdownShortcut,
   splitTextBlock,
 } from "@/components/editor/editor-content"
-import { paginate, type PageFrame } from "@/components/editor/editor-pagination"
+import { paginate, type PageFrame, type PaginationRow } from "@/components/editor/editor-pagination"
 import { SlashMenu } from "@/components/editor/slash-menu"
 import type { EditorController } from "@/components/editor/use-editor-controller"
 import { resolveDocumentSurfaceInk, type DocumentSurface } from "@/lib/document-surface"
@@ -140,7 +142,7 @@ export function EditorCanvas({
   const unitElements = useRef(new Map<string, HTMLElement>())
   const headerRef = useRef<HTMLDivElement>(null)
   const [headerHeight, setHeaderHeight] = useState(0)
-  const [layout, setLayout] = useState<ReturnType<typeof paginate>>({ pageCount: 1, pages: {}, spacers: {} })
+  const [layout, setLayout] = useState<ReturnType<typeof paginate>>({ inside: {}, pageCount: 1, pages: {}, spacers: {} })
   const [slash, setSlash] = useState<SlashState | null>(null)
   const [fontsReady, setFontsReady] = useState(0)
   const slashChoices = useMemo(
@@ -177,15 +179,34 @@ export function EditorCanvas({
       return
     }
 
+    // Only a block taller than the smallest page needs its rows: nothing else breaks.
+    const room = Math.min(frame.height - frame.marginTop(0) - frame.marginBottom(0), frame.height - frame.marginTop(1) - frame.marginBottom(1))
+    const folded = Object.keys(layout.inside).length > 0
+    const style = rootRef.current?.style
+
+    if (folded) {
+      Object.entries(PAGE_BREAKS_FOLDED).forEach(([name, value]) => style?.setProperty(name, value))
+    }
+
     const next = paginate(
-      units.map((unit) => ({
-        height: unitElements.current.get(unit.id)?.offsetHeight ?? 0,
-        id: unit.id,
-        keepWithNext: unit.keepWithNext,
-        pageBreakBefore: unit.pageBreakBefore,
-      })),
+      units.map((unit) => {
+        const element = unitElements.current.get(unit.id)
+        const height = element?.offsetHeight ?? 0
+
+        return {
+          height,
+          id: unit.id,
+          keepWithNext: unit.keepWithNext,
+          pageBreakBefore: unit.pageBreakBefore,
+          rows: element && height > room ? measureRows(element, zoom) : undefined,
+        }
+      }),
       frame
     )
+
+    if (folded) {
+      Object.keys(PAGE_BREAKS_FOLDED).forEach((name) => style?.removeProperty(name))
+    }
 
     if (JSON.stringify(next) !== JSON.stringify(layout)) {
       setLayout(next)
@@ -715,7 +736,7 @@ export function EditorCanvas({
           data-slot="page-flow"
           style={{ paddingInline: margin, paddingTop: frame.marginTop(0) }}
         >
-          {flow}
+          <PageBreaks.Provider value={layout.inside}>{flow}</PageBreaks.Provider>
           {units.length === 0 ? (
             <div className="pointer-events-auto">
               <EmptyPageLine actions={actions} onStart={() => focusPageEnd(0)} />
@@ -830,6 +851,43 @@ function MarginPill({
       </button>
     </div>
   )
+}
+
+/**
+ * Where a page may end inside a block too tall for one, measured from the
+ * block's top: before a list item, before a table row after the first, and
+ * before any line of a paragraph but its first.
+ *
+ * @param unit - The block's element, with every page-break space folded away.
+ * @param zoom - The canvas's scale, since the screen reports scaled sizes.
+ * @returns The rows, top to bottom.
+ */
+function measureRows(unit: HTMLElement, zoom: number): PaginationRow[] {
+  const origin = unit.getBoundingClientRect().top
+  const rows: PaginationRow[] = []
+
+  for (const element of unit.querySelectorAll<HTMLElement>("li[data-caret-key], tr[data-row-key]")) {
+    rows.push({
+      key: element.dataset.caretKey ?? element.dataset.rowKey ?? "",
+      top: (element.getBoundingClientRect().top - origin) / zoom,
+    })
+  }
+
+  for (const paragraph of unit.querySelectorAll<HTMLElement>("p[data-caret-key]")) {
+    const range = document.createRange()
+    range.selectNodeContents(paragraph)
+    // Each line's box sits the same way inside it, so the first one's top is the paragraph's.
+    const [first, ...rest] = [...range.getClientRects()].map((rect) => rect.top)
+    const top = (paragraph.getBoundingClientRect().top - origin) / zoom
+
+    for (const line of new Set(rest.map((lineTop) => Math.round((lineTop - (first ?? lineTop)) / zoom)))) {
+      if (line > 0) {
+        rows.push({ key: `${paragraph.dataset.caretKey}@${line}`, top: top + line })
+      }
+    }
+  }
+
+  return rows.sort((one, other) => one.top - other.top)
 }
 
 function createUnits(plan: TemplateRenderPlan): CanvasUnit[] {
