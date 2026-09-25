@@ -32,6 +32,17 @@
   --brand-vellum: #ece6f3;
   --brand-plum: #635273;
   --brand-rule: #c9c2bb;
+  /* The sign-in backdrop's pastels: mostly purples, a little rose and sage. */
+  --fold-lavender: #c9b6e4;
+  --fold-lilac: #b9a3da;
+  --fold-wisteria: #a992cc;
+  --fold-orchid: #d3b2d9;
+  --fold-periwinkle: #b6bde9;
+  --fold-rose: #ebbfcd;
+  --fold-sage: #bdd7c6;
+  --fold-strength: 0.62;
+  /* The seams between the pieces: the log-in button's plum by day, black at night. */
+  --fold-seam: var(--primary);
 }
 
 .dark {
@@ -62,6 +73,8 @@
   --brand-vellum: #2b2634;
   --brand-plum: #ab93c4;
   --brand-rule: #3b3549;
+  --fold-strength: 0.36;
+  --fold-seam: var(--canvas);
 }
 
 @theme inline {
@@ -195,6 +208,159 @@
     line-height: 1rem;
     letter-spacing: 0.16em;
     text-transform: uppercase;
+  }
+}
+
+/*
+ * The sign-in backdrop (src/components/auth/auth-backdrop.tsx). Facets arrive
+ * step by step; the whole page floats, and drifts through its tones on log in.
+ * The dot grid and the page lean toward the cursor or a tilted phone, the page
+ * further, so it reads as nearer.
+ */
+@property --lean-x {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
+}
+
+@property --lean-y {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
+}
+
+@layer components {
+  .auth-backdrop[data-idle] {
+    animation: auth-lean 24s ease-in-out infinite alternate;
+  }
+
+  .auth-grid,
+  .auth-fold {
+    transition: transform 0.9s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+
+  /* While drifting on its own, the lean is already smooth. */
+  .auth-backdrop[data-idle] :is(.auth-grid, .auth-fold) {
+    transition: none;
+  }
+
+  .auth-grid {
+    background-image: radial-gradient(
+      circle,
+      color-mix(in oklch, var(--foreground) 16%, transparent) 1.1px,
+      transparent 1.6px
+    );
+    background-size: 62px 62px;
+    transform: translate3d(calc(var(--lean-x) * -8px), calc(var(--lean-y) * -8px), 0);
+  }
+
+  .auth-fold {
+    transform: translate3d(calc(var(--lean-x) * -22px), calc(var(--lean-y) * -22px), 0);
+  }
+
+  .auth-fold-float {
+    animation: auth-fold-float 10s ease-in-out infinite alternate;
+    transform-box: view-box;
+    transform-origin: 0 0;
+  }
+
+  /* Pieces come apart about the page's middle (src/components/auth/fold-loops.ts). */
+  .auth-fold-piece {
+    transform-box: view-box;
+    transform-origin: 0 0;
+  }
+
+  /*
+   * Pieces are solid, so the dot grid never shows through them: each pastel
+   * is mixed with the page's ground rather than laid over it translucently.
+   */
+  .auth-fold-facet {
+    --mix: calc(var(--strength) * var(--fold-strength) * 100%);
+    fill: color-mix(in oklch, var(--fold-from) var(--mix), var(--canvas));
+    opacity: 0;
+    stroke: var(--fold-seam);
+    stroke-linejoin: round;
+    stroke-width: 3.75;
+    transform: scale(0.72) rotate(-10deg);
+    transform-box: fill-box;
+    transform-origin: center;
+    transition:
+      opacity 0.9s ease,
+      transform 1.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+    transition-delay: calc(var(--i) * 55ms);
+  }
+
+  .auth-fold-facet[data-on="true"] {
+    opacity: 1;
+    transform: none;
+  }
+
+  .auth-fold[data-whole] .auth-fold-facet {
+    animation: auth-fold-drift 16s ease-in-out calc(var(--i) * -1.7s) infinite alternate;
+  }
+
+  .auth-fold-wave {
+    fill: none;
+    opacity: 0;
+    stroke: color-mix(in oklch, var(--fold-wisteria) calc(0.8 * var(--fold-strength) * 100%), var(--canvas));
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    stroke-linecap: round;
+    stroke-width: 9;
+    transition:
+      stroke-dashoffset 1.8s cubic-bezier(0.4, 0, 0.2, 1),
+      opacity 0.9s ease;
+  }
+
+  .auth-fold-wave[data-on="true"] {
+    opacity: 1;
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes auth-lean {
+  0% {
+    --lean-x: -0.6;
+    --lean-y: -0.3;
+  }
+
+  35% {
+    --lean-x: 0.4;
+    --lean-y: 0.5;
+  }
+
+  70% {
+    --lean-x: 0.7;
+    --lean-y: -0.4;
+  }
+
+  100% {
+    --lean-x: -0.3;
+    --lean-y: 0.6;
+  }
+}
+
+@keyframes auth-fold-float {
+  from {
+    transform: translateY(-8px) rotate(-1.6deg);
+  }
+
+  to {
+    transform: translateY(8px) rotate(1.6deg);
+  }
+}
+
+@keyframes auth-fold-drift {
+  0% {
+    fill: color-mix(in oklch, var(--fold-from) var(--mix), var(--canvas));
+  }
+
+  50% {
+    fill: color-mix(in oklch, var(--fold-via) var(--mix), var(--canvas));
+  }
+
+  100% {
+    fill: color-mix(in oklch, var(--fold-to) var(--mix), var(--canvas));
   }
 }
 
