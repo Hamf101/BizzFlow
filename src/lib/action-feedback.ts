@@ -129,7 +129,7 @@ export const ACTION_FEEDBACK = {
     analyticsEvent: "action_outcome",
     durationMs: 5_000,
     persistent: false,
-    title: "Organization created",
+    title: "Workspace created",
     tone: "success",
   },
   password_updated: {

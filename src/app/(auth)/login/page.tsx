@@ -10,8 +10,8 @@ import { AuthPageCard } from "@/lib/page-auth-card"
 import { loginAction } from "./actions"
 
 type LoginSearchParams = Promise<{
+  confirmed?: string
   error?: string
-  message?: string
   next?: string
 }>
 
@@ -35,6 +35,13 @@ export default async function LoginPage({
           </Link>
         </>
       }
+      description={
+        params.confirmed ? (
+          <>
+            <span className="font-medium text-foreground">Email confirmed.</span> Log in to carry on.
+          </>
+        ) : undefined
+      }
       footerClassName="justify-between gap-3"
       title="Log in to BizFlow"
     >
@@ -44,12 +51,6 @@ export default async function LoginPage({
           <Alert variant="destructive">
             <AlertTitle>Unable to log in</AlertTitle>
             <AlertDescription>{params.error}</AlertDescription>
-          </Alert>
-        )}
-        {params.message && (
-          <Alert>
-            <AlertTitle>Check your email</AlertTitle>
-            <AlertDescription>{params.message}</AlertDescription>
           </Alert>
         )}
         <FieldGroup>

@@ -33,18 +33,18 @@ test.describe("onboarding", () => {
     await page.getByRole("button", { name: "Sign up" }).click()
 
     // A session is returned inline when confirmations are disabled, so the app
-    // redirects straight to the dashboard rather than via /login.
-    await page.waitForURL(/\/dashboard/)
+    // goes straight on to naming the workspace rather than via /login.
+    await page.waitForURL(/\/welcome/)
 
     await expect(
-      page.getByRole("button", { name: "Create organization" })
+      page.getByRole("button", { name: "Create workspace" })
     ).toBeVisible()
 
-    await page.getByLabel("Organization name").fill(organizationName)
-    await page.getByRole("button", { name: "Create organization" }).click()
+    await page.getByLabel("Workspace name").fill(organizationName)
+    await page.getByRole("button", { name: "Create workspace" }).click()
 
     await expect(
-      page.getByRole("status").filter({ hasText: "Organization created" })
+      page.getByRole("status").filter({ hasText: "Workspace created" })
     ).toBeVisible()
     await expect(page.getByRole("main").getByText(organizationName, { exact: true })).toBeVisible()
     await expect(page.getByRole("region", { name: "Waiting on you" })).toBeVisible()
@@ -65,6 +65,36 @@ test.describe("onboarding", () => {
     expect(membership.data.role).toBe("owner_admin")
 
     await cleanUp(admin, email, organizationName)
+  })
+
+  test("confirms a new address from the emailed link in any browser, once, then goes on to naming the workspace", async ({
+    admin,
+    browser,
+  }) => {
+    const email = `confirm-${Date.now().toString(36)}@e2e.bizflow.test`
+    // Where a project asks for confirmation, this is the link the email carries.
+    const { data, error } = await admin.auth.admin.generateLink({ email, password: "e2e-BizFlow-Passw0rd", type: "signup" })
+    if (error) throw error
+    const link = `/confirm-email?token_hash=${encodeURIComponent(data.properties.hashed_token)}&type=${data.properties.verification_type}`
+
+    try {
+      // Opened on another device: a browser that never saw the sign-up.
+      const elsewhere = await browser.newContext()
+      const page = await elsewhere.newPage()
+      await page.goto(link)
+      await page.getByRole("button", { name: "Confirm my email" }).click()
+      await page.waitForURL(/\/welcome/)
+      await expect(page.getByRole("button", { name: "Create workspace" })).toBeVisible()
+      await elsewhere.close()
+
+      const again = await (await browser.newContext()).newPage()
+      await again.goto(link)
+      await again.getByRole("button", { name: "Confirm my email" }).click()
+      await expect(again.getByRole("heading", { name: "This link no longer works" })).toBeVisible()
+      await again.context().close()
+    } finally {
+      await admin.auth.admin.deleteUser(data.user.id)
+    }
   })
 
   test("refuses a password below the minimum length", async ({ page }) => {

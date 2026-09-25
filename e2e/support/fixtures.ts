@@ -78,7 +78,8 @@ export async function signInAs(
   await page.getByLabel("Email").fill(email)
   await page.getByLabel("Password", { exact: true }).fill(password)
   await page.getByRole("button", { name: "Log in" }).click()
-  await page.waitForURL(/\/dashboard/)
+  // Someone without a workspace goes on to name one.
+  await page.waitForURL(/\/(dashboard|welcome)/)
 }
 
 /**

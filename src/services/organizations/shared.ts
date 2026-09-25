@@ -340,7 +340,7 @@ export function normalizeOrganizationName(name: string): string {
 
   if (normalizedName.length < 2 || normalizedName.length > 120) {
     throw new OrganizationServiceError(
-      "Organization name must be between 2 and 120 characters.",
+      "Workspace name must be between 2 and 120 characters.",
       400
     )
   }
