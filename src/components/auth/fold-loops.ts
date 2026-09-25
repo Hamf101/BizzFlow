@@ -26,6 +26,10 @@ const OPENING_STEP_MS = 30
 const STEP_MS = 120
 // The drift is worked out in small steps and sampled into frames.
 const TICK_MS = 10
+// Left mid-drift, the page's pieces come home in the time, and on the curve, a
+// facet takes to arrive.
+const GATHER_MS = 1_200
+const GATHER_EASING = "cubic-bezier(0.2, 0.8, 0.2, 1)"
 
 // Starts and ends at rest with no jolt: zero speed and zero acceleration.
 function settle(share: number): number {
@@ -180,15 +184,59 @@ export function startFoldLoop(
   )
 }
 
+// Where a piece has got to, read back from the browser into the offset and
+// turn `placed` spells out.
+function whereIs(piece: FoldPiece): { offset: Point; turn: number } {
+  const { a, b, e, f } = new DOMMatrixReadOnly(getComputedStyle(piece.element).transform)
+  const turn = Math.atan2(b, a)
+  const { x, y } = piece.center
+
+  return {
+    offset: { x: e - x + x * Math.cos(turn) - y * Math.sin(turn), y: f - y + x * Math.sin(turn) + y * Math.cos(turn) },
+    turn: (turn * 180) / Math.PI,
+  }
+}
+
+/**
+ * Brings every piece straight home from wherever it has got to, upright and
+ * all together, in place of the trips they are on.
+ *
+ * @param pieces - The page's pieces.
+ * @param running - Their trips, in the same order.
+ * @returns One animation per piece.
+ */
+export function gatherHome(pieces: readonly FoldPiece[], running: readonly Animation[]): Animation[] {
+  const from = pieces.map(whereIs)
+  running.forEach((animation) => animation.cancel())
+
+  return pieces.map((piece, index) =>
+    piece.element.animate(
+      [
+        { transform: placed(from[index]!.offset, from[index]!.turn, piece.center) },
+        { transform: placed({ x: 0, y: 0 }, 0, piece.center) },
+      ],
+      { duration: GATHER_MS, easing: GATHER_EASING }
+    )
+  )
+}
+
+/** The loops `playFoldLoops` plays. */
+export type FoldLoops = {
+  /** Brings the pieces home if they are out; resolves once they all are. */
+  gather: () => Promise<void>
+  /** Stops the loops and puts every piece back at once. */
+  stop: () => void
+}
+
 /**
  * Every few seconds, lets the page unfurl and drift for 10 to 15 seconds
  * before it folds back together, until stopped.
  *
  * @param figure - The group the pieces are drawn in, to find the screen's corners in it.
  * @param pieces - The page's pieces.
- * @returns Stops the loops and puts every piece back.
+ * @returns Brings the pieces home early, or stops the loops.
  */
-export function playFoldLoops(figure: SVGGraphicsElement, pieces: readonly FoldPiece[]): () => void {
+export function playFoldLoops(figure: SVGGraphicsElement, pieces: readonly FoldPiece[]): FoldLoops {
   let running: Animation[] = []
   let timer = 0
   const rest = (): void => {
@@ -215,8 +263,19 @@ export function playFoldLoops(figure: SVGGraphicsElement, pieces: readonly FoldP
 
   rest()
 
-  return () => {
-    clearTimeout(timer)
-    running.forEach((animation) => animation.cancel())
+  return {
+    gather() {
+      if (!running.some((animation) => animation.playState === "running")) {
+        return Promise.resolve()
+      }
+
+      running = gatherHome(pieces, running)
+      // Home, the loops carry on unless stopped.
+      return Promise.all(running.map((animation) => animation.finished)).then(rest, () => undefined)
+    },
+    stop() {
+      clearTimeout(timer)
+      running.forEach((animation) => animation.cancel())
+    },
   }
 }

@@ -3,7 +3,7 @@
 import { usePathname, useSearchParams } from "next/navigation"
 import { type CSSProperties, type ReactElement, useEffect, useRef, useState } from "react"
 
-import { playFoldLoops } from "@/components/auth/fold-loops"
+import { type FoldLoops, playFoldLoops } from "@/components/auth/fold-loops"
 
 type Corner = keyof typeof CORNERS
 type Tone = "lavender" | "lilac" | "wisteria" | "orchid" | "periwinkle" | "rose" | "sage"
@@ -109,10 +109,23 @@ export function AuthBackdrop(): ReactElement {
   const [step, setStep] = useState(0)
   const ground = useRef<HTMLDivElement>(null)
   const figure = useRef<SVGGElement>(null)
+  const loops = useRef<FoldLoops | null>(null)
 
   useEffect(() => {
-    const frame = requestAnimationFrame(() => setStep(target))
-    return () => cancelAnimationFrame(frame)
+    let current = true
+    let frame = 0
+
+    // A page that has come apart folds back together before it loses facets.
+    void Promise.resolve(target < 4 ? loops.current?.gather() : undefined).then(() => {
+      if (current) {
+        frame = requestAnimationFrame(() => setStep(target))
+      }
+    })
+
+    return () => {
+      current = false
+      cancelAnimationFrame(frame)
+    }
   }, [target])
 
   useEffect(() => lean(ground.current), [])
@@ -127,10 +140,11 @@ export function AuthBackdrop(): ReactElement {
     // lines across the page rather than pieces of it.
     const drawn = figure.current
     const pieces = [...drawn.querySelectorAll(".auth-fold-piece")]
-    const stop = playFoldLoops(
+    const playing = playFoldLoops(
       drawn,
       pieces.map((element, index) => ({ center: CENTERS[index]!, element, line: index > FACETS.length }))
     )
+    loops.current = playing
     // Moves the held tones on, each nudge too small to see (globals.css).
     const started = performance.now()
     const drift = window.setInterval(() => {
@@ -142,7 +156,8 @@ export function AuthBackdrop(): ReactElement {
     }, DRIFT_STEP_MS)
 
     return () => {
-      stop()
+      loops.current = null
+      playing.stop()
       clearInterval(drift)
     }
   }, [step])

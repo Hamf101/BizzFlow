@@ -1,6 +1,6 @@
-import { expect, it } from "vitest"
+import { expect, it, vi } from "vitest"
 
-import { startFoldLoop } from "@/components/auth/fold-loops"
+import { gatherHome, startFoldLoop } from "@/components/auth/fold-loops"
 
 type Step = { ms: number; offset: number; turn: number; x: number; y: number }
 
@@ -28,6 +28,14 @@ const pieces = [
   { center: { x: -150, y: 190 } },
 ]
 
+// Where a frame puts a piece: its offset from home and its turn about its own middle.
+function read(frame: Keyframe): { turn: number; x: number; y: number } {
+  const [x, y] = String(frame.transform).match(/-?\d+\.\d+(?=px)/g)!.map(Number)
+  const turn = Number(String(frame.transform).match(/rotate\((-?\d+\.\d+)deg\)/)![1])
+
+  return { turn, x: x!, y: y! }
+}
+
 /** Sixty loops, each on its own random draws: every piece's planned trip, frame by frame, timed from the loop's start. */
 function everyRun(): Step[][][] {
   const runs: Step[][][] = []
@@ -39,11 +47,7 @@ function everyRun(): Step[][][] {
       element: {
         animate(frames: Keyframe[], { delay = 0, duration }: { delay?: number; duration: number }) {
           trips.push(
-            frames.map((frame) => {
-              const [x, y] = String(frame.transform).match(/-?\d+\.\d+(?=px)/g)!.map(Number)
-              const turn = Number(String(frame.transform).match(/rotate\((-?\d+\.\d+)deg\)/)![1])
-              return { ms: delay + frame.offset! * duration, offset: frame.offset!, turn, x: x!, y: y! }
-            })
+            frames.map((frame) => ({ ms: delay + frame.offset! * duration, offset: frame.offset!, ...read(frame) }))
           )
           return {}
         },
@@ -103,4 +107,58 @@ it("brings every piece home upright, with no sudden jump or spin on the way", ()
       expect(Math.hypot(trip[index]!.x - trip[index - 1]!.x, trip[index]!.y - trip[index - 1]!.y)).toBeLessThan(25)
     }
   }
+})
+
+it("brings pieces caught mid-drift straight home from where they are, all together", () => {
+  // Two pieces the page was left with: each moved off and turned about its own middle.
+  const drifted = [
+    { turn: 24, x: 38, y: -52 },
+    { turn: -31, x: -70, y: 45 },
+  ]
+  const cancelled: number[] = []
+  const trips: { duration: unknown; frames: Keyframe[] }[] = []
+  const caught = drifted.map(({ turn, x, y }, index) => {
+    const center = pieces[index + 1]!.center
+    const [cos, sin] = [Math.cos((turn * Math.PI) / 180), Math.sin((turn * Math.PI) / 180)]
+    // As the browser reports it: the turn, and where the page's middle has gone.
+    const now = `matrix(${cos}, ${sin}, ${-sin}, ${cos}, ${center.x + x - (center.x * cos - center.y * sin)}, ${center.y + y - (center.x * sin + center.y * cos)})`
+
+    return {
+      center,
+      element: {
+        animate(frames: Keyframe[], { duration }: KeyframeAnimationOptions) {
+          trips.push({ duration, frames })
+          return {}
+        },
+        now,
+      } as unknown as Element,
+    }
+  })
+  vi.stubGlobal("getComputedStyle", (element: { now: string }) => ({ transform: element.now }))
+  vi.stubGlobal(
+    "DOMMatrixReadOnly",
+    class {
+      a: number
+      b: number
+      e: number
+      f: number
+
+      constructor(transform: string) {
+        ;[this.a, this.b, , , this.e, this.f] = transform.match(/-?[\d.]+(?:e-?\d+)?/g)!.map(Number) as number[]
+      }
+    }
+  )
+
+  gatherHome(caught, [0, 1].map((index) => ({ cancel: () => cancelled.push(index) }) as unknown as Animation))
+  vi.unstubAllGlobals()
+
+  expect(cancelled).toEqual([0, 1])
+  expect(new Set(trips.map((trip) => trip.duration)).size).toBe(1)
+  trips.forEach(({ frames }, index) => {
+    const [from, home] = [read(frames[0]!), read(frames.at(-1)!)]
+
+    expect(Math.abs(from.turn - drifted[index]!.turn)).toBeLessThan(0.01)
+    expect(Math.hypot(from.x - drifted[index]!.x, from.y - drifted[index]!.y)).toBeLessThan(0.01)
+    expect([home.x, home.y, home.turn].map(Math.abs)).toEqual([0, 0, 0])
+  })
 })
