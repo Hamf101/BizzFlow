@@ -629,6 +629,59 @@ describe("template Flow service", () => {
     expect(readProviderRequests(aiProvider)).toHaveLength(1)
   })
 
+  it("recovers from a temporary provider outage with a proposal on the same model", async () => {
+    const content = createContent()
+    const original = structuredClone(content)
+    const aiProvider = createTestAiProvider([
+      temporaryProviderOutage(),
+      flowProviderResult({
+        ...successfulFlowPayload(),
+        operations: [{ type: "set_title", summary: "Updated title", payload: { value: "Customer intake" } }],
+      }),
+    ])
+    const persistMessages = vi.fn(async (): Promise<void> => {})
+    const result = await executeTemplateFlow(
+      createInput(content, "Rename this to Customer intake."),
+      createDependencies({ aiProvider, persistMessages })
+    )
+
+    expect(result.proposal?.candidateDraft.title).toBe("Customer intake")
+    expect(content).toEqual(original)
+    expect(persistMessages).toHaveBeenCalledTimes(1)
+    expect(readProviderRequests(aiProvider)).toHaveLength(2)
+    expect(readProviderRequests(aiProvider)[1]).toEqual(readProviderRequests(aiProvider)[0])
+  })
+
+  it.each(["outage", "invalid output"])("stops after two calls when an outage is followed by %s", async (failure) => {
+    const aiProvider = createTestAiProvider([
+      temporaryProviderOutage(),
+      failure === "outage"
+        ? temporaryProviderOutage()
+        : { ...flowProviderResult(successfulFlowPayload()), text: "not-json" },
+    ])
+    const persistMessages = vi.fn(async (): Promise<void> => {})
+
+    await expect(executeTemplateFlow(
+      createInput(createBlankTemplateContent(), "Create an agreement."),
+      createDependencies({ aiProvider, persistMessages })
+    )).rejects.toMatchObject({ statusCode: failure === "outage" ? 503 : 502 })
+    expect(readProviderRequests(aiProvider)).toHaveLength(2)
+    expect(persistMessages).not.toHaveBeenCalled()
+  })
+
+  it("does not retry an outage after spending the remaining call on semantic repair", async () => {
+    const aiProvider = createTestAiProvider([
+      { ...flowProviderResult(successfulFlowPayload()), text: "not-json" },
+      temporaryProviderOutage(),
+    ])
+
+    await expect(executeTemplateFlow(
+      createInput(createBlankTemplateContent(), "Create an agreement."),
+      createDependencies({ aiProvider })
+    )).rejects.toMatchObject({ statusCode: 503 })
+    expect(readProviderRequests(aiProvider)).toHaveLength(2)
+  })
+
   it("performs one bounded semantic repair on the same model", async () => {
     const aiProvider = createTestAiProvider([
       {
@@ -1455,6 +1508,18 @@ function rawFlowProviderResult(
       totalTokens: null
     }
   }
+}
+
+function temporaryProviderOutage(): AiProviderError {
+  return new AiProviderError({
+    code: AI_PROVIDER_ERROR_CODES.UPSTREAM_UNAVAILABLE,
+    message: "Provider temporarily unavailable.",
+    model: { provider: TEST_PROVIDER_ID, model: TEST_MODEL },
+    provider: TEST_PROVIDER_ID,
+    retryable: true,
+    statusCode: 503,
+    traceId: "provider-outage-trace",
+  })
 }
 
 function successfulFlowPayload(): TestFlowPayload {

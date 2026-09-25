@@ -8,7 +8,6 @@ BizFlow Docs is a mobile-first, multi-tenant workflow portal for reusable forms,
 - Sprint: Sprints 0–11, 13, and 14 are implemented and migrated. Sprint 12 (offline/PWA) is deferred.
 - Application scaffold: Next.js App Router foundation with versioned documents, organization templates, guided signing/PDF workflows, creator-owned submission drafts, private verified files, a tenant-scoped review inbox, tasks with Inngest reminders, SMS notifications via Termii, public form links, template duplication, notification preferences, PostHog analytics, and tamper-evident audit log with CSV export.
 - Delivery direction: cloud-first. Offline/PWA work and related packages are deferred until explicitly reprioritized.
-- Canonical project guide: `.agent/AGENT.md`.
 
 ## MVP Scope
 
@@ -26,7 +25,7 @@ MVP non-goals:
 
 - Frontend: Next.js App Router, React, TypeScript.
 - UI: Tailwind CSS and shadcn/ui.
-- Forms: React Hook Form and Zod.
+- Forms: server actions and Zod.
 - Backend: Next.js route handlers, server actions, and service functions.
 - Database and auth: Supabase PostgreSQL, Supabase Auth, and Postgres RLS.
 - Storage: Cloudflare R2 private buckets with signed URLs.
@@ -38,16 +37,20 @@ MVP non-goals:
 
 ## Local Development
 
-This repository uses `pnpm` as the package manager. After the Next.js application is scaffolded, use:
+Install Node.js 22 and the pnpm version specified in `package.json`, then run:
 
 ```bash
-pnpm install
+pnpm install --frozen-lockfile
+cp .env.example .env.local
+# Fill in .env.local with your own service credentials before starting.
 pnpm dev
 ```
 
-The local app is expected to run at `http://localhost:3000` unless the scaffold changes the default port.
+The app runs at `http://localhost:3000`. Configure your own Supabase project and private R2 bucket using the sections below, and apply the database migrations before using the app. Optional integrations require their own credentials.
 
-Example API calls after the app is scaffolded:
+Personal editor/agent settings, local environments, generated files, and `.github/` workflows are excluded from Git. Configure those tools yourself if needed. Shared build/test configuration, the dependency lockfile, and the credential-free `.env.example` stay versioned so fresh clones can be installed and checked. Run `pnpm check` locally before pushing; the repository does not ship a GitHub Actions workflow. Next.js regenerates its type declarations during development, builds, and `pnpm typecheck`.
+
+Example authenticated API calls:
 
 ```bash
 curl -X POST http://localhost:3000/api/documents/upload-url \
@@ -89,7 +92,7 @@ curl -X POST http://localhost:3000/api/submissions/00000000-0000-4000-8000-00000
 
 ## Environment Variables
 
-Use `.env.example` as the source of truth for required local variables. Copy it to `.env.local` after it exists:
+Use `.env.example` as the source of truth for required local variables. Copy it to `.env.local`:
 
 ```bash
 cp .env.example .env.local
@@ -179,7 +182,7 @@ Apply the Supabase migrations before using the dashboard pages:
 
 ```bash
 npx supabase login
-npx supabase link --project-ref tmciougnqzbopuqyuacu
+npx supabase link --project-ref <your-project-ref>
 npx supabase db push
 ```
 

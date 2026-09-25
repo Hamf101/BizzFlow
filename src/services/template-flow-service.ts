@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto"
+import { setTimeout as delay } from "node:timers/promises"
 
 import { z } from "zod"
 
@@ -748,6 +749,29 @@ async function requestFlowProvider(input: {
         traceId: input.traceId
       })
     } catch (error: unknown) {
+      // A transient outage uses the same remaining call as a semantic repair;
+      // it must never expand the two-call budget or switch models.
+      upstreamCalls += 1
+      if (
+        error instanceof AiProviderError &&
+        error.code === AI_PROVIDER_ERROR_CODES.UPSTREAM_UNAVAILABLE &&
+        error.retryable &&
+        providerCall < FLOW_MAX_UPSTREAM_CALLS &&
+        upstreamCalls < FLOW_MAX_UPSTREAM_CALLS
+      ) {
+        console.warn("template_flow_provider_retrying", JSON.stringify({
+          templateId: input.request.templateId,
+          organizationId: input.request.organizationId,
+          provider: model.provider,
+          model: model.model,
+          providerStatusCode: error.statusCode,
+          traceId: error.traceId,
+          upstreamCalls,
+          durationMs: Math.round(performance.now() - input.startedAt),
+        }))
+        await delay(1_000)
+        continue
+      }
       throwFlowProviderError(error, input, model)
     }
 
@@ -1083,7 +1107,14 @@ function throwFlowProviderError(
     )
   }
 
-  console.error("template_flow_provider_failed", logContext)
+  console.error("template_flow_provider_failed", JSON.stringify(logContext))
+
+  if (providerError.code === AI_PROVIDER_ERROR_CODES.UPSTREAM_UNAVAILABLE) {
+    throw new TemplateFlowServiceError(
+      "Flow's AI service is temporarily unavailable. Your document is unchanged. Try sending your message again shortly.",
+      503
+    )
+  }
 
   if (providerError.code === AI_PROVIDER_ERROR_CODES.REQUEST_TIMEOUT) {
     throw new TemplateFlowServiceError(

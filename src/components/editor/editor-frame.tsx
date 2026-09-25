@@ -246,7 +246,7 @@ export function EditorFrame<Mode extends string>({
         {banner}
         <div
           className={cn(
-            "absolute inset-0 overflow-auto",
+            "absolute inset-0 overflow-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
             !narrow && "group-has-[[data-slot=editor-panel]:not([hidden])]/stage:right-[23.5rem]"
           )}
           data-slot="editor-scroll"

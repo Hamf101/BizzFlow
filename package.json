@@ -14,7 +14,7 @@
     "test": "vitest run",
     "supabase:check": "node scripts/check-supabase-live.mjs",
     "supabase:check:audit-chain": "node scripts/verify-audit-chain.mjs",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "next typegen && tsc --noEmit",
     "check": "pnpm lint && pnpm typecheck && pnpm check:test-integrity && pnpm test && pnpm check:duplication && pnpm check:deadcode && pnpm build && pnpm check:route-js && pnpm audit:dependencies",
     "check:e2e": "pnpm build:e2e && pnpm test:e2e",
     "test:e2e": "playwright test",
