@@ -3,7 +3,7 @@ import Link from "next/link"
 import type { ReactElement, ReactNode } from "react"
 
 import { ListFilterChips } from "@/components/data/list-filter-chips"
-import { ListSearch } from "@/components/data/list-search"
+import { ListQuery } from "@/components/data/list-query"
 import { type ListSavedViews, ListViewMenu, ListViewTitle } from "@/components/data/list-view-menu"
 import { PurgeRequestForm } from "@/components/documents/purge-request-form"
 import type { FileEntry } from "@/components/files/file-entry"
@@ -18,7 +18,6 @@ import {
   describeDocumentKind,
   describeTrashNote,
   describeWorkflowStatus,
-  FILE_SEARCH_MAX_LENGTH,
   fileListState,
   FILES_PATH,
   getChosenItemId,
@@ -27,7 +26,6 @@ import {
   getFileExtension,
   getFileLifecycleOptions,
   getFileLifecycleView,
-  getFileSearchFields,
   getFileViewMenuSections,
   getFolderHref,
   getItemHref,
@@ -475,42 +473,35 @@ export function FilesWorkspace({
       <section className="flex flex-col gap-5" data-slot="files-workspace">
         {/* The real space keeps the accessible name "Files 12 items" rather
             than "Files12 items". */}
-        <h1 className="text-2xl leading-none font-medium tracking-[-0.02em]">
-          <ListViewTitle title="Files" views={listViews} />{" "}
-          <span
-            aria-label={`${total} ${total === 1 ? "item" : "items"}`}
-            className="ml-0.5 text-xl font-normal text-muted-foreground"
-          >
-            {total}
-          </span>
-        </h1>
+        <div className="flex items-center justify-between gap-3">
+          <h1 className="min-w-0 text-2xl leading-none font-medium tracking-[-0.02em]">
+            <ListViewTitle title="Files" views={listViews} />{" "}
+            <span
+              aria-label={`${total} ${total === 1 ? "item" : "items"}`}
+              className="ml-0.5 text-xl font-normal text-muted-foreground"
+            >
+              {total}
+            </span>
+          </h1>
+          <div className="flex shrink-0 gap-2">
+            <ListViewMenu
+              adjusted={isFileViewAdjusted(view)}
+              label="View options"
+              sections={getFileViewMenuSections(view)}
+              views={listViews}
+            />
+            {offersNew ? (
+              <NewFileMenu addDocumentHref={addDocumentHref} newFolder={newFolder} />
+            ) : null}
+          </div>
+        </div>
 
-        <div
-          className={cn(
-            "grid gap-2",
-            offersNew
-              ? "grid-cols-[minmax(0,1fr)_auto_auto]"
-              : "grid-cols-[minmax(0,1fr)_auto]"
-          )}
-        >
-          <ListSearch
-            fields={getFileSearchFields(view)}
-            label="Search files"
-            maxLength={FILE_SEARCH_MAX_LENGTH}
-            path={FILES_PATH}
-            placeholder="Search files…"
+        {view.query ? (
+          <ListQuery
+            clearHref={fileListState.href(FILES_PATH, view, { query: "" })}
             query={view.query}
           />
-          <ListViewMenu
-            adjusted={isFileViewAdjusted(view)}
-            label="View options"
-            sections={getFileViewMenuSections(view)}
-            views={listViews}
-          />
-          {offersNew ? (
-            <NewFileMenu addDocumentHref={addDocumentHref} newFolder={newFolder} />
-          ) : null}
-        </div>
+        ) : null}
 
         <div className="flex items-center justify-between gap-3">
           <ListFilterChips

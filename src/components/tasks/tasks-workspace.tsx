@@ -3,12 +3,11 @@ import type { ReactElement } from "react"
 
 import { ListFilterChips } from "@/components/data/list-filter-chips"
 import { ListPagination } from "@/components/data/list-pagination"
-import { ListSearch } from "@/components/data/list-search"
+import { ListQuery } from "@/components/data/list-query"
 import { type ListSavedViews, ListViewMenu, ListViewTitle } from "@/components/data/list-view-menu"
 import { formatMemberName } from "@/components/people/member-name"
 import { NewTaskDialog } from "@/components/tasks/new-task-dialog"
 import {
-  getTaskSearchFields,
   getTaskStatusOptions,
   getTaskViewMenuSections,
   isTaskViewAdjusted,
@@ -20,7 +19,7 @@ import { formatMediumDate } from "@/lib/date-format"
 import { getLastPage } from "@/lib/list-state"
 import { cn } from "@/lib/utils"
 import type { OrganizationMember } from "@/types/organization"
-import { TASK_SEARCH_MAX_LENGTH, type Task } from "@/types/task"
+import type { Task } from "@/types/task"
 
 /** One task row, with its overdue flag worked out while the page loads. */
 export type TaskListItem = {
@@ -74,39 +73,39 @@ export function TasksWorkspace({
     <section className="flex flex-col gap-5" data-slot="tasks-workspace">
       {/* The real space keeps the accessible name "Tasks 55 tasks" rather
           than "Tasks55 tasks"; the small margin keeps the visual gap. */}
-      <h1 className="text-2xl leading-none font-medium tracking-[-0.02em]">
-        <ListViewTitle title="Tasks" views={listViews} />{" "}
-        <span
-          aria-label={`${total} ${total === 1 ? "task" : "tasks"}`}
-          className="ml-0.5 text-xl font-normal text-muted-foreground"
-        >
-          {total}
-        </span>
-      </h1>
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="min-w-0 text-2xl leading-none font-medium tracking-[-0.02em]">
+          <ListViewTitle title="Tasks" views={listViews} />{" "}
+          <span
+            aria-label={`${total} ${total === 1 ? "task" : "tasks"}`}
+            className="ml-0.5 text-xl font-normal text-muted-foreground"
+          >
+            {total}
+          </span>
+        </h1>
+        <div className="flex shrink-0 gap-2">
+          <ListViewMenu
+            adjusted={isTaskViewAdjusted(view)}
+            label="View options"
+            sections={getTaskViewMenuSections(view, internalMembers)}
+            views={listViews}
+          />
+          {canCreate ? (
+            <NewTaskDialog
+              canAssign={canAssign}
+              createTaskAction={createTaskAction}
+              members={internalMembers}
+            />
+          ) : null}
+        </div>
+      </div>
 
-      <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-2">
-        <ListSearch
-          fields={getTaskSearchFields(view)}
-          label="Search tasks"
-          maxLength={TASK_SEARCH_MAX_LENGTH}
-          path="/tasks"
-          placeholder="Search tasks…"
+      {view.query ? (
+        <ListQuery
+          clearHref={taskListState.href("/tasks", view, { query: "" })}
           query={view.query}
         />
-        <ListViewMenu
-          adjusted={isTaskViewAdjusted(view)}
-          label="View options"
-          sections={getTaskViewMenuSections(view, internalMembers)}
-          views={listViews}
-        />
-        {canCreate ? (
-          <NewTaskDialog
-            canAssign={canAssign}
-            createTaskAction={createTaskAction}
-            members={internalMembers}
-          />
-        ) : null}
-      </div>
+      ) : null}
 
       <ListFilterChips
         label="Filter tasks by status"

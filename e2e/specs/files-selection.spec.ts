@@ -1,6 +1,7 @@
 import { expect, test, uniqueName } from "../support/fixtures"
 import { waitForHydration } from "../support/hydration"
 import { retryConcurrentChange } from "../support/retry"
+import { searchList } from "../support/search"
 
 test("selects files with modifier clicks, archives them together, and undoes it", async ({
   admin,
@@ -159,8 +160,7 @@ test("keeps a selection through a search, and starts fresh in another view", asy
   await expect(bar).toContainText("2 selected")
 
   // The search narrows what is shown; both stay chosen.
-  await page.getByLabel("Search files").fill(shared)
-  await page.getByLabel("Search files").press("Enter")
+  await searchList(page, "Files", shared)
   await expect(page).toHaveURL(/[?&]q=/)
   await expect(tile(names[1])).toHaveCount(0)
   await expect(bar).toContainText("2 selected")

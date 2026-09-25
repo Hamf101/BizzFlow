@@ -205,23 +205,6 @@ async function openChoices(trigger: Element | null): Promise<string[]> {
   )
 }
 
-async function enterSearch(value: string): Promise<void> {
-  const input = document.querySelector('input[aria-label="Search people"]')
-
-  if (!(input instanceof HTMLInputElement)) {
-    throw new Error("Expected the people search input.")
-  }
-
-  await act(async () => {
-    const valueSetter = Object.getOwnPropertyDescriptor(
-      HTMLInputElement.prototype,
-      "value"
-    )?.set
-    valueSetter?.call(input, value)
-    input.dispatchEvent(new Event("input", { bubbles: true }))
-  })
-}
-
 describe("PeopleWorkspace", () => {
   it("renders the searchable directory without the old explanatory cards", () => {
     renderWorkspace()
@@ -335,23 +318,25 @@ describe("PeopleWorkspace", () => {
     ])
   })
 
-  it("filters the visible directory by search and role", async () => {
-    renderWorkspace()
-
-    await enterSearch("mara")
+  it("narrows the directory to the words search sent, with a way back to everyone", () => {
+    renderWorkspace({ query: "mara" })
 
     expect(document.body.textContent).toContain("Mara Bell")
     expect(document.body.textContent).not.toContain("Avery Hart")
     expect(document.body.textContent).not.toContain("Theo Miles")
+    expect(document.querySelector('[data-slot="list-query"]')?.getAttribute("href")).toBe("/people")
+  })
 
-    await enterSearch("")
+  it("narrows the directory by role", async () => {
+    renderWorkspace()
+
     await click(getButton("Staff1"))
 
     expect(document.body.textContent).toContain("Theo Miles")
     expect(document.body.textContent).not.toContain("Mara Bell")
   })
 
-  it("searches by an owner-assigned workspace display name", async () => {
+  it("finds a member by an owner-assigned workspace display name", () => {
     renderWorkspace({
       members: [
         {
@@ -360,9 +345,8 @@ describe("PeopleWorkspace", () => {
         },
         members[2],
       ],
+      query: "client success",
     })
-
-    await enterSearch("client success")
 
     expect(document.body.textContent).toContain("Client success")
     expect(document.body.textContent).not.toContain("Theo Miles")

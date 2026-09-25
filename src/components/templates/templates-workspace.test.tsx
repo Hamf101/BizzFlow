@@ -107,16 +107,20 @@ function readCards(slot: string): Array<string | null | undefined> {
 }
 
 describe("TemplatesWorkspace", () => {
-  it("leads with the title and count, one search, and status pills for people who manage templates", () => {
+  it("leads with the title and count, its own buttons beside them, and status pills for people who manage templates", () => {
     renderWorkspace({ total: 12 })
 
     expect(document.querySelector("h1")?.textContent).toBe("Templates 12")
     expect(
       document.querySelector("h1 span")?.getAttribute("aria-label")
     ).toBe("12 templates")
+    // Search is the workspace's own now; the list keeps no box of its own.
+    expect(document.querySelector('[role="search"], input[type="search"]')).toBeNull()
     expect(
-      document.querySelector('input[type="search"]')?.getAttribute("aria-label")
-    ).toBe("Search templates")
+      [...(document.querySelector("h1")?.nextElementSibling?.querySelectorAll("a, button") ?? [])].map(
+        (control: Element) => control.getAttribute("aria-label") ?? control.textContent
+      )
+    ).toEqual(["View options", "Create template"])
     expect(
       document.querySelector('nav[aria-label="Filter templates by status"]')
         ?.textContent
@@ -226,7 +230,7 @@ describe("TemplatesWorkspace", () => {
     expect(document.querySelector('[data-slot="template-library"]')).toBeNull()
   })
 
-  it("carries the rest of the view into a new search", () => {
+  it("shows the words the view is narrowed to, and clears only them", () => {
     renderWorkspace({
       view: templateListState.parse({
         category: "Leasing",
@@ -237,19 +241,10 @@ describe("TemplatesWorkspace", () => {
       }),
     })
 
-    const form = document.querySelector('form[role="search"]')
+    const chip = document.querySelector('[data-slot="list-query"]')
 
-    expect(form?.getAttribute("action")).toBe("/templates")
-    expect(
-      [...(form?.querySelectorAll('input[type="hidden"]') ?? [])].map(
-        (input: Element) => [input.getAttribute("name"), input.getAttribute("value")]
-      )
-    ).toEqual([
-      ["category", "Leasing"],
-      ["status", "draft"],
-      ["size", "25"],
-    ])
-    expect(form?.querySelector('input[name="q"]')?.getAttribute("value")).toBe("old")
+    expect(chip?.textContent).toContain("Matching “old”")
+    expect(chip?.getAttribute("href")).toBe("/templates?category=Leasing&status=draft&size=25")
   })
 
   it("pages with the rest of the view kept in each link, and no link past either end", () => {

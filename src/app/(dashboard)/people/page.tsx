@@ -4,6 +4,7 @@ import type { ReactElement } from "react"
 import { PeopleWorkspace } from "@/components/people/people-workspace"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { buildFeedbackRedirect } from "@/lib/action-result"
+import type { RawSearchParams } from "@/lib/list-state"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
 import { getPageErrorMessage } from "@/lib/page-errors"
 import { loadPageOrganizationContext } from "@/lib/page-organization-context"
@@ -15,7 +16,18 @@ import {
   updateMemberAccessAction,
 } from "./actions"
 
-export default async function PeoplePage(): Promise<ReactElement> {
+/**
+ * Lists the organization's people, narrowed by any words search sent along.
+ *
+ * @param props - The words, as `q`.
+ * @returns The People workspace, or a user-safe load failure.
+ */
+export default async function PeoplePage({
+  searchParams,
+}: {
+  searchParams: Promise<RawSearchParams>
+}): Promise<ReactElement> {
+  const { q } = await searchParams
   const user = await loadAuthenticatedPageUser("/people")
   const { context, errorMessage: contextErrorMessage } =
     await loadPageOrganizationContext({
@@ -80,6 +92,7 @@ export default async function PeoplePage(): Promise<ReactElement> {
         invites={people.invites}
         members={people.members}
         organizationId={context.organization.id}
+        query={(Array.isArray(q) ? q[0] : q)?.trim().slice(0, 100)}
         roles={people.roles}
         revokeInviteAction={revokeInviteAction}
         updateMemberAccessAction={updateMemberAccessAction}

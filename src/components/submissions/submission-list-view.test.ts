@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest"
 
 import {
-  getSubmissionSearchFields,
   getSubmissionStatusOptions,
   getSubmissionViewAssignee,
   getSubmissionViewMenuSections,
@@ -169,25 +168,5 @@ describe("submission list view", () => {
     expect(isSubmissionViewAdjusted(submissionListState.parse({ size: "25" }))).toBe(
       true
     )
-  })
-
-  it("carries the view into a new search without the old query or page", () => {
-    expect(
-      getSubmissionSearchFields(
-        submissionListState.parse({
-          assignee: MARA_ID,
-          page: "2",
-          q: "old",
-          size: "25",
-          sort: "title",
-          status: "submitted",
-        })
-      )
-    ).toEqual([
-      ["assignee", MARA_ID],
-      ["status", "submitted"],
-      ["sort", "title"],
-      ["size", "25"],
-    ])
   })
 })

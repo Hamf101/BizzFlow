@@ -5,7 +5,6 @@ import {
   ExternalLink,
   MoreHorizontal,
   Plus,
-  Search,
   Trash2,
 } from "lucide-react"
 import Link from "next/link"
@@ -15,6 +14,7 @@ import {
   type ReactElement,
 } from "react"
 
+import { ListQuery } from "@/components/data/list-query"
 import { getMemberDisplayName, getMemberRoleName } from "@/components/people/member-name"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -75,6 +75,8 @@ type PeopleWorkspaceProps = {
   invites: OrganizationInvite[]
   members: OrganizationMember[]
   organizationId: string
+  /** Words from search, which narrow the directory. */
+  query?: string
   roles: OrganizationRoleDefinition[]
   revokeInviteAction: ServerFormAction
   updateMemberAccessAction: ServerFormAction
@@ -93,11 +95,11 @@ export function PeopleWorkspace({
   invites,
   members,
   organizationId,
+  query = "",
   roles,
   revokeInviteAction,
   updateMemberAccessAction,
 }: PeopleWorkspaceProps): ReactElement {
-  const [query, setQuery] = useState("")
   const [roleFilter, setRoleFilter] = useState<PeopleFilter>("all")
   const normalizedQuery = query.trim().toLowerCase()
   const visibleMembers = useMemo(
@@ -126,11 +128,11 @@ export function PeopleWorkspace({
         className="flex min-h-[calc(100dvh-10rem)] flex-col gap-5"
         data-slot="people-workspace"
       >
-        <div className="flex items-baseline gap-2">
+        <div className="flex items-center justify-between gap-3">
           {/* The real space keeps the accessible name "People 3 members"
               rather than "People3 members"; the small margin keeps the gap. */}
           <h1
-            className="text-2xl leading-none font-medium tracking-[-0.02em]"
+            className="min-w-0 text-2xl leading-none font-medium tracking-[-0.02em]"
             data-slot="people-heading"
           >
             People{" "}
@@ -141,23 +143,6 @@ export function PeopleWorkspace({
               {members.length}
             </span>
           </h1>
-        </div>
-
-        <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
-          <label className="relative block min-w-0">
-            <Search
-              aria-hidden="true"
-              className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground"
-            />
-            <Input
-              aria-label="Search people"
-              className="h-11 rounded-[12px] bg-card pl-10 md:h-11"
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search people…"
-              type="search"
-              value={query}
-            />
-          </label>
           {canInviteMembers(actorRole) ? (
             <InviteWorkspace
               createInviteAction={createInviteAction}
@@ -171,6 +156,8 @@ export function PeopleWorkspace({
             />
           ) : null}
         </div>
+
+        {query ? <ListQuery clearHref="/people" query={query} /> : null}
 
         <RoleFilters
           activeFilter={roleFilter}

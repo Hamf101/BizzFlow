@@ -110,16 +110,20 @@ function readCells(slot: string): Array<string | null | undefined> {
 }
 
 describe("SubmissionsWorkspace", () => {
-  it("leads with the title and count, one search, and the status pills", () => {
+  it("leads with the title and count, its own buttons beside them, and the status pills", () => {
     renderWorkspace({ total: 12 })
 
     expect(document.querySelector("h1")?.textContent).toBe("Submissions 12")
     expect(
       document.querySelector("h1 span")?.getAttribute("aria-label")
     ).toBe("12 submissions")
+    // Search is the workspace's own now; the list keeps no box of its own.
+    expect(document.querySelector('[role="search"], input[type="search"]')).toBeNull()
     expect(
-      document.querySelector('input[type="search"]')?.getAttribute("aria-label")
-    ).toBe("Search submissions")
+      [...(document.querySelector("h1")?.nextElementSibling?.querySelectorAll("a, button") ?? [])].map(
+        (control: Element) => control.getAttribute("aria-label") ?? control.textContent
+      )
+    ).toEqual(["View options", "New submission"])
     expect(
       document.querySelector('nav[aria-label="Filter submissions by status"]')
         ?.textContent
@@ -127,7 +131,7 @@ describe("SubmissionsWorkspace", () => {
     expect(document.body.textContent).not.toContain("Review inbox")
   })
 
-  it("carries the rest of the view into a new search", () => {
+  it("shows the words the view is narrowed to, and clears only them", () => {
     renderWorkspace({
       view: submissionListState.parse({
         page: "2",
@@ -137,18 +141,10 @@ describe("SubmissionsWorkspace", () => {
       }),
     })
 
-    const form = document.querySelector('form[role="search"]')
+    const chip = document.querySelector('[data-slot="list-query"]')
 
-    expect(form?.getAttribute("action")).toBe("/submissions")
-    expect(
-      [...(form?.querySelectorAll('input[type="hidden"]') ?? [])].map(
-        (input: Element) => [input.getAttribute("name"), input.getAttribute("value")]
-      )
-    ).toEqual([
-      ["status", "draft"],
-      ["size", "25"],
-    ])
-    expect(form?.querySelector('input[name="q"]')?.getAttribute("value")).toBe("old")
+    expect(chip?.textContent).toContain("Matching “old”")
+    expect(chip?.getAttribute("href")).toBe("/submissions?status=draft&size=25")
   })
 
   it("lists each submission by its title, linked to it, with how far it has come and its assignee", () => {

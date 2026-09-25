@@ -4,11 +4,10 @@ import type { CSSProperties, ReactElement } from "react"
 
 import { ListFilterChips } from "@/components/data/list-filter-chips"
 import { ListPagination } from "@/components/data/list-pagination"
-import { ListSearch } from "@/components/data/list-search"
+import { ListQuery } from "@/components/data/list-query"
 import { type ListSavedViews, ListViewMenu, ListViewTitle } from "@/components/data/list-view-menu"
 import { formatMemberName } from "@/components/people/member-name"
 import {
-  getSubmissionSearchFields,
   getSubmissionStatusOptions,
   getSubmissionViewMenuSections,
   isSubmissionViewAdjusted,
@@ -25,10 +24,7 @@ import { formatMediumDate } from "@/lib/date-format"
 import { getLastPage } from "@/lib/list-state"
 import { cn } from "@/lib/utils"
 import type { OrganizationMember } from "@/types/organization"
-import {
-  SUBMISSION_SEARCH_MAX_LENGTH,
-  type Submission,
-} from "@/types/submission"
+import type { Submission } from "@/types/submission"
 
 const SUBMISSIONS_PATH = "/submissions"
 
@@ -86,46 +82,46 @@ export function SubmissionsWorkspace({
     <section className="flex flex-col gap-5" data-slot="submissions-workspace">
       {/* The real space keeps the accessible name "Submissions 12
           submissions" rather than "Submissions12 submissions". */}
-      <h1 className="text-2xl leading-none font-medium tracking-[-0.02em]">
-        <ListViewTitle title="Submissions" views={listViews} />{" "}
-        <span
-          aria-label={`${total} ${total === 1 ? "submission" : "submissions"}`}
-          className="ml-0.5 text-xl font-normal text-muted-foreground"
-        >
-          {total}
-        </span>
-      </h1>
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="min-w-0 text-2xl leading-none font-medium tracking-[-0.02em]">
+          <ListViewTitle title="Submissions" views={listViews} />{" "}
+          <span
+            aria-label={`${total} ${total === 1 ? "submission" : "submissions"}`}
+            className="ml-0.5 text-xl font-normal text-muted-foreground"
+          >
+            {total}
+          </span>
+        </h1>
+        <div className="flex shrink-0 gap-2">
+          <ListViewMenu
+            adjusted={isSubmissionViewAdjusted(view)}
+            label="View options"
+            sections={getSubmissionViewMenuSections(view, members, {
+              canFilterAssignee: canAssign,
+            })}
+            views={listViews}
+          />
+          {canCreate ? (
+            <Link
+              className={cn(
+                buttonVariants(),
+                "h-11 rounded-[12px] px-4 font-normal"
+              )}
+              href="/submissions/new"
+            >
+              <Plus aria-hidden="true" data-icon="inline-start" />
+              <span className="max-sm:sr-only">New submission</span>
+            </Link>
+          ) : null}
+        </div>
+      </div>
 
-      <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-2">
-        <ListSearch
-          fields={getSubmissionSearchFields(view)}
-          label="Search submissions"
-          maxLength={SUBMISSION_SEARCH_MAX_LENGTH}
-          path={SUBMISSIONS_PATH}
-          placeholder="Search submissions…"
+      {view.query ? (
+        <ListQuery
+          clearHref={submissionListState.href(SUBMISSIONS_PATH, view, { query: "" })}
           query={view.query}
         />
-        <ListViewMenu
-          adjusted={isSubmissionViewAdjusted(view)}
-          label="View options"
-          sections={getSubmissionViewMenuSections(view, members, {
-            canFilterAssignee: canAssign,
-          })}
-          views={listViews}
-        />
-        {canCreate ? (
-          <Link
-            className={cn(
-              buttonVariants(),
-              "h-11 rounded-[12px] px-4 font-normal"
-            )}
-            href="/submissions/new"
-          >
-            <Plus aria-hidden="true" data-icon="inline-start" />
-            <span className="max-sm:sr-only">New submission</span>
-          </Link>
-        ) : null}
-      </div>
+      ) : null}
 
       <ListFilterChips
         glide
