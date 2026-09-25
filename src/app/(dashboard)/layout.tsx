@@ -26,7 +26,8 @@ async function signOutAction(): Promise<void> {
   "use server"
 
   const supabase = await createClient()
-  await supabase.auth.signOut()
+  // This device only; the person stays logged in everywhere else.
+  await supabase.auth.signOut({ scope: "local" })
   redirect("/login")
 }
 
