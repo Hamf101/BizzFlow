@@ -1,4 +1,4 @@
-import type { TemplateBlock, TemplateContentV3 } from "@/types/template"
+import { fitRuns, type TemplateBlock, type TemplateContentV3, type TextRun } from "@/types/template"
 import {
   deleteTemplateBlock,
   insertTemplateBlock,
@@ -59,10 +59,15 @@ export function splitTextBlock(
     }
   }
 
-  const kept = updateTemplateBlock(content, { ...block, text: block.text.slice(0, offset) })
+  const kept = updateTemplateBlock(content, {
+    ...block,
+    runs: sliceRuns(block.runs, 0, offset),
+    text: block.text.slice(0, offset),
+  })
   const next: TemplateBlock = {
     alignment: block.type === "paragraph" ? block.alignment : "left",
     id: newBlockId,
+    runs: sliceRuns(block.runs, offset),
     text: block.text.slice(offset),
     type: "paragraph",
   }
@@ -103,7 +108,11 @@ export function mergeIntoPrevious(
   }
 
   if (isLine(previous)) {
-    const joined = updateTemplateBlock(content, { ...previous, text: previous.text + block.text })
+    const joined = updateTemplateBlock(content, {
+      ...previous,
+      runs: joinRuns(previous, block),
+      text: previous.text + block.text,
+    })
 
     return {
       content: deleteTemplateBlock(joined, blockId),
@@ -113,12 +122,12 @@ export function mergeIntoPrevious(
 
   if (isList(previous)) {
     const last = previous.items.length - 1
-    const items = previous.items.map((item, itemIndex) =>
-      itemIndex === last ? item + block.text : item
+    const entries = listEntries(previous).map((entry, itemIndex) =>
+      itemIndex === last ? { runs: joinRuns(entry, block), text: entry.text + block.text } : entry
     )
 
     return {
-      content: deleteTemplateBlock(updateTemplateBlock(content, { ...previous, items }), blockId),
+      content: deleteTemplateBlock(updateTemplateBlock(content, withEntries(previous, entries)), blockId),
       focus: { blockId: previous.id, item: last, offset: previous.items[last]?.length ?? 0 },
     }
   }
@@ -159,14 +168,14 @@ export function readMarkdownShortcut(text: string): TextBlockKind | null {
  * @param content - The page.
  * @param blockId - The line to turn.
  * @param kind - What it becomes.
- * @param text - The line's text to keep, when it differs from what is stored.
+ * @param words - The words to keep, with their formatting, when they differ from what is stored.
  * @returns The page and a caret at the end of the line.
  */
 export function convertTextBlock(
   content: TemplateContentV3,
   blockId: string,
   kind: TextBlockKind,
-  text?: string
+  words?: ListEntry
 ): { content: TemplateContentV3; focus: CaretTarget } {
   const block = content.blocks.find((candidate) => candidate.id === blockId)
 
@@ -174,18 +183,76 @@ export function convertTextBlock(
     return { content, focus: { blockId, offset: 0 } }
   }
 
-  const words = text ?? (isList(block) ? block.items.join(" ") : block.text)
+  // A list's items become one line, a space between each, formatting and all.
+  const whole = isList(block)
+    ? { runs: joinRuns(...listEntries(block).flatMap((entry, index) => (index > 0 ? [{ text: " " }, entry] : [entry]))), text: block.items.join(" ") }
+    : { runs: block.runs, text: block.text }
+  const { runs, text } = words ?? whole
   const alignment = isLine(block) ? block.alignment : "left"
   const next: TemplateBlock =
     kind.type === "heading"
-      ? { alignment, id: blockId, level: kind.level, text: words, type: "heading" }
+      ? { alignment, id: blockId, level: kind.level, runs, text, type: "heading" }
       : kind.type === "paragraph"
-        ? { alignment, id: blockId, text: words, type: "paragraph" }
-        : { id: blockId, items: [words], type: kind.type }
+        ? { alignment, id: blockId, runs, text, type: "paragraph" }
+        : withEntries({ id: blockId, items: [], type: kind.type }, [{ runs, text }])
 
   return {
     content: updateTemplateBlock(content, next),
-    focus: { blockId, item: isList(next) ? 0 : undefined, offset: words.length },
+    focus: { blockId, item: isList(next) ? 0 : undefined, offset: text.length },
+  }
+}
+
+/**
+ * Lifts one list item out as a line of its own, where it stands: the items
+ * before it stay a list above it, and those after it become a list below.
+ * A list of one simply becomes the line.
+ *
+ * @param content - The page.
+ * @param blockId - The list.
+ * @param item - The item to lift out.
+ * @param kind - The kind of line it becomes.
+ * @param ids - Fresh ids for the line and for the list after it.
+ * @returns The page and a caret at the start of the line.
+ */
+export function liftListItem(
+  content: TemplateContentV3,
+  blockId: string,
+  item: number,
+  kind: Extract<TextBlockKind, { type: "heading" | "paragraph" }>,
+  ids: readonly [line: string, rest: string]
+): { content: TemplateContentV3; focus: CaretTarget } {
+  const block = content.blocks.find((candidate) => candidate.id === blockId)
+
+  if (!isList(block)) {
+    return { content, focus: { blockId, offset: 0 } }
+  }
+
+  const entries = listEntries(block)
+  const { runs, text } = entries[item] ?? { text: "" }
+  const before = entries.slice(0, item)
+  const after = entries.slice(item + 1)
+
+  if (before.length === 0 && after.length === 0) {
+    return { ...convertTextBlock(content, blockId, kind, { runs, text }), focus: { blockId, offset: 0 } }
+  }
+
+  const [lineId, restId] = ids
+  const line: TemplateBlock =
+    kind.type === "heading"
+      ? { alignment: "left", id: lineId, level: kind.level, runs, text, type: "heading" }
+      : { alignment: "left", id: lineId, runs, text, type: "paragraph" }
+  const index = content.blocks.indexOf(block)
+  const kept = before.length > 0 ? updateTemplateBlock(content, withEntries(block, before)) : content
+  const placed = insertTemplateBlock(kept, before.length > 0 ? blockId : (content.blocks[index - 1]?.id ?? null), line)
+
+  return {
+    content:
+      before.length === 0
+        ? updateTemplateBlock(placed, withEntries(block, after))
+        : after.length > 0
+          ? insertTemplateBlock(placed, lineId, withEntries({ id: restId, items: [], type: block.type }, after))
+          : placed,
+    focus: { blockId: lineId, offset: 0 },
   }
 }
 
@@ -261,10 +328,12 @@ export function normalizeContentForSave(content: TemplateContentV3): TemplateCon
       }
 
       if (isList(block)) {
-        const items = block.items.map((item) => item.trim()).filter(Boolean)
+        const entries = listEntries(block)
+          .map((entry) => ({ runs: fitRuns(entry.text.trim(), entry.runs), text: entry.text.trim() }))
+          .filter((entry) => entry.text)
 
-        return items.length > 0
-          ? { ...block, items }
+        return entries.length > 0
+          ? withEntries(block, entries)
           : { alignment: "left", id: block.id, text: "", type: "paragraph" }
       }
 
@@ -278,6 +347,74 @@ export function normalizeContentForSave(content: TemplateContentV3): TemplateCon
       return block
     }),
   }
+}
+
+/** One list item with its formatting, as the canvas edits items. */
+export type ListEntry = Readonly<{ runs?: TextRun[]; text: string }>
+
+/**
+ * A list's items beside their formatting.
+ *
+ * @param block - The list.
+ * @returns One entry for each item.
+ */
+export function listEntries(block: ListBlock): ListEntry[] {
+  return block.items.map((text, index): ListEntry => ({ runs: block.itemRuns?.[index] ?? undefined, text }))
+}
+
+/**
+ * Puts a list's items back from entries, keeping formatting only when some
+ * item has any.
+ *
+ * @param block - The list.
+ * @param entries - Its items with their formatting.
+ * @returns The list with those items.
+ */
+export function withEntries<Block extends ListBlock>(block: Block, entries: readonly ListEntry[]): Block {
+  const itemRuns = entries.map((entry) => entry.runs ?? null)
+
+  return {
+    ...block,
+    itemRuns: itemRuns.some(Boolean) ? itemRuns : undefined,
+    items: entries.map((entry) => entry.text),
+  }
+}
+
+/**
+ * The formatting of part of a text, from one character up to another.
+ *
+ * @param runs - The whole text's formatting, if it has any.
+ * @param start - Where the part starts.
+ * @param end - Where it ends; the end of the text when left out.
+ * @returns The part's formatting, or undefined when it is plain.
+ */
+export function sliceRuns(runs: readonly TextRun[] | undefined, start: number, end = Infinity): TextRun[] | undefined {
+  const part: TextRun[] = []
+  let at = 0
+
+  for (const run of runs ?? []) {
+    const text = run.text.slice(Math.max(0, start - at), Math.max(0, end - at))
+
+    if (text) {
+      part.push({ ...run, text })
+    }
+
+    at += run.text.length
+  }
+
+  return fitRuns(part.map((run) => run.text).join(""), part)
+}
+
+/**
+ * The formatting of texts set one after another.
+ *
+ * @param parts - Each text with its formatting, if it has any.
+ * @returns The joined formatting, or undefined when all of it is plain.
+ */
+export function joinRuns(...parts: ReadonlyArray<Readonly<{ runs?: readonly TextRun[]; text: string }>>): TextRun[] | undefined {
+  const runs = parts.flatMap((part) => part.runs ?? (part.text ? [{ text: part.text }] : []))
+
+  return fitRuns(runs.map((run) => run.text).join(""), runs)
 }
 
 function setPageBreak(content: TemplateContentV3, blockId: string): TemplateContentV3 {

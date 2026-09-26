@@ -39,15 +39,19 @@ test("writing longer than a page carries on onto new pages instead of running pa
         const margin = parseFloat(getComputedStyle(flow).paddingLeft) * scale
         const pages = sheets.map((sheet) => sheet.getBoundingClientRect())
         const rows = [
-          ...[...flow.querySelectorAll("li[data-caret-key], tbody tr:not([aria-hidden])")].map((row) => row.getBoundingClientRect()),
-          ...[...flow.querySelectorAll("p[data-caret-key]")].flatMap((paragraph) => {
+          ...[...flow.querySelectorAll("li[data-line-key], tbody tr:not([aria-hidden])")].map((row) => row.getBoundingClientRect()),
+          // A paragraph being typed in is a plain block, and a paragraph otherwise.
+          ...[...flow.querySelectorAll("div[data-line-key], p[data-line-key]")].flatMap((paragraph) => {
             const range = document.createRange()
             range.selectNodeContents(paragraph)
             return [...range.getClientRects()]
           }),
         ]
 
-        return rows.filter((row) => !pages.some((sheet) => row.top >= sheet.top && row.bottom <= sheet.bottom - margin + 1)).length
+        // Finding no lines at all is a failure too, not a pass.
+        return rows.length < 200
+          ? -1
+          : rows.filter((row) => !pages.some((sheet) => row.top >= sheet.top && row.bottom <= sheet.bottom - margin + 1)).length
       })
     )
     .toBe(0)

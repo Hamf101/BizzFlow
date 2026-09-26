@@ -10,6 +10,7 @@ import {
 } from "react"
 
 import { cn } from "@/lib/utils"
+import type { TextRun } from "@/types/template"
 
 /** The caret inside one editable line when a key goes down. */
 export type TextCaret = Readonly<{
@@ -17,8 +18,17 @@ export type TextCaret = Readonly<{
   atStart: boolean
   collapsed: boolean
   offset: number
+  /** The line's formatting, when it has any. */
+  runs?: TextRun[]
   text: string
 }>
+
+/**
+ * Lays a line's placeholder over it rather than writing it in, so the caret
+ * waits where typing starts and an emptied line keeps one line's height.
+ */
+export const PLACEHOLDER_CLASS =
+  "relative min-h-[1lh] data-[empty=true]:before:pointer-events-none data-[empty=true]:before:absolute data-[empty=true]:before:inset-x-0 data-[empty=true]:before:text-muted-foreground/55 data-[empty=true]:before:content-[attr(data-placeholder)]"
 
 type EditableTextProps = {
   as?: "div" | "h1" | "h2" | "h3" | "li" | "p" | "td" | "th"
@@ -103,10 +113,7 @@ export function EditableText({
       className={cn(
         "min-w-0 break-words whitespace-pre-wrap outline-none",
         editable && "cursor-text",
-        // Laid over the line rather than written in it, so the caret waits
-        // where typing starts and an emptied line keeps one line's height.
-        placeholder &&
-          "relative min-h-[1lh] data-[empty=true]:before:pointer-events-none data-[empty=true]:before:absolute data-[empty=true]:before:inset-x-0 data-[empty=true]:before:text-muted-foreground/55 data-[empty=true]:before:content-[attr(data-placeholder)]",
+        placeholder && PLACEHOLDER_CLASS,
         className
       )}
       contentEditable={editable ? "plaintext-only" : undefined}
@@ -147,47 +154,4 @@ export function readCaretOffset(element: HTMLElement): number {
   range.setEnd(selection.focusNode as Node, selection.focusOffset)
 
   return range.toString().length
-}
-
-/**
- * Puts the caret into an editable element at a character offset.
- *
- * @param element - The editable element.
- * @param offset - Characters before the caret; clamped to the text.
- */
-export function placeCaret(element: HTMLElement, offset: number): void {
-  const selection = window.getSelection()
-
-  if (!selection) {
-    return
-  }
-
-  element.focus({ preventScroll: true })
-
-  const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT)
-  let remaining = Math.max(0, offset)
-  let node = walker.nextNode()
-  const range = document.createRange()
-
-  while (node) {
-    const length = node.textContent?.length ?? 0
-
-    if (remaining <= length) {
-      range.setStart(node, remaining)
-      range.collapse(true)
-      selection.removeAllRanges()
-      selection.addRange(range)
-      element.scrollIntoView({ block: "nearest" })
-      return
-    }
-
-    remaining -= length
-    node = walker.nextNode()
-  }
-
-  range.selectNodeContents(element)
-  range.collapse(false)
-  selection.removeAllRanges()
-  selection.addRange(range)
-  element.scrollIntoView({ block: "nearest" })
 }

@@ -333,6 +333,19 @@
 }
 
 /*
+ * Words an author coloured or highlighted were coloured for paper. On a dark
+ * screen they stay legible: a colour lightens, and a highlight becomes a tint
+ * behind the screen's own ink. Paper, and the PDF, keep them exactly.
+ */
+.dark .doc-ink:not([data-document-surface="paper"] *) {
+  color: oklch(from var(--doc-ink) max(l, 0.78) c h) !important;
+}
+
+.dark .doc-highlight:not([data-document-surface="paper"] *) {
+  background-color: oklch(from var(--doc-highlight) 0.42 calc(c * 2.5) h) !important;
+}
+
+/*
  * The paper surface reproduces a printed page, so it must not follow the
  * interface theme: the author's brand ink was chosen against paper, and a
  * themed background moves out from under it. Redefining the surface tokens

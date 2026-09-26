@@ -96,11 +96,12 @@ const textRunsSchema = z.array(textRunSchema).max(2_000)
 
 /**
  * Keeps formatting only while it spells out the text it formats. The text is
- * trimmed when saved, so its formatting is trimmed with it; neighbours that
- * look alike are joined; and formatting that no longer matches its text, as
- * after an edit that rewrote the words alone, or that marks nothing, is let go.
+ * trimmed when saved, so its formatting is trimmed with it, while text being
+ * typed keeps its spaces; neighbours that look alike are joined; and
+ * formatting that no longer matches its text, as after an edit that rewrote
+ * the words alone, or that marks nothing, is let go.
  *
- * @param text - The text, already trimmed.
+ * @param text - The text, trimmed when saved or as typed while edited.
  * @param runs - Its formatting, as it arrived.
  * @returns The formatting to keep, or undefined when the text is plain.
  */
@@ -110,8 +111,8 @@ export function fitRuns(text: string, runs: readonly TextRun[] | null | undefine
   }
 
   const joined = runs.map((run: TextRun): string => run.text).join("")
-  let skip = joined.length - joined.trimStart().length
-  let keep = joined.trim().length
+  let skip = joined.startsWith(text) ? 0 : joined.length - joined.trimStart().length
+  let keep = text.length
   const fitted: TextRun[] = []
 
   for (const run of runs) {

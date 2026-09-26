@@ -1,8 +1,14 @@
 "use client"
 
 import { Menu as MenuPrimitive } from "@base-ui/react/menu"
+import { ChevronRight } from "lucide-react"
 
 import { cn } from "@/lib/utils"
+
+const ITEM_CLASS = cn(
+  "group/dropdown-menu-item relative flex cursor-default items-center gap-2 rounded-[8px] px-2 py-2 text-sm outline-hidden select-none",
+  "focus:bg-accent focus:text-accent-foreground data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
+)
 
 function DropdownMenu(props: MenuPrimitive.Root.Props) {
   return <MenuPrimitive.Root data-slot="dropdown-menu" {...props} />
@@ -74,8 +80,7 @@ function DropdownMenuItem({
   return (
     <MenuPrimitive.Item
       className={cn(
-        "group/dropdown-menu-item relative flex cursor-default items-center gap-2 rounded-[8px] px-2 py-2 text-sm outline-hidden select-none",
-        "focus:bg-accent focus:text-accent-foreground data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+        ITEM_CLASS,
         "data-[variant=destructive]:text-destructive data-[variant=destructive]:focus:bg-destructive/10 data-[variant=destructive]:focus:text-destructive",
         className
       )}
@@ -99,6 +104,24 @@ function DropdownMenuSeparator({
   )
 }
 
+/** A menu inside a menu, opened from one of its items. */
+function DropdownMenuSub(props: MenuPrimitive.SubmenuRoot.Props) {
+  return <MenuPrimitive.SubmenuRoot data-slot="dropdown-menu-sub" {...props} />
+}
+
+function DropdownMenuSubTrigger({ children, className, ...props }: MenuPrimitive.SubmenuTrigger.Props) {
+  return (
+    <MenuPrimitive.SubmenuTrigger
+      className={cn(ITEM_CLASS, "data-popup-open:bg-accent data-popup-open:text-accent-foreground", className)}
+      data-slot="dropdown-menu-sub-trigger"
+      {...props}
+    >
+      {children}
+      <ChevronRight aria-hidden="true" className="ml-auto text-muted-foreground" />
+    </MenuPrimitive.SubmenuTrigger>
+  )
+}
+
 export {
   DropdownMenu,
   DropdownMenuContent,
@@ -106,5 +129,7 @@ export {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 }

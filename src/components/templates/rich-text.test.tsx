@@ -25,7 +25,7 @@ it("shows formatted words as formatted, and opens links in a new tab without han
   })
 
   expect(html).toContain('<span style="font-weight:700">within 30 days</span>')
-  expect(html).toContain('<span style="color:#a24949;font-style:italic"> or late fees apply.</span>')
+  expect(html).toContain('<span class="doc-ink" style="--doc-ink:#a24949;color:#a24949;font-style:italic"> or late fees apply.</span>')
   expect(html).toMatch(/<a [^>]*href="https:\/\/pay\.example\.com"[^>]*rel="noopener noreferrer"[^>]*target="_blank"[^>]*>the portal<\/a>/)
 })
 
@@ -37,7 +37,7 @@ it("formats each list item on its own, and leaves plain text as plain as before"
     type: "bullet_list",
   })
 
-  expect(list).toContain('<li>Weekly <span style="background-color:#f2cd5c">visit</span></li>')
+  expect(list).toContain('<li>Weekly <span class="doc-highlight" style="--doc-highlight:#f2cd5c;background-color:#f2cd5c">visit</span></li>')
   expect(list).toContain("<li>Deep clean</li>")
   expect(draw({ alignment: "left", id: ID, text: "Pay now.", type: "paragraph" })).not.toContain("<span")
 })

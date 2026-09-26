@@ -26,11 +26,15 @@ import {
   useRef,
 } from "react"
 
+import type { Editor } from "@tiptap/core"
+
 import { GeneratedBlock } from "@/components/documents/generated-document-content"
 import { INSERT_CHOICES } from "@/components/editor/block-catalog"
 import { EditableText, type TextCaret } from "@/components/editor/editable-text"
 import { convertTextBlock, type TextBlockKind } from "@/components/editor/editor-content"
-import type { EditorController } from "@/components/editor/use-editor-controller"
+import { RichLine } from "@/components/editor/rich-line"
+import type { EditorController, FocusRequest } from "@/components/editor/use-editor-controller"
+import { RichText } from "@/components/templates/rich-text"
 import { TemplateStaticBlock } from "@/components/templates/template-static-block"
 import { Button } from "@/components/ui/button"
 import {
@@ -41,7 +45,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
 import { describeDateFormat } from "@/lib/date-format"
-import type { TemplateBlock } from "@/types/template"
+import type { TemplateBlock, TextRun } from "@/types/template"
 
 export type LineBlock = Extract<TemplateBlock, { type: "heading" | "paragraph" }>
 export type ListBlock = Extract<TemplateBlock, { type: "bullet_list" | "numbered_list" }>
@@ -53,16 +57,13 @@ export type CanvasActions = Readonly<{
   controller: EditorController
   designable: boolean
   fields: "design" | "fill" | "read"
+  /** The caret request for one line, when it is that line's turn. */
+  focusFor: (caretKey: string) => FocusRequest | null
   onAnswerChange: (fieldKey: string, value: unknown) => void
-  onLineInput: (block: LineBlock, text: string, caret: number) => void
-  onLineKeyDown: (event: KeyboardEvent<HTMLElement>, caret: TextCaret, block: LineBlock) => void
-  onListInput: (block: ListBlock, item: number, text: string) => void
-  onListKeyDown: (
-    event: KeyboardEvent<HTMLElement>,
-    caret: TextCaret,
-    block: ListBlock,
-    item: number
-  ) => void
+  onLineInput: (block: LineBlock, text: string, runs: TextRun[] | undefined, caret: number) => void
+  onLineKeyDown: (event: globalThis.KeyboardEvent, caret: TextCaret, block: LineBlock) => void
+  onListInput: (block: ListBlock, item: number, text: string, runs: TextRun[] | undefined) => void
+  onListKeyDown: (event: globalThis.KeyboardEvent, caret: TextCaret, block: ListBlock, item: number) => void
   placeholderFor: (blockId: string) => string | undefined
   textEditable: boolean
 }>
@@ -195,16 +196,17 @@ function BlockBody({ actions, block }: { actions: CanvasActions; block: Template
   switch (block.type) {
     case "heading":
       return (
-        <EditableText
+        <TextLine
+          actions={actions}
           as={`h${block.level}`}
+          blockId={block.id}
           caretKey={block.id}
           className="font-semibold"
-          editable={actions.textEditable}
           label={`Heading ${block.level}`}
-          onChange={(text, caret) => actions.onLineInput(block, text, caret)}
-          onFocus={() => actions.controller.setActiveBlockId(block.id)}
+          onChange={(text, runs, caret) => actions.onLineInput(block, text, runs, caret)}
           onKeyDown={(event, caret) => actions.onLineKeyDown(event, caret, block)}
           placeholder={actions.placeholderFor(block.id) ?? `Heading ${block.level}`}
+          runs={block.runs}
           style={{ ...HEADING_STYLE[block.level], color: "var(--doc-primary)", textAlign: block.alignment }}
           value={block.text}
         />
@@ -213,15 +215,16 @@ function BlockBody({ actions, block }: { actions: CanvasActions; block: Template
       return (
         <>
           <LineBreaks blockId={block.id} />
-          <EditableText
-            as="p"
+          <TextLine
+            actions={actions}
+            as="div"
+            blockId={block.id}
             caretKey={block.id}
-            editable={actions.textEditable}
             label="Text"
-            onChange={(text, caret) => actions.onLineInput(block, text, caret)}
-            onFocus={() => actions.controller.setActiveBlockId(block.id)}
+            onChange={(text, runs, caret) => actions.onLineInput(block, text, runs, caret)}
             onKeyDown={(event, caret) => actions.onLineKeyDown(event, caret, block)}
             placeholder={actions.placeholderFor(block.id)}
+            runs={block.runs}
             style={{ lineHeight: 1.5, minHeight: "1.5em", textAlign: block.alignment }}
             value={block.text}
           />
@@ -237,16 +240,17 @@ function BlockBody({ actions, block }: { actions: CanvasActions; block: Template
           style={{ lineHeight: 1.5, paddingLeft: "1.4em" }}
         >
           {block.items.map((item: string, index: number) => (
-            <EditableText
+            <TextLine
+              actions={actions}
               as="li"
+              blockId={block.id}
               caretKey={`${block.id}:${index}`}
-              editable={actions.textEditable}
               key={index}
               label="List item"
-              onChange={(text) => actions.onListInput(block, index, text)}
-              onFocus={() => actions.controller.setActiveBlockId(block.id)}
+              onChange={(text, runs) => actions.onListInput(block, index, text, runs)}
               onKeyDown={(event, caret) => actions.onListKeyDown(event, caret, block, index)}
               placeholder="List item"
+              runs={block.itemRuns?.[index] ?? undefined}
               style={spaceBefore(breaks[`${block.id}:${index}`])}
               value={item}
             />
@@ -342,6 +346,76 @@ function BlockBody({ actions, block }: { actions: CanvasActions; block: Template
         />
       )
   }
+}
+
+/**
+ * A line of words: typed in place with its formatting while text can be
+ * edited, and otherwise drawn as it will print. Either way its outer element
+ * carries the line's key, which the canvas measures page breaks by.
+ *
+ * @param props - The line, what it is drawn as, and its handlers.
+ * @returns The line.
+ */
+function TextLine({
+  actions,
+  as,
+  blockId,
+  caretKey,
+  className,
+  label,
+  onChange,
+  onKeyDown,
+  placeholder,
+  runs,
+  style,
+  value,
+}: {
+  actions: CanvasActions
+  as: "div" | "h1" | "h2" | "h3" | "li"
+  blockId: string
+  caretKey: string
+  className?: string
+  label: string
+  onChange: (text: string, runs: TextRun[] | undefined, caret: number) => void
+  onKeyDown: (event: globalThis.KeyboardEvent, caret: TextCaret) => void
+  placeholder?: string
+  runs?: TextRun[]
+  style?: CSSProperties
+  value: string
+}): ReactElement {
+  const { controller } = actions
+
+  if (!actions.textEditable) {
+    // A paragraph reads as one; it is a plain block only while it can be typed in.
+    const Element = as === "div" ? "p" : as
+
+    return (
+      <Element className={cn("min-w-0 break-words whitespace-pre-wrap", className)} data-line-key={caretKey} style={style}>
+        <RichText runs={runs} text={value} />
+      </Element>
+    )
+  }
+
+  return (
+    <RichLine
+      as={as}
+      caretKey={caretKey}
+      className={className}
+      focus={actions.focusFor(caretKey)}
+      label={label}
+      onChange={onChange}
+      onFocus={(editor: Editor) => {
+        controller.setActiveBlockId(blockId)
+        controller.setLine(editor)
+      }}
+      onGone={(editor: Editor) => controller.setLine((line) => (line === editor ? null : line))}
+      onKeyDown={onKeyDown}
+      placeholder={placeholder}
+      runs={runs}
+      style={style}
+      value={value}
+    />
+  )
 }
 
 function spaceBefore(space: number | undefined): CSSProperties | undefined {

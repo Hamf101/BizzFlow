@@ -34,12 +34,14 @@ export const ROUTE_BUDGETS = [
   {
     label: "Template editor",
     route: "/(editor)/templates/[templateId]/edit/page",
-    ceilingKiB: 290,
+    // Google Docs-style editing: the editor library the owner approved, 2026-09-26.
+    ceilingKiB: 400,
   },
   {
     label: "Document editor",
     route: "/(editor)/documents/[documentId]/edit/page",
-    ceilingKiB: 290,
+    // Google Docs-style editing: the editor library the owner approved, 2026-09-26.
+    ceilingKiB: 400,
   },
 ]
 

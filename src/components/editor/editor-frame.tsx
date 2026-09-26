@@ -70,6 +70,8 @@ type EditorFrameProps<Mode extends string> = {
   saveStatus: AutosaveStatus | "blocked" | "unsaved-local" | null
   title: string
   titleEditable: boolean
+  /** The formatting toolbar, floating at the top of the canvas on a laptop. */
+  toolbar?: ReactNode
 }
 
 /**
@@ -103,6 +105,7 @@ export function EditorFrame<Mode extends string>({
   saveStatus,
   title,
   titleEditable,
+  toolbar,
 }: EditorFrameProps<Mode>): ReactElement {
   const narrow = useSyncExternalStore(
     subscribeToWidth,
@@ -252,7 +255,18 @@ export function EditorFrame<Mode extends string>({
       {/* An open panel takes its own column on a laptop, so it never covers the
           page; Fit follows because the scroll area's width changes. */}
       <div className="group/stage relative min-h-0 flex-1">
-        {banner}
+        {/* The page scrolls under the toolbar, with any notice just below it. */}
+        {(toolbar && !narrow) || banner ? (
+          <div
+            className={cn(
+              "pointer-events-none absolute inset-x-0 top-3 z-30 flex flex-col items-center gap-2 px-4",
+              !narrow && "group-has-[[data-slot=editor-panel]:not([hidden])]/stage:right-[23.5rem]"
+            )}
+          >
+            {narrow ? null : toolbar}
+            {banner}
+          </div>
+        ) : null}
         <div
           className={cn(
             "absolute inset-0 overflow-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
@@ -261,7 +275,7 @@ export function EditorFrame<Mode extends string>({
           data-slot="editor-scroll"
           ref={scrollRef}
         >
-          <div className={cn("flex min-h-full justify-center", narrow ? "pb-28" : "px-6 pt-6 pb-24")}>
+          <div className={cn("flex min-h-full justify-center", narrow ? "pb-28" : cn("px-6 pb-24", toolbar ? "pt-18" : "pt-6"))}>
             {children({ narrow, zoom })}
           </div>
         </div>
@@ -274,7 +288,7 @@ export function EditorFrame<Mode extends string>({
           data-slot="editor-tools"
         >
           {narrow ? (
-            <div className="pointer-events-auto absolute bottom-[calc(1rem+env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2">
+            <div className="pointer-events-auto absolute right-0 bottom-[calc(1rem+env(safe-area-inset-bottom))] left-2 flex">
               {dock(true, "flat")}
             </div>
           ) : (
@@ -370,7 +384,7 @@ export function EditorNotice({
 }): ReactElement {
   return (
     <div
-      className="absolute top-3 left-1/2 z-30 flex max-w-[calc(100%-2rem)] -translate-x-1/2 items-center gap-1 rounded-full border border-border bg-popover py-1 pr-1 pl-4 text-sm text-popover-foreground shadow-lg"
+      className="pointer-events-auto flex max-w-full items-center gap-1 rounded-full border border-border bg-popover py-1 pr-1 pl-4 text-sm text-popover-foreground shadow-lg"
       data-slot="editor-notice"
       role="status"
     >

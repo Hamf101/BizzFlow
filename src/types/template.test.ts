@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest"
 import { formatDateAnswer } from "@/lib/date-format"
 
 import {
+  fitRuns,
   createBlankTemplateContent,
   MAX_TEMPLATE_BLOCK_COUNT,
   parseTemplateContent,
@@ -350,6 +351,14 @@ describe("formatted text", () => {
       runs: [{ text: "Pay " }, { bold: true, text: "within 30 days" }, { text: "." }],
       text: "Pay within 30 days.",
     })
+  })
+
+  it("tidies formatting as it is typed, keeping the spaces a person is still typing around", () => {
+    expect(fitRuns("Pay now ", [{ bold: true, text: "Pay" }, { text: " now" }, { text: " " }])).toEqual([
+      { bold: true, text: "Pay" },
+      { text: " now " },
+    ])
+    expect(fitRuns(" Pay", [{ text: " " }, { italic: true, text: "Pay" }])).toEqual([{ text: " " }, { italic: true, text: "Pay" }])
   })
 
   it("lets go of formatting once the text changes without it, or when none of it is formatted", () => {

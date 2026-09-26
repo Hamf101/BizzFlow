@@ -1,15 +1,15 @@
 "use client"
 
-import { Download, Files, MoreHorizontal, Palette, Plus, Send, TextCursorInput } from "lucide-react"
+import { Download, Files, MoreHorizontal, Palette, Send } from "lucide-react"
 import { type ReactElement, useMemo, useRef, useState } from "react"
 
 import type { DocumentContentInput } from "@/app/(editor)/documents/[documentId]/edit/actions"
 import { DocumentRecipientCollection } from "@/components/documents/document-recipient-collection"
 import { useFlowHandoff } from "@/components/flow/flow-handoff"
-import { findInsertChoices } from "@/components/editor/block-catalog"
 import { EditorCanvas } from "@/components/editor/editor-canvas"
 import { normalizeContentForSave } from "@/components/editor/editor-content"
-import { type DockTool, EditorDock, InsertTiles } from "@/components/editor/editor-dock"
+import { type DockTool, EditorDock } from "@/components/editor/editor-dock"
+import { FormatBar } from "@/components/editor/format-bar"
 import { FlowWindow } from "@/components/flow/flow-window"
 import { EditorFrame, type EditorLayoutStore, EditorNotice, EditorSidePanel } from "@/components/editor/editor-frame"
 import { PageSetupPanel } from "@/components/editor/page-setup-panel"
@@ -183,34 +183,6 @@ export function DocumentEditor({
 
   const tools: DockTool[] = [
     {
-      content: (close) => (
-        <InsertTiles
-          choices={findInsertChoices({ allowFiles: false }).filter((choice) => choice.group === "page")}
-          onChoose={(choice) => {
-            controller.insert(choice)
-            close()
-          }}
-        />
-      ),
-      icon: Plus,
-      id: "add",
-      label: "Add",
-    },
-    {
-      content: (close) => (
-        <InsertTiles
-          choices={findInsertChoices({ allowFiles: false }).filter((choice) => choice.group === "fields")}
-          onChoose={(choice) => {
-            controller.insert(choice)
-            close()
-          }}
-        />
-      ),
-      icon: TextCursorInput,
-      id: "fields",
-      label: "Fields",
-    },
-    {
       content: () => <PageSetupPanel layout={page.content.layout} onChange={controller.setLayout} />,
       icon: Files,
       id: "pages",
@@ -306,7 +278,14 @@ export function DocumentEditor({
         canUndo={history.canUndo}
         dock={(narrow, orientation) =>
           // Flow has a button of its own, always there.
-          writable && !proposal ? <EditorDock narrow={narrow} orientation={orientation} tools={tools} /> : null
+          writable && !proposal ? (
+            <EditorDock
+              lead={narrow ? <FormatBar allowFiles={false} controller={controller} narrow /> : undefined}
+              narrow={narrow}
+              orientation={orientation}
+              tools={tools}
+            />
+          ) : null
         }
         layout={editorLayout}
         extra={
@@ -398,7 +377,8 @@ export function DocumentEditor({
                 />
               ) : null}
             </EditorSidePanel>
-            <FlowWindow onOpenChange={setFlowOpen} open={flowOpen}>
+            {/* On a phone Flow's button rests above the tools' row. */}
+            <FlowWindow onOpenChange={setFlowOpen} open={flowOpen} phoneBottom={writable && !proposal ? 84 : 16}>
               <TemplateFlowPanel
                 canUndo={flowUndo !== null}
                 draft={flowDraft}
@@ -441,6 +421,7 @@ export function DocumentEditor({
         saveStatus={writable || fillable ? saveStatus : null}
         title={page.title}
         titleEditable={writable && !proposal}
+        toolbar={writable && !proposal ? <FormatBar allowFiles={false} controller={controller} narrow={false} /> : undefined}
       >
         {({ narrow, zoom }) => (
           <form
