@@ -48,6 +48,8 @@ const nextConfig: NextConfig = {
     "/api/documents/*/pdf": [
       "./node_modules/dejavu-fonts-ttf/ttf/DejaVuSans.ttf",
       "./node_modules/dejavu-fonts-ttf/ttf/DejaVuSans-Bold.ttf",
+      "./node_modules/dejavu-fonts-ttf/ttf/DejaVuSans-Oblique.ttf",
+      "./node_modules/dejavu-fonts-ttf/ttf/DejaVuSans-BoldOblique.ttf",
     ],
   },
   async headers() {
