@@ -1,19 +1,5 @@
-import {
-  upgradeV2TemplateContentToV3,
-  type TemplateBlock,
-  type TemplateBranding,
-  type TemplateContent,
-  type TemplateContentV3,
-  type TemplateLayout
-} from "@/types/template"
-import {
-  createUniqueTemplateFieldKey,
-  deleteTemplateBlock,
-  duplicateTemplateBlock,
-  insertTemplateBlock,
-  moveTemplateBlock,
-  updateTemplateBlock
-} from "@/types/template-structure"
+import type { TemplateBlock, TemplateContent } from "@/types/template"
+import { createUniqueTemplateFieldKey } from "@/types/template-structure"
 
 type TemplateFieldBlockType = Extract<
   TemplateBlock,
@@ -38,123 +24,6 @@ export type TemplateEditorState = {
   description: string
   category: string
   content: TemplateContent
-}
-
-type EditableTemplateEditorState = Omit<TemplateEditorState, "content"> & {
-  content: TemplateContentV3
-}
-
-export type TemplateEditorAction =
-  | { type: "replace_state"; value: TemplateEditorState }
-  | { type: "set_title"; value: string }
-  | { type: "set_description"; value: string }
-  | { type: "set_category"; value: string }
-  | { type: "set_branding"; value: TemplateBranding }
-  | { type: "set_layout"; value: TemplateLayout }
-  | { type: "add_block"; block: TemplateBlock }
-  | {
-      type: "insert_block"
-      afterBlockId: string | null
-      block: TemplateBlock
-    }
-  | {
-      type: "update_block"
-      block: TemplateBlock
-    }
-  | {
-      type: "duplicate_block"
-      blockId: string
-      newBlockId: string
-    }
-  | {
-      type: "delete_block"
-      blockId: string
-    }
-  | {
-      type: "move_block"
-      blockId: string
-      direction: "up" | "down"
-    }
-
-/**
- * Applies one explicit template editor action without mutating prior state.
- *
- * @param state - Current guided editor state.
- * @param action - Typed content, metadata, or ordering action.
- * @returns A new editor state reflecting the action.
- */
-export function templateEditorReducer(
-  state: TemplateEditorState,
-  action: TemplateEditorAction
-): TemplateEditorState {
-  if (action.type === "replace_state") {
-    return toEditableTemplateEditorState(action.value)
-  }
-
-  const editableState = toEditableTemplateEditorState(state)
-
-  switch (action.type) {
-    case "set_title":
-      return { ...editableState, title: action.value }
-    case "set_description":
-      return { ...editableState, description: action.value }
-    case "set_category":
-      return { ...editableState, category: action.value }
-    case "set_branding":
-      return {
-        ...editableState,
-        content: { ...editableState.content, branding: action.value }
-      }
-    case "set_layout":
-      return {
-        ...editableState,
-        content: { ...editableState.content, layout: action.value }
-      }
-    case "add_block":
-      return {
-        ...editableState,
-        content: insertTemplateBlock(
-          editableState.content,
-          editableState.content.blocks.at(-1)?.id ?? null,
-          action.block
-        )
-      }
-    case "insert_block":
-      return {
-        ...editableState,
-        content: insertTemplateBlock(
-          editableState.content,
-          action.afterBlockId,
-          action.block
-        )
-      }
-    case "update_block":
-      return {
-        ...editableState,
-        content: updateTemplateBlock(editableState.content, action.block)
-      }
-    case "duplicate_block":
-      return {
-        ...editableState,
-        content: duplicateTemplateBlock(
-          editableState.content, action.blockId, action.newBlockId
-        )
-      }
-    case "delete_block":
-      return {
-        ...editableState,
-        content: deleteTemplateBlock(editableState.content, action.blockId)
-      }
-    case "move_block":
-      return {
-        ...editableState,
-        content: moveTemplateBlock(
-          editableState.content,
-          action.blockId,
-          action.direction
-        )
-      }
-  }
 }
 
 /**
@@ -266,20 +135,5 @@ function createFieldDefaults(
     label,
     required: false,
     helpText: null
-  }
-}
-
-function toEditableTemplateEditorState(
-  state: TemplateEditorState
-): EditableTemplateEditorState {
-  const content = upgradeV2TemplateContentToV3(state.content)
-
-  if (content === state.content) {
-    return state as EditableTemplateEditorState
-  }
-
-  return {
-    ...state,
-    content
   }
 }

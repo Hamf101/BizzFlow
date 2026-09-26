@@ -232,18 +232,6 @@ export function canInviteMembers(
 }
 
 /**
- * Checks whether a member role subject can update another member's role.
- *
- * @param subject - Current member role and optional custom permissions.
- * @returns True when the subject can change member roles.
- */
-export function canUpdateMemberRole(
-  subject: OrganizationPermissionSubject
-): boolean {
-  return canPerformOrganizationAction(subject, "members:update_role")
-}
-
-/**
  * Base roles whose database row scope stays inside each base role's own.
  * Custom roles run on Staff row scope, so this is what stops a Staff-scoped
  * inviter from minting a Manager, whose policies reach tenant-wide rows.

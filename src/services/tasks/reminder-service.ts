@@ -1,6 +1,5 @@
 import type {
   CancelTaskReminderInput,
-  ListTaskRemindersInput,
   NotifyTaskAssigneeInput,
   ScheduleTaskReminderInput,
   TaskNotificationResult,
@@ -537,52 +536,6 @@ async function insertAutomaticReminderRow(
       origin: reminder.origin,
     },
   })
-}
-
-/**
- * Lists every reminder scheduled against one visible task.
- *
- * @param input - Actor, tenant, and task identifiers.
- * @param deps - Optional trusted database dependency.
- * @returns Reminders ordered by their scheduled instant.
- * @throws TaskServiceError when access fails or the task does not exist.
- */
-export async function listTaskReminders(
-  input: ListTaskRemindersInput,
-  deps: TaskServiceDeps = {}
-): Promise<TaskReminder[]> {
-  return runTaskOperation(
-    "list_task_reminders",
-    {
-      actorUserId: input.actorUserId,
-      organizationId: input.organizationId,
-      taskId: input.taskId,
-    },
-    async (): Promise<TaskReminder[]> => {
-      const client = getTaskClient(deps)
-      await requireTaskPermission(
-        client,
-        input.organizationId,
-        input.actorUserId,
-        "tasks:view",
-        "You cannot view task reminders."
-      )
-
-      const task = await getTaskById(client, input.organizationId, input.taskId)
-      const reminders = await listTaskReminderRows(
-        client,
-        input.organizationId,
-        task.id
-      )
-
-      // A superseded row is the sync's own bookkeeping — the reminder it
-      // replaced when the due date or assignee moved. No member scheduled it,
-      // so it does not belong in their reminder history.
-      return reminders.filter(
-        (reminder: TaskReminder): boolean => reminder.status !== "superseded"
-      )
-    }
-  )
 }
 
 /**

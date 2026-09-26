@@ -429,21 +429,6 @@ export function summarizeTemplateQuality(
 }
 
 /**
- * Reports whether any quality issue is critical.
- *
- * @param issues - Deterministic issues returned by the quality evaluator.
- * @returns True when at least one issue must block a guarded action.
- */
-export function hasBlockingTemplateQualityIssues(
-  issues: readonly TemplateQualityIssue[]
-): boolean {
-  return issues.some(
-    (issue: TemplateQualityIssue): boolean =>
-      issue.severity === "critical"
-  )
-}
-
-/**
  * Reports whether one finding represents invalid data that cannot be saved.
  *
  * Drafts may retain incomplete but schema-valid work, while malformed metadata

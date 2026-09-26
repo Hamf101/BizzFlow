@@ -4,7 +4,6 @@ import {
   canAssignOrganizationRole,
   canPerformOrganizationAction,
   canInviteMembers,
-  canUpdateMemberRole,
   createOrganizationPermissionSubject,
   getAssignableOrganizationRoles,
   getOrganizationRolePermissions,
@@ -119,10 +118,10 @@ describe("organization permissions", () => {
   })
 
   it("allows only owner admins to update member roles", () => {
-    expect(canUpdateMemberRole("owner_admin")).toBe(true)
-    expect(canUpdateMemberRole("manager")).toBe(false)
-    expect(canUpdateMemberRole("staff")).toBe(false)
-    expect(canUpdateMemberRole("external_reviewer")).toBe(false)
+    expect(canPerformOrganizationAction("owner_admin", "members:update_role")).toBe(true)
+    expect(canPerformOrganizationAction("manager", "members:update_role")).toBe(false)
+    expect(canPerformOrganizationAction("staff", "members:update_role")).toBe(false)
+    expect(canPerformOrganizationAction("external_reviewer", "members:update_role")).toBe(false)
   })
 
   it("does not allow assigning another owner admin through the people page", () => {

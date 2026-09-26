@@ -5,7 +5,6 @@ export type {
   DuplicateDocumentTemplateInput,
   GetDocumentTemplateInput,
   ListDocumentTemplatesInput,
-  ListRecentDocumentsInput,
   ListTemplatePageInput,
   PublishDocumentTemplateInput,
   RecordDocumentRecentAccessInput,
@@ -16,7 +15,6 @@ export type {
 export { TemplateServiceError } from "./templates/errors"
 export {
   createGeneratedDocument,
-  listRecentDocuments,
   recordDocumentRecentAccess,
 } from "./templates/generated-document-service"
 export {

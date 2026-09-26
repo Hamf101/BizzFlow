@@ -9,7 +9,6 @@ import {
 
 import {
   evaluateTemplateQuality,
-  hasBlockingTemplateQualityIssues,
   isTemplateQualityIssueSaveBlocking,
   summarizeTemplateQuality,
   type TemplateQualityIssue
@@ -458,8 +457,6 @@ describe("template quality helpers", () => {
       warningCount: 1,
       isBlocking: true
     })
-    expect(hasBlockingTemplateQualityIssues(issues)).toBe(true)
-    expect(hasBlockingTemplateQualityIssues(issues.slice(1))).toBe(false)
     expect(isTemplateQualityIssueSaveBlocking(issues[0]!)).toBe(false)
     expect(
       isTemplateQualityIssueSaveBlocking({

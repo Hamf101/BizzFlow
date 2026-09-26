@@ -4,7 +4,6 @@ export type {
   CreateTaskInput,
   GetTaskInput,
   ListTaskPageInput,
-  ListTaskRemindersInput,
   ListTasksInput,
   NotifyTaskAssigneeInput,
   ScheduleTaskReminderInput,
@@ -23,7 +22,6 @@ export type {
 export { TaskServiceError } from "@/services/tasks/errors"
 export {
   cancelTaskReminder,
-  listTaskReminders,
   notifyTaskAssignee,
   processDueTaskReminders,
   scheduleTaskReminder,

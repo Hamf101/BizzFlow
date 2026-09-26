@@ -27,7 +27,6 @@ import {
   isSerializationFailure,
 } from "@/services/serialization-retry"
 import type {
-  DocumentSourceKind,
   DocumentTemplate,
   DocumentTemplateRow,
   DocumentTemplateStatus,
@@ -246,17 +245,6 @@ export function mapGeneratedDocument(
   })
 }
 
-export function parseDocumentSourceKind(value: string): DocumentSourceKind {
-  if (value === "upload" || value === "generated") {
-    return value
-  }
-
-  throw new TemplateServiceError(
-    "Database returned an unsupported document source.",
-    500
-  )
-}
-
 export function normalizeTitle(value: string): string {
   const title = value.trim().replace(/\s+/g, " ")
 
@@ -397,21 +385,6 @@ export function normalizeNullableId(
 ): string | null {
   const normalized = value?.trim()
   return normalized ? normalized : null
-}
-
-export function normalizeRecentLimit(value: number | undefined): number {
-  if (value === undefined) {
-    return 6
-  }
-
-  if (!Number.isInteger(value) || value < 1 || value > 20) {
-    throw new TemplateServiceError(
-      "Recent document limit must be between 1 and 20.",
-      400
-    )
-  }
-
-  return value
 }
 
 export function assertRevision(value: number): void {

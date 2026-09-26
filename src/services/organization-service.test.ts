@@ -13,7 +13,6 @@ import {
   OrganizationServiceError,
   revokeInvite,
   updateMemberAccess,
-  updateMemberRole,
   updateOrganizationRole,
 } from "@/services/organization-service"
 
@@ -461,111 +460,6 @@ describe("organization service atomic mutations", () => {
       }
     )
   }
-
-  it("updates a role through the locked RPC and verifies the returned row", async () => {
-    vi.spyOn(console, "info").mockImplementation(() => {})
-    const client = new QueuedAdminClient(
-      {
-        organization_memberships: [
-          {
-            data: createMembershipRow(
-              OWNER_MEMBERSHIP_ID,
-              OWNER_ID,
-              "owner_admin"
-            ),
-            error: null,
-          },
-          {
-            data: createMembershipRow(MEMBER_MEMBERSHIP_ID, MEMBER_ID, "manager"),
-            error: null,
-          },
-          {
-            data: createMembershipRow(MEMBER_MEMBERSHIP_ID, MEMBER_ID, "staff"),
-            error: null,
-          },
-        ],
-      },
-      {
-        update_organization_member_role: [
-          { data: MEMBER_MEMBERSHIP_ID, error: null },
-        ],
-      }
-    )
-    const recordAuditLog = vi.fn(async (): Promise<void> => {})
-
-    const membership = await updateMemberRole(
-      {
-        actorUserId: OWNER_ID,
-        organizationId: ORGANIZATION_ID,
-        membershipId: MEMBER_MEMBERSHIP_ID,
-        role: "staff",
-      },
-      { client: client as never, recordAuditLog }
-    )
-
-    expect(membership.role).toBe("staff")
-    expect(client.rpcCalls[0]).toEqual({
-      functionName: "update_organization_member_role",
-      args: {
-        target_org_id: ORGANIZATION_ID,
-        target_membership_id: MEMBER_MEMBERSHIP_ID,
-        target_actor_user_id: OWNER_ID,
-        target_role: "staff",
-      },
-    })
-  })
-
-  it("preserves the last-owner user-safe error returned by the RPC", async () => {
-    vi.spyOn(console, "warn").mockImplementation(() => {})
-    const client = new QueuedAdminClient(
-      {
-        organization_memberships: [
-          {
-            data: createMembershipRow(
-              OWNER_MEMBERSHIP_ID,
-              OWNER_ID,
-              "owner_admin"
-            ),
-            error: null,
-          },
-          {
-            data: createMembershipRow(
-              OWNER_MEMBERSHIP_ID,
-              OWNER_ID,
-              "owner_admin"
-            ),
-            error: null,
-          },
-        ],
-      },
-      {
-        update_organization_member_role: [
-          {
-            data: null,
-            error: {
-              code: "23514",
-              message: "The organization must keep one owner.",
-            },
-          },
-        ],
-      }
-    )
-
-    await expect(
-      updateMemberRole(
-        {
-          actorUserId: OWNER_ID,
-          organizationId: ORGANIZATION_ID,
-          membershipId: OWNER_MEMBERSHIP_ID,
-          role: "manager",
-        },
-        { client: client as never, recordAuditLog: async (): Promise<void> => {} }
-      )
-    ).rejects.toMatchObject({
-      message: "The organization must keep one owner.",
-      statusCode: 400,
-    })
-  })
 
   it("revokes an invite only after permission and tenant checks", async () => {
     vi.spyOn(console, "info").mockImplementation(() => {})

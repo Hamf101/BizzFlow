@@ -10,7 +10,6 @@ import {
   listDocumentTemplateCategories,
   createGeneratedDocument,
   listDocumentTemplates,
-  listRecentDocuments,
   publishDocumentTemplate,
   recordDocumentRecentAccess,
   updateDocumentTemplate,
@@ -959,7 +958,7 @@ describe("template service", () => {
     expect(tables.document_answers).toEqual([])
   })
 
-  it("upserts and lists per-user recents in last-opened order", async () => {
+  it("keeps one recent per document, stamped with the latest opening", async () => {
     const tables = createBaseTables()
     tables.document_recent_accesses.push({
       org_id: ORG_ID,
@@ -1003,20 +1002,16 @@ describe("template service", () => {
       }
     )
 
-    const recent = await listRecentDocuments(
-      { actorUserId: STAFF_ID, organizationId: ORG_ID },
-      { client: client as never }
+    expect(
+      tables.document_recent_accesses.map((row) => [row.user_id, row.document_id, row.last_opened_at])
+    ).toEqual(
+      expect.arrayContaining([
+        [OTHER_USER_ID, SECOND_DOCUMENT_ID, "2026-07-17T23:00:00.000Z"],
+        [STAFF_ID, DOCUMENT_ID, "2026-07-17T22:00:00.000Z"],
+        [STAFF_ID, SECOND_DOCUMENT_ID, "2026-07-17T21:00:00.000Z"]
+      ])
     )
-
-    expect(recent.map((document) => document.documentId)).toEqual([
-      DOCUMENT_ID,
-      SECOND_DOCUMENT_ID
-    ])
-    expect(recent.map((document) => document.lastOpenedAt)).toEqual([
-      "2026-07-17T22:00:00.000Z",
-      "2026-07-17T21:00:00.000Z"
-    ])
-    expect(recent.every((document) => document.userId === STAFF_ID)).toBe(true)
+    expect(tables.document_recent_accesses).toHaveLength(3)
   })
 
   it("rejects non-PNG/JPEG embedded image data", () => {
