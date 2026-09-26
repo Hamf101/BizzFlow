@@ -71,7 +71,7 @@ test("Flow is within reach wherever a document or a template is open", async ({
     tenant.users.owner_admin.id,
     { email: "signer@example.test", name: "Sam Signer" }
   )
-  const flow = page.getByRole("navigation", { name: "Editor tools" }).getByRole("button", { name: "Flow" })
+  const flow = page.locator('[data-slot="flow-launcher"]')
 
   // Out for signature the words can no longer change, and Flow still answers.
   await page.goto(`/documents/${documentId}/edit`)
@@ -79,7 +79,7 @@ test("Flow is within reach wherever a document or a template is open", async ({
   await flow.click()
   await expect(page.getByLabel("Ask Flow")).toBeVisible()
 
-  // Preview used to put the dock away, and Flow with it.
+  // Preview puts the dock away; Flow's own button stays.
   await page.goto(`/templates/${template.id}/edit`)
   const preview = page.getByRole("radio", { name: "Preview" })
   await waitForHydration(preview)
