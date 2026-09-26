@@ -67,44 +67,141 @@ const fieldBlockShape = {
   visibleWhen: templateFieldVisibilitySchema.optional()
 } as const
 
-/** Heading block in the ordered document flow. */
-export const headingBlockSchema = z
+// A link opens a web page or writes an email, never runs anything.
+const LINK_PATTERN = /^(?:https?:\/\/|mailto:)\S+$/i
+const RUN_MARKS = ["bold", "italic", "underline", "strike", "color", "highlight", "size", "link"] as const
+
+/**
+ * A stretch of text and how it looks: the marks the toolbar puts on it. A mark
+ * that is off is left out, so plain text carries none.
+ */
+export const textRunSchema = z
+  .object({
+    text: z.string().min(1).max(20_000),
+    bold: z.literal(true).optional(),
+    italic: z.literal(true).optional(),
+    underline: z.literal(true).optional(),
+    strike: z.literal(true).optional(),
+    color: z.string().regex(HEX_COLOR_PATTERN).optional(),
+    highlight: z.string().regex(HEX_COLOR_PATTERN).optional(),
+    // Points, as a printed page measures type.
+    size: z.number().min(6).max(96).optional(),
+    link: z.string().max(2_000).regex(LINK_PATTERN).optional()
+  })
+  .strict()
+
+export type TextRun = z.infer<typeof textRunSchema>
+
+const textRunsSchema = z.array(textRunSchema).max(2_000)
+
+/**
+ * Keeps formatting only while it spells out the text it formats. The text is
+ * trimmed when saved, so its formatting is trimmed with it; neighbours that
+ * look alike are joined; and formatting that no longer matches its text, as
+ * after an edit that rewrote the words alone, or that marks nothing, is let go.
+ *
+ * @param text - The text, already trimmed.
+ * @param runs - Its formatting, as it arrived.
+ * @returns The formatting to keep, or undefined when the text is plain.
+ */
+export function fitRuns(text: string, runs: readonly TextRun[] | null | undefined): TextRun[] | undefined {
+  if (!runs?.length) {
+    return undefined
+  }
+
+  const joined = runs.map((run: TextRun): string => run.text).join("")
+  let skip = joined.length - joined.trimStart().length
+  let keep = joined.trim().length
+  const fitted: TextRun[] = []
+
+  for (const run of runs) {
+    const cut = Math.min(skip, run.text.length)
+    const piece = run.text.slice(cut, cut + keep)
+    const last = fitted.at(-1)
+    skip -= cut
+    keep -= piece.length
+
+    if (!piece) {
+      continue
+    }
+
+    if (last && RUN_MARKS.every((mark) => last[mark] === run[mark])) {
+      last.text += piece
+    } else {
+      fitted.push({ ...run, text: piece })
+    }
+  }
+
+  const marked = fitted.some((run: TextRun): boolean => RUN_MARKS.some((mark) => run[mark] !== undefined))
+
+  return marked && fitted.map((run: TextRun): string => run.text).join("") === text ? fitted : undefined
+}
+
+function withRuns<Block extends { runs?: TextRun[]; text: string }>(block: Block): Block {
+  const { runs, ...rest } = block
+  const fitted = fitRuns(block.text, runs)
+
+  return (fitted ? { ...rest, runs: fitted } : rest) as Block
+}
+
+function withItemRuns<Block extends { itemRuns?: Array<TextRun[] | null>; items: string[] }>(block: Block): Block {
+  const { itemRuns, ...rest } = block
+  const fitted = itemRuns?.length === block.items.length
+    ? itemRuns.map((runs, index: number) => fitRuns(block.items[index] ?? "", runs) ?? null)
+    : []
+
+  return (fitted.some(Boolean) ? { ...rest, itemRuns: fitted } : rest) as Block
+}
+
+// The block shapes as plain objects, for building other shapes from; the
+// schemas below also keep each block's formatting in step with its text.
+export const headingBlockObjectSchema = z
   .object({
     id: blockIdSchema,
     type: z.literal("heading"),
     text: z.string().trim().min(1).max(500),
+    runs: textRunsSchema.optional(),
     level: z.union([z.literal(1), z.literal(2), z.literal(3)]).default(2),
     alignment: z.enum(["left", "center", "right"]).default("left")
   })
   .strict()
 
-/** Paragraph block in the ordered document flow. */
-export const paragraphBlockSchema = z
+export const paragraphBlockObjectSchema = z
   .object({
     id: blockIdSchema,
     type: z.literal("paragraph"),
     text: richTextSchema,
+    runs: textRunsSchema.optional(),
     alignment: z.enum(["left", "center", "right"]).default("left")
   })
   .strict()
 
-/** Bulleted list block in the ordered document flow. */
-export const bulletListBlockSchema = z
-  .object({
-    id: blockIdSchema,
-    type: z.literal("bullet_list"),
-    items: z.array(z.string().trim().min(1).max(2_000)).min(1).max(100)
-  })
+const listItemsShape = {
+  id: blockIdSchema,
+  items: z.array(z.string().trim().min(1).max(2_000)).min(1).max(100),
+  // Each item's formatting, beside it; null for a plain item.
+  itemRuns: z.array(textRunsSchema.nullable()).max(100).optional()
+} as const
+
+export const bulletListBlockObjectSchema = z
+  .object({ ...listItemsShape, type: z.literal("bullet_list") })
   .strict()
 
-/** Numbered list block in the ordered document flow. */
-export const numberedListBlockSchema = z
-  .object({
-    id: blockIdSchema,
-    type: z.literal("numbered_list"),
-    items: z.array(z.string().trim().min(1).max(2_000)).min(1).max(100)
-  })
+export const numberedListBlockObjectSchema = z
+  .object({ ...listItemsShape, type: z.literal("numbered_list") })
   .strict()
+
+/** Heading block in the ordered document flow. */
+export const headingBlockSchema = headingBlockObjectSchema.transform(withRuns)
+
+/** Paragraph block in the ordered document flow. */
+export const paragraphBlockSchema = paragraphBlockObjectSchema.transform(withRuns)
+
+/** Bulleted list block in the ordered document flow. */
+export const bulletListBlockSchema = bulletListBlockObjectSchema.transform(withItemRuns)
+
+/** Numbered list block in the ordered document flow. */
+export const numberedListBlockSchema = numberedListBlockObjectSchema.transform(withItemRuns)
 
 /** Image block: a stored picture, or one embedded before pictures were stored. */
 export const imageBlockSchema = z

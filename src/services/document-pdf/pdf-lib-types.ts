@@ -11,6 +11,8 @@ export type PdfLibRenderContext = {
   boldFont: PDFFont
   content: NormalizedPdfInput["content"]
   document: PDFDocument
+  /** The face for bold or italic words; the slanted ones are embedded on first use. */
+  faceFor: (bold: boolean, italic: boolean) => Promise<PDFFont>
   hasSigners: boolean
   imageCache: Map<string, PDFImage>
   layout: PdfLayoutMetrics

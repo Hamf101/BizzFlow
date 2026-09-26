@@ -1,6 +1,7 @@
 import Image from "next/image"
 import type { CSSProperties, ReactElement } from "react"
 
+import { RichText } from "@/components/templates/rich-text"
 import { cn } from "@/lib/utils"
 import type { HeadingBlock, TemplateBlock } from "@/types/template"
 import { imageSource } from "@/types/template-images"
@@ -70,14 +71,16 @@ export function TemplateStaticBlock({
           className="whitespace-pre-wrap text-sm leading-6"
           style={{ textAlign: block.alignment }}
         >
-          {block.text || "Paragraph"}
+          {block.text ? <RichText runs={block.runs} text={block.text} /> : "Paragraph"}
         </p>
       )
     case "bullet_list":
       return (
         <ul className="list-disc space-y-1 pl-5 text-sm leading-6">
           {block.items.map((item: string, index: number) => (
-            <li key={`${block.id}-${index}`}>{item}</li>
+            <li key={`${block.id}-${index}`}>
+              <RichText runs={block.itemRuns?.[index]} text={item} />
+            </li>
           ))}
         </ul>
       )
@@ -85,7 +88,9 @@ export function TemplateStaticBlock({
       return (
         <ol className="list-decimal space-y-1 pl-5 text-sm leading-6">
           {block.items.map((item: string, index: number) => (
-            <li key={`${block.id}-${index}`}>{item}</li>
+            <li key={`${block.id}-${index}`}>
+              <RichText runs={block.itemRuns?.[index]} text={item} />
+            </li>
           ))}
         </ol>
       )
@@ -190,13 +195,15 @@ function TemplateHeading({
     textAlign: block.alignment,
   } as CSSProperties
 
+  const text = <RichText runs={block.runs} text={block.text} />
+
   if (block.level === 1) {
-    return <h1 className={className} style={style}>{block.text}</h1>
+    return <h1 className={className} style={style}>{text}</h1>
   }
 
   if (block.level === 2) {
-    return <h2 className={className} style={style}>{block.text}</h2>
+    return <h2 className={className} style={style}>{text}</h2>
   }
 
-  return <h3 className={className} style={style}>{block.text}</h3>
+  return <h3 className={className} style={style}>{text}</h3>
 }

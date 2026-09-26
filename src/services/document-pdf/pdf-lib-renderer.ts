@@ -13,9 +13,12 @@ import type { TemplateBlock } from "@/types/template"
 
 import {
   PDF_BOLD_FONT_PATH,
+  PDF_BOLD_ITALIC_FONT_PATH,
+  PDF_ITALIC_FONT_PATH,
   PDF_REGULAR_FONT_PATH
 } from "./constants"
 import { embedPdfLibImage, fitPdfImage } from "./pdf-lib-images"
+import { drawRichPdfText } from "./pdf-lib-rich-text"
 import { drawPdfLibSigner, drawPdfLibSigningIntro } from "./pdf-lib-signing"
 import {
   drawWrappedPdfText,
@@ -65,6 +68,21 @@ export async function renderPdfLibDocument(
   document.registerFontkit(fontkit)
   const regularFont = await document.embedFont(fontBytes.regular)
   const boldFont = await document.embedFont(fontBytes.bold)
+  // Slanted faces only for a document with italic words, so others stay as they were.
+  const faces = new Map<string, Promise<PDFFont>>([
+    ["bold", Promise.resolve(boldFont)],
+    ["regular", Promise.resolve(regularFont)]
+  ])
+  const faceFor = (bold: boolean, italic: boolean): Promise<PDFFont> => {
+    const key = `${bold ? "bold" : "regular"}${italic ? "-italic" : ""}`
+    const face =
+      faces.get(key) ??
+      readFile(bold ? PDF_BOLD_ITALIC_FONT_PATH : PDF_ITALIC_FONT_PATH).then((bytes: Buffer) => document.embedFont(bytes))
+
+    faces.set(key, face)
+
+    return face
+  }
 
   document.setTitle(input.title)
   document.setAuthor(input.content.branding.organizationName || "BizFlow Docs")
@@ -79,6 +97,7 @@ export async function renderPdfLibDocument(
       boldFont,
       content: input.content,
       document,
+      faceFor,
       hasSigners: input.signers.length > 0,
       imageCache,
       layout,
@@ -345,6 +364,12 @@ async function drawPdfLibBlock(
       const size = block.level === 1 ? 20 : block.level === 2 ? 16 : 13
       const lineHeight = block.level === 1 ? 29 : block.level === 2 ? 24 : 20
 
+      if (block.runs) {
+        return (
+          (await drawRichPdfText(context, block.runs, topY - 10, frame.x, frame.width, size, lineHeight, true, primaryColor, block.alignment)) - 6
+        )
+      }
+
       return (
         drawWrappedPdfText(
           context,
@@ -361,6 +386,12 @@ async function drawPdfLibBlock(
       )
     }
     case "paragraph":
+      if (block.runs) {
+        return (
+          (await drawRichPdfText(context, block.runs, topY, frame.x, frame.width, 10, 15, false, rgb(0.07, 0.09, 0.13), block.alignment)) - 8
+        )
+      }
+
       return (
         drawWrappedPdfText(
           context,
@@ -421,12 +452,12 @@ async function drawPdfLibColumns(
   return Math.min(leftBottom, rightBottom)
 }
 
-function drawPdfLibList(
+async function drawPdfLibList(
   item: PdfBlockFlowItem,
   context: PdfLibRenderContext,
   topY: number,
   frame: PdfContentFrame
-): number {
+): Promise<number> {
   if (
     item.block.type !== "bullet_list" &&
     item.block.type !== "numbered_list"
@@ -436,11 +467,29 @@ function drawPdfLibList(
 
   let cursorY = topY
 
-  item.block.items.forEach((value: string, index: number): void => {
+  for (const [index, value] of item.block.items.entries()) {
     const defaultMarker =
       item.block.type === "bullet_list" ? "-" : `${index + 1}.`
     const marker = item.listMarkers?.[index] ?? defaultMarker
     const text = `${marker}${marker.length === 0 ? "    " : " "}${value}`
+    const runs = item.block.itemRuns?.[index]
+
+    if (runs) {
+      cursorY =
+        (await drawRichPdfText(
+          context,
+          marker ? [{ text: `${marker} ` }, ...runs] : runs,
+          cursorY,
+          frame.x + 12,
+          frame.width - 12,
+          10,
+          15,
+          false,
+          rgb(0.07, 0.09, 0.13),
+          "left"
+        )) - 3
+      continue
+    }
 
     cursorY =
       drawWrappedPdfText(
@@ -455,7 +504,7 @@ function drawPdfLibList(
         rgb(0.07, 0.09, 0.13),
         "left"
       ) - 3
-  })
+  }
 
   return cursorY - 5
 }

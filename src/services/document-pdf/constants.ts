@@ -30,3 +30,12 @@ export const PDF_BOLD_FONT_PATH = resolve(
   PDF_FONT_PACKAGE_DIRECTORY,
   "DejaVuSans-Bold.ttf"
 )
+// Slanted faces for italic words, embedded only by a document that has some.
+export const PDF_ITALIC_FONT_PATH = resolve(
+  PDF_FONT_PACKAGE_DIRECTORY,
+  "DejaVuSans-Oblique.ttf"
+)
+export const PDF_BOLD_ITALIC_FONT_PATH = resolve(
+  PDF_FONT_PACKAGE_DIRECTORY,
+  "DejaVuSans-BoldOblique.ttf"
+)

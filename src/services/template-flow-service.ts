@@ -37,16 +37,16 @@ import {
   type TemplateQualityIssue
 } from "@/services/templates/template-quality-service"
 import {
-  bulletListBlockSchema,
+  bulletListBlockObjectSchema,
   checkboxFieldBlockSchema,
   dateFieldBlockSchema,
   dividerBlockSchema,
   dropdownFieldBlockSchema,
   fileFieldBlockSchema,
-  headingBlockSchema,
+  headingBlockObjectSchema,
   initialsFieldBlockSchema,
-  numberedListBlockSchema,
-  paragraphBlockSchema,
+  numberedListBlockObjectSchema,
+  paragraphBlockObjectSchema,
   signatureFieldBlockSchema,
   tableBlockSchema,
   templateBlockSchema,
@@ -107,10 +107,11 @@ const flowRequestSchema = z
   })
   .strict()
 const generatedBlockSchema = z.discriminatedUnion("type", [
-  headingBlockSchema.omit({ id: true }),
-  paragraphBlockSchema.omit({ id: true }),
-  bulletListBlockSchema.omit({ id: true }),
-  numberedListBlockSchema.omit({ id: true }),
+  // Flow writes words; formatting stays the editor's.
+  headingBlockObjectSchema.omit({ id: true, runs: true }),
+  paragraphBlockObjectSchema.omit({ id: true, runs: true }),
+  bulletListBlockObjectSchema.omit({ id: true, itemRuns: true }),
+  numberedListBlockObjectSchema.omit({ id: true, itemRuns: true }),
   tableBlockSchema.omit({ id: true }),
   dividerBlockSchema.omit({ id: true }),
   textFieldBlockSchema
