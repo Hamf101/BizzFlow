@@ -58,11 +58,16 @@ beforeEach(() => {
   // of the screen: a wide one, where the bar can be carried about.
   Element.prototype.scrollIntoView = () => undefined
   vi.stubGlobal("matchMedia", () => ({ matches: true }))
-  // Where the bar opens on a 1024 by 768 screen: centred, its bottom edge
-  // 13% up, with room above for results.
-  vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue(
-    DOMRect.fromRect({ height: 120, width: 736, x: 144, y: 548 })
-  )
+  // Where the bar opens on a 1024 by 768 screen, centred and 13% down, and
+  // wherever it is carried from there, as a browser would lay it out: its box
+  // and filters 100 high, and the whole bar taller once results show.
+  vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+    const bar = this.closest<HTMLElement>('[data-slot="workspace-search"]')
+    const carried = (axis: string): number => Number.parseFloat(bar?.style.getPropertyValue(`--carried-${axis}`) || "0")
+    const height = this.dataset.slot === "workspace-search-head" ? 100 : bar?.querySelector('[role="listbox"]') ? 537 : 140
+
+    return DOMRect.fromRect({ height, width: 736, x: 144 + carried("x"), y: 100 + carried("y") })
+  })
   localStorage.clear()
   const host = document.createElement("div")
   document.body.append(host)
@@ -156,21 +161,58 @@ it("opens a section's own list when it is chosen before any words", async () => 
   expect(document.querySelectorAll('[role="option"]')[1]?.getAttribute("href")).toBe("/tasks")
 })
 
+// Pressed, carried by (x, y), drawn there, and let go.
+async function carry(from: Element, x: number, y: number): Promise<void> {
+  await act(async () => {
+    from.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, button: 0, cancelable: true, clientX: 10, clientY: 10 }))
+    window.dispatchEvent(new MouseEvent("pointermove", { clientX: 10 + x, clientY: 10 + y }))
+  })
+  await act(async () => {
+    window.dispatchEvent(new MouseEvent("pointerup", { clientX: 10 + x, clientY: 10 + y }))
+  })
+}
+
+const hints = (bar: HTMLElement): Element => [...bar.querySelectorAll("span")].find((span) => span.textContent === "Only what you can open")!
+const where = (bar: HTMLElement): string[] =>
+  ["--search-x", "--search-top", "--search-bottom"].map((name) => bar.style.getPropertyValue(name))
+
 it("moves when carried by anything but its controls, and opens where it was left", async () => {
   await open()
   const bar = document.querySelector<HTMLElement>('[data-slot="workspace-search"]')!
-  const carry = async (from: Element): Promise<void> =>
-    act(async () => {
-      from.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, button: 0, cancelable: true, clientX: 10, clientY: 10 }))
-      window.dispatchEvent(new MouseEvent("pointermove", { clientX: 70, clientY: 50 }))
-      window.dispatchEvent(new MouseEvent("pointerup", { clientX: 70, clientY: 50 }))
-    })
 
   // Pressing in the box selects its words; the bar stays.
-  await carry(document.querySelector('[role="combobox"]')!)
-  expect([bar.style.getPropertyValue("--search-x"), bar.style.getPropertyValue("--search-y")]).toEqual(["0px", "0px"])
+  await carry(document.querySelector('[role="combobox"]')!, 60, 40)
+  expect(where(bar)).toEqual(["0px", "13vh", "auto"])
 
-  await carry([...bar.querySelectorAll("span")].find((span) => span.textContent === "Only what you can open")!)
-  expect([bar.style.getPropertyValue("--search-x"), bar.style.getPropertyValue("--search-y")]).toEqual(["60px", "40px"])
-  expect(JSON.parse(localStorage.getItem("bizflow.search.place") ?? "null")).toEqual({ x: 60, y: 40 })
+  // Left in the top half, it still opens underneath, held by its top edge.
+  await carry(hints(bar), 60, 40)
+  expect(where(bar)).toEqual(["60px", "140px", "auto"])
+  expect(bar.dataset.opens).toBe("down")
+  expect(JSON.parse(localStorage.getItem("bizflow.search.place") ?? "null")).toEqual({ edge: 140, up: false, x: 60 })
+})
+
+it("opens upward once carried into the bottom half, and goes as high as the top", async () => {
+  await open()
+  const bar = document.querySelector<HTMLElement>('[data-slot="workspace-search"]')!
+
+  await carry(hints(bar), 0, 400)
+  expect(bar.dataset.opens).toBe("up")
+  expect(where(bar)).toEqual(["0px", "auto", "168px"])
+
+  // Back up past the top it stops at the screen's edge, opening underneath.
+  await carry(hints(bar), 0, -600)
+  expect(bar.dataset.opens).toBe("down")
+  expect(where(bar)).toEqual(["0px", "16px", "auto"])
+})
+
+it("can be carried into the bottom half with its results open, and turns them upward", async () => {
+  await open()
+  await type("lease")
+  const bar = document.querySelector<HTMLElement>('[data-slot="workspace-search"]')!
+
+  // Only its box and filters need stay on screen while it is carried.
+  await carry(hints(bar), 0, 350)
+  expect(bar.dataset.opens).toBe("up")
+  // Held by its bottom edge, with room above for everything it shows.
+  expect(where(bar)).toEqual(["0px", "auto", "215px"])
 })

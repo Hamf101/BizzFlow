@@ -77,17 +77,33 @@ const OPENING: Readonly<Record<WorkspaceSearchKind, string>> = {
   templates: "Recent",
 }
 const WAIT_MS = 150
-// Where the bar was left, in this browser, as a move from where it opens.
+// Where the bar was left, in this browser.
 const PLACE_KEY = "bizflow.search.place"
 // Wide enough to carry the bar about; on a phone it keeps to the top.
 const WIDE = "(min-width: 48rem)"
 // A press that travels this far carries the bar rather than clicking.
 const DRAG_THRESHOLD = 4
-// The bar keeps this far inside the screen, and room above it for results.
+// The bar keeps this far inside the screen, and room for its results.
 const EDGE = 16
 const RESULTS_ROOM = 417
 
 type Point = Readonly<{ x: number; y: number }>
+
+/**
+ * Where the bar sits on a wide screen. It opens away from the nearer edge of
+ * the screen: in the top half, results open underneath and the bar is held by
+ * its top edge; in the bottom half, they open above and it is held by its
+ * bottom edge. Either way the box stays put as results come and go.
+ */
+type Place = Readonly<{
+  /** How far the held edge sits from that edge of the screen; none, 13% down. */
+  edge: number | null
+  up: boolean
+  /** How far the bar's middle sits right of the screen's middle. */
+  x: number
+}>
+
+const HOME: Place = { edge: null, up: false, x: 0 }
 
 type Section = Readonly<{ href: string; kind: WorkspaceSearchKind; label: string }>
 
@@ -148,7 +164,9 @@ export function WorkspaceSearchTrigger(props: DialogPrimitive.Trigger.Props): Re
  * @returns The search, closed until opened.
  */
 export function WorkspaceSearch({ role }: { role: OrganizationPermissionSubject | null }): ReactElement {
-  const [place, setPlace] = useState<Point>(readPlace)
+  const [place, setPlace] = useState<Place>(readPlace)
+  // How far the bar has been carried and not yet let go.
+  const [carried, setCarried] = useState<Point>({ x: 0, y: 0 })
   const bar = useRef<HTMLDivElement>(null)
 
   // Any part of the bar but its controls carries it, as the editor's tools
@@ -161,9 +179,9 @@ export function WorkspaceSearch({ role }: { role: OrganizationPermissionSubject 
     }
 
     event.preventDefault()
+    const measured = measure(event.currentTarget, place)
     const press = { moved: false, pointerId: event.pointerId, x: event.clientX, y: event.clientY }
-    const within = limitsFrom(event.currentTarget, place)
-    const to = (at: globalThis.PointerEvent): Point => within({ x: at.clientX - press.x, y: at.clientY - press.y })
+    const to = (at: globalThis.PointerEvent): Point => measured.carry({ x: at.clientX - press.x, y: at.clientY - press.y })
 
     function move(at: globalThis.PointerEvent): void {
       if (at.pointerId !== press.pointerId || (!press.moved && Math.hypot(at.clientX - press.x, at.clientY - press.y) < DRAG_THRESHOLD)) {
@@ -171,7 +189,7 @@ export function WorkspaceSearch({ role }: { role: OrganizationPermissionSubject 
       }
 
       press.moved = true
-      setPlace(to(at))
+      setCarried(to(at))
     }
 
     function end(at: globalThis.PointerEvent): void {
@@ -184,7 +202,8 @@ export function WorkspaceSearch({ role }: { role: OrganizationPermissionSubject 
       removeEventListener("pointercancel", end)
 
       if (press.moved) {
-        const left = to(at)
+        const left = measured.rest(to(at))
+        setCarried({ x: 0, y: 0 })
         setPlace(left)
 
         try {
@@ -226,9 +245,9 @@ export function WorkspaceSearch({ role }: { role: OrganizationPermissionSubject 
       // A screen grown smaller since the bar was left brings it back in view.
       onOpenChangeComplete={(open) => {
         if (open && bar.current && matchMedia(WIDE).matches) {
-          const settled = limitsFrom(bar.current, place)({ x: 0, y: 0 })
+          const settled = measure(bar.current, place).rest({ x: 0, y: 0 })
 
-          if (settled.x !== place.x || settled.y !== place.y) {
+          if (settled.up !== place.up || settled.x !== place.x || settled.edge !== (place.edge ?? settled.edge)) {
             setPlace(settled)
           }
         }
@@ -237,27 +256,37 @@ export function WorkspaceSearch({ role }: { role: OrganizationPermissionSubject 
       <DialogPrimitive.Portal>
         <DialogPrimitive.Popup
           className={cn(
-            // On a phone, across the top where the keyboard never covers it; wider,
-            // held by its bottom edge, so results open upward and the box stays put.
-            "fixed top-[max(env(safe-area-inset-top),0.75rem)] left-1/2 z-50 flex w-[calc(100vw-1.5rem)] -translate-x-1/2 flex-col overflow-hidden rounded-[22px] outline-none md:top-auto md:bottom-[13vh] md:w-[min(46rem,calc(100vw-4rem))] md:[transform:translate(var(--search-x),var(--search-y))]",
+            // On a phone, across the top where the keyboard never covers it;
+            // wider, wherever it was left (see Place).
+            "fixed top-[max(env(safe-area-inset-top),0.75rem)] left-1/2 z-50 flex w-[calc(100vw-1.5rem)] -translate-x-1/2 flex-col overflow-hidden rounded-[22px] outline-none md:top-[var(--search-top)] md:bottom-[var(--search-bottom)] md:left-[calc(50%_+_var(--search-x))] md:w-[min(46rem,calc(100vw-4rem))] md:[transform:translate(var(--carried-x),var(--carried-y))]",
             // Glass: the page shows through, blurred, as Spotlight's does.
             "border border-foreground/10 bg-popover/60 text-popover-foreground shadow-[inset_0_1px_0_rgb(255_255_255/0.35),0_30px_90px_-24px_rgb(0_0_0/0.38)] backdrop-blur-[30px] backdrop-saturate-[1.7]",
-            "origin-top transition-[opacity,scale] md:origin-bottom duration-150 ease-out data-[ending-style]:scale-[0.98] data-[ending-style]:opacity-0 data-[starting-style]:scale-[0.98] data-[starting-style]:opacity-0 motion-reduce:transition-none"
+            "origin-top transition-[opacity,scale] duration-150 ease-out data-[ending-style]:scale-[0.98] data-[ending-style]:opacity-0 data-[starting-style]:scale-[0.98] data-[starting-style]:opacity-0 motion-reduce:transition-none",
+            place.up && "md:origin-bottom"
           )}
+          data-opens={place.up ? "up" : "down"}
           data-slot="workspace-search"
           onPointerDown={carry}
           ref={bar}
-          style={{ "--search-x": `${place.x}px`, "--search-y": `${place.y}px` } as CSSProperties}
+          style={
+            {
+              "--carried-x": `${carried.x}px`,
+              "--carried-y": `${carried.y}px`,
+              "--search-bottom": place.up ? `${place.edge ?? EDGE}px` : "auto",
+              "--search-top": place.up ? "auto" : place.edge === null ? "13vh" : `${place.edge}px`,
+              "--search-x": `${place.x}px`,
+            } as CSSProperties
+          }
         >
           <DialogPrimitive.Title className="sr-only">Search</DialogPrimitive.Title>
-          <SearchPanel role={role} />
+          <SearchPanel role={role} up={place.up} />
         </DialogPrimitive.Popup>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>
   )
 }
 
-function SearchPanel({ role }: { role: OrganizationPermissionSubject | null }): ReactElement {
+function SearchPanel({ role, up }: { role: OrganizationPermissionSubject | null; up: boolean }): ReactElement {
   const customization = useNavigationPreferences()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -369,11 +398,11 @@ function SearchPanel({ role }: { role: OrganizationPermissionSubject | null }): 
   const every = counted ? Object.values(counted.result.totals).reduce((sum, count) => sum + (count ?? 0), 0) : undefined
   const filters = [{ count: every, kind: null, label: "All" }, ...sections.map((each) => ({ count: counted?.result.totals[each.kind], kind: each.kind, label: each.label }))]
 
-  // Read in this order, the box first; a wide screen draws it bottom up, the
-  // box at the bottom and the hints at the top.
+  // Read box first. Drawn with the filters above the box, results on the side
+  // the bar opens to, and the hints beyond them.
   return (
-    <div className="flex flex-col divide-y divide-foreground/[0.08] md:flex-col-reverse md:divide-y-reverse">
-      <div className="flex flex-col gap-3 px-4 py-3.5 md:flex-col-reverse md:px-5">
+    <div className={cn("flex flex-col divide-y divide-foreground/[0.08]", up && "md:flex-col-reverse md:divide-y-reverse")}>
+      <div className="flex flex-col-reverse gap-3 px-4 py-3.5 md:px-5" data-slot="workspace-search-head">
         <div className="flex items-center gap-3">
           <Search aria-hidden="true" className="size-5 shrink-0 text-muted-foreground" />
           <input
@@ -583,31 +612,53 @@ function Key({ children, className }: { children: ReactNode; className?: string 
   )
 }
 
-function readPlace(): Point {
+function readPlace(): Place {
   try {
-    const kept = JSON.parse(localStorage.getItem(PLACE_KEY) ?? "null") as Partial<Point> | null
+    const kept = JSON.parse(localStorage.getItem(PLACE_KEY) ?? "null") as Partial<Place> | null
 
-    if (typeof kept?.x === "number" && typeof kept.y === "number") {
-      return { x: kept.x, y: kept.y }
+    if (typeof kept?.edge === "number" && typeof kept.up === "boolean" && typeof kept.x === "number") {
+      return { edge: kept.edge, up: kept.up, x: kept.x }
     }
   } catch {
     // No storage, or nothing kept: the bar opens where it always has.
   }
 
-  return { x: 0, y: 0 }
+  return HOME
 }
 
-// Where the bar, now at `from`, lands when moved by as much of a move as
-// keeps every edge on screen, with room above a bar still without results
-// for them to open into. Measured once, before the move.
-function limitsFrom(bar: HTMLElement, from: Point): (by: Point) => Point {
-  const box = bar.getBoundingClientRect()
-  const top = box.top - (bar.querySelector("[role='listbox']") ? 0 : RESULTS_ROOM)
+/**
+ * Measures the bar once, before it moves, for where it may be carried and
+ * where it comes to rest.
+ *
+ * @param bar - The bar, where it stands now.
+ * @param place - Where it was left.
+ * @returns `carry`, which keeps its box and filters on screen while the rest
+ *   may run off until it is let go; and `rest`, where it lands: opening away
+ *   from the nearer edge of the screen, held by the edge its box is on, with
+ *   room on the other side for the rest of it and its results.
+ */
+function measure(bar: HTMLElement, place: Place): { carry: (by: Point) => Point; rest: (by: Point) => Place } {
+  const whole = bar.getBoundingClientRect()
+  const head = bar.querySelector("[data-slot='workspace-search-head']")?.getBoundingClientRect() ?? whole
+  const tall = whole.height + (bar.querySelector("[role='listbox']") ? 0 : RESULTS_ROOM)
 
-  return (by) => ({
-    x: from.x + Math.max(Math.min(by.x, innerWidth - EDGE - box.right), EDGE - box.left),
-    y: from.y + Math.max(Math.min(by.y, innerHeight - EDGE - box.bottom), EDGE - top),
-  })
+  return {
+    carry: (by) => ({
+      x: Math.max(Math.min(by.x, innerWidth - EDGE - whole.right), EDGE - whole.left),
+      y: Math.max(Math.min(by.y, innerHeight - EDGE - head.bottom), EDGE - head.top),
+    }),
+    rest: (by) => {
+      const top = head.top + by.y
+      const bottom = head.bottom + by.y
+      const up = top + bottom > innerHeight
+
+      return {
+        edge: Math.min(Math.max(up ? innerHeight - bottom : top, EDGE), Math.max(EDGE, innerHeight - EDGE - tall)),
+        up,
+        x: place.x + by.x + Math.max(0, EDGE - (whole.left + by.x)) - Math.max(0, whole.right + by.x - (innerWidth - EDGE)),
+      }
+    },
+  }
 }
 
 function listHref(path: string, words: string, view: string): string {
