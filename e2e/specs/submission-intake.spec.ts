@@ -31,9 +31,13 @@ test.describe("submission intake", () => {
     await waitForHydration(publish)
     await publish.click()
 
-    // Only published templates are offered when starting a submission, so the
-    // next step doubles as proof that publishing took effect.
-    await expect(manager.getByText(/published/i).first()).toBeVisible()
+    // Only published templates are offered when starting a submission, so
+    // wait for the toast that follows the action's redirect. A bare
+    // /published/i also matched the phone editor itself, whose "Publish" and
+    // "Edit" read as one word, before anything was saved.
+    await expect(
+      manager.getByRole("status").filter({ hasText: "Template published" })
+    ).toBeVisible()
 
     const staff = await pageAs("staff")
     const submissionTitle = uniqueName("Intake run")
