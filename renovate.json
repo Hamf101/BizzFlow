@@ -85,7 +85,7 @@
       "matchPackageNames": [
         "pdf-lib",
         "@cantoo/pdf-lib",
-        "@pdf-lib/fontkit"
+        "fontkit"
       ],
       "groupName": "PDF toolchain"
     },
@@ -103,12 +103,6 @@
       "description": "Keep ESLint on the supported 9.x line",
       "matchPackageNames": ["eslint"],
       "allowedVersions": "<10.0.0"
-    },
-    {
-      "description": "Hold the frozen fontkit adapter at its verified release",
-      "matchPackageNames": ["@pdf-lib/fontkit"],
-      "allowedVersions": "1.1.1",
-      "automerge": false
     },
     {
       "description": "Keep Node.js on the production-supported 24.x line",

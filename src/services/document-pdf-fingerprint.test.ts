@@ -46,10 +46,14 @@ const EXPECTED_PAGE_COUNT = 3
 const EXPECTED_PAGE_SIZE = { height: 842, width: 595 }
 
 const EXPECTED_CONTENT_STREAM_SHA256: readonly string[] = [
-  "daebf827f853fd165cc39682934f9b324e64c5217ab5fb93df0c938c7c22d74d",
-  "0007774018557b0117dbc3068f8083871de6954aab6fb191d9caf8bb99f4c897",
-  "fcfc5f264e9fa33f1b83549e2c82c2f7de10b578a4d4ffe5a6bb596404c4cbad"
+  "69c4701fdcc99aa5bee1053387e28076cc3cede52603050e987f9128943dc4ed",
+  "c3112ee6a52a946d1f4af740f336b7bb2cb2f258910e2a1a93df140ae0ef4b5c",
+  "89c3c949fca732dd1211c8a5c7d68d53e28be3235652a5280548a337f6a3564d"
 ]
+
+// Three pages of text with a few fields and a signature. Whole font files made
+// even a one-line document about 0.9 MB; only the glyphs drawn are embedded.
+const MAX_SAMPLE_BYTES = 150 * 1024
 
 // Each case embeds fonts and renders a real PDF, which costs seconds rather
 // than milliseconds. Vitest runs files in parallel, so on a busy machine the
@@ -88,6 +92,10 @@ describe("generated document PDF fingerprint", () => {
     const hashes = await fingerprintContentStreams(await renderSample())
 
     expect(hashes).toEqual(EXPECTED_CONTENT_STREAM_SHA256)
+  })
+
+  it("embeds only the glyphs it draws, so the file stays small", async () => {
+    expect((await renderSample()).length).toBeLessThan(MAX_SAMPLE_BYTES)
   })
 
   it("writes the injected metadata timestamp rather than the clock", async () => {

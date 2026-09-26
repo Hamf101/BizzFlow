@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises"
 
-import fontkit from "@pdf-lib/fontkit"
+import * as fontkit from "fontkit"
 import {
   PDFDocument,
   rgb,
@@ -66,8 +66,10 @@ export async function renderPdfLibDocument(
   )
 
   document.registerFontkit(fontkit)
-  const regularFont = await document.embedFont(fontBytes.regular)
-  const boldFont = await document.embedFont(fontBytes.bold)
+  // Only the glyphs a document draws are embedded: whole faces made even a
+  // one-line document about 0.9 MB.
+  const regularFont = await document.embedFont(fontBytes.regular, { subset: true })
+  const boldFont = await document.embedFont(fontBytes.bold, { subset: true })
   // Slanted faces only for a document with italic words, so others stay as they were.
   const faces = new Map<string, Promise<PDFFont>>([
     ["bold", Promise.resolve(boldFont)],
@@ -77,7 +79,7 @@ export async function renderPdfLibDocument(
     const key = `${bold ? "bold" : "regular"}${italic ? "-italic" : ""}`
     const face =
       faces.get(key) ??
-      readFile(bold ? PDF_BOLD_ITALIC_FONT_PATH : PDF_ITALIC_FONT_PATH).then((bytes: Buffer) => document.embedFont(bytes))
+      readFile(bold ? PDF_BOLD_ITALIC_FONT_PATH : PDF_ITALIC_FONT_PATH).then((bytes: Buffer) => document.embedFont(bytes, { subset: true }))
 
     faces.set(key, face)
 
