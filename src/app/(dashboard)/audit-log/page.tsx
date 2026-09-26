@@ -25,8 +25,9 @@ import { listSavedViews } from "@/services/saved-view-service"
 import type { AuditChainVerification } from "@/types/audit"
 import type { OrganizationMember } from "@/types/organization"
 
-// Chain verification walks every entry for the organization, so it streams in
-// its own boundaries rather than delaying the event list. Keyed on primitives
+// Chain verification hashes what was recorded since the last check, and every
+// entry once a day, so it streams in its own boundaries rather than delaying
+// the event list. Keyed on primitives
 // (an input object would defeat cache()'s identity-based memoization) so the
 // badge and the failure alert share one round trip.
 const getCachedChainVerification = cache(
