@@ -11,12 +11,10 @@ import { cn } from "@/lib/utils"
 export type DockTool = Readonly<{
   badge?: number
   /** The panel it opens beside the dock. */
-  content?: (close: () => void) => ReactNode
+  content: (close: () => void) => ReactNode
   icon: LucideIcon
   id: string
   label: string
-  /** Opens something of the editor's own instead, such as Flow's side panel. */
-  onOpen?: () => void
   wide?: boolean
 }>
 
@@ -69,21 +67,6 @@ export function EditorDock({
         )
         const buttonClass =
           "relative grid size-11 place-items-center rounded-[12px] text-foreground/80 outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40 data-popup-open:bg-secondary data-popup-open:text-secondary-foreground"
-
-        if (!tool.content) {
-          return (
-            <button
-              aria-label={tool.label}
-              className={cn(buttonClass, !narrow && "size-10")}
-              key={tool.id}
-              onClick={tool.onOpen}
-              title={tool.label}
-              type="button"
-            >
-              {face}
-            </button>
-          )
-        }
 
         const content = tool.content
 

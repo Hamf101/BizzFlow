@@ -30,9 +30,9 @@ const ZOOM_STEPS = [0.5, 0.67, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2] as co
 const NARROW = "(width < 48rem), (pointer: coarse) and (width < 64rem)"
 
 // Where the dock and zoom start: the dock upright at the left, the zoom at the
-// bottom right.
+// bottom in the middle, clear of Flow's button in the bottom right corner.
 const DOCK_HOME: Spot = { x: 0, y: 0.5 }
-const ZOOM_HOME: Spot = { x: 1, y: 1 }
+const ZOOM_HOME: Spot = { x: 0.5, y: 1 }
 
 /** Where a person keeps the floating tools, and how to keep a change. */
 export type EditorLayoutStore = Readonly<{

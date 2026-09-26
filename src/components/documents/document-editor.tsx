@@ -5,12 +5,12 @@ import { type ReactElement, useMemo, useRef, useState } from "react"
 
 import type { DocumentContentInput } from "@/app/(editor)/documents/[documentId]/edit/actions"
 import { DocumentRecipientCollection } from "@/components/documents/document-recipient-collection"
-import { FlowMark } from "@/components/brand/flow-mark"
 import { useFlowHandoff } from "@/components/flow/flow-handoff"
 import { findInsertChoices } from "@/components/editor/block-catalog"
 import { EditorCanvas } from "@/components/editor/editor-canvas"
 import { normalizeContentForSave } from "@/components/editor/editor-content"
 import { type DockTool, EditorDock, InsertTiles } from "@/components/editor/editor-dock"
+import { FlowWindow } from "@/components/flow/flow-window"
 import { EditorFrame, type EditorLayoutStore, EditorNotice, EditorSidePanel } from "@/components/editor/editor-frame"
 import { PageSetupPanel } from "@/components/editor/page-setup-panel"
 import { type SaveResult, useAutosave } from "@/components/editor/use-autosave"
@@ -229,13 +229,6 @@ export function DocumentEditor({
     },
   ]
 
-  const flowTool: DockTool = {
-    icon: FlowMark,
-    id: "flow",
-    label: "Flow",
-    onOpen: () => setFlowOpen((open) => !open),
-  }
-
   function applyProposal(next: TemplateFlowProposal, messageId: string): void {
     if (next.status !== "pending" || next.baseDraftFingerprint !== createTemplateFlowDraftFingerprint(flowDraft)) {
       setProposal({ ...next, status: "stale" })
@@ -311,13 +304,10 @@ export function DocumentEditor({
         }
         canRedo={history.canRedo}
         canUndo={history.canUndo}
-        dock={(narrow, orientation) => (
-          <EditorDock
-            narrow={narrow}
-            orientation={orientation}
-            tools={writable && !proposal ? [...tools, flowTool] : [flowTool]}
-          />
-        )}
+        dock={(narrow, orientation) =>
+          // Flow has a button of its own, always there.
+          writable && !proposal ? <EditorDock narrow={narrow} orientation={orientation} tools={tools} /> : null
+        }
         layout={editorLayout}
         extra={
           view.recipients.length > 0 ? (
@@ -408,7 +398,7 @@ export function DocumentEditor({
                 />
               ) : null}
             </EditorSidePanel>
-            <EditorSidePanel keepMounted narrow={narrow} onClose={() => setFlowOpen(false)} open={flowOpen} title="Flow">
+            <FlowWindow onOpenChange={setFlowOpen} open={flowOpen}>
               <TemplateFlowPanel
                 canUndo={flowUndo !== null}
                 draft={flowDraft}
@@ -432,7 +422,7 @@ export function DocumentEditor({
                 pendingProposal={proposal}
                 starter={writable ? DRAFT_STARTER : SENT_STARTER}
               />
-            </EditorSidePanel>
+            </FlowWindow>
           </>
         )}
         primary={

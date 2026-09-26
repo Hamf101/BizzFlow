@@ -15,12 +15,12 @@ import Link from "next/link"
 import { type ReactElement, useMemo, useRef, useState, useTransition } from "react"
 
 import type { TemplateDraftInput } from "@/app/(dashboard)/templates/actions"
-import { FlowMark } from "@/components/brand/flow-mark"
 import { useFlowHandoff } from "@/components/flow/flow-handoff"
 import { findInsertChoices } from "@/components/editor/block-catalog"
 import { EditorCanvas } from "@/components/editor/editor-canvas"
 import { normalizeContentForSave } from "@/components/editor/editor-content"
 import { type DockTool, EditorDock, InsertTiles } from "@/components/editor/editor-dock"
+import { FlowWindow } from "@/components/flow/flow-window"
 import { EditorFrame, type EditorLayoutStore, EditorNotice, EditorSidePanel } from "@/components/editor/editor-frame"
 import { PageSetupPanel } from "@/components/editor/page-setup-panel"
 import { type SaveResult, useAutosave } from "@/components/editor/use-autosave"
@@ -302,12 +302,6 @@ export function TemplateEditor({
       label: "Brand",
     },
     {
-      icon: FlowMark,
-      id: "flow",
-      label: "Flow",
-      onOpen: () => setFlowOpen((open) => !open),
-    },
-    {
       badge: quality.summary.criticalCount || undefined,
       content: (close) => (
         <TemplateChecksPanel
@@ -370,14 +364,10 @@ export function TemplateEditor({
         }
         canRedo={history.canRedo}
         canUndo={history.canUndo}
-        dock={(narrow, orientation) => (
-          // Flow stays within reach in every mode; the other tools need Edit.
-          <EditorDock
-            narrow={narrow}
-            orientation={orientation}
-            tools={mode === "edit" && !proposal ? tools : tools.filter((tool) => tool.id === "flow")}
-          />
-        )}
+        dock={(narrow, orientation) =>
+          // The tools need Edit; Flow has a button of its own, always there.
+          mode === "edit" && !proposal ? <EditorDock narrow={narrow} orientation={orientation} tools={tools} /> : null
+        }
         layout={editorLayout}
         menu={
           <DropdownMenu>
@@ -445,7 +435,7 @@ export function TemplateEditor({
                 />
               ) : null}
             </EditorSidePanel>
-            <EditorSidePanel keepMounted narrow={narrow} onClose={() => setFlowOpen(false)} open={flowOpen} title="Flow">
+            <FlowWindow onOpenChange={setFlowOpen} open={flowOpen}>
               <TemplateFlowPanel
                 canUndo={flowUndo !== null}
                 draft={state}
@@ -465,7 +455,7 @@ export function TemplateEditor({
                 pendingProposal={proposal}
                 templateId={template.id}
               />
-            </EditorSidePanel>
+            </FlowWindow>
           </>
         )}
         primary={
