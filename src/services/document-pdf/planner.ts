@@ -140,6 +140,13 @@ export function createPdfPagePlans(input: NormalizedPdfInput): PdfPagePlan[] {
     pages.push(currentPage.plan)
   }
 
+  // A picture placed on a later page than the text reaches still gets its page.
+  const lastPlacedPage = Math.max(1, ...input.renderPlan.blocks.map(({ block }) => (block.type === "image" ? (block.placement?.page ?? 1) : 1)))
+
+  while (pages.length < lastPlacedPage) {
+    pages.push(createMutablePdfPage(input, metrics, pages.length + 1).plan)
+  }
+
   return pages
 }
 
@@ -247,7 +254,8 @@ function createBlockPaginationUnits(
   metrics: PdfLayoutMetrics
 ): PdfPaginationUnit[] {
   const units: PdfPaginationUnit[] = []
-  const blocks = input.renderPlan.blocks
+  // Placed pictures print over their pages, outside the flow.
+  const blocks = input.renderPlan.blocks.filter(({ block }) => !(block.type === "image" && block.placement))
   let blockIndex = 0
 
   while (blockIndex < blocks.length) {
@@ -852,7 +860,8 @@ function estimateFlowItemHeight(
         item.block,
         input.answers,
         metrics.contentWidth,
-        item.answerOverride
+        item.answerOverride,
+        metrics.lineSpacing
       )
       break
     case "columns": {
@@ -862,7 +871,8 @@ function estimateFlowItemHeight(
             item.left.block,
             input.answers,
             columnWidth,
-            item.left.answerOverride
+            item.left.answerOverride,
+            metrics.lineSpacing
           )
         : 0
       const rightHeight = item.right
@@ -870,7 +880,8 @@ function estimateFlowItemHeight(
             item.right.block,
             input.answers,
             columnWidth,
-            item.right.answerOverride
+            item.right.answerOverride,
+            metrics.lineSpacing
           )
         : 0
 
@@ -905,14 +916,16 @@ function estimateBlockHeight(
   block: TemplateBlock,
   answers: Record<string, unknown>,
   availableWidth: number,
-  answerOverride?: string
+  answerOverride?: string,
+  lineSpacing?: number
 ): number {
   switch (block.type) {
     case "heading": {
       const baselineCharacters =
         block.level === 1 ? 55 : block.level === 2 ? 65 : 75
-      const lineHeight = block.level === 1 ? 29 : block.level === 2 ? 24 : 20
-      const scale = runScale(block.runs, block.level === 1 ? 20 : block.level === 2 ? 16 : 13)
+      const size = block.level === 1 ? 20 : block.level === 2 ? 16 : 13
+      const lineHeight = lineSpacing ? size * lineSpacing : block.level === 1 ? 29 : block.level === 2 ? 24 : 20
+      const scale = runScale(block.runs, size)
 
       return (
         estimateWrappedTextHeight(
@@ -929,7 +942,7 @@ function estimateBlockHeight(
         estimateWrappedTextHeight(
           block.text,
           scalePdfCharacterEstimate(88, availableWidth) / scale,
-          15 * scale
+          10 * (lineSpacing ?? 1.5) * scale
         ) + 10
       )
     }
@@ -938,7 +951,7 @@ function estimateBlockHeight(
       return (
         block.items.reduce(
           (height: number, item: string, index: number): number =>
-            height + estimateListEntryHeight(item, availableWidth, block.itemRuns?.[index]),
+            height + estimateListEntryHeight(item, availableWidth, block.itemRuns?.[index]) * ((lineSpacing ?? 1.5) / 1.5),
           0
         ) + 8
       )

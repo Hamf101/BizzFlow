@@ -8,10 +8,12 @@ import {
   ArrowUp,
   Asterisk,
   CalendarDays,
+  BringToFront,
   ChevronDown,
   Copy,
   Settings2,
   Trash2,
+  WrapText,
 } from "lucide-react"
 import {
   createContext,
@@ -30,11 +32,15 @@ import type { Editor } from "@tiptap/core"
 
 import { GeneratedBlock } from "@/components/documents/generated-document-content"
 import { INSERT_CHOICES } from "@/components/editor/block-catalog"
-import { EditableText, type TextCaret } from "@/components/editor/editable-text"
+import type { TextCaret } from "@/components/editor/editable-text"
 import { convertTextBlock, type TextBlockKind } from "@/components/editor/editor-content"
+import { EditorImage } from "@/components/editor/editor-image"
+import { EditorTable } from "@/components/editor/editor-table"
+import { placeImage, placementOf } from "@/components/editor/image-placement"
 import { RichLine } from "@/components/editor/rich-line"
 import type { EditorController, FocusRequest } from "@/components/editor/use-editor-controller"
 import { RichText } from "@/components/templates/rich-text"
+import { BlockFields } from "@/components/templates/template-block-editor"
 import { TemplateStaticBlock } from "@/components/templates/template-static-block"
 import { Button } from "@/components/ui/button"
 import {
@@ -43,6 +49,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
 import { describeDateFormat } from "@/lib/date-format"
 import type { TemplateBlock, TextRun } from "@/types/template"
@@ -50,6 +57,8 @@ import type { TemplateBlock, TextRun } from "@/types/template"
 export type LineBlock = Extract<TemplateBlock, { type: "heading" | "paragraph" }>
 export type ListBlock = Extract<TemplateBlock, { type: "bullet_list" | "numbered_list" }>
 type FieldBlock = Extract<TemplateBlock, { fieldKey: string }>
+type ImageBlock = Extract<TemplateBlock, { type: "image" }>
+type Placement = NonNullable<ImageBlock["placement"]>
 
 /** What the canvas lends each block: its controller, modes, and key handling. */
 export type CanvasActions = Readonly<{
@@ -70,9 +79,9 @@ export type CanvasActions = Readonly<{
 
 // A phone's reflowed column is narrow, so its headings step down less steeply.
 const HEADING_STYLE = {
-  1: { fontSize: "var(--doc-h1, 2em)", lineHeight: 1.35 },
-  2: { fontSize: "var(--doc-h2, 1.6em)", lineHeight: 1.4 },
-  3: { fontSize: "var(--doc-h3, 1.3em)", lineHeight: 1.45 },
+  1: { fontSize: "var(--doc-h1, 2em)", lineHeight: "var(--doc-line-height, 1.35)" },
+  2: { fontSize: "var(--doc-h2, 1.6em)", lineHeight: "var(--doc-line-height, 1.4)" },
+  3: { fontSize: "var(--doc-h3, 1.3em)", lineHeight: "var(--doc-line-height, 1.45)" },
 } as const
 
 /**
@@ -98,9 +107,12 @@ export const PAGE_BREAKS_FOLDED = { "--page-space-display": "none", "--page-spac
 export function CanvasBlock({
   actions,
   block,
+  placed = false,
 }: {
   actions: CanvasActions
   block: TemplateBlock
+  /** Whether it is a picture drawn in its box on a page rather than in the text. */
+  placed?: boolean
 }): ReactElement {
   const { controller } = actions
   const selected = controller.selectedBlockId === block.id
@@ -135,8 +147,12 @@ export function CanvasBlock({
     const mod = event.metaKey || event.ctrlKey
     const blocks = controller.content.blocks
     const index = blocks.findIndex((candidate) => candidate.id === block.id)
+    const nudged = placed && block.type === "image" && block.placement ? nudge(block.placement, event) : null
 
-    if (event.key === "Backspace" || event.key === "Delete") {
+    if (nudged && block.type === "image") {
+      event.preventDefault()
+      controller.updateBlock({ ...block, placement: nudged }, `image:${block.id}`)
+    } else if (event.key === "Backspace" || event.key === "Delete") {
       event.preventDefault()
       controller.remove(block.id)
     } else if (event.key === "Escape") {
@@ -150,6 +166,9 @@ export function CanvasBlock({
       } else if (isList(block)) {
         const item = block.items.length - 1
         controller.requestFocus({ blockId: block.id, item, offset: block.items[item]?.length ?? 0 })
+      } else if (block.type === "table") {
+        // A table has no settings of its own; Enter starts typing in it.
+        wrapper.current?.querySelector<HTMLElement>("[contenteditable]")?.focus()
       } else if (actions.designable || actions.textEditable) {
         controller.openSettings(block.id)
       }
@@ -172,7 +191,8 @@ export function CanvasBlock({
   return (
     <div
       className={cn(
-        "relative rounded-[0.35em] outline-none",
+        "rounded-[0.35em] outline-none",
+        placed ? "pointer-events-auto absolute" : "relative",
         canSelect && field && actions.fields === "design" && "cursor-default",
         selected && "ring-2 ring-primary ring-offset-[0.4em] ring-offset-card"
       )}
@@ -182,15 +202,16 @@ export function CanvasBlock({
       onKeyDown={handleKeyDown}
       onMouseDown={handleMouseDown}
       ref={wrapper}
+      style={placed && block.type === "image" && block.placement ? boxStyle(block.placement) : undefined}
       tabIndex={selected ? -1 : undefined}
     >
       {selected && canSelect ? <BlockToolbar actions={actions} block={block} /> : null}
-      <BlockBody actions={actions} block={block} />
+      <BlockBody actions={actions} block={block} placed={placed} />
     </div>
   )
 }
 
-function BlockBody({ actions, block }: { actions: CanvasActions; block: TemplateBlock }): ReactElement {
+function BlockBody({ actions, block, placed }: { actions: CanvasActions; block: TemplateBlock; placed: boolean }): ReactElement {
   const breaks = useContext(PageBreaks)
 
   switch (block.type) {
@@ -225,7 +246,7 @@ function BlockBody({ actions, block }: { actions: CanvasActions; block: Template
             onKeyDown={(event, caret) => actions.onLineKeyDown(event, caret, block)}
             placeholder={actions.placeholderFor(block.id)}
             runs={block.runs}
-            style={{ lineHeight: 1.5, minHeight: "1.5em", textAlign: block.alignment }}
+            style={{ lineHeight: "var(--doc-line-height, 1.5)", minHeight: "1.5em", textAlign: block.alignment }}
             value={block.text}
           />
         </>
@@ -237,7 +258,7 @@ function BlockBody({ actions, block }: { actions: CanvasActions; block: Template
       return (
         <List
           className={cn(block.type === "bullet_list" ? "list-disc" : "list-decimal", "grid gap-[0.2em]")}
-          style={{ lineHeight: 1.5, paddingLeft: "1.4em" }}
+          style={{ lineHeight: "var(--doc-line-height, 1.5)", paddingLeft: "1.4em" }}
         >
           {block.items.map((item: string, index: number) => (
             <TextLine
@@ -259,70 +280,9 @@ function BlockBody({ actions, block }: { actions: CanvasActions; block: Template
       )
     }
     case "table":
-      return (
-        <table className="w-full border-collapse" style={{ fontSize: "0.9em", lineHeight: 1.4 }}>
-          <thead>
-            <tr>
-              {block.headers.map((header: string, column: number) => (
-                <EditableText
-                  as="th"
-                  caretKey={`${block.id}:h${column}`}
-                  className="border border-border bg-muted/50 px-[0.6em] py-[0.4em] text-left font-semibold"
-                  editable={actions.textEditable}
-                  key={column}
-                  label={`Column ${column + 1} heading`}
-                  onChange={(text) =>
-                    actions.controller.updateBlock(
-                      { ...block, headers: block.headers.map((value, i) => (i === column ? text : value)) },
-                      `table:${block.id}`
-                    )
-                  }
-                  onKeyDown={preventEnter}
-                  value={header}
-                />
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {block.rows.map((row: string[], rowIndex: number) => (
-              <Fragment key={rowIndex}>
-                {breaks[`${block.id}:row${rowIndex}`] ? (
-                  <tr aria-hidden="true" style={{ display: "var(--page-space-display, table-row)" }}>
-                    <td colSpan={block.headers.length} style={{ border: 0, height: breaks[`${block.id}:row${rowIndex}`], padding: 0 }} />
-                  </tr>
-                ) : null}
-                {/* The first row stays with the heading row, so a page never ends between them. */}
-                <tr data-row-key={rowIndex > 0 ? `${block.id}:row${rowIndex}` : undefined}>
-                  {row.map((cell: string, column: number) => (
-                    <EditableText
-                      as="td"
-                      caretKey={`${block.id}:${rowIndex}-${column}`}
-                      className="border border-border px-[0.6em] py-[0.4em] align-top"
-                      editable={actions.textEditable}
-                      key={column}
-                      label={`Row ${rowIndex + 1}, column ${column + 1}`}
-                      onChange={(text) =>
-                        actions.controller.updateBlock(
-                          {
-                            ...block,
-                            rows: block.rows.map((values, r) =>
-                              r === rowIndex ? values.map((value, c) => (c === column ? text : value)) : values
-                            ),
-                          },
-                          `table:${block.id}`
-                        )
-                      }
-                      onKeyDown={preventEnter}
-                      value={cell}
-                    />
-                  ))}
-                </tr>
-              </Fragment>
-            ))}
-          </tbody>
-        </table>
-      )
+      return <EditorTable actions={actions} block={block} breaks={breaks} />
     case "image":
+      return <EditorImage actions={actions} block={block} placed={placed} />
     case "divider":
       return (
         <TemplateStaticBlock
@@ -533,6 +493,14 @@ function BlockToolbar({ actions, block }: { actions: CanvasActions; block: Templ
   const blocks = controller.content.blocks
   const index = blocks.findIndex((candidate) => candidate.id === block.id)
 
+  // A picture let out of the text stays exactly where it was on its page.
+  function placeFreely(image: ImageBlock): void {
+    const picture = document.querySelector(`[data-block-id="${CSS.escape(image.id)}"] [data-image-box]`)
+    const placement = (picture ? placementOf(picture) : null) ?? placeImage({ height: 25, page: 1, width: 40, x: 10, y: 10 })
+
+    controller.updateBlock({ ...image, placement })
+  }
+
   function turnInto(kind: TextBlockKind): void {
     const isList = kind.type === "bullet_list" || kind.type === "numbered_list"
 
@@ -605,25 +573,70 @@ function BlockToolbar({ actions, block }: { actions: CanvasActions; block: Templ
           <Asterisk />
         </ToolButton>
       ) : null}
-      {isField(block) || block.type === "table" || block.type === "image" ? (
-        <ToolButton label="Settings" onClick={() => controller.openSettings(block.id)}>
-          <Settings2 />
-        </ToolButton>
+      {isField(block) ? (
+        <Popover
+          onOpenChange={(open) => (open ? controller.openSettings(block.id) : controller.closeSettings())}
+          open={controller.settingsBlockId === block.id}
+        >
+          <PopoverTrigger
+            render={
+              <Button aria-label="Field settings" className="size-10 md:pointer-fine:size-8" size="icon-sm" title="Field settings" type="button" variant="ghost">
+                <Settings2 />
+              </Button>
+            }
+          />
+          <PopoverContent className="w-80">
+            <PopoverTitle className="mb-3 font-semibold">Field settings</PopoverTitle>
+            <BlockFields block={block} blocks={blocks} onChange={(next) => controller.updateBlock(next, `settings:${block.id}`)} />
+          </PopoverContent>
+        </Popover>
+      ) : null}
+      {block.type === "image" ? (
+        <>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button className="h-10 gap-1 px-2 font-normal md:pointer-fine:h-8" size="sm" type="button" variant="ghost">
+                  {block.placement ? "In front of text" : "In line"}
+                  <ChevronDown aria-hidden="true" className="size-3.5 text-muted-foreground" />
+                </Button>
+              }
+            />
+            <DropdownMenuContent align="start" className="w-48">
+              <DropdownMenuItem onClick={() => controller.updateBlock({ ...block, placement: undefined })}>
+                <WrapText aria-hidden="true" />
+                In line
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => !block.placement && placeFreely(block)}>
+                <BringToFront aria-hidden="true" />
+                In front of text
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <ToolButton label="Settings" onClick={() => controller.openSettings(block.id)}>
+            <Settings2 />
+          </ToolButton>
+        </>
       ) : null}
       <span aria-hidden="true" className="mx-0.5 h-5 w-px bg-border" />
       <ToolButton label="Duplicate" onClick={() => controller.duplicate(block.id)}>
         <Copy />
       </ToolButton>
-      <ToolButton disabled={index <= 0} label="Move up" onClick={() => controller.move(block.id, "up")}>
-        <ArrowUp />
-      </ToolButton>
-      <ToolButton
-        disabled={index >= blocks.length - 1}
-        label="Move down"
-        onClick={() => controller.move(block.id, "down")}
-      >
-        <ArrowDown />
-      </ToolButton>
+      {/* A picture placed on a page has no place in the order to move to. */}
+      {block.type === "image" && block.placement ? null : (
+        <>
+          <ToolButton disabled={index <= 0} label="Move up" onClick={() => controller.move(block.id, "up")}>
+            <ArrowUp />
+          </ToolButton>
+          <ToolButton
+            disabled={index >= blocks.length - 1}
+            label="Move down"
+            onClick={() => controller.move(block.id, "down")}
+          >
+            <ArrowDown />
+          </ToolButton>
+        </>
+      )}
       <ToolButton label="Delete" onClick={() => controller.remove(block.id)}>
         <Trash2 />
       </ToolButton>
@@ -674,10 +687,33 @@ function describeLine(block: LineBlock | ListBlock): string {
   }
 }
 
-function preventEnter(event: KeyboardEvent<HTMLElement>): void {
-  if (event.key === "Enter") {
-    event.preventDefault()
+// A picture's box as CSS, in percentages of its page.
+function boxStyle(box: Placement): CSSProperties {
+  return { height: `${box.height}%`, left: `${box.x}%`, top: `${box.y}%`, width: `${box.width}%` }
+}
+
+// Where the arrow keys take a placed picture: along the page, a step at a time
+// or five with Shift; with Alt, larger or smaller, keeping its shape; and with
+// Page Up and Page Down, to the page before or after.
+function nudge(box: Placement, event: KeyboardEvent<HTMLElement>): Placement | null {
+  const step = event.shiftKey ? 5 : 1
+  const [across, down] = { ArrowDown: [0, step], ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step] }[event.key] ?? [0, 0]
+
+  if (event.key === "PageUp" || event.key === "PageDown") {
+    return placeImage({ ...box, page: box.page + (event.key === "PageUp" ? -1 : 1) })
   }
+
+  if (!across && !down) {
+    return null
+  }
+
+  if (event.altKey) {
+    const width = Math.max(1, box.width + across + down)
+
+    return placeImage({ ...box, height: (box.height * width) / box.width, width })
+  }
+
+  return placeImage({ ...box, x: box.x + across, y: box.y + down })
 }
 
 /** Says whether a block is a line of text: a paragraph or a heading. */

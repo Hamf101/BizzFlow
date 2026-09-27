@@ -386,7 +386,7 @@ export function TemplateEditor({
             <EditorSidePanel
               narrow={narrow}
               onClose={controller.closeSettings}
-              open={settingsBlock !== null}
+              open={settingsBlock?.type === "image"}
               title="Settings"
             >
               {settingsBlock ? (

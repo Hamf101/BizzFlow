@@ -48,7 +48,7 @@ test("saves the exact brand colors picked, and prints the page with them", async
   }))).toEqual({ primary: "#ffffff", accent: "#eeeeee" })
 })
 
-test("duplicates fields from the toolbar and from settings with unique saved field keys", async ({
+test("duplicates fields and renames one in its settings on the page, with unique saved field keys", async ({
   admin, pageAs, tenant,
 }, testInfo) => {
   const template = await seedTemplate(admin, tenant.organizationId, uniqueName("Duplicate"))
@@ -65,10 +65,11 @@ test("duplicates fields from the toolbar and from settings with unique saved fie
   await toolbar.getByRole("button", { name: "Duplicate", exact: true }).click()
   await expect(textFields).toHaveCount(2)
 
-  // The copy is selected, so its settings rename it and copy it once more.
-  await toolbar.getByRole("button", { name: "Settings", exact: true }).click()
+  // The copy is selected, so its settings rename it, and then it is copied once more.
+  await toolbar.getByRole("button", { name: "Field settings", exact: true }).click()
   await page.getByLabel("Label", { exact: true }).fill("Copied reference")
-  await page.getByRole("button", { name: "Duplicate Text field", exact: true }).click()
+  await page.keyboard.press("Escape")
+  await toolbar.getByRole("button", { name: "Duplicate", exact: true }).click()
   await expect(textFields).toHaveCount(3)
 
   await expect.poll(async () => {

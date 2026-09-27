@@ -1,19 +1,20 @@
 import { decodePDFRawStream, PDFArray, PDFDict, PDFDocument, PDFName, PDFRawStream, PDFString } from "pdf-lib"
-import { describe, expect, it } from "vitest"
+import { readFile } from "node:fs/promises"
+import { describe, expect, it, vi } from "vitest"
 
 import { renderGeneratedDocumentPdf } from "@/services/document-pdf-service"
 import { createSampleDocumentInput } from "@/services/document-pdf/sample-document.test-support"
-import type { TemplateBlock } from "@/types/template"
+import { imageBlockSchema, type TemplateLayout, type TemplateBlock } from "@/types/template"
 
 // Rendering embeds whole fonts, which can take seconds on a busy machine.
 const RENDER_TIMEOUT_MS = 30_000
 const ids = (index: number): string => `70000000-0000-4000-8000-${String(index).padStart(12, "0")}`
 
-async function render(blocks: TemplateBlock[]): Promise<PDFDocument> {
+async function render(blocks: TemplateBlock[], layout?: Partial<TemplateLayout>): Promise<PDFDocument> {
   const sample = createSampleDocumentInput("2026-07-17T19:30:00.000Z")
   const bytes = await renderGeneratedDocumentPdf({
     ...sample,
-    content: { ...(sample.content as Record<string, unknown>), blockRules: [], blocks, fieldGroups: [], sections: [] },
+    content: { ...(sample.content as Record<string, unknown>), blockRules: [], blocks, fieldGroups: [], sections: [], ...(layout ? { layout } : {}) },
     signers: [],
   })
 
@@ -170,6 +171,95 @@ describe("formatted text in a PDF", () => {
       // above the foot of an A4 page.
       expect(textShown(document)).toBeGreaterThanOrEqual(684 + 32)
       expect(Math.min(...baselines(document, 24), ...baselines(document, 36))).toBeGreaterThan(46)
+    },
+    RENDER_TIMEOUT_MS
+  )
+})
+
+
+describe("fonts, placed pictures and spacing in a PDF", () => {
+  it(
+    "prints a chosen family from its own file, and in the default face whatever that family cannot",
+    async () => {
+      const roboto = await readFile("src/services/document-pdf/fixtures/roboto-latin-400-normal.woff2")
+      const network = vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(roboto))
+
+      try {
+        const document = await render([
+          {
+            alignment: "left",
+            id: ids(1),
+            runs: [{ font: "roboto", text: "Invoice Ж " }, { font: "no-such-font", text: "due" }],
+            text: "Invoice Ж due",
+            type: "paragraph",
+          },
+        ])
+
+        expect(faces(document, 0).filter((face) => face.startsWith("Roboto"))).toEqual(["Roboto-Regular"])
+        expect(network.mock.calls.map(([url]) => String(url))).toEqual([
+          "https://cdn.jsdelivr.net/fontsource/fonts/roboto@5.3.0/latin-400-normal.woff2",
+          "https://cdn.jsdelivr.net/fontsource/fonts/roboto@5.3.0/cyrillic-400-normal.woff2",
+        ])
+      } finally {
+        network.mockRestore()
+      }
+    },
+    RENDER_TIMEOUT_MS
+  )
+
+  it(
+    "prints a placed picture on its own page, where it was put",
+    async () => {
+      const document = await render([
+        imageBlockSchema.parse({
+          altText: "Seal",
+          dataUrl:
+            "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl2lJ8AAAAASUVORK5CYII=",
+          id: ids(1),
+          placement: { height: 20, page: 2, width: 20, x: 25, y: 30 },
+          type: "image",
+        }),
+      ])
+      const [first, second] = contents(document)
+      const { height, width } = document.getPage(1).getSize()
+      // Moved to its corner, then scaled to its size. A square in a taller box
+      // sits in its middle, and PDF measures up from the foot of the page.
+      const placed = /1 0 0 1 ([\d.]+) ([\d.]+) cm\s+1 0 0 1 0 0 cm\s+([\d.]+) 0 0 ([\d.]+) 0 0 cm/.exec(second ?? "")
+
+      expect(document.getPageCount()).toBe(2)
+      expect(first).not.toMatch(/\/Image\S* Do/)
+      expect(second).toMatch(/\/Image\S* Do/)
+      expect(placed?.slice(1).map(Number)).toEqual([
+        expect.closeTo(width * 0.25),
+        expect.closeTo(height * 0.7 - (height * 0.2 + width * 0.2) / 2),
+        expect.closeTo(width * 0.2),
+        expect.closeTo(width * 0.2),
+      ])
+    },
+    RENDER_TIMEOUT_MS
+  )
+
+  it(
+    "spaces lines and paragraphs by the numbers set, inside the margins set",
+    async () => {
+      const text = "The provider cleans every office on the agreed day and brings every supply the work needs, at no extra cost."
+      const document = await render(
+        [1, 2].map((index) => ({ alignment: "left" as const, id: ids(index), text, type: "paragraph" as const })),
+        {
+          footerPolicy: "none",
+          headerPolicy: "none",
+          lineSpacing: 2,
+          margins: { bottom: 50, left: 70, right: 30, top: 60 },
+          paragraphSpacing: 18,
+          printedTitle: { mode: "none" },
+        }
+      )
+      const lines = baselines(document, 10)
+
+      // Two lines each: 20pt apart within a paragraph, 18pt more between them.
+      expect(lines.map((line, index) => Math.round((lines[index - 1] ?? line) - line))).toEqual([0, 20, 38, 20])
+      // The first line starts at the left margin, its baseline 10pt below the top one.
+      expect(contents(document)[0]).toContain(`1 0 0 1 70 ${841.89 - 60 - 10} Tm`)
     },
     RENDER_TIMEOUT_MS
   )

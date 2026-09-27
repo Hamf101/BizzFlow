@@ -41,12 +41,14 @@ import {
   withEntries,
 } from "@/components/editor/editor-content"
 import { paginate, type PageFrame, type PaginationRow } from "@/components/editor/editor-pagination"
+import { MarginGuides } from "@/components/editor/margin-guides"
 import { SlashMenu } from "@/components/editor/slash-menu"
 import { addPageBreak, type EditorController, type FocusRequest } from "@/components/editor/use-editor-controller"
 import { resolveDocumentSurfaceInk, type DocumentSurface } from "@/lib/document-surface"
 import { cn } from "@/lib/utils"
 import {
   createTemplateRenderPlan,
+  paragraphGap,
   shouldRenderTemplateFooter,
   shouldRenderTemplateHeader,
   type TemplateRenderBlock,
@@ -131,12 +133,20 @@ export function EditorCanvas({
     [answers, content, documentTitle, fields]
   )
   const units = useMemo(() => createUnits(plan), [plan])
+  const placedImages = plan.blocks.flatMap(({ block }) =>
+    block.type === "image" && block.placement ? [{ block, page: block.placement.page }] : []
+  )
   const ink = resolveDocumentSurfaceInk(surface, plan.branding)
   const point = narrow ? PHONE_POINT_PX : POINT_PX * plan.geometry.scale
   const pageWidth = plan.geometry.widthPoints * point
   const pageHeight = plan.geometry.heightPoints * point
-  const margin = plan.geometry.marginPoints * point
-  const blockGap = { balanced: 11, comfortable: 16, compact: 7 }[plan.layout.density] * point
+  const margins = {
+    bottom: plan.geometry.margins.bottom * point,
+    left: plan.geometry.margins.left * point,
+    right: plan.geometry.margins.right * point,
+    top: plan.geometry.margins.top * point,
+  }
+  const blockGap = paragraphGap(plan.layout) * point
   const logo = imageSource(plan.branding.logoAsset, plan.branding.logoDataUrl)
   const hasBranding = Boolean(logo || plan.branding.organizationName)
   const rootRef = useRef<HTMLDivElement>(null)
@@ -157,12 +167,15 @@ export function EditorCanvas({
   const frame: PageFrame = {
     gap: PAGE_GAP_PX,
     height: pageHeight,
-    marginBottom: (page) => margin + (footerOn(page) ? FOOTER_POINTS * point : 0),
-    marginTop: (page) => margin + (headerOn(page) ? headerHeight : 0),
+    marginBottom: (page) => margins.bottom + (footerOn(page) ? FOOTER_POINTS * point : 0),
+    marginTop: (page) => margins.top + (headerOn(page) ? headerHeight : 0),
   }
 
   useEffect(() => {
-    void document.fonts?.ready.then(() => setFontsReady((count) => count + 1))
+    const remeasure = (): void => setFontsReady((count) => count + 1)
+    void document.fonts?.ready.then(remeasure)
+    document.fonts?.addEventListener("loadingdone", remeasure)
+    return () => document.fonts?.removeEventListener("loadingdone", remeasure)
   }, [])
 
   // Measure every render: typing changes heights, and so do fonts and images.
@@ -537,6 +550,7 @@ export function EditorCanvas({
     "--doc-accent": ink.accent,
     "--doc-primary": ink.primary,
     "--doc-pt": `${point}px`,
+    "--doc-line-height": plan.layout.lineSpacing,
     ...(narrow ? { "--doc-h1": "1.55em", "--doc-h2": "1.35em", "--doc-h3": "1.15em", "--doc-title": "1.7em" } : {}),
     fontSize: 10 * point,
   } as CSSProperties
@@ -585,6 +599,10 @@ export function EditorCanvas({
         style={inkStyle}
       >
         {flow}
+        {/* A phone's column has no pages, so placed pictures follow the text. */}
+        {placedImages.map(({ block }) => (
+          <CanvasBlock actions={actions} block={block} key={block.id} />
+        ))}
         {units.length === 0 ? <EmptyPageLine actions={actions} onStart={() => focusPageEnd(0)} /> : null}
         {textEditable ? (
           <AddPageButton className="mt-6" onClick={() => controller.addPage(content.blocks.at(-1)?.id ?? null)} />
@@ -602,7 +620,8 @@ export function EditorCanvas({
     )
   }
 
-  const stackHeight = layout.pageCount * (pageHeight + PAGE_GAP_PX) + (textEditable ? 56 : 0)
+  const pageCount = Math.max(layout.pageCount, ...placedImages.map(({ page }) => page))
+  const stackHeight = pageCount * (pageHeight + PAGE_GAP_PX) + (textEditable ? 56 : 0)
 
   return (
     <div
@@ -617,9 +636,9 @@ export function EditorCanvas({
         ref={rootRef}
         style={{ ...inkStyle, height: stackHeight, transform: `scale(${zoom})`, width: pageWidth }}
       >
-        {Array.from({ length: layout.pageCount }, (_, page) => (
+        {Array.from({ length: pageCount }, (_, page) => (
           <div
-            aria-label={`Page ${page + 1} of ${layout.pageCount}`}
+            aria-label={`Page ${page + 1} of ${pageCount}`}
             className="group/page absolute inset-x-0 cursor-text bg-card shadow-[0_1px_2px_rgba(37,35,41,0.08),0_10px_30px_rgba(37,35,41,0.1)]"
             data-page={page + 1}
             key={page}
@@ -632,6 +651,9 @@ export function EditorCanvas({
             role="region"
             style={{ height: pageHeight, top: page * (pageHeight + PAGE_GAP_PX) }}
           >
+            {designable ? (
+              <MarginGuides first={page === 0} layout={plan.layout} onChange={controller.setLayout} point={point} zoom={zoom} />
+            ) : null}
             {headerOn(page) ? (
               <div
                 className={cn(
@@ -640,7 +662,7 @@ export function EditorCanvas({
                   plan.branding.logoAlignment === "right" && "items-end"
                 )}
                 ref={page === 0 ? headerRef : undefined}
-                style={{ paddingBottom: 10 * point, paddingInline: margin, top: margin }}
+                style={{ paddingBottom: 10 * point, paddingLeft: margins.left, paddingRight: margins.right, top: margins.top }}
               >
                 {logo ? (
                   // eslint-disable-next-line @next/next/no-img-element -- the author's own picture, already sized
@@ -660,15 +682,15 @@ export function EditorCanvas({
               <MarginPill
                 label="Header"
                 onClick={() => controller.setLayout({ ...plan.layout, headerPolicy: "all_pages" })}
-                zone={{ height: margin, top: 0 }}
+                zone={{ height: margins.top, top: 0 }}
               />
             ) : null}
             {footerOn(page) ? (
               <p
                 className="absolute text-muted-foreground tabular-nums"
-                style={{ bottom: margin * 0.55, fontSize: 8 * point, right: margin }}
+                style={{ bottom: margins.bottom * 0.55, fontSize: 8 * point, right: margins.right }}
               >
-                Page {page + 1} of {layout.pageCount}
+                Page {page + 1} of {pageCount}
               </p>
             ) : textEditable ? (
               <MarginPill
@@ -676,14 +698,14 @@ export function EditorCanvas({
                 onClick={() =>
                   controller.setLayout({ ...plan.layout, footerPolicy: "all_pages", pageNumbering: "page_x_of_y" })
                 }
-                zone={{ bottom: 0, height: margin }}
+                zone={{ bottom: 0, height: margins.bottom }}
               />
             ) : null}
             {textEditable ? (
               <AddPageButton
                 className={cn(
                   "absolute left-1/2 -translate-x-1/2 -translate-y-1/2",
-                  page < layout.pageCount - 1 &&
+                  page < pageCount - 1 &&
                     "opacity-0 transition-opacity hover:opacity-100 focus-visible:opacity-100 group-hover/page:opacity-100"
                 )}
                 onClick={() => {
@@ -691,15 +713,25 @@ export function EditorCanvas({
 
                   controller.addPage(lastUnit?.blocks.at(-1)?.block.id ?? null)
                 }}
-                style={{ top: pageHeight + (page < layout.pageCount - 1 ? PAGE_GAP_PX / 2 : 28) }}
+                style={{ top: pageHeight + (page < pageCount - 1 ? PAGE_GAP_PX / 2 : 28) }}
               />
             ) : null}
+          </div>
+        ))}
+        {/* Placed pictures lie over their pages' text, as they print. */}
+        {placedImages.map(({ block, page }) => (
+          <div
+            className="pointer-events-none absolute inset-x-0 z-10"
+            key={block.id}
+            style={{ height: pageHeight, top: (page - 1) * (pageHeight + PAGE_GAP_PX) }}
+          >
+            <CanvasBlock actions={actions} block={block} placed />
           </div>
         ))}
         <div
           className="pointer-events-none absolute inset-x-0 top-0"
           data-slot="page-flow"
-          style={{ paddingInline: margin, paddingTop: frame.marginTop(0) }}
+          style={{ paddingLeft: margins.left, paddingRight: margins.right, paddingTop: frame.marginTop(0) }}
         >
           <PageBreaks.Provider value={layout.inside}>{flow}</PageBreaks.Provider>
           {units.length === 0 ? (
@@ -858,7 +890,7 @@ function measureRows(unit: HTMLElement, zoom: number): PaginationRow[] {
 
 function createUnits(plan: TemplateRenderPlan): CanvasUnit[] {
   const units: CanvasUnit[] = []
-  const blocks = plan.blocks
+  const blocks = plan.blocks.filter(({ block }) => !(block.type === "image" && block.placement))
 
   if (plan.title) {
     units.push({ blocks: [], columns: 1, groupLabel: null, id: "title", keepWithNext: false, pageBreakBefore: false, sectionLabel: null })

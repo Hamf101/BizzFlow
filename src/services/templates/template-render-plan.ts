@@ -19,6 +19,7 @@ export type TemplatePageGeometry = Readonly<{
   widthPoints: number
   heightPoints: number
   marginPoints: number
+  margins: Readonly<{ top: number; right: number; bottom: number; left: number }>
   contentWidthPoints: number
   contentHeightPoints: number
   /** Physical points per design point. */
@@ -215,16 +216,51 @@ export function resolvePageGeometry(layout: TemplateLayout): TemplatePageGeometr
     (layout.orientation === "landscape" ? portraitHeight : portraitWidth) / scale
   const heightPoints =
     (layout.orientation === "landscape" ? portraitWidth : portraitHeight) / scale
-  const marginPoints = MARGIN_POINTS[layout.marginPreset]
+  const preset = MARGIN_POINTS[layout.marginPreset]
+  const requested = layout.margins ?? { bottom: preset, left: preset, right: preset, top: preset }
+  const page = { heightPoints, widthPoints }
+  const margins = {
+    bottom: Math.min(requested.bottom, maxMargin(page, "bottom")),
+    left: Math.min(requested.left, maxMargin(page, "left")),
+    right: Math.min(requested.right, maxMargin(page, "right")),
+    top: Math.min(requested.top, maxMargin(page, "top")),
+  }
 
   return {
     widthPoints,
     heightPoints,
-    marginPoints,
-    contentWidthPoints: widthPoints - marginPoints * 2,
-    contentHeightPoints: heightPoints - marginPoints * 2,
+    marginPoints: margins.left,
+    margins,
+    contentWidthPoints: widthPoints - margins.left - margins.right,
+    contentHeightPoints: heightPoints - margins.top - margins.bottom,
     scale
   }
+}
+
+/**
+ * The space between paragraphs, in points: the layout's own figure, or its
+ * density's.
+ *
+ * @param layout - The layout.
+ * @returns The space, in points.
+ */
+export function paragraphGap(layout: TemplateLayout): number {
+  return layout.paragraphSpacing ?? { balanced: 11, comfortable: 16, compact: 7 }[layout.density]
+}
+
+/** A side of the page, for its margin. */
+export type PageSide = keyof TemplatePageGeometry["margins"]
+
+/**
+ * The widest one margin may be: two inches, as a saved layout allows, and
+ * never more than two fifths of the page.
+ *
+ * @param page - The page's size, in design points.
+ * @param side - The margin's side.
+ * @returns The widest margin, in design points.
+ */
+export function maxMargin(page: Readonly<{ heightPoints: number; widthPoints: number }>, side: PageSide): number {
+  return Math.min(144, Math.floor((side === "left" || side === "right" ? page.widthPoints : page.heightPoints) * 0.4))
 }
 
 /**

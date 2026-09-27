@@ -179,7 +179,14 @@ export function TemplateBlockEditor({
   )
 }
 
-function BlockFields({
+/**
+ * A block's own settings: a field's label, key and choices in its popover on
+ * the page, or a picture's in the settings panel.
+ *
+ * @param props - The block, the page's blocks, and how to change the block.
+ * @returns The settings.
+ */
+export function BlockFields({
   block,
   blocks,
   onChange,
@@ -275,46 +282,8 @@ function BlockFields({
       )
     case "image":
       return <ImageFields block={block} onChange={onChange} pictureSource={pictureSource} />
+    // A table is typed into on the page, and changed from its cells' menu.
     case "table":
-      return (
-        <div className="grid gap-4">
-          <Field>
-            <FieldLabel htmlFor={`${block.id}-table-headers`}>
-              Headings, separated by |
-            </FieldLabel>
-            <Input
-              id={`${block.id}-table-headers`}
-              onChange={(event: ChangeEvent<HTMLInputElement>): void =>
-                onChange({
-                  ...block,
-                  headers: event.target.value.split("|").map((value: string) =>
-                    value.trim()
-                  ),
-                })
-              }
-              value={block.headers.join(" | ")}
-            />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor={`${block.id}-table-rows`}>
-              Rows, one per line, cells separated by |
-            </FieldLabel>
-            <textarea
-              className={cn(CONTROL_CLASS_NAME, "min-h-28 resize-y font-mono")}
-              id={`${block.id}-table-rows`}
-              onChange={(event: ChangeEvent<HTMLTextAreaElement>): void =>
-                onChange({
-                  ...block,
-                  rows: event.target.value.split("\n").map((row: string) =>
-                    row.split("|").map((value: string) => value.trim())
-                  ),
-                })
-              }
-              value={block.rows.map((row: string[]) => row.join(" | ")).join("\n")}
-            />
-          </Field>
-        </div>
-      )
     case "divider":
       return null
     case "text_field":

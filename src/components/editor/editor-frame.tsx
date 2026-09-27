@@ -270,6 +270,8 @@ export function EditorFrame<Mode extends string>({
         <div
           className={cn(
             "absolute inset-0 overflow-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+            // What scrolls into view, such as the caret, stops clear of the floating tools.
+            narrow ? "scroll-pb-28" : toolbar && "scroll-pt-18",
             !narrow && "group-has-[[data-slot=editor-panel]:not([hidden])]/stage:right-[23.5rem]"
           )}
           data-slot="editor-scroll"

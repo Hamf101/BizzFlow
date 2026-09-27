@@ -102,15 +102,32 @@ async function measure(context: PdfLibRenderContext, runs: readonly TextRun[], s
   }
 
   for (const run of runs) {
-    const font = await context.faceFor(bold || Boolean(run.bold), Boolean(run.italic))
     const runSize = run.size ?? size
 
     for (const part of run.text.split(/(\s+)/)) {
       if (/^\s+$/.test(part)) {
         finish()
       } else if (part) {
-        const text = normalizeStandardFontText(part, font)
-        pieces.push({ font, run, size: runSize, text, width: font.widthOfTextAtSize(text, runSize) })
+        // A chosen family can lack a character, which then prints in the
+        // default face; neighbours in the same face stay one piece.
+        const groups: Array<{ font: PDFFont; text: string }> = []
+
+        for (const character of part) {
+          const font = await context.faceFor(bold || Boolean(run.bold), Boolean(run.italic), run.font, character)
+          const last = groups.at(-1)
+
+          if (last?.font === font) {
+            last.text += character
+          } else {
+            groups.push({ font, text: character })
+          }
+        }
+
+        for (const group of groups) {
+          const text = normalizeStandardFontText(group.text, group.font)
+
+          pieces.push({ font: group.font, run, size: runSize, text, width: group.font.widthOfTextAtSize(text, runSize) })
+        }
       }
     }
   }

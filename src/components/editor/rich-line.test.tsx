@@ -106,3 +106,15 @@ it("rewrites itself when its words change elsewhere, as after an undo, and puts 
 
   expect(line().editor.state.selection.head).toBe(3)
 })
+
+it("keeps a chosen font through editing and a reload, and loads its stylesheet", async () => {
+  const onChange = vi.fn()
+  const rerender = await render({ onChange, value: "Invoice" })
+
+  await act(async () => line().editor.chain().setTextSelection({ from: 0, to: 7 }).setMark("textStyle", { font: "roboto" }).run())
+  expect(onChange).toHaveBeenLastCalledWith("Invoice", [{ font: "roboto", text: "Invoice" }], 7)
+
+  await rerender({ runs: [{ font: "roboto", text: "Invoice" }] })
+  expect(line().querySelector("[data-font]")?.getAttribute("data-font")).toBe("roboto")
+  expect(document.querySelector('link[href="/fonts/roboto/font.css"]')).not.toBeNull()
+})

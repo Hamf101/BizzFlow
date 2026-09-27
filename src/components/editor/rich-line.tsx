@@ -14,6 +14,7 @@ import { EditorContent, useEditor } from "@tiptap/react"
 import { type CSSProperties, type ReactElement, useEffect, useRef, useSyncExternalStore } from "react"
 
 import { PLACEHOLDER_CLASS, type TextCaret } from "@/components/editor/editable-text"
+import { DocumentFontStyles, documentFontFamily } from "@/components/templates/document-font-styles"
 import { RichText } from "@/components/templates/rich-text"
 import { cn } from "@/lib/utils"
 import { fitRuns, textRunSchema, type TextRun } from "@/types/template"
@@ -22,13 +23,22 @@ import { fitRuns, textRunSchema, type TextRun } from "@/types/template"
 const Line = Node.create({ content: "inline*", name: "doc", topNode: true })
 const Text = Node.create({ group: "inline", name: "text" })
 
-// A word's colour and size, drawn the way RichText draws them: the colour
-// with the class a dark screen adapts it by, and the size in points of the
-// printed page, at however many pixels a point takes on the surface.
+// A word's family, colour and size, drawn the way RichText draws them: the
+// family with the default one behind it, the colour with the class a dark
+// screen adapts it by, and the size in points of the printed page, at however
+// many pixels a point takes on the surface.
 const Ink = Extension.create({
   addGlobalAttributes: () => [
     {
       attributes: {
+        font: {
+          default: null,
+          parseHTML: (element: HTMLElement) => element.getAttribute("data-font"),
+          renderHTML: (attributes: Record<string, unknown>) =>
+            typeof attributes.font === "string" && textRunSchema.shape.font.safeParse(attributes.font).success
+              ? { "data-font": attributes.font, style: `font-family: ${documentFontFamily(attributes.font)}; font-synthesis: none` }
+              : {},
+        },
         color: {
           default: null,
           parseHTML: (element: HTMLElement) => /(?:^|;)\s*color:\s*(#[0-9a-f]{6})\b/i.exec(element.getAttribute("style") ?? "")?.[1] ?? null,
@@ -205,6 +215,7 @@ export function RichLine({
       data-placeholder={placeholder}
       style={style}
     >
+      <DocumentFontStyles fonts={runs?.map((run: TextRun) => run.font) ?? []} />
       {/* The words as they will print, until the line can be typed in. */}
       {editor ? <EditorContent className="contents" editor={editor} /> : <RichText runs={runs} text={value} />}
     </Element>
@@ -232,6 +243,7 @@ export function readLine(doc: ProseNode): { runs?: TextRun[]; text: string } {
         keep(run, "highlight", attrs.color)
       } else if (type.name === "textStyle") {
         keep(run, "color", attrs.color)
+        keep(run, "font", attrs.font)
         keep(run, "size", attrs.size)
       }
     }
@@ -260,7 +272,9 @@ export function lineContent(text: string, runs?: readonly TextRun[]): JSONConten
         ...(["bold", "italic", "underline", "strike"] as const).filter((mark) => run[mark]).map((type) => ({ type })),
         ...(run.link ? [{ attrs: { href: run.link }, type: "link" }] : []),
         ...(run.highlight ? [{ attrs: { color: run.highlight }, type: "highlight" }] : []),
-        ...(run.color || run.size ? [{ attrs: { color: run.color ?? null, size: run.size ?? null }, type: "textStyle" }] : []),
+        ...(run.color || run.font || run.size
+          ? [{ attrs: { color: run.color ?? null, font: run.font ?? null, size: run.size ?? null }, type: "textStyle" }]
+          : []),
       ],
       text: run.text,
       type: "text",
@@ -288,8 +302,9 @@ function readCaret(state: EditorState): TextCaret {
 }
 
 // Keeps a mark's value only when a saved document would: a colour as #rrggbb,
-// a size in range, a link to a web page or an email address.
-function keep<Key extends "color" | "highlight" | "link" | "size">(run: TextRun, key: Key, value: unknown): void {
+// a size in range, a family by its catalog name, a link to a web page or an
+// email address.
+function keep<Key extends "color" | "font" | "highlight" | "link" | "size">(run: TextRun, key: Key, value: unknown): void {
   if (value !== null && value !== undefined && textRunSchema.shape[key].safeParse(value).success) {
     run[key] = value as TextRun[Key]
   }

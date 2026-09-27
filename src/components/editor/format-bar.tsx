@@ -30,6 +30,7 @@ import { type FormEvent, type ReactElement, type ReactNode, useEffect, useState 
 import { findInsertChoices, INSERT_CHOICES, type InsertChoice } from "@/components/editor/block-catalog"
 import { isLine, isList } from "@/components/editor/editor-block"
 import { convertTextBlock, liftListItem, type TextBlockKind } from "@/components/editor/editor-content"
+import { FontPicker } from "@/components/editor/font-picker"
 import type { EditorController } from "@/components/editor/use-editor-controller"
 import { Button } from "@/components/ui/button"
 import {
@@ -43,7 +44,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
-import { textRunSchema } from "@/types/template"
+import { type TemplateBlock, textRunSchema } from "@/types/template"
 
 type LineKind = Extract<TextBlockKind, { type: "heading" | "paragraph" }>
 
@@ -110,6 +111,7 @@ export function FormatBar({
         ? {
             bold: editor.isActive("bold"),
             color: editor.getAttributes("textStyle").color as string | undefined,
+            font: editor.getAttributes("textStyle").font as string | undefined,
             highlight: editor.getAttributes("highlight").color as string | undefined,
             italic: editor.isActive("italic"),
             link: editor.getAttributes("link").href as string | undefined,
@@ -316,6 +318,13 @@ export function FormatBar({
           ))}
         </DropdownMenuContent>
       </DropdownMenu>
+      <FontPicker
+        disabled={!line}
+        documentFonts={documentFonts(controller.content.blocks)}
+        narrow={narrow}
+        onChange={(font) => format((chain) => chain.setMark("textStyle", { font }).removeEmptyTextStyle())}
+        value={marks?.font}
+      />
       <div className="flex shrink-0 items-center">
         <Tool className={cn(narrow ? "size-11" : "h-8 w-7")} disabled={!line || size <= 6} label="Smaller text" onClick={() => setSize(size - 1)}>
           <Minus />
@@ -441,6 +450,15 @@ export function FormatBar({
 
 function Divider(): ReactElement {
   return <span aria-hidden="true" className="mx-1 h-5 w-px shrink-0 bg-border" />
+}
+
+// The families the document's words already use, for the font menu to offer first.
+function documentFonts(blocks: readonly TemplateBlock[]): string[] {
+  const runs = blocks.flatMap((block) =>
+    isLine(block) ? (block.runs ?? []) : isList(block) ? (block.itemRuns ?? []).flatMap((item) => item ?? []) : []
+  )
+
+  return runs.flatMap((run) => (run.font ? [run.font] : []))
 }
 
 // A plain toolbar button. Pressing it leaves the caret and the chosen words

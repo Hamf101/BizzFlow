@@ -69,7 +69,7 @@ const fieldBlockShape = {
 
 // A link opens a web page or writes an email, never runs anything.
 const LINK_PATTERN = /^(?:https?:\/\/|mailto:)\S+$/i
-const RUN_MARKS = ["bold", "italic", "underline", "strike", "color", "highlight", "size", "link"] as const
+const RUN_MARKS = ["bold", "italic", "underline", "strike", "color", "highlight", "size", "link", "font"] as const
 
 /**
  * A stretch of text and how it looks: the marks the toolbar puts on it. A mark
@@ -78,6 +78,8 @@ const RUN_MARKS = ["bold", "italic", "underline", "strike", "color", "highlight"
 export const textRunSchema = z
   .object({
     text: z.string().min(1).max(20_000),
+    // A family from the font catalog, by its Fontsource name, such as "open-sans".
+    font: z.string().max(100).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).optional(),
     bold: z.literal(true).optional(),
     italic: z.literal(true).optional(),
     underline: z.literal(true).optional(),
@@ -214,6 +216,19 @@ export const imageBlockSchema = z
     altText: z.string().trim().min(1).max(500),
     caption: z.string().trim().max(500).nullable().default(null),
     alignment: z.enum(["left", "center", "right"]).default("center"),
+    // Placed on a page in front of the text rather than in it: the page, and
+    // the box the picture fills there, in percentages of the page.
+    placement: z
+      .object({
+        page: z.number().int().min(1).max(100),
+        x: z.number().min(0).max(99),
+        y: z.number().min(0).max(99),
+        width: z.number().min(1).max(100),
+        height: z.number().min(1).max(100),
+      })
+      .strict()
+      .refine((box) => box.x + box.width <= 100.001 && box.y + box.height <= 100.001, "Image must fit inside its page.")
+      .optional(),
     widthPercent: z.number().int().min(10).max(100).default(100)
   })
   .strict()
@@ -360,6 +375,19 @@ export const templateLayoutSchema = z
   .object({
     pageSize: z.enum(["A3", "A4", "A5", "Letter", "Legal"]).default("A4"),
     orientation: z.enum(["portrait", "landscape"]).default("portrait"),
+    // Each side's margin in points, when set side by side rather than by preset.
+    margins: z
+      .object({
+        top: z.number().min(0).max(144),
+        right: z.number().min(0).max(144),
+        bottom: z.number().min(0).max(144),
+        left: z.number().min(0).max(144),
+      })
+      .strict()
+      .optional(),
+    // Line height as a multiple of the text size, and the space between paragraphs in points.
+    lineSpacing: z.number().min(1).max(3).optional(),
+    paragraphSpacing: z.number().min(0).max(48).optional(),
     marginPreset: z
       .enum(["standard", "compact", "generous"])
       .default("standard"),

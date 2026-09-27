@@ -9,8 +9,8 @@ export async function proxy(request: NextRequest) {
 export const config = {
   matcher: [
     // "monitoring" is the Sentry tunnel route: browser events must not pay a
-    // Supabase session round trip.
-    "/((?!_next/static|_next/image|favicon.ico|monitoring|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    // Supabase session round trip. Nor must document fonts, which are public.
+    "/((?!_next/static|_next/image|favicon.ico|monitoring|fonts/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 }
 

@@ -242,8 +242,9 @@ export function useEditorController({
     change((current) => updateTemplateBlock(current, block), coalesceKey)
   }
 
-  function setLayout(layout: TemplateLayout): void {
-    change((current) => ({ ...current, layout }))
+  // A drag or a run of keystrokes on one setting makes one undo step.
+  function setLayout(layout: TemplateLayout, coalesceKey?: string): void {
+    change((current) => ({ ...current, layout }), coalesceKey)
   }
 
   return {

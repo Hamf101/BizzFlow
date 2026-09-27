@@ -56,7 +56,7 @@ export function TemplateStaticBlock({
   accentColorVariable,
   block,
   primaryColorVariable,
-}: TemplateStaticBlockProps): ReactElement {
+}: TemplateStaticBlockProps): ReactElement | null {
   switch (block.type) {
     case "heading":
       return (
@@ -68,7 +68,7 @@ export function TemplateStaticBlock({
     case "paragraph":
       return (
         <p
-          className="whitespace-pre-wrap text-sm leading-6"
+          className="whitespace-pre-wrap text-sm leading-[var(--doc-line-height,1.5rem)]"
           style={{ textAlign: block.alignment }}
         >
           {block.text ? <RichText runs={block.runs} text={block.text} /> : "Paragraph"}
@@ -76,7 +76,7 @@ export function TemplateStaticBlock({
       )
     case "bullet_list":
       return (
-        <ul className="list-disc space-y-1 pl-5 text-sm leading-6">
+        <ul className="list-disc space-y-1 pl-5 text-sm leading-[var(--doc-line-height,1.5rem)]">
           {block.items.map((item: string, index: number) => (
             <li key={`${block.id}-${index}`}>
               <RichText runs={block.itemRuns?.[index]} text={item} />
@@ -86,7 +86,7 @@ export function TemplateStaticBlock({
       )
     case "numbered_list":
       return (
-        <ol className="list-decimal space-y-1 pl-5 text-sm leading-6">
+        <ol className="list-decimal space-y-1 pl-5 text-sm leading-[var(--doc-line-height,1.5rem)]">
           {block.items.map((item: string, index: number) => (
             <li key={`${block.id}-${index}`}>
               <RichText runs={block.itemRuns?.[index]} text={item} />
@@ -95,6 +95,11 @@ export function TemplateStaticBlock({
         </ol>
       )
     case "image": {
+      // A picture placed on a page is drawn over it, not in the text.
+      if (block.placement) {
+        return null
+      }
+
       const source = imageSource(block.asset, block.dataUrl)
 
       return (

@@ -1,6 +1,6 @@
 import type { PDFFont, PDFDocument, PDFImage, PDFPage } from "pdf-lib"
 
-import type { TemplateImageAsset } from "@/types/template"
+import type { TemplateBlock, TemplateImageAsset } from "@/types/template"
 
 import type { NormalizedPdfInput } from "./types"
 import type { PdfLayoutMetrics } from "./layout"
@@ -11,8 +11,13 @@ export type PdfLibRenderContext = {
   boldFont: PDFFont
   content: NormalizedPdfInput["content"]
   document: PDFDocument
-  /** The face for bold or italic words; the slanted ones are embedded on first use. */
-  faceFor: (bold: boolean, italic: boolean) => Promise<PDFFont>
+  /**
+   * The face for bold or italic words, in the family they chose or the
+   * default one; each face is embedded on first use.
+   */
+  faceFor: (bold: boolean, italic: boolean, font?: string, character?: string) => Promise<PDFFont>
+  /** Pictures placed on a page rather than in the flow, printed over it. */
+  freeImages: Array<Extract<TemplateBlock, { type: "image" }>>
   hasSigners: boolean
   imageCache: Map<string, PDFImage>
   layout: PdfLayoutMetrics

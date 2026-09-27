@@ -4,11 +4,11 @@ import { expect, test, uniqueName } from "../support/fixtures"
 import { waitForHydration } from "../support/hydration"
 import { seedTemplate } from "../support/seed"
 
-test("formats the chosen words from the toolbar and adds a table from Insert's grid, then keeps both", async ({
+test("formats the chosen words from the toolbar, adds a table from Insert's grid and a column from a cell, then keeps it all", async ({
   admin,
   pageAs,
   tenant,
-}) => {
+}, testInfo) => {
   const template = await seedTemplate(admin, tenant.organizationId, uniqueName("Formatting"), "draft", [
     { alignment: "left", id: randomUUID(), text: "Pay the invoice within thirty days.", type: "paragraph" },
   ])
@@ -28,9 +28,27 @@ test("formats the chosen words from the toolbar and adds a table from Insert's g
   await page.getByRole("button", { name: "Dark red", exact: true }).click()
   await expect(page.getByRole("button", { name: "Bold" })).toHaveAttribute("aria-pressed", "true")
 
+  // Arial is not a Google font; the menu offers the one that takes the same room.
+  await page.getByRole("combobox", { name: /^Font/ }).click()
+  await expect(page.getByPlaceholder(/^Search fonts/)).toBeFocused()
+  await page.keyboard.type("arial")
+  await expect(page.getByRole("option")).toHaveText([/^Arimo/])
+  await page.keyboard.press("Enter")
+  await expect(page.getByRole("combobox", { name: "Font: Arimo" })).toBeVisible()
+
   await page.getByRole("button", { name: "Insert" }).click()
   await page.getByRole("menuitem", { name: "Table" }).click()
   await page.getByRole("menuitem", { name: "3 by 2 table" }).click()
+
+  // A right-click on a cell opens its menu; a phone floats a button for it while the cell is typed in.
+  const cell = page.getByRole("textbox", { name: "Row 1, column 3" })
+  if (testInfo.project.name === "mobile-chrome") {
+    await cell.tap()
+    await page.getByRole("button", { name: "Rows and columns" }).click()
+  } else {
+    await cell.click({ button: "right" })
+  }
+  await page.getByRole("menuitem", { name: "Insert column right" }).click()
 
   await expect
     .poll(
@@ -43,9 +61,9 @@ test("formats the chosen words from the toolbar and adds a table from Insert's g
     )
     .toEqual([
       {
-        runs: [{ text: "Pay the " }, { bold: true, color: "#990000", text: "invoice" }, { text: " within thirty days." }],
+        runs: [{ text: "Pay the " }, { bold: true, color: "#990000", font: "arimo", text: "invoice" }, { text: " within thirty days." }],
         type: "paragraph",
       },
-      { headers: ["Column 1", "Column 2", "Column 3"], rows: [["", "", ""]], type: "table" },
+      { headers: ["Column 1", "Column 2", "Column 3", "Column 4"], rows: [["", "", "", ""]], type: "table" },
     ])
 })

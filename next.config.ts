@@ -43,9 +43,12 @@ const nextConfig: NextConfig = {
     // Embedded logos/images are validated and capped by the template schema.
     serverActions: { bodySizeLimit: "10mb" },
   },
-  // Ensure serverless/standalone builds carry the PDF renderer's font files.
+  // Ensure serverless/standalone builds carry the font files the PDF renderer
+  // and the /fonts route read from disk.
   outputFileTracingIncludes: {
+    "/fonts/*/*": ["./public/fonts/faces.json", "./node_modules/dejavu-fonts-ttf/ttf/*.ttf"],
     "/api/documents/*/pdf": [
+      "./public/fonts/faces.json",
       "./node_modules/dejavu-fonts-ttf/ttf/DejaVuSans.ttf",
       "./node_modules/dejavu-fonts-ttf/ttf/DejaVuSans-Bold.ttf",
       "./node_modules/dejavu-fonts-ttf/ttf/DejaVuSans-Oblique.ttf",

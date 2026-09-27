@@ -9,6 +9,7 @@ import {
   type RGB
 } from "pdf-lib"
 
+import { DocumentFontError, getDocumentFontAsset, resolveDocumentFont } from "@/services/document-font-service"
 import type { TemplateBlock } from "@/types/template"
 
 import {
@@ -17,6 +18,7 @@ import {
   PDF_ITALIC_FONT_PATH,
   PDF_REGULAR_FONT_PATH
 } from "./constants"
+import { DocumentPdfServiceError } from "./errors"
 import { embedPdfLibImage, fitPdfImage } from "./pdf-lib-images"
 import { drawRichPdfText } from "./pdf-lib-rich-text"
 import { drawPdfLibSigner, drawPdfLibSigningIntro } from "./pdf-lib-signing"
@@ -75,7 +77,7 @@ export async function renderPdfLibDocument(
     ["bold", Promise.resolve(boldFont)],
     ["regular", Promise.resolve(regularFont)]
   ])
-  const faceFor = (bold: boolean, italic: boolean): Promise<PDFFont> => {
+  const defaultFace = (bold: boolean, italic: boolean): Promise<PDFFont> => {
     const key = `${bold ? "bold" : "regular"}${italic ? "-italic" : ""}`
     const face =
       faces.get(key) ??
@@ -85,6 +87,53 @@ export async function renderPdfLibDocument(
 
     return face
   }
+  // A chosen family prints a character from the file that holds it; one the
+  // family lacks, or a family no longer offered, prints in the default face.
+  const characterSets = new Map<PDFFont, Set<number>>()
+  const familyFace = async (font: string, bold: boolean, italic: boolean, character: string): Promise<PDFFont> => {
+    const resolved = await resolveDocumentFont(font, bold, italic, character)
+
+    if (!resolved) {
+      return defaultFace(bold, italic)
+    }
+
+    const key = `${font}/${resolved.file}`
+    const face =
+      faces.get(key) ??
+      getDocumentFontAsset(font, resolved.file).then(
+        ({ body }) => document.embedFont(body, { subset: true }),
+        (error: unknown) => {
+          // Fontsource being unreachable passes; a PDF printed without the font would not.
+          throw error instanceof DocumentFontError
+            ? new DocumentPdfServiceError("A font this document uses is unavailable right now. Please try again.", 503)
+            : error
+        }
+      )
+
+    faces.set(key, face)
+
+    const embedded = await face
+    const drawn = characterSets.get(embedded) ?? new Set(embedded.getCharacterSet())
+
+    characterSets.set(embedded, drawn)
+
+    return drawn.has(character.codePointAt(0) ?? 32) ? embedded : defaultFace(bold, italic)
+  }
+  const chosenFaces = new Map<string, Promise<PDFFont>>()
+  const faceFor: PdfLibRenderContext["faceFor"] = (bold, italic, font, character = " ") => {
+    if (!font) {
+      return defaultFace(bold, italic)
+    }
+
+    const key = `${font}:${bold}:${italic}:${character}`
+    const face = chosenFaces.get(key) ?? familyFace(font, bold, italic, character)
+
+    chosenFaces.set(key, face)
+
+    return face
+  }
+
+  const freeImages = input.renderPlan.blocks.flatMap(({ block }) => (block.type === "image" && block.placement ? [block] : []))
 
   document.setTitle(input.title)
   document.setAuthor(input.content.branding.organizationName || "BizFlow Docs")
@@ -100,6 +149,7 @@ export async function renderPdfLibDocument(
       content: input.content,
       document,
       faceFor,
+      freeImages,
       hasSigners: input.signers.length > 0,
       imageCache,
       layout,
@@ -163,6 +213,39 @@ async function drawPdfLibPage(
   if (plan.showPageNumber) {
     drawPdfLibFooter(context, pageNumber, totalPages)
   }
+
+  for (const block of context.freeImages) {
+    if (block.placement?.page === pageNumber) {
+      await drawPdfLibPlacedImage(context, block, block.placement)
+    }
+  }
+}
+
+// A picture placed on its page prints over the text there, fitted to its saved
+// box, with any caption along the box's foot.
+async function drawPdfLibPlacedImage(
+  context: PdfLibRenderContext,
+  block: PdfLibRenderContext["freeImages"][number],
+  box: NonNullable<PdfLibRenderContext["freeImages"][number]["placement"]>
+): Promise<void> {
+  const { pageHeight, pageWidth } = context.layout
+  const left = (pageWidth * box.x) / 100
+  const top = pageHeight * (1 - box.y / 100)
+  const width = (pageWidth * box.width) / 100
+  const pictureHeight = Math.max(1, (pageHeight * box.height) / 100 - (block.caption ? 14 : 0))
+  const image = await embedPdfLibImage(context, block)
+  const fitted = image.scaleToFit(width, pictureHeight)
+
+  context.page.drawImage(image, {
+    height: fitted.height,
+    width: fitted.width,
+    x: left + (width - fitted.width) / 2,
+    y: top - (pictureHeight + fitted.height) / 2,
+  })
+
+  if (block.caption) {
+    drawWrappedPdfText(context, block.caption, top - pictureHeight, left, width, 8, 10, context.regularFont, rgb(0.4, 0.4, 0.4), "center")
+  }
 }
 
 function drawPdfLibFooter(
@@ -171,7 +254,7 @@ function drawPdfLibFooter(
   totalPages: number
 ): void {
   const { contentWidth, margin } = context.layout
-  const footerTop = margin
+  const footerTop = context.layout.marginBottom
 
   context.page.drawLine({
     start: { x: margin, y: footerTop },
@@ -186,7 +269,7 @@ function drawPdfLibFooter(
 
   context.page.drawText(safeLabel, {
     x: margin + contentWidth - labelWidth,
-    y: margin / 2,
+    y: context.layout.marginBottom / 2,
     color: rgb(0.42, 0.45, 0.5),
     font: context.regularFont,
     size: 7
@@ -364,7 +447,7 @@ async function drawPdfLibBlock(
   switch (block.type) {
     case "heading": {
       const size = block.level === 1 ? 20 : block.level === 2 ? 16 : 13
-      const lineHeight = block.level === 1 ? 29 : block.level === 2 ? 24 : 20
+      const lineHeight = context.layout.lineSpacing ? size * context.layout.lineSpacing : block.level === 1 ? 29 : block.level === 2 ? 24 : 20
 
       if (block.runs) {
         return (
@@ -390,7 +473,7 @@ async function drawPdfLibBlock(
     case "paragraph":
       if (block.runs) {
         return (
-          (await drawRichPdfText(context, block.runs, topY, frame.x, frame.width, 10, 15, false, rgb(0.07, 0.09, 0.13), block.alignment)) - 8
+          (await drawRichPdfText(context, block.runs, topY, frame.x, frame.width, 10, 10 * (context.layout.lineSpacing ?? 1.5), false, rgb(0.07, 0.09, 0.13), block.alignment)) - 8
         )
       }
 
@@ -402,7 +485,7 @@ async function drawPdfLibBlock(
           frame.x,
           frame.width,
           10,
-          15,
+          10 * (context.layout.lineSpacing ?? 1.5),
           context.regularFont,
           rgb(0.07, 0.09, 0.13),
           block.alignment
@@ -485,7 +568,7 @@ async function drawPdfLibList(
           frame.x + 12,
           frame.width - 12,
           10,
-          15,
+          10 * (context.layout.lineSpacing ?? 1.5),
           false,
           rgb(0.07, 0.09, 0.13),
           "left"
@@ -501,7 +584,7 @@ async function drawPdfLibList(
         frame.x + 12,
         frame.width - 12,
         10,
-        15,
+        10 * (context.layout.lineSpacing ?? 1.5),
         context.regularFont,
         rgb(0.07, 0.09, 0.13),
         "left"
