@@ -177,7 +177,7 @@ describe("organization service setup failures", () => {
     vi.restoreAllMocks()
   })
 
-  it("reports missing server credentials without logging a console error", async () => {
+  it("reports missing server credentials as a failure, with a message fit to show", async () => {
     process.env = {
       ...originalEnv,
       SUPABASE_URL: "https://example.supabase.co",
@@ -186,8 +186,8 @@ describe("organization service setup failures", () => {
       SUPABASE_SECRET_KEY: undefined,
     }
 
+    // A server without its credentials is broken, not refusing a request.
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {})
     vi.spyOn(console, "info").mockImplementation(() => {})
 
     await expect(getCurrentOrganizationContext("user-id")).rejects.toMatchObject({
@@ -195,15 +195,13 @@ describe("organization service setup failures", () => {
       statusCode: 500,
     } satisfies Partial<OrganizationServiceError>)
 
-    expect(warnSpy).toHaveBeenCalledWith(
-      "organization_service_rejected",
+    expect(errorSpy).toHaveBeenCalledWith(
+      "organization_service_failed",
       expect.objectContaining({
         operationName: "get_current_organization_context",
-        reason: "Supabase server credentials are not configured.",
         statusCode: 500,
       })
     )
-    expect(errorSpy).not.toHaveBeenCalled()
   })
 })
 

@@ -16,6 +16,7 @@ import {
   type R2Env,
 } from "@/lib/env"
 import { createR2Client } from "@/lib/r2/client"
+import { runOperation, type LogValue } from "@/services/operation"
 
 /** Hard upper bound for one internal-submission file. */
 export const SUBMISSION_FILE_MAX_BYTES = 20 * 1024 * 1024
@@ -541,34 +542,12 @@ export async function createSignedSubmissionDownloadUrl(
   )
 }
 
-type StorageLogValue = string | number | boolean | null | undefined
-
-async function runSubmissionStorageOperation<T>(
+function runSubmissionStorageOperation<T>(
   operationName: string,
-  identifiers: Record<string, StorageLogValue>,
+  identifiers: Record<string, LogValue>,
   operation: () => Promise<T>
 ): Promise<T> {
-  const startedAt = Date.now()
-
-  try {
-    const result = await operation()
-    console.info("submission_storage_success", {
-      operationName,
-      durationMs: Date.now() - startedAt,
-      ...identifiers,
-    })
-    return result
-  } catch (error: unknown) {
-    const storageError = toSubmissionStorageError(error)
-    const log = storageError.statusCode >= 500 ? console.error : console.warn
-    log("submission_storage_rejected", {
-      operationName,
-      statusCode: storageError.statusCode,
-      durationMs: Date.now() - startedAt,
-      ...identifiers,
-    })
-    throw storageError
-  }
+  return runOperation("submission_storage", toSubmissionStorageError, operationName, identifiers, operation)
 }
 
 function assertStoredObjectInput(input: VerifySubmissionUploadInput): void {

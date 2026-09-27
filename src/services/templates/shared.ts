@@ -9,7 +9,6 @@ import {
   parseImageDataUrl,
   readImageDimensions,
 } from "@/lib/image-header"
-import { captureUnexpectedError } from "@/lib/observability"
 import {
   canPerformOrganizationAction,
   createOrganizationPermissionSubject,
@@ -49,6 +48,7 @@ import type {
 import { TemplateServiceError } from "./errors"
 import { loadActiveMembership } from "@/services/organizations/active-membership"
 import { mapImageAssets, PRINT_MAX_WIDTH } from "@/types/template-images"
+import { runOperation, type LogValue } from "@/services/operation"
 
 export const TEMPLATE_COLUMNS =
   "id,org_id,title,description,category,status,revision,content,created_by,updated_by,published_by,archived_by,created_at,updated_at,published_at,archived_at"
@@ -56,8 +56,6 @@ export const TEMPLATE_COLUMNS =
 /** Columns the templates list reads; template content stays behind. */
 export const TEMPLATE_SUMMARY_COLUMNS =
   "id,org_id,title,category,status,revision,created_at,updated_at"
-
-type LogValue = string | number | boolean | null | undefined
 
 type MembershipRow = {
   role: string
@@ -432,57 +430,24 @@ export function createDatabaseError(
   return new TemplateServiceError(fallbackMessage, 500)
 }
 
-export async function runTemplateOperation<T>(
+export function runTemplateOperation<T>(
   operationName: string,
   identifiers: Record<string, LogValue>,
   operation: () => Promise<T>
 ): Promise<T> {
-  const startedAt = Date.now()
+  return runOperation("template", toTemplateServiceError, operationName, identifiers, operation)
+}
 
-  try {
-    const result = await operation()
-    console.info("template_service_success", {
-      operationName,
-      durationMs: Date.now() - startedAt,
-      ...identifiers,
-    })
-    return result
-  } catch (error: unknown) {
-    if (error instanceof TemplateServiceError) {
-      console.warn("template_service_rejected", {
-        operationName,
-        durationMs: Date.now() - startedAt,
-        statusCode: error.statusCode,
-        reason: error.message,
-        ...identifiers,
-      })
-      throw error
-    }
-
-    if (error instanceof ZodError) {
-      const validationError = new TemplateServiceError(
-        "Document template content is invalid.",
-        400
-      )
-      console.warn("template_service_rejected", {
-        operationName,
-        durationMs: Date.now() - startedAt,
-        statusCode: validationError.statusCode,
-        reason: validationError.message,
-        ...identifiers,
-      })
-      throw validationError
-    }
-
-    console.error("template_service_failed", {
-      operationName,
-      durationMs: Date.now() - startedAt,
-      reason: error instanceof Error ? error.message : "Unknown service error",
-      ...identifiers,
-    })
-    captureUnexpectedError(error, { operationName, ...identifiers })
-    throw new TemplateServiceError("Template service failed.", 500)
+function toTemplateServiceError(error: unknown): TemplateServiceError {
+  if (error instanceof TemplateServiceError) {
+    return error
   }
+
+  if (error instanceof ZodError) {
+    return new TemplateServiceError("Document template content is invalid.", 400)
+  }
+
+  return new TemplateServiceError("Template service failed.", 500)
 }
 
 function parseDocumentTemplateStatus(

@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto"
 
-import { captureUnexpectedError } from "@/lib/observability"
 import {
   isOrganizationRole,
   ORGANIZATION_PERMISSION_ACTIONS,
@@ -26,6 +25,7 @@ import type {
   OrganizationMembership,
   OrganizationRoleDefinition,
 } from "@/types/organization"
+import { runOperation } from "@/services/operation"
 
 /**
  * Runs an organization operation with consistent observability and error translation.
@@ -36,55 +36,20 @@ import type {
  * @returns The operation result.
  * @throws OrganizationServiceError when the operation is rejected or fails.
  */
-export async function runOrganizationOperation<T>(
+export function runOrganizationOperation<T>(
   operationName: string,
   identifiers: Record<string, LogValue>,
   operation: () => Promise<T>
 ): Promise<T> {
-  const startedAt = Date.now()
+  return runOperation("organization", toOrganizationServiceError, operationName, identifiers, operation)
+}
 
-  try {
-    const result = await operation()
-    console.info("organization_service_success", {
-      operationName,
-      durationMs: Date.now() - startedAt,
-      ...identifiers,
-    })
-    return result
-  } catch (error: unknown) {
-    if (error instanceof OrganizationServiceError) {
-      console.warn("organization_service_rejected", {
-        operationName,
-        durationMs: Date.now() - startedAt,
-        statusCode: error.statusCode,
-        reason: error.message,
-        ...identifiers,
-      })
-      throw error
-    }
-
-    const setupError = createOrganizationSetupError(error)
-
-    if (setupError) {
-      console.warn("organization_service_rejected", {
-        operationName,
-        durationMs: Date.now() - startedAt,
-        statusCode: setupError.statusCode,
-        reason: setupError.message,
-        ...identifiers,
-      })
-      throw setupError
-    }
-
-    console.error("organization_service_failed", {
-      operationName,
-      durationMs: Date.now() - startedAt,
-      reason: error instanceof Error ? error.message : "Unknown service error",
-      ...identifiers,
-    })
-    captureUnexpectedError(error, { operationName, ...identifiers })
-    throw new OrganizationServiceError("Organization service failed.", 500)
+function toOrganizationServiceError(error: unknown): OrganizationServiceError {
+  if (error instanceof OrganizationServiceError) {
+    return error
   }
+
+  return createOrganizationSetupError(error) ?? new OrganizationServiceError("Organization service failed.", 500)
 }
 
 /**

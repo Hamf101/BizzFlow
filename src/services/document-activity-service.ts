@@ -19,10 +19,9 @@ import {
   type DocumentActivityEventRow,
   type DocumentActivityEventType,
 } from "@/types/activity"
+import { runOperation, type LogValue } from "@/services/operation"
 
 type DocumentActivityServiceClient = Pick<AdminSupabaseClient, "from" | "rpc">
-
-type LogValue = string | number | boolean | null | undefined
 
 type DocumentStateRow = {
   lifecycle_state?: unknown
@@ -286,44 +285,18 @@ function normalizeLimit(value: number | undefined): number {
   return value
 }
 
-async function runDocumentActivityOperation<T>(
+function runDocumentActivityOperation<T>(
   operationName: string,
   identifiers: Record<string, LogValue>,
   operation: () => Promise<T>
 ): Promise<T> {
-  const startedAt = Date.now()
+  return runOperation("document_activity", toDocumentActivityServiceError, operationName, identifiers, operation)
+}
 
-  try {
-    const result = await operation()
-    console.info("document_activity_service_success", {
-      operationName,
-      durationMs: Date.now() - startedAt,
-      ...identifiers,
-    })
-    return result
-  } catch (error: unknown) {
-    if (error instanceof DocumentActivityServiceError) {
-      console.warn("document_activity_service_rejected", {
-        operationName,
-        statusCode: error.statusCode,
-        reason: error.message,
-        durationMs: Date.now() - startedAt,
-        ...identifiers,
-      })
-      throw error
-    }
-
-    console.error("document_activity_service_failed", {
-      operationName,
-      reason: error instanceof Error ? error.message : "Unknown activity error",
-      durationMs: Date.now() - startedAt,
-      ...identifiers,
-    })
-    throw new DocumentActivityServiceError(
-      "Document activity service failed.",
-      500
-    )
-  }
+function toDocumentActivityServiceError(error: unknown): DocumentActivityServiceError {
+  return error instanceof DocumentActivityServiceError
+    ? error
+    : new DocumentActivityServiceError("Document activity service failed.", 500)
 }
 
 function getClient(
