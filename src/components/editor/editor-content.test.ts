@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest"
 
 import {
+  convertTextBlock,
   insertPageAfter,
+  liftListItem,
   mergeIntoPrevious,
   normalizeContentForSave,
   readMarkdownShortcut,
@@ -101,5 +103,69 @@ describe("typing on the page", () => {
       { id: C, type: "paragraph", text: "", alignment: "left" },
     ])
     expect(templateContentV3Schema.safeParse(saved).success).toBe(true)
+  })
+})
+
+describe("formatting as lines split and join", () => {
+  it("keeps each word's formatting when Enter splits a line, and when Backspace joins it back", () => {
+    const content = page([
+      { alignment: "left", id: A, runs: [{ text: "Rent is " }, { bold: true, text: "due monthly" }], text: "Rent is due monthly", type: "paragraph" },
+    ])
+    const split = splitTextBlock(content, A, 11, B)
+
+    expect(split.content.blocks).toMatchObject([
+      { runs: [{ text: "Rent is " }, { bold: true, text: "due" }], text: "Rent is due" },
+      { runs: [{ bold: true, text: " monthly" }], text: " monthly" },
+    ])
+    expect(mergeIntoPrevious(split.content, B).content.blocks).toEqual(content.blocks)
+  })
+
+  it("keeps formatting when a line becomes a list and back, and saves it beside the items that stay", () => {
+    const line = page([
+      { alignment: "left", id: A, runs: [{ italic: true, text: "Keys" }, { text: " returned" }], text: "Keys returned", type: "paragraph" },
+    ])
+    const list = convertTextBlock(line, A, { type: "bullet_list" }).content
+
+    expect(list.blocks).toEqual([
+      { id: A, itemRuns: [[{ italic: true, text: "Keys" }, { text: " returned" }]], items: ["Keys returned"], type: "bullet_list" },
+    ])
+    expect(convertTextBlock(list, A, { type: "paragraph" }).content.blocks).toEqual(line.blocks)
+    expect(
+      normalizeContentForSave(
+        page([{ id: B, itemRuns: [null, [{ bold: true, text: "Deep clean " }]], items: ["", "Deep clean "], type: "bullet_list" }])
+      ).blocks
+    ).toEqual([{ id: B, itemRuns: [[{ bold: true, text: "Deep clean" }]], items: ["Deep clean"], type: "bullet_list" }])
+  })
+})
+
+describe("lifting a list item out", () => {
+  const list = page([
+    {
+      id: A,
+      itemRuns: [null, [{ bold: true, text: "Deep" }, { text: " clean" }], null],
+      items: ["Weekly visit", "Deep clean", "Windows"],
+      type: "bullet_list",
+    },
+  ])
+
+  it("turns just that item into a line where it stands, keeping the list around it", () => {
+    const lifted = liftListItem(list, A, 1, { level: 2, type: "heading" }, [B, C])
+
+    expect(lifted.content.blocks).toEqual([
+      { id: A, items: ["Weekly visit"], type: "bullet_list" },
+      { alignment: "left", id: B, level: 2, runs: [{ bold: true, text: "Deep" }, { text: " clean" }], text: "Deep clean", type: "heading" },
+      { id: C, items: ["Windows"], type: "bullet_list" },
+    ])
+    expect(lifted.focus).toEqual({ blockId: B, offset: 0 })
+  })
+
+  it("puts a first item above the list, and turns a list of one into the line itself", () => {
+    expect(texts(liftListItem(list, A, 0, { type: "paragraph" }, [B, C]).content)).toEqual(["Weekly visit", "bullet_list"])
+
+    const single = page([{ id: A, items: ["Windows"], type: "numbered_list" }])
+
+    expect(liftListItem(single, A, 0, { type: "paragraph" }, [B, C]).content.blocks).toEqual([
+      { alignment: "left", id: A, text: "Windows", type: "paragraph" },
+    ])
   })
 })

@@ -6,7 +6,9 @@ import type { ImageUploadGrant, ImageUploadRequest } from "@/components/template
 import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
 import { checkRateLimit, RateLimitError } from "@/lib/rate-limit"
 import { getCurrentOrganizationContext } from "@/services/organization-service"
+import { createPictureOriginalDownload } from "@/services/picture-download-service"
 import { createTemplateImageUpload, TemplateImageServiceError } from "@/services/template-image-service"
+import type { PictureSource } from "@/types/template-images"
 
 const copySchema = z.object({
   bytes: z.number().int().positive(),
@@ -17,6 +19,10 @@ const requestSchema = z.object({
   height: z.number().int().min(1).max(30_000),
   type: z.enum(["png", "jpeg"]),
   width: z.number().int().min(1).max(30_000),
+})
+const downloadSchema = z.object({
+  assetId: z.string().uuid(),
+  source: z.union([z.object({ templateId: z.string().uuid() }), z.object({ documentId: z.string().uuid() })]),
 })
 
 /**
@@ -39,6 +45,34 @@ export async function requestImageUploadAction(request: ImageUploadRequest): Pro
     return await createTemplateImageUpload({ ...parsed, actorUserId: user.id, organizationId: context.organization.id })
   } catch (error: unknown) {
     return { error: describeFailure(error, "image_upload_action_failed") }
+  }
+}
+
+/**
+ * A short-lived link that downloads a picture exactly as it was uploaded, for
+ * someone who can still open the template or document it's in.
+ *
+ * @param request - The picture, and the template or document it's in.
+ * @returns The download link, or an error to show.
+ */
+export async function downloadImageOriginalAction(request: {
+  assetId: string
+  source: PictureSource
+}): Promise<{ error: string } | { url: string }> {
+  try {
+    const parsed = downloadSchema.parse(request)
+    const user = await getAuthenticatedUser()
+    const context = await getCurrentOrganizationContext(user.id)
+
+    if (!context) {
+      return { error: "Join a workspace to download pictures." }
+    }
+
+    return {
+      url: await createPictureOriginalDownload({ ...parsed, actorUserId: user.id, organizationId: context.organization.id }),
+    }
+  } catch (error: unknown) {
+    return { error: describeFailure(error, "image_original_action_failed") }
   }
 }
 

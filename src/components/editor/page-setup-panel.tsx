@@ -1,16 +1,26 @@
 "use client"
 
+import { NumberField } from "@base-ui/react/number-field"
 import type { ReactElement, ReactNode } from "react"
 
 import { Select } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { cn } from "@/lib/utils"
-import { resizeTemplateLayout } from "@/services/templates/template-render-plan"
+import { maxMargin, paragraphGap, resizeTemplateLayout, resolvePageGeometry } from "@/services/templates/template-render-plan"
 import type { TemplateLayout } from "@/types/template"
 
+const MARGIN_SIDES = [
+  ["top", "Top"],
+  ["bottom", "Bottom"],
+  ["left", "Left"],
+  ["right", "Right"],
+] as const
+
 /**
- * The page's paper, margins and what prints on every page. Paper and
- * orientation changes keep the content in proportion, so nothing breaks.
+ * The page's paper, margins and spacing, and what prints on every page. Paper
+ * and orientation changes keep the content in proportion, so nothing breaks.
+ * Margins come as a preset or in points for each side, as dragging the page's
+ * margin guides sets them.
  *
  * @param props - The layout and how to change it.
  * @returns The page setup controls.
@@ -20,8 +30,10 @@ export function PageSetupPanel({
   onChange,
 }: {
   layout: TemplateLayout
-  onChange: (layout: TemplateLayout) => void
+  onChange: (layout: TemplateLayout, coalesceKey?: string) => void
 }): ReactElement {
+  const geometry = resolvePageGeometry(layout)
+
   return (
     <div className="grid gap-3.5" data-slot="page-setup">
       <Row label="Paper">
@@ -51,24 +63,50 @@ export function PageSetupPanel({
       />
       <Choice
         label="Margins"
-        onChange={(marginPreset) => onChange({ ...layout, marginPreset })}
+        onChange={(marginPreset) => onChange({ ...layout, marginPreset, margins: undefined })}
         options={[
           ["compact", "Narrow"],
           ["standard", "Normal"],
           ["generous", "Wide"],
         ]}
-        value={layout.marginPreset}
+        // Margins set side by side match no preset.
+        value={layout.margins ? null : layout.marginPreset}
       />
-      <Choice
-        label="Spacing"
-        onChange={(density) => onChange({ ...layout, density })}
-        options={[
-          ["compact", "Tight"],
-          ["balanced", "Normal"],
-          ["comfortable", "Airy"],
-        ]}
-        value={layout.density}
-      />
+      <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+        {MARGIN_SIDES.map(([side, label]) => (
+          <label className="flex items-center justify-between gap-2 text-sm text-muted-foreground" key={side}>
+            {label}
+            <Points
+              label={`${label} margin, in points`}
+              max={maxMargin(geometry, side)}
+              min={0}
+              onChange={(value) => onChange({ ...layout, margins: { ...geometry.margins, [side]: value } }, `margin:${side}`)}
+              unit="pt"
+              value={Math.round(geometry.margins[side])}
+            />
+          </label>
+        ))}
+      </div>
+      <Row label="Line spacing">
+        <Points
+          label="Line spacing"
+          max={3}
+          min={1}
+          onChange={(lineSpacing) => onChange({ ...layout, lineSpacing }, "line-spacing")}
+          step={0.05}
+          value={layout.lineSpacing ?? 1.5}
+        />
+      </Row>
+      <Row label="Space between paragraphs">
+        <Points
+          label="Space between paragraphs, in points"
+          max={48}
+          min={0}
+          onChange={(paragraphSpacing) => onChange({ ...layout, paragraphSpacing }, "paragraph-spacing")}
+          unit="pt"
+          value={paragraphGap(layout)}
+        />
+      </Row>
       <div className="grid gap-1 border-t border-border pt-2">
         <Toggle
           checked={layout.printedTitle.mode !== "none"}
@@ -105,6 +143,43 @@ function Row({ children, label }: { children: ReactNode; label: string }): React
   )
 }
 
+// A number typed, stepped with the arrow keys, or nudged with the buttons.
+// What is typed takes effect as it becomes a number in range.
+function Points({
+  label,
+  max,
+  min,
+  onChange,
+  step = 1,
+  unit,
+  value,
+}: {
+  label: string
+  max: number
+  min: number
+  onChange: (value: number) => void
+  step?: number
+  unit?: string
+  value: number
+}): ReactElement {
+  return (
+    <NumberField.Root
+      largeStep={step * 10}
+      max={max}
+      min={min}
+      onValueChange={(next) => next !== null && onChange(Math.min(max, Math.max(min, next)))}
+      smallStep={step}
+      step={step}
+      value={value}
+    >
+      <NumberField.Group className="flex h-8 w-20 items-center rounded-[8px] border border-input bg-card text-foreground focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/30">
+        <NumberField.Input aria-label={label} className="min-w-0 flex-1 bg-transparent pl-2 text-[13px] tabular-nums outline-none" />
+        {unit ? <span className="pr-2 text-xs text-muted-foreground">{unit}</span> : null}
+      </NumberField.Group>
+    </NumberField.Root>
+  )
+}
+
 function Choice<Value extends string>({
   label,
   onChange,
@@ -114,7 +189,7 @@ function Choice<Value extends string>({
   label: string
   onChange: (value: Value) => void
   options: ReadonlyArray<readonly [Value, string]>
-  value: Value
+  value: Value | null
 }): ReactElement {
   return (
     <Row label={label}>

@@ -55,5 +55,6 @@ test("finds a file filed anywhere, and only for a member who may open it", async
   await expect(
     staff.getByRole("heading", { level: 1 })
   ).toHaveAccessibleName("Files 0 items")
-  await expect(staff.getByText(title)).toHaveCount(0)
+  // The chip shows staff their own words; no file carries them.
+  await expect(staff.getByRole("link", { exact: true, name: title })).toHaveCount(0)
 })

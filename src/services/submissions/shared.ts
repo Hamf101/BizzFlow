@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto"
 
-import { captureUnexpectedError } from "@/lib/observability"
 import {
   canPerformOrganizationAction,
   createOrganizationPermissionSubject,
@@ -31,6 +30,7 @@ import {
 } from "@/types/submission"
 import { SubmissionReviewDomainError } from "@/types/submission-review"
 import { loadActiveMembership } from "@/services/organizations/active-membership"
+import { runOperation } from "@/services/operation"
 
 /** Columns required by the canonical submission row parser. */
 export const SUBMISSION_COLUMNS =
@@ -61,44 +61,12 @@ type MembershipRow = {
  * @returns The operation result.
  * @throws SubmissionServiceError for every expected or unexpected failure.
  */
-export async function runSubmissionOperation<T>(
+export function runSubmissionOperation<T>(
   operationName: string,
   identifiers: Record<string, SubmissionLogValue>,
   operation: () => Promise<T>
 ): Promise<T> {
-  const startedAt = Date.now()
-
-  try {
-    const result = await operation()
-    console.info("submission_service_success", {
-      operationName,
-      durationMs: Date.now() - startedAt,
-      ...identifiers,
-    })
-    return result
-  } catch (error: unknown) {
-    const serviceError = toSubmissionServiceError(error)
-    const log = serviceError.statusCode >= 500 ? console.error : console.warn
-    log("submission_service_rejected", {
-      operationName,
-      statusCode: serviceError.statusCode,
-      durationMs: Date.now() - startedAt,
-      actorUserId: identifiers.actorUserId,
-      organizationId: identifiers.organizationId,
-      submissionId: identifiers.submissionId,
-    })
-
-    if (serviceError.statusCode >= 500) {
-      captureUnexpectedError(error, {
-        operationName,
-        actorUserId: identifiers.actorUserId,
-        organizationId: identifiers.organizationId,
-        submissionId: identifiers.submissionId,
-      })
-    }
-
-    throw serviceError
-  }
+  return runOperation("submission", toSubmissionServiceError, operationName, identifiers, operation)
 }
 
 /**

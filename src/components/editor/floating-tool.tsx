@@ -58,8 +58,11 @@ export function FloatingTool({
     const area = event.currentTarget.parentElement?.getBoundingClientRect()
     const box = event.currentTarget.getBoundingClientRect()
 
-    // Only a plain primary press drags; Ctrl-click is a right click on a Mac.
-    if (!area || event.button !== 0 || event.ctrlKey) {
+    // Only a plain primary press on the tool itself drags; Ctrl-click is a
+    // right click on a Mac. A press in a panel the tool opened reaches here
+    // through React although the panel sits elsewhere on the page, and a colour
+    // wheel there must turn rather than carry the tool off.
+    if (!area || event.button !== 0 || event.ctrlKey || !event.currentTarget.contains(event.target as Node)) {
       return
     }
 

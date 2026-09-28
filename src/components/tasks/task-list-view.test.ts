@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest"
 
 import {
-  getTaskSearchFields,
   getTaskStatusOptions,
   getTaskViewMenuSections,
   isTaskViewAdjusted,
@@ -113,25 +112,5 @@ describe("task list view", () => {
     ["another page size", { size: "100" }, true],
   ])("reports whether the view menu holds a change for %s", (_case, params, expected) => {
     expect(isTaskViewAdjusted(taskListState.parse(params))).toBe(expected)
-  })
-
-  it("keeps everything but the query and the page when a new search is submitted", () => {
-    expect(
-      getTaskSearchFields(
-        taskListState.parse({
-          assignee: MARA_ID,
-          page: "4",
-          q: "old",
-          size: "25",
-          sort: "-title",
-          status: "open",
-        })
-      )
-    ).toEqual([
-      ["assignee", MARA_ID],
-      ["status", "open"],
-      ["sort", "-title"],
-      ["size", "25"],
-    ])
   })
 })

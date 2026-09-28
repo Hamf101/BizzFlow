@@ -2,19 +2,12 @@ import { describe, expect, it } from "vitest"
 
 import {
   createBlankTemplateContent,
-  parseTemplateContent,
   templateBlockSchema,
   type TemplateBlock
 } from "@/types/template"
+import { insertTemplateBlock, updateTemplateBlock } from "@/types/template-structure"
 
-import {
-  createTemplateBlock,
-  templateEditorReducer,
-  type TemplateEditorState
-} from "./template-editor-state"
-
-const FIRST_BLOCK_ID = "00000000-0000-4000-8000-000000000001"
-const SECOND_BLOCK_ID = "00000000-0000-4000-8000-000000000002"
+import { createTemplateBlock } from "./template-editor-state"
 
 const FIELD_DEFAULTS = [
   ["text_field", "Text field", "text_field"],
@@ -28,213 +21,7 @@ const FIELD_DEFAULTS = [
   readonly [TemplateBlock["type"], string, string]
 >
 
-function createState(): TemplateEditorState {
-  return {
-    title: "Agreement",
-    description: "Reusable agreement",
-    category: "Operations",
-    content: createBlankTemplateContent()
-  }
-}
-
-describe("templateEditorReducer", () => {
-  it.each(FIELD_DEFAULTS)("duplicates %s with an independent answer key", (type) => {
-    const block = { ...createTemplateBlock(type), id: FIRST_BLOCK_ID }
-    const original = templateEditorReducer(createState(), { type: "add_block", block })
-    const copied = templateEditorReducer(original, {
-      type: "duplicate_block", blockId: FIRST_BLOCK_ID, newBlockId: SECOND_BLOCK_ID,
-    })
-    expect(copied.content.blocks).toHaveLength(2)
-    const duplicate = copied.content.blocks[1]
-    expect(templateBlockSchema.safeParse(duplicate).success).toBe(true)
-    if (!("fieldKey" in block) || !("fieldKey" in duplicate)) {
-      throw new Error("Expected field fixtures")
-    }
-    expect(duplicate).toEqual({ ...block, id: SECOND_BLOCK_ID, fieldKey: `${block.fieldKey}_2` })
-    expect(original.content.blocks).toEqual([block])
-  })
-
-  it("upgrades version-two content only when it first enters an edit action", () => {
-    const legacyContent = parseTemplateContent({
-      schemaVersion: 2,
-      branding: {
-        organizationName: "",
-        logoDataUrl: null,
-        logoAlignment: "left",
-        logoWidthPercent: 24,
-        primaryColor: "#252329",
-        accentColor: "#635273"
-      },
-      blocks: [
-        {
-          id: FIRST_BLOCK_ID,
-          type: "paragraph",
-          text: "Legacy draft",
-          alignment: "left"
-        }
-      ]
-    })
-    const initialState: TemplateEditorState = {
-      title: "Legacy draft",
-      description: "",
-      category: "",
-      content: legacyContent
-    }
-
-    expect(initialState.content.schemaVersion).toBe(2)
-
-    const edited = templateEditorReducer(initialState, {
-      type: "set_title",
-      value: "Edited draft"
-    })
-
-    expect(edited.content).toMatchObject({
-      schemaVersion: 3,
-      sections: [
-        {
-          id: FIRST_BLOCK_ID,
-          label: "Section 1",
-          startBlockId: FIRST_BLOCK_ID
-        }
-      ]
-    })
-  })
-
-  it("adds, updates, reorders, and deletes free-form blocks explicitly", () => {
-    const initialState = createState()
-    const withHeading = templateEditorReducer(initialState, {
-      type: "add_block",
-      block: {
-        id: FIRST_BLOCK_ID,
-        type: "heading",
-        text: "First heading",
-        level: 2,
-        alignment: "left"
-      }
-    })
-    const withParagraph = templateEditorReducer(withHeading, {
-      type: "add_block",
-      block: {
-        id: SECOND_BLOCK_ID,
-        type: "paragraph",
-        text: "Paragraph",
-        alignment: "left"
-      }
-    })
-    const reordered = templateEditorReducer(withParagraph, {
-      type: "move_block",
-      blockId: SECOND_BLOCK_ID,
-      direction: "up"
-    })
-    const updated = templateEditorReducer(reordered, {
-      type: "update_block",
-      block: {
-        id: FIRST_BLOCK_ID,
-        type: "heading",
-        text: "Updated heading",
-        level: 1,
-        alignment: "center"
-      }
-    })
-    const deleted = templateEditorReducer(updated, {
-      type: "delete_block",
-      blockId: SECOND_BLOCK_ID
-    })
-
-    expect(initialState.content.blocks).toEqual([])
-    expect(reordered.content.blocks.map((block) => block.id)).toEqual([
-      SECOND_BLOCK_ID,
-      FIRST_BLOCK_ID
-    ])
-    expect(updated.content.blocks[1]).toMatchObject({
-      text: "Updated heading",
-      level: 1
-    })
-    expect(deleted.content.blocks).toHaveLength(1)
-    expect(deleted.content.blocks[0]?.id).toBe(FIRST_BLOCK_ID)
-    // Blocks added to an empty page print no invented "Section 1" label.
-    expect(deleted.content).toMatchObject({ schemaVersion: 3, sections: [] })
-  })
-
-  it("inserts a block at a requested editorial gutter position", () => {
-    const withFirstBlock = templateEditorReducer(createState(), {
-      type: "add_block",
-      block: {
-        id: FIRST_BLOCK_ID,
-        type: "paragraph",
-        text: "First",
-        alignment: "left"
-      }
-    })
-    const inserted = templateEditorReducer(withFirstBlock, {
-      type: "insert_block",
-      afterBlockId: FIRST_BLOCK_ID,
-      block: {
-        id: SECOND_BLOCK_ID,
-        type: "heading",
-        text: "Next",
-        level: 2,
-        alignment: "left"
-      }
-    })
-
-    expect(inserted.content.blocks.map((block) => block.id)).toEqual([
-      FIRST_BLOCK_ID,
-      SECOND_BLOCK_ID
-    ])
-  })
-
-  it("replaces the draft with a validated Flow result", () => {
-    const nextState = {
-      ...createState(),
-      title: "AI organized agreement"
-    }
-
-    expect(
-      templateEditorReducer(createState(), {
-        type: "replace_state",
-        value: nextState
-      })
-    ).toBe(nextState)
-  })
-
-  it("updates page layout without changing canonical blocks", () => {
-    const withParagraph = templateEditorReducer(createState(), {
-      type: "add_block",
-      block: {
-        id: FIRST_BLOCK_ID,
-        type: "paragraph",
-        text: "Printable content",
-        alignment: "left"
-      }
-    })
-    const editableContent = withParagraph.content
-
-    if (editableContent.schemaVersion !== 3) {
-      throw new Error("Expected editor actions to upgrade content to version three.")
-    }
-
-    const updated = templateEditorReducer(withParagraph, {
-      type: "set_layout",
-      value: {
-        ...editableContent.layout,
-        pageSize: "Letter",
-        orientation: "landscape",
-        marginPreset: "compact"
-      }
-    })
-
-    expect(updated.content).toMatchObject({
-      schemaVersion: 3,
-      layout: {
-        pageSize: "Letter",
-        orientation: "landscape",
-        marginPreset: "compact"
-      }
-    })
-    expect(updated.content.blocks).toEqual(withParagraph.content.blocks)
-  })
-
+describe("createTemplateBlock", () => {
   it("creates a schema-valid starter for every supported block type", () => {
     const blockTypes: TemplateBlock["type"][] = [
       "heading",
@@ -311,19 +98,13 @@ describe("templateEditorReducer", () => {
       throw new Error("Expected a signature field block.")
     }
 
-    const renamed = templateEditorReducer(createState(), {
-      type: "add_block",
-      block
-    })
-    const updated = templateEditorReducer(renamed, {
-      type: "update_block",
-      block: {
-        ...block,
-        label: "Authorized signer"
-      }
+    const added = insertTemplateBlock(createBlankTemplateContent(), null, block)
+    const updated = updateTemplateBlock(added, {
+      ...block,
+      label: "Authorized signer"
     })
 
-    expect(updated.content.blocks[0]).toMatchObject({
+    expect(updated.blocks[0]).toMatchObject({
       label: "Authorized signer",
       fieldKey: "signature_field"
     })

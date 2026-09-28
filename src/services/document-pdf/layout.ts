@@ -1,3 +1,4 @@
+import type { TemplatePageGeometry } from "@/services/templates/template-render-plan"
 import type { TemplateLayout } from "@/types/template"
 
 import {
@@ -13,7 +14,11 @@ import {
 export type PdfLayoutMetrics = Readonly<{
   pageWidth: number
   pageHeight: number
+  /** The left margin, where lines start. */
   margin: number
+  marginBottom: number
+  /** Line height as a multiple of the text size, when the layout sets one. */
+  lineSpacing?: number
   contentWidth: number
   flowTopY: number
   pageCapacity: number
@@ -21,13 +26,10 @@ export type PdfLayoutMetrics = Readonly<{
   densityItemGapAdjustment: number
 }>
 
-type RenderPlanGeometry = Readonly<{
-  widthPoints: number
-  heightPoints: number
-  marginPoints: number
-  contentWidthPoints: number
-  contentHeightPoints: number
-}>
+type RenderPlanGeometry = Pick<
+  TemplatePageGeometry,
+  "contentHeightPoints" | "contentWidthPoints" | "heightPoints" | "marginPoints" | "margins" | "widthPoints"
+>
 
 /**
  * Converts the canonical page geometry into concrete PDF measurements.
@@ -45,6 +47,7 @@ export function createPdfLayoutMetrics(
   layout: TemplateLayout
 ): PdfLayoutMetrics {
   const isLegacyDefaultGeometry =
+    !layout.margins &&
     approximatelyEqual(geometry.widthPoints, A4_WIDTH) &&
     approximatelyEqual(geometry.heightPoints, A4_HEIGHT) &&
     approximatelyEqual(geometry.marginPoints, PAGE_HORIZONTAL_MARGIN)
@@ -52,21 +55,26 @@ export function createPdfLayoutMetrics(
   return {
     pageWidth: geometry.widthPoints,
     pageHeight: geometry.heightPoints,
-    margin: geometry.marginPoints,
+    margin: geometry.margins.left,
+    marginBottom: geometry.margins.bottom,
+    lineSpacing: layout.lineSpacing,
     contentWidth: geometry.contentWidthPoints,
     flowTopY: isLegacyDefaultGeometry
       ? geometry.heightPoints - PAGE_TOP_MARGIN
-      : geometry.heightPoints - geometry.marginPoints,
+      : geometry.heightPoints - geometry.margins.top,
     pageCapacity: isLegacyDefaultGeometry
       ? PAGE_FLOW_HEIGHT
       : geometry.contentHeightPoints,
     columnGap: Math.min(16, Math.max(10, geometry.contentWidthPoints * 0.025)),
+    // A paragraph already leaves 8pt below itself.
     densityItemGapAdjustment:
-      layout.density === "compact"
-        ? -3
-        : layout.density === "comfortable"
-          ? 4
-          : 0
+      layout.paragraphSpacing !== undefined
+        ? layout.paragraphSpacing - 8
+        : layout.density === "compact"
+          ? -3
+          : layout.density === "comfortable"
+            ? 4
+            : 0
   }
 }
 

@@ -99,44 +99,6 @@ export async function createTemplateAction(formData: FormData): Promise<void> {
   )
 }
 
-/**
- * Saves metadata and canonical content using optimistic revision matching.
- *
- * @param formData - Template id, revision, metadata, and serialized content.
- * @returns Never returns; redirects to the refreshed editor or a user-safe error.
- */
-export async function updateTemplateAction(formData: FormData): Promise<void> {
-  const templateId = getFormString(formData, "templateId")
-  const editorPath = getEditorPath(templateId)
-  const startedAt = Date.now()
-
-  try {
-    const actionContext = await loadTemplateActionContext()
-    const template = await persistTemplateDraftOrConfirmUnchanged(
-      formData,
-      actionContext
-    )
-
-    revalidateTemplatePaths(template.id)
-    console.info("template_update_action_completed", {
-      durationMs: Date.now() - startedAt,
-      organizationId: actionContext.context.organization.id,
-      revision: template.revision,
-      templateId: template.id,
-    })
-  } catch (error: unknown) {
-    handleTemplateActionFailure({
-      error,
-      eventName: "template_update_action_failed",
-      nextPath: editorPath,
-      startedAt,
-      templateId,
-    })
-  }
-
-  redirect(buildFeedbackRedirect(editorPath, "changes_saved"))
-}
-
 /** A template as the editor saves it while it changes. */
 export type TemplateDraftInput = {
   category: string

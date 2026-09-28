@@ -1,5 +1,6 @@
 "use client"
 
+import type { Editor } from "@tiptap/core"
 import { useState } from "react"
 
 import type { InsertChoice } from "@/components/editor/block-catalog"
@@ -60,6 +61,8 @@ export function useEditorController({
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null)
   const [focus, setFocus] = useState<FocusRequest | null>(null)
   const [settingsBlockId, setSettingsBlockId] = useState<string | null>(null)
+  // The line the caret was last in: what the toolbar formats.
+  const [line, setLine] = useState<Editor | null>(null)
 
   function requestFocus(target: CaretTarget): void {
     setSelectedBlockId(null)
@@ -72,6 +75,10 @@ export function useEditorController({
 
     if (blockId) {
       setActiveBlockId(blockId)
+      setLine((current) => {
+        const lineBlockId = current?.view.dom.dataset.caretKey?.split(":")[0]
+        return lineBlockId === blockId ? current : null
+      })
     }
   }
 
@@ -88,11 +95,15 @@ export function useEditorController({
    * Adds a choice after the block in use, or in place of an empty line.
    *
    * @param choice - What to add.
-   * @param options - Where: after a block, or replacing an empty line.
+   * @param options - Where: after a block, or replacing an empty line; and a table's size.
    */
   function insert(
     choice: InsertChoice,
-    options: { afterBlockId?: string | null; replaceBlockId?: string } = {}
+    options: {
+      afterBlockId?: string | null
+      replaceBlockId?: string
+      table?: Readonly<{ columns: number; rows: number }>
+    } = {}
   ): void {
     const replaceBlockId = options.replaceBlockId
     const afterBlockId =
@@ -116,7 +127,7 @@ export function useEditorController({
         const kind = choice.action.value
         const isList = kind.type === "bullet_list" || kind.type === "numbered_list"
 
-        change((current) => convertTextBlock(current, replaceBlockId, kind, "").content)
+        change((current) => convertTextBlock(current, replaceBlockId, kind, { text: "" }).content)
         requestFocus({ blockId: replaceBlockId, item: isList ? 0 : undefined, offset: 0 })
         return
       }
@@ -135,7 +146,17 @@ export function useEditorController({
       return
     }
 
-    const block = createTemplateBlock(choice.action.type, content.blocks)
+    const created = createTemplateBlock(choice.action.type, content.blocks)
+    const size = options.table
+    // A table picked from the size grid has that many columns, and rows counting its heading row.
+    const block: TemplateBlock =
+      created.type === "table" && size
+        ? {
+            ...created,
+            headers: Array.from({ length: size.columns }, (_, index) => `Column ${index + 1}`),
+            rows: Array.from({ length: size.rows - 1 }, () => Array.from({ length: size.columns }, () => "")),
+          }
+        : created
 
     change((current) => {
       if (!replaceBlockId) {
@@ -225,8 +246,9 @@ export function useEditorController({
     change((current) => updateTemplateBlock(current, block), coalesceKey)
   }
 
-  function setLayout(layout: TemplateLayout): void {
-    change((current) => ({ ...current, layout }))
+  // A drag or a run of keystrokes on one setting makes one undo step.
+  function setLayout(layout: TemplateLayout, coalesceKey?: string): void {
+    change((current) => ({ ...current, layout }), coalesceKey)
   }
 
   return {
@@ -238,6 +260,7 @@ export function useEditorController({
     duplicate,
     focus,
     insert,
+    line,
     move,
     openSettings: setSettingsBlockId,
     remove,
@@ -246,6 +269,7 @@ export function useEditorController({
     selectedBlockId,
     setActiveBlockId,
     setLayout,
+    setLine,
     settingsBlockId,
     updateBlock,
   }

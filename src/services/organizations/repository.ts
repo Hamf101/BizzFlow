@@ -48,13 +48,6 @@ type AcceptOrganizationInviteInput = {
   userEmail: string
 }
 
-type UpdateOrganizationMemberRoleInput = {
-  organizationId: string
-  membershipId: string
-  actorUserId: string
-  role: OrganizationRole
-}
-
 type UpdateOrganizationMemberAccessRecordInput = {
   organizationId: string
   membershipId: string
@@ -552,34 +545,6 @@ export async function acceptOrganizationInvite(
 
   if (error || !data) {
     throw createAcceptInviteMutationError(error)
-  }
-
-  return data
-}
-
-/**
- * Updates a membership role through the locked database RPC.
- *
- * @param client - Trusted Supabase client.
- * @param input - Tenant, membership, actor, and target role values.
- * @returns Updated membership identifier.
- */
-export async function updateOrganizationMemberRole(
-  client: OrganizationServiceClient,
-  input: UpdateOrganizationMemberRoleInput
-): Promise<string> {
-  const { data, error } = await client.rpc(
-    "update_organization_member_role",
-    {
-      target_org_id: input.organizationId,
-      target_membership_id: input.membershipId,
-      target_actor_user_id: input.actorUserId,
-      target_role: input.role,
-    }
-  )
-
-  if (error || data !== input.membershipId) {
-    throw createMemberRoleMutationError(error)
   }
 
   return data

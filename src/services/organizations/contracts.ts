@@ -1,9 +1,6 @@
 import type { AdminSupabaseClient } from "@/lib/supabase/admin"
 import type { SendInviteEmailInput } from "@/services/invite-email-service"
-import type {
-  OrganizationPermissionAction,
-  OrganizationRole,
-} from "@/lib/permissions"
+import type { OrganizationPermissionAction } from "@/lib/permissions"
 import type {
   AuditLogAction,
   AuditLogTargetType,
@@ -123,13 +120,6 @@ export type AcceptInviteInput = {
   userId: string
   userEmail: string | null
   token: string
-}
-
-export type UpdateMemberRoleInput = {
-  actorUserId: string
-  organizationId: string
-  membershipId: string
-  role: OrganizationRole
 }
 
 export type CreateOrganizationRoleInput = {

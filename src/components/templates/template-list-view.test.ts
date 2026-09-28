@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest"
 
 import {
-  getTemplateSearchFields,
   getTemplateStatusOptions,
   getTemplateViewCategory,
   getTemplateViewMenuSections,
@@ -117,25 +116,5 @@ describe("template list view", () => {
     )
     expect(isTemplateViewAdjusted(templateListState.parse({ sort: "title" }))).toBe(true)
     expect(isTemplateViewAdjusted(templateListState.parse({ size: "25" }))).toBe(true)
-  })
-
-  it("carries the view into a new search without the old query or page", () => {
-    expect(
-      getTemplateSearchFields(
-        templateListState.parse({
-          category: "Safety",
-          page: "2",
-          q: "old",
-          size: "25",
-          sort: "title",
-          status: "draft",
-        })
-      )
-    ).toEqual([
-      ["category", "Safety"],
-      ["status", "draft"],
-      ["sort", "title"],
-      ["size", "25"],
-    ])
   })
 })

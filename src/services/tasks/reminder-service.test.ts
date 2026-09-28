@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from "vitest"
 
 import {
   cancelTaskReminder,
-  listTaskReminders,
   notifyTaskAssignee,
   processDueTaskReminders,
   scheduleTaskReminder,
@@ -31,7 +30,6 @@ import {
   TASK_ID,
 } from "@/services/task-service.test-support"
 
-const LATER_AT = "2026-07-31T15:00:00.000Z"
 const SECOND_REMINDER_ID = "50000000-0000-4000-8000-000000000002"
 const MISSING_TASK_ID = "30000000-0000-4000-8000-0000000000ff"
 
@@ -280,36 +278,6 @@ describe("cancelTaskReminder", () => {
         createDeps(client)
       )
     ).rejects.toMatchObject({ statusCode: 409 })
-  })
-})
-
-describe("listTaskReminders", () => {
-  it("returns reminders ordered by their scheduled instant", async () => {
-    const client = createReminderClient([
-      createTaskReminderRow({ id: SECOND_REMINDER_ID, remind_at: LATER_AT }),
-      createTaskReminderRow({ remind_at: FUTURE_AT }),
-    ])
-
-    const reminders = await listTaskReminders(
-      { actorUserId: STAFF_ID, organizationId: ORG_ID, taskId: TASK_ID },
-      createDeps(client)
-    )
-
-    expect(reminders.map((reminder): string => reminder.id)).toEqual([
-      REMINDER_ID,
-      SECOND_REMINDER_ID,
-    ])
-  })
-
-  it("rejects an external reviewer", async () => {
-    const client = createReminderClient([createTaskReminderRow()])
-
-    await expect(
-      listTaskReminders(
-        { actorUserId: REVIEWER_ID, organizationId: ORG_ID, taskId: TASK_ID },
-        createDeps(client)
-      )
-    ).rejects.toMatchObject({ statusCode: 403 })
   })
 })
 

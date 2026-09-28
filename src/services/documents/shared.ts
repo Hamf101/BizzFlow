@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto"
 
-import { captureUnexpectedError } from "@/lib/observability"
 import {
   canPerformOrganizationAction,
   createOrganizationPermissionSubject,
@@ -32,6 +31,7 @@ import type {
 } from "@/types/document"
 import type { OrganizationMembership } from "@/types/organization"
 import { loadActiveMembership } from "@/services/organizations/active-membership"
+import { runOperation } from "@/services/operation"
 
 type SupabaseErrorLike = {
   code?: string
@@ -60,71 +60,24 @@ type MembershipRow = {
  * @returns The operation result.
  * @throws DocumentServiceError when the operation is rejected or fails.
  */
-export async function runDocumentOperation<T>(
+export function runDocumentOperation<T>(
   operationName: string,
   identifiers: Record<string, LogValue>,
   operation: () => Promise<T>
 ): Promise<T> {
-  const startedAt = Date.now()
+  return runOperation("document", toDocumentServiceError, operationName, identifiers, operation)
+}
 
-  try {
-    const result = await operation()
-    console.info("document_service_success", {
-      operationName,
-      durationMs: Date.now() - startedAt,
-      ...identifiers,
-    })
-    return result
-  } catch (error: unknown) {
-    if (error instanceof DocumentStorageServiceError) {
-      const storageError = new DocumentServiceError(
-        error.message,
-        error.statusCode
-      )
-
-      console.warn("document_service_rejected", {
-        operationName,
-        durationMs: Date.now() - startedAt,
-        statusCode: storageError.statusCode,
-        reason: storageError.message,
-        ...identifiers,
-      })
-      throw storageError
-    }
-
-    if (error instanceof DocumentServiceError) {
-      console.warn("document_service_rejected", {
-        operationName,
-        durationMs: Date.now() - startedAt,
-        statusCode: error.statusCode,
-        reason: error.message,
-        ...identifiers,
-      })
-      throw error
-    }
-
-    const setupError = createDocumentSetupError(error)
-
-    if (setupError) {
-      console.warn("document_service_rejected", {
-        operationName,
-        durationMs: Date.now() - startedAt,
-        statusCode: setupError.statusCode,
-        reason: setupError.message,
-        ...identifiers,
-      })
-      throw setupError
-    }
-
-    console.error("document_service_failed", {
-      operationName,
-      durationMs: Date.now() - startedAt,
-      reason: error instanceof Error ? error.message : "Unknown service error",
-      ...identifiers,
-    })
-    captureUnexpectedError(error, { operationName, ...identifiers })
-    throw new DocumentServiceError("Document service failed.", 500)
+function toDocumentServiceError(error: unknown): DocumentServiceError {
+  if (error instanceof DocumentServiceError) {
+    return error
   }
+
+  if (error instanceof DocumentStorageServiceError) {
+    return new DocumentServiceError(error.message, error.statusCode)
+  }
+
+  return createDocumentSetupError(error) ?? new DocumentServiceError("Document service failed.", 500)
 }
 
 /**

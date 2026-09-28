@@ -18,10 +18,9 @@ import type {
   DocumentComment,
   DocumentCommentRow,
 } from "@/types/comment"
+import { runOperation, type LogValue } from "@/services/operation"
 
 type DocumentCommentServiceClient = Pick<AdminSupabaseClient, "from" | "rpc">
-
-type LogValue = string | number | boolean | null | undefined
 
 type DocumentStateRow = {
   id: string
@@ -431,44 +430,18 @@ function normalizeLimit(value: number | undefined): number {
   return value
 }
 
-async function runDocumentCommentOperation<T>(
+function runDocumentCommentOperation<T>(
   operationName: string,
   identifiers: Record<string, LogValue>,
   operation: () => Promise<T>
 ): Promise<T> {
-  const startedAt = Date.now()
+  return runOperation("document_comment", toDocumentCommentServiceError, operationName, identifiers, operation)
+}
 
-  try {
-    const result = await operation()
-    console.info("document_comment_service_success", {
-      operationName,
-      durationMs: Date.now() - startedAt,
-      ...identifiers,
-    })
-    return result
-  } catch (error: unknown) {
-    if (error instanceof DocumentCommentServiceError) {
-      console.warn("document_comment_service_rejected", {
-        operationName,
-        statusCode: error.statusCode,
-        reason: error.message,
-        durationMs: Date.now() - startedAt,
-        ...identifiers,
-      })
-      throw error
-    }
-
-    console.error("document_comment_service_failed", {
-      operationName,
-      reason: error instanceof Error ? error.message : "Unknown comment error",
-      durationMs: Date.now() - startedAt,
-      ...identifiers,
-    })
-    throw new DocumentCommentServiceError(
-      "Document comment service failed.",
-      500
-    )
-  }
+function toDocumentCommentServiceError(error: unknown): DocumentCommentServiceError {
+  return error instanceof DocumentCommentServiceError
+    ? error
+    : new DocumentCommentServiceError("Document comment service failed.", 500)
 }
 
 function getClient(deps: DocumentCommentServiceDeps): DocumentCommentServiceClient {

@@ -55,6 +55,7 @@ test.describe("invitations", () => {
 
     try {
       await page.goto(`/accept-invite/${invite?.token as string}`)
+      await page.getByLabel("Your name").fill("Sam Okafor")
       await page.getByLabel("Choose a password").fill(password)
       await page.getByLabel("Confirm password").fill(password)
       await page.getByRole("button", { name: join }).click()
@@ -76,8 +77,17 @@ test.describe("invitations", () => {
         status: "active",
       })
 
+      // Who they said they are is theirs from the first page on.
+      const { data: profile } = await admin
+        .from("profiles")
+        .select("full_name,phone_number")
+        .eq("id", inviteeId)
+        .single()
+      expect(profile).toEqual({ full_name: "Sam Okafor", phone_number: null })
+
       const dashboard = page.getByRole("main")
 
+      await expect(dashboard.getByText("Welcome back, Sam!", { exact: true })).toBeVisible()
       await expect(dashboard.getByText(tenant.organizationName, { exact: true })).toBeVisible()
       await expect(dashboard.getByRole("region", { name: "Waiting on you" })).toBeVisible()
       // Setting the workspace up is the owner's job, not a new staff member's.

@@ -198,17 +198,3 @@ export function isSubmissionViewAdjusted(view: SubmissionListView): boolean {
   )
 }
 
-/**
- * Lists the fields a new search carries over: everything except the old
- * query and the page, so the search starts on page one of the same view.
- *
- * @param view - Current Submissions view.
- * @returns Name and value pairs for hidden form fields.
- */
-export function getSubmissionSearchFields(
-  view: SubmissionListView
-): Array<[name: string, value: string]> {
-  return Array.from(
-    submissionListState.toSearchParams({ ...view, page: 1, query: "" }).entries()
-  )
-}

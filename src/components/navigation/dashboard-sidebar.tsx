@@ -1,15 +1,16 @@
 "use client"
 
-import { PanelLeftClose } from "lucide-react"
+import { PanelLeftClose, Search } from "lucide-react"
 import Link from "next/link"
 import { useState, type MouseEvent, type ReactElement } from "react"
 
-import { BizFlowMark, BizFlowWordmark } from "@/components/brand/bizflow-mark"
+import { BizFlowMark } from "@/components/brand/bizflow-mark"
 import {
   DashboardAccountMenu,
   type DashboardAccount,
 } from "@/components/navigation/dashboard-account-menu"
 import { DashboardNavigation } from "@/components/navigation/dashboard-navigation"
+import { SearchShortcut, WorkspaceSearchTrigger } from "@/components/search/workspace-search"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
@@ -49,33 +50,30 @@ export function DashboardSidebar({
       className={cn(
         // Hidden below md: at 375px this aside was ~500px of chrome above every
         // page heading. Mobile navigation is the bottom tab bar instead.
-        "hidden flex-col gap-6 px-4 pt-5 pb-4 transition-[width,padding] duration-200 md:flex md:w-[232px] md:shrink-0 md:pt-6",
-        collapsed && "md:w-[80px] md:cursor-e-resize md:px-3"
+        "hidden flex-col gap-6 px-4 pt-5 pb-4 transition-[width] duration-200 md:flex md:w-[232px] md:shrink-0 md:pt-6",
+        // Collapsed, the rail is one 44px column: the logo and every tab keep
+        // their size and place, and only the words beside them go. While it
+        // widens, what doesn't fit yet is cut off rather than squeezed in.
+        "md:overflow-x-clip",
+        collapsed && "md:w-[76px] md:cursor-e-resize"
       )}
       data-collapsed={collapsed}
       onClick={expandFromEmptyRail}
     >
-      <div
-        className={cn(
-          "flex items-center justify-between gap-2",
-          collapsed && "md:flex-col"
-        )}
-      >
+      <div className="flex items-center justify-between gap-2">
         <Link
           aria-label="BizFlow dashboard"
-          className="inline-flex min-w-0 rounded-[12px] outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+          className="inline-flex shrink-0 items-center gap-2.5 rounded-[12px] outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
           href="/dashboard"
         >
-          <span className={cn(collapsed && "md:hidden")}>
-            <BizFlowWordmark compact />
-          </span>
+          <BizFlowMark className="size-11 shrink-0" />
           <span
             className={cn(
-              "hidden size-9 place-items-center rounded-[10px] border border-primary/15 bg-secondary text-primary shadow-[0_1px_0_rgba(37,35,41,0.05)]",
-              collapsed && "md:grid"
+              "font-editorial text-xl leading-none font-semibold tracking-[-0.02em]",
+              collapsed && "md:hidden"
             )}
           >
-            <BizFlowMark className="size-6" />
+            BizFlow
           </span>
         </Link>
 
@@ -108,10 +106,31 @@ export function DashboardSidebar({
         </span>
       </div>
 
-      <DashboardNavigation
-        collapsed={collapsed}
-        role={account.permissionSubject}
-      />
+      <div className="flex flex-col gap-1">
+        {account.permissionSubject ? (
+          // Drawn as a tab, so it keeps the tabs' square and place.
+          <WorkspaceSearchTrigger
+            aria-label={collapsed ? "Search" : undefined}
+            className={cn(
+              "flex h-11 items-center rounded-[8px] pr-3 text-sm text-foreground/80 outline-none transition-colors hover:bg-secondary/70 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40 motion-reduce:transition-none",
+              collapsed && "md:w-11 md:pr-0"
+            )}
+            title={collapsed ? "Search" : undefined}
+          >
+            <span className="grid size-11 shrink-0 place-items-center">
+              <Search aria-hidden="true" className="size-5" />
+            </span>
+            <span className={cn("flex-1 truncate text-left", collapsed && "md:hidden")}>
+              Search
+            </span>
+            <SearchShortcut className={cn(collapsed && "md:hidden")} />
+          </WorkspaceSearchTrigger>
+        ) : null}
+        <DashboardNavigation
+          collapsed={collapsed}
+          role={account.permissionSubject}
+        />
+      </div>
 
       <div className="mt-auto border-t border-border/70 pt-3">
         <DashboardAccountMenu

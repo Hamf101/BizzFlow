@@ -365,7 +365,8 @@ type VerifyAuditLogChainInput = {
 }
 
 /**
- * Verifies the organization's audit hash chain server-side.
+ * Verifies the organization's audit hash chain server-side, from the entry
+ * the last check vouched for, or from the first entry once a day.
  *
  * Recomputation happens inside the database function, so no cross-language
  * jsonb canonicalization is ever relied on. Reads bypass RLS via the admin

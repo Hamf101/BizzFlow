@@ -124,11 +124,7 @@ export async function createTemplateImageUpload(
   )
 
   return {
-    asset: {
-      ...asset,
-      originalUrl: await signImageUrl(input.organizationId, asset, "original", deps),
-      url: await signImageUrl(input.organizationId, asset, "display", deps),
-    },
+    asset: { ...asset, url: await signDisplayUrl(input.organizationId, asset.id, deps) },
     uploads,
   }
 }
@@ -148,25 +144,46 @@ export async function withTemplateImageUrls<Content extends TemplateContent>(
   organizationId: string,
   deps: TemplateImageDeps = {}
 ): Promise<Content> {
-  return signImages(content, organizationId, deps, false)
+  const assets = new Map(storedImages(content).map((asset) => [asset.id, asset]))
+
+  if (assets.size === 0) {
+    return content
+  }
+
+  const urls = new Map(
+    await Promise.all([...assets.keys()].map(async (id) => [id, await signDisplayUrl(organizationId, id, deps)] as const))
+  )
+
+  return mapImageAssets(content, (asset) => ({ ...asset, url: urls.get(asset.id) }))
 }
 
 /**
- * As {@link withTemplateImageUrls}, with a download of each original too. For
- * the editors only, after their own access checks: an original is exactly as
- * uploaded, with whatever the camera recorded, such as where a photo was taken.
+ * A short-lived link that downloads a picture exactly as it was uploaded.
+ * Call it only after checking, when it's asked for, that the person may see
+ * the content holding the picture: an original keeps whatever the camera
+ * recorded, such as where a photo was taken.
  *
- * @param content - Content the viewer may see.
- * @param organizationId - The workspace that stores its pictures.
- * @param deps - Injected clock and storage for tests.
- * @returns The content with a display address and a download on every stored picture.
+ * @param organizationId - The workspace that stores the picture.
+ * @param asset - The stored picture.
+ * @param deps - Injected storage for tests.
+ * @returns A download link that expires within minutes.
  */
-export async function withTemplateImageOriginals<Content extends TemplateContent>(
-  content: Content,
+export async function signTemplateImageOriginal(
   organizationId: string,
-  deps: TemplateImageDeps = {}
-): Promise<Content> {
-  return signImages(content, organizationId, deps, true)
+  asset: Pick<TemplateImageAsset, "id" | "type">,
+  deps: Pick<TemplateImageDeps, "r2Client" | "r2Env" | "sign"> = {}
+): Promise<string> {
+  const { bucket, client, env, sign } = storage(deps)
+
+  return sign(
+    client as S3Client,
+    new GetObjectCommand({
+      Bucket: bucket,
+      Key: imageKey(organizationId, asset.id, "original"),
+      ResponseContentDisposition: `attachment; filename="picture.${asset.type === "png" ? "png" : "jpg"}"`,
+    }),
+    { expiresIn: env.CLOUDFLARE_R2_SIGNED_URL_TTL_SECONDS }
+  )
 }
 
 /**
@@ -244,7 +261,13 @@ export async function readTemplateImage(
   return result.Body.transformToByteArray()
 }
 
-function storedImages(content: TemplateContent): TemplateImageAsset[] {
+/**
+ * Every stored picture in some content: each image block's and the logo's.
+ *
+ * @param content - A template or document's content.
+ * @returns Its stored pictures.
+ */
+export function storedImages(content: TemplateContent): TemplateImageAsset[] {
   const assets: TemplateImageAsset[] = []
   mapImageAssets(content, (asset) => {
     assets.push(asset)
@@ -258,56 +281,14 @@ function imageKey(organizationId: string, assetId: string, copy: ImageCopy): str
   return ["organizations", organizationId, "images", assetId, copy].join("/")
 }
 
-async function signImages<Content extends TemplateContent>(
-  content: Content,
-  organizationId: string,
-  deps: TemplateImageDeps,
-  originals: boolean
-): Promise<Content> {
-  const assets = new Map(storedImages(content).map((asset) => [asset.id, asset]))
-
-  if (assets.size === 0) {
-    return content
-  }
-
-  const signed = new Map(
-    await Promise.all(
-      [...assets.values()].map(
-        async (asset) =>
-          [
-            asset.id,
-            {
-              url: await signImageUrl(organizationId, asset, "display", deps),
-              ...(originals && { originalUrl: await signImageUrl(organizationId, asset, "original", deps) }),
-            },
-          ] as const
-      )
-    )
-  )
-
-  return mapImageAssets(content, (asset) => ({ ...asset, ...signed.get(asset.id) }))
-}
-
-async function signImageUrl(
-  organizationId: string,
-  asset: Pick<TemplateImageAsset, "id" | "type">,
-  copy: "display" | "original",
-  deps: TemplateImageDeps
-): Promise<string> {
+async function signDisplayUrl(organizationId: string, assetId: string, deps: TemplateImageDeps): Promise<string> {
   const { bucket, client, sign } = storage(deps)
   const signingDate = new Date((deps.now ?? (() => new Date()))())
   signingDate.setUTCMinutes(0, 0, 0)
 
   return sign(
     client as S3Client,
-    new GetObjectCommand({
-      Bucket: bucket,
-      Key: imageKey(organizationId, asset.id, copy),
-      // An original downloads as a file rather than opening in the tab.
-      ...(copy === "original" && {
-        ResponseContentDisposition: `attachment; filename="picture.${asset.type === "png" ? "png" : "jpg"}"`,
-      }),
-    }),
+    new GetObjectCommand({ Bucket: bucket, Key: imageKey(organizationId, assetId, "display") }),
     { expiresIn: DISPLAY_URL_SECONDS, signingDate }
   )
 }
@@ -318,6 +299,7 @@ function storage(deps: TemplateImageDeps) {
   return {
     bucket: env.CLOUDFLARE_R2_BUCKET_NAME,
     client: deps.r2Client ?? createR2Client(env),
+    env,
     sign: deps.sign ?? getSignedUrl,
   }
 }

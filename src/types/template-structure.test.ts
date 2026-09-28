@@ -51,6 +51,25 @@ describe("duplicateTemplateBlock", () => {
     expect(content.blocks).toHaveLength(4)
   })
 
+  it("sets a copy of a placed picture a little down and across, still on its page", () => {
+    const picture = {
+      alignment: "center" as const,
+      altText: "Seal",
+      caption: null,
+      dataUrl: "data:image/png;base64,iVBORw0KGgo=",
+      id: SOURCE_ID,
+      placement: { height: 20, page: 2, width: 20, x: 79, y: 10 },
+      type: "image" as const,
+      widthPercent: 100,
+    }
+    const copy = duplicateTemplateBlock({ ...createBlankTemplateContent(), blocks: [picture] }, SOURCE_ID, INSERTED_ID)
+
+    expect(copy.blocks.map((block) => (block.type === "image" ? block.placement : null))).toEqual([
+      { height: 20, page: 2, width: 20, x: 79, y: 10 },
+      { height: 20, page: 2, width: 20, x: 80, y: 13 },
+    ])
+  })
+
   it("retains group membership when copying its last field", () => {
     const copy = duplicateTemplateBlock(createStructuredContent(), THIRD_FIELD_ID, INSERTED_ID)
     expect(copy.fieldGroups[0].endBlockId).toBe(INSERTED_ID)

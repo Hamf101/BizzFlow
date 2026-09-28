@@ -2,6 +2,7 @@ import type { Page } from "@playwright/test"
 
 import { expect, test, uniqueName } from "../support/fixtures"
 import { retryConcurrentChange } from "../support/retry"
+import { openSearch } from "../support/search"
 
 test.use({ screenshot: "off", trace: "off", video: "off" })
 
@@ -82,22 +83,24 @@ async function timeSwitch(
   )
 }
 
-test("searching a list arrives without reloading the document", async ({
+test("search arrives at what it found without reloading the document", async ({
   pageAs,
+  tenant,
 }, testInfo) => {
   const page = await pageAs("owner_admin")
+  const { email } = tenant.users.staff
   await page.goto("/documents")
 
   // A document load starts a new performance timeline; a transition does not.
   const timeline = await page.evaluate(() => performance.timeOrigin)
-  await page.getByLabel("Search files").fill(uniqueName("Nothing filed as"))
+  const search = await openSearch(page)
+  await search.getByRole("combobox", { name: "Search" }).fill(email)
+  await expect(search.getByRole("option").first()).toContainText(email)
   const asked = Date.now()
-  await page.getByLabel("Search files").press("Enter")
+  await page.keyboard.press("Enter")
 
-  await expect(page).toHaveURL(/[?&]q=/)
-  await expect(page.getByRole("heading", { level: 1 })).toHaveAccessibleName(
-    /Files 0 items/
-  )
+  await expect(page).toHaveURL(/\/people\?q=/)
+  await expect(page.locator('[data-slot="list-query"]')).toContainText(email)
   console.log(
     `list-navigation (${testInfo.project.name}): search answered in ${Date.now() - asked} ms`
   )

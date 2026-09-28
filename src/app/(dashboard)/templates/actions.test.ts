@@ -21,7 +21,6 @@ import {
   createTemplateAction,
   duplicateTemplateAction,
   publishTemplateAction,
-  updateTemplateAction,
 } from "./actions"
 
 const ACTOR_USER_ID = "20000000-0000-4000-8000-000000000001"
@@ -143,6 +142,27 @@ describe("publish template action", () => {
       expect.stringContaining("Document+template+changed")
     )
   })
+
+  it("publishes an unchanged draft that is still the latest revision", async () => {
+    // Undo can return the editor to exactly the saved state, so publishing it
+    // must not answer the harmless no-op save with "check your input".
+    vi.mocked(updateDocumentTemplate).mockRejectedValue(
+      new TemplateServiceError("No template changes were provided.", 400)
+    )
+    vi.mocked(getDocumentTemplate).mockResolvedValue(createTemplate(1, "draft"))
+    vi.mocked(publishDocumentTemplate).mockResolvedValue(
+      createTemplate(1, "published")
+    )
+
+    await expect(
+      publishTemplateAction(createPublishFormData(1))
+    ).rejects.toThrow(
+      `NEXT_REDIRECT:/templates/${TEMPLATE_ID}/edit?feedback=template_published`
+    )
+    expect(publishDocumentTemplate).toHaveBeenCalledWith(
+      expect.objectContaining({ expectedRevision: 1 })
+    )
+  })
 })
 
 describe("template mutation outcomes", () => {
@@ -202,38 +222,6 @@ describe("template mutation outcomes", () => {
     )
   })
 
-  it("saves the submitted revision before reporting completion", async () => {
-    await expect(updateTemplateAction(createPublishFormData(1))).rejects.toThrow(
-      `NEXT_REDIRECT:/templates/${TEMPLATE_ID}/edit?feedback=changes_saved`
-    )
-    expect(updateDocumentTemplate).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({
-        actorUserId: ACTOR_USER_ID,
-        organizationId: ORGANIZATION_ID,
-        templateId: TEMPLATE_ID,
-        expectedRevision: 1,
-      })
-    )
-  })
-
-  it.each([
-    ["reports an unchanged draft as saved", 1, "changes_saved"],
-    ["asks for a refresh when an unchanged draft is out of date", 2, "refresh_required"],
-  ])("%s instead of an input error", async (_case, storedRevision, feedback) => {
-    // Undo can return the editor to exactly the saved state, so Save must not
-    // answer a harmless no-op with "check your input".
-    vi.mocked(updateDocumentTemplate).mockRejectedValue(
-      new TemplateServiceError("No template changes were provided.", 400)
-    )
-    vi.mocked(getDocumentTemplate).mockResolvedValue(
-      createTemplate(storedRevision, "draft")
-    )
-
-    await expect(updateTemplateAction(createPublishFormData(1))).rejects.toThrow(
-      `NEXT_REDIRECT:/templates/${TEMPLATE_ID}/edit?feedback=${feedback}`
-    )
-  })
-
   it("archives only after the service succeeds", async () => {
     const formData = new FormData()
     formData.set("templateId", TEMPLATE_ID)
@@ -261,7 +249,7 @@ describe("template mutation outcomes", () => {
     const formData = createPublishFormData(1)
     formData.set("content", "not-json")
 
-    await expect(updateTemplateAction(formData)).rejects.toThrow(
+    await expect(publishTemplateAction(formData)).rejects.toThrow(
       `NEXT_REDIRECT:/templates/${TEMPLATE_ID}/edit?feedback=invalid_input`
     )
     expect(updateDocumentTemplate).not.toHaveBeenCalled()
@@ -275,7 +263,7 @@ describe("template mutation outcomes", () => {
       new AuthenticationError("Sign in to continue.")
     )
 
-    await expect(updateTemplateAction(createPublishFormData(1))).rejects.toThrow(
+    await expect(publishTemplateAction(createPublishFormData(1))).rejects.toThrow(
       `NEXT_REDIRECT:/login?next=%2Ftemplates%2F${TEMPLATE_ID}%2Fedit`
     )
     expect(updateDocumentTemplate).not.toHaveBeenCalled()

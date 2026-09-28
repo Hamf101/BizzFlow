@@ -1,5 +1,3 @@
-import { randomUUID } from "node:crypto"
-
 import {
   createAdminClient,
   type AdminSupabaseClient,
@@ -21,21 +19,12 @@ import {
   type DocumentActivityEventRow,
   type DocumentActivityEventType,
 } from "@/types/activity"
+import { runOperation, type LogValue } from "@/services/operation"
 
 type DocumentActivityServiceClient = Pick<AdminSupabaseClient, "from" | "rpc">
 
-type LogValue = string | number | boolean | null | undefined
-
 type DocumentStateRow = {
   lifecycle_state?: unknown
-}
-
-export type RecordDocumentActivityInput = {
-  organizationId: string
-  documentId: string
-  actorUserId: string | null
-  eventType: DocumentActivityEventType
-  metadata?: ActivityMetadata
 }
 
 export type ListDocumentActivityInput = {
@@ -47,7 +36,6 @@ export type ListDocumentActivityInput = {
 
 export type DocumentActivityServiceDeps = {
   client?: DocumentActivityServiceClient
-  createId?: () => string
 }
 
 /**
@@ -67,54 +55,6 @@ export class DocumentActivityServiceError extends Error {
     this.name = "DocumentActivityServiceError"
     this.statusCode = statusCode
   }
-}
-
-/**
- * Records an immutable document activity event from a trusted server workflow.
- *
- * @param input - Tenant, document, actor, event, and metadata values.
- * @param deps - Optional data-access dependencies for tests and composition.
- * @returns A promise that resolves after the event is stored.
- * @throws DocumentActivityServiceError when the document is outside the tenant or the write fails.
- */
-export async function recordDocumentActivity(
-  input: RecordDocumentActivityInput,
-  deps: DocumentActivityServiceDeps = {}
-): Promise<void> {
-  return runDocumentActivityOperation(
-    "record_document_activity",
-    {
-      organizationId: input.organizationId,
-      documentId: input.documentId,
-      actorUserId: input.actorUserId,
-      eventType: input.eventType,
-    },
-    async (): Promise<void> => {
-      const client = getClient(deps)
-
-      await requireTenantDocument(
-        client,
-        input.organizationId,
-        input.documentId
-      )
-
-      const { error } = await client.from("document_activity_events").insert({
-        id: createId(deps),
-        org_id: input.organizationId,
-        document_id: input.documentId,
-        actor_user_id: input.actorUserId,
-        event_type: parseDocumentActivityEventType(input.eventType),
-        metadata: input.metadata ?? {},
-      })
-
-      if (error) {
-        throw new DocumentActivityServiceError(
-          "Unable to record document activity.",
-          500
-        )
-      }
-    }
-  )
 }
 
 /**
@@ -218,27 +158,6 @@ async function requireDocumentViewPermission(
     }
 
     throw error
-  }
-}
-
-async function requireTenantDocument(
-  client: DocumentActivityServiceClient,
-  organizationId: string,
-  documentId: string
-): Promise<void> {
-  const { data, error } = await client
-    .from("documents")
-    .select("id")
-    .eq("id", documentId)
-    .eq("org_id", organizationId)
-    .maybeSingle()
-
-  if (error) {
-    throw new DocumentActivityServiceError("Unable to load document.", 500)
-  }
-
-  if (!data) {
-    throw new DocumentActivityServiceError("Document was not found.", 404)
   }
 }
 
@@ -366,44 +285,18 @@ function normalizeLimit(value: number | undefined): number {
   return value
 }
 
-async function runDocumentActivityOperation<T>(
+function runDocumentActivityOperation<T>(
   operationName: string,
   identifiers: Record<string, LogValue>,
   operation: () => Promise<T>
 ): Promise<T> {
-  const startedAt = Date.now()
+  return runOperation("document_activity", toDocumentActivityServiceError, operationName, identifiers, operation)
+}
 
-  try {
-    const result = await operation()
-    console.info("document_activity_service_success", {
-      operationName,
-      durationMs: Date.now() - startedAt,
-      ...identifiers,
-    })
-    return result
-  } catch (error: unknown) {
-    if (error instanceof DocumentActivityServiceError) {
-      console.warn("document_activity_service_rejected", {
-        operationName,
-        statusCode: error.statusCode,
-        reason: error.message,
-        durationMs: Date.now() - startedAt,
-        ...identifiers,
-      })
-      throw error
-    }
-
-    console.error("document_activity_service_failed", {
-      operationName,
-      reason: error instanceof Error ? error.message : "Unknown activity error",
-      durationMs: Date.now() - startedAt,
-      ...identifiers,
-    })
-    throw new DocumentActivityServiceError(
-      "Document activity service failed.",
-      500
-    )
-  }
+function toDocumentActivityServiceError(error: unknown): DocumentActivityServiceError {
+  return error instanceof DocumentActivityServiceError
+    ? error
+    : new DocumentActivityServiceError("Document activity service failed.", 500)
 }
 
 function getClient(
@@ -412,6 +305,3 @@ function getClient(
   return deps.client ?? createAdminClient()
 }
 
-function createId(deps: DocumentActivityServiceDeps): string {
-  return deps.createId ? deps.createId() : randomUUID()
-}

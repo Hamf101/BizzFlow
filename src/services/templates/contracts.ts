@@ -83,10 +83,6 @@ export type RecordDocumentRecentAccessInput = TemplateActorInput & {
   documentId: string
 }
 
-export type ListRecentDocumentsInput = TemplateActorInput & {
-  limit?: number
-}
-
 export type TemplateServiceDeps = {
   client?: TemplateServiceClient
   createId?: () => string

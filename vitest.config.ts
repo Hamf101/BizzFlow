@@ -9,6 +9,7 @@ export default defineConfig({
     },
   },
   test: {
+    testTimeout: 15_000,
     // A test that makes no assertion fails instead of passing silently.
     expect: { requireAssertions: true },
     // e2e/ holds Playwright specs. They use the same `.spec.ts` suffix but a

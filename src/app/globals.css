@@ -43,6 +43,8 @@
   --fold-strength: 0.62;
   /* The seams between the pieces: the log-in button's plum by day, black at night. */
   --fold-seam: var(--primary);
+  /* The sign-in pages' ground: the panels' stone by day, the canvas at night. */
+  --auth-ground: var(--background);
 }
 
 .dark {
@@ -75,6 +77,7 @@
   --brand-rule: #3b3549;
   --fold-strength: 0.36;
   --fold-seam: var(--canvas);
+  --auth-ground: var(--canvas);
 }
 
 @theme inline {
@@ -83,6 +86,7 @@
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
   --color-canvas: var(--canvas);
+  --color-auth-ground: var(--auth-ground);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -189,11 +193,15 @@
 
   /*
    * The page scrollbar has no track, so its lane shows the root's own colour.
-   * Shells that sit on the canvas mark themselves, and the root takes the
-   * canvas too, so the thumb rests on the ground around it, not on a strip.
+   * Shells that sit on a ground of their own mark themselves, and the root
+   * takes that ground too, so the thumb rests on it, not on a strip.
    */
   html:has([data-ground="canvas"]) {
     background-color: var(--canvas);
+  }
+
+  html:has([data-ground="auth"]) {
+    background-color: var(--auth-ground);
   }
 }
 
@@ -214,69 +222,43 @@
 /*
  * The sign-in backdrop (src/components/auth/auth-backdrop.tsx). Facets arrive
  * step by step; the whole page floats, and drifts through its tones on log in.
- * The dot grid and the page lean toward the cursor or a tilted phone, the page
- * further, so it reads as nearer.
+ * It leans toward the cursor or a tilted phone, and the ground's diamonds shade
+ * around the pointer.
  */
-@property --lean-x {
-  syntax: "<number>";
-  inherits: true;
-  initial-value: 0;
-}
-
-@property --lean-y {
-  syntax: "<number>";
-  inherits: true;
-  initial-value: 0;
-}
-
 @layer components {
-  .auth-backdrop[data-idle] {
-    animation: auth-lean 24s ease-in-out infinite alternate;
+  /* By day the folded page is plum tints, like the log-in button; Flow's own page keeps the pastels. */
+  :root:not(.dark) .auth-backdrop {
+    --fold-lavender: #bcb0c9;
+    --fold-lilac: #ab9ebc;
+    --fold-wisteria: #9a8dac;
+    --fold-orchid: #c9bfd3;
+    --fold-periwinkle: #b5adc7;
+    --fold-rose: #c8b7c6;
+    --fold-sage: #bbb5c2;
+    --fold-strength: 0.55;
   }
 
-  .auth-grid,
-  .auth-fold {
-    transition: transform 0.9s cubic-bezier(0.2, 0.8, 0.2, 1);
-  }
-
-  /* While drifting on its own, the lean is already smooth. */
-  .auth-backdrop[data-idle] :is(.auth-grid, .auth-fold) {
-    transition: none;
-  }
-
-  .auth-grid {
-    background-image: radial-gradient(
-      circle,
-      color-mix(in oklch, var(--foreground) 16%, transparent) 1.1px,
-      transparent 1.6px
-    );
-    background-size: 62px 62px;
-    transform: translate3d(calc(var(--lean-x) * -8px), calc(var(--lean-y) * -8px), 0);
-  }
-
-  .auth-fold {
-    transform: translate3d(calc(var(--lean-x) * -22px), calc(var(--lean-y) * -22px), 0);
-  }
-
-  .auth-fold-float {
-    animation: auth-fold-float 10s ease-in-out infinite alternate;
-    transform-box: view-box;
-    transform-origin: 0 0;
-  }
-
-  /* Pieces come apart about the page's middle (src/components/auth/fold-loops.ts). */
-  .auth-fold-piece {
-    transform-box: view-box;
-    transform-origin: 0 0;
+  /* Drawn in black (auth-backdrop.tsx); keep the night glow at 3.9% as day shading deepens. */
+  .dark .auth-grid {
+    filter: invert(1);
+    opacity: 0.39;
   }
 
   /*
-   * Pieces are solid, so the dot grid never shows through them: each pastel
-   * is mixed with the page's ground rather than laid over it translucently.
+   * A box, like each piece (auth-backdrop.tsx), so it turns about its own
+   * middle, the page's: pieces come apart about it (fold-loops.ts).
+   */
+  .auth-fold-float {
+    animation: auth-fold-float 10s ease-in-out infinite alternate;
+  }
+
+  /*
+   * Pieces are solid, so one never shows through another as they drift: each
+   * pastel is mixed with the page's ground rather than laid over it translucently.
    */
   .auth-fold-facet {
     --mix: calc(var(--strength) * var(--fold-strength) * 100%);
-    fill: color-mix(in oklch, var(--fold-from) var(--mix), var(--canvas));
+    fill: color-mix(in oklch, var(--fold-from) var(--mix), var(--auth-ground));
     opacity: 0;
     stroke: var(--fold-seam);
     stroke-linejoin: round;
@@ -295,14 +277,19 @@
     transform: none;
   }
 
+  /*
+   * Held still and moved on a few times a second (auth-backdrop.tsx): a colour
+   * that changed every frame would have the page redrawn every frame, and the
+   * pieces stutter whenever the browser gives its time to another window.
+   */
   .auth-fold[data-whole] .auth-fold-facet {
-    animation: auth-fold-drift 16s ease-in-out calc(var(--i) * -1.7s) infinite alternate;
+    animation: auth-fold-drift 16s ease-in-out calc(var(--i) * -1.7s) infinite alternate paused;
   }
 
   .auth-fold-wave {
     fill: none;
     opacity: 0;
-    stroke: color-mix(in oklch, var(--fold-wisteria) calc(0.8 * var(--fold-strength) * 100%), var(--canvas));
+    stroke: color-mix(in oklch, var(--fold-wisteria) calc(0.8 * var(--fold-strength) * 100%), var(--auth-ground));
     stroke-dasharray: 1;
     stroke-dashoffset: 1;
     stroke-linecap: round;
@@ -318,28 +305,6 @@
   }
 }
 
-@keyframes auth-lean {
-  0% {
-    --lean-x: -0.6;
-    --lean-y: -0.3;
-  }
-
-  35% {
-    --lean-x: 0.4;
-    --lean-y: 0.5;
-  }
-
-  70% {
-    --lean-x: 0.7;
-    --lean-y: -0.4;
-  }
-
-  100% {
-    --lean-x: -0.3;
-    --lean-y: 0.6;
-  }
-}
-
 @keyframes auth-fold-float {
   from {
     transform: translateY(-8px) rotate(-1.6deg);
@@ -352,15 +317,15 @@
 
 @keyframes auth-fold-drift {
   0% {
-    fill: color-mix(in oklch, var(--fold-from) var(--mix), var(--canvas));
+    fill: color-mix(in oklch, var(--fold-from) var(--mix), var(--auth-ground));
   }
 
   50% {
-    fill: color-mix(in oklch, var(--fold-via) var(--mix), var(--canvas));
+    fill: color-mix(in oklch, var(--fold-via) var(--mix), var(--auth-ground));
   }
 
   100% {
-    fill: color-mix(in oklch, var(--fold-to) var(--mix), var(--canvas));
+    fill: color-mix(in oklch, var(--fold-to) var(--mix), var(--auth-ground));
   }
 }
 
@@ -378,6 +343,19 @@
     transition-delay: 0ms !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/*
+ * Words an author coloured or highlighted were coloured for paper. On a dark
+ * screen they stay legible: a colour lightens, and a highlight becomes a tint
+ * behind the screen's own ink. Paper, and the PDF, keep them exactly.
+ */
+.dark .doc-ink:not([data-document-surface="paper"] *) {
+  color: oklch(from var(--doc-ink) max(l, 0.78) c h) !important;
+}
+
+.dark .doc-highlight:not([data-document-surface="paper"] *) {
+  background-color: oklch(from var(--doc-highlight) 0.42 calc(c * 2.5) h) !important;
 }
 
 /*

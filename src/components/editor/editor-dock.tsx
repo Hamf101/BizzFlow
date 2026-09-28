@@ -3,7 +3,6 @@
 import type { LucideIcon } from "lucide-react"
 import { type ReactElement, type ReactNode, useState } from "react"
 
-import type { InsertChoice } from "@/components/editor/block-catalog"
 import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
 
@@ -11,12 +10,10 @@ import { cn } from "@/lib/utils"
 export type DockTool = Readonly<{
   badge?: number
   /** The panel it opens beside the dock. */
-  content?: (close: () => void) => ReactNode
+  content: (close: () => void) => ReactNode
   icon: LucideIcon
   id: string
   label: string
-  /** Opens something of the editor's own instead, such as Flow's side panel. */
-  onOpen?: () => void
   wide?: boolean
 }>
 
@@ -32,10 +29,13 @@ export type DockOrientation = "upright" | "flat"
  * @returns The dock.
  */
 export function EditorDock({
+  lead,
   narrow,
   orientation,
   tools,
 }: {
+  /** Tools that come first, such as the formatting toolbar on a phone. */
+  lead?: ReactNode
   narrow: boolean
   orientation: DockOrientation
   tools: readonly DockTool[]
@@ -47,10 +47,18 @@ export function EditorDock({
       aria-label="Editor tools"
       className={cn(
         "flex gap-1 rounded-[16px] border border-border bg-popover p-1.5 shadow-lg",
-        orientation === "upright" && "flex-col"
+        orientation === "upright" && "flex-col",
+        // On a phone the row runs off the screen's right edge, which shows it scrolls.
+        narrow && "max-w-full items-center overflow-x-auto rounded-r-none border-r-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       )}
       data-slot="editor-dock"
     >
+      {lead ? (
+        <>
+          {lead}
+          <span aria-hidden="true" className="mx-1 h-6 w-px shrink-0 bg-border" />
+        </>
+      ) : null}
       {tools.map((tool: DockTool) => {
         const Icon = tool.icon
         const close = () => setOpen(null)
@@ -68,22 +76,7 @@ export function EditorDock({
           </>
         )
         const buttonClass =
-          "relative grid size-11 place-items-center rounded-[12px] text-foreground/80 outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40 data-popup-open:bg-secondary data-popup-open:text-secondary-foreground"
-
-        if (!tool.content) {
-          return (
-            <button
-              aria-label={tool.label}
-              className={cn(buttonClass, !narrow && "size-10")}
-              key={tool.id}
-              onClick={tool.onOpen}
-              title={tool.label}
-              type="button"
-            >
-              {face}
-            </button>
-          )
-        }
+          "relative grid size-11 shrink-0 place-items-center rounded-[12px] text-foreground/80 outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40 data-popup-open:bg-secondary data-popup-open:text-secondary-foreground"
 
         const content = tool.content
 
@@ -113,39 +106,5 @@ export function EditorDock({
         )
       })}
     </nav>
-  )
-}
-
-/**
- * Tiles for adding to the page, each with its icon and a short name.
- *
- * @param props - The choices and what choosing does.
- * @returns A grid of tiles.
- */
-export function InsertTiles({
-  choices,
-  onChoose,
-}: {
-  choices: readonly InsertChoice[]
-  onChoose: (choice: InsertChoice) => void
-}): ReactElement {
-  return (
-    <div className="grid grid-cols-3 gap-1.5">
-      {choices.map((choice: InsertChoice) => {
-        const Icon = choice.icon
-
-        return (
-          <button
-            className="grid min-h-[4.5rem] content-center justify-items-center gap-1.5 rounded-[12px] bg-muted/60 px-1.5 py-2.5 text-center text-xs leading-tight text-foreground/85 outline-none transition-colors hover:bg-secondary hover:text-secondary-foreground focus-visible:ring-2 focus-visible:ring-ring/40"
-            key={choice.id}
-            onClick={() => onChoose(choice)}
-            type="button"
-          >
-            <Icon aria-hidden="true" className="size-[18px] text-primary" />
-            {choice.label}
-          </button>
-        )
-      })}
-    </div>
   )
 }

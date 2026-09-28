@@ -13,19 +13,33 @@ import {
   createOrganization,
   getCurrentOrganizationContext,
   OrganizationServiceError,
+  updateProfile,
 } from "@/services/organization-service"
 import {
   seedSampleSubmissionsForOrganization,
   seedStarterTemplatesForOrganization,
 } from "@/services/templates/starter-templates"
+import { profileSchema } from "@/types/profile"
 
 /**
- * Creates the new account's workspace, the last step of signing up.
+ * Creates the new account's workspace, the last step of signing up, and saves
+ * the owner's name and phone number with it.
  *
- * @param formData - Submitted workspace name.
+ * @param formData - The owner's name and optional phone, and the workspace name.
  * @returns Never returns; redirects to the dashboard, or back to /welcome with the reason.
  */
 export async function createOrganizationAction(formData: FormData): Promise<void> {
+  const profile = profileSchema.safeParse({
+    displayName: getFormString(formData, "displayName"),
+    phoneNumber: getFormString(formData, "phoneNumber"),
+  })
+
+  if (!profile.success) {
+    redirect(buildRedirect("/welcome", { error: profile.error.issues[0]?.message ?? "Check the form and try again." }))
+  }
+
+  let userId: string
+
   try {
     const user = await getAuthenticatedUser()
     await createOrganization({
@@ -33,6 +47,7 @@ export async function createOrganizationAction(formData: FormData): Promise<void
       userEmail: user.email,
       name: getFormString(formData, "name"),
     })
+    userId = user.id
   } catch (error: unknown) {
     if (error instanceof AuthenticationError) {
       redirect(buildRedirect("/login", { next: "/welcome" }))
@@ -58,6 +73,10 @@ export async function createOrganizationAction(formData: FormData): Promise<void
       })
     )
   }
+
+  // The workspace made their profile row, so the name follows it. One that
+  // fails to save (the service logs why) can go in from Settings instead.
+  await updateProfile({ actorUserId: userId, ...profile.data }).catch(() => undefined)
 
   redirect(buildFeedbackRedirect("/dashboard", "organization_created"))
 }

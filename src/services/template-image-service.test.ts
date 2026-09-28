@@ -5,7 +5,6 @@ import {
   createTemplateImageUpload,
   readTemplateImage,
   requireStoredImages,
-  withTemplateImageOriginals,
   withTemplateImageUrls,
 } from "@/services/template-image-service"
 import { createBlankTemplateContent } from "@/types/template"
@@ -122,21 +121,6 @@ describe("showing and printing a picture", () => {
     expect(early).toMatchObject({ asset: { url: expect.stringContaining(`organizations/${ORG_ID}/images/${ASSET_ID}/display`) } })
     expect(await at("2026-09-24T10:55:00Z")).toEqual(early)
     expect(await at("2026-09-24T11:01:00Z")).not.toEqual(early)
-  })
-
-  it("offers each original as a download only where asked for, never on the pages everyone sees", async () => {
-    const { deps, signed } = harness()
-
-    expect((await withTemplateImageUrls(content, ORG_ID, deps)).blocks[0]).not.toHaveProperty("asset.originalUrl")
-    expect((await withTemplateImageOriginals(content, ORG_ID, deps)).blocks[0]).toMatchObject({
-      asset: {
-        originalUrl: expect.stringContaining(`organizations/${ORG_ID}/images/${ASSET_ID}/original`),
-        url: expect.stringContaining(`organizations/${ORG_ID}/images/${ASSET_ID}/display`),
-      },
-    })
-    expect(signed.map(({ command }) => command.input)).toContainEqual(
-      expect.objectContaining({ ResponseContentDisposition: 'attachment; filename="picture.jpg"' })
-    )
   })
 
   it("saves a new picture only once its shown copies are stored, and doesn't recheck the ones already saved", async () => {

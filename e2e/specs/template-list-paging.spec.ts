@@ -2,6 +2,7 @@ import { createBlankTemplateContent } from "@/types/template"
 
 import { expect, test, uniqueName } from "../support/fixtures"
 import { waitForHydration } from "../support/hydration"
+import { searchList } from "../support/search"
 
 const PAGE_SIZE = 25
 const PUBLISHED = 55
@@ -61,10 +62,8 @@ test("searches, filters, sorts, and pages templates through shareable URLs", asy
 
   await page.goto(`/templates?size=${PAGE_SIZE}`)
 
-  // Searching keeps the page size and starts on page one.
-  const search = page.getByRole("searchbox", { name: "Search templates" })
-  await search.fill(prefix)
-  await search.press("Enter")
+  // Searching the list from search keeps its page size and starts on page one.
+  await searchList(page, "Templates", prefix)
   await expect.poll(() => param("q")).toBe(prefix)
   expect(param("size")).toBe("25")
   await expect(heading).toHaveAccessibleName("Templates 60 templates")

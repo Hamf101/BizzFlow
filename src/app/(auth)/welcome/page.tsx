@@ -2,6 +2,7 @@ import Link from "next/link"
 import { redirect } from "next/navigation"
 import type { ReactElement } from "react"
 
+import { ProfileFields } from "@/components/auth/profile-fields"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import {
@@ -22,8 +23,9 @@ type WelcomeSearchParams = Promise<{
 }>
 
 /**
- * The last step of signing up: naming the workspace the new account will own.
- * It sits with the other sign-in pages, so the backdrop keeps building.
+ * The last step of signing up: the owner says who they are and names the
+ * workspace the new account will own. It sits with the other sign-in pages,
+ * so the backdrop keeps building.
  */
 export default async function WelcomePage({
   searchParams,
@@ -59,13 +61,12 @@ export default async function WelcomePage({
 
   return (
     <AuthPageCard
-      description="It's where your team's templates, documents and submissions live."
       footer={
         <span className="text-sm text-muted-foreground">
           Joining a team? Open the link in your invite email instead.
         </span>
       }
-      title="Name your workspace"
+      title="Welcome to BizFlow"
     >
       <form action={createOrganizationAction} className="flex flex-col gap-5">
         {params.error && (
@@ -75,6 +76,7 @@ export default async function WelcomePage({
           </Alert>
         )}
         <FieldGroup>
+          <ProfileFields />
           <Field>
             <FieldLabel htmlFor="name">Workspace name</FieldLabel>
             <Input

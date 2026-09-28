@@ -9,6 +9,9 @@ export const PRINT_MAX_WIDTH = 3_000
 /** Largest file accepted for each stored copy of a picture. */
 export const IMAGE_COPY_MAX_BYTES = { display: 3_000_000, original: 20_000_000, print: 15_000_000 } as const
 
+/** Where a picture is being downloaded from: the template or document open in the editor. */
+export type PictureSource = { documentId: string } | { templateId: string }
+
 /** The stored copies of one picture. */
 export type ImageCopy = keyof typeof IMAGE_COPY_MAX_BYTES
 

@@ -1,5 +1,6 @@
 import { expect, test, uniqueName } from "../support/fixtures"
 import { waitForHydration } from "../support/hydration"
+import { searchList } from "../support/search"
 import { seedTemplate } from "../support/seed"
 
 const PAGE_SIZE = 25
@@ -59,10 +60,8 @@ test("searches, filters, sorts, pages, and exports submissions through shareable
 
   await page.goto(`/submissions?size=${PAGE_SIZE}`)
 
-  // Searching keeps the page size and starts on page one.
-  const search = page.getByRole("searchbox", { name: "Search submissions" })
-  await search.fill(prefix)
-  await search.press("Enter")
+  // Searching the list from search keeps its page size and starts on page one.
+  await searchList(page, "Submissions", prefix)
   await expect.poll(() => param("q")).toBe(prefix)
   expect(param("size")).toBe("25")
   await expect(heading).toHaveAccessibleName("Submissions 60 submissions")

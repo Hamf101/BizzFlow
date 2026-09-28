@@ -4,10 +4,9 @@ import type { CSSProperties, ReactElement } from "react"
 
 import { ListFilterChips } from "@/components/data/list-filter-chips"
 import { ListPagination } from "@/components/data/list-pagination"
-import { ListSearch } from "@/components/data/list-search"
+import { ListQuery } from "@/components/data/list-query"
 import { type ListSavedViews, ListViewMenu, ListViewTitle } from "@/components/data/list-view-menu"
 import {
-  getTemplateSearchFields,
   getTemplateStatusOptions,
   getTemplateViewMenuSections,
   isTemplateViewAdjusted,
@@ -20,11 +19,7 @@ import { buttonVariants } from "@/components/ui/button"
 import { formatMediumDate } from "@/lib/date-format"
 import { getLastPage } from "@/lib/list-state"
 import { cn } from "@/lib/utils"
-import {
-  TEMPLATE_SEARCH_MAX_LENGTH,
-  type DocumentTemplateCard,
-  type DocumentTemplateStatus,
-} from "@/types/template"
+import type { DocumentTemplateCard, DocumentTemplateStatus } from "@/types/template"
 
 const TEMPLATES_PATH = "/templates"
 
@@ -83,51 +78,44 @@ export function TemplatesWorkspace({
     <section className="flex flex-col gap-5" data-slot="templates-workspace">
       {/* The real space keeps the accessible name "Templates 12 templates"
           rather than "Templates12 templates". */}
-      <h1 className="text-2xl leading-none font-medium tracking-[-0.02em]">
-        <ListViewTitle title="Templates" views={listViews} />{" "}
-        <span
-          aria-label={`${total} ${total === 1 ? "template" : "templates"}`}
-          className="ml-0.5 text-xl font-normal text-muted-foreground"
-        >
-          {total}
-        </span>
-      </h1>
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="min-w-0 text-2xl leading-none font-medium tracking-[-0.02em]">
+          <ListViewTitle title="Templates" views={listViews} />{" "}
+          <span
+            aria-label={`${total} ${total === 1 ? "template" : "templates"}`}
+            className="ml-0.5 text-xl font-normal text-muted-foreground"
+          >
+            {total}
+          </span>
+        </h1>
+        <div className="flex shrink-0 gap-2">
+          <ListViewMenu
+            adjusted={isTemplateViewAdjusted(view)}
+            label="View options"
+            sections={getTemplateViewMenuSections(view, categories)}
+            views={listViews}
+          />
+          {canManage ? (
+            <Link
+              className={cn(
+                buttonVariants(),
+                "h-11 rounded-[12px] px-4 font-normal"
+              )}
+              href="/templates/new"
+            >
+              <Plus aria-hidden="true" data-icon="inline-start" />
+              <span className="max-sm:sr-only">Create template</span>
+            </Link>
+          ) : null}
+        </div>
+      </div>
 
-      <div
-        className={cn(
-          "grid gap-2",
-          canManage
-            ? "grid-cols-[minmax(0,1fr)_auto_auto]"
-            : "grid-cols-[minmax(0,1fr)_auto]"
-        )}
-      >
-        <ListSearch
-          fields={getTemplateSearchFields(view)}
-          label="Search templates"
-          maxLength={TEMPLATE_SEARCH_MAX_LENGTH}
-          path={TEMPLATES_PATH}
-          placeholder="Search templates…"
+      {view.query ? (
+        <ListQuery
+          clearHref={templateListState.href(TEMPLATES_PATH, view, { query: "" })}
           query={view.query}
         />
-        <ListViewMenu
-          adjusted={isTemplateViewAdjusted(view)}
-          label="View options"
-          sections={getTemplateViewMenuSections(view, categories)}
-          views={listViews}
-        />
-        {canManage ? (
-          <Link
-            className={cn(
-              buttonVariants(),
-              "h-11 rounded-[12px] px-4 font-normal"
-            )}
-            href="/templates/new"
-          >
-            <Plus aria-hidden="true" data-icon="inline-start" />
-            <span className="max-sm:sr-only">Create template</span>
-          </Link>
-        ) : null}
-      </div>
+      ) : null}
 
       {canManage ? (
         <ListFilterChips

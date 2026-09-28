@@ -34,13 +34,15 @@ export type SeededTemplate = {
  * @param title - Template title, unique per run.
  * @param status - `draft` to publish through the UI, `published` to skip ahead,
  *   `archived` for one already put away.
+ * @param blocks - Content to write in place of the heading and two fields.
  * @returns Handles for the template and its field keys.
  */
 export async function seedTemplate(
   client: SupabaseClient,
   organizationId: string,
   title: string,
-  status: "archived" | "draft" | "published" = "draft"
+  status: "archived" | "draft" | "published" = "draft",
+  blocks?: readonly Record<string, unknown>[]
 ): Promise<SeededTemplate> {
   const textFieldKey = "client_reference"
   const fileFieldKey = "supporting_document"
@@ -52,7 +54,7 @@ export async function seedTemplate(
   // violation the moment the schema gains a key.
   const content = {
     ...createBlankTemplateContent(),
-    blocks: [
+    blocks: blocks ?? [
       {
         alignment: "left",
         id: randomUUID(),

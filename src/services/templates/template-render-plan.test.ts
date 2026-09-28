@@ -6,11 +6,13 @@ import { TemplatePreview } from "@/components/templates/template-preview"
 import {
   createTemplateRenderPlan,
   resizeTemplateLayout,
+  resolvePageGeometry,
   shouldRenderTemplateFooter,
   shouldRenderTemplateHeader
 } from "@/services/templates/template-render-plan"
 import {
   createBlankTemplateContent,
+  templateLayoutSchema,
   type TemplateContentV2,
   type TemplateContentV3
 } from "@/types/template"
@@ -46,6 +48,7 @@ describe("template render plan", () => {
       widthPoints: 1008,
       heightPoints: 612,
       marginPoints: 56,
+      margins: { top: 56, right: 56, bottom: 56, left: 56 },
       contentWidthPoints: 896,
       contentHeightPoints: 500,
       scale: 1
@@ -348,6 +351,15 @@ describe("template render plan", () => {
     // Turning the page keeps text at its size, and going back undoes the scale.
     expect(plan(resizeTemplateLayout(content.layout, { orientation: "landscape" })).geometry.scale).toBe(1)
     expect(resizeTemplateLayout(a3Layout, { pageSize: "A4" })).toEqual(content.layout)
+  })
+
+  it("sets each margin on its own side, and fits the writing between them", () => {
+    const page = resolvePageGeometry(templateLayoutSchema.parse({ margins: { bottom: 36, left: 72, right: 48, top: 24 } }))
+
+    expect(page.margins).toEqual({ bottom: 36, left: 72, right: 48, top: 24 })
+    expect(page.contentWidthPoints).toBeCloseTo(page.widthPoints - 120)
+    expect(page.contentHeightPoints).toBeCloseTo(page.heightPoints - 60)
+    expect(templateLayoutSchema.safeParse({ margins: { bottom: 20, left: 20, right: 20, top: -1 } }).success).toBe(false)
   })
 
   it("prints no title when the layout asks for none", () => {

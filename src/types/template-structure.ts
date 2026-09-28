@@ -523,6 +523,15 @@ export function duplicateTemplateBlock(
   // independent so editing the duplicate cannot change the original.
   const block = JSON.parse(JSON.stringify(source)) as TemplateBlock
   block.id = newBlockId
+
+  // A copy of a picture placed on a page sits a little down and across from
+  // it, so both can be seen.
+  if (block.type === "image" && block.placement) {
+    const { height, width, x, y } = block.placement
+
+    block.placement = { ...block.placement, x: Math.min(x + 3, 100 - width), y: Math.min(y + 3, 100 - height) }
+  }
+
   const inserted = insertTemplateBlock(content, blockId, block)
   const rule = content.blockRules.find((candidate) => candidate.blockId === blockId)
 

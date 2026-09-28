@@ -7,6 +7,14 @@ export const ORGANIZATION_ROLES = [
 
 export type OrganizationRole = (typeof ORGANIZATION_ROLES)[number]
 
+/** Each built-in role's name, for a member whose role definition names none. */
+export const ORGANIZATION_ROLE_LABELS: Readonly<Record<OrganizationRole, string>> = {
+  external_reviewer: "External reviewer",
+  manager: "Manager",
+  owner_admin: "Owner admin",
+  staff: "Staff",
+}
+
 export const ORGANIZATION_PERMISSION_ACTIONS = [
   "people:view",
   // Organization-wide notification switches. Owner receives this by default;
@@ -221,18 +229,6 @@ export function canInviteMembers(
   subject: OrganizationPermissionSubject
 ): boolean {
   return canPerformOrganizationAction(subject, "members:invite")
-}
-
-/**
- * Checks whether a member role subject can update another member's role.
- *
- * @param subject - Current member role and optional custom permissions.
- * @returns True when the subject can change member roles.
- */
-export function canUpdateMemberRole(
-  subject: OrganizationPermissionSubject
-): boolean {
-  return canPerformOrganizationAction(subject, "members:update_role")
 }
 
 /**

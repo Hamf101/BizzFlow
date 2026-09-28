@@ -3,7 +3,6 @@ import {
   type GeneratedDocumentRow
 } from "@/services/generated-documents/generated-document-persistence"
 import {
-  getEffectiveDocumentAccess,
   requireDocumentAccess,
   requireFolderAccess,
 } from "@/services/documents/access-service"
@@ -14,13 +13,11 @@ import {
   parseTemplateContent,
   type DocumentRecentAccessRow,
   type DocumentTemplate,
-  type GeneratedDocument,
-  type RecentDocument
+  type GeneratedDocument
 } from "@/types/template"
 
 import type {
   CreateGeneratedDocumentInput,
-  ListRecentDocumentsInput,
   RecordDocumentRecentAccessInput,
   TemplateServiceClient,
   TemplateServiceDeps
@@ -34,27 +31,14 @@ import {
   mapGeneratedDocument,
   normalizeDescription,
   normalizeNullableId,
-  normalizeRecentLimit,
   normalizeTitle,
   nowIso,
-  parseDocumentSourceKind,
   requireActiveFolder,
   requirePermission,
   requireTenantDocument,
   runTemplateOperation
 } from "./shared"
 import { withoutImageUrls } from "@/types/template-images"
-
-type RecentDocumentRow = Record<string, unknown> & {
-  id: string
-  org_id: string
-  folder_id: string | null
-  title: string
-  description: string | null
-  source_kind: string
-  lifecycle_state: string
-  archived_at: string | null
-}
 
 /**
  * Creates a generated document and an immutable content snapshot.
@@ -287,126 +271,6 @@ export async function recordDocumentRecentAccess(
       }
 
       return data as DocumentRecentAccessRow
-    }
-  )
-}
-
-/**
- * Lists the current user's most recently opened active documents.
- *
- * @param input - Actor, tenant, and optional bounded result limit.
- * @param deps - Optional injected dependencies for tests.
- * @returns Recent documents in last-opened order.
- * @throws TemplateServiceError when permission or persistence fails.
- */
-export async function listRecentDocuments(
-  input: ListRecentDocumentsInput,
-  deps: TemplateServiceDeps = {}
-): Promise<RecentDocument[]> {
-  return runTemplateOperation(
-    "list_recent_documents",
-    input,
-    async (): Promise<RecentDocument[]> => {
-      const client = getClient(deps)
-
-      await requirePermission(
-        client,
-        input.organizationId,
-        input.actorUserId,
-        "documents:view",
-        "You cannot view documents."
-      )
-      const requestedLimit = normalizeRecentLimit(input.limit)
-      const { data: recentData, error: recentError } = await client
-        .from("document_recent_accesses")
-        .select("org_id,user_id,document_id,last_opened_at")
-        .eq("org_id", input.organizationId)
-        .eq("user_id", input.actorUserId)
-        .order("last_opened_at", { ascending: false })
-        // Over-fetch so archived documents do not displace older active recents.
-        .limit(Math.min(requestedLimit * 5, 100))
-
-      if (recentError || !recentData) {
-        throw createDatabaseError(
-          recentError,
-          "Unable to load recent documents."
-        )
-      }
-
-      const accessRows = recentData as DocumentRecentAccessRow[]
-
-      if (accessRows.length === 0) {
-        return []
-      }
-
-      const { data: documentData, error: documentError } = await client
-        .from("documents")
-        .select("id,org_id,folder_id,title,description,source_kind,lifecycle_state,archived_at")
-        .eq("org_id", input.organizationId)
-        .in(
-          "id",
-          accessRows.map(
-            (row: DocumentRecentAccessRow): string => row.document_id
-          )
-        )
-        .eq("lifecycle_state", "active")
-
-      if (documentError || !documentData) {
-        throw createDatabaseError(
-          documentError,
-          "Unable to load recent documents."
-        )
-      }
-
-      const accessibleDocumentRows = await Promise.all(
-        (documentData as RecentDocumentRow[]).map(
-          async (row: RecentDocumentRow): Promise<RecentDocumentRow | null> => {
-            try {
-              const access = await getEffectiveDocumentAccess(
-                {
-                  actorUserId: input.actorUserId,
-                  organizationId: input.organizationId,
-                  documentId: row.id,
-                },
-                client
-              )
-
-              return access ? row : null
-            } catch (error: unknown) {
-              throw translateDocumentAccessError(error)
-            }
-          }
-        )
-      )
-      const documentById = new Map<string, RecentDocumentRow>(
-        accessibleDocumentRows.flatMap(
-          (row: RecentDocumentRow | null): [string, RecentDocumentRow][] =>
-            row ? [[row.id, row]] : []
-        )
-      )
-
-      return accessRows
-        .flatMap((access: DocumentRecentAccessRow): RecentDocument[] => {
-          const document = documentById.get(access.document_id)
-
-          if (!document) {
-            return []
-          }
-
-          return [
-            {
-              organizationId: access.org_id,
-              userId: access.user_id,
-              documentId: access.document_id,
-              lastOpenedAt: access.last_opened_at,
-              title: document.title,
-              description: document.description,
-              folderId: document.folder_id,
-              sourceKind: parseDocumentSourceKind(document.source_kind)
-            }
-          ]
-        })
-        .slice(0, requestedLimit)
     }
   )
 }

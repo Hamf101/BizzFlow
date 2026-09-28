@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { BizFlowFavicon } from "@/components/brand/favicon";
 
 import { OfflineDraftBanner } from "@/components/ui/offline-draft-banner";
 import { BizFlowToaster } from "@/components/ui/toaster";
@@ -33,6 +34,7 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           {children}
+          <BizFlowFavicon />
           <OfflineDraftBanner />
           <BizFlowToaster />
         </ThemeProvider>

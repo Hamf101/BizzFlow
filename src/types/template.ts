@@ -45,9 +45,7 @@ export const templateImageAssetSchema = z
     width: z.number().int().min(1).max(30_000),
     height: z.number().int().min(1).max(30_000),
     // Where the viewer can see it now: signed for each page, never stored.
-    url: z.string().url().optional(),
-    // In the editors, where they can download the original: never stored either.
-    originalUrl: z.string().url().optional()
+    url: z.string().url().optional()
   })
   .strict()
 
@@ -69,44 +67,144 @@ const fieldBlockShape = {
   visibleWhen: templateFieldVisibilitySchema.optional()
 } as const
 
-/** Heading block in the ordered document flow. */
-export const headingBlockSchema = z
+// A link opens a web page or writes an email, never runs anything.
+const LINK_PATTERN = /^(?:https?:\/\/|mailto:)\S+$/i
+const RUN_MARKS = ["bold", "italic", "underline", "strike", "color", "highlight", "size", "link", "font"] as const
+
+/**
+ * A stretch of text and how it looks: the marks the toolbar puts on it. A mark
+ * that is off is left out, so plain text carries none.
+ */
+export const textRunSchema = z
+  .object({
+    text: z.string().min(1).max(20_000),
+    // A family from the font catalog, by its Fontsource name, such as "open-sans".
+    font: z.string().max(100).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).optional(),
+    bold: z.literal(true).optional(),
+    italic: z.literal(true).optional(),
+    underline: z.literal(true).optional(),
+    strike: z.literal(true).optional(),
+    color: z.string().regex(HEX_COLOR_PATTERN).optional(),
+    highlight: z.string().regex(HEX_COLOR_PATTERN).optional(),
+    // Points, as a printed page measures type.
+    size: z.number().min(6).max(96).optional(),
+    link: z.string().max(2_000).regex(LINK_PATTERN).optional()
+  })
+  .strict()
+
+export type TextRun = z.infer<typeof textRunSchema>
+
+const textRunsSchema = z.array(textRunSchema).max(2_000)
+
+/**
+ * Keeps formatting only while it spells out the text it formats. The text is
+ * trimmed when saved, so its formatting is trimmed with it, while text being
+ * typed keeps its spaces; neighbours that look alike are joined; and
+ * formatting that no longer matches its text, as after an edit that rewrote
+ * the words alone, or that marks nothing, is let go.
+ *
+ * @param text - The text, trimmed when saved or as typed while edited.
+ * @param runs - Its formatting, as it arrived.
+ * @returns The formatting to keep, or undefined when the text is plain.
+ */
+export function fitRuns(text: string, runs: readonly TextRun[] | null | undefined): TextRun[] | undefined {
+  if (!runs?.length) {
+    return undefined
+  }
+
+  const joined = runs.map((run: TextRun): string => run.text).join("")
+  let skip = joined.startsWith(text) ? 0 : joined.length - joined.trimStart().length
+  let keep = text.length
+  const fitted: TextRun[] = []
+
+  for (const run of runs) {
+    const cut = Math.min(skip, run.text.length)
+    const piece = run.text.slice(cut, cut + keep)
+    const last = fitted.at(-1)
+    skip -= cut
+    keep -= piece.length
+
+    if (!piece) {
+      continue
+    }
+
+    if (last && RUN_MARKS.every((mark) => last[mark] === run[mark])) {
+      last.text += piece
+    } else {
+      fitted.push({ ...run, text: piece })
+    }
+  }
+
+  const marked = fitted.some((run: TextRun): boolean => RUN_MARKS.some((mark) => run[mark] !== undefined))
+
+  return marked && fitted.map((run: TextRun): string => run.text).join("") === text ? fitted : undefined
+}
+
+function withRuns<Block extends { runs?: TextRun[]; text: string }>(block: Block): Block {
+  const { runs, ...rest } = block
+  const fitted = fitRuns(block.text, runs)
+
+  return (fitted ? { ...rest, runs: fitted } : rest) as Block
+}
+
+function withItemRuns<Block extends { itemRuns?: Array<TextRun[] | null>; items: string[] }>(block: Block): Block {
+  const { itemRuns, ...rest } = block
+  const fitted = itemRuns?.length === block.items.length
+    ? itemRuns.map((runs, index: number) => fitRuns(block.items[index] ?? "", runs) ?? null)
+    : []
+
+  return (fitted.some(Boolean) ? { ...rest, itemRuns: fitted } : rest) as Block
+}
+
+// The block shapes as plain objects, for building other shapes from; the
+// schemas below also keep each block's formatting in step with its text.
+export const headingBlockObjectSchema = z
   .object({
     id: blockIdSchema,
     type: z.literal("heading"),
     text: z.string().trim().min(1).max(500),
+    runs: textRunsSchema.optional(),
     level: z.union([z.literal(1), z.literal(2), z.literal(3)]).default(2),
     alignment: z.enum(["left", "center", "right"]).default("left")
   })
   .strict()
 
-/** Paragraph block in the ordered document flow. */
-export const paragraphBlockSchema = z
+export const paragraphBlockObjectSchema = z
   .object({
     id: blockIdSchema,
     type: z.literal("paragraph"),
     text: richTextSchema,
+    runs: textRunsSchema.optional(),
     alignment: z.enum(["left", "center", "right"]).default("left")
   })
   .strict()
 
-/** Bulleted list block in the ordered document flow. */
-export const bulletListBlockSchema = z
-  .object({
-    id: blockIdSchema,
-    type: z.literal("bullet_list"),
-    items: z.array(z.string().trim().min(1).max(2_000)).min(1).max(100)
-  })
+const listItemsShape = {
+  id: blockIdSchema,
+  items: z.array(z.string().trim().min(1).max(2_000)).min(1).max(100),
+  // Each item's formatting, beside it; null for a plain item.
+  itemRuns: z.array(textRunsSchema.nullable()).max(100).optional()
+} as const
+
+export const bulletListBlockObjectSchema = z
+  .object({ ...listItemsShape, type: z.literal("bullet_list") })
   .strict()
 
-/** Numbered list block in the ordered document flow. */
-export const numberedListBlockSchema = z
-  .object({
-    id: blockIdSchema,
-    type: z.literal("numbered_list"),
-    items: z.array(z.string().trim().min(1).max(2_000)).min(1).max(100)
-  })
+export const numberedListBlockObjectSchema = z
+  .object({ ...listItemsShape, type: z.literal("numbered_list") })
   .strict()
+
+/** Heading block in the ordered document flow. */
+export const headingBlockSchema = headingBlockObjectSchema.transform(withRuns)
+
+/** Paragraph block in the ordered document flow. */
+export const paragraphBlockSchema = paragraphBlockObjectSchema.transform(withRuns)
+
+/** Bulleted list block in the ordered document flow. */
+export const bulletListBlockSchema = bulletListBlockObjectSchema.transform(withItemRuns)
+
+/** Numbered list block in the ordered document flow. */
+export const numberedListBlockSchema = numberedListBlockObjectSchema.transform(withItemRuns)
 
 /** Image block: a stored picture, or one embedded before pictures were stored. */
 export const imageBlockSchema = z
@@ -118,6 +216,19 @@ export const imageBlockSchema = z
     altText: z.string().trim().min(1).max(500),
     caption: z.string().trim().max(500).nullable().default(null),
     alignment: z.enum(["left", "center", "right"]).default("center"),
+    // Placed on a page in front of the text rather than in it: the page, and
+    // the box the picture fills there, in percentages of the page.
+    placement: z
+      .object({
+        page: z.number().int().min(1).max(100),
+        x: z.number().min(0).max(99),
+        y: z.number().min(0).max(99),
+        width: z.number().min(1).max(100),
+        height: z.number().min(1).max(100),
+      })
+      .strict()
+      .refine((box) => box.x + box.width <= 100.001 && box.y + box.height <= 100.001, "Image must fit inside its page.")
+      .optional(),
     widthPercent: z.number().int().min(10).max(100).default(100)
   })
   .strict()
@@ -264,6 +375,19 @@ export const templateLayoutSchema = z
   .object({
     pageSize: z.enum(["A3", "A4", "A5", "Letter", "Legal"]).default("A4"),
     orientation: z.enum(["portrait", "landscape"]).default("portrait"),
+    // Each side's margin in points, when set side by side rather than by preset.
+    margins: z
+      .object({
+        top: z.number().min(0).max(144),
+        right: z.number().min(0).max(144),
+        bottom: z.number().min(0).max(144),
+        left: z.number().min(0).max(144),
+      })
+      .strict()
+      .optional(),
+    // Line height as a multiple of the text size, and the space between paragraphs in points.
+    lineSpacing: z.number().min(1).max(3).optional(),
+    paragraphSpacing: z.number().min(0).max(48).optional(),
     marginPreset: z
       .enum(["standard", "compact", "generous"])
       .default("standard"),

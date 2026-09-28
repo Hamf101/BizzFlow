@@ -54,7 +54,7 @@ test("a pause on a submission's title opens its pages beside it, and a tap opens
   const page = await openSubmissionsAsManager(browser, testInfo, title)
 
   try {
-    const link = page.getByRole("link", { name: title })
+    const link = page.getByRole("link", { exact: true, name: title })
     const preview = page.locator('[data-slot="submission-preview"]')
     await waitForHydration(link)
 

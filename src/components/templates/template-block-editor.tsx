@@ -33,9 +33,9 @@ import {
 } from "@/lib/date-format"
 import { cn } from "@/lib/utils"
 import type { TemplateBlock } from "@/types/template"
-import { imageSource } from "@/types/template-images"
+import { imageSource, type PictureSource } from "@/types/template-images"
 import { evaluateTemplateDropdownOptionEdit } from "@/types/template-structure"
-import { requestImageUploadAction } from "@/app/(editor)/image-actions"
+import { downloadImageOriginalAction, requestImageUploadAction } from "@/app/(editor)/image-actions"
 
 import { storeTemplateImage } from "./template-image"
 
@@ -99,6 +99,8 @@ type TemplateBlockEditorProps = {
   onDuplicate?: () => void
   onMoveDown: () => void
   onMoveUp: () => void
+  // The template or document being edited, so a picture's original can be downloaded from it.
+  pictureSource?: PictureSource
 }
 
 /**
@@ -117,6 +119,7 @@ export function TemplateBlockEditor({
   onDuplicate,
   onMoveDown,
   onMoveUp,
+  pictureSource,
 }: TemplateBlockEditorProps): ReactElement {
   return (
     <div className="flex flex-col gap-4 rounded-lg border bg-card p-4">
@@ -171,19 +174,28 @@ export function TemplateBlockEditor({
       </div>
 
       {/* Keyed, so options still being written never carry over to another block. */}
-      <BlockFields block={block} blocks={blocks} key={block.id} onChange={onChange} />
+      <BlockFields block={block} blocks={blocks} key={block.id} onChange={onChange} pictureSource={pictureSource} />
     </div>
   )
 }
 
-function BlockFields({
+/**
+ * A block's own settings: a field's label, key and choices in its popover on
+ * the page, or a picture's in the settings panel.
+ *
+ * @param props - The block, the page's blocks, and how to change the block.
+ * @returns The settings.
+ */
+export function BlockFields({
   block,
   blocks,
   onChange,
+  pictureSource,
 }: {
   block: TemplateBlock
   blocks: readonly TemplateBlock[]
   onChange: (block: TemplateBlock) => void
+  pictureSource?: PictureSource
 }): ReactElement | null {
   switch (block.type) {
     case "heading":
@@ -269,47 +281,9 @@ function BlockFields({
         </Field>
       )
     case "image":
-      return <ImageFields block={block} onChange={onChange} />
+      return <ImageFields block={block} onChange={onChange} pictureSource={pictureSource} />
+    // A table is typed into on the page, and changed from its cells' menu.
     case "table":
-      return (
-        <div className="grid gap-4">
-          <Field>
-            <FieldLabel htmlFor={`${block.id}-table-headers`}>
-              Headings, separated by |
-            </FieldLabel>
-            <Input
-              id={`${block.id}-table-headers`}
-              onChange={(event: ChangeEvent<HTMLInputElement>): void =>
-                onChange({
-                  ...block,
-                  headers: event.target.value.split("|").map((value: string) =>
-                    value.trim()
-                  ),
-                })
-              }
-              value={block.headers.join(" | ")}
-            />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor={`${block.id}-table-rows`}>
-              Rows, one per line, cells separated by |
-            </FieldLabel>
-            <textarea
-              className={cn(CONTROL_CLASS_NAME, "min-h-28 resize-y font-mono")}
-              id={`${block.id}-table-rows`}
-              onChange={(event: ChangeEvent<HTMLTextAreaElement>): void =>
-                onChange({
-                  ...block,
-                  rows: event.target.value.split("\n").map((row: string) =>
-                    row.split("|").map((value: string) => value.trim())
-                  ),
-                })
-              }
-              value={block.rows.map((row: string[]) => row.join(" | ")).join("\n")}
-            />
-          </Field>
-        </div>
-      )
     case "divider":
       return null
     case "text_field":
@@ -591,14 +565,27 @@ function PlaceholderField({
 function ImageFields({
   block,
   onChange,
+  pictureSource,
 }: {
   block: Extract<TemplateBlock, { type: "image" }>
   onChange: (block: TemplateBlock) => void
+  pictureSource?: PictureSource
 }): ReactElement {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const altTextMissing = block.altText.trim().length === 0
   const source = imageSource(block.asset, block.dataUrl)
+
+  // Asked for when pressed, so it checks the person can still see the picture.
+  async function downloadOriginal(assetId: string, source: PictureSource): Promise<void> {
+    const result = await downloadImageOriginalAction({ assetId, source })
+
+    if ("url" in result) {
+      window.location.assign(result.url)
+    } else {
+      setErrorMessage(result.error)
+    }
+  }
 
   async function handleFileChange(
     event: ChangeEvent<HTMLInputElement>
@@ -662,11 +649,16 @@ function ImageFields({
               type="file"
             />
           </label>
-          {block.asset?.originalUrl ? (
-            <a className={buttonVariants({ size: "sm", variant: "ghost" })} href={block.asset.originalUrl}>
+          {block.asset && pictureSource ? (
+            <Button
+              onClick={(): void => void downloadOriginal((block.asset as NonNullable<typeof block.asset>).id, pictureSource)}
+              size="sm"
+              type="button"
+              variant="ghost"
+            >
               <Download />
               Download original
-            </a>
+            </Button>
           ) : null}
         </div>
         {errorMessage && (

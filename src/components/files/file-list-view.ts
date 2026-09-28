@@ -187,21 +187,6 @@ export function isFileViewAdjusted(view: FileListView): boolean {
 }
 
 /**
- * Lists the fields a new search carries over: the folder, lifecycle view, and
- * order, but not the old query.
- *
- * @param view - Current Files view.
- * @returns Name and value pairs for hidden form fields.
- */
-export function getFileSearchFields(
-  view: FileListView
-): Array<[name: string, value: string]> {
-  return Array.from(
-    fileListState.toSearchParams({ ...view, page: 1, query: "" }).entries()
-  )
-}
-
-/**
  * Links to a folder in the same lifecycle view and order, with the search left
  * behind.
  *
@@ -374,7 +359,9 @@ export function getCardRequest(
  * @param document - The document to open.
  * @returns The document's page or editor link.
  */
-export function getDocumentHref(document: AccessibleDocumentSummary): string {
+export function getDocumentHref(
+  document: Pick<AccessibleDocumentSummary, "id" | "lifecycleState" | "sourceKind">
+): string {
   const documentId = encodeURIComponent(document.id)
 
   return document.sourceKind === "generated" && document.lifecycleState === "active"

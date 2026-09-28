@@ -16,8 +16,10 @@ import {
   createInvitedAccount,
   getInvitePreview,
   OrganizationServiceError,
+  updateProfile,
 } from "@/services/organization-service"
 import { newPasswordSchema } from "@/types/password"
+import { profileSchema } from "@/types/profile"
 
 const joinSchema = z.object({
   account: z.enum(["existing", "new"]),
@@ -61,7 +63,7 @@ export async function acceptInviteAction(formData: FormData): Promise<void> {
  * Joins the workspace in one step from a signed-out browser: opens an account
  * for someone new, or signs in someone who already has one, then accepts.
  *
- * @param formData - The invite token, whether they have an account, and a password (twice when new).
+ * @param formData - The invite token, whether they have an account, a password (twice when new), and someone new's name and optional phone.
  * @returns Never returns; redirects to the dashboard or back with the reason.
  */
 export async function joinWithPasswordAction(formData: FormData): Promise<void> {
@@ -86,6 +88,18 @@ export async function joinWithPasswordAction(formData: FormData): Promise<void> 
 
   if (chosen && !chosen.success) {
     back(chosen.error.issues[0]?.message ?? "Check the password and try again.", account)
+  }
+
+  // Someone new says who they are, too; it's checked before any account opens.
+  const profile =
+    account === "new" &&
+    profileSchema.safeParse({
+      displayName: getFormString(formData, "displayName"),
+      phoneNumber: getFormString(formData, "phoneNumber"),
+    })
+
+  if (profile && !profile.success) {
+    back(profile.error.issues[0]?.message ?? "Check your details and try again.", account)
   }
 
   await enforceActionRateLimit({
@@ -129,6 +143,12 @@ export async function joinWithPasswordAction(formData: FormData): Promise<void> 
     await acceptInvite({ token, userEmail: data.user.email, userId: data.user.id })
   } catch (error: unknown) {
     back(describeFailure(error), "existing")
+  }
+
+  // Joining made their profile row, so the name follows it. One that fails to
+  // save (the service logs why) can go in from Settings; they're in either way.
+  if (profile) {
+    await updateProfile({ actorUserId: data.user.id, ...profile.data }).catch(() => undefined)
   }
 
   redirect(buildFeedbackRedirect("/dashboard", "invite_accepted"))

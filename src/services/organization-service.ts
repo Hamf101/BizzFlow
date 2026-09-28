@@ -10,7 +10,6 @@ export type {
   OrganizationMutationDeps,
   OrganizationPeople,
   RevokeInviteInput,
-  UpdateMemberRoleInput,
 } from "@/services/organizations/contracts"
 export { OrganizationServiceError } from "@/services/organizations/errors"
 export {
@@ -36,7 +35,6 @@ export {
 export {
   getMemberSettings,
   listOrganizationPeople,
-  updateMemberRole,
   updateMemberAccess,
   updateProfilePhone,
   updateProfile,

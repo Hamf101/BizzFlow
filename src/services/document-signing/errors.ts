@@ -1,6 +1,4 @@
-import { captureUnexpectedError } from "@/lib/observability"
-
-type LogValue = string | number | boolean | null | undefined
+import { runOperation, type LogValue } from "@/services/operation"
 
 type SupabaseErrorLike = {
   code?: string
@@ -96,44 +94,16 @@ export function createDatabaseError(
  * @returns The use case result.
  * @throws DocumentSigningServiceError when the use case fails.
  */
-export async function runSigningOperation<T>(
+export function runSigningOperation<T>(
   operation: string,
   context: Record<string, LogValue>,
   callback: () => Promise<T>
 ): Promise<T> {
-  const startedAt = performance.now()
+  return runOperation("document_signing", toSigningServiceError, operation, context, callback)
+}
 
-  try {
-    const result = await callback()
-    console.info("document_signing_operation_succeeded", {
-      operation,
-      ...context,
-      durationMs: Math.round(performance.now() - startedAt),
-    })
-    return result
-  } catch (error: unknown) {
-    const normalizedError =
-      error instanceof DocumentSigningServiceError
-        ? error
-        : new DocumentSigningServiceError(
-            "Unable to complete the document signing request.",
-            500
-          )
-    const log =
-      normalizedError.statusCode >= 500 ? console.error : console.warn
-
-    log("document_signing_operation_failed", {
-      operation,
-      ...context,
-      statusCode: normalizedError.statusCode,
-      reason: normalizedError.message,
-      durationMs: Math.round(performance.now() - startedAt),
-    })
-
-    if (normalizedError.statusCode >= 500) {
-      captureUnexpectedError(error, { operation, ...context })
-    }
-
-    throw normalizedError
-  }
+function toSigningServiceError(error: unknown): DocumentSigningServiceError {
+  return error instanceof DocumentSigningServiceError
+    ? error
+    : new DocumentSigningServiceError("Unable to complete the document signing request.", 500)
 }

@@ -1,26 +1,16 @@
 "use client"
 
-import {
-  Archive,
-  FilePenLine,
-  Files,
-  Link2,
-  ListChecks,
-  MoreHorizontal,
-  Palette,
-  Plus,
-  TextCursorInput,
-} from "lucide-react"
+import { Archive, FilePenLine, Files, Link2, ListChecks, MoreHorizontal, Palette } from "lucide-react"
 import Link from "next/link"
 import { type ReactElement, useMemo, useRef, useState, useTransition } from "react"
 
 import type { TemplateDraftInput } from "@/app/(dashboard)/templates/actions"
-import { FlowMark } from "@/components/brand/flow-mark"
 import { useFlowHandoff } from "@/components/flow/flow-handoff"
-import { findInsertChoices } from "@/components/editor/block-catalog"
 import { EditorCanvas } from "@/components/editor/editor-canvas"
 import { normalizeContentForSave } from "@/components/editor/editor-content"
-import { type DockTool, EditorDock, InsertTiles } from "@/components/editor/editor-dock"
+import { type DockTool, EditorDock } from "@/components/editor/editor-dock"
+import { FormatBar } from "@/components/editor/format-bar"
+import { FlowWindow } from "@/components/flow/flow-window"
 import { EditorFrame, type EditorLayoutStore, EditorNotice, EditorSidePanel } from "@/components/editor/editor-frame"
 import { PageSetupPanel } from "@/components/editor/page-setup-panel"
 import { type SaveResult, useAutosave } from "@/components/editor/use-autosave"
@@ -257,34 +247,6 @@ export function TemplateEditor({
 
   const tools: DockTool[] = [
     {
-      content: (close) => (
-        <InsertTiles
-          choices={findInsertChoices({ allowFiles: true }).filter((choice) => choice.group === "page")}
-          onChoose={(choice) => {
-            controller.insert(choice)
-            close()
-          }}
-        />
-      ),
-      icon: Plus,
-      id: "add",
-      label: "Add",
-    },
-    {
-      content: (close) => (
-        <InsertTiles
-          choices={findInsertChoices({ allowFiles: true }).filter((choice) => choice.group === "fields")}
-          onChoose={(choice) => {
-            controller.insert(choice)
-            close()
-          }}
-        />
-      ),
-      icon: TextCursorInput,
-      id: "fields",
-      label: "Fields",
-    },
-    {
       content: () => <PageSetupPanel layout={content.layout} onChange={controller.setLayout} />,
       icon: Files,
       id: "pages",
@@ -300,12 +262,6 @@ export function TemplateEditor({
       icon: Palette,
       id: "brand",
       label: "Brand",
-    },
-    {
-      icon: FlowMark,
-      id: "flow",
-      label: "Flow",
-      onOpen: () => setFlowOpen((open) => !open),
     },
     {
       badge: quality.summary.criticalCount || undefined,
@@ -370,14 +326,17 @@ export function TemplateEditor({
         }
         canRedo={history.canRedo}
         canUndo={history.canUndo}
-        dock={(narrow, orientation) => (
-          // Flow stays within reach in every mode; the other tools need Edit.
-          <EditorDock
-            narrow={narrow}
-            orientation={orientation}
-            tools={mode === "edit" && !proposal ? tools : tools.filter((tool) => tool.id === "flow")}
-          />
-        )}
+        dock={(narrow, orientation) =>
+          // The tools need Edit; Flow has a button of its own, always there.
+          mode === "edit" && !proposal ? (
+            <EditorDock
+              lead={narrow ? <FormatBar allowFiles controller={controller} narrow /> : undefined}
+              narrow={narrow}
+              orientation={orientation}
+              tools={tools}
+            />
+          ) : null
+        }
         layout={editorLayout}
         menu={
           <DropdownMenu>
@@ -427,7 +386,7 @@ export function TemplateEditor({
             <EditorSidePanel
               narrow={narrow}
               onClose={controller.closeSettings}
-              open={settingsBlock !== null}
+              open={settingsBlock?.type === "image"}
               title="Settings"
             >
               {settingsBlock ? (
@@ -441,10 +400,12 @@ export function TemplateEditor({
                   onDuplicate={() => controller.duplicate(settingsBlock.id)}
                   onMoveDown={() => controller.move(settingsBlock.id, "down")}
                   onMoveUp={() => controller.move(settingsBlock.id, "up")}
+                  pictureSource={{ templateId: template.id }}
                 />
               ) : null}
             </EditorSidePanel>
-            <EditorSidePanel keepMounted narrow={narrow} onClose={() => setFlowOpen(false)} open={flowOpen} title="Flow">
+            {/* On a phone Flow's button rests above the tools' row. */}
+            <FlowWindow onOpenChange={setFlowOpen} open={flowOpen} phoneBottom={mode === "edit" && !proposal ? 84 : 16}>
               <TemplateFlowPanel
                 canUndo={flowUndo !== null}
                 draft={state}
@@ -464,7 +425,7 @@ export function TemplateEditor({
                 pendingProposal={proposal}
                 templateId={template.id}
               />
-            </EditorSidePanel>
+            </FlowWindow>
           </>
         )}
         primary={
@@ -480,6 +441,7 @@ export function TemplateEditor({
         saveStatus={isDraft ? (validationErrors > 0 ? "blocked" : autosave.status) : unsaved ? "unsaved-local" : null}
         title={state.title}
         titleEditable={mode === "edit" && !proposal}
+        toolbar={mode === "edit" && !proposal ? <FormatBar allowFiles controller={controller} narrow={false} /> : undefined}
       >
         {({ narrow, zoom }) => (
           <EditorCanvas

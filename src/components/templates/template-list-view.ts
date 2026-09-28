@@ -167,17 +167,3 @@ export function isTemplateViewAdjusted(view: TemplateListView): boolean {
   )
 }
 
-/**
- * Lists the fields a new search carries over: everything except the old
- * query and the page, so the search starts on page one of the same view.
- *
- * @param view - Current Templates view.
- * @returns Name and value pairs for hidden form fields.
- */
-export function getTemplateSearchFields(
-  view: TemplateListView
-): Array<[name: string, value: string]> {
-  return Array.from(
-    templateListState.toSearchParams({ ...view, page: 1, query: "" }).entries()
-  )
-}

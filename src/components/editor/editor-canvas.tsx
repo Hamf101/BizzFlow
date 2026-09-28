@@ -4,7 +4,6 @@ import { Plus } from "lucide-react"
 import {
   type CSSProperties,
   Fragment,
-  type KeyboardEvent,
   type ReactElement,
   useEffect,
   useLayoutEffect,
@@ -18,7 +17,7 @@ import {
   INSERT_CHOICES,
   type InsertChoice,
 } from "@/components/editor/block-catalog"
-import { placeCaret, type TextCaret } from "@/components/editor/editable-text"
+import type { TextCaret } from "@/components/editor/editable-text"
 import {
   CanvasBlock,
   type CanvasActions,
@@ -26,31 +25,37 @@ import {
   isList,
   type LineBlock,
   type ListBlock,
+  PAGE_BREAKS_FOLDED,
+  PageBreaks,
 } from "@/components/editor/editor-block"
 import {
   convertTextBlock,
+  joinRuns,
+  liftListItem,
+  type ListEntry,
+  listEntries,
   mergeIntoPrevious,
   readMarkdownShortcut,
+  sliceRuns,
   splitTextBlock,
+  withEntries,
 } from "@/components/editor/editor-content"
-import { paginate, type PageFrame } from "@/components/editor/editor-pagination"
+import { paginate, type PageFrame, type PaginationRow } from "@/components/editor/editor-pagination"
+import { MarginGuides } from "@/components/editor/margin-guides"
 import { SlashMenu } from "@/components/editor/slash-menu"
-import type { EditorController } from "@/components/editor/use-editor-controller"
+import { addPageBreak, type EditorController, type FocusRequest } from "@/components/editor/use-editor-controller"
 import { resolveDocumentSurfaceInk, type DocumentSurface } from "@/lib/document-surface"
 import { cn } from "@/lib/utils"
 import {
   createTemplateRenderPlan,
+  paragraphGap,
   shouldRenderTemplateFooter,
   shouldRenderTemplateHeader,
   type TemplateRenderBlock,
   type TemplateRenderPlan,
 } from "@/services/templates/template-render-plan"
-import type { TemplateBlock } from "@/types/template"
-import {
-  deleteTemplateBlock,
-  insertTemplateBlock,
-  updateTemplateBlock,
-} from "@/types/template-structure"
+import type { TextRun } from "@/types/template"
+import { updateTemplateBlock } from "@/types/template-structure"
 import { imageSource } from "@/types/template-images"
 
 /** CSS pixels in a printed point: a page at 100% is its paper's real size. */
@@ -128,19 +133,27 @@ export function EditorCanvas({
     [answers, content, documentTitle, fields]
   )
   const units = useMemo(() => createUnits(plan), [plan])
+  const placedImages = plan.blocks.flatMap(({ block }) =>
+    block.type === "image" && block.placement ? [{ block, page: block.placement.page }] : []
+  )
   const ink = resolveDocumentSurfaceInk(surface, plan.branding)
   const point = narrow ? PHONE_POINT_PX : POINT_PX * plan.geometry.scale
   const pageWidth = plan.geometry.widthPoints * point
   const pageHeight = plan.geometry.heightPoints * point
-  const margin = plan.geometry.marginPoints * point
-  const blockGap = { balanced: 11, comfortable: 16, compact: 7 }[plan.layout.density] * point
+  const margins = {
+    bottom: plan.geometry.margins.bottom * point,
+    left: plan.geometry.margins.left * point,
+    right: plan.geometry.margins.right * point,
+    top: plan.geometry.margins.top * point,
+  }
+  const blockGap = paragraphGap(plan.layout) * point
   const logo = imageSource(plan.branding.logoAsset, plan.branding.logoDataUrl)
   const hasBranding = Boolean(logo || plan.branding.organizationName)
   const rootRef = useRef<HTMLDivElement>(null)
   const unitElements = useRef(new Map<string, HTMLElement>())
   const headerRef = useRef<HTMLDivElement>(null)
   const [headerHeight, setHeaderHeight] = useState(0)
-  const [layout, setLayout] = useState<ReturnType<typeof paginate>>({ pageCount: 1, pages: {}, spacers: {} })
+  const [layout, setLayout] = useState<ReturnType<typeof paginate>>({ inside: {}, pageCount: 1, pages: {}, spacers: {} })
   const [slash, setSlash] = useState<SlashState | null>(null)
   const [fontsReady, setFontsReady] = useState(0)
   const slashChoices = useMemo(
@@ -154,12 +167,15 @@ export function EditorCanvas({
   const frame: PageFrame = {
     gap: PAGE_GAP_PX,
     height: pageHeight,
-    marginBottom: (page) => margin + (footerOn(page) ? FOOTER_POINTS * point : 0),
-    marginTop: (page) => margin + (headerOn(page) ? headerHeight : 0),
+    marginBottom: (page) => margins.bottom + (footerOn(page) ? FOOTER_POINTS * point : 0),
+    marginTop: (page) => margins.top + (headerOn(page) ? headerHeight : 0),
   }
 
   useEffect(() => {
-    void document.fonts?.ready.then(() => setFontsReady((count) => count + 1))
+    const remeasure = (): void => setFontsReady((count) => count + 1)
+    void document.fonts?.ready.then(remeasure)
+    document.fonts?.addEventListener("loadingdone", remeasure)
+    return () => document.fonts?.removeEventListener("loadingdone", remeasure)
   }, [])
 
   // Measure every render: typing changes heights, and so do fonts and images.
@@ -177,46 +193,39 @@ export function EditorCanvas({
       return
     }
 
+    // Only a block taller than the smallest page needs its rows: nothing else breaks.
+    const room = Math.min(frame.height - frame.marginTop(0) - frame.marginBottom(0), frame.height - frame.marginTop(1) - frame.marginBottom(1))
+    const folded = Object.keys(layout.inside).length > 0
+    const style = rootRef.current?.style
+
+    if (folded) {
+      Object.entries(PAGE_BREAKS_FOLDED).forEach(([name, value]) => style?.setProperty(name, value))
+    }
+
     const next = paginate(
-      units.map((unit) => ({
-        height: unitElements.current.get(unit.id)?.offsetHeight ?? 0,
-        id: unit.id,
-        keepWithNext: unit.keepWithNext,
-        pageBreakBefore: unit.pageBreakBefore,
-      })),
+      units.map((unit) => {
+        const element = unitElements.current.get(unit.id)
+        const height = element?.offsetHeight ?? 0
+
+        return {
+          height,
+          id: unit.id,
+          keepWithNext: unit.keepWithNext,
+          pageBreakBefore: unit.pageBreakBefore,
+          rows: element && height > room ? measureRows(element, zoom) : undefined,
+        }
+      }),
       frame
     )
+
+    if (folded) {
+      Object.keys(PAGE_BREAKS_FOLDED).forEach((name) => style?.removeProperty(name))
+    }
 
     if (JSON.stringify(next) !== JSON.stringify(layout)) {
       setLayout(next)
     }
   })
-
-  useEffect(() => {
-    const focus = controller.focus
-
-    if (!focus) {
-      return
-    }
-
-    const key = focus.item === undefined ? focus.blockId : `${focus.blockId}:${focus.item}`
-    const element = rootRef.current?.querySelector<HTMLElement>(
-      `[data-caret-key="${key}"]`
-    )
-
-    if (element) {
-      placeCaret(element, focus.offset)
-    }
-  }, [controller.focus])
-
-  function blockText(blockId: string, item?: number): string {
-    const key = item === undefined ? blockId : `${blockId}:${item}`
-
-    return (
-      rootRef.current?.querySelector<HTMLElement>(`[data-caret-key="${key}"]`)
-        ?.textContent ?? ""
-    )
-  }
 
   function updateSlash(blockId: string, text: string, caret: number): void {
     if (text[caret - 1] === "/" && (caret === 1 || /\s/.test(text[caret - 2] ?? ""))) {
@@ -247,8 +256,15 @@ export function EditorCanvas({
       return
     }
 
-    const text = blockText(block.id)
-    const rest = text.slice(0, open.start) + text.slice(open.start + 1 + open.query.length)
+    // The typed / and its query go; the words around them stay as they were.
+    const end = open.start + 1 + open.query.length
+    const rest: ListEntry = {
+      runs: joinRuns(
+        { runs: sliceRuns(block.runs, 0, open.start), text: block.text.slice(0, open.start) },
+        { runs: sliceRuns(block.runs, end), text: block.text.slice(end) }
+      ),
+      text: block.text.slice(0, open.start) + block.text.slice(end),
+    }
 
     if (choice.action.kind === "text") {
       const kind = choice.action.value
@@ -259,10 +275,10 @@ export function EditorCanvas({
       return
     }
 
-    controller.updateBlock({ ...block, text: rest })
+    controller.updateBlock({ ...block, ...rest })
     controller.insert(
       choice,
-      rest.trim().length === 0 ? { replaceBlockId: block.id } : { afterBlockId: block.id }
+      rest.text.trim().length === 0 ? { replaceBlockId: block.id } : { afterBlockId: block.id }
     )
   }
 
@@ -294,7 +310,7 @@ export function EditorCanvas({
     return false
   }
 
-  function handleSlashKey(event: KeyboardEvent<HTMLElement>, blockId: string): boolean {
+  function handleSlashKey(event: globalThis.KeyboardEvent, blockId: string): boolean {
     if (!slash || slash.blockId !== blockId) {
       return false
     }
@@ -334,38 +350,48 @@ export function EditorCanvas({
     controller,
     designable,
     fields,
+    focusFor(caretKey: string): FocusRequest | null {
+      const focus = controller.focus
+
+      return focus && (focus.item === undefined ? focus.blockId : `${focus.blockId}:${focus.item}`) === caretKey
+        ? focus
+        : null
+    },
     onAnswerChange,
-    onLineInput(block: LineBlock, text: string, caret: number): void {
+    onLineInput(block: LineBlock, text: string, runs: TextRun[] | undefined, caret: number): void {
       const shortcut = block.type === "paragraph" ? readMarkdownShortcut(text) : null
 
       if (shortcut) {
         const list = shortcut.type === "bullet_list" || shortcut.type === "numbered_list"
 
         setSlash(null)
-        controller.change((current) => convertTextBlock(current, block.id, shortcut, "").content)
+        controller.change((current) => convertTextBlock(current, block.id, shortcut, { text: "" }).content)
         controller.requestFocus({ blockId: block.id, item: list ? 0 : undefined, offset: 0 })
         return
       }
 
-      controller.updateBlock({ ...block, text }, `text:${block.id}`)
+      controller.updateBlock({ ...block, runs, text }, `text:${block.id}`)
       updateSlash(block.id, text, caret)
     },
-    onLineKeyDown(event: KeyboardEvent<HTMLElement>, caret: TextCaret, block: LineBlock): void {
-      if (handleSlashKey(event, block.id) || event.nativeEvent.isComposing) {
+    onLineKeyDown(event: globalThis.KeyboardEvent, caret: TextCaret, block: LineBlock): void {
+      if (handleSlashKey(event, block.id) || event.isComposing) {
         return
       }
 
-      const synced = { ...block, text: caret.text }
+      const synced = { ...block, runs: caret.runs, text: caret.text }
       const mod = event.metaKey || event.ctrlKey
 
       if (event.key === "Enter") {
         event.preventDefault()
         const id = crypto.randomUUID()
-        const opensAbove = caret.offset === 0 && caret.text.length > 0
+        const opensAbove = caret.offset === 0 && caret.text.length > 0 && !mod
 
-        controller.change((current) =>
-          splitTextBlock(updateTemplateBlock(current, synced), block.id, caret.offset, id).content
-        )
+        // With Ctrl or Cmd, as in Google Docs, what follows the caret starts a new page.
+        controller.change((current) => {
+          const split = splitTextBlock(updateTemplateBlock(current, synced), block.id, caret.offset, id).content
+
+          return mod ? addPageBreak(split, opensAbove ? block.id : id) : split
+        })
         controller.requestFocus(opensAbove ? { blockId: block.id, offset: 0 } : { blockId: id, offset: 0 })
       } else if (event.key === "Backspace" && caret.atStart && caret.collapsed) {
         const result = mergeIntoPrevious(updateTemplateBlock(content, synced), block.id)
@@ -400,61 +426,67 @@ export function EditorCanvas({
         controller.duplicate(block.id)
       }
     },
-    onListInput(block: ListBlock, item: number, text: string): void {
+    onListInput(block: ListBlock, item: number, text: string, runs: TextRun[] | undefined): void {
       controller.updateBlock(
-        { ...block, items: block.items.map((value, index) => (index === item ? text : value)) },
+        withEntries(block, listEntries(block).map((entry, index) => (index === item ? { runs, text } : entry))),
         `list:${block.id}:${item}`
       )
     },
-    onListKeyDown(event: KeyboardEvent<HTMLElement>, caret: TextCaret, block: ListBlock, item: number): void {
-      if (event.nativeEvent.isComposing) {
+    onListKeyDown(event: globalThis.KeyboardEvent, caret: TextCaret, block: ListBlock, item: number): void {
+      if (event.isComposing) {
         return
       }
 
-      const items = block.items.map((value, index) => (index === item ? caret.text : value))
+      const entries = listEntries(block).map((entry, index) =>
+        index === item ? { runs: caret.runs, text: caret.text } : entry
+      )
 
       if (event.key === "Enter") {
         event.preventDefault()
 
         if (caret.text.length === 0) {
-          endList(block, items, item)
+          liftItem(block, entries, item)
           return
         }
 
         const next = [
-          ...items.slice(0, item),
-          caret.text.slice(0, caret.offset),
-          caret.text.slice(caret.offset),
-          ...items.slice(item + 1),
+          ...entries.slice(0, item),
+          { runs: sliceRuns(caret.runs, 0, caret.offset), text: caret.text.slice(0, caret.offset) },
+          { runs: sliceRuns(caret.runs, caret.offset), text: caret.text.slice(caret.offset) },
+          ...entries.slice(item + 1),
         ]
 
-        controller.change((current) => updateTemplateBlock(current, { ...block, items: next }))
+        controller.change((current) => updateTemplateBlock(current, withEntries(block, next)))
         controller.requestFocus({ blockId: block.id, item: item + 1, offset: 0 })
       } else if (event.key === "Backspace" && caret.atStart && caret.collapsed) {
         event.preventDefault()
 
         if (item > 0) {
-          const previous = items[item - 1] ?? ""
-          const merged = [...items.slice(0, item - 1), previous + caret.text, ...items.slice(item + 1)]
+          const previous = entries[item - 1] ?? { text: "" }
+          const merged = [
+            ...entries.slice(0, item - 1),
+            { runs: joinRuns(previous, { runs: caret.runs, text: caret.text }), text: previous.text + caret.text },
+            ...entries.slice(item + 1),
+          ]
 
-          controller.change((current) => updateTemplateBlock(current, { ...block, items: merged }))
-          controller.requestFocus({ blockId: block.id, item: item - 1, offset: previous.length })
+          controller.change((current) => updateTemplateBlock(current, withEntries(block, merged)))
+          controller.requestFocus({ blockId: block.id, item: item - 1, offset: previous.text.length })
           return
         }
 
-        leaveList(block, items)
+        liftItem(block, entries, 0)
       } else if (event.key === "ArrowUp" && caret.atStart) {
         event.preventDefault()
 
         if (item > 0) {
-          controller.requestFocus({ blockId: block.id, item: item - 1, offset: items[item - 1]?.length ?? 0 })
+          controller.requestFocus({ blockId: block.id, item: item - 1, offset: entries[item - 1]?.text.length ?? 0 })
         } else {
           focusNeighbour(block.id, -1)
         }
       } else if (event.key === "ArrowDown" && caret.atEnd) {
         event.preventDefault()
 
-        if (item < items.length - 1) {
+        if (item < entries.length - 1) {
           controller.requestFocus({ blockId: block.id, item: item + 1, offset: 0 })
         } else {
           focusNeighbour(block.id, 1)
@@ -476,53 +508,19 @@ export function EditorCanvas({
     textEditable,
   }
 
-  // An empty item ends a list: what follows it becomes a line of text.
-  function endList(block: ListBlock, items: readonly string[], item: number): void {
-    const before = items.slice(0, item)
-    const after = items.slice(item + 1)
-    const line: TemplateBlock = { alignment: "left", id: crypto.randomUUID(), text: "", type: "paragraph" }
-    const index = content.blocks.findIndex((candidate) => candidate.id === block.id)
-    const previousId = content.blocks[index - 1]?.id ?? null
-
-    controller.change((current) => {
-      if (before.length === 0 && after.length === 0) {
-        return insertTemplateBlock(deleteTemplateBlock(current, block.id), previousId, line)
-      }
-
-      if (before.length === 0) {
-        return insertTemplateBlock(updateTemplateBlock(current, { ...block, items: after }), previousId, line)
-      }
-
-      const kept = insertTemplateBlock(updateTemplateBlock(current, { ...block, items: before }), block.id, line)
-
-      return after.length === 0
-        ? kept
-        : insertTemplateBlock(kept, line.id, { id: crypto.randomUUID(), items: after, type: block.type })
-    })
-    controller.requestFocus({ blockId: line.id, offset: 0 })
-  }
-
-  // Backspace at the start of a list's first item lifts it out as a line.
-  function leaveList(block: ListBlock, items: readonly string[]): void {
-    const [first = "", ...rest] = items
-
-    if (rest.length === 0) {
-      controller.change((current) => convertTextBlock(current, block.id, { type: "paragraph" }, first).content)
-      controller.requestFocus({ blockId: block.id, offset: 0 })
-      return
-    }
-
-    const index = content.blocks.findIndex((candidate) => candidate.id === block.id)
-    const line: TemplateBlock = { alignment: "left", id: crypto.randomUUID(), text: first, type: "paragraph" }
-
-    controller.change((current) =>
-      insertTemplateBlock(
-        updateTemplateBlock(current, { ...block, items: rest }),
-        content.blocks[index - 1]?.id ?? null,
-        line
-      )
+  // Enter on an empty item, or Backspace at the start of the first, lifts the
+  // item out of the list as a line of text.
+  function liftItem(block: ListBlock, entries: readonly ListEntry[], item: number): void {
+    const lifted = liftListItem(
+      updateTemplateBlock(content, withEntries(block, entries)),
+      block.id,
+      item,
+      { type: "paragraph" },
+      [crypto.randomUUID(), crypto.randomUUID()]
     )
-    controller.requestFocus({ blockId: line.id, offset: 0 })
+
+    controller.change(() => lifted.content)
+    controller.requestFocus(lifted.focus)
   }
 
   // A click on empty paper puts the caret at the end of that page's writing.
@@ -551,6 +549,8 @@ export function EditorCanvas({
   const inkStyle = {
     "--doc-accent": ink.accent,
     "--doc-primary": ink.primary,
+    "--doc-pt": `${point}px`,
+    "--doc-line-height": plan.layout.lineSpacing,
     ...(narrow ? { "--doc-h1": "1.55em", "--doc-h2": "1.35em", "--doc-h3": "1.15em", "--doc-title": "1.7em" } : {}),
     fontSize: 10 * point,
   } as CSSProperties
@@ -599,6 +599,10 @@ export function EditorCanvas({
         style={inkStyle}
       >
         {flow}
+        {/* A phone's column has no pages, so placed pictures follow the text. */}
+        {placedImages.map(({ block }) => (
+          <CanvasBlock actions={actions} block={block} key={block.id} />
+        ))}
         {units.length === 0 ? <EmptyPageLine actions={actions} onStart={() => focusPageEnd(0)} /> : null}
         {textEditable ? (
           <AddPageButton className="mt-6" onClick={() => controller.addPage(content.blocks.at(-1)?.id ?? null)} />
@@ -616,7 +620,8 @@ export function EditorCanvas({
     )
   }
 
-  const stackHeight = layout.pageCount * (pageHeight + PAGE_GAP_PX) + (textEditable ? 56 : 0)
+  const pageCount = Math.max(layout.pageCount, ...placedImages.map(({ page }) => page))
+  const stackHeight = pageCount * (pageHeight + PAGE_GAP_PX) + (textEditable ? 56 : 0)
 
   return (
     <div
@@ -631,9 +636,9 @@ export function EditorCanvas({
         ref={rootRef}
         style={{ ...inkStyle, height: stackHeight, transform: `scale(${zoom})`, width: pageWidth }}
       >
-        {Array.from({ length: layout.pageCount }, (_, page) => (
+        {Array.from({ length: pageCount }, (_, page) => (
           <div
-            aria-label={`Page ${page + 1} of ${layout.pageCount}`}
+            aria-label={`Page ${page + 1} of ${pageCount}`}
             className="group/page absolute inset-x-0 cursor-text bg-card shadow-[0_1px_2px_rgba(37,35,41,0.08),0_10px_30px_rgba(37,35,41,0.1)]"
             data-page={page + 1}
             key={page}
@@ -646,6 +651,9 @@ export function EditorCanvas({
             role="region"
             style={{ height: pageHeight, top: page * (pageHeight + PAGE_GAP_PX) }}
           >
+            {designable ? (
+              <MarginGuides first={page === 0} layout={plan.layout} onChange={controller.setLayout} point={point} zoom={zoom} />
+            ) : null}
             {headerOn(page) ? (
               <div
                 className={cn(
@@ -654,7 +662,7 @@ export function EditorCanvas({
                   plan.branding.logoAlignment === "right" && "items-end"
                 )}
                 ref={page === 0 ? headerRef : undefined}
-                style={{ paddingBottom: 10 * point, paddingInline: margin, top: margin }}
+                style={{ paddingBottom: 10 * point, paddingLeft: margins.left, paddingRight: margins.right, top: margins.top }}
               >
                 {logo ? (
                   // eslint-disable-next-line @next/next/no-img-element -- the author's own picture, already sized
@@ -674,15 +682,15 @@ export function EditorCanvas({
               <MarginPill
                 label="Header"
                 onClick={() => controller.setLayout({ ...plan.layout, headerPolicy: "all_pages" })}
-                zone={{ height: margin, top: 0 }}
+                zone={{ height: margins.top, top: 0 }}
               />
             ) : null}
             {footerOn(page) ? (
               <p
                 className="absolute text-muted-foreground tabular-nums"
-                style={{ bottom: margin * 0.55, fontSize: 8 * point, right: margin }}
+                style={{ bottom: margins.bottom * 0.55, fontSize: 8 * point, right: margins.right }}
               >
-                Page {page + 1} of {layout.pageCount}
+                Page {page + 1} of {pageCount}
               </p>
             ) : textEditable ? (
               <MarginPill
@@ -690,14 +698,14 @@ export function EditorCanvas({
                 onClick={() =>
                   controller.setLayout({ ...plan.layout, footerPolicy: "all_pages", pageNumbering: "page_x_of_y" })
                 }
-                zone={{ bottom: 0, height: margin }}
+                zone={{ bottom: 0, height: margins.bottom }}
               />
             ) : null}
             {textEditable ? (
               <AddPageButton
                 className={cn(
                   "absolute left-1/2 -translate-x-1/2 -translate-y-1/2",
-                  page < layout.pageCount - 1 &&
+                  page < pageCount - 1 &&
                     "opacity-0 transition-opacity hover:opacity-100 focus-visible:opacity-100 group-hover/page:opacity-100"
                 )}
                 onClick={() => {
@@ -705,17 +713,27 @@ export function EditorCanvas({
 
                   controller.addPage(lastUnit?.blocks.at(-1)?.block.id ?? null)
                 }}
-                style={{ top: pageHeight + (page < layout.pageCount - 1 ? PAGE_GAP_PX / 2 : 28) }}
+                style={{ top: pageHeight + (page < pageCount - 1 ? PAGE_GAP_PX / 2 : 28) }}
               />
             ) : null}
+          </div>
+        ))}
+        {/* Placed pictures lie over their pages' text, as they print. */}
+        {placedImages.map(({ block, page }) => (
+          <div
+            className="pointer-events-none absolute inset-x-0 z-10"
+            key={block.id}
+            style={{ height: pageHeight, top: (page - 1) * (pageHeight + PAGE_GAP_PX) }}
+          >
+            <CanvasBlock actions={actions} block={block} placed />
           </div>
         ))}
         <div
           className="pointer-events-none absolute inset-x-0 top-0"
           data-slot="page-flow"
-          style={{ paddingInline: margin, paddingTop: frame.marginTop(0) }}
+          style={{ paddingLeft: margins.left, paddingRight: margins.right, paddingTop: frame.marginTop(0) }}
         >
-          {flow}
+          <PageBreaks.Provider value={layout.inside}>{flow}</PageBreaks.Provider>
           {units.length === 0 ? (
             <div className="pointer-events-auto">
               <EmptyPageLine actions={actions} onStart={() => focusPageEnd(0)} />
@@ -832,9 +850,47 @@ function MarginPill({
   )
 }
 
+/**
+ * Where a page may end inside a block too tall for one, measured from the
+ * block's top: before a list item, before a table row after the first, and
+ * before any line of a paragraph but its first.
+ *
+ * @param unit - The block's element, with every page-break space folded away.
+ * @param zoom - The canvas's scale, since the screen reports scaled sizes.
+ * @returns The rows, top to bottom.
+ */
+function measureRows(unit: HTMLElement, zoom: number): PaginationRow[] {
+  const origin = unit.getBoundingClientRect().top
+  const rows: PaginationRow[] = []
+
+  for (const element of unit.querySelectorAll<HTMLElement>("li[data-line-key], tr[data-row-key]")) {
+    rows.push({
+      key: element.dataset.lineKey ?? element.dataset.rowKey ?? "",
+      top: (element.getBoundingClientRect().top - origin) / zoom,
+    })
+  }
+
+  // A paragraph is a plain block while it is typed in, and a paragraph otherwise.
+  for (const paragraph of unit.querySelectorAll<HTMLElement>("div[data-line-key], p[data-line-key]")) {
+    const range = document.createRange()
+    range.selectNodeContents(paragraph)
+    // Each line's box sits the same way inside it, so the first one's top is the paragraph's.
+    const [first, ...rest] = [...range.getClientRects()].map((rect) => rect.top)
+    const top = (paragraph.getBoundingClientRect().top - origin) / zoom
+
+    for (const line of new Set(rest.map((lineTop) => Math.round((lineTop - (first ?? lineTop)) / zoom)))) {
+      if (line > 0) {
+        rows.push({ key: `${paragraph.dataset.lineKey}@${line}`, top: top + line })
+      }
+    }
+  }
+
+  return rows.sort((one, other) => one.top - other.top)
+}
+
 function createUnits(plan: TemplateRenderPlan): CanvasUnit[] {
   const units: CanvasUnit[] = []
-  const blocks = plan.blocks
+  const blocks = plan.blocks.filter(({ block }) => !(block.type === "image" && block.placement))
 
   if (plan.title) {
     units.push({ blocks: [], columns: 1, groupLabel: null, id: "title", keepWithNext: false, pageBreakBefore: false, sectionLabel: null })

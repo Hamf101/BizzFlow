@@ -2,7 +2,6 @@ import { randomUUID } from "node:crypto"
 
 import { ZodError } from "zod"
 
-import { captureUnexpectedError } from "@/lib/observability"
 import {
   canPerformOrganizationAction,
   createOrganizationPermissionSubject,
@@ -34,6 +33,7 @@ import {
   type TaskStatus,
 } from "@/types/task"
 import { loadActiveMembership } from "@/services/organizations/active-membership"
+import { runOperation } from "@/services/operation"
 
 /** Columns required by the canonical task row parser. */
 export const TASK_COLUMNS =
@@ -90,43 +90,12 @@ type SupabaseErrorLike = {
  * @returns The operation result.
  * @throws TaskServiceError for every expected or unexpected failure.
  */
-export async function runTaskOperation<T>(
+export function runTaskOperation<T>(
   operationName: string,
   identifiers: Record<string, TaskLogValue>,
   operation: () => Promise<T>
 ): Promise<T> {
-  const startedAt = Date.now()
-
-  try {
-    const result = await operation()
-    console.info("task_service_success", {
-      operationName,
-      durationMs: Date.now() - startedAt,
-      ...identifiers,
-    })
-    return result
-  } catch (error: unknown) {
-    const serviceError = toTaskServiceError(error)
-    const log = serviceError.statusCode >= 500 ? console.error : console.warn
-    log(
-      serviceError.statusCode >= 500
-        ? "task_service_failed"
-        : "task_service_rejected",
-      {
-        operationName,
-        durationMs: Date.now() - startedAt,
-        statusCode: serviceError.statusCode,
-        reason: serviceError.message,
-        ...identifiers,
-      }
-    )
-
-    if (serviceError.statusCode >= 500) {
-      captureUnexpectedError(error, { operationName, ...identifiers })
-    }
-
-    throw serviceError
-  }
+  return runOperation("task", toTaskServiceError, operationName, identifiers, operation)
 }
 
 /**

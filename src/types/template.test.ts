@@ -3,9 +3,11 @@ import { describe, expect, it } from "vitest"
 import { formatDateAnswer } from "@/lib/date-format"
 
 import {
+  fitRuns,
   createBlankTemplateContent,
   MAX_TEMPLATE_BLOCK_COUNT,
   parseTemplateContent,
+  templateBlockSchema,
   templateContentV3Schema,
   upgradeV2TemplateContentToV3,
   type TemplateContentV2
@@ -332,3 +334,58 @@ describe("date field formats", () => {
     expect(saved.blocks[0]).toMatchObject({ dateFormat: { month: "number", order: "dmy", separator: "/" }, type: "date_field" })
   })
 })
+
+describe("formatted text", () => {
+  const paragraph = (text: string, runs: unknown) =>
+    templateBlockSchema.parse({ id: FIRST_BLOCK_ID, runs, text, type: "paragraph" })
+
+  it("keeps a paragraph's formatting while it spells out the text, trimmed and tidied the same way", () => {
+    const block = paragraph("  Pay within 30 days.  ", [
+      { text: "  Pay " },
+      { bold: true, text: "within" },
+      { bold: true, text: " 30 days" },
+      { text: ".  " },
+    ])
+
+    expect(block).toMatchObject({
+      runs: [{ text: "Pay " }, { bold: true, text: "within 30 days" }, { text: "." }],
+      text: "Pay within 30 days.",
+    })
+  })
+
+  it("tidies formatting as it is typed, keeping the spaces a person is still typing around", () => {
+    expect(fitRuns("Pay now ", [{ bold: true, text: "Pay" }, { text: " now" }, { text: " " }])).toEqual([
+      { bold: true, text: "Pay" },
+      { text: " now " },
+    ])
+    expect(fitRuns(" Pay", [{ text: " " }, { italic: true, text: "Pay" }])).toEqual([{ text: " " }, { italic: true, text: "Pay" }])
+  })
+
+  it("lets go of formatting once the text changes without it, or when none of it is formatted", () => {
+    expect(paragraph("Pay later.", [{ bold: true, text: "Pay now." }])).not.toHaveProperty("runs")
+    expect(paragraph("Pay now.", [{ text: "Pay " }, { text: "now." }])).not.toHaveProperty("runs")
+  })
+
+  it("links only to web and email addresses", () => {
+    expect(() => paragraph("Pay", [{ link: "javascript:alert(1)", text: "Pay" }])).toThrow()
+    expect(paragraph("Pay", [{ link: "mailto:billing@example.com", text: "Pay" }])).toMatchObject({
+      runs: [{ link: "mailto:billing@example.com", text: "Pay" }],
+    })
+  })
+
+  it("keeps each list item's formatting beside it, and lets go when the items change", () => {
+    const list = (items: string[]) =>
+      templateBlockSchema.parse({
+        id: FIRST_BLOCK_ID,
+        itemRuns: [[{ bold: true, text: "Weekly" }, { text: " visit" }], null],
+        items,
+        type: "bullet_list",
+      })
+
+    expect(list(["Weekly visit", "Deep clean"])).toMatchObject({
+      itemRuns: [[{ bold: true, text: "Weekly" }, { text: " visit" }], null],
+    })
+    expect(list(["Weekly visit"])).not.toHaveProperty("itemRuns")
+  })
+})
+

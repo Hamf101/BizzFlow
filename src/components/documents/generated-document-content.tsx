@@ -16,6 +16,7 @@ import {
   isStaticTemplateBlock,
   TemplateStaticBlock
 } from "@/components/templates/template-static-block"
+import { BLOCK_GAP, pageStyle, PlacedImages, printableMargin } from "@/components/templates/printed-page"
 import {
   groupTemplateRenderBlocks,
   type TemplateWebRenderGroup
@@ -157,21 +158,17 @@ export function GeneratedDocumentContent({
   const paperStyle = {
     "--document-accent": ink.accent,
     "--document-primary": ink.primary,
-    aspectRatio: `${renderPlan.geometry.widthPoints} / ${renderPlan.geometry.heightPoints}`
+    ...pageStyle(renderPlan)
   } as CSSProperties
-  // CSS percentage margins on every side resolve against container width.
-  // Scaling points by page width therefore preserves one physical margin.
-  const marginPercent =
-    (renderPlan.geometry.marginPoints / renderPlan.geometry.widthPoints) * 100
   const printableAreaStyle = {
-    margin: `${marginPercent}%`
+    margin: printableMargin(renderPlan)
   } as CSSProperties
 
   return (
     <article
       aria-label="Generated document content"
       className={cn(
-        "mx-auto min-h-[34rem] w-full overflow-hidden rounded-sm border bg-card text-foreground shadow-sm",
+        "relative mx-auto min-h-[34rem] w-full overflow-hidden rounded-sm border bg-card text-foreground shadow-sm",
         renderPlan.layout.orientation === "portrait"
           ? "max-w-[50rem]"
           : "max-w-[68rem]"
@@ -217,6 +214,7 @@ export function GeneratedDocumentContent({
             <GeneratedPageFooter />
           )}
       </div>
+      <PlacedImages plan={renderPlan} />
     </article>
   )
 }
@@ -360,12 +358,7 @@ function GeneratedSection({
 
   return (
     <section
-      className={cn(
-        "flex min-w-0 flex-col",
-        density === "compact" && "gap-1.5",
-        density === "balanced" && "gap-3",
-        density === "comfortable" && "gap-5"
-      )}
+      className={cn("flex min-w-0 flex-col", BLOCK_GAP[density])}
       data-keep-together={section.keepTogether ? "true" : undefined}
       data-page-break-before={section.pageBreakBefore ? "true" : undefined}
       data-template-section-id={section.id ?? "implicit"}
@@ -427,12 +420,7 @@ function GeneratedFieldGroup({
 }): ReactElement {
   return (
     <section
-      className={cn(
-        "flex min-w-0 flex-col",
-        density === "compact" && "gap-1.5",
-        density === "balanced" && "gap-3",
-        density === "comfortable" && "gap-5"
-      )}
+      className={cn("flex min-w-0 flex-col", BLOCK_GAP[density])}
       data-keep-together={group.keepTogether ? "true" : undefined}
       data-template-field-group-columns={group.columns}
       data-template-field-group-id={group.id ?? "ungrouped"}
@@ -454,9 +442,7 @@ function GeneratedFieldGroup({
           group.columns === 1
             ? "grid-cols-1"
             : "grid-cols-1 sm:grid-cols-[repeat(2,minmax(0,1fr))]",
-          density === "compact" && "gap-1.5",
-          density === "balanced" && "gap-3",
-          density === "comfortable" && "gap-5"
+          BLOCK_GAP[density]
         )}
       >
         {group.blocks.map(

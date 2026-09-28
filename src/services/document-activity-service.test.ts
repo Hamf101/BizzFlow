@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest"
 
 import {
   listDocumentActivity,
-  recordDocumentActivity,
   type DocumentActivityServiceDeps,
 } from "@/services/document-activity-service"
 
@@ -79,7 +78,6 @@ class FakeSupabaseClient {
 
 class FakeQueryBuilder {
   private readonly filters: Array<(row: FakeRow) => boolean> = []
-  private insertRows: FakeRow[] | null = null
   private orderColumn: string | null = null
   private orderAscending = true
   private limitCount: number | null = null
@@ -90,11 +88,6 @@ class FakeQueryBuilder {
   ) {}
 
   select(): FakeQueryBuilder {
-    return this
-  }
-
-  insert(value: FakeRow | FakeRow[]): FakeQueryBuilder {
-    this.insertRows = Array.isArray(value) ? value : [value]
     return this
   }
 
@@ -145,15 +138,6 @@ class FakeQueryBuilder {
   }
 
   private execute(): FakeRow[] {
-    if (this.insertRows) {
-      const rows = this.insertRows.map((row: FakeRow) => ({
-        created_at: "2026-07-17T12:00:00.000Z",
-        ...row,
-      }))
-      this.client.tables[this.tableName].push(...rows)
-      return rows
-    }
-
     let rows = this.client.tables[this.tableName].filter((row: FakeRow) =>
       this.filters.every((filter: (row: FakeRow) => boolean) => filter(row))
     )
@@ -173,58 +157,8 @@ class FakeQueryBuilder {
 }
 
 function deps(client: FakeSupabaseClient): DocumentActivityServiceDeps {
-  return { client: client as never, createId: () => "activity-new" }
+  return { client: client as never }
 }
-
-describe("record document activity", () => {
-  it("stores a server-side event for a same-tenant document", async () => {
-    const client = new FakeSupabaseClient({
-      documents: [{ id: "document-1", org_id: "org-1" }],
-    })
-
-    await recordDocumentActivity(
-      {
-        organizationId: "org-1",
-        documentId: "document-1",
-        actorUserId: "user-1",
-        eventType: "document.replaced",
-        metadata: { versionId: "version-2", versionNumber: 2 },
-      },
-      deps(client)
-    )
-
-    expect(client.tables.document_activity_events).toEqual([
-      expect.objectContaining({
-        id: "activity-new",
-        org_id: "org-1",
-        document_id: "document-1",
-        actor_user_id: "user-1",
-        event_type: "document.replaced",
-        metadata: { versionId: "version-2", versionNumber: 2 },
-      }),
-    ])
-  })
-
-  it("rejects a document belonging to another tenant", async () => {
-    const client = new FakeSupabaseClient({
-      documents: [{ id: "document-1", org_id: "org-2" }],
-    })
-
-    await expect(
-      recordDocumentActivity(
-        {
-          organizationId: "org-1",
-          documentId: "document-1",
-          actorUserId: "user-1",
-          eventType: "document.archived",
-        },
-        deps(client)
-      )
-    ).rejects.toMatchObject({ statusCode: 404 })
-
-    expect(client.tables.document_activity_events).toHaveLength(0)
-  })
-})
 
 describe("list document activity", () => {
   it("requires an active membership with document access", async () => {

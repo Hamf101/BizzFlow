@@ -3,6 +3,7 @@ import type { ReactElement } from "react"
 
 import { NewPasswordFields } from "@/components/auth/new-password-fields"
 import { PasswordInput } from "@/components/auth/password-input"
+import { ProfileFields } from "@/components/auth/profile-fields"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
@@ -166,7 +167,10 @@ export default async function AcceptInvitePage({
               <PasswordInput id="password" name="password" autoComplete="current-password" required minLength={8} />
             </Field>
           ) : (
-            <NewPasswordFields label="Choose a password" />
+            <>
+              <ProfileFields />
+              <NewPasswordFields label="Choose a password" />
+            </>
           )}
         </FieldGroup>
         <Button type="submit" className="w-full">

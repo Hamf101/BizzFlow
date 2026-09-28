@@ -334,10 +334,7 @@ export function TemplateFlowPanel({
   }
 
   return (
-    <aside
-      aria-label="Flow document assistant"
-      className="flex min-h-[36rem] flex-col overflow-hidden rounded-[10px] border border-primary/15 bg-secondary/70 shadow-[0_8px_30px_rgba(37,35,41,0.07)] xl:sticky xl:top-5 xl:h-[calc(100vh-2.5rem)] xl:max-h-[52rem]"
-    >
+    <aside aria-label="Flow document assistant" className="flex min-h-0 flex-1 flex-col">
 
       <div
         aria-live="polite"
@@ -396,17 +393,15 @@ export function TemplateFlowPanel({
         </div>
       )}
 
-      <form
-        className="border-t border-primary/10 bg-card/75 p-3"
-        onSubmit={handleSubmit}
-      >
+      <form className="px-3 pt-1 pb-3" onSubmit={handleSubmit}>
         <label className="sr-only" htmlFor="flow-composer">
           Ask Flow
         </label>
         <div className="relative">
+          {/* One line tall, growing with the message to about six. */}
           <textarea
             aria-describedby={pendingProposal ? "flow-composer-hint" : undefined}
-            className="min-h-24 w-full resize-none rounded-[8px] border border-primary/15 bg-card px-3 py-2.5 pr-12 text-sm leading-relaxed outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 disabled:opacity-60"
+            className="field-sizing-content max-h-36 min-h-10 w-full resize-none rounded-[12px] border border-border bg-card px-3 py-2.5 pr-12 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 disabled:opacity-60"
             disabled={isLoading || pendingProposal !== null}
             id="flow-composer"
             maxLength={2_000}
@@ -419,7 +414,7 @@ export function TemplateFlowPanel({
           />
           <button
             aria-label="Send message to Flow"
-            className="absolute right-2 bottom-2.5 grid size-8 place-items-center rounded-full text-primary outline-none transition-opacity hover:opacity-75 disabled:opacity-35 focus-visible:ring-2 focus-visible:ring-ring/40"
+            className="absolute right-1.5 bottom-1 grid size-8 place-items-center rounded-full text-primary outline-none transition-opacity hover:opacity-75 disabled:opacity-35 focus-visible:ring-2 focus-visible:ring-ring/40"
             disabled={
               isLoading ||
               pendingProposal !== null ||

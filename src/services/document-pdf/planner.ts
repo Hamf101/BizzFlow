@@ -3,7 +3,7 @@ import {
   shouldRenderTemplateHeader,
   type TemplateRenderBlock
 } from "@/services/templates/template-render-plan"
-import type { TemplateBlock, TemplateContent } from "@/types/template"
+import type { TemplateBlock, TemplateContent, TextRun } from "@/types/template"
 
 import {
   FIELD_CHUNK_CHARACTERS,
@@ -140,6 +140,13 @@ export function createPdfPagePlans(input: NormalizedPdfInput): PdfPagePlan[] {
     pages.push(currentPage.plan)
   }
 
+  // A picture placed on a later page than the text reaches still gets its page.
+  const lastPlacedPage = Math.max(1, ...input.renderPlan.blocks.map(({ block }) => (block.type === "image" ? (block.placement?.page ?? 1) : 1)))
+
+  while (pages.length < lastPlacedPage) {
+    pages.push(createMutablePdfPage(input, metrics, pages.length + 1).plan)
+  }
+
   return pages
 }
 
@@ -247,7 +254,8 @@ function createBlockPaginationUnits(
   metrics: PdfLayoutMetrics
 ): PdfPaginationUnit[] {
   const units: PdfPaginationUnit[] = []
-  const blocks = input.renderPlan.blocks
+  // Placed pictures print over their pages, outside the flow.
+  const blocks = input.renderPlan.blocks.filter(({ block }) => !(block.type === "image" && block.placement))
   let blockIndex = 0
 
   while (blockIndex < blocks.length) {
@@ -483,21 +491,32 @@ function expandBlockForPagination(
   const { block } = renderBlock
 
   switch (block.type) {
-    case "paragraph":
-      return splitText(
-        block.text,
-        resolveChunkCharacters(
-          PARAGRAPH_CHUNK_CHARACTERS,
-          availableWidth,
-          pageCapacity
+    case "paragraph": {
+      const chunkCharacters = resolveChunkCharacters(
+        PARAGRAPH_CHUNK_CHARACTERS,
+        availableWidth,
+        pageCapacity
+      )
+
+      // Formatted text is cut in the same places, each piece keeping its own formatting.
+      if (block.runs) {
+        return splitRuns(block.runs, scaleChunk(chunkCharacters, block.runs, 10)).map(
+          (runs: TextRun[]): PdfBlockFlowItem => ({
+            kind: "block",
+            block: { ...block, runs, text: runs.map((run: TextRun): string => run.text).join("") },
+            renderBlock
+          })
         )
-      ).map(
+      }
+
+      return splitText(block.text, chunkCharacters).map(
         (text: string): PdfBlockFlowItem => ({
           kind: "block",
           block: { ...block, text },
           renderBlock
         })
       )
+    }
     case "bullet_list":
     case "numbered_list":
       return splitListBlock(block, renderBlock, availableWidth, pageCapacity)
@@ -553,25 +572,26 @@ function splitListBlock(
     (
       item: string,
       itemIndex: number
-    ): Array<{ marker: string; text: string }> =>
-      splitText(item, entryCharacters).map(
-        (
-          text: string,
-          chunkIndex: number
-        ): { marker: string; text: string } => ({
-          marker:
-            chunkIndex === 0
-              ? block.type === "bullet_list"
-                ? "-"
-                : `${itemIndex + 1}.`
-              : "",
-          text
-        })
-      )
+    ): Array<{ marker: string; runs?: TextRun[]; text: string }> => {
+      const formatted = block.itemRuns?.[itemIndex]
+      const pieces = formatted
+        ? splitRuns(formatted, scaleChunk(entryCharacters, formatted, 10)).map((runs: TextRun[]) => ({ runs, text: runs.map((run: TextRun): string => run.text).join("") }))
+        : splitText(item, entryCharacters).map((text: string) => ({ text }))
+
+      return pieces.map((piece, chunkIndex: number) => ({
+        ...piece,
+        marker:
+          chunkIndex === 0
+            ? block.type === "bullet_list"
+              ? "-"
+              : `${itemIndex + 1}.`
+            : ""
+      }))
+    }
   )
   const chunks: PdfBlockFlowItem[] = []
   const chunkHeight = Math.min(LIST_CHUNK_HEIGHT, pageCapacity * 0.72)
-  let currentEntries: Array<{ marker: string; text: string }> = []
+  let currentEntries: Array<{ marker: string; runs?: TextRun[]; text: string }> = []
   let currentHeight = 0
 
   const flush = (): void => {
@@ -583,21 +603,21 @@ function splitListBlock(
       kind: "block",
       block: {
         ...block,
-        items: currentEntries.map(
-          (entry: { marker: string; text: string }): string => entry.text
-        )
+        items: currentEntries.map((entry): string => entry.text),
+        // The formatting of this piece's own entries, if any has some.
+        itemRuns: currentEntries.some((entry) => entry.runs)
+          ? currentEntries.map((entry) => entry.runs ?? null)
+          : undefined
       },
       renderBlock,
-      listMarkers: currentEntries.map(
-        (entry: { marker: string; text: string }): string => entry.marker
-      )
+      listMarkers: currentEntries.map((entry): string => entry.marker)
     })
     currentEntries = []
     currentHeight = 0
   }
 
   for (const entry of entries) {
-    const entryHeight = estimateListEntryHeight(entry.text, availableWidth)
+    const entryHeight = estimateListEntryHeight(entry.text, availableWidth, entry.runs)
 
     if (
       currentEntries.length > 0 &&
@@ -734,6 +754,56 @@ function splitText(value: string, maximumCharacters: number): string[] {
   return chunks
 }
 
+/**
+ * Cuts formatted text where splitText would cut the same words: whitespace
+ * folded to single spaces, the ends trimmed, and each piece keeping the
+ * formatting of the words in it.
+ *
+ * @param runs - The text and its formatting.
+ * @param maximumCharacters - The longest a piece may be.
+ * @returns The pieces, each as formatted text.
+ */
+function splitRuns(runs: readonly TextRun[], maximumCharacters: number): TextRun[][] {
+  // Character by character, as the text units splitText slices by.
+  const letters: Array<{ character: string; run: TextRun }> = []
+
+  for (const run of runs) {
+    for (let index = 0; index < run.text.length; index += 1) {
+      const character = run.text[index] ?? ""
+      const space = /\s/.test(character)
+
+      if (!space || (letters.length > 0 && letters.at(-1)?.character !== " ")) {
+        letters.push({ character: space ? " " : character, run })
+      }
+    }
+  }
+
+  while (letters.at(-1)?.character === " ") {
+    letters.pop()
+  }
+
+  const text = letters.map((letter): string => letter.character).join("")
+  let from = 0
+
+  return splitText(text, maximumCharacters).map((piece: string): TextRun[] => {
+    const start = text.indexOf(piece, from)
+    const grouped: Array<{ run: TextRun; source: TextRun }> = []
+    from = start + piece.length
+
+    for (const { character, run } of letters.slice(start, start + piece.length)) {
+      const last = grouped.at(-1)
+
+      if (last?.source === run) {
+        last.run.text += character
+      } else {
+        grouped.push({ run: { ...run, text: character }, source: run })
+      }
+    }
+
+    return grouped.map(({ run }) => run)
+  })
+}
+
 function resolveChunkCharacters(
   baselineCharacters: number,
   availableWidth: number,
@@ -790,7 +860,8 @@ function estimateFlowItemHeight(
         item.block,
         input.answers,
         metrics.contentWidth,
-        item.answerOverride
+        item.answerOverride,
+        metrics.lineSpacing
       )
       break
     case "columns": {
@@ -800,7 +871,8 @@ function estimateFlowItemHeight(
             item.left.block,
             input.answers,
             columnWidth,
-            item.left.answerOverride
+            item.left.answerOverride,
+            metrics.lineSpacing
           )
         : 0
       const rightHeight = item.right
@@ -808,7 +880,8 @@ function estimateFlowItemHeight(
             item.right.block,
             input.answers,
             columnWidth,
-            item.right.answerOverride
+            item.right.answerOverride,
+            metrics.lineSpacing
           )
         : 0
 
@@ -843,36 +916,42 @@ function estimateBlockHeight(
   block: TemplateBlock,
   answers: Record<string, unknown>,
   availableWidth: number,
-  answerOverride?: string
+  answerOverride?: string,
+  lineSpacing?: number
 ): number {
   switch (block.type) {
     case "heading": {
       const baselineCharacters =
         block.level === 1 ? 55 : block.level === 2 ? 65 : 75
-      const lineHeight = block.level === 1 ? 29 : block.level === 2 ? 24 : 20
+      const size = block.level === 1 ? 20 : block.level === 2 ? 16 : 13
+      const lineHeight = lineSpacing ? size * lineSpacing : block.level === 1 ? 29 : block.level === 2 ? 24 : 20
+      const scale = runScale(block.runs, size)
 
       return (
         estimateWrappedTextHeight(
           block.text,
-          scalePdfCharacterEstimate(baselineCharacters, availableWidth),
-          lineHeight
+          scalePdfCharacterEstimate(baselineCharacters, availableWidth) / scale,
+          lineHeight * scale
         ) + 16
       )
     }
-    case "paragraph":
+    case "paragraph": {
+      const scale = runScale(block.runs, 10)
+
       return (
         estimateWrappedTextHeight(
           block.text,
-          scalePdfCharacterEstimate(88, availableWidth),
-          15
+          scalePdfCharacterEstimate(88, availableWidth) / scale,
+          10 * (lineSpacing ?? 1.5) * scale
         ) + 10
       )
+    }
     case "bullet_list":
     case "numbered_list":
       return (
         block.items.reduce(
-          (height: number, item: string): number =>
-            height + estimateListEntryHeight(item, availableWidth),
+          (height: number, item: string, index: number): number =>
+            height + estimateListEntryHeight(item, availableWidth, block.itemRuns?.[index]) * ((lineSpacing ?? 1.5) / 1.5),
           0
         ) + 8
       )
@@ -961,15 +1040,36 @@ function hasBranding(content: TemplateContent): boolean {
 
 function estimateListEntryHeight(
   value: string,
-  availableWidth: number
+  availableWidth: number,
+  runs?: readonly TextRun[] | null
 ): number {
+  const scale = runScale(runs, 10)
+
   return (
     estimateWrappedTextHeight(
       value,
-      scalePdfCharacterEstimate(82, availableWidth),
-      15
+      scalePdfCharacterEstimate(82, availableWidth) / scale,
+      15 * scale
     ) + 4
   )
+}
+
+/**
+ * How many times the block's own size its biggest words are. Estimates treat
+ * every word as that big: a line stands as tall as its tallest word, so a
+ * little extra room is the price of never running off the page.
+ *
+ * @param runs - The text's formatting, if it has any.
+ * @param size - The block's own font size.
+ * @returns At least 1.
+ */
+function runScale(runs: readonly TextRun[] | null | undefined, size: number): number {
+  return Math.max(1, ...(runs ?? []).map((run: TextRun): number => (run.size ?? size) / size))
+}
+
+// Bigger words fill a piece faster, down as well as across.
+function scaleChunk(characters: number, runs: readonly TextRun[], size: number): number {
+  return Math.max(1, Math.floor(characters / runScale(runs, size) ** 2))
 }
 
 function estimateTableRowHeight(

@@ -14,6 +14,7 @@ import {
   isStaticTemplateBlock,
   TemplateStaticBlock
 } from "@/components/templates/template-static-block"
+import { BLOCK_GAP, pageStyle, PlacedImages, printableMargin } from "@/components/templates/printed-page"
 import {
   groupTemplateRenderBlocks,
   type TemplateWebRenderGroup
@@ -77,18 +78,14 @@ export function TemplatePreview({
   selectedBlockId = null,
   surface = "screen"
 }: TemplatePreviewProps): ReactElement {
-  // CSS percentage margins on every side resolve against container width.
-  // Scaling points by page width therefore preserves one physical margin.
-  const marginPercent =
-    (renderPlan.geometry.marginPoints / renderPlan.geometry.widthPoints) * 100
   const ink = resolveDocumentSurfaceInk(surface, renderPlan.branding)
   const paperStyle = {
     "--template-accent": ink.accent,
     "--template-primary": ink.primary,
-    aspectRatio: `${renderPlan.geometry.widthPoints} / ${renderPlan.geometry.heightPoints}`
+    ...pageStyle(renderPlan)
   } as CSSProperties
   const printableAreaStyle = {
-    margin: `${marginPercent}%`
+    margin: printableMargin(renderPlan)
   } as CSSProperties
   const showEditorialGutter =
     onBlockSelect !== undefined || onRequestInsert !== undefined
@@ -97,7 +94,7 @@ export function TemplatePreview({
     <article
       aria-label="Template preview"
       className={cn(
-        "mx-auto flex min-h-[34rem] w-full flex-col rounded-[2px] border border-border bg-card text-foreground shadow-[0_8px_30px_rgba(37,35,41,0.08),0_1px_2px_rgba(37,35,41,0.08)]",
+        "relative mx-auto flex min-h-[34rem] w-full flex-col rounded-[2px] border border-border bg-card text-foreground shadow-[0_8px_30px_rgba(37,35,41,0.08),0_1px_2px_rgba(37,35,41,0.08)]",
         renderPlan.layout.orientation === "portrait"
           ? "max-w-[46rem]"
           : "max-w-[64rem]",
@@ -153,6 +150,7 @@ export function TemplatePreview({
             />
           )}
       </div>
+      <PlacedImages plan={renderPlan} />
     </article>
   )
 }
@@ -414,12 +412,7 @@ function PreviewSection({
 
   return (
     <section
-      className={cn(
-        "flex min-w-0 flex-col",
-        density === "compact" && "gap-1.5",
-        density === "balanced" && "gap-3",
-        density === "comfortable" && "gap-5"
-      )}
+      className={cn("flex min-w-0 flex-col", BLOCK_GAP[density])}
       data-keep-together={section.keepTogether ? "true" : undefined}
       data-page-break-before={section.pageBreakBefore ? "true" : undefined}
       data-template-section-id={section.id ?? "implicit"}
@@ -499,12 +492,7 @@ function PreviewFieldGroup({
 
   return (
     <section
-      className={cn(
-        "flex min-w-0 flex-col",
-        density === "compact" && "gap-1.5",
-        density === "balanced" && "gap-3",
-        density === "comfortable" && "gap-5"
-      )}
+      className={cn("flex min-w-0 flex-col", BLOCK_GAP[density])}
       data-keep-together={group.keepTogether ? "true" : undefined}
       data-template-field-group-columns={group.columns}
       data-template-field-group-id={group.id ?? "ungrouped"}
@@ -524,9 +512,7 @@ function PreviewFieldGroup({
           group.columns === 1
             ? "grid-cols-1"
             : "grid-cols-1 sm:grid-cols-[repeat(2,minmax(0,1fr))]",
-          density === "compact" && "gap-1.5",
-          density === "balanced" && "gap-3",
-          density === "comfortable" && "gap-5",
+          BLOCK_GAP[density],
           group.columns === 2 && twoColumnContentPadding
         )}
       >

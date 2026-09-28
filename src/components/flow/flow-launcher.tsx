@@ -6,9 +6,8 @@ import { type FormEvent, type KeyboardEvent, type ReactElement, useRef, useState
 
 import { createGeneratedDocumentAction } from "@/app/(dashboard)/documents/actions"
 import { createTemplateAction } from "@/app/(dashboard)/templates/actions"
-import { FlowMark } from "@/components/brand/flow-mark"
 import { handOffToFlow } from "@/components/flow/flow-handoff"
-import { Sheet, SheetClose, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
+import { FlowWindow } from "@/components/flow/flow-window"
 import { cn } from "@/lib/utils"
 import type { WorkspaceFlowAnswer, WorkspaceFlowItem } from "@/services/workspace-flow-service"
 
@@ -24,8 +23,8 @@ type Turn = Readonly<{
 }>
 
 /**
- * Flow from any workspace page: a floating button that opens a conversation
- * which finds the member's work or starts something new. The conversation
+ * Flow from any workspace page: Flow's button, which opens a conversation
+ * that finds the member's work or starts something new. The conversation
  * stays as the member moves between pages.
  *
  * @returns The launcher and its conversation.
@@ -34,26 +33,10 @@ export function FlowLauncher(): ReactElement {
   const [open, setOpen] = useState(false)
 
   return (
-    <Sheet onOpenChange={setOpen} open={open}>
-      <SheetTrigger
-        aria-label="Flow"
-        className="fixed right-4 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-40 grid size-13 place-items-center rounded-full border border-border bg-popover text-primary shadow-lg outline-none transition-transform hover:scale-105 focus-visible:ring-2 focus-visible:ring-ring/40 active:scale-95 motion-reduce:transition-none md:right-6 md:bottom-6"
-        data-slot="flow-launcher"
-        title="Flow"
-      >
-        <FlowMark aria-hidden="true" className="size-6" />
-      </SheetTrigger>
-      <SheetContent
-        backdropClassName="md:bg-transparent md:backdrop-blur-none"
-        className="md:inset-x-auto md:right-6 md:bottom-24 md:max-h-[min(38rem,calc(100dvh-8rem))] md:w-[24rem] md:rounded-[18px] md:border-b md:[&>span:first-child]:hidden"
-      >
-        <div className="flex items-center justify-between">
-          <SheetTitle>Flow</SheetTitle>
-          <SheetClose />
-        </div>
-        <FlowConversation onLeave={() => setOpen(false)} />
-      </SheetContent>
-    </Sheet>
+    // On a phone it rests above the tab bar, which is 4.5rem tall.
+    <FlowWindow onOpenChange={setOpen} open={open} phoneBottom={72}>
+      <FlowConversation onLeave={() => setOpen(false)} />
+    </FlowWindow>
   )
 }
 
@@ -126,7 +109,8 @@ function FlowConversation({ onLeave }: { onLeave: () => void }): ReactElement {
   }
 
   return (
-    <div className="flex flex-col gap-3 px-1">
+    <>
+      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 pb-2">
       {turns.length === 0 ? (
         <div className="grid gap-2 py-2">
           <p className="px-1 pb-1 text-lg font-medium">What do you need?</p>
@@ -176,8 +160,9 @@ function FlowConversation({ onLeave }: { onLeave: () => void }): ReactElement {
           {busy ? <li className="text-sm text-muted-foreground">Thinking…</li> : null}
         </ol>
       )}
+      </div>
       <form
-        className="sticky bottom-0 bg-card pt-1"
+        className="px-3 pt-1 pb-3"
         onSubmit={(event: FormEvent<HTMLFormElement>) => {
           event.preventDefault()
           void send(text)
@@ -187,8 +172,9 @@ function FlowConversation({ onLeave }: { onLeave: () => void }): ReactElement {
           Ask Flow
         </label>
         <div className="relative">
+          {/* One line tall, growing with the message to about six. */}
           <textarea
-            className="min-h-20 w-full resize-none rounded-[12px] border border-border bg-card px-3 py-2.5 pr-12 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
+            className="field-sizing-content max-h-36 min-h-10 w-full resize-none rounded-[12px] border border-border bg-card px-3 py-2.5 pr-12 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
             disabled={busy}
             id="workspace-flow-composer"
             maxLength={2_000}
@@ -199,7 +185,7 @@ function FlowConversation({ onLeave }: { onLeave: () => void }): ReactElement {
           />
           <button
             aria-label="Send to Flow"
-            className="absolute right-2 bottom-2.5 grid size-8 place-items-center rounded-full text-primary outline-none transition-opacity hover:opacity-75 disabled:opacity-35 focus-visible:ring-2 focus-visible:ring-ring/40"
+            className="absolute right-1.5 bottom-1 grid size-8 place-items-center rounded-full text-primary outline-none transition-opacity hover:opacity-75 disabled:opacity-35 focus-visible:ring-2 focus-visible:ring-ring/40"
             disabled={busy || text.trim().length < 2}
             type="submit"
           >
@@ -207,6 +193,6 @@ function FlowConversation({ onLeave }: { onLeave: () => void }): ReactElement {
           </button>
         </div>
       </form>
-    </div>
+    </>
   )
 }

@@ -466,7 +466,7 @@ describe("folder creation beside a colleague's write", () => {
       )
     ).resolves.toMatchObject({ id: "folder-1", name: "Leases" })
 
-    client.failNextWrites("folders", "40001", 4)
+    client.failNextWrites("folders", "40001", 7)
 
     await expect(
       createFolder(

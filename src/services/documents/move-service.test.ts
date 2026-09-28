@@ -167,7 +167,7 @@ describe("moving files", (): void => {
 
     expect(folder.parentFolderId).toBe("folder-2")
 
-    client.failNextWrites("folders", "40001", 4)
+    client.failNextWrites("folders", "40001", 7)
 
     await expect(
       moveFolder(

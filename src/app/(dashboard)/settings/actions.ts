@@ -25,6 +25,7 @@ import {
   updateProfile,
   updateNotificationPreferences,
 } from "@/services/organization-service"
+import { profileSchema } from "@/types/profile"
 
 const SETTINGS_ACCESS_PATH = "/settings#roles-and-access"
 const permissionSchema = z.enum(ORGANIZATION_PERMISSION_ACTIONS)
@@ -43,14 +44,6 @@ const roleArchiveSchema = z.object({
   roleId: z.string().uuid(),
 })
 
-const updateProfileSchema = z.object({
-  displayName: z.string().min(1, "Display name is required.").max(200).trim(),
-  phoneNumber: z
-    .string()
-    .regex(/^\+[1-9]\d{1,14}$/, "Phone number must be in E.164 format (e.g. +2348001234567).")
-    .nullable(),
-})
-
 const updatePreferencesSchema = z.object({
   organizationId: z.string().uuid("Organization ID is required."),
   emailNotificationsEnabled: z.boolean(),
@@ -63,12 +56,9 @@ const updatePreferencesSchema = z.object({
  * @param formData - Form containing displayName and phoneNumber fields.
  */
 export async function updateProfileAction(formData: FormData): Promise<void> {
-  const rawDisplayName = getFormString(formData, "displayName")
-  const rawPhoneNumber = getFormString(formData, "phoneNumber")
-
-  const parsed = updateProfileSchema.safeParse({
-    displayName: rawDisplayName,
-    phoneNumber: rawPhoneNumber === "" ? null : rawPhoneNumber,
+  const parsed = profileSchema.safeParse({
+    displayName: getFormString(formData, "displayName"),
+    phoneNumber: getFormString(formData, "phoneNumber"),
   })
 
   if (!parsed.success) {

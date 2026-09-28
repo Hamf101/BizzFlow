@@ -131,9 +131,6 @@ export type CancelTaskReminderInput = GetTaskInput & {
   reminderId: string
 }
 
-/** Input for listing the reminders scheduled against one task. */
-export type ListTaskRemindersInput = GetTaskInput
-
 /** Input for the trusted assignment notification job. */
 export type NotifyTaskAssigneeInput = {
   organizationId: string
