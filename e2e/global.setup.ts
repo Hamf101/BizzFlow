@@ -110,7 +110,7 @@ async function signIn(
 
   await page.waitForURL(/\/dashboard/, { timeout: 30_000 })
   await expect(
-    page.getByRole("main").getByText(tenant.organizationName, { exact: true })
+    page.getByRole("complementary").getByText(`${tenant.organizationName}'s workspace`, { exact: true })
   ).toBeVisible()
 }
 

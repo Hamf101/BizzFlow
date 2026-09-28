@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation"
 import type { ReactElement, ReactNode } from "react"
 
+import { DatedTitle } from "@/components/navigation/dated-title"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -101,12 +102,9 @@ export default async function SettingsPage(): Promise<ReactElement> {
 
   return (
     <SettingsShell>
-      <section className="flex flex-col gap-2">
+      <DatedTitle>
         <h1 className="text-2xl font-medium tracking-normal">Settings</h1>
-        <p className="text-[13px] text-muted-foreground">
-          {context.organization.name}
-        </p>
-      </section>
+      </DatedTitle>
 
       {isOwner ? (
         <RolesAndAccessSection

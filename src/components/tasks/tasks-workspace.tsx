@@ -5,6 +5,7 @@ import { ListFilterChips } from "@/components/data/list-filter-chips"
 import { ListPagination } from "@/components/data/list-pagination"
 import { ListQuery } from "@/components/data/list-query"
 import { type ListSavedViews, ListViewMenu, ListViewTitle } from "@/components/data/list-view-menu"
+import { DatedTitle } from "@/components/navigation/dated-title"
 import { formatMemberName } from "@/components/people/member-name"
 import { NewTaskDialog } from "@/components/tasks/new-task-dialog"
 import {
@@ -74,15 +75,17 @@ export function TasksWorkspace({
       {/* The real space keeps the accessible name "Tasks 55 tasks" rather
           than "Tasks55 tasks"; the small margin keeps the visual gap. */}
       <div className="flex items-center justify-between gap-3">
-        <h1 className="min-w-0 text-2xl leading-none font-medium tracking-[-0.02em]">
-          <ListViewTitle title="Tasks" views={listViews} />{" "}
-          <span
-            aria-label={`${total} ${total === 1 ? "task" : "tasks"}`}
-            className="ml-0.5 text-xl font-normal text-muted-foreground"
-          >
-            {total}
-          </span>
-        </h1>
+        <DatedTitle>
+          <h1 className="min-w-0 text-2xl leading-none font-medium tracking-[-0.02em]">
+            <ListViewTitle title="Tasks" views={listViews} />{" "}
+            <span
+              aria-label={`${total} ${total === 1 ? "task" : "tasks"}`}
+              className="ml-0.5 text-xl font-normal text-muted-foreground"
+            >
+              {total}
+            </span>
+          </h1>
+        </DatedTitle>
         <div className="flex shrink-0 gap-2">
           <ListViewMenu
             adjusted={isTaskViewAdjusted(view)}

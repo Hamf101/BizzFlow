@@ -6,6 +6,7 @@ import { ListFilterChips } from "@/components/data/list-filter-chips"
 import { ListPagination } from "@/components/data/list-pagination"
 import { ListQuery } from "@/components/data/list-query"
 import { type ListSavedViews, ListViewMenu, ListViewTitle } from "@/components/data/list-view-menu"
+import { DatedTitle } from "@/components/navigation/dated-title"
 import {
   getTemplateStatusOptions,
   getTemplateViewMenuSections,
@@ -79,15 +80,17 @@ export function TemplatesWorkspace({
       {/* The real space keeps the accessible name "Templates 12 templates"
           rather than "Templates12 templates". */}
       <div className="flex items-center justify-between gap-3">
-        <h1 className="min-w-0 text-2xl leading-none font-medium tracking-[-0.02em]">
-          <ListViewTitle title="Templates" views={listViews} />{" "}
-          <span
-            aria-label={`${total} ${total === 1 ? "template" : "templates"}`}
-            className="ml-0.5 text-xl font-normal text-muted-foreground"
-          >
-            {total}
-          </span>
-        </h1>
+        <DatedTitle>
+          <h1 className="min-w-0 text-2xl leading-none font-medium tracking-[-0.02em]">
+            <ListViewTitle title="Templates" views={listViews} />{" "}
+            <span
+              aria-label={`${total} ${total === 1 ? "template" : "templates"}`}
+              className="ml-0.5 text-xl font-normal text-muted-foreground"
+            >
+              {total}
+            </span>
+          </h1>
+        </DatedTitle>
         <div className="flex shrink-0 gap-2">
           <ListViewMenu
             adjusted={isTemplateViewAdjusted(view)}

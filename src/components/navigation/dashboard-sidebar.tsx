@@ -19,6 +19,12 @@ type DashboardSidebarProps = {
   signOutAction: () => Promise<void>
 }
 
+/** "Hawn's workspace"; a name ending in s takes the apostrophe alone, as in "Acme Tools' workspace". */
+function workspaceLabel(name: string | null): string {
+  if (!name) return "Workspace"
+  return `${name}${/s$/i.test(name) ? "'" : "'s"} workspace`
+}
+
 /**
  * Renders the responsive dashboard sidebar and owns its desktop collapse state.
  *
@@ -101,8 +107,8 @@ export function DashboardSidebar({
       </div>
 
       <div className={cn("hidden md:block", collapsed && "md:hidden")}>
-        <span className="editorial-kicker font-semibold text-primary">
-          Workspace
+        <span className="editorial-kicker line-clamp-2 font-semibold text-primary">
+          {workspaceLabel(account.organizationName)}
         </span>
       </div>
 

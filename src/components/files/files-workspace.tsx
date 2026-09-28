@@ -47,6 +47,7 @@ import { FilesLayoutSwitch } from "@/components/files/files-layout-switch"
 import type { MoveDestination } from "@/components/files/move-to-dialog"
 import { NewFileMenu, type NewFolderForm } from "@/components/files/new-file-menu"
 import { SelectionBar } from "@/components/files/selection-bar"
+import { DatedTitle } from "@/components/navigation/dated-title"
 import { formatMediumDate } from "@/lib/date-format"
 import { buildDocumentFolderPath } from "@/lib/page-document-folders"
 import {
@@ -474,15 +475,17 @@ export function FilesWorkspace({
         {/* The real space keeps the accessible name "Files 12 items" rather
             than "Files12 items". */}
         <div className="flex items-center justify-between gap-3">
-          <h1 className="min-w-0 text-2xl leading-none font-medium tracking-[-0.02em]">
-            <ListViewTitle title="Files" views={listViews} />{" "}
-            <span
-              aria-label={`${total} ${total === 1 ? "item" : "items"}`}
-              className="ml-0.5 text-xl font-normal text-muted-foreground"
-            >
-              {total}
-            </span>
-          </h1>
+          <DatedTitle>
+            <h1 className="min-w-0 text-2xl leading-none font-medium tracking-[-0.02em]">
+              <ListViewTitle title="Files" views={listViews} />{" "}
+              <span
+                aria-label={`${total} ${total === 1 ? "item" : "items"}`}
+                className="ml-0.5 text-xl font-normal text-muted-foreground"
+              >
+                {total}
+              </span>
+            </h1>
+          </DatedTitle>
           <div className="flex shrink-0 gap-2">
             <ListViewMenu
               adjusted={isFileViewAdjusted(view)}

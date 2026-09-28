@@ -127,6 +127,7 @@ async function getDashboardAccount(
       organizationName: context.organization.name,
       permissionSubject: context.membership,
       role: context.membership.role,
+      roleName: context.membership.roleName,
     }
   } catch (error: unknown) {
     console.warn("dashboard_account_load_failed", {

@@ -51,7 +51,10 @@ test.describe("onboarding", () => {
       page.getByRole("status").filter({ hasText: "Workspace created" })
     ).toBeVisible()
     await expect(page.getByText("Welcome back, Talora!", { exact: true })).toBeVisible()
-    await expect(page.getByRole("main").getByText(organizationName, { exact: true })).toBeVisible()
+    // The workspace's name sits in the account menu on every screen size.
+    await page.getByRole("button", { name: /^Open account menu/ }).click()
+    await expect(page.getByRole("menu").getByText(organizationName)).toBeVisible()
+    await page.keyboard.press("Escape")
     await expect(page.getByRole("region", { name: "Waiting on you" })).toBeVisible()
 
     // The creator is the owner; every permission the app grants keys off this.

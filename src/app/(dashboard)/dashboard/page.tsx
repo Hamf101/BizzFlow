@@ -9,6 +9,7 @@ import {
   selectDueThisWeek,
 } from "@/components/dashboard/dashboard-view"
 import { OnboardingChecklist } from "@/components/dashboard/onboarding-checklist"
+import { DatedTitle } from "@/components/navigation/dated-title"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
 import { getPageErrorMessage } from "@/lib/page-errors"
@@ -50,11 +51,6 @@ export default async function DashboardPage(): Promise<ReactElement> {
       failureEvent: "dashboard_context_load_failed",
     })
   const now = new Date()
-  const today = new Intl.DateTimeFormat("en", {
-    day: "numeric",
-    month: "long",
-    weekday: "long",
-  }).format(now)
 
   if (!context) {
     if (!contextErrorMessage) {
@@ -279,12 +275,9 @@ export default async function DashboardPage(): Promise<ReactElement> {
         <p className="text-2xl leading-none font-medium tracking-[-0.02em] lg:col-start-2 lg:row-start-1">
           {firstName ? `Welcome back, ${firstName}!` : "Welcome back!"}
         </p>
-        <div className="flex flex-col gap-2 lg:col-start-1 lg:row-start-1">
+        <DatedTitle className="lg:col-start-1 lg:row-start-1">
           <h1 className="text-2xl leading-none font-medium tracking-[-0.02em]">Dashboard</h1>
-          <p className="text-[13px] text-muted-foreground">
-            {today} · <span>{context.organization.name}</span>
-          </p>
-        </div>
+        </DatedTitle>
       </header>
 
       {/* Setting up is for those who can; a new staff member starts at their own work. */}
