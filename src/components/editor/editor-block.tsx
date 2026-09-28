@@ -70,6 +70,8 @@ export type CanvasActions = Readonly<{
   controller: EditorController
   designable: boolean
   fields: "design" | "fill" | "read"
+  /** Whether the page is a phone's reflowed column rather than sheets of paper. */
+  narrow: boolean
   /** The caret request for one line, when it is that line's turn. */
   focusFor: (caretKey: string) => FocusRequest | null
   onAnswerChange: (fieldKey: string, value: unknown) => void
@@ -613,26 +615,29 @@ function BlockToolbar({ actions, block }: { actions: CanvasActions; block: Templ
       ) : null}
       {block.type === "image" ? (
         <>
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <Button className="h-10 gap-1 px-2 font-normal md:pointer-fine:h-8" size="sm" type="button" variant="ghost">
-                  {block.placement ? "In front of text" : "In line"}
-                  <ChevronDown aria-hidden="true" className="size-3.5 text-muted-foreground" />
-                </Button>
-              }
-            />
-            <DropdownMenuContent align="start" className="w-48">
-              <DropdownMenuItem onClick={() => controller.updateBlock({ ...block, placement: undefined })}>
-                <WrapText aria-hidden="true" />
-                In line
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => !block.placement && placeFreely(block)}>
-                <BringToFront aria-hidden="true" />
-                In front of text
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {/* A phone's column has no pages to place a picture on, only a way back into the text. */}
+          {block.placement || !actions.narrow ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button className="h-10 gap-1 px-2 font-normal md:pointer-fine:h-8" size="sm" type="button" variant="ghost">
+                    {block.placement ? "In front of text" : "In line"}
+                    <ChevronDown aria-hidden="true" className="size-3.5 text-muted-foreground" />
+                  </Button>
+                }
+              />
+              <DropdownMenuContent align="start" className="w-48">
+                <DropdownMenuItem onClick={() => controller.updateBlock({ ...block, placement: undefined })}>
+                  <WrapText aria-hidden="true" />
+                  In line
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => !block.placement && placeFreely(block)}>
+                  <BringToFront aria-hidden="true" />
+                  In front of text
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null}
           <ToolButton label="Settings" onClick={() => controller.openSettings(block.id)}>
             <Settings2 />
           </ToolButton>

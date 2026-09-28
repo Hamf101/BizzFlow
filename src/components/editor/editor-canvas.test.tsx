@@ -20,12 +20,14 @@ beforeAll(() => {
 })
 afterEach(() => { act(() => root?.unmount()); document.body.replaceChildren() })
 
-function Canvas({ editable = true, narrow = true }: { editable?: boolean; narrow?: boolean }) {
-  const history = useEditorHistory<TemplateContentV3>({
-    ...createEmptyDocumentContent(),
-    blocks: [{ id: B, type: "paragraph" as const, alignment: "left" as const, text: "Pay monthly." }],
-    sections: [{ id: S, label: "Terms", startBlockId: B, keepTogether: false, pageBreakBefore: false }],
-  })
+const TERMS: TemplateContentV3 = {
+  ...createEmptyDocumentContent(),
+  blocks: [{ id: B, type: "paragraph" as const, alignment: "left" as const, text: "Pay monthly." }],
+  sections: [{ id: S, label: "Terms", startBlockId: B, keepTogether: false, pageBreakBefore: false }],
+}
+
+function Canvas({ editable = true, initial = TERMS, narrow = true }: { editable?: boolean; initial?: TemplateContentV3; narrow?: boolean }) {
+  const history = useEditorHistory<TemplateContentV3>(initial)
   const current = useEditorController({ change: history.set, content: history.state, undo: history.undo })
   useEffect(() => { controller = current })
   return <EditorCanvas allowFiles controller={current} designable={editable} documentTitle="Agreement" fields="design" narrow={narrow} surface="screen" textEditable={editable} zoom={1} />
@@ -84,4 +86,19 @@ it("keeps the active section pieces when the canvas switches from desktop to pho
   expect(document.querySelector('[data-slot="section-pieces"]')).not.toBeNull()
   await act(async () => root.render(<Canvas narrow />))
   expect(document.querySelector('[data-slot="section-pieces"]')).not.toBeNull()
+})
+
+it("offers placing a picture in front of the text only where there are pages to place it on", async () => {
+  const picture = { alignment: "center" as const, altText: "Logo", caption: null, dataUrl: "data:image/png;base64,iVBORw0KGgo=", id: B, type: "image" as const, widthPercent: 50 }
+  const initial = { ...createEmptyDocumentContent(), blocks: [picture] }
+
+  for (const narrow of [false, true]) {
+    root = createRoot(document.body.appendChild(document.createElement("div")))
+    await act(async () => root.render(<Canvas initial={initial} narrow={narrow} />))
+    await act(async () => controller.select(B))
+
+    // A phone's column has no pages, so a picture there stays in the text.
+    expect(Boolean([...document.querySelectorAll("button")].find((button) => button.textContent === "In line"))).toBe(!narrow)
+    act(() => root.unmount())
+  }
 })

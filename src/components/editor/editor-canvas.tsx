@@ -349,6 +349,7 @@ export function EditorCanvas({
     controller,
     designable,
     fields,
+    narrow,
     focusFor(caretKey: string): FocusRequest | null {
       const focus = controller.focus
 
