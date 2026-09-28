@@ -18,6 +18,7 @@ import {
   startTemplateSection,
   stepTemplateBlockSlot,
   updateTemplateBlock,
+  updateTemplateFieldGroup,
   updateTemplateSection,
   withGeneratedFieldKeys
 } from "./template-structure"
@@ -722,6 +723,16 @@ describe("authoring sections, side-by-side fields and keep with next", () => {
     ])
     expect(templateContentV3Schema.safeParse(extended).success).toBe(true)
     expect(parted.fieldGroups).toEqual([])
+  })
+
+  it("labels a group of fields, takes an emptied label away, and keeps the group on one page", () => {
+    const content = createStructuredContent()
+    const relabelled = updateTemplateFieldGroup(content, GROUP_ID, { label: "Signed by" })
+    const unlabelled = updateTemplateFieldGroup(relabelled, GROUP_ID, { keepTogether: false, label: "" })
+
+    expect(relabelled.fieldGroups[0]).toMatchObject({ keepTogether: true, label: "Signed by" })
+    expect(unlabelled.fieldGroups[0]).toMatchObject({ keepTogether: false, label: null })
+    expect(templateContentV3Schema.safeParse(unlabelled).success).toBe(true)
   })
 
   it("keeps a labelled group when its fields go back to one column", () => {

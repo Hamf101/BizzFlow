@@ -41,6 +41,7 @@ import {
   type TemplateBlockSlot,
   type TemplateMoveResult,
   updateTemplateBlock,
+  updateTemplateFieldGroup,
   updateTemplateSection,
 } from "@/types/template-structure"
 
@@ -427,6 +428,9 @@ export function useEditorController({
     turnIntoSection,
     turnSectionInto,
     updateBlock,
+    // Typing a group's label makes one undo step.
+    updateGroup: (groupId: string, patch: Readonly<{ keepTogether?: boolean; label?: string }>, coalesceKey?: string) =>
+      change((current) => updateTemplateFieldGroup(current, groupId, patch), coalesceKey),
     updateSection,
   }
 }

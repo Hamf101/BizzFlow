@@ -563,6 +563,35 @@ export function setFieldSideBySide(
 }
 
 /**
+ * Changes what a group of fields shares: the label printed above it, and
+ * whether it stays on one page. An emptied label takes the label away.
+ *
+ * @param content - Editable version-three content.
+ * @param groupId - The group.
+ * @param change - Its new label, as typed, or whether it keeps together.
+ * @returns The content with the group changed.
+ */
+export function updateTemplateFieldGroup(
+  content: TemplateContentV3,
+  groupId: string,
+  change: Readonly<{ keepTogether?: boolean; label?: string }>
+): TemplateContentV3 {
+  return {
+    ...content,
+    fieldGroups: content.fieldGroups.map(
+      (group: TemplateFieldGroup): TemplateFieldGroup =>
+        group.id !== groupId
+          ? group
+          : {
+              ...group,
+              keepTogether: change.keepTogether ?? group.keepTogether,
+              label: change.label === undefined ? group.label : change.label || null,
+            }
+    ),
+  }
+}
+
+/**
  * Keeps a block on the same page as the one after it, or lets it go.
  *
  * @param content - Editable version-three content.

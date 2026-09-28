@@ -916,7 +916,7 @@ function VisibilityFields({
   )
 }
 
-function CheckboxControl({
+export function CheckboxControl({
   checked,
   id,
   label,

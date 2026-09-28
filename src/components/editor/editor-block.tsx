@@ -45,6 +45,7 @@ import { placeImage, placementOf } from "@/components/editor/image-placement"
 import { RichLine } from "@/components/editor/rich-line"
 import type { EditorController, FocusRequest } from "@/components/editor/use-editor-controller"
 import { RichText } from "@/components/templates/rich-text"
+import { FieldGroupSettings } from "@/components/editor/field-group-settings"
 import { BlockFields } from "@/components/templates/template-block-editor"
 import { TemplateStaticBlock } from "@/components/templates/template-static-block"
 import { Button } from "@/components/ui/button"
@@ -633,6 +634,7 @@ function BlockToolbar({ actions, block }: { actions: CanvasActions; block: Templ
           <PopoverContent className="w-80">
             <PopoverTitle className="mb-3 font-semibold">Field settings</PopoverTitle>
             <BlockFields block={block} blocks={blocks} onChange={(next) => controller.updateBlock(next, `settings:${block.id}`)} />
+            {group ? <FieldGroupSettings controller={controller} group={group} /> : null}
           </PopoverContent>
         </Popover>
       ) : null}
