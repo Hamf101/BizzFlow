@@ -125,6 +125,17 @@ describe("publish template action", () => {
     })
   })
 
+  it("says Update on a published template updated it", async () => {
+    vi.mocked(updateDocumentTemplate).mockResolvedValue(createTemplate(2, "published"))
+    vi.mocked(publishDocumentTemplate).mockResolvedValue(createTemplate(2, "published"))
+
+    await expect(
+      publishTemplateAction(createPublishFormData(1))
+    ).rejects.toThrow(
+      `NEXT_REDIRECT:/templates/${TEMPLATE_ID}/edit?feedback=template_updated`
+    )
+  })
+
   it("does not publish a newer revision discovered after a no-op save", async () => {
     vi.mocked(updateDocumentTemplate).mockRejectedValue(
       new TemplateServiceError("No template changes were provided.", 400)
@@ -302,5 +313,6 @@ function createTemplate(
     publishedAt:
       status === "published" ? "2026-07-18T12:00:00.000Z" : null,
     archivedAt: null,
+    publishedRevision: status === "published" ? 1 : null,
   }
 }

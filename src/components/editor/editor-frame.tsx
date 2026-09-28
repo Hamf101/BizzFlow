@@ -66,7 +66,7 @@ type EditorFrameProps<Mode extends string> = {
   pageWidthPoints: number
   panel?: (narrow: boolean) => ReactNode
   primary?: ReactNode
-  /** How saving stands; "blocked" waits on a fix, "unsaved-local" on Update. */
+  /** How saving stands; "blocked" waits on a fix, "unsaved-local" on Save. */
   saveStatus: AutosaveStatus | "blocked" | "unsaved-local" | null
   title: string
   titleEditable: boolean

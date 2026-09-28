@@ -7,9 +7,12 @@ import {
 } from "@/lib/image-header.test-support"
 import {
   createDocumentTemplate,
+  getDocumentTemplate,
+  getDocumentTemplateVersion,
   listDocumentTemplateCategories,
   createGeneratedDocument,
   listDocumentTemplates,
+  listDocumentTemplateVersions,
   publishDocumentTemplate,
   recordDocumentRecentAccess,
   updateDocumentTemplate,
@@ -36,6 +39,7 @@ type FakeOperation = "select" | "insert" | "update" | "upsert" | "delete"
 type FakeOperationHook = (tableName: string, operation: FakeOperation) => void
 
 const ORG_ID = "10000000-0000-4000-8000-000000000001"
+const OTHER_ORG_ID = "10000000-0000-4000-8000-000000000002"
 const MANAGER_ID = "20000000-0000-4000-8000-000000000001"
 const STAFF_ID = "20000000-0000-4000-8000-000000000002"
 const EXTERNAL_ID = "20000000-0000-4000-8000-000000000003"
@@ -268,6 +272,10 @@ class FakeClient {
   ) {}
 
   from(tableName: string): FakeQuery {
+    if (tableName === "published_document_templates") {
+      this.tables.published_document_templates = publishedTemplates(this.tables)
+    }
+
     return new FakeQuery(tableName, this.tables, this.beforeOperation)
   }
 
@@ -311,6 +319,32 @@ class FakeClient {
       error: null,
     }
   }
+}
+
+// Stands in for the published_document_templates view: each published
+// template as its version at published_revision. A fixture with no versions
+// was last published as its working copy stands.
+function publishedTemplates(tables: FakeTables): FakeRow[] {
+  return tables.document_templates
+    .filter((row: FakeRow): boolean => row.status === "published")
+    .map((row: FakeRow): FakeRow => {
+      const version = (tables.document_template_versions ?? []).find(
+        (candidate: FakeRow): boolean =>
+          candidate.template_id === row.id && candidate.revision === row.published_revision
+      )
+
+      return version
+        ? {
+            ...row,
+            content: version.content,
+            description: version.description,
+            published_at: version.published_at,
+            revision: version.revision,
+            title: version.title,
+            updated_at: version.published_at
+          }
+        : { ...row }
+    })
 }
 
 function withDatabaseDefaults(tableName: string, payload: FakeRow): FakeRow {
@@ -464,7 +498,7 @@ describe("template categories", () => {
       { client: client as never }
     )
 
-    expect(templates).toHaveLength(3)
+    expect(templates.map((template) => template.category)).toEqual(["Safety", null])
   })
 
   it("lists distinct categories alphabetically, excluding uncategorised", async () => {
@@ -621,7 +655,7 @@ describe("template service", () => {
     expect(draft.content).toMatchObject({ schemaVersion: 2 })
   })
 
-  it("shows all template statuses to managers and only published templates to staff", async () => {
+  it("offers managers and staff alike only published templates to start from", async () => {
     const client = new FakeClient(createBaseTables())
 
     const managerTemplates = await listDocumentTemplates(
@@ -633,13 +667,8 @@ describe("template service", () => {
       { client: client as never }
     )
 
-    expect(managerTemplates.map((template) => template.status)).toEqual([
-      "draft",
-      "published"
-    ])
-    expect(staffTemplates.map((template) => template.status)).toEqual([
-      "published"
-    ])
+    expect(managerTemplates.map((template) => template.id)).toEqual([TEMPLATE_ID])
+    expect(staffTemplates.map((template) => template.id)).toEqual([TEMPLATE_ID])
     await expect(
       listDocumentTemplates(
         { actorUserId: EXTERNAL_ID, organizationId: ORG_ID },
@@ -900,27 +929,106 @@ describe("template service", () => {
     ).rejects.toMatchObject({ statusCode: 409 })
   })
 
-  it("rejects critical regressions when updating a published template", async () => {
+  it("keeps a published template's edits in its working copy until Update, which checks them", async () => {
     const tables = createBaseTables()
+    const published = createUsableTemplateContent()
+    tables.document_templates[0].published_revision = 1
+    tables.document_template_versions = [
+      {
+        content: published,
+        description: null,
+        org_id: ORG_ID,
+        published_at: "2026-07-17T19:00:00.000Z",
+        published_by: MANAGER_ID,
+        revision: 1,
+        template_id: TEMPLATE_ID,
+        title: "Published handbook"
+      }
+    ]
     const client = new FakeClient(tables)
+    const deps = { client: client as never, createId: (): string => CREATED_DOCUMENT_ID }
 
+    // Work in progress saves, however unfinished.
+    const edited = await updateDocumentTemplate(
+      {
+        actorUserId: MANAGER_ID,
+        organizationId: ORG_ID,
+        templateId: TEMPLATE_ID,
+        expectedRevision: 1,
+        title: "Handbook, being rewritten",
+        content: createBlankTemplateContent()
+      },
+      deps
+    )
+
+    expect(edited).toMatchObject({ publishedRevision: 1, revision: 2, title: "Handbook, being rewritten" })
+
+    // Staff, and the documents they start, still get what was published.
+    const seen = await getDocumentTemplate(
+      { actorUserId: STAFF_ID, organizationId: ORG_ID, templateId: TEMPLATE_ID },
+      deps
+    )
+    const generated = await createGeneratedDocument(
+      { actorUserId: STAFF_ID, organizationId: ORG_ID, templateId: TEMPLATE_ID },
+      deps
+    )
+
+    expect(seen).toMatchObject({ content: parseTemplateContent(published), revision: 1, title: "Published handbook" })
+    expect(generated).toMatchObject({ templateSnapshot: parseTemplateContent(published), title: "Published handbook" })
+    expect(tables.documents.find((row: FakeRow): boolean => row.id === CREATED_DOCUMENT_ID)?.template_revision).toBe(1)
+
+    // Update is where the checks stand between the working copy and staff.
     await expect(
-      updateDocumentTemplate(
-        {
-          actorUserId: MANAGER_ID,
-          organizationId: ORG_ID,
-          templateId: TEMPLATE_ID,
-          expectedRevision: 1,
-          content: createBlankTemplateContent()
-        },
-        { client: client as never }
+      publishDocumentTemplate(
+        { actorUserId: MANAGER_ID, organizationId: ORG_ID, templateId: TEMPLATE_ID, expectedRevision: 2 },
+        deps
       )
     ).rejects.toMatchObject({
       message: "Add content before this template is ready to use.",
       statusCode: 400
     })
+    expect(tables.document_templates[0].published_at).toBe("2026-07-17T19:00:00.000Z")
+  })
 
-    expect(tables.document_templates[0].revision).toBe(1)
+  it("lists the versions a template was published at, and brings one back only within its organization", async () => {
+    const tables = createBaseTables()
+    const first = createUsableTemplateContent()
+    const version = (templateId: string, orgId: string, revision: number, title: string): FakeRow => ({
+      content: first,
+      description: null,
+      org_id: orgId,
+      published_at: `2026-07-1${revision}T09:00:00.000Z`,
+      published_by: MANAGER_ID,
+      revision,
+      template_id: templateId,
+      title
+    })
+    tables.document_template_versions = [
+      version(TEMPLATE_ID, ORG_ID, 1, "Handbook"),
+      version(TEMPLATE_ID, ORG_ID, 3, "Handbook, revised"),
+      version(NEW_TEMPLATE_ID, OTHER_ORG_ID, 1, "Another organization's handbook")
+    ]
+    const client = new FakeClient(tables)
+    const manager = { actorUserId: MANAGER_ID, organizationId: ORG_ID }
+
+    expect(await listDocumentTemplateVersions({ ...manager, templateId: TEMPLATE_ID }, { client: client as never })).toEqual([
+      { publishedAt: "2026-07-13T09:00:00.000Z", revision: 3 },
+      { publishedAt: "2026-07-11T09:00:00.000Z", revision: 1 }
+    ])
+    expect(
+      await getDocumentTemplateVersion({ ...manager, revision: 1, templateId: TEMPLATE_ID }, { client: client as never })
+    ).toEqual({ content: parseTemplateContent(first), description: null, title: "Handbook" })
+
+    expect(await listDocumentTemplateVersions({ ...manager, templateId: NEW_TEMPLATE_ID }, { client: client as never })).toEqual([])
+    await expect(
+      getDocumentTemplateVersion({ ...manager, revision: 1, templateId: NEW_TEMPLATE_ID }, { client: client as never })
+    ).rejects.toMatchObject({ statusCode: 404 })
+    await expect(
+      getDocumentTemplateVersion(
+        { actorUserId: STAFF_ID, organizationId: ORG_ID, revision: 1, templateId: TEMPLATE_ID },
+        { client: client as never }
+      )
+    ).rejects.toMatchObject({ statusCode: 403 })
   })
 
   it("reserves file upload fields for internal submissions", async () => {

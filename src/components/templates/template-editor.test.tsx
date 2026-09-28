@@ -39,6 +39,7 @@ it("keeps a trial run's answers when the author edits or previews and comes back
       <TemplateEditor
         archiveAction={vi.fn()}
         initialFlowMessages={[]}
+        loadVersionAction={vi.fn()}
         publishAction={vi.fn()}
         saveDraftAction={vi.fn(async () => ({ ok: true as const, version: "1" }))}
         template={createTemplate()}
@@ -71,6 +72,7 @@ it("asks Flow with only the title, description and content its request accepts",
       <TemplateEditor
         archiveAction={vi.fn()}
         initialFlowMessages={[]}
+        loadVersionAction={vi.fn()}
         publishAction={vi.fn()}
         saveDraftAction={vi.fn(async () => ({ ok: true as const, version: "1" }))}
         template={createTemplate()}
@@ -144,6 +146,7 @@ function createTemplate(): DocumentTemplate {
     organizationId: "10000000-0000-4000-8000-000000000002",
     publishedAt: null,
     publishedBy: null,
+    publishedRevision: null,
     revision: 1,
     status: "draft",
     title: "Client agreement",

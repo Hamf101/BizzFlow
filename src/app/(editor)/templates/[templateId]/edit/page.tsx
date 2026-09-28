@@ -17,14 +17,16 @@ import { listTemplateFlowMessages } from "@/services/template-flow-service"
 import {
   getDocumentTemplate,
   listDocumentTemplateCategories,
+  listDocumentTemplateVersions,
 } from "@/services/template-service"
 import { withTemplateImageUrls } from "@/services/template-image-service"
 import type { EditorLayout } from "@/types/editor-layout"
-import type { DocumentTemplate } from "@/types/template"
+import type { DocumentTemplate, DocumentTemplateVersion } from "@/types/template"
 import type { TemplateFlowMessage } from "@/types/template-flow"
 
 import {
   archiveTemplateAction,
+  loadTemplateVersionAction,
   publishTemplateAction,
   saveTemplateDraftAction,
 } from "@/app/(dashboard)/templates/actions"
@@ -141,6 +143,12 @@ export default async function EditTemplatePage({
   }).catch((): string[] => [])
   // Where the tools were left; without it they start at home.
   const editorLayout = await getEditorLayout({ actorUserId: user.id }).catch((): EditorLayout => ({}))
+  // History is for going back; the template still edits without it.
+  const versions = await listDocumentTemplateVersions({
+    actorUserId: user.id,
+    organizationId: context.organization.id,
+    templateId,
+  }).catch((): DocumentTemplateVersion[] => [])
 
   return (
     <TemplateEditor
@@ -148,9 +156,11 @@ export default async function EditTemplatePage({
       categorySuggestions={categorySuggestions}
       editorLayout={{ initial: editorLayout, save: saveEditorLayoutAction }}
       initialFlowMessages={initialFlowMessages}
+      loadVersionAction={loadTemplateVersionAction}
       publishAction={publishTemplateAction}
       saveDraftAction={saveTemplateDraftAction}
       template={templateResult.template}
+      versions={versions}
     />
   )
 }

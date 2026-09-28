@@ -122,7 +122,7 @@ export async function listTemplatePage(
       const { rows, total } = await readCountedPage(
         await filterVisibleTemplates(
           client
-            .from("document_templates")
+            .from(templateRelation(filters))
             .select(TEMPLATE_SUMMARY_COLUMNS, { count: "exact" }),
           filters
         )
@@ -144,7 +144,8 @@ export async function listTemplatePage(
       const contents = await readTemplateCardContents(
         client,
         input.organizationId,
-        summaries.map((summary: DocumentTemplateSummary): string => summary.id)
+        summaries.map((summary: DocumentTemplateSummary): string => summary.id),
+        !filters.canManage
       )
 
       return {
@@ -172,7 +173,8 @@ export async function listTemplatePage(
 async function readTemplateCardContents(
   client: TemplateServiceClient,
   organizationId: string,
-  templateIds: readonly string[]
+  templateIds: readonly string[],
+  publishedOnly: boolean
 ): Promise<Map<string, TemplateContent>> {
   const contents = new Map<string, TemplateContent>()
 
@@ -181,6 +183,7 @@ async function readTemplateCardContents(
   }
 
   const { data, error } = await client.rpc("document_template_card_contents", {
+    published_only: publishedOnly,
     target_org_id: organizationId,
     template_ids: [...templateIds],
   })
@@ -209,6 +212,13 @@ async function readTemplateCardContents(
   )
 }
 
+// Authors list working copies; everyone else what was published.
+function templateRelation(
+  filters: TemplateListFilters
+): "document_templates" | "published_document_templates" {
+  return filters.canManage ? "document_templates" : "published_document_templates"
+}
+
 function filterVisibleTemplates<TQuery>(
   query: TQuery,
   filters: TemplateListFilters
@@ -217,10 +227,6 @@ function filterVisibleTemplates<TQuery>(
     "org_id",
     filters.organizationId
   )
-
-  if (!filters.canManage) {
-    filtered = filtered.eq("status", "published")
-  }
 
   if (filters.statuses !== null) {
     filtered = filtered.in("status", filters.statuses)
@@ -244,7 +250,7 @@ async function countVisibleTemplates(
   filters: TemplateListFilters
 ): Promise<number> {
   const { count, error } = await filterVisibleTemplates(
-    client.from("document_templates").select("id", { count: "exact", head: true }),
+    client.from(templateRelation(filters)).select("id", { count: "exact", head: true }),
     filters
   )
 

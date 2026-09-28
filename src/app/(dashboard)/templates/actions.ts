@@ -16,11 +16,13 @@ import {
   createDocumentTemplate,
   duplicateDocumentTemplate,
   getDocumentTemplate,
+  getDocumentTemplateVersion,
   publishDocumentTemplate,
   TemplateServiceError,
   updateDocumentTemplate,
 } from "@/services/template-service"
 import type { SaveResult } from "@/components/editor/use-autosave"
+import { withTemplateImageUrls } from "@/services/template-image-service"
 import {
   createEmptyDocumentContent,
   parseTemplateContent,
@@ -175,6 +177,7 @@ export async function publishTemplateAction(formData: FormData): Promise<void> {
   const templateId = getFormString(formData, "templateId")
   const editorPath = getEditorPath(templateId)
   const startedAt = Date.now()
+  let outcome: "template_published" | "template_updated" = "template_published"
 
   try {
     const actionContext = await loadTemplateActionContext()
@@ -195,6 +198,7 @@ export async function publishTemplateAction(formData: FormData): Promise<void> {
       organizationId: actionContext.context.organization.id,
       templateId: template.id,
     })
+    outcome = savedTemplate.status === "published" ? "template_updated" : "template_published"
   } catch (error: unknown) {
     handleTemplateActionFailure({
       error,
@@ -205,7 +209,48 @@ export async function publishTemplateAction(formData: FormData): Promise<void> {
     })
   }
 
-  redirect(buildFeedbackRedirect(editorPath, "template_published"))
+  redirect(buildFeedbackRedirect(editorPath, outcome))
+}
+
+/** What a published version held, for the editor to bring back. */
+export type TemplateVersionResult =
+  | Readonly<{ ok: true; version: Pick<DocumentTemplate, "content" | "description" | "title"> }>
+  | Readonly<{ message: string; ok: false }>
+
+/**
+ * Loads a published version so the editor can bring it back into the working
+ * copy, where it saves like any edit and Undo takes it back.
+ *
+ * @param templateId - The template the version belongs to.
+ * @param revision - The revision it was published at.
+ * @returns The version's title, description, and content, or why not.
+ */
+export async function loadTemplateVersionAction(templateId: string, revision: number): Promise<TemplateVersionResult> {
+  try {
+    const actionContext = await loadTemplateActionContext()
+    const organizationId = actionContext.context.organization.id
+    const version = await getDocumentTemplateVersion({
+      actorUserId: actionContext.actorUserId,
+      organizationId,
+      revision,
+      templateId: requireTemplateId(templateId),
+    })
+
+    // Pictures get addresses this person can load, as the editor page gives them.
+    return { ok: true, version: { ...version, content: await withTemplateImageUrls(version.content, organizationId) } }
+  } catch (error: unknown) {
+    logTemplateActionFailure("template_version_load_failed", {
+      reason: getUnknownErrorMessage(error),
+      templateId,
+    })
+    return {
+      message:
+        error instanceof TemplateServiceError && error.statusCode !== 500
+          ? error.message
+          : "That version could not be loaded.",
+      ok: false,
+    }
+  }
 }
 
 /**

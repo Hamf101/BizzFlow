@@ -1,10 +1,10 @@
 "use client"
 
-import { Archive, FilePenLine, Files, Link2, ListChecks, MoreHorizontal, Palette } from "lucide-react"
+import { Archive, FilePenLine, Files, History, Link2, ListChecks, MoreHorizontal, Palette } from "lucide-react"
 import Link from "next/link"
-import { type ReactElement, useMemo, useRef, useState, useTransition } from "react"
+import { type ReactElement, useEffect, useMemo, useRef, useState, useTransition } from "react"
 
-import type { TemplateDraftInput } from "@/app/(dashboard)/templates/actions"
+import type { TemplateDraftInput, TemplateVersionResult } from "@/app/(dashboard)/templates/actions"
 import { useFlowHandoff } from "@/components/flow/flow-handoff"
 import { EditorCanvas } from "@/components/editor/editor-canvas"
 import { normalizeContentForSave } from "@/components/editor/editor-content"
@@ -48,6 +48,7 @@ import {
 } from "@/services/templates/template-quality-service"
 import {
   type DocumentTemplate,
+  type DocumentTemplateVersion,
   type TemplateContentV3,
   upgradeV2TemplateContentToV3,
 } from "@/types/template"
@@ -70,15 +71,19 @@ type TemplateEditorProps = {
   /** Where this person keeps the dock and zoom. */
   editorLayout?: EditorLayoutStore
   initialFlowMessages: TemplateFlowMessage[]
+  loadVersionAction: (templateId: string, revision: number) => Promise<TemplateVersionResult>
   publishAction: (formData: FormData) => Promise<void>
   saveDraftAction: (input: TemplateDraftInput) => Promise<SaveResult>
   template: DocumentTemplate
+  /** The versions it was published at, newest first. */
+  versions?: readonly DocumentTemplateVersion[]
 }
 
 /**
  * The template studio in the editor canvas: pages to type on, the dock with
  * everything that can be added, Flow and Checks, and Edit, Preview and Test.
- * A draft saves as it changes; a published template changes on Update.
+ * A draft saves as it changes. A published template's changes stay on this
+ * device until Save, and reach staff on Update.
  *
  * @param props - The template, its Flow history, and the server actions.
  * @returns The full-screen template editor.
@@ -88,9 +93,11 @@ export function TemplateEditor({
   categorySuggestions = [],
   editorLayout,
   initialFlowMessages,
+  loadVersionAction,
   publishAction,
   saveDraftAction,
   template,
+  versions = [],
 }: TemplateEditorProps): ReactElement {
   const initial = useMemo(
     (): TemplateEditorState => ({
@@ -158,6 +165,10 @@ export function TemplateEditor({
   const settingsBlock = content.blocks.find((block) => block.id === controller.settingsBlockId) ?? null
   const settingsIndex = settingsBlock ? content.blocks.indexOf(settingsBlock) : -1
   const unsaved = JSON.stringify(state) !== JSON.stringify(savedState)
+  // On a published template the button saves first, then publishes.
+  const needsSave = !isDraft && unsaved
+  // Changes staff don't have yet: saved past what was published, or not saved yet.
+  const unpublished = template.revision !== template.publishedRevision || JSON.stringify(state) !== JSON.stringify(initial)
   const geometry = resolvePageGeometry(content.layout)
 
   function submit(action: (formData: FormData) => Promise<void>): void {
@@ -189,31 +200,62 @@ export function TemplateEditor({
   }
 
   async function publish(): Promise<void> {
-    if (blockedByChecks("publish")) {
+    if (blockedByChecks(isDraft ? "publish" : "update")) {
       return
     }
 
-    await autosave.flush()
-
-    if (autosave.status !== "conflict") {
+    // What isn't saved yet saves first, so Update publishes what is on screen.
+    if (await autosave.flush()) {
       submit(publishAction)
     }
   }
 
-  async function update(): Promise<void> {
-    if (blockedByChecks("update")) {
+  // A published template's changes save to its working copy only when asked.
+  // Until then they stay on this device, and a lost connection retries.
+  async function save(): Promise<void> {
+    if (validationErrors > 0) {
+      bizflowToast.error(`Fix ${validationErrors} ${validationErrors === 1 ? "check" : "checks"} before you save.`)
       return
     }
 
-    const result = await saveDraftAction(toDraftInput(template.id, revisionRef.current, state))
+    await autosave.flush()
+  }
 
-    if (result.ok) {
-      revisionRef.current = Number(result.version)
-      setSavedState(state)
-      bizflowToast.success("Template updated")
-    } else {
-      bizflowToast.error(result.message)
+  // ⌘S or Ctrl+S saves here, rather than asking the browser to save the page.
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent): void {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
+        event.preventDefault()
+        void save()
+      }
     }
+
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  })
+
+  // An old version comes back as an edit: Undo takes it back, Save keeps it,
+  // and staff get it only on Update.
+  async function restore(revision: number): Promise<boolean> {
+    if (proposal) {
+      bizflowToast.info("Apply or reject Flow's suggestion first.")
+      return false
+    }
+
+    const result = await loadVersionAction(template.id, revision)
+
+    if (!result.ok) {
+      bizflowToast.error(result.message)
+      return false
+    }
+
+    history.set((current) => ({
+      ...current,
+      content: withGeneratedFieldKeys(upgradeV2TemplateContentToV3(result.version.content)),
+      description: result.version.description ?? "",
+      title: result.version.title,
+    }))
+    return true
   }
 
   function changeMode(next: Mode): void {
@@ -282,6 +324,26 @@ export function TemplateEditor({
       label: "Checks",
       wide: true,
     },
+    ...(versions.length > 0
+      ? [
+          {
+            content: (close: () => void) => (
+              <TemplateVersions
+                live={template.publishedRevision}
+                onRestore={async (revision) => {
+                  if (await restore(revision)) {
+                    close()
+                  }
+                }}
+                versions={versions}
+              />
+            ),
+            icon: History,
+            id: "versions",
+            label: "Versions",
+          },
+        ]
+      : []),
   ]
 
   return (
@@ -430,15 +492,26 @@ export function TemplateEditor({
         )}
         primary={
           <Button
+            aria-keyshortcuts={needsSave ? "Meta+S Control+S" : undefined}
             className="h-10 px-4"
-            disabled={!isDraft && !unsaved}
-            onClick={() => void (isDraft ? publish() : update())}
+            disabled={!unpublished && !unsaved}
+            onClick={() => void (needsSave ? save() : publish())}
             type="button"
           >
-            {isDraft ? "Publish" : "Update"}
+            {isDraft ? "Publish" : needsSave ? "Save" : "Update"}
           </Button>
         }
-        saveStatus={isDraft ? (validationErrors > 0 ? "blocked" : autosave.status) : unsaved ? "unsaved-local" : null}
+        saveStatus={
+          validationErrors > 0
+            ? "blocked"
+            : isDraft || ["conflict", "error", "offline", "saving"].includes(autosave.status)
+              ? autosave.status
+              : unsaved
+                ? "unsaved-local"
+                : unpublished
+                  ? "saved"
+                  : null
+        }
         title={state.title}
         titleEditable={mode === "edit" && !proposal}
         toolbar={mode === "edit" && !proposal ? <FormatBar allowFiles controller={controller} narrow={false} /> : undefined}
@@ -498,6 +571,33 @@ export function TemplateEditor({
         </DialogContent>
       </Dialog>
     </>
+  )
+}
+
+// Newest first; the live one is what staff get now.
+function TemplateVersions({
+  live,
+  onRestore,
+  versions,
+}: {
+  live: number | null
+  onRestore: (revision: number) => Promise<void>
+  versions: readonly DocumentTemplateVersion[]
+}): ReactElement {
+  return (
+    <ul className="grid gap-1" data-slot="template-versions">
+      {versions.map((version) => (
+        <li className="flex min-h-11 items-center gap-3 rounded-[8px] px-2 hover:bg-muted/60" key={version.revision}>
+          <span className="min-w-0 flex-1 truncate text-sm">
+            {new Date(version.publishedAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}
+          </span>
+          {version.revision === live ? <span className="text-[12.5px] text-muted-foreground">Live</span> : null}
+          <Button onClick={() => void onRestore(version.revision)} size="sm" type="button" variant="outline">
+            Restore
+          </Button>
+        </li>
+      ))}
+    </ul>
   )
 }
 

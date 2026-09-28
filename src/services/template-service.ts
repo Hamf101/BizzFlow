@@ -22,8 +22,10 @@ export {
   createDocumentTemplate,
   duplicateDocumentTemplate,
   getDocumentTemplate,
+  getDocumentTemplateVersion,
   listDocumentTemplateCategories,
   listDocumentTemplates,
+  listDocumentTemplateVersions,
   publishDocumentTemplate,
   updateDocumentTemplate,
 } from "./templates/template-lifecycle-service"

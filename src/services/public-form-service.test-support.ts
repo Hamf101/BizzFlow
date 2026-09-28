@@ -27,6 +27,7 @@ export const FROZEN_NOW = "2026-07-31T12:00:00.000Z"
  */
 const KNOWN_TABLES = [
   "document_templates",
+  "published_document_templates",
   "public_form_links",
   "organizations",
   "submissions",
@@ -283,6 +284,14 @@ export class FakePublicFormClient {
     this.tables = Object.fromEntries(
       KNOWN_TABLES.map((name) => [name, seed[name] ?? []])
     ) as Record<FakeTableName, FakeRow[]>
+
+    // Unless a test says otherwise, each published template was last
+    // published exactly as its working copy stands.
+    if (!seed.published_document_templates) {
+      this.tables.published_document_templates = this.tables.document_templates
+        .filter((row) => row.status === "published")
+        .map((row) => ({ ...row }))
+    }
   }
 
   from(tableName: string): FakeQueryBuilder {

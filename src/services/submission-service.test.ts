@@ -1450,7 +1450,7 @@ function createClient(overrides: Partial<FakeTables> = {}): FakeClient {
       createMembership(OTHER_STAFF_ID, "staff"),
       createMembership(EXTERNAL_ID, "external_reviewer")
     ],
-    document_templates: [
+    published_document_templates: [
       {
         id: TEMPLATE_ID,
         org_id: ORGANIZATION_ID,

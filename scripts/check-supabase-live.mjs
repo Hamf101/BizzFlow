@@ -55,7 +55,15 @@ export const TABLE_CHECKS = [
   },
   {
     name: "document_templates",
-    select: "id,org_id,title,status,revision,created_at,updated_at",
+    select: "id,org_id,title,status,revision,published_revision,created_at,updated_at",
+  },
+  {
+    name: "document_template_versions",
+    select: "org_id,template_id,revision,title,description,content,published_by,published_at",
+  },
+  {
+    name: "published_document_templates",
+    select: "id,org_id,title,status,revision,content,published_revision,published_at",
   },
   {
     name: "document_answers",

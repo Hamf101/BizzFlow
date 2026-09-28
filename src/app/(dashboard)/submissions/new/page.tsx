@@ -66,10 +66,7 @@ export default async function NewSubmissionPage(): Promise<ReactElement> {
     organizationId: context.organization.id,
   })
     .then((templates: DocumentTemplate[]) => ({
-      templates: templates.filter(
-        (template: DocumentTemplate): boolean =>
-          template.status === "published"
-      ),
+      templates,
       errorMessage: null as string | null,
     }))
     .catch((error: unknown) => ({

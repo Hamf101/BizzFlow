@@ -919,6 +919,26 @@ export type DocumentTemplateRow = Record<string, unknown> & {
   updated_at: string
   published_at: string | null
   archived_at: string | null
+  /** The working copy's revision it was last published at; null until published. */
+  published_revision: number | null
+}
+
+/** One immutable published version of a template. */
+export type DocumentTemplateVersionRow = {
+  content: TemplateContent
+  description: string | null
+  org_id: string
+  published_at: string
+  published_by: string | null
+  revision: number
+  template_id: string
+  title: string
+}
+
+/** A published version as the editor's history lists it. */
+export type DocumentTemplateVersion = {
+  publishedAt: string
+  revision: number
 }
 
 /** Application-facing reusable document template. */
@@ -940,6 +960,11 @@ export type DocumentTemplate = {
   updatedAt: string
   publishedAt: string | null
   archivedAt: string | null
+  /**
+   * The revision last published. Members who use the template get that
+   * version; a working copy past it has changes not yet published.
+   */
+  publishedRevision: number | null
 }
 
 /** Database columns the templates list reads. */

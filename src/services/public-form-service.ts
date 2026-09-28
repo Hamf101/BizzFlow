@@ -23,6 +23,7 @@ import type {
 } from "@/types/template"
 import { parseTemplateContent } from "@/types/template"
 import { isTemplateBlockVisible } from "@/types/template-visibility"
+import { mapDocumentTemplate } from "@/services/templates/shared"
 
 /**
  * Retention marker written when a public upload is allocated.
@@ -381,9 +382,10 @@ export async function getPublicFormLinkByToken(
     return invalid("max_submissions_reached", link)
   }
 
+  // A public form serves what was published, not the working copy.
   const [templateRes, orgRes] = await Promise.all([
     client
-      .from("document_templates")
+      .from("published_document_templates")
       .select("*")
       .eq("id", link.templateId)
       .eq("org_id", link.organizationId)
@@ -399,25 +401,7 @@ export async function getPublicFormLinkByToken(
     return invalid("not_found", link)
   }
 
-  const rawTemplate = templateRes.data as DocumentTemplateRow
-  const template: DocumentTemplate = {
-    id: rawTemplate.id,
-    organizationId: rawTemplate.org_id,
-    title: rawTemplate.title,
-    description: rawTemplate.description,
-    category: rawTemplate.category ?? null,
-    status: rawTemplate.status,
-    revision: rawTemplate.revision,
-    content: parseTemplateContent(rawTemplate.content),
-    createdBy: rawTemplate.created_by,
-    updatedBy: rawTemplate.updated_by,
-    publishedBy: rawTemplate.published_by,
-    archivedBy: rawTemplate.archived_by,
-    createdAt: rawTemplate.created_at,
-    updatedAt: rawTemplate.updated_at,
-    publishedAt: rawTemplate.published_at,
-    archivedAt: rawTemplate.archived_at,
-  }
+  const template = mapDocumentTemplate(templateRes.data as DocumentTemplateRow)
 
   return {
     valid: true,

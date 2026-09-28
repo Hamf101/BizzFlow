@@ -27,6 +27,7 @@ import {
   createDatabaseError,
   createId,
   getClient,
+  getPublishedTemplateById,
   getTemplateById,
   mapGeneratedDocument,
   normalizeDescription,
@@ -103,18 +104,17 @@ export async function createGeneratedDocument(
           "templates:view",
           "You cannot use document templates."
         )
-        template = await getTemplateById(
-          client,
-          input.organizationId,
-          templateId
-        )
+        const { status } = await getTemplateById(client, input.organizationId, templateId)
 
-        if (template.status !== "published") {
+        if (status !== "published") {
           throw new TemplateServiceError(
             "Only published templates can create documents.",
             409
           )
         }
+
+        // What was published, not the working copy an author may be changing.
+        template = await getPublishedTemplateById(client, input.organizationId, templateId)
       }
 
       const snapshot = withoutImageUrls(

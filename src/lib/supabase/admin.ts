@@ -20,6 +20,7 @@ import type {
   DocumentSigningRecipientRow,
   DocumentSourceKind,
   DocumentTemplateRow,
+  DocumentTemplateVersionRow,
   TemplateContent,
 } from "@/types/template"
 import type { TemplateFlowMessageRow } from "@/types/template-flow"
@@ -485,6 +486,7 @@ export type AdminDatabase = {
         DocumentTemplateInsert,
         Partial<DocumentTemplateRow>
       >
+      document_template_versions: DatabaseTable<DocumentTemplateVersionRow, DocumentTemplateVersionRow, never>
       template_flow_messages: DatabaseTable<
         TemplateFlowMessageRow,
         TemplateFlowMessageInsert,
@@ -640,6 +642,7 @@ export type AdminDatabase = {
       }
       document_template_card_contents: {
         Args: {
+          published_only: boolean
           target_org_id: string
           template_ids: string[]
         }

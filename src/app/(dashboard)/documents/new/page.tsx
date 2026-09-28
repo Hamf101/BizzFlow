@@ -78,7 +78,6 @@ export default async function NewDocumentPage({
 
   const publishedTemplates = templates.filter(
     (template: DocumentTemplate): boolean =>
-      template.status === "published" &&
       !template.content.blocks.some(
         (block): boolean => block.type === "file_field"
       )

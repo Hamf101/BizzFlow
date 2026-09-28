@@ -333,6 +333,13 @@ export const ACTION_FEEDBACK = {
     title: "Template published",
     tone: "success",
   },
+  template_updated: {
+    analyticsEvent: "template_published",
+    durationMs: 5_000,
+    persistent: false,
+    title: "Template updated",
+    tone: "success",
+  },
   view_deleted: {
     analyticsEvent: "action_outcome",
     durationMs: 5_000,

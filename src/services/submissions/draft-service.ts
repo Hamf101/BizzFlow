@@ -57,11 +57,10 @@ export async function createInternalSubmissionDraft(
 
       const title = normalizeSubmissionTitle(input.title)
       const { data: template, error: templateError } = await client
-        .from("document_templates")
+        .from("published_document_templates")
         .select("content")
         .eq("org_id", input.organizationId)
         .eq("id", input.templateId)
-        .eq("status", "published")
         .maybeSingle()
 
       if (templateError) {
@@ -79,7 +78,7 @@ export async function createInternalSubmissionDraft(
       }
 
       // Fail before mutation when a published snapshot cannot be rendered safely.
-      parseTemplateContent(template.content)
+      parseTemplateContent((template as { content: unknown }).content)
 
       const submissionId = normalizeSubmissionId(input.submissionId)
       const { data, error } = await client.rpc(

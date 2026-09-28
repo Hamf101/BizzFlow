@@ -44,6 +44,7 @@ export const ACTION_FEEDBACK_CODES = [
   "template_created",
   "template_duplicated",
   "template_published",
+  "template_updated",
   "view_deleted",
   "view_not_renamed",
   "view_not_saved",

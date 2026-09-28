@@ -5,6 +5,8 @@ import {
   upgradeV2TemplateContentToV3,
   type DocumentTemplate,
   type DocumentTemplateRow,
+  type DocumentTemplateVersion,
+  type DocumentTemplateVersionRow,
   type TemplateContent,
 } from "@/types/template"
 
@@ -27,6 +29,7 @@ import {
   createDatabaseError,
   createId,
   getClient,
+  getPublishedTemplateById,
   getTemplateById,
   mapDocumentTemplate,
   normalizeCategory,
@@ -41,9 +44,9 @@ import { requireStoredImages, TemplateImageServiceError } from "@/services/templ
 import { withoutImageUrls } from "@/types/template-images"
 
 /**
- * Lists templates visible to an active organization member.
+ * Lists the templates a member can start from: each published template as it
+ * was last published, whatever its working copy holds now.
  *
- * Managers and owners receive every status; staff receive published templates only.
  * An `input.category` of `null` selects the uncategorised templates; omitting the
  * key entirely returns every category.
  *
@@ -65,7 +68,7 @@ export async function listDocumentTemplates(
     },
     async (): Promise<DocumentTemplate[]> => {
       const client = getClient(deps)
-      const role = await requirePermission(
+      await requirePermission(
         client,
         input.organizationId,
         input.actorUserId,
@@ -73,13 +76,9 @@ export async function listDocumentTemplates(
         "You cannot view document templates."
       )
       let query = client
-        .from("document_templates")
+        .from("published_document_templates")
         .select(TEMPLATE_COLUMNS)
         .eq("org_id", input.organizationId)
-
-      if (!canPerformOrganizationAction(role, "templates:manage")) {
-        query = query.eq("status", "published")
-      }
 
       // hasOwnProperty, not a truthiness test: `null` is the meaningful
       // "uncategorised only" filter and would otherwise read as "no filter".
@@ -165,7 +164,8 @@ export async function listDocumentTemplateCategories(
 }
 
 /**
- * Loads one tenant-scoped template visible to the actor.
+ * Loads one tenant-scoped template visible to the actor: an author gets its
+ * working copy, anyone else the version last published.
  *
  * @param input - Actor, organization, and template identifiers.
  * @param deps - Optional injected dependencies for tests.
@@ -188,20 +188,9 @@ export async function getDocumentTemplate(
         "templates:view",
         "You cannot view document templates."
       )
-      const template = await getTemplateById(
-        client,
-        input.organizationId,
-        input.templateId
-      )
-
-      if (
-        template.status !== "published" &&
-        !canPerformOrganizationAction(role, "templates:manage")
-      ) {
-        throw new TemplateServiceError("Document template was not found.", 404)
-      }
-
-      return template
+      return canPerformOrganizationAction(role, "templates:manage")
+        ? getTemplateById(client, input.organizationId, input.templateId)
+        : getPublishedTemplateById(client, input.organizationId, input.templateId)
     }
   )
 }
@@ -360,11 +349,9 @@ export async function updateDocumentTemplate(
         throw new TemplateServiceError("No template changes were provided.", 400)
       }
 
+      // A published template's edits wait in its working copy until the next
+      // publish, which is where the checks apply.
       const nextContent = withoutImageUrls(upgradeV2TemplateContentToV3(proposedContent))
-
-      if (existing.status === "published") {
-        assertTemplatePublishReady(nextTitle, nextDescription, nextContent)
-      }
 
       if (hasContent) {
         assertTemplateImagesRenderable(nextContent)
@@ -405,11 +392,13 @@ export async function updateDocumentTemplate(
 }
 
 /**
- * Publishes a schema-valid template for use by organization staff.
+ * Publishes a template's working copy for use by organization staff. The
+ * database keeps each version published and never changes one, so Update on a
+ * published template adds a version rather than rewriting the last.
  *
  * @param input - Actor, organization, template, and exact saved revision.
  * @param deps - Optional injected dependencies for tests.
- * @returns Published template; an already-published template is returned unchanged.
+ * @returns Published template; one already published at this revision is returned unchanged.
  * @throws TemplateServiceError when permission, validation, revision matching, or persistence fails.
  */
 export async function publishDocumentTemplate(
@@ -458,7 +447,7 @@ export async function publishDocumentTemplate(
         content
       )
 
-      if (existing.status === "published") {
+      if (existing.status === "published" && existing.publishedRevision === existing.revision) {
         return existing
       }
 
@@ -510,6 +499,102 @@ function assertTemplatePublishReady(
   if (firstBlockingIssue) {
     throw new TemplateServiceError(firstBlockingIssue.message, 400)
   }
+}
+
+/**
+ * Lists the versions a template was published at, newest first.
+ *
+ * @param input - Actor, organization, and template identifiers.
+ * @param deps - Optional injected dependencies for tests.
+ * @returns Each published version's revision and time; none for another organization's template.
+ * @throws TemplateServiceError when permission or database access fails.
+ */
+export async function listDocumentTemplateVersions(
+  input: GetDocumentTemplateInput,
+  deps: TemplateServiceDeps = {}
+): Promise<DocumentTemplateVersion[]> {
+  return runTemplateOperation(
+    "list_document_template_versions",
+    input,
+    async (): Promise<DocumentTemplateVersion[]> => {
+      const client = getClient(deps)
+
+      await requirePermission(
+        client,
+        input.organizationId,
+        input.actorUserId,
+        "templates:manage",
+        "You cannot manage document templates."
+      )
+
+      const { data, error } = await client
+        .from("document_template_versions")
+        .select("revision,published_at")
+        .eq("org_id", input.organizationId)
+        .eq("template_id", input.templateId)
+        .order("revision", { ascending: false })
+
+      if (error || !data) {
+        throw createDatabaseError(error, "Unable to load template versions.")
+      }
+
+      return (data as Pick<DocumentTemplateVersionRow, "published_at" | "revision">[]).map((row) => ({
+        publishedAt: row.published_at,
+        revision: row.revision,
+      }))
+    }
+  )
+}
+
+/**
+ * Loads what one published version held, for an author to bring back into the
+ * working copy. The version itself stays as it was.
+ *
+ * @param input - Actor, organization, template, and the version's revision.
+ * @param deps - Optional injected dependencies for tests.
+ * @returns The version's title, description, and content.
+ * @throws TemplateServiceError 404 when the template has no such version in this organization.
+ */
+export async function getDocumentTemplateVersion(
+  input: GetDocumentTemplateInput & { revision: number },
+  deps: TemplateServiceDeps = {}
+): Promise<Pick<DocumentTemplate, "content" | "description" | "title">> {
+  return runTemplateOperation(
+    "get_document_template_version",
+    input,
+    async (): Promise<Pick<DocumentTemplate, "content" | "description" | "title">> => {
+      const client = getClient(deps)
+
+      await requirePermission(
+        client,
+        input.organizationId,
+        input.actorUserId,
+        "templates:manage",
+        "You cannot manage document templates."
+      )
+      assertRevision(input.revision)
+
+      const { data, error } = await client
+        .from("document_template_versions")
+        .select("title,description,content")
+        .eq("org_id", input.organizationId)
+        .eq("template_id", input.templateId)
+        .eq("revision", input.revision)
+        .maybeSingle()
+
+      if (error) {
+        throw createDatabaseError(error, "Unable to load the template version.")
+      }
+
+      if (!data) {
+        throw new TemplateServiceError("That version was not found.", 404)
+      }
+
+      const version = data as Pick<DocumentTemplateVersionRow, "content" | "description" | "title">
+
+      return { content: parseTemplateContent(version.content), description: version.description, title: version.title }
+    }
+  )
 }
 
 /**

@@ -105,14 +105,20 @@ describe("createPublicFormLink", () => {
 })
 
 describe("getPublicFormLinkByToken", () => {
-  it("resolves an active link with its template", async () => {
+  it("resolves an active link with its template as published, not the working copy", async () => {
+    const published = createTemplateRow({ title: "Visitor Form" })
     const preview = await getPublicFormLinkByToken(
       PUBLIC_TOKEN,
-      createDeps(seedValidLink())
+      createDeps(
+        seedValidLink({
+          document_templates: [createTemplateRow({ revision: 4, title: "Visitor Form, being rewritten" })],
+          published_document_templates: [published],
+        })
+      )
     )
 
     expect(preview.valid).toBe(true)
-    expect(preview.template?.id).toBe(TEMPLATE_ID)
+    expect(preview.template).toMatchObject({ id: TEMPLATE_ID, revision: 3, title: "Visitor Form" })
     expect(preview.organizationName).toBe("Acme")
   })
 
