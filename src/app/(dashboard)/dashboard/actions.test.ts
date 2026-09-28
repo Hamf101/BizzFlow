@@ -5,6 +5,7 @@ import {
   createOrganization,
   getCurrentOrganizationContext,
   OrganizationServiceError,
+  updateProfile,
 } from "@/services/organization-service"
 import {
   seedSampleSubmissionsForOrganization,
@@ -39,6 +40,7 @@ vi.mock("@/services/organization-service", async (importOriginal) => {
     ...actual,
     createOrganization: vi.fn(),
     getCurrentOrganizationContext: vi.fn(),
+    updateProfile: vi.fn(),
   }
 })
 
@@ -63,6 +65,7 @@ beforeEach(() => {
     email: "owner@example.com",
   })
   vi.mocked(createOrganization).mockResolvedValue(undefined as never)
+  vi.mocked(updateProfile).mockResolvedValue(undefined)
   vi.mocked(getCurrentOrganizationContext).mockResolvedValue({
     organization: {
       id: ORGANIZATION_ID,
@@ -96,10 +99,7 @@ beforeEach(() => {
 
 describe("createOrganizationAction", () => {
   it("creates an organization for the authenticated user before reporting success", async () => {
-    const formData = new FormData()
-    formData.set("name", "Acme")
-
-    await expect(createOrganizationAction(formData)).rejects.toThrow(
+    await expect(createOrganizationAction(welcomeForm())).rejects.toThrow(
       "NEXT_REDIRECT:/dashboard?feedback=organization_created"
     )
     expect(createOrganization).toHaveBeenCalledExactlyOnceWith({
@@ -109,12 +109,50 @@ describe("createOrganizationAction", () => {
     })
   })
 
+  it("saves the owner's name and phone, written the way people write numbers, once the workspace exists", async () => {
+    await expect(
+      createOrganizationAction(welcomeForm({ displayName: "  Talora Reyes ", phoneNumber: "+44 (20) 7946-0958" }))
+    ).rejects.toThrow("NEXT_REDIRECT:/dashboard?feedback=organization_created")
+    expect(updateProfile).toHaveBeenCalledExactlyOnceWith({
+      actorUserId: USER_ID,
+      displayName: "Talora Reyes",
+      phoneNumber: "+442079460958",
+    })
+    // Their profile row is made with the workspace, so the name can only follow it.
+    expect(vi.mocked(createOrganization).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(updateProfile).mock.invocationCallOrder[0] ?? 0
+    )
+  })
+
+  it("asks again for a phone number without its country code, before making anything", async () => {
+    await expect(createOrganizationAction(welcomeForm({ phoneNumber: "020 7946 0958" }))).rejects.toThrow(
+      "NEXT_REDIRECT:/welcome?error=Start+your+phone+number+with+%2B+and+the+country+code."
+    )
+    expect(createOrganization).not.toHaveBeenCalled()
+    expect(updateProfile).not.toHaveBeenCalled()
+  })
+
+  it("asks for the owner's name", async () => {
+    await expect(createOrganizationAction(welcomeForm({ displayName: "  " }))).rejects.toThrow(
+      "NEXT_REDIRECT:/welcome?error=Enter+your+name."
+    )
+    expect(createOrganization).not.toHaveBeenCalled()
+  })
+
+  it("still opens the new workspace when the name can't be saved, since Settings can take it later", async () => {
+    vi.mocked(updateProfile).mockRejectedValue(new OrganizationServiceError("Unable to update profile.", 500))
+
+    await expect(createOrganizationAction(welcomeForm())).rejects.toThrow(
+      "NEXT_REDIRECT:/dashboard?feedback=organization_created"
+    )
+  })
+
   it("keeps service detail out of the address, and sends the person back to name their workspace", async () => {
     vi.mocked(createOrganization).mockRejectedValue(
       new OrganizationServiceError("Private duplicate organization detail", 409)
     )
 
-    await expect(createOrganizationAction(new FormData())).rejects.toThrow(
+    await expect(createOrganizationAction(welcomeForm())).rejects.toThrow(
       "NEXT_REDIRECT:/welcome?error=Unable+to+create+the+workspace.+Try+again."
     )
     expect(redirectMock).not.toHaveBeenCalledWith(
@@ -127,7 +165,7 @@ describe("createOrganizationAction", () => {
       new OrganizationServiceError("Workspace name must be between 2 and 120 characters.", 400)
     )
 
-    await expect(createOrganizationAction(new FormData())).rejects.toThrow(
+    await expect(createOrganizationAction(welcomeForm())).rejects.toThrow(
       "NEXT_REDIRECT:/welcome?error=Workspace+name+must+be+between+2+and+120+characters."
     )
   })
@@ -137,11 +175,21 @@ describe("createOrganizationAction", () => {
       new AuthenticationError("Sign in to continue.")
     )
 
-    await expect(createOrganizationAction(new FormData())).rejects.toThrow(
+    await expect(createOrganizationAction(welcomeForm())).rejects.toThrow(
       "NEXT_REDIRECT:/login?next=%2Fwelcome"
     )
   })
 })
+
+function welcomeForm(fields: Record<string, string> = {}): FormData {
+  const formData = new FormData()
+
+  for (const [key, value] of Object.entries({ displayName: "Talora Reyes", name: "Acme", phoneNumber: "", ...fields })) {
+    formData.set(key, value)
+  }
+
+  return formData
+}
 
 describe("dashboard starter content actions", () => {
   it("adds starter templates for the authenticated organization", async () => {

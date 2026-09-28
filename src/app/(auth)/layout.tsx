@@ -18,7 +18,7 @@ export default function AuthLayout({
   children: React.ReactNode
 }>) {
   return (
-    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-canvas px-4 py-10" data-ground="canvas">
+    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-auth-ground px-4 py-16" data-ground="auth">
       {/* Reads the address to know the step; nothing waits on it. */}
       <Suspense fallback={null}>
         <AuthBackdrop />

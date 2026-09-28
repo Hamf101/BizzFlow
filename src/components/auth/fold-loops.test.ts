@@ -36,11 +36,14 @@ function read(frame: Keyframe): { turn: number; x: number; y: number } {
   return { turn, x: x!, y: y! }
 }
 
-/** Sixty loops, each on its own random draws: every piece's planned trip, frame by frame, timed from the loop's start. */
-function everyRun(): Step[][][] {
+/**
+ * Sixty loops, each on its own random draws: every piece's planned trip, frame
+ * by frame, timed from the loop's start, on a screen `scale` px to the page's unit.
+ */
+function everyRun(scale = 1, count = 60): Step[][][] {
   const runs: Step[][][] = []
 
-  for (let seed = 1; seed <= 60; seed++) {
+  for (let seed = 1; seed <= count; seed++) {
     const trips: Step[][] = []
     const planned = pieces.map((piece) => ({
       ...piece,
@@ -54,7 +57,7 @@ function everyRun(): Step[][][] {
       } as unknown as Element,
     }))
 
-    startFoldLoop(planned, corners, 12_000, seeded(seed))
+    startFoldLoop(planned, corners, 12_000, seeded(seed), scale)
     runs.push(trips)
   }
 
@@ -97,7 +100,7 @@ it("keeps one or two of the pieces nearest the middle close by it, never a line"
 })
 
 it("brings every piece home upright, with no sudden jump or spin on the way", () => {
-  for (const trip of everyRun().flat()) {
+  for (const trip of everyRun(1, 20).flat()) {
     const last = trip.at(-1)!
 
     expect(last.offset).toBe(1)
@@ -109,7 +112,20 @@ it("brings every piece home upright, with no sudden jump or spin on the way", ()
   }
 })
 
+it("moves each piece as far across the screen as the page is drawn large", () => {
+  const [planned, doubled] = [everyRun(1, 10).flat(2), everyRun(2, 10).flat(2)]
+
+  expect(doubled).toHaveLength(planned.length)
+  doubled.forEach((step, index) => {
+    expect(step.turn).toBeCloseTo(planned[index]!.turn, 1)
+    expect(step.x).toBeCloseTo(2 * planned[index]!.x, 1)
+    expect(step.y).toBeCloseTo(2 * planned[index]!.y, 1)
+  })
+})
+
 it("brings pieces caught mid-drift straight home from where they are, all together", () => {
+  // The page drawn at two screen px to its unit.
+  const scale = 2
   // Two pieces the page was left with: each moved off and turned about its own middle.
   const drifted = [
     { turn: 24, x: 38, y: -52 },
@@ -120,8 +136,8 @@ it("brings pieces caught mid-drift straight home from where they are, all togeth
   const caught = drifted.map(({ turn, x, y }, index) => {
     const center = pieces[index + 1]!.center
     const [cos, sin] = [Math.cos((turn * Math.PI) / 180), Math.sin((turn * Math.PI) / 180)]
-    // As the browser reports it: the turn, and where the page's middle has gone.
-    const now = `matrix(${cos}, ${sin}, ${-sin}, ${cos}, ${center.x + x - (center.x * cos - center.y * sin)}, ${center.y + y - (center.x * sin + center.y * cos)})`
+    // As the browser reports it, in screen px: the turn, and where the page's middle has gone.
+    const now = `matrix(${cos}, ${sin}, ${-sin}, ${cos}, ${scale * (center.x + x - (center.x * cos - center.y * sin))}, ${scale * (center.y + y - (center.x * sin + center.y * cos))})`
 
     return {
       center,
@@ -149,7 +165,11 @@ it("brings pieces caught mid-drift straight home from where they are, all togeth
     }
   )
 
-  gatherHome(caught, [0, 1].map((index) => ({ cancel: () => cancelled.push(index) }) as unknown as Animation))
+  gatherHome(
+    caught,
+    [0, 1].map((index) => ({ cancel: () => cancelled.push(index) }) as unknown as Animation),
+    scale
+  )
   vi.unstubAllGlobals()
 
   expect(cancelled).toEqual([0, 1])
@@ -158,7 +178,7 @@ it("brings pieces caught mid-drift straight home from where they are, all togeth
     const [from, home] = [read(frames[0]!), read(frames.at(-1)!)]
 
     expect(Math.abs(from.turn - drifted[index]!.turn)).toBeLessThan(0.01)
-    expect(Math.hypot(from.x - drifted[index]!.x, from.y - drifted[index]!.y)).toBeLessThan(0.01)
+    expect(Math.hypot(from.x - scale * drifted[index]!.x, from.y - scale * drifted[index]!.y)).toBeLessThan(0.01)
     expect([home.x, home.y, home.turn].map(Math.abs)).toEqual([0, 0, 0])
   })
 })

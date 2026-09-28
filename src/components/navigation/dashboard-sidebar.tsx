@@ -66,9 +66,7 @@ export function DashboardSidebar({
           className="inline-flex shrink-0 items-center gap-2.5 rounded-[12px] outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
           href="/dashboard"
         >
-          <span className="grid size-11 place-items-center rounded-[12px] border border-primary/15 bg-secondary text-primary shadow-[0_1px_0_rgba(37,35,41,0.05)]">
-            <BizFlowMark className="size-7" />
-          </span>
+          <BizFlowMark className="size-11 shrink-0" />
           <span
             className={cn(
               "font-editorial text-xl leading-none font-semibold tracking-[-0.02em]",

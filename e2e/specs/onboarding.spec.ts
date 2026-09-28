@@ -41,12 +41,16 @@ test.describe("onboarding", () => {
       page.getByRole("button", { name: "Create workspace" })
     ).toBeVisible()
 
+    // Who they are goes in with the workspace, the phone written as people write it.
+    await page.getByLabel("Your name").fill("Talora Reyes")
+    await page.getByLabel("Phone").fill("+44 20 7946 0958")
     await page.getByLabel("Workspace name").fill(organizationName)
     await page.getByRole("button", { name: "Create workspace" }).click()
 
     await expect(
       page.getByRole("status").filter({ hasText: "Workspace created" })
     ).toBeVisible()
+    await expect(page.getByText("Welcome back, Talora!", { exact: true })).toBeVisible()
     await expect(page.getByRole("main").getByText(organizationName, { exact: true })).toBeVisible()
     await expect(page.getByRole("region", { name: "Waiting on you" })).toBeVisible()
 
@@ -59,11 +63,19 @@ test.describe("onboarding", () => {
     if (organization.error) throw organization.error
     const membership = await admin
       .from("organization_memberships")
-      .select("role")
+      .select("role,user_id")
       .eq("org_id", organization.data.id)
       .single()
     if (membership.error) throw membership.error
     expect(membership.data.role).toBe("owner_admin")
+
+    const profile = await admin
+      .from("profiles")
+      .select("full_name,phone_number")
+      .eq("id", membership.data.user_id)
+      .single()
+    if (profile.error) throw profile.error
+    expect(profile.data).toEqual({ full_name: "Talora Reyes", phone_number: "+442079460958" })
 
     await cleanUp(admin, email, organizationName)
   })

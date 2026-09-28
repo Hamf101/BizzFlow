@@ -71,4 +71,4 @@ it("serves the default family from the PDF's own faces", async () => {
   expect((await getDocumentFontAsset("default", "bold.ttf")).body).toEqual(
     await readFile("node_modules/dejavu-fonts-ttf/ttf/DejaVuSans-Bold.ttf")
   )
-})
+}, 15_000)

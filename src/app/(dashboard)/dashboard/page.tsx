@@ -238,6 +238,9 @@ export default async function DashboardPage(): Promise<ReactElement> {
 
   const [progress, members, tasks, reviews, own, counts, files, activity] = answers
   const unavailable = answers.some((answer) => answer !== null && !answer.ok)
+  // Greeted by the name they go by here, or the one they set up with.
+  const me = members.value.find((member) => member.userId === user.id)
+  const firstName = (me?.workspaceDisplayName?.trim() || me?.fullName?.trim())?.split(/\s+/)[0]
 
   const onboardingSteps = [
     {
@@ -272,11 +275,16 @@ export default async function DashboardPage(): Promise<ReactElement> {
 
   return (
     <div className="flex flex-col gap-6">
-      <header className="flex flex-col gap-2">
-        <h1 className="text-2xl leading-none font-medium tracking-[-0.02em]">Dashboard</h1>
-        <p className="text-[13px] text-muted-foreground">
-          {today} · <span>{context.organization.name}</span>
+      <header className="grid items-baseline gap-x-6 gap-y-4 lg:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]">
+        <p className="text-2xl leading-none font-medium tracking-[-0.02em] lg:col-start-2 lg:row-start-1">
+          {firstName ? `Welcome back, ${firstName}!` : "Welcome back!"}
         </p>
+        <div className="flex flex-col gap-2 lg:col-start-1 lg:row-start-1">
+          <h1 className="text-2xl leading-none font-medium tracking-[-0.02em]">Dashboard</h1>
+          <p className="text-[13px] text-muted-foreground">
+            {today} · <span>{context.organization.name}</span>
+          </p>
+        </div>
       </header>
 
       {/* Setting up is for those who can; a new staff member starts at their own work. */}

@@ -1,6 +1,6 @@
 /**
- * A piece of the folded page: its group, and where its middle sits. A line
- * drawn across the page, rather than a piece of it, never stays behind.
+ * A piece of the folded page: its box, and where its middle sits in the page's
+ * units. A line drawn across the page, rather than a piece of it, never stays behind.
  */
 export type FoldPiece = { center: Point; element: Element; line?: boolean }
 
@@ -50,10 +50,12 @@ function at(wave: Wave, ms: number): number {
   return wave.reach * Math.sin((2 * Math.PI * ms) / wave.period + wave.phase)
 }
 
-// Every piece moves about the page's middle, the group's origin, so a turn
-// about the piece's own middle is spelled out.
-function placed(offset: Point, turn: number, center: Point): string {
-  return `translate(${offset.x.toFixed(2)}px, ${offset.y.toFixed(2)}px) translate(${center.x}px, ${center.y}px) rotate(${turn.toFixed(2)}deg) translate(${-center.x}px, ${-center.y}px)`
+// Every piece moves about the page's middle, where its box's own middle sits,
+// so a turn about the piece's own middle is spelled out, in the screen's px.
+function placed(offset: Point, turn: number, center: Point, scale: number): string {
+  const px = (units: number): string => `${(units * scale).toFixed(2)}px`
+
+  return `translate(${px(offset.x)}, ${px(offset.y)}) translate(${px(center.x)}, ${px(center.y)}) rotate(${turn.toFixed(2)}deg) translate(${px(-center.x)}, ${px(-center.y)})`
 }
 
 // How hard the screen's edge turns a piece back: not at all well inside it,
@@ -75,7 +77,8 @@ function float(
   screen: { x: Span; y: Span },
   homeAt: number,
   stays: boolean,
-  random: () => number
+  random: () => number,
+  scale: number
 ): Animation {
   const total = homeAt + TOGETHER_MS
   const opening = between(random, ...OPENING_MS)
@@ -113,7 +116,12 @@ function float(
       const home = 1 - settle((ms - homeAt) / TOGETHER_MS)
       frames.push({
         offset: ms / total,
-        transform: placed({ x: home * place.x, y: home * place.y }, home * loose * (spin + at(sway, ms)), piece.center),
+        transform: placed(
+          { x: home * place.x, y: home * place.y },
+          home * loose * (spin + at(sway, ms)),
+          piece.center,
+          scale
+        ),
       })
       sampleAt += ms < release + opening + 1_500 ? OPENING_STEP_MS : STEP_MS
     }
@@ -135,7 +143,7 @@ function float(
     }
   }
 
-  frames.push({ offset: 1, transform: placed({ x: 0, y: 0 }, 0, piece.center) })
+  frames.push({ offset: 1, transform: placed({ x: 0, y: 0 }, 0, piece.center, scale) })
 
   return piece.element.animate(frames, { duration: total })
 }
@@ -149,13 +157,15 @@ function float(
  * @param corners - The screen's corners in the pieces' units, clockwise from top left.
  * @param floatMs - How long the pieces drift once the page has unfurled.
  * @param random - A source of numbers in [0, 1).
+ * @param scale - The screen's px to one of the pieces' units.
  * @returns One animation per piece.
  */
 export function startFoldLoop(
   pieces: readonly FoldPiece[],
   corners: readonly Point[],
   floatMs: number,
-  random: () => number
+  random: () => number,
+  scale: number
 ): Animation[] {
   const [topLeft, , bottomRight] = corners as [Point, Point, Point, Point]
   // Where a piece's middle may drift freely: nearly the whole screen, so the
@@ -179,20 +189,24 @@ export function startFoldLoop(
       screen,
       homeAt,
       staying.has(piece),
-      random
+      random,
+      scale
     )
   )
 }
 
-// Where a piece has got to, read back from the browser into the offset and
-// turn `placed` spells out.
-function whereIs(piece: FoldPiece): { offset: Point; turn: number } {
+// Where a piece has got to, read back from the browser in the screen's px into
+// the offset and turn `placed` spells out.
+function whereIs(piece: FoldPiece, scale: number): { offset: Point; turn: number } {
   const { a, b, e, f } = new DOMMatrixReadOnly(getComputedStyle(piece.element).transform)
   const turn = Math.atan2(b, a)
   const { x, y } = piece.center
 
   return {
-    offset: { x: e - x + x * Math.cos(turn) - y * Math.sin(turn), y: f - y + x * Math.sin(turn) + y * Math.cos(turn) },
+    offset: {
+      x: e / scale - x + x * Math.cos(turn) - y * Math.sin(turn),
+      y: f / scale - y + x * Math.sin(turn) + y * Math.cos(turn),
+    },
     turn: (turn * 180) / Math.PI,
   }
 }
@@ -203,17 +217,18 @@ function whereIs(piece: FoldPiece): { offset: Point; turn: number } {
  *
  * @param pieces - The page's pieces.
  * @param running - Their trips, in the same order.
+ * @param scale - The screen's px to one of the pieces' units, as their trips were planned.
  * @returns One animation per piece.
  */
-export function gatherHome(pieces: readonly FoldPiece[], running: readonly Animation[]): Animation[] {
-  const from = pieces.map(whereIs)
+export function gatherHome(pieces: readonly FoldPiece[], running: readonly Animation[], scale: number): Animation[] {
+  const from = pieces.map((piece) => whereIs(piece, scale))
   running.forEach((animation) => animation.cancel())
 
   return pieces.map((piece, index) =>
     piece.element.animate(
       [
-        { transform: placed(from[index]!.offset, from[index]!.turn, piece.center) },
-        { transform: placed({ x: 0, y: 0 }, 0, piece.center) },
+        { transform: placed(from[index]!.offset, from[index]!.turn, piece.center, scale) },
+        { transform: placed({ x: 0, y: 0 }, 0, piece.center, scale) },
       ],
       { duration: GATHER_MS, easing: GATHER_EASING }
     )
@@ -232,31 +247,34 @@ export type FoldLoops = {
  * Every few seconds, lets the page unfurl and drift for 10 to 15 seconds
  * before it folds back together, until stopped.
  *
- * @param figure - The group the pieces are drawn in, to find the screen's corners in it.
+ * @param figure - A group drawn in the pieces' units, at rest, to find the screen's corners and px in it.
  * @param pieces - The page's pieces.
  * @returns Brings the pieces home early, or stops the loops.
  */
 export function playFoldLoops(figure: SVGGraphicsElement, pieces: readonly FoldPiece[]): FoldLoops {
   let running: Animation[] = []
+  let scale = 1
   let timer = 0
   const rest = (): void => {
     timer = window.setTimeout(play, 5_000 + Math.random() * 3_000)
   }
   const play = (): void => {
-    const fromScreen = figure.getScreenCTM()?.inverse()
+    const toScreen = figure.getScreenCTM()
 
-    if (!fromScreen) {
+    if (!toScreen) {
       rest()
       return
     }
 
+    const fromScreen = toScreen.inverse()
     const corners = [
       [0, 0],
       [innerWidth, 0],
       [innerWidth, innerHeight],
       [0, innerHeight],
     ].map(([x, y]) => new DOMPoint(x, y).matrixTransform(fromScreen))
-    running = startFoldLoop(pieces, corners, 10_000 + Math.random() * 5_000, Math.random)
+    scale = Math.hypot(toScreen.a, toScreen.b)
+    running = startFoldLoop(pieces, corners, 10_000 + Math.random() * 5_000, Math.random, scale)
     // A stopped loop rejects, and nothing follows it.
     Promise.all(running.map((animation) => animation.finished)).then(rest, () => undefined)
   }
@@ -269,7 +287,7 @@ export function playFoldLoops(figure: SVGGraphicsElement, pieces: readonly FoldP
         return Promise.resolve()
       }
 
-      running = gatherHome(pieces, running)
+      running = gatherHome(pieces, running, scale)
       // Home, the loops carry on unless stopped.
       return Promise.all(running.map((animation) => animation.finished)).then(rest, () => undefined)
     },
