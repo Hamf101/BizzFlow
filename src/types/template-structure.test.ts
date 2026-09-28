@@ -5,16 +5,18 @@ import {
   deleteTemplateBlock,
   duplicateTemplateBlock,
   evaluateTemplateBlockDeletion,
-  evaluateTemplateBlockMove,
   evaluateTemplateDropdownOptionEdit,
   getTemplateSectionForBlock,
   insertTemplateBlock,
-  moveTemplateBlock,
+  listTemplateBlockSlots,
   moveTemplateBlockAfter,
+  moveTemplateBlockTo,
+  moveTemplateSection,
   removeTemplateSection,
   setBlockKeepWithNext,
   setFieldSideBySide,
   startTemplateSection,
+  stepTemplateBlockSlot,
   updateTemplateBlock,
   updateTemplateSection,
   withGeneratedFieldKeys
@@ -177,27 +179,6 @@ describe("template structure helpers", () => {
     expect(templateContentV3Schema.safeParse(inserted).success).toBe(true)
   })
 
-  it("repairs section and group boundaries and invalid visibility after a move", () => {
-    const moved = moveTemplateBlock(
-      createStructuredContent(),
-      SOURCE_ID,
-      "down"
-    )
-    const movedTarget = moved.blocks[0]
-
-    expect(moved.sections[0]).toMatchObject({
-      id: FIRST_SECTION_ID,
-      startBlockId: TARGET_ID
-    })
-    expect(moved.fieldGroups[0]).toMatchObject({
-      id: GROUP_ID,
-      startBlockId: TARGET_ID,
-      endBlockId: THIRD_FIELD_ID
-    })
-    expect(movedTarget).not.toHaveProperty("visibleWhen")
-    expect(templateContentV3Schema.safeParse(moved).success).toBe(true)
-  })
-
   it("identifies every conditional field before deleting its visibility source", () => {
     const result = evaluateTemplateBlockDeletion(
       createStructuredContent().blocks,
@@ -230,24 +211,6 @@ describe("template structure helpers", () => {
         DROPDOWN_DEPENDENT_ID,
         SECOND_DROPDOWN_DEPENDENT_ID
       ]
-    })
-  })
-
-  it("identifies conditional fields made invalid by an adjacent move", () => {
-    const blocks = createStructuredContent().blocks
-
-    expect(evaluateTemplateBlockMove(blocks, SOURCE_ID, "down")).toMatchObject({
-      success: false,
-      code: "visibility_order_conflict",
-      dependentBlockIds: [TARGET_ID]
-    })
-    expect(evaluateTemplateBlockMove(blocks, TARGET_ID, "up")).toMatchObject({
-      success: false,
-      code: "visibility_order_conflict",
-      dependentBlockIds: [TARGET_ID]
-    })
-    expect(evaluateTemplateBlockMove(blocks, THIRD_FIELD_ID, "up")).toEqual({
-      success: true
     })
   })
 
@@ -819,5 +782,140 @@ describe("generated field keys", () => {
 
     const good = { ...content, blocks: [keyed(SOURCE_ID, "client_name")] }
     expect(withGeneratedFieldKeys(good)).toBe(good)
+  })
+})
+
+describe("moving blocks and sections", () => {
+  const [INTRO, NAME, COMPANY, ACCOUNT, TERMS, NUMBER, THANKS] = [1, 2, 3, 4, 5, 6, 7].map(
+    (index) => `61000000-0000-4000-8000-00000000000${index}`
+  ) as [string, string, string, string, string, string, string]
+  const CUSTOMER = "61000000-0000-4000-8000-000000000011"
+  const TERMS_SECTION = "61000000-0000-4000-8000-000000000012"
+  const ROW = "61000000-0000-4000-8000-000000000021"
+  const FILLER = "61000000-0000-4000-8000-000000000031"
+  const text = (id: string, label: string, visibleWhen?: { sourceBlockId: string; operator: "equals"; value: boolean }) => ({
+    fieldKey: label.toLowerCase().replace(/ /g, "_"), helpText: null, id, label, multiline: false, placeholder: null, required: false, type: "text_field" as const,
+    ...(visibleWhen ? { visibleWhen } : {}),
+  })
+
+  // Welcome, then Customer: Name and Company side by side, and a checkbox;
+  // then Terms: a line, a number asked only with an account, and thanks.
+  function agreement(): TemplateContentV3 {
+    return {
+      ...createBlankTemplateContent(),
+      blocks: [
+        { alignment: "left", id: INTRO, text: "Welcome", type: "paragraph" },
+        text(NAME, "Name"),
+        text(COMPANY, "Company"),
+        { checkedByDefault: false, fieldKey: "has_account", helpText: null, id: ACCOUNT, label: "Has an account", required: false, type: "checkbox_field" },
+        { alignment: "left", id: TERMS, text: "Pay monthly.", type: "paragraph" },
+        text(NUMBER, "Account number", { operator: "equals", sourceBlockId: ACCOUNT, value: true }),
+        { alignment: "left", id: THANKS, text: "Thanks.", type: "paragraph" },
+      ],
+      sections: [
+        { id: CUSTOMER, keepTogether: false, label: "Customer", pageBreakBefore: false, startBlockId: NAME },
+        { id: TERMS_SECTION, keepTogether: false, label: "Terms", pageBreakBefore: true, startBlockId: TERMS },
+      ],
+      fieldGroups: [{ columns: 2, endBlockId: COMPANY, id: ROW, keepTogether: false, label: null, startBlockId: NAME }],
+      blockRules: [{ blockId: ACCOUNT, keepWithNext: true, pageBreakBefore: false }],
+    }
+  }
+  const step = (content: TemplateContentV3, blockId: string, direction: "up" | "down"): TemplateContentV3 => {
+    const slot = stepTemplateBlockSlot(content, blockId, direction)
+    const moved = slot ? moveTemplateBlockTo(content, blockId, slot, FILLER) : null
+
+    if (!moved?.success) {
+      throw new Error(`Could not move ${blockId} ${direction}.`)
+    }
+
+    expect(templateContentV3Schema.safeParse(moved.content).success).toBe(true)
+    return moved.content
+  }
+  const order = (content: TemplateContentV3) => content.blocks.map((block) => block.id)
+  const starts = (content: TemplateContentV3) => content.sections.map((section) => [section.id, section.startBlockId])
+
+  it("steps a block past a row as one piece and a section's title as one step, moving nothing else", () => {
+    const content = agreement()
+    const up = step(content, ACCOUNT, "up")
+    const upAgain = step(up, ACCOUNT, "up")
+    const down = step(content, ACCOUNT, "down")
+
+    // Above the row, under the Customer title; then above that title.
+    expect(order(up)).toEqual([INTRO, ACCOUNT, NAME, COMPANY, TERMS, NUMBER, THANKS])
+    expect(starts(up)).toEqual([[CUSTOMER, ACCOUNT], [TERMS_SECTION, TERMS]])
+    expect(order(upAgain)).toEqual(order(up))
+    expect(starts(upAgain)).toEqual([[CUSTOMER, NAME], [TERMS_SECTION, TERMS]])
+    // Under the Terms title, which keeps its page break; the row never changes.
+    expect(order(down)).toEqual([INTRO, NAME, COMPANY, ACCOUNT, TERMS, NUMBER, THANKS])
+    expect(starts(down)).toEqual([[CUSTOMER, NAME], [TERMS_SECTION, ACCOUNT]])
+    expect(down.sections[1]?.pageBreakBefore).toBe(true)
+
+    for (const moved of [up, upAgain, down]) {
+      expect(moved.fieldGroups).toEqual(content.fieldGroups)
+      // The same block, key, condition and rules: nothing is recreated.
+      expect(moved.blocks.find((block) => block.id === ACCOUNT)).toBe(content.blocks[3])
+      expect(moved.blockRules).toEqual(content.blockRules)
+    }
+  })
+
+  it("moves a field across its own row before taking it out of the row", () => {
+    const content = agreement()
+    const left = step(content, COMPANY, "up")
+    const above = step(left, COMPANY, "up")
+    const below = step(content, COMPANY, "down")
+
+    expect(order(left)).toEqual([INTRO, COMPANY, NAME, ACCOUNT, TERMS, NUMBER, THANKS])
+    expect(left.fieldGroups).toEqual([{ ...content.fieldGroups[0], endBlockId: NAME, startBlockId: COMPANY }])
+    expect(starts(left)[0]).toEqual([CUSTOMER, COMPANY])
+    // Out of the row, one field has nothing to sit beside, so the row goes.
+    expect(above.fieldGroups).toEqual([])
+    expect(order(above)).toEqual(order(left))
+    expect(order(below)).toEqual([INTRO, NAME, COMPANY, ACCOUNT, TERMS, NUMBER, THANKS])
+    expect(below.fieldGroups).toEqual([])
+    // A drag drops beside a row, never inside one.
+    expect(listTemplateBlockSlots(content, COMPANY, false).some((slot) => slot.inGroup)).toBe(false)
+  })
+
+  it("leaves the title of a section it empties, over an empty line", () => {
+    const content: TemplateContentV3 = {
+      ...agreement(),
+      blocks: agreement().blocks.filter((block) => block.id !== NUMBER && block.id !== THANKS),
+    }
+    const slot = listTemplateBlockSlots(content, TERMS, false).find((candidate) => candidate.index === 0 && candidate.opens === null)
+    const moved = slot ? moveTemplateBlockTo(content, TERMS, slot, FILLER) : null
+
+    expect(moved?.success).toBe(true)
+
+    if (moved?.success) {
+      expect(order(moved.content)).toEqual([TERMS, INTRO, NAME, COMPANY, ACCOUNT, FILLER])
+      expect(starts(moved.content)).toEqual([[CUSTOMER, NAME], [TERMS_SECTION, FILLER]])
+      expect(templateContentV3Schema.safeParse(moved.content).success).toBe(true)
+    }
+  })
+
+  it("refuses to put a conditional field above the field it depends on", () => {
+    const content = agreement()
+    const refusal = (from: TemplateContentV3, blockId: string, direction: "up" | "down") =>
+      moveTemplateBlockTo(from, blockId, stepTemplateBlockSlot(from, blockId, direction)!, FILLER)
+    const twiceUp = step(step(content, NUMBER, "up"), NUMBER, "up")
+    const twiceDown = step(step(content, ACCOUNT, "down"), ACCOUNT, "down")
+
+    // Each may come right up to the other, and no further.
+    expect(order(twiceUp)).toEqual([INTRO, NAME, COMPANY, ACCOUNT, NUMBER, TERMS, THANKS])
+    expect(order(twiceDown)).toEqual([INTRO, NAME, COMPANY, TERMS, ACCOUNT, NUMBER, THANKS])
+    expect(refusal(twiceUp, NUMBER, "up")).toMatchObject({ code: "visibility_order_conflict", dependentBlockIds: [NUMBER], success: false })
+    expect(refusal(twiceDown, ACCOUNT, "down")).toMatchObject({ code: "visibility_order_conflict", dependentBlockIds: [NUMBER], success: false })
+  })
+
+  it("moves a section with all it holds past its neighbour, but never past writing outside any section", () => {
+    const content = { ...agreement(), blocks: agreement().blocks.map((block) => (block.id === NUMBER ? text(NUMBER, "Account number") : block)) }
+    const moved = moveTemplateSection(content, TERMS_SECTION, "up")
+
+    expect(moved.success && order(moved.content)).toEqual([INTRO, TERMS, NUMBER, THANKS, NAME, COMPANY, ACCOUNT])
+    expect(moved.success && moved.content.sections.map((section) => section.id)).toEqual([TERMS_SECTION, CUSTOMER])
+    expect(moved.success && templateContentV3Schema.safeParse(moved.content).success).toBe(true)
+    expect(moveTemplateSection(content, CUSTOMER, "up")).toEqual({ content, success: true })
+    // With its account number still asked only after the checkbox, Terms stays below it.
+    expect(moveTemplateSection(agreement(), TERMS_SECTION, "up")).toMatchObject({ dependentBlockIds: [NUMBER], success: false })
   })
 })

@@ -12,6 +12,7 @@ import {
   ChevronDown,
   Copy,
   Columns2,
+  GripVertical,
   Link2,
   Section,
   Settings2,
@@ -24,6 +25,7 @@ import {
   Fragment,
   type KeyboardEvent,
   type MouseEvent,
+  type PointerEvent,
   type ReactElement,
   type ReactNode,
   useContext,
@@ -69,6 +71,8 @@ export type CanvasActions = Readonly<{
   answers: Record<string, unknown>
   controller: EditorController
   designable: boolean
+  /** The block being dragged to a new place, if any. */
+  dragging: string | null
   fields: "design" | "fill" | "read"
   /** Whether the page is a phone's reflowed column rather than sheets of paper. */
   narrow: boolean
@@ -80,6 +84,8 @@ export type CanvasActions = Readonly<{
   onListInput: (block: ListBlock, item: number, text: string, runs: TextRun[] | undefined) => void
   onListKeyDown: (event: globalThis.KeyboardEvent, caret: TextCaret, block: ListBlock, item: number) => void
   placeholderFor: (blockId: string) => string | undefined
+  /** Starts dragging a block, from a press on it or on its grip; absent where blocks cannot move. */
+  startDrag?: (event: PointerEvent<HTMLElement>, blockId: string, grip?: boolean) => void
   textEditable: boolean
 }>
 
@@ -124,6 +130,7 @@ export function CanvasBlock({
   const selected = controller.selectedBlockId === block.id
   const wrapper = useRef<HTMLDivElement>(null)
   const field = isField(block)
+  const text = isLine(block) || isList(block)
   const canSelect = actions.textEditable || (actions.designable && field)
 
   useEffect(() => {
@@ -200,18 +207,27 @@ export function CanvasBlock({
         "rounded-[0.35em] outline-none",
         placed ? "pointer-events-auto absolute" : "relative",
         canSelect && field && actions.fields === "design" && "cursor-default",
-        selected && "ring-2 ring-primary ring-offset-[0.4em] ring-offset-card"
+        selected && actions.dragging !== block.id && "ring-2 ring-primary ring-offset-[0.4em] ring-offset-card",
+        // Words held still are ready to drag; a block being dragged rides above the page.
+        "data-held:ring-2 data-held:ring-primary/40 data-held:ring-offset-[0.4em] data-held:ring-offset-card",
+        actions.dragging === block.id && "z-40 bg-card opacity-70 shadow-xl"
       )}
       data-block-id={block.id}
       data-block-type={block.type}
       data-selected={selected || undefined}
       onKeyDown={handleKeyDown}
       onMouseDown={handleMouseDown}
+      // A picture placed on a page moves on its page instead.
+      onPointerDown={placed ? undefined : (event) => actions.startDrag?.(event, block.id)}
       ref={wrapper}
       style={placed && block.type === "image" && block.placement ? boxStyle(block.placement) : undefined}
       tabIndex={selected ? -1 : undefined}
     >
-      {selected && canSelect ? <BlockToolbar actions={actions} block={block} /> : null}
+      {selected && canSelect && actions.dragging !== block.id ? <BlockToolbar actions={actions} block={block} /> : null}
+      {/* On a touch screen the block in use shows a grip beside it: in a row, between the columns. */}
+      {!placed && (selected || (text && controller.activeBlockId === block.id)) ? (
+        <Grip actions={actions} blockId={block.id} />
+      ) : null}
       <BlockBody actions={actions} block={block} placed={placed} />
     </div>
   )
@@ -505,6 +521,8 @@ function BlockToolbar({ actions, block }: { actions: CanvasActions; block: Templ
     return index >= start && index <= end
   })
   const sideBySide = group?.columns === 2
+  // Side by side, fields pair up a row at a time: every other one sits on the right.
+  const onRight = sideBySide && (index - blocks.findIndex((candidate) => candidate.id === group?.startBlockId)) % 2 === 1
   const canPair = sideBySide || setFieldSideBySide(controller.content, block.id, true, "preview") !== controller.content
   const keepWithNext = controller.content.blockRules.some((rule) => rule.blockId === block.id && rule.keepWithNext)
 
@@ -525,7 +543,12 @@ function BlockToolbar({ actions, block }: { actions: CanvasActions; block: Templ
 
   return (
     <div
-      className="absolute right-0 bottom-full z-30 mb-[0.8em] flex max-w-[calc(100vw-3rem)] flex-wrap justify-end items-center gap-0.5 rounded-[12px] border border-border bg-popover p-1 text-sm text-popover-foreground shadow-lg"
+      className={cn(
+        "absolute bottom-full z-30 mb-[0.8em] flex w-max max-w-[calc(100vw-3rem)] flex-wrap items-center gap-0.5 rounded-[12px] border border-border bg-popover p-1 text-sm text-popover-foreground shadow-lg",
+        // On a phone, a field on the left of a row is half the column wide, so its
+        // toolbar runs across from its left edge instead of squeezing above it.
+        actions.narrow && sideBySide && !onRight ? "left-0" : "right-0 justify-end"
+      )}
       data-slot="block-toolbar"
       role="toolbar"
       aria-label="Block"
@@ -650,11 +673,17 @@ function BlockToolbar({ actions, block }: { actions: CanvasActions; block: Templ
       {/* A picture placed on a page has no place in the order to move to. */}
       {block.type === "image" && block.placement ? null : (
         <>
-          <ToolButton disabled={index <= 0} label="Move up" onClick={() => controller.move(block.id, "up")}>
+          <ToolButton
+            disabled={!controller.canMove(block.id, "up")}
+            keys="Control+Shift+ArrowUp Meta+Shift+ArrowUp"
+            label="Move up"
+            onClick={() => controller.move(block.id, "up")}
+          >
             <ArrowUp />
           </ToolButton>
           <ToolButton
-            disabled={index >= blocks.length - 1}
+            disabled={!controller.canMove(block.id, "down")}
+            keys="Control+Shift+ArrowDown Meta+Shift+ArrowDown"
             label="Move down"
             onClick={() => controller.move(block.id, "down")}
           >
@@ -672,18 +701,22 @@ function BlockToolbar({ actions, block }: { actions: CanvasActions; block: Templ
 function ToolButton({
   children,
   disabled,
+  keys,
   label,
   onClick,
   pressed,
 }: {
   children: ReactNode
   disabled?: boolean
+  /** The keys that do the same, for screen readers. */
+  keys?: string
   label: string
   onClick: () => void
   pressed?: boolean
 }): ReactElement {
   return (
     <Button
+      aria-keyshortcuts={keys}
       aria-label={label}
       aria-pressed={pressed}
       className={cn("size-10 md:pointer-fine:size-8", pressed && "bg-secondary text-secondary-foreground")}
@@ -696,6 +729,42 @@ function ToolButton({
     >
       {children}
     </Button>
+  )
+}
+
+/**
+ * What a finger drags a block by, shown only on a touch screen: a press that
+ * travels moves the block, a tap selects it, and the arrow keys move it a
+ * step at a time.
+ *
+ * @param props - The block, and what the canvas lends it.
+ * @returns The grip, or nothing where blocks cannot move.
+ */
+function Grip({ actions, blockId }: { actions: CanvasActions; blockId: string }): ReactElement | null {
+  const { controller, startDrag } = actions
+
+  if (!startDrag) {
+    return null
+  }
+
+  return (
+    <button
+      aria-keyshortcuts="ArrowUp ArrowDown"
+      aria-label="Move"
+      className="absolute top-0 -right-5 hidden h-[1.5em] w-5 touch-none place-items-center rounded-md text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/40 pointer-coarse:grid"
+      onClick={() => controller.select(blockId)}
+      onKeyDown={(event) => {
+        if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+          event.preventDefault()
+          controller.move(blockId, event.key === "ArrowUp" ? "up" : "down")
+        }
+      }}
+      onPointerDown={(event) => startDrag(event, blockId, true)}
+      title="Drag to move"
+      type="button"
+    >
+      <GripVertical aria-hidden="true" className="size-4" />
+    </button>
   )
 }
 

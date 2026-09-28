@@ -11,6 +11,7 @@ import {
   useRef,
   useState,
 } from "react"
+import { createPortal } from "react-dom"
 
 import {
   findInsertChoices,
@@ -46,6 +47,7 @@ import { SectionPieces } from "./section-pieces"
 import { EditorSection } from "./editor-section"
 import { MarginGuides } from "@/components/editor/margin-guides"
 import { SlashMenu } from "@/components/editor/slash-menu"
+import { type DropTarget, useBlockDrag } from "@/components/editor/use-block-drag"
 import { addPageBreak, type EditorController, type FocusRequest } from "@/components/editor/use-editor-controller"
 import { resolveDocumentSurfaceInk, type DocumentSurface } from "@/lib/document-surface"
 import { cn } from "@/lib/utils"
@@ -57,7 +59,13 @@ import {
   type TemplateRenderPlan,
 } from "@/services/templates/template-render-plan"
 import type { TextRun } from "@/types/template"
-import { updateTemplateBlock } from "@/types/template-structure"
+import {
+  getTemplateBlockSlot,
+  listTemplateBlockSlots,
+  moveTemplateBlockTo,
+  type TemplateBlockSlot,
+  updateTemplateBlock,
+} from "@/types/template-structure"
 import { imageSource } from "@/types/template-images"
 
 /** CSS pixels in a printed point: a page at 100% is its paper's real size. */
@@ -126,6 +134,10 @@ export function EditorCanvas({
     [answers, content, documentTitle, fields]
   )
   const units = useMemo(() => createUnits(plan), [plan])
+  const unitOf = useMemo(
+    () => new Map(units.flatMap((unit) => unit.blocks.map(({ block }): [string, string] => [block.id, unit.id]))),
+    [units]
+  )
   const placedImages = plan.blocks.flatMap(({ block }) =>
     block.type === "image" && block.placement ? [{ block, page: block.placement.page }] : []
   )
@@ -149,6 +161,7 @@ export function EditorCanvas({
   const [layout, setLayout] = useState<ReturnType<typeof paginate>>({ inside: {}, pageCount: 1, pages: {}, spacers: {} })
   const [slash, setSlash] = useState<SlashState | null>(null)
   const [fontsReady, setFontsReady] = useState(0)
+  const { begin, dragging, indicator } = useBlockDrag<TemplateBlockSlot>({ locate, onDrop: drop, zoom: narrow ? 1 : zoom })
   const slashChoices = useMemo(
     () => (slash ? findInsertChoices({ allowFiles, query: slash.query }) : []),
     [allowFiles, slash]
@@ -344,10 +357,66 @@ export function EditorCanvas({
     return false
   }
 
+  // Where a block dragged to a height on screen lands: the gap nearest the
+  // pointer, with a place above and below each section's title, and nowhere
+  // while the pointer is over the block's own place.
+  function locate(blockId: string, y: number): DropTarget<TemplateBlockSlot> | null {
+    const box = (id: string | undefined): DOMRect | undefined =>
+      id === undefined ? undefined : unitElements.current.get(unitOf.get(id) ?? "")?.getBoundingClientRect()
+    const own = box(blockId)
+    const current = getTemplateBlockSlot(content, blockId)
+
+    if (!own || !current || (y >= own.top && y <= own.bottom)) {
+      return null
+    }
+
+    const rest = content.blocks.filter((block) => block.id !== blockId)
+    const titles = new Map(
+      [...(rootRef.current?.querySelectorAll<HTMLElement>("[data-section-title]") ?? [])].map((title) => [
+        title.dataset.sectionTitle,
+        title.getBoundingClientRect(),
+      ])
+    )
+    let best: (DropTarget<TemplateBlockSlot> & { distance: number }) | null = null
+
+    for (const slot of listTemplateBlockSlots(content, blockId, false)) {
+      const before = box(rest[slot.index - 1]?.id)
+      const after = box(rest[slot.index]?.id)
+      const title = slot.opens ? titles.get(slot.opens) : undefined
+      const edge = after ?? before
+
+      if (!edge || (slot.index === current.index && slot.opens === current.opens && !current.inGroup)) {
+        continue
+      }
+
+      // Under a title the line sits below it; elsewhere it fills the gap
+      // between the blocks either side, even across the gap between pages.
+      const top = title ? (title.top + title.bottom) / 2 : (before?.bottom ?? edge.top)
+      const bottom = title ? title.bottom : (after?.top ?? edge.bottom)
+      const distance = y < top ? top - y : y > bottom ? y - bottom : 0
+
+      if (!best || distance < best.distance) {
+        const line = { left: edge.left, top: title || y - top > bottom - y ? bottom : top, width: edge.width }
+
+        best = { distance, line, slot, valid: true }
+      }
+    }
+
+    return best && { line: best.line, slot: best.slot, valid: moveTemplateBlockTo(content, blockId, best.slot, blockId).success }
+  }
+
+  // A block let go somewhere new stays chosen, so its place is plain to see.
+  function drop(blockId: string, slot: TemplateBlockSlot): void {
+    if (controller.moveTo(blockId, slot)) {
+      controller.select(blockId)
+    }
+  }
+
   const actions: CanvasActions = {
     answers,
     controller,
     designable,
+    dragging,
     fields,
     narrow,
     focusFor(caretKey: string): FocusRequest | null {
@@ -501,6 +570,7 @@ export function EditorCanvas({
         controller.select(block.id)
       }
     },
+    startDrag: textEditable ? begin : undefined,
     placeholderFor(blockId: string): string | undefined {
       if (!textEditable) {
         return undefined
@@ -595,6 +665,29 @@ export function EditorCanvas({
     </Fragment>
   ))
 
+  // The line a dragged block would land on, and what a screen reader hears
+  // after a move.
+  const overlays = (
+    <>
+      {dragging
+        ? createPortal(
+            <div
+              aria-hidden="true"
+              className="pointer-events-none fixed z-50 h-0.5 -translate-y-1/2 rounded-full bg-primary data-[valid=false]:bg-destructive"
+              hidden
+              ref={indicator}
+            />,
+            document.body
+          )
+        : null}
+      {textEditable ? (
+        <p aria-live="polite" className="sr-only" data-slot="editor-announcement">
+          {controller.announcement}
+        </p>
+      ) : null}
+    </>
+  )
+
   if (narrow) {
     return (
       <div
@@ -623,6 +716,7 @@ export function EditorCanvas({
             onHover={(active) => setSlash({ ...slash, active })}
           />
         ) : null}
+        {overlays}
       </div>
     )
   }
@@ -758,6 +852,7 @@ export function EditorCanvas({
           onHover={(active) => setSlash({ ...slash, active })}
         />
       ) : null}
+      {overlays}
     </div>
   )
 }

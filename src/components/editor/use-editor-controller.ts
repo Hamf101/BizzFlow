@@ -30,13 +30,16 @@ import {
   deleteTemplateBlock,
   duplicateTemplateBlock,
   evaluateTemplateBlockDeletion,
-  evaluateTemplateBlockMove,
   insertTemplateBlock,
   getTemplateSectionForBlock,
-  moveTemplateBlock,
+  moveTemplateBlockTo,
+  moveTemplateSection,
   removeTemplateSection,
   setBlockKeepWithNext,
   setFieldSideBySide,
+  stepTemplateBlockSlot,
+  type TemplateBlockSlot,
+  type TemplateMoveResult,
   updateTemplateBlock,
   updateTemplateSection,
 } from "@/types/template-structure"
@@ -74,6 +77,8 @@ export function useEditorController({
   const [settingsBlockId, setSettingsBlockId] = useState<string | null>(null)
   // The line the caret was last in: what the toolbar formats.
   const [line, setLine] = useState<Editor | null>(null)
+  // What a screen reader says after a move.
+  const [announcement, setAnnouncement] = useState("")
 
   function requestFocus(target: CaretTarget): void {
     setSelectedBlockId(null)
@@ -243,15 +248,62 @@ export function useEditorController({
     select(id)
   }
 
-  function move(blockId: string, direction: "up" | "down"): void {
-    const evaluation = evaluateTemplateBlockMove(content.blocks, blockId, direction)
+  /**
+   * Moves a block to a place, leaving everything else where it is, and says
+   * where it went; a move that would put a conditional field above the field
+   * it depends on is refused with the reason.
+   *
+   * @param blockId - The block.
+   * @param slot - Where to.
+   * @returns Whether it moved.
+   */
+  function moveTo(blockId: string, slot: TemplateBlockSlot): boolean {
+    const result = moveTemplateBlockTo(content, blockId, slot, crypto.randomUUID())
 
-    if (!evaluation.success) {
-      bizflowToast.error(evaluation.message)
-      return
+    if (!applyMove(result) || !result.success) {
+      return false
     }
 
-    change((current) => moveTemplateBlock(current, blockId, direction))
+    setAnnouncement(describeMove(result.content, blockId))
+    return true
+  }
+
+  // One step up or down: past a row as one piece, and past a section's title.
+  function move(blockId: string, direction: "up" | "down"): void {
+    const slot = stepTemplateBlockSlot(content, blockId, direction)
+
+    if (slot) {
+      moveTo(blockId, slot)
+    }
+  }
+
+  /**
+   * Moves a section, with all it holds, above or below its neighbour.
+   *
+   * @param sectionId - The section.
+   * @param direction - Which way.
+   */
+  function moveSection(sectionId: string, direction: "up" | "down"): void {
+    const label = content.sections.find((section) => section.id === sectionId)?.label ?? "Section"
+
+    if (applyMove(moveTemplateSection(content, sectionId, direction))) {
+      setAnnouncement(`${label} moved ${direction}.`)
+    }
+  }
+
+  function applyMove(result: TemplateMoveResult): boolean {
+    if (!result.success) {
+      bizflowToast.error(result.message)
+      return false
+    }
+
+    // A section a move empties keeps a line, which a full page has no room for.
+    if (result.content === content || (result.content.blocks.length > content.blocks.length && !hasRoom())) {
+      return false
+    }
+
+    change(() => result.content)
+    return true
   }
 
   function remove(blockId: string): void {
@@ -344,6 +396,9 @@ export function useEditorController({
   return {
     activeBlockId,
     addPage,
+    announcement,
+    /** Whether a block has somewhere to go, one step up or down. */
+    canMove: (blockId: string, direction: "up" | "down") => stepTemplateBlockSlot(content, blockId, direction) !== null,
     change,
     /** The section the caret is in, or its title's section, or null before any. */
     currentSectionId: sectionOfTitle(activeBlockId) ?? (activeBlockId ? getTemplateSectionForBlock(content, activeBlockId)?.id ?? null : null),
@@ -354,6 +409,8 @@ export function useEditorController({
     insert,
     line,
     move,
+    moveSection,
+    moveTo,
     openSettings: setSettingsBlockId,
     remove,
     removeSection,
@@ -408,4 +465,19 @@ function createTextBlock(id: string, kind: TextBlockKind): TemplateBlock {
     default:
       return { id, items: [""], type: kind.type }
   }
+}
+
+// Where a block now is, as a screen reader should hear it.
+function describeMove(content: TemplateContentV3, blockId: string): string {
+  const index = content.blocks.findIndex((block) => block.id === blockId)
+  const block = content.blocks[index]
+  const section = getTemplateSectionForBlock(content, blockId)
+  const name =
+    block && "label" in block
+      ? block.label
+      : block && "text" in block && block.text.trim()
+        ? `“${block.text.trim().split(/\s+/).slice(0, 6).join(" ")}”`
+        : "Block"
+
+  return `${name} moved to ${index + 1} of ${content.blocks.length}${section ? `, in ${section.label}` : ""}.`
 }

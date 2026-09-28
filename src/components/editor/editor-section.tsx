@@ -1,6 +1,6 @@
 "use client"
 
-import { FilePlus2, FoldVertical, Trash2 } from "lucide-react"
+import { ArrowDown, ArrowUp, FilePlus2, FoldVertical, Trash2 } from "lucide-react"
 import { type ReactElement, useEffect, useRef } from "react"
 
 import { EditableText } from "./editable-text"
@@ -20,6 +20,7 @@ export function EditorSection({ controller, section }: { controller: EditorContr
   const host = useRef<HTMLDivElement>(null)
   const active = controller.activeBlockId === key
   const focus = controller.focus?.blockId === key ? controller.focus : null
+  const place = controller.content.sections.findIndex((candidate) => candidate.id === section.id)
 
   useEffect(() => {
     const element = host.current?.querySelector<HTMLElement>("[contenteditable]")
@@ -60,6 +61,13 @@ export function EditorSection({ controller, section }: { controller: EditorContr
             ["keepTogether", "Keep on one page", FoldVertical],
           ] as const).map(([rule, label, Icon]) => (
             <Button aria-label={label} aria-pressed={section[rule]} className="size-10 aria-pressed:bg-secondary aria-pressed:text-secondary-foreground md:pointer-fine:size-8" key={rule} onClick={() => controller.updateSection(section.id, { [rule]: !section[rule] })} size="icon-sm" title={label} type="button" variant="ghost"><Icon /></Button>
+          ))}
+          <span aria-hidden="true" className="mx-0.5 h-5 w-px bg-border" />
+          {([
+            ["up", "Move section up", ArrowUp, place <= 0],
+            ["down", "Move section down", ArrowDown, place === controller.content.sections.length - 1],
+          ] as const).map(([direction, label, Icon, disabled]) => (
+            <Button aria-label={label} className="size-10 md:pointer-fine:size-8" disabled={disabled} key={direction} onClick={() => controller.moveSection(section.id, direction)} size="icon-sm" title={label} type="button" variant="ghost"><Icon /></Button>
           ))}
           <Button aria-label="Remove section" className="size-10 md:pointer-fine:size-8" onClick={() => controller.removeSection(section.id)} size="icon-sm" title="Remove section, keep its content" type="button" variant="ghost"><Trash2 /></Button>
         </div>

@@ -59,6 +59,38 @@ export type TemplateVisibilityStructureEditResult =
       dependentBlockIds: readonly string[]
     }>
 
+/**
+ * A place a block can be moved to, counted among the other blocks with it
+ * lifted out: before the block at `index`, or at the end.
+ */
+export type TemplateBlockSlot = Readonly<{
+  index: number
+  /** The section whose title it goes under, as its first block; null to follow what comes before. */
+  opens: string | null
+  /** Whether it stays in its own group of fields. */
+  inGroup: boolean
+}>
+
+/** A move made, or refused because a conditional field would come before its source. */
+export type TemplateMoveResult =
+  | Readonly<{ success: true; content: TemplateContentV3 }>
+  | Extract<TemplateVisibilityStructureEditResult, { success: false }>
+
+type LiftedBlock = Readonly<{
+  at: number
+  block: TemplateBlock
+  /** The section with no other block, whose title stays where the block was. */
+  emptied: string | null
+  /** Its own group, when the group has other fields, by where they sit among `rest`. */
+  own: Readonly<{ group: TemplateFieldGroup; start: number; end: number }> | null
+  opens: string | null
+  /** Every other group's fields, by where they sit among `rest`. */
+  others: readonly Readonly<{ start: number; end: number }>[]
+  rest: readonly TemplateBlock[]
+  /** Where each section's first block sits among `rest`. */
+  starts: ReadonlyMap<number, string>
+}>
+
 type IndexedFieldGroup = {
   group: TemplateFieldGroup
   startIndex: number
@@ -203,65 +235,6 @@ export function evaluateTemplateBlockDeletion(
     dependentBlockIds: dependents.map(
       (dependent: TemplateFieldBlock): string => dependent.id
     )
-  }
-}
-
-/**
- * Validates an adjacent block move without placing conditional fields before
- * their checkbox or dropdown visibility source.
- *
- * @param blocks - Current canonical block order.
- * @param blockId - Block proposed for movement.
- * @param direction - Adjacent movement direction.
- * @returns Success for a safe or boundary move, or an actionable refusal with
- * every conditional field made invalid by the proposed order.
- */
-export function evaluateTemplateBlockMove(
-  blocks: readonly TemplateBlock[],
-  blockId: string,
-  direction: "up" | "down"
-): TemplateVisibilityStructureEditResult {
-  const blockIndex = blocks.findIndex(
-    (block: TemplateBlock): boolean => block.id === blockId
-  )
-
-  if (blockIndex === -1) {
-    return createVisibilityStructureEditFailure(
-      "block_not_found",
-      "The block is no longer available. Select it again before moving it."
-    )
-  }
-
-  const targetIndex = direction === "up" ? blockIndex - 1 : blockIndex + 1
-
-  if (targetIndex < 0 || targetIndex >= blocks.length) {
-    return { success: true }
-  }
-
-  const proposedBlocks = [...blocks]
-  const block = proposedBlocks[blockIndex]
-  const targetBlock = proposedBlocks[targetIndex]
-
-  if (block === undefined || targetBlock === undefined) {
-    return { success: true }
-  }
-
-  proposedBlocks[blockIndex] = targetBlock
-  proposedBlocks[targetIndex] = block
-
-  const dependentBlockIds = findVisibilityOrderConflicts(proposedBlocks)
-
-  if (dependentBlockIds.length === 0) {
-    return { success: true }
-  }
-
-  const fieldWord = dependentBlockIds.length === 1 ? "field" : "fields"
-
-  return {
-    success: false,
-    code: "visibility_order_conflict",
-    message: `This move would place ${dependentBlockIds.length} conditional ${fieldWord} before the checkbox or dropdown that controls visibility. Keep each source above the fields it controls, or change the affected conditions first.`,
-    dependentBlockIds
   }
 }
 
@@ -624,6 +597,238 @@ export function setBlockKeepWithNext(
 }
 
 /**
+ * Lists every place a block can be moved to, top to bottom. A row of fields
+ * is one piece that a block goes above or below, and a section's title has a
+ * place on each side: before it, closing the section above, and under it,
+ * opening its section.
+ *
+ * @param content - Editable version-three content.
+ * @param blockId - The block to move.
+ * @param withinGroup - Whether the places inside the block's own group count,
+ *   as they do for moving it a step at a time; a drag goes only beside rows.
+ * @returns The places, or none when the block is missing.
+ */
+export function listTemplateBlockSlots(
+  content: TemplateContentV3,
+  blockId: string,
+  withinGroup: boolean
+): TemplateBlockSlot[] {
+  const lifted = liftTemplateBlock(content, blockId)
+
+  if (!lifted) {
+    return []
+  }
+
+  const { emptied, others, own, rest, starts } = lifted
+  const inside = (gap: number, range: Readonly<{ start: number; end: number }>): boolean => gap > range.start && gap <= range.end
+  const slots: TemplateBlockSlot[] = []
+
+  for (let gap = 0; gap <= rest.length; gap += 1) {
+    const opens = starts.get(gap) ?? null
+
+    if (others.some((range) => inside(gap, range))) {
+      continue
+    }
+
+    if (own && inside(gap, own)) {
+      if (withinGroup) {
+        slots.push({ index: gap, inGroup: true, opens: null })
+      }
+
+      continue
+    }
+
+    if (withinGroup && own?.end === gap - 1) {
+      slots.push({ index: gap, inGroup: true, opens: null })
+    }
+
+    slots.push({ index: gap, inGroup: false, opens: null })
+
+    if (emptied && gap === lifted.at) {
+      slots.push({ index: gap, inGroup: false, opens: emptied })
+    }
+
+    if (opens) {
+      slots.push({ index: gap, inGroup: false, opens })
+    }
+
+    if (withinGroup && own?.start === gap) {
+      slots.push({ index: gap, inGroup: true, opens })
+    }
+  }
+
+  return slots
+}
+
+/**
+ * The place a block has now, as `listTemplateBlockSlots` counts places.
+ *
+ * @param content - Editable version-three content.
+ * @param blockId - The block.
+ * @returns Its place, or null for a missing block.
+ */
+export function getTemplateBlockSlot(content: TemplateContentV3, blockId: string): TemplateBlockSlot | null {
+  const lifted = liftTemplateBlock(content, blockId)
+
+  return lifted ? currentSlot(lifted) : null
+}
+
+/**
+ * The place one step up or down from where a block is.
+ *
+ * @param content - Editable version-three content.
+ * @param blockId - The block to move.
+ * @param direction - Which way.
+ * @returns The place, or null at the top or bottom, or for a missing block.
+ */
+export function stepTemplateBlockSlot(
+  content: TemplateContentV3,
+  blockId: string,
+  direction: "up" | "down"
+): TemplateBlockSlot | null {
+  const current = getTemplateBlockSlot(content, blockId)
+  const slots = listTemplateBlockSlots(content, blockId, true)
+  const at = current ? slots.findIndex((slot) => isSameSlot(slot, current)) : -1
+
+  return at === -1 ? null : (slots[at + (direction === "up" ? -1 : 1)] ?? null)
+}
+
+/**
+ * Moves a block to a place. Only the block moves: every other block keeps
+ * its section and its row, and the block keeps its id, key, condition and
+ * rules. It joins the section of its place and leaves its row unless it
+ * stays in it; a row left with one field is undone, and a section it leaves
+ * with nothing keeps its title over an empty line.
+ *
+ * @param content - Editable version-three content.
+ * @param blockId - The block to move.
+ * @param slot - Where to, from `listTemplateBlockSlots`.
+ * @param newBlockId - A fresh id, for the line a section it empties keeps.
+ * @returns The moved content, or a refusal naming every conditional field
+ *   the move would put above its checkbox or dropdown.
+ */
+export function moveTemplateBlockTo(
+  content: TemplateContentV3,
+  blockId: string,
+  slot: TemplateBlockSlot,
+  newBlockId: string
+): TemplateMoveResult {
+  const lifted = liftTemplateBlock(content, blockId)
+
+  if (!lifted) {
+    return { code: "block_not_found", dependentBlockIds: [], message: "The block is no longer available. Select it again before moving it.", success: false }
+  }
+
+  if (isSameSlot(slot, currentSlot(lifted)) || slot.index < 0 || slot.index > lifted.rest.length) {
+    return { content, success: true }
+  }
+
+  const { at, block, emptied, own, rest } = lifted
+  const follower = content.blocks[at + 1]
+  const blocks = [...rest.slice(0, slot.index), block, ...rest.slice(slot.index)]
+  const filler: TemplateBlock | null = emptied ? { alignment: "left", id: newBlockId, text: "", type: "paragraph" } : null
+
+  if (filler) {
+    // The emptied section's title sat just above what followed the block, or
+    // just above the block when it now opens the section after that title.
+    const where = slot.index === at && slot.opens !== null ? blocks.indexOf(block) : follower ? blocks.indexOf(follower) : blocks.length
+
+    blocks.splice(where, 0, filler)
+  }
+
+  const conflicts = findVisibilityOrderConflicts(blocks)
+
+  if (conflicts.length > 0) {
+    return createOrderConflict(conflicts)
+  }
+
+  const index = createBlockIndex(blocks)
+  const sections = content.sections
+    .map((section: TemplateSection): TemplateSection => {
+      if (section.id === slot.opens) {
+        return { ...section, startBlockId: block.id }
+      }
+
+      if (section.id === emptied && filler) {
+        return { ...section, startBlockId: filler.id }
+      }
+
+      // A section the block opened is opened by the block after it instead.
+      return section.startBlockId === block.id && follower ? { ...section, startBlockId: follower.id } : section
+    })
+    .sort((left, right) => (index.get(left.startBlockId) ?? 0) - (index.get(right.startBlockId) ?? 0))
+  const fieldGroups = content.fieldGroups.flatMap((group: TemplateFieldGroup): TemplateFieldGroup[] => {
+    const members = content.blocks
+      .slice(content.blocks.findIndex((candidate) => candidate.id === group.startBlockId), content.blocks.findIndex((candidate) => candidate.id === group.endBlockId) + 1)
+      .filter((member) => member.id !== block.id || (slot.inGroup && group.id === own?.group.id))
+      .map((member) => index.get(member.id) ?? 0)
+      .sort((left, right) => left - right)
+    const first = blocks[members[0] ?? -1]
+    const last = blocks[members.at(-1) ?? -1]
+
+    // One field on its own has nothing to sit beside.
+    if (!first || !last || (members.length < 2 && group.label === null && !group.keepTogether)) {
+      return []
+    }
+
+    return [{ ...group, endBlockId: last.id, startBlockId: first.id }]
+  })
+
+  return { content: { ...content, blocks, fieldGroups, sections }, success: true }
+}
+
+/**
+ * Moves a section, with everything in it, above the section before it or
+ * below the one after. Writing before the first section has no section to
+ * swap with, so it stays first.
+ *
+ * @param content - Editable version-three content.
+ * @param sectionId - The section.
+ * @param direction - Which way.
+ * @returns The moved content, unchanged at either end, or a refusal naming
+ *   every conditional field the move would put above its source.
+ */
+export function moveTemplateSection(
+  content: TemplateContentV3,
+  sectionId: string,
+  direction: "up" | "down"
+): TemplateMoveResult {
+  const indexed = getIndexedSections(content).sort((left, right) => left.startIndex - right.startIndex)
+  const at = indexed.findIndex(({ section }) => section.id === sectionId)
+  const other = at + (direction === "up" ? -1 : 1)
+  const upper = indexed[Math.min(at, other)]
+  const lower = indexed[Math.max(at, other)]
+
+  if (at === -1 || !upper || !lower) {
+    return { content, success: true }
+  }
+
+  const end = indexed[Math.max(at, other) + 1]?.startIndex ?? content.blocks.length
+  const blocks = [
+    ...content.blocks.slice(0, upper.startIndex),
+    ...content.blocks.slice(lower.startIndex, end),
+    ...content.blocks.slice(upper.startIndex, lower.startIndex),
+    ...content.blocks.slice(end),
+  ]
+  const conflicts = findVisibilityOrderConflicts(blocks)
+
+  if (conflicts.length > 0) {
+    return createOrderConflict(conflicts)
+  }
+
+  const index = createBlockIndex(blocks)
+
+  return {
+    content: {
+      ...content,
+      blocks,
+      sections: [...content.sections].sort((left, right) => (index.get(left.startBlockId) ?? 0) - (index.get(right.startBlockId) ?? 0)),
+    },
+    success: true,
+  }
+}
+
+/**
  * Inserts a block while retaining version-three structural references.
  *
  * @param content - Current editable version-three content.
@@ -905,54 +1110,6 @@ export function deleteTemplateBlock(
 }
 
 /**
- * Moves one block by one position while section and group boundaries stay put.
- *
- * Root blocks remain the sole ordering source; boundary ids are remapped to the
- * blocks now occupying their established positions.
- *
- * @param content - Current editable version-three content.
- * @param blockId - Existing block id to move.
- * @param direction - Adjacent movement direction.
- * @returns New content with repaired structural references.
- */
-export function moveTemplateBlock(
-  content: TemplateContentV3,
-  blockId: string,
-  direction: "up" | "down"
-): TemplateContentV3 {
-  const blockIndex = content.blocks.findIndex(
-    (block: TemplateBlock): boolean => block.id === blockId
-  )
-  const targetIndex = direction === "up" ? blockIndex - 1 : blockIndex + 1
-
-  if (
-    blockIndex < 0 ||
-    targetIndex < 0 ||
-    targetIndex >= content.blocks.length
-  ) {
-    return content
-  }
-
-  const blocks = [...content.blocks]
-  const targetBlock = blocks[targetIndex]
-  const selectedBlock = blocks[blockIndex]
-
-  if (targetBlock === undefined || selectedBlock === undefined) {
-    return content
-  }
-
-  blocks[blockIndex] = targetBlock
-  blocks[targetIndex] = selectedBlock
-
-  return reconcileTemplateStructure(
-    content,
-    blocks,
-    getIndexedSections(content),
-    getIndexedFieldGroups(content)
-  )
-}
-
-/**
  * Moves one block to an arbitrary canonical position.
  *
  * Section and field-group boundaries retain their established root positions
@@ -1016,6 +1173,77 @@ export function moveTemplateBlockAfter(
     getIndexedSections(content),
     getIndexedFieldGroups(content)
   )
+}
+
+// The block taken out of the flow, and where everything else sits without it.
+function liftTemplateBlock(content: TemplateContentV3, blockId: string): LiftedBlock | null {
+  const at = content.blocks.findIndex((block: TemplateBlock): boolean => block.id === blockId)
+  const block = content.blocks[at]
+
+  if (!block) {
+    return null
+  }
+
+  const rest = content.blocks.filter((candidate: TemplateBlock): boolean => candidate.id !== blockId)
+  const restIndex = createBlockIndex(rest)
+  const follower = content.blocks[at + 1]
+  const starts = new Map<number, string>()
+  let emptied: string | null = null
+  let opens: string | null = null
+
+  for (const section of content.sections) {
+    if (section.startBlockId !== blockId) {
+      const start = restIndex.get(section.startBlockId)
+
+      if (start !== undefined) {
+        starts.set(start, section.id)
+      }
+    } else if (follower && !content.sections.some((candidate) => candidate.startBlockId === follower.id)) {
+      opens = section.id
+      starts.set(at, section.id)
+    } else {
+      opens = section.id
+      emptied = section.id
+    }
+  }
+
+  const ranges = getIndexedFieldGroups(content).map(({ endIndex, group, startIndex }) => ({
+    end: at <= endIndex ? endIndex - 1 : endIndex,
+    group,
+    holds: at >= startIndex && at <= endIndex,
+    start: at < startIndex ? startIndex - 1 : startIndex,
+  }))
+  const own = ranges.find((range) => range.holds && range.end >= range.start) ?? null
+
+  return {
+    at,
+    block,
+    emptied,
+    opens,
+    others: ranges.filter((range) => !range.holds),
+    own: own && { end: own.end, group: own.group, start: own.start },
+    rest,
+    starts,
+  }
+}
+
+function currentSlot(lifted: LiftedBlock): TemplateBlockSlot {
+  return { index: lifted.at, inGroup: lifted.own !== null, opens: lifted.opens }
+}
+
+function isSameSlot(left: TemplateBlockSlot, right: TemplateBlockSlot): boolean {
+  return left.index === right.index && left.opens === right.opens && left.inGroup === right.inGroup
+}
+
+function createOrderConflict(dependentBlockIds: readonly string[]): Extract<TemplateMoveResult, { success: false }> {
+  const fieldWord = dependentBlockIds.length === 1 ? "field" : "fields"
+
+  return {
+    code: "visibility_order_conflict",
+    dependentBlockIds,
+    message: `This move would place ${dependentBlockIds.length} conditional ${fieldWord} before the checkbox or dropdown that controls visibility. Keep each source above the fields it controls, or change the affected conditions first.`,
+    success: false,
+  }
 }
 
 function reconcileTemplateStructure(
