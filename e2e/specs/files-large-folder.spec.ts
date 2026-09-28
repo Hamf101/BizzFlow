@@ -1,5 +1,5 @@
 import { expect, signInAs, test, uniqueName } from "../support/fixtures"
-import { seedTenant } from "../support/tenant"
+import { destroyTenant, seedTenant } from "../support/tenant"
 
 // PostgREST answers at most 1,000 rows per request (`max_rows`), so a listing
 // that reads its documents in one request silently loses the rest.
@@ -64,4 +64,7 @@ test("lists every document in a folder that holds more than one response's worth
   console.log(
     `files-large-folder: ${DOCUMENTS} documents searched in ${Date.now() - searched} ms (${testInfo.project.name})`
   )
+
+  // A passing run takes its tenant with it; a failing one leaves it to look into.
+  await destroyTenant(admin, tenant)
 })
