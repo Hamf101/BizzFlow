@@ -616,21 +616,10 @@ function validateSections(
     return []
   }
 
-  // Sections are optional structure metadata: content authored before the
-  // version-three editor maintains them stays readable, and a document with no
-  // declared boundaries is simply treated as one implicit section.
+  // Sections are optional structure metadata, and the first may start partway
+  // down: what comes before it belongs to no section and prints no title.
   if (content.sections.length === 0) {
     return []
-  }
-
-  const firstBlockId = content.blocks[0]?.id
-
-  if (content.sections[0]?.startBlockId !== firstBlockId) {
-    context.addIssue({
-      code: "custom",
-      message: "The first section must start at the first document block.",
-      path: ["sections", 0, "startBlockId"]
-    })
   }
 
   const sectionStartIndices: number[] = []
@@ -728,14 +717,9 @@ function validateFieldGroups(
     )
     const endSectionIndex = findSectionIndex(sectionStartIndices, endIndex)
 
-    // With no declared sections the document is one implicit section, so no
-    // group can cross a boundary that does not exist.
-    if (
-      sectionStartIndices.length > 0 &&
-      (startSectionIndex === -1 ||
-        endSectionIndex === -1 ||
-        startSectionIndex !== endSectionIndex)
-    ) {
+    // Before the first section is -1, so a group may sit there, but no group
+    // crosses into a section.
+    if (startSectionIndex !== endSectionIndex) {
       context.addIssue({
         code: "custom",
         message: "A field group cannot cross a section boundary.",

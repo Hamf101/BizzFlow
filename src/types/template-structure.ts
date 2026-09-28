@@ -416,6 +416,214 @@ export function getTemplateSectionForBlock(
 }
 
 /**
+ * Starts a section at a block. A block inside a row of side-by-side fields
+ * starts it at the row's first field, since a section never splits a row.
+ *
+ * @param content - Editable version-three content.
+ * @param blockId - The block the section opens with.
+ * @param sectionId - A fresh id for the section.
+ * @param label - Its printed title; defaults to an editable placeholder.
+ * @returns The content with the section, or unchanged when the block is
+ * missing or already opens a section.
+ */
+export function startTemplateSection(
+  content: TemplateContentV3,
+  blockId: string,
+  sectionId: string,
+  label = "Section title"
+): TemplateContentV3 {
+  const index = content.blocks.findIndex((block: TemplateBlock): boolean => block.id === blockId)
+  const row = getIndexedFieldGroups(content).find(
+    (group: IndexedFieldGroup): boolean => index >= group.startIndex && index <= group.endIndex
+  )
+  const startIndex = row?.startIndex ?? index
+  const startBlockId = content.blocks[startIndex]?.id
+
+  if (
+    startBlockId === undefined ||
+    content.sections.some((section: TemplateSection): boolean => section.startBlockId === startBlockId)
+  ) {
+    return content
+  }
+
+  return reconcileTemplateStructure(
+    content,
+    content.blocks,
+    [
+      ...getIndexedSections(content),
+      { section: { id: sectionId, label, startBlockId, pageBreakBefore: false, keepTogether: false }, startIndex },
+    ],
+    getIndexedFieldGroups(content)
+  )
+}
+
+/**
+ * Changes a section's title or its page rules.
+ *
+ * @param content - Editable version-three content.
+ * @param sectionId - The section.
+ * @param change - Its new title, whether it starts a new page, and whether it
+ * stays on one page.
+ * @returns The content with the section changed.
+ */
+export function updateTemplateSection(
+  content: TemplateContentV3,
+  sectionId: string,
+  change: Partial<Pick<TemplateSection, "keepTogether" | "label" | "pageBreakBefore">>
+): TemplateContentV3 {
+  return {
+    ...content,
+    sections: content.sections.map(
+      (section: TemplateSection): TemplateSection => (section.id === sectionId ? { ...section, ...change } : section)
+    ),
+  }
+}
+
+/**
+ * Removes a section's boundary and title, keeping everything in it.
+ *
+ * @param content - Editable version-three content.
+ * @param sectionId - The section.
+ * @returns The content, its blocks now part of the section before.
+ */
+export function removeTemplateSection(content: TemplateContentV3, sectionId: string): TemplateContentV3 {
+  return {
+    ...content,
+    sections: content.sections.filter((section: TemplateSection): boolean => section.id !== sectionId),
+  }
+}
+
+/**
+ * Puts a field beside its neighbours or back on its own line. A field joins
+ * the row just before or after it, or pairs with a lone field beside it, and
+ * never across a section. Parting a row removes the group unless it has a
+ * label or keeps together, in which case its fields stack in one column.
+ *
+ * @param content - Editable version-three content.
+ * @param blockId - The field.
+ * @param sideBySide - Whether it should sit in a row of two columns.
+ * @param newGroupId - A fresh id, used when a new row is made.
+ * @returns The content, or unchanged when there is nothing to pair with.
+ */
+export function setFieldSideBySide(
+  content: TemplateContentV3,
+  blockId: string,
+  sideBySide: boolean,
+  newGroupId: string
+): TemplateContentV3 {
+  const index = content.blocks.findIndex((block: TemplateBlock): boolean => block.id === blockId)
+  const field = content.blocks[index]
+
+  if (field === undefined || !isTemplateFieldBlock(field)) {
+    return content
+  }
+
+  const groups = getIndexedFieldGroups(content)
+  const holding = (at: number): IndexedFieldGroup | undefined =>
+    groups.find((group: IndexedFieldGroup): boolean => at >= group.startIndex && at <= group.endIndex)
+  const own = holding(index)
+  const setGroups = (fieldGroups: TemplateFieldGroup[]): TemplateContentV3 => ({ ...content, fieldGroups })
+  const change = (groupId: string, patch: Partial<TemplateFieldGroup>): TemplateContentV3 =>
+    setGroups(
+      content.fieldGroups.map(
+        (group: TemplateFieldGroup): TemplateFieldGroup => (group.id === groupId ? { ...group, ...patch } : group)
+      )
+    )
+
+  if (!sideBySide) {
+    if (own === undefined || own.group.columns === 1) {
+      return content
+    }
+
+    return own.group.label === null && !own.group.keepTogether
+      ? setGroups(content.fieldGroups.filter((group: TemplateFieldGroup): boolean => group.id !== own.group.id))
+      : change(own.group.id, { columns: 1 })
+  }
+
+  if (own !== undefined) {
+    return own.group.columns === 2 ? content : change(own.group.id, { columns: 2 })
+  }
+
+  const starts = getIndexedSections(content)
+    .map(({ startIndex }: IndexedSection): number => startIndex)
+    .sort((left: number, right: number): number => left - right)
+  const section = findSectionIndex(starts, index)
+  const beside = (at: number): boolean => {
+    const other = content.blocks[at]
+
+    return other !== undefined && isTemplateFieldBlock(other) && findSectionIndex(starts, at) === section
+  }
+  const before = holding(index - 1)
+  const after = holding(index + 1)
+
+  if (before?.group.columns === 2 && beside(index - 1)) {
+    return change(before.group.id, { endBlockId: blockId })
+  }
+
+  if (after?.group.columns === 2 && beside(index + 1)) {
+    return change(after.group.id, { startBlockId: blockId })
+  }
+
+  const pair = [index + 1, index - 1].find((at: number): boolean => beside(at) && holding(at) === undefined)
+
+  if (pair === undefined) {
+    return content
+  }
+
+  const [first, last] = pair > index ? [index, pair] : [pair, index]
+  const row: TemplateFieldGroup = {
+    id: newGroupId,
+    label: null,
+    startBlockId: content.blocks[first]?.id ?? blockId,
+    endBlockId: content.blocks[last]?.id ?? blockId,
+    columns: 2,
+    keepTogether: false,
+  }
+
+  return setGroups(
+    [...groups.map(({ group }: IndexedFieldGroup): TemplateFieldGroup => group), row].sort(
+      (left: TemplateFieldGroup, right: TemplateFieldGroup): number =>
+        content.blocks.findIndex((block: TemplateBlock): boolean => block.id === left.startBlockId) -
+        content.blocks.findIndex((block: TemplateBlock): boolean => block.id === right.startBlockId)
+    )
+  )
+}
+
+/**
+ * Keeps a block on the same page as the one after it, or lets it go.
+ *
+ * @param content - Editable version-three content.
+ * @param blockId - The block.
+ * @param keepWithNext - Whether it stays with the next block.
+ * @returns The content with the block's rule changed, keeping any page break
+ * it already starts.
+ */
+export function setBlockKeepWithNext(
+  content: TemplateContentV3,
+  blockId: string,
+  keepWithNext: boolean
+): TemplateContentV3 {
+  if (!content.blocks.some((block: TemplateBlock): boolean => block.id === blockId)) {
+    return content
+  }
+
+  const existing = content.blockRules.find((rule): boolean => rule.blockId === blockId)
+  const rule = { blockId, pageBreakBefore: existing?.pageBreakBefore ?? false, keepWithNext }
+  const others = content.blockRules.filter((candidate): boolean => candidate.blockId !== blockId)
+
+  if (!rule.pageBreakBefore && !rule.keepWithNext) {
+    return { ...content, blockRules: others }
+  }
+
+  return {
+    ...content,
+    blockRules: existing
+      ? content.blockRules.map((candidate) => (candidate.blockId === blockId ? rule : candidate))
+      : [...content.blockRules, rule],
+  }
+}
+
+/**
  * Inserts a block while retaining version-three structural references.
  *
  * @param content - Current editable version-three content.
@@ -454,11 +662,13 @@ export function insertTemplateBlock(
     return reconcileTemplateStructure(content, blocks, [], [])
   }
 
+  // A section that opens the page keeps a block typed above it; one that
+  // starts partway down moves along with its first block.
   const sections = getIndexedSections(content).map(
-    ({ section, startIndex }: IndexedSection, sectionIndex: number) => ({
+    ({ section, startIndex }: IndexedSection) => ({
       section,
       startIndex:
-        insertIndex === 0 && sectionIndex === 0
+        insertIndex === 0 && startIndex === 0
           ? 0
           : startIndex >= insertIndex
             ? startIndex + 1
@@ -858,7 +1068,8 @@ function repairSections(
   blocks: readonly TemplateBlock[],
   indexedSections: readonly IndexedSection[]
 ): TemplateSection[] {
-  // Content without sections is one implicit, unlabeled section.
+  // Content without sections is one implicit, unlabeled section, and what
+  // comes before the first section belongs to none.
   if (blocks.length === 0 || indexedSections.length === 0) {
     return []
   }
@@ -869,23 +1080,6 @@ function repairSections(
     if (startIndex >= 0 && startIndex < blocks.length) {
       sectionByStartIndex.set(startIndex, section)
     }
-  }
-
-  if (!sectionByStartIndex.has(0)) {
-    const firstExistingSection = [...sectionByStartIndex.entries()].sort(
-      ([leftIndex], [rightIndex]): number => leftIndex - rightIndex
-    )[0]?.[1]
-
-    sectionByStartIndex.set(
-      0,
-      firstExistingSection ?? {
-        id: blocks[0]?.id ?? "",
-        label: "Section 1",
-        startBlockId: blocks[0]?.id ?? "",
-        pageBreakBefore: false,
-        keepTogether: false
-      }
-    )
   }
 
   const seenSectionIds = new Set<string>()
@@ -937,7 +1131,6 @@ function repairFieldGroups(
     const endSectionIndex = findSectionIndex(sectionStartIndices, endIndex)
 
     if (
-      startSectionIndex === -1 ||
       startSectionIndex !== endSectionIndex ||
       groupedBlocks.some(
         (block: TemplateBlock): boolean => !isTemplateFieldBlock(block)

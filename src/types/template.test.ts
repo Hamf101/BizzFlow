@@ -133,6 +133,21 @@ describe("template content schema", () => {
     )
   })
 
+  it("lets a section start partway down, leaving the fields above it outside any section", () => {
+    const content = createConditionalContent()
+    content.sections = [
+      {
+        id: THIRD_BLOCK_ID,
+        label: "Notes",
+        startBlockId: THIRD_BLOCK_ID,
+        pageBreakBefore: true,
+        keepTogether: false
+      }
+    ]
+
+    expect(templateContentV3Schema.safeParse(content).error?.issues).toBeUndefined()
+  })
+
   it("rejects later, self, or incompatible visibility sources", () => {
     const content = createConditionalContent()
     const source = content.blocks[0]

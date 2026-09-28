@@ -11,7 +11,12 @@ import {
   insertTemplateBlock,
   moveTemplateBlock,
   moveTemplateBlockAfter,
+  removeTemplateSection,
+  setBlockKeepWithNext,
+  setFieldSideBySide,
+  startTemplateSection,
   updateTemplateBlock,
+  updateTemplateSection,
   withGeneratedFieldKeys
 } from "./template-structure"
 import {
@@ -699,6 +704,99 @@ function createDropdownVisibilityContent(): TemplateContentV3 {
 
   return content
 }
+
+describe("authoring sections, side-by-side fields and keep with next", () => {
+  it("keeps a section that starts partway down where it is as blocks come and go above it", () => {
+    const content = createStructuredContent()
+    content.sections = content.sections.slice(1)
+
+    const inserted = insertTemplateBlock(content, null, { id: INSERTED_ID, type: "paragraph", text: "Welcome", alignment: "left" })
+    const deleted = deleteTemplateBlock(content, SOURCE_ID)
+
+    expect(inserted.sections.map((section) => section.startBlockId)).toEqual([SECOND_SECTION_BLOCK_ID])
+    expect(deleted.sections.map((section) => section.startBlockId)).toEqual([SECOND_SECTION_BLOCK_ID])
+    expect(deleted.fieldGroups.map((group) => [group.startBlockId, group.endBlockId])).toEqual([[TARGET_ID, THIRD_FIELD_ID]])
+    expect(templateContentV3Schema.safeParse(inserted).success).toBe(true)
+    expect(templateContentV3Schema.safeParse(deleted).success).toBe(true)
+  })
+
+  it("starts, titles, rules and removes a section without touching the words", () => {
+    const content = { ...createStructuredContent(), sections: [] }
+    const started = startTemplateSection(content, SECOND_SECTION_BLOCK_ID, SECOND_SECTION_ID)
+    const titled = updateTemplateSection(started, SECOND_SECTION_ID, { label: "Terms", pageBreakBefore: true, keepTogether: true })
+
+    expect(started.sections).toEqual([
+      { id: SECOND_SECTION_ID, label: "Section title", startBlockId: SECOND_SECTION_BLOCK_ID, pageBreakBefore: false, keepTogether: false },
+    ])
+    expect(titled.sections).toEqual([
+      { id: SECOND_SECTION_ID, label: "Terms", startBlockId: SECOND_SECTION_BLOCK_ID, pageBreakBefore: true, keepTogether: true },
+    ])
+    expect(templateContentV3Schema.safeParse(started).success).toBe(true)
+    expect(templateContentV3Schema.safeParse(titled).success).toBe(true)
+    expect(startTemplateSection(titled, SECOND_SECTION_BLOCK_ID, FIRST_SECTION_ID)).toBe(titled)
+    expect(removeTemplateSection(titled, SECOND_SECTION_ID)).toEqual({ ...titled, sections: [] })
+  })
+
+  it("starts a section before a row of side-by-side fields instead of splitting the row", () => {
+    const content = { ...createStructuredContent(), sections: [] }
+    const started = startTemplateSection(content, THIRD_FIELD_ID, FIRST_SECTION_ID, "Approval")
+
+    expect(started.sections.map((section) => [section.label, section.startBlockId])).toEqual([["Approval", SOURCE_ID]])
+    expect(started.fieldGroups).toEqual(content.fieldGroups)
+  })
+
+  it("puts a field beside its neighbour, adds the next field to the row, and parts them again", () => {
+    const content = { ...createStructuredContent(), sections: [], fieldGroups: [] }
+    const paired = setFieldSideBySide(content, SOURCE_ID, true, GROUP_ID)
+    const extended = setFieldSideBySide(paired, THIRD_FIELD_ID, true, INSERTED_ID)
+    const parted = setFieldSideBySide(extended, TARGET_ID, false, INSERTED_ID)
+
+    expect(paired.fieldGroups).toEqual([
+      { id: GROUP_ID, label: null, startBlockId: SOURCE_ID, endBlockId: TARGET_ID, columns: 2, keepTogether: false },
+    ])
+    expect(extended.fieldGroups.map((group) => [group.id, group.startBlockId, group.endBlockId])).toEqual([
+      [GROUP_ID, SOURCE_ID, THIRD_FIELD_ID],
+    ])
+    expect(templateContentV3Schema.safeParse(extended).success).toBe(true)
+    expect(parted.fieldGroups).toEqual([])
+  })
+
+  it("keeps a labelled group when its fields go back to one column", () => {
+    const content = createStructuredContent()
+
+    expect(setFieldSideBySide(content, TARGET_ID, false, INSERTED_ID).fieldGroups).toEqual([
+      { ...content.fieldGroups[0], columns: 1 },
+    ])
+  })
+
+  it("pairs a field only with a field in its own section", () => {
+    const content = { ...createStructuredContent(), fieldGroups: [] }
+    content.sections = [
+      { id: SECOND_SECTION_ID, label: "Details", startBlockId: TARGET_ID, pageBreakBefore: false, keepTogether: false },
+    ]
+
+    // The checkbox's only neighbour opens the next section; the date has
+    // words after it, so it pairs with the field before.
+    expect(setFieldSideBySide(content, SOURCE_ID, true, GROUP_ID)).toBe(content)
+    expect(
+      setFieldSideBySide(content, THIRD_FIELD_ID, true, GROUP_ID).fieldGroups.map((group) => [group.startBlockId, group.endBlockId])
+    ).toEqual([[TARGET_ID, THIRD_FIELD_ID]])
+  })
+
+  it("keeps a block with the next one alongside a page break it already starts", () => {
+    const content = createStructuredContent()
+    const broken = { ...content, blockRules: [{ blockId: THIRD_FIELD_ID, pageBreakBefore: true, keepWithNext: false }] }
+    const kept = setBlockKeepWithNext(broken, THIRD_FIELD_ID, true)
+
+    expect(kept.blockRules).toEqual([{ blockId: THIRD_FIELD_ID, pageBreakBefore: true, keepWithNext: true }])
+    expect(setBlockKeepWithNext(kept, THIRD_FIELD_ID, false).blockRules).toEqual(broken.blockRules)
+    expect(setBlockKeepWithNext(content, SOURCE_ID, true).blockRules).toEqual([
+      ...content.blockRules,
+      { blockId: SOURCE_ID, pageBreakBefore: false, keepWithNext: true },
+    ])
+    expect(setBlockKeepWithNext(content, TARGET_ID, false).blockRules).toEqual([])
+  })
+})
 
 describe("generated field keys", () => {
   it("rebuilds keys typed by hand or repeated, and leaves good ones alone", () => {

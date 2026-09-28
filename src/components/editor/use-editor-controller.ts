@@ -9,8 +9,13 @@ import {
   convertTextBlock,
   hasPageBreak,
   insertPageAfter,
+  insertSectionAfter,
   removePageBreak,
+  sectionOfTitle,
+  sectionTitleKey,
   type TextBlockKind,
+  turnLineIntoSection,
+  turnSectionIntoLine,
 } from "@/components/editor/editor-content"
 import { createTemplateBlock } from "@/components/templates/template-editor-state"
 import { bizflowToast } from "@/components/ui/toaster"
@@ -19,6 +24,7 @@ import {
   type TemplateBlock,
   type TemplateContentV3,
   type TemplateLayout,
+  type TemplateSection,
 } from "@/types/template"
 import {
   deleteTemplateBlock,
@@ -26,8 +32,13 @@ import {
   evaluateTemplateBlockDeletion,
   evaluateTemplateBlockMove,
   insertTemplateBlock,
+  getTemplateSectionForBlock,
   moveTemplateBlock,
+  removeTemplateSection,
+  setBlockKeepWithNext,
+  setFieldSideBySide,
   updateTemplateBlock,
+  updateTemplateSection,
 } from "@/types/template-structure"
 
 /** A caret the canvas should place, with a nonce so the same spot can be asked for twice. */
@@ -106,10 +117,32 @@ export function useEditorController({
     } = {}
   ): void {
     const replaceBlockId = options.replaceBlockId
+    // With the caret in a section's title, what is added goes just under it.
+    const titled = content.sections.find((section) => section.id === sectionOfTitle(activeBlockId))
+    const titledIndex = content.blocks.findIndex((block) => block.id === titled?.startBlockId)
     const afterBlockId =
       options.afterBlockId !== undefined
         ? options.afterBlockId
-        : (activeBlockId ?? content.blocks.at(-1)?.id ?? null)
+        : titled
+          ? (content.blocks[titledIndex - 1]?.id ?? null)
+          : (activeBlockId ?? content.blocks.at(-1)?.id ?? null)
+    const underTitle = (current: TemplateContentV3, blockId: string): TemplateContentV3 =>
+      titled && options.afterBlockId === undefined
+        ? { ...current, sections: current.sections.map((section) => (section.id === titled.id ? { ...section, startBlockId: blockId } : section)) }
+        : current
+
+    if (choice.action.kind === "section") {
+      if (!replaceBlockId && !hasRoom()) return
+      const sectionId = crypto.randomUUID()
+
+      change((current) =>
+        replaceBlockId
+          ? turnLineIntoSection(current, replaceBlockId, sectionId).content
+          : insertSectionAfter(current, afterBlockId, sectionId, crypto.randomUUID()).content
+      )
+      requestFocus({ blockId: sectionTitleKey(sectionId), offset: 0 })
+      return
+    }
 
     if (choice.action.kind === "page") {
       if (replaceBlockId) {
@@ -137,7 +170,7 @@ export function useEditorController({
       }
 
       const block = createTextBlock(crypto.randomUUID(), choice.action.value)
-      change((current) => insertTemplateBlock(current, afterBlockId, block))
+      change((current) => underTitle(insertTemplateBlock(current, afterBlockId, block), block.id))
       requestFocus({ blockId: block.id, item: "items" in block ? 0 : undefined, offset: 0 })
       return
     }
@@ -160,7 +193,7 @@ export function useEditorController({
 
     change((current) => {
       if (!replaceBlockId) {
-        return insertTemplateBlock(current, afterBlockId, block)
+        return underTitle(insertTemplateBlock(current, afterBlockId, block), block.id)
       }
 
       // The empty line gives way to the block, which keeps any page break.
@@ -246,6 +279,63 @@ export function useEditorController({
     change((current) => updateTemplateBlock(current, block), coalesceKey)
   }
 
+  /**
+   * Changes a section's title or page rules; typing the title makes one undo step.
+   *
+   * @param sectionId - The section.
+   * @param patch - Its new title or rules.
+   * @param coalesceKey - Joins a run of keystrokes into one undo step.
+   */
+  function updateSection(
+    sectionId: string,
+    patch: Partial<Pick<TemplateSection, "keepTogether" | "label" | "pageBreakBefore">>,
+    coalesceKey?: string
+  ): void {
+    change((current) => updateTemplateSection(current, sectionId, patch), coalesceKey)
+  }
+
+  /**
+   * Takes a section's title and boundary away, keeping what it held, and puts
+   * the caret at the start of its first line.
+   *
+   * @param sectionId - The section.
+   */
+  function removeSection(sectionId: string): void {
+    const start = content.blocks.find((block) => block.id === content.sections.find((section) => section.id === sectionId)?.startBlockId)
+
+    change((current) => removeTemplateSection(current, sectionId))
+
+    if (start && (start.type === "paragraph" || start.type === "heading")) {
+      requestFocus({ blockId: start.id, offset: 0 })
+    }
+  }
+
+  /**
+   * Turns a line into the title of a section holding what follows it.
+   *
+   * @param blockId - The line.
+   */
+  function turnIntoSection(blockId: string): void {
+    const sectionId = crypto.randomUUID()
+    const result = turnLineIntoSection(content, blockId, sectionId)
+    change(() => result.content)
+    requestFocus(result.focus)
+  }
+
+  /**
+   * Turns a section's title back into a line where it stands.
+   *
+   * @param sectionId - The section.
+   * @param kind - The kind of line the title becomes.
+   */
+  function turnSectionInto(sectionId: string, kind: TextBlockKind): void {
+    const id = crypto.randomUUID()
+    const label = content.sections.find((section) => section.id === sectionId)?.label ?? ""
+
+    change((current) => turnSectionIntoLine(current, sectionId, kind, id).content)
+    requestFocus({ blockId: id, offset: label.length })
+  }
+
   // A drag or a run of keystrokes on one setting makes one undo step.
   function setLayout(layout: TemplateLayout, coalesceKey?: string): void {
     change((current) => ({ ...current, layout }), coalesceKey)
@@ -255,6 +345,8 @@ export function useEditorController({
     activeBlockId,
     addPage,
     change,
+    /** The section the caret is in, or its title's section, or null before any. */
+    currentSectionId: sectionOfTitle(activeBlockId) ?? (activeBlockId ? getTemplateSectionForBlock(content, activeBlockId)?.id ?? null : null),
     closeSettings: () => setSettingsBlockId(null),
     content,
     duplicate,
@@ -264,14 +356,21 @@ export function useEditorController({
     move,
     openSettings: setSettingsBlockId,
     remove,
+    removeSection,
     requestFocus,
     select,
     selectedBlockId,
     setActiveBlockId,
+    setKeepWithNext: (blockId: string, keep: boolean) => change((current) => setBlockKeepWithNext(current, blockId, keep)),
     setLayout,
     setLine,
+    setSideBySide: (blockId: string, sideBySide: boolean) =>
+      change((current) => setFieldSideBySide(current, blockId, sideBySide, crypto.randomUUID())),
     settingsBlockId,
+    turnIntoSection,
+    turnSectionInto,
     updateBlock,
+    updateSection,
   }
 }
 

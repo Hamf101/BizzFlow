@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest"
 
-import { paginate, type PageFrame } from "@/components/editor/editor-pagination"
+import { createUnits, paginate, type PageFrame } from "@/components/editor/editor-pagination"
+import { createTemplateRenderPlan } from "@/services/templates/template-render-plan"
+import { createBlankTemplateContent, type TemplateContentV3 } from "@/types/template"
 
 // Pages 1000px tall with 100px margins and a 40px gap: 800px of content each,
 // starting at 100, 1140, 2180...
@@ -14,13 +16,19 @@ const frame: PageFrame = {
 const unit = (
   id: string,
   height: number,
-  rules: { pageBreakBefore?: boolean; keepWithNext?: boolean; rows?: { key: string; top: number }[] } = {}
+  rules: {
+    pageBreakBefore?: boolean
+    keepWithNext?: boolean
+    rows?: { key: string; top: number }[]
+    together?: string[]
+  } = {}
 ) => ({
   height,
   id,
   keepWithNext: rules.keepWithNext ?? false,
   pageBreakBefore: rules.pageBreakBefore ?? false,
   rows: rules.rows,
+  together: rules.together,
 })
 
 // Where a block can break: a line, list item or table row starting every `step` px.
@@ -35,6 +43,18 @@ describe("paginate", () => {
     expect(result.pageCount).toBe(2)
     expect(result.pages).toEqual({ a: 0, b: 0, c: 1 })
     expect(result.spacers).toEqual({ c: 1140 - 850 })
+  })
+
+  it("moves a run kept on one page to the next page when it will not fit, as the PDF does", () => {
+    const kept = { together: ["section:signatures"] }
+    const moved = paginate([unit("a", 500), unit("b", 150, kept), unit("c", 200, kept)], frame)
+    // A run taller than a page stays where it is and flows on.
+    const tooTall = paginate([unit("a", 500), unit("b", 450, kept), unit("c", 450, kept)], frame)
+
+    // b and c take 350 and only 300 is left, so b starts page 2 and c follows it.
+    expect(moved.pages).toEqual({ a: 0, b: 1, c: 1 })
+    expect(moved.spacers).toEqual({ b: 1140 - 600 })
+    expect(tooTall.pages).toEqual({ a: 0, b: 1, c: 2 })
   })
 
   it("starts a page at a page break, and keeps a heading with the line after it", () => {
@@ -90,5 +110,32 @@ describe("paginate", () => {
 
   it("draws one page for an empty document", () => {
     expect(paginate([], frame)).toEqual({ inside: {}, pageCount: 1, pages: {}, spacers: {} })
+  })
+})
+
+describe("createUnits", () => {
+  const field = (id: string, label: string) =>
+    ({ fieldKey: label.toLowerCase(), helpText: null, id, label, multiline: false, placeholder: null, required: false, type: "text_field" }) as const
+  const ids = ["a", "b", "c", "d", "e"].map((letter) => `70000000-0000-4000-8000-00000000000${letter}`)
+
+  it("pairs side-by-side fields a row at a time and keeps runs together by the keys the PDF uses", () => {
+    const [a, b, c, d, e] = ids as [string, string, string, string, string]
+    const content: TemplateContentV3 = {
+      ...createBlankTemplateContent(),
+      blocks: [field(a, "Name"), field(b, "Company"), field(c, "Email"), field(d, "Phone"), field(e, "Notes")],
+      sections: [{ id: "s", label: "Customer", startBlockId: a, pageBreakBefore: false, keepTogether: true }],
+      fieldGroups: [{ id: "g", label: "Contact", startBlockId: a, endBlockId: c, columns: 2, keepTogether: true }],
+      blockRules: [{ blockId: c, pageBreakBefore: true, keepWithNext: false }],
+    }
+    const plan = createTemplateRenderPlan({ content, mode: "build", title: "" })
+
+    // A field that starts a new page starts a new row, as the PDF pairs them;
+    // a field alone in its row keeps its column's width.
+    expect(createUnits(plan).map((unit) => [unit.blocks.map(({ block }) => block.id), unit.columns, unit.groupLabel, unit.together])).toEqual([
+      [[a, b], 2, "Contact", ["section:s"]],
+      [[c], 2, null, ["section:s"]],
+      [[d], 1, null, ["section:s"]],
+      [[e], 1, null, ["section:s"]],
+    ])
   })
 })

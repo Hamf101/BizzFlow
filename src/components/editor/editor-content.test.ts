@@ -3,12 +3,15 @@ import { describe, expect, it } from "vitest"
 import {
   convertTextBlock,
   insertPageAfter,
+  insertSectionAfter,
   liftListItem,
   mergeIntoPrevious,
   normalizeContentForSave,
   readMarkdownShortcut,
   removePageBreak,
   splitTextBlock,
+  turnLineIntoSection,
+  turnSectionIntoLine,
 } from "@/components/editor/editor-content"
 import {
   createEmptyDocumentContent,
@@ -167,5 +170,79 @@ describe("lifting a list item out", () => {
     expect(liftListItem(single, A, 0, { type: "paragraph" }, [B, C]).content.blocks).toEqual([
       { alignment: "left", id: A, text: "Windows", type: "paragraph" },
     ])
+  })
+})
+
+describe("sections typed on the page", () => {
+  const S = "70000000-0000-4000-8000-000000000011"
+  const N = "70000000-0000-4000-8000-000000000012"
+  const line = (id: string, text: string): TemplateBlock => ({ alignment: "left", id, text, type: "paragraph" })
+  const heading = (id: string, text: string): TemplateBlock => ({ alignment: "left", id, level: 2, text, type: "heading" })
+
+  it("turns a heading into the title of a section holding what follows, and back again", () => {
+    const made = turnLineIntoSection(page([line(A, "Intro"), heading(B, "Terms"), line(C, "Pay monthly.")]), B, S)
+    const undone = turnSectionIntoLine(made.content, S, { level: 2, type: "heading" }, N)
+
+    expect(texts(made.content)).toEqual(["Intro", "Pay monthly."])
+    expect(made.content.sections).toEqual([
+      { id: S, keepTogether: false, label: "Terms", pageBreakBefore: false, startBlockId: C },
+    ])
+    expect(made.focus).toEqual({ blockId: `section:${S}`, offset: 5 })
+    expect(templateContentV3Schema.safeParse(made.content).success).toBe(true)
+    expect(undone.content.blocks.map((block) => [block.type, texts(page([block]))[0]])).toEqual([
+      ["paragraph", "Intro"],
+      ["heading", "Terms"],
+      ["paragraph", "Pay monthly."],
+    ])
+    expect(undone.content.sections).toEqual([])
+    expect(undone.focus).toEqual({ blockId: N, offset: 5 })
+  })
+
+  it("moves a page break from the line to the section, and keeps an empty last line to hold it", () => {
+    const made = turnLineIntoSection(insertPageAfter(page([line(A, "Intro")]), A, B), B, S)
+    const undone = turnSectionIntoLine(made.content, S, { type: "paragraph" }, N)
+
+    expect(made.content.blocks.map((block) => block.id)).toEqual([A, B])
+    expect(made.content.sections).toEqual([
+      { id: S, keepTogether: false, label: "Section title", pageBreakBefore: true, startBlockId: B },
+    ])
+    expect(made.content.blockRules).toEqual([])
+    expect(undone.content.blockRules).toEqual([{ blockId: N, keepWithNext: false, pageBreakBefore: true }])
+  })
+
+  it("starts a section after the caret's block, at the next block or on a new empty line", () => {
+    const content = page([line(A, "Intro"), line(C, "Pay monthly.")])
+    const split = insertSectionAfter(content, A, S, N)
+    const atEnd = insertSectionAfter(content, C, S, N)
+
+    expect(split.content.sections).toEqual([
+      { id: S, keepTogether: false, label: "Section title", pageBreakBefore: false, startBlockId: C },
+    ])
+    expect(split.focus).toEqual({ blockId: `section:${S}`, offset: 0 })
+    expect(templateContentV3Schema.safeParse(split.content).success).toBe(true)
+    expect(templateContentV3Schema.safeParse(atEnd.content).success).toBe(true)
+    expect(atEnd.content.blocks.map((block) => block.id)).toEqual([A, C, N])
+    expect(atEnd.content.sections.map((section) => section.startBlockId)).toEqual([N])
+  })
+
+  it("inserts a section before an existing first section without moving its boundary", () => {
+    const content = { ...page([line(A, "Terms body")]), sections: [{ id: S, label: "Terms", startBlockId: A, pageBreakBefore: false, keepTogether: false }] }
+    const added = insertSectionAfter(content, null, B, N).content
+    expect(added.sections.map((section) => [section.id, section.startBlockId])).toEqual([[B, N], [S, A]])
+    expect(templateContentV3Schema.safeParse(added).success).toBe(true)
+  })
+
+  it("keeps a line longer than the section title limit unchanged", () => {
+    const content = page([line(A, "a".repeat(161)), line(B, "Body")])
+    expect(turnLineIntoSection(content, A, S).content).toBe(content)
+  })
+
+  it("leaves a line that already opens a section as it is", () => {
+    const content = {
+      ...page([line(A, "Intro"), heading(B, "Terms")]),
+      sections: [{ id: S, keepTogether: false, label: "Legal", pageBreakBefore: false, startBlockId: B }],
+    }
+
+    expect(turnLineIntoSection(content, B, N).content).toBe(content)
   })
 })

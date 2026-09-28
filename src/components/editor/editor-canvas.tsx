@@ -37,10 +37,13 @@ import {
   mergeIntoPrevious,
   readMarkdownShortcut,
   sliceRuns,
+  sectionTitleKey,
   splitTextBlock,
   withEntries,
 } from "@/components/editor/editor-content"
-import { paginate, type PageFrame, type PaginationRow } from "@/components/editor/editor-pagination"
+import { type CanvasUnit, createUnits, paginate, type PageFrame, type PaginationRow } from "@/components/editor/editor-pagination"
+import { SectionPieces } from "./section-pieces"
+import { EditorSection } from "./editor-section"
 import { MarginGuides } from "@/components/editor/margin-guides"
 import { SlashMenu } from "@/components/editor/slash-menu"
 import { addPageBreak, type EditorController, type FocusRequest } from "@/components/editor/use-editor-controller"
@@ -51,7 +54,6 @@ import {
   paragraphGap,
   shouldRenderTemplateFooter,
   shouldRenderTemplateHeader,
-  type TemplateRenderBlock,
   type TemplateRenderPlan,
 } from "@/services/templates/template-render-plan"
 import type { TextRun } from "@/types/template"
@@ -67,15 +69,6 @@ const FOOTER_POINTS = 18
 const EMPTY_ANSWERS: Record<string, unknown> = {}
 const TEXT_CHOICE = INSERT_CHOICES[0] as InsertChoice
 
-type CanvasUnit = Readonly<{
-  blocks: readonly TemplateRenderBlock[]
-  columns: 1 | 2
-  groupLabel: string | null
-  id: string
-  keepWithNext: boolean
-  pageBreakBefore: boolean
-  sectionLabel: string | null
-}>
 
 type SlashState = Readonly<{
   active: number
@@ -212,6 +205,7 @@ export function EditorCanvas({
           id: unit.id,
           keepWithNext: unit.keepWithNext,
           pageBreakBefore: unit.pageBreakBefore,
+          together: unit.together,
           rows: element && height > room ? measureRows(element, zoom) : undefined,
         }
       }),
@@ -284,6 +278,11 @@ export function EditorCanvas({
 
   function focusNeighbour(blockId: string, direction: -1 | 1): boolean {
     const blocks = content.blocks
+    const section = direction < 0 ? content.sections.find((section) => section.startBlockId === blockId) : content.sections.find((section) => section.startBlockId === blocks[blocks.findIndex((block) => block.id === blockId) + 1]?.id)
+    if (section) {
+      controller.requestFocus({ blockId: sectionTitleKey(section.id), offset: direction < 0 ? section.label.length : 0 })
+      return true
+    }
     let index = blocks.findIndex((candidate) => candidate.id === blockId) + direction
 
     while (blocks[index] && !isLine(blocks[index]) && !isList(blocks[index])) {
@@ -394,6 +393,11 @@ export function EditorCanvas({
         })
         controller.requestFocus(opensAbove ? { blockId: block.id, offset: 0 } : { blockId: id, offset: 0 })
       } else if (event.key === "Backspace" && caret.atStart && caret.collapsed) {
+        if (content.sections.some((section) => section.startBlockId === block.id)) {
+          event.preventDefault()
+          focusNeighbour(block.id, -1)
+          return
+        }
         const result = mergeIntoPrevious(updateTemplateBlock(content, synced), block.id)
 
         event.preventDefault()
@@ -565,6 +569,7 @@ export function EditorCanvas({
       <div
         className="pointer-events-auto"
         data-unit-id={unit.id}
+        data-section-id={unit.blocks[0]?.sectionId ?? undefined}
         ref={(element) => {
           if (element) {
             unitElements.current.set(unit.id, element)
@@ -592,13 +597,14 @@ export function EditorCanvas({
   if (narrow) {
     return (
       <div
-        className="mx-auto w-full max-w-2xl bg-card px-5 py-6 shadow-sm"
+        className="relative mx-auto w-full max-w-2xl bg-card px-5 py-6 shadow-sm"
         data-document-surface={surface}
         data-slot="editor-pages"
         ref={rootRef}
         style={inkStyle}
       >
         {flow}
+        {textEditable ? <SectionPieces root={rootRef} sectionId={controller.currentSectionId} narrow zoom={1} revision={content} /> : null}
         {/* A phone's column has no pages, so placed pictures follow the text. */}
         {placedImages.map(({ block }) => (
           <CanvasBlock actions={actions} block={block} key={block.id} />
@@ -718,6 +724,7 @@ export function EditorCanvas({
             ) : null}
           </div>
         ))}
+        {textEditable ? <SectionPieces root={rootRef} sectionId={controller.currentSectionId} narrow={false} zoom={zoom} revision={layout} /> : null}
         {/* Placed pictures lie over their pages' text, as they print. */}
         {placedImages.map(({ block, page }) => (
           <div
@@ -757,7 +764,9 @@ export function EditorCanvas({
 function UnitBlocks({ actions, unit }: { actions: CanvasActions; unit: CanvasUnit }): ReactElement {
   return (
     <>
-      {unit.sectionLabel ? (
+      {unit.sectionId && actions.textEditable ? (
+        <EditorSection controller={actions.controller} section={actions.controller.content.sections.find((section) => section.id === unit.sectionId)!} />
+      ) : unit.sectionLabel ? (
         <p className="font-semibold" style={{ color: "var(--doc-primary)", fontSize: "1.5em", marginBottom: "0.5em" }}>
           {unit.sectionLabel}
         </p>
@@ -886,44 +895,6 @@ function measureRows(unit: HTMLElement, zoom: number): PaginationRow[] {
   }
 
   return rows.sort((one, other) => one.top - other.top)
-}
-
-function createUnits(plan: TemplateRenderPlan): CanvasUnit[] {
-  const units: CanvasUnit[] = []
-  const blocks = plan.blocks.filter(({ block }) => !(block.type === "image" && block.placement))
-
-  if (plan.title) {
-    units.push({ blocks: [], columns: 1, groupLabel: null, id: "title", keepWithNext: false, pageBreakBefore: false, sectionLabel: null })
-  }
-
-  let index = 0
-
-  while (index < blocks.length) {
-    const first = blocks[index] as TemplateRenderBlock
-    const prior = blocks[index - 1]
-    const startsSection = index === 0 || prior?.sectionId !== first.sectionId
-    const startsGroup = first.fieldGroupId !== null && prior?.fieldGroupId !== first.fieldGroupId
-    const grouped: TemplateRenderBlock[] = [first]
-
-    if (first.fieldGroupId !== null && first.fieldGroupColumns === 2) {
-      while (blocks[index + grouped.length]?.fieldGroupId === first.fieldGroupId) {
-        grouped.push(blocks[index + grouped.length] as TemplateRenderBlock)
-      }
-    }
-
-    units.push({
-      blocks: grouped,
-      columns: grouped.length > 1 ? 2 : 1,
-      groupLabel: startsGroup ? first.fieldGroupLabel : null,
-      id: first.block.id,
-      keepWithNext: grouped.at(-1)?.keepWithNext ?? false,
-      pageBreakBefore: first.pageBreakBefore,
-      sectionLabel: startsSection ? first.sectionLabel : null,
-    })
-    index += grouped.length
-  }
-
-  return units
 }
 
 function readCaretRect(): DOMRect {

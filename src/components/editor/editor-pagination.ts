@@ -1,3 +1,5 @@
+import type { TemplateRenderBlock, TemplateRenderPlan } from "@/services/templates/template-render-plan"
+
 /** Where a page may end inside a block: a line, list item or table row, from the block's top. */
 export type PaginationRow = Readonly<{ key: string; top: number }>
 
@@ -9,6 +11,8 @@ export type PaginationUnit = Readonly<{
   pageBreakBefore: boolean
   /** Only needed when the block is taller than a page. */
   rows?: readonly PaginationRow[]
+  /** The runs it belongs to that stay on one page, such as a section's. */
+  together?: readonly string[]
 }>
 
 /**
@@ -24,8 +28,9 @@ export type PageFrame = Readonly<{
 
 /**
  * Lays measured blocks onto pages the way the paper will hold them: a block
- * that does not fit starts the next page, a page break always does, and a
- * block kept with the next one moves with it. A block taller than a page
+ * that does not fit starts the next page, a page break always does, a block
+ * kept with the next one moves with it, and a run kept on one page moves whole
+ * when a fresh page holds it, as the PDF does. A block taller than a page
  * breaks at its rows instead, so nothing ever runs past a page's bottom
  * margin. The flow stays one column, and whatever starts a page is pushed down
  * by a spacer to that page's content, so nothing is remounted and the caret
@@ -61,9 +66,21 @@ export function paginate(
     const next = units[index + 1]
     // Too tall for any page: it breaks where it stands rather than moving whole.
     const splits = Boolean(unit.rows?.length) && unit.height > bottom(page + 1) - top(page + 1)
+    const keeps = (unit.together ?? [])
+      .filter((key: string): boolean => !units[index - 1]?.together?.includes(key))
+      .some((key: string): boolean => {
+        let height = 0
+
+        for (let at = index; units[at]?.together?.includes(key); at += 1) {
+          height += units[at]?.height ?? 0
+        }
+
+        return y + height > bottom(page) && height <= bottom(page + 1) - top(page + 1)
+      })
     const breaks =
       !empty &&
       (unit.pageBreakBefore ||
+        keeps ||
         (!splits && y + unit.height > bottom(page)) ||
         (unit.keepWithNext &&
           next !== undefined &&
@@ -114,4 +131,63 @@ export function paginate(
   })
 
   return { inside, pageCount: page + 1, pages, spacers }
+}
+
+/** What the canvas lays out as one piece: a block, or a row of fields side by side. */
+export type CanvasUnit = Readonly<{
+  blocks: readonly TemplateRenderBlock[]
+  columns: 1 | 2
+  groupLabel: string | null
+  id: string
+  keepWithNext: boolean
+  pageBreakBefore: boolean
+  sectionLabel: string | null
+  sectionId: string | null
+  together: readonly string[]
+}>
+
+/**
+ * Cuts a plan into the pieces the canvas lays out and paginates.
+ *
+ * @param plan - The page's render plan.
+ * @returns The pieces, in flow order, after the printed title.
+ */
+export function createUnits(plan: TemplateRenderPlan): CanvasUnit[] {
+  const units: CanvasUnit[] = []
+  const blocks = plan.blocks.filter(({ block }) => !(block.type === "image" && block.placement))
+
+  if (plan.title) {
+    units.push({ blocks: [], columns: 1, groupLabel: null, id: "title", keepWithNext: false, pageBreakBefore: false, sectionLabel: null, sectionId: null, together: [] })
+  }
+
+  let index = 0
+
+  while (index < blocks.length) {
+    const first = blocks[index] as TemplateRenderBlock
+    const prior = blocks[index - 1]
+    const startsSection = index === 0 || prior?.sectionId !== first.sectionId
+    const startsGroup = first.fieldGroupId !== null && prior?.fieldGroupId !== first.fieldGroupId
+    const next = blocks[index + 1]
+    const sideBySide = first.fieldGroupId !== null && first.fieldGroupColumns === 2
+    // Side-by-side fields pair up a row at a time, as the PDF prints them, and
+    // a field that starts a new page starts a new row.
+    const grouped = sideBySide && next?.fieldGroupId === first.fieldGroupId && !next.pageBreakBefore ? [first, next] : [first]
+    const keptSection = first.sectionId !== null && plan.sections.some((section) => section.id === first.sectionId && section.keepTogether)
+
+    units.push({
+      blocks: grouped,
+      columns: sideBySide ? 2 : 1,
+      groupLabel: startsGroup ? first.fieldGroupLabel : null,
+      id: first.block.id,
+      keepWithNext: grouped.at(-1)?.keepWithNext ?? false,
+      pageBreakBefore: first.pageBreakBefore,
+      sectionLabel: startsSection ? first.sectionLabel : null,
+      sectionId: startsSection ? first.sectionId : null,
+      // A kept section holds its groups too, so its key alone decides, as in the PDF.
+      together: keptSection ? [`section:${first.sectionId}`] : first.fieldGroupId && first.keepTogether ? [`group:${first.fieldGroupId}`] : [],
+    })
+    index += grouped.length
+  }
+
+  return units
 }

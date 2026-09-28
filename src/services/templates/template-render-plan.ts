@@ -124,9 +124,10 @@ export function createTemplateRenderPlan(
     )
   )
   const structure = createStructureIndex(input.content, canonicalIndexById)
+  const opened = new Set<IndexedSection>()
   const blocks = visibleBlocks.map(
     (block: TemplateBlock): TemplateRenderBlock =>
-      decorateRenderBlock(block, canonicalIndexById, structure)
+      decorateRenderBlock(block, canonicalIndexById, structure, opened)
   )
 
   return {
@@ -331,7 +332,12 @@ function createStructureIndex(
             }
           ]
   } else {
-    sections = content.sections.map(
+    // What comes before the first section belongs to none and prints no title.
+    const firstStartIndex = canonicalIndexById.get(content.sections[0]?.startBlockId ?? "") ?? 0
+    const opening: IndexedSection[] =
+      firstStartIndex > 0 ? [{ section: null, startIndex: 0, endIndex: firstStartIndex - 1 }] : []
+
+    sections = [...opening, ...content.sections.map(
       (section: TemplateSection, index: number): IndexedSection => {
         const startIndex = canonicalIndexById.get(section.startBlockId) ?? 0
         const nextSection = content.sections[index + 1]
@@ -346,7 +352,7 @@ function createStructureIndex(
           endIndex: Math.max(startIndex, nextStartIndex - 1)
         }
       }
-    )
+    )]
   }
   const groups = content.fieldGroups.map(
     (group: TemplateFieldGroup): IndexedFieldGroup => ({
@@ -376,7 +382,8 @@ function createStructureIndex(
 function decorateRenderBlock(
   block: TemplateBlock,
   canonicalIndexById: ReadonlyMap<string, number>,
-  structure: StructureIndex
+  structure: StructureIndex,
+  opened: Set<IndexedSection>
 ): TemplateRenderBlock {
   const canonicalIndex = canonicalIndexById.get(block.id) ?? -1
   const indexedSection = structure.sections.find(
@@ -384,6 +391,13 @@ function decorateRenderBlock(
       canonicalIndex >= candidate.startIndex &&
       canonicalIndex <= candidate.endIndex
   )
+  // A section starts its page at its first block that shows, even when a
+  // hidden field opens it.
+  const opensSection = indexedSection !== undefined && !opened.has(indexedSection)
+
+  if (indexedSection) {
+    opened.add(indexedSection)
+  }
   const indexedGroup = structure.groups.find(
     (candidate: IndexedFieldGroup): boolean =>
       canonicalIndex >= candidate.startIndex &&
@@ -400,8 +414,7 @@ function decorateRenderBlock(
     fieldGroupLabel: indexedGroup?.group.label ?? null,
     fieldGroupColumns: indexedGroup?.group.columns ?? 1,
     pageBreakBefore:
-      (indexedSection?.startIndex === canonicalIndex &&
-        indexedSection.section?.pageBreakBefore === true) ||
+      (opensSection && indexedSection.section?.pageBreakBefore === true) ||
       rule?.pageBreakBefore === true,
     keepTogether:
       indexedSection?.section?.keepTogether === true ||

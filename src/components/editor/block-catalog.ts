@@ -13,6 +13,7 @@ import {
   Minus,
   PenLine,
   Pilcrow,
+  Section,
   Signature,
   SquareCheck,
   Table,
@@ -22,11 +23,12 @@ import {
 import type { TextBlockKind } from "@/components/editor/editor-content"
 import type { TemplateBlock } from "@/types/template"
 
-/** What choosing an item adds: a kind of line, a block, or a new page. */
+/** What choosing an item adds: a kind of line, a block, a new page, or a section. */
 export type InsertAction =
   | Readonly<{ kind: "text"; value: TextBlockKind }>
   | Readonly<{ kind: "block"; type: TemplateBlock["type"] }>
   | Readonly<{ kind: "page" }>
+  | Readonly<{ kind: "section" }>
 
 /** One thing a person can add to the page, from the dock or by typing /. */
 export type InsertChoice = Readonly<{
@@ -51,6 +53,7 @@ export const INSERT_CHOICES: readonly InsertChoice[] = [
   { action: { kind: "block", type: "image" }, group: "page", icon: Image, id: "image", keywords: ["picture", "photo", "logo"], label: "Image" },
   { action: { kind: "block", type: "divider" }, group: "page", icon: Minus, id: "divider", keywords: ["line", "rule", "separator"], label: "Divider" },
   { action: { kind: "page" }, group: "page", icon: FilePlus2, id: "page", keywords: ["page break", "new page"], label: "New page" },
+  { action: { kind: "section" }, group: "page", icon: Section, id: "section", keywords: ["part", "chapter"], label: "Section" },
   { action: { kind: "block", type: "text_field" }, group: "fields", icon: TextCursorInput, id: "text-field", keywords: ["input", "answer", "name"], label: "Text field" },
   { action: { kind: "block", type: "date_field" }, group: "fields", icon: CalendarDays, id: "date-field", keywords: ["day", "when"], label: "Date" },
   { action: { kind: "block", type: "checkbox_field" }, group: "fields", icon: SquareCheck, id: "checkbox-field", keywords: ["tick", "agree", "consent"], label: "Checkbox" },

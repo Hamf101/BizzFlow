@@ -11,6 +11,9 @@ import {
   BringToFront,
   ChevronDown,
   Copy,
+  Columns2,
+  Link2,
+  Section,
   Settings2,
   Trash2,
   WrapText,
@@ -52,6 +55,7 @@ import {
 import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
 import { describeDateFormat } from "@/lib/date-format"
+import { setFieldSideBySide } from "@/types/template-structure"
 import type { TemplateBlock, TextRun } from "@/types/template"
 
 export type LineBlock = Extract<TemplateBlock, { type: "heading" | "paragraph" }>
@@ -493,6 +497,15 @@ function BlockToolbar({ actions, block }: { actions: CanvasActions; block: Templ
   const blocks = controller.content.blocks
   const index = blocks.findIndex((candidate) => candidate.id === block.id)
 
+  const group = controller.content.fieldGroups.find((group) => {
+    const start = blocks.findIndex((block) => block.id === group.startBlockId)
+    const end = blocks.findIndex((block) => block.id === group.endBlockId)
+    return index >= start && index <= end
+  })
+  const sideBySide = group?.columns === 2
+  const canPair = sideBySide || setFieldSideBySide(controller.content, block.id, true, "preview") !== controller.content
+  const keepWithNext = controller.content.blockRules.some((rule) => rule.blockId === block.id && rule.keepWithNext)
+
   // A picture let out of the text stays exactly where it was on its page.
   function placeFreely(image: ImageBlock): void {
     const picture = document.querySelector(`[data-block-id="${CSS.escape(image.id)}"] [data-image-box]`)
@@ -510,7 +523,7 @@ function BlockToolbar({ actions, block }: { actions: CanvasActions; block: Templ
 
   return (
     <div
-      className="absolute right-0 bottom-full z-30 mb-[0.8em] flex items-center gap-0.5 rounded-[12px] border border-border bg-popover p-1 text-sm text-popover-foreground shadow-lg"
+      className="absolute right-0 bottom-full z-30 mb-[0.8em] flex max-w-[calc(100vw-3rem)] flex-wrap justify-end items-center gap-0.5 rounded-[12px] border border-border bg-popover p-1 text-sm text-popover-foreground shadow-lg"
       data-slot="block-toolbar"
       role="toolbar"
       aria-label="Block"
@@ -526,6 +539,7 @@ function BlockToolbar({ actions, block }: { actions: CanvasActions; block: Templ
             }
           />
           <DropdownMenuContent align="start" className="w-44">
+            {isLine(block) ? <DropdownMenuItem disabled={block.text.trim().length > 160 || controller.content.sections.some((section) => section.startBlockId === block.id)} onClick={() => controller.turnIntoSection(block.id)}><Section />Section</DropdownMenuItem> : null}
             {INSERT_CHOICES.filter((choice) => choice.action.kind === "text").map((choice) => {
               const Icon = choice.icon
 
@@ -563,6 +577,12 @@ function BlockToolbar({ actions, block }: { actions: CanvasActions; block: Templ
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
+      ) : null}
+      {isField(block) ? (
+        <ToolButton disabled={!canPair} label="Side by side" onClick={() => controller.setSideBySide(block.id, !sideBySide)} pressed={sideBySide}><Columns2 /></ToolButton>
+      ) : null}
+      {!(block.type === "image" && block.placement) ? (
+        <ToolButton disabled={index === blocks.length - 1} label="Keep with next" onClick={() => controller.setKeepWithNext(block.id, !keepWithNext)} pressed={keepWithNext}><Link2 /></ToolButton>
       ) : null}
       {isField(block) ? (
         <ToolButton

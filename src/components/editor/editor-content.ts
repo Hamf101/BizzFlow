@@ -2,7 +2,10 @@ import { fitRuns, type TemplateBlock, type TemplateContentV3, type TextRun } fro
 import {
   deleteTemplateBlock,
   insertTemplateBlock,
+  removeTemplateSection,
+  startTemplateSection,
   updateTemplateBlock,
+  updateTemplateSection,
 } from "@/types/template-structure"
 
 /** Where the caret goes after an edit: a block, and an item for lists. */
@@ -313,6 +316,125 @@ export function hasPageBreak(content: TemplateContentV3, blockId: string): boole
 }
 
 /**
+ * The caret key of a section's title, which is typed on the page like a line.
+ *
+ * @param sectionId - The section.
+ * @returns The key the canvas finds the title by.
+ */
+export function sectionTitleKey(sectionId: string): string {
+  return `section:${sectionId}`
+}
+
+/**
+ * The section whose title a caret key names.
+ *
+ * @param key - A caret key, or null.
+ * @returns The section's id, or null when the key is not a section title's.
+ */
+export function sectionOfTitle(key: string | null): string | null {
+  return key?.startsWith("section:") ? key.slice("section:".length) : null
+}
+
+/**
+ * Starts a section after a block: at the block after it, or on a new empty
+ * line when nothing follows or the next block already opens a section. The
+ * caret goes to its editable placeholder title.
+ *
+ * @param content - The page.
+ * @param afterBlockId - The block with the caret, or null for the top.
+ * @param sectionId - A fresh id for the section.
+ * @param newBlockId - A fresh id, used when a new line is needed.
+ * @returns The page and where the caret goes.
+ */
+export function insertSectionAfter(
+  content: TemplateContentV3,
+  afterBlockId: string | null,
+  sectionId: string,
+  newBlockId: string
+): { content: TemplateContentV3; focus: CaretTarget } {
+  const next = content.blocks[content.blocks.findIndex((block) => block.id === afterBlockId) + 1]
+  const placed = next !== undefined && !opensSection(content, next.id)
+    ? content
+    : insertTemplateBlock(content, afterBlockId, emptyParagraph(newBlockId))
+  // Inserting a new section above the first one must not claim that section's body.
+  const preserved = { ...placed, sections: content.sections }
+  const changed = startTemplateSection(preserved, placed === content ? next!.id : newBlockId, sectionId, "Section title")
+
+  return { content: changed, focus: { blockId: sectionTitleKey(sectionId), offset: 0 } }
+}
+
+/**
+ * Turns a line into the title of a section holding what follows it. A page
+ * break the line started moves to the section. The last line, or one before
+ * another section, stays as the section's empty first line; a line that
+ * already opens a section is left alone.
+ *
+ * @param content - The page.
+ * @param blockId - The line.
+ * @param sectionId - A fresh id for the section.
+ * @returns The page and where the caret goes.
+ */
+export function turnLineIntoSection(
+  content: TemplateContentV3,
+  blockId: string,
+  sectionId: string
+): { content: TemplateContentV3; focus: CaretTarget } {
+  const index = content.blocks.findIndex((block) => block.id === blockId)
+  const line = content.blocks[index]
+
+  if (!isLine(line) || line.text.trim().length > 160 || opensSection(content, blockId)) {
+    return { content, focus: { blockId, offset: isLine(line) ? line.text.length : 0 } }
+  }
+
+  const next = content.blocks[index + 1]
+  const holder = next !== undefined && !opensSection(content, next.id) ? next.id : blockId
+  const without =
+    holder === blockId
+      ? removePageBreak({ ...content, blocks: content.blocks.map((block) => (block.id === blockId ? emptyParagraph(blockId) : block)) }, blockId)
+      : deleteTemplateBlock(content, blockId)
+  const started = startTemplateSection(without, holder, sectionId, line.text.trim() || "Section title")
+  const changed = updateTemplateSection(started, sectionId, { pageBreakBefore: hasPageBreak(content, blockId) })
+
+  return { content: changed, focus: { blockId: sectionTitleKey(sectionId), offset: line.text.length } }
+}
+
+/**
+ * Turns a section's title back into a line where it stands, keeping what the
+ * section held and any page break it started.
+ *
+ * @param content - The page.
+ * @param sectionId - The section.
+ * @param kind - The kind of line the title becomes.
+ * @param newBlockId - A fresh id for the line.
+ * @returns The page and where the caret goes.
+ */
+export function turnSectionIntoLine(
+  content: TemplateContentV3,
+  sectionId: string,
+  kind: TextBlockKind,
+  newBlockId: string
+): { content: TemplateContentV3; focus: CaretTarget } {
+  const section = content.sections.find((candidate) => candidate.id === sectionId)
+  const startIndex = content.blocks.findIndex((block) => block.id === section?.startBlockId)
+
+  if (!section || startIndex === -1) {
+    return { content, focus: { blockId: sectionTitleKey(sectionId), offset: 0 } }
+  }
+
+  const text = section.label
+  const line: TemplateBlock =
+    kind.type === "heading"
+      ? { alignment: "left", id: newBlockId, level: kind.level, text, type: "heading" }
+      : { alignment: "left", id: newBlockId, text, type: "paragraph" }
+  const placed = removeTemplateSection(insertTemplateBlock(content, content.blocks[startIndex - 1]?.id ?? null, line), sectionId)
+
+  return {
+    content: section.pageBreakBefore ? setPageBreak(placed, newBlockId) : placed,
+    focus: { blockId: newBlockId, offset: text.length },
+  }
+}
+
+/**
  * Makes what was typed valid to save: an emptied heading becomes an empty
  * line, empty list items go, and a list with none left becomes an empty line.
  *
@@ -428,6 +550,10 @@ function setPageBreak(content: TemplateContentV3, blockId: string): TemplateCont
         )
       : [...content.blockRules, { blockId, keepWithNext: false, pageBreakBefore: true }],
   }
+}
+
+function opensSection(content: TemplateContentV3, blockId: string): boolean {
+  return content.sections.some((section) => section.startBlockId === blockId)
 }
 
 function emptyParagraph(id: string): TemplateBlock {

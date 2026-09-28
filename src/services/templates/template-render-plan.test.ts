@@ -196,6 +196,57 @@ describe("template render plan", () => {
     expect(plan.blocks[0]?.pageBreakBefore).toBe(true)
   })
 
+  it("keeps what comes before the first section, printed without a section title", () => {
+    const content: TemplateContentV3 = {
+      ...createBlankTemplateContent(),
+      blocks: [
+        { id: SOURCE_ID, type: "paragraph", text: "Opening words", alignment: "left" },
+        { id: FINAL_ID, type: "paragraph", text: "Signed here", alignment: "left" }
+      ],
+      sections: [
+        { id: SECTION_ID, label: "Signatures", startBlockId: FINAL_ID, pageBreakBefore: true, keepTogether: true }
+      ]
+    }
+    const plan = createTemplateRenderPlan({ title: "Agreement", content, mode: "preview" })
+    const markup = renderToStaticMarkup(createElement(TemplatePreview, { renderPlan: plan }))
+
+    expect(
+      plan.sections.map((section) => [section.id, section.label, section.blocks.map(({ block }) => block.id)])
+    ).toEqual([
+      [null, null, [SOURCE_ID]],
+      [SECTION_ID, "Signatures", [FINAL_ID]]
+    ])
+    expect(plan.blocks.map((block) => [block.sectionId, block.pageBreakBefore, block.keepTogether])).toEqual([
+      [null, false, false],
+      [SECTION_ID, true, true]
+    ])
+    expect(markup).toContain("Opening words")
+    expect(markup.match(/data-template-section-label="true"/g)).toHaveLength(1)
+  })
+
+  it("starts a section's new page at its first block that shows, when a hidden field opens it", () => {
+    const content: TemplateContentV3 = {
+      ...createStructuredContent(),
+      sections: [
+        { id: SECTION_ID, label: "Decision", startBlockId: SOURCE_ID, pageBreakBefore: false, keepTogether: false },
+        { id: GROUP_ID, label: "Details", startBlockId: CONDITIONAL_ID, pageBreakBefore: true, keepTogether: false }
+      ],
+      fieldGroups: [],
+      blockRules: []
+    }
+    const plan = createTemplateRenderPlan({
+      title: "Approval",
+      content,
+      answers: { include_details: false },
+      mode: "final"
+    })
+
+    expect(plan.blocks.map((block) => [block.block.id, block.sectionLabel, block.pageBreakBefore])).toEqual([
+      [SOURCE_ID, "Decision", false],
+      [FINAL_ID, "Details", true]
+    ])
+  })
+
   it("renders exactly one resolved printed title and only planned web blocks", () => {
     const content = createStructuredContent()
     content.layout = {
