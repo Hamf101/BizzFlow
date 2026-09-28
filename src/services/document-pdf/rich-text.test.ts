@@ -129,6 +129,36 @@ describe("formatted text in a PDF", () => {
   )
 
   it(
+    "ends a link annotation when unlinked words appear between stretches with the same URL",
+    async () => {
+      const document = await render([
+        {
+          alignment: "left",
+          id: ids(1),
+          runs: [
+            { link: "https://pay.example.com", text: "Pay here" },
+            { text: " or view " },
+            { link: "https://pay.example.com", text: "this invoice" },
+          ],
+          text: "Pay here or view this invoice",
+          type: "paragraph",
+        },
+      ])
+      const annotations = document.getPage(0).node.Annots()
+      const annotArray = annotations?.asArray() ?? []
+
+      expect(annotArray).toHaveLength(2)
+      const rects = annotArray.map((ref) => {
+        const rect = document.context.lookup(ref, PDFDict).lookup(PDFName.of("Rect"), PDFArray)
+        return rect.asArray().map((num) => Number(num))
+      })
+
+      expect(rects[0]![2]).toBeLessThan(rects[1]![0])
+    },
+    RENDER_TIMEOUT_MS
+  )
+
+  it(
     "carries a long formatted paragraph onto the next page with its formatting",
     async () => {
       const sentence = "The provider cleans every office on the agreed day. "

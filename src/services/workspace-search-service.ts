@@ -232,19 +232,16 @@ export async function searchWorkspace(
   // words, only the chosen section opens.
   const looked = query ? kinds : kinds.filter((each) => each === kind)
 
-  try {
-    const found = await Promise.all(
-      looked.map((each) => FINDERS[each](actor, query, kind === undefined ? SHOWN_EACH : each === kind ? SHOWN_ONE : 1, deps))
-    )
+  const settled = await Promise.allSettled(
+    looked.map((each) => FINDERS[each](actor, query, kind === undefined ? SHOWN_EACH : each === kind ? SHOWN_ONE : 1, deps))
+  )
 
-    return {
-      hits: found.flatMap((result, index) => (kind === undefined || looked[index] === kind ? result.hits : [])),
-      totals: Object.fromEntries(looked.map((each, index) => [each, found[index]!.total])),
-    }
-  } catch (error: unknown) {
+  const chosenIndex = kind !== undefined ? looked.indexOf(kind) : -1
+
+  if (chosenIndex !== -1 && settled[chosenIndex]!.status === "rejected") {
+    const error = settled[chosenIndex]!.reason
     const statusCode = (error as { statusCode?: unknown }).statusCode
 
-    // A section's own refusal, such as too many files matching, says why.
     if (error instanceof Error && typeof statusCode === "number" && statusCode < 500) {
       throw new WorkspaceSearchError(error.message, statusCode)
     }
@@ -256,6 +253,64 @@ export async function searchWorkspace(
     })
     throw new WorkspaceSearchError("Search failed. Try again.", 500)
   }
+
+  const fulfilled = settled.filter((result): result is PromiseFulfilledResult<Found> => result.status === "fulfilled")
+
+  if (fulfilled.length === 0) {
+    const firstError = settled.find((result): result is PromiseRejectedResult => result.status === "rejected")?.reason
+    const statusCode = (firstError as { statusCode?: unknown }).statusCode
+
+    if (firstError instanceof Error && typeof statusCode === "number" && statusCode < 500) {
+      throw new WorkspaceSearchError(firstError.message, statusCode)
+    }
+
+    console.error("workspace_search_service_failed", {
+      actorUserId: input.actorUserId,
+      organizationId: input.organizationId,
+      reason: firstError instanceof Error ? firstError.message : "Unknown error",
+    })
+    throw new WorkspaceSearchError("Search failed. Try again.", 500)
+  }
+
+  settled.forEach((result, index) => {
+    if (result.status === "rejected") {
+      const error = result.reason
+      const statusCode = (error as { statusCode?: unknown }).statusCode
+
+      if (error instanceof Error && typeof statusCode === "number" && statusCode < 500) {
+        console.warn("workspace_search_section_rejected", {
+          actorUserId: input.actorUserId,
+          organizationId: input.organizationId,
+          reason: error.message,
+          section: looked[index],
+          statusCode,
+        })
+      } else {
+        console.error("workspace_search_section_failed", {
+          actorUserId: input.actorUserId,
+          organizationId: input.organizationId,
+          reason: error instanceof Error ? error.message : "Unknown error",
+          section: looked[index],
+        })
+      }
+    }
+  })
+
+  const hits: WorkspaceSearchHit[] = []
+  const totals: Partial<Record<WorkspaceSearchKind, number>> = {}
+
+  looked.forEach((each, index) => {
+    const result = settled[index]!
+
+    if (result.status === "fulfilled") {
+      totals[each] = result.value.total
+      if (kind === undefined || each === kind) {
+        hits.push(...result.value.hits)
+      }
+    }
+  })
+
+  return { hits, totals }
 }
 
 async function loadMembership(actor: Actor): Promise<OrganizationPermissionSubject> {

@@ -101,16 +101,45 @@ describe("searchWorkspace", () => {
     expect(deps.listFiles).not.toHaveBeenCalled()
   })
 
-  it("says why a section refused, and nothing of a failure", async () => {
+  it("says why a chosen section refused, and lets other sections answer when one fails", async () => {
     vi.spyOn(console, "error").mockImplementation(() => undefined)
+    vi.spyOn(console, "warn").mockImplementation(() => undefined)
     const tooMany = Object.assign(new Error("Too many files match this search. Narrow it down."), { statusCode: 413 })
 
-    await expect(search({ query: "le" }, fakes("staff", { listFiles: vi.fn().mockRejectedValue(tooMany) }))).rejects.toMatchObject({
+    // When the member explicitly asked for files, reporting why it refused.
+    await expect(search({ kind: "files", query: "le" }, fakes("staff", { listFiles: vi.fn().mockRejectedValue(tooMany) }))).rejects.toMatchObject({
       message: tooMany.message,
       statusCode: 413,
     })
+
+    // When searching another section, a file failure does not block results.
+    const people = await search({ kind: "people", query: "le" }, fakes("staff", { listFiles: vi.fn().mockRejectedValue(tooMany) }))
+    expect(people.hits.length).toBeGreaterThan(0)
+    expect(people.hits.every((hit) => hit.kind === "people")).toBe(true)
+    expect(people.totals.people).toBeGreaterThan(0)
+    expect(people.totals.files).toBeUndefined()
+
+    // When searching all sections, results from working sections are not discarded.
+    const all = await search({ query: "le" }, fakes("staff", { listFiles: vi.fn().mockRejectedValue(tooMany) }))
+    expect(all.hits.length).toBeGreaterThan(0)
+    expect(all.hits.every((hit) => hit.kind !== "files")).toBe(true)
+    expect(all.totals.files).toBeUndefined()
+    expect(all.totals.people).toBeDefined()
+
+    // When all sections fail, it reports search failed.
+    const networkFail = new Error("connect ECONNRESET 10.0.0.3:5432")
     await expect(
-      search({ query: "le" }, fakes("staff", { listTasks: vi.fn().mockRejectedValue(new Error("connect ECONNRESET 10.0.0.3:5432")) }))
+      search(
+        { query: "le" },
+        fakes("staff", {
+          listFiles: vi.fn().mockRejectedValue(networkFail),
+          listFolders: vi.fn().mockRejectedValue(networkFail),
+          listPeople: vi.fn().mockRejectedValue(networkFail),
+          listSubmissions: vi.fn().mockRejectedValue(networkFail),
+          listTasks: vi.fn().mockRejectedValue(networkFail),
+          listTemplates: vi.fn().mockRejectedValue(networkFail),
+        })
+      )
     ).rejects.toMatchObject({ message: "Search failed. Try again.", statusCode: 500 })
   })
 })

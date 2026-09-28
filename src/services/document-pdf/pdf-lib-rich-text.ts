@@ -49,22 +49,25 @@ export async function drawRichPdfText(
     // One clickable area for each stretch of a link on the line, spaces and all.
     const links: Array<{ bottom: number; left: number; right: number; top: number; url: string }> = []
     let penX = alignment === "center" ? x + (width - used) / 2 : alignment === "right" ? x + width - used : x
+    let activeLink: { bottom: number; left: number; right: number; top: number; url: string } | null = null
 
     line.forEach((word: Word, index: number): void => {
       const next = line[index + 1]?.pieces[0]
 
       for (const piece of word.pieces) {
         const { link } = piece.run
-        const last = links.at(-1)
         // A run that carries on past the space underlines, strikes or highlights it too.
         const gap = piece === word.pieces.at(-1) && next?.run === piece.run ? space(word) : 0
 
         draw(context, piece, penX, baseline, color, gap)
 
-        if (link && last?.url === link) {
-          last.right = penX + piece.width
+        if (link && activeLink?.url === link) {
+          activeLink.right = penX + piece.width
         } else if (link) {
-          links.push({ bottom: baseline - piece.size * 0.25, left: penX, right: penX + piece.width, top: baseline + piece.size * 0.9, url: link })
+          activeLink = { bottom: baseline - piece.size * 0.25, left: penX, right: penX + piece.width, top: baseline + piece.size * 0.9, url: link }
+          links.push(activeLink)
+        } else {
+          activeLink = null
         }
 
         penX += piece.width
