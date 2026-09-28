@@ -75,6 +75,10 @@ export function useEditorController({
 
     if (blockId) {
       setActiveBlockId(blockId)
+      setLine((current) => {
+        const lineBlockId = current?.view.dom.dataset.caretKey?.split(":")[0]
+        return lineBlockId === blockId ? current : null
+      })
     }
   }
 

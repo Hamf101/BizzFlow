@@ -103,7 +103,11 @@ export function FormatBar({
   controller: EditorController
   narrow: boolean
 }): ReactElement {
-  const line = controller.line && !controller.line.isDestroyed ? controller.line : null
+  const lineBlockId = controller.line?.view.dom.dataset.caretKey?.split(":")[0]
+  const line =
+    controller.line && !controller.line.isDestroyed && lineBlockId === controller.activeBlockId
+      ? controller.line
+      : null
   const marks = useEditorState({
     editor: line,
     selector: ({ editor }) =>

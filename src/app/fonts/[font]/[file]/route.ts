@@ -23,7 +23,7 @@ export async function GET(_request: Request, context: DocumentFontRouteContext):
 
     return new Response(new Uint8Array(asset.body), {
       headers: {
-        "Cache-Control": "public, max-age=86400, s-maxage=31536000",
+        "Cache-Control": file === "font.css" ? "public, max-age=3600, s-maxage=86400" : "public, max-age=86400, s-maxage=31536000",
         "Content-Type": asset.contentType,
       },
     })

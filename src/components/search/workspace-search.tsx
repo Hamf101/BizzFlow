@@ -318,11 +318,18 @@ function SearchPanel({ role, up }: { role: OrganizationPermissionSubject | null;
       )
     : []
   const total = section ? current?.result.totals[section.kind] : undefined
+  const sectionFailed = Boolean(section && current?.result.failed.includes(section.kind))
+  const failedLabels = current
+    ? sections
+        .filter((each) => current.result.failed.includes(each.kind))
+        .map((each) => each.label)
+        .join(", ")
+    : ""
   const options: Option[] = [
     ...hits.map((hit) => ({ hit, href: present(hit).href, key: `${hit.kind}:${hit.item.id}` })),
     // The whole list, searched as its own box used to: from that list, its
     // view carries over and paging starts again.
-    ...(section && current && current.kind === section.kind && (opening || total)
+    ...(section && current && current.kind === section.kind && (opening || total !== undefined)
       ? [{ href: listHref(section.href, asked, pathname === section.href ? searchParams.toString() : ""), key: "all" }]
       : []),
   ]
@@ -357,7 +364,7 @@ function SearchPanel({ role, up }: { role: OrganizationPermissionSubject | null;
           return
         }
 
-        setFound({ kind, result: { hits: payload.hits, totals: payload.totals }, words: asked })
+        setFound({ kind, result: { failed: payload.failed ?? [], hits: payload.hits, totals: payload.totals }, words: asked })
         setFailure(null)
         setActive(0)
       } catch (error: unknown) {
@@ -499,7 +506,14 @@ function SearchPanel({ role, up }: { role: OrganizationPermissionSubject | null;
               ))
             ) : (
               <p className="px-3 py-6 text-sm text-muted-foreground" role="status">
-                {failure ?? (current ? `Nothing${section ? ` in ${section.label}` : ""} matches “${current.words}”.` : "Searching…")}
+                {failure ??
+                  (current
+                    ? section && sectionFailed
+                      ? `${section.label} could not be searched. Try again.`
+                      : failedLabels
+                        ? `Nothing matches “${current.words}” (${failedLabels} could not be searched).`
+                        : `Nothing${section ? ` in ${section.label}` : ""} matches “${current.words}”.`
+                    : "Searching…")}
               </p>
             )}
           </div>

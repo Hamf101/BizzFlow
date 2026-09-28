@@ -45,6 +45,8 @@ export type WorkspaceSearchHit =
 
 /** What a search found, and how much each section the member may open holds. */
 export type WorkspaceSearchResult = Readonly<{
+  /** Sections that could not be searched, so the client can warn instead of showing silence. */
+  failed: readonly WorkspaceSearchKind[]
   hits: readonly WorkspaceSearchHit[]
   totals: Readonly<Partial<Record<WorkspaceSearchKind, number>>>
 }>
@@ -228,9 +230,18 @@ export async function searchWorkspace(
   const membership = await (deps.loadMembership ?? loadMembership)(actor)
   const kinds = WORKSPACE_SEARCH_KINDS.filter((each) => canPerformOrganizationAction(membership, PERMISSIONS[each]))
 
+  if (kind !== undefined && !kinds.includes(kind)) {
+    return { failed: [], hits: [], totals: {} }
+  }
+
   // Searching one section still counts the rest for their filters; without
   // words, only the chosen section opens.
   const looked = query ? kinds : kinds.filter((each) => each === kind)
+
+  // A user with no permissions for any section has nothing to search.
+  if (looked.length === 0) {
+    return { failed: [], hits: [], totals: {} }
+  }
 
   const settled = await Promise.allSettled(
     looked.map((each) => FINDERS[each](actor, query, kind === undefined ? SHOWN_EACH : each === kind ? SHOWN_ONE : 1, deps))
@@ -298,6 +309,7 @@ export async function searchWorkspace(
 
   const hits: WorkspaceSearchHit[] = []
   const totals: Partial<Record<WorkspaceSearchKind, number>> = {}
+  const failed: WorkspaceSearchKind[] = []
 
   looked.forEach((each, index) => {
     const result = settled[index]!
@@ -307,10 +319,12 @@ export async function searchWorkspace(
       if (kind === undefined || each === kind) {
         hits.push(...result.value.hits)
       }
+    } else {
+      failed.push(each)
     }
   })
 
-  return { hits, totals }
+  return { failed, hits, totals }
 }
 
 async function loadMembership(actor: Actor): Promise<OrganizationPermissionSubject> {

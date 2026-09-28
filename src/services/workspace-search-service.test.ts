@@ -118,6 +118,7 @@ describe("searchWorkspace", () => {
     expect(people.hits.every((hit) => hit.kind === "people")).toBe(true)
     expect(people.totals.people).toBeGreaterThan(0)
     expect(people.totals.files).toBeUndefined()
+    expect(people.failed).toEqual(["files"])
 
     // When searching all sections, results from working sections are not discarded.
     const all = await search({ query: "le" }, fakes("staff", { listFiles: vi.fn().mockRejectedValue(tooMany) }))
@@ -125,6 +126,7 @@ describe("searchWorkspace", () => {
     expect(all.hits.every((hit) => hit.kind !== "files")).toBe(true)
     expect(all.totals.files).toBeUndefined()
     expect(all.totals.people).toBeDefined()
+    expect(all.failed).toEqual(["files"])
 
     // When all sections fail, it reports search failed.
     const networkFail = new Error("connect ECONNRESET 10.0.0.3:5432")
@@ -141,5 +143,18 @@ describe("searchWorkspace", () => {
         })
       )
     ).rejects.toMatchObject({ message: "Search failed. Try again.", statusCode: 500 })
+  })
+
+  it("returns empty without searching when a chosen section is inaccessible to the member's role", async () => {
+    const deps = fakes("external_reviewer")
+
+    const withWords = await search({ kind: "tasks", query: "lease" }, deps)
+    expect(withWords).toEqual({ failed: [], hits: [], totals: {} })
+    expect(deps.listTasks).not.toHaveBeenCalled()
+    expect(deps.listFiles).not.toHaveBeenCalled()
+
+    const withoutWords = await search({ kind: "tasks" }, deps)
+    expect(withoutWords).toEqual({ failed: [], hits: [], totals: {} })
+    expect(deps.listTasks).not.toHaveBeenCalled()
   })
 })
