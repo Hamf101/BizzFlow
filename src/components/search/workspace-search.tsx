@@ -309,7 +309,7 @@ function SearchPanel({ role, up }: { role: OrganizationPermissionSubject | null;
   const asked = words.length >= 2 ? words : ""
   const opening = !asked && section !== undefined
   const current =
-    found && (asked ? found.words !== "" : opening && found.words === "" && found.kind === kind) ? found : null
+    found && (asked ? found.words === asked : opening && found.words === "" && found.kind === kind) ? found : null
   // Narrowing shows at once what is already here, while the rest arrives.
   const hits = current
     ? current.result.hits.filter((hit) => !section || hit.kind === section.kind).sort(
