@@ -4,6 +4,7 @@ import * as Sentry from "@sentry/nextjs"
 import { redirect } from "next/navigation"
 import { Suspense, type ReactElement, type ReactNode } from "react"
 
+import { SharingNoticesListener } from "@/components/sharing/sharing-notices-listener"
 import { PostHogProvider } from "@/components/analytics/posthog-provider"
 import { DashboardContentSkeleton } from "@/components/dashboard/dashboard-content-skeleton"
 import { FlowLauncher } from "@/components/flow/flow-launcher"
@@ -168,6 +169,7 @@ export default async function DashboardLayout({
         </div>
         <MobileTabBar role={account.permissionSubject} />
         {account.navigation?.organizationId ? <FlowLauncher /> : null}
+        {userId ? <SharingNoticesListener /> : null}
         {/* Beside the sidebar rather than in a boundary of its own, so its
             buttons never come alive before the search they open. */}
         {account.permissionSubject ? <WorkspaceSearch role={account.permissionSubject} /> : null}

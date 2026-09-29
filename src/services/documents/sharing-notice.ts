@@ -1,0 +1,48 @@
+import { createAdminClient } from "@/lib/supabase/admin"
+import type { SharingNotice } from "@/services/documents/sharing-contracts"
+
+type Send = (topic: string, event: string, message: object) => Promise<void>
+
+/**
+ * The private channel a member listens to for word meant for them. A policy on
+ * realtime.messages lets each member hear only the one carrying their own id.
+ *
+ * @param userId - The member.
+ * @returns The channel's topic.
+ */
+export function noticeTopic(userId: string): string {
+  return `user:${userId}`
+}
+
+/**
+ * Tells a member, if they are online, that something was shared with them. The
+ * share is already kept, so someone offline simply finds it in Files.
+ *
+ * @param notice - Who shared what, at what level, with whom.
+ * @param send - Sends to a channel; defaults to Supabase Realtime over HTTP.
+ * @throws Error when the channel takes no message; the caller decides whether that matters.
+ */
+export async function broadcastSharingNotice(notice: SharingNotice, send: Send = sendWithRealtime): Promise<void> {
+  await send(noticeTopic(notice.recipientUserId), "shared", {
+    actorName: notice.actorName,
+    id: notice.resource.id,
+    kind: notice.resource.kind,
+    level: notice.level,
+    name: notice.resourceName,
+  })
+}
+
+async function sendWithRealtime(topic: string, event: string, message: object): Promise<void> {
+  const client = createAdminClient()
+  const channel = client.channel(topic, { config: { private: true } })
+
+  try {
+    const result = await channel.httpSend(event, message)
+
+    if (!result.success) {
+      throw new Error(result.error)
+    }
+  } finally {
+    await client.removeChannel(channel)
+  }
+}
