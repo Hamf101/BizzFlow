@@ -18,6 +18,13 @@ export type SharingInput = {
 /** Someone, or everyone who holds a role. */
 export type SharingPrincipal = { userId: string } | { role: OrganizationRole }
 
+/** Several items at once. */
+export type SharingManyInput = {
+  actorUserId: string
+  organizationId: string
+  resources: SharingResource[]
+}
+
 export type SetSharingAccessInput = SharingInput & {
   /** Null takes the access away. */
   level: DocumentAccessLevel | null
@@ -39,8 +46,8 @@ export type SharingPerson = {
 
 /** Access someone was given on this item itself. */
 export type SharingGrant =
-  | { kind: "person"; level: DocumentAccessLevel; person: SharingPerson }
-  | { kind: "role"; level: DocumentAccessLevel; role: OrganizationRole }
+  | { kind: "person"; level: DocumentAccessLevel; mixed?: boolean; person: SharingPerson }
+  | { kind: "role"; level: DocumentAccessLevel; mixed?: boolean; role: OrganizationRole }
 
 /** Access that arrives from a folder above, which cannot be changed here. */
 export type SharingInherited = {
@@ -67,6 +74,8 @@ export type SharingView = {
 /** Word for the person a document or folder was just shared with. */
 export type SharingNotice = {
   actorName: string
+  /** How many items were shared in one go; absent for one. */
+  count?: number
   level: DocumentAccessLevel
   recipientUserId: string
   resource: SharingResource

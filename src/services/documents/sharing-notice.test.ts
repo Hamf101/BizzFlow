@@ -29,6 +29,14 @@ describe("telling someone it was shared with them", () => {
     })
   })
 
+  it("says how many items were shared at once", async () => {
+    const send = vi.fn(async () => undefined)
+
+    await broadcastSharingNotice({ ...NOTICE, count: 3 }, send)
+
+    expect(send).toHaveBeenCalledWith(expect.any(String), "shared", expect.objectContaining({ count: 3 }))
+  })
+
   it("lets the caller see a channel that would not take it", async () => {
     await expect(broadcastSharingNotice(NOTICE, async () => { throw new Error("no channel") })).rejects.toThrow("no channel")
   })

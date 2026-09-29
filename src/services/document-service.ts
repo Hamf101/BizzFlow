@@ -40,7 +40,7 @@ export type {
   SharingView,
 } from "@/services/documents/sharing-contracts"
 export {
-  getSharing,
-  setSharingAccess,
-  setSharingInheritance,
-} from "@/services/documents/sharing-service"
+  getSharingMany,
+  setSharingAccessMany,
+  setSharingInheritanceMany,
+} from "@/services/documents/sharing-many"

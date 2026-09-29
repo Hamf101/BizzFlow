@@ -25,6 +25,7 @@ export function noticeTopic(userId: string): string {
 export async function broadcastSharingNotice(notice: SharingNotice, send: Send = sendWithRealtime): Promise<void> {
   await send(noticeTopic(notice.recipientUserId), "shared", {
     actorName: notice.actorName,
+    ...(notice.count ? { count: notice.count } : {}),
     id: notice.resource.id,
     kind: notice.resource.kind,
     level: notice.level,

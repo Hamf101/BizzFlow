@@ -101,10 +101,16 @@ describe("who may open the Share dialog", () => {
     }
   })
 
-  it("refuses someone who can see it but did not make it and is not a manager", async () => {
+  it("refuses someone who can only view it and is not a manager", async () => {
     const { deps } = setup()
 
     await expect(getSharing(document(STAFF), deps)).rejects.toMatchObject({ statusCode: 403 })
+  })
+
+  it("lets anyone who can edit it, even if they did not make it", async () => {
+    const { deps } = setup({ access: { [`${STAFF}:${DOC}`]: "contributor" } })
+
+    await expect(getSharing(document(STAFF), deps)).resolves.toMatchObject({ name: "Lease" })
   })
 
   it("does not admit that it exists to someone who cannot open it, or to another organization", async () => {

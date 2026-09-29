@@ -8,14 +8,16 @@ import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
 import { buildRedirect } from "@/lib/form-utils"
 import {
   DocumentServiceError,
-  getSharing,
-  setSharingAccess,
-  setSharingInheritance,
+  getSharingMany,
+  setSharingAccessMany,
+  setSharingInheritanceMany,
   type SharingView,
 } from "@/services/document-service"
 import { getCurrentOrganizationContext } from "@/services/organization-service"
 
 const resourceSchema = z.object({ id: z.string().uuid(), kind: z.enum(["document", "folder"]) })
+// One item or a selection; the service holds the same limit.
+const resourcesSchema = z.array(resourceSchema).min(1).max(50)
 const principalSchema = z.union([
   z.object({ userId: z.string().uuid() }).strict(),
   z.object({ role: z.enum(["manager", "staff", "external_reviewer"]) }).strict(),
@@ -23,9 +25,9 @@ const principalSchema = z.union([
 const accessSchema = z.object({
   level: z.enum(["viewer", "contributor"]).nullable(),
   principal: principalSchema,
-  resource: resourceSchema,
+  resources: resourcesSchema,
 })
-const inheritanceSchema = z.object({ inherit: z.boolean(), resource: resourceSchema })
+const inheritanceSchema = z.object({ inherit: z.boolean(), resources: resourcesSchema })
 
 /** What the Share dialog gets back: the sharing as it now stands, or why not. */
 export type SharingResult = { ok: true; view: SharingView } | { message: string; ok: false }
@@ -33,33 +35,33 @@ export type SharingResult = { ok: true; view: SharingView } | { message: string;
 type Who = { actorUserId: string; organizationId: string }
 
 /**
- * Opens an item's sharing for the Share dialog.
+ * Opens the sharing of one item, or what several items have in common, for the Share dialog.
  *
- * @param resource - The document or folder.
- * @returns Its sharing, or a plain-words reason it cannot be shown.
+ * @param resources - The documents and folders.
+ * @returns Their sharing, or a plain-words reason it cannot be shown.
  */
-export async function loadSharingAction(resource: z.infer<typeof resourceSchema>): Promise<SharingResult> {
-  return run(resourceSchema.safeParse(resource), false, (who, parsed) => getSharing({ ...who, resource: parsed }))
+export async function loadSharingAction(resources: z.infer<typeof resourcesSchema>): Promise<SharingResult> {
+  return run(resourcesSchema.safeParse(resources), false, (who, parsed) => getSharingMany({ ...who, resources: parsed }))
 }
 
 /**
  * Shares an item with a person or a role, changes the level, or takes it away.
  *
- * @param input - The item, who, and the level (null removes it).
+ * @param input - The items, who, and the level (null removes it).
  * @returns The sharing afterwards, or a plain-words reason it was refused.
  */
 export async function setSharingAccessAction(input: z.infer<typeof accessSchema>): Promise<SharingResult> {
-  return run(accessSchema.safeParse(input), true, (who, parsed) => setSharingAccess({ ...who, ...parsed }))
+  return run(accessSchema.safeParse(input), true, (who, parsed) => setSharingAccessMany({ ...who, ...parsed }))
 }
 
 /**
  * Chooses whether an item also takes in what the folders above it are shared with.
  *
- * @param input - The item and the choice.
+ * @param input - The items and the choice.
  * @returns The sharing afterwards, or a plain-words reason it was refused.
  */
 export async function setSharingInheritanceAction(input: z.infer<typeof inheritanceSchema>): Promise<SharingResult> {
-  return run(inheritanceSchema.safeParse(input), true, (who, parsed) => setSharingInheritance({ ...who, ...parsed }))
+  return run(inheritanceSchema.safeParse(input), true, (who, parsed) => setSharingInheritanceMany({ ...who, ...parsed }))
 }
 
 async function run<T>(

@@ -258,20 +258,28 @@ async function authorize(client: DocumentServiceClient, input: SharingInput): Pr
         : await getEffectiveFolderAccess({ actorUserId: input.actorUserId, folderId: input.resource.id, organizationId: input.organizationId }, client)
 
     if (access === null) throw notFound
-  }
 
-  if (!made && !canManage) {
-    throw new DocumentServiceError("Only the person who made this, or a manager, can change who it is shared with.", 403)
+    // Whoever can edit it may pass it on; someone who can only view it may not, unless they manage folders.
+    if (access !== "contributor" && !canManage) {
+      throw new DocumentServiceError("Only someone who can edit this, or a manager, can change who it is shared with.", 403)
+    }
   }
 
   return target
 }
 
 async function listMembers(deps: SharingServiceDeps, input: SharingInput): Promise<OrganizationMember[]> {
-  return (deps.listMembers ?? defaultListMembers)(input.organizationId, input.actorUserId)
+  return (deps.listMembers ?? listSharingMembers)(input.organizationId, input.actorUserId)
 }
 
-async function defaultListMembers(organizationId: string, actorUserId: string): Promise<OrganizationMember[]> {
+/**
+ * Everyone in the workspace, as the Share dialog names them.
+ *
+ * @param organizationId - The workspace.
+ * @param actorUserId - Who is asking.
+ * @returns The members.
+ */
+export async function listSharingMembers(organizationId: string, actorUserId: string): Promise<OrganizationMember[]> {
   return (await listOrganizationPeople(actorUserId, organizationId)).members
 }
 
