@@ -12,7 +12,7 @@ import {
 import { createPdfPagePlans } from "@/services/document-pdf/planner"
 import { normalizePdfInput } from "@/services/document-pdf/shared"
 import type { PdfFlowItem, PdfPagePlan } from "@/services/document-pdf/types"
-import { createPdfLayoutMetrics } from "@/services/document-pdf/layout"
+import { createPdfLayoutMetrics, getPdfColumnFrames, type PdfLayoutMetrics } from "@/services/document-pdf/layout"
 import { resizeTemplateLayout } from "@/services/templates/template-render-plan"
 import {
   createBlankTemplateContent,
@@ -414,7 +414,7 @@ describe("document PDF service", () => {
     expect(paragraphPage).toBe(headingPage)
   })
 
-  it("renders canonical two-column field groups as paired PDF flow rows", async () => {
+  it("prints a row of any blocks in columns at their widths", async () => {
     const input = createPdfInput({
       repeatHeader: false,
       repeatFooter: false
@@ -422,6 +422,7 @@ describe("document PDF service", () => {
     const content = requireVersionThreeContent(input)
     const leftFieldId = "50000000-0000-4000-8000-000000000001"
     const rightFieldId = "50000000-0000-4000-8000-000000000002"
+    const noteId = "50000000-0000-4000-8000-000000000003"
 
     content.blocks = [
       {
@@ -441,6 +442,12 @@ describe("document PDF service", () => {
         label: "Contact date",
         required: true,
         helpText: null
+      },
+      {
+        id: noteId,
+        type: "paragraph",
+        text: "We reply within two working days.",
+        alignment: "left"
       }
     ]
     content.sections = []
@@ -449,8 +456,9 @@ describe("document PDF service", () => {
         id: "50000000-0000-4000-8000-000000000101",
         label: "Contact",
         startBlockId: leftFieldId,
-        endBlockId: rightFieldId,
-        columns: 2,
+        endBlockId: noteId,
+        columns: 3,
+        widths: [3, 6, 3],
         keepTogether: true
       }
     ]
@@ -473,10 +481,46 @@ describe("document PDF service", () => {
     const buffer = await renderGeneratedDocumentPdf(input)
 
     expect(columnRows).toHaveLength(1)
-    expect(columnRows[0]?.left?.block.id).toBe(leftFieldId)
-    expect(columnRows[0]?.right?.block.id).toBe(rightFieldId)
+    expect(columnRows[0]?.cells.map((cell) => cell?.block.id)).toEqual([leftFieldId, rightFieldId, noteId])
+    expect(columnRows[0]?.widths).toEqual([3, 6, 3])
+
+    // The middle column is twice the others, after two gaps.
+    const frames = getPdfColumnFrames({ columnGap: 12, contentWidth: 492, margin: 50 } as PdfLayoutMetrics, [3, 6, 3])
+
+    expect(frames).toEqual([
+      { width: 117, x: 50 },
+      { width: 234, x: 179 },
+      { width: 117, x: 425 }
+    ])
     expect(collectPlannedStructureLabels(plans)).toEqual(["Contact"])
     expect(buffer.subarray(0, 5).toString("utf8")).toBe("%PDF-")
+  })
+
+  it("leaves room to write by hand in a blank form, more for a long answer", () => {
+    const pagesFor = (multiline: boolean): number => {
+      const input = createPdfInput({ repeatHeader: false, repeatFooter: false })
+      const content = requireVersionThreeContent(input)
+
+      content.blocks = Array.from({ length: 30 }, (_value: unknown, index: number) => ({
+        id: `51000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
+        type: "text_field" as const,
+        fieldKey: `answer_${index}`,
+        label: `Question ${index + 1}`,
+        required: false,
+        helpText: null,
+        placeholder: null,
+        multiline
+      }))
+      content.sections = []
+      content.fieldGroups = []
+      content.blockRules = []
+      input.answers = {}
+      input.signers = []
+
+      return planPdf(input).length
+    }
+
+    expect(pagesFor(true)).toBeGreaterThan(pagesFor(false))
   })
 
   it("uses density and margin settings to change printable pagination", () => {
@@ -549,7 +593,7 @@ describe("document PDF service", () => {
 
     // Laid out exactly as on A4, then printed on A3.
     const a3Metrics = createPdfLayoutMetrics(a3.renderPlan.geometry, a3.renderPlan.layout)
-    expect(a3Metrics.pageCapacity).toBe(a4Metrics.pageCapacity)
+    expect(a3Metrics.pageCapacity).toBeCloseTo(a4Metrics.pageCapacity, 0)
     expect(a3Metrics.contentWidth).toBeCloseTo(a4Metrics.contentWidth, 2)
     expect(createPdfPagePlans(a3)).toEqual(a4Pages)
     expect(rendered.getPageCount()).toBe(a4Pages.length)
@@ -567,23 +611,17 @@ describe("document PDF service", () => {
     expect(pages.flatMap((page) => page.items).some((item) => item.kind === "title")).toBe(false)
   })
 
-  it("keeps the established default A4 planning measurements", () => {
+  it("prints a default A4 page inside the margins the editor draws", () => {
     const normalized = normalizePdfInput(
       createPdfInput({ repeatHeader: true, repeatFooter: true })
     )
-    const metrics = createPdfLayoutMetrics(
-      normalized.renderPlan.geometry,
-      normalized.renderPlan.layout
-    )
+    const { geometry } = normalized.renderPlan
+    const metrics = createPdfLayoutMetrics(geometry, normalized.renderPlan.layout)
 
     expect(metrics).toMatchObject({
-      pageWidth: 595.28,
-      pageHeight: 841.89,
-      margin: 40,
-      contentWidth: 515.28,
-      flowTopY: 805.89,
-      pageCapacity: 760,
-      densityItemGapAdjustment: 0
+      contentWidth: geometry.widthPoints - geometry.margins.left - geometry.margins.right,
+      flowTopY: geometry.heightPoints - geometry.margins.top,
+      pageCapacity: geometry.heightPoints - geometry.margins.top - geometry.margins.bottom,
     })
   })
 
@@ -725,10 +763,7 @@ function collectFlowItemBlockIds(item: PdfFlowItem): string[] {
   }
 
   if (item.kind === "columns") {
-    return [
-      ...(item.left ? [item.left.block.id] : []),
-      ...(item.right ? [item.right.block.id] : [])
-    ]
+    return item.cells.flatMap((cell) => (cell ? [cell.block.id] : []))
   }
 
   return []

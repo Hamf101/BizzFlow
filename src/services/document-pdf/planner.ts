@@ -16,15 +16,23 @@ import {
 import { DocumentPdfServiceError } from "./errors"
 import {
   createPdfLayoutMetrics,
-  getPdfColumnWidth,
+  getPdfColumnFrames,
   scalePdfCharacterEstimate,
   type PdfLayoutMetrics
 } from "./layout"
-import { formatFieldValue, normalizeDrawingDataUrl } from "./shared"
+import {
+  ANSWER_BOX_PADDING,
+  ANSWER_BOX_SIGNATURE,
+  answerBoxHeight,
+  CHECKBOX_LABEL_INSET,
+  formatFieldValue,
+  normalizeDrawingDataUrl
+} from "./shared"
 import type {
   DocumentPdfSigner,
   NormalizedPdfInput,
   PdfBlockFlowItem,
+  PdfFieldBlock,
   PdfFlowItem,
   PdfPagePlan
 } from "./types"
@@ -275,20 +283,19 @@ function createBlockPaginationUnits(
 
     units.push(...structureLabelUnits)
 
-    if (renderBlock.fieldGroupId && renderBlock.fieldGroupColumns === 2) {
+    if (renderBlock.fieldGroupId && renderBlock.fieldGroupColumns > 1) {
       const groupedBlocks: TemplateRenderBlock[] = []
       let groupIndex = blockIndex
 
       while (
         groupIndex < blocks.length &&
-        blocks[groupIndex]?.fieldGroupId === renderBlock.fieldGroupId &&
-        blocks[groupIndex]?.fieldGroupColumns === 2
+        blocks[groupIndex]?.fieldGroupId === renderBlock.fieldGroupId
       ) {
         groupedBlocks.push(blocks[groupIndex])
         groupIndex += 1
       }
 
-      const columnUnits = createTwoColumnPaginationUnits(
+      const columnUnits = createRowPaginationUnits(
           groupedBlocks,
           input,
           metrics
@@ -390,67 +397,54 @@ function createSingleBlockPaginationUnits(
   )
 }
 
-function createTwoColumnPaginationUnits(
+function createRowPaginationUnits(
   renderBlocks: readonly TemplateRenderBlock[],
   input: NormalizedPdfInput,
   metrics: PdfLayoutMetrics
 ): PdfPaginationUnit[] {
   const units: PdfPaginationUnit[] = []
-  const columnWidth = getPdfColumnWidth(metrics)
+  const first = renderBlocks[0]
+  const columns = first?.fieldGroupColumns ?? 1
+  const widths = first?.fieldGroupWidths ?? Array.from({ length: columns }, () => 12 / columns)
+  const frames = getPdfColumnFrames(metrics, widths)
   let blockIndex = 0
 
   while (blockIndex < renderBlocks.length) {
-    const leftBlock = renderBlocks[blockIndex]
-    const nextBlock = renderBlocks[blockIndex + 1]
-    const rightBlock = nextBlock?.pageBreakBefore ? undefined : nextBlock
-    const leftItems = expandBlockForPagination(
-      leftBlock,
-      input.answers,
-      columnWidth,
-      metrics.pageCapacity
-    )
-    const rightItems = rightBlock
-      ? expandBlockForPagination(
-          rightBlock,
-          input.answers,
-          columnWidth,
-          metrics.pageCapacity
-        )
-      : []
-    const rowCount = Math.max(leftItems.length, rightItems.length)
+    // A row takes up to its column count; a page break starts the next row.
+    const row: TemplateRenderBlock[] = []
 
-    for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
-      const left = leftItems[rowIndex]
-      const right = rightItems[rowIndex]
-
-      if (!left && !right) {
-        continue
+    for (const renderBlock of renderBlocks.slice(blockIndex)) {
+      if (row.length === columns || (row.length > 0 && renderBlock.pageBreakBefore)) {
+        break
       }
 
-      const keepTogetherKeys = Array.from(
-        new Set<string>([
-          ...getKeepTogetherKeys(leftBlock, input),
-          ...(rightBlock ? getKeepTogetherKeys(rightBlock, input) : [])
-        ])
-      )
-      const isLastRow = rowIndex === rowCount - 1
+      row.push(renderBlock)
+    }
 
+    const cellItems = row.map((renderBlock: TemplateRenderBlock, column: number): PdfBlockFlowItem[] =>
+      expandBlockForPagination(renderBlock, input.answers, frames[column]?.width ?? metrics.contentWidth, metrics.pageCapacity)
+    )
+    const pieceCount = Math.max(...cellItems.map((items) => items.length))
+    const keepTogetherKeys = Array.from(
+      new Set<string>(row.flatMap((renderBlock: TemplateRenderBlock): string[] => getKeepTogetherKeys(renderBlock, input)))
+    )
+    const lastBlock = row.at(-1)
+
+    // A long block is split into pieces; each piece of the row prints as one line of cells.
+    for (let piece = 0; piece < pieceCount; piece += 1) {
       units.push({
         item: {
+          cells: widths.map((_: number, column: number): PdfBlockFlowItem | null => cellItems[column]?.[piece] ?? null),
           kind: "columns",
-          ...(left ? { left } : {}),
-          ...(right ? { right } : {})
+          widths
         },
-        pageBreakBefore: rowIndex === 0 && leftBlock.pageBreakBefore,
+        pageBreakBefore: piece === 0 && row[0]?.pageBreakBefore === true,
         keepTogetherKeys,
-        keepWithNext:
-          isLastRow &&
-          (rightBlock?.keepWithNext === true ||
-            (rightBlock === undefined && leftBlock.keepWithNext))
+        keepWithNext: piece === pieceCount - 1 && lastBlock?.keepWithNext === true
       })
     }
 
-    blockIndex += rightBlock ? 2 : 1
+    blockIndex += row.length
   }
 
   return units
@@ -525,10 +519,10 @@ function expandBlockForPagination(
     case "signature_field":
     case "initials_field":
     case "file_field":
+    case "checkbox_field":
       return [{ kind: "block", block, renderBlock }]
     case "text_field":
     case "date_field":
-    case "checkbox_field":
     case "dropdown_field": {
       const answer = formatFieldValue(block, answers[block.fieldKey])
 
@@ -865,27 +859,22 @@ function estimateFlowItemHeight(
       )
       break
     case "columns": {
-      const columnWidth = getPdfColumnWidth(metrics)
-      const leftHeight = item.left
-        ? estimateBlockHeight(
-            item.left.block,
-            input.answers,
-            columnWidth,
-            item.left.answerOverride,
-            metrics.lineSpacing
-          )
-        : 0
-      const rightHeight = item.right
-        ? estimateBlockHeight(
-            item.right.block,
-            input.answers,
-            columnWidth,
-            item.right.answerOverride,
-            metrics.lineSpacing
-          )
-        : 0
+      const frames = getPdfColumnFrames(metrics, item.widths)
 
-      baseHeight = Math.max(leftHeight, rightHeight)
+      baseHeight = Math.max(
+        0,
+        ...item.cells.map((cell, column: number): number =>
+          cell
+            ? estimateBlockHeight(
+                cell.block,
+                input.answers,
+                frames[column]?.width ?? metrics.contentWidth,
+                cell.answerOverride,
+                metrics.lineSpacing
+              )
+            : 0
+        )
+      )
       break
     }
     case "signing_intro":
@@ -980,7 +969,25 @@ function estimateBlockHeight(
       return 20
     case "signature_field":
     case "initials_field":
-      return normalizeDrawingDataUrl(answers[block.fieldKey]) ? 78 : 48
+      return (
+        estimateFieldLabelHeight(block, availableWidth) +
+        (normalizeDrawingDataUrl(answers[block.fieldKey]) ? Math.max(ANSWER_BOX_SIGNATURE, 45 + ANSWER_BOX_PADDING * 2) : ANSWER_BOX_SIGNATURE) +
+        estimateHelpHeight(block, availableWidth) +
+        13
+      )
+    case "checkbox_field":
+      return (
+        Math.max(
+          15,
+          estimateWrappedTextHeight(
+            block.label,
+            scalePdfCharacterEstimate(88, availableWidth - CHECKBOX_LABEL_INSET),
+            15
+          )
+        ) +
+        estimateHelpHeight(block, availableWidth) +
+        10
+      )
     case "file_field": {
       const labelHeight = estimateWrappedTextHeight(
         block.label,
@@ -1005,27 +1012,32 @@ function estimateBlockHeight(
     default: {
       const answer =
         answerOverride ?? formatFieldValue(block, answers[block.fieldKey])
-      const labelHeight = estimateWrappedTextHeight(
-        block.label,
-        scalePdfCharacterEstimate(78, availableWidth),
-        13
-      )
-      const answerHeight = estimateWrappedTextHeight(
-        answer,
-        scalePdfCharacterEstimate(88, availableWidth),
-        15
-      )
-      const helpHeight = block.helpText
+      const answerHeight = answer
         ? estimateWrappedTextHeight(
-            block.helpText,
-            scalePdfCharacterEstimate(110, availableWidth),
-            10
+            answer,
+            scalePdfCharacterEstimate(88, availableWidth - ANSWER_BOX_PADDING * 2),
+            15
           )
         : 0
 
-      return labelHeight + answerHeight + helpHeight + 20
+      return (
+        estimateFieldLabelHeight(block, availableWidth) +
+        Math.max(answerBoxHeight(block), answerHeight + ANSWER_BOX_PADDING * 2) +
+        estimateHelpHeight(block, availableWidth) +
+        13
+      )
     }
   }
+}
+
+function estimateFieldLabelHeight(block: PdfFieldBlock, availableWidth: number): number {
+  return estimateWrappedTextHeight(block.label, scalePdfCharacterEstimate(78, availableWidth), 13)
+}
+
+function estimateHelpHeight(block: PdfFieldBlock, availableWidth: number): number {
+  return block.helpText
+    ? estimateWrappedTextHeight(block.helpText, scalePdfCharacterEstimate(110, availableWidth), 10)
+    : 0
 }
 
 function estimateBrandingHeight(content: TemplateContent): number {

@@ -2,6 +2,7 @@
 
 import {
   type ChangeEvent,
+  Fragment,
   type ReactElement,
   useMemo,
   useState
@@ -15,7 +16,15 @@ import { DatePicker } from "@/components/ui/date-picker"
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
-import { createTemplateRenderPlan } from "@/services/templates/template-render-plan"
+import {
+  groupTemplateRenderBlocks,
+  rowGridStyle,
+  type TemplateWebRenderGroup
+} from "@/components/templates/template-render-groups"
+import {
+  createTemplateRenderPlan,
+  type TemplateRenderBlock
+} from "@/services/templates/template-render-plan"
 import type { TemplateBlock, TemplateContent } from "@/types/template"
 
 import { PublicSubmissionFileField } from "./public-submission-file-field"
@@ -131,23 +140,49 @@ export function PublicFormFieldList({
     [answers, content]
   )
 
+  const groups = groupTemplateRenderBlocks(renderPlan.blocks)
+  const renderField = ({ block }: TemplateRenderBlock): ReactElement => (
+    <PublicFormFieldBlock
+      answers={answers}
+      block={block}
+      initialFile={files.find(
+        (file: PublicFormInitialFile): boolean =>
+          "fieldKey" in block && file.fieldKey === block.fieldKey
+      )}
+      key={block.id}
+      onAnswerChange={onAnswerChange}
+      onFileChange={onFileChange}
+      onFilesCheckpointed={onFilesCheckpointed}
+      token={token}
+    />
+  )
+
   return (
     <>
-      {renderPlan.blocks.map(({ block }) => (
-        <PublicFormFieldBlock
-          answers={answers}
-          block={block}
-          initialFile={files.find(
-            (file: PublicFormInitialFile): boolean =>
-              "fieldKey" in block && file.fieldKey === block.fieldKey
-          )}
-          key={block.id}
-          onAnswerChange={onAnswerChange}
-          onFileChange={onFileChange}
-          onFilesCheckpointed={onFilesCheckpointed}
-          token={token}
-        />
-      ))}
+      {groups.map((group: TemplateWebRenderGroup, index: number): ReactElement => {
+        const first = group.blocks[0]
+        const opensSection =
+          first?.sectionLabel != null && first.sectionId !== groups[index - 1]?.blocks.at(-1)?.sectionId
+
+        return (
+          <Fragment key={group.id ?? first?.block.id ?? index}>
+            {opensSection && <h2 className="pt-2 text-base font-semibold">{first.sectionLabel}</h2>}
+            {group.label && <h3 className="text-sm font-medium text-muted-foreground">{group.label}</h3>}
+            {group.columns > 1 ? (
+              // A row stacks on a phone and sits side by side, at its widths, from sm up.
+              <div
+                className="grid grid-cols-1 gap-4 sm:grid-cols-[var(--row-columns)]"
+                data-public-form-row=""
+                style={rowGridStyle(group)}
+              >
+                {group.blocks.map(renderField)}
+              </div>
+            ) : (
+              group.blocks.map(renderField)
+            )}
+          </Fragment>
+        )
+      })}
     </>
   )
 }

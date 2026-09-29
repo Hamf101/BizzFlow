@@ -6,6 +6,7 @@ import { type ReactElement, useEffect, useRef } from "react"
 import { EditableText } from "./editable-text"
 import { sectionTitleKey } from "./editor-content"
 import type { EditorController } from "./use-editor-controller"
+import { SECTION_TITLE } from "@/components/editor/paper-field"
 import { Button } from "@/components/ui/button"
 import type { TemplateSection } from "@/types/template"
 
@@ -75,7 +76,7 @@ export function EditorSection({ controller, section }: { controller: EditorContr
       <EditableText
         as="h2"
         caretKey={key}
-        className="font-semibold"
+        className="font-bold"
         editable
         label="Section title"
         onChange={(text) => {
@@ -101,7 +102,7 @@ export function EditorSection({ controller, section }: { controller: EditorContr
             }
           }
         }}
-        style={{ color: "var(--doc-primary)", fontSize: "1.5em", marginBottom: "0.5em" }}
+        style={SECTION_TITLE}
         value={section.label}
       />
     </div>

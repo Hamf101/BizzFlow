@@ -7,10 +7,12 @@ import { maxMargin, type PageSide, resolvePageGeometry } from "@/services/templa
 import type { TemplateLayout } from "@/types/template"
 
 const SIDES: readonly PageSide[] = ["top", "right", "bottom", "left"]
+const OPPOSITE = { bottom: "top", left: "right", right: "left", top: "bottom" } as const satisfies Record<PageSide, PageSide>
+const AXIS = { bottom: "y", left: "x", right: "x", top: "y" } as const
 
 /**
  * The page's margins as dashed lines to drag, in the points the PDF prints
- * them at. Focused, the arrow keys move one a point at a time, or ten with
+ * them at. Dragging one moves the one across from it too. Focused, the arrow keys move one a point at a time, or ten with
  * Shift. Every page shows them; only the first page's are in the tab order,
  * so the keyboard meets them once.
  *
@@ -34,10 +36,11 @@ export function MarginGuides({
   const geometry = resolvePageGeometry(layout)
   const drag = useRef<{ from: number; value: number } | null>(null)
 
+  // Margins move in pairs, so the page stays even: left with right, top with bottom.
   function set(side: PageSide, value: number): void {
     const margin = Math.round(Math.max(0, Math.min(maxMargin(geometry, side), value)))
 
-    onChange({ ...layout, margins: { ...geometry.margins, [side]: margin } }, `margin:${side}`)
+    onChange({ ...layout, margins: { ...geometry.margins, [side]: margin, [OPPOSITE[side]]: margin } }, `margin:${AXIS[side]}`)
   }
 
   return (

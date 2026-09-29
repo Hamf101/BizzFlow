@@ -138,4 +138,19 @@ describe("createUnits", () => {
       [[e], 1, null, ["section:s"]],
     ])
   })
+
+  it("sets up to four blocks of any kind in one row, at the row's widths", () => {
+    const [a, b, c, d] = ids as [string, string, string, string]
+    const content: TemplateContentV3 = {
+      ...createBlankTemplateContent(),
+      blocks: [field(a, "Name"), { alignment: "left", id: b, text: "or", type: "paragraph" }, field(c, "Email"), field(d, "Notes")],
+      fieldGroups: [{ id: "g", label: null, startBlockId: a, endBlockId: c, columns: 3, widths: [5, 2, 5], keepTogether: false }],
+    }
+    const plan = createTemplateRenderPlan({ content, mode: "build", title: "" })
+
+    expect(createUnits(plan).map((unit) => [unit.blocks.map(({ block }) => block.id), unit.columns, unit.widths])).toEqual([
+      [[a, b, c], 3, [5, 2, 5]],
+      [[d], 1, null],
+    ])
+  })
 })

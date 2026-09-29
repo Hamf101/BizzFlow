@@ -2,9 +2,13 @@
 
 import { type PointerEvent, type RefObject, useEffect, useRef, useState } from "react"
 
-/** Where a dragged block would land, and where its line is drawn on screen. */
+/**
+ * Where a dragged block would land, and where its line is drawn on screen: a
+ * line across the gap it lands in, or, with a height, one standing beside the
+ * block it would join in a row.
+ */
 export type DropTarget<Slot> = Readonly<{
-  line: Readonly<{ left: number; top: number; width: number }>
+  line: Readonly<{ left: number; top: number; width: number; height?: number }>
   slot: Slot
   /** Whether it may land there; a drop where it may not says why. */
   valid: boolean
@@ -34,7 +38,7 @@ const SPEED = 900
  * @returns The block being dragged, the line to draw, and the press handler.
  */
 export function useBlockDrag<Slot>(options: {
-  locate: (blockId: string, y: number) => DropTarget<Slot> | null
+  locate: (blockId: string, x: number, y: number) => DropTarget<Slot> | null
   onDrop: (blockId: string, slot: Slot) => void
   zoom: number
 }): {
@@ -64,7 +68,7 @@ export function useBlockDrag<Slot>(options: {
       event.button !== 0 ||
       event.ctrlKey ||
       !element ||
-      (!grip && (event.pointerType === "touch" || target.closest("a, button, input, label, select, textarea, [data-slot=block-toolbar]")))
+      (!grip && (event.pointerType === "touch" || target.closest("a, button, canvas, input, select, textarea, [data-slot=block-toolbar]")))
     ) {
       return
     }
@@ -72,7 +76,9 @@ export function useBlockDrag<Slot>(options: {
     stop.current?.()
 
     const block: HTMLElement = element
-    const text = !grip && target.closest("[contenteditable]") !== null
+    // A field is mostly its label, so a label is held like words: a click
+    // still reaches its field, and a press held a moment takes the block.
+    const text = !grip && target.closest("[contenteditable], label") !== null
     const scroller = block.closest<HTMLElement>("[data-slot=editor-scroll]")
     const root = document.documentElement.style
     const saved = { cursor: root.cursor, userSelect: root.userSelect }
@@ -108,7 +114,7 @@ export function useBlockDrag<Slot>(options: {
     function follow(): void {
       const { locate, zoom } = latest.current
       const scrolled = (scroller?.scrollTop ?? 0) - press.scrollTop
-      const landing = locate(blockId, press.y)
+      const landing = locate(blockId, press.x, press.y)
       const line = indicator.current
 
       block.style.transform = `translate(${(press.x - from.x) / zoom}px, ${(press.y - from.y + scrolled) / zoom}px)`
@@ -121,6 +127,7 @@ export function useBlockDrag<Slot>(options: {
           line.style.left = `${landing.line.left}px`
           line.style.top = `${landing.line.top}px`
           line.style.width = `${landing.line.width}px`
+          line.style.height = landing.line.height === undefined ? "" : `${landing.line.height}px`
         }
       }
     }
@@ -197,7 +204,7 @@ export function useBlockDrag<Slot>(options: {
         return
       }
 
-      const landing = commit ? latest.current.locate(blockId, press.y) : null
+      const landing = commit ? latest.current.locate(blockId, press.x, press.y) : null
 
       block.style.transform = ""
       root.cursor = saved.cursor

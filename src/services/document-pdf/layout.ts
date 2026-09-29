@@ -1,14 +1,7 @@
-import type { TemplatePageGeometry } from "@/services/templates/template-render-plan"
+import { blockSpacingAdjustment, columnGap, type TemplatePageGeometry } from "@/services/templates/template-render-plan"
 import type { TemplateLayout } from "@/types/template"
 
-import {
-  A4_HEIGHT,
-  A4_WIDTH,
-  PAGE_FLOW_HEIGHT,
-  PAGE_HORIZONTAL_MARGIN,
-  PAGE_TOP_MARGIN,
-  PDF_CONTENT_WIDTH
-} from "./constants"
+import { PDF_CONTENT_WIDTH } from "./constants"
 
 /** Resolved physical measurements shared by PDF planning and drawing. */
 export type PdfLayoutMetrics = Readonly<{
@@ -46,12 +39,6 @@ export function createPdfLayoutMetrics(
   geometry: RenderPlanGeometry,
   layout: TemplateLayout
 ): PdfLayoutMetrics {
-  const isLegacyDefaultGeometry =
-    !layout.margins &&
-    approximatelyEqual(geometry.widthPoints, A4_WIDTH) &&
-    approximatelyEqual(geometry.heightPoints, A4_HEIGHT) &&
-    approximatelyEqual(geometry.marginPoints, PAGE_HORIZONTAL_MARGIN)
-
   return {
     pageWidth: geometry.widthPoints,
     pageHeight: geometry.heightPoints,
@@ -59,22 +46,11 @@ export function createPdfLayoutMetrics(
     marginBottom: geometry.margins.bottom,
     lineSpacing: layout.lineSpacing,
     contentWidth: geometry.contentWidthPoints,
-    flowTopY: isLegacyDefaultGeometry
-      ? geometry.heightPoints - PAGE_TOP_MARGIN
-      : geometry.heightPoints - geometry.margins.top,
-    pageCapacity: isLegacyDefaultGeometry
-      ? PAGE_FLOW_HEIGHT
-      : geometry.contentHeightPoints,
-    columnGap: Math.min(16, Math.max(10, geometry.contentWidthPoints * 0.025)),
-    // A paragraph already leaves 8pt below itself.
-    densityItemGapAdjustment:
-      layout.paragraphSpacing !== undefined
-        ? layout.paragraphSpacing - 8
-        : layout.density === "compact"
-          ? -3
-          : layout.density === "comfortable"
-            ? 4
-            : 0
+    // The page's own margins, as the editor draws them.
+    flowTopY: geometry.heightPoints - geometry.margins.top,
+    pageCapacity: geometry.contentHeightPoints,
+    columnGap: columnGap(geometry.contentWidthPoints),
+    densityItemGapAdjustment: blockSpacingAdjustment(layout)
   }
 }
 
@@ -96,17 +72,25 @@ export function scalePdfCharacterEstimate(
 }
 
 /**
- * Returns the printable width of one column in a two-column field group.
+ * Places the columns of a row: each gets its share of the content width, in
+ * twelfths, after the gaps between them.
  *
  * @param metrics - Active PDF layout measurements.
- * @returns Width available to each column.
+ * @param widths - Each column's width in twelfths.
+ * @returns Each column's left edge and width, left to right.
  */
-export function getPdfColumnWidth(metrics: PdfLayoutMetrics): number {
-  return (metrics.contentWidth - metrics.columnGap) / 2
-}
+export function getPdfColumnFrames(
+  metrics: PdfLayoutMetrics,
+  widths: readonly number[]
+): Array<Readonly<{ x: number; width: number }>> {
+  const shared = metrics.contentWidth - metrics.columnGap * (widths.length - 1)
+  let x = metrics.margin
 
-// Paper sizes are rounded to the point, so A4 scaled to A3 and back lands a
-// tenth of a point off; a quarter point still means the same page.
-function approximatelyEqual(left: number, right: number): boolean {
-  return Math.abs(left - right) < 0.25
+  return widths.map((twelfths: number) => {
+    const frame = { width: (shared * twelfths) / 12, x }
+
+    x += frame.width + metrics.columnGap
+
+    return frame
+  })
 }

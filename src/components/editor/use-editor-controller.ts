@@ -35,8 +35,10 @@ import {
   moveTemplateBlockTo,
   moveTemplateSection,
   removeTemplateSection,
+  placeBeside as placeBlockBeside,
   setBlockKeepWithNext,
-  setFieldSideBySide,
+  setRowWidths as setTemplateRowWidths,
+  standAlone as standBlockAlone,
   stepTemplateBlockSlot,
   type TemplateBlockSlot,
   type TemplateMoveResult,
@@ -269,6 +271,35 @@ export function useEditorController({
     return true
   }
 
+  /**
+   * Puts a block beside another, joining or starting a row, and says where
+   * it went; a place it may not go is refused with the reason.
+   *
+   * @param blockId - The block.
+   * @param targetId - The block it goes beside.
+   * @param side - Which side of it.
+   * @returns Whether it moved.
+   */
+  function placeBeside(blockId: string, targetId: string, side: "left" | "right"): boolean {
+    const result = placeBlockBeside(content, blockId, targetId, side, () => crypto.randomUUID())
+
+    if (!applyMove(result) || !result.success) {
+      return false
+    }
+
+    setAnnouncement(describeMove(result.content, blockId))
+    return true
+  }
+
+  // Takes a block out of its row onto a line of its own below it.
+  function standAlone(blockId: string): void {
+    const result = standBlockAlone(content, blockId, () => crypto.randomUUID())
+
+    if (applyMove(result) && result.success) {
+      setAnnouncement(describeMove(result.content, blockId))
+    }
+  }
+
   // One step up or down: past a row as one piece, and past a section's title.
   function move(blockId: string, direction: "up" | "down"): void {
     const slot = stepTemplateBlockSlot(content, blockId, direction)
@@ -412,6 +443,7 @@ export function useEditorController({
     move,
     moveSection,
     moveTo,
+    placeBeside,
     openSettings: setSettingsBlockId,
     remove,
     removeSection,
@@ -422,9 +454,11 @@ export function useEditorController({
     setKeepWithNext: (blockId: string, keep: boolean) => change((current) => setBlockKeepWithNext(current, blockId, keep)),
     setLayout,
     setLine,
-    setSideBySide: (blockId: string, sideBySide: boolean) =>
-      change((current) => setFieldSideBySide(current, blockId, sideBySide, crypto.randomUUID())),
+    // Dragging a column's edge makes one undo step.
+    setRowWidths: (groupId: string, widths: readonly number[], coalesceKey?: string) =>
+      change((current) => setTemplateRowWidths(current, groupId, widths), coalesceKey),
     settingsBlockId,
+    standAlone,
     turnIntoSection,
     turnSectionInto,
     updateBlock,
@@ -483,5 +517,16 @@ function describeMove(content: TemplateContentV3, blockId: string): string {
         ? `“${block.text.trim().split(/\s+/).slice(0, 6).join(" ")}”`
         : "Block"
 
-  return `${name} moved to ${index + 1} of ${content.blocks.length}${section ? `, in ${section.label}` : ""}.`
+  const row = content.fieldGroups.find((group) => {
+    const start = content.blocks.findIndex((candidate) => candidate.id === group.startBlockId)
+    const end = content.blocks.findIndex((candidate) => candidate.id === group.endBlockId)
+
+    return group.columns > 1 && index >= start && index <= end
+  })
+  const rowStart = row ? content.blocks.findIndex((candidate) => candidate.id === row.startBlockId) : -1
+  const where = row
+    ? `column ${((index - rowStart) % row.columns) + 1} of ${row.columns} in a row`
+    : `${index + 1} of ${content.blocks.length}`
+
+  return `${name} moved to ${where}${section ? `, in ${section.label}` : ""}.`
 }

@@ -34,7 +34,10 @@ export type TemplateRenderBlock = Readonly<{
   sectionLabel: string | null
   fieldGroupId: string | null
   fieldGroupLabel: string | null
-  fieldGroupColumns: 1 | 2
+  /** How many blocks its row sets side by side (1 when it is in no row). */
+  fieldGroupColumns: number
+  /** The row's column widths in twelfths, or null for equal columns. */
+  fieldGroupWidths: readonly number[] | null
   pageBreakBefore: boolean
   keepTogether: boolean
   keepWithNext: boolean
@@ -240,13 +243,35 @@ export function resolvePageGeometry(layout: TemplateLayout): TemplatePageGeometr
 
 /**
  * The space between paragraphs, in points: the layout's own figure, or its
- * density's.
+ * density's, as the PDF prints it.
  *
  * @param layout - The layout.
  * @returns The space, in points.
  */
 export function paragraphGap(layout: TemplateLayout): number {
-  return layout.paragraphSpacing ?? { balanced: 11, comfortable: 16, compact: 7 }[layout.density]
+  return layout.paragraphSpacing ?? { balanced: 8, comfortable: 12, compact: 5 }[layout.density]
+}
+
+/**
+ * What the layout's spacing adds under every block, in points, beyond the
+ * space each kind of block leaves of its own (8 points under a paragraph).
+ *
+ * @param layout - The layout.
+ * @returns The points added, or taken away when negative.
+ */
+export function blockSpacingAdjustment(layout: TemplateLayout): number {
+  return paragraphGap(layout) - 8
+}
+
+/**
+ * The gap between a row's columns, in points: a fortieth of the text's width,
+ * kept between 10 and 16.
+ *
+ * @param contentWidthPoints - The width between the side margins.
+ * @returns The gap, in points.
+ */
+export function columnGap(contentWidthPoints: number): number {
+  return Math.min(16, Math.max(10, contentWidthPoints * 0.025))
 }
 
 /** A side of the page, for its margin. */
@@ -413,6 +438,7 @@ function decorateRenderBlock(
     fieldGroupId: indexedGroup?.group.id ?? null,
     fieldGroupLabel: indexedGroup?.group.label ?? null,
     fieldGroupColumns: indexedGroup?.group.columns ?? 1,
+    fieldGroupWidths: indexedGroup?.group.widths ?? null,
     pageBreakBefore:
       (opensSection && indexedSection.section?.pageBreakBefore === true) ||
       rule?.pageBreakBefore === true,

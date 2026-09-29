@@ -133,10 +133,13 @@ export function paginate(
   return { inside, pageCount: page + 1, pages, spacers }
 }
 
-/** What the canvas lays out as one piece: a block, or a row of fields side by side. */
+/** What the canvas lays out as one piece: a block, or a row of blocks side by side. */
 export type CanvasUnit = Readonly<{
   blocks: readonly TemplateRenderBlock[]
-  columns: 1 | 2
+  /** How many columns the row has (1 for a block on its own line). */
+  columns: number
+  /** The row's column widths in twelfths, or null for equal columns. */
+  widths: readonly number[] | null
   groupLabel: string | null
   id: string
   keepWithNext: boolean
@@ -157,7 +160,7 @@ export function createUnits(plan: TemplateRenderPlan): CanvasUnit[] {
   const blocks = plan.blocks.filter(({ block }) => !(block.type === "image" && block.placement))
 
   if (plan.title) {
-    units.push({ blocks: [], columns: 1, groupLabel: null, id: "title", keepWithNext: false, pageBreakBefore: false, sectionLabel: null, sectionId: null, together: [] })
+    units.push({ blocks: [], columns: 1, widths: null, groupLabel: null, id: "title", keepWithNext: false, pageBreakBefore: false, sectionLabel: null, sectionId: null, together: [] })
   }
 
   let index = 0
@@ -167,16 +170,24 @@ export function createUnits(plan: TemplateRenderPlan): CanvasUnit[] {
     const prior = blocks[index - 1]
     const startsSection = index === 0 || prior?.sectionId !== first.sectionId
     const startsGroup = first.fieldGroupId !== null && prior?.fieldGroupId !== first.fieldGroupId
-    const next = blocks[index + 1]
-    const sideBySide = first.fieldGroupId !== null && first.fieldGroupColumns === 2
-    // Side-by-side fields pair up a row at a time, as the PDF prints them, and
-    // a field that starts a new page starts a new row.
-    const grouped = sideBySide && next?.fieldGroupId === first.fieldGroupId && !next.pageBreakBefore ? [first, next] : [first]
+    const columns = first.fieldGroupId !== null ? first.fieldGroupColumns : 1
+    // A row takes up to its column count, as the PDF prints it, and a block
+    // that starts a new page starts a new row.
+    const grouped = [first]
+
+    for (const next of blocks.slice(index + 1)) {
+      if (grouped.length === columns || next.fieldGroupId !== first.fieldGroupId || next.pageBreakBefore) {
+        break
+      }
+
+      grouped.push(next)
+    }
     const keptSection = first.sectionId !== null && plan.sections.some((section) => section.id === first.sectionId && section.keepTogether)
 
     units.push({
       blocks: grouped,
-      columns: sideBySide ? 2 : 1,
+      columns,
+      widths: columns > 1 ? first.fieldGroupWidths : null,
       groupLabel: startsGroup ? first.fieldGroupLabel : null,
       id: first.block.id,
       keepWithNext: grouped.at(-1)?.keepWithNext ?? false,

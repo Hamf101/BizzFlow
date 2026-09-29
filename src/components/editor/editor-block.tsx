@@ -7,13 +7,12 @@ import {
   ArrowDown,
   ArrowUp,
   Asterisk,
-  CalendarDays,
   BringToFront,
   ChevronDown,
   Copy,
-  Columns2,
   GripVertical,
   Link2,
+  Rows2,
   Section,
   Settings2,
   Trash2,
@@ -35,12 +34,12 @@ import {
 
 import type { Editor } from "@tiptap/core"
 
-import { GeneratedBlock } from "@/components/documents/generated-document-content"
 import { INSERT_CHOICES } from "@/components/editor/block-catalog"
 import type { TextCaret } from "@/components/editor/editable-text"
 import { convertTextBlock, type TextBlockKind } from "@/components/editor/editor-content"
 import { EditorImage } from "@/components/editor/editor-image"
 import { EditorTable } from "@/components/editor/editor-table"
+import { PaperField, PRINTED_HEADING, printedSpace } from "@/components/editor/paper-field"
 import { placeImage, placementOf } from "@/components/editor/image-placement"
 import { RichLine } from "@/components/editor/rich-line"
 import type { EditorController, FocusRequest } from "@/components/editor/use-editor-controller"
@@ -57,8 +56,6 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
-import { describeDateFormat } from "@/lib/date-format"
-import { setFieldSideBySide } from "@/types/template-structure"
 import type { TemplateBlock, TextRun } from "@/types/template"
 
 export type LineBlock = Extract<TemplateBlock, { type: "heading" | "paragraph" }>
@@ -90,12 +87,31 @@ export type CanvasActions = Readonly<{
   textEditable: boolean
 }>
 
+// Headings at the PDF's sizes and lines: 20 points on 29, 16 on 24, 13 on 20.
 // A phone's reflowed column is narrow, so its headings step down less steeply.
 const HEADING_STYLE = {
-  1: { fontSize: "var(--doc-h1, 2em)", lineHeight: "var(--doc-line-height, 1.35)" },
-  2: { fontSize: "var(--doc-h2, 1.6em)", lineHeight: "var(--doc-line-height, 1.4)" },
-  3: { fontSize: "var(--doc-h3, 1.3em)", lineHeight: "var(--doc-line-height, 1.45)" },
+  1: { ...PRINTED_HEADING, fontSize: "var(--doc-h1, 2em)", lineHeight: `var(--doc-line-height, ${29 / 20})` },
+  2: { ...PRINTED_HEADING, fontSize: "var(--doc-h2, 1.6em)", lineHeight: `var(--doc-line-height, ${24 / 16})` },
+  3: { ...PRINTED_HEADING, fontSize: "var(--doc-h3, 1.3em)", lineHeight: `var(--doc-line-height, ${20 / 13})` },
 } as const
+
+// The points the PDF leaves above and below each kind of block (see
+// drawPdfLibBlock); a field leaves 3 under its box, inside it, and 7 more.
+const PRINTED_SPACE: Partial<Record<TemplateBlock["type"], readonly [above: number, below: number]>> = {
+  bullet_list: [0, 5],
+  divider: [6, 14],
+  heading: [10, 6],
+  image: [0, 4],
+  numbered_list: [0, 5],
+  paragraph: [0, 8],
+  table: [0, 10],
+}
+
+function printedMargins(block: TemplateBlock): CSSProperties {
+  const [above, below] = PRINTED_SPACE[block.type] ?? [0, 7]
+
+  return { marginBottom: printedSpace(below), marginTop: above ? printedSpace(above, false) : undefined }
+}
 
 /**
  * One block on the page. Text is typed in place; anything else is selected by
@@ -221,7 +237,7 @@ export function CanvasBlock({
       // A picture placed on a page moves on its page instead.
       onPointerDown={placed ? undefined : (event) => actions.startDrag?.(event, block.id)}
       ref={wrapper}
-      style={placed && block.type === "image" && block.placement ? boxStyle(block.placement) : undefined}
+      style={placed && block.type === "image" && block.placement ? boxStyle(block.placement) : printedMargins(block)}
       tabIndex={selected ? -1 : undefined}
     >
       {selected && canSelect && actions.dragging !== block.id ? <BlockToolbar actions={actions} block={block} /> : null}
@@ -245,7 +261,7 @@ function BlockBody({ actions, block, placed }: { actions: CanvasActions; block: 
           as={`h${block.level}`}
           blockId={block.id}
           caretKey={block.id}
-          className="font-semibold"
+          className="font-bold"
           label={`Heading ${block.level}`}
           onChange={(text, runs, caret) => actions.onLineInput(block, text, runs, caret)}
           onKeyDown={(event, caret) => actions.onLineKeyDown(event, caret, block)}
@@ -280,8 +296,9 @@ function BlockBody({ actions, block, placed }: { actions: CanvasActions; block: 
 
       return (
         <List
-          className={cn(block.type === "bullet_list" ? "list-disc" : "list-decimal", "grid gap-[0.2em]")}
-          style={{ lineHeight: "var(--doc-line-height, 1.5)", paddingLeft: "1.4em" }}
+          className={cn(block.type === "bullet_list" ? "list-disc" : "list-decimal", "grid gap-[0.3em]")}
+          // Each item leaves 3 points under it, as the PDF does.
+          style={{ lineHeight: "var(--doc-line-height, 1.5)", paddingBottom: "0.3em", paddingLeft: "1.4em" }}
         >
           {block.items.map((item: string, index: number) => (
             <TextLine
@@ -315,19 +332,7 @@ function BlockBody({ actions, block, placed }: { actions: CanvasActions; block: 
         />
       )
     default:
-      return actions.fields === "design" ? (
-        <DesignField block={block} />
-      ) : (
-        <GeneratedBlock
-          answers={actions.answers}
-          block={block}
-          editable={actions.fields === "fill"}
-          fileFieldContent={{}}
-          onAnswerChange={actions.onAnswerChange}
-          recipientSigned={false}
-          recipientSigning={false}
-        />
-      )
+      return <PaperField answers={actions.answers} block={block} mode={actions.fields} onAnswerChange={actions.onAnswerChange} />
   }
 }
 
@@ -439,78 +444,6 @@ function LineBreaks({ blockId }: { blockId: string }): ReactElement | null {
   ) : null
 }
 
-/**
- * A field as the author sees it while building: its label and the space the
- * answer will take, the way the PDF draws it.
- *
- * @param props - The field.
- * @returns The field's placeholder.
- */
-function DesignField({ block }: { block: FieldBlock }): ReactElement {
-  const box = "rounded-[0.35em] border border-border px-[0.7em] text-muted-foreground"
-  const label = (
-    <span className="font-semibold" style={{ fontSize: "0.9em" }}>
-      {block.label}
-      {block.required ? <span className="text-destructive"> *</span> : null}
-    </span>
-  )
-  let answer: ReactNode
-
-  switch (block.type) {
-    case "checkbox_field":
-      return (
-        <span className="flex items-center gap-[0.6em]">
-          <span aria-hidden="true" className="size-[1.1em] rounded-[0.2em] border border-muted-foreground/50" />
-          {label}
-        </span>
-      )
-    case "text_field":
-      answer = (
-        <span className={cn(box, "flex py-[0.45em]")} style={{ minHeight: block.multiline ? "5em" : undefined }}>
-          {block.placeholder || "Text"}
-        </span>
-      )
-      break
-    case "date_field":
-      answer = (
-        <span className={cn(box, "flex items-center justify-between py-[0.45em]")}>
-          {describeDateFormat(block.dateFormat)}
-          <CalendarDays aria-hidden="true" className="size-[1.1em]" />
-        </span>
-      )
-      break
-    case "dropdown_field":
-      answer = (
-        <span className={cn(box, "flex items-center justify-between py-[0.45em]")}>
-          {block.placeholder || "Choose an option"}
-          <ChevronDown aria-hidden="true" className="size-[1.1em]" />
-        </span>
-      )
-      break
-    case "initials_field":
-      answer = <span className={cn(box, "flex h-[4em] w-[9em] items-end border-dashed pb-[0.4em]")}>Initials</span>
-      break
-    case "signature_field":
-      answer = <span className={cn(box, "flex h-[5.5em] items-end border-dashed pb-[0.4em]")}>Sign here</span>
-      break
-    case "file_field":
-      answer = <span className={cn(box, "flex border-dashed py-[0.9em]")}>Choose a file</span>
-      break
-  }
-
-  return (
-    <span className="grid gap-[0.4em]">
-      {label}
-      {answer}
-      {block.helpText ? (
-        <span className="text-muted-foreground" style={{ fontSize: "0.85em" }}>
-          {block.helpText}
-        </span>
-      ) : null}
-    </span>
-  )
-}
-
 function BlockToolbar({ actions, block }: { actions: CanvasActions; block: TemplateBlock }): ReactElement {
   const { controller } = actions
   const blocks = controller.content.blocks
@@ -521,10 +454,7 @@ function BlockToolbar({ actions, block }: { actions: CanvasActions; block: Templ
     const end = blocks.findIndex((block) => block.id === group.endBlockId)
     return index >= start && index <= end
   })
-  const sideBySide = group?.columns === 2
-  // Side by side, fields pair up a row at a time: every other one sits on the right.
-  const onRight = sideBySide && (index - blocks.findIndex((candidate) => candidate.id === group?.startBlockId)) % 2 === 1
-  const canPair = sideBySide || setFieldSideBySide(controller.content, block.id, true, "preview") !== controller.content
+  const inRow = group !== undefined && group.columns > 1
   const keepWithNext = controller.content.blockRules.some((rule) => rule.blockId === block.id && rule.keepWithNext)
 
   // A picture let out of the text stays exactly where it was on its page.
@@ -546,9 +476,8 @@ function BlockToolbar({ actions, block }: { actions: CanvasActions; block: Templ
     <div
       className={cn(
         "absolute bottom-full z-30 mb-[0.8em] flex w-max max-w-[calc(100vw-3rem)] flex-wrap items-center gap-0.5 rounded-[12px] border border-border bg-popover p-1 text-sm text-popover-foreground shadow-lg",
-        // On a phone, a field on the left of a row is half the column wide, so its
-        // toolbar runs across from its left edge instead of squeezing above it.
-        actions.narrow && sideBySide && !onRight ? "left-0" : "right-0 justify-end"
+        // Rows stack on a phone, so every block there is the column's full width.
+        "right-0 justify-end"
       )}
       data-slot="block-toolbar"
       role="toolbar"
@@ -604,8 +533,8 @@ function BlockToolbar({ actions, block }: { actions: CanvasActions; block: Templ
           </DropdownMenuContent>
         </DropdownMenu>
       ) : null}
-      {isField(block) ? (
-        <ToolButton disabled={!canPair} label="Side by side" onClick={() => controller.setSideBySide(block.id, !sideBySide)} pressed={sideBySide}><Columns2 /></ToolButton>
+      {inRow ? (
+        <ToolButton label="Stand alone" onClick={() => controller.standAlone(block.id)}><Rows2 /></ToolButton>
       ) : null}
       {!(block.type === "image" && block.placement) ? (
         <ToolButton disabled={index === blocks.length - 1} label="Keep with next" onClick={() => controller.setKeepWithNext(block.id, !keepWithNext)} pressed={keepWithNext}><Link2 /></ToolButton>

@@ -35,6 +35,28 @@ function renderFields(
   )
 }
 
+describe("PublicFormFieldList layout", () => {
+  it("shows sections and sets a row's fields side by side at its widths", () => {
+    const content = createDropdownContent()
+    const [first, second] = content.blocks
+
+    content.sections = [
+      { id: "70000000-0000-4000-8000-000000000011", label: "Your request", startBlockId: first?.id ?? "", pageBreakBefore: false, keepTogether: false }
+    ]
+    content.fieldGroups = [
+      { id: "70000000-0000-4000-8000-000000000021", label: null, startBlockId: first?.id ?? "", endBlockId: second?.id ?? "", columns: 2, widths: [4, 8], keepTogether: false }
+    ]
+
+    const markup = renderFields(content, { request_type: "Other" })
+    const row = markup.slice(markup.indexOf("data-public-form-row"))
+
+    expect(markup).toContain("Your request")
+    expect(row).toContain("--row-columns:minmax(0, 4fr) minmax(0, 8fr)")
+    expect(row.indexOf('name="field_request_type"')).toBeGreaterThan(-1)
+    expect(row.indexOf('name="field_request_details"')).toBeGreaterThan(-1)
+  })
+})
+
 describe("PublicFormFieldList conditional visibility", () => {
   it("reacts to a controlling dropdown while preserving public field names", () => {
     const content = createDropdownContent()

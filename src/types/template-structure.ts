@@ -1,4 +1,6 @@
 import {
+  isPinnedBlock,
+  MAX_ROW_COLUMNS,
   MAX_TEMPLATE_BLOCK_COUNT,
   type TemplateBlock,
   type TemplateContentV3,
@@ -75,6 +77,12 @@ export type TemplateBlockSlot = Readonly<{
 export type TemplateMoveResult =
   | Readonly<{ success: true; content: TemplateContentV3 }>
   | Extract<TemplateVisibilityStructureEditResult, { success: false }>
+  | Readonly<{
+      success: false
+      code: "row_full" | "pinned_block"
+      message: string
+      dependentBlockIds: readonly string[]
+    }>
 
 type LiftedBlock = Readonly<{
   at: number
@@ -467,99 +475,143 @@ export function removeTemplateSection(content: TemplateContentV3, sectionId: str
 }
 
 /**
- * Puts a field beside its neighbours or back on its own line. A field joins
- * the row just before or after it, or pairs with a lone field beside it, and
- * never across a section. Parting a row removes the group unless it has a
- * label or keeps together, in which case its fields stack in one column.
+ * Puts a block beside another, to its left or right: any block, not only
+ * fields. It joins the other block's row, widening it by a column, or the two
+ * start a row of their own. The block moves into the other block's section,
+ * and a row holds at most four blocks. Pinned blocks stay out of rows.
  *
  * @param content - Editable version-three content.
- * @param blockId - The field.
- * @param sideBySide - Whether it should sit in a row of two columns.
- * @param newGroupId - A fresh id, used when a new row is made.
- * @returns The content, or unchanged when there is nothing to pair with.
+ * @param blockId - The block to move.
+ * @param targetId - The block it goes beside.
+ * @param side - Which side of the target.
+ * @param newId - Makes fresh ids, for a new row or the line an emptied section keeps.
+ * @returns The content, or a refusal saying why the block cannot go there.
  */
-export function setFieldSideBySide(
+export function placeBeside(
   content: TemplateContentV3,
   blockId: string,
-  sideBySide: boolean,
-  newGroupId: string
-): TemplateContentV3 {
-  const index = content.blocks.findIndex((block: TemplateBlock): boolean => block.id === blockId)
-  const field = content.blocks[index]
+  targetId: string,
+  side: "left" | "right",
+  newId: () => string
+): TemplateMoveResult {
+  const moving = content.blocks.find((block: TemplateBlock): boolean => block.id === blockId)
+  const targetAt = content.blocks.findIndex((block: TemplateBlock): boolean => block.id === targetId)
+  const target = content.blocks[targetAt]
 
-  if (field === undefined || !isTemplateFieldBlock(field)) {
+  if (!moving || !target) {
+    return { code: "block_not_found", dependentBlockIds: [], message: "The block is no longer available. Select it again before moving it.", success: false }
+  }
+
+  if (blockId === targetId) {
+    return { content, success: true }
+  }
+
+  if (isPinnedBlock(moving) || isPinnedBlock(target)) {
+    return { code: "pinned_block", dependentBlockIds: [], message: "A block pinned to its page can't share a row. Put it back in line first.", success: false }
+  }
+
+  const row = getIndexedFieldGroups(content).find(({ endIndex, startIndex }) => targetAt >= startIndex && targetAt <= endIndex)
+  const ownRow = row !== undefined && content.blocks.slice(row.startIndex, row.endIndex + 1).includes(moving)
+  const members = row ? row.endIndex - row.startIndex + 1 : 1
+
+  if (row && !ownRow && members >= MAX_ROW_COLUMNS && members <= row.group.columns) {
+    return { code: "row_full", dependentBlockIds: [], message: "A row holds at most four blocks side by side.", success: false }
+  }
+
+  const rest = content.blocks.filter((block: TemplateBlock): boolean => block.id !== blockId)
+  const slot: TemplateBlockSlot = {
+    index: rest.findIndex((block: TemplateBlock): boolean => block.id === targetId) + (side === "right" ? 1 : 0),
+    inGroup: ownRow,
+    // Left of a section's first block, the block opens that section instead.
+    opens: side === "left" ? (content.sections.find((section) => section.startBlockId === targetId)?.id ?? null) : null,
+  }
+  const moved = moveTemplateBlockTo(content, blockId, slot, newId())
+
+  if (!moved.success || ownRow) {
+    return moved
+  }
+
+  const next = moved.content
+  const index = createBlockIndex(next.blocks)
+  const blockAt = index.get(blockId) ?? 0
+  const at = index.get(targetId) ?? 0
+  const held = next.fieldGroups.find((group) => (index.get(group.startBlockId) ?? -1) <= at && at <= (index.get(group.endBlockId) ?? -1))
+  const fieldGroups = held
+    ? next.fieldGroups.map((group: TemplateFieldGroup): TemplateFieldGroup => {
+        if (group !== held) {
+          return group
+        }
+
+        const start = Math.min(index.get(group.startBlockId) ?? blockAt, blockAt)
+        const end = Math.max(index.get(group.endBlockId) ?? blockAt, blockAt)
+        // A single row gains a column; a range that already wraps just takes one more.
+        const widened = members <= group.columns ? { ...withoutWidths(group), columns: Math.min(MAX_ROW_COLUMNS, members + 1) } : group
+
+        return { ...widened, endBlockId: next.blocks[end]?.id ?? blockId, startBlockId: next.blocks[start]?.id ?? blockId }
+      })
+    : [
+        ...next.fieldGroups,
+        {
+          columns: 2,
+          endBlockId: blockAt > at ? blockId : targetId,
+          id: newId(),
+          keepTogether: false,
+          label: null,
+          startBlockId: blockAt > at ? targetId : blockId,
+        },
+      ].sort((left, right) => (index.get(left.startBlockId) ?? 0) - (index.get(right.startBlockId) ?? 0))
+
+  return { content: { ...next, fieldGroups }, success: true }
+}
+
+/**
+ * Takes a block out of its row and puts it on its own line just below it.
+ * The row loses a column, and a row left with one block is undone unless it
+ * has a label or keeps together.
+ *
+ * @param content - Editable version-three content.
+ * @param blockId - The block.
+ * @param newId - Makes a fresh id, for the line an emptied section keeps.
+ * @returns The content, unchanged when the block is in no row.
+ */
+export function standAlone(content: TemplateContentV3, blockId: string, newId: () => string): TemplateMoveResult {
+  const at = content.blocks.findIndex((block: TemplateBlock): boolean => block.id === blockId)
+  const row = getIndexedFieldGroups(content).find(({ endIndex, startIndex }) => at >= startIndex && at <= endIndex)
+
+  // Lifted out, the row's last block sits one place earlier, so its end is the place after it.
+  return row ? moveTemplateBlockTo(content, blockId, { inGroup: false, index: row.endIndex, opens: null }, newId()) : { content, success: true }
+}
+
+/**
+ * Sizes a row's columns in twelfths of the page's width. Equal columns keep
+ * no widths at all.
+ *
+ * @param content - Editable version-three content.
+ * @param groupId - The row.
+ * @param widths - One width per column, each at least two twelfths, filling twelve.
+ * @returns The content, unchanged when the widths do not fit the row.
+ */
+export function setRowWidths(content: TemplateContentV3, groupId: string, widths: readonly number[]): TemplateContentV3 {
+  const group = content.fieldGroups.find((candidate: TemplateFieldGroup): boolean => candidate.id === groupId)
+  const fits =
+    group !== undefined &&
+    widths.length === group.columns &&
+    widths.every((width: number): boolean => Number.isInteger(width) && width >= 2) &&
+    widths.reduce((total: number, width: number): number => total + width, 0) === 12
+
+  if (!fits) {
     return content
   }
 
-  const groups = getIndexedFieldGroups(content)
-  const holding = (at: number): IndexedFieldGroup | undefined =>
-    groups.find((group: IndexedFieldGroup): boolean => at >= group.startIndex && at <= group.endIndex)
-  const own = holding(index)
-  const setGroups = (fieldGroups: TemplateFieldGroup[]): TemplateContentV3 => ({ ...content, fieldGroups })
-  const change = (groupId: string, patch: Partial<TemplateFieldGroup>): TemplateContentV3 =>
-    setGroups(
-      content.fieldGroups.map(
-        (group: TemplateFieldGroup): TemplateFieldGroup => (group.id === groupId ? { ...group, ...patch } : group)
-      )
-    )
+  const equal = widths.every((width: number): boolean => width === widths[0])
 
-  if (!sideBySide) {
-    if (own === undefined || own.group.columns === 1) {
-      return content
-    }
-
-    return own.group.label === null && !own.group.keepTogether
-      ? setGroups(content.fieldGroups.filter((group: TemplateFieldGroup): boolean => group.id !== own.group.id))
-      : change(own.group.id, { columns: 1 })
+  return {
+    ...content,
+    fieldGroups: content.fieldGroups.map(
+      (candidate: TemplateFieldGroup): TemplateFieldGroup =>
+        candidate.id !== groupId ? candidate : equal ? withoutWidths(candidate) : { ...candidate, widths: [...widths] }
+    ),
   }
-
-  if (own !== undefined) {
-    return own.group.columns === 2 ? content : change(own.group.id, { columns: 2 })
-  }
-
-  const starts = getIndexedSections(content)
-    .map(({ startIndex }: IndexedSection): number => startIndex)
-    .sort((left: number, right: number): number => left - right)
-  const section = findSectionIndex(starts, index)
-  const beside = (at: number): boolean => {
-    const other = content.blocks[at]
-
-    return other !== undefined && isTemplateFieldBlock(other) && findSectionIndex(starts, at) === section
-  }
-  const before = holding(index - 1)
-  const after = holding(index + 1)
-
-  if (before?.group.columns === 2 && beside(index - 1)) {
-    return change(before.group.id, { endBlockId: blockId })
-  }
-
-  if (after?.group.columns === 2 && beside(index + 1)) {
-    return change(after.group.id, { startBlockId: blockId })
-  }
-
-  const pair = [index + 1, index - 1].find((at: number): boolean => beside(at) && holding(at) === undefined)
-
-  if (pair === undefined) {
-    return content
-  }
-
-  const [first, last] = pair > index ? [index, pair] : [pair, index]
-  const row: TemplateFieldGroup = {
-    id: newGroupId,
-    label: null,
-    startBlockId: content.blocks[first]?.id ?? blockId,
-    endBlockId: content.blocks[last]?.id ?? blockId,
-    columns: 2,
-    keepTogether: false,
-  }
-
-  return setGroups(
-    [...groups.map(({ group }: IndexedFieldGroup): TemplateFieldGroup => group), row].sort(
-      (left: TemplateFieldGroup, right: TemplateFieldGroup): number =>
-        content.blocks.findIndex((block: TemplateBlock): boolean => block.id === left.startBlockId) -
-        content.blocks.findIndex((block: TemplateBlock): boolean => block.id === right.startBlockId)
-    )
-  )
 }
 
 /**
@@ -800,7 +852,7 @@ export function moveTemplateBlockTo(
       return []
     }
 
-    return [{ ...group, endBlockId: last.id, startBlockId: first.id }]
+    return [fitRow({ ...group, endBlockId: last.id, startBlockId: first.id }, members.length)]
   })
 
   return { content: { ...content, blocks, fieldGroups, sections }, success: true }
@@ -1399,12 +1451,7 @@ function repairFieldGroups(
     )
     const endSectionIndex = findSectionIndex(sectionStartIndices, endIndex)
 
-    if (
-      startSectionIndex !== endSectionIndex ||
-      groupedBlocks.some(
-        (block: TemplateBlock): boolean => !isTemplateFieldBlock(block)
-      )
-    ) {
+    if (startSectionIndex !== endSectionIndex || groupedBlocks.some(isPinnedBlock)) {
       continue
     }
 
@@ -1415,16 +1462,29 @@ function repairFieldGroups(
       continue
     }
 
-    groups.push({
-      ...group,
-      startBlockId: startBlock.id,
-      endBlockId: endBlock.id
-    })
+    groups.push(
+      fitRow({ ...group, startBlockId: startBlock.id, endBlockId: endBlock.id }, groupedBlocks.length)
+    )
     seenGroupIds.add(group.id)
     priorEndIndex = endIndex
   }
 
   return groups
+}
+
+// A row sets its blocks side by side, so it never has more columns than
+// blocks; widths size columns, so they go when the count changes.
+function fitRow(group: TemplateFieldGroup, members: number): TemplateFieldGroup {
+  const columns = Math.max(1, Math.min(group.columns, members))
+  const fitted = columns === group.columns ? group : { ...group, columns }
+
+  return fitted.widths !== undefined && fitted.widths.length !== columns ? withoutWidths(fitted) : fitted
+}
+
+function withoutWidths(group: TemplateFieldGroup): TemplateFieldGroup {
+  const { widths, ...rest } = group
+
+  return widths === undefined ? group : rest
 }
 
 function removeInvalidVisibilityConditions(

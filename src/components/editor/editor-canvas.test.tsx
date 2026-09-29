@@ -26,11 +26,11 @@ const TERMS: TemplateContentV3 = {
   sections: [{ id: S, label: "Terms", startBlockId: B, keepTogether: false, pageBreakBefore: false }],
 }
 
-function Canvas({ editable = true, initial = TERMS, narrow = true }: { editable?: boolean; initial?: TemplateContentV3; narrow?: boolean }) {
+function Canvas({ editable = true, fields = "design", initial = TERMS, narrow = true }: { editable?: boolean; fields?: "design" | "fill"; initial?: TemplateContentV3; narrow?: boolean }) {
   const history = useEditorHistory<TemplateContentV3>(initial)
   const current = useEditorController({ change: history.set, content: history.state, undo: history.undo })
   useEffect(() => { controller = current })
-  return <EditorCanvas allowFiles controller={current} designable={editable} documentTitle="Agreement" fields="design" narrow={narrow} surface="screen" textEditable={editable} zoom={1} />
+  return <EditorCanvas allowFiles controller={current} designable={editable} documentTitle="Agreement" fields={fields} narrow={narrow} surface="screen" textEditable={editable} zoom={1} />
 }
 
 it("edits section titles, keeps an emptied title valid, switches rules and moves the caret into its text", async () => {
@@ -60,23 +60,41 @@ it("shows section titles without editing controls or decorative pieces in previe
   expect(document.querySelector('[data-slot="section-pieces"]')).toBeNull()
 })
 
-it("pairs fields through the block toolbar and toggles keep-with-next on the saved content", async () => {
+it("sets blocks side by side, resizes the row from its seam, and lets a block stand alone", async () => {
   root = createRoot(document.body.appendChild(document.createElement("div")))
-  await act(async () => root.render(<Canvas />))
+  // Rows stack on a phone, so their seams appear only where there is room.
+  await act(async () => root.render(<Canvas narrow={false} />))
   const choice = INSERT_CHOICES.find((choice) => choice.id === "text-field")!
   await act(async () => controller.insert(choice))
   const first = controller.content.blocks.at(-1)!.id
   await act(async () => controller.insert(choice))
   const second = controller.content.blocks.at(-1)!.id
   const press = (name: string) => act(() => (document.querySelector(`[aria-label="${name}"]`) as HTMLButtonElement).click())
-  press("Side by side")
+  await act(async () => controller.placeBeside(second, first, "right"))
   expect(controller.content.fieldGroups).toMatchObject([{ columns: 2, startBlockId: first, endBlockId: second }])
+  const seam = document.querySelector<HTMLElement>('[data-slot="row-seam"]')!
+  await act(async () => seam.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "ArrowLeft" })))
+  expect(controller.content.fieldGroups[0]?.widths).toEqual([5, 7])
   await act(async () => controller.select(first))
   press("Keep with next")
   expect(controller.content.blockRules).toContainEqual({ blockId: first, keepWithNext: true, pageBreakBefore: false })
-  press("Side by side")
+  press("Stand alone")
   expect(controller.content.fieldGroups).toEqual([])
   expect(templateContentV3Schema.safeParse(controller.content).success).toBe(true)
+})
+
+it("lets a signature be drawn with a mouse without carrying its block away", async () => {
+  const signature = { fieldKey: "signature", helpText: null, id: B, label: "Signature", required: false, type: "signature_field" as const }
+  root = createRoot(document.body.appendChild(document.createElement("div")))
+  await act(async () => root.render(<Canvas fields="fill" initial={{ ...createEmptyDocumentContent(), blocks: [signature] }} narrow={false} />))
+  const pad = document.querySelector("canvas")!
+  const block = pad.closest<HTMLElement>("[data-block-id]")!
+  const at = (type: string, x: number) => new MouseEvent(type, { bubbles: true, button: 0, clientX: x, clientY: 10 })
+  await act(async () => {
+    pad.dispatchEvent(Object.assign(at("pointerdown", 10), { pointerId: 1, pointerType: "mouse" }))
+    for (const x of [30, 60, 90]) window.dispatchEvent(Object.assign(at("pointermove", x), { pointerId: 1, pointerType: "mouse" }))
+  })
+  expect(block.style.transform).toBe("")
 })
 
 it("keeps the active section pieces when the canvas switches from desktop to phone", async () => {
@@ -127,4 +145,18 @@ it("moves a selected block a step at a time from the keyboard, across a section'
   expect(controller.content.blocks.map((block) => block.id)).toEqual([B, note])
   expect(controller.content.sections[0]?.startBlockId).toBe(B)
   expect((document.querySelector('[aria-label="Move down"]') as HTMLButtonElement).disabled).toBe(true)
+})
+
+it("moves a page's margins in pairs, so the text stays centred", async () => {
+  root = createRoot(document.body.appendChild(document.createElement("div")))
+  await act(async () => root.render(<Canvas narrow={false} />))
+  const left = document.querySelector<HTMLElement>('[aria-label="Left margin"]')!
+  const top = document.querySelector<HTMLElement>('[aria-label="Top margin"]')!
+
+  await act(async () => left.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "ArrowRight", shiftKey: true })))
+  await act(async () => top.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "ArrowDown" })))
+
+  const { margins } = controller.content.layout
+  expect(margins).toMatchObject({ left: margins!.right, top: margins!.bottom })
+  expect(margins!.left).toBeGreaterThan(margins!.top)
 })

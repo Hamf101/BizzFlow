@@ -53,8 +53,10 @@ export type PdfFlowItem =
   | PdfBlockFlowItem
   | {
       kind: "columns"
-      left?: PdfBlockFlowItem
-      right?: PdfBlockFlowItem
+      /** Each column's width in twelfths of the content width. */
+      widths: readonly number[]
+      /** One cell per column, left to right; null where a column is empty. */
+      cells: readonly (PdfBlockFlowItem | null)[]
     }
   | { kind: "signing_intro" }
   | { kind: "signer"; signer: DocumentPdfSigner }

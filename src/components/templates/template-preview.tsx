@@ -17,6 +17,7 @@ import {
 import { BLOCK_GAP, pageStyle, PlacedImages, printableMargin } from "@/components/templates/printed-page"
 import {
   groupTemplateRenderBlocks,
+  rowGridStyle,
   type TemplateWebRenderGroup
 } from "@/components/templates/template-render-groups"
 import { Button } from "@/components/ui/button"
@@ -507,13 +508,13 @@ function PreviewFieldGroup({
         />
       )}
       <div
+        style={rowGridStyle(group)}
         className={cn(
           "grid min-w-0",
-          group.columns === 1
-            ? "grid-cols-1"
-            : "grid-cols-1 sm:grid-cols-[repeat(2,minmax(0,1fr))]",
+          // Rows stack on a phone and sit side by side, at their widths, from sm up.
+          "grid-cols-1 sm:grid-cols-[var(--row-columns)]",
           BLOCK_GAP[density],
-          group.columns === 2 && twoColumnContentPadding
+          group.columns > 1 && twoColumnContentPadding
         )}
       >
         {group.blocks.map(
@@ -529,7 +530,7 @@ function PreviewFieldGroup({
                 canMoveUp={visibleIndex > 0}
                 changed={changedBlockIds.has(renderBlock.block.id)}
                 contentPadding={
-                  group.columns === 2 ? "min-w-0" : contentPadding
+                  group.columns > 1 ? "min-w-0" : contentPadding
                 }
                 key={renderBlock.block.id}
                 onBlockSelect={onBlockSelect}

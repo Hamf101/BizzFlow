@@ -354,6 +354,11 @@
   color: oklch(from var(--doc-ink) max(l, 0.78) c h) !important;
 }
 
+/* A drawn signature is dark ink for paper; a dark screen shows it light. */
+.dark .doc-drawing:not([data-document-surface="paper"] *) {
+  filter: invert(1);
+}
+
 .dark .doc-highlight:not([data-document-surface="paper"] *) {
   background-color: oklch(from var(--doc-highlight) 0.42 calc(c * 2.5) h) !important;
 }

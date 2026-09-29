@@ -47,14 +47,17 @@ import { type CanvasUnit, createUnits, paginate, type PageFrame, type Pagination
 import { SectionPieces } from "./section-pieces"
 import { EditorSection } from "./editor-section"
 import { MarginGuides } from "@/components/editor/margin-guides"
+import { PRINTED_HEADING, printedSpace, SECTION_TITLE } from "@/components/editor/paper-field"
 import { SlashMenu } from "@/components/editor/slash-menu"
 import { type DropTarget, useBlockDrag } from "@/components/editor/use-block-drag"
+import { rowGridColumns } from "@/components/templates/template-render-groups"
 import { addPageBreak, type EditorController, type FocusRequest } from "@/components/editor/use-editor-controller"
 import { resolveDocumentSurfaceInk, type DocumentSurface } from "@/lib/document-surface"
 import { cn } from "@/lib/utils"
 import {
   createTemplateRenderPlan,
-  paragraphGap,
+  blockSpacingAdjustment,
+  columnGap,
   shouldRenderTemplateFooter,
   shouldRenderTemplateHeader,
   type TemplateRenderPlan,
@@ -64,6 +67,7 @@ import {
   getTemplateBlockSlot,
   listTemplateBlockSlots,
   moveTemplateBlockTo,
+  placeBeside,
   type TemplateBlockSlot,
   updateTemplateBlock,
 } from "@/types/template-structure"
@@ -78,6 +82,11 @@ const FOOTER_POINTS = 18
 const EMPTY_ANSWERS: Record<string, unknown> = {}
 const TEXT_CHOICE = INSERT_CHOICES[0] as InsertChoice
 
+
+/** Where a dragged block lands: in a gap between blocks, or beside one, in its row. */
+type CanvasDrop =
+  | Readonly<{ kind: "gap"; slot: TemplateBlockSlot }>
+  | Readonly<{ kind: "beside"; side: "left" | "right"; targetId: string }>
 
 type SlashState = Readonly<{
   active: number
@@ -155,7 +164,6 @@ export function EditorCanvas({
     right: plan.geometry.margins.right * point,
     top: plan.geometry.margins.top * point,
   }
-  const blockGap = paragraphGap(plan.layout) * point
   const logo = imageSource(plan.branding.logoAsset, plan.branding.logoDataUrl)
   const hasBranding = Boolean(logo || plan.branding.organizationName)
   const rootRef = useRef<HTMLDivElement>(null)
@@ -165,7 +173,7 @@ export function EditorCanvas({
   const [layout, setLayout] = useState<ReturnType<typeof paginate>>({ inside: {}, pageCount: 1, pages: {}, spacers: {} })
   const [slash, setSlash] = useState<SlashState | null>(null)
   const [fontsReady, setFontsReady] = useState(0)
-  const { begin, dragging, indicator } = useBlockDrag<TemplateBlockSlot>({ locate, onDrop: drop, zoom: narrow ? 1 : zoom })
+  const { begin, dragging, indicator } = useBlockDrag<CanvasDrop>({ locate, onDrop: drop, zoom: narrow ? 1 : zoom })
   const slashChoices = useMemo(
     () => (slash ? findInsertChoices({ allowFiles, query: slash.query }) : []),
     [allowFiles, slash]
@@ -361,10 +369,45 @@ export function EditorCanvas({
     return false
   }
 
-  // Where a block dragged to a height on screen lands: the gap nearest the
-  // pointer, with a place above and below each section's title, and nowhere
-  // while the pointer is over the block's own place.
-  function locate(blockId: string, y: number): DropTarget<TemplateBlockSlot> | null {
+  // Where a dragged block lands: beside a block whose left or right quarter
+  // the pointer is over, joining it in a row, or else the gap nearest the
+  // pointer's height.
+  function locate(blockId: string, x: number, y: number): DropTarget<CanvasDrop> | null {
+    return locateBeside(blockId, x, y) ?? locateGap(blockId, y)
+  }
+
+  // Rows stack on a phone, so there a block only goes above or below.
+  function locateBeside(blockId: string, x: number, y: number): DropTarget<CanvasDrop> | null {
+    if (narrow) {
+      return null
+    }
+
+    for (const element of rootRef.current?.querySelectorAll<HTMLElement>("[data-block-id]") ?? []) {
+      const targetId = element.dataset.blockId
+      const box = element.getBoundingClientRect()
+
+      if (!targetId || targetId === blockId || x < box.left || x > box.right || y < box.top || y > box.bottom) {
+        continue
+      }
+
+      const edge = box.width / 4
+      const side = x < box.left + edge ? "left" : x > box.right - edge ? "right" : null
+
+      return side
+        ? {
+            line: { height: box.height, left: side === "left" ? box.left - 6 : box.right + 4, top: box.top + box.height / 2, width: 2 },
+            slot: { kind: "beside", side, targetId },
+            valid: placeBeside(content, blockId, targetId, side, () => blockId).success,
+          }
+        : null
+    }
+
+    return null
+  }
+
+  // The gap nearest the pointer's height, with a place above and below each
+  // section's title, and nowhere while the pointer is over the block's own place.
+  function locateGap(blockId: string, y: number): DropTarget<CanvasDrop> | null {
     const box = (id: string | undefined): DOMRect | undefined =>
       id === undefined ? undefined : unitElements.current.get(unitOf.get(id) ?? "")?.getBoundingClientRect()
     const own = box(blockId)
@@ -406,12 +449,23 @@ export function EditorCanvas({
       }
     }
 
-    return best && { line: best.line, slot: best.slot, valid: moveTemplateBlockTo(content, blockId, best.slot, blockId).success }
+    return (
+      best && {
+        line: best.line,
+        slot: { kind: "gap", slot: best.slot },
+        valid: moveTemplateBlockTo(content, blockId, best.slot, blockId).success,
+      }
+    )
   }
 
   // A block let go somewhere new stays chosen, so its place is plain to see.
-  function drop(blockId: string, slot: TemplateBlockSlot): void {
-    if (controller.moveTo(blockId, slot)) {
+  function drop(blockId: string, landing: CanvasDrop): void {
+    const moved =
+      landing.kind === "beside"
+        ? controller.placeBeside(blockId, landing.targetId, landing.side)
+        : controller.moveTo(blockId, landing.slot)
+
+    if (moved) {
       controller.select(blockId)
     }
   }
@@ -629,8 +683,13 @@ export function EditorCanvas({
     "--doc-accent": ink.accent,
     "--doc-primary": ink.primary,
     "--doc-pt": `${point}px`,
+    // The PDF's spacing: what the layout adds under each block, and between a row's columns.
+    "--doc-adjust": `${blockSpacingAdjustment(plan.layout) * point}px`,
+    "--doc-column-gap": `${columnGap(plan.geometry.contentWidthPoints) * point}px`,
     "--doc-line-height": plan.layout.lineSpacing,
     ...(narrow ? { "--doc-h1": "1.55em", "--doc-h2": "1.35em", "--doc-h3": "1.15em", "--doc-title": "1.7em" } : {}),
+    // The face the PDF prints in, so words wrap on the page where they will print.
+    fontFamily: '"bf-default", sans-serif',
     fontSize: 10 * point,
   } as CSSProperties
   const flow = units.map((unit: CanvasUnit) => (
@@ -652,13 +711,12 @@ export function EditorCanvas({
             unitElements.current.delete(unit.id)
           }
         }}
-        style={{ paddingBottom: blockGap }}
       >
         {unit.id === "title" ? (
           <h1
-            className="font-semibold"
+            className="font-bold"
             data-printed-title=""
-            style={{ color: "var(--doc-primary)", fontSize: "var(--doc-title, 2.2em)", lineHeight: 1.25 }}
+            style={{ ...PRINTED_HEADING, color: "var(--doc-primary)", fontSize: "var(--doc-title, 2.4em)", lineHeight: 35 / 24, marginBottom: printedSpace(16) }}
           >
             {plan.title}
           </h1>
@@ -701,6 +759,7 @@ export function EditorCanvas({
         ref={rootRef}
         style={inkStyle}
       >
+        {PRINTED_FACE}
         {flow}
         {textEditable ? <SectionPieces root={rootRef} sectionId={controller.currentSectionId} narrow zoom={1} revision={content} /> : null}
         {/* A phone's column has no pages, so placed pictures follow the text. */}
@@ -742,6 +801,7 @@ export function EditorCanvas({
         ref={rootRef}
         style={{ ...inkStyle, height: stackHeight, transform: `scale(${zoom})`, width: pageWidth }}
       >
+        {PRINTED_FACE}
         {Array.from({ length: pageCount }, (_, page) => (
           <div
             aria-label={`Page ${page + 1} of ${pageCount}`}
@@ -869,20 +929,100 @@ function UnitBlocks({ actions, unit }: { actions: CanvasActions; unit: CanvasUni
       {unit.sectionId && actions.textEditable ? (
         <EditorSection controller={actions.controller} section={actions.controller.content.sections.find((section) => section.id === unit.sectionId)!} />
       ) : unit.sectionLabel ? (
-        <p className="font-semibold" style={{ color: "var(--doc-primary)", fontSize: "1.5em", marginBottom: "0.5em" }}>
+        <p className="font-bold" style={SECTION_TITLE}>
           {unit.sectionLabel}
         </p>
       ) : null}
       {unit.groupLabel ? (
-        <p className="tracking-[0.08em] text-muted-foreground uppercase" style={{ fontSize: "0.8em", marginBottom: "0.6em" }}>
+        <p className="font-bold text-muted-foreground uppercase" style={{ fontSize: "0.9em", lineHeight: 13 / 9, marginBottom: printedSpace(8) }}>
           {unit.groupLabel}
         </p>
       ) : null}
-      <div className={cn("grid", unit.columns === 2 && "grid-cols-2")} style={{ gap: "1.2em" }}>
+      <div
+        className="relative grid"
+        // A row stacks on a phone, where there is no room beside a block.
+        // Each block keeps the space the PDF leaves under it, so rows need no gap of their own.
+        style={{ columnGap: "var(--doc-column-gap)", gridTemplateColumns: actions.narrow ? undefined : rowGridColumns(unit.columns, unit.widths) }}
+      >
         {unit.blocks.map((renderBlock) => (
           <CanvasBlock actions={actions} block={renderBlock.block} key={renderBlock.block.id} />
         ))}
+        {actions.textEditable && !actions.narrow ? <RowSeams controller={actions.controller} unit={unit} /> : null}
       </div>
+    </>
+  )
+}
+
+
+// Given a precedence, React puts the stylesheet in the head once, beside the
+// families some words use.
+// eslint-disable-next-line @next/next/no-css-tags -- the document face, served by the fonts route like the others
+const PRINTED_FACE = <link href="/fonts/default/font.css" precedence="document-fonts" rel="stylesheet" />
+
+// The edges between a row's columns: drag one, or focus it and use the arrow
+// keys, to trade width between the columns either side, a twelfth at a time.
+function RowSeams({ controller, unit }: { controller: EditorController; unit: CanvasUnit }): ReactElement | null {
+  const groupId = unit.blocks[0]?.fieldGroupId
+  const widths = unit.widths ?? Array.from({ length: unit.columns }, () => 12 / unit.columns)
+
+  if (!groupId || unit.columns < 2) {
+    return null
+  }
+
+  return (
+    <>
+      {widths.slice(0, -1).map((_, index) => {
+        const left = widths[index] ?? 0
+        const right = widths[index + 1] ?? 0
+        const at = widths.slice(0, index + 1).reduce((total, width) => total + width, 0)
+
+        // Each column keeps at least two twelfths.
+        function resize(to: number): void {
+          const next = Math.min(at + right - 2, Math.max(at - left + 2, Math.round(to)))
+
+          if (next !== at) {
+            controller.setRowWidths(
+              groupId as string,
+              widths.map((width, column) => (column === index ? left + next - at : column === index + 1 ? right - (next - at) : width)),
+              `row:${groupId}`
+            )
+          }
+        }
+
+        return (
+          <div
+            aria-label="Column width"
+            aria-orientation="vertical"
+            aria-valuemax={10}
+            aria-valuemin={2}
+            aria-valuenow={left}
+            className="absolute inset-y-0 z-10 w-3 -translate-x-1/2 cursor-col-resize touch-none after:absolute after:inset-y-0 after:left-1/2 after:w-0.5 after:-translate-x-1/2 after:rounded-full after:bg-primary after:opacity-0 after:transition-opacity hover:after:opacity-60 focus-visible:outline-none focus-visible:after:opacity-100"
+            data-slot="row-seam"
+            key={index}
+            onKeyDown={(event) => {
+              if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+                event.preventDefault()
+                resize(at + (event.key === "ArrowLeft" ? -1 : 1))
+              }
+            }}
+            onPointerDown={(event) => {
+              event.preventDefault()
+              event.stopPropagation()
+              event.currentTarget.setPointerCapture(event.pointerId)
+            }}
+            onPointerMove={(event) => {
+              const grid = event.currentTarget.parentElement?.getBoundingClientRect()
+
+              if (grid && event.currentTarget.hasPointerCapture(event.pointerId)) {
+                resize(((event.clientX - grid.left) / grid.width) * 12)
+              }
+            }}
+            role="separator"
+            style={{ left: `calc((100% - ${widths.length - 1} * var(--doc-column-gap)) * ${at / 12} + ${index + 0.5} * var(--doc-column-gap))` }}
+            tabIndex={0}
+          />
+        )
+      })}
     </>
   )
 }

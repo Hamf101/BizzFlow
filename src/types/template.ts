@@ -429,14 +429,22 @@ export const templateSectionSchema = z
   })
   .strict()
 
-/** One contiguous field range rendered in one or two columns. */
+/** The most blocks one row sets side by side. */
+export const MAX_ROW_COLUMNS = 4
+
+/**
+ * One contiguous range of blocks set side by side: a row of up to four
+ * columns, sized in twelfths of the page's width (equal when `widths` is
+ * absent). A range with more blocks than columns wraps onto further rows.
+ */
 export const templateFieldGroupSchema = z
   .object({
     id: blockIdSchema,
     label: z.string().trim().min(1).max(160).nullable().default(null),
     startBlockId: blockIdSchema,
     endBlockId: blockIdSchema,
-    columns: z.union([z.literal(1), z.literal(2)]),
+    columns: z.number().int().min(1).max(MAX_ROW_COLUMNS),
+    widths: z.array(z.number().int().min(2).max(10)).min(2).max(MAX_ROW_COLUMNS).optional(),
     keepTogether: z.boolean()
   })
   .strict()
@@ -725,11 +733,23 @@ function validateFieldGroups(
 
     const groupedBlocks = content.blocks.slice(startIndex, endIndex + 1)
 
-    if (groupedBlocks.some((block: TemplateBlock): boolean => !isFieldBlock(block))) {
+    if (groupedBlocks.some(isPinnedBlock)) {
       context.addIssue({
         code: "custom",
-        message: "A field group range can contain only fillable fields.",
+        message: "A block pinned to its page cannot share a row.",
         path: ["fieldGroups", groupIndex]
+      })
+    }
+
+    if (
+      group.widths !== undefined &&
+      (group.widths.length !== group.columns ||
+        group.widths.reduce((total: number, width: number): number => total + width, 0) !== 12)
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "A row's column widths must fill its twelve twelfths, one width per column.",
+        path: ["fieldGroups", groupIndex, "widths"]
       })
     }
   }
@@ -881,6 +901,16 @@ function findSectionIndex(
   }
 
   return result
+}
+
+/**
+ * Tells a block pinned to a spot on its page, outside the flow of the rest.
+ *
+ * @param block - Canonical template block.
+ * @returns Whether the block has a place of its own on a page.
+ */
+export function isPinnedBlock(block: TemplateBlock): boolean {
+  return "placement" in block && block.placement !== undefined
 }
 
 function isFieldBlock(

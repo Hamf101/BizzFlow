@@ -39,16 +39,16 @@ const FIXED_METADATA_TIMESTAMP = "2026-07-17T19:30:00.000Z"
 
 const EXPECTED_PAGE_COUNT = 3
 
-// A4 at 72dpi — A4_WIDTH/A4_HEIGHT in document-pdf/constants.ts, rounded.
+// A4 at 72dpi (595.28 x 841.89 points, as template-render-plan.ts sizes it), rounded.
 // Deliberately written out rather than imported: importing the constants would
 // make both sides of the assertion move together, so switching the renderer to
 // Letter would silently pass.
 const EXPECTED_PAGE_SIZE = { height: 842, width: 595 }
 
 const EXPECTED_CONTENT_STREAM_SHA256: readonly string[] = [
-  "69c4701fdcc99aa5bee1053387e28076cc3cede52603050e987f9128943dc4ed",
-  "c3112ee6a52a946d1f4af740f336b7bb2cb2f258910e2a1a93df140ae0ef4b5c",
-  "89c3c949fca732dd1211c8a5c7d68d53e28be3235652a5280548a337f6a3564d"
+  "91a494b9ebd5eb5e126b23b076aca3fdb0b9bd67b1fb31b021f1badf7c354399",
+  "c56139909b3ada869aec6aad767c1c22e81dcf559a4d0c09fcd2b446051d541b",
+  "95f09a7508c47767a95bc2165982b3d7bcf766abfc2060f64f347de52a186231"
 ]
 
 // Three pages of text with a few fields and a signature. Whole font files made

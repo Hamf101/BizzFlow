@@ -14,13 +14,16 @@ import {
   moveTemplateSection,
   removeTemplateSection,
   setBlockKeepWithNext,
-  setFieldSideBySide,
+  placeBeside,
+  setRowWidths,
+  standAlone,
   startTemplateSection,
   stepTemplateBlockSlot,
   updateTemplateBlock,
   updateTemplateFieldGroup,
   updateTemplateSection,
-  withGeneratedFieldKeys
+  withGeneratedFieldKeys,
+  type TemplateMoveResult
 } from "./template-structure"
 import {
   MAX_TEMPLATE_BLOCK_COUNT,
@@ -39,6 +42,15 @@ const SECOND_SECTION_ID = "60000000-0000-4000-8000-000000000012"
 const GROUP_ID = "60000000-0000-4000-8000-000000000021"
 const DROPDOWN_ID = "60000000-0000-4000-8000-000000000031"
 const DROPDOWN_DEPENDENT_ID = "60000000-0000-4000-8000-000000000032"
+const EXTRA_ID = "60000000-0000-4000-8000-000000000006"
+
+function placed(result: TemplateMoveResult): TemplateContentV3 {
+  if (!result.success) {
+    throw new Error(result.message)
+  }
+
+  return result.content
+}
 
 describe("duplicateTemplateBlock", () => {
   it("copies a conditional field after its source without retargeting its condition", () => {
@@ -159,9 +171,10 @@ describe("template structure helpers", () => {
     expect(templateContentV3Schema.safeParse(inserted).success).toBe(true)
   })
 
-  it("drops a group made noncontiguous while retaining unaffected references", () => {
+  it("keeps a row whole when any block is inserted inside it, retaining unaffected references", () => {
+    const content = createStructuredContent()
     const inserted = insertTemplateBlock(
-      createStructuredContent(),
+      content,
       SOURCE_ID,
       {
         id: INSERTED_ID,
@@ -169,7 +182,8 @@ describe("template structure helpers", () => {
       }
     )
 
-    expect(inserted.fieldGroups).toEqual([])
+    // Rows hold any block now, so a divider inside one joins it instead of breaking it.
+    expect(inserted.fieldGroups).toEqual(content.fieldGroups)
     expect(inserted.blockRules).toEqual([
       {
         blockId: TARGET_ID,
@@ -244,7 +258,11 @@ describe("template structure helpers", () => {
         keepTogether: false
       }
     ])
-    expect(moved.fieldGroups).toEqual([])
+    // The row keeps its place and the paragraph moved into it; it ends where
+    // the next section now begins.
+    expect(moved.fieldGroups).toEqual([
+      { ...createStructuredContent().fieldGroups[0], endBlockId: TARGET_ID }
+    ])
     expect(templateContentV3Schema.safeParse(moved).success).toBe(true)
   })
 
@@ -709,20 +727,50 @@ describe("authoring sections, side-by-side fields and keep with next", () => {
     expect(started.fieldGroups).toEqual(content.fieldGroups)
   })
 
-  it("puts a field beside its neighbour, adds the next field to the row, and parts them again", () => {
+  it("puts any block beside another, widens the row, and lets a block stand alone again", () => {
     const content = { ...createStructuredContent(), sections: [], fieldGroups: [] }
-    const paired = setFieldSideBySide(content, SOURCE_ID, true, GROUP_ID)
-    const extended = setFieldSideBySide(paired, THIRD_FIELD_ID, true, INSERTED_ID)
-    const parted = setFieldSideBySide(extended, TARGET_ID, false, INSERTED_ID)
+    const paired = placed(placeBeside(content, SECOND_SECTION_BLOCK_ID, THIRD_FIELD_ID, "right", () => GROUP_ID))
+    const widened = placed(placeBeside(paired, TARGET_ID, THIRD_FIELD_ID, "left", () => INSERTED_ID))
+    const parted = placed(standAlone(widened, THIRD_FIELD_ID, () => INSERTED_ID))
 
+    // A paragraph shares a row with a field: rows are no longer fields only.
     expect(paired.fieldGroups).toEqual([
-      { id: GROUP_ID, label: null, startBlockId: SOURCE_ID, endBlockId: TARGET_ID, columns: 2, keepTogether: false },
+      { id: GROUP_ID, label: null, startBlockId: THIRD_FIELD_ID, endBlockId: SECOND_SECTION_BLOCK_ID, columns: 2, keepTogether: false },
     ])
-    expect(extended.fieldGroups.map((group) => [group.id, group.startBlockId, group.endBlockId])).toEqual([
-      [GROUP_ID, SOURCE_ID, THIRD_FIELD_ID],
-    ])
-    expect(templateContentV3Schema.safeParse(extended).success).toBe(true)
-    expect(parted.fieldGroups).toEqual([])
+    expect(widened.fieldGroups).toEqual([{ ...paired.fieldGroups[0], startBlockId: TARGET_ID, columns: 3 }])
+    expect(parted.blocks.map((block) => block.id)).toEqual([SOURCE_ID, TARGET_ID, SECOND_SECTION_BLOCK_ID, THIRD_FIELD_ID])
+    expect(parted.fieldGroups).toEqual([{ ...paired.fieldGroups[0], startBlockId: TARGET_ID, endBlockId: SECOND_SECTION_BLOCK_ID }])
+
+    for (const step of [paired, widened, parted]) {
+      expect(templateContentV3Schema.safeParse(step).success).toBe(true)
+    }
+  })
+
+  it("joins a row inside the section of the block it goes beside, and holds at most four", () => {
+    const content = { ...createStructuredContent(), fieldGroups: [] }
+    const joined = placed(placeBeside(content, THIRD_FIELD_ID, SECOND_SECTION_BLOCK_ID, "left", () => GROUP_ID))
+
+    // The date leaves the first section to open the second, beside its first block.
+    expect(joined.sections.map((section) => section.startBlockId)).toEqual([SOURCE_ID, THIRD_FIELD_ID])
+    expect(joined.fieldGroups[0]).toMatchObject({ startBlockId: THIRD_FIELD_ID, endBlockId: SECOND_SECTION_BLOCK_ID })
+    expect(templateContentV3Schema.safeParse(joined).success).toBe(true)
+
+    const four = { ...content, sections: [], fieldGroups: [{ id: GROUP_ID, label: null, startBlockId: TARGET_ID, endBlockId: EXTRA_ID, columns: 4, keepTogether: false }] }
+    four.blocks = [...content.blocks, { alignment: "left" as const, id: EXTRA_ID, text: "More", type: "paragraph" as const }]
+
+    expect(placeBeside(four, SOURCE_ID, TARGET_ID, "left", () => INSERTED_ID)).toMatchObject({ code: "row_full", success: false })
+  })
+
+  it("sizes a row's columns in twelfths, and keeps equal columns without widths", () => {
+    const content = createStructuredContent()
+    const row = { ...content, fieldGroups: [{ ...content.fieldGroups[0], endBlockId: TARGET_ID }] }
+
+    expect(setRowWidths(row, GROUP_ID, [4, 8]).fieldGroups[0]).toMatchObject({ widths: [4, 8] })
+    expect(setRowWidths(setRowWidths(row, GROUP_ID, [4, 8]), GROUP_ID, [6, 6]).fieldGroups[0]).not.toHaveProperty("widths")
+    // Widths that do not fill the row, or leave a column too thin to use, change nothing.
+    expect(setRowWidths(row, GROUP_ID, [5, 5])).toBe(row)
+    expect(setRowWidths(row, GROUP_ID, [1, 11])).toBe(row)
+    expect(templateContentV3Schema.safeParse(setRowWidths(row, GROUP_ID, [4, 8])).success).toBe(true)
   })
 
   it("labels a group of fields, takes an emptied label away, and keeps the group on one page", () => {
@@ -733,28 +781,6 @@ describe("authoring sections, side-by-side fields and keep with next", () => {
     expect(relabelled.fieldGroups[0]).toMatchObject({ keepTogether: true, label: "Signed by" })
     expect(unlabelled.fieldGroups[0]).toMatchObject({ keepTogether: false, label: null })
     expect(templateContentV3Schema.safeParse(unlabelled).success).toBe(true)
-  })
-
-  it("keeps a labelled group when its fields go back to one column", () => {
-    const content = createStructuredContent()
-
-    expect(setFieldSideBySide(content, TARGET_ID, false, INSERTED_ID).fieldGroups).toEqual([
-      { ...content.fieldGroups[0], columns: 1 },
-    ])
-  })
-
-  it("pairs a field only with a field in its own section", () => {
-    const content = { ...createStructuredContent(), fieldGroups: [] }
-    content.sections = [
-      { id: SECOND_SECTION_ID, label: "Details", startBlockId: TARGET_ID, pageBreakBefore: false, keepTogether: false },
-    ]
-
-    // The checkbox's only neighbour opens the next section; the date has
-    // words after it, so it pairs with the field before.
-    expect(setFieldSideBySide(content, SOURCE_ID, true, GROUP_ID)).toBe(content)
-    expect(
-      setFieldSideBySide(content, THIRD_FIELD_ID, true, GROUP_ID).fieldGroups.map((group) => [group.startBlockId, group.endBlockId])
-    ).toEqual([[TARGET_ID, THIRD_FIELD_ID]])
   })
 
   it("keeps a block with the next one alongside a page break it already starts", () => {

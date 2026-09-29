@@ -29,8 +29,15 @@ import {
   wrapPdfText
 } from "./pdf-lib-text"
 import type { PdfLibRenderContext } from "./pdf-lib-types"
-import { createPdfLayoutMetrics, getPdfColumnWidth } from "./layout"
-import { formatFieldValue, normalizeDrawingDataUrl } from "./shared"
+import { createPdfLayoutMetrics, getPdfColumnFrames } from "./layout"
+import {
+  ANSWER_BOX_PADDING,
+  answerBoxHeight,
+  CHECKBOX_LABEL_INSET,
+  formatFieldValue,
+  isFieldChecked,
+  normalizeDrawingDataUrl
+} from "./shared"
 import type {
   NormalizedPdfInput,
   PdfBlockFlowItem,
@@ -518,23 +525,18 @@ async function drawPdfLibColumns(
   context: PdfLibRenderContext,
   topY: number
 ): Promise<number> {
-  const columnWidth = getPdfColumnWidth(context.layout)
-  const leftFrame: PdfContentFrame = {
-    x: context.layout.margin,
-    width: columnWidth
-  }
-  const rightFrame: PdfContentFrame = {
-    x: context.layout.margin + columnWidth + context.layout.columnGap,
-    width: columnWidth
-  }
-  const leftBottom = item.left
-    ? await drawPdfLibBlock(item.left, context, topY, leftFrame)
-    : topY
-  const rightBottom = item.right
-    ? await drawPdfLibBlock(item.right, context, topY, rightFrame)
-    : topY
+  const frames = getPdfColumnFrames(context.layout, item.widths)
+  let bottom = topY
 
-  return Math.min(leftBottom, rightBottom)
+  for (const [column, cell] of item.cells.entries()) {
+    const frame = frames[column]
+
+    if (cell && frame) {
+      bottom = Math.min(bottom, await drawPdfLibBlock(cell, context, topY, frame))
+    }
+  }
+
+  return bottom
 }
 
 async function drawPdfLibList(
@@ -707,63 +709,74 @@ async function drawPdfLibField(
   const label = `${block.label}${
     item.fieldContinued ? " (continued)" : block.required ? " *" : ""
   }`
-  let cursorY = drawWrappedPdfText(
-    context,
-    label,
-    topY,
-    frame.x,
-    frame.width,
-    9,
-    13,
-    context.boldFont,
-    rgb(0.07, 0.09, 0.13),
-    "left"
-  )
-  cursorY -= 3
+  const ink = rgb(0.07, 0.09, 0.13)
+  const edge = rgb(0.61, 0.64, 0.69)
+  let cursorY: number
 
-  const drawingDataUrl =
-    block.type === "signature_field" || block.type === "initials_field"
-      ? normalizeDrawingDataUrl(context.answers[block.fieldKey])
-      : null
-
-  if (drawingDataUrl) {
-    const drawing = await embedPdfLibImage(context, drawingDataUrl)
-    const size = fitPdfImage(drawing, Math.min(150, frame.width), 45)
-    context.page.drawImage(drawing, {
+  // A checkbox prints as the editor shows it: a box with its label beside it.
+  if (block.type === "checkbox_field") {
+    const size = 10
+    context.page.drawRectangle({
+      borderColor: edge,
+      borderWidth: 0.7,
+      height: size,
+      width: size,
       x: frame.x,
-      y: cursorY - size.height,
-      height: size.height,
-      width: size.width
+      y: topY - 2 - size,
     })
-    cursorY -= Math.max(45, size.height)
+
+    if (isFieldChecked(block, context.answers[block.fieldKey])) {
+      context.page.drawLine({ color: ink, end: { x: frame.x + 4, y: topY - 10 }, start: { x: frame.x + 2, y: topY - 7 }, thickness: 1.2 })
+      context.page.drawLine({ color: ink, end: { x: frame.x + 8.5, y: topY - 4 }, start: { x: frame.x + 4, y: topY - 10 }, thickness: 1.2 })
+    }
+
+    cursorY = drawWrappedPdfText(context, label, topY, frame.x + CHECKBOX_LABEL_INSET, frame.width - CHECKBOX_LABEL_INSET, 10, 15, context.regularFont, ink, "left")
   } else {
-    const answer =
-      (block.type === "signature_field" || block.type === "initials_field") &&
-      context.hasSigners
-        ? "Captured per signer in signing record below"
-        : (item.answerOverride ??
-          formatFieldValue(block, context.answers[block.fieldKey]))
-    const answerBottom = drawWrappedPdfText(
-      context,
-      answer,
-      cursorY,
-      frame.x,
-      frame.width,
-      10,
-      15,
-      context.regularFont,
-      rgb(0.07, 0.09, 0.13),
-      "left"
-    )
-    cursorY = Math.min(cursorY - 18, answerBottom)
+    cursorY = drawWrappedPdfText(context, label, topY, frame.x, frame.width, 9, 13, context.boldFont, ink, "left") - 3
+
+    const boxTop = cursorY
+    const inner = frame.width - ANSWER_BOX_PADDING * 2
+    const drawingDataUrl =
+      block.type === "signature_field" || block.type === "initials_field"
+        ? normalizeDrawingDataUrl(context.answers[block.fieldKey])
+        : null
+    let contentBottom = boxTop
+
+    if (drawingDataUrl) {
+      const drawing = await embedPdfLibImage(context, drawingDataUrl)
+      const size = fitPdfImage(drawing, Math.min(150, inner), 45)
+      context.page.drawImage(drawing, {
+        x: frame.x + ANSWER_BOX_PADDING,
+        y: boxTop - ANSWER_BOX_PADDING - size.height,
+        height: size.height,
+        width: size.width
+      })
+      contentBottom = boxTop - ANSWER_BOX_PADDING - size.height
+    } else {
+      const answer =
+        (block.type === "signature_field" || block.type === "initials_field") &&
+        context.hasSigners
+          ? "Captured per signer in signing record below"
+          : (item.answerOverride ??
+            formatFieldValue(block, context.answers[block.fieldKey]))
+
+      if (answer) {
+        contentBottom = drawWrappedPdfText(context, answer, boxTop - ANSWER_BOX_PADDING, frame.x + ANSWER_BOX_PADDING, inner, 10, 15, context.regularFont, ink, "left")
+      }
+    }
+
+    const boxHeight = Math.max(answerBoxHeight(block), boxTop - contentBottom + ANSWER_BOX_PADDING)
+    context.page.drawRectangle({
+      borderColor: edge,
+      borderWidth: 0.7,
+      height: boxHeight,
+      width: frame.width,
+      x: frame.x,
+      y: boxTop - boxHeight,
+    })
+    cursorY = boxTop - boxHeight
   }
 
-  context.page.drawLine({
-    start: { x: frame.x, y: cursorY },
-    end: { x: frame.x + frame.width, y: cursorY },
-    color: rgb(0.61, 0.64, 0.69),
-    thickness: 0.7
-  })
   cursorY -= 3
 
   if (block.helpText && !item.fieldContinued) {

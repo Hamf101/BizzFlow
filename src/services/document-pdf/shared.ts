@@ -136,19 +136,51 @@ export function formatFieldValue(
     return "Uploads are only in submissions."
   }
 
-  if (block.type === "checkbox_field") {
-    const checked = value === undefined ? block.checkedByDefault : value === true
-    return checked ? "Checked" : "Not checked"
-  }
-
   if (typeof value === "string" && value.trim().length > 0) {
     const text = value.trim().slice(0, 20_000)
 
     return block.type === "date_field" ? formatDateAnswer(text, block.dateFormat) : text
   }
 
-  return "Not completed"
+  // Left empty, so the printed box is there to write in.
+  return ""
 }
+
+/**
+ * Whether a checkbox prints ticked: its answer, or its default when unanswered.
+ *
+ * @param block - The checkbox.
+ * @param value - Its stored answer.
+ * @returns Whether to draw a tick.
+ */
+export function isFieldChecked(block: Extract<PdfFieldBlock, { type: "checkbox_field" }>, value: unknown): boolean {
+  return value === undefined ? block.checkedByDefault : value === true
+}
+
+/**
+ * The least height of a field's answer box, in points, so a blank form leaves
+ * room to write by hand: two lines for a short answer, four for a long one,
+ * and room to sign.
+ *
+ * @param block - The field.
+ * @returns The box's least height.
+ */
+export function answerBoxHeight(block: PdfFieldBlock): number {
+  if (block.type === "signature_field" || block.type === "initials_field") {
+    return ANSWER_BOX_SIGNATURE
+  }
+
+  return block.type === "text_field" && block.multiline ? ANSWER_BOX_LINE * 4 : ANSWER_BOX_LINE * 2
+}
+
+/** One handwritten line of an answer box, in points. */
+export const ANSWER_BOX_LINE = 15
+/** Room to sign in, in points. */
+export const ANSWER_BOX_SIGNATURE = 56
+/** The gap between an answer box's edge and its text, in points. */
+export const ANSWER_BOX_PADDING = 6
+/** How far a checkbox's label sits from the box's left edge, in points. */
+export const CHECKBOX_LABEL_INSET = 16
 
 /**
  * Reads an optional drawing data URL from supported answer shapes.

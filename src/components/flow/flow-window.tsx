@@ -376,6 +376,11 @@ function animate(parts: Parts): { resize: (event: PointerEvent, zone: HTMLElemen
     // From the swarm as it is this instant, grown under the pointer or not.
     bloom = opening ? parseFloat(getComputedStyle(parts.swarm).scale) || 1 : 1
     pace(1)
+
+    // The swarm rests while the window is open, where it is hidden; see finish.
+    if (opening) {
+      for (const animation of motion) animation.pause()
+    }
     parts.hit.hidden = true
     showSpecks()
     parts.setMode(next)
@@ -426,6 +431,12 @@ function animate(parts: Parts): { resize: (event: PointerEvent, zone: HTMLElemen
     parts.specks.hidden = true
     parts.win.style.opacity = closed ? "0" : "1"
     parts.win.style.transform = ""
+
+    // Started again as it shows, so the browser draws it moving: left running
+    // while hidden, a swarm could come back still until the button moved.
+    if (closed) {
+      for (const animation of motion) animation.play()
+    }
 
     if (closed && returnFocus) {
       returnFocus = false

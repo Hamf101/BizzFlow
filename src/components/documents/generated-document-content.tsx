@@ -19,6 +19,7 @@ import {
 import { BLOCK_GAP, pageStyle, PlacedImages, printableMargin } from "@/components/templates/printed-page"
 import {
   groupTemplateRenderBlocks,
+  rowGridStyle,
   type TemplateWebRenderGroup
 } from "@/components/templates/template-render-groups"
 import { DatePicker } from "@/components/ui/date-picker"
@@ -436,11 +437,11 @@ function GeneratedFieldGroup({
         </h3>
       )}
       <div
+        style={rowGridStyle(group)}
         className={cn(
           "grid min-w-0",
-          group.columns === 1
-            ? "grid-cols-1"
-            : "grid-cols-1 sm:grid-cols-[repeat(2,minmax(0,1fr))]",
+          // Rows stack on a phone and sit side by side, at their widths, from sm up.
+          "grid-cols-1 sm:grid-cols-[var(--row-columns)]",
           BLOCK_GAP[density]
         )}
       >

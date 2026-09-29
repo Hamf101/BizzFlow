@@ -370,7 +370,8 @@ function MemberProfilePreview({
   return (
     <PreviewCard handle={previewHandle}>
       <span
-        className="min-w-0"
+        // A flex box, so a long name is cut short beside its role, not under it.
+        className="flex min-w-0"
         onClick={() => previewHandle.open(triggerId)}
         onFocus={() => previewHandle.open(triggerId)}
       >
