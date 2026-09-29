@@ -2,6 +2,8 @@
 
 import {
   type ChangeEvent,
+  type ComponentProps,
+  type FormEvent,
   type ReactElement,
   useMemo,
   useState
@@ -15,6 +17,7 @@ import { DatePicker } from "@/components/ui/date-picker"
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
+import { describeInvalidField } from "@/components/ui/toaster"
 import { createTemplateRenderPlan } from "@/services/templates/template-render-plan"
 import type { TemplateBlock, TemplateContent } from "@/types/template"
 
@@ -199,7 +202,7 @@ function PublicFormFieldBlock({
 
     case "text_field":
       return (
-        <Field data-public-form-field-key={block.fieldKey}>
+        <ErrorField block={block} data-public-form-field-key={block.fieldKey}>
           <PublicFormFieldLabel block={block} />
           {block.multiline ? (
             <textarea
@@ -227,12 +230,12 @@ function PublicFormFieldBlock({
             />
           )}
           <PublicFormFieldHelpText block={block} />
-        </Field>
+        </ErrorField>
       )
 
     case "date_field":
       return (
-        <Field data-public-form-field-key={block.fieldKey}>
+        <ErrorField block={block} data-public-form-field-key={block.fieldKey}>
           <PublicFormFieldLabel block={block} />
           <DatePicker
             format={block.dateFormat}
@@ -243,12 +246,13 @@ function PublicFormFieldBlock({
             value={readStringAnswer(answers, block.fieldKey)}
           />
           <PublicFormFieldHelpText block={block} />
-        </Field>
+        </ErrorField>
       )
 
     case "checkbox_field":
       return (
-        <Field
+        <ErrorField
+          block={block}
           className="flex flex-row items-start gap-3 rounded-lg border p-3"
           data-public-form-field-key={block.fieldKey}
         >
@@ -272,12 +276,12 @@ function PublicFormFieldBlock({
             <PublicFormFieldLabel block={block} />
             <PublicFormFieldHelpText block={block} />
           </div>
-        </Field>
+        </ErrorField>
       )
 
     case "dropdown_field":
       return (
-        <Field data-public-form-field-key={block.fieldKey}>
+        <ErrorField block={block} data-public-form-field-key={block.fieldKey}>
           <PublicFormFieldLabel block={block} />
           <Select
             id={block.id}
@@ -298,12 +302,69 @@ function PublicFormFieldBlock({
             ))}
           </Select>
           <PublicFormFieldHelpText block={block} />
-        </Field>
+        </ErrorField>
       )
 
     default:
       return null
   }
+}
+
+type FieldControl = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+
+function asControl(target: EventTarget): FieldControl | null {
+  return target instanceof HTMLInputElement || target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement
+    ? target
+    : null
+}
+
+/**
+ * A field that keeps its own error on the page. When the browser refuses to
+ * submit it, the message appears under it and is tied to the control, so it is
+ * announced once and can be read again; typing clears it. The toast every form
+ * shows stays as well.
+ */
+function ErrorField({
+  block,
+  children,
+  ...props
+}: ComponentProps<typeof Field> & { block: Extract<TemplateBlock, { fieldKey: string }> }): ReactElement {
+  const [message, setMessage] = useState<string | null>(null)
+  const errorId = `${block.id}-error`
+
+  function clear(event: FormEvent<HTMLElement>): void {
+    const control = asControl(event.target)
+
+    if (control && message !== null) {
+      control.removeAttribute("aria-invalid")
+      control.removeAttribute("aria-describedby")
+      setMessage(null)
+    }
+  }
+
+  return (
+    <Field
+      {...props}
+      onChangeCapture={clear}
+      onInputCapture={clear}
+      onInvalidCapture={(event: FormEvent<HTMLElement>): void => {
+        const control = asControl(event.target)
+
+        if (control) {
+          control.setAttribute("aria-invalid", "true")
+          control.setAttribute("aria-describedby", errorId)
+          setMessage(describeInvalidField(control))
+        }
+      }}
+    >
+      {children}
+      {message === null ? null : (
+        <p className="text-sm text-destructive" id={errorId} role="alert">
+          {message}
+        </p>
+      )}
+    </Field>
+  )
 }
 
 function PublicFormFieldLabel({
@@ -314,7 +375,11 @@ function PublicFormFieldLabel({
   return (
     <FieldLabel htmlFor={block.id}>
       {block.label}
-      {block.required && <span className="ml-1 text-destructive">*</span>}
+      {block.required && (
+        <span aria-hidden="true" className="ml-1 text-destructive">
+          *
+        </span>
+      )}
     </FieldLabel>
   )
 }
