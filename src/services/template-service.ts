@@ -1,16 +1,6 @@
 export type {
-  ChangeDocumentTemplateStatusInput,
-  CreateDocumentTemplateInput,
-  CreateGeneratedDocumentInput,
-  DuplicateDocumentTemplateInput,
-  GetDocumentTemplateInput,
-  ListDocumentTemplatesInput,
   ListTemplatePageInput,
-  PublishDocumentTemplateInput,
-  RecordDocumentRecentAccessInput,
   TemplatePage,
-  TemplateServiceDeps,
-  UpdateDocumentTemplateInput,
 } from "./templates/contracts"
 export { TemplateServiceError } from "./templates/errors"
 export {

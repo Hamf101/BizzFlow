@@ -10,7 +10,6 @@ export { DocumentPdfServiceError } from "./document-pdf/errors"
 /** Reads stored pictures' print copies, for documents that have them. */
 export type RenderGeneratedDocumentPdfOptions = { readImage?: PdfLibRenderContext["readImage"] }
 export type {
-  DocumentPdfSigner,
   RenderGeneratedDocumentPdfInput,
 } from "./document-pdf/types"
 

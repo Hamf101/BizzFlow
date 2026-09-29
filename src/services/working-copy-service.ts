@@ -5,11 +5,6 @@ export {
   readWorkingCopySince,
   signWorkingCopyPictures,
   WorkingCopyServiceError,
-  type DocumentRoomInput,
-  type OpenedWorkingCopyRoom,
-  type RoomInput,
-  type TemplateRoomInput,
-  type WorkingCopyMessage,
   type WorkingCopyServiceDeps,
 } from "./working-copies/working-copy-service"
 export {

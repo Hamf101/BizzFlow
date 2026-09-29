@@ -1,36 +1,8 @@
 export type {
-  ArchiveDocumentInput,
-  CompleteDocumentUploadInput,
-  CreateDocumentDownloadUrlInput,
   CreateDocumentReplacementUploadUrlInput,
   CreateDocumentUploadUrlInput,
-  CreateFolderInput,
   DocumentServiceDeps,
-  FolderLifecycleInput,
-  GetDocumentDetailInput,
-  ListDocumentCardsInput,
-  ListFolderDocumentsInput,
-  ListRecentDocumentsInput,
-  ListWorkspaceFoldersInput,
-  MoveDocumentInput,
-  MoveFolderInput,
-  RestoreDocumentInput,
-  TrashDocumentInput,
 } from "@/services/documents/contracts"
-export type {
-  ProcessDueResourcePurgesOptions,
-  ProcessDueResourcePurgesResult,
-  RequestDocumentPurgeInput,
-  RequestFolderPurgeInput,
-  ResourcePurgeRequestResult,
-} from "@/services/documents/purge-contracts"
-export type {
-  DocumentAccessLookupInput,
-  DocumentAccessRequirementInput,
-  FolderAccessLookupInput,
-  FolderAccessRequirementInput,
-  ResourceAccessOperation,
-} from "@/services/documents/access-service"
 export type { DocumentCard } from "@/services/documents/card-service"
 export { listDocumentCards } from "@/services/documents/card-service"
 export { DocumentServiceError } from "@/services/documents/errors"

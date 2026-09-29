@@ -1030,18 +1030,6 @@ export type DocumentRecentAccessRow = Record<string, unknown> & {
   last_opened_at: string
 }
 
-/** Recent document data returned to the Documents workspace. */
-export type RecentDocument = {
-  organizationId: string
-  userId: string
-  documentId: string
-  lastOpenedAt: string
-  title: string
-  description: string | null
-  folderId: string | null
-  sourceKind: DocumentSourceKind
-}
-
 /** Generated document metadata with its immutable guided-content snapshot. */
 export type GeneratedDocument = {
   id: string

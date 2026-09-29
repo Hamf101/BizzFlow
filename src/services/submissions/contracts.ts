@@ -202,12 +202,6 @@ export type SubmissionServiceDeps = {
   maxExportRows?: number
 }
 
-/** Full normalized values sent to mutation RPCs. */
-export type NormalizedSubmissionMutation = {
-  submission: Submission
-  values: SubmissionAnswers
-}
-
 /** Scalar values permitted in operation logs. */
 export type SubmissionLogValue =
   | string

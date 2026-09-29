@@ -169,7 +169,6 @@ export type InngestEnv = z.infer<typeof inngestEnvSchema>
 export type SentryEnv = z.infer<typeof sentryEnvSchema>
 export type UpstashRedisEnv = z.infer<typeof upstashRedisEnvSchema>
 export type SmsEnv = z.infer<typeof smsEnvSchema>
-export type PosthogEnv = z.infer<typeof posthogEnvSchema>
 
 function emptyStringToUndefined(value: unknown): unknown {
   return typeof value === "string" && value.trim().length === 0

@@ -1,15 +1,5 @@
 export type {
-  AcceptInviteInput,
-  CreateInviteInput,
-  CreateInviteResult,
-  CreateOrganizationInput,
-  CreateOrganizationRoleInput,
-  UpdateOrganizationRoleInput,
-  ArchiveOrganizationRoleInput,
-  UpdateMemberAccessInput,
-  OrganizationMutationDeps,
   OrganizationPeople,
-  RevokeInviteInput,
 } from "@/services/organizations/contracts"
 export { OrganizationServiceError } from "@/services/organizations/errors"
 export {
@@ -21,7 +11,6 @@ export {
 } from "@/services/organizations/invitation-service"
 export {
   getOnboardingProgress,
-  type OnboardingProgress,
 } from "@/services/organizations/onboarding-service"
 export {
   createOrganization,
@@ -40,7 +29,4 @@ export {
   updateProfile,
   updateNotificationPreferences,
   type MemberSettings,
-  type UpdateProfilePhoneInput,
-  type UpdateProfileInput,
-  type UpdateNotificationPreferencesInput,
 } from "@/services/organizations/membership-service"

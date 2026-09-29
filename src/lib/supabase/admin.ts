@@ -28,6 +28,7 @@ import type {
   SubmissionActivityEventRow,
   SubmissionCommentRow,
 } from "@/types/submission-review"
+import type { SavedViewRecord } from "@/types/saved-view"
 
 type DatabaseOrganizationRole =
   | "owner_admin"
@@ -488,12 +489,12 @@ export type AdminDatabase = {
         Partial<OrganizationRoleRow>
       >
       saved_list_views: DatabaseTable<
-        import("@/types/saved-view").SavedViewRecord,
+        SavedViewRecord,
         Pick<
-          import("@/types/saved-view").SavedViewRecord,
+          SavedViewRecord,
           "list" | "name" | "org_id" | "query" | "user_id"
         >,
-        Partial<Pick<import("@/types/saved-view").SavedViewRecord, "name">>
+        Partial<Pick<SavedViewRecord, "name">>
       >
       invites: DatabaseTable<
         InviteRow,
