@@ -10,6 +10,7 @@
     "build": "next build",
     "build:e2e": "node scripts/build-e2e.mjs",
     "start": "next start",
+    "clean": "node scripts/clean.mjs",
     "lint": "eslint",
     "test": "vitest run",
     "supabase:check": "node scripts/check-supabase-live.mjs",
