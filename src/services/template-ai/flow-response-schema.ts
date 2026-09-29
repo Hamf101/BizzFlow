@@ -39,9 +39,10 @@ export function createTemplateFlowResponseSchema(): FlowJsonSchema {
       description:
         "Clarification question when confirmation is needed; otherwise an empty string.",
     },
+    // Shape only: strict modes on several providers reject size limits, so
+    // Flow's own validation enforces how many operations a turn may carry.
     operations: {
       type: "array",
-      maxItems: 24,
       items: createClosedObjectSchema({
         type: {
           type: "string",

@@ -77,7 +77,9 @@ import type {
   TemplateFlowResult
 } from "@/types/template-flow"
 
-const FLOW_MAX_OUTPUT_TOKENS = 8_192
+// A sectioned intake form or agreement runs to dozens of operations.
+const FLOW_MAX_OUTPUT_TOKENS = 16_384
+const FLOW_MAX_OPERATIONS = 80
 const FLOW_MAX_UPSTREAM_CALLS = 2
 const MAX_FLOW_REPAIR_RESPONSE_CHARACTERS = 12_000
 const MAX_FLOW_HISTORY_MESSAGES = 20
@@ -239,7 +241,7 @@ const flowProviderResponseSchema = z
     assistantMessage: z.string().trim().min(1).max(2_000),
     needsConfirmation: z.boolean(),
     confirmationQuestion: z.string().trim().max(500),
-    operations: z.array(flowWireOperationSchema).max(24)
+    operations: z.array(flowWireOperationSchema).max(FLOW_MAX_OPERATIONS)
   })
   .strict()
 const flowStructuredResponseSchema = z
@@ -257,7 +259,7 @@ const flowStructuredResponseSchema = z
           })
           .strict()
       )
-      .max(24)
+      .max(FLOW_MAX_OPERATIONS)
   })
   .strict()
 

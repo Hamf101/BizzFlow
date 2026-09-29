@@ -7,6 +7,12 @@ export type AiModelReference = {
   model: string
 }
 
+/**
+ * How hard a model may think before answering. Each adapter maps it to its
+ * provider's own setting; which level a model gets is decided per model.
+ */
+export type AiEffort = "minimal" | "low" | "medium" | "high"
+
 /** JSON Schema subset accepted by structured-output provider adapters. */
 export type AiJsonSchema = Record<string, unknown>
 
