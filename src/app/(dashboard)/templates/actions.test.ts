@@ -4,6 +4,7 @@ import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
 import { getCurrentOrganizationContext } from "@/services/organization-service"
 import {
   archiveDocumentTemplate,
+  changeDocumentTemplates,
   createDocumentTemplate,
   duplicateDocumentTemplate,
   getDocumentTemplate,
@@ -18,6 +19,7 @@ import {
 
 import {
   archiveTemplateAction,
+  changeTemplatesAction,
   createTemplateAction,
   duplicateTemplateAction,
   publishTemplateAction,
@@ -58,6 +60,7 @@ vi.mock("@/services/template-service", async (importOriginal) => {
   return {
     ...actual,
     archiveDocumentTemplate: vi.fn(),
+    changeDocumentTemplates: vi.fn(),
     createDocumentTemplate: vi.fn(),
     duplicateDocumentTemplate: vi.fn(),
     getDocumentTemplate: vi.fn(),
@@ -314,5 +317,73 @@ function createTemplate(
       status === "published" ? "2026-07-18T12:00:00.000Z" : null,
     archivedAt: null,
     publishedRevision: status === "published" ? 1 : null,
+  }
+}
+
+describe("change several templates action", () => {
+  const result = { changed: [TEMPLATE_ID], created: [], failed: 0, previousCategories: {} }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(getAuthenticatedUser).mockResolvedValue({ id: ACTOR_USER_ID, email: "manager@example.com" })
+    vi.mocked(getCurrentOrganizationContext).mockResolvedValue(memberContext("manager"))
+    vi.mocked(changeDocumentTemplates).mockResolvedValue(result)
+  })
+
+  it("hands the selection to the service as the signed-in manager and returns what changed", async () => {
+    await expect(
+      changeTemplatesAction({ category: "  Legal ", change: "category", templateIds: [TEMPLATE_ID] })
+    ).resolves.toEqual(result)
+
+    expect(changeDocumentTemplates).toHaveBeenCalledWith({
+      actorUserId: ACTOR_USER_ID,
+      category: "  Legal ",
+      change: "category",
+      organizationId: ORGANIZATION_ID,
+      templateIds: [TEMPLATE_ID],
+    })
+    expect(revalidatePathMock).toHaveBeenCalledWith("/templates")
+  })
+
+  it("refuses staff before anything reaches the service", async () => {
+    vi.mocked(getCurrentOrganizationContext).mockResolvedValue(memberContext("staff"))
+
+    await expect(changeTemplatesAction({ change: "archive", templateIds: [TEMPLATE_ID] })).rejects.toThrow("You cannot manage document templates.")
+    expect(changeDocumentTemplates).not.toHaveBeenCalled()
+  })
+
+  it("refuses ids that are not ids, and a change it does not know", async () => {
+    await expect(changeTemplatesAction({ change: "archive", templateIds: ["../etc"] })).rejects.toThrow()
+    await expect(changeTemplatesAction({ change: "delete" as never, templateIds: [TEMPLATE_ID] })).rejects.toThrow()
+    expect(changeDocumentTemplates).not.toHaveBeenCalled()
+  })
+
+  it("sends a signed-out visitor to sign in", async () => {
+    vi.mocked(getAuthenticatedUser).mockRejectedValue(new AuthenticationError("Sign in to continue."))
+
+    await expect(changeTemplatesAction({ change: "archive", templateIds: [TEMPLATE_ID] })).rejects.toThrow("NEXT_REDIRECT:/login?next=%2Ftemplates")
+    expect(changeDocumentTemplates).not.toHaveBeenCalled()
+  })
+})
+
+function memberContext(role: "manager" | "staff"): Awaited<ReturnType<typeof getCurrentOrganizationContext>> {
+  return {
+    organization: {
+      id: ORGANIZATION_ID,
+      name: "Acme",
+      slug: "acme",
+      createdBy: ACTOR_USER_ID,
+      createdAt: "2026-07-18T12:00:00.000Z",
+      updatedAt: "2026-07-18T12:00:00.000Z",
+    },
+    membership: {
+      id: "membership-1",
+      organizationId: ORGANIZATION_ID,
+      userId: ACTOR_USER_ID,
+      role,
+      status: "active",
+      createdAt: "2026-07-18T12:00:00.000Z",
+      updatedAt: "2026-07-18T12:00:00.000Z",
+    },
   }
 }

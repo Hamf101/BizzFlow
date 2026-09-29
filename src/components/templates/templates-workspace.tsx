@@ -1,6 +1,6 @@
 import { Plus } from "lucide-react"
 import Link from "next/link"
-import type { CSSProperties, ReactElement } from "react"
+import type { CSSProperties, ReactElement, ReactNode } from "react"
 
 import { ListFilterChips } from "@/components/data/list-filter-chips"
 import { ListPagination } from "@/components/data/list-pagination"
@@ -16,6 +16,11 @@ import {
 } from "@/components/templates/template-list-view"
 import { TemplatePageThumbnail } from "@/components/templates/template-page-thumbnail"
 import { TemplateRowMenu } from "@/components/templates/template-row-menu"
+import {
+  SelectableTemplateCard,
+  TemplateSelection,
+  TemplateSelectionBar,
+} from "@/components/templates/template-selection"
 import { buttonVariants } from "@/components/ui/button"
 import { formatMediumDate } from "@/lib/date-format"
 import { getLastPage } from "@/lib/list-state"
@@ -136,22 +141,24 @@ export function TemplatesWorkspace({
           {filtered ? "No templates match this view." : "No templates yet."}
         </p>
       ) : (
-        <ul
-          aria-label="Templates"
-          className="grid grid-cols-2 gap-2.5 sm:grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] sm:gap-4 xl:grid-cols-[repeat(auto-fill,minmax(14rem,1fr))]"
-          data-slot="template-library"
-        >
-          {offersNew ? <NewTemplateTile /> : null}
-          {templates.map((template: DocumentTemplateCard, index: number) => (
-            <TemplateCard
-              canManage={canManage}
-              duplicateAction={duplicateAction}
-              index={index}
-              key={template.id}
-              template={template}
-            />
-          ))}
-        </ul>
+        <SelectableLibrary canManage={canManage} categories={categories} templates={templates}>
+          <ul
+            aria-label="Templates"
+            className="grid grid-cols-2 gap-2.5 sm:grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] sm:gap-4 xl:grid-cols-[repeat(auto-fill,minmax(14rem,1fr))]"
+            data-slot="template-library"
+          >
+            {offersNew ? <NewTemplateTile /> : null}
+            {templates.map((template: DocumentTemplateCard, index: number) => (
+              <TemplateCard
+                canManage={canManage}
+                duplicateAction={duplicateAction}
+                index={index}
+                key={template.id}
+                template={template}
+              />
+            ))}
+          </ul>
+        </SelectableLibrary>
       )}
       {templates.length === 0 && offersNew ? (
         // The tile invites the first template; this says why the rest is empty.
@@ -180,6 +187,37 @@ export function TemplatesWorkspace({
         total={total}
       />
     </section>
+  )
+}
+
+/**
+ * Lets people who manage templates select several cards, as Files does: the
+ * selection, its bar and each card's right-click menu. Everyone else gets the
+ * plain list.
+ */
+function SelectableLibrary({
+  canManage,
+  categories,
+  children,
+  templates,
+}: {
+  canManage: boolean
+  categories: string[]
+  children: ReactNode
+  templates: DocumentTemplateCard[]
+}): ReactElement {
+  if (!canManage) {
+    return <>{children}</>
+  }
+
+  return (
+    <TemplateSelection
+      categories={categories}
+      templates={templates.map((template) => ({ id: template.id, status: template.status }))}
+    >
+      {children}
+      <TemplateSelectionBar />
+    </TemplateSelection>
   )
 }
 
@@ -229,9 +267,10 @@ function TemplateCard({
     "line-clamp-2 min-h-[2.6em] min-w-0 flex-1 text-[11.5px] leading-[1.3] font-medium text-balance text-foreground sm:line-clamp-1 sm:min-h-0 sm:text-[13.5px] sm:leading-snug"
 
   return (
-    <li
+    <Card
+      canManage={canManage}
       className="relative grid grid-rows-[auto_1fr_auto] overflow-hidden rounded-[12px] border border-border bg-card/70 transition-[translate,box-shadow,border-color] duration-200 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-1 motion-safe:fill-mode-backwards motion-safe:[--tw-animation-delay:var(--card-delay)] sm:hover:border-primary/35 sm:hover:shadow-[0_10px_24px_rgba(37,35,41,0.1)] sm:motion-safe:hover:-translate-y-0.5"
-      data-slot="template-card"
+      id={template.id}
       style={riseDelay}
     >
       <div className="flex min-w-0 items-start gap-2 px-2.5 pt-2.5 pb-2 sm:px-3.5 sm:pt-3">
@@ -252,13 +291,13 @@ function TemplateCard({
             {template.title}
           </span>
         )}
-        {editable ? (
+        {canManage ? (
           // Above the card's own link, so the menu opens instead of the editor.
           // Phones keep it at the card's foot, so the title keeps the full width.
           <div className="relative z-10 -my-1 -mr-1.5 max-sm:absolute max-sm:right-1.5 max-sm:bottom-0 max-sm:m-0">
             <TemplateRowMenu
               duplicateAction={duplicateAction}
-              published={template.status === "published"}
+              status={template.status}
               templateId={template.id}
               title={template.title}
             />
@@ -303,6 +342,31 @@ function TemplateCard({
           {detail}
         </span>
       </div>
+    </Card>
+  )
+}
+
+// People who manage templates get a card that selects; everyone else a plain one.
+function Card({
+  canManage,
+  children,
+  className,
+  id,
+  style,
+}: {
+  canManage: boolean
+  children: ReactNode
+  className: string
+  id: string
+  style: CSSProperties
+}): ReactElement {
+  return canManage ? (
+    <SelectableTemplateCard as="li" className={className} itemId={id} style={style}>
+      {children}
+    </SelectableTemplateCard>
+  ) : (
+    <li className={className} data-slot="template-card" style={style}>
+      {children}
     </li>
   )
 }

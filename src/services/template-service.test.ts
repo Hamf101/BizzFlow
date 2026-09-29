@@ -6,6 +6,8 @@ import {
   toImageDataUrl
 } from "@/lib/image-header.test-support"
 import {
+  archiveDocumentTemplate,
+  changeDocumentTemplates,
   createDocumentTemplate,
   getDocumentTemplate,
   getDocumentTemplateVersion,
@@ -15,6 +17,8 @@ import {
   listDocumentTemplateVersions,
   publishDocumentTemplate,
   recordDocumentRecentAccess,
+  restoreDocumentTemplate,
+  setDocumentTemplateCategory,
   updateDocumentTemplate,
   duplicateDocumentTemplate
 } from "@/services/template-service"
@@ -1386,5 +1390,201 @@ describe("template service", () => {
         statusCode: 404
       })
     })
+  })
+})
+
+function templateIn(tables: FakeTables, id: string): FakeRow {
+  const row = tables.document_templates.find((entry: FakeRow): boolean => entry.id === id)
+
+  if (!row) {
+    throw new Error(`Expected template ${id} to exist.`)
+  }
+
+  return row
+}
+
+describe("restoring an archived template", () => {
+  const ask = (actorUserId: string, templateId: string) => ({ actorUserId, organizationId: ORG_ID, templateId })
+
+  it("brings a published template back as published, with the same revision", async () => {
+    const tables = createBaseTables()
+    const client = new FakeClient(tables)
+
+    await archiveDocumentTemplate(ask(MANAGER_ID, TEMPLATE_ID), { client: client as never })
+    expect(templateIn(tables, TEMPLATE_ID)).toMatchObject({ status: "archived", archived_by: MANAGER_ID })
+
+    const restored = await restoreDocumentTemplate(ask(MANAGER_ID, TEMPLATE_ID), { client: client as never })
+
+    expect(restored).toMatchObject({ status: "published", revision: 1, archivedAt: null, archivedBy: null })
+    expect(templateIn(tables, TEMPLATE_ID)).toMatchObject({ status: "published", archived_at: null, archived_by: null })
+  })
+
+  it("brings a template that was never published back as a draft", async () => {
+    const tables = createBaseTables()
+    const client = new FakeClient(tables)
+
+    await archiveDocumentTemplate(ask(MANAGER_ID, DRAFT_TEMPLATE_ID), { client: client as never })
+    const restored = await restoreDocumentTemplate(ask(MANAGER_ID, DRAFT_TEMPLATE_ID), { client: client as never })
+
+    expect(restored.status).toBe("draft")
+    expect(templateIn(tables, DRAFT_TEMPLATE_ID).published_at).toBeNull()
+  })
+
+  it("leaves a template that is not archived as it is", async () => {
+    const tables = createBaseTables()
+    const client = new FakeClient(tables)
+    const before = JSON.stringify(templateIn(tables, TEMPLATE_ID))
+
+    const restored = await restoreDocumentTemplate(ask(MANAGER_ID, TEMPLATE_ID), { client: client as never })
+
+    expect(restored.status).toBe("published")
+    expect(JSON.stringify(templateIn(tables, TEMPLATE_ID))).toBe(before)
+  })
+
+  it("refuses people who cannot manage templates, and templates of another organization", async () => {
+    const tables = createBaseTables()
+    const client = new FakeClient(tables)
+
+    await archiveDocumentTemplate(ask(MANAGER_ID, TEMPLATE_ID), { client: client as never })
+    await expect(restoreDocumentTemplate(ask(STAFF_ID, TEMPLATE_ID), { client: client as never })).rejects.toMatchObject({ statusCode: 403 })
+    expect(templateIn(tables, TEMPLATE_ID).status).toBe("archived")
+
+    await expect(
+      restoreDocumentTemplate({ ...ask(MANAGER_ID, TEMPLATE_ID), organizationId: OTHER_ORG_ID }, { client: client as never })
+    ).rejects.toMatchObject({ statusCode: 403 })
+  })
+})
+
+describe("changing a template's category", () => {
+  const ask = (category: string | null, actorUserId = MANAGER_ID, templateId = TEMPLATE_ID) => ({
+    actorUserId,
+    category,
+    organizationId: ORG_ID,
+    templateId,
+  })
+
+  it("sets the category, reports the one it replaced, and leaves the revision alone", async () => {
+    const tables = createBaseTables()
+    templateIn(tables, TEMPLATE_ID).category = "HR"
+    const client = new FakeClient(tables)
+
+    const result = await setDocumentTemplateCategory(ask("  Legal   forms "), { client: client as never })
+
+    expect(result).toEqual({ previousCategory: "HR", templateId: TEMPLATE_ID })
+    expect(templateIn(tables, TEMPLATE_ID)).toMatchObject({ category: "Legal forms", revision: 1, updated_by: MANAGER_ID })
+  })
+
+  it("clears the category when given none", async () => {
+    const tables = createBaseTables()
+    templateIn(tables, TEMPLATE_ID).category = "HR"
+    const client = new FakeClient(tables)
+
+    await setDocumentTemplateCategory(ask(null), { client: client as never })
+
+    expect(templateIn(tables, TEMPLATE_ID).category).toBeNull()
+  })
+
+  it("refuses an archived template and people who cannot manage templates", async () => {
+    const tables = createBaseTables()
+    const client = new FakeClient(tables)
+
+    await expect(setDocumentTemplateCategory(ask("Legal", STAFF_ID), { client: client as never })).rejects.toMatchObject({ statusCode: 403 })
+    await archiveDocumentTemplate({ actorUserId: MANAGER_ID, organizationId: ORG_ID, templateId: TEMPLATE_ID }, { client: client as never })
+    await expect(setDocumentTemplateCategory(ask("Legal"), { client: client as never })).rejects.toMatchObject({ statusCode: 409 })
+    expect(templateIn(tables, TEMPLATE_ID).category).toBeNull()
+  })
+})
+
+describe("changing several templates at once", () => {
+  const ask = (change: "archive" | "restore" | "duplicate" | "category", templateIds: string[], extra: { category?: string | null } = {}) => ({
+    actorUserId: MANAGER_ID,
+    change,
+    organizationId: ORG_ID,
+    templateIds,
+    ...extra,
+  })
+
+  it("archives every template it can and names the ones that changed", async () => {
+    const tables = createBaseTables()
+    const client = new FakeClient(tables)
+
+    const result = await changeDocumentTemplates(ask("archive", [TEMPLATE_ID, DRAFT_TEMPLATE_ID]), { client: client as never })
+
+    expect(result).toMatchObject({ changed: [TEMPLATE_ID, DRAFT_TEMPLATE_ID], failed: 0 })
+    expect(tables.document_templates.map((row: FakeRow) => row.status)).toEqual(["archived", "archived"])
+  })
+
+  it("undoes an archive by restoring exactly those templates", async () => {
+    const tables = createBaseTables()
+    const client = new FakeClient(tables)
+
+    const archived = await changeDocumentTemplates(ask("archive", [TEMPLATE_ID, DRAFT_TEMPLATE_ID]), { client: client as never })
+    await changeDocumentTemplates(ask("restore", archived.changed), { client: client as never })
+
+    expect(tables.document_templates.map((row: FakeRow) => row.status)).toEqual(["published", "draft"])
+  })
+
+  it("counts one that cannot change and still changes the rest", async () => {
+    const tables = createBaseTables()
+    const client = new FakeClient(tables)
+
+    const result = await changeDocumentTemplates(
+      ask("archive", [TEMPLATE_ID, "30000000-0000-4000-8000-0000000000ff", DRAFT_TEMPLATE_ID]),
+      { client: client as never }
+    )
+
+    expect(result).toMatchObject({ changed: [TEMPLATE_ID, DRAFT_TEMPLATE_ID], failed: 1 })
+  })
+
+  it("lets a person without templates:manage change nothing", async () => {
+    const tables = createBaseTables()
+    const client = new FakeClient(tables)
+
+    await expect(
+      changeDocumentTemplates({ ...ask("archive", [TEMPLATE_ID]), actorUserId: STAFF_ID }, { client: client as never })
+    ).rejects.toMatchObject({ statusCode: 403 })
+    expect(templateIn(tables, TEMPLATE_ID).status).toBe("published")
+  })
+
+  it("duplicates each template into its own draft and returns the new ids", async () => {
+    const tables = createBaseTables()
+    const client = new FakeClient(tables)
+    const ids = ["30000000-0000-4000-8000-0000000000a1", "30000000-0000-4000-8000-0000000000a2"]
+    let next = 0
+
+    const result = await changeDocumentTemplates(ask("duplicate", [TEMPLATE_ID, DRAFT_TEMPLATE_ID]), {
+      client: client as never,
+      createId: (): string => ids[next++] as string,
+    })
+
+    expect(result).toMatchObject({ changed: [TEMPLATE_ID, DRAFT_TEMPLATE_ID], created: ids, failed: 0 })
+    expect(tables.document_templates.filter((row: FakeRow) => ids.includes(row.id as string)).map((row: FakeRow) => row.status)).toEqual(["draft", "draft"])
+  })
+
+  it("sets one category on all of them and returns what each had, so it can be put back", async () => {
+    const tables = createBaseTables()
+    templateIn(tables, TEMPLATE_ID).category = "HR"
+    const client = new FakeClient(tables)
+
+    const result = await changeDocumentTemplates(ask("category", [TEMPLATE_ID, DRAFT_TEMPLATE_ID], { category: "Legal" }), { client: client as never })
+
+    expect(result).toMatchObject({ changed: [TEMPLATE_ID, DRAFT_TEMPLATE_ID], failed: 0, previousCategories: { [TEMPLATE_ID]: "HR", [DRAFT_TEMPLATE_ID]: null } })
+    expect(tables.document_templates.map((row: FakeRow) => row.category)).toEqual(["Legal", "Legal"])
+
+    await Promise.all(
+      Object.entries(result.previousCategories).map(([templateId, category]) =>
+        setDocumentTemplateCategory({ actorUserId: MANAGER_ID, category, organizationId: ORG_ID, templateId }, { client: client as never })
+      )
+    )
+    expect(tables.document_templates.map((row: FakeRow) => row.category)).toEqual(["HR", null])
+  })
+
+  it("refuses an empty selection and one too large", async () => {
+    const client = new FakeClient(createBaseTables())
+
+    await expect(changeDocumentTemplates(ask("archive", []), { client: client as never })).rejects.toMatchObject({ statusCode: 400 })
+    await expect(
+      changeDocumentTemplates(ask("archive", Array.from({ length: 201 }, (_, index) => `30000000-0000-4000-8000-${String(index).padStart(12, "0")}`)), { client: client as never })
+    ).rejects.toMatchObject({ statusCode: 400 })
   })
 })

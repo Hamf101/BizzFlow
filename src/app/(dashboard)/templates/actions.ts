@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
+import { z } from "zod"
 
 import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
 import {
@@ -13,11 +14,14 @@ import { canPerformOrganizationAction } from "@/lib/permissions"
 import { getCurrentOrganizationContext } from "@/services/organization-service"
 import {
   archiveDocumentTemplate,
+  changeDocumentTemplates,
   createDocumentTemplate,
   duplicateDocumentTemplate,
   getDocumentTemplate,
   getDocumentTemplateVersion,
   publishDocumentTemplate,
+  MAX_BULK_TEMPLATES,
+  type TemplateBulkResult,
   TemplateServiceError,
   updateDocumentTemplate,
 } from "@/services/template-service"
@@ -348,6 +352,47 @@ export async function duplicateTemplateAction(formData: FormData): Promise<void>
       "template_duplicated"
     )
   )
+}
+
+const templateChangeSchema = z.object({
+  category: z.string().nullable().optional(),
+  change: z.enum(["archive", "restore", "duplicate", "category"]),
+  templateIds: z.array(z.string().uuid()).min(1).max(MAX_BULK_TEMPLATES),
+})
+
+/** One change for several of the library's selected templates. */
+export type TemplateChange = z.infer<typeof templateChangeSchema>
+
+/**
+ * Changes several templates at once for the library's selection. The service
+ * runs each through its single-change checks and reports what changed, so the
+ * page can say so and offer Undo.
+ *
+ * @param input - The change and the selected templates.
+ * @returns The templates that changed, any copies made, the categories they had, and how many failed.
+ */
+export async function changeTemplatesAction(input: TemplateChange): Promise<TemplateBulkResult> {
+  const change = templateChangeSchema.parse(input)
+  let actionContext: TemplateActionContext
+
+  try {
+    actionContext = await loadTemplateActionContext()
+  } catch (error: unknown) {
+    if (error instanceof AuthenticationError) {
+      redirect(buildRedirect("/login", { next: "/templates" }))
+    }
+
+    throw error
+  }
+
+  const result = await changeDocumentTemplates({
+    ...change,
+    actorUserId: actionContext.actorUserId,
+    organizationId: actionContext.context.organization.id,
+  })
+
+  revalidatePath("/templates")
+  return result
 }
 
 async function persistTemplateDraftOrConfirmUnchanged(

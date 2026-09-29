@@ -20,6 +20,7 @@ import type {
   TemplateServiceDeps,
   UpdateDocumentTemplateInput,
   DuplicateDocumentTemplateInput,
+  SetDocumentTemplateCategoryInput,
 } from "./contracts"
 import { TemplateServiceError } from "./errors"
 import { evaluateTemplateQuality } from "./template-quality-service"
@@ -659,6 +660,123 @@ export async function archiveDocumentTemplate(
       }
 
       return mapDocumentTemplate(data as DocumentTemplateRow)
+    }
+  )
+}
+
+/**
+ * Brings an archived template back: published if it was ever published, else a
+ * draft. Nothing else about it changes, so Undo of an archive is exact.
+ *
+ * @param input - Actor, organization, and template identifiers.
+ * @param deps - Optional injected dependencies for tests.
+ * @returns The restored template; one that is not archived is returned unchanged.
+ * @throws TemplateServiceError when permission or persistence fails.
+ */
+export async function restoreDocumentTemplate(
+  input: ChangeDocumentTemplateStatusInput,
+  deps: TemplateServiceDeps = {}
+): Promise<DocumentTemplate> {
+  return runTemplateOperation(
+    "restore_document_template",
+    input,
+    async (): Promise<DocumentTemplate> => {
+      const client = getClient(deps)
+
+      await requirePermission(
+        client,
+        input.organizationId,
+        input.actorUserId,
+        "templates:manage",
+        "You cannot manage document templates."
+      )
+      const existing = await getTemplateById(client, input.organizationId, input.templateId)
+
+      if (existing.status !== "archived") {
+        return existing
+      }
+
+      const { data, error } = await client
+        .from("document_templates")
+        .update({
+          status: existing.publishedAt ? "published" : "draft",
+          archived_by: null,
+          archived_at: null,
+          updated_by: input.actorUserId,
+        })
+        .eq("id", input.templateId)
+        .eq("org_id", input.organizationId)
+        .eq("revision", existing.revision)
+        .eq("status", "archived")
+        .select(TEMPLATE_COLUMNS)
+        .maybeSingle()
+
+      if (error) {
+        throw createDatabaseError(error, "Unable to restore document template.")
+      }
+
+      if (!data) {
+        throw new TemplateServiceError("Document template changed before it could be restored.", 409)
+      }
+
+      return mapDocumentTemplate(data as DocumentTemplateRow)
+    }
+  )
+}
+
+/**
+ * Files a template under a category, or under none. Unlike an edit in the
+ * editor this leaves the revision alone: the category is not part of what a
+ * version publishes, so nothing needs publishing again.
+ *
+ * @param input - Actor, organization, template, and the new category (null clears it).
+ * @param deps - Optional injected dependencies for tests.
+ * @returns The template and the category it had, so the change can be put back.
+ * @throws TemplateServiceError when permission or persistence fails, or the template is archived.
+ */
+export async function setDocumentTemplateCategory(
+  input: SetDocumentTemplateCategoryInput,
+  deps: TemplateServiceDeps = {}
+): Promise<{ previousCategory: string | null; templateId: string }> {
+  return runTemplateOperation(
+    "set_document_template_category",
+    { actorUserId: input.actorUserId, organizationId: input.organizationId, templateId: input.templateId },
+    async () => {
+      const client = getClient(deps)
+
+      await requirePermission(
+        client,
+        input.organizationId,
+        input.actorUserId,
+        "templates:manage",
+        "You cannot manage document templates."
+      )
+      const category = normalizeCategory(input.category)
+      const existing = await getTemplateById(client, input.organizationId, input.templateId)
+
+      if (existing.status === "archived") {
+        throw new TemplateServiceError("Archived templates cannot be edited.", 409)
+      }
+
+      const { data, error } = await client
+        .from("document_templates")
+        .update({ category, updated_by: input.actorUserId })
+        .eq("id", input.templateId)
+        .eq("org_id", input.organizationId)
+        .eq("revision", existing.revision)
+        .eq("status", existing.status)
+        .select("id")
+        .maybeSingle()
+
+      if (error) {
+        throw createDatabaseError(error, "Unable to change the template's category.")
+      }
+
+      if (!data) {
+        throw new TemplateServiceError("Document template changed before its category could be set.", 409)
+      }
+
+      return { previousCategory: existing.category, templateId: input.templateId }
     }
   )
 }

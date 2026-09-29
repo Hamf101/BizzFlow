@@ -151,7 +151,7 @@ describe("TemplatesWorkspace", () => {
     ])
   })
 
-  it("opens drafts and published templates in the editor and leaves archived ones read-only", () => {
+  it("opens drafts and published templates in the editor and leaves archived ones read-only, with a way to restore them", () => {
     renderWorkspace()
 
     expect(
@@ -166,7 +166,7 @@ describe("TemplatesWorkspace", () => {
       [...document.querySelectorAll('button[aria-label^="Actions for"]')].map(
         (button: Element) => button.getAttribute("aria-label")
       )
-    ).toEqual(["Actions for Vendor intake", "Actions for Lease renewal"])
+    ).toEqual(["Actions for Vendor intake", "Actions for Lease renewal", "Actions for Old checklist"])
   })
 
   it("starts a new template from the front of the library, and nowhere else", () => {
