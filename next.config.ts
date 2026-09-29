@@ -40,6 +40,9 @@ const securityHeaders: Array<{ key: string; value: string }> = [
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  // Yjs warns "already imported" when the server bundles it once for route
+  // handlers and again for rendering; a shared copy keeps its class checks true.
+  serverExternalPackages: ["yjs"],
   experimental: {
     // Embedded logos/images are validated and capped by the template schema.
     serverActions: { bodySizeLimit: "10mb" },
