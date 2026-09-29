@@ -292,6 +292,71 @@ type AdminTaskReminderRow = Record<string, unknown> & {
   updated_at: string
 }
 
+/** A room where a working copy is edited together; bytes arrive as PostgREST writes bytea, `\\x` and hex. */
+export type WorkingCopyRoomRow = Record<string, unknown> & {
+  id: string
+  org_id: string
+  template_id: string | null
+  document_id: string | null
+  revision: number
+  state: string
+  state_revision: number
+  schema_version: number
+  saved_hash: string
+  created_at: string
+  updated_at: string
+}
+
+/** One update a room kept, in the order it was kept. */
+export type WorkingCopyUpdateRow = Record<string, unknown> & {
+  org_id: string
+  room_id: string
+  revision: number
+  update: string
+  actor_user_id: string | null
+  created_at: string
+}
+
+type WorkingCopyRoomInsert = Pick<WorkingCopyRoomRow, "id" | "org_id" | "saved_hash" | "state"> &
+  Partial<Pick<WorkingCopyRoomRow, "document_id" | "template_id">>
+
+type WorkingCopyCheckpointRow = Record<string, unknown> & {
+  id: string
+  org_id: string
+  room_id: string
+  revision: number
+  label: string
+  value: unknown
+  value_hash: string
+  schema_version: number
+  restored_from: string | null
+  created_by: string | null
+  created_at: string
+}
+
+type WorkingCopyCommentRow = Record<string, unknown> & {
+  id: string
+  org_id: string
+  room_id: string
+  thread_id: string
+  block_id: string | null
+  quote: string | null
+  body: string
+  author_id: string | null
+  created_at: string
+  resolved_at: string | null
+  resolved_by: string | null
+}
+
+type WorkingCopyChatRow = Record<string, unknown> & {
+  id: string
+  org_id: string
+  room_id: string
+  body: string
+  author_id: string | null
+  created_at: string
+}
+
 export type AdminPublicFormLinkRow = Record<string, unknown> & {
   id: string
   org_id: string
@@ -487,6 +552,15 @@ export type AdminDatabase = {
         Partial<DocumentTemplateRow>
       >
       document_template_versions: DatabaseTable<DocumentTemplateVersionRow, DocumentTemplateVersionRow, never>
+      working_copy_rooms: DatabaseTable<WorkingCopyRoomRow, WorkingCopyRoomInsert, never>
+      working_copy_updates: DatabaseTable<WorkingCopyUpdateRow, never, never>
+      working_copy_checkpoints: DatabaseTable<WorkingCopyCheckpointRow, Omit<WorkingCopyCheckpointRow, "created_at">, never>
+      working_copy_comments: DatabaseTable<
+        WorkingCopyCommentRow,
+        Omit<WorkingCopyCommentRow, "created_at" | "resolved_at" | "resolved_by">,
+        Pick<WorkingCopyCommentRow, "resolved_at" | "resolved_by">
+      >
+      working_copy_messages: DatabaseTable<WorkingCopyChatRow, Omit<WorkingCopyChatRow, "created_at">, never>
       template_flow_messages: DatabaseTable<
         TemplateFlowMessageRow,
         TemplateFlowMessageInsert,
@@ -557,6 +631,27 @@ export type AdminDatabase = {
     }
     Views: Record<string, never>
     Functions: {
+      append_working_copy_update: {
+        Args: {
+          target_org_id: string
+          target_room_id: string
+          expected_revision: number
+          target_update: string
+          target_actor_user_id: string
+          saved_working_copy?: Record<string, unknown> | null
+          saved_hash?: string | null
+        }
+        Returns: number | null
+      }
+      compact_working_copy_room: {
+        Args: {
+          target_org_id: string
+          target_room_id: string
+          target_state: string
+          target_state_revision: number
+        }
+        Returns: boolean
+      }
       accept_organization_invite: {
         Args: {
           target_invite_id: string

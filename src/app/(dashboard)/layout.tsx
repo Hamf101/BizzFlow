@@ -14,6 +14,7 @@ import { DashboardSidebar } from "@/components/navigation/dashboard-sidebar"
 import { WorkspaceSearch } from "@/components/search/workspace-search"
 import { ActionFeedback } from "@/components/ui/action-feedback"
 import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
+import { getFallbackDisplayName } from "@/lib/display-name"
 import { captureUnexpectedError } from "@/lib/observability"
 import { createClient } from "@/lib/supabase/server"
 import {
@@ -59,28 +60,6 @@ async function DashboardUserScope(): Promise<null> {
   return null
 }
 
-/**
- * Produces the best available name when a member has not completed their profile.
- *
- * @param email - Authenticated email address, when Supabase supplied one.
- * @returns A readable account label.
- */
-function getFallbackDisplayName(email: string | null): string {
-  if (!email) {
-    return "BizFlow member"
-  }
-
-  const localPart = email.split("@", 1)[0] ?? ""
-  const words = localPart.split(/[._-]+/).filter(Boolean)
-
-  if (words.length === 0) {
-    return email
-  }
-
-  return words
-    .map((word) => `${word.charAt(0).toUpperCase()}${word.slice(1)}`)
-    .join(" ")
-}
 
 /**
  * Loads account details used by the persistent dashboard sidebar.

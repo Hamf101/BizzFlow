@@ -84,10 +84,11 @@ allowed_cidrs_v6 = ["::/0"]
 # [db.ssl_enforcement]
 # enabled = true
 
-# Disabled: nothing in src/ opens a realtime channel. Turning it off removes a
-# container from every `supabase start`, which CI pays for on each run.
+# Working copy rooms: editors join a private channel to hear each other's
+# changes and presence. Its policies on realtime.messages live in the
+# migrations, which need Realtime's own tables to exist first.
 [realtime]
-enabled = false
+enabled = true
 # Bind realtime via either IPv4 or IPv6. (default: IPv4)
 # ip_version = "IPv6"
 # The maximum length in bytes of HTTP request headers. (default: 4096)

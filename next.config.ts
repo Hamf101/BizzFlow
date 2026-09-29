@@ -16,6 +16,7 @@ const contentSecurityPolicy = buildContentSecurityPolicy({
   posthogHost: process.env.NEXT_PUBLIC_POSTHOG_HOST,
   posthogKey: process.env.NEXT_PUBLIC_POSTHOG_KEY,
   r2Endpoint: process.env.CLOUDFLARE_R2_ENDPOINT,
+  supabaseUrl: process.env.SUPABASE_URL,
 })
 
 const securityHeaders: Array<{ key: string; value: string }> = [

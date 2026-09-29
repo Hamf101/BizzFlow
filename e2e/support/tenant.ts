@@ -152,7 +152,7 @@ async function insertOrganization(
  * @param label - Run suffix, kept in the address so leaked rows are traceable.
  * @returns The seeded user's credentials and id.
  */
-async function insertMember(
+export async function insertMember(
   client: SupabaseClient,
   organizationId: string,
   role: OrganizationRole,

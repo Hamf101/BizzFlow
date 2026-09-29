@@ -10,6 +10,7 @@ import {
   OrganizationServiceError,
 } from "@/services/organization-service"
 import { TemplateFlowServiceError } from "@/services/template-flow-service"
+import { WorkingCopyServiceError } from "@/services/working-copy-service"
 
 /**
  * Signs the member in and spends one Flow turn from both of their buckets,
@@ -47,7 +48,8 @@ export async function startFlowTurn(): Promise<{ organizationId: string; userId:
  */
 export function createTemplateRouteErrorResponse(
   error: unknown,
-  routeName: string
+  routeName: string,
+  failure = "Unable to complete the Flow request."
 ): Response {
   if (error instanceof RateLimitError) {
     return createRateLimitResponse(error, "template_route_rejected", routeName)
@@ -66,7 +68,8 @@ export function createTemplateRouteErrorResponse(
 
   if (
     error instanceof TemplateFlowServiceError ||
-    error instanceof OrganizationServiceError
+    error instanceof OrganizationServiceError ||
+    error instanceof WorkingCopyServiceError
   ) {
     console.warn("template_route_rejected", {
       reason: error.message,
@@ -84,8 +87,5 @@ export function createTemplateRouteErrorResponse(
     routeName,
   })
   captureUnexpectedError(error, { routeName })
-  return NextResponse.json(
-    { error: "Unable to complete the Flow request." },
-    { status: 500 }
-  )
+  return NextResponse.json({ error: failure }, { status: 500 })
 }

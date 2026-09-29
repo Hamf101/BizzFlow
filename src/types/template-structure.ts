@@ -1275,6 +1275,18 @@ function createOrderConflict(dependentBlockIds: readonly string[]): Extract<Temp
   }
 }
 
+/**
+ * Lets go of structure that no longer fits its blocks, as when two people's
+ * edits meet: a section, group or rule on a block that is gone, a group that
+ * now crosses a section, a condition on a field that moved above its source.
+ *
+ * @param content - Content whose blocks are settled.
+ * @returns The content with only the structure its blocks still support.
+ */
+export function repairTemplateStructure(content: TemplateContentV3): TemplateContentV3 {
+  return reconcileTemplateStructure(content, content.blocks, getIndexedSections(content), getIndexedFieldGroups(content))
+}
+
 function reconcileTemplateStructure(
   content: TemplateContentV3,
   inputBlocks: readonly TemplateBlock[],

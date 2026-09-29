@@ -39,6 +39,7 @@ it("keeps a trial run's answers when the author edits or previews and comes back
       <TemplateEditor
         archiveAction={vi.fn()}
         initialFlowMessages={[]}
+        me={{ id: "20000000-0000-4000-8000-000000000001", name: "Test editor" }}
         loadVersionAction={vi.fn()}
         publishAction={vi.fn()}
         saveDraftAction={vi.fn(async () => ({ ok: true as const, version: "1" }))}
@@ -72,6 +73,7 @@ it("asks Flow with only the title, description and content its request accepts",
       <TemplateEditor
         archiveAction={vi.fn()}
         initialFlowMessages={[]}
+        me={{ id: "20000000-0000-4000-8000-000000000001", name: "Test editor" }}
         loadVersionAction={vi.fn()}
         publishAction={vi.fn()}
         saveDraftAction={vi.fn(async () => ({ ok: true as const, version: "1" }))}
@@ -85,7 +87,8 @@ it("asks Flow with only the title, description and content its request accepts",
   )
   await act(async () => prompt?.click())
 
-  const [, request] = fetchFlow.mock.calls[0] as unknown as [string, { body: string }]
+  // The room opens with its own request; this is the one to Flow.
+  const [, request] = (fetchFlow.mock.calls as unknown as Array<[string, { body: string }]>).find(([url]) => url.includes("/flow"))!
   expect(Object.keys(JSON.parse(request.body).draft).sort()).toEqual(["content", "description", "title"])
   vi.unstubAllGlobals()
 })

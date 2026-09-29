@@ -38,8 +38,7 @@ test("a touch tablet held upright gets the phone's canvas, not a shrunken page",
   await waitForHydration(dock.getByRole("button").first())
 
   // The dock rests at the bottom and the page is not scaled down to fit.
-  const box = await dock.boundingBox()
-  expect(box && box.y > (page.viewportSize()?.height ?? 0) / 2).toBe(true)
+  await expect.poll(async () => (await dock.boundingBox())?.y ?? 0).toBeGreaterThan((page.viewportSize()?.height ?? 0) / 2)
   await expect(page.locator('[data-slot="editor-zoom"]')).toHaveCount(0)
   await context.close()
 })

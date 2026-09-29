@@ -60,14 +60,18 @@ type EditorFrameProps<Mode extends string> = {
   onModeChange?: (mode: Mode) => void
   onRedo: () => void
   onRetrySave?: () => void
+  /** What ⌘S or Ctrl+S keeps, rather than the browser saving the page. */
+  onSave?: () => void
   onTitleChange: (title: string) => void
   onUndo: () => void
   /** The page's width in printed points, which Fit zooms to. */
   pageWidthPoints: number
   panel?: (narrow: boolean) => ReactNode
+  /** Who else is here; on a phone they sit beside the modes. */
+  people?: (narrow: boolean) => ReactNode
   primary?: ReactNode
-  /** How saving stands; "blocked" waits on a fix, "unsaved-local" on Save. */
-  saveStatus: AutosaveStatus | "blocked" | "unsaved-local" | null
+  /** How saving stands; "blocked" waits on a fix, "unsaved-local" on Save, "stopped" once editing here ended. */
+  saveStatus: AutosaveStatus | "blocked" | "stopped" | "unsaved-local" | null
   title: string
   titleEditable: boolean
   /** The formatting toolbar, floating at the top of the canvas on a laptop. */
@@ -97,10 +101,12 @@ export function EditorFrame<Mode extends string>({
   onModeChange,
   onRedo,
   onRetrySave,
+  onSave,
   onTitleChange,
   onUndo,
   pageWidthPoints,
   panel,
+  people,
   primary,
   saveStatus,
   title,
@@ -162,7 +168,12 @@ export function EditorFrame<Mode extends string>({
         return
       }
 
-      if (key === "z" || key === "y") {
+      if (key === "s") {
+        if (onSave) {
+          event.preventDefault()
+          onSave()
+        }
+      } else if (key === "z" || key === "y") {
         const inField = (event.target as HTMLElement | null)?.closest("input, textarea, select")
 
         if (inField) {
@@ -187,7 +198,7 @@ export function EditorFrame<Mode extends string>({
 
     document.addEventListener("keydown", handleKey)
     return () => document.removeEventListener("keydown", handleKey)
-  }, [onRedo, onUndo, zoom])
+  }, [onRedo, onSave, onUndo, zoom])
 
   return (
     <div className="flex h-dvh flex-col bg-canvas text-foreground" data-slot="editor">
@@ -219,6 +230,7 @@ export function EditorFrame<Mode extends string>({
         {!narrow && modes && mode && onModeChange ? (
           <Segmented className="absolute left-1/2 -translate-x-1/2" label="Mode" onChange={onModeChange} options={modes} value={mode} />
         ) : null}
+        {narrow && modes && mode && onModeChange ? null : people?.(narrow)}
         {extra}
         <Button
           aria-label="Undo"
@@ -248,8 +260,9 @@ export function EditorFrame<Mode extends string>({
         {primary}
       </header>
       {narrow && modes && mode && onModeChange ? (
-        <div className="flex justify-center pb-2">
+        <div className="flex items-center justify-center gap-2 pb-2">
           <Segmented label="Mode" onChange={onModeChange} options={modes} value={mode} />
+          {people?.(true)}
         </div>
       ) : null}
       {/* An open panel takes its own column on a laptop, so it never covers the
@@ -472,7 +485,7 @@ function SaveStatus({
   status,
 }: {
   onRetry?: () => void
-  status: AutosaveStatus | "blocked" | "unsaved-local" | null
+  status: AutosaveStatus | "blocked" | "stopped" | "unsaved-local" | null
 }): ReactElement | null {
   if (!status) {
     return null
@@ -486,6 +499,7 @@ function SaveStatus({
     offline: "Offline",
     saved: "Saved",
     saving: "Saving…",
+    stopped: "Editing stopped",
     unsaved: "Saving…",
   }[status]
 
@@ -500,11 +514,11 @@ function SaveStatus({
         aria-hidden="true"
         className={cn(
           "size-1.5 rounded-full",
-          status === "saved" ? "bg-primary/60" : status === "conflict" || status === "error" ? "bg-destructive" : "bg-muted-foreground/50"
+          status === "saved" ? "bg-primary/60" : status === "conflict" || status === "error" || status === "stopped" ? "bg-destructive" : "bg-muted-foreground/50"
         )}
       />
       {text}
-      {status === "conflict" ? (
+      {status === "conflict" || status === "stopped" ? (
         <button className="underline underline-offset-2 hover:text-foreground" onClick={() => window.location.reload()} type="button">
           Reload
         </button>

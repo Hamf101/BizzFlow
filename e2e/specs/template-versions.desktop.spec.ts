@@ -4,7 +4,7 @@ import { expect, test, uniqueName } from "../support/fixtures"
 import { waitForHydration } from "../support/hydration"
 import { seedTemplate } from "../support/seed"
 
-test("a published template's edits wait for Save, reach staff on Update, and an old version comes back as an edit", async ({
+test("a published template's edits are kept as they're made, reach staff on Update, and an old version comes back as an edit", async ({
   admin,
   pageAs,
   tenant,
@@ -23,31 +23,24 @@ test("a published template's edits wait for Save, reach staff on Update, and an 
     )
   const update = page.getByRole("button", { exact: true, name: "Update" })
   const save = page.getByRole("button", { exact: true, name: "Save" })
+  const opened = page.waitForResponse((response) => response.url().endsWith(`/api/templates/${template.id}/room`))
 
   await page.goto(`/templates/${template.id}/edit`)
   await waitForHydration(update)
+  await opened
   await expect(update).toBeDisabled()
   await expect(save).toBeHidden()
 
-  // An edit stays on this device until Save, and a closed tab doesn't lose it.
+  // An edit is kept as it is made, with nothing to save by hand; staff still get what was published.
   await page.getByText("Pay within 30 days.").click({ clickCount: 3 })
   await page.keyboard.type("Pay within 14 days.")
-  await expect
-    .poll(() => page.evaluate((id) => Object.keys(localStorage).some((key) => key.endsWith(`template:${id}`)), template.id))
-    .toBe(true)
-  page.once("dialog", (dialog) => void dialog.accept())
-  await page.reload()
-  await waitForHydration(update)
-  await page.getByRole("button", { exact: true, name: "Restore" }).click()
-  await expect(page.getByText("Pay within 14 days.")).toBeVisible()
-  await text("document_templates").toEqual(["Pay within 30 days."])
-
-  // Save, where Update was, keeps it in the working copy; staff still get what was published.
-  await save.click()
   await text("document_templates").toEqual(["Pay within 14 days."])
   await text("published_document_templates").toEqual(["Pay within 30 days."])
   await expect(save).toBeHidden()
-  await expect(update).toBeFocused()
+  await expect(update).toBeEnabled()
+  await page.reload()
+  await waitForHydration(update)
+  await expect(page.getByText("Pay within 14 days.")).toBeVisible()
 
   // A document started now copies the published version.
   await page.goto("/documents/new")
@@ -82,7 +75,6 @@ test("a published template's edits wait for Save, reach staff on Update, and an 
   await expect(versions.first()).toContainText("Live")
   await versions.nth(1).getByRole("button", { name: "Restore" }).click()
   await expect(page.getByText("Pay within 30 days.")).toBeVisible()
-  await page.keyboard.press("ControlOrMeta+s")
   await text("document_templates").toEqual(["Pay within 30 days."])
   await text("published_document_templates").toEqual(["Pay within 14 days."])
 

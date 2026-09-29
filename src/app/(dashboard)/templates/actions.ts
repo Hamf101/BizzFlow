@@ -23,6 +23,7 @@ import {
 } from "@/services/template-service"
 import type { SaveResult } from "@/components/editor/use-autosave"
 import { withTemplateImageUrls } from "@/services/template-image-service"
+import { publishTemplateRoom } from "@/services/working-copy-service"
 import {
   createEmptyDocumentContent,
   parseTemplateContent,
@@ -181,16 +182,29 @@ export async function publishTemplateAction(formData: FormData): Promise<void> {
 
   try {
     const actionContext = await loadTemplateActionContext()
-    const savedTemplate = await persistTemplateDraftOrConfirmUnchanged(
-      formData,
-      actionContext
-    )
-    const template = await publishDocumentTemplate({
-      actorUserId: actionContext.actorUserId,
-      organizationId: actionContext.context.organization.id,
-      templateId: savedTemplate.id,
-      expectedRevision: savedTemplate.revision,
-    })
+    const roomId = getFormString(formData, "roomId")
+    // Edited live, the template already holds what was typed: publish it as the room shows it.
+    const savedTemplate = roomId
+      ? await getDocumentTemplate({
+          actorUserId: actionContext.actorUserId,
+          organizationId: actionContext.context.organization.id,
+          templateId: requireTemplateId(templateId),
+        })
+      : await persistTemplateDraftOrConfirmUnchanged(formData, actionContext)
+    const template = roomId
+      ? await publishTemplateRoom({
+          actorUserId: actionContext.actorUserId,
+          organizationId: actionContext.context.organization.id,
+          roomId,
+          roomRevision: parseRoomRevision(getFormString(formData, "roomRevision")),
+          templateId: savedTemplate.id,
+        })
+      : await publishDocumentTemplate({
+          actorUserId: actionContext.actorUserId,
+          organizationId: actionContext.context.organization.id,
+          templateId: savedTemplate.id,
+          expectedRevision: savedTemplate.revision,
+        })
 
     revalidateTemplatePaths(template.id)
     console.info("template_publish_action_completed", {
@@ -430,6 +444,17 @@ function parseExpectedRevision(value: string): number {
   const revision = Number(value)
 
   if (!Number.isInteger(revision) || revision < 1) {
+    throw new TemplateActionError("Template revision is invalid.")
+  }
+
+  return revision
+}
+
+// A room starts at revision 0, before anyone's change is kept.
+function parseRoomRevision(value: string): number {
+  const revision = Number(value)
+
+  if (!Number.isSafeInteger(revision) || revision < 0) {
     throw new TemplateActionError("Template revision is invalid.")
   }
 

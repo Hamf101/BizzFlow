@@ -1,6 +1,6 @@
 "use client"
 
-import { Archive, FilePenLine, Files, History, Link2, ListChecks, MoreHorizontal, Palette } from "lucide-react"
+import { Archive, FilePenLine, Files, History, Link2, ListChecks, MessageSquare, MoreHorizontal, Palette } from "lucide-react"
 import Link from "next/link"
 import { type ReactElement, useEffect, useMemo, useRef, useState, useTransition } from "react"
 
@@ -15,13 +15,23 @@ import { EditorFrame, type EditorLayoutStore, EditorNotice, EditorSidePanel } fr
 import { PageSetupPanel } from "@/components/editor/page-setup-panel"
 import { type SaveResult, useAutosave } from "@/components/editor/use-autosave"
 import { useEditorController } from "@/components/editor/use-editor-controller"
-import { useEditorHistory } from "@/components/editor/use-editor-history"
+import {
+  preloadPanels,
+  RoomCheckpoints,
+  RoomComments,
+  RoomLayer,
+  RoomPeople,
+  TemplateBlockEditor,
+  TemplateFlowPanel,
+} from "@/components/editor/lazy-panels"
+import { useLiveRoom } from "@/components/editor/use-live-room"
+import { useRoomPlace } from "@/components/editor/use-room-place"
 import { useLocalRecovery } from "@/components/editor/use-local-recovery"
-import { TemplateBlockEditor } from "@/components/templates/template-block-editor"
+import { useMissingPictureAddresses, usePictureAddresses } from "@/components/editor/use-picture-addresses"
+import { useWorkingCopyHistory } from "@/components/editor/use-working-copy-history"
 import { TemplateBrandingPanel } from "@/components/templates/template-branding-panel"
 import { TemplateChecksPanel } from "@/components/templates/template-checks-panel"
 import type { TemplateEditorState } from "@/components/templates/template-editor-state"
-import { TemplateFlowPanel } from "@/components/templates/template-flow-panel"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -40,6 +50,7 @@ import {
 import { Field, FieldLabel } from "@/components/ui/field"
 import { SuggestInput } from "@/components/ui/suggest-input"
 import { bizflowToast } from "@/components/ui/toaster"
+import type { WorkingCopy } from "@/lib/collaboration/working-copy-doc"
 import { createTemplateFlowDraftFingerprint } from "@/services/template-flow-proposal-state"
 import { resolvePageGeometry } from "@/services/templates/template-render-plan"
 import {
@@ -72,6 +83,8 @@ type TemplateEditorProps = {
   editorLayout?: EditorLayoutStore
   initialFlowMessages: TemplateFlowMessage[]
   loadVersionAction: (templateId: string, revision: number) => Promise<TemplateVersionResult>
+  /** Who is editing, as the others in the room see them. */
+  me: Readonly<{ id: string; name: string }>
   publishAction: (formData: FormData) => Promise<void>
   saveDraftAction: (input: TemplateDraftInput) => Promise<SaveResult>
   template: DocumentTemplate
@@ -94,6 +107,7 @@ export function TemplateEditor({
   editorLayout,
   initialFlowMessages,
   loadVersionAction,
+  me,
   publishAction,
   saveDraftAction,
   template,
@@ -109,7 +123,29 @@ export function TemplateEditor({
     }),
     [template]
   )
-  const history = useEditorHistory<TemplateEditorState>(initial)
+  const pictures = usePictureAddresses(initial.content as TemplateContentV3)
+  const livePath = `/api/templates/${template.id}/room`
+  const fromCopy = (copy: WorkingCopy): TemplateEditorState => ({
+    category: copy.category ?? "",
+    content: pictures.attach(copy.content),
+    description: copy.description ?? "",
+    title: copy.title,
+  })
+  const live = useLiveRoom<TemplateEditorState>({
+    enabled: template.status !== "archived",
+    fromCopy,
+    me,
+    onRefused: (message) => bizflowToast.error(message),
+    path: livePath,
+    toCopy: (next) => {
+      pictures.remember(next.content as TemplateContentV3)
+      return { category: next.category, content: next.content as TemplateContentV3, description: next.description, title: next.title }
+    },
+  })
+  const history = useWorkingCopyHistory(initial, live.session)
+  const room = live.session && live.roomId ? { path: livePath, roomId: live.roomId, seen: live.notesSeen } : null
+  const liveMode = history.liveStatus !== null
+  const editable = history.liveStatus !== "stopped"
   const state = history.state
   const content = state.content as TemplateContentV3
   const [mode, setMode] = useState<Mode>("edit")
@@ -141,13 +177,21 @@ export function TemplateEditor({
     content,
     undo: history.undo,
   })
+  useEffect(preloadPanels, [])
+
+  // Where this person is, for the others in the room.
+  useRoomPlace(controller, live.setPlace)
+
+  // Pictures someone else added arrive without an address this page can load.
+  useMissingPictureAddresses({ content, path: livePath, pictures, roomId: live.roomId, session: live.session })
+
   const candidate = useMemo(
     () => (proposal ? upgradeV2TemplateContentToV3(proposal.candidateDraft.content) : content),
     [content, proposal]
   )
   const preview = useEditorController({ change: () => undefined, content: candidate, undo: () => undefined })
   const autosave = useAutosave<TemplateEditorState>({
-    enabled: isDraft && validationErrors === 0,
+    enabled: !live.session && live.unavailable && isDraft && validationErrors === 0,
     initialVersion: String(template.revision),
     save: async (value, version) => {
       const result = await saveDraftAction(toDraftInput(template.id, Number(version), value))
@@ -161,14 +205,20 @@ export function TemplateEditor({
     },
     value: state,
   })
-  const recovery = useLocalRecovery({ key: `template:${template.id}`, saved: savedState, value: state })
+  const recovery = useLocalRecovery({
+    key: `template:${template.id}`,
+    // Live, what the room has kept is saved; anything waiting stays on this device too.
+    saved: !liveMode ? savedState : history.liveStatus === "saved" ? state : initial,
+    value: state,
+  })
   const settingsBlock = content.blocks.find((block) => block.id === controller.settingsBlockId) ?? null
   const settingsIndex = settingsBlock ? content.blocks.indexOf(settingsBlock) : -1
-  const unsaved = JSON.stringify(state) !== JSON.stringify(savedState)
+  // Live, every change is kept as it is made, so there is nothing to save by hand.
+  const unsaved = !liveMode && JSON.stringify(state) !== JSON.stringify(savedState)
   // On a published template the button saves first, then publishes.
   const needsSave = !isDraft && unsaved
-  // Changes staff don't have yet: saved past what was published, or not saved yet.
-  const unpublished = template.revision !== template.publishedRevision || JSON.stringify(state) !== JSON.stringify(initial)
+  // Changes staff don't have yet: saved past what was published, or made since this opened.
+  const unpublished = template.revision !== template.publishedRevision || stableJson(state) !== stableJson(initial)
   const geometry = resolvePageGeometry(content.layout)
 
   function submit(action: (formData: FormData) => Promise<void>): void {
@@ -204,6 +254,24 @@ export function TemplateEditor({
       return
     }
 
+    const session = live.session
+
+    if (session && live.roomId) {
+      // Everything made here is kept, and everything others made is here, before it goes out.
+      if (!(await session.flush())) {
+        bizflowToast.error("Your latest changes haven't been saved yet. Try again in a moment.")
+        return
+      }
+
+      await session.catchUp()
+      const formData = new FormData()
+      formData.set("templateId", template.id)
+      formData.set("roomId", live.roomId)
+      formData.set("roomRevision", String(session.revision()))
+      startTransition(() => publishAction(formData))
+      return
+    }
+
     // What isn't saved yet saves first, so Update publishes what is on screen.
     if (await autosave.flush()) {
       submit(publishAction)
@@ -211,8 +279,14 @@ export function TemplateEditor({
   }
 
   // A published template's changes save to its working copy only when asked.
-  // Until then they stay on this device, and a lost connection retries.
+  // Until then they stay on this device, and a lost connection retries. Live,
+  // every change is kept as it is made, so saving keeps a checkpoint instead.
   async function save(): Promise<void> {
+    if (live.session) {
+      await live.checkpoint("Checkpoint")
+      return
+    }
+
     if (validationErrors > 0) {
       bizflowToast.error(`Fix ${validationErrors} ${validationErrors === 1 ? "check" : "checks"} before you save.`)
       return
@@ -220,19 +294,6 @@ export function TemplateEditor({
 
     await autosave.flush()
   }
-
-  // ⌘S or Ctrl+S saves here, rather than asking the browser to save the page.
-  useEffect(() => {
-    function onKeyDown(event: KeyboardEvent): void {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
-        event.preventDefault()
-        void save()
-      }
-    }
-
-    window.addEventListener("keydown", onKeyDown)
-    return () => window.removeEventListener("keydown", onKeyDown)
-  })
 
   // An old version comes back as an edit: Undo takes it back, Save keeps it,
   // and staff get it only on Update.
@@ -324,19 +385,52 @@ export function TemplateEditor({
       label: "Checks",
       wide: true,
     },
-    ...(versions.length > 0
+    ...(room
       ? [
           {
             content: (close: () => void) => (
-              <TemplateVersions
-                live={template.publishedRevision}
-                onRestore={async (revision) => {
-                  if (await restore(revision)) {
-                    close()
-                  }
+              <RoomComments
+                blocks={content.blocks}
+                onShow={(blockId: string) => {
+                  changeMode("edit")
+                  controller.select(blockId)
+                  close()
                 }}
-                versions={versions}
+                others={live.others}
+                room={room}
+                target={controller.selectedBlockId ?? controller.activeBlockId}
               />
+            ),
+            icon: MessageSquare,
+            id: "comments",
+            label: "Comments",
+            wide: true,
+          },
+        ]
+      : []),
+    ...(room || versions.length > 0
+      ? [
+          {
+            content: (close: () => void) => (
+              <div className="grid gap-4">
+                {room ? (
+                  <RoomCheckpoints onRestore={(copy: WorkingCopy) => history.set(() => fromCopy(copy))} onSave={live.checkpoint} room={room} />
+                ) : null}
+                {versions.length > 0 ? (
+                  <section className="grid gap-1">
+                    {room ? <h3 className="px-1 pt-1 text-[12.5px] font-medium text-muted-foreground">Published</h3> : null}
+                    <TemplateVersions
+                      live={template.publishedRevision}
+                      onRestore={async (revision) => {
+                        if (await restore(revision)) {
+                          close()
+                        }
+                      }}
+                      versions={versions}
+                    />
+                  </section>
+                ) : null}
+              </div>
             ),
             icon: History,
             id: "versions",
@@ -439,10 +533,12 @@ export function TemplateEditor({
         modes={MODES}
         onModeChange={changeMode}
         onRedo={history.redo}
-        onRetrySave={() => void autosave.flush()}
+        onRetrySave={() => void (live.session ? live.session.flush() : autosave.flush())}
+        onSave={() => void save()}
         onTitleChange={(title) => history.set((current) => ({ ...current, title }), "title")}
         onUndo={history.undo}
         pageWidthPoints={geometry.widthPoints * geometry.scale}
+        people={(narrow) => (room ? <RoomPeople me={me} narrow={narrow} others={live.others} room={room} /> : null)}
         panel={(narrow) => (
           <>
             <EditorSidePanel
@@ -502,7 +598,9 @@ export function TemplateEditor({
           </Button>
         }
         saveStatus={
-          validationErrors > 0
+          history.liveStatus
+            ? history.liveStatus
+            : validationErrors > 0
             ? "blocked"
             : isDraft || ["conflict", "error", "offline", "saving"].includes(autosave.status)
               ? autosave.status
@@ -513,7 +611,7 @@ export function TemplateEditor({
                   : null
         }
         title={state.title}
-        titleEditable={mode === "edit" && !proposal}
+        titleEditable={editable && mode === "edit" && !proposal}
         toolbar={mode === "edit" && !proposal ? <FormatBar allowFiles controller={controller} narrow={false} /> : undefined}
       >
         {({ narrow, zoom }) => (
@@ -521,15 +619,16 @@ export function TemplateEditor({
             allowFiles
             answers={mode === "test" ? testAnswers : undefined}
             controller={proposal ? preview : controller}
-            designable={mode === "edit" && !proposal}
+            designable={editable && mode === "edit" && !proposal}
             documentTitle={proposal ? proposal.candidateDraft.title : state.title}
             fields={proposal || mode === "preview" ? "read" : mode === "test" ? "fill" : "design"}
             narrow={narrow}
             onAnswerChange={(fieldKey, value) =>
               setTestAnswers((answers) => applyVisibleTemplateFieldValue(content, answers, fieldKey, value))
             }
+            overlay={room && !proposal ? <RoomLayer narrow={narrow} others={live.others} revision={content} room={room} /> : null}
             surface={proposal || mode === "preview" ? "paper" : "screen"}
-            textEditable={mode === "edit" && !proposal}
+            textEditable={editable && mode === "edit" && !proposal}
             zoom={zoom}
           />
         )}
@@ -610,4 +709,13 @@ function toDraftInput(templateId: string, revision: number, state: TemplateEdito
     templateId,
     title: state.title,
   }
+}
+
+// The same state reads the same whatever order its keys were written in.
+function stableJson(value: unknown): string {
+  return JSON.stringify(value, (_key, entry: unknown) =>
+    entry && typeof entry === "object" && !Array.isArray(entry)
+      ? Object.fromEntries(Object.entries(entry).sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0)))
+      : entry
+  )
 }

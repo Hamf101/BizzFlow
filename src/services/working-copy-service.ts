@@ -1,0 +1,27 @@
+export {
+  applyWorkingCopyUpdate,
+  openWorkingCopyRoom,
+  publishTemplateRoom,
+  readWorkingCopySince,
+  signWorkingCopyPictures,
+  WorkingCopyServiceError,
+  type DocumentRoomInput,
+  type OpenedWorkingCopyRoom,
+  type RoomInput,
+  type TemplateRoomInput,
+  type WorkingCopyMessage,
+  type WorkingCopyServiceDeps,
+} from "./working-copies/working-copy-service"
+export {
+  addWorkingCopyComment,
+  listWorkingCopyCheckpoints,
+  listWorkingCopyComments,
+  listWorkingCopyMessages,
+  resolveWorkingCopyThread,
+  restoreWorkingCopyCheckpoint,
+  saveWorkingCopyCheckpoint,
+  sendWorkingCopyMessage,
+  type WorkingCopyChatMessage,
+  type WorkingCopyCheckpoint,
+  type WorkingCopyComment,
+} from "./working-copies/notes-service"

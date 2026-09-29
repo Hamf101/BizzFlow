@@ -11,7 +11,7 @@ import { Underline } from "@tiptap/extension-underline"
 import type { Node as ProseNode } from "@tiptap/pm/model"
 import type { EditorState } from "@tiptap/pm/state"
 import { EditorContent, useEditor } from "@tiptap/react"
-import { type CSSProperties, type ReactElement, useEffect, useRef, useSyncExternalStore } from "react"
+import { type CSSProperties, type ReactElement, useEffect, useLayoutEffect, useRef, useSyncExternalStore } from "react"
 
 import { PLACEHOLDER_CLASS, type TextCaret } from "@/components/editor/editable-text"
 import { DocumentFontStyles, documentFontFamily } from "@/components/templates/document-font-styles"
@@ -182,8 +182,10 @@ export function RichLine({
     handlers.current = { onGone, onKeyDown }
   })
 
-  // A change from elsewhere, such as an undo, rewrites the line.
-  useEffect(() => {
+  // A change from elsewhere, such as an undo or someone else typing in this
+  // line, rewrites it before the next key lands, so that key is never made on
+  // words that are gone; the caret keeps its place among the words.
+  useLayoutEffect(() => {
     if (!editor || editor.isDestroyed) {
       return
     }
@@ -191,7 +193,9 @@ export function RichLine({
     const shown = readLine(editor.state.doc)
 
     if (shown.text !== value || JSON.stringify(shown.runs) !== JSON.stringify(fitRuns(value, runs))) {
+      const { anchor, head } = editor.state.selection
       editor.commands.setContent(lineContent(value, runs), { emitUpdate: false })
+      editor.commands.setTextSelection({ from: keepPlace(shown.text, value, anchor), to: keepPlace(shown.text, value, head) })
     }
   }, [editor, runs, value])
 
@@ -281,6 +285,29 @@ export function lineContent(text: string, runs?: readonly TextRun[]): JSONConten
     })),
     type: "doc",
   }
+}
+
+// Where a position in the words lands once they changed: the same place when
+// the change was after it, moved along when before it, and after the change
+// when the change covered it.
+function keepPlace(before: string, after: string, position: number): number {
+  let prefix = 0
+  let suffix = 0
+
+  while (prefix < before.length && prefix < after.length && before[prefix] === after[prefix]) prefix += 1
+  while (
+    suffix < before.length - prefix &&
+    suffix < after.length - prefix &&
+    before[before.length - 1 - suffix] === after[after.length - 1 - suffix]
+  ) {
+    suffix += 1
+  }
+
+  if (position <= prefix) {
+    return position
+  }
+
+  return position >= before.length - suffix ? position + after.length - before.length : after.length - suffix
 }
 
 function subscribeNever(): () => void {

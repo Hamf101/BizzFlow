@@ -20,6 +20,8 @@ export type RateLimitBucket =
   | "document_open"
   | "public_form_submission"
   | "public_form_file_upload"
+  | "working_copy_write"
+  | "working_copy_read"
 
 /**
  * How a bucket behaves when a configured limiter cannot be reached.
@@ -61,6 +63,10 @@ const BUCKET_CONFIGS: Readonly<Record<RateLimitBucket, BucketConfig>> = {
   document_open: { limit: 120, windowSeconds: 60, failMode: "open" },
   public_form_submission: { limit: 5, windowSeconds: 60, failMode: "open" },
   public_form_file_upload: { limit: 10, windowSeconds: 60, failMode: "open" },
+  // An editor sends a change every few hundred milliseconds while someone types,
+  // and reads each change the others make.
+  working_copy_write: { limit: 300, windowSeconds: 60, failMode: "open" },
+  working_copy_read: { limit: 900, windowSeconds: 60, failMode: "open" },
 }
 
 /** The subset of an Upstash ratelimit decision the check depends on. */

@@ -20,6 +20,14 @@ describe("buildContentSecurityPolicy", () => {
     expect(policy).not.toContain("upgrade-insecure-requests")
   })
 
+  it("lets editors reach the configured Supabase's live channel", () => {
+    const local = buildContentSecurityPolicy({ isProduction: true, supabaseUrl: "http://127.0.0.1:54321" })
+    const hosted = buildContentSecurityPolicy({ isProduction: true, supabaseUrl: "https://project.example.com" })
+
+    expect(local).toMatch(/connect-src [^;]* ws:\/\/127\.0\.0\.1:54321(;| )/)
+    expect(hosted).toMatch(/connect-src [^;]* wss:\/\/project\.example\.com(;| )/)
+  })
+
   it("adds production transport hardening only for an HTTPS app", () => {
     const policy = buildContentSecurityPolicy({
       appUrl: "https://app.bizflow.example",
@@ -47,10 +55,12 @@ describe("buildContentSecurityPolicy", () => {
       posthogHost: "https://analytics.example; script-src *",
       posthogKey: "phc_test",
       r2Endpoint: "data:text/plain,unsafe",
+      supabaseUrl: "javascript:alert(1)",
     })
 
     expect(policy).not.toContain("analytics.example")
     expect(policy).not.toContain("data:text/plain")
+    expect(policy).not.toContain("javascript:")
     expect(policy.match(/script-src/g)).toHaveLength(1)
   })
 })

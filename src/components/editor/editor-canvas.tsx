@@ -5,6 +5,7 @@ import {
   type CSSProperties,
   Fragment,
   type ReactElement,
+  type ReactNode,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -96,6 +97,8 @@ export type EditorCanvasProps = Readonly<{
   fields: "design" | "fill" | "read"
   narrow: boolean
   onAnswerChange?: (fieldKey: string, value: unknown) => void
+  /** Drawn over the pages at their shown size, such as where others are. */
+  overlay?: ReactNode
   surface: DocumentSurface
   textEditable: boolean
   zoom: number
@@ -118,6 +121,7 @@ export function EditorCanvas({
   fields,
   narrow,
   onAnswerChange = () => undefined,
+  overlay,
   surface,
   textEditable,
   zoom,
@@ -707,6 +711,7 @@ export function EditorCanvas({
         {textEditable ? (
           <AddPageButton className="mt-6" onClick={() => controller.addPage(content.blocks.at(-1)?.id ?? null)} />
         ) : null}
+        {overlay}
         {slash ? (
           <SlashMenu
             activeIndex={slash.active}
@@ -843,6 +848,7 @@ export function EditorCanvas({
           ) : null}
         </div>
       </div>
+      {overlay}
       {slash ? (
         <SlashMenu
           activeIndex={slash.active}
