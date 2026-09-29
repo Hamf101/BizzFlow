@@ -7,9 +7,8 @@ import {
   type DateFormat
 } from "@/lib/date-format"
 import type { DocumentLifecycleState } from "@/types/document"
+import { IMAGE_DATA_URL_PATTERN, MAX_IMAGE_DATA_URL_LENGTH } from "@/types/template-limits"
 
-/** Maximum encoded length accepted for an embedded PNG or JPEG image. */
-export const MAX_IMAGE_DATA_URL_LENGTH = 2_800_000
 
 /** Maximum serialized size accepted for one complete guided document layout. */
 export const MAX_TEMPLATE_CONTENT_JSON_LENGTH = 8_000_000
@@ -17,9 +16,6 @@ export const MAX_TEMPLATE_CONTENT_JSON_LENGTH = 8_000_000
 /** Maximum number of ordered blocks accepted in one canonical document. */
 export const MAX_TEMPLATE_BLOCK_COUNT = 250
 
-/** Canonical data URI pattern accepted for embedded PNG and JPEG images. */
-export const IMAGE_DATA_URL_PATTERN =
-  /^data:image\/(?:png|jpeg);base64,[A-Za-z0-9+/]+={0,2}$/
 const FIELD_KEY_PATTERN = /^[A-Za-z][A-Za-z0-9_-]{0,79}$/
 const HEX_COLOR_PATTERN = /^#[0-9A-Fa-f]{6}$/
 

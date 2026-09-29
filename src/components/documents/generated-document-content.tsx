@@ -35,14 +35,13 @@ import {
   type TemplateRenderPlan,
   type TemplateRenderSection
 } from "@/services/templates/template-render-plan"
-import {
-  IMAGE_DATA_URL_PATTERN,
-  MAX_IMAGE_DATA_URL_LENGTH,
-  type TemplateBlock,
-  type TemplateBranding,
-  type TemplateContent,
-  type TemplateLayout
+import type {
+  TemplateBlock,
+  TemplateBranding,
+  TemplateContent,
+  TemplateLayout
 } from "@/types/template"
+import { IMAGE_DATA_URL_PATTERN, MAX_IMAGE_DATA_URL_LENGTH } from "@/types/template-limits"
 import {
   applyVisibleTemplateFieldValue,
   pruneHiddenTemplateFieldValues
