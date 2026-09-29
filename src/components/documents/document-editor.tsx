@@ -12,7 +12,6 @@ import { type DockTool, EditorDock } from "@/components/editor/editor-dock"
 import { FormatBar } from "@/components/editor/format-bar"
 import { FlowWindow } from "@/components/flow/flow-window"
 import { EditorFrame, type EditorLayoutStore, EditorNotice, EditorSidePanel } from "@/components/editor/editor-frame"
-import { PageSetupPanel } from "@/components/editor/page-setup-panel"
 import { type SaveResult, useAutosave } from "@/components/editor/use-autosave"
 import { useEditorController } from "@/components/editor/use-editor-controller"
 import {
@@ -23,13 +22,14 @@ import {
   RoomPeople,
   TemplateBlockEditor,
   TemplateFlowPanel,
+  PageSetupPanel,
+  TemplateBrandingPanel,
 } from "@/components/editor/lazy-panels"
 import { useLiveRoom } from "@/components/editor/use-live-room"
 import { useRoomPlace } from "@/components/editor/use-room-place"
 import { useLocalRecovery } from "@/components/editor/use-local-recovery"
 import { useMissingPictureAddresses, usePictureAddresses } from "@/components/editor/use-picture-addresses"
 import { useWorkingCopyHistory } from "@/components/editor/use-working-copy-history"
-import { TemplateBrandingPanel } from "@/components/templates/template-branding-panel"
 import type { FlowStarter } from "@/components/templates/template-flow-panel"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"

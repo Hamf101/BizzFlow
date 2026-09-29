@@ -5,10 +5,16 @@ import dynamic from "next/dynamic"
 const loadBlockSettings = () => import("@/components/templates/template-block-editor")
 const loadFlowPanel = () => import("@/components/templates/template-flow-panel")
 const loadRoom = () => import("@/components/editor/room-ui")
+const loadPageSetup = () => import("@/components/editor/page-setup-panel")
+const loadBranding = () => import("@/components/templates/template-branding-panel")
+const loadChecks = () => import("@/components/templates/template-checks-panel")
 
 // Panels no page needs to draw at first; they arrive while the page is idle.
 export const TemplateBlockEditor = dynamic(() => loadBlockSettings().then((panel) => panel.TemplateBlockEditor))
 export const TemplateFlowPanel = dynamic(() => loadFlowPanel().then((panel) => panel.TemplateFlowPanel))
+export const PageSetupPanel = dynamic(() => loadPageSetup().then((panel) => panel.PageSetupPanel))
+export const TemplateBrandingPanel = dynamic(() => loadBranding().then((panel) => panel.TemplateBrandingPanel))
+export const TemplateChecksPanel = dynamic(() => loadChecks().then((panel) => panel.TemplateChecksPanel))
 // What editing together shows, once a room is open.
 export const RoomCheckpoints = dynamic(() => loadRoom().then((room) => room.RoomCheckpoints))
 export const RoomComments = dynamic(() => loadRoom().then((room) => room.RoomComments))
@@ -25,6 +31,9 @@ export function preloadPanels(): () => void {
     void loadBlockSettings()
     void loadFlowPanel()
     void loadRoom()
+    void loadPageSetup()
+    void loadBranding()
+    void loadChecks()
   }
 
   if (typeof window.requestIdleCallback === "function") {
