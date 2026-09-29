@@ -21,6 +21,7 @@ import {
   type SubmissionPage,
 } from "@/services/submission-service"
 import type { OrganizationMember } from "@/types/organization"
+import type { Metadata } from "next"
 
 type SubmissionsSearchParams = Promise<RawSearchParams>
 
@@ -31,6 +32,8 @@ type SubmissionsSearchParams = Promise<RawSearchParams>
  * @param props - View state in search parameters.
  * @returns The Submissions workspace, or a user-safe access or load failure.
  */
+export const metadata: Metadata = { title: "Submissions" }
+
 export default async function SubmissionsPage({
   searchParams,
 }: {

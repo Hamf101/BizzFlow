@@ -62,6 +62,7 @@ import {
   TaskReminderStatusBadge,
   TaskStatusBadge,
 } from "@/components/tasks/task-presentation"
+import type { Metadata } from "next"
 
 type TaskDetailParams = Promise<{ taskId: string }>
 
@@ -87,6 +88,8 @@ const TASK_TRANSITION_PRESENTATIONS: Record<
  * @param props - Task path identifier.
  * @returns Task workspace with lifecycle, assignment, and reminder controls.
  */
+export const metadata: Metadata = { title: "Task" }
+
 export default async function TaskDetailPage({
   params,
 }: {

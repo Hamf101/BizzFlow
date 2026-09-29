@@ -42,6 +42,9 @@ import {
   updateOrganizationRoleAction,
   updateProfileAction,
 } from "./actions"
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Settings" }
 
 export default async function SettingsPage(): Promise<ReactElement> {
   const user = await loadAuthenticatedPageUser("/settings")

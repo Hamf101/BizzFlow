@@ -17,12 +17,15 @@ import { cn } from "@/lib/utils"
 import { listDocumentTemplateCategories } from "@/services/template-service"
 
 import { createTemplateAction } from "../actions"
+import type { Metadata } from "next"
 
 /**
  * Collects initial template metadata before creating a draft revision.
  *
  * @returns A manager-only create form.
  */
+export const metadata: Metadata = { title: "New template" }
+
 export default async function NewTemplatePage(): Promise<ReactElement> {
   const user = await loadAuthenticatedPageUser("/templates/new")
   const contextResult = await loadPageOrganizationContext({

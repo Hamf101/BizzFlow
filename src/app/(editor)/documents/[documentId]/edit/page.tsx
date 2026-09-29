@@ -27,6 +27,7 @@ import {
   saveDocumentContentAction,
   sendGeneratedDocumentAction,
 } from "./actions"
+import type { Metadata } from "next"
 
 type GeneratedDocumentEditorParams = Promise<{
   documentId: string
@@ -39,6 +40,8 @@ type GeneratedDocumentEditorParams = Promise<{
  * @param props - Route document identifier.
  * @returns The document editor, or a short way back when it cannot open.
  */
+export const metadata: Metadata = { title: "Document editor" }
+
 export default async function GeneratedDocumentEditorPage({
   params,
 }: {

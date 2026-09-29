@@ -21,6 +21,7 @@ import {
   createPublicFormLinkAction,
   disablePublicFormLinkAction,
 } from "../public-link-actions"
+import type { Metadata } from "next"
 
 type TemplateLinksParams = Promise<{
   templateId: string
@@ -32,6 +33,8 @@ type TemplateLinksParams = Promise<{
  * @param props - Route template identifier.
  * @returns The template's public links, or a user-safe load failure.
  */
+export const metadata: Metadata = { title: "Public links" }
+
 export default async function TemplateLinksPage({
   params,
 }: {

@@ -22,6 +22,7 @@ import {
 } from "@/services/template-service"
 
 import { duplicateTemplateAction } from "./actions"
+import type { Metadata } from "next"
 
 type TemplatesSearchParams = Promise<RawSearchParams>
 
@@ -32,6 +33,8 @@ type TemplatesSearchParams = Promise<RawSearchParams>
  * @param props - View state in search parameters.
  * @returns The Templates workspace, or a user-safe access or load failure.
  */
+export const metadata: Metadata = { title: "Templates" }
+
 export default async function TemplatesPage({
   searchParams,
 }: {

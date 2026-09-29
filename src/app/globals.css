@@ -346,6 +346,18 @@
 }
 
 /*
+ * Forced colours (Windows High Contrast and the like) remove box-shadows, and
+ * most controls draw their focus ring with one. An outline survives, in the
+ * system's own highlight colour, so every focused control keeps a visible mark.
+ */
+@media (forced-colors: active) {
+  :focus-visible {
+    outline: 2px solid Highlight !important;
+    outline-offset: 2px !important;
+  }
+}
+
+/*
  * Words an author coloured or highlighted were coloured for paper. On a dark
  * screen they stay legible: a colour lightens, and a highlight becomes a tint
  * behind the screen's own ink. Paper, and the PDF, keep them exactly.

@@ -2,7 +2,7 @@
 
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog"
 import { XIcon } from "lucide-react"
-import type { ComponentProps, ReactElement } from "react"
+import type { ComponentProps, KeyboardEvent, ReactElement } from "react"
 
 import { cn } from "@/lib/utils"
 
@@ -70,6 +70,39 @@ function DialogBackdrop({
   )
 }
 
+const TABBABLE =
+  'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+
+/**
+ * Keeps Tab inside a dialog: past the last control it goes to the first, and
+ * back from the first to the last. Without it, the trailing focus guard is a
+ * nameless stop and, now and then, focus reaches the page behind the dialog.
+ *
+ * @param event - The key press inside the dialog surface.
+ */
+function wrapTab(event: KeyboardEvent<HTMLElement>): void {
+  if (event.key !== "Tab") {
+    return
+  }
+
+  const stops = [...event.currentTarget.querySelectorAll<HTMLElement>(TABBABLE)].filter(
+    (stop: HTMLElement) => !stop.closest("[hidden], [inert]")
+  )
+  const first = stops[0]
+  const last = stops[stops.length - 1]
+  const active = document.activeElement
+
+  if (!first || !last) {
+    event.preventDefault()
+  } else if (event.shiftKey && (active === first || active === event.currentTarget)) {
+    event.preventDefault()
+    last.focus()
+  } else if (!event.shiftKey && active === last) {
+    event.preventDefault()
+    first.focus()
+  }
+}
+
 /**
  * Renders a centred, labelled dialog surface with an optional icon close control.
  *
@@ -82,6 +115,7 @@ function DialogBackdrop({
 function DialogContent({
   children,
   className,
+  onKeyDown,
   showCloseButton = true,
   ...props
 }: DialogPrimitive.Popup.Props & {
@@ -100,6 +134,10 @@ function DialogContent({
             className
           )}
           data-slot="dialog-content"
+          onKeyDown={(event: KeyboardEvent<HTMLElement>) => {
+            wrapTab(event)
+            ;(onKeyDown as ((event: KeyboardEvent<HTMLElement>) => void) | undefined)?.(event)
+          }}
           {...props}
         >
           {children}

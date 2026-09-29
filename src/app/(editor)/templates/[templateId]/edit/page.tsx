@@ -32,6 +32,7 @@ import {
   saveTemplateDraftAction,
 } from "@/app/(dashboard)/templates/actions"
 import { saveEditorLayoutAction } from "@/app/(editor)/editor-layout-actions"
+import type { Metadata } from "next"
 
 type EditTemplateParams = Promise<{
   templateId: string
@@ -43,6 +44,8 @@ type EditTemplateParams = Promise<{
  * @param props - Route template identifier.
  * @returns The authenticated editor or a user-safe load error.
  */
+export const metadata: Metadata = { title: "Template editor" }
+
 export default async function EditTemplatePage({
   params,
 }: {

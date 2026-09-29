@@ -42,10 +42,13 @@ import {
   restoreDocumentAction,
   trashDocumentAction,
 } from "../actions"
+import type { Metadata } from "next"
 
 type DocumentDetailParams = Promise<{
   documentId: string
 }>
+
+export const metadata: Metadata = { title: "File" }
 
 export default async function DocumentDetailPage({
   params,

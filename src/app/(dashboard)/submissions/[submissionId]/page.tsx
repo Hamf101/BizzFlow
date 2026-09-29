@@ -43,6 +43,7 @@ import {
   saveSubmissionAction,
   submitSubmissionAction
 } from "../actions"
+import type { Metadata } from "next"
 
 type SubmissionDetailParams = Promise<{ submissionId: string }>
 
@@ -52,6 +53,8 @@ type SubmissionDetailParams = Promise<{ submissionId: string }>
  * @param props - Submission path identifier.
  * @returns Snapshot-driven answer form with verified file-field controls.
  */
+export const metadata: Metadata = { title: "Submission" }
+
 export default async function SubmissionDetailPage({
   params,
 }: {
