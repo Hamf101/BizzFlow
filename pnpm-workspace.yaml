@@ -29,8 +29,9 @@ overrides:
   # Raised to 5.0.9: 5.0.8 is still in the advisory's vulnerable range.
   brace-expansion@5: '>=5.0.9'
   # Host confusion and SSRF advisories; reached through @sentry/webpack-plugin.
-  # Bounded below 4 so the advisory floor cannot drag in a major upgrade.
-  fast-uri: '>=3.1.6 <4'
+  # Bounded below 4 so the advisory floor cannot drag in a major upgrade. Raised
+  # to 3.1.8: 3.1.6 is in GHSA-qw65-cvwx-89v3 and GHSA-58mr-gqgx-xq4g.
+  fast-uri: '>=3.1.8 <4'
   # Custom generators can loop indefinitely; reached through the pinned postcss.
   # Bounded below 4 for the same reason.
   nanoid: '>=3.3.18 <4'
