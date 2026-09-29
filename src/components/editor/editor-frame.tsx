@@ -18,7 +18,6 @@ import { FloatingTool, type Spot } from "@/components/editor/floating-tool"
 import type { AutosaveStatus } from "@/components/editor/use-autosave"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu"
-import { Segmented } from "@/components/ui/segmented"
 import { Sheet, SheetClose, SheetContent, SheetTitle } from "@/components/ui/sheet"
 import { bizflowToast } from "@/components/ui/toaster"
 import { cn } from "@/lib/utils"
@@ -40,10 +39,8 @@ export type EditorLayoutStore = Readonly<{
   save: (layout: EditorLayout) => Promise<{ error?: string }>
 }>
 
-/** One of the editor's modes, such as Edit, Preview and Test. */
-export type EditorMode<Value extends string> = Readonly<{ label: string; value: Value }>
 
-type EditorFrameProps<Mode extends string> = {
+type EditorFrameProps = {
   backHref: string
   backLabel: string
   banner?: ReactNode
@@ -55,9 +52,6 @@ type EditorFrameProps<Mode extends string> = {
   /** Where the tools were left last time; without it they start at home each visit. */
   layout?: EditorLayoutStore
   menu?: ReactNode
-  mode?: Mode
-  modes?: readonly EditorMode<Mode>[]
-  onModeChange?: (mode: Mode) => void
   onRedo: () => void
   onRetrySave?: () => void
   /** What ⌘S or Ctrl+S keeps, rather than the browser saving the page. */
@@ -67,7 +61,7 @@ type EditorFrameProps<Mode extends string> = {
   /** The page's width in printed points, which Fit zooms to. */
   pageWidthPoints: number
   panel?: (narrow: boolean) => ReactNode
-  /** Who else is here; on a phone they sit beside the modes. */
+  /** Who else is here. */
   people?: (narrow: boolean) => ReactNode
   primary?: ReactNode
   /** How saving stands; "blocked" waits on a fix, "unsaved-local" on Save, "stopped" once editing here ended. */
@@ -85,7 +79,7 @@ type EditorFrameProps<Mode extends string> = {
  * @param props - What the top bar shows and does, and the canvas to frame.
  * @returns The full-screen editor.
  */
-export function EditorFrame<Mode extends string>({
+export function EditorFrame({
   backHref,
   backLabel,
   banner,
@@ -96,9 +90,6 @@ export function EditorFrame<Mode extends string>({
   extra,
   layout: layoutStore,
   menu,
-  mode,
-  modes,
-  onModeChange,
   onRedo,
   onRetrySave,
   onSave,
@@ -112,7 +103,7 @@ export function EditorFrame<Mode extends string>({
   title,
   titleEditable,
   toolbar,
-}: EditorFrameProps<Mode>): ReactElement {
+}: EditorFrameProps): ReactElement {
   const narrow = useSyncExternalStore(
     subscribeToWidth,
     () => window.matchMedia(NARROW).matches,
@@ -227,10 +218,7 @@ export function EditorFrame<Mode extends string>({
         />
         <SaveStatus onRetry={onRetrySave} status={saveStatus} />
         <span className="grow" />
-        {!narrow && modes && mode && onModeChange ? (
-          <Segmented className="absolute left-1/2 -translate-x-1/2" label="Mode" onChange={onModeChange} options={modes} value={mode} />
-        ) : null}
-        {narrow && modes && mode && onModeChange ? null : people?.(narrow)}
+        {people?.(narrow)}
         {extra}
         <Button
           aria-label="Undo"
@@ -259,12 +247,6 @@ export function EditorFrame<Mode extends string>({
         {menu}
         {primary}
       </header>
-      {narrow && modes && mode && onModeChange ? (
-        <div className="flex items-center justify-center gap-2 pb-2">
-          <Segmented label="Mode" onChange={onModeChange} options={modes} value={mode} />
-          {people?.(true)}
-        </div>
-      ) : null}
       {/* An open panel takes its own column on a laptop, so it never covers the
           page; Fit follows because the scroll area's width changes. */}
       <div className="group/stage relative min-h-0 flex-1">

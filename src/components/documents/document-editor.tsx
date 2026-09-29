@@ -10,7 +10,7 @@ import { EditorCanvas } from "@/components/editor/editor-canvas"
 import { normalizeContentForSave } from "@/components/editor/editor-content"
 import { type DockTool, EditorDock } from "@/components/editor/editor-dock"
 import { FormatBar } from "@/components/editor/format-bar"
-import { FlowWindow } from "@/components/flow/flow-window"
+import { FlowDockSlot, FlowWindow } from "@/components/flow/flow-window"
 import { EditorFrame, type EditorLayoutStore, EditorNotice, EditorSidePanel } from "@/components/editor/editor-frame"
 import { type SaveResult, useAutosave } from "@/components/editor/use-autosave"
 import { useEditorController } from "@/components/editor/use-editor-controller"
@@ -357,6 +357,7 @@ export function DocumentEditor({
               narrow={narrow}
               orientation={orientation}
               tools={tools}
+              trail={narrow ? <FlowDockSlot /> : undefined}
             />
           ) : null
         }
@@ -452,7 +453,7 @@ export function DocumentEditor({
                 />
               ) : null}
             </EditorSidePanel>
-            {/* On a phone Flow's button rests above the tools' row. */}
+            {/* On a phone Flow's button rests in the tools' row, or above the page without it. */}
             <FlowWindow onOpenChange={setFlowOpen} open={flowOpen} phoneBottom={writable && !proposal ? 84 : 16}>
               <TemplateFlowPanel
                 canUndo={flowUndo !== null}

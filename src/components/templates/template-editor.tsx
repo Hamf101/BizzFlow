@@ -10,7 +10,7 @@ import { EditorCanvas } from "@/components/editor/editor-canvas"
 import { normalizeContentForSave } from "@/components/editor/editor-content"
 import { type DockTool, EditorDock } from "@/components/editor/editor-dock"
 import { FormatBar } from "@/components/editor/format-bar"
-import { FlowWindow } from "@/components/flow/flow-window"
+import { FlowDockSlot, FlowWindow } from "@/components/flow/flow-window"
 import { EditorFrame, type EditorLayoutStore, EditorNotice, EditorSidePanel } from "@/components/editor/editor-frame"
 import { type SaveResult, useAutosave } from "@/components/editor/use-autosave"
 import { useEditorController } from "@/components/editor/use-editor-controller"
@@ -67,13 +67,6 @@ import type { TemplateFlowMessage, TemplateFlowProposal } from "@/types/template
 import { withGeneratedFieldKeys } from "@/types/template-structure"
 import { applyVisibleTemplateFieldValue } from "@/types/template-visibility"
 
-type Mode = "edit" | "preview" | "test"
-
-const MODES = [
-  { label: "Edit", value: "edit" },
-  { label: "Preview", value: "preview" },
-  { label: "Test", value: "test" },
-] as const
 
 type TemplateEditorProps = {
   archiveAction: (formData: FormData) => Promise<void>
@@ -94,7 +87,8 @@ type TemplateEditorProps = {
 
 /**
  * The template studio in the editor canvas: pages to type on, the dock with
- * everything that can be added, Flow and Checks, and Edit, Preview and Test.
+ * everything that can be added, Flow and Checks. The page is the printed
+ * page, and its boxes take answers, so the author tries the form as it grows.
  * A draft saves as it changes. A published template's changes stay on this
  * device until Save, and reach staff on Update.
  *
@@ -148,8 +142,7 @@ export function TemplateEditor({
   const editable = history.liveStatus !== "stopped"
   const state = history.state
   const content = state.content as TemplateContentV3
-  const [mode, setMode] = useState<Mode>("edit")
-  // Test answers belong to the editor, so switching modes keeps a trial run.
+  // What the author types into the boxes to try the form; never saved.
   const [testAnswers, setTestAnswers] = useState<Record<string, unknown>>({})
   const [proposal, setProposal] = useState<TemplateFlowProposal | null>(null)
   const [flowUndo, setFlowUndo] = useState<{ messageId: string; state: TemplateEditorState } | null>(null)
@@ -319,15 +312,9 @@ export function TemplateEditor({
     return true
   }
 
-  function changeMode(next: Mode): void {
-    setMode(next)
-    controller.select(null)
-  }
-
   function stageProposal(next: TemplateFlowProposal): void {
     setProposal(next)
     controller.select(null)
-    setMode("preview")
   }
 
   function applyProposal(next: TemplateFlowProposal, messageId: string): void {
@@ -345,7 +332,6 @@ export function TemplateEditor({
       content: upgradeV2TemplateContentToV3(next.candidateDraft.content),
     }))
     setProposal(null)
-    setMode("edit")
   }
 
   const tools: DockTool[] = [
@@ -373,7 +359,6 @@ export function TemplateEditor({
           content={content}
           description={state.description}
           onSelectBlock={(blockId: string) => {
-            changeMode("edit")
             controller.select(blockId)
             close()
           }}
@@ -392,8 +377,7 @@ export function TemplateEditor({
               <RoomComments
                 blocks={content.blocks}
                 onShow={(blockId: string) => {
-                  changeMode("edit")
-                  controller.select(blockId)
+                        controller.select(blockId)
                   close()
                 }}
                 others={live.others}
@@ -478,18 +462,21 @@ export function TemplateEditor({
             >
               {proposal.status === "stale" ? "Flow's suggestion is out of date" : "Flow's suggestion"}
             </EditorNotice>
+          ) : Object.keys(testAnswers).length > 0 ? (
+            <EditorNotice actions={[{ label: "Clear", onClick: () => setTestAnswers({}) }]}>Answers typed here are a try-out</EditorNotice>
           ) : null
         }
         canRedo={history.canRedo}
         canUndo={history.canUndo}
         dock={(narrow, orientation) =>
-          // The tools need Edit; Flow has a button of its own, always there.
-          mode === "edit" && !proposal ? (
+          // Flow has a button of its own, always there.
+          !proposal ? (
             <EditorDock
               lead={narrow ? <FormatBar allowFiles controller={controller} narrow /> : undefined}
               narrow={narrow}
               orientation={orientation}
               tools={tools}
+              trail={narrow ? <FlowDockSlot /> : undefined}
             />
           ) : null
         }
@@ -529,9 +516,6 @@ export function TemplateEditor({
             </DropdownMenuContent>
           </DropdownMenu>
         }
-        mode={mode}
-        modes={MODES}
-        onModeChange={changeMode}
         onRedo={history.redo}
         onRetrySave={() => void (live.session ? live.session.flush() : autosave.flush())}
         onSave={() => void save()}
@@ -562,8 +546,8 @@ export function TemplateEditor({
                 />
               ) : null}
             </EditorSidePanel>
-            {/* On a phone Flow's button rests above the tools' row. */}
-            <FlowWindow onOpenChange={setFlowOpen} open={flowOpen} phoneBottom={mode === "edit" && !proposal ? 84 : 16}>
+            {/* On a phone Flow's button rests in the tools' row, or above the page without it. */}
+            <FlowWindow onOpenChange={setFlowOpen} open={flowOpen} phoneBottom={!proposal ? 84 : 16}>
               <TemplateFlowPanel
                 canUndo={flowUndo !== null}
                 draft={state}
@@ -611,24 +595,25 @@ export function TemplateEditor({
                   : null
         }
         title={state.title}
-        titleEditable={editable && mode === "edit" && !proposal}
-        toolbar={mode === "edit" && !proposal ? <FormatBar allowFiles controller={controller} narrow={false} /> : undefined}
+        titleEditable={editable && !proposal}
+        toolbar={!proposal ? <FormatBar allowFiles controller={controller} narrow={false} /> : undefined}
       >
         {({ narrow, zoom }) => (
           <EditorCanvas
             allowFiles
-            answers={mode === "test" ? testAnswers : undefined}
+            answers={proposal ? undefined : testAnswers}
             controller={proposal ? preview : controller}
-            designable={editable && mode === "edit" && !proposal}
+            designable={editable && !proposal}
             documentTitle={proposal ? proposal.candidateDraft.title : state.title}
-            fields={proposal || mode === "preview" ? "read" : mode === "test" ? "fill" : "design"}
+            // The boxes take answers, so the author tries the form as they build it.
+            fields={proposal ? "read" : "fill"}
             narrow={narrow}
             onAnswerChange={(fieldKey, value) =>
               setTestAnswers((answers) => applyVisibleTemplateFieldValue(content, answers, fieldKey, value))
             }
             overlay={room && !proposal ? <RoomLayer narrow={narrow} others={live.others} revision={content} room={room} /> : null}
-            surface={proposal || mode === "preview" ? "paper" : "screen"}
-            textEditable={editable && mode === "edit" && !proposal}
+            surface={proposal ? "paper" : "screen"}
+            textEditable={editable && !proposal}
             zoom={zoom}
           />
         )}

@@ -29,7 +29,7 @@ afterEach(() => {
   window.localStorage.clear()
 })
 
-it("keeps a trial run's answers when the author edits or previews and comes back", async () => {
+it("lets an author try the form by typing into its boxes while editing, and clear the try-out", async () => {
   const container = document.body.appendChild(document.createElement("div"))
   const root = createRoot(container)
   roots.push(root)
@@ -48,17 +48,12 @@ it("keeps a trial run's answers when the author edits or previews and comes back
     )
   })
 
-  await chooseMode("Test")
   typeInto(nameInput(), "Ada Lovelace")
-
-  // Fixing wording mid-test, or checking the printed page, must not lose what was typed.
-  await chooseMode("Edit")
-  await chooseMode("Test")
   expect(nameInput().value).toBe("Ada Lovelace")
 
-  await chooseMode("Preview")
-  await chooseMode("Test")
-  expect(nameInput().value).toBe("Ada Lovelace")
+  const clear = [...document.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent?.trim() === "Clear")
+  await act(async () => clear?.click())
+  expect(nameInput().value).toBe("")
 })
 
 it("asks Flow with only the title, description and content its request accepts", async () => {
@@ -92,18 +87,6 @@ it("asks Flow with only the title, description and content its request accepts",
   expect(Object.keys(JSON.parse(request.body).draft).sort()).toEqual(["content", "description", "title"])
   vi.unstubAllGlobals()
 })
-
-async function chooseMode(name: string): Promise<void> {
-  const radio = [...document.querySelectorAll<HTMLButtonElement>('[role="radio"]')].find(
-    (candidate) => candidate.textContent?.trim() === name
-  )
-
-  if (!radio) {
-    throw new Error(`Expected a "${name}" mode.`)
-  }
-
-  await act(async () => radio.click())
-}
 
 function nameInput(): HTMLInputElement {
   const input = document.getElementById(NAME_BLOCK_ID)

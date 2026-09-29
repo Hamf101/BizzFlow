@@ -237,7 +237,12 @@ type Parts = {
  * @param parts - The swarm, the drawn pieces and dots, the button, the window and its handles.
  * @returns A way to ask for the window open or shut, and to stop.
  */
-function animate(parts: Parts): { resize: (event: PointerEvent, zone: HTMLElement) => void; stop: () => void; want: (open: boolean) => void } {
+function animate(parts: Parts): {
+  dockTo: (slot: HTMLElement | null) => void
+  resize: (event: PointerEvent, zone: HTMLElement) => void
+  stop: () => void
+  want: (open: boolean) => void
+} {
   const still = matchMedia("(prefers-reduced-motion: reduce)").matches
   const phoneQuery = matchMedia(PHONE)
   let phone = phoneQuery.matches
@@ -294,6 +299,14 @@ function animate(parts: Parts): { resize: (event: PointerEvent, zone: HTMLElemen
     for (const animation of motion) animation.updatePlaybackRate(rate)
   }
 
+  // A place kept for the button in a toolbar, which it rests in instead of floating.
+  let slot: HTMLElement | null = null
+  const slotWatch = typeof ResizeObserver === "function" ? new ResizeObserver(() => place()) : null
+  const docked = (): Spot | null => {
+    const at = slot?.isConnected ? slot.getBoundingClientRect() : null
+
+    return at?.width ? { x: at.left + at.width / 2 - PAGE.w / 2, y: at.top + at.height / 2 - PAGE.h / 2 } : null
+  }
   const buttonBox = (): Rect => ({ ...button, h: PAGE.h, w: PAGE.w })
   const shape = (index: number, where: "button" | "window"): Point[] =>
     PIECES[index]!.points.map(where === "button" ? onto(buttonBox()) : onto(box, fold()))
@@ -312,6 +325,7 @@ function animate(parts: Parts): { resize: (event: PointerEvent, zone: HTMLElemen
   }
 
   function place(): void {
+    button = docked() ?? button
     parts.hit.style.transform = `translate(${button.x - REACH.x}px, ${button.y - REACH.y}px)`
     Object.assign(parts.win.style, { height: `${box.h}px`, left: `${box.x}px`, top: `${box.y}px`, width: `${box.w}px` })
   }
@@ -683,7 +697,8 @@ function animate(parts: Parts): { resize: (event: PointerEvent, zone: HTMLElemen
   const onHitDown = (event: PointerEvent): void => {
     swallowClick = false
 
-    if (mode !== "closed" || event.button !== 0) return
+    // Resting in a toolbar, it stays there: a press only opens it.
+    if (mode !== "closed" || event.button !== 0 || docked()) return
 
     parts.hit.setPointerCapture?.(event.pointerId)
     drag = { from: { ...button }, id: event.pointerId, moved: false, start: { x: event.clientX, y: event.clientY } }
@@ -839,6 +854,8 @@ function animate(parts: Parts): { resize: (event: PointerEvent, zone: HTMLElemen
     [parts.head, "pointerup", onHeadUp as EventListener],
     [parts.head, "pointercancel", onHeadUp as EventListener],
     [window, "resize", onResize],
+    // A phone's keyboard moves the toolbar the button may rest in.
+    ...(window.visualViewport ? [[window.visualViewport, "resize", onResize] as [EventTarget, string, EventListener]] : []),
   ]
 
   listeners.forEach(([target, type, listener]) => target.addEventListener(type, listener))
@@ -846,7 +863,16 @@ function animate(parts: Parts): { resize: (event: PointerEvent, zone: HTMLElemen
   kick()
 
   return {
+    dockTo(next) {
+      slotWatch?.disconnect()
+      slot = next
+
+      if (next) slotWatch?.observe(next)
+
+      place()
+    },
     stop() {
+      slotWatch?.disconnect()
       for (const animation of motion) animation.cancel()
       cancelAnimationFrame(frame)
       cancelAnimationFrame(heightChange.frame)
@@ -923,6 +949,7 @@ export function FlowWindow({
   // Drawn only in the browser, over everything, once the page has hydrated.
   const mounted = useSyncExternalStore(subscribeNever, () => true, () => false)
   const [mode, setMode] = useState<Mode>("closed")
+  const dock = useSyncExternalStore(subscribeToDock, () => dockSlot, () => null)
   const [dots] = useState(makeSwarm)
   const phone = useSyncExternalStore(subscribeToPhone, () => matchMedia(PHONE).matches, () => false)
   const titleId = useId()
@@ -971,6 +998,10 @@ export function FlowWindow({
       running.stop()
     }
   }, [dots, mounted])
+
+  useEffect(() => {
+    engine.current?.dockTo(dock)
+  }, [dock, mounted])
 
   useEffect(() => {
     engine.current?.want(open)
@@ -1096,3 +1127,42 @@ const EDGE_CLASS = {
   sw: "absolute -bottom-1 -left-1 size-4 cursor-nesw-resize touch-none",
   w: "absolute top-3.5 bottom-3.5 -left-1 w-2 cursor-ew-resize touch-none",
 } as const
+
+// The place a toolbar keeps for Flow's button, if one is on screen.
+let dockSlot: HTMLElement | null = null
+const dockListeners = new Set<() => void>()
+
+function subscribeToDock(onChange: () => void): () => void {
+  dockListeners.add(onChange)
+
+  return () => dockListeners.delete(onChange)
+}
+
+function setDockSlot(next: HTMLElement | null): void {
+  dockSlot = next
+  dockListeners.forEach((listener) => listener())
+}
+
+/**
+ * A place in a toolbar for Flow's button, which rests there instead of
+ * floating over the page while the toolbar is on screen. The button stays
+ * Flow's own, drawn over the place.
+ *
+ * @returns The empty place.
+ */
+export function FlowDockSlot(): ReactElement {
+  return (
+    <span
+      aria-hidden="true"
+      className="mx-1 size-11 shrink-0"
+      data-slot="flow-dock-slot"
+      ref={(element) => {
+        setDockSlot(element)
+
+        return () => {
+          if (dockSlot === element) setDockSlot(null)
+        }
+      }}
+    />
+  )
+}

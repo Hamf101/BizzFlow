@@ -79,11 +79,12 @@ export function PaperField({
     const booleanName = getGeneratedDocumentAnswerName("boolean", block.fieldKey)
 
     return (
-      <label className="relative block" htmlFor={fill ? block.id : undefined} style={{ lineHeight: 1.5, paddingLeft: "1.6em" }}>
+      <div className="relative" style={{ lineHeight: 1.5, paddingLeft: "1.6em" }}>
         {fill ? (
           <>
             <input name={booleanName} type="hidden" value="false" />
             <input
+              aria-label={block.label}
               checked={checked}
               className="peer absolute top-[0.2em] left-0 size-[1em] cursor-pointer opacity-0"
               id={block.id}
@@ -104,7 +105,7 @@ export function PaperField({
         {block.label}
         {required}
         <Help block={block} inset="-1.6em" />
-      </label>
+      </div>
     )
   }
 
@@ -118,6 +119,7 @@ export function PaperField({
       answer = fill ? (
         block.multiline ? (
           <textarea
+            aria-label={block.label}
             className="w-full resize-none bg-transparent outline-none placeholder:text-muted-foreground"
             id={block.id}
             maxLength={20_000}
@@ -130,6 +132,7 @@ export function PaperField({
           />
         ) : (
           <input
+            aria-label={block.label}
             className="w-full min-w-0 bg-transparent outline-none placeholder:text-muted-foreground"
             id={block.id}
             maxLength={20_000}
@@ -147,7 +150,7 @@ export function PaperField({
       break
     case "date_field":
       answer = fill ? (
-        <DatePicker className={BARE} format={block.dateFormat} id={block.id} name={textName} onChange={set} value={text} />
+        <DatePicker aria-label={block.label} className={BARE} format={block.dateFormat} id={block.id} name={textName} onChange={set} value={text} />
       ) : mode === "read" ? (
         formatDateAnswer(text, block.dateFormat)
       ) : (
@@ -156,7 +159,7 @@ export function PaperField({
       break
     case "dropdown_field":
       answer = fill ? (
-        <Select className={BARE} id={block.id} name={textName} onChange={(event) => set(event.target.value)} value={text}>
+        <Select aria-label={block.label} className={BARE} id={block.id} name={textName} onChange={(event) => set(event.target.value)} value={text}>
           <option value="">{block.placeholder || "Select an option"}</option>
           {block.options.map((option: string) => (
             <option key={option} value={option}>
@@ -192,14 +195,13 @@ export function PaperField({
       break
   }
 
-  const LabelTag = fill && block.type !== "signature_field" && block.type !== "initials_field" && block.type !== "file_field" ? "label" : "span"
-
   return (
     <div className="flex flex-col">
-      <LabelTag className="font-bold" htmlFor={LabelTag === "label" ? block.id : undefined} style={{ fontSize: "0.9em", lineHeight: 13 / 9, marginBottom: "0.3em" }}>
+      {/* Not a <label>: a press on it takes the field to arrange it, and the box takes answers. */}
+      <span className="font-bold" style={{ fontSize: "0.9em", lineHeight: 13 / 9, marginBottom: "0.3em" }}>
         {block.label}
         {required}
-      </LabelTag>
+      </span>
       <div
         className={cn("relative flex flex-col focus-within:ring-2 focus-within:ring-ring/40", fill && "cursor-text")}
         data-slot="paper-box"

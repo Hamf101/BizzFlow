@@ -31,6 +31,7 @@ const SPOKEN_DATE: DateFormat = { month: "long", order: "dmy", separator: " " }
  */
 export default function DatePickerCalendar({
   "aria-describedby": describedBy,
+  "aria-label": ariaLabel,
   className,
   defaultOpen = false,
   format,
@@ -98,6 +99,7 @@ export default function DatePickerCalendar({
         <PopoverTrigger
           aria-describedby={describedBy}
           aria-haspopup="dialog"
+          aria-label={ariaLabel}
           className={cn(FIELD_BUTTON_CLASS_NAME, className)}
           id={id}
           ref={trigger}

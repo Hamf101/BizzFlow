@@ -33,23 +33,31 @@ export function EditorDock({
   narrow,
   orientation,
   tools,
+  trail,
 }: {
   /** Tools that come first, such as the formatting toolbar on a phone. */
   lead?: ReactNode
   narrow: boolean
   orientation: DockOrientation
   tools: readonly DockTool[]
+  /** On a phone, what stays at the row's end while the rest scrolls, such as Flow's place. */
+  trail?: ReactNode
 }): ReactElement {
   const [open, setOpen] = useState<string | null>(null)
+  const row = narrow && trail
 
-  return (
+  const nav = (
     <nav
       aria-label="Editor tools"
       className={cn(
-        "flex gap-1 rounded-[16px] border border-border bg-popover p-1.5 shadow-lg",
+        "flex gap-1 p-1.5",
+        !row && "rounded-[16px] border border-border bg-popover shadow-lg",
         orientation === "upright" && "flex-col",
         // On a phone the row runs off the screen's right edge, which shows it scrolls.
-        narrow && "max-w-full items-center overflow-x-auto rounded-r-none border-r-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        narrow && "max-w-full items-center overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+        narrow && !row && "rounded-r-none border-r-0",
+        // With something kept at its end, the tools fade out before it, and snap as they scroll.
+        row && "min-w-0 flex-1 snap-x snap-proximity pr-6 [mask-image:linear-gradient(to_right,black_calc(100%-28px),transparent)] [&>*]:snap-start"
       )}
       data-slot="editor-dock"
     >
@@ -106,5 +114,15 @@ export function EditorDock({
         )
       })}
     </nav>
+  )
+
+  return row ? (
+    <div className="flex max-w-full min-w-0 flex-1 items-center rounded-l-[16px] border border-r-0 border-border bg-popover shadow-lg">
+      {nav}
+      <span aria-hidden="true" className="h-6 w-px shrink-0 bg-border" />
+      {trail}
+    </div>
+  ) : (
+    nav
   )
 }

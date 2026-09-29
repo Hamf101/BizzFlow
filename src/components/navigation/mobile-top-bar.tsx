@@ -3,6 +3,7 @@ import Link from "next/link"
 import type { ReactElement } from "react"
 
 import { BizFlowWordmark } from "@/components/brand/bizflow-mark"
+import { FlowDockSlot } from "@/components/flow/flow-window"
 import {
   DashboardAccountMenu,
   type DashboardAccount,
@@ -40,6 +41,8 @@ export function MobileTopBar({
           pixel the wordmark gave up and drew the avatar over "BizFlow"; in a
           wrapper sized to its content it sits at the right edge instead. */}
       <div className="flex shrink-0 items-center gap-1">
+        {/* Flow's button rests here on a phone, clear of the page. */}
+        {account.navigation?.organizationId ? <FlowDockSlot /> : null}
         {account.permissionSubject ? (
           <WorkspaceSearchTrigger
             aria-label="Search"
