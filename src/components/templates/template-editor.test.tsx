@@ -77,13 +77,22 @@ it("asks Flow with only the title, description and content its request accepts",
     )
   })
 
-  const prompt = [...document.querySelectorAll<HTMLButtonElement>("button")].find(
-    (button) => button.textContent?.trim() === "Explain the structure of this document"
-  )
-  await act(async () => prompt?.click())
+  // A busy machine can take a moment to show the prompts and send the request.
+  const prompt = await vi.waitFor(() => {
+    const found = [...document.querySelectorAll<HTMLButtonElement>("button")].find(
+      (button) => button.textContent?.trim() === "Explain the structure of this document"
+    )
+    expect(found).toBeDefined()
+    return found!
+  })
+  await act(async () => prompt.click())
 
   // The room opens with its own request; this is the one to Flow.
-  const [, request] = (fetchFlow.mock.calls as unknown as Array<[string, { body: string }]>).find(([url]) => url.includes("/flow"))!
+  const [, request] = await vi.waitFor(() => {
+    const call = (fetchFlow.mock.calls as unknown as Array<[string, { body: string }]>).find(([url]) => url.includes("/flow"))
+    expect(call).toBeDefined()
+    return call!
+  })
   expect(Object.keys(JSON.parse(request.body).draft).sort()).toEqual(["content", "description", "title"])
   vi.unstubAllGlobals()
 })
