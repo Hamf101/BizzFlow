@@ -82,6 +82,7 @@ const FLOW_MAX_OUTPUT_TOKENS = 16_384
 const FLOW_MAX_OPERATIONS = 80
 const FLOW_MAX_UPSTREAM_CALLS = 2
 const MAX_FLOW_REPAIR_RESPONSE_CHARACTERS = 12_000
+const MAX_FLOW_REPAIR_DETAIL_CHARACTERS = 300
 const MAX_FLOW_HISTORY_MESSAGES = 20
 const MAX_FLOW_CONTEXT_CHARACTERS = 55_000
 const MAX_FLOW_STRUCTURE_CONTEXT_CHARACTERS = 10_000
@@ -184,7 +185,9 @@ const flowWireOperationSchema = z.discriminatedUnion("type", [
       payload: z
         .object({
           afterBlockId: uuidSchema.nullable(),
-          block: generatedBlockSchema
+          block: generatedBlockSchema,
+          // The id a block's ref was given before this was read; never the model's own.
+          id: uuidSchema.optional()
         })
         .strict()
     })
@@ -283,6 +286,8 @@ type FlowProviderParseResult =
       success: false
       issueCode: string
       issuePath: string
+      /** What went wrong, for the model's correction; it can quote a label, so it is never logged. */
+      detail?: string
     }
 type FlowWireOperation = z.infer<typeof flowWireOperationSchema>
 type GeneratedBlock = z.infer<typeof generatedBlockSchema>
@@ -316,6 +321,7 @@ type FlowCandidateValidationResult =
       success: false
       issueCode: string
       issuePath: string
+      detail?: string
     }
 type TemplateFlowClient = Pick<AdminSupabaseClient, "from">
 
@@ -801,7 +807,7 @@ async function requestFlowProvider(input: {
       )
     }
 
-    const parsedOutput = parseFlowProviderText(result.text)
+    const parsedOutput = parseFlowProviderText(result.text, input.createId)
     let validationFailure: Extract<
       FlowCandidateValidationResult,
       { success: false }
@@ -850,7 +856,8 @@ async function requestFlowProvider(input: {
         request,
         invalidResponse: result.text,
         issueCode: validationFailure.issueCode,
-        issuePath: validationFailure.issuePath
+        issuePath: validationFailure.issuePath,
+        detail: validationFailure.detail
       })
     }
   }
@@ -926,7 +933,8 @@ function validateFlowCandidate(input: {
       return {
         success: false,
         issueCode: "semantic_validation",
-        issuePath: "operations"
+        issuePath: "operations",
+        detail: error instanceof FlowOperationError ? error.detail : undefined
       }
     }
 
@@ -971,7 +979,10 @@ function validateFlowCandidate(input: {
   }
 }
 
-function parseFlowProviderText(text: string): FlowProviderParseResult {
+function parseFlowProviderText(
+  text: string,
+  createId: () => string
+): FlowProviderParseResult {
   let decodedOutput: unknown
 
   try {
@@ -991,9 +1002,19 @@ function parseFlowProviderText(text: string): FlowProviderParseResult {
     return readFlowParseIssue(structuredOutput.error)
   }
 
-  const parsedOutput = flowProviderResponseSchema.safeParse(
-    normalizeFlowResponse(structuredOutput.data)
-  )
+  const normalized = normalizeFlowResponse(structuredOutput.data)
+  const refIssue = resolveFlowRefs(normalized.operations, createId)
+
+  if (refIssue !== null) {
+    return {
+      success: false,
+      issueCode: "unknown_ref",
+      issuePath: "operations",
+      detail: refIssue
+    }
+  }
+
+  const parsedOutput = flowProviderResponseSchema.safeParse(normalized)
 
   if (!parsedOutput.success) {
     return readFlowParseIssue(parsedOutput.error)
@@ -1011,8 +1032,17 @@ function readFlowParseIssue(error: z.ZodError): FlowProviderParseResult {
   return {
     success: false,
     issueCode: firstIssue?.code ?? "unknown",
-    issuePath: firstIssue?.path.join(".") || "root"
+    issuePath: firstIssue?.path.join(".") || "root",
+    detail: describeZodIssues(error)
   }
+}
+
+// The first few things a schema refused, each with where it is.
+function describeZodIssues(error: z.ZodError): string {
+  return error.issues
+    .slice(0, 3)
+    .map((issue): string => `${issue.path.join(".") || "root"}: ${issue.message}`)
+    .join("; ")
 }
 
 function createFlowRepairPrompt(input: {
@@ -1020,6 +1050,7 @@ function createFlowRepairPrompt(input: {
   invalidResponse: string
   issueCode: string
   issuePath: string
+  detail?: string
 }): string {
   // The first prompt, repeated as the opening, which the provider can reuse.
   return JSON.stringify({
@@ -1033,7 +1064,10 @@ function createFlowRepairPrompt(input: {
       ),
       validationIssue: {
         code: input.issueCode,
-        path: input.issuePath
+        path: input.issuePath,
+        ...(input.detail
+          ? { detail: input.detail.slice(0, MAX_FLOW_REPAIR_DETAIL_CHARACTERS) }
+          : {})
       }
     }
   })
@@ -1156,6 +1190,7 @@ function createFlowSystemInstruction(): string {
     "Never remove a logo, image, field, or content block unless the user explicitly requests removal.",
     "When a request could cause unintended loss, return needsConfirmation=true, a single clear confirmationQuestion, and no operations.",
     "Use only ids present in currentDraft when updating, moving, or removing blocks.",
+    'To use a block you add in the same response, give its add_block a ref such as "new:1" and write that ref wherever a later operation needs its id: afterBlockId, blockId, or visibleWhen.sourceBlockId. A ref names one block and works only after the operation that adds it.',
     "Use add_block for new content; use update_block with a complete replacement block without id for non-image edits.",
     "Use update_image to change an existing image's placement, size, caption, or alt text; you cannot replace its bytes.",
     "Use move_block to reorganize content while preserving its id.",
@@ -1175,10 +1210,10 @@ function createFlowPayloadContract(): string {
     'set_title => {"value":"Document title"}.',
     'set_description => {"value":"Document description"}.',
     'set_branding => include only requested properties from {"organizationName":"Name","primaryColor":"#RRGGBB","accentColor":"#RRGGBB","logoAlignment":"left|center|right","logoWidthPercent":25,"removeLogo":false}.',
-    'add_block => {"afterBlockId":"existing-uuid-or-null","block":{...new block without id}}.',
+    'add_block => {"ref":optional "new:1","afterBlockId":"existing-uuid, earlier ref, or null for the end of the document","block":{...new block without id}}.',
     'update_block => {"blockId":"existing-uuid","block":{...complete replacement block without id}}.',
     'update_image => {"blockId":"existing-uuid","altText":"Description","caption":null,"alignment":"left|center|right","widthPercent":50}.',
-    'move_block => {"blockId":"existing-uuid","afterBlockId":"existing-uuid-or-null"}.',
+    'move_block => {"blockId":"existing-uuid","afterBlockId":"existing-uuid, or null for the start of the document"}.',
     'remove_block => {"blockId":"existing-uuid"}.',
     "Block contracts:",
     'heading {"type":"heading","text":"Text","level":1|2|3,"alignment":"left|center|right"};',
@@ -1194,13 +1229,13 @@ function createFlowPayloadContract(): string {
     'file_field {"type":"file_field","fieldKey":"stable_key","label":"Label","required":true,"helpText":null,"visibleWhen":optional};',
     'checkbox_field {"type":"checkbox_field","fieldKey":"stable_key","label":"Label","required":true,"helpText":null,"checkedByDefault":false,"visibleWhen":optional};',
     'dropdown_field {"type":"dropdown_field","fieldKey":"stable_key","label":"Label","required":true,"helpText":null,"placeholder":null,"options":["Known choice A","Known choice B","Other"],"visibleWhen":optional}.',
-    "Omit visibleWhen when it is not needed. When present, encode it as an object with sourceBlockId, operator='equals', and a declared string choice or checkbox boolean."
+    "Omit visibleWhen when it is not needed. When present, encode it as an object with sourceBlockId, operator='equals', and a declared string choice or checkbox boolean. Its source must be a dropdown or checkbox placed before the field; a condition that cannot hold is refused, not dropped."
   ].join(" ")
 }
 
 function normalizeFlowResponse(
   response: z.infer<typeof flowStructuredResponseSchema>
-): unknown {
+): Record<string, unknown> & { operations: DecodedFlowOperation[] } {
   return {
     assistantMessage: response.assistantMessage,
     needsConfirmation: response.needsConfirmation,
@@ -1210,7 +1245,7 @@ function normalizeFlowResponse(
         operation: z.infer<
           typeof flowStructuredResponseSchema
         >["operations"][number]
-      ): Record<string, unknown> => ({
+      ): DecodedFlowOperation => ({
         type: operation.type,
         summary: operation.summary,
         payload: parseFlowPayloadJson(operation.payloadJson)
@@ -1225,6 +1260,103 @@ function parseFlowPayloadJson(payloadJson: string): unknown {
   } catch {
     return null
   }
+}
+
+type DecodedFlowOperation = { type: string; summary: string; payload: unknown }
+
+// The name a response gives a block it adds, to use as that block's id in its later operations.
+const FLOW_REF_PATTERN = /^new:\d{1,3}$/
+// Where an operation names a block.
+const FLOW_REF_KEYS = new Set(["afterBlockId", "blockId", "blockIds", "sourceBlockId"])
+// A payload names blocks no deeper than block.visibleWhen.sourceBlockId; nothing past this is read.
+const FLOW_REF_DEPTH = 4
+
+/**
+ * Gives each block a response adds under a ref its id, and puts that id
+ * wherever a later operation uses the ref, so one turn can add a field and
+ * then place it, or make another field depend on it.
+ *
+ * @param operations - The response's operations, their payloads decoded but not yet checked.
+ * @param createId - Makes the new blocks' ids.
+ * @returns What is wrong with a ref, for the model's correction, or null.
+ */
+function resolveFlowRefs(
+  operations: DecodedFlowOperation[],
+  createId: () => string
+): string | null {
+  const ids = new Map<string, string>()
+
+  for (const [index, operation] of operations.entries()) {
+    const unknown = replaceFlowRefs(operation.payload, ids, 0)
+
+    if (unknown !== null) {
+      return `operations[${index}] ${operation.type}: ${unknown} is not the ref of a block added earlier in this response`
+    }
+
+    if (operation.type !== "add_block" || !isRecord(operation.payload)) {
+      continue
+    }
+
+    const { ref } = operation.payload
+
+    delete operation.payload.ref
+    delete operation.payload.id
+
+    if (ref === undefined) {
+      continue
+    }
+
+    if (typeof ref !== "string" || !FLOW_REF_PATTERN.test(ref) || ids.has(ref)) {
+      return `operations[${index}] add_block: ref ${JSON.stringify(ref).slice(0, 40)} must be "new:N", and no two blocks may share one`
+    }
+
+    ids.set(ref, createId())
+    operation.payload.id = ids.get(ref)
+  }
+
+  return null
+}
+
+// Swaps refs for ids in place, and returns the first ref that names nothing.
+function replaceFlowRefs(
+  node: unknown,
+  ids: ReadonlyMap<string, string>,
+  depth: number
+): string | null {
+  if (!isRecord(node) || depth > FLOW_REF_DEPTH) {
+    return null
+  }
+
+  for (const [key, value] of Object.entries(node)) {
+    if (!FLOW_REF_KEYS.has(key)) {
+      const unknown = replaceFlowRefs(value, ids, depth + 1)
+
+      if (unknown !== null) {
+        return unknown
+      }
+
+      continue
+    }
+
+    const named = Array.isArray(value) ? value : [value]
+    const resolved = named.map((entry: unknown): unknown =>
+      typeof entry === "string" && FLOW_REF_PATTERN.test(entry)
+        ? (ids.get(entry) ?? entry)
+        : entry
+    )
+    const unknown = resolved.find(
+      (entry: unknown): entry is string =>
+        typeof entry === "string" && FLOW_REF_PATTERN.test(entry)
+    )
+
+    if (unknown !== undefined) {
+      return unknown
+    }
+
+    node[key] = Array.isArray(value) ? resolved : resolved[0]
+  }
+
+  return null
 }
 
 function buildFlowDocumentContext(
@@ -1739,16 +1871,43 @@ function applyFlowOperations(
   const otherInvariantContext = createOtherCompanionInvariantContext(
     currentDraft.content
   )
+  // The fields with a condition, and what it rests on: those the document
+  // came with, then each an operation gives one, under that operation's name.
+  const conditioned = new Map<string, { source: string | null; where: string }>(
+    currentDraft.content.blocks.flatMap((block: TemplateBlock) =>
+      isTemplateFieldBlock(block) && block.visibleWhen !== undefined
+        ? [[block.id, { source: block.visibleWhen.sourceBlockId, where: "operations" }] as const]
+        : []
+    )
+  )
 
-  for (const operation of operations) {
+  for (const [index, operation] of operations.entries()) {
     recordAffectedOtherDropdowns(nextDraft, operation, otherInvariantContext)
     const target = describeOperationTarget(nextDraft, operation)
-    const affectedBlockIds = applyFlowOperation(
-      nextDraft,
-      operation,
-      createId,
-      otherInvariantContext
-    )
+    let affectedBlockIds: string[]
+
+    try {
+      affectedBlockIds = applyFlowOperation(
+        nextDraft,
+        operation,
+        createId,
+        otherInvariantContext
+      )
+    } catch (error: unknown) {
+      // The model is told which of its operations failed, and why.
+      throw error instanceof FlowOperationError
+        ? new FlowOperationError(`operations[${index}] ${operation.type}: ${error.detail}`)
+        : error
+    }
+
+    if (
+      (operation.type === "add_block" || operation.type === "update_block") &&
+      "visibleWhen" in operation.payload.block &&
+      operation.payload.block.visibleWhen !== undefined &&
+      affectedBlockIds[0] !== undefined
+    ) {
+      conditioned.set(affectedBlockIds[0], { source: null, where: `operations[${index}] ${operation.type}` })
+    }
 
     affectedBlockIds.forEach((blockId: string): void => {
       changedBlockIds.add(blockId)
@@ -1781,12 +1940,31 @@ function applyFlowOperations(
     }
   }
 
+  // A condition the document cannot keep is taken off its field, as the field
+  // goes in or as a move or a changed choice leaves it pointing nowhere. Once
+  // every operation has had its say, one still missing is told to Flow, so a
+  // field never ends up shown to everyone by mistake. A field whose source
+  // was removed on request has nothing left to depend on.
+  for (const [blockId, { source, where }] of conditioned) {
+    const kept = nextDraft.content.blocks.find(
+      (block: TemplateBlock): boolean => block.id === blockId
+    )
+    const sourceGone =
+      source !== null &&
+      !nextDraft.content.blocks.some((block: TemplateBlock): boolean => block.id === source)
+
+    if (kept !== undefined && isTemplateFieldBlock(kept) && kept.visibleWhen === undefined && !sourceGone) {
+      throw new FlowOperationError(
+        `${where}: the field ${JSON.stringify(kept.label)} would lose its visibleWhen, which must name a dropdown or checkbox that comes before the field, and one of its values`
+      )
+    }
+  }
+
   const parsedDraft = editableFlowDraftSchema.safeParse(nextDraft)
 
   if (!parsedDraft.success) {
-    throw new TemplateFlowServiceError(
-      "Flow produced a document that failed validation.",
-      502
+    throw new FlowOperationError(
+      `the document these operations make is not valid: ${describeZodIssues(parsedDraft.error)}`
     )
   }
 
@@ -1868,10 +2046,10 @@ function applyAddBlockOperation(
       (block: TemplateBlock): boolean => block.id === payload.afterBlockId
     )
   ) {
-    throw invalidOperationError()
+    throw invalidOperationError("afterBlockId is not a block in the document")
   }
 
-  const blockId = createId()
+  const blockId = payload.id ?? createId()
   const block = createGeneratedTemplateBlock(
     payload.block,
     blockId,
@@ -1946,7 +2124,7 @@ function applyUpdateBlockOperation(
   )
 
   if (blockIndex === -1) {
-    throw invalidOperationError()
+    throw invalidOperationError("blockId is not a block in the document")
   }
 
   const existingBlock = draft.content.blocks[blockIndex]
@@ -1955,10 +2133,17 @@ function applyUpdateBlockOperation(
     existingBlock?.type === "image" ||
     payload.block.type !== existingBlock?.type
   ) {
-    throw invalidOperationError()
+    throw invalidOperationError(
+      `the block is a ${existingBlock?.type}; update_block keeps a block's type, and update_image changes an image`
+    )
   }
 
   const candidate: Record<string, unknown> = {
+    // Flow writes words, not formatting: words it leaves alone keep theirs,
+    // and a box keeps the height its author gave it unless Flow sets one.
+    ..."runs" in existingBlock ? { runs: existingBlock.runs } : {},
+    ..."itemRuns" in existingBlock ? { itemRuns: existingBlock.itemRuns } : {},
+    ..."boxHeight" in existingBlock ? { boxHeight: existingBlock.boxHeight } : {},
     ...payload.block,
     id: payload.blockId
   }
@@ -2084,17 +2269,24 @@ function parseCanonicalBlock(candidate: unknown): TemplateBlock {
   const result = templateBlockSchema.safeParse(candidate)
 
   if (!result.success) {
-    throw invalidOperationError()
+    throw invalidOperationError(`the block is not valid: ${describeZodIssues(result.error)}`)
   }
 
   return result.data
 }
 
-function invalidOperationError(): TemplateFlowServiceError {
-  return new TemplateFlowServiceError(
-    "Flow returned an edit operation that failed validation.",
-    502
-  )
+function invalidOperationError(detail = "it does not fit the document"): FlowOperationError {
+  return new FlowOperationError(detail)
+}
+
+/** An operation the document refused, with why, for the model's one correction. */
+class FlowOperationError extends TemplateFlowServiceError {
+  readonly detail: string
+
+  constructor(detail: string) {
+    super("Flow returned an edit operation that failed validation.", 502)
+    this.detail = detail
+  }
 }
 
 function createProposedAssistantContent(

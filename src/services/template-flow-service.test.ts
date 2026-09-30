@@ -1165,6 +1165,98 @@ describe("Flow and date formats", () => {
   })
 })
 
+describe("Flow building with the blocks it adds", () => {
+  it("lets one turn say where its new blocks go and what shows them, by the names it gave them", async () => {
+    const { run } = runFlow(createContent(), [
+      { type: "add_block", summary: "Asked about pets", payload: { ref: "new:1", afterBlockId: null, block: { type: "checkbox_field", fieldKey: "pet", label: "Has a pet", required: false, helpText: null, checkedByDefault: false } } },
+      {
+        type: "add_block",
+        summary: "Asked the pet's name",
+        payload: { afterBlockId: "new:1", block: { type: "text_field", fieldKey: "name", label: "Pet's name", required: false, helpText: null, placeholder: null, multiline: false, visibleWhen: { sourceBlockId: "new:1", operator: "equals", value: true } } },
+      },
+      { type: "add_block", summary: "Asked the kind of pet", payload: { ref: "new:2", afterBlockId: null, block: { type: "dropdown_field", fieldKey: "kind", label: "Kind of pet", required: false, helpText: null, placeholder: null, options: ["Dog", "Cat", "Other"] } } },
+      { type: "add_block", summary: "Thanked them", payload: { afterBlockId: "new:2", block: { type: "paragraph", text: "Thank you.", alignment: "left" } } },
+    ])
+    const blocks = (await run).proposal!.candidateDraft.content.blocks
+    const named = (label: string) => blocks.find((block: TemplateBlock) => "label" in block && block.label === label)!
+
+    expect(blocks.map((block: TemplateBlock) => ("label" in block ? block.label : block.type))).toEqual([
+      "paragraph",
+      "Has a pet",
+      "Pet's name",
+      "Kind of pet",
+      // Added after the new dropdown, the paragraph still leaves its "Other" answer beside it.
+      "Please specify",
+      "paragraph",
+    ])
+    expect(named("Pet's name")).toMatchObject({ visibleWhen: { sourceBlockId: named("Has a pet").id, value: true } })
+    expect(named("Please specify")).toMatchObject({ visibleWhen: { sourceBlockId: named("Kind of pet").id } })
+  })
+
+  it("keeps the formatting of words it leaves alone, and the height a box was given", async () => {
+    const content = createContent()
+    content.blocks = [
+      { id: PARAGRAPH_ID, type: "heading", level: 2, alignment: "left", text: "Rental terms", runs: [{ text: "Rental " }, { text: "terms", bold: true }] },
+      { id: FIELD_ID, type: "text_field", fieldKey: "notes", label: "Notes", required: false, helpText: null, placeholder: null, multiline: true, boxHeight: 90 },
+    ]
+    const { run } = runFlow(content, [
+      { type: "update_block", summary: "Made it the main heading", payload: { blockId: PARAGRAPH_ID, block: { type: "heading", level: 1, alignment: "left", text: "Rental terms" } } },
+      { type: "update_block", summary: "Reworded the label", payload: { blockId: FIELD_ID, block: { type: "text_field", fieldKey: "notes", label: "Notes for the landlord", required: false, helpText: null, placeholder: null, multiline: true } } },
+    ])
+
+    expect((await run).proposal?.candidateDraft.content.blocks).toMatchObject([
+      { level: 1, runs: [{ text: "Rental " }, { text: "terms", bold: true }] },
+      { label: "Notes for the landlord", boxHeight: 90 },
+    ])
+  })
+
+  it("tells the model which operation failed and why, so its one correction lands", async () => {
+    const add = { type: "add_block", summary: "Added a note", payload: { ref: "new:1", afterBlockId: null, block: { type: "paragraph", text: "A note.", alignment: "left" } } }
+    const { aiProvider, run } = runFlow(createContent(), [add, { type: "move_block", summary: "Moved it up", payload: { blockId: "new:2", afterBlockId: null } }], [add])
+    const result = await run
+
+    expect(String(readProviderRequests(aiProvider)[1]?.input)).toMatch(/operations\[1\] move_block: .*new:2/)
+    expect(result.proposal?.candidateDraft.content.blocks).toHaveLength(2)
+    expect(readProviderRequests(aiProvider)).toHaveLength(2)
+  })
+
+  it("refuses, and says why, what it would otherwise drop or mistake, and survives a payload nested without end", async () => {
+    const checkbox = { id: FIELD_ID, type: "checkbox_field" as const, fieldKey: "pet", label: "Has a pet", required: false, helpText: null, checkedByDefault: false }
+    const paragraph = { type: "paragraph", text: "A note.", alignment: "left" }
+    const refused: Array<[RegExp, TestFlowOperation[]]> = [
+      // A name given to two new blocks.
+      [/operations\[1\] add_block: .*new:1/, [1, 2].map(() => ({ type: "add_block", summary: "Added a note", payload: { ref: "new:1", afterBlockId: null, block: paragraph } }))],
+      // A condition on a field that comes later: once dropped without a word.
+      [
+        /operations\[0\] add_block: .*visibleWhen/,
+        [{ type: "add_block", summary: "Asked the pet's name", payload: { afterBlockId: PARAGRAPH_ID, block: { type: "text_field", fieldKey: "name", label: "Pet's name", required: false, helpText: null, placeholder: null, multiline: false, visibleWhen: { sourceBlockId: FIELD_ID, operator: "equals", value: true } } } }],
+      ],
+      // A move that puts a field's source after it: the field would show for everyone.
+      [/operations: .*Pet's age.*visibleWhen/, [{ type: "move_block", summary: "Moved the question down", payload: { blockId: FIELD_ID, afterBlockId: COMPANION_ID } }]],
+    ]
+
+    for (const [reason, operations] of refused) {
+      const content = createContent()
+      content.blocks.push(checkbox, { id: COMPANION_ID, type: "text_field", fieldKey: "age", label: "Pet's age", required: false, helpText: null, placeholder: null, multiline: false, visibleWhen: { sourceBlockId: FIELD_ID, operator: "equals", value: true } })
+      const { aiProvider, run } = runFlow(content, operations)
+
+      await expect(run).rejects.toMatchObject({ statusCode: 502 })
+      expect(String(readProviderRequests(aiProvider)[1]?.input)).toMatch(reason)
+    }
+
+    const nested = rawFlowProviderResult({
+      assistantMessage: "Done.",
+      needsConfirmation: false,
+      confirmationQuestion: "",
+      operations: [{ type: "move_block", summary: "Moved it", payloadJson: `${'{"a":'.repeat(7_000)}1${"}".repeat(7_000)}` }],
+    })
+
+    await expect(
+      executeTemplateFlow(createInput(createContent(), "Build the form."), createDependencies({ aiProvider: createTestAiProvider([nested]) }))
+    ).rejects.toMatchObject({ statusCode: 502 })
+  })
+})
+
 describe("document Flow", () => {
   const DOCUMENT_ID = "00000000-0000-4000-8000-000000000020"
 
@@ -1384,6 +1476,15 @@ function readOtherCompanions(
       block.visibleWhen.operator === "equals" &&
       block.visibleWhen.value === "Other"
   )
+}
+
+// One Flow turn over a document: what the model replies with first, and after a correction.
+function runFlow(content: TemplateContent, ...replies: TestFlowOperation[][]) {
+  const aiProvider = createTestAiProvider(
+    replies.map((operations: TestFlowOperation[]) => flowProviderResult({ assistantMessage: "Done.", needsConfirmation: false, confirmationQuestion: "", operations }))
+  )
+
+  return { aiProvider, run: executeTemplateFlow(createInput(content, "Build the form."), createDependencies({ aiProvider })) }
 }
 
 function createContent(): TemplateContent {

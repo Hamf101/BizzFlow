@@ -28,6 +28,7 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import { TEMPLATE_FLOW_OPERATION_TYPES } from "@/services/template-ai/flow-response-schema"
 import {
   createTemplateFlowDraftFingerprint,
   toTemplateFlowDraft
@@ -870,18 +871,9 @@ function parseLedgerItem(value: unknown): TemplateFlowLedgerItem | null {
     return null
   }
 
-  const allowedTypes: readonly string[] = [
-    "set_title",
-    "set_description",
-    "set_branding",
-    "add_block",
-    "update_block",
-    "update_image",
-    "move_block",
-    "remove_block"
-  ]
-
-  if (!allowedTypes.includes(value.type)) {
+  // The one list of what Flow can do: a type left off a second list here
+  // would drop the whole proposal it arrived in.
+  if (!(TEMPLATE_FLOW_OPERATION_TYPES as readonly string[]).includes(value.type)) {
     return null
   }
 
