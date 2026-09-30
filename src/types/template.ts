@@ -449,18 +449,47 @@ export const templateFieldGroupSchema = z
   })
   .strict()
 
-/** Pagination hints attached to one canonical block reference. */
+/**
+ * Where a block on a line of its own sits across the page: its left edge and
+ * width, in percentages of the space between the margins.
+ */
+export const blockFrameSchema = z
+  .object({
+    left: z.number().min(0).max(95),
+    width: z.number().min(5).max(100),
+  })
+  .strict()
+  .refine((frame) => frame.left + frame.width <= 100.001, "A block must fit between the margins.")
+
+/** Where a block sits across the page. */
+export type BlockFrame = z.infer<typeof blockFrameSchema>
+
+/**
+ * How one canonical block is laid out: whether it starts a page or stays with
+ * the next, the space above it in points, and where it sits across the page.
+ */
 export const templateBlockRuleSchema = z
   .object({
     blockId: blockIdSchema,
     pageBreakBefore: z.boolean(),
-    keepWithNext: z.boolean()
+    keepWithNext: z.boolean(),
+    spaceAbove: z.number().min(0).max(600).optional(),
+    frame: blockFrameSchema.optional()
   })
   .strict()
-  .refine(
-    (rule): boolean => rule.pageBreakBefore || rule.keepWithNext,
-    "A block rule must enable at least one pagination behavior."
-  )
+  .refine(ruleHasEffect, "A block rule must change how its block is laid out.")
+
+/**
+ * Tells a block rule that changes anything, as one left at its defaults does not.
+ *
+ * @param rule - A block's rule.
+ * @returns Whether it breaks a page, keeps with the next, adds space or moves the block across.
+ */
+export function ruleHasEffect(
+  rule: Readonly<{ pageBreakBefore: boolean; keepWithNext: boolean; spaceAbove?: number; frame?: BlockFrame }>
+): boolean {
+  return rule.pageBreakBefore || rule.keepWithNext || (rule.spaceAbove ?? 0) > 0 || rule.frame !== undefined
+}
 
 /** Read-compatible version-two template content retained for immutable snapshots. */
 export const templateContentV2Schema = z

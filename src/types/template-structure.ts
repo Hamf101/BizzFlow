@@ -2,6 +2,7 @@ import {
   isPinnedBlock,
   MAX_ROW_COLUMNS,
   MAX_TEMPLATE_BLOCK_COUNT,
+  ruleHasEffect,
   type TemplateBlock,
   type TemplateContentV3,
   type TemplateFieldGroup,
@@ -9,6 +10,7 @@ import {
 } from "@/types/template"
 
 type TemplateFieldBlock = Extract<TemplateBlock, { fieldKey: string }>
+type TemplateBlockRule = TemplateContentV3["blockRules"][number]
 type TemplateDropdownFieldBlock = Extract<
   TemplateBlock,
   { type: "dropdown_field" }
@@ -649,23 +651,46 @@ export function updateTemplateFieldGroup(
  * @param content - Editable version-three content.
  * @param blockId - The block.
  * @param keepWithNext - Whether it stays with the next block.
- * @returns The content with the block's rule changed, keeping any page break
- * it already starts.
+ * @returns The content with the block's rule changed, keeping the rest of its rule.
  */
 export function setBlockKeepWithNext(
   content: TemplateContentV3,
   blockId: string,
   keepWithNext: boolean
 ): TemplateContentV3 {
+  return setBlockRule(content, blockId, { keepWithNext })
+}
+
+/**
+ * Changes how a block is laid out: its page break, whether it stays with the
+ * next, the space above it and where it sits across the page. What is not
+ * named stays as it was, and a rule left changing nothing is dropped.
+ *
+ * @param content - Editable version-three content.
+ * @param blockId - The block.
+ * @param change - What changes; an undefined space or frame is taken away.
+ * @returns The content with the block's rule changed.
+ */
+export function setBlockRule(
+  content: TemplateContentV3,
+  blockId: string,
+  change: Partial<Omit<TemplateBlockRule, "blockId">>
+): TemplateContentV3 {
   if (!content.blocks.some((block: TemplateBlock): boolean => block.id === blockId)) {
     return content
   }
 
   const existing = content.blockRules.find((rule): boolean => rule.blockId === blockId)
-  const rule = { blockId, pageBreakBefore: existing?.pageBreakBefore ?? false, keepWithNext }
+  const rule: TemplateBlockRule = { blockId, keepWithNext: false, pageBreakBefore: false, ...existing, ...change }
   const others = content.blockRules.filter((candidate): boolean => candidate.blockId !== blockId)
 
-  if (!rule.pageBreakBefore && !rule.keepWithNext) {
+  // Held down past the most a page allows, a space stops there.
+  if (rule.spaceAbove) rule.spaceAbove = Math.min(rule.spaceAbove, 600)
+  // None of it left, a rule would say nothing.
+  if (!rule.spaceAbove) delete rule.spaceAbove
+  if (!rule.frame) delete rule.frame
+
+  if (!ruleHasEffect(rule)) {
     return { ...content, blockRules: others }
   }
 
@@ -675,6 +700,23 @@ export function setBlockKeepWithNext(
       ? content.blockRules.map((candidate) => (candidate.blockId === blockId ? rule : candidate))
       : [...content.blockRules, rule],
   }
+}
+
+/**
+ * Where a block sits across the page, as its rule keeps it: none when it
+ * fills the line, and to a tenth of a percent otherwise.
+ *
+ * @param left - Its left edge, in percentages of the line.
+ * @param width - Its width, in the same.
+ * @returns The frame, or undefined for the whole line.
+ */
+export function frameOf(left: number, width: number): TemplateBlockRule["frame"] {
+  const round = (value: number): number => Math.round(value * 10) / 10
+
+  // Pushed past either edge, a block stops at it, and never narrower than a twentieth.
+  const at = round(Math.min(Math.max(left, 0), 95))
+
+  return at < 0.5 && width > 99.5 ? undefined : { left: at, width: round(Math.min(Math.max(width, 5), 100 - at)) }
 }
 
 /**
@@ -1367,7 +1409,7 @@ function reconcileTemplateStructure(
     if (
       !existingBlockIds.has(rule.blockId) ||
       seenRuleBlockIds.has(rule.blockId) ||
-      (!rule.pageBreakBefore && !rule.keepWithNext)
+      !ruleHasEffect(rule)
     ) {
       return false
     }

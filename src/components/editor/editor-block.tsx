@@ -43,6 +43,7 @@ import { PaperField, PRINTED_HEADING, printedSpace } from "@/components/editor/p
 import { placeImage, placementOf } from "@/components/editor/image-placement"
 import { RichLine } from "@/components/editor/rich-line"
 import type { EditorController, FocusRequest } from "@/components/editor/use-editor-controller"
+import { frameOf, setBlockRule } from "@/types/template-structure"
 import { RichText } from "@/components/templates/rich-text"
 import { FieldGroupSettings } from "@/components/editor/field-group-settings"
 import { BlockFields } from "@/components/templates/template-block-editor"
@@ -72,6 +73,8 @@ export type CanvasActions = Readonly<{
   /** The block being dragged to a new place, if any. */
   dragging: string | null
   fields: "design" | "fill" | "read"
+  /** Blocks the answers so far would hide, shown faded while the page is built. */
+  hiddenByRule: ReadonlySet<string>
   /** Whether the page is a phone's reflowed column rather than sheets of paper. */
   narrow: boolean
   /** The caret request for one line, when it is that line's turn. */
@@ -79,6 +82,8 @@ export type CanvasActions = Readonly<{
   onAnswerChange: (fieldKey: string, value: unknown) => void
   onLineInput: (block: LineBlock, text: string, runs: TextRun[] | undefined, caret: number) => void
   onLineKeyDown: (event: globalThis.KeyboardEvent, caret: TextCaret, block: LineBlock) => void
+  /** Puts words pasted over several lines in a line, from one place to another, as a line each. */
+  onPasteLines: (caretKey: string, lines: readonly string[], from: number, to: number) => void
   onListInput: (block: ListBlock, item: number, text: string, runs: TextRun[] | undefined) => void
   onListKeyDown: (event: globalThis.KeyboardEvent, caret: TextCaret, block: ListBlock, item: number) => void
   placeholderFor: (blockId: string) => string | undefined
@@ -169,6 +174,31 @@ export function CanvasBlock({
     controller.select(block.id)
   }
 
+  // Alt and an arrow move a block alone on its line across the page, or
+  // down; with Shift, across makes it narrower or wider.
+  function nudgeFrame(event: KeyboardEvent<HTMLDivElement>): boolean {
+    const content = controller.content
+    const inRow = (rowOf(content, block.id)?.columns ?? 1) > 1
+
+    if (actions.narrow || inRow || !(actions.textEditable || actions.designable)) {
+      return false
+    }
+
+    const rule = content.blockRules.find((candidate) => candidate.blockId === block.id)
+    const { left, width } = rule?.frame ?? { left: 0, width: 100 }
+    const step = event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 1
+
+    if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+      controller.change((current) => setBlockRule(current, block.id, { spaceAbove: Math.max(0, (rule?.spaceAbove ?? 0) + step * 2) }), `space:${block.id}`)
+    } else if (event.shiftKey) {
+      controller.change((current) => setBlockRule(current, block.id, { frame: frameOf(left, Math.max(5, width + step)) }), `frame:${block.id}`)
+    } else {
+      controller.change((current) => setBlockRule(current, block.id, { frame: frameOf(Math.min(Math.max(0, left + step), 100 - width), width) }), `frame:${block.id}`)
+    }
+
+    return true
+  }
+
   function handleKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
     if (event.target !== event.currentTarget) {
       return
@@ -182,6 +212,8 @@ export function CanvasBlock({
     if (nudged && block.type === "image") {
       event.preventDefault()
       controller.updateBlock({ ...block, placement: nudged }, `image:${block.id}`)
+    } else if (event.altKey && event.key.startsWith("Arrow") && nudgeFrame(event)) {
+      event.preventDefault()
     } else if (event.key === "Backspace" || event.key === "Delete") {
       event.preventDefault()
       controller.remove(block.id)
@@ -227,10 +259,14 @@ export function CanvasBlock({
         selected && actions.dragging !== block.id && "ring-2 ring-primary ring-offset-[0.4em] ring-offset-card",
         // Words held still are ready to drag; a block being dragged rides above the page.
         "data-held:ring-2 data-held:ring-primary/40 data-held:ring-offset-[0.4em] data-held:ring-offset-card",
-        actions.dragging === block.id && "z-40 bg-card opacity-70 shadow-xl"
+        actions.dragging === block.id && "z-40 bg-card opacity-70 shadow-xl",
+        // Hidden by its rule for these answers: there to edit, faded as it won't print.
+        actions.hiddenByRule.has(block.id) && "opacity-45"
       )}
       data-block-id={block.id}
       data-block-type={block.type}
+      data-hidden-by-rule={actions.hiddenByRule.has(block.id) ? "" : undefined}
+      title={actions.hiddenByRule.has(block.id) ? "Hidden for these answers by its rule" : undefined}
       data-selected={selected || undefined}
       onKeyDown={handleKeyDown}
       onMouseDown={handleMouseDown}
@@ -398,6 +434,7 @@ function TextLine({
       }}
       onGone={(editor: Editor) => controller.setLine((line) => (line === editor ? null : line))}
       onKeyDown={onKeyDown}
+      onPasteLines={(lines, from, to) => actions.onPasteLines(caretKey, lines, from, to)}
       placeholder={placeholder}
       runs={runs}
       style={style}
@@ -444,16 +481,23 @@ function LineBreaks({ blockId }: { blockId: string }): ReactElement | null {
   ) : null
 }
 
+// The row a block is in, if any.
+function rowOf(content: EditorController["content"], blockId: string): EditorController["content"]["fieldGroups"][number] | undefined {
+  const index = content.blocks.findIndex((block) => block.id === blockId)
+
+  return content.fieldGroups.find((group) => {
+    const start = content.blocks.findIndex((block) => block.id === group.startBlockId)
+    const end = content.blocks.findIndex((block) => block.id === group.endBlockId)
+    return index >= start && index <= end
+  })
+}
+
 function BlockToolbar({ actions, block }: { actions: CanvasActions; block: TemplateBlock }): ReactElement {
   const { controller } = actions
   const blocks = controller.content.blocks
   const index = blocks.findIndex((candidate) => candidate.id === block.id)
 
-  const group = controller.content.fieldGroups.find((group) => {
-    const start = blocks.findIndex((block) => block.id === group.startBlockId)
-    const end = blocks.findIndex((block) => block.id === group.endBlockId)
-    return index >= start && index <= end
-  })
+  const group = rowOf(controller.content, block.id)
   const inRow = group !== undefined && group.columns > 1
   const keepWithNext = controller.content.blockRules.some((rule) => rule.blockId === block.id && rule.keepWithNext)
 

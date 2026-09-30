@@ -68,12 +68,26 @@ export function rowGridColumns(columns: number, widths: readonly number[] | null
 }
 
 /**
- * Hands a row's columns to its grid as `--row-columns`, so one class can
- * stack the row on a phone and set it side by side from sm up.
+ * Hands a row's layout to its grid: its columns as `--row-columns`, the space
+ * above it as `--row-space`, and, for a block alone on its line, where it sits
+ * across the page as `--row-left` and `--row-width`. `ROW_GRID` reads them, so
+ * a phone stacks the row and keeps its own rhythm, and from sm up it is laid
+ * out as it prints.
  *
  * @param group - The row.
- * @returns Inline style carrying the row's grid columns.
+ * @returns Inline style carrying the row's layout.
  */
-export function rowGridStyle(group: Pick<TemplateWebRenderGroup, "columns" | "widths">): CSSProperties {
-  return { "--row-columns": rowGridColumns(group.columns, group.widths) } as CSSProperties
+export function rowGridStyle(group: Pick<TemplateWebRenderGroup, "blocks" | "columns" | "widths">): CSSProperties {
+  const first = group.blocks[0]
+  const frame = group.columns === 1 ? first?.frame : null
+
+  return {
+    "--row-columns": rowGridColumns(group.columns, group.widths),
+    ...(first?.spaceAbove ? { "--row-space": `${first.spaceAbove}pt` } : {}),
+    ...(frame ? { "--row-left": `${frame.left}%`, "--row-width": `${frame.width}%` } : {}),
+  } as CSSProperties
 }
+
+/** The classes that lay a row out by `rowGridStyle`'s properties. */
+export const ROW_GRID =
+  "grid min-w-0 grid-cols-1 sm:grid-cols-[var(--row-columns)] sm:mt-[var(--row-space,0)] sm:ml-[var(--row-left,0)] sm:w-[var(--row-width,100%)]"

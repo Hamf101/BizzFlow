@@ -1,4 +1,5 @@
 import type { TemplateRenderBlock, TemplateRenderPlan } from "@/services/templates/template-render-plan"
+import type { BlockFrame } from "@/types/template"
 
 /** Where a page may end inside a block: a line, list item or table row, from the block's top. */
 export type PaginationRow = Readonly<{ key: string; top: number }>
@@ -140,6 +141,10 @@ export type CanvasUnit = Readonly<{
   columns: number
   /** The row's column widths in twelfths, or null for equal columns. */
   widths: readonly number[] | null
+  /** Where a block on a line of its own sits across the page, or null for the whole width. */
+  frame: BlockFrame | null
+  /** The space above it, in points. */
+  space: number
   groupLabel: string | null
   id: string
   keepWithNext: boolean
@@ -160,7 +165,7 @@ export function createUnits(plan: TemplateRenderPlan): CanvasUnit[] {
   const blocks = plan.blocks.filter(({ block }) => !(block.type === "image" && block.placement))
 
   if (plan.title) {
-    units.push({ blocks: [], columns: 1, widths: null, groupLabel: null, id: "title", keepWithNext: false, pageBreakBefore: false, sectionLabel: null, sectionId: null, together: [] })
+    units.push({ blocks: [], columns: 1, frame: null, space: 0, widths: null, groupLabel: null, id: "title", keepWithNext: false, pageBreakBefore: false, sectionLabel: null, sectionId: null, together: [] })
   }
 
   let index = 0
@@ -188,6 +193,8 @@ export function createUnits(plan: TemplateRenderPlan): CanvasUnit[] {
       blocks: grouped,
       columns,
       widths: columns > 1 ? first.fieldGroupWidths : null,
+      frame: columns > 1 ? null : first.frame,
+      space: first.spaceAbove,
       groupLabel: startsGroup ? first.fieldGroupLabel : null,
       id: first.block.id,
       keepWithNext: grouped.at(-1)?.keepWithNext ?? false,

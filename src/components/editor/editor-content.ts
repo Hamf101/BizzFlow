@@ -1,6 +1,7 @@
-import { fitRuns, type TemplateBlock, type TemplateContentV3, type TextRun } from "@/types/template"
+import { fitRuns, ruleHasEffect, type TemplateBlock, type TemplateContentV3, type TextRun } from "@/types/template"
 import {
   deleteTemplateBlock,
+  evaluateTemplateBlockDeletion,
   insertTemplateBlock,
   removeTemplateSection,
   startTemplateSection,
@@ -292,7 +293,7 @@ export function removePageBreak(
       .map((rule: TemplateBlockRule) =>
         rule.blockId === blockId ? { ...rule, pageBreakBefore: false } : rule
       )
-      .filter((rule: TemplateBlockRule) => rule.pageBreakBefore || rule.keepWithNext),
+      .filter(ruleHasEffect),
     sections: content.sections.map((section) =>
       section.startBlockId === blockId ? { ...section, pageBreakBefore: false } : section
     ),
@@ -537,6 +538,164 @@ export function joinRuns(...parts: ReadonlyArray<Readonly<{ runs?: readonly Text
   const runs = parts.flatMap((part) => part.runs ?? (part.text ? [{ text: part.text }] : []))
 
   return fitRuns(runs.map((run) => run.text).join(""), runs)
+}
+
+/**
+ * Takes out the words and blocks between two points on the page, as when a
+ * selection across blocks is deleted or typed over. The words before the
+ * first point and after the last join where the first point was, keeping
+ * their formatting; blocks wholly between them go, fields and pictures too,
+ * and a list keeps the items after the last point. The points can come in
+ * either order.
+ *
+ * @param content - The page.
+ * @param from - One end of the selection.
+ * @param to - The other end.
+ * @returns The page and where the caret goes, or why it cannot be done.
+ */
+export function deleteAcross(
+  content: TemplateContentV3,
+  from: CaretTarget,
+  to: CaretTarget
+): Readonly<{ content: TemplateContentV3; focus: CaretTarget | null; ok: true }> | Readonly<{ message: string; ok: false }> {
+  const order = (point: CaretTarget): number[] => [content.blocks.findIndex((block) => block.id === point.blockId), point.item ?? 0, point.offset]
+  const [first, last] = compareOrder(order(from), order(to)) <= 0 ? [from, to] : [to, from]
+  const start = content.blocks.findIndex((block) => block.id === first.blockId)
+  const end = content.blocks.findIndex((block) => block.id === last.blockId)
+  const head = entriesOf(content.blocks[start])
+  const tail = entriesOf(content.blocks[end])
+  const firstItem = first.item ?? 0
+  const lastItem = last.item ?? 0
+  const before = head ? [...head.slice(0, firstItem), cut(head[firstItem], 0, first.offset)] : null
+  const after = tail ? [cut(tail[lastItem], last.offset), ...tail.slice(lastItem + 1)] : null
+  // What goes whole: the blocks between, and an end that is not words.
+  const gone = content.blocks
+    .slice(start, end + 1)
+    .filter((block, index) => (index > 0 && index < end - start) || (index === 0 && !before) || (index === end - start && !after && start !== end))
+    .map((block) => block.id)
+
+  if (start < 0 || end < 0) {
+    return { message: "The selection is no longer on the page.", ok: false }
+  }
+
+  let blocks = content.blocks
+
+  for (const id of gone) {
+    const allowed = evaluateTemplateBlockDeletion(blocks, id)
+
+    if (!allowed.success) {
+      return { message: allowed.message, ok: false }
+    }
+
+    blocks = blocks.filter((block) => block.id !== id)
+  }
+
+  let next = gone.reduce((page, id) => deleteTemplateBlock(page, id), content)
+
+  if (before) {
+    // The words after the last point join the first block, when both are words.
+    const joined = after ? [...before.slice(0, -1), joinEntries(before.at(-1)!, after[0]!)] : before
+    const rest = after?.slice(1) ?? []
+
+    next = updateTemplateBlock(next, withAll(content.blocks[start]!, start === end ? [...joined, ...rest] : joined))
+
+    if (start !== end && after) {
+      next = rest.length ? updateTemplateBlock(next, withAll(content.blocks[end]!, rest)) : deleteTemplateBlock(next, last.blockId)
+    }
+
+    return { content: next, focus: { blockId: first.blockId, ...(first.item === undefined ? {} : { item: firstItem }), offset: first.offset }, ok: true }
+  }
+
+  if (after) {
+    next = updateTemplateBlock(next, withAll(content.blocks[end]!, after))
+
+    return { content: next, focus: { blockId: last.blockId, ...(last.item === undefined ? {} : { item: 0 }), offset: 0 }, ok: true }
+  }
+
+  return { content: next, focus: null, ok: true }
+}
+
+/**
+ * Puts words in at the caret, a line or several: the first joins the words
+ * before the caret, each next one starts a line of its own (an item, in a
+ * list), and the words after the caret follow the last. Blank lines between
+ * are dropped.
+ *
+ * @param content - The page.
+ * @param at - The caret.
+ * @param lines - The lines put in.
+ * @param newId - Makes an id for each new line.
+ * @returns The page, and the caret at the end of the pasted words.
+ */
+export function insertLines(content: TemplateContentV3, at: CaretTarget, lines: readonly string[], newId: () => string): { content: TemplateContentV3; focus: CaretTarget } {
+  const block = content.blocks.find((candidate) => candidate.id === at.blockId)
+  const entries = entriesOf(block)
+  const kept = lines.filter((line, index) => line.trim() || index === 0 || index === lines.length - 1)
+
+  if (!block || !entries || kept.length === 0) {
+    return { content, focus: at }
+  }
+
+  const item = at.item ?? 0
+  const entry = entries[item]!
+  const pasted: ListEntry[] =
+    kept.length === 1
+      ? [joinEntries(joinEntries(cut(entry, 0, at.offset), { text: kept[0]! }), cut(entry, at.offset))]
+      : [
+          joinEntries(cut(entry, 0, at.offset), { text: kept[0]! }),
+          ...kept.slice(1, -1).map((text) => ({ text })),
+          joinEntries({ text: kept.at(-1)! }, cut(entry, at.offset)),
+        ]
+  const offset = (kept.length === 1 ? at.offset : 0) + kept.at(-1)!.length
+
+  if (isList(block)) {
+    const listed = withEntries(block, [...entries.slice(0, item), ...pasted, ...entries.slice(item + 1)])
+
+    return { content: updateTemplateBlock(content, listed), focus: { blockId: block.id, item: item + pasted.length - 1, offset } }
+  }
+
+  let next = updateTemplateBlock(content, withAll(block, [pasted[0]!]))
+  let previous = block.id
+
+  for (const line of pasted.slice(1)) {
+    const id = newId()
+
+    next = insertTemplateBlock(next, previous, { alignment: "left", id, runs: line.runs, text: line.text, type: "paragraph" })
+    previous = id
+  }
+
+  return { content: next, focus: { blockId: previous, offset } }
+}
+
+// A block's words as entries: one for a line, one for each item of a list,
+// and none for a block that is not words.
+function entriesOf(block: TemplateBlock | undefined): ListEntry[] | null {
+  return isLine(block) ? [{ runs: block.runs, text: block.text }] : isList(block) ? listEntries(block) : null
+}
+
+// A block given back its entries: a line takes the first.
+function withAll(block: TemplateBlock, entries: readonly ListEntry[]): TemplateBlock {
+  if (isList(block)) {
+    return withEntries(block, entries)
+  }
+
+  const [line = { text: "" }] = entries
+
+  return isLine(block) ? { ...block, runs: fitRuns(line.text, line.runs), text: line.text } : block
+}
+
+function cut(entry: ListEntry | undefined, start: number, end = Infinity): ListEntry {
+  return { runs: sliceRuns(entry?.runs, start, end), text: (entry?.text ?? "").slice(start, end) }
+}
+
+function joinEntries(left: ListEntry, right: ListEntry): ListEntry {
+  return { runs: joinRuns(left, right), text: left.text + right.text }
+}
+
+function compareOrder(left: readonly number[], right: readonly number[]): number {
+  const index = left.findIndex((value, at) => value !== right[at])
+
+  return index < 0 ? 0 : (left[index] ?? 0) - (right[index] ?? 0)
 }
 
 function setPageBreak(content: TemplateContentV3, blockId: string): TemplateContentV3 {

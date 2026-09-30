@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, useEffect } from "react"
+import { act, useEffect, useState } from "react"
 import { createRoot, type Root } from "react-dom/client"
 import { afterEach, beforeAll, expect, it } from "vitest"
 
@@ -29,8 +29,9 @@ const TERMS: TemplateContentV3 = {
 function Canvas({ editable = true, fields = "design", initial = TERMS, narrow = true }: { editable?: boolean; fields?: "design" | "fill"; initial?: TemplateContentV3; narrow?: boolean }) {
   const history = useEditorHistory<TemplateContentV3>(initial)
   const current = useEditorController({ change: history.set, content: history.state, undo: history.undo })
+  const [answers, setAnswers] = useState<Record<string, unknown>>({})
   useEffect(() => { controller = current })
-  return <EditorCanvas allowFiles controller={current} designable={editable} documentTitle="Agreement" fields={fields} narrow={narrow} surface="screen" textEditable={editable} zoom={1} />
+  return <EditorCanvas allowFiles answers={answers} controller={current} designable={editable} documentTitle="Agreement" fields={fields} narrow={narrow} onAnswerChange={(key, value) => setAnswers((all) => ({ ...all, [key]: value }))} surface="screen" textEditable={editable} zoom={1} />
 }
 
 it("edits section titles, keeps an emptied title valid, switches rules and moves the caret into its text", async () => {
@@ -159,4 +160,26 @@ it("moves a page's margins in pairs, so the text stays centred", async () => {
   const { margins } = controller.content.layout
   expect(margins).toMatchObject({ left: margins!.right, top: margins!.bottom })
   expect(margins!.left).toBeGreaterThan(margins!.top)
+})
+
+it("keeps a field its rule hides on the page while it is built, faded until the answers show it", async () => {
+  const pets = "70000000-0000-4000-8000-000000000021"
+  const kind = "70000000-0000-4000-8000-000000000022"
+  const content = templateContentV3Schema.parse({
+    ...TERMS,
+    blocks: [
+      ...TERMS.blocks,
+      { checkedByDefault: false, fieldKey: "pets", helpText: null, id: pets, label: "Any pets?", required: false, type: "checkbox_field" },
+      { fieldKey: "pet_kind", helpText: null, id: kind, label: "What kind?", multiline: false, placeholder: null, required: false, type: "text_field", visibleWhen: { operator: "equals", sourceBlockId: pets, value: true } },
+    ],
+  })
+  root = createRoot(document.body.appendChild(document.createElement("div")))
+  await act(async () => root.render(<Canvas fields="fill" initial={content} />))
+  const conditional = () => document.querySelector<HTMLElement>(`[data-block-id="${kind}"]`)
+
+  expect(conditional()?.dataset.hiddenByRule).toBe("")
+
+  await act(async () => document.querySelector<HTMLInputElement>('input[aria-label="Any pets?"]')!.click())
+
+  expect(conditional()?.dataset.hiddenByRule).toBeUndefined()
 })

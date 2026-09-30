@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest"
 
 import {
   convertTextBlock,
+  deleteAcross,
+  insertLines,
   insertPageAfter,
   insertSectionAfter,
   liftListItem,
@@ -244,5 +246,60 @@ describe("sections typed on the page", () => {
     }
 
     expect(turnLineIntoSection(content, B, N).content).toBe(content)
+  })
+})
+
+describe("words selected across blocks", () => {
+  const D = "70000000-0000-4000-8000-000000000004"
+  const E = "70000000-0000-4000-8000-000000000005"
+  const content = page([
+    { alignment: "left", id: A, level: 2, runs: [{ bold: true, text: "Payment" }, { text: " terms" }], text: "Payment terms", type: "heading" },
+    { alignment: "left", id: B, text: "Rent is due monthly.", type: "paragraph" },
+    { fieldKey: "tenant", helpText: null, id: C, label: "Tenant", multiline: false, placeholder: null, required: false, type: "text_field" },
+    { id: D, items: ["Keys", "Alarm code"], type: "bullet_list" },
+    { alignment: "left", id: E, text: "Signed below.", type: "paragraph" },
+  ])
+
+  it("takes out what lies between two points, joining the words either side and keeping their formatting", () => {
+    const cut = deleteAcross(content, { blockId: A, offset: 4 }, { blockId: D, item: 1, offset: 6 })
+
+    // Everything between goes, the field too; the list keeps nothing before the point.
+    expect(cut.ok && texts(cut.content)).toEqual(["Paymcode", "Signed below."])
+    expect(cut.ok && cut.content.blocks[0]).toMatchObject({ runs: [{ bold: true, text: "Paym" }, { text: "code" }], type: "heading" })
+    expect(cut.ok && cut.focus).toEqual({ blockId: A, offset: 4 })
+    // Picked backwards, it is the same cut.
+    expect(deleteAcross(content, { blockId: D, item: 1, offset: 6 }, { blockId: A, offset: 4 })).toEqual(cut)
+    expect(cut.ok && templateContentV3Schema.safeParse(cut.content).success).toBe(true)
+  })
+
+  it("keeps a list's items after the point, and inside one line cuts only the words", () => {
+    const listed = deleteAcross(content, { blockId: B, offset: 4 }, { blockId: D, item: 0, offset: 2 })
+
+    expect(listed.ok && texts(listed.content)).toEqual(["Payment terms", "Rentys", "bullet_list", "Signed below."])
+    expect(listed.ok && listed.content.blocks[2]).toMatchObject({ items: ["Alarm code"] })
+
+    const words = deleteAcross(content, { blockId: B, offset: 0 }, { blockId: B, offset: 8 })
+
+    expect(words.ok && texts(words.content)[1]).toBe("due monthly.")
+  })
+
+  it("refuses to take out a field another field's rule depends on", () => {
+    const ruled = page([
+      ...content.blocks,
+      { fieldKey: "pets", helpText: null, id: "70000000-0000-4000-8000-000000000006", label: "Pets", multiline: false, placeholder: null, required: false, type: "text_field", visibleWhen: { operator: "equals", sourceBlockId: C, value: "yes" } },
+    ])
+
+    expect(deleteAcross(ruled, { blockId: B, offset: 2 }, { blockId: D, item: 0, offset: 1 }).ok).toBe(false)
+  })
+
+  it("pastes several lines as a line each, the words after the caret after the last", () => {
+    const pasted = insertLines(content, { blockId: B, offset: 8 }, ["paid", "", "in full "], () => C + "9")
+
+    expect(texts(pasted.content).slice(0, 4)).toEqual(["Payment terms", "Rent is paid", "in full due monthly.", "text_field"])
+    expect(pasted.focus).toEqual({ blockId: pasted.content.blocks[2]!.id, offset: 8 })
+
+    const listed = insertLines(content, { blockId: D, item: 0, offset: 4 }, ["", "Gate fob"], () => C + "9")
+
+    expect(listed.content.blocks[3]).toMatchObject({ items: ["Keys", "Gate fob", "Alarm code"] })
   })
 })

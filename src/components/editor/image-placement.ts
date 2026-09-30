@@ -2,6 +2,61 @@ import type { TemplateBlock } from "@/types/template"
 
 type Placement = NonNullable<Extract<TemplateBlock, { type: "image" }>["placement"]>
 
+type Box = Readonly<{ height: number; width: number; x: number; y: number }>
+
+/**
+ * Snaps a box being moved or resized to the lines near it: the page's edges,
+ * margins and middle, and other pinned blocks' edges and middles. Moving, its
+ * nearest edge or middle meets a line; resizing, its far edges do. The line
+ * met on each axis is returned, to draw as a guide.
+ *
+ * @param box - The box, in pixels from the page's corner.
+ * @param lines - Where lines run across and down the page, in the same pixels.
+ * @param threshold - How near, in pixels, a line pulls.
+ * @param how - Whether the box is moving or being resized.
+ * @returns The snapped box, and the lines it meets.
+ */
+export function snapBox(
+  box: Box,
+  lines: Readonly<{ x: readonly number[]; y: readonly number[] }>,
+  threshold: number,
+  how: "move" | "resize"
+): { box: Box; guides: { x?: number; y?: number } } {
+  const guides: { x?: number; y?: number } = {}
+  const snapped = { ...box }
+
+  for (const axis of ["x", "y"] as const) {
+    const size = axis === "x" ? box.width : box.height
+    const start = box[axis]
+    const points = how === "move" ? [start, start + size / 2, start + size] : [start + size]
+    let best: { line: number; shift: number } | null = null
+
+    for (const point of points) {
+      for (const line of lines[axis]) {
+        const shift = line - point
+
+        if (Math.abs(shift) <= threshold && (!best || Math.abs(shift) < Math.abs(best.shift))) {
+          best = { line, shift }
+        }
+      }
+    }
+
+    if (best) {
+      guides[axis] = best.line
+
+      if (how === "move") {
+        snapped[axis] = start + best.shift
+      } else if (axis === "x") {
+        snapped.width = size + best.shift
+      } else {
+        snapped.height = size + best.shift
+      }
+    }
+  }
+
+  return { box: snapped, guides }
+}
+
 /**
  * Keeps a picture's box on its page: at least 1% on each side, no larger than
  * the page, and wholly inside it.

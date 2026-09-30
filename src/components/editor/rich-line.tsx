@@ -110,6 +110,8 @@ type RichLineProps = {
   /** Says the line's editor is going, so nothing keeps acting on it. */
   onGone?: (editor: Editor) => void
   onKeyDown?: (event: KeyboardEvent, caret: TextCaret) => void
+  /** Takes pasted words that run to several lines, in place of the words from one place to another. */
+  onPasteLines?: (lines: string[], from: number, to: number) => void
   placeholder?: string
   runs?: readonly TextRun[]
   style?: CSSProperties
@@ -134,12 +136,13 @@ export function RichLine({
   onFocus,
   onGone,
   onKeyDown,
+  onPasteLines,
   placeholder,
   runs,
   style,
   value,
 }: RichLineProps): ReactElement {
-  const handlers = useRef({ onGone, onKeyDown })
+  const handlers = useRef({ onGone, onKeyDown, onPasteLines })
   // Lines the server drew wait for hydration; a line added later, as by Enter,
   // is ready to type in the moment it appears.
   const hydrated = useSyncExternalStore(subscribeNever, () => true, () => false)
@@ -162,7 +165,18 @@ export function RichLine({
         handlers.current.onKeyDown?.(event, readCaret(view.state))
         return event.defaultPrevented
       },
-      // Pasted words land on this one line.
+      // Words pasted over several lines become a line each.
+      handlePaste: (view, event) => {
+        const lines = (event.clipboardData?.getData("text/plain") ?? "").replace(/\r\n?/g, "\n").split("\n")
+
+        if (lines.length < 2 || !handlers.current.onPasteLines) {
+          return false
+        }
+
+        handlers.current.onPasteLines(lines, view.state.selection.from, view.state.selection.to)
+        return true
+      },
+      // Words pasted on one line stay on it.
       transformPastedText: (text: string) => text.replace(/\s+/g, " "),
     },
     enableInputRules: false,
@@ -179,7 +193,7 @@ export function RichLine({
   })
 
   useEffect(() => {
-    handlers.current = { onGone, onKeyDown }
+    handlers.current = { onGone, onKeyDown, onPasteLines }
   })
 
   // A change from elsewhere, such as an undo or someone else typing in this

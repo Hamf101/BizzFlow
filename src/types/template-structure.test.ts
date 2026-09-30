@@ -13,7 +13,9 @@ import {
   moveTemplateBlockTo,
   moveTemplateSection,
   removeTemplateSection,
+  frameOf,
   setBlockKeepWithNext,
+  setBlockRule,
   placeBeside,
   setRowWidths,
   standAlone,
@@ -795,6 +797,38 @@ describe("authoring sections, side-by-side fields and keep with next", () => {
       { blockId: SOURCE_ID, pageBreakBefore: false, keepWithNext: true },
     ])
     expect(setBlockKeepWithNext(content, TARGET_ID, false).blockRules).toEqual([])
+  })
+
+  it("keeps where a block was put across and down the page through moves, until it is put back", () => {
+    const content = createStructuredContent()
+    const put = setBlockRule(content, SECOND_SECTION_BLOCK_ID, { frame: { left: 50, width: 50 }, spaceAbove: 24 })
+    const moved = placed(moveTemplateBlockTo(put, SECOND_SECTION_BLOCK_ID, { inGroup: false, index: 0, opens: null }, INSERTED_ID))
+    const kept = setBlockKeepWithNext(moved, SECOND_SECTION_BLOCK_ID, true)
+    const rule = { blockId: SECOND_SECTION_BLOCK_ID, frame: { left: 50, width: 50 }, keepWithNext: false, pageBreakBefore: false, spaceAbove: 24 }
+
+    const own = (moving: TemplateContentV3) => moving.blockRules.filter((candidate) => candidate.blockId === SECOND_SECTION_BLOCK_ID)
+
+    expect(own(moved)).toEqual([rule])
+    expect(templateContentV3Schema.safeParse(moved).success).toBe(true)
+    expect(own(kept)).toEqual([{ ...rule, keepWithNext: true }])
+    // Back across the whole page with no space, and not kept with the next, it has no rule.
+    expect(own(setBlockRule(kept, SECOND_SECTION_BLOCK_ID, { frame: undefined, keepWithNext: false, spaceAbove: 0 }))).toEqual([])
+    expect(frameOf(0.2, 99.9)).toBeUndefined()
+    expect(frameOf(33.333, 80)).toEqual({ left: 33.3, width: 66.7 })
+  })
+
+  it("keeps a place pushed past the page's edges, or a space held down too long, one the template can still be saved with", () => {
+    const content = createStructuredContent()
+    const pushed = [
+      setBlockRule(content, SECOND_SECTION_BLOCK_ID, { spaceAbove: 900 }),
+      setBlockRule(content, SECOND_SECTION_BLOCK_ID, { frame: frameOf(-3.2, 40) }),
+      setBlockRule(content, SECOND_SECTION_BLOCK_ID, { frame: frameOf(98, 2) }),
+    ]
+
+    for (const saved of pushed) {
+      expect(templateContentV3Schema.safeParse(saved).success).toBe(true)
+    }
+    expect(pushed[0]!.blockRules.find((rule) => rule.blockId === SECOND_SECTION_BLOCK_ID)?.spaceAbove).toBe(600)
   })
 })
 

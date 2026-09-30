@@ -17,6 +17,7 @@ import {
 import { BLOCK_GAP, pageStyle, PlacedImages, printableMargin } from "@/components/templates/printed-page"
 import {
   groupTemplateRenderBlocks,
+  ROW_GRID,
   rowGridStyle,
   type TemplateWebRenderGroup
 } from "@/components/templates/template-render-groups"
@@ -510,9 +511,8 @@ function PreviewFieldGroup({
       <div
         style={rowGridStyle(group)}
         className={cn(
-          "grid min-w-0",
-          // Rows stack on a phone and sit side by side, at their widths, from sm up.
-          "grid-cols-1 sm:grid-cols-[var(--row-columns)]",
+          // Rows stack on a phone and are laid out as they print from sm up.
+          ROW_GRID,
           BLOCK_GAP[density],
           group.columns > 1 && twoColumnContentPadding
         )}

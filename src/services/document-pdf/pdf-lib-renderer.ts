@@ -343,8 +343,17 @@ async function drawPdfLibFlowItem(
           "left"
         ) - 8
       break
+    case "space":
+      return topY - item.height
     case "block":
-      bottomY = await drawPdfLibBlock(item, context, topY, fullFrame)
+      bottomY = await drawPdfLibBlock(
+        item,
+        context,
+        topY,
+        item.frame
+          ? { width: (fullFrame.width * item.frame.width) / 100, x: fullFrame.x + (fullFrame.width * item.frame.left) / 100 }
+          : fullFrame
+      )
       break
     case "columns":
       bottomY = await drawPdfLibColumns(item, context, topY)

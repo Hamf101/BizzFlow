@@ -4,6 +4,7 @@ import { Plus } from "lucide-react"
 import {
   type CSSProperties,
   Fragment,
+  type PointerEvent,
   type ReactElement,
   type ReactNode,
   useEffect,
@@ -32,6 +33,8 @@ import {
 } from "@/components/editor/editor-block"
 import {
   convertTextBlock,
+  deleteAcross,
+  insertLines,
   joinRuns,
   liftListItem,
   type ListEntry,
@@ -44,15 +47,19 @@ import {
   withEntries,
 } from "@/components/editor/editor-content"
 import { type CanvasUnit, createUnits, paginate, type PageFrame, type PaginationRow } from "@/components/editor/editor-pagination"
+import { usePageSelection } from "@/components/editor/page-selection"
+import { bizflowToast } from "@/components/ui/toaster"
 import { SectionPieces } from "./section-pieces"
 import { EditorSection } from "./editor-section"
 import { MarginGuides } from "@/components/editor/margin-guides"
 import { PRINTED_HEADING, printedSpace, SECTION_TITLE } from "@/components/editor/paper-field"
 import { SlashMenu } from "@/components/editor/slash-menu"
-import { type DropTarget, useBlockDrag } from "@/components/editor/use-block-drag"
+import { snapBox } from "@/components/editor/image-placement"
+import { type DragBox, type DragLine, type DropTarget, useBlockDrag } from "@/components/editor/use-block-drag"
 import { rowGridColumns } from "@/components/templates/template-render-groups"
 import { addPageBreak, type EditorController, type FocusRequest } from "@/components/editor/use-editor-controller"
 import { resolveDocumentSurfaceInk, type DocumentSurface } from "@/lib/document-surface"
+import { getVisibleTemplateBlocks } from "@/types/template-visibility"
 import { cn } from "@/lib/utils"
 import {
   createTemplateRenderPlan,
@@ -62,12 +69,14 @@ import {
   shouldRenderTemplateHeader,
   type TemplateRenderPlan,
 } from "@/services/templates/template-render-plan"
-import type { TextRun } from "@/types/template"
+import type { BlockFrame, TextRun } from "@/types/template"
 import {
   getTemplateBlockSlot,
   listTemplateBlockSlots,
   moveTemplateBlockTo,
   placeBeside,
+  frameOf,
+  setBlockRule,
   type TemplateBlockSlot,
   updateTemplateBlock,
 } from "@/types/template-structure"
@@ -78,14 +87,18 @@ export const POINT_PX = 4 / 3
 // A phone shows the words reflowed at a size that reads comfortably.
 const PHONE_POINT_PX = 1.5
 const PAGE_GAP_PX = 36
+// How near, on screen, a block being moved lines up with something.
+const SNAP_PX = 6
 const FOOTER_POINTS = 18
 const EMPTY_ANSWERS: Record<string, unknown> = {}
+const EMPTY_IDS: ReadonlySet<string> = new Set()
 const TEXT_CHOICE = INSERT_CHOICES[0] as InsertChoice
 
 
 /** Where a dragged block lands: in a gap between blocks, or beside one, in its row. */
 type CanvasDrop =
   | Readonly<{ kind: "gap"; slot: TemplateBlockSlot }>
+  | Readonly<{ frame: BlockFrame | null; kind: "free"; slot: TemplateBlockSlot | null; spaceAbove: number }>
   | Readonly<{ kind: "beside"; side: "left" | "right"; targetId: string }>
 
 type SlashState = Readonly<{
@@ -141,11 +154,20 @@ export function EditorCanvas({
       createTemplateRenderPlan({
         answers,
         content,
-        mode: fields === "design" ? "build" : "test",
+        // While the page can be built every block shows, even one its rule hides.
+        mode: fields === "design" || designable ? "build" : "test",
         title: documentTitle,
       }),
-    [answers, content, documentTitle, fields]
+    [answers, content, designable, documentTitle, fields]
   )
+  // What the answers so far would hide, faded on a page still being built.
+  const hiddenByRule = useMemo(() => {
+    if (!designable || fields === "design") return EMPTY_IDS
+
+    const shown = new Set(getVisibleTemplateBlocks(content, answers).map((block) => block.id))
+
+    return new Set(content.blocks.filter((block) => !shown.has(block.id)).map((block) => block.id))
+  }, [answers, content, designable, fields])
   const units = useMemo(() => createUnits(plan), [plan])
   const unitOf = useMemo(
     () => new Map(units.flatMap((unit) => unit.blocks.map(({ block }): [string, string] => [block.id, unit.id]))),
@@ -173,7 +195,7 @@ export function EditorCanvas({
   const [layout, setLayout] = useState<ReturnType<typeof paginate>>({ inside: {}, pageCount: 1, pages: {}, spacers: {} })
   const [slash, setSlash] = useState<SlashState | null>(null)
   const [fontsReady, setFontsReady] = useState(0)
-  const { begin, dragging, indicator } = useBlockDrag<CanvasDrop>({ locate, onDrop: drop, zoom: narrow ? 1 : zoom })
+  const { begin, dragging, guides, indicator } = useBlockDrag<CanvasDrop>({ lift: !narrow, locate, onDrop: drop, zoom: narrow ? 1 : zoom })
   const slashChoices = useMemo(
     () => (slash ? findInsertChoices({ allowFiles, query: slash.query }) : []),
     [allowFiles, slash]
@@ -372,22 +394,108 @@ export function EditorCanvas({
   // Where a dragged block lands: beside a block whose left or right quarter
   // the pointer is over, joining it in a row, or else the gap nearest the
   // pointer's height.
-  function locate(blockId: string, x: number, y: number): DropTarget<CanvasDrop> | null {
-    return locateBeside(blockId, x, y) ?? locateGap(blockId, y)
+  // On paper the block goes where it is let go, lined up with what it comes
+  // near; a phone's column only has places between blocks.
+  function locate(blockId: string, x: number, y: number, box: DragBox): DropTarget<CanvasDrop> | null {
+    // On paper the block's own middle decides, wherever it was grabbed.
+    const middle = narrow ? { x, y } : { x: box.left + box.width / 2, y: box.top + box.height / 2 }
+
+    return locateBeside(blockId, middle.x, middle.y, box) ?? (narrow ? locateGap(blockId, y) : locateFree(blockId, box))
   }
 
-  // Rows stack on a phone, so there a block only goes above or below.
-  function locateBeside(blockId: string, x: number, y: number): DropTarget<CanvasDrop> | null {
+  // Where a block let go on the page lands: after the last line that starts
+  // above it, as far below it as it was let go, and across the page where it
+  // was let go. It lines up with the margins, the page's middle and other
+  // blocks' edges and middles, sits snug under the line above when near it,
+  // and takes the same space as another block when near that.
+  function locateFree(blockId: string, box: DragBox): DropTarget<CanvasDrop> | null {
+    const screenPoint = point * zoom
+    const own = unitOf.get(blockId)
+    const ownUnit = units.find((unit) => unit.id === own)
+    const lines = units.flatMap((unit) => {
+      const element = unitElements.current.get(unit.id)
+      // A block alone on its line has left it while it moves.
+      const gone = unit.id === own && unit.blocks.length === 1
+
+      return element && !gone ? [{ rect: element.getBoundingClientRect(), unit }] : []
+    })
+    const page = lines[0]?.rect
+    const dragged = rootRef.current?.querySelector<HTMLElement>(`[data-block-id="${CSS.escape(blockId)}"]`)
+
+    if (!page || !dragged || !ownUnit) {
+      return null
+    }
+
+    // It goes past a block once its top passes that block's middle, so a gap
+    // can open above it without the block below, closed up, taking its place.
+    const above = lines.filter(({ rect }) => rect.top + rect.height / 2 <= box.top).at(-1) ?? lines[0]!
+    const rest = content.blocks.filter((block) => block.id !== blockId)
+    const lastAbove = above.unit.blocks.at(-1)?.block.id
+    const gap = lastAbove === undefined ? 0 : rest.findIndex((block) => block.id === lastAbove) + 1
+    const slots = listTemplateBlockSlots(content, blockId, false)
+    const slot = slots.find((candidate) => candidate.index >= gap && candidate.opens === null) ?? slots.at(-1) ?? null
+    const current = getTemplateBlockSlot(content, blockId)
+    const same = slot && current && slot.index === current.index && slot.opens === current.opens && !current.inGroup
+
+    // Snug under the line above: its own space above, as it prints.
+    const lead = parseFloat(dragged.dataset.lead ?? "0") * zoom
+    const snug = above.rect.bottom + lead
+    const spaces = [0, ...new Set(units.flatMap((unit) => (unit.id !== own && unit.space ? [unit.space] : [])))]
+    const asked = Math.max(0, (box.top - snug) / screenPoint)
+    const even = spaces.find((space) => Math.abs(space - asked) * screenPoint <= SNAP_PX)
+    const spaceAbove = even ?? Math.min(600, Math.round(asked))
+    const top = snug + spaceAbove * screenPoint
+
+    // Across: the margins, the middle, and the blocks on the page.
+    const width = Math.min(box.width, page.width)
+    const others = [...(rootRef.current?.querySelectorAll<HTMLElement>("[data-block-id]") ?? [])].filter((element) => element !== dragged && element.dataset.blockId !== undefined)
+    const edges = [0, page.width / 2, page.width, ...others.flatMap((element) => {
+      const rect = element.getBoundingClientRect()
+      return [rect.left - page.left, (rect.left + rect.right) / 2 - page.left, rect.right - page.left]
+    })]
+    const across = snapBox({ height: box.height, width, x: box.left - page.left, y: 0 }, { x: edges, y: [] }, SNAP_PX, "move")
+    const left = Math.min(Math.max(0, across.box.x), page.width - width)
+    const frame = frameOf((left / page.width) * 100, (width / page.width) * 100) ?? null
+    const guides: DragLine[] = []
+
+    if (across.guides.x !== undefined) {
+      guides.push({ height: box.height + 48, left: page.left + across.guides.x, top: top - 24, width: 1 })
+    }
+
+    if (even !== undefined) {
+      guides.push({ height: 1, left: page.left, top, width: page.width })
+    }
+
+    return {
+      at: { left: page.left + left, top },
+      guides,
+      slot: { frame, kind: "free", slot: same ? null : slot, spaceAbove },
+      valid: true,
+    }
+  }
+
+  // Rows stack on a phone, so there a block only goes above or below. On
+  // paper it joins a block in a row when it comes to one's left or right
+  // quarter, or to the empty page beside a block that does not fill its line.
+  function locateBeside(blockId: string, x: number, y: number, held: DragBox): DropTarget<CanvasDrop> | null {
     if (narrow) {
       return null
     }
 
+    const page = unitElements.current.values().next().value?.getBoundingClientRect()
+
     for (const element of rootRef.current?.querySelectorAll<HTMLElement>("[data-block-id]") ?? []) {
       const targetId = element.dataset.blockId
       const box = element.getBoundingClientRect()
+      const reach = { left: box.left - (page ? box.left - page.left : 0), right: page ? page.right : box.right }
 
-      if (!targetId || targetId === blockId || x < box.left || x > box.right || y < box.top || y > box.bottom) {
+      if (!targetId || targetId === blockId || x < reach.left || x > reach.right || y < box.top || y > box.bottom) {
         continue
+      }
+
+      // Laid over a block's middle, a block is on it, not beside it.
+      if (held.left < box.left + box.width / 2 && held.left + held.width > box.left + box.width / 2) {
+        return null
       }
 
       const edge = box.width / 4
@@ -463,12 +571,36 @@ export function EditorCanvas({
     const moved =
       landing.kind === "beside"
         ? controller.placeBeside(blockId, landing.targetId, landing.side)
-        : controller.moveTo(blockId, landing.slot)
+        : landing.kind === "free"
+          ? controller.placeAt(blockId, landing.slot, landing)
+          : controller.moveTo(blockId, landing.slot)
 
     if (moved) {
       controller.select(blockId)
     }
   }
+
+  // A selection across blocks: typing over it or deleting it takes out what
+  // lies between its ends, and the caret goes where they joined.
+  usePageSelection({
+    enabled: textEditable,
+    onCaret: controller.requestFocus,
+    onReplace(from, to, text) {
+      const cut = deleteAcross(content, from, to)
+
+      if (!cut.ok) {
+        bizflowToast.error(cut.message)
+        return
+      }
+
+      const typed = text && cut.focus ? insertLines(cut.content, cut.focus, [text], () => crypto.randomUUID()) : null
+
+      controller.change(() => typed?.content ?? cut.content)
+
+      if (typed?.focus ?? cut.focus) controller.requestFocus(typed?.focus ?? cut.focus!)
+    },
+    root: rootRef,
+  })
 
   const actions: CanvasActions = {
     answers,
@@ -476,6 +608,7 @@ export function EditorCanvas({
     designable,
     dragging,
     fields,
+    hiddenByRule,
     narrow,
     focusFor(caretKey: string): FocusRequest | null {
       const focus = controller.focus
@@ -485,6 +618,18 @@ export function EditorCanvas({
         : null
     },
     onAnswerChange,
+    onPasteLines(caretKey, lines, from, to) {
+      const [blockId = "", item] = caretKey.split(":")
+      const point = (offset: number) => (item === undefined ? { blockId, offset } : { blockId, item: Number(item), offset })
+      const cut = deleteAcross(content, point(from), point(to))
+
+      if (cut.ok) {
+        const pasted = insertLines(cut.content, point(from), lines, () => crypto.randomUUID())
+
+        controller.change(() => pasted.content)
+        controller.requestFocus(pasted.focus)
+      }
+    },
     onLineInput(block: LineBlock, text: string, runs: TextRun[] | undefined, caret: number): void {
       const shortcut = block.type === "paragraph" ? readMarkdownShortcut(text) : null
 
@@ -692,7 +837,7 @@ export function EditorCanvas({
     fontFamily: '"bf-default", sans-serif',
     fontSize: 10 * point,
   } as CSSProperties
-  const flow = units.map((unit: CanvasUnit) => (
+  const unitNode = (unit: CanvasUnit): ReactElement => (
     <Fragment key={unit.id}>
       {!narrow && layout.spacers[unit.id] ? (
         <div aria-hidden="true" style={{ height: layout.spacers[unit.id] }} />
@@ -703,6 +848,8 @@ export function EditorCanvas({
       <div
         className="pointer-events-auto"
         data-unit-id={unit.id}
+        // The space asked for above it; a phone's column keeps its own rhythm.
+        style={narrow || !unit.space ? undefined : { paddingTop: unit.space * point }}
         data-section-id={unit.blocks[0]?.sectionId ?? undefined}
         ref={(element) => {
           if (element) {
@@ -725,7 +872,41 @@ export function EditorCanvas({
         )}
       </div>
     </Fragment>
-  ))
+  )
+  // The page's pieces in reading order. A picture placed on a page keeps its
+  // place in that order, for a screen reader and a phone's column, and is
+  // drawn over its page in its box.
+  const emitted = new Set<string>()
+  const flow = [
+    ...units.filter((unit) => unit.id === "title").map(unitNode),
+    ...plan.blocks.flatMap(({ block }) => {
+      const box = block.type === "image" ? block.placement : undefined
+
+      if (box) {
+        return [
+          narrow ? (
+            <CanvasBlock actions={actions} block={block} key={block.id} />
+          ) : (
+            <div
+              className="pointer-events-none absolute inset-x-0 z-10"
+              key={block.id}
+              style={{ height: pageHeight, top: (box.page - 1) * (pageHeight + PAGE_GAP_PX) }}
+            >
+              <CanvasBlock actions={actions} block={block} placed />
+            </div>
+          ),
+        ]
+      }
+
+      const unit = units.find((candidate) => candidate.id === unitOf.get(block.id))
+
+      if (!unit || emitted.has(unit.id)) return []
+
+      emitted.add(unit.id)
+
+      return [unitNode(unit)]
+    }),
+  ]
 
   // The line a dragged block would land on, and what a screen reader hears
   // after a move.
@@ -733,12 +914,16 @@ export function EditorCanvas({
     <>
       {dragging
         ? createPortal(
-            <div
-              aria-hidden="true"
-              className="pointer-events-none fixed z-50 h-0.5 -translate-y-1/2 rounded-full bg-primary data-[valid=false]:bg-destructive"
-              hidden
-              ref={indicator}
-            />,
+            <>
+              <div
+                aria-hidden="true"
+                className="pointer-events-none fixed z-50 h-0.5 -translate-y-1/2 rounded-full bg-primary data-[valid=false]:bg-destructive"
+                hidden
+                ref={indicator}
+              />
+              {/* The lines a moving block lines up with. */}
+              <div aria-hidden="true" className="pointer-events-none [&>div]:fixed [&>div]:z-50 [&>div]:bg-primary/70" ref={guides} />
+            </>,
             document.body
           )
         : null}
@@ -762,10 +947,6 @@ export function EditorCanvas({
         {PRINTED_FACE}
         {flow}
         {textEditable ? <SectionPieces root={rootRef} sectionId={controller.currentSectionId} narrow zoom={1} revision={content} /> : null}
-        {/* A phone's column has no pages, so placed pictures follow the text. */}
-        {placedImages.map(({ block }) => (
-          <CanvasBlock actions={actions} block={block} key={block.id} />
-        ))}
         {units.length === 0 ? <EmptyPageLine actions={actions} onStart={() => focusPageEnd(0)} /> : null}
         {textEditable ? (
           <AddPageButton className="mt-6" onClick={() => controller.addPage(content.blocks.at(-1)?.id ?? null)} />
@@ -885,16 +1066,6 @@ export function EditorCanvas({
           </div>
         ))}
         {textEditable ? <SectionPieces root={rootRef} sectionId={controller.currentSectionId} narrow={false} zoom={zoom} revision={layout} /> : null}
-        {/* Placed pictures lie over their pages' text, as they print. */}
-        {placedImages.map(({ block, page }) => (
-          <div
-            className="pointer-events-none absolute inset-x-0 z-10"
-            key={block.id}
-            style={{ height: pageHeight, top: (page - 1) * (pageHeight + PAGE_GAP_PX) }}
-          >
-            <CanvasBlock actions={actions} block={block} placed />
-          </div>
-        ))}
         <div
           className="pointer-events-none absolute inset-x-0 top-0"
           data-slot="page-flow"
@@ -942,12 +1113,20 @@ function UnitBlocks({ actions, unit }: { actions: CanvasActions; unit: CanvasUni
         className="relative grid"
         // A row stacks on a phone, where there is no room beside a block.
         // Each block keeps the space the PDF leaves under it, so rows need no gap of their own.
-        style={{ columnGap: "var(--doc-column-gap)", gridTemplateColumns: actions.narrow ? undefined : rowGridColumns(unit.columns, unit.widths) }}
+        style={{
+          columnGap: "var(--doc-column-gap)",
+          gridTemplateColumns: actions.narrow ? undefined : rowGridColumns(unit.columns, unit.widths),
+          // A block moved across the page sits where it was put.
+          ...(unit.frame && !actions.narrow ? { marginLeft: `${unit.frame.left}%`, width: `${unit.frame.width}%` } : {}),
+        }}
       >
         {unit.blocks.map((renderBlock) => (
           <CanvasBlock actions={actions} block={renderBlock.block} key={renderBlock.block.id} />
         ))}
         {actions.textEditable && !actions.narrow ? <RowSeams controller={actions.controller} unit={unit} /> : null}
+        {actions.textEditable && !actions.narrow && unit.columns === 1 && unit.blocks[0] ? (
+          <FrameEdges blockId={unit.blocks[0].block.id} controller={actions.controller} frame={unit.frame} />
+        ) : null}
       </div>
     </>
   )
@@ -958,6 +1137,58 @@ function UnitBlocks({ actions, unit }: { actions: CanvasActions; unit: CanvasUni
 // families some words use.
 // eslint-disable-next-line @next/next/no-css-tags -- the document face, served by the fonts route like the others
 const PRINTED_FACE = <link href="/fonts/default/font.css" precedence="document-fonts" rel="stylesheet" />
+
+// The sides of a block alone on its line: drag one to make the block
+// narrower or wider, lining up with the margins, the page's middle and other
+// blocks' edges. The keyboard does the same from the block (see nudgeFrame).
+function FrameEdges({ blockId, controller, frame }: { blockId: string; controller: EditorController; frame: BlockFrame | null }): ReactElement {
+  const box = frame ?? { left: 0, width: 100 }
+
+  function drag(side: "left" | "right", event: PointerEvent<HTMLDivElement>): void {
+    const line = event.currentTarget.closest<HTMLElement>("[data-unit-id]")?.getBoundingClientRect()
+
+    if (!line || !event.currentTarget.hasPointerCapture(event.pointerId)) {
+      return
+    }
+
+    const others = [...document.querySelectorAll<HTMLElement>("[data-block-id]")].filter((element) => element.dataset.blockId !== blockId)
+    const edges = [0, 50, 100, ...others.flatMap((element) => {
+      const rect = element.getBoundingClientRect()
+      return [rect.left, (rect.left + rect.right) / 2, rect.right].map((x) => ((x - line.left) / line.width) * 100)
+    })]
+    const asked = ((event.clientX - line.left) / line.width) * 100
+    const near = edges.reduce((best, edge) => (Math.abs(edge - asked) < Math.abs(best - asked) ? edge : best), Infinity)
+    const at = (Math.abs(near - asked) / 100) * line.width <= SNAP_PX ? near : asked
+    const right = box.left + box.width
+    const next = side === "left" ? { left: Math.min(Math.max(0, at), right - 5), right } : { left: box.left, right: Math.max(Math.min(100, at), box.left + 5) }
+
+    controller.change((content) => setBlockRule(content, blockId, { frame: frameOf(next.left, next.right - next.left) }), `frame:${blockId}`)
+  }
+
+  return (
+    <>
+      {(["left", "right"] as const).map((side) => (
+        <div
+          aria-hidden="true"
+          className={cn(
+            // Over the margins' guides, which a block filling its line sits on.
+            "absolute inset-y-0 z-30 w-3 cursor-ew-resize touch-none after:absolute after:inset-y-0 after:left-1/2 after:w-0.5 after:-translate-x-1/2 after:rounded-full after:bg-primary after:opacity-0 after:transition-opacity hover:after:opacity-60",
+            // Just outside the block, so a click on its words still reaches them.
+            side === "left" ? "right-full" : "left-full"
+          )}
+          data-slot="frame-edge"
+          key={side}
+          onPointerDown={(event) => {
+            event.preventDefault()
+            event.stopPropagation()
+            event.currentTarget.setPointerCapture(event.pointerId)
+          }}
+          onPointerMove={(event) => drag(side, event)}
+        />
+      ))}
+    </>
+  )
+}
 
 // The edges between a row's columns: drag one, or focus it and use the arrow
 // keys, to trade width between the columns either side, a twelfth at a time.

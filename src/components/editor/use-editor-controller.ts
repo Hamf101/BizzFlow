@@ -20,6 +20,7 @@ import {
 import { createTemplateBlock } from "@/components/templates/template-editor-state"
 import { bizflowToast } from "@/components/ui/toaster"
 import {
+  type BlockFrame,
   MAX_TEMPLATE_BLOCK_COUNT,
   type TemplateBlock,
   type TemplateContentV3,
@@ -37,6 +38,7 @@ import {
   removeTemplateSection,
   placeBeside as placeBlockBeside,
   setBlockKeepWithNext,
+  setBlockRule,
   setRowWidths as setTemplateRowWidths,
   standAlone as standBlockAlone,
   stepTemplateBlockSlot,
@@ -282,12 +284,37 @@ export function useEditorController({
    */
   function placeBeside(blockId: string, targetId: string, side: "left" | "right"): boolean {
     const result = placeBlockBeside(content, blockId, targetId, side, () => crypto.randomUUID())
+    // In a row the block takes its column, with none of the space or spot it had alone.
+    const placed = result.success ? { ...result, content: setBlockRule(result.content, blockId, { frame: undefined, spaceAbove: undefined }) } : result
 
-    if (!applyMove(result) || !result.success) {
+    if (!applyMove(placed) || !placed.success) {
       return false
     }
 
-    setAnnouncement(describeMove(result.content, blockId))
+    setAnnouncement(describeMove(placed.content, blockId))
+    return true
+  }
+
+  /**
+   * Puts a block where it was let go: at a place in the text, the space above
+   * it and where it sits across the page.
+   *
+   * @param blockId - The block.
+   * @param slot - Its place in the text, or null to keep the one it has.
+   * @param layout - The space above it in points, and its spot across the page, or null for the whole width.
+   * @returns Whether anything changed.
+   */
+  function placeAt(blockId: string, slot: TemplateBlockSlot | null, layout: Readonly<{ frame: BlockFrame | null; spaceAbove: number }>): boolean {
+    const moved = slot ? moveTemplateBlockTo(content, blockId, slot, crypto.randomUUID()) : ({ content, success: true } as const)
+    const placed = moved.success
+      ? { ...moved, content: setBlockRule(moved.content, blockId, { frame: layout.frame ?? undefined, spaceAbove: layout.spaceAbove || undefined }) }
+      : moved
+
+    if (!applyMove(placed) || !placed.success) {
+      return false
+    }
+
+    setAnnouncement(describeMove(placed.content, blockId))
     return true
   }
 
@@ -443,6 +470,7 @@ export function useEditorController({
     move,
     moveSection,
     moveTo,
+    placeAt,
     placeBeside,
     openSettings: setSettingsBlockId,
     remove,

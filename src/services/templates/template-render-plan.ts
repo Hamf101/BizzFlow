@@ -1,7 +1,9 @@
 import type {
+  BlockFrame,
   TemplateBlock,
   TemplateBranding,
   TemplateContent,
+  TemplateContentV3,
   TemplateFieldGroup,
   TemplateLayout,
   TemplateSection
@@ -41,6 +43,10 @@ export type TemplateRenderBlock = Readonly<{
   pageBreakBefore: boolean
   keepTogether: boolean
   keepWithNext: boolean
+  /** Extra space above it, in points. */
+  spaceAbove: number
+  /** Where it sits across the page on a line of its own, or null for the whole width. */
+  frame: BlockFrame | null
 }>
 
 /** One visible section in canonical root-block order. */
@@ -174,11 +180,10 @@ export function shouldRenderTemplateFooter(
 type StructureIndex = Readonly<{
   sections: readonly IndexedSection[]
   groups: readonly IndexedFieldGroup[]
-  rulesByBlockId: ReadonlyMap<
-    string,
-    Readonly<{ pageBreakBefore: boolean; keepWithNext: boolean }>
-  >
+  rulesByBlockId: ReadonlyMap<string, TemplateBlockRule>
 }>
+
+type TemplateBlockRule = TemplateContentV3["blockRules"][number]
 
 type IndexedSection = Readonly<{
   section: TemplateSection | null
@@ -387,18 +392,7 @@ function createStructureIndex(
     })
   )
   const rulesByBlockId = new Map(
-    content.blockRules.map(
-      (rule): readonly [
-        string,
-        Readonly<{ pageBreakBefore: boolean; keepWithNext: boolean }>
-      ] => [
-        rule.blockId,
-        {
-          pageBreakBefore: rule.pageBreakBefore,
-          keepWithNext: rule.keepWithNext
-        }
-      ]
-    )
+    content.blockRules.map((rule): readonly [string, TemplateBlockRule] => [rule.blockId, rule])
   )
 
   return { sections, groups, rulesByBlockId }
@@ -445,7 +439,10 @@ function decorateRenderBlock(
     keepTogether:
       indexedSection?.section?.keepTogether === true ||
       indexedGroup?.group.keepTogether === true,
-    keepWithNext: rule?.keepWithNext === true
+    keepWithNext: rule?.keepWithNext === true,
+    spaceAbove: rule?.spaceAbove ?? 0,
+    // A block in a row takes its column instead.
+    frame: indexedGroup && indexedGroup.group.columns > 1 ? null : (rule?.frame ?? null)
   }
 }
 

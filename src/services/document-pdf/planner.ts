@@ -280,8 +280,11 @@ function createBlockPaginationUnits(
       startsSection,
       startsFieldGroup
     )
+    const space = spaceAbove(renderBlock)
 
-    units.push(...structureLabelUnits)
+    // The space asked for above a block goes before its section's title and
+    // starts the page they start; a row's rows take theirs as they come.
+    units.push(...space, ...clearLeadingPageBreak(structureLabelUnits, space.length > 0))
 
     if (renderBlock.fieldGroupId && renderBlock.fieldGroupColumns > 1) {
       const groupedBlocks: TemplateRenderBlock[] = []
@@ -304,7 +307,7 @@ function createBlockPaginationUnits(
       units.push(
         ...clearLeadingPageBreak(
           columnUnits,
-          structureLabelUnits.length > 0
+          structureLabelUnits.length > 0 || space.length > 0
         )
       )
       blockIndex = groupIndex
@@ -317,12 +320,19 @@ function createBlockPaginationUnits(
       metrics
     )
     units.push(
-      ...clearLeadingPageBreak(blockUnits, structureLabelUnits.length > 0)
+      ...clearLeadingPageBreak(blockUnits, structureLabelUnits.length > 0 || space.length > 0)
     )
     blockIndex += 1
   }
 
   return units
+}
+
+// Space left above a block, moving with it to the next page.
+function spaceAbove(renderBlock: TemplateRenderBlock | undefined): PdfPaginationUnit[] {
+  return renderBlock?.spaceAbove
+    ? [{ item: { height: renderBlock.spaceAbove, kind: "space" }, keepTogetherKeys: [], keepWithNext: true, pageBreakBefore: renderBlock.pageBreakBefore }]
+    : []
 }
 
 function createStructureLabelUnits(
@@ -378,12 +388,13 @@ function createSingleBlockPaginationUnits(
   input: NormalizedPdfInput,
   metrics: PdfLayoutMetrics
 ): PdfPaginationUnit[] {
+  const frame = renderBlock.frame ?? undefined
   const items = expandBlockForPagination(
     renderBlock,
     input.answers,
-    metrics.contentWidth,
+    frame ? (metrics.contentWidth * frame.width) / 100 : metrics.contentWidth,
     metrics.pageCapacity
-  )
+  ).map((item: PdfBlockFlowItem): PdfBlockFlowItem => (frame ? { ...item, frame } : item))
   const keepTogetherKeys = getKeepTogetherKeys(renderBlock, input)
 
   return items.map(
@@ -429,6 +440,11 @@ function createRowPaginationUnits(
       new Set<string>(row.flatMap((renderBlock: TemplateRenderBlock): string[] => getKeepTogetherKeys(renderBlock, input)))
     )
     const lastBlock = row.at(-1)
+
+    // The group's first row had its space put in before its labels.
+    if (blockIndex > 0) {
+      units.push(...spaceAbove(row[0]))
+    }
 
     // A long block is split into pieces; each piece of the row prints as one line of cells.
     for (let piece = 0; piece < pieceCount; piece += 1) {
@@ -849,11 +865,13 @@ function estimateFlowItemHeight(
           13
         ) + 8
       break
+    case "space":
+      return item.height
     case "block":
       baseHeight = estimateBlockHeight(
         item.block,
         input.answers,
-        metrics.contentWidth,
+        item.frame ? (metrics.contentWidth * item.frame.width) / 100 : metrics.contentWidth,
         item.answerOverride,
         metrics.lineSpacing
       )

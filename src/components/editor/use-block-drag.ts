@@ -2,17 +2,26 @@
 
 import { type PointerEvent, type RefObject, useEffect, useRef, useState } from "react"
 
+/** A line drawn on screen while a block is dragged, in pixels from the viewport's corner. */
+export type DragLine = Readonly<{ left: number; top: number; width: number; height?: number }>
+
 /**
- * Where a dragged block would land, and where its line is drawn on screen: a
- * line across the gap it lands in, or, with a height, one standing beside the
- * block it would join in a row.
+ * Where a dragged block would land, and what shows it: a line standing beside
+ * the block it would join in a row, or the block itself drawn where it would
+ * land, with the guides it lines up with.
  */
 export type DropTarget<Slot> = Readonly<{
-  line: Readonly<{ left: number; top: number; width: number; height?: number }>
+  line?: DragLine
+  /** Where the block is drawn, its top-left corner on screen, once it has lined up with something. */
+  at?: Readonly<{ left: number; top: number }>
+  guides?: readonly DragLine[]
   slot: Slot
   /** Whether it may land there; a drop where it may not says why. */
   valid: boolean
 }>
+
+/** The block being dragged as the pointer holds it: where it would be drawn, on screen. */
+export type DragBox = Readonly<{ height: number; left: number; top: number; width: number }>
 
 // A press that travels this far is a drag; one on the grip, a little less.
 const DRAG_THRESHOLD = 4
@@ -38,16 +47,20 @@ const SPEED = 900
  * @returns The block being dragged, the line to draw, and the press handler.
  */
 export function useBlockDrag<Slot>(options: {
-  locate: (blockId: string, x: number, y: number) => DropTarget<Slot> | null
+  /** Whether the block leaves the text while it moves, so what follows closes up behind it. */
+  lift: boolean
+  locate: (blockId: string, x: number, y: number, box: DragBox) => DropTarget<Slot> | null
   onDrop: (blockId: string, slot: Slot) => void
   zoom: number
 }): {
   begin: (event: PointerEvent<HTMLElement>, blockId: string, grip?: boolean) => void
   dragging: string | null
+  guides: RefObject<HTMLDivElement | null>
   indicator: RefObject<HTMLDivElement | null>
 } {
   const [dragging, setDragging] = useState<string | null>(null)
   const indicator = useRef<HTMLDivElement>(null)
+  const guides = useRef<HTMLDivElement>(null)
   const latest = useRef(options)
   const stop = useRef<(() => void) | null>(null)
 
@@ -84,6 +97,9 @@ export function useBlockDrag<Slot>(options: {
     const saved = { cursor: root.cursor, userSelect: root.userSelect }
     const press = { held: false, scrollTop: 0, started: false, x: event.clientX, y: event.clientY }
     const from = { x: event.clientX, y: event.clientY }
+    let held = block.getBoundingClientRect()
+    // The styles lifting the block out of the text changes, to put back.
+    let lifted: (() => void) | null = null
     let frame = 0
     let tick = 0
     const timer = text
@@ -96,6 +112,7 @@ export function useBlockDrag<Slot>(options: {
     function pickUp(): void {
       press.started = true
       press.scrollTop = scroller?.scrollTop ?? 0
+      held = block.getBoundingClientRect()
       // The words held give up their caret and selection: the block is moving.
       if (text) {
         ;(document.activeElement as HTMLElement | null)?.blur()
@@ -104,6 +121,7 @@ export function useBlockDrag<Slot>(options: {
 
       root.cursor = "grabbing"
       root.userSelect = "none"
+      lifted = latest.current.lift ? lift(block, held, latest.current.zoom) : null
       setDragging(blockId)
       frame = requestAnimationFrame((now) => {
         tick = now
@@ -111,25 +129,39 @@ export function useBlockDrag<Slot>(options: {
       })
     }
 
+    // Where the block would be drawn if it went wherever the pointer takes it.
+    function box(): DragBox {
+      return { height: held.height, left: held.left + press.x - from.x, top: held.top + press.y - from.y, width: held.width }
+    }
+
     function follow(): void {
       const { locate, zoom } = latest.current
       const scrolled = (scroller?.scrollTop ?? 0) - press.scrollTop
-      const landing = locate(blockId, press.x, press.y)
+      const free = box()
+      const landing = locate(blockId, press.x, press.y, free)
+      const at = landing?.at ?? free
       const line = indicator.current
 
-      block.style.transform = `translate(${(press.x - from.x) / zoom}px, ${(press.y - from.y + scrolled) / zoom}px)`
+      // The block follows the pointer, and lines up with what it comes near.
+      block.style.transform = `translate(${(at.left - held.left) / zoom}px, ${(at.top - held.top + scrolled) / zoom}px)`
 
       if (line) {
-        line.hidden = !landing
+        line.hidden = !landing?.line
 
-        if (landing) {
+        if (landing?.line) {
           line.dataset.valid = String(landing.valid)
-          line.style.left = `${landing.line.left}px`
-          line.style.top = `${landing.line.top}px`
-          line.style.width = `${landing.line.width}px`
-          line.style.height = landing.line.height === undefined ? "" : `${landing.line.height}px`
+          place(line, landing.line)
         }
       }
+
+      guides.current?.replaceChildren(
+        ...(landing?.guides ?? []).map((guide) => {
+          const element = document.createElement("div")
+
+          place(element, guide)
+          return element
+        })
+      )
     }
 
     // Near the scrolling area's top or bottom, the page scrolls on its own.
@@ -204,9 +236,11 @@ export function useBlockDrag<Slot>(options: {
         return
       }
 
-      const landing = commit ? latest.current.locate(blockId, press.x, press.y) : null
+      const landing = commit ? latest.current.locate(blockId, press.x, press.y, box()) : null
 
       block.style.transform = ""
+      lifted?.()
+      guides.current?.replaceChildren()
       root.cursor = saved.cursor
       root.userSelect = saved.userSelect
       setDragging(null)
@@ -246,7 +280,44 @@ export function useBlockDrag<Slot>(options: {
     window.addEventListener("keydown", escape, true)
   }
 
-  return { begin, dragging, indicator }
+  return { begin, dragging, guides, indicator }
+}
+
+// Takes a block out of the text where it stands: drawn in the same place,
+// over the page, while what follows closes up behind it. A block alone on its
+// line takes its line's space with it. Returns what puts it all back.
+function lift(block: HTMLElement, at: DOMRect, zoom: number): () => void {
+  const line = block.closest<HTMLElement>("[data-unit-id]")
+  const alone = line?.querySelectorAll("[data-block-id]").length === 1
+  const saved = { block: block.style.cssText, line: line?.style.paddingTop ?? "" }
+
+  // The space it keeps above itself, which the page leaves wherever it lands.
+  block.dataset.lead = String(parseFloat(getComputedStyle(block).marginTop) || 0)
+  // Its line gives up the space above it first, so what it is placed in has moved up already.
+  if (line && alone) line.style.paddingTop = "0"
+
+  const container = (block.offsetParent ?? block.parentElement)?.getBoundingClientRect()
+
+  Object.assign(block.style, {
+    left: `${(at.left - (container?.left ?? 0)) / zoom}px`,
+    margin: "0",
+    position: "absolute",
+    top: `${(at.top - (container?.top ?? 0)) / zoom}px`,
+    width: `${at.width / zoom}px`,
+  })
+
+  return () => {
+    block.style.cssText = saved.block
+    delete block.dataset.lead
+    if (line) line.style.paddingTop = saved.line
+  }
+}
+
+function place(element: HTMLElement, line: DragLine): void {
+  element.style.left = `${line.left}px`
+  element.style.top = `${line.top}px`
+  element.style.width = `${line.width}px`
+  element.style.height = line.height === undefined ? "" : `${line.height}px`
 }
 
 function swallow(event: MouseEvent): void {

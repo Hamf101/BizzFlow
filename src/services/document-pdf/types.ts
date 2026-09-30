@@ -2,7 +2,7 @@ import type {
   TemplateRenderBlock,
   TemplateRenderPlan
 } from "@/services/templates/template-render-plan"
-import type { TemplateBlock, TemplateContent } from "@/types/template"
+import type { BlockFrame, TemplateBlock, TemplateContent } from "@/types/template"
 
 export type PdfTextAlignment = "left" | "center" | "right"
 
@@ -43,6 +43,8 @@ export type PdfBlockFlowItem = {
   answerOverride?: string
   fieldContinued?: boolean
   listMarkers?: string[]
+  /** Where it sits across the page, when not across the whole of it. */
+  frame?: BlockFrame
 }
 
 export type PdfFlowItem =
@@ -58,6 +60,8 @@ export type PdfFlowItem =
       /** One cell per column, left to right; null where a column is empty. */
       cells: readonly (PdfBlockFlowItem | null)[]
     }
+  /** Space left above a block, in points. */
+  | { kind: "space"; height: number }
   | { kind: "signing_intro" }
   | { kind: "signer"; signer: DocumentPdfSigner }
 
