@@ -4,8 +4,9 @@ import {
   MAX_BULK_TEMPLATES,
   type TemplateServiceDeps,
 } from "./contracts"
+import { requireCanCreateTemplates } from "./access"
 import { TemplateServiceError } from "./errors"
-import { getClient, requirePermission, runTemplateOperation } from "./shared"
+import { getClient, runTemplateOperation } from "./shared"
 import {
   archiveDocumentTemplate,
   duplicateDocumentTemplate,
@@ -34,13 +35,8 @@ export async function changeDocumentTemplates(
     "change_document_templates",
     { actorUserId: input.actorUserId, change: input.change, count: templateIds.length, organizationId: input.organizationId },
     async (): Promise<ChangeDocumentTemplatesResult> => {
-      await requirePermission(
-        getClient(deps),
-        input.organizationId,
-        input.actorUserId,
-        "templates:manage",
-        "You cannot manage document templates."
-      )
+      // Anyone who makes templates may try; each one then answers for itself.
+      await requireCanCreateTemplates(getClient(deps), input.organizationId, input.actorUserId)
 
       if (templateIds.length === 0 || templateIds.length > MAX_BULK_TEMPLATES) {
         throw new TemplateServiceError(`Choose between 1 and ${MAX_BULK_TEMPLATES} templates.`, 400)

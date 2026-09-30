@@ -153,7 +153,9 @@ export async function executeWorkspaceFlow(
   const actor = { actorUserId: input.actorUserId, organizationId: input.organizationId }
   const membership = await (deps.loadMembership ?? loadMembership)(actor)
   const creatable = (["template", "document"] as const).filter((target) =>
-    canPerformOrganizationAction(membership, target === "template" ? "templates:manage" : "documents:create")
+    target === "template"
+      ? canPerformOrganizationAction(membership, "templates:create") || canPerformOrganizationAction(membership, "templates:manage")
+      : canPerformOrganizationAction(membership, "documents:create")
   )
   const plan = await requestPlan(message.data, historySchema.parse(input.history), creatable, deps)
 

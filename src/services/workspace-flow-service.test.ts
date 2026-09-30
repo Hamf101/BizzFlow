@@ -42,7 +42,7 @@ describe("workspace Flow", () => {
     await expect(executeWorkspaceFlow(input("make an intake form"), deps("staff", plan))).resolves.toEqual({
       kind: "create",
       reply: "Starting an intake form.",
-      target: "document",
+      target: "template",
       title: "Client intake",
     })
     await expect(executeWorkspaceFlow(input("make an intake form"), deps("external_reviewer", plan))).resolves.toEqual({

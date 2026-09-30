@@ -11,11 +11,11 @@ import { loadAuthenticatedPageUser } from "@/lib/page-auth"
 import { getPageErrorMessage } from "@/lib/page-errors"
 import { loadMemberName } from "@/lib/page-member-name"
 import { loadPageOrganizationContext } from "@/lib/page-organization-context"
-import { canPerformOrganizationAction } from "@/lib/permissions"
 import { cn } from "@/lib/utils"
 import { getEditorLayout } from "@/services/editor-layout-service"
 import { listTemplateFlowMessages } from "@/services/template-flow-service"
 import {
+  canEditDocumentTemplate,
   getDocumentTemplate,
   listDocumentTemplateCategories,
   listDocumentTemplateVersions,
@@ -79,8 +79,13 @@ export default async function EditTemplatePage({
 
   const context = contextResult.context
 
+  // Its maker, an editor it was shared with, or a manager of templates may edit it.
   if (
-    !canPerformOrganizationAction(context.membership, "templates:manage")
+    !(await canEditDocumentTemplate({
+      actorUserId: user.id,
+      organizationId: context.organization.id,
+      templateId,
+    }))
   ) {
     redirect(
       buildFeedbackRedirect("/templates", "permission_denied")

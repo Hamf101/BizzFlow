@@ -63,6 +63,7 @@ export default async function NewTemplatePage(): Promise<ReactElement> {
   const context = contextResult.context
 
   if (
+    !canPerformOrganizationAction(context.membership, "templates:create") &&
     !canPerformOrganizationAction(context.membership, "templates:manage")
   ) {
     redirect(

@@ -132,6 +132,21 @@ type DocumentAccessGrantRow = Record<string, unknown> & {
   updated_at: string
 }
 
+/** What a template is shared at: read it, make documents from it, or edit it. */
+export type TemplateAccessLevel = "viewer" | "user" | "editor"
+
+type TemplateAccessGrantRow = Record<string, unknown> & {
+  id: string
+  org_id: string
+  template_id: string
+  user_id: string | null
+  organization_role: DatabaseOrganizationRole | null
+  access_level: TemplateAccessLevel
+  granted_by: string | null
+  created_at: string
+  updated_at: string
+}
+
 type FolderAccessGrantRow = Record<string, unknown> & {
   id: string
   org_id: string
@@ -390,6 +405,8 @@ type DocumentAccessGrantInsert = Partial<DocumentAccessGrantRow> &
     DocumentAccessGrantRow,
     "org_id" | "document_id" | "access_level"
   >
+type TemplateAccessGrantInsert = Partial<TemplateAccessGrantRow> &
+  Pick<TemplateAccessGrantRow, "org_id" | "template_id" | "access_level">
 type FolderAccessGrantInsert = Partial<FolderAccessGrantRow> &
   Pick<FolderAccessGrantRow, "org_id" | "folder_id" | "access_level">
 type DocumentVersionInsert = Partial<AdminDocumentVersionRow> &
@@ -526,6 +543,11 @@ export type AdminDatabase = {
         DocumentAccessGrantRow,
         DocumentAccessGrantInsert,
         Partial<DocumentAccessGrantRow>
+      >
+      template_access_grants: DatabaseTable<
+        TemplateAccessGrantRow,
+        TemplateAccessGrantInsert,
+        Partial<TemplateAccessGrantRow>
       >
       folder_access_grants: DatabaseTable<
         FolderAccessGrantRow,
@@ -667,6 +689,22 @@ export type AdminDatabase = {
           target_user_id: string
         }
         Returns: CurrentOrganizationContextRow[]
+      }
+      get_template_access_level: {
+        Args: {
+          target_org_id: string
+          target_template_id: string
+          target_actor_user_id: string
+        }
+        Returns: TemplateAccessLevel | null
+      }
+      hidden_template_ids: {
+        Args: { target_org_id: string; target_actor_user_id: string }
+        Returns: string[]
+      }
+      editable_template_ids: {
+        Args: { target_org_id: string; target_actor_user_id: string }
+        Returns: string[]
       }
       get_document_access_level: {
         Args: {

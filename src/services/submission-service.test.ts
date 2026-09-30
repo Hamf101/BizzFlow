@@ -536,6 +536,10 @@ describe("internal submission draft lifecycle", () => {
   it("creates a draft through the atomic snapshot RPC", async () => {
     const client = createClient()
     client.rpc.mockImplementation(async (functionName, args) => {
+      if (functionName === "get_template_access_level") {
+        return { data: "user", error: null }
+      }
+
       expect(functionName).toBe("create_internal_submission_draft")
       expect(args).toMatchObject({
         target_org_id: ORGANIZATION_ID,
@@ -564,6 +568,31 @@ describe("internal submission draft lifecycle", () => {
     )
 
     expect(result).toMatchObject({ id: SUBMISSION_ID, status: "draft" })
+  })
+
+  it.each([
+    ["can only view the template", "viewer", 403],
+    ["cannot see the template", null, 404]
+  ])("refuses a draft from a template the member %s", async (_case, level, statusCode) => {
+    const client = createClient()
+    client.rpc.mockImplementation(async (functionName) => ({
+      data: functionName === "get_template_access_level" ? level : "must not be reached",
+      error: null
+    }))
+
+    await expect(
+      createInternalSubmissionDraft(
+        {
+          actorUserId: STAFF_ID,
+          organizationId: ORGANIZATION_ID,
+          submissionId: SUBMISSION_ID,
+          templateId: TEMPLATE_ID,
+          title: "Vendor intake"
+        },
+        { client: client as never }
+      )
+    ).rejects.toMatchObject({ statusCode })
+    expect(client.rpc).toHaveBeenCalledOnce()
   })
 
   it("merges a form patch over persisted values before saving", async () => {

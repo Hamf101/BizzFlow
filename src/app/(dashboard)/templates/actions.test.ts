@@ -345,11 +345,11 @@ describe("change several templates action", () => {
     expect(revalidatePathMock).toHaveBeenCalledWith("/templates")
   })
 
-  it("refuses staff before anything reaches the service", async () => {
+  it("leaves staff to the service, which judges each template", async () => {
     vi.mocked(getCurrentOrganizationContext).mockResolvedValue(memberContext("staff"))
 
-    await expect(changeTemplatesAction({ change: "archive", templateIds: [TEMPLATE_ID] })).rejects.toThrow("You cannot manage document templates.")
-    expect(changeDocumentTemplates).not.toHaveBeenCalled()
+    await changeTemplatesAction({ change: "archive", templateIds: [TEMPLATE_ID] })
+    expect(changeDocumentTemplates).toHaveBeenCalledWith(expect.objectContaining({ actorUserId: ACTOR_USER_ID }))
   })
 
   it("refuses ids that are not ids, and a change it does not know", async () => {

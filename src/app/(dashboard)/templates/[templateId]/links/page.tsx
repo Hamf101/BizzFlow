@@ -10,10 +10,9 @@ import { buildFeedbackRedirect } from "@/lib/action-result"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
 import { getPageErrorMessage } from "@/lib/page-errors"
 import { loadPageOrganizationContext } from "@/lib/page-organization-context"
-import { canPerformOrganizationAction } from "@/lib/permissions"
 import { cn } from "@/lib/utils"
 import { listPublicFormLinks } from "@/services/public-form-service"
-import { getDocumentTemplate } from "@/services/template-service"
+import { canEditDocumentTemplate, getDocumentTemplate } from "@/services/template-service"
 import type { PublicFormLink } from "@/types/public-link"
 import type { DocumentTemplate } from "@/types/template"
 
@@ -62,7 +61,7 @@ export default async function TemplateLinksPage({
 
   const context = contextResult.context
 
-  if (!canPerformOrganizationAction(context.membership, "templates:manage")) {
+  if (!(await canEditDocumentTemplate({ actorUserId: user.id, organizationId: context.organization.id, templateId }))) {
     redirect(buildFeedbackRedirect("/templates", "permission_denied"))
   }
 

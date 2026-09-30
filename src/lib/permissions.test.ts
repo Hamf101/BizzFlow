@@ -180,6 +180,10 @@ describe("organization permissions", () => {
     expect(canPerformOrganizationAction("owner_admin", "templates:manage")).toBe(true)
     expect(canPerformOrganizationAction("manager", "templates:manage")).toBe(true)
     expect(canPerformOrganizationAction("staff", "templates:manage")).toBe(false)
+    // Everyone who works with templates can make their own; only reviewers cannot.
+    expect(canPerformOrganizationAction("manager", "templates:create")).toBe(true)
+    expect(canPerformOrganizationAction("staff", "templates:create")).toBe(true)
+    expect(canPerformOrganizationAction("external_reviewer", "templates:create")).toBe(false)
     expect(canPerformOrganizationAction("external_reviewer", "templates:view")).toBe(false)
 
     expect(canPerformOrganizationAction("staff", "templates:view")).toBe(true)

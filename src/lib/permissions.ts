@@ -27,6 +27,7 @@ export const ORGANIZATION_PERMISSION_ACTIONS = [
   // owner_admin receives it through the full-array grant below.
   "audit_logs:verify",
   "templates:view",
+  "templates:create",
   "templates:manage",
   "documents:view",
   "documents:send",
@@ -74,6 +75,7 @@ const permissionsByRole: Record<
     "members:invite",
     "audit_logs:view",
     "templates:view",
+    "templates:create",
     "templates:manage",
     "documents:view",
     "documents:send",
@@ -97,6 +99,7 @@ const permissionsByRole: Record<
   staff: [
     "people:view",
     "templates:view",
+    "templates:create",
     "documents:view",
     "documents:send",
     "documents:fill",
