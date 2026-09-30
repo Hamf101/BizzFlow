@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
 
 import { getPublicSupabaseEnv, isPublicSupabaseEnvConfigured } from "@/lib/env"
+import { limitRequestByMember } from "@/lib/request-rate-limit"
 
 const PROTECTED_PREFIXES: readonly string[] = [
   "/audit-log",
@@ -31,7 +32,7 @@ export function isProtectedPath(pathname: string): boolean {
  * @param request - Incoming Next.js middleware request.
  * @returns Response with refreshed cookies or an auth redirect.
  */
-export async function updateSession(request: NextRequest): Promise<NextResponse> {
+export async function updateSession(request: NextRequest): Promise<Response> {
   let response = NextResponse.next({ request })
 
   if (!isPublicSupabaseEnvConfigured()) {
@@ -89,6 +90,16 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
     redirectUrl.searchParams.set("next", request.nextUrl.pathname)
 
     return NextResponse.redirect(redirectUrl)
+  }
+
+  const memberId = data?.claims?.sub
+
+  if (memberId) {
+    const limited = await limitRequestByMember(request, memberId)
+
+    if (limited) {
+      return limited
+    }
   }
 
   return response

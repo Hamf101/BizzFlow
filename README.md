@@ -101,7 +101,7 @@ cp .env.example .env.local
 Expected variable groups:
 
 - App: `NEXT_PUBLIC_APP_URL`.
-- Scheduled maintenance: server-only `CRON_SECRET` (at least 16 random characters in Vercel).
+- Scheduled maintenance: server-only `CRON_SECRET` (at least 16 random characters).
 - Supabase: `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, `SUPABASE_JWKS_URL`, `SUPABASE_PROJECT_REF`, `SUPABASE_DB_URL`, and `SUPABASE_POOLER_URL`.
 - Cloudflare R2: `CLOUDFLARE_R2_ACCOUNT_ID`, `CLOUDFLARE_R2_ACCESS_KEY_ID`, `CLOUDFLARE_R2_SECRET_ACCESS_KEY`, `CLOUDFLARE_R2_BUCKET_NAME`, `CLOUDFLARE_R2_ENDPOINT`, `CLOUDFLARE_R2_REGION`, and `CLOUDFLARE_R2_SIGNED_URL_TTL_SECONDS`.
 - File uploads: `FILE_UPLOAD_MAX_BYTES` and `FILE_UPLOAD_ALLOWED_MIME_TYPES`.
@@ -109,7 +109,7 @@ Expected variable groups:
 - Email: server-only EmailJS credentials, optional `EMAIL_REPLY_TO_EMAIL`, and `EMAIL_TIMEOUT_MS` for invitations, signing links, task assignments, and reminders. `EMAIL_PROVIDER=emailjs` documents the temporarily pinned provider.
 - AI Flow: server-only `AI_PROVIDER`, `AI_MODEL`, `AI_TIMEOUT_MS`, and the selected adapter's credential (currently `GEMINI_API_KEY`) for stateless, schema-validated document editing.
 - SMS: Termii credentials, with Africa's Talking placeholders reserved for a later provider switch.
-- Rate limiting: `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN`; when unset, limits are disabled (local dev, CI).
+- Rate limiting: `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` share one budget across instances; when unset, production counts per process and dev/CI do not limit. `CLIENT_IP_HEADER` and `TRUSTED_PROXY_COUNT` say which header your proxy sets and how many proxies append to it (see [Denial-of-service protection](#denial-of-service-protection)).
 - Observability: Sentry DSN and PostHog key or internal analytics settings.
 
 Do not commit real secrets. Keep local secrets in `.env.local` and deployment secrets in the target hosting provider.
@@ -240,8 +240,8 @@ Implemented internal-submission file routes:
 
 Internal scheduled maintenance:
 
-- `GET /api/cron/submission-file-cleanup` (Vercel Cron only; requires `Authorization: Bearer $CRON_SECRET`)
-- `GET /api/cron/document-purge` (Vercel Cron only; bounded enqueue, R2 deletion, retry, and finalization; requires `Authorization: Bearer $CRON_SECRET`)
+- `GET /api/cron/submission-file-cleanup` (scheduler only; requires `Authorization: Bearer $CRON_SECRET`)
+- `GET /api/cron/document-purge` (scheduler only; bounded enqueue, R2 deletion, retry, and finalization; requires `Authorization: Bearer $CRON_SECRET`)
 
 Implemented guided-document pages:
 
@@ -320,6 +320,18 @@ Comments, tasks, and reminders:
 Activity, audit, and background jobs:
 
 - `POST /api/inngest`
+
+## Denial-of-service protection
+
+Host-independent, in the app (`src/lib/rate-limit.ts`, `src/lib/request-rate-limit.ts`):
+
+- **Every request** spends a per-IP budget in `src/proxy.ts` before any session lookup or render. The editor's live sync and `/api/inngest` are exempt; they have their own limits.
+- **Every signed-in API call and server action** spends a per-member budget; CSV exports get a smaller one.
+- **Abuse-prone surfaces** (sign-in, public forms, signing, uploads, PDF, AI, email) have their own tighter buckets. Buckets that spend money with a third party fail closed if the limiter is down; the rest fail open.
+- **JSON bodies** over 10 MB are refused without being read in full; server actions are capped at 10 MB.
+- **No Redis:** production falls back to a per-process limiter (logged as `rate_limit_unconfigured`). Set the Upstash variables when running more than one instance.
+
+Per-IP limits are only as good as the address they see: set `CLIENT_IP_HEADER` and `TRUSTED_PROXY_COUNT` to match the proxy in front of the app. Volumetric floods and slow-connection attacks (slowloris) are not something the app can absorb; run it behind a CDN, load balancer, or WAF that provides connection/read timeouts and network-level filtering.
 
 ## Verification Commands
 

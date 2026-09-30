@@ -54,6 +54,23 @@ describe("trusted JSON request validation", () => {
     } satisfies Partial<RequestSecurityError>)
   })
 
+  it("refuses an oversized body without reading it, however it is declared", async () => {
+    const declared = createRequest({ "content-length": String(11 * 1024 * 1024) })
+    const chunked = new Request("https://app.example.com/api/test", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: new ReadableStream({
+        pull(controller) {
+          controller.enqueue(new TextEncoder().encode(" ".repeat(1024 * 1024)))
+        },
+      }),
+      duplex: "half",
+    } as RequestInit)
+
+    await expect(readTrustedJsonObject(declared)).rejects.toMatchObject({ statusCode: 413 })
+    await expect(readTrustedJsonObject(chunked)).rejects.toMatchObject({ statusCode: 413 })
+  })
+
   it("rejects arrays and malformed JSON", async () => {
     await expect(
       readTrustedJsonObject(createRequest({}, JSON.stringify([])))
