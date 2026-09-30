@@ -1,0 +1,546 @@
+{
+  "request": "service agreement for a freelance graphic designer",
+  "title": "Graphic design service agreement",
+  "description": "Use when a freelance graphic designer takes on a client project, to record the work, the fees and the terms both sides agree to.",
+  "content": {
+    "schemaVersion": 3,
+    "branding": {
+      "organizationName": "",
+      "logoAsset": null,
+      "logoDataUrl": null,
+      "logoAlignment": "left",
+      "logoWidthPercent": 24,
+      "primaryColor": "#252329",
+      "accentColor": "#635273"
+    },
+    "blocks": [
+      {
+        "id": "a3000000-0000-4000-8000-000000000001",
+        "type": "heading",
+        "text": "Graphic design service agreement",
+        "level": 1,
+        "alignment": "left"
+      },
+      {
+        "id": "a3000000-0000-4000-8000-000000000002",
+        "fieldKey": "designer_name",
+        "label": "Designer name",
+        "required": true,
+        "helpText": null,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a3000000-0000-4000-8000-000000000004",
+        "fieldKey": "designer_email",
+        "label": "Designer email",
+        "required": false,
+        "helpText": null,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a3000000-0000-4000-8000-000000000007",
+        "fieldKey": "client_name",
+        "label": "Client name",
+        "required": true,
+        "helpText": null,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a3000000-0000-4000-8000-000000000008",
+        "fieldKey": "client_email",
+        "label": "Client email",
+        "required": false,
+        "helpText": null,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a3000000-0000-4000-8000-000000000011",
+        "fieldKey": "effective_date",
+        "label": "Effective date",
+        "required": true,
+        "helpText": null,
+        "type": "date_field"
+      },
+      {
+        "id": "a3000000-0000-4000-8000-000000000012",
+        "fieldKey": "design_services_and_deliverables",
+        "label": "Design services and deliverables",
+        "required": true,
+        "helpText": "Describe the work, what will be delivered and in which file formats.",
+        "boxHeight": 72,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "a3000000-0000-4000-8000-000000000014",
+        "fieldKey": "rounds_of_revisions_included",
+        "label": "Rounds of revisions included",
+        "required": false,
+        "helpText": null,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a3000000-0000-4000-8000-000000000015",
+        "fieldKey": "fees",
+        "label": "Fees",
+        "required": true,
+        "helpText": "The price for the work, or the hourly or daily rate.",
+        "boxHeight": 45,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "a3000000-0000-4000-8000-000000000017",
+        "fieldKey": "deposit",
+        "label": "Deposit",
+        "required": false,
+        "helpText": "The amount to pay before work starts, if any.",
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a3000000-0000-4000-8000-000000000018",
+        "fieldKey": "payment_period",
+        "label": "Payment period",
+        "required": true,
+        "helpText": "How long the client has to pay each invoice.",
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a3000000-0000-4000-8000-000000000021",
+        "fieldKey": "start_date",
+        "label": "Start date",
+        "required": true,
+        "helpText": null,
+        "type": "date_field"
+      },
+      {
+        "id": "a3000000-0000-4000-8000-000000000023",
+        "fieldKey": "term",
+        "label": "Term",
+        "required": true,
+        "helpText": "How long this agreement lasts.",
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a3000000-0000-4000-8000-000000000024",
+        "fieldKey": "notice_period",
+        "label": "Notice period",
+        "required": true,
+        "helpText": "The written notice needed to end it.",
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a3000000-0000-4000-8000-000000000028",
+        "fieldKey": "limit_of_liability",
+        "label": "Limit of liability",
+        "required": true,
+        "helpText": "The most either party can be asked to pay the other under this agreement.",
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a3000000-0000-4000-8000-000000000029",
+        "fieldKey": "governing_law",
+        "label": "Governing law",
+        "required": true,
+        "helpText": "The country or state whose law applies to this agreement.",
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a3000000-0000-4000-8000-000000000030",
+        "type": "heading",
+        "text": "Services",
+        "level": 2,
+        "alignment": "left"
+      },
+      {
+        "id": "a3000000-0000-4000-8000-000000000032",
+        "type": "paragraph",
+        "text": "The designer will provide the design services and deliverables described above with reasonable skill and care. The client will give the designer the content, feedback and approvals needed, in good time. The fees cover the rounds of revisions stated above. Further revisions and any other extra work must be agreed in writing, with the price, before that work starts.",
+        "alignment": "left"
+      },
+      {
+        "id": "a3000000-0000-4000-8000-000000000033",
+        "type": "heading",
+        "text": "Fees and payment",
+        "level": 2,
+        "alignment": "left"
+      },
+      {
+        "id": "a3000000-0000-4000-8000-000000000034",
+        "type": "paragraph",
+        "text": "The client will pay the fees stated above. Any deposit stated above is payable before work starts. The designer will invoice the client, and each invoice is payable within the payment period stated above. The client will repay expenses only where it agreed them in writing beforehand.",
+        "alignment": "left"
+      },
+      {
+        "id": "a3000000-0000-4000-8000-000000000035",
+        "type": "heading",
+        "text": "Term and termination",
+        "level": 2,
+        "alignment": "left"
+      },
+      {
+        "id": "a3000000-0000-4000-8000-000000000036",
+        "type": "paragraph",
+        "text": "This agreement starts on the start date and continues for the term stated above. Either party may end it by giving the other written notice of at least the notice period stated above. Either party may end it at once, in writing, if the other seriously breaches it and does not put the breach right when asked. When this agreement ends, the client will pay for the work done up to that date.",
+        "alignment": "left"
+      },
+      {
+        "id": "a3000000-0000-4000-8000-000000000037",
+        "type": "heading",
+        "text": "Ownership of work",
+        "level": 2,
+        "alignment": "left"
+      },
+      {
+        "id": "a3000000-0000-4000-8000-000000000038",
+        "type": "paragraph",
+        "text": "When the client has paid the fees in full, the designer transfers ownership of the final approved designs to the client. The designer keeps ownership of drafts, unused concepts and anything the designer created before this agreement. Fonts, stock images and other material from third parties stay subject to their own licences. The designer may show the finished work in a portfolio unless the client asks in writing to keep it private.",
+        "alignment": "left"
+      },
+      {
+        "id": "a3000000-0000-4000-8000-000000000039",
+        "type": "heading",
+        "text": "Confidentiality",
+        "level": 2,
+        "alignment": "left"
+      },
+      {
+        "id": "a3000000-0000-4000-8000-000000000040",
+        "type": "paragraph",
+        "text": "Each party will keep the other's confidential information private, use it only for this agreement, and not share it with anyone else without written permission. This does not apply to information that is already public or that the law requires a party to disclose. These duties continue after this agreement ends.",
+        "alignment": "left"
+      },
+      {
+        "id": "a3000000-0000-4000-8000-000000000041",
+        "type": "heading",
+        "text": "Warranties",
+        "level": 2,
+        "alignment": "left"
+      },
+      {
+        "id": "a3000000-0000-4000-8000-000000000042",
+        "type": "paragraph",
+        "text": "Each party confirms that it has the right to enter this agreement. The designer confirms that the work will be original or properly licensed. The client confirms that it has the right to use any content it gives the designer. Neither party makes any other promise about the work unless it is written in this agreement.",
+        "alignment": "left"
+      },
+      {
+        "id": "a3000000-0000-4000-8000-000000000043",
+        "type": "heading",
+        "text": "Limitation of liability",
+        "level": 2,
+        "alignment": "left"
+      },
+      {
+        "id": "a3000000-0000-4000-8000-000000000044",
+        "type": "paragraph",
+        "text": "Each party's total liability to the other under this agreement is limited to the limit of liability stated above. Neither party is liable for loss of profit or for indirect loss. Nothing in this agreement limits liability that the law does not allow to be limited.",
+        "alignment": "left"
+      },
+      {
+        "id": "a3000000-0000-4000-8000-000000000045",
+        "type": "heading",
+        "text": "General terms",
+        "level": 2,
+        "alignment": "left"
+      },
+      {
+        "id": "a3000000-0000-4000-8000-000000000046",
+        "type": "paragraph",
+        "text": "The designer is an independent contractor and not an employee of the client. This agreement is the whole agreement between the parties about the services. Any change to it must be in writing and signed by both parties. Neither party may transfer it to someone else without the other's written consent. This agreement is governed by the governing law stated above.",
+        "alignment": "left"
+      },
+      {
+        "id": "a3000000-0000-4000-8000-000000000047",
+        "type": "paragraph",
+        "text": "By signing below, each party agrees to the terms of this agreement.",
+        "alignment": "left"
+      },
+      {
+        "id": "a3000000-0000-4000-8000-000000000049",
+        "fieldKey": "designer_signature",
+        "label": "Designer signature",
+        "required": true,
+        "helpText": null,
+        "type": "signature_field"
+      },
+      {
+        "id": "a3000000-0000-4000-8000-000000000050",
+        "fieldKey": "client_signature",
+        "label": "Client signature",
+        "required": true,
+        "helpText": null,
+        "type": "signature_field"
+      },
+      {
+        "id": "a3000000-0000-4000-8000-000000000051",
+        "fieldKey": "designer_printed_name",
+        "label": "Designer printed name",
+        "required": true,
+        "helpText": null,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a3000000-0000-4000-8000-000000000052",
+        "fieldKey": "client_printed_name",
+        "label": "Client printed name",
+        "required": true,
+        "helpText": null,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a3000000-0000-4000-8000-000000000053",
+        "fieldKey": "designer_title",
+        "label": "Designer title",
+        "required": false,
+        "helpText": null,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a3000000-0000-4000-8000-000000000054",
+        "fieldKey": "client_title",
+        "label": "Client title",
+        "required": false,
+        "helpText": null,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a3000000-0000-4000-8000-000000000055",
+        "fieldKey": "date_signed_by_designer",
+        "label": "Date signed by designer",
+        "required": true,
+        "helpText": null,
+        "type": "date_field"
+      },
+      {
+        "id": "a3000000-0000-4000-8000-000000000056",
+        "fieldKey": "date_signed_by_client",
+        "label": "Date signed by client",
+        "required": true,
+        "helpText": null,
+        "type": "date_field"
+      }
+    ],
+    "layout": {
+      "pageSize": "A4",
+      "orientation": "portrait",
+      "marginPreset": "standard",
+      "density": "balanced",
+      "printedTitle": {
+        "mode": "none"
+      },
+      "headerPolicy": "none",
+      "footerPolicy": "none",
+      "pageNumbering": "none"
+    },
+    "sections": [
+      {
+        "id": "a3000000-0000-4000-8000-000000000003",
+        "label": "The parties",
+        "startBlockId": "a3000000-0000-4000-8000-000000000002",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "a3000000-0000-4000-8000-000000000013",
+        "label": "The work",
+        "startBlockId": "a3000000-0000-4000-8000-000000000012",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "a3000000-0000-4000-8000-000000000016",
+        "label": "Fees and deposit",
+        "startBlockId": "a3000000-0000-4000-8000-000000000015",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "a3000000-0000-4000-8000-000000000022",
+        "label": "Term, liability and law",
+        "startBlockId": "a3000000-0000-4000-8000-000000000021",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "a3000000-0000-4000-8000-000000000031",
+        "label": "Terms and conditions",
+        "startBlockId": "a3000000-0000-4000-8000-000000000030",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "a3000000-0000-4000-8000-000000000048",
+        "label": "Signatures",
+        "startBlockId": "a3000000-0000-4000-8000-000000000047",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      }
+    ],
+    "fieldGroups": [
+      {
+        "id": "a3000000-0000-4000-8000-000000000006",
+        "label": null,
+        "startBlockId": "a3000000-0000-4000-8000-000000000002",
+        "endBlockId": "a3000000-0000-4000-8000-000000000004",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "a3000000-0000-4000-8000-000000000010",
+        "label": null,
+        "startBlockId": "a3000000-0000-4000-8000-000000000007",
+        "endBlockId": "a3000000-0000-4000-8000-000000000008",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "a3000000-0000-4000-8000-000000000020",
+        "label": null,
+        "startBlockId": "a3000000-0000-4000-8000-000000000017",
+        "endBlockId": "a3000000-0000-4000-8000-000000000018",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "a3000000-0000-4000-8000-000000000026",
+        "label": null,
+        "startBlockId": "a3000000-0000-4000-8000-000000000021",
+        "endBlockId": "a3000000-0000-4000-8000-000000000024",
+        "columns": 3,
+        "keepTogether": false
+      },
+      {
+        "id": "a3000000-0000-4000-8000-000000000058",
+        "label": null,
+        "startBlockId": "a3000000-0000-4000-8000-000000000049",
+        "endBlockId": "a3000000-0000-4000-8000-000000000050",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "a3000000-0000-4000-8000-000000000060",
+        "label": null,
+        "startBlockId": "a3000000-0000-4000-8000-000000000051",
+        "endBlockId": "a3000000-0000-4000-8000-000000000052",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "a3000000-0000-4000-8000-000000000062",
+        "label": null,
+        "startBlockId": "a3000000-0000-4000-8000-000000000053",
+        "endBlockId": "a3000000-0000-4000-8000-000000000054",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "a3000000-0000-4000-8000-000000000064",
+        "label": null,
+        "startBlockId": "a3000000-0000-4000-8000-000000000055",
+        "endBlockId": "a3000000-0000-4000-8000-000000000056",
+        "columns": 2,
+        "keepTogether": false
+      }
+    ],
+    "blockRules": [
+      {
+        "blockId": "a3000000-0000-4000-8000-000000000030",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "a3000000-0000-4000-8000-000000000033",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "a3000000-0000-4000-8000-000000000035",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "a3000000-0000-4000-8000-000000000037",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "a3000000-0000-4000-8000-000000000039",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "a3000000-0000-4000-8000-000000000041",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "a3000000-0000-4000-8000-000000000043",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "a3000000-0000-4000-8000-000000000045",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "a3000000-0000-4000-8000-000000000047",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "a3000000-0000-4000-8000-000000000049",
+        "pageBreakBefore": false,
+        "keepWithNext": false,
+        "spaceAbove": 8
+      },
+      {
+        "blockId": "a3000000-0000-4000-8000-000000000050",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "a3000000-0000-4000-8000-000000000052",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "a3000000-0000-4000-8000-000000000054",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      }
+    ]
+  }
+}

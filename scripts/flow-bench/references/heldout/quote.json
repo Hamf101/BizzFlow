@@ -1,0 +1,524 @@
+{
+  "request": "quote for commercial landscaping maintenance",
+  "title": "Landscaping maintenance quote",
+  "description": "Use to quote a business customer for regular grounds maintenance, with the sites, the visits, the costs and the customer's acceptance.",
+  "content": {
+    "schemaVersion": 3,
+    "branding": {
+      "organizationName": "",
+      "logoAsset": null,
+      "logoDataUrl": null,
+      "logoAlignment": "left",
+      "logoWidthPercent": 24,
+      "primaryColor": "#252329",
+      "accentColor": "#635273"
+    },
+    "blocks": [
+      {
+        "id": "a5000000-0000-4000-8000-000000000001",
+        "type": "heading",
+        "text": "Landscaping maintenance quote",
+        "level": 1,
+        "alignment": "left"
+      },
+      {
+        "id": "a5000000-0000-4000-8000-000000000002",
+        "fieldKey": "business_name",
+        "label": "Business name",
+        "required": true,
+        "helpText": null,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a5000000-0000-4000-8000-000000000004",
+        "fieldKey": "business_number",
+        "label": "Business number",
+        "required": false,
+        "helpText": "Your company or tax number, if any.",
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a5000000-0000-4000-8000-000000000007",
+        "fieldKey": "business_phone",
+        "label": "Business phone",
+        "required": false,
+        "helpText": null,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a5000000-0000-4000-8000-000000000008",
+        "fieldKey": "business_email",
+        "label": "Business email",
+        "required": false,
+        "helpText": null,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a5000000-0000-4000-8000-000000000011",
+        "fieldKey": "customer_company",
+        "label": "Customer company",
+        "required": true,
+        "helpText": null,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a5000000-0000-4000-8000-000000000013",
+        "fieldKey": "contact_name",
+        "label": "Contact name",
+        "required": false,
+        "helpText": null,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a5000000-0000-4000-8000-000000000014",
+        "fieldKey": "contact_phone",
+        "label": "Contact phone",
+        "required": false,
+        "helpText": null,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a5000000-0000-4000-8000-000000000017",
+        "fieldKey": "contact_email",
+        "label": "Contact email",
+        "required": false,
+        "helpText": null,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a5000000-0000-4000-8000-000000000018",
+        "fieldKey": "site_address",
+        "label": "Site address",
+        "required": true,
+        "helpText": "List each site if there is more than one.",
+        "boxHeight": 56,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "a5000000-0000-4000-8000-000000000019",
+        "fieldKey": "quote_number",
+        "label": "Quote number",
+        "required": false,
+        "helpText": null,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a5000000-0000-4000-8000-000000000021",
+        "fieldKey": "quote_date",
+        "label": "Quote date",
+        "required": false,
+        "helpText": null,
+        "type": "date_field"
+      },
+      {
+        "id": "a5000000-0000-4000-8000-000000000022",
+        "fieldKey": "valid_until",
+        "label": "Valid until",
+        "required": true,
+        "helpText": "The last day to accept this price.",
+        "type": "date_field"
+      },
+      {
+        "id": "a5000000-0000-4000-8000-000000000026",
+        "fieldKey": "areas_to_be_maintained",
+        "label": "Areas to be maintained",
+        "required": true,
+        "helpText": "For example lawns, beds, hedges, car parks and entrances.",
+        "boxHeight": 72,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "a5000000-0000-4000-8000-000000000028",
+        "fieldKey": "work_carried_out_at_each_visit",
+        "label": "Work carried out at each visit",
+        "required": true,
+        "helpText": "For example mowing, edging, hedge trimming, weeding and litter clearance.",
+        "boxHeight": 90,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "a5000000-0000-4000-8000-000000000029",
+        "fieldKey": "how_often_we_visit",
+        "label": "How often we visit",
+        "required": true,
+        "helpText": null,
+        "type": "dropdown_field",
+        "placeholder": null,
+        "options": [
+          "Weekly",
+          "Every two weeks",
+          "Monthly",
+          "Other"
+        ]
+      },
+      {
+        "id": "a5000000-0000-4000-8000-000000000030",
+        "fieldKey": "please_specify",
+        "label": "Please specify",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "a5000000-0000-4000-8000-000000000029",
+          "operator": "equals",
+          "value": "Other"
+        },
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a5000000-0000-4000-8000-000000000031",
+        "type": "table",
+        "headers": [
+          "Item",
+          "Quantity",
+          "Unit price",
+          "Amount"
+        ],
+        "rows": [
+          [
+            "Maintenance visits",
+            "",
+            "",
+            ""
+          ],
+          [
+            "Planting and mulching",
+            "",
+            "",
+            ""
+          ],
+          [
+            "Green waste removal",
+            "",
+            "",
+            ""
+          ],
+          [
+            "Materials",
+            "",
+            "",
+            ""
+          ],
+          [
+            "Subtotal",
+            "",
+            "",
+            ""
+          ],
+          [
+            "Tax",
+            "",
+            "",
+            ""
+          ],
+          [
+            "Total",
+            "",
+            "",
+            ""
+          ]
+        ]
+      },
+      {
+        "id": "a5000000-0000-4000-8000-000000000033",
+        "fieldKey": "not_included_in_this_quote",
+        "label": "Not included in this quote",
+        "required": false,
+        "helpText": "For example tree work, irrigation repairs or storm clearance.",
+        "boxHeight": 56,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "a5000000-0000-4000-8000-000000000035",
+        "type": "paragraph",
+        "text": "Work outside this quote is priced separately, and we will agree it with you in writing before we start it.",
+        "alignment": "left"
+      },
+      {
+        "id": "a5000000-0000-4000-8000-000000000036",
+        "fieldKey": "optional_extras_and_their_prices",
+        "label": "Optional extras and their prices",
+        "required": false,
+        "helpText": "Work the customer can add, each with its own price.",
+        "boxHeight": 56,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "a5000000-0000-4000-8000-000000000038",
+        "fieldKey": "how_often_we_invoice",
+        "label": "How often we invoice",
+        "required": false,
+        "helpText": "For example after each visit or once a month.",
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a5000000-0000-4000-8000-000000000040",
+        "fieldKey": "payment_due",
+        "label": "Payment due",
+        "required": false,
+        "helpText": "How long the customer has to pay each invoice.",
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a5000000-0000-4000-8000-000000000043",
+        "fieldKey": "how_to_pay",
+        "label": "How to pay",
+        "required": false,
+        "helpText": "For example bank transfer details.",
+        "boxHeight": 45,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "a5000000-0000-4000-8000-000000000044",
+        "fieldKey": "service_start_date",
+        "label": "Service start date",
+        "required": false,
+        "helpText": null,
+        "type": "date_field"
+      },
+      {
+        "id": "a5000000-0000-4000-8000-000000000046",
+        "fieldKey": "service_end_date",
+        "label": "Service end date",
+        "required": false,
+        "helpText": null,
+        "type": "date_field"
+      },
+      {
+        "id": "a5000000-0000-4000-8000-000000000049",
+        "type": "paragraph",
+        "text": "By signing below, you accept this quote and ask us to carry out the work described in it.",
+        "alignment": "left"
+      },
+      {
+        "id": "a5000000-0000-4000-8000-000000000051",
+        "fieldKey": "customer_signature",
+        "label": "Customer signature",
+        "required": true,
+        "helpText": null,
+        "type": "signature_field"
+      },
+      {
+        "id": "a5000000-0000-4000-8000-000000000052",
+        "fieldKey": "date_accepted",
+        "label": "Date accepted",
+        "required": true,
+        "helpText": null,
+        "type": "date_field"
+      },
+      {
+        "id": "a5000000-0000-4000-8000-000000000055",
+        "fieldKey": "printed_name",
+        "label": "Printed name",
+        "required": true,
+        "helpText": null,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      }
+    ],
+    "layout": {
+      "pageSize": "A4",
+      "orientation": "portrait",
+      "marginPreset": "standard",
+      "density": "balanced",
+      "printedTitle": {
+        "mode": "none"
+      },
+      "headerPolicy": "none",
+      "footerPolicy": "none",
+      "pageNumbering": "none"
+    },
+    "sections": [
+      {
+        "id": "a5000000-0000-4000-8000-000000000003",
+        "label": "Our details",
+        "startBlockId": "a5000000-0000-4000-8000-000000000002",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "a5000000-0000-4000-8000-000000000012",
+        "label": "Customer details",
+        "startBlockId": "a5000000-0000-4000-8000-000000000011",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "a5000000-0000-4000-8000-000000000020",
+        "label": "Quote details",
+        "startBlockId": "a5000000-0000-4000-8000-000000000019",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "a5000000-0000-4000-8000-000000000027",
+        "label": "The work",
+        "startBlockId": "a5000000-0000-4000-8000-000000000026",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "a5000000-0000-4000-8000-000000000032",
+        "label": "Costs",
+        "startBlockId": "a5000000-0000-4000-8000-000000000031",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "a5000000-0000-4000-8000-000000000034",
+        "label": "What is not included",
+        "startBlockId": "a5000000-0000-4000-8000-000000000033",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "a5000000-0000-4000-8000-000000000037",
+        "label": "Optional extras",
+        "startBlockId": "a5000000-0000-4000-8000-000000000036",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "a5000000-0000-4000-8000-000000000039",
+        "label": "Payment terms",
+        "startBlockId": "a5000000-0000-4000-8000-000000000038",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "a5000000-0000-4000-8000-000000000045",
+        "label": "Dates",
+        "startBlockId": "a5000000-0000-4000-8000-000000000044",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "a5000000-0000-4000-8000-000000000050",
+        "label": "Acceptance",
+        "startBlockId": "a5000000-0000-4000-8000-000000000049",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      }
+    ],
+    "fieldGroups": [
+      {
+        "id": "a5000000-0000-4000-8000-000000000006",
+        "label": null,
+        "startBlockId": "a5000000-0000-4000-8000-000000000002",
+        "endBlockId": "a5000000-0000-4000-8000-000000000004",
+        "columns": 2,
+        "widths": [
+          8,
+          4
+        ],
+        "keepTogether": false
+      },
+      {
+        "id": "a5000000-0000-4000-8000-000000000010",
+        "label": null,
+        "startBlockId": "a5000000-0000-4000-8000-000000000007",
+        "endBlockId": "a5000000-0000-4000-8000-000000000008",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "a5000000-0000-4000-8000-000000000016",
+        "label": null,
+        "startBlockId": "a5000000-0000-4000-8000-000000000013",
+        "endBlockId": "a5000000-0000-4000-8000-000000000014",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "a5000000-0000-4000-8000-000000000024",
+        "label": null,
+        "startBlockId": "a5000000-0000-4000-8000-000000000019",
+        "endBlockId": "a5000000-0000-4000-8000-000000000022",
+        "columns": 3,
+        "keepTogether": false
+      },
+      {
+        "id": "a5000000-0000-4000-8000-000000000042",
+        "label": null,
+        "startBlockId": "a5000000-0000-4000-8000-000000000038",
+        "endBlockId": "a5000000-0000-4000-8000-000000000040",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "a5000000-0000-4000-8000-000000000048",
+        "label": null,
+        "startBlockId": "a5000000-0000-4000-8000-000000000044",
+        "endBlockId": "a5000000-0000-4000-8000-000000000046",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "a5000000-0000-4000-8000-000000000054",
+        "label": null,
+        "startBlockId": "a5000000-0000-4000-8000-000000000051",
+        "endBlockId": "a5000000-0000-4000-8000-000000000052",
+        "columns": 2,
+        "widths": [
+          8,
+          4
+        ],
+        "keepTogether": false
+      }
+    ],
+    "blockRules": [
+      {
+        "blockId": "a5000000-0000-4000-8000-000000000049",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "a5000000-0000-4000-8000-000000000051",
+        "pageBreakBefore": false,
+        "keepWithNext": false,
+        "spaceAbove": 12
+      },
+      {
+        "blockId": "a5000000-0000-4000-8000-000000000052",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      }
+    ]
+  }
+}
