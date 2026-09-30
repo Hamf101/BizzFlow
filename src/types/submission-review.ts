@@ -12,6 +12,9 @@ export const SUBMISSION_ACTIVITY_EVENT_TYPES = [
   "approved",
   "rejected",
   "completed",
+  "review_approved",
+  "changes_dismissed",
+  "reviewer_removed",
 ] as const
 
 /** Binding state changes available to submission reviewers. */
@@ -80,6 +83,27 @@ export type SubmissionActivityEvent = {
   createdAt: string
 }
 
+/** What one reviewer has decided so far. */
+export const SUBMISSION_REVIEWER_DECISIONS = [
+  "pending",
+  "approved",
+  "changes_requested",
+  "dismissed",
+] as const
+
+/** One reviewer's decision on a submission. */
+export type SubmissionReviewerDecision = (typeof SUBMISSION_REVIEWER_DECISIONS)[number]
+
+/** A person reviewing a submission, and what they decided. */
+export type SubmissionReviewer = {
+  assignedAt: string
+  assignedBy: string | null
+  decidedAt: string | null
+  decision: SubmissionReviewerDecision
+  note: string | null
+  userId: string
+}
+
 /** Comments and state history shown with one visible submission. */
 export type SubmissionReviewData = {
   comments: SubmissionComment[]
@@ -120,6 +144,14 @@ const submissionCommentRowSchema = z.object({
   body: z.string().trim().min(1).max(2_000),
   created_by: nullableUuidSchema,
   created_at: timestampSchema,
+})
+const submissionReviewerRowSchema = z.object({
+  assigned_at: timestampSchema,
+  assigned_by: nullableUuidSchema,
+  decided_at: timestampSchema.nullable(),
+  decision: z.enum(SUBMISSION_REVIEWER_DECISIONS),
+  note: z.string().nullable(),
+  user_id: uuidSchema,
 })
 const submissionActivityEventRowSchema = z.object({
   id: uuidSchema,
@@ -191,5 +223,29 @@ export function parseSubmissionActivityEventRow(
     commentId: result.data.comment_id,
     submissionRevision: result.data.submission_revision,
     createdAt: result.data.created_at,
+  }
+}
+
+/**
+ * Parses an unknown database row into a submission reviewer.
+ *
+ * @param value - Untrusted persistence data.
+ * @returns The reviewer and their decision.
+ * @throws SubmissionReviewDomainError when the row is invalid.
+ */
+export function parseSubmissionReviewerRow(value: unknown): SubmissionReviewer {
+  const result = submissionReviewerRowSchema.safeParse(value)
+
+  if (!result.success) {
+    throw new SubmissionReviewDomainError("Database returned an invalid submission reviewer.")
+  }
+
+  return {
+    assignedAt: result.data.assigned_at,
+    assignedBy: result.data.assigned_by,
+    decidedAt: result.data.decided_at,
+    decision: result.data.decision,
+    note: result.data.note,
+    userId: result.data.user_id,
   }
 }

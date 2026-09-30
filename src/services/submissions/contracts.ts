@@ -23,6 +23,7 @@ import type {
 import type {
   SubmissionActivityEvent,
   SubmissionComment,
+  SubmissionReviewer,
   SubmissionReviewTransition,
 } from "@/types/submission-review"
 
@@ -38,6 +39,10 @@ export type SubmissionDetail = {
   files: SubmissionFile[]
   comments: SubmissionComment[]
   activity: SubmissionActivityEvent[]
+  /** The reviewers this viewer may see, with what each decided. */
+  reviewers: SubmissionReviewer[]
+  /** Whether the viewer assigned the reviewers, so a change request is theirs to set aside. */
+  isRequester: boolean
 }
 
 /** What the list's hover preview draws for one visible submission, and no more. */
@@ -117,6 +122,24 @@ export type SubmitInternalSubmissionInput = GetInternalSubmissionInput & {
 export type AssignInternalSubmissionInput = GetInternalSubmissionInput & {
   expectedRevision: number
   assignedTo: string
+}
+
+/** Input for naming who reviews a submission. */
+export type SetInternalSubmissionReviewersInput = GetInternalSubmissionInput & {
+  expectedRevision: number
+  /** The first of them leads. */
+  reviewerIds: string[]
+  /** How many must approve; null means all of them. */
+  requiredApprovals: number | null
+}
+
+/** Input for setting one reviewer's change request aside. */
+export type DismissSubmissionChangesRequestInput = GetInternalSubmissionInput & {
+  expectedRevision: number
+  reviewerUserId: string
+  comment: string
+  /** Also record the assigner's own approval. */
+  alsoApprove: boolean
 }
 
 /** Input for one binding submission review state change. */

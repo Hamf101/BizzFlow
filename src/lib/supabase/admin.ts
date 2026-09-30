@@ -249,6 +249,17 @@ type AdminSubmissionRow = Record<string, unknown> & {
   assigned_at: string | null
 }
 
+type AdminSubmissionReviewerRow = Record<string, unknown> & {
+  submission_id: string
+  org_id: string
+  user_id: string
+  assigned_by: string | null
+  assigned_at: string
+  decision: "pending" | "approved" | "changes_requested" | "dismissed"
+  note: string | null
+  decided_at: string | null
+}
+
 type AdminSubmissionFileRow = Record<string, unknown> & {
   id: string
   org_id: string
@@ -613,6 +624,7 @@ export type AdminDatabase = {
           >,
         Partial<AdminSubmissionRow>
       >
+      submission_reviewers: DatabaseTable<AdminSubmissionReviewerRow, never, never>
       submission_files: DatabaseTable<
         AdminSubmissionFileRow,
         Partial<AdminSubmissionFileRow> &
@@ -1080,6 +1092,29 @@ export type AdminDatabase = {
           target_submission_id: string
           target_expected_revision: number
           target_assignee_user_id: string
+          target_actor_user_id: string
+        }
+        Returns: AdminSubmissionRow
+      }
+      set_submission_reviewers: {
+        Args: {
+          target_org_id: string
+          target_submission_id: string
+          target_expected_revision: number
+          target_reviewer_ids: string[]
+          target_required_approvals: number | null
+          target_actor_user_id: string
+        }
+        Returns: AdminSubmissionRow
+      }
+      dismiss_submission_changes_request: {
+        Args: {
+          target_org_id: string
+          target_submission_id: string
+          target_expected_revision: number
+          target_reviewer_user_id: string
+          target_comment: string
+          target_also_approve: boolean
           target_actor_user_id: string
         }
         Returns: AdminSubmissionRow

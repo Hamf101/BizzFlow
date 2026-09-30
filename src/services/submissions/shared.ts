@@ -34,7 +34,7 @@ import { runOperation } from "@/services/operation"
 
 /** Columns required by the canonical submission row parser. */
 export const SUBMISSION_COLUMNS =
-  "id,org_id,title,template_id,template_revision,template_snapshot,values,status,revision,created_by,updated_by,submitted_by,assigned_to,assigned_by,created_at,updated_at,submitted_at,assigned_at"
+  "id,org_id,title,template_id,template_revision,template_snapshot,values,status,revision,created_by,updated_by,submitted_by,assigned_to,assigned_by,created_at,updated_at,submitted_at,assigned_at,required_approvals"
 
 /** Columns required by the canonical submission-file row parser. */
 export const SUBMISSION_FILE_COLUMNS =
@@ -440,6 +440,17 @@ function getKnownMutationMessage(message: string | undefined): string | null {
     "Files cannot be",
     "Only the submission creator",
     "Only the assigned reviewer",
+    "Only an assigned reviewer",
+    "Only the person who assigned the reviewers",
+    "A reviewer who has already decided",
+    "A note of up to 2000",
+    "Change request identifiers",
+    "Choose between 1 and 20 reviewers",
+    "Reviewers must be",
+    "That reviewer has no change request",
+    "The approvals needed",
+    "There is no change request",
+    "Your change request",
     "Published submission template",
     "Required submission",
     "Review comment",
@@ -451,6 +462,7 @@ function getKnownMutationMessage(message: string | undefined): string | null {
     "Submission file",
     "Submission identifier",
     "Submission review",
+    "Submission reviewers",
     "Submission revision",
     "Submission status",
     "Submission timestamp",

@@ -7,7 +7,9 @@ import {
   assignInternalSubmission,
   createInternalSubmissionDraft,
   createInternalSubmissionComment,
+  dismissSubmissionChangesRequest,
   saveInternalSubmissionDraft,
+  setInternalSubmissionReviewers,
   SubmissionServiceError,
   submitInternalSubmission,
   transitionInternalSubmission,
@@ -17,7 +19,9 @@ import {
   assignSubmissionAction,
   createSubmissionAction,
   createSubmissionCommentAction,
+  dismissChangesRequestAction,
   saveSubmissionAction,
+  setSubmissionReviewersAction,
   submitSubmissionAction,
   transitionSubmissionAction,
 } from "./actions"
@@ -59,7 +63,9 @@ vi.mock("@/services/submission-service", async (importOriginal) => {
     assignInternalSubmission: vi.fn(),
     createInternalSubmissionComment: vi.fn(),
     createInternalSubmissionDraft: vi.fn(),
+    dismissSubmissionChangesRequest: vi.fn(),
     saveInternalSubmissionDraft: vi.fn(),
+    setInternalSubmissionReviewers: vi.fn(),
     submitInternalSubmission: vi.fn(),
     transitionInternalSubmission: vi.fn(),
   }
@@ -106,6 +112,68 @@ describe("submission review actions", () => {
     expect(revalidatePathMock).toHaveBeenCalledWith(
       `/submissions/${SUBMISSION_ID}`
     )
+  })
+
+  it("names the reviewers and the approvals needed, taking the tenant and actor from the server", async () => {
+    const formData = createSubmissionFormData()
+    formData.append("reviewerIds", ASSIGNEE_USER_ID)
+    formData.append("reviewerIds", ACTOR_USER_ID)
+    formData.set("requiredApprovals", "2")
+    formData.set("organizationId", "untrusted-organization")
+
+    await expect(setSubmissionReviewersAction(formData)).rejects.toThrow(
+      `NEXT_REDIRECT:/submissions/${SUBMISSION_ID}?feedback=submission_assigned`
+    )
+
+    expect(setInternalSubmissionReviewers).toHaveBeenCalledWith({
+      actorUserId: ACTOR_USER_ID,
+      expectedRevision: 3,
+      organizationId: ORGANIZATION_ID,
+      requiredApprovals: 2,
+      reviewerIds: [ASSIGNEE_USER_ID, ACTOR_USER_ID],
+      submissionId: SUBMISSION_ID,
+    })
+  })
+
+  it("asks for everyone to approve when no number is given, and turns staff away", async () => {
+    const formData = createSubmissionFormData()
+    formData.append("reviewerIds", ASSIGNEE_USER_ID)
+
+    await expect(setSubmissionReviewersAction(formData)).rejects.toThrow("submission_assigned")
+    expect(setInternalSubmissionReviewers).toHaveBeenCalledWith(expect.objectContaining({ requiredApprovals: null }))
+
+    vi.mocked(setInternalSubmissionReviewers).mockClear()
+    mockOrganizationContext("staff")
+    await expect(setSubmissionReviewersAction(formData)).rejects.toThrow("permission_denied")
+    expect(setInternalSubmissionReviewers).not.toHaveBeenCalled()
+  })
+
+  it("sets a change request aside with a note, and approves too when asked", async () => {
+    const formData = createSubmissionFormData()
+    formData.set("reviewerUserId", ASSIGNEE_USER_ID)
+    formData.set("comment", "  Seen it, fine  ")
+    formData.set("alsoApprove", "yes")
+
+    await expect(dismissChangesRequestAction(formData)).rejects.toThrow("submission_review_updated")
+
+    expect(dismissSubmissionChangesRequest).toHaveBeenCalledWith({
+      actorUserId: ACTOR_USER_ID,
+      alsoApprove: true,
+      comment: "Seen it, fine",
+      expectedRevision: 3,
+      organizationId: ORGANIZATION_ID,
+      reviewerUserId: ASSIGNEE_USER_ID,
+      submissionId: SUBMISSION_ID,
+    })
+  })
+
+  it("will not set a change request aside without a note", async () => {
+    const formData = createSubmissionFormData()
+    formData.set("reviewerUserId", ASSIGNEE_USER_ID)
+    formData.set("comment", "  ")
+
+    await expect(dismissChangesRequestAction(formData)).rejects.toThrow("NEXT_REDIRECT")
+    expect(dismissSubmissionChangesRequest).not.toHaveBeenCalled()
   })
 
   it("blocks binding decisions from an external reviewer", async () => {

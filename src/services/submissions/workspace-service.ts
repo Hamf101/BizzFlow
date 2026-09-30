@@ -17,6 +17,7 @@ import {
   SUBMISSION_LIST_INPUT,
   type SubmissionListFilters,
 } from "@/services/submissions/list-filters"
+import { listSubmissionReviewers, isReviewRequester } from "@/services/submissions/reviewer-service"
 import { listSubmissionReviewData } from "@/services/submissions/review-service"
 import {
   assertSubmissionVisible,
@@ -204,7 +205,8 @@ export async function getInternalSubmission(
     async (): Promise<SubmissionDetail> => {
       const client = getSubmissionClient(deps)
       const { role, submission } = await loadVisibleSubmission(client, input)
-      const [files, reviewData] = await Promise.all([
+      const viewer = { role, userId: input.actorUserId }
+      const [files, reviewData, reviewers] = await Promise.all([
         listSubmissionFiles(
           client,
           input.organizationId,
@@ -218,9 +220,10 @@ export async function getInternalSubmission(
           input.organizationId,
           input.submissionId
         ),
+        listSubmissionReviewers(client, submission, viewer),
       ])
 
-      return { submission, files, ...reviewData }
+      return { submission, files, ...reviewData, reviewers, isRequester: isReviewRequester(submission, viewer) }
     }
   )
 }

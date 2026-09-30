@@ -9,12 +9,14 @@ import {
   createInternalSubmissionComment,
   createInternalSubmissionDraft,
   createInternalSubmissionFileDownloadUrl,
+  dismissSubmissionChangesRequest,
   expireAbandonedSubmissionFiles,
   exportInternalSubmissionsCsv,
   getInternalSubmission,
   getInternalSubmissionPreview,
   listSubmissionPage,
   saveInternalSubmissionDraft,
+  setInternalSubmissionReviewers,
   type ListSubmissionPageInput,
   submitInternalSubmission,
   supersedeInternalSubmissionFile,
@@ -1039,6 +1041,141 @@ describe("internal submission review workflow", () => {
     )
 
     expect(result).toMatchObject({ id: COMMENT_ID, createdBy: EXTERNAL_ID })
+  })
+})
+
+const OWNER_ID = "20000000-0000-4000-8000-000000000005"
+const SECOND_MANAGER_ID = "20000000-0000-4000-8000-000000000006"
+
+function createReviewerRow(userId: string, overrides: FakeRow = {}): FakeRow {
+  return {
+    assigned_at: "2026-07-18T17:05:00.000Z",
+    assigned_by: MANAGER_ID,
+    decided_at: null,
+    decision: "pending",
+    note: null,
+    org_id: ORGANIZATION_ID,
+    submission_id: SUBMISSION_ID,
+    user_id: userId,
+    ...overrides
+  }
+}
+
+describe("several reviewers on one submission", () => {
+  const named = { expectedRevision: 2, requiredApprovals: null as number | null, reviewerIds: [MANAGER_ID, SECOND_MANAGER_ID] }
+  const input = (actorUserId: string, more: Partial<typeof named> = {}) => ({
+    actorUserId,
+    organizationId: ORGANIZATION_ID,
+    submissionId: SUBMISSION_ID,
+    ...named,
+    ...more
+  })
+
+  it("lets a manager name the reviewers and how many must approve, and passes them on in order", async () => {
+    const client = createClient()
+    client.rpc.mockResolvedValue({ data: createAssignedSubmissionRow({ assigned_to: MANAGER_ID, required_approvals: 2 }), error: null })
+
+    const result = await setInternalSubmissionReviewers(
+      input(MANAGER_ID, { requiredApprovals: 2 }),
+      { client: client as never }
+    )
+
+    expect(client.rpc).toHaveBeenCalledWith("set_submission_reviewers", {
+      target_actor_user_id: MANAGER_ID,
+      target_expected_revision: 2,
+      target_org_id: ORGANIZATION_ID,
+      target_required_approvals: 2,
+      target_reviewer_ids: [MANAGER_ID, SECOND_MANAGER_ID],
+      target_submission_id: SUBMISSION_ID
+    })
+    expect(result).toMatchObject({ assignedTo: MANAGER_ID, requiredApprovals: 2 })
+  })
+
+  it("turns away staff, no reviewers, repeats, non-ids, and more approvals than reviewers before the database is asked", async () => {
+    const client = createClient()
+    const attempt = (actor: string, more: Partial<typeof named> = {}) =>
+      setInternalSubmissionReviewers(input(actor, more), { client: client as never })
+
+    await expect(attempt(STAFF_ID)).rejects.toMatchObject({ statusCode: 403 })
+    await expect(attempt(MANAGER_ID, { reviewerIds: [] })).rejects.toMatchObject({ statusCode: 400 })
+    await expect(attempt(MANAGER_ID, { reviewerIds: [MANAGER_ID, MANAGER_ID] })).rejects.toMatchObject({ statusCode: 400 })
+    await expect(attempt(MANAGER_ID, { reviewerIds: ["../x"] })).rejects.toMatchObject({ statusCode: 400 })
+    await expect(attempt(MANAGER_ID, { requiredApprovals: 3 })).rejects.toMatchObject({ statusCode: 400 })
+    await expect(attempt(MANAGER_ID, { requiredApprovals: 0 })).rejects.toMatchObject({ statusCode: 400 })
+    expect(client.rpc).not.toHaveBeenCalled()
+  })
+
+  it("sets a change request aside only with a note, and only for someone who may review", async () => {
+    const client = createClient()
+    client.rpc.mockResolvedValue({ data: createAssignedSubmissionRow({ assigned_to: MANAGER_ID }), error: null })
+    const dismiss = (actor: string, comment: string) =>
+      dismissSubmissionChangesRequest(
+        { actorUserId: actor, alsoApprove: true, comment, expectedRevision: 4, organizationId: ORGANIZATION_ID, reviewerUserId: SECOND_MANAGER_ID, submissionId: SUBMISSION_ID },
+        { client: client as never }
+      )
+
+    await expect(dismiss(MANAGER_ID, "   ")).rejects.toMatchObject({ statusCode: 400 })
+    await expect(dismiss(STAFF_ID, "Seen it")).rejects.toMatchObject({ statusCode: 403 })
+    expect(client.rpc).not.toHaveBeenCalled()
+
+    await dismiss(MANAGER_ID, "  Seen it, fine  ")
+    expect(client.rpc).toHaveBeenCalledWith("dismiss_submission_changes_request", {
+      target_actor_user_id: MANAGER_ID,
+      target_also_approve: true,
+      target_comment: "Seen it, fine",
+      target_expected_revision: 4,
+      target_org_id: ORGANIZATION_ID,
+      target_reviewer_user_id: SECOND_MANAGER_ID,
+      target_submission_id: SUBMISSION_ID
+    })
+  })
+
+  describe("who sees the other reviewers", () => {
+    const detailFor = async (actorUserId: string, assignedBy: string) => {
+      const client = createClient({
+        organization_memberships: [
+          createMembership(OWNER_ID, "owner_admin"),
+          createMembership(MANAGER_ID, "manager"),
+          createMembership(SECOND_MANAGER_ID, "manager"),
+          createMembership(STAFF_ID, "staff"),
+          createMembership(EXTERNAL_ID, "external_reviewer")
+        ],
+        submission_reviewers: [
+          createReviewerRow(MANAGER_ID, { decision: "approved", decided_at: "2026-07-18T18:00:00.000Z" }),
+          createReviewerRow(SECOND_MANAGER_ID, { decision: "changes_requested", decided_at: "2026-07-18T18:05:00.000Z", note: "Total is wrong" })
+        ],
+        submissions: [createAssignedSubmissionRow({ assigned_by: assignedBy, assigned_to: actorUserId === EXTERNAL_ID ? EXTERNAL_ID : MANAGER_ID, status: "needs_changes" })]
+      })
+
+      return getInternalSubmission(
+        { actorUserId, organizationId: ORGANIZATION_ID, submissionId: SUBMISSION_ID },
+        { client: client as never }
+      )
+    }
+    const seen = (detail: Awaited<ReturnType<typeof detailFor>>) => detail.reviewers.map((reviewer) => reviewer.userId)
+
+    it("shows everyone to a reviewer of the same rank as whoever assigned them, with what each decided", async () => {
+      const detail = await detailFor(SECOND_MANAGER_ID, MANAGER_ID)
+
+      expect(seen(detail)).toEqual([MANAGER_ID, SECOND_MANAGER_ID])
+      expect(detail.reviewers[1]).toMatchObject({ decision: "changes_requested", note: "Total is wrong" })
+    })
+
+    it("shows an owner everyone, and a manager only themselves when an owner assigned the reviewers", async () => {
+      expect(seen(await detailFor(OWNER_ID, OWNER_ID))).toEqual([MANAGER_ID, SECOND_MANAGER_ID])
+      expect(seen(await detailFor(SECOND_MANAGER_ID, OWNER_ID))).toEqual([SECOND_MANAGER_ID])
+    })
+
+    it("shows the lower ranks nothing of the panel", async () => {
+      expect(seen(await detailFor(MANAGER_ID, OWNER_ID))).toEqual([MANAGER_ID])
+      expect(seen(await detailFor(EXTERNAL_ID, MANAGER_ID))).toEqual([])
+    })
+
+    it("tells only the person who assigned the reviewers that the change request is theirs to set aside", async () => {
+      expect((await detailFor(MANAGER_ID, MANAGER_ID)).isRequester).toBe(true)
+      expect((await detailFor(SECOND_MANAGER_ID, MANAGER_ID)).isRequester).toBe(false)
+      expect((await detailFor(OWNER_ID, MANAGER_ID)).isRequester).toBe(false)
+    })
   })
 })
 
