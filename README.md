@@ -124,12 +124,12 @@ Create a Gemini API key in Google AI Studio, restrict it to the Gemini API, and 
 
 ```bash
 AI_PROVIDER=gemini
-AI_MODEL=gemini-3.6-flash
+AI_MODEL=gemini-flash-latest
 AI_TIMEOUT_MS=30000
 GEMINI_API_KEY=<your-key>
 ```
 
-`AI_PROVIDER` currently defaults to the registered `gemini` adapter, and `AI_MODEL` defaults to the stable `gemini-3.6-flash` model for that adapter. The Flow service itself is provider-neutral: adding another adapter is isolated to the provider registry and its credential configuration. An unregistered provider is rejected without fallback. For one release, existing Gemini deployments may continue to supply deprecated `GEMINI_MODEL` and `GEMINI_TIMEOUT_MS`; each is read only when its canonical AI-prefixed replacement is absent. Migrate those aliases rather than configuring both.
+`AI_PROVIDER` currently defaults to the registered `gemini` adapter, and `AI_MODEL` defaults to `gemini-flash-latest`, Google's alias for its newest Flash release. Google swaps the model behind that alias on each release, so Flow follows it with no change here; set `AI_MODEL` to a fixed version listed in `src/services/ai/approved-models.ts` to hold Flow on it instead. The Flow service itself is provider-neutral: adding another adapter is isolated to the provider registry and its credential configuration. An unregistered provider is rejected without fallback. For one release, existing Gemini deployments may continue to supply deprecated `GEMINI_MODEL` and `GEMINI_TIMEOUT_MS`; each is read only when its canonical AI-prefixed replacement is absent. Migrate those aliases rather than configuring both.
 
 Restart the application after changing local environment values. In deployed environments, add the same values to the hosting provider and redeploy. Only active organization owners and managers can use a template's shared Flow conversation.
 

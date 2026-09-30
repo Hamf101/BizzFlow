@@ -9,11 +9,9 @@ afterEach(() => {
 })
 
 describe("AI provider factory", () => {
-  it("constructs the registered provider with the exact approved model", () => {
+  it("runs with no model configured, on the approved model that follows Gemini's newest", () => {
     process.env = {
       NODE_ENV: "test",
-      AI_PROVIDER: "gemini",
-      AI_MODEL: "gemini-3.6-flash",
       AI_TIMEOUT_MS: "14000",
       GEMINI_API_KEY: "test-provider-key",
     }
@@ -21,7 +19,7 @@ describe("AI provider factory", () => {
     const runtime = createAiRuntime()
 
     expect(runtime.provider.id).toBe("gemini")
-    expect(runtime.model).toEqual({ provider: "gemini", model: "gemini-3.6-flash" })
+    expect(runtime.model).toEqual({ provider: "gemini", model: "gemini-flash-latest" })
   })
 
   it("refuses a model the benchmark has not approved, unless a benchmark asks for it", () => {

@@ -361,7 +361,7 @@ export function getAiEnv(): AiEnv {
     AI_MODEL: readCanonicalOrDeprecatedEnvValue(
       process.env.AI_MODEL,
       provider === "gemini" ? process.env.GEMINI_MODEL : undefined
-    ) ?? (provider === "gemini" ? "gemini-3.6-flash" : undefined),
+    ) ?? (provider === "gemini" ? "gemini-flash-latest" : undefined),
     AI_TIMEOUT_MS: readCanonicalOrDeprecatedEnvValue(
       process.env.AI_TIMEOUT_MS,
       provider === "gemini" ? process.env.GEMINI_TIMEOUT_MS : undefined

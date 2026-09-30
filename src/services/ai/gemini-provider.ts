@@ -17,6 +17,8 @@ import {
 
 const GEMINI_PROVIDER_ID = "gemini" as const
 const GEMINI_STABLE_API_VERSION = "v1"
+/** Google serves its "-latest" aliases on the beta API only; a fixed version stays on the stable one. */
+const GEMINI_ALIAS_API_VERSION = "v1beta"
 
 type GeminiInteractionResponse = Pick<
   Interactions.Interaction,
@@ -86,6 +88,7 @@ export class GeminiAiProvider implements AiProvider {
     try {
       const response = await this.executeInteraction(
         {
+          ...(request.model.model.endsWith("-latest") ? { api_version: GEMINI_ALIAS_API_VERSION } : {}),
           model: request.model.model,
           input: request.input,
           system_instruction: request.systemInstruction,
