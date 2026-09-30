@@ -1,6 +1,6 @@
 "use client"
 
-import { Copy, Ellipsis, Link2, Pencil } from "lucide-react"
+import { Copy, Ellipsis, Link2, Pencil, UserPlus } from "lucide-react"
 import Link from "next/link"
 import { type ReactElement, useState } from "react"
 
@@ -9,10 +9,12 @@ import {
   CategoryDialog,
   CHANGE_ICONS,
   describeTemplateChange,
+  shareableTemplates,
   type TemplateChangeLabel,
   useTemplateChanges,
   useTemplateSelection,
 } from "@/components/templates/template-selection"
+import { ShareDialog } from "@/components/sharing/share-dialog"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -34,11 +36,17 @@ import type { DocumentTemplateStatus } from "@/types/template"
  * @returns The card's action button, its menus, and the category dialog.
  */
 export function TemplateRowMenu({
+  canDuplicate,
+  canEdit,
   duplicateAction,
   status,
   templateId,
   title,
 }: {
+  /** The viewer may make a copy of it. */
+  canDuplicate: boolean
+  /** The viewer may edit it, and so archive, file and share it. */
+  canEdit: boolean
   duplicateAction: (formData: FormData) => Promise<void>
   status: DocumentTemplateStatus
   templateId: string
@@ -46,12 +54,21 @@ export function TemplateRowMenu({
 }): ReactElement {
   const selection = useTemplateSelection()
   const [filing, setFiling] = useState(false)
+  const [sharing, setSharing] = useState(false)
   const opensOnRightClick = useOpensOnRightClick()
   const inSelection = selection !== null && selection.selected.size > 1 && selection.selected.has(templateId)
   const targets = inSelection
     ? selection.items.filter((template) => selection.selected.has(template.id))
-    : [{ id: templateId, status }]
+    : [{ canDuplicate, canEdit, id: templateId, status }]
   const changes = useTemplateChanges(targets)
+  // The whole selection when the template is part of one, otherwise just the template.
+  const share = shareableTemplates(targets)
+  const shareItem = share ? (
+    <DropdownMenuItem onClick={() => setSharing(true)}>
+      <UserPlus aria-hidden="true" />
+      {share.length > 1 ? `Share ${share.length} templates…` : "Share…"}
+    </DropdownMenuItem>
+  ) : null
   const templatePath = `/templates/${encodeURIComponent(templateId)}`
 
   function change(label: TemplateChangeLabel): ReactElement {
@@ -66,8 +83,11 @@ export function TemplateRowMenu({
   }
 
   const items = inSelection ? (
-    changes.labels.length > 0 ? (
-      changes.labels.map(change)
+    changes.labels.length > 0 || share ? (
+      <>
+        {shareItem}
+        {changes.labels.map(change)}
+      </>
     ) : (
       <DropdownMenuItem disabled>No change fits every selected template</DropdownMenuItem>
     )
@@ -75,31 +95,36 @@ export function TemplateRowMenu({
     change("Restore")
   ) : (
     <>
-      <DropdownMenuItem render={<Link href={`${templatePath}/edit`} />}>
-        <Pencil aria-hidden="true" />
-        Edit
-      </DropdownMenuItem>
-      {status === "published" ? (
+      {canEdit ? (
+        <DropdownMenuItem render={<Link href={`${templatePath}/edit`} />}>
+          <Pencil aria-hidden="true" />
+          Edit
+        </DropdownMenuItem>
+      ) : null}
+      {canEdit && status === "published" ? (
         <DropdownMenuItem render={<Link href={`${templatePath}/links`} />}>
           <Link2 aria-hidden="true" />
           Public links
         </DropdownMenuItem>
       ) : null}
-      <form action={duplicateAction}>
-        <input name="templateId" type="hidden" value={templateId} />
-        {/* The menu stays open until the copy's editor opens, so closing it
-            cannot unmount this form mid-submit. */}
-        <DropdownMenuItem
-          closeOnClick={false}
-          nativeButton
-          render={<button className="w-full" type="submit" />}
-        >
-          <Copy aria-hidden="true" />
-          Duplicate
-        </DropdownMenuItem>
-      </form>
-      {change("Archive")}
-      {change("Category")}
+      {shareItem}
+      {canDuplicate ? (
+        <form action={duplicateAction}>
+          <input name="templateId" type="hidden" value={templateId} />
+          {/* The menu stays open until the copy's editor opens, so closing it
+              cannot unmount this form mid-submit. */}
+          <DropdownMenuItem
+            closeOnClick={false}
+            nativeButton
+            render={<button className="w-full" type="submit" />}
+          >
+            <Copy aria-hidden="true" />
+            Duplicate
+          </DropdownMenuItem>
+        </form>
+      ) : null}
+      {canEdit ? change("Archive") : null}
+      {canEdit ? change("Category") : null}
     </>
   )
 
@@ -128,6 +153,7 @@ export function TemplateRowMenu({
         </DropdownMenuContent>
       </DropdownMenu>
       {opensOnRightClick ? <DropdownMenuContent className="w-52">{items}</DropdownMenuContent> : null}
+      {share ? <ShareDialog name={title} onOpenChange={setSharing} open={sharing} resources={share} /> : null}
       <CategoryDialog
         count={targets.length}
         onChoose={(category) => changes.run("Category", category)}

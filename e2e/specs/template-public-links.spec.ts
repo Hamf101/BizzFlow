@@ -57,15 +57,16 @@ test("keeps a template's actions behind its card menu and its public links on th
   await expect.poll(path).toBe("/templates")
   await expect(page.getByText("This item changed")).toBeVisible()
 
-  // People who cannot manage templates get no card menu and cannot open the
-  // public links page.
+  // People who cannot edit the template can copy it, but the menu has no public
+  // links and they cannot open the public links page.
   const staffPage = await pageAs("staff")
 
   await staffPage.goto(libraryPath)
   await expect(staffPage.locator('[data-slot="template-card"]').first()).toBeVisible()
-  await expect(
-    staffPage.getByRole("button", { name: `Actions for ${title}` })
-  ).toHaveCount(0)
+  await staffPage.getByRole("button", { name: `Actions for ${title}` }).click()
+  await expect(staffPage.getByRole("menuitem", { name: "Duplicate" })).toBeVisible()
+  await expect(staffPage.getByRole("menuitem", { name: "Public links" })).toHaveCount(0)
+  await staffPage.keyboard.press("Escape")
   await staffPage.goto(linksPath)
   await expect.poll(() => new URL(staffPage.url()).pathname).toBe("/templates")
   await expect(

@@ -69,6 +69,9 @@ export default async function TemplatesPage({
     context.membership,
     "templates:manage"
   )
+  const canCreate =
+    canManage ||
+    canPerformOrganizationAction(context.membership, "templates:create")
   const view = templateListState.parse(query)
   const [result, categories, savedViews] = await Promise.all([
     listTemplatePage({
@@ -135,6 +138,7 @@ export default async function TemplatesPage({
   return (
     <TemplatesShell>
       <TemplatesWorkspace
+        canCreate={canCreate}
         canManage={canManage}
         categories={categories}
         duplicateAction={duplicateTemplateAction}
