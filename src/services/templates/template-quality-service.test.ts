@@ -7,6 +7,7 @@ import {
   type TemplateContent
 } from "@/types/template"
 
+import { STARTER_TEMPLATES } from "./starter-templates"
 import {
   evaluateTemplateQuality,
   isTemplateQualityIssueSaveBlocking,
@@ -298,6 +299,22 @@ describe("evaluateTemplateQuality", () => {
     })
   })
 
+  it("lets a page with no printed title open with its title as a heading", () => {
+    const content = createVersionThreeContent([
+      { id: FIRST_BLOCK_ID, type: "heading", text: "Client agreement", level: 1, alignment: "left" }
+    ])
+
+    if (content.schemaVersion !== 3) {
+      throw new Error("Expected a version-three quality fixture.")
+    }
+
+    content.layout = { ...content.layout, printedTitle: { mode: "none" } }
+
+    expect(
+      evaluateTemplateQuality({ title: "Client agreement", description: "Defines the client agreement.", content }).issues
+    ).toEqual([])
+  })
+
   it("blocks blank metadata and every visible heading or label", () => {
     const content = createVersionThreeContent([
       {
@@ -416,6 +433,29 @@ describe("evaluateTemplateQuality", () => {
       severity: "critical",
       affectedBlockIds: []
     })
+  })
+
+  it("says when a form asks about someone's health, and stays quiet on ordinary forms", () => {
+    const asks = (label: string, helpText: string | null = null) =>
+      evaluateTemplateQuality({
+        title: "Client intake",
+        description: "Collects the details needed to onboard a client.",
+        content: createVersionThreeContent([
+          { id: FIRST_BLOCK_ID, type: "text_field", fieldKey: "answer", label, required: false, helpText, placeholder: null, multiline: false }
+        ])
+      }).issues.filter((issue) => issue.code === "collects_health_information")
+
+    expect(asks("Current medications")).toMatchObject([{ severity: "warning", affectedBlockIds: [FIRST_BLOCK_ID] }])
+    expect(asks("Anything we should know?", "List any allergies or medical conditions.")).toHaveLength(1)
+
+    // Near misses: a safety form, a pet's records, a word that only contains one.
+    for (const label of ["Health and safety checklist", "Pet's vaccination records", "Premedicated primer used"]) {
+      expect(asks(label)).toEqual([])
+    }
+
+    for (const starter of STARTER_TEMPLATES) {
+      expect(evaluateTemplateQuality(starter).issues.map((issue) => issue.code)).not.toContain("collects_health_information")
+    }
   })
 
   it("does not mutate the supplied template content", () => {

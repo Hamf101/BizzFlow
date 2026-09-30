@@ -29,6 +29,7 @@ export type TemplateQualityIssueCode =
   | "invalid_field_key"
   | "duplicate_title_heading"
   | "heading_level_jump"
+  | "collects_health_information"
   | "missing_description"
 
 /** One actionable, high-confidence usability problem in a template draft. */
@@ -63,6 +64,10 @@ export type TemplateQualityEvaluation = Readonly<{
 const NEEDS_INPUT_PATTERN = /\bneeds\s+input\s*:/i
 const PLACEHOLDER_CHOICE_PATTERN =
   /^(?:option|choice)\s*(?:[-_#]\s*)?(?:\d+|[a-z]|one|two|three|four|five)$/i
+// Questions about a person's health. Kept narrow: a notice that fires on a
+// safety checklist or a pet's records teaches people to ignore it.
+const HEALTH_INFORMATION_PATTERN =
+  /\b(?:medications?|medicines?|prescriptions?|allerg(?:y|ies)|diagnos[ei]s|symptoms?|medical (?:history|conditions?|records?)|health (?:conditions?|history|concerns?|insurance)|surger(?:y|ies)|pregnan(?:t|cy))\b/i
 const MAX_TEMPLATE_TITLE_LENGTH = 180
 const MAX_TEMPLATE_DESCRIPTION_LENGTH = 2_000
 
@@ -386,6 +391,24 @@ export function evaluateTemplateQuality(
       message:
         "Fix heading levels that skip a level in the document hierarchy.",
       affectedBlockIds: headingLevelJumpIds
+    })
+  }
+
+  const healthFieldIds = blocks
+    .filter(
+      (block) =>
+        "fieldKey" in block &&
+        HEALTH_INFORMATION_PATTERN.test(`${block.label} ${block.helpText ?? ""}`)
+    )
+    .map((block) => block.id)
+
+  if (healthFieldIds.length > 0) {
+    issues.push({
+      code: "collects_health_information",
+      severity: "warning",
+      message:
+        "This form asks for health information. BizFlow is not set up for HIPAA-covered records, so check the rules that apply to you before using it.",
+      affectedBlockIds: healthFieldIds
     })
   }
 
