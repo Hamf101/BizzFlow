@@ -31,7 +31,7 @@ function Canvas({ editable = true, fields = "design", initial = TERMS, narrow = 
   const current = useEditorController({ change: history.set, content: history.state, undo: history.undo })
   const [answers, setAnswers] = useState<Record<string, unknown>>({})
   useEffect(() => { controller = current })
-  return <EditorCanvas allowFiles answers={answers} controller={current} designable={editable} documentTitle="Agreement" fields={fields} narrow={narrow} onAnswerChange={(key, value) => setAnswers((all) => ({ ...all, [key]: value }))} surface="screen" textEditable={editable} zoom={1} />
+  return <EditorCanvas allowFiles answers={answers} controller={current} designable={editable} documentTitle="Agreement" fields={fields} narrow={narrow} onAnswerChange={(key, value) => setAnswers((all) => ({ ...all, [key]: value }))} textEditable={editable} zoom={1} />
 }
 
 it("edits section titles, keeps an emptied title valid, switches rules and moves the caret into its text", async () => {

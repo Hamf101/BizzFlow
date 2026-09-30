@@ -612,7 +612,6 @@ export function TemplateEditor({
               setTestAnswers((answers) => applyVisibleTemplateFieldValue(content, answers, fieldKey, value))
             }
             overlay={room && !proposal ? <RoomLayer narrow={narrow} others={live.others} revision={content} room={room} /> : null}
-            surface={proposal ? "paper" : "screen"}
             textEditable={editable && !proposal}
             zoom={zoom}
           />

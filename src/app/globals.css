@@ -372,6 +372,9 @@
  * in both themes by design.
  */
 [data-document-surface="paper"] {
+  /* Words with no colour of their own inherit the theme's, which is light on a
+     dark screen and vanishes on paper: the paper sets its own. */
+  color: #2f2b33;
   --card: #f7f4ee;
   --card-foreground: #2f2b33;
   --foreground: #2f2b33;

@@ -58,7 +58,7 @@ import { SNAP_PX, snapBox } from "@/components/editor/image-placement"
 import { type DragBox, type DragLine, type DropTarget, useBlockDrag } from "@/components/editor/use-block-drag"
 import { rowGridColumns } from "@/components/templates/template-render-groups"
 import { addPageBreak, type EditorController, type FocusRequest } from "@/components/editor/use-editor-controller"
-import { resolveDocumentSurfaceInk, type DocumentSurface } from "@/lib/document-surface"
+import { resolveDocumentSurfaceInk } from "@/lib/document-surface"
 import { getVisibleTemplateBlocks } from "@/types/template-visibility"
 import { cn } from "@/lib/utils"
 import {
@@ -119,7 +119,6 @@ export type EditorCanvasProps = Readonly<{
   onAnswerChange?: (fieldKey: string, value: unknown) => void
   /** Drawn over the pages at their shown size, such as where others are. */
   overlay?: ReactNode
-  surface: DocumentSurface
   textEditable: boolean
   zoom: number
 }>
@@ -142,7 +141,6 @@ export function EditorCanvas({
   narrow,
   onAnswerChange = () => undefined,
   overlay,
-  surface,
   textEditable,
   zoom,
 }: EditorCanvasProps): ReactElement {
@@ -174,7 +172,8 @@ export function EditorCanvas({
   const placedImages = plan.blocks.flatMap(({ block }) =>
     block.type === "image" && block.placement ? [{ block, page: block.placement.page }] : []
   )
-  const ink = resolveDocumentSurfaceInk(surface, plan.branding)
+  // Always the screen: the page keeps the theme it is read in, a proposal included.
+  const ink = resolveDocumentSurfaceInk("screen", plan.branding)
   const point = narrow ? PHONE_POINT_PX : POINT_PX * plan.geometry.scale
   const pageWidth = plan.geometry.widthPoints * point
   const pageHeight = plan.geometry.heightPoints * point
@@ -956,7 +955,7 @@ export function EditorCanvas({
     return (
       <div
         className="relative mx-auto w-full max-w-2xl bg-card px-5 py-6 shadow-sm"
-        data-document-surface={surface}
+        data-document-surface="screen"
         data-slot="editor-pages"
         ref={rootRef}
         style={inkStyle}
@@ -994,7 +993,7 @@ export function EditorCanvas({
     >
       <div
         className="absolute top-0 left-0 origin-top-left"
-        data-document-surface={surface}
+        data-document-surface="screen"
         data-slot="editor-pages"
         ref={rootRef}
         style={{ ...inkStyle, height: stackHeight, transform: `scale(${zoom})`, width: pageWidth }}

@@ -519,7 +519,6 @@ export function DocumentEditor({
                 setAnswers((current) => applyVisibleTemplateFieldValue(page.content, current, fieldKey, value))
               }
               overlay={room && !proposal ? <RoomLayer narrow={narrow} others={live.others} revision={page.content} room={room} /> : null}
-              surface={proposal ? "paper" : "screen"}
               textEditable={editable && !proposal}
               zoom={zoom}
             />
