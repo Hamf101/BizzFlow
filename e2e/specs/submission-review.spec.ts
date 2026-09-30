@@ -1,3 +1,5 @@
+import type { Page } from "@playwright/test"
+
 import { expect, test, uniqueName } from "../support/fixtures"
 import { waitForHydration } from "../support/hydration"
 import { seedSubmission, seedTemplate } from "../support/seed"
@@ -117,6 +119,7 @@ test.describe("submission review", () => {
     // The manager had already approved and the owner's request no longer counts,
     // so nothing is left to wait for.
     await expectStatus(admin, submissionId, "approved")
+    await expectAuditLogOpens(owner)
   })
 
   test("refuses to record changes or rejection without a note", async ({
@@ -231,6 +234,7 @@ test.describe("submission review", () => {
     await manager.getByLabel(/Set aside E2E external_reviewer/).fill("Checked, they do not overlap.")
     await manager.getByRole("button", { name: "Set aside and approve" }).click()
     await expectStatus(admin, submissionId, "approved")
+    await expectAuditLogOpens(await pageAs("owner_admin"))
   })
 
   test("keeps a reviewer's suggested answer apart until the person who submitted it accepts it", async ({
@@ -260,8 +264,21 @@ test.describe("submission review", () => {
     await expect.poll(() => readAnswer(admin, submissionId, template.textFieldKey)).toBe("REF-9000")
     await expect(staff.getByText("Accepted", { exact: true })).toBeVisible()
     await expectStatus(admin, submissionId, "in_review")
+    await expectAuditLogOpens(await pageAs("owner_admin"))
   })
 })
+
+/**
+ * The audit log reads every event in the workspace, so one event it cannot
+ * name would blank the whole page. Each journey checks it after its own.
+ *
+ * @param owner - A page signed in as an owner.
+ * @returns Resolves once the log shows its count.
+ */
+async function expectAuditLogOpens(owner: Page): Promise<void> {
+  await owner.goto("/audit-log")
+  await expect(owner.getByRole("heading", { level: 1 })).toHaveAccessibleName(/^Audit log \d+ events?$/)
+}
 
 async function readAnswer(admin: Parameters<typeof seedSubmission>[0], submissionId: string, fieldKey: string): Promise<unknown> {
   const { data } = await admin.from("submissions").select("values").eq("id", submissionId).single()
