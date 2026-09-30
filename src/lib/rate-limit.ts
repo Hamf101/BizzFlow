@@ -72,7 +72,8 @@ const BUCKET_CONFIGS: Readonly<Record<RateLimitBucket, BucketConfig>> = {
   working_copy_read: { limit: 900, windowSeconds: 60, failMode: "open" },
   // Backstops for what has no bucket of its own; see request-rate-limit.ts.
   // Roomy on purpose: an office shares one address, and a page prefetches links.
-  request_ip: { limit: 1_200, windowSeconds: 60, failMode: "open" },
+  // 1,200 a minute refused real pages when two browsers ran the e2e suite.
+  request_ip: { limit: 6_000, windowSeconds: 60, failMode: "open" },
   member_request: { limit: 600, windowSeconds: 60, failMode: "open" },
   // A CSV export reads a whole list; nobody needs more than a few a minute.
   member_export: { limit: 6, windowSeconds: 60, failMode: "open" },
