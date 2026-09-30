@@ -12,9 +12,9 @@ const BRAND_PRIMARY = "#252329"
 const BRAND_ACCENT = "#635273"
 
 describe("document surface", () => {
-  it("renders working surfaces with theme ink rather than brand ink", () => {
-    // Brand colours are chosen for printed paper. On a themed surface they
-    // cannot be trusted: in dark mode the paper moves and the ink does not.
+  it("shows the brand's ink where a document is worked on, lifted only as far as a dark page needs", () => {
+    // The author sees the colours that will print. A dark page raises their
+    // lightness to a floor the theme sets; a light page leaves them exact.
     const markup = renderToStaticMarkup(
       createElement(GeneratedDocumentContent, {
         answers: {},
@@ -24,25 +24,21 @@ describe("document surface", () => {
       })
     )
 
-    expect(markup).toContain("--document-primary:var(--foreground)")
-    expect(markup).toContain("--document-accent:var(--primary)")
-    expect(markup).not.toContain(BRAND_PRIMARY)
-    expect(markup).not.toContain(BRAND_ACCENT)
+    expect(markup).toContain(`--document-primary:oklch(from ${BRAND_PRIMARY} `)
+    expect(markup).toContain(`--document-accent:oklch(from ${BRAND_ACCENT} `)
   })
 
-  it("renders the template canvas with theme ink by default", () => {
+  it("renders the template canvas with the brand's ink by default", () => {
     const markup = renderToStaticMarkup(
       createElement(TemplatePreview, { renderPlan: createBrandedPlan() })
     )
 
     expect(markup).toContain('data-document-surface="screen"')
-    expect(markup).toContain("--template-primary:var(--foreground)")
-    expect(markup).not.toContain(BRAND_PRIMARY)
+    expect(markup).toContain(`--template-primary:oklch(from ${BRAND_PRIMARY} `)
   })
 
   it("reproduces the real page on the paper surface", () => {
-    // Preview is the one place an author asks to see the finished document,
-    // so it is the one place brand ink belongs on screen.
+    // Paper takes the brand's colours exactly as they print, in either theme.
     const markup = renderToStaticMarkup(
       createElement(TemplatePreview, {
         renderPlan: createBrandedPlan(),

@@ -152,9 +152,7 @@ export function GeneratedDocumentContent({
     )
   }
   // This component is only ever an editing or review surface: every caller
-  // renders it inside the themed app, and none offers a print view. Fidelity
-  // to the author's brand colours belongs to the Studio's Preview mode and to
-  // the finalized PDF, both of which draw on real paper.
+  // renders it inside the themed app, so the brand's colours go through the theme.
   const ink = resolveDocumentSurfaceInk("screen", renderPlan.branding)
   const paperStyle = {
     "--document-accent": ink.accent,

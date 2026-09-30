@@ -346,12 +346,29 @@
 }
 
 /*
+ * An author's colours were chosen for paper. A light page shows them exactly:
+ * lightness = 0 + 1 x l. A dark page is that paper turned over: lightness =
+ * 1.19 - l, so black ink reads as near-white, and an ink too pale to read in
+ * print is as hard to read here. 1.19 puts the default ink on the theme's own.
+ */
+:root {
+  --doc-ink-from: 0;
+  --doc-ink-by: 1;
+}
+
+.dark {
+  --doc-ink-from: 1.19;
+  --doc-ink-by: -1;
+}
+
+/*
  * Words an author coloured or highlighted were coloured for paper. On a dark
- * screen they stay legible: a colour lightens, and a highlight becomes a tint
- * behind the screen's own ink. Paper, and the PDF, keep them exactly.
+ * screen a colour turns over with the page, as the brand's ink does, and a
+ * highlight becomes a tint behind the screen's own ink. Paper, and the PDF,
+ * keep them exactly.
  */
 .dark .doc-ink:not([data-document-surface="paper"] *) {
-  color: oklch(from var(--doc-ink) max(l, 0.78) c h) !important;
+  color: oklch(from var(--doc-ink) calc(var(--doc-ink-from) + var(--doc-ink-by) * l) c h) !important;
 }
 
 /* A drawn signature is dark ink for paper; a dark screen shows it light. */
