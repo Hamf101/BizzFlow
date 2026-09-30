@@ -85,7 +85,7 @@ class FakeQuery implements PromiseLike<Result> {
         this.rows.some(
           (existing) =>
             existing.org_id === row.org_id &&
-            (existing.document_id ?? existing.folder_id) === (row.document_id ?? row.folder_id) &&
+            (existing.document_id ?? existing.folder_id ?? existing.template_id) === (row.document_id ?? row.folder_id ?? row.template_id) &&
             existing.user_id === row.user_id &&
             existing.organization_role === row.organization_role
         )
@@ -126,7 +126,7 @@ export class SharingFakeClient {
    */
   constructor(
     readonly tables: Record<string, FakeRow[]>,
-    private readonly access: Record<string, "contributor" | "viewer"> = {}
+    private readonly access: Record<string, "contributor" | "editor" | "user" | "viewer"> = {}
   ) {}
 
   from(table: string): FakeQuery {
@@ -135,7 +135,7 @@ export class SharingFakeClient {
   }
 
   async rpc(_name: string, args: Record<string, unknown>): Promise<{ data: unknown; error: null }> {
-    const item = args.target_document_id ?? args.target_folder_id
+    const item = args.target_document_id ?? args.target_folder_id ?? args.target_template_id
 
     return { data: this.access[`${String(args.target_actor_user_id)}:${String(item)}`] ?? null, error: null }
   }

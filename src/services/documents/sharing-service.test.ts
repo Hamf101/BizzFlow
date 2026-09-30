@@ -23,6 +23,7 @@ const ROOT = "30000000-0000-4000-8000-000000000001"
 const CLIENTS = "30000000-0000-4000-8000-000000000002"
 const PRIVATE_FOLDER = "30000000-0000-4000-8000-000000000003"
 const DOC = "40000000-0000-4000-8000-000000000001"
+const TEMPLATE = "60000000-0000-4000-8000-000000000001"
 
 const PEOPLE: ReadonlyArray<readonly [string, OrganizationRole, string]> = [
   [OWNER, "owner_admin", "Olu Owner"],
@@ -49,9 +50,11 @@ function tables(): Record<string, FakeRow[]> {
     document_access_grants: [
       { access_level: "viewer", document_id: DOC, id: "g1", org_id: ORG, organization_role: null, user_id: STAFF },
     ],
+    document_templates: [{ access_restricted: false, created_by: CREATOR, id: TEMPLATE, org_id: ORG, title: "Lease form" }],
     documents: [
       { created_by: CREATOR, folder_id: CLIENTS, id: DOC, org_id: ORG, share_inherit: true, title: "Lease", lifecycle_state: "active" },
     ],
+    template_access_grants: [],
     folder_access_grants: [
       { access_level: "contributor", folder_id: CLIENTS, id: "f1", org_id: ORG, organization_role: "manager", user_id: null },
       { access_level: "viewer", folder_id: ROOT, id: "f2", org_id: ORG, organization_role: null, user_id: REVIEWER },
@@ -71,7 +74,7 @@ function tables(): Record<string, FakeRow[]> {
 type Notify = NonNullable<SharingServiceDeps["notify"]>
 type Audit = NonNullable<SharingServiceDeps["recordAuditLog"]>
 
-function setup(options: { access?: Record<string, "contributor" | "viewer">; notify?: Notify; audit?: Audit } = {}) {
+function setup(options: { access?: Record<string, "contributor" | "editor" | "user" | "viewer">; notify?: Notify; audit?: Audit } = {}) {
   const client = new SharingFakeClient(tables(), {
     [`${MANAGER}:${DOC}`]: "contributor",
     [`${STAFF}:${DOC}`]: "viewer",
@@ -310,5 +313,79 @@ describe("a folder is shared the same way", () => {
 
     expect(client.tables.folder_access_grants).toContainEqual(expect.objectContaining({ access_level: "viewer", folder_id: CLIENTS, user_id: STAFF }))
     expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: "folder.access_granted", targetType: "folder" }))
+  })
+})
+
+describe("a template is shared with three levels", () => {
+  const template = (actorUserId: string) => ({ actorUserId, organizationId: ORG, resource: { id: TEMPLATE, kind: "template" as const } })
+
+  it("is open to everyone until the maker restricts it, and has no folder above", async () => {
+    const { deps } = setup()
+    const open = await getSharing(template(CREATOR), deps)
+
+    expect(open).toMatchObject({ inherit: true, inherited: [], name: "Lease form", parent: null })
+    expect(open.owner).toMatchObject({ userId: CREATOR })
+
+    await setSharingInheritance({ ...template(CREATOR), inherit: false }, deps)
+    await expect(getSharing(template(CREATOR), deps)).resolves.toMatchObject({ inherit: false })
+  })
+
+  it("restricts through the template's own flag and keeps a record", async () => {
+    const { audit, client, deps } = setup()
+
+    await setSharingInheritance({ ...template(CREATOR), inherit: false }, deps)
+
+    expect(client.tables.document_templates).toContainEqual(expect.objectContaining({ access_restricted: true, id: TEMPLATE }))
+    expect(audit).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "template.sharing_restriction_changed", metadata: { restricted: true }, targetType: "template" })
+    )
+  })
+
+  it("adds a person at the level chosen, tells them, and keeps a record", async () => {
+    const { audit, client, deps, notify } = setup()
+
+    await setSharingAccess({ ...template(CREATOR), level: "user", principal: { userId: STAFF } }, deps)
+
+    expect(client.tables.template_access_grants).toContainEqual(
+      expect.objectContaining({ access_level: "user", template_id: TEMPLATE, user_id: STAFF })
+    )
+    expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: "template.access_granted", targetType: "template" }))
+    expect(notify).toHaveBeenCalledWith(expect.objectContaining({ level: "user", recipientUserId: STAFF, resource: { id: TEMPLATE, kind: "template" } }))
+  })
+
+  it("shares with a role, and reads the grants back with their levels", async () => {
+    const { deps } = setup()
+
+    const view = await setSharingAccess({ ...template(CREATOR), level: "editor", principal: { role: "manager" } }, deps)
+
+    expect(view.grants).toEqual([{ kind: "role", level: "editor", role: "manager" }])
+  })
+
+  it("only accepts the levels that belong to it", async () => {
+    const { deps } = setup()
+
+    await expect(setSharingAccess({ ...template(CREATOR), level: "contributor", principal: { userId: STAFF } }, deps)).rejects.toMatchObject({ statusCode: 400 })
+    await expect(setSharingAccess({ ...document(CREATOR), level: "editor", principal: { userId: STAFF } }, deps)).rejects.toMatchObject({ statusCode: 400 })
+    await expect(setSharingAccess({ ...document(CREATOR), level: "user", principal: { role: "staff" } }, deps)).rejects.toMatchObject({ statusCode: 400 })
+  })
+
+  it("lets an external reviewer view only", async () => {
+    const { deps } = setup()
+
+    await expect(setSharingAccess({ ...template(CREATOR), level: "user", principal: { userId: REVIEWER } }, deps)).rejects.toMatchObject({ statusCode: 400 })
+    await expect(setSharingAccess({ ...template(CREATOR), level: "editor", principal: { role: "external_reviewer" } }, deps)).rejects.toMatchObject({ statusCode: 400 })
+    await expect(setSharingAccess({ ...template(CREATOR), level: "viewer", principal: { userId: REVIEWER } }, deps)).resolves.toBeDefined()
+  })
+
+  it("is for the maker, an owner admin and anyone who can edit it; others are refused or told it is not there", async () => {
+    const { deps } = setup({ access: { [`${MANAGER}:${TEMPLATE}`]: "editor", [`${STAFF}:${TEMPLATE}`]: "user" } })
+
+    for (const actor of [CREATOR, OWNER, MANAGER]) {
+      await expect(getSharing(template(actor), deps), actor).resolves.toMatchObject({ name: "Lease form" })
+    }
+
+    await expect(getSharing(template(STAFF), deps)).rejects.toMatchObject({ statusCode: 403 })
+    await expect(getSharing(template(REVIEWER), deps)).rejects.toMatchObject({ statusCode: 404 })
+    await expect(getSharing({ ...template(OUTSIDER) }, deps)).rejects.toMatchObject({ statusCode: 404 })
   })
 })

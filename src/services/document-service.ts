@@ -35,6 +35,7 @@ export {
 } from "@/services/documents/purge-service"
 export type {
   SharingGrant,
+  SharingLevel,
   SharingPerson,
   SharingResource,
   SharingView,

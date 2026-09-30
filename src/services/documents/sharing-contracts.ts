@@ -1,4 +1,5 @@
 import type { OrganizationRole } from "@/lib/permissions"
+import type { TemplateAccessLevel } from "@/lib/supabase/admin"
 import type {
   DocumentAuditLogInput,
   DocumentServiceClient,
@@ -6,8 +7,11 @@ import type {
 import type { OrganizationMember } from "@/types/organization"
 import type { DocumentAccessLevel } from "@/types/document"
 
-/** What can be shared: a document or a folder. */
-export type SharingResource = { id: string; kind: "document" | "folder" }
+/** What can be shared: a document, a folder or a template. */
+export type SharingResource = { id: string; kind: "document" | "folder" | "template" }
+
+/** Documents and folders are viewed or edited; a template is viewed, used, or edited. */
+export type SharingLevel = DocumentAccessLevel | TemplateAccessLevel
 
 export type SharingInput = {
   actorUserId: string
@@ -27,7 +31,7 @@ export type SharingManyInput = {
 
 export type SetSharingAccessInput = SharingInput & {
   /** Null takes the access away. */
-  level: DocumentAccessLevel | null
+  level: SharingLevel | null
   principal: SharingPrincipal
 }
 
@@ -46,14 +50,14 @@ export type SharingPerson = {
 
 /** Access someone was given on this item itself. */
 export type SharingGrant =
-  | { kind: "person"; level: DocumentAccessLevel; mixed?: boolean; person: SharingPerson }
-  | { kind: "role"; level: DocumentAccessLevel; mixed?: boolean; role: OrganizationRole }
+  | { kind: "person"; level: SharingLevel; mixed?: boolean; person: SharingPerson }
+  | { kind: "role"; level: SharingLevel; mixed?: boolean; role: OrganizationRole }
 
 /** Access that arrives from a folder above, which cannot be changed here. */
 export type SharingInherited = {
   from: string
   label: string
-  level: DocumentAccessLevel
+  level: SharingLevel
 }
 
 /** Everything the Share dialog shows. */
@@ -76,7 +80,7 @@ export type SharingNotice = {
   actorName: string
   /** How many items were shared in one go; absent for one. */
   count?: number
-  level: DocumentAccessLevel
+  level: SharingLevel
   recipientUserId: string
   resource: SharingResource
   resourceName: string

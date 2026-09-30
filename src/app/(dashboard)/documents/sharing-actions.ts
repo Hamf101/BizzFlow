@@ -15,7 +15,7 @@ import {
 } from "@/services/document-service"
 import { getCurrentOrganizationContext } from "@/services/organization-service"
 
-const resourceSchema = z.object({ id: z.string().uuid(), kind: z.enum(["document", "folder"]) })
+const resourceSchema = z.object({ id: z.string().uuid(), kind: z.enum(["document", "folder", "template"]) })
 // One item or a selection; the service holds the same limit.
 const resourcesSchema = z.array(resourceSchema).min(1).max(50)
 const principalSchema = z.union([
@@ -23,7 +23,7 @@ const principalSchema = z.union([
   z.object({ role: z.enum(["manager", "staff", "external_reviewer"]) }).strict(),
 ])
 const accessSchema = z.object({
-  level: z.enum(["viewer", "contributor"]).nullable(),
+  level: z.enum(["viewer", "contributor", "user", "editor"]).nullable(),
   principal: principalSchema,
   resources: resourcesSchema,
 })
@@ -85,6 +85,7 @@ async function run<T>(
 
     if (changes) {
       revalidatePath("/documents")
+      revalidatePath("/templates")
     }
 
     return { ok: true, view }

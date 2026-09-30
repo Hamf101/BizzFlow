@@ -11,6 +11,7 @@ import type {
   SharingGrant,
   SharingInherited,
   SharingInput,
+  SharingLevel,
   SharingPerson,
   SharingPrincipal,
   SharingResource,
@@ -26,7 +27,6 @@ import {
 } from "@/services/documents/shared"
 import { listOrganizationPeople } from "@/services/organizations/membership-service"
 import type { AuditLogAction } from "@/types/audit"
-import type { DocumentAccessLevel } from "@/types/document"
 import type { OrganizationMember } from "@/types/organization"
 
 // One implementation serves both: only the tables and column names differ.
@@ -40,6 +40,7 @@ const KINDS = {
     grantColumn: "document_id",
     grants: "document_access_grants",
     label: "Document",
+    levels: ["viewer", "contributor"],
     nameColumn: "title",
     parentColumn: "folder_id",
     table: "documents",
@@ -53,9 +54,26 @@ const KINDS = {
     grantColumn: "folder_id",
     grants: "folder_access_grants",
     label: "Folder",
+    levels: ["viewer", "contributor"],
     nameColumn: "name",
     parentColumn: "parent_folder_id",
     table: "folders",
+  },
+  // A template has no folder. "Inherit" is the reverse of its restricted flag:
+  // it starts open to everyone, and the maker can keep it to chosen people.
+  template: {
+    audit: {
+      granted: "template.access_granted",
+      inheritance: "template.sharing_restriction_changed",
+      revoked: "template.access_revoked",
+    },
+    grantColumn: "template_id",
+    grants: "template_access_grants",
+    label: "Template",
+    levels: ["viewer", "user", "editor"],
+    nameColumn: "title",
+    parentColumn: null,
+    table: "document_templates",
   },
 } as const satisfies Record<SharingResource["kind"], { audit: Record<string, AuditLogAction> } & Record<string, unknown>>
 
@@ -75,6 +93,9 @@ type Row = Record<string, unknown>
 // The database is typed per table; these two names are chosen at run time.
 type AnyTable = "documents"
 type AnyGrants = "document_access_grants"
+
+// Templates say "restricted" where documents say "inherit"; this reads and writes whichever the kind uses.
+const restrictsInsteadOfInherits = (resource: SharingResource): boolean => resource.kind === "template"
 
 /**
  * Shows everything the Share dialog needs for a document or a folder: who made
@@ -192,7 +213,7 @@ export async function setSharingInheritance(
     const kind = KINDS[input.resource.kind]
     const { error } = await client
       .from(kind.table as AnyTable)
-      .update({ share_inherit: input.inherit } as Row)
+      .update((restrictsInsteadOfInherits(input.resource) ? { access_restricted: !input.inherit } : { share_inherit: input.inherit }) as Row)
       .eq("id", input.resource.id)
       .eq("org_id", input.organizationId)
 
@@ -201,7 +222,7 @@ export async function setSharingInheritance(
     await recordRequiredDocumentAuditLog(deps, {
       action: kind.audit.inheritance,
       actorUserId: input.actorUserId,
-      metadata: { inherit: input.inherit },
+      metadata: restrictsInsteadOfInherits(input.resource) ? { restricted: !input.inherit } : { inherit: input.inherit },
       organizationId: input.organizationId,
       targetId: input.resource.id,
       targetType: input.resource.kind,
@@ -232,7 +253,11 @@ async function authorize(client: DocumentServiceClient, input: SharingInput): Pr
 
   const { data, error } = await client
     .from(kind.table as AnyTable)
-    .select(`id,created_by,share_inherit,${kind.nameColumn},${kind.parentColumn}`)
+    .select(
+      ["id", "created_by", restrictsInsteadOfInherits(input.resource) ? "access_restricted" : "share_inherit", kind.nameColumn, kind.parentColumn]
+        .filter(Boolean)
+        .join(",") as "id" // the columns differ by kind, so the database's typing cannot follow them
+    )
     .eq("id", input.resource.id)
     .eq("org_id", input.organizationId)
     .maybeSingle()
@@ -241,31 +266,47 @@ async function authorize(client: DocumentServiceClient, input: SharingInput): Pr
 
   if (!data) throw notFound
 
-  const row = data as Row
+  const row = data as unknown as Row
   const target: Target = {
     createdBy: (row.created_by as string | null) ?? null,
-    inherit: row.share_inherit !== false,
+    inherit: restrictsInsteadOfInherits(input.resource) ? row.access_restricted !== true : row.share_inherit !== false,
     name: String(row[kind.nameColumn]),
-    parentId: (row[kind.parentColumn] as string | null) ?? null,
+    parentId: kind.parentColumn ? ((row[kind.parentColumn] as string | null) ?? null) : null,
   }
   const made = target.createdBy === input.actorUserId
-  const canManage = canPerformOrganizationAction(membership, "folders:manage")
+  // Templates go by their own level: editing one is what allows sharing it.
+  const canManage = input.resource.kind !== "template" && canPerformOrganizationAction(membership, "folders:manage")
 
   if (!made && membership.role !== "owner_admin") {
-    const access =
-      input.resource.kind === "document"
-        ? await getEffectiveDocumentAccess({ actorUserId: input.actorUserId, documentId: input.resource.id, organizationId: input.organizationId }, client)
-        : await getEffectiveFolderAccess({ actorUserId: input.actorUserId, folderId: input.resource.id, organizationId: input.organizationId }, client)
+    const access = await accessTo(client, input)
 
     if (access === null) throw notFound
 
     // Whoever can edit it may pass it on; someone who can only view it may not, unless they manage folders.
-    if (access !== "contributor" && !canManage) {
+    if (access !== "contributor" && access !== "editor" && !canManage) {
       throw new DocumentServiceError("Only someone who can edit this, or a manager, can change who it is shared with.", 403)
     }
   }
 
   return target
+}
+
+async function accessTo(client: DocumentServiceClient, input: SharingInput): Promise<SharingLevel | null> {
+  const asked = { actorUserId: input.actorUserId, organizationId: input.organizationId }
+
+  if (input.resource.kind === "document") return getEffectiveDocumentAccess({ ...asked, documentId: input.resource.id }, client)
+
+  if (input.resource.kind === "folder") return getEffectiveFolderAccess({ ...asked, folderId: input.resource.id }, client)
+
+  const { data, error } = await client.rpc("get_template_access_level", {
+    target_actor_user_id: input.actorUserId,
+    target_org_id: input.organizationId,
+    target_template_id: input.resource.id,
+  })
+
+  if (error) throw createSupabaseServiceError(error, "Unable to check access to that template.")
+
+  return (data as SharingLevel | null) ?? null
 }
 
 async function listMembers(deps: SharingServiceDeps, input: SharingInput): Promise<OrganizationMember[]> {
@@ -299,6 +340,15 @@ async function checkPrincipal(
   target: Target,
   people: readonly OrganizationMember[]
 ): Promise<{ label: string }> {
+  const kind = KINDS[input.resource.kind]
+
+  if (input.level !== null && !(kind.levels as readonly SharingLevel[]).includes(input.level)) {
+    throw new DocumentServiceError("That level is not available here.", 400)
+  }
+
+  // Someone from outside the workspace may look and nothing more.
+  const viewsOnly = input.level !== null && input.level !== "viewer"
+
   if ("role" in input.principal) {
     const { role } = input.principal
 
@@ -306,7 +356,7 @@ async function checkPrincipal(
       throw new DocumentServiceError("That role already has access, or cannot be chosen.", 400)
     }
 
-    if (role === "external_reviewer" && input.level === "contributor") {
+    if (role === "external_reviewer" && viewsOnly) {
       throw new DocumentServiceError("External reviewers can only view.", 400)
     }
 
@@ -322,7 +372,7 @@ async function checkPrincipal(
     throw new DocumentServiceError("That person always has access.", 400)
   }
 
-  if (member.role === "external_reviewer" && input.level === "contributor") {
+  if (member.role === "external_reviewer" && viewsOnly) {
     throw new DocumentServiceError("External reviewers can only view.", 400)
   }
 
@@ -379,7 +429,7 @@ async function buildView(
   const grants: SharingGrant[] = []
 
   for (const row of (data ?? []) as Row[]) {
-    const level = row.access_level as DocumentAccessLevel
+    const level = row.access_level as SharingLevel
     const member = byId.get(row.user_id as string)
 
     if (row.user_id && member) grants.push({ kind: "person", level, person: personOf(member) })
@@ -452,7 +502,7 @@ async function inheritedFrom(
     if (error) throw createSupabaseServiceError(error, "Unable to read the sharing.")
 
     for (const row of (data ?? []) as Row[]) {
-      const level = row.access_level as DocumentAccessLevel
+      const level = row.access_level as SharingLevel
       const member = row.user_id ? byId.get(row.user_id as string) : undefined
 
       if (member) found.push({ from: folder.name, label: nameOf(member) ?? member.email, level })

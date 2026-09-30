@@ -61,6 +61,14 @@ describe("the Share dialog's actions", () => {
 
     expect(setSharingAccessMany).toHaveBeenCalledWith({ actorUserId: ACTOR, level: "viewer", organizationId: ORG, principal: { userId: PERSON }, resources: [RESOURCE] })
     expect(revalidatePathMock).toHaveBeenCalledWith("/documents")
+    expect(revalidatePathMock).toHaveBeenCalledWith("/templates")
+  })
+
+  it("share a template at one of its three levels", async () => {
+    const template = { id: "40000000-0000-4000-8000-000000000008", kind: "template" as const }
+
+    await expect(setSharingAccessAction({ level: "user", principal: { userId: PERSON }, resources: [template] })).resolves.toEqual({ ok: true, view: VIEW })
+    expect(setSharingAccessMany).toHaveBeenCalledWith(expect.objectContaining({ level: "user", resources: [template] }))
   })
 
   it("change whether it takes in the folder's sharing", async () => {
