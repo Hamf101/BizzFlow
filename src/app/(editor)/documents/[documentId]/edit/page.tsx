@@ -125,6 +125,10 @@ export default async function GeneratedDocumentEditorPage({
     canPerformOrganizationAction(context.membership, "documents:send") &&
     view.accessLevel === "contributor" &&
     view.document.lifecycleState === "active"
+  // Anyone who can edit it, and anyone who manages folders, may choose who else can open it.
+  const canShare =
+    view.document.lifecycleState === "active" &&
+    (view.accessLevel === "contributor" || canPerformOrganizationAction(context.membership, "folders:manage"))
   // Where the tools were left; without it they start at home.
   const editorLayout = await getEditorLayout({ actorUserId: user.id }).catch((): EditorLayout => ({}))
   // How the others in the room see this person.
@@ -140,6 +144,7 @@ export default async function GeneratedDocumentEditorPage({
         backHref={backHref}
         canFill={canFill}
         canSend={canSend}
+        canShare={canShare}
         editorLayout={{ initial: editorLayout, save: saveEditorLayoutAction }}
         me={{ id: user.id, name }}
         resendAction={resendGeneratedDocumentInvitationAction}

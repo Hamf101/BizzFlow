@@ -260,16 +260,22 @@ describe("FilesWorkspace", () => {
       folders: [leases, { ...contracts, accessLevel: "viewer" }],
     })
 
-    expect(readActionTargets()).toEqual(["Leases", "Zoning letter"])
+    // A viewer-level item offers no lifecycle changes but can still be shared by someone who manages folders.
+    expect(readActionTargets()).toEqual(["Contracts", "Leases", "Welcome pack", "Zoning letter"])
     expect(hasNewButton()).toBe(true)
 
-    // Staff may add documents, but not archive, trash, or delete anything.
-    renderWorkspace({ membership: "staff" })
+    // Staff may add documents but not archive, trash, or delete anything; they can still share what they can edit.
+    renderWorkspace({ documents: [zoning, { ...welcome, accessLevel: "viewer" }], folders: [], membership: "staff" })
 
-    expect(readActionTargets()).toEqual([])
+    expect(readActionTargets()).toEqual([zoning.title])
     expect(hasNewButton()).toBe(true)
 
-    renderWorkspace({ membership: "external_reviewer" })
+    // A reviewer only ever views, so has no menu at all.
+    renderWorkspace({
+      documents: [{ ...zoning, accessLevel: "viewer" }],
+      folders: [{ ...leases, accessLevel: "viewer" }],
+      membership: "external_reviewer",
+    })
 
     expect(readActionTargets()).toEqual([])
     expect(hasNewButton()).toBe(false)
