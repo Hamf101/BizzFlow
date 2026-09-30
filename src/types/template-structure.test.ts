@@ -9,7 +9,6 @@ import {
   getTemplateSectionForBlock,
   insertTemplateBlock,
   listTemplateBlockSlots,
-  moveTemplateBlockAfter,
   moveTemplateBlockTo,
   moveTemplateSection,
   removeTemplateSection,
@@ -229,43 +228,6 @@ describe("template structure helpers", () => {
         SECOND_DROPDOWN_DEPENDENT_ID
       ]
     })
-  })
-
-  it("repairs positional structure after an arbitrary move", () => {
-    const moved = moveTemplateBlockAfter(
-      createStructuredContent(),
-      SECOND_SECTION_BLOCK_ID,
-      SOURCE_ID
-    )
-
-    expect(moved.blocks.map((block) => block.id)).toEqual([
-      SOURCE_ID,
-      SECOND_SECTION_BLOCK_ID,
-      TARGET_ID,
-      THIRD_FIELD_ID
-    ])
-    expect(moved.sections).toEqual([
-      {
-        id: FIRST_SECTION_ID,
-        label: "Approval details",
-        startBlockId: SOURCE_ID,
-        pageBreakBefore: false,
-        keepTogether: true
-      },
-      {
-        id: SECOND_SECTION_ID,
-        label: "Terms",
-        startBlockId: THIRD_FIELD_ID,
-        pageBreakBefore: true,
-        keepTogether: false
-      }
-    ])
-    // The row keeps its place and the paragraph moved into it; it ends where
-    // the next section now begins.
-    expect(moved.fieldGroups).toEqual([
-      { ...createStructuredContent().fieldGroups[0], endBlockId: TARGET_ID }
-    ])
-    expect(templateContentV3Schema.safeParse(moved).success).toBe(true)
   })
 
   it("shrinks ranges and removes dangling conditions and rules on delete", () => {

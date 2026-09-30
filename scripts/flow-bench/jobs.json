@@ -10,6 +10,7 @@
   { "id": "agreement-specific", "family": "agreement", "start": "blank", "turns": ["Draft a service agreement between a freelance bookkeeper and a small business client: scope of services, fees and invoicing, client responsibilities, confidentiality, term and termination, limitation of liability, and signatures for both parties."] },
   { "id": "agreement-healthcare", "family": "agreement", "start": "blank", "turns": ["consent and service agreement for a mobile massage therapist"] },
   { "id": "edit-side-by-side", "family": "edit", "start": "starter:0", "turns": ["put the date and the location side by side, and start a new page before the incident description"] },
-  { "id": "edit-rewrite", "family": "edit", "start": "starter:2", "turns": ["make the instructions clearer and friendlier without changing any field"] },
-  { "id": "edit-closing-block", "family": "edit", "start": "starter:2", "turns": ["add an approver signature and a date signed at the end, set on the right half of the page with some space above them, and give the reason for the purchase a taller box"] }
+  { "id": "edit-rewrite", "family": "edit", "start": "starter:0", "turns": ["rewrite the help text under each question so it is clearer and friendlier, without changing any label"] },
+  { "id": "edit-closing-block", "family": "edit", "start": "starter:2", "turns": ["add an approver signature and a date signed at the end, set on the right half of the page with some space above them, and give the item or service name a taller box"] },
+  { "id": "edit-missing", "family": "edit", "start": "starter:2", "turns": ["make the reason for the purchase box taller"] }
 ]

@@ -293,7 +293,18 @@ describe("template Flow service", () => {
     expect(responseSchema).not.toContain('"target"')
   })
 
-  it("asks before an ambiguous removal and leaves the draft unchanged", async () => {
+  it("hands back a removal nobody asked for, and keeps the rest of the turn when the rewrite leaves the block alone", async () => {
+    const removal: TestFlowOperation = { type: "remove_block", summary: "Removed introduction", payload: { blockId: PARAGRAPH_ID } }
+    const rename: TestFlowOperation = { type: "set_title", summary: "Renamed it", payload: { value: "Short agreement" } }
+    const { aiProvider, run } = runFlow(createContent(), [removal, rename], [rename])
+    const result = await run
+
+    expect(String(readProviderRequests(aiProvider)[1]?.input)).toMatch(/unrequested_removal.*A long introduction/)
+    expect(result.needsConfirmation).toBe(false)
+    expect(result.proposal?.candidateDraft).toMatchObject({ title: "Short agreement", content: { blocks: [{ id: PARAGRAPH_ID }] } })
+  })
+
+  it("asks before a removal the model insists on, naming what would go, and leaves the draft unchanged", async () => {
     const content = createContent()
     const aiProvider = createTestAiProvider([
       flowProviderResult({
@@ -319,8 +330,9 @@ describe("template Flow service", () => {
 
     expect(result.needsConfirmation).toBe(true)
     expect(result.proposal).toBeNull()
-    expect(result.messages[1].content).toContain("Which content")
+    expect(result.messages[1].content).toContain("A long introduction")
     expect(result.messages[1].operations).toEqual([])
+    expect(readProviderRequests(aiProvider)).toHaveLength(2)
   })
 
   it("keeps appended free-form blocks in provider operation order", async () => {
@@ -967,28 +979,19 @@ describe("template Flow service", () => {
     ])
   })
 
-  it("preserves the stable companion while repairing reorder and duplicates", async () => {
+  it("keeps the stable companion: a duplicate is dropped, and a move above its dropdown is refused with the reason", async () => {
     const content = createDropdownContent(
       ["Billing", "Support", "Other"],
       true
     )
+    const reply = (operations: TestFlowOperation[]) =>
+      flowProviderResult({ assistantMessage: "I proposed reorganizing the category fields.", needsConfirmation: false, confirmationQuestion: "", operations })
     const aiProvider = createTestAiProvider([
-      flowProviderResult({
-        assistantMessage: "I proposed reorganizing the category fields.",
-        needsConfirmation: false,
-        confirmationQuestion: "",
-        operations: [
-          createConditionalCompanionOperation(DROPDOWN_ID),
-          {
-            type: "move_block",
-            summary: "Moved explanation field",
-            payload: {
-              blockId: COMPANION_ID,
-              afterBlockId: null
-            }
-          }
-        ]
-      })
+      reply([
+        createConditionalCompanionOperation(DROPDOWN_ID),
+        { type: "move_block", summary: "Moved explanation field", payload: { blockId: COMPANION_ID, afterBlockId: null } }
+      ]),
+      reply([createConditionalCompanionOperation(DROPDOWN_ID)])
     ])
 
     const result = await executeTemplateFlow(
@@ -997,6 +1000,8 @@ describe("template Flow service", () => {
     )
     const blocks = result.proposal?.candidateDraft.content.blocks ?? []
     const companions = readOtherCompanions(blocks, DROPDOWN_ID)
+
+    expect(String(readProviderRequests(aiProvider)[1]?.input)).toMatch(/operations\[1\] move_block: .*conditional field/)
 
     expect(companions).toHaveLength(1)
     expect(companions[0]).toMatchObject({
@@ -1167,6 +1172,96 @@ describe("Flow and date formats", () => {
   })
 })
 
+describe("Flow checking its own draft", () => {
+  const service = (options: string[], label = "Service needed"): TestFlowOperation[] => [
+    { type: "add_block", summary: "Asked which service", payload: { afterBlockId: null, block: { type: "dropdown_field", fieldKey: "service", label, required: true, helpText: null, placeholder: null, options } } },
+  ]
+  const reply = (operations: TestFlowOperation[]) => flowProviderResult({ assistantMessage: "Done.", needsConfirmation: false, confirmationQuestion: "", operations })
+  const placeholders = service(["Option 1", "Option 2"])
+  const choices = (result: Awaited<ReturnType<typeof executeTemplateFlow>>) =>
+    result.proposal?.candidateDraft.content.blocks.flatMap((block: TemplateBlock) => (block.type === "dropdown_field" ? block.options : []))
+
+  it("rewrites once when its draft has a fault it can see, and proposes the better draft", async () => {
+    const { aiProvider, run } = runFlow(createContent(), placeholders, service(["Deep clean", "Regular clean"]))
+    const result = await run
+    const requests = readProviderRequests(aiProvider)
+
+    expect(requests).toHaveLength(2)
+    expect((JSON.parse(String(requests[1]?.input)) as { revision: unknown }).revision).toMatchObject({
+      faults: [{ blocks: [expect.stringContaining("Service needed")] }],
+      priorResponse: expect.stringContaining("Option 1"),
+    })
+    expect(choices(result)).toEqual(["Deep clean", "Regular clean"])
+    expect(result.proposal?.qualityIssues.map((issue) => issue.code)).not.toContain("dropdown_placeholder_choices")
+  })
+
+  it("keeps its first draft when the rewrite is no better, unreadable or never arrives", async () => {
+    for (const second of [reply(service(["Choice 1", "Choice 2"])), { ...reply(placeholders), text: "not-json" }, temporaryProviderOutage()]) {
+      const aiProvider = createTestAiProvider([reply(placeholders), second])
+      const result = await executeTemplateFlow(createInput(createContent(), "Build the form."), createDependencies({ aiProvider }))
+
+      expect(choices(result)).toEqual(["Option 1", "Option 2"])
+      expect(readProviderRequests(aiProvider)).toHaveLength(2)
+    }
+  })
+
+  it("spends no call on what it cannot fix, on faults that were already there, or when time is short", async () => {
+    // A decision only the author can make, a health question, and no description.
+    const open = runFlow(createContent(), [
+      { type: "add_block", summary: "Left the fee open", payload: { afterBlockId: null, block: { type: "paragraph", text: "Needs input: the hourly fee.", alignment: "left" } } },
+      { type: "add_block", summary: "Asked about medication", payload: { afterBlockId: null, block: { type: "text_field", fieldKey: "medications", label: "Current medications", required: false, helpText: null, placeholder: null, multiline: true } } },
+    ])
+
+    expect((await open.run).proposal?.qualityIssues.map((issue) => issue.code)).toEqual(
+      expect.arrayContaining(["unresolved_needs_input", "collects_health_information"])
+    )
+    expect(readProviderRequests(open.aiProvider)).toHaveLength(1)
+
+    // The author's own placeholder choices, which this turn was not asked to touch.
+    const content = createContent()
+    content.blocks.push({ id: FIELD_ID, type: "dropdown_field", fieldKey: "plan", label: "Plan", required: false, helpText: null, placeholder: null, options: ["Option 1", "Option 2"] })
+    const untouched = runFlow(content, [{ type: "set_title", summary: "Renamed it", payload: { value: "Cleaning intake" } }])
+
+    await untouched.run
+    expect(readProviderRequests(untouched.aiProvider)).toHaveLength(1)
+
+    // A first answer that took so long a second would run past the request's time.
+    const clock = vi.spyOn(performance, "now").mockReturnValueOnce(0).mockReturnValue(101_000)
+    const late = runFlow(createContent(), placeholders, service(["Deep clean", "Regular clean"]))
+
+    expect(choices(await late.run)).toEqual(["Option 1", "Option 2"])
+    expect(readProviderRequests(late.aiProvider)).toHaveLength(1)
+    clock.mockRestore()
+  })
+})
+
+describe("Flow reading a document longer than it can take in", () => {
+  it("sends as many blocks as fit, and says how many it left out", async () => {
+    const content = createContent()
+    content.blocks = Array.from({ length: 250 }, (_, index) => ({
+      id: `70000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
+      type: "paragraph" as const,
+      text: `Clause ${index}: ${"the supplier keeps records for the period the client sets out. ".repeat(6)}`,
+      alignment: "left" as const,
+    }))
+    const { aiProvider, run } = runFlow(content, [])
+
+    await run
+
+    const { currentDraft } = JSON.parse(String(readProviderRequests(aiProvider)[0]?.input)) as {
+      currentDraft: { blocks: unknown[]; omitted: { blocks: number } }
+    }
+    const sent = JSON.stringify(currentDraft).length
+    const oneMore = JSON.stringify(content.blocks[currentDraft.blocks.length]).length
+
+    expect(currentDraft.blocks.length + currentDraft.omitted.blocks).toBe(250)
+    expect(currentDraft.omitted.blocks).toBeGreaterThan(0)
+    // Full to the limit and no further: the next block would not have fitted.
+    expect(sent).toBeLessThan(55_010)
+    expect(sent + oneMore).toBeGreaterThan(55_000)
+  })
+})
+
 describe("Flow building with the blocks it adds", () => {
   it("lets one turn say where its new blocks go and what shows them, by whatever names it gave them", async () => {
     const { run } = runFlow(createContent(), [
@@ -1193,6 +1288,34 @@ describe("Flow building with the blocks it adds", () => {
     ])
     expect(named("Pet's name")).toMatchObject({ visibleWhen: { sourceBlockId: named("Has a pet").id, value: true } })
     expect(named("Please specify")).toMatchObject({ visibleWhen: { sourceBlockId: named("Kind of pet").id } })
+  })
+
+  it("keeps every section and row on the blocks it named when an \"Other\" answer is slotted in above them", async () => {
+    const field = (label: string) => ({ type: "text_field", fieldKey: "key", label, required: false, helpText: null, placeholder: null, multiline: false })
+    const add = (ref: string, afterBlockId: string | null, block: Record<string, unknown>): TestFlowOperation => ({ type: "add_block", summary: `Added ${String(block.label)}`, payload: { ref, afterBlockId, block } })
+    const { run } = runFlow(createContent(), [
+      add("kind", PARAGRAPH_ID, { type: "dropdown_field", fieldKey: "kind", label: "Property type", required: false, helpText: null, placeholder: null, options: ["House", "Flat", "Other"] }),
+      // Written after the dropdown, as a model writes them: the "Other" answer has to go in between.
+      add("bedrooms", "kind", field("Bedrooms")),
+      add("bathrooms", "bedrooms", field("Bathrooms")),
+      add("access", "bathrooms", field("Access instructions")),
+      add("signature", "access", { type: "signature_field", fieldKey: "signature", label: "Signature", required: true, helpText: null }),
+      add("signed", "signature", { type: "date_field", fieldKey: "signed", label: "Date signed", required: true, helpText: null }),
+      { type: "set_row", summary: "Set the rooms side by side", payload: { blockIds: ["bedrooms", "bathrooms"] } },
+      { type: "set_section", summary: "Started the access section", payload: { blockId: "access", label: "Access" } },
+      { type: "set_row", summary: "Set signature and date side by side", payload: { blockIds: ["signature", "signed"] } },
+    ])
+    const { blocks, fieldGroups, sections } = (await run).proposal!.candidateDraft.content as TemplateContentV3
+    const label = (blockId: string) => blocks.flatMap((block: TemplateBlock) => (block.id === blockId && "label" in block ? [block.label] : []))[0]
+
+    expect(blocks.flatMap((block: TemplateBlock) => ("label" in block ? [block.label] : []))).toEqual([
+      "Property type", "Please specify", "Bedrooms", "Bathrooms", "Access instructions", "Signature", "Date signed",
+    ])
+    expect(fieldGroups.map((row) => [label(row.startBlockId), label(row.endBlockId)])).toEqual([
+      ["Bedrooms", "Bathrooms"],
+      ["Signature", "Date signed"],
+    ])
+    expect(sections.filter((section) => section.label === "Access").map((section) => label(section.startBlockId))).toEqual(["Access instructions"])
   })
 
   it("keeps the formatting of words it leaves alone, and the height a box was given", async () => {
@@ -1236,7 +1359,7 @@ describe("Flow building with the blocks it adds", () => {
         [{ type: "add_block", summary: "Asked the pet's name", payload: { afterBlockId: PARAGRAPH_ID, block: { type: "text_field", fieldKey: "name", label: "Pet's name", required: false, helpText: null, placeholder: null, multiline: false, visibleWhen: { sourceBlockId: FIELD_ID, operator: "equals", value: true } } } }],
       ],
       // A move that puts a field's source after it: the field would show for everyone.
-      [/operations: .*Pet's age.*visibleWhen/, [{ type: "move_block", summary: "Moved the question down", payload: { blockId: FIELD_ID, afterBlockId: COMPANION_ID } }]],
+      [/operations\[0\] move_block: .*conditional field/, [{ type: "move_block", summary: "Moved the question down", payload: { blockId: FIELD_ID, afterBlockId: COMPANION_ID } }]],
     ]
 
     for (const [reason, operations] of refused) {

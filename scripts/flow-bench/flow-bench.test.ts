@@ -36,6 +36,13 @@ type Job = {
   turns: string[]
 }
 
+// Why a call was a second attempt: the reply before it was refused (corrected), or was valid but had faults (revised).
+function readFollowUp(input: string): { corrected: unknown; revised: unknown } {
+  const prompt = JSON.parse(input) as { semanticRepair?: { validationIssue?: unknown }; revision?: { faults?: unknown } }
+
+  return { corrected: prompt.semanticRepair?.validationIssue ?? null, revised: prompt.revision?.faults ?? null }
+}
+
 type CallRecord = { ms: number; usage?: AiTokenUsage; error?: string }
 
 type JobResult = {
@@ -95,7 +102,7 @@ async function runJob(job: Job, runtime: AiRuntime, outDir: string, name: string
   const calls: CallRecord[] = []
   // What the model sent back each time, and what it was told was wrong with
   // its last attempt: how a rejected reply is read afterwards, not guessed at.
-  const replies: Array<{ corrected: unknown; reply: string }> = []
+  const replies: Array<{ corrected: unknown; revised: unknown; reply: string }> = []
   const recording: AiRuntime = {
     model: runtime.model,
     provider: {
@@ -108,7 +115,7 @@ async function runJob(job: Job, runtime: AiRuntime, outDir: string, name: string
 
           calls.push({ ms: Math.round(performance.now() - started), usage: result.usage })
           replies.push({
-            corrected: (JSON.parse(String(request.input)) as { semanticRepair?: { validationIssue?: unknown } }).semanticRepair?.validationIssue ?? null,
+            ...readFollowUp(String(request.input)),
             reply: result.text
           })
 
