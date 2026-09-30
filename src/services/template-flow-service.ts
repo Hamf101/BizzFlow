@@ -1338,7 +1338,10 @@ function parseFlowPayloadJson(payloadJson: string): unknown {
 type DecodedFlowOperation = { type: string; summary: string; payload: unknown }
 
 // The name a response gives a block it adds, to use as that block's id in its later operations.
-const FLOW_REF_PATTERN = /^new:\d{1,3}$/
+// Any short name: models write "new:1", "new:signature" and "b_owner" alike.
+const FLOW_REF_PATTERN = /^[\w:.-]{1,40}$/
+// A real block id. Where an operation names a block, anything else is read as a ref.
+const FLOW_BLOCK_ID_PATTERN = /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i
 // Where an operation names a block.
 const FLOW_REF_KEYS = new Set(["afterBlockId", "blockId", "blockIds", "sourceBlockId"])
 // A payload names blocks no deeper than block.visibleWhen.sourceBlockId; nothing past this is read.
@@ -1363,7 +1366,7 @@ function resolveFlowRefs(
     const unknown = replaceFlowRefs(operation.payload, ids, 0)
 
     if (unknown !== null) {
-      return `operations[${index}] ${operation.type}: ${unknown} is not the ref of a block added earlier in this response`
+      return `operations[${index}] ${operation.type}: ${JSON.stringify(unknown).slice(0, 40)} is neither a block id nor the ref of a block added earlier in this response`
     }
 
     if (operation.type !== "add_block" || !isRecord(operation.payload)) {
@@ -1379,8 +1382,8 @@ function resolveFlowRefs(
       continue
     }
 
-    if (typeof ref !== "string" || !FLOW_REF_PATTERN.test(ref) || ids.has(ref)) {
-      return `operations[${index}] add_block: ref ${JSON.stringify(ref).slice(0, 40)} must be "new:N", and no two blocks may share one`
+    if (typeof ref !== "string" || !FLOW_REF_PATTERN.test(ref) || FLOW_BLOCK_ID_PATTERN.test(ref) || ids.has(ref)) {
+      return `operations[${index}] add_block: ref ${JSON.stringify(ref).slice(0, 40)} must be a short name such as "new:1", and no two blocks may share one`
     }
 
     ids.set(ref, createId())
@@ -1413,13 +1416,11 @@ function replaceFlowRefs(
 
     const named = Array.isArray(value) ? value : [value]
     const resolved = named.map((entry: unknown): unknown =>
-      typeof entry === "string" && FLOW_REF_PATTERN.test(entry)
-        ? (ids.get(entry) ?? entry)
-        : entry
+      typeof entry === "string" ? (ids.get(entry) ?? entry) : entry
     )
     const unknown = resolved.find(
       (entry: unknown): entry is string =>
-        typeof entry === "string" && FLOW_REF_PATTERN.test(entry)
+        typeof entry === "string" && !FLOW_BLOCK_ID_PATTERN.test(entry)
     )
 
     if (unknown !== undefined) {

@@ -1168,16 +1168,16 @@ describe("Flow and date formats", () => {
 })
 
 describe("Flow building with the blocks it adds", () => {
-  it("lets one turn say where its new blocks go and what shows them, by the names it gave them", async () => {
+  it("lets one turn say where its new blocks go and what shows them, by whatever names it gave them", async () => {
     const { run } = runFlow(createContent(), [
-      { type: "add_block", summary: "Asked about pets", payload: { ref: "new:1", afterBlockId: null, block: { type: "checkbox_field", fieldKey: "pet", label: "Has a pet", required: false, helpText: null, checkedByDefault: false } } },
+      { type: "add_block", summary: "Asked about pets", payload: { ref: "new:has_pet", afterBlockId: null, block: { type: "checkbox_field", fieldKey: "pet", label: "Has a pet", required: false, helpText: null, checkedByDefault: false } } },
       {
         type: "add_block",
         summary: "Asked the pet's name",
-        payload: { afterBlockId: "new:1", block: { type: "text_field", fieldKey: "name", label: "Pet's name", required: false, helpText: null, placeholder: null, multiline: false, visibleWhen: { sourceBlockId: "new:1", operator: "equals", value: true } } },
+        payload: { afterBlockId: "new:has_pet", block: { type: "text_field", fieldKey: "name", label: "Pet's name", required: false, helpText: null, placeholder: null, multiline: false, visibleWhen: { sourceBlockId: "new:has_pet", operator: "equals", value: true } } },
       },
-      { type: "add_block", summary: "Asked the kind of pet", payload: { ref: "new:2", afterBlockId: null, block: { type: "dropdown_field", fieldKey: "kind", label: "Kind of pet", required: false, helpText: null, placeholder: null, options: ["Dog", "Cat", "Other"] } } },
-      { type: "add_block", summary: "Thanked them", payload: { afterBlockId: "new:2", block: { type: "paragraph", text: "Thank you.", alignment: "left" } } },
+      { type: "add_block", summary: "Asked the kind of pet", payload: { ref: "b_kind", afterBlockId: null, block: { type: "dropdown_field", fieldKey: "kind", label: "Kind of pet", required: false, helpText: null, placeholder: null, options: ["Dog", "Cat", "Other"] } } },
+      { type: "add_block", summary: "Thanked them", payload: { afterBlockId: "b_kind", block: { type: "paragraph", text: "Thank you.", alignment: "left" } } },
     ])
     const blocks = (await run).proposal!.candidateDraft.content.blocks
     const named = (label: string) => blocks.find((block: TemplateBlock) => "label" in block && block.label === label)!
@@ -1228,6 +1228,8 @@ describe("Flow building with the blocks it adds", () => {
     const refused: Array<[RegExp, TestFlowOperation[]]> = [
       // A name given to two new blocks.
       [/operations\[1\] add_block: .*new:1/, [1, 2].map(() => ({ type: "add_block", summary: "Added a note", payload: { ref: "new:1", afterBlockId: null, block: paragraph } }))],
+      // A name that is an existing block's id, which would turn every later mention of that block to the new one.
+      [/operations\[0\] add_block: ref .*short name/, [{ type: "add_block", summary: "Added a note", payload: { ref: PARAGRAPH_ID, afterBlockId: null, block: paragraph } }]],
       // A condition on a field that comes later: once dropped without a word.
       [
         /operations\[0\] add_block: .*visibleWhen/,
