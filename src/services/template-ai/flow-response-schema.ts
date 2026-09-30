@@ -11,6 +11,10 @@ export const TEMPLATE_FLOW_OPERATION_TYPES = [
   "update_image",
   "move_block",
   "remove_block",
+  "set_section",
+  "set_row",
+  "stand_alone",
+  "set_block_rule",
 ] as const satisfies readonly TemplateFlowOperationType[]
 
 /**

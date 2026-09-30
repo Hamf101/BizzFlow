@@ -93,6 +93,9 @@ describe.runIf(process.env.FLOW_BENCH === "1")("Flow bench", () => {
 
 async function runJob(job: Job, runtime: AiRuntime, outDir: string, name: string): Promise<JobResult> {
   const calls: CallRecord[] = []
+  // What the model sent back each time, and what it was told was wrong with
+  // its last attempt: how a rejected reply is read afterwards, not guessed at.
+  const replies: Array<{ corrected: unknown; reply: string }> = []
   const recording: AiRuntime = {
     model: runtime.model,
     provider: {
@@ -104,6 +107,10 @@ async function runJob(job: Job, runtime: AiRuntime, outDir: string, name: string
           const result = await runtime.provider.generateStructured(request)
 
           calls.push({ ms: Math.round(performance.now() - started), usage: result.usage })
+          replies.push({
+            corrected: (JSON.parse(String(request.input)) as { semanticRepair?: { validationIssue?: unknown } }).semanticRepair?.validationIssue ?? null,
+            reply: result.text
+          })
 
           return result
         } catch (error: unknown) {
@@ -163,7 +170,7 @@ async function runJob(job: Job, runtime: AiRuntime, outDir: string, name: string
     pages = `unrenderable: ${caught instanceof Error ? caught.message : String(caught)}`
   }
 
-  writeFileSync(join(outDir, `${name}.json`), JSON.stringify({ draft, history, job }, null, 2))
+  writeFileSync(join(outDir, `${name}.json`), JSON.stringify({ draft, history, job, replies }, null, 2))
 
   return {
     calls,

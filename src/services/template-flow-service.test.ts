@@ -20,8 +20,10 @@ import {
 } from "@/services/template-flow-service"
 import {
   createBlankTemplateContent,
+  templateContentV3Schema,
   type TemplateBlock,
-  type TemplateContent
+  type TemplateContent,
+  type TemplateContentV3
 } from "@/types/template"
 import type { TemplateFlowMessage } from "@/types/template-flow"
 
@@ -1254,6 +1256,104 @@ describe("Flow building with the blocks it adds", () => {
     await expect(
       executeTemplateFlow(createInput(createContent(), "Build the form."), createDependencies({ aiProvider: createTestAiProvider([nested]) }))
     ).rejects.toMatchObject({ statusCode: 502 })
+  })
+})
+
+describe("Flow laying out a document", () => {
+  const field = (label: string, more: Record<string, unknown> = {}) => ({ type: "text_field", fieldKey: "key", label, required: false, helpText: null, placeholder: null, multiline: false, ...more })
+  const add = (ref: string, afterBlockId: string | null, block: Record<string, unknown>): TestFlowOperation => ({ type: "add_block", summary: `Added ${String(block.label)}`, payload: { ref, afterBlockId, block } })
+
+  it("builds a section, a row, a tall box and a closing signature set to one side, all in one turn", async () => {
+    const { run } = runFlow(createContent(), [
+      add("new:1", null, field("Full name")),
+      add("new:2", "new:1", field("Phone")),
+      add("new:3", "new:2", field("Notes", { multiline: true, boxHeight: 120 })),
+      add("new:4", "new:3", { type: "signature_field", fieldKey: "key", label: "Signature", required: true, helpText: null }),
+      { type: "set_section", summary: "Started the contact section", payload: { blockId: "new:1", label: "Contact details", keepTogether: true } },
+      { type: "set_row", summary: "Set name and phone side by side", payload: { blockIds: ["new:1", "new:2"], widths: [8, 4] } },
+      { type: "set_block_rule", summary: "Started notes on a new page", payload: { blockId: "new:3", pageBreakBefore: true } },
+      { type: "set_block_rule", summary: "Set the signature to the right", payload: { blockId: "new:4", spaceAbove: 24, frame: { left: 50, width: 50 } } },
+    ])
+    const proposal = (await run).proposal!
+    const content = templateContentV3Schema.parse(proposal.candidateDraft.content)
+    const id = (label: string) => content.blocks.find((block) => "label" in block && block.label === label)!.id
+
+    expect(content.sections).toMatchObject([{ keepTogether: true, label: "Contact details", pageBreakBefore: false, startBlockId: id("Full name") }])
+    expect(content.fieldGroups).toMatchObject([{ columns: 2, endBlockId: id("Phone"), startBlockId: id("Full name"), widths: [8, 4] }])
+    expect(content.blockRules).toEqual([
+      { blockId: id("Notes"), keepWithNext: false, pageBreakBefore: true },
+      { blockId: id("Signature"), frame: { left: 50, width: 50 }, keepWithNext: false, pageBreakBefore: false, spaceAbove: 24 },
+    ])
+    expect(content.blocks.find((block) => block.id === id("Notes"))).toMatchObject({ boxHeight: 120 })
+    // The row's two blocks are both marked as changed, for the page to show.
+    expect(proposal.operations.find((operation) => operation.type === "set_row")?.affectedBlockIds).toEqual([id("Full name"), id("Phone")])
+  })
+
+  it("makes a row of part of a wider one where it stands, takes a row apart, and ends a section, moving nothing else", async () => {
+    const { run: built } = runFlow(createContent(), [
+      add("new:1", null, field("Full name")),
+      add("new:2", "new:1", field("Phone")),
+      add("new:3", "new:2", field("Email")),
+      { type: "set_section", summary: "Started the contact section", payload: { blockId: "new:1", label: "Contact details" } },
+      { type: "set_row", summary: "Set three side by side", payload: { blockIds: ["new:1", "new:2", "new:3"] } },
+    ])
+    const start = (await built).proposal!.candidateDraft.content as TemplateContentV3
+    const [, name, phone, email] = start.blocks.map((block) => block.id)
+    const order = start.blocks.map((block) => block.id)
+    const { run } = runFlow(start, [
+      // Email, not named, steps out of the row; the two named stay where they are.
+      { type: "set_row", summary: "Left name and phone side by side, the name wider", payload: { blockIds: [name, phone], widths: [9, 3] } },
+      { type: "set_section", summary: "Ended the section", payload: { blockId: name, label: null } },
+      { type: "set_block_rule", summary: "Kept the email with what follows", payload: { blockId: email, frame: null, keepWithNext: true } },
+    ])
+    const content = (await run).proposal!.candidateDraft.content as TemplateContentV3
+
+    // The same row, narrowed and resized in place: its id is the one it had.
+    expect(content.fieldGroups).toMatchObject([{ columns: 2, endBlockId: phone, id: start.fieldGroups[0]!.id, startBlockId: name, widths: [9, 3] }])
+    expect(content.sections).toEqual([])
+    expect(content.blockRules).toEqual([{ blockId: email, keepWithNext: true, pageBreakBefore: false }])
+    expect(content.blocks.map((block) => block.id)).toEqual(order)
+
+    const { run: apart } = runFlow(content, [{ type: "stand_alone", summary: "Put the phone on its own line", payload: { blockId: phone } }])
+    const alone = (await apart).proposal!.candidateDraft.content as TemplateContentV3
+
+    expect(alone.fieldGroups).toEqual([])
+    expect(alone.blocks.map((block) => block.id)).toEqual(order)
+  })
+
+  it("holds what it is given within the page, and refuses by name what cannot be laid out", async () => {
+    const { run: built } = runFlow(createContent(), [
+      add("new:1", null, field("Full name")),
+      add("new:2", "new:1", field("Phone")),
+      add("new:3", "new:2", field("Email")),
+      { type: "set_row", summary: "Set two side by side", payload: { blockIds: ["new:1", "new:2"] } },
+    ])
+    const start = (await built).proposal!.candidateDraft.content as TemplateContentV3
+    const [paragraph, name, phone, email] = start.blocks.map((block) => block.id)
+    const { run } = runFlow(start, [{ type: "set_block_rule", summary: "Pushed it far down and off the edge", payload: { blockId: email, spaceAbove: 9_999, frame: { left: 90, width: 50 } } }])
+
+    expect(((await run).proposal!.candidateDraft.content as TemplateContentV3).blockRules).toEqual([
+      { blockId: email, frame: { left: 90, width: 10 }, keepWithNext: false, pageBreakBefore: false, spaceAbove: 600 },
+    ])
+
+    const refused: Array<[RegExp, TestFlowOperation]> = [
+      [/set_block_rule: .*row/, { type: "set_block_rule", summary: "Framed a row member", payload: { blockId: name, frame: { left: 50, width: 50 } } }],
+      [/set_block_rule: /, { type: "set_block_rule", summary: "Changed nothing", payload: { blockId: email } }],
+      [/set_row: .*12/, { type: "set_row", summary: "Widths that do not fill the row", payload: { blockIds: [name, phone], widths: [8, 8] } }],
+      [/set_row: .*12/, { type: "set_row", summary: "A width for a block not there", payload: { blockIds: [name, phone], widths: [4, 4, 4] } }],
+      [/blockIds/, { type: "set_row", summary: "Five in a row", payload: { blockIds: [paragraph, name, phone, email, email] } }],
+      [/set_row: .*different/, { type: "set_row", summary: "The same block twice", payload: { blockIds: [email, email] } }],
+      [/stand_alone: .*row/, { type: "stand_alone", summary: "Took out a block in no row", payload: { blockId: email } }],
+      [/set_section: /, { type: "set_section", summary: "Ended a section that is not there", payload: { blockId: email, label: null } }],
+      [/set_section: /, { type: "set_section", summary: "Started one at a missing block", payload: { blockId: TEMPLATE_ID, label: "Extras" } }],
+    ]
+
+    for (const [reason, operation] of refused) {
+      const { aiProvider, run: attempt } = runFlow(start, [operation])
+
+      await expect(attempt, operation.summary).rejects.toMatchObject({ statusCode: 502 })
+      expect(String(readProviderRequests(aiProvider)[1]?.input), operation.summary).toMatch(reason)
+    }
   })
 })
 

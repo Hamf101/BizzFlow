@@ -45,6 +45,7 @@ import {
   fileFieldBlockSchema,
   headingBlockObjectSchema,
   initialsFieldBlockSchema,
+  MAX_ROW_COLUMNS,
   numberedListBlockObjectSchema,
   paragraphBlockObjectSchema,
   signatureFieldBlockSchema,
@@ -61,10 +62,20 @@ import {
 import {
   createUniqueTemplateFieldKey,
   deleteTemplateBlock,
+  frameOf,
   insertTemplateBlock,
   isTemplateFieldBlock,
   moveTemplateBlockAfter,
-  updateTemplateBlock
+  placeBeside,
+  removeTemplateSection,
+  rowOf,
+  setBlockRule,
+  setRowWidths,
+  standAlone,
+  startTemplateSection,
+  updateTemplateBlock,
+  updateTemplateSection,
+  type TemplateMoveResult
 } from "@/types/template-structure"
 import type {
   TemplateFlowDraft,
@@ -236,6 +247,61 @@ const flowWireOperationSchema = z.discriminatedUnion("type", [
       type: z.literal("remove_block"),
       summary: operationSummarySchema,
       payload: z.object({ blockId: uuidSchema }).strict()
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal("set_section"),
+      summary: operationSummarySchema,
+      payload: z
+        .object({
+          blockId: uuidSchema,
+          // Its printed title, or null to end the section that starts here.
+          label: z.string().trim().min(1).max(160).nullable(),
+          pageBreakBefore: z.boolean().optional(),
+          keepTogether: z.boolean().optional()
+        })
+        .strict()
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal("set_row"),
+      summary: operationSummarySchema,
+      payload: z
+        .object({
+          blockIds: z.array(uuidSchema).min(2).max(MAX_ROW_COLUMNS),
+          // Twelfths of the page's width, one for each block.
+          widths: z.array(z.number().int()).min(2).max(MAX_ROW_COLUMNS).optional()
+        })
+        .strict()
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal("stand_alone"),
+      summary: operationSummarySchema,
+      payload: z.object({ blockId: uuidSchema }).strict()
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal("set_block_rule"),
+      summary: operationSummarySchema,
+      payload: z
+        .object({
+          blockId: uuidSchema,
+          pageBreakBefore: z.boolean().optional(),
+          keepWithNext: z.boolean().optional(),
+          // Any size is taken and held to what a page allows, as a drag in the editor is.
+          spaceAbove: z.number().min(0).optional(),
+          frame: z
+            .object({ left: z.number().min(0).max(100), width: z.number().min(0).max(100) })
+            .strict()
+            .nullable()
+            .optional()
+        })
+        .strict()
     })
     .strict()
 ])
@@ -1194,6 +1260,9 @@ function createFlowSystemInstruction(): string {
     "Use add_block for new content; use update_block with a complete replacement block without id for non-image edits.",
     "Use update_image to change an existing image's placement, size, caption, or alt text; you cannot replace its bytes.",
     "Use move_block to reorganize content while preserving its id.",
+    "Layout is metadata about blocks. sections: a printed title opening at startBlockId and running to the next section; pageBreakBefore starts it on a new page. fieldGroups: a row of 2 to 4 neighbouring blocks set side by side, widths in twelfths of the page adding up to 12; rows stack on a phone. blockRules: per block, pageBreakBefore, keepWithNext, spaceAbove in points, and frame, its left edge and width in percent of the space between the margins. boxHeight on a field is the height of its answer box in points. omitted counts what was left out of currentDraft for length; never assume those parts are absent.",
+    "Use set_section to give related blocks a titled section, set_row to set short related fields side by side such as first and last name or a date beside a signature, stand_alone to take a block out of its row, and set_block_rule for page breaks, keeping a heading with what follows, space and position.",
+    "Lay out with restraint: prefer sections and rows. Give long answers and any field likely to wrap a line of its own. Use frame and spaceAbove only for closing blocks such as a signature or date set to one side, with spaceAbove usually 0 to 48; never frame a block that is in a row. Set boxHeight only when an answer needs visibly more or less room than the default.",
     "Use only canonical block types: heading, paragraph, bullet_list, numbered_list, table, divider, text_field, date_field, checkbox_field, dropdown_field, initials_field, signature_field, or file_field.",
     "List items are plain strings. Never use a generic list type or objects for list items.",
     "Every operation must include type, summary, and payloadJson.",
@@ -1215,6 +1284,10 @@ function createFlowPayloadContract(): string {
     'update_image => {"blockId":"existing-uuid","altText":"Description","caption":null,"alignment":"left|center|right","widthPercent":50}.',
     'move_block => {"blockId":"existing-uuid","afterBlockId":"existing-uuid, or null for the start of the document"}.',
     'remove_block => {"blockId":"existing-uuid"}.',
+    'set_section => {"blockId":"the block the section opens with","label":"Section title, or null to end the section that opens there","pageBreakBefore":optional false,"keepTogether":optional false}.',
+    'set_row => {"blockIds":["2 to 4 different blocks, left to right"],"widths":optional [8,4] whole twelfths, each 2 or more, one per block, adding up to 12}. The blocks are moved together beside the first.',
+    'stand_alone => {"blockId":"a block in a row"}.',
+    'set_block_rule => {"blockId":"existing-uuid","pageBreakBefore":optional true,"keepWithNext":optional true,"spaceAbove":optional 24,"frame":optional {"left":50,"width":50} or null for the full width}. Include only what changes.',
     "Block contracts:",
     'heading {"type":"heading","text":"Text","level":1|2|3,"alignment":"left|center|right"};',
     'paragraph {"type":"paragraph","text":"Text","alignment":"left|center|right"};',
@@ -1222,14 +1295,14 @@ function createFlowPayloadContract(): string {
     'numbered_list {"type":"numbered_list","items":["Plain text"]};',
     'table {"type":"table","headers":["Header"],"rows":[["Cell"]]};',
     'divider {"type":"divider"};',
-    'text_field {"type":"text_field","fieldKey":"stable_key","label":"Label","required":true,"helpText":null,"placeholder":null,"multiline":false,"visibleWhen":{"sourceBlockId":"earlier-dropdown-or-checkbox-uuid","operator":"equals","value":"Other"}};',
+    'text_field {"type":"text_field","fieldKey":"stable_key","label":"Label","required":true,"helpText":null,"placeholder":null,"multiline":false,"boxHeight":optional 27 to 600,"visibleWhen":{"sourceBlockId":"earlier-dropdown-or-checkbox-uuid","operator":"equals","value":"Other"}};',
     'date_field {"type":"date_field","fieldKey":"stable_key","label":"Label","required":true,"helpText":null,"dateFormat":optional {"order":"dmy"|"mdy"|"ymd","separator":"/"|"."|"-"|" ","month":"number"|"short"|"long"},"visibleWhen":optional};',
     'initials_field {"type":"initials_field","fieldKey":"stable_key","label":"Label","required":true,"helpText":null,"visibleWhen":optional};',
     'signature_field {"type":"signature_field","fieldKey":"stable_key","label":"Label","required":true,"helpText":null,"visibleWhen":optional};',
     'file_field {"type":"file_field","fieldKey":"stable_key","label":"Label","required":true,"helpText":null,"visibleWhen":optional};',
     'checkbox_field {"type":"checkbox_field","fieldKey":"stable_key","label":"Label","required":true,"helpText":null,"checkedByDefault":false,"visibleWhen":optional};',
     'dropdown_field {"type":"dropdown_field","fieldKey":"stable_key","label":"Label","required":true,"helpText":null,"placeholder":null,"options":["Known choice A","Known choice B","Other"],"visibleWhen":optional}.',
-    "Omit visibleWhen when it is not needed. When present, encode it as an object with sourceBlockId, operator='equals', and a declared string choice or checkbox boolean. Its source must be a dropdown or checkbox placed before the field; a condition that cannot hold is refused, not dropped."
+    "boxHeight is also optional on date_field, dropdown_field, initials_field and signature_field, never on checkbox_field or file_field. Omit visibleWhen when it is not needed. When present, encode it as an object with sourceBlockId, operator='equals', and a declared string choice or checkbox boolean. Its source must be a dropdown or checkbox placed before the field; a condition that cannot hold is refused, not dropped."
   ].join(" ")
 }
 
@@ -1544,18 +1617,29 @@ function describeOperationTarget(
       return "Document branding"
     case "add_block":
       return describeBlockTarget(operation.payload.block)
+    case "set_row":
+      return boundLedgerTarget(
+        operation.payload.blockIds
+          .map((blockId: string): string => describeDraftBlock(draft, blockId))
+          .join(" + ")
+      )
     case "update_block":
     case "update_image":
     case "move_block":
-    case "remove_block": {
-      const block = draft.content.blocks.find(
-        (candidate: TemplateBlock): boolean =>
-          candidate.id === operation.payload.blockId
-      )
-
-      return block ? describeBlockTarget(block) : "Document element"
-    }
+    case "remove_block":
+    case "set_section":
+    case "stand_alone":
+    case "set_block_rule":
+      return describeDraftBlock(draft, operation.payload.blockId)
   }
+}
+
+function describeDraftBlock(draft: TemplateFlowDraft, blockId: string): string {
+  const block = draft.content.blocks.find(
+    (candidate: TemplateBlock): boolean => candidate.id === blockId
+  )
+
+  return block ? describeBlockTarget(block) : "Document element"
 }
 
 function describeBlockTarget(block: GeneratedBlock | TemplateBlock): string {
@@ -1691,7 +1775,12 @@ function readOperationBlockReferences(
     case "update_block":
     case "update_image":
     case "remove_block":
+    case "set_section":
+    case "stand_alone":
+    case "set_block_rule":
       return [operation.payload.blockId]
+    case "set_row":
+      return operation.payload.blockIds
     case "move_block":
       return operation.payload.afterBlockId === null
         ? [operation.payload.blockId]
@@ -2006,7 +2095,181 @@ function applyFlowOperation(
       return applyMoveBlockOperation(draft, operation.payload)
     case "remove_block":
       return applyRemoveBlockOperation(draft, operation.payload)
+    case "set_section":
+      return applySetSectionOperation(draft, operation.payload, createId)
+    case "set_row":
+      return applySetRowOperation(draft, operation.payload, createId)
+    case "stand_alone":
+      return applyStandAloneOperation(draft, operation.payload, createId)
+    case "set_block_rule":
+      return applySetBlockRuleOperation(draft, operation.payload)
   }
+}
+
+// The editor's own helpers leave the document as it was when they cannot do
+// what is asked. Flow is told instead, so nothing is reported done that was not.
+function assertBlockExists(draft: EditableFlowDraft, blockId: string): void {
+  if (!draft.content.blocks.some((block: TemplateBlock): boolean => block.id === blockId)) {
+    throw invalidOperationError("blockId is not a block in the document")
+  }
+}
+
+function applySetSectionOperation(
+  draft: EditableFlowDraft,
+  payload: FlowOperationPayload<"set_section">,
+  createId: () => string
+): string[] {
+  assertBlockExists(draft, payload.blockId)
+
+  const opened = draft.content.sections.find(
+    (section): boolean => section.startBlockId === payload.blockId
+  )
+
+  if (payload.label === null) {
+    if (opened === undefined) {
+      throw invalidOperationError("no section starts at this block, so there is none to end")
+    }
+
+    draft.content = removeTemplateSection(draft.content, opened.id)
+    return [payload.blockId]
+  }
+
+  const sectionId = opened?.id ?? createId()
+
+  if (opened === undefined) {
+    const started = startTemplateSection(draft.content, payload.blockId, sectionId, payload.label)
+
+    if (started === draft.content) {
+      throw invalidOperationError("the row this block is in already opens a section; name the row's first block")
+    }
+
+    draft.content = started
+  }
+
+  draft.content = updateTemplateSection(draft.content, sectionId, {
+    label: payload.label,
+    ...(payload.pageBreakBefore === undefined ? {} : { pageBreakBefore: payload.pageBreakBefore }),
+    ...(payload.keepTogether === undefined ? {} : { keepTogether: payload.keepTogether })
+  })
+
+  // In a row, the section opens at the row's first block.
+  return [draft.content.sections.find((section): boolean => section.id === sectionId)?.startBlockId ?? payload.blockId]
+}
+
+function applySetRowOperation(
+  draft: EditableFlowDraft,
+  payload: FlowOperationPayload<"set_row">,
+  createId: () => string
+): string[] {
+  const { blockIds, widths } = payload
+  const first = blockIds[0] ?? ""
+  const last = blockIds[blockIds.length - 1] ?? ""
+  // The row these blocks make up, all of them and no others, in this order.
+  const theirRow = (content: TemplateContentV3): TemplateContentV3["fieldGroups"][number] | undefined => {
+    const at = content.blocks.findIndex((block: TemplateBlock): boolean => block.id === first)
+
+    return content.fieldGroups.find(
+      (group): boolean =>
+        group.columns === blockIds.length &&
+        group.startBlockId === first &&
+        group.endBlockId === last &&
+        blockIds.every((blockId: string, index: number): boolean => content.blocks[at + index]?.id === blockId)
+    )
+  }
+
+  if (new Set(blockIds).size !== blockIds.length) {
+    throw invalidOperationError("blockIds must name different blocks")
+  }
+
+  blockIds.forEach((blockId: string): void => assertBlockExists(draft, blockId))
+
+  if (widths !== undefined && (widths.length !== blockIds.length || widths.some((width: number): boolean => width < 2) || widths.reduce((total: number, width: number): number => total + width, 0) !== 12)) {
+    throw invalidOperationError("widths must give each block a whole number of twelfths, 2 or more, adding up to 12")
+  }
+
+  const moved = (result: TemplateMoveResult): TemplateContentV3 => {
+    if (!result.success) {
+      throw invalidOperationError(result.message)
+    }
+
+    return result.content
+  }
+  let content = draft.content
+
+  // The blocks named stay where they are. Whatever else shares a row with one
+  // of them steps out onto its own line, so nothing named moves that need not.
+  for (const blockId of blockIds) {
+    const row = rowOf(content, blockId)
+    const from = content.blocks.findIndex((block: TemplateBlock): boolean => block.id === row?.startBlockId)
+    const to = content.blocks.findIndex((block: TemplateBlock): boolean => block.id === row?.endBlockId)
+
+    for (const other of row === undefined ? [] : content.blocks.slice(from, to + 1)) {
+      if (!blockIds.includes(other.id)) {
+        content = moved(standAlone(content, other.id, createId))
+      }
+    }
+  }
+
+  // Then each joins the one before it, unless they already make the row.
+  for (const [index, blockId] of blockIds.entries()) {
+    if (index > 0 && theirRow(content) === undefined) {
+      content = moved(placeBeside(content, blockId, blockIds[index - 1] ?? "", "right", createId))
+    }
+  }
+
+  const row = theirRow(content)
+
+  if (row === undefined) {
+    throw invalidOperationError("these blocks cannot share one row")
+  }
+
+  draft.content = widths === undefined ? content : setRowWidths(content, row.id, widths)
+  return [...blockIds]
+}
+
+function applyStandAloneOperation(
+  draft: EditableFlowDraft,
+  payload: FlowOperationPayload<"stand_alone">,
+  createId: () => string
+): string[] {
+  assertBlockExists(draft, payload.blockId)
+
+  if ((rowOf(draft.content, payload.blockId)?.columns ?? 1) < 2) {
+    throw invalidOperationError("the block is not in a row")
+  }
+
+  const result = standAlone(draft.content, payload.blockId, createId)
+
+  if (!result.success) {
+    throw invalidOperationError(result.message)
+  }
+
+  draft.content = result.content
+  return [payload.blockId]
+}
+
+function applySetBlockRuleOperation(
+  draft: EditableFlowDraft,
+  payload: FlowOperationPayload<"set_block_rule">
+): string[] {
+  const { blockId, frame, ...rules } = payload
+
+  assertBlockExists(draft, blockId)
+
+  if (frame === undefined && Object.keys(rules).length === 0) {
+    throw invalidOperationError("say what to change: pageBreakBefore, keepWithNext, spaceAbove or frame")
+  }
+
+  if (frame && (rowOf(draft.content, blockId)?.columns ?? 1) > 1) {
+    throw invalidOperationError("a frame places a block that is alone on its line; this one is in a row, so size it with set_row widths")
+  }
+
+  draft.content = setBlockRule(draft.content, blockId, {
+    ...rules,
+    // Null puts the block back across the whole page.
+    ...(frame === undefined ? {} : { frame: frame === null ? undefined : frameOf(frame.left, frame.width) })
+  })
+  return [blockId]
 }
 
 function applyBrandingOperation(

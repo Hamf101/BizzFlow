@@ -567,6 +567,19 @@ export function placeBeside(
 }
 
 /**
+ * Finds the row or group a block is in.
+ *
+ * @param content - Editable version-three content.
+ * @param blockId - The block.
+ * @returns Its group, or undefined when it is on a line of its own.
+ */
+export function rowOf(content: TemplateContentV3, blockId: string): TemplateFieldGroup | undefined {
+  const index = content.blocks.findIndex((block: TemplateBlock): boolean => block.id === blockId)
+
+  return getIndexedFieldGroups(content).find(({ endIndex, startIndex }) => index >= startIndex && index <= endIndex)?.group
+}
+
+/**
  * Takes a block out of its row and puts it on its own line just below it.
  * The row loses a column, and a row left with one block is undone unless it
  * has a label or keeps together.

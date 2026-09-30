@@ -6,10 +6,15 @@ import {
   ArrowUp,
   AlertTriangle,
   Check,
+  Columns2,
+  LayoutTemplate,
   LoaderCircle,
+  type LucideIcon,
   Move,
   PencilLine,
   RotateCcw,
+  Rows2,
+  Section,
   Trash2,
   X
 } from "lucide-react"
@@ -633,22 +638,26 @@ function FlowLedgerRow({
   )
 }
 
+// One for every kind of change, so a new kind cannot go without.
+const OPERATION_ICONS: Record<TemplateFlowOperationType, LucideIcon> = {
+  set_title: PencilLine,
+  set_description: PencilLine,
+  set_branding: PencilLine,
+  add_block: ArrowDownToLine,
+  update_block: PencilLine,
+  update_image: PencilLine,
+  move_block: Move,
+  remove_block: Trash2,
+  set_section: Section,
+  set_row: Columns2,
+  stand_alone: Rows2,
+  set_block_rule: LayoutTemplate
+}
+
 function renderOperationIcon(type: TemplateFlowOperationType): ReactElement {
-  const className = "mt-0.5 size-3.5 text-primary"
+  const Icon = OPERATION_ICONS[type]
 
-  if (type === "move_block") {
-    return <Move className={className} />
-  }
-
-  if (type === "remove_block") {
-    return <Trash2 className={className} />
-  }
-
-  if (type === "add_block") {
-    return <ArrowDownToLine className={className} />
-  }
-
-  return <PencilLine className={className} />
+  return <Icon aria-hidden="true" className="mt-0.5 size-3.5 text-primary" />
 }
 
 function formatOperationType(type: TemplateFlowOperationType): string {
@@ -660,7 +669,11 @@ function formatOperationType(type: TemplateFlowOperationType): string {
     update_block: "Revise",
     update_image: "Position",
     move_block: "Move",
-    remove_block: "Remove"
+    remove_block: "Remove",
+    set_section: "Section",
+    set_row: "Row",
+    stand_alone: "Separate",
+    set_block_rule: "Lay out"
   }
 
   return labels[type]

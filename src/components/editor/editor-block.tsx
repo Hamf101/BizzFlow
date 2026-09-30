@@ -44,7 +44,7 @@ import { PaperField, PRINTED_HEADING, printedSpace } from "@/components/editor/p
 import { placeImage, placementOf, SNAP_PX } from "@/components/editor/image-placement"
 import { RichLine } from "@/components/editor/rich-line"
 import type { EditorController, FocusRequest } from "@/components/editor/use-editor-controller"
-import { frameOf, setBlockRule } from "@/types/template-structure"
+import { frameOf, rowOf, setBlockRule } from "@/types/template-structure"
 import { RichText } from "@/components/templates/rich-text"
 import { FieldGroupSettings } from "@/components/editor/field-group-settings"
 import { BlockFields } from "@/components/templates/template-block-editor"
@@ -653,17 +653,6 @@ function BoxEdge({ block, controller }: { block: BoxedField; controller: EditorC
       onPointerMove={drag}
     />
   )
-}
-
-// The row a block is in, if any.
-function rowOf(content: EditorController["content"], blockId: string): EditorController["content"]["fieldGroups"][number] | undefined {
-  const index = content.blocks.findIndex((block) => block.id === blockId)
-
-  return content.fieldGroups.find((group) => {
-    const start = content.blocks.findIndex((block) => block.id === group.startBlockId)
-    const end = content.blocks.findIndex((block) => block.id === group.endBlockId)
-    return index >= start && index <= end
-  })
 }
 
 function BlockToolbar({ actions, block }: { actions: CanvasActions; block: TemplateBlock }): ReactElement {
