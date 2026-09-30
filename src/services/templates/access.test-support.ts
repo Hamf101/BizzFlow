@@ -61,9 +61,7 @@ export function answerTemplateAccess(tables: Tables, name: string, args: Record<
         ? templates
             .filter((row) => {
               const level = levelOf(row.id)
-              const relevant = row.access_restricted || row.status !== "published"
-
-              return relevant && (level === null || (row.status !== "published" && level !== "editor"))
+              return row.access_restricted === true && (level === null || (row.status !== "published" && level !== "editor"))
             })
             .map((row) => row.id)
         : templates.filter((row) => levelOf(row.id) === "editor").map((row) => row.id),

@@ -19,6 +19,8 @@ declare
   some_submission uuid := gen_random_uuid();
   again_submission uuid := gen_random_uuid();
   outside_submission uuid := gen_random_uuid();
+  settle_submission uuid := gen_random_uuid();
+  settle_again uuid := gen_random_uuid();
   blank constant jsonb := '{"schemaVersion":3,"branding":{},"blocks":[],"layout":{},"sections":[],"fieldGroups":[],"blockRules":[]}';
   snapshot constant jsonb := '{"schemaVersion":3,"branding":{},"blocks":[],"layout":{},"sections":[],"fieldGroups":[],"blockRules":[]}';
   result public.submissions%rowtype;
@@ -58,7 +60,10 @@ begin
   )
   select submission_id, organization_id, 'Under review ' || position, template_id, 1, snapshot, '{}', 'submitted',
          staff_id, staff_id, staff_id, now()
-  from (values (all_submission, 1), (some_submission, 2), (again_submission, 3), (outside_submission, 4)) as made(submission_id, position);
+  from (values (all_submission, 1), (some_submission, 2), (again_submission, 3), (outside_submission, 4), (settle_submission, 5), (settle_again, 6)) as made(submission_id, position);
+
+  -- Everything from here runs as the app does: as the service role, not a superuser.
+  set local role service_role;
 
   -- Only owners and managers name reviewers, and only owners and managers can be named.
   begin
@@ -156,22 +161,22 @@ begin
   exception when sqlstate '22023' then null;
   end;
 
-  -- Setting it aside and approving: two of three approved, so it is back in review and waiting for the last.
+  -- Setting it aside, without approving, puts it back in review. The reviewer
+  -- set aside no longer counts, so the assigner's own approval is the last one needed.
   select * into result from public.dismiss_submission_changes_request(
-    organization_id, all_submission, 4, third_id, 'Seen the signed copy, it is attached', true, first_id);
+    organization_id, all_submission, 4, third_id, 'Seen the signed copy, it is attached', false, first_id);
   if result.status <> 'in_review' then
     raise exception 'Setting the change request aside did not put the submission back in review.';
   end if;
 
-  if (select decision from public.submission_reviewers where submission_id = all_submission and user_id = third_id) <> 'dismissed'
-      or (select decision from public.submission_reviewers where submission_id = all_submission and user_id = first_id) <> 'approved' then
-    raise exception 'The dismissal and the assigner''s approval were not recorded.';
+  if (select decision from public.submission_reviewers where submission_id = all_submission and user_id = third_id) <> 'dismissed' then
+    raise exception 'The dismissal was not recorded.';
   end if;
 
   select * into result from public.transition_internal_submission(
-    organization_id, all_submission, result.revision, 'approved', null, third_id);
+    organization_id, all_submission, result.revision, 'approved', null, first_id);
   if result.status <> 'approved' then
-    raise exception 'The last approval did not approve the submission.';
+    raise exception 'Everyone still counting approved, yet the submission was not approved.';
   end if;
 
   -- The record of who did what.
@@ -214,11 +219,14 @@ begin
   select * into result from public.transition_internal_submission(
     organization_id, again_submission, result.revision, 'needs_changes', 'Please redo page two', second_id);
 
+  -- The submitter resubmits (a direct write, which only the superuser may make).
+  reset role;
   update public.submissions
   set status = 'submitted', submitted_by = staff_id, submitted_at = now(),
       revision = revision + 1, updated_by = staff_id, updated_at = now()
   where id = again_submission
   returning * into result;
+  set local role service_role;
 
   if exists (select 1 from public.submission_reviewers where submission_id = again_submission and decision <> 'pending') then
     raise exception 'A resubmission kept the earlier decisions.';
@@ -266,12 +274,39 @@ begin
     raise exception 'Both reviewers approving did not approve the submission.';
   end if;
 
+  -- Everyone must approve, one reviewer asks for changes, and the person who
+  -- assigned them sets it aside and approves: that settles it without them.
+  select * into result from public.set_submission_reviewers(
+    organization_id, settle_submission, 1, array[first_id, second_id], null, first_id);
+  select * into result from public.transition_internal_submission(
+    organization_id, settle_submission, result.revision, 'needs_changes', 'Not convinced', second_id);
+  select * into result from public.dismiss_submission_changes_request(
+    organization_id, settle_submission, result.revision, second_id, 'Checked it myself', true, first_id);
+  if result.status <> 'approved' then
+    raise exception 'Setting the only change request aside and approving did not approve (status %).', result.status;
+  end if;
+
+  -- When everyone still counting has already approved, setting the change
+  -- request aside is enough on its own.
+  select * into result from public.set_submission_reviewers(
+    organization_id, settle_again, 1, array[first_id, second_id], null, first_id);
+  select * into result from public.transition_internal_submission(
+    organization_id, settle_again, result.revision, 'approved', null, first_id);
+  select * into result from public.transition_internal_submission(
+    organization_id, settle_again, result.revision, 'needs_changes', 'Not convinced', second_id);
+  select * into result from public.dismiss_submission_changes_request(
+    organization_id, settle_again, result.revision, second_id, 'Checked it myself', false, first_id);
+  if result.status <> 'approved' then
+    raise exception 'Nothing was left to wait for, yet the submission stayed %.', result.status;
+  end if;
+
   -- Signed-in users reach none of it directly.
   if has_table_privilege('authenticated', 'public.submission_reviewers', 'select') then
     raise exception 'Signed-in users can read the reviewers table directly.';
   end if;
 
   -- Removing a submission removes its reviewers.
+  reset role;
   delete from public.submissions where id = again_submission;
   if exists (select 1 from public.submission_reviewers where submission_id = again_submission) then
     raise exception 'Reviewers outlived their submission.';

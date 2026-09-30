@@ -794,6 +794,36 @@ begin
 end;
 $$;
 
+-- Whether a submission has the approvals it needs and no change request open.
+-- A reviewer whose change request was set aside no longer counts, so the person
+-- who assigned the reviewers can settle it without them; and a number asked for
+-- never exceeds the reviewers still counting.
+create or replace function private.submission_approvals_met(
+  target_submission_id uuid,
+  target_required_approvals integer
+)
+returns boolean
+language sql
+stable
+set search_path = ''
+as $$
+  select count(*) filter (where reviewer.decision = 'changes_requested') = 0
+     and count(*) filter (where reviewer.decision = 'approved') >= greatest(
+       1,
+       least(
+         coalesce(target_required_approvals, count(*) filter (where reviewer.decision <> 'dismissed')),
+         count(*) filter (where reviewer.decision <> 'dismissed')
+       )
+     )
+  from public.submission_reviewers reviewer
+  where reviewer.submission_id = target_submission_id;
+$$;
+
+revoke all on function private.submission_approvals_met(uuid, integer)
+  from public, anon, authenticated, service_role;
+grant execute on function private.submission_approvals_met(uuid, integer)
+  to service_role;
+
 -- The person who assigned the reviewers sets one reviewer's change request
 -- aside, with a note, and may approve in the same step. The submission goes
 -- back into review once no change request is left.
@@ -815,8 +845,6 @@ declare
   normalized_comment text;
   created_comment_id uuid;
   remaining integer;
-  approvals integer;
-  total integer;
 begin
   normalized_comment := nullif(btrim(target_comment), '');
 
@@ -922,19 +950,17 @@ begin
     )
   );
 
-  if coalesce(target_also_approve, false) and remaining = 0 then
-    -- The assigner approves too, as a reviewer, and the usual rule then decides.
-    insert into public.submission_reviewers (submission_id, org_id, user_id, assigned_by, decision, decided_at)
-    values (target_submission_id, target_org_id, target_actor_user_id, target_actor_user_id, 'approved', now())
-    on conflict (submission_id, user_id)
-    do update set decision = 'approved', note = null, decided_at = now();
+  if remaining = 0 then
+    -- The assigner may approve too, as a reviewer. Either way, once nothing is
+    -- held up, the usual rule decides whether the approvals are already enough.
+    if coalesce(target_also_approve, false) then
+      insert into public.submission_reviewers (submission_id, org_id, user_id, assigned_by, decision, decided_at)
+      values (target_submission_id, target_org_id, target_actor_user_id, target_actor_user_id, 'approved', now())
+      on conflict (submission_id, user_id)
+      do update set decision = 'approved', note = null, decided_at = now();
+    end if;
 
-    select count(*) filter (where reviewer.decision = 'approved'), count(*)
-    into approvals, total
-    from public.submission_reviewers reviewer
-    where reviewer.submission_id = target_submission_id;
-
-    if approvals >= coalesce(locked_submission.required_approvals, total) then
+    if private.submission_approvals_met(target_submission_id, locked_submission.required_approvals) then
       update public.submissions submission
       set status = 'approved',
           revision = submission.revision + 1,

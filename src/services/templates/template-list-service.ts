@@ -24,7 +24,7 @@ import type {
   TemplateServiceClient,
   TemplateServiceDeps,
 } from "./contracts"
-import { templateVisibility } from "./access"
+import { onlyVisibleTemplates, templateVisibility } from "./access"
 import { TemplateServiceError } from "./errors"
 import {
   createDatabaseError,
@@ -72,6 +72,7 @@ type TemplateListFilters = {
 type TemplateFilterQuery = {
   eq(column: string, value: string): TemplateFilterQuery
   not(column: string, operator: string, value: string): TemplateFilterQuery
+  or(filters: string): TemplateFilterQuery
   ilike(column: string, pattern: string): TemplateFilterQuery
   in(column: string, values: readonly string[]): TemplateFilterQuery
   is(column: string, value: null): TemplateFilterQuery
@@ -274,9 +275,7 @@ function filterVisibleTemplates<TQuery>(
     filters.organizationId
   )
 
-  if (filters.hidden.length > 0) {
-    filtered = filtered.not("id", "in", `(${filters.hidden.join(",")})`)
-  }
+  filtered = onlyVisibleTemplates(filtered, filters, filters.canManage)
 
   if (filters.statuses !== null) {
     filtered = filtered.in("status", filters.statuses)

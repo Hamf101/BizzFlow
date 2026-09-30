@@ -21,7 +21,7 @@ import type {
   DuplicateDocumentTemplateInput,
   SetDocumentTemplateCategoryInput,
 } from "./contracts"
-import { getTemplateAccess, requireCanCreateTemplates, requireTemplateAccess, templateVisibility } from "./access"
+import { getTemplateAccess, onlyVisibleTemplates, requireCanCreateTemplates, requireTemplateAccess, templateVisibility } from "./access"
 import { TemplateServiceError } from "./errors"
 import { evaluateTemplateQuality } from "./template-quality-service"
 import {
@@ -43,6 +43,7 @@ import {
 } from "./shared"
 import { requireStoredImages, TemplateImageServiceError } from "@/services/template-image-service"
 import { withoutImageUrls } from "@/types/template-images"
+import { canPerformOrganizationAction } from "@/lib/permissions"
 
 /**
  * Lists the templates a member can start from: each published template as it
@@ -76,15 +77,15 @@ export async function listDocumentTemplates(
         "templates:view",
         "You cannot view document templates."
       )
-      const { hidden } = await templateVisibility(client, input.organizationId, input.actorUserId)
-      let query = client
-        .from("published_document_templates")
-        .select(TEMPLATE_COLUMNS)
-        .eq("org_id", input.organizationId)
-
-      if (hidden.length > 0) {
-        query = query.not("id", "in", `(${hidden.join(",")})`)
-      }
+      // The published view holds no drafts, so only restricted templates need leaving out.
+      let query = onlyVisibleTemplates(
+        client
+          .from("published_document_templates")
+          .select(TEMPLATE_COLUMNS)
+          .eq("org_id", input.organizationId),
+        await templateVisibility(client, input.organizationId, input.actorUserId),
+        true
+      )
 
       // hasOwnProperty, not a truthiness test: `null` is the meaningful
       // "uncategorised only" filter and would otherwise read as "no filter".
@@ -129,7 +130,7 @@ export async function listDocumentTemplateCategories(
     input,
     async (): Promise<string[]> => {
       const client = getClient(deps)
-      await requirePermission(
+      const subject = await requirePermission(
         client,
         input.organizationId,
         input.actorUserId,
@@ -137,17 +138,14 @@ export async function listDocumentTemplateCategories(
         "You cannot view document templates."
       )
       // Restricted templates they cannot open, and drafts only editors see, are left out.
-      const { hidden } = await templateVisibility(client, input.organizationId, input.actorUserId)
-      let query = client
-        .from("document_templates")
-        .select("category")
-        .eq("org_id", input.organizationId)
-
-      if (hidden.length > 0) {
-        query = query.not("id", "in", `(${hidden.join(",")})`)
-      }
-
-      const { data, error } = await query
+      const { data, error } = await onlyVisibleTemplates(
+        client
+          .from("document_templates")
+          .select("category")
+          .eq("org_id", input.organizationId),
+        await templateVisibility(client, input.organizationId, input.actorUserId),
+        canPerformOrganizationAction(subject, "templates:manage")
+      )
 
       if (error || !data) {
         throw createDatabaseError(

@@ -313,9 +313,10 @@ as $$
   );
 $$;
 
--- Templates to leave out of this member's list: restricted ones they cannot
--- open, and unpublished ones they may look at or use but not edit, since only
--- editors see a draft.
+-- Restricted templates to leave out of this member's list: those they cannot
+-- open, and drafts they may look at or use but not edit, since only editors see
+-- a draft. Only restricted templates are listed, so the list stays short; the
+-- app keeps other people's unrestricted drafts out with a status filter.
 create function public.hidden_template_ids(
   target_org_id uuid,
   target_actor_user_id uuid
@@ -338,7 +339,7 @@ as $$
       ) as level
     from public.document_templates template
     where template.org_id = target_org_id
-      and (template.access_restricted or template.status <> 'published')
+      and template.access_restricted
   ) hidden
   where hidden.level is null
     or (hidden.status <> 'published' and hidden.level <> 'editor'::public.template_access_level);

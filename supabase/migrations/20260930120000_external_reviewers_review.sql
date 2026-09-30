@@ -63,8 +63,6 @@ declare
   activity_event_type text;
   audit_action text;
   reviewer_decision text;
-  approvals integer;
-  open_changes integer;
   advances boolean := true;
   new_status text;
 begin
@@ -225,23 +223,7 @@ begin
   end if;
 
   if target_transition = 'approved' then
-    select count(*) filter (where reviewer.decision = 'approved'),
-           count(*) filter (where reviewer.decision = 'changes_requested')
-    into approvals, open_changes
-    from public.submission_reviewers reviewer
-    where reviewer.submission_id = target_submission_id
-      and reviewer.org_id = target_org_id;
-
-    advances := open_changes = 0
-      and approvals >= coalesce(
-        locked_submission.required_approvals,
-        (
-          select count(*)
-          from public.submission_reviewers reviewer
-          where reviewer.submission_id = target_submission_id
-            and reviewer.org_id = target_org_id
-        )
-      );
+    advances := private.submission_approvals_met(target_submission_id, locked_submission.required_approvals);
   end if;
 
   new_status := case when advances then target_transition else previous_status end;

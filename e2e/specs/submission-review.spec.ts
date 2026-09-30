@@ -70,7 +70,7 @@ test.describe("submission review", () => {
     await expectStatus(admin, submissionId, "completed")
   })
 
-  test("waits for every reviewer, and a change request holds it until the person who assigned them sets it aside", async ({
+  test("waits for every reviewer, and a change request holds it until the person who assigned them sets it aside, which settles it", async ({
     admin,
     pageAs,
     tenant,
@@ -110,11 +110,9 @@ test.describe("submission review", () => {
     await manager.goto(`/submissions/${submissionId}`)
     await manager.getByLabel(/Set aside E2E owner_admin/).fill("I checked the total, it is right.")
     await manager.getByRole("button", { name: "Set aside", exact: true }).click()
-    await expectStatus(admin, submissionId, "in_review")
 
-    // Everyone has now approved or had their request set aside; the last approval finishes it.
-    await owner.goto(`/submissions/${submissionId}`)
-    await owner.getByRole("button", { name: "Approve" }).click()
+    // The manager had already approved and the owner's request no longer counts,
+    // so nothing is left to wait for.
     await expectStatus(admin, submissionId, "approved")
   })
 

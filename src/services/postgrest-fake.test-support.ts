@@ -124,7 +124,8 @@ export class PostgrestReadQuery implements PromiseLike<PostgrestFakeResult> {
    * are supported, which is all the services send.
    */
   or(clauses: string): this {
-    const tests = clauses.split(",").map(parseOrClause)
+    // Commas inside a list, as in id.in.(a,b), belong to that clause.
+    const tests = (clauses.match(/[^,(]+(?:\([^)]*\))?/g) ?? []).map(parseOrClause)
 
     return this.where((row: FakeRow): boolean =>
       tests.some((test: RowFilter): boolean => test(row))
@@ -335,6 +336,10 @@ function parseOrClause(clause: string): RowFilter {
     case "is":
       return (row: FakeRow): boolean =>
         value === "null" ? isNull(row[column]) : text(row) === value
+    case "in": {
+      const values = value.replace(/^\(|\)$/g, "").split(",")
+      return (row: FakeRow): boolean => values.includes(text(row) ?? "")
+    }
     default:
       throw new Error(`The fake does not support or() operator "${operator}".`)
   }

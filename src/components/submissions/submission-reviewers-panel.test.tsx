@@ -56,6 +56,22 @@ describe("reviewerComments", () => {
 describe("SubmissionReviewersPanel", () => {
   const submission = { requiredApprovals: null } as Submission
 
+  it("stops counting a reviewer whose change request was set aside", () => {
+    const html = renderToStaticMarkup(
+      <SubmissionReviewersPanel
+        activity={[]}
+        comments={[]}
+        members={[member(OUTSIDER, "Olive Outside", "external_reviewer"), member(MANAGER, "Maya Manager", "manager")]}
+        reviewers={[reviewer(OUTSIDER, "dismissed", "Not convinced"), reviewer(MANAGER, "pending")]}
+        submission={submission}
+        tally={{ approved: 0, changesRequested: 0, counting: 1, total: 2 }}
+      />
+    )
+
+    expect(html).toContain("0 of 1 approval")
+    expect(html).toContain("Change request set aside")
+  })
+
   it("lists an external reviewer with their decision and their comments", () => {
     const html = renderToStaticMarkup(
       <SubmissionReviewersPanel
@@ -64,7 +80,7 @@ describe("SubmissionReviewersPanel", () => {
         members={[member(OUTSIDER, "Olive Outside", "external_reviewer"), member(MANAGER, "Maya Manager", "manager")]}
         reviewers={[reviewer(OUTSIDER, "approved"), reviewer(MANAGER, "pending")]}
         submission={submission}
-        tally={{ approved: 1, changesRequested: 0, total: 2 }}
+        tally={{ approved: 1, changesRequested: 0, counting: 2, total: 2 }}
       />
     )
 

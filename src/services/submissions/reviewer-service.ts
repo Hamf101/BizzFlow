@@ -186,7 +186,12 @@ export async function listSubmissionReviewers(
 
   return {
     reviewers: seesAll ? all : all.filter((reviewer) => reviewer.userId === viewer.userId),
-    tally: { approved: count("approved"), changesRequested: count("changes_requested"), total: all.length },
+    tally: {
+      approved: count("approved"),
+      changesRequested: count("changes_requested"),
+      counting: all.length - count("dismissed"),
+      total: all.length,
+    },
   }
 }
 

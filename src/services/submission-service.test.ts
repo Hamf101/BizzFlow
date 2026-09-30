@@ -1219,7 +1219,7 @@ describe("several reviewers on one submission", () => {
     })
 
     it("counts every reviewer for the summary, including the ones this viewer may not see", async () => {
-      expect((await detailFor(SECOND_MANAGER_ID, OWNER_ID)).tally).toEqual({ approved: 1, changesRequested: 1, total: 2 })
+      expect((await detailFor(SECOND_MANAGER_ID, OWNER_ID)).tally).toEqual({ approved: 1, changesRequested: 1, counting: 2, total: 2 })
     })
 
     it("tells only the person who assigned the reviewers that the change request is theirs to set aside", async () => {

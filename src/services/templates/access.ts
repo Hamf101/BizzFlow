@@ -125,3 +125,41 @@ export async function templateVisibility(
 
   return { editable: editable.data ?? [], hidden: hidden.data ?? [] }
 }
+
+type VisibilityQuery = {
+  eq(column: string, value: string): VisibilityQuery
+  not(column: string, operator: string, value: string): VisibilityQuery
+  or(filters: string): VisibilityQuery
+}
+
+/**
+ * Narrows a templates query to what a member may see: no restricted template
+ * they cannot open, and no draft unless they may edit it. Someone who manages
+ * templates edits every open draft, so only restricted ones need leaving out.
+ *
+ * @param query - A query on document_templates.
+ * @param visibility - What templateVisibility answered for the member.
+ * @param managesTemplates - Whether the member holds templates:manage.
+ * @returns The same query, narrowed.
+ */
+export function onlyVisibleTemplates<TQuery>(
+  query: TQuery,
+  visibility: { editable: readonly string[]; hidden: readonly string[] },
+  managesTemplates: boolean
+): TQuery {
+  let narrowed = query as unknown as VisibilityQuery
+
+  // ponytail: restricted templates a member cannot open go in the address; thousands of them would need a database-side filter.
+  if (visibility.hidden.length > 0) {
+    narrowed = narrowed.not("id", "in", `(${visibility.hidden.join(",")})`)
+  }
+
+  if (!managesTemplates) {
+    narrowed =
+      visibility.editable.length > 0
+        ? narrowed.or(`status.eq.published,id.in.(${visibility.editable.join(",")})`)
+        : narrowed.eq("status", "published")
+  }
+
+  return narrowed as unknown as TQuery
+}

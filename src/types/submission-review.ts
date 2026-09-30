@@ -105,7 +105,13 @@ export type SubmissionReviewer = {
 }
 
 /** How the reviewers stand together, counting all of them. */
-export type SubmissionReviewTally = { approved: number; changesRequested: number; total: number }
+export type SubmissionReviewTally = {
+  approved: number
+  changesRequested: number
+  /** Reviewers whose approval still counts: everyone but those whose change request was set aside. */
+  counting: number
+  total: number
+}
 
 /** Comments and state history shown with one visible submission. */
 export type SubmissionReviewData = {

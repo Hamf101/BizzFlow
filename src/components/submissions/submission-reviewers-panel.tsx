@@ -73,7 +73,8 @@ export function SubmissionReviewersPanel({
     return null
   }
 
-  const needed = submission.requiredApprovals ?? tally.total
+  // The database's rule: a reviewer set aside no longer counts, and never more than those still counting.
+  const needed = Math.max(1, Math.min(submission.requiredApprovals ?? tally.counting, tally.counting))
   const byId = new Map(members.map((member) => [member.userId, member]))
   const open = tally.changesRequested > 0
 
@@ -83,7 +84,7 @@ export function SubmissionReviewersPanel({
         <h3 className="text-sm font-medium">Reviewers</h3>
         <p className="text-xs text-muted-foreground">
           {tally.approved} of {needed} {needed === 1 ? "approval" : "approvals"}
-          {submission.requiredApprovals === null && tally.total > 1 ? " (everyone)" : ""}
+          {submission.requiredApprovals === null && tally.counting > 1 ? " (everyone)" : ""}
           {open ? " · held up by a change request" : ""}
         </p>
       </div>
