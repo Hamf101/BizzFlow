@@ -54,7 +54,7 @@ import { EditorSection } from "./editor-section"
 import { MarginGuides } from "@/components/editor/margin-guides"
 import { PRINTED_HEADING, printedSpace, SECTION_TITLE } from "@/components/editor/paper-field"
 import { SlashMenu } from "@/components/editor/slash-menu"
-import { snapBox } from "@/components/editor/image-placement"
+import { SNAP_PX, snapBox } from "@/components/editor/image-placement"
 import { type DragBox, type DragLine, type DropTarget, useBlockDrag } from "@/components/editor/use-block-drag"
 import { rowGridColumns } from "@/components/templates/template-render-groups"
 import { addPageBreak, type EditorController, type FocusRequest } from "@/components/editor/use-editor-controller"
@@ -87,8 +87,6 @@ export const POINT_PX = 4 / 3
 // A phone shows the words reflowed at a size that reads comfortably.
 const PHONE_POINT_PX = 1.5
 const PAGE_GAP_PX = 36
-// How near, on screen, a block being moved lines up with something.
-const SNAP_PX = 6
 const FOOTER_POINTS = 18
 const EMPTY_ANSWERS: Record<string, unknown> = {}
 const EMPTY_IDS: ReadonlySet<string> = new Set()
@@ -448,22 +446,41 @@ export function EditorCanvas({
 
     // Across: the margins, the middle, and the blocks on the page.
     const width = Math.min(box.width, page.width)
-    const others = [...(rootRef.current?.querySelectorAll<HTMLElement>("[data-block-id]") ?? [])].filter((element) => element !== dragged && element.dataset.blockId !== undefined)
-    const edges = [0, page.width / 2, page.width, ...others.flatMap((element) => {
-      const rect = element.getBoundingClientRect()
-      return [rect.left - page.left, (rect.left + rect.right) / 2 - page.left, rect.right - page.left]
-    })]
+    const others = [...(rootRef.current?.querySelectorAll<HTMLElement>("[data-block-id]") ?? [])]
+      .filter((element) => element !== dragged && element.dataset.blockId !== undefined)
+      .map((element) => element.getBoundingClientRect())
+    const sides = (rect: DOMRect): number[] => [rect.left - page.left, (rect.left + rect.right) / 2 - page.left, rect.right - page.left]
+    const edges = [0, page.width / 2, page.width, ...others.flatMap(sides)]
     const across = snapBox({ height: box.height, width, x: box.left - page.left, y: 0 }, { x: edges, y: [] }, SNAP_PX, "move")
     const left = Math.min(Math.max(0, across.box.x), page.width - width)
     const frame = frameOf((left / page.width) * 100, (width / page.width) * 100) ?? null
     const guides: DragLine[] = []
+    const lined = across.guides.x
 
-    if (across.guides.x !== undefined) {
-      guides.push({ height: box.height + 48, left: page.left + across.guides.x, top: top - 24, width: 1 })
+    if (lined !== undefined) {
+      // The line runs on to the nearest block it lines up with, so what it met shows.
+      const met = others
+        .filter((rect) => sides(rect).some((side) => Math.abs(side - lined) < 1))
+        .sort((a, b) => Math.abs(a.top - top) - Math.abs(b.top - top))[0]
+      const from = Math.min(top - 24, met?.top ?? Infinity)
+      const to = Math.max(top + box.height + 24, met?.bottom ?? -Infinity)
+
+      guides.push({ height: to - from, left: page.left + lined, top: from, width: 1 })
     }
 
-    if (even !== undefined) {
-      guides.push({ height: 1, left: page.left, top, width: page.width })
+    if (even === 0) {
+      guides.push({ height: 1, left: page.left + left, top, width })
+    } else if (even !== undefined) {
+      // The same gap, measured here and wherever else the page has it.
+      const middle = page.left + left + width / 2
+      const matched = units.flatMap((unit) => {
+        const rect = unit.id !== own && unit.space === even ? unitElements.current.get(unit.id)?.getBoundingClientRect() : undefined
+        const block = rect && unitElements.current.get(unit.id)?.querySelector("[data-block-id]")?.getBoundingClientRect()
+
+        return rect && block ? [measure((block.left + block.right) / 2, rect.top, even * screenPoint)] : []
+      })
+
+      guides.push(...measure(middle, top - even * screenPoint, even * screenPoint), ...matched.flat())
     }
 
     return {
@@ -1341,6 +1358,15 @@ function MarginPill({
  * @param zoom - The canvas's scale, since the screen reports scaled sizes.
  * @returns The rows, top to bottom.
  */
+// A gap measured as a drawing marks one: a line down it with a tick at each end.
+function measure(x: number, top: number, height: number): DragLine[] {
+  return [
+    { height, left: x, top, width: 1 },
+    { height: 1, left: x - 4, top, width: 9 },
+    { height: 1, left: x - 4, top: top + height - 1, width: 9 },
+  ]
+}
+
 function measureRows(unit: HTMLElement, zoom: number): PaginationRow[] {
   const origin = unit.getBoundingClientRect().top
   const rows: PaginationRow[] = []

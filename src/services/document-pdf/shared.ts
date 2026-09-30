@@ -157,26 +157,8 @@ export function isFieldChecked(block: Extract<PdfFieldBlock, { type: "checkbox_f
   return value === undefined ? block.checkedByDefault : value === true
 }
 
-/**
- * The least height of a field's answer box, in points, so a blank form leaves
- * room to write by hand: two lines for a short answer, four for a long one,
- * and room to sign.
- *
- * @param block - The field.
- * @returns The box's least height.
- */
-export function answerBoxHeight(block: PdfFieldBlock): number {
-  if (block.type === "signature_field" || block.type === "initials_field") {
-    return ANSWER_BOX_SIGNATURE
-  }
-
-  return block.type === "text_field" && block.multiline ? ANSWER_BOX_LINE * 4 : ANSWER_BOX_LINE * 2
-}
-
-/** One handwritten line of an answer box, in points. */
-export const ANSWER_BOX_LINE = 15
-/** Room to sign in, in points. */
-export const ANSWER_BOX_SIGNATURE = 56
+// The page shows answer boxes at these heights too, so they live with the blocks.
+export { answerBoxHeight } from "@/types/template"
 /** The gap between an answer box's edge and its text, in points. */
 export const ANSWER_BOX_PADDING = 6
 /** How far a checkbox's label sits from the box's left edge, in points. */

@@ -63,6 +63,17 @@ const fieldBlockShape = {
   visibleWhen: templateFieldVisibilitySchema.optional()
 } as const
 
+/** One handwritten line of an answer box, in points. */
+const ANSWER_BOX_LINE = 15
+/** Room to sign in, in points. */
+const ANSWER_BOX_SIGNATURE = 56
+
+// How tall a field's answer box prints, in points, when its author has made it
+// taller or shorter: never less than a written line and its padding (15 + 6 + 6),
+// and it still grows to hold what is written in it.
+export const BOX_HEIGHT_POINTS = { max: 600, min: 27 } as const
+const boxHeightSchema = z.number().min(BOX_HEIGHT_POINTS.min).max(BOX_HEIGHT_POINTS.max).optional()
+
 // A link opens a web page or writes an email, never runs anything.
 const LINK_PATTERN = /^(?:https?:\/\/|mailto:)\S+$/i
 const RUN_MARKS = ["bold", "italic", "underline", "strike", "color", "highlight", "size", "link", "font"] as const
@@ -251,6 +262,7 @@ export const dividerBlockSchema = z
 export const textFieldBlockSchema = z
   .object({
     ...fieldBlockShape,
+    boxHeight: boxHeightSchema,
     type: z.literal("text_field"),
     placeholder: shortTextSchema.nullable().default(null),
     multiline: z.boolean().default(false)
@@ -270,6 +282,7 @@ export const dateFormatSchema = z
 export const dateFieldBlockSchema = z
   .object({
     ...fieldBlockShape,
+    boxHeight: boxHeightSchema,
     type: z.literal("date_field"),
     dateFormat: dateFormatSchema.optional()
   })
@@ -288,6 +301,7 @@ export const checkboxFieldBlockSchema = z
 export const dropdownFieldBlockSchema = z
   .object({
     ...fieldBlockShape,
+    boxHeight: boxHeightSchema,
     type: z.literal("dropdown_field"),
     placeholder: shortTextSchema.nullable().default(null),
     options: z.array(z.string().trim().min(1).max(240)).max(100)
@@ -298,6 +312,7 @@ export const dropdownFieldBlockSchema = z
 export const initialsFieldBlockSchema = z
   .object({
     ...fieldBlockShape,
+    boxHeight: boxHeightSchema,
     type: z.literal("initials_field")
   })
   .strict()
@@ -306,6 +321,7 @@ export const initialsFieldBlockSchema = z
 export const signatureFieldBlockSchema = z
   .object({
     ...fieldBlockShape,
+    boxHeight: boxHeightSchema,
     type: z.literal("signature_field")
   })
   .strict()
@@ -1198,4 +1214,24 @@ export function createBlankTemplateContent(): TemplateContentV3 {
     fieldGroups: [],
     blockRules: []
   })
+}
+
+/**
+ * The least height of a field's answer box, in points, so a blank form leaves
+ * room to write by hand: as its author made it, or else two lines for a short
+ * answer, four for a long one, and room to sign.
+ *
+ * @param block - The field.
+ * @returns The box's least height.
+ */
+export function answerBoxHeight(block: TemplateBlock): number {
+  if ("boxHeight" in block && block.boxHeight !== undefined) {
+    return block.boxHeight
+  }
+
+  if (block.type === "signature_field" || block.type === "initials_field") {
+    return ANSWER_BOX_SIGNATURE
+  }
+
+  return block.type === "text_field" && block.multiline ? ANSWER_BOX_LINE * 4 : ANSWER_BOX_LINE * 2
 }

@@ -4,6 +4,9 @@ type Placement = NonNullable<Extract<TemplateBlock, { type: "image" }>["placemen
 
 type Box = Readonly<{ height: number; width: number; x: number; y: number }>
 
+/** How near, on screen, something being moved or resized lines up with something else. */
+export const SNAP_PX = 6
+
 /**
  * Snaps a box being moved or resized to the lines near it: the page's edges,
  * margins and middle, and other pinned blocks' edges and middles. Moving, its

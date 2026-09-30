@@ -314,6 +314,45 @@ describe("fonts, placed pictures and spacing in a PDF", () => {
   )
 
   it(
+    "prints an answer box as tall or short as it was made, with what follows moved to fit",
+    async () => {
+      const layout = { footerPolicy: "none", headerPolicy: "none", margins: { bottom: 40, left: 40, right: 40, top: 40 }, printedTitle: { mode: "none" } } as const
+      const field = (boxHeight?: number) => ({ fieldKey: "notes", helpText: null, id: ids(1), label: "Notes", multiline: false, placeholder: null, required: false, type: "text_field" as const, ...(boxHeight ? { boxHeight } : {}) })
+      const after = { alignment: "left" as const, id: ids(2), text: "After", type: "paragraph" as const }
+      // Where the paragraph under the box starts: the box ends just above it.
+      const read = (document: PDFDocument) => ({ after: Number([...contents(document)[0]!.matchAll(/1 0 0 1 [\d.]+ ([\d.]+) Tm/g)].at(-1)![1]) })
+      const [plain, tall, short] = (await Promise.all([render([field(), after], layout), render([field(120), after], layout), render([field(27), after], layout)])).map(read)
+
+      expect(plain.after - tall.after).toBeCloseTo(120 - 30, 1)
+      // As short as a box goes: a line and its padding.
+      expect(short.after - plain.after).toBeCloseTo(30 - 27, 1)
+    },
+    RENDER_TIMEOUT_MS
+  )
+
+  it(
+    "prints a box taller than a page, or a title squeezed too narrow for one, rather than refusing the document",
+    async () => {
+      const layout = { footerPolicy: "none", headerPolicy: "none", margins: { bottom: 144, left: 144, right: 144, top: 144 }, printedTitle: { mode: "none" } } as const
+      const shared = { boxHeight: 600, helpText: null, required: false }
+      const document = await render(
+        [
+          { ...shared, fieldKey: "notes", id: ids(1), label: "Notes", multiline: true, placeholder: null, type: "text_field" },
+          { ...shared, fieldKey: "signed", id: ids(2), label: "Signed", type: "signature_field" },
+          { alignment: "left", id: ids(3), level: 1, text: "A long title ".repeat(12).trim(), type: "heading" },
+        ],
+        layout,
+        [{ blockId: ids(3), frame: { left: 95, width: 5 }, keepWithNext: false, pageBreakBefore: false }]
+      )
+
+      // Each box keeps a page of its own, and the title prints across the page.
+      expect(document.getPageCount()).toBe(3)
+      expect(contents(document)[2]).toContain("Tj")
+    },
+    RENDER_TIMEOUT_MS
+  )
+
+  it(
     "prints every word when each block asks for the most space, the narrowest place at the far edge, and to stay with the next",
     async () => {
       const text = "Words that wrap many times in a column this narrow and run on and on."

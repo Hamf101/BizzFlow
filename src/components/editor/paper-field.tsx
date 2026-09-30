@@ -59,11 +59,14 @@ const BARE =
 export function PaperField({
   answers,
   block,
+  edge,
   mode,
   onAnswerChange,
 }: {
   answers: Readonly<Record<string, unknown>>
   block: FieldBlock
+  /** What changes the box's height, along its foot. */
+  edge?: ReactNode
   mode: "design" | "fill" | "read"
   onAnswerChange: (fieldKey: string, value: unknown) => void
 }): ReactElement {
@@ -111,6 +114,8 @@ export function PaperField({
 
   let answer: ReactNode
   let height: number = BOX_HEIGHT.line
+  // A box its author made taller or shorter, in ems of the 10-point text.
+  const sized = "boxHeight" in block && block.boxHeight !== undefined ? block.boxHeight / 10 : undefined
   const placeholder = (words: string): ReactElement => <span className="text-muted-foreground">{words}</span>
 
   switch (block.type) {
@@ -127,7 +132,7 @@ export function PaperField({
             onChange={(event) => set(event.target.value)}
             placeholder={block.placeholder ?? undefined}
             // It grows with its answer, as the printed box does.
-            style={{ fieldSizing: "content", minHeight: `${BOX_HEIGHT.lines - 1.2}em` }}
+            style={{ fieldSizing: "content", minHeight: `${(sized ?? BOX_HEIGHT.lines) - 1.2}em` }}
             value={text}
           />
         ) : (
@@ -205,9 +210,10 @@ export function PaperField({
       <div
         className={cn("relative flex flex-col focus-within:ring-2 focus-within:ring-ring/40", fill && "cursor-text")}
         data-slot="paper-box"
-        style={{ border: `0.07em solid ${EDGE}`, lineHeight: 1.5, minHeight: `${height}em`, padding: "0.6em" }}
+        style={{ border: `0.07em solid ${EDGE}`, lineHeight: 1.5, minHeight: `${sized ?? height}em`, padding: "0.6em" }}
       >
         {answer}
+        {edge}
       </div>
       <Help block={block} />
     </div>

@@ -22,7 +22,6 @@ import {
 } from "./layout"
 import {
   ANSWER_BOX_PADDING,
-  ANSWER_BOX_SIGNATURE,
   answerBoxHeight,
   CHECKBOX_LABEL_INSET,
   formatFieldValue,
@@ -388,13 +387,21 @@ function createSingleBlockPaginationUnits(
   input: NormalizedPdfInput,
   metrics: PdfLayoutMetrics
 ): PdfPaginationUnit[] {
-  const frame = renderBlock.frame ?? undefined
-  const items = expandBlockForPagination(
-    renderBlock,
-    input.answers,
-    frame ? (metrics.contentWidth * frame.width) / 100 : metrics.contentWidth,
-    metrics.pageCapacity
-  ).map((item: PdfBlockFlowItem): PdfBlockFlowItem => (frame ? { ...item, frame } : item))
+  const room = emptyPageRoom(input, metrics)
+  const expand = (frame: TemplateRenderBlock["frame"]): PdfBlockFlowItem[] =>
+    expandBlockForPagination(
+      renderBlock,
+      input.answers,
+      frame ? (metrics.contentWidth * frame.width) / 100 : metrics.contentWidth,
+      metrics.pageCapacity,
+      room
+    ).map((item: PdfBlockFlowItem): PdfBlockFlowItem => (frame ? { ...item, frame } : item))
+  const framed = expand(renderBlock.frame)
+  // Put somewhere too narrow for a page to hold it, a block prints across the page instead.
+  const items =
+    renderBlock.frame && framed.some((item: PdfBlockFlowItem): boolean => estimateFlowItemHeight(item, input, metrics) > room)
+      ? expand(null)
+      : framed
   const keepTogetherKeys = getKeepTogetherKeys(renderBlock, input)
 
   return items.map(
@@ -433,7 +440,7 @@ function createRowPaginationUnits(
     }
 
     const cellItems = row.map((renderBlock: TemplateRenderBlock, column: number): PdfBlockFlowItem[] =>
-      expandBlockForPagination(renderBlock, input.answers, frames[column]?.width ?? metrics.contentWidth, metrics.pageCapacity)
+      expandBlockForPagination(renderBlock, input.answers, frames[column]?.width ?? metrics.contentWidth, metrics.pageCapacity, emptyPageRoom(input, metrics))
     )
     const pieceCount = Math.max(...cellItems.map((items) => items.length))
     const keepTogetherKeys = Array.from(
@@ -493,11 +500,13 @@ function getKeepTogetherKeys(
 }
 
 function expandBlockForPagination(
-  renderBlock: TemplateRenderBlock,
+  sizedBlock: TemplateRenderBlock,
   answers: Record<string, unknown>,
   availableWidth: number,
-  pageCapacity: number
+  pageCapacity: number,
+  room: number
 ): PdfBlockFlowItem[] {
+  const renderBlock = fitBoxToPage(sizedBlock, availableWidth, room)
   const { block } = renderBlock
 
   switch (block.type) {
@@ -562,6 +571,26 @@ function expandBlockForPagination(
     default:
       return [{ kind: "block", block, renderBlock }]
   }
+}
+
+// The least room an empty page has, whichever page a block lands on: the
+// first can carry the template's header, and so can every one after it.
+function emptyPageRoom(input: NormalizedPdfInput, metrics: PdfLayoutMetrics): number {
+  return Math.min(getEmptyPageContentCapacity(input, metrics, 1), getEmptyPageContentCapacity(input, metrics, 2))
+}
+
+// An answer box made taller than a page can hold under its label and above
+// its help is drawn as tall as a page allows.
+function fitBoxToPage(renderBlock: TemplateRenderBlock, availableWidth: number, room: number): TemplateRenderBlock {
+  const { block } = renderBlock
+
+  if (!("boxHeight" in block) || block.boxHeight === undefined) {
+    return renderBlock
+  }
+
+  const most = Math.floor(room - estimateFieldLabelHeight(block, availableWidth) - estimateHelpHeight(block, availableWidth) - 13)
+
+  return block.boxHeight <= most ? renderBlock : { ...renderBlock, block: { ...block, boxHeight: Math.max(most, 27) } }
 }
 
 function splitListBlock(
@@ -989,7 +1018,7 @@ function estimateBlockHeight(
     case "initials_field":
       return (
         estimateFieldLabelHeight(block, availableWidth) +
-        (normalizeDrawingDataUrl(answers[block.fieldKey]) ? Math.max(ANSWER_BOX_SIGNATURE, 45 + ANSWER_BOX_PADDING * 2) : ANSWER_BOX_SIGNATURE) +
+        (normalizeDrawingDataUrl(answers[block.fieldKey]) ? Math.max(answerBoxHeight(block), 45 + ANSWER_BOX_PADDING * 2) : answerBoxHeight(block)) +
         estimateHelpHeight(block, availableWidth) +
         13
       )

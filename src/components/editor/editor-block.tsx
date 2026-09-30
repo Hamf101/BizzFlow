@@ -16,6 +16,7 @@ import {
   Section,
   Settings2,
   Trash2,
+  Undo2,
   WrapText,
 } from "lucide-react"
 import {
@@ -40,7 +41,7 @@ import { convertTextBlock, type TextBlockKind } from "@/components/editor/editor
 import { EditorImage } from "@/components/editor/editor-image"
 import { EditorTable } from "@/components/editor/editor-table"
 import { PaperField, PRINTED_HEADING, printedSpace } from "@/components/editor/paper-field"
-import { placeImage, placementOf } from "@/components/editor/image-placement"
+import { placeImage, placementOf, SNAP_PX } from "@/components/editor/image-placement"
 import { RichLine } from "@/components/editor/rich-line"
 import type { EditorController, FocusRequest } from "@/components/editor/use-editor-controller"
 import { frameOf, setBlockRule } from "@/types/template-structure"
@@ -49,15 +50,18 @@ import { FieldGroupSettings } from "@/components/editor/field-group-settings"
 import { BlockFields } from "@/components/templates/template-block-editor"
 import { TemplateStaticBlock } from "@/components/templates/template-static-block"
 import { Button } from "@/components/ui/button"
+import { ContextMenu, ContextMenuTrigger } from "@/components/ui/context-menu"
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
-import type { TemplateBlock, TextRun } from "@/types/template"
+import { answerBoxHeight, BOX_HEIGHT_POINTS, type TemplateBlock, type TextRun } from "@/types/template"
 
 export type LineBlock = Extract<TemplateBlock, { type: "heading" | "paragraph" }>
 export type ListBlock = Extract<TemplateBlock, { type: "bullet_list" | "numbered_list" }>
@@ -154,6 +158,7 @@ export function CanvasBlock({
   const field = isField(block)
   const text = isLine(block) || isList(block)
   const canSelect = actions.textEditable || (actions.designable && field)
+  const pointer = useRef("")
 
   useEffect(() => {
     if (selected) {
@@ -212,6 +217,16 @@ export function CanvasBlock({
     if (nudged && block.type === "image") {
       event.preventDefault()
       controller.updateBlock({ ...block, placement: nudged }, `image:${block.id}`)
+    } else if (
+      event.altKey &&
+      event.shiftKey &&
+      (event.key === "ArrowUp" || event.key === "ArrowDown") &&
+      isBoxed(block) &&
+      (actions.textEditable || actions.designable)
+    ) {
+      // With Shift, up and down make an answer box shorter or taller.
+      event.preventDefault()
+      controller.updateBlock(sizedBox(block, answerBoxHeight(block) + (event.key === "ArrowUp" ? -2 : 2)), `box:${block.id}`)
     } else if (event.altKey && event.key.startsWith("Arrow") && nudgeFrame(event)) {
       event.preventDefault()
     } else if (event.key === "Backspace" || event.key === "Delete") {
@@ -247,10 +262,34 @@ export function CanvasBlock({
     } else if (mod && event.key.toLowerCase() === "d") {
       event.preventDefault()
       controller.duplicate(block.id)
+    } else if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
+      // The menu key opens the block's menu at its corner, as a right-click would.
+      const box = event.currentTarget.getBoundingClientRect()
+
+      event.preventDefault()
+      pointer.current = "keyboard"
+      event.currentTarget.dispatchEvent(new globalThis.MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: box.left + 8, clientY: box.top + 8 }))
     }
   }
 
   return (
+    <ContextMenu
+      disabled={!canSelect}
+      // A press and hold on a touch screen picks the block up; its toolbar has the same actions.
+      onOpenChange={(open, details) => {
+        if (open && pointer.current === "touch") details.cancel()
+      }}
+    >
+      <ContextMenuTrigger
+        className="contents"
+        // Words being typed in keep the browser's own menu, with its spelling and pasting.
+        onContextMenuCapture={(event) => {
+          if (!selected && (event.target as Element).closest("[data-line-key]")) event.stopPropagation()
+        }}
+        onPointerDownCapture={(event) => {
+          pointer.current = event.pointerType
+        }}
+      >
     <div
       className={cn(
         "rounded-[0.35em] outline-none",
@@ -268,6 +307,12 @@ export function CanvasBlock({
       data-hidden-by-rule={actions.hiddenByRule.has(block.id) ? "" : undefined}
       title={actions.hiddenByRule.has(block.id) ? "Hidden for these answers by its rule" : undefined}
       data-selected={selected || undefined}
+      // Typing in its words or cells again, the block is no longer chosen as a whole.
+      onFocus={(event) => {
+        if (selected && event.target !== event.currentTarget && event.target.closest('[contenteditable]:not([contenteditable="false"])')) {
+          controller.select(null)
+        }
+      }}
       onKeyDown={handleKeyDown}
       onMouseDown={handleMouseDown}
       // A picture placed on a page moves on its page instead.
@@ -283,6 +328,70 @@ export function CanvasBlock({
       ) : null}
       <BlockBody actions={actions} block={block} placed={placed} />
     </div>
+      </ContextMenuTrigger>
+      <BlockMenu actions={actions} block={block} />
+    </ContextMenu>
+  )
+}
+
+// What the block's toolbar does, from a right-click or the menu key.
+function BlockMenu({ actions, block }: { actions: CanvasActions; block: TemplateBlock }): ReactElement {
+  const { controller } = actions
+  const content = controller.content
+  const rule = content.blockRules.find((candidate) => candidate.blockId === block.id)
+  const inRow = (rowOf(content, block.id)?.columns ?? 1) > 1
+  // A picture placed on a page has no place in the order.
+  const pinned = block.type === "image" && block.placement !== undefined
+
+  return (
+    <DropdownMenuContent className="w-52">
+      {inRow ? (
+        <DropdownMenuItem onClick={() => controller.standAlone(block.id)}>
+          <Rows2 aria-hidden="true" />
+          Stand alone
+        </DropdownMenuItem>
+      ) : null}
+      {pinned ? null : (
+        <>
+          <DropdownMenuCheckboxItem
+            checked={rule?.keepWithNext ?? false}
+            disabled={content.blocks.at(-1)?.id === block.id}
+            onCheckedChange={(on) => controller.setKeepWithNext(block.id, on)}
+          >
+            <Link2 aria-hidden="true" />
+            Keep with next
+          </DropdownMenuCheckboxItem>
+          {rule?.frame || rule?.spaceAbove ? (
+            <DropdownMenuItem onClick={() => controller.change((current) => setBlockRule(current, block.id, { frame: undefined, spaceAbove: 0 }))}>
+              <Undo2 aria-hidden="true" />
+              Reset position
+            </DropdownMenuItem>
+          ) : null}
+          <DropdownMenuSeparator />
+        </>
+      )}
+      <DropdownMenuItem onClick={() => controller.duplicate(block.id)}>
+        <Copy aria-hidden="true" />
+        Duplicate
+      </DropdownMenuItem>
+      {pinned ? null : (
+        <>
+          <DropdownMenuItem disabled={!controller.canMove(block.id, "up")} onClick={() => controller.move(block.id, "up")}>
+            <ArrowUp aria-hidden="true" />
+            Move up
+          </DropdownMenuItem>
+          <DropdownMenuItem disabled={!controller.canMove(block.id, "down")} onClick={() => controller.move(block.id, "down")}>
+            <ArrowDown aria-hidden="true" />
+            Move down
+          </DropdownMenuItem>
+        </>
+      )}
+      <DropdownMenuSeparator />
+      <DropdownMenuItem onClick={() => controller.remove(block.id)} variant="destructive">
+        <Trash2 aria-hidden="true" />
+        Delete
+      </DropdownMenuItem>
+    </DropdownMenuContent>
   )
 }
 
@@ -368,7 +477,15 @@ function BlockBody({ actions, block, placed }: { actions: CanvasActions; block: 
         />
       )
     default:
-      return <PaperField answers={actions.answers} block={block} mode={actions.fields} onAnswerChange={actions.onAnswerChange} />
+      return (
+        <PaperField
+          answers={actions.answers}
+          block={block}
+          edge={isBoxed(block) && actions.textEditable && !actions.narrow ? <BoxEdge block={block} controller={actions.controller} /> : undefined}
+          mode={actions.fields}
+          onAnswerChange={actions.onAnswerChange}
+        />
+      )
   }
 }
 
@@ -479,6 +596,63 @@ function LineBreaks({ blockId }: { blockId: string }): ReactElement | null {
       ))}
     </>
   ) : null
+}
+
+type BoxedField = Extract<TemplateBlock, { type: "date_field" | "dropdown_field" | "initials_field" | "signature_field" | "text_field" }>
+
+// The fields that print an answer box, whose height can be changed.
+function isBoxed(block: TemplateBlock): block is BoxedField {
+  return ["date_field", "dropdown_field", "initials_field", "signature_field", "text_field"].includes(block.type)
+}
+
+// A box at a height, held between a line and its padding and the most a page
+// allows; at its usual height it keeps none of its own.
+function sizedBox(block: BoxedField, points: number): BoxedField {
+  const sized: BoxedField = { ...block, boxHeight: Math.round(Math.min(Math.max(points, BOX_HEIGHT_POINTS.min), BOX_HEIGHT_POINTS.max)) }
+
+  if (sized.boxHeight === answerBoxHeight({ ...block, boxHeight: undefined })) {
+    delete sized.boxHeight
+  }
+
+  return sized
+}
+
+// The foot of an answer box: dragged, the box grows or shrinks, lining up
+// with its usual height and with the other boxes on the page.
+function BoxEdge({ block, controller }: { block: BoxedField; controller: EditorController }): ReactElement {
+  function drag(event: PointerEvent<HTMLDivElement>): void {
+    const box = event.currentTarget.parentElement
+
+    if (!box || !event.currentTarget.hasPointerCapture(event.pointerId)) {
+      return
+    }
+
+    // The box's text is 10 points, so a tenth of its em is a point on screen.
+    const point = parseFloat(getComputedStyle(box).fontSize) / 10
+    const top = box.getBoundingClientRect().top
+    const heights = [
+      answerBoxHeight({ ...block, boxHeight: undefined }),
+      ...[...document.querySelectorAll<HTMLElement>("[data-slot=paper-box]")].filter((other) => other !== box).map((other) => other.getBoundingClientRect().height / point),
+    ]
+    const asked = (event.clientY - top) / point
+    const near = heights.reduce((best, height) => (Math.abs(height - asked) < Math.abs(best - asked) ? height : best), Infinity)
+
+    controller.updateBlock(sizedBox(block, Math.abs(near - asked) * point <= SNAP_PX ? near : asked), `box:${block.id}`)
+  }
+
+  return (
+    <div
+      aria-hidden="true"
+      className="absolute inset-x-0 top-full z-30 h-2.5 cursor-ns-resize touch-none after:absolute after:inset-x-0 after:top-0 after:h-0.5 after:rounded-full after:bg-primary after:opacity-0 after:transition-opacity hover:after:opacity-60"
+      data-slot="box-edge"
+      onPointerDown={(event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        event.currentTarget.setPointerCapture(event.pointerId)
+      }}
+      onPointerMove={drag}
+    />
+  )
 }
 
 // The row a block is in, if any.

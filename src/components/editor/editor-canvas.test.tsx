@@ -183,3 +183,64 @@ it("keeps a field its rule hides on the page while it is built, faded until the 
 
   expect(conditional()?.dataset.hiddenByRule).toBeUndefined()
 })
+
+it("opens a block's menu on a right-click, but leaves words being typed in the browser's own menu, and a phone its press and hold", async () => {
+  const field = "70000000-0000-4000-8000-000000000031"
+  const content = templateContentV3Schema.parse({
+    ...TERMS,
+    blockRules: [{ blockId: field, frame: { left: 50, width: 50 }, keepWithNext: false, pageBreakBefore: false, spaceAbove: 24 }],
+    blocks: [...TERMS.blocks, { fieldKey: "name", helpText: null, id: field, label: "Name", multiline: false, placeholder: null, required: false, type: "text_field" }],
+  })
+  root = createRoot(document.body.appendChild(document.createElement("div")))
+  await act(async () => root.render(<Canvas initial={content} narrow={false} />))
+  const rightClick = async (target: Element, pointerType = "mouse") => {
+    const menu = new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 5, clientY: 5 })
+    await act(async () => {
+      target.dispatchEvent(Object.assign(new MouseEvent("pointerdown", { bubbles: true, button: 2 }), { pointerType }))
+      target.dispatchEvent(menu)
+    })
+    return menu
+  }
+  const item = (name: string) => [...document.querySelectorAll<HTMLElement>("[role^=menuitem]")].find((candidate) => candidate.textContent?.trim() === name)
+  const words = document.querySelector(`[data-block-id="${B}"] [data-line-key]`)!
+  const box = document.querySelector(`[data-block-id="${field}"]`)!
+
+  expect((await rightClick(words)).defaultPrevented).toBe(false)
+  expect(document.querySelector("[role=menu]")).toBeNull()
+
+  await rightClick(box, "touch")
+  expect(document.querySelector("[role=menu]")).toBeNull()
+
+  // The menu key opens it on a block chosen from the keyboard.
+  await act(async () => controller.select(field))
+  await act(async () => box.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "F10", shiftKey: true })))
+  expect(item("Keep with next")?.getAttribute("aria-checked")).toBe("false")
+  await act(async () => item("Reset position")!.click())
+  expect(controller.content.blockRules).toEqual([])
+
+  // Typing again in a chosen block's words lets the block go, so Escape can choose it again.
+  await act(async () => controller.select(B))
+  await act(async () => words.querySelector("[contenteditable]")!.dispatchEvent(new FocusEvent("focusin", { bubbles: true })))
+  expect(controller.selectedBlockId).toBeNull()
+})
+
+it("makes an answer box taller or shorter from the keyboard, back to its usual height and no shorter than a line", async () => {
+  const field = "70000000-0000-4000-8000-000000000041"
+  const content = templateContentV3Schema.parse({
+    ...TERMS,
+    blocks: [...TERMS.blocks, { fieldKey: "name", helpText: null, id: field, label: "Name", multiline: false, placeholder: null, required: false, type: "text_field" }],
+  })
+  root = createRoot(document.body.appendChild(document.createElement("div")))
+  await act(async () => root.render(<Canvas initial={content} narrow={false} />))
+  await act(async () => controller.select(field))
+  const press = (key: string) => act(async () => void document.querySelector(`[data-block-id="${field}"]`)!.dispatchEvent(new KeyboardEvent("keydown", { altKey: true, bubbles: true, cancelable: true, key, shiftKey: true })))
+  const height = () => (controller.content.blocks.find((block) => block.id === field) as { boxHeight?: number }).boxHeight
+
+  await press("ArrowDown")
+  expect(height()).toBe(32)
+  await press("ArrowUp")
+  expect(controller.content.blocks.find((block) => block.id === field)).not.toHaveProperty("boxHeight")
+  for (let step = 0; step < 4; step += 1) await press("ArrowUp")
+  expect(height()).toBe(27)
+  expect(templateContentV3Schema.safeParse(controller.content).success).toBe(true)
+})
