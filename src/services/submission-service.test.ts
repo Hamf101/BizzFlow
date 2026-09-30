@@ -1105,6 +1105,19 @@ describe("several reviewers on one submission", () => {
     expect(client.rpc).not.toHaveBeenCalled()
   })
 
+  it("keeps the reviewers an owner chose out of a manager's hands", async () => {
+    const client = createClient({
+      organization_memberships: [createMembership(OWNER_ID, "owner_admin"), createMembership(MANAGER_ID, "manager")],
+      submissions: [createAssignedSubmissionRow({ assigned_by: OWNER_ID, assigned_to: OWNER_ID })]
+    })
+    client.rpc.mockResolvedValue({ data: createAssignedSubmissionRow(), error: null })
+    const set = (actor: string) => setInternalSubmissionReviewers(input(actor), { client: client as never })
+
+    await expect(set(MANAGER_ID)).rejects.toMatchObject({ statusCode: 403 })
+    expect(client.rpc).not.toHaveBeenCalled()
+    await expect(set(OWNER_ID)).resolves.toBeDefined()
+  })
+
   it("sets a change request aside only with a note, and only for someone who may review", async () => {
     const client = createClient()
     client.rpc.mockResolvedValue({ data: createAssignedSubmissionRow({ assigned_to: MANAGER_ID }), error: null })
@@ -1169,6 +1182,10 @@ describe("several reviewers on one submission", () => {
     it("shows the lower ranks nothing of the panel", async () => {
       expect(seen(await detailFor(MANAGER_ID, OWNER_ID))).toEqual([MANAGER_ID])
       expect(seen(await detailFor(EXTERNAL_ID, MANAGER_ID))).toEqual([])
+    })
+
+    it("counts every reviewer for the summary, including the ones this viewer may not see", async () => {
+      expect((await detailFor(SECOND_MANAGER_ID, OWNER_ID)).tally).toEqual({ approved: 1, changesRequested: 1, total: 2 })
     })
 
     it("tells only the person who assigned the reviewers that the change request is theirs to set aside", async () => {

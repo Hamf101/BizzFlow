@@ -1,4 +1,4 @@
-import { isOrganizationRole, type OrganizationRole } from "@/lib/permissions"
+import { getOrganizationRoleFromSubject, isOrganizationRole, type OrganizationRole } from "@/lib/permissions"
 import { loadActiveMembership } from "@/services/organizations/active-membership"
 import type {
   DismissSubmissionChangesRequestInput,
@@ -10,12 +10,13 @@ import { SubmissionServiceError } from "@/services/submissions/errors"
 import {
   createSubmissionDatabaseError,
   createSubmissionMutationError,
+  getSubmissionById,
   getSubmissionClient,
   requireSubmissionPermission,
   runSubmissionOperation,
 } from "@/services/submissions/shared"
 import { parseSubmissionRow, type Submission } from "@/types/submission"
-import { parseSubmissionReviewerRow, type SubmissionReviewer } from "@/types/submission-review"
+import { parseSubmissionReviewerRow, type SubmissionReviewer, type SubmissionReviewTally } from "@/types/submission-review"
 
 const REVIEWER_COLUMNS = "user_id,assigned_by,assigned_at,decision,note,decided_at"
 const MAX_REVIEWERS = 20
@@ -43,13 +44,24 @@ export async function setInternalSubmissionReviewers(
     async (): Promise<Submission> => {
       const client = getSubmissionClient(deps)
 
-      await requireSubmissionPermission(
+      const subject = await requireSubmissionPermission(
         client,
         input.organizationId,
         input.actorUserId,
         "submissions:assign",
         "You cannot assign internal submissions."
       )
+
+      // Reviewers someone more senior chose are not for a more junior person to change.
+      const current = await getSubmissionById(client, input.organizationId, input.submissionId)
+
+      if (
+        current.assignedBy &&
+        current.assignedBy !== input.actorUserId &&
+        RANK[getOrganizationRoleFromSubject(subject)] < RANK[await roleOf(client, current, current.assignedBy)]
+      ) {
+        throw new SubmissionServiceError("The reviewers were chosen by someone more senior, so only they or an owner can change them.", 403)
+      }
 
       const reviewerIds = input.reviewerIds.map((id) => id.trim().toLowerCase())
 
@@ -140,21 +152,21 @@ export async function dismissSubmissionChangesRequest(
 }
 
 /**
- * The reviewers one person may see. Someone of the same rank as whoever
- * assigned the reviewers, or above, sees them all; anyone below sees only
- * themselves.
+ * The reviewers one person may see, and how the whole panel stands. Someone of
+ * the same rank as whoever assigned the reviewers, or above, sees them all;
+ * anyone below sees only themselves. The tally counts everyone either way.
  *
  * @param client - Trusted Supabase client.
  * @param submission - The submission, already known to be visible to the viewer.
  * @param viewer - Who is looking, and their role.
- * @returns The reviewers in the order they were added.
+ * @returns The visible reviewers in the order they were added, and the tally.
  * @throws SubmissionServiceError when the read fails.
  */
 export async function listSubmissionReviewers(
   client: SubmissionServiceClient,
   submission: Submission,
   viewer: { role: OrganizationRole; userId: string }
-): Promise<SubmissionReviewer[]> {
+): Promise<{ reviewers: SubmissionReviewer[]; tally: SubmissionReviewTally }> {
   const { data, error } = await client
     .from("submission_reviewers")
     .select(REVIEWER_COLUMNS)
@@ -167,10 +179,14 @@ export async function listSubmissionReviewers(
     throw createSubmissionDatabaseError(error, "Unable to load the reviewers.")
   }
 
-  const reviewers = data.map(parseSubmissionReviewerRow)
+  const all = data.map(parseSubmissionReviewerRow)
   const seesAll = RANK[viewer.role] >= RANK[await roleOf(client, submission, submission.assignedBy)]
+  const count = (decision: SubmissionReviewer["decision"]): number => all.filter((reviewer) => reviewer.decision === decision).length
 
-  return seesAll ? reviewers : reviewers.filter((reviewer) => reviewer.userId === viewer.userId)
+  return {
+    reviewers: seesAll ? all : all.filter((reviewer) => reviewer.userId === viewer.userId),
+    tally: { approved: count("approved"), changesRequested: count("changes_requested"), total: all.length },
+  }
 }
 
 /**

@@ -24,6 +24,7 @@ import type {
   SubmissionActivityEvent,
   SubmissionComment,
   SubmissionReviewer,
+  SubmissionReviewTally,
   SubmissionReviewTransition,
 } from "@/types/submission-review"
 
@@ -41,6 +42,8 @@ export type SubmissionDetail = {
   activity: SubmissionActivityEvent[]
   /** The reviewers this viewer may see, with what each decided. */
   reviewers: SubmissionReviewer[]
+  /** How all the reviewers stand, including any this viewer may not see. */
+  tally: SubmissionReviewTally
   /** Whether the viewer assigned the reviewers, so a change request is theirs to set aside. */
   isRequester: boolean
 }

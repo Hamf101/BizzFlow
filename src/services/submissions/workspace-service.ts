@@ -206,7 +206,7 @@ export async function getInternalSubmission(
       const client = getSubmissionClient(deps)
       const { role, submission } = await loadVisibleSubmission(client, input)
       const viewer = { role, userId: input.actorUserId }
-      const [files, reviewData, reviewers] = await Promise.all([
+      const [files, reviewData, review] = await Promise.all([
         listSubmissionFiles(
           client,
           input.organizationId,
@@ -223,7 +223,7 @@ export async function getInternalSubmission(
         listSubmissionReviewers(client, submission, viewer),
       ])
 
-      return { submission, files, ...reviewData, reviewers, isRequester: isReviewRequester(submission, viewer) }
+      return { submission, files, ...reviewData, ...review, isRequester: isReviewRequester(submission, viewer) }
     }
   )
 }

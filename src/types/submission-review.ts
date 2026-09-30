@@ -104,6 +104,9 @@ export type SubmissionReviewer = {
   userId: string
 }
 
+/** How the reviewers stand together, counting all of them. */
+export type SubmissionReviewTally = { approved: number; changesRequested: number; total: number }
+
 /** Comments and state history shown with one visible submission. */
 export type SubmissionReviewData = {
   comments: SubmissionComment[]
