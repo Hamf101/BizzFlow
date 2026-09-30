@@ -28,6 +28,9 @@ overrides:
   # DoS advisory GHSA-mh99-v99m-4gvg; scoped to the 5.x line used by glob 13.
   # Raised to 5.0.12 for GHSA-6j4f-fj2g-mc7p (below 5.0.10) and GHSA-q2hr-2g5m-vwhr (below 5.0.12).
   brace-expansion@5: '>=5.0.12'
+  # GHSA-m9gg-hp2v-232j: unauthorized certificates reported as authorized below 1.14.5;
+  # reached through inngest's OpenTelemetry exporters.
+  '@grpc/grpc-js@1': '>=1.14.5'
   # Host confusion and SSRF advisories; reached through @sentry/webpack-plugin.
   # Bounded below 4 so the advisory floor cannot drag in a major upgrade. Raised
   # to 3.1.8: 3.1.6 is in GHSA-qw65-cvwx-89v3 and GHSA-58mr-gqgx-xq4g.
