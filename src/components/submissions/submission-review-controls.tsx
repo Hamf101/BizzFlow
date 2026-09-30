@@ -1,10 +1,11 @@
-import { Check, CheckCheck, MessageSquare, RotateCcw, UserRoundCheck, X } from "lucide-react"
+import { Check, CheckCheck, MessageSquare, RotateCcw, UserRoundCheck, UserRoundPlus, X } from "lucide-react"
 import type { ReactElement } from "react"
 
 import {
   commentFromReviewAction,
   dismissChangesRequestAction,
   setSubmissionReviewersAction,
+  shareSubmissionAction,
   transitionSubmissionAction,
 } from "@/app/(dashboard)/submissions/actions"
 import { ROLE_LABELS, SubmissionReviewersPanel } from "@/components/submissions/submission-reviewers-panel"
@@ -28,7 +29,9 @@ const eligibleReviewerRoles: readonly OrganizationRole[] = ["owner_admin", "mana
 /**
  * Renders the reviewers, how to name them, and the decisions each of them can
  * record: approve, request changes (which holds the submission up), or reject.
- * The person who assigned the reviewers can set a change request aside.
+ * The person who assigned the reviewers can set a change request aside. The
+ * person who submitted it, whoever chose the reviewers and owners can share it
+ * with others, who comment and may ask for changes but never approve.
  *
  * @param props - Submission, what the viewer may do, the reviewers they can see, and the members.
  * @returns Review controls allowed by the current status and the viewer's part in it.
@@ -37,6 +40,7 @@ export function SubmissionReviewControls({
   activity,
   canAssign,
   canReview,
+  canShare,
   comments,
   currentUserId,
   isRequester,
@@ -48,6 +52,7 @@ export function SubmissionReviewControls({
   activity: SubmissionActivityEvent[]
   canAssign: boolean
   canReview: boolean
+  canShare: boolean
   comments: SubmissionComment[]
   currentUserId: string
   isRequester: boolean
@@ -61,11 +66,20 @@ export function SubmissionReviewControls({
     submission.status === "in_review" ||
     submission.status === "needs_changes"
   const mine = reviewers.find((reviewer) => reviewer.userId === currentUserId)
-  // Being named a reviewer is what lets someone approve or ask for changes, whatever their role.
+  // Being named a reviewer is what lets someone approve or ask for changes, whatever their role;
+  // someone it was shared with may ask for changes but not approve.
   const canDecide = mine !== undefined
+  const approvers = reviewers.filter((reviewer) => reviewer.canApprove)
   const startsReview = submission.status === "submitted"
   // Who was chosen is only editable by someone who can see every reviewer.
-  const seesEveryone = reviewers.length === tally.total
+  const seesEveryone = approvers.length === tally.total
+  const shareable = members.filter(
+    (member: OrganizationMember): boolean =>
+      member.status === "active" &&
+      member.userId !== submission.createdBy &&
+      member.userId !== currentUserId &&
+      !approvers.some((reviewer) => reviewer.userId === member.userId)
+  )
   const eligibleMembers = members.filter(
     (member: OrganizationMember): boolean =>
       member.status === "active" && eligibleReviewerRoles.includes(member.role)
@@ -75,7 +89,7 @@ export function SubmissionReviewControls({
       ? reviewers.filter((reviewer) => reviewer.decision === "changes_requested")
       : []
 
-  if (!canAssign && !canReview && tally.total === 0) {
+  if (!canAssign && !canReview && !canShare && reviewers.length === 0) {
     return null
   }
 
@@ -99,7 +113,7 @@ export function SubmissionReviewControls({
                 <label className="flex items-center gap-2.5 text-sm" key={member.id}>
                   <input
                     className="size-4 accent-primary"
-                    defaultChecked={reviewers.some((reviewer) => reviewer.userId === member.userId)}
+                    defaultChecked={approvers.some((reviewer) => reviewer.userId === member.userId)}
                     name="reviewerIds"
                     type="checkbox"
                     value={member.userId}
@@ -140,6 +154,34 @@ export function SubmissionReviewControls({
           <p className="border-t pt-5 text-sm text-muted-foreground">
             Someone more senior chose the other reviewers, so only they or an owner can change them.
           </p>
+        )}
+
+        {canShare && shareable.length > 0 && (
+          <form action={shareSubmissionAction} className="flex flex-col gap-3 border-t pt-5 first:border-t-0 first:pt-0">
+            <input name="submissionId" type="hidden" value={submission.id} />
+            <fieldset className="flex flex-col gap-1.5">
+              <legend className="pb-1 text-sm font-medium">Share with</legend>
+              <p className="pb-1 text-xs text-muted-foreground">They can read it, comment and ask for changes, but not approve.</p>
+              {shareable.map((member: OrganizationMember) => (
+                <label className="flex items-center gap-2.5 text-sm" key={member.id}>
+                  <input
+                    className="size-4 accent-primary"
+                    defaultChecked={reviewers.some((reviewer) => !reviewer.canApprove && reviewer.userId === member.userId)}
+                    name="sharedUserIds"
+                    type="checkbox"
+                    value={member.userId}
+                  />
+                  <span className="min-w-0 truncate">
+                    {formatMemberLabel(member)} · {ROLE_LABELS[member.role]}
+                  </span>
+                </label>
+              ))}
+            </fieldset>
+            <Button className="w-fit" type="submit" variant="outline">
+              <UserRoundPlus />
+              Save sharing
+            </Button>
+          </form>
         )}
 
         {asideCandidates.map((reviewer) => (
@@ -197,9 +239,9 @@ export function SubmissionReviewControls({
               className="text-xs text-muted-foreground"
               id="review-comment-description"
             >
-              A note is required for requested changes and rejection. It is
-              optional for approval, and a comment leaves your decision as it is. A change request holds the submission up
-              until whoever chose the reviewers sets it aside.
+              {mine?.canApprove === false
+                ? "It was shared with you, so you can comment or ask for changes, which holds it up until whoever chose the reviewers sets it aside. A note is required to ask for changes."
+                : "A note is required for requested changes and rejection. It is optional for approval, and a comment leaves your decision as it is. A change request holds the submission up until whoever chose the reviewers sets it aside."}
             </p>
             <div className="flex flex-wrap gap-2">
               <Button
@@ -211,10 +253,12 @@ export function SubmissionReviewControls({
                 <RotateCcw />
                 Request changes
               </Button>
-              <Button name="targetStatus" type="submit" value="approved">
-                <Check />
-                {mine?.decision === "approved" ? "Approved" : "Approve"}
-              </Button>
+              {mine?.canApprove ? (
+                <Button name="targetStatus" type="submit" value="approved">
+                  <Check />
+                  {mine.decision === "approved" ? "Approved" : "Approve"}
+                </Button>
+              ) : null}
               {canReview && (
                 <Button
                   name="targetStatus"
@@ -234,7 +278,7 @@ export function SubmissionReviewControls({
           </form>
         )}
 
-        {submission.status === "approved" && canDecide && canReview && (
+        {submission.status === "approved" && mine?.canApprove && canReview && (
           <form
             action={transitionSubmissionAction}
             className="flex flex-col gap-3 border-t pt-5"
@@ -260,7 +304,7 @@ export function SubmissionReviewControls({
         {canReview &&
           (submission.status === "in_review" ||
             submission.status === "approved") &&
-          !canDecide && (
+          !mine?.canApprove && (
             <p className="border-t pt-5 text-sm text-muted-foreground">
               Only the reviewers record decisions. Add yourself as a reviewer to
               continue.

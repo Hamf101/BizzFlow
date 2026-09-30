@@ -1,4 +1,4 @@
-import { ArrowLeft, MessageSquare, Save, Send } from "lucide-react"
+import { ArrowLeft, MessageSquare, PencilLine, Save, Send } from "lucide-react"
 import Link from "next/link"
 import { redirect } from "next/navigation"
 import type { ReactElement, ReactNode } from "react"
@@ -8,6 +8,7 @@ import { SubmissionActivityTimeline } from "@/components/submissions/submission-
 import { SubmissionFileField } from "@/components/submissions/submission-file-field"
 import { SubmissionReviewControls } from "@/components/submissions/submission-review-controls"
 import { SubmissionStatusBadge } from "@/components/submissions/submission-status-badge"
+import { SubmissionSuggestions } from "@/components/submissions/submission-suggestions"
 import { SubmissionTaskPanel } from "@/components/tasks/submission-task-panel"
 import { listInternalTaskMembers } from "@/components/tasks/task-presentation"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -41,11 +42,13 @@ import { createTaskAction } from "../../tasks/actions"
 import {
   createSubmissionCommentAction,
   saveSubmissionAction,
-  submitSubmissionAction
+  submitSubmissionAction,
+  suggestSubmissionChangesAction
 } from "../actions"
 import type { Metadata } from "next"
 
 type SubmissionDetailParams = Promise<{ submissionId: string }>
+type SubmissionDetailSearchParams = Promise<{ suggest?: string | string[] }>
 
 /**
  * Loads one internal submission with editable creator draft or read-only detail.
@@ -57,10 +60,12 @@ export const metadata: Metadata = { title: "Submission" }
 
 export default async function SubmissionDetailPage({
   params,
+  searchParams,
 }: {
   params: SubmissionDetailParams
+  searchParams: SubmissionDetailSearchParams
 }): Promise<ReactElement> {
-  const { submissionId } = await params
+  const [{ submissionId }, { suggest }] = await Promise.all([params, searchParams])
   const detailPath = `/submissions/${encodeURIComponent(submissionId)}`
   const user = await loadAuthenticatedPageUser(detailPath)
   const contextResult = await loadPageOrganizationContext({
@@ -159,6 +164,8 @@ export default async function SubmissionDetailPage({
     (submission.status === "draft" || submission.status === "needs_changes") &&
     submission.createdBy === user.id &&
     canPerformOrganizationAction(context.membership, "submissions:edit")
+  // A reviewer suggesting changes works in the same form; nothing changes until the submitter accepts.
+  const suggesting = detail.canSuggest && !editable && suggest === "1"
   const canAssign = canPerformOrganizationAction(
     context.membership,
     "submissions:assign"
@@ -277,12 +284,12 @@ export default async function SubmissionDetailPage({
           <CardTitle>Submission form</CardTitle>
           <CardAction>
             <Badge variant="outline">
-              {editable ? "Editable" : "Read only"}
+              {editable ? "Editable" : suggesting ? "Suggesting changes" : "Read only"}
             </Badge>
           </CardAction>
         </CardHeader>
         <CardContent className="overflow-auto bg-muted/30 p-4 sm:p-6">
-          <form action={saveSubmissionAction} id="submission-answer-form">
+          <form action={suggesting ? suggestSubmissionChangesAction : saveSubmissionAction} id="submission-answer-form">
             <input name="submissionId" type="hidden" value={submission.id} />
             <input
               name="expectedRevision"
@@ -292,13 +299,33 @@ export default async function SubmissionDetailPage({
             <GeneratedDocumentContent
               answers={submission.values}
               content={submission.templateSnapshot}
-              editable={editable}
+              editable={editable || suggesting}
               fileFieldContent={fileFieldContent}
               title={submission.title}
             />
           </form>
         </CardContent>
         <CardFooter className="flex-wrap justify-between gap-3">
+          {suggesting && (
+            <div className="flex flex-wrap items-center gap-2">
+              <Button form="submission-answer-form" type="submit">
+                <Send />
+                Send suggestions
+              </Button>
+              <Link className={buttonVariants({ variant: "ghost" })} href={detailPath}>
+                Cancel
+              </Link>
+              <p className="w-full text-xs text-muted-foreground">
+                Change typed answers, dates, choices and tick boxes. Nothing changes until the person who submitted it accepts.
+              </p>
+            </div>
+          )}
+          {detail.canSuggest && !editable && !suggesting && (
+            <Link className={buttonVariants({ variant: "outline" })} href={`${detailPath}?suggest=1`}>
+              <PencilLine />
+              Suggest changes
+            </Link>
+          )}
           {editable && (
             <div className="flex flex-wrap gap-2">
               <Button
@@ -324,6 +351,13 @@ export default async function SubmissionDetailPage({
         </CardFooter>
       </Card>
 
+      <SubmissionSuggestions
+        currentUserId={user.id}
+        members={peopleResult.members}
+        submission={submission}
+        suggestions={detail.suggestions}
+      />
+
       {peopleResult.errorMessage && submission.status !== "draft" && (
         <Alert variant="destructive">
           <AlertTitle>Reviewer names unavailable</AlertTitle>
@@ -338,6 +372,7 @@ export default async function SubmissionDetailPage({
               activity={detail.activity}
               canAssign={canAssign && !peopleResult.errorMessage}
               canReview={canReview}
+              canShare={detail.canShare && !peopleResult.errorMessage}
               comments={detail.comments}
               currentUserId={user.id}
               isRequester={detail.isRequester}

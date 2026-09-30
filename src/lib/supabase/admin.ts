@@ -255,8 +255,23 @@ type AdminSubmissionReviewerRow = Record<string, unknown> & {
   user_id: string
   assigned_by: string | null
   assigned_at: string
+  can_approve: boolean
   decision: "pending" | "approved" | "changes_requested" | "dismissed"
   note: string | null
+  decided_at: string | null
+}
+
+type AdminSubmissionSuggestionRow = Record<string, unknown> & {
+  id: string
+  org_id: string
+  submission_id: string
+  field_key: string
+  previous_value: string | boolean | null
+  proposed_value: string | boolean
+  suggested_by: string | null
+  suggested_at: string
+  status: "pending" | "accepted" | "declined"
+  decided_by: string | null
   decided_at: string | null
 }
 
@@ -625,6 +640,7 @@ export type AdminDatabase = {
         Partial<AdminSubmissionRow>
       >
       submission_reviewers: DatabaseTable<AdminSubmissionReviewerRow, never, never>
+      submission_answer_suggestions: DatabaseTable<AdminSubmissionSuggestionRow, never, never>
       submission_files: DatabaseTable<
         AdminSubmissionFileRow,
         Partial<AdminSubmissionFileRow> &
@@ -1103,6 +1119,34 @@ export type AdminDatabase = {
           target_expected_revision: number
           target_reviewer_ids: string[]
           target_required_approvals: number | null
+          target_actor_user_id: string
+        }
+        Returns: AdminSubmissionRow
+      }
+      set_submission_sharing: {
+        Args: {
+          target_org_id: string
+          target_submission_id: string
+          target_user_ids: string[]
+          target_actor_user_id: string
+        }
+        Returns: string[]
+      }
+      suggest_submission_answers: {
+        Args: {
+          target_org_id: string
+          target_submission_id: string
+          target_values: Record<string, string | boolean>
+          target_actor_user_id: string
+        }
+        Returns: number
+      }
+      decide_submission_suggestion: {
+        Args: {
+          target_org_id: string
+          target_submission_id: string
+          target_suggestion_id: string
+          target_accept: boolean
           target_actor_user_id: string
         }
         Returns: AdminSubmissionRow

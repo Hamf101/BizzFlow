@@ -1,8 +1,11 @@
+import type { SharedMessage } from "@/components/sharing/sharing-notices"
 import { getOrganizationRoleFromSubject, isOrganizationRole, type OrganizationRole } from "@/lib/permissions"
+import { sendNotice } from "@/services/documents/sharing-notice"
 import { loadActiveMembership } from "@/services/organizations/active-membership"
 import type {
   DismissSubmissionChangesRequestInput,
   SetInternalSubmissionReviewersInput,
+  ShareInternalSubmissionInput,
   SubmissionServiceClient,
   SubmissionServiceDeps,
 } from "@/services/submissions/contracts"
@@ -19,8 +22,9 @@ import {
 import { parseSubmissionRow, type Submission } from "@/types/submission"
 import { parseSubmissionReviewerRow, type SubmissionReviewer, type SubmissionReviewTally } from "@/types/submission-review"
 
-const REVIEWER_COLUMNS = "user_id,assigned_by,assigned_at,decision,note,decided_at"
+const REVIEWER_COLUMNS = "user_id,assigned_by,assigned_at,can_approve,decision,note,decided_at"
 const MAX_REVIEWERS = 20
+const MAX_SHARED = 50
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
 
 // Who outranks whom when it comes to seeing the other reviewers.
@@ -81,6 +85,7 @@ export async function setInternalSubmissionReviewers(
         throw new SubmissionServiceError("The approvals needed must be between 1 and the number of reviewers.", 400)
       }
 
+      const before = await reviewerIdsOf(client, current)
       const { data, error } = await client.rpc("set_submission_reviewers", {
         target_actor_user_id: input.actorUserId,
         target_expected_revision: input.expectedRevision,
@@ -94,7 +99,10 @@ export async function setInternalSubmissionReviewers(
         throw createSubmissionMutationError(error, "Unable to set the reviewers.")
       }
 
-      return parseSubmissionRow(data)
+      const submission = parseSubmissionRow(data)
+      await tell(client, deps, submission, input.actorUserId, "reviewer", reviewerIds.filter((id) => !before.has(id)))
+
+      return submission
     }
   )
 }
@@ -153,9 +161,71 @@ export async function dismissSubmissionChangesRequest(
 }
 
 /**
+ * Sets who a submission is shared with beyond its reviewers. They see it,
+ * comment and may ask for changes, but never approve. The person who submitted
+ * it, whoever chose its reviewers and owner admins may share it; the database
+ * holds that rule. Anyone newly added is told.
+ *
+ * @param input - Actor, submission, and everyone it should be shared with.
+ * @param deps - Optional trusted database and notice dependencies.
+ * @returns The people newly added.
+ * @throws SubmissionServiceError when access, the choice, or persistence fails.
+ */
+export async function shareInternalSubmission(
+  input: ShareInternalSubmissionInput,
+  deps: SubmissionServiceDeps = {}
+): Promise<string[]> {
+  return runSubmissionOperation(
+    "share_internal_submission",
+    { actorUserId: input.actorUserId, organizationId: input.organizationId, submissionId: input.submissionId },
+    async (): Promise<string[]> => {
+      const client = getSubmissionClient(deps)
+
+      const subject = await requireSubmissionPermission(
+        client,
+        input.organizationId,
+        input.actorUserId,
+        "submissions:view",
+        "You cannot view internal submissions."
+      )
+
+      const ticked = [...new Set(input.userIds.map((id) => id.trim().toLowerCase()))]
+
+      if (ticked.length > MAX_SHARED || !ticked.every((id) => UUID.test(id))) {
+        throw new SubmissionServiceError(`Share with at most ${MAX_SHARED} people.`, 400)
+      }
+
+      // The form lists only the people this person can see; anyone it was shared
+      // with whom they cannot see stays shared.
+      const submission = await getSubmissionById(client, input.organizationId, input.submissionId)
+      const { all, visible } = await readReviewers(client, submission, { role: getOrganizationRoleFromSubject(subject), userId: input.actorUserId })
+      const hidden = all.filter((reviewer) => !reviewer.canApprove && !visible.includes(reviewer)).map((reviewer) => reviewer.userId)
+      const userIds = [...new Set([...ticked, ...hidden])]
+
+      const { data, error } = await client.rpc("set_submission_sharing", {
+        target_actor_user_id: input.actorUserId,
+        target_org_id: input.organizationId,
+        target_submission_id: input.submissionId,
+        target_user_ids: userIds,
+      })
+
+      if (error || !Array.isArray(data)) {
+        throw createSubmissionMutationError(error, "Unable to share the submission.")
+      }
+
+      const added = data.map(String)
+      await tell(client, deps, submission, input.actorUserId, "commenter", added)
+
+      return added
+    }
+  )
+}
+
+/**
  * The reviewers one person may see, and how the whole panel stands. Someone of
  * the same rank as whoever assigned the reviewers, or above, sees them all;
- * anyone below sees only themselves. The tally counts everyone either way.
+ * anyone below sees only themselves and the people they added. The tally
+ * counts everyone either way.
  *
  * @param client - Trusted Supabase client.
  * @param submission - The submission, already known to be visible to the viewer.
@@ -168,6 +238,69 @@ export async function listSubmissionReviewers(
   submission: Submission,
   viewer: { role: OrganizationRole; userId: string }
 ): Promise<{ reviewers: SubmissionReviewer[]; tally: SubmissionReviewTally }> {
+  const { all, visible } = await readReviewers(client, submission, viewer)
+  // Only reviewers who can approve count toward approval; anyone's change request holds it up.
+  const approvers = all.filter((reviewer) => reviewer.canApprove)
+  const count = (decision: SubmissionReviewer["decision"]): number => approvers.filter((reviewer) => reviewer.decision === decision).length
+
+  return {
+    reviewers: visible,
+    tally: {
+      approved: count("approved"),
+      changesRequested: all.filter((reviewer) => reviewer.decision === "changes_requested").length,
+      counting: approvers.length - count("dismissed"),
+      total: approvers.length,
+    },
+  }
+}
+
+/**
+ * Adds to a staff member's or external reviewer's filters the submissions they
+ * review or that were shared with them. Owners' and managers' filters come back
+ * as they were: they see everything anyway.
+ *
+ * @param client - Trusted Supabase client.
+ * @param filters - Validated actor scope and view filters.
+ * @returns Filters that can be applied to a query.
+ * @throws SubmissionServiceError when the read fails.
+ */
+export async function withReviewedIds(client: SubmissionServiceClient, filters: SubmissionListFilters): Promise<SubmissionListFilters> {
+  if (filters.role !== "external_reviewer" && filters.role !== "staff") {
+    return filters
+  }
+
+  const { data, error } = await client
+    .from("submission_reviewers")
+    .select("submission_id")
+    .eq("org_id", filters.organizationId)
+    .eq("user_id", filters.actorUserId)
+
+  if (error || !data) {
+    throw createSubmissionDatabaseError(error, "Unable to load the submissions you review.")
+  }
+
+  // ponytail: one read is capped at PostgREST's row limit, and the ids ride in the list's URL; someone on
+  // hundreds of submissions would need a set-wise list function like list_workspace_documents.
+  return { ...filters, reviewedIds: data.map((row) => String(row.submission_id)) }
+}
+
+/**
+ * Whether the viewer is the person who assigned the reviewers, and so the one
+ * who may set a change request aside.
+ *
+ * @param submission - The submission.
+ * @param viewer - Who is looking.
+ * @returns True for the assigner while they can still review.
+ */
+export function isReviewRequester(submission: Submission, viewer: { role: OrganizationRole; userId: string }): boolean {
+  return submission.assignedBy === viewer.userId && (viewer.role === "owner_admin" || viewer.role === "manager")
+}
+
+async function readReviewers(
+  client: SubmissionServiceClient,
+  submission: Submission,
+  viewer: { role: OrganizationRole; userId: string }
+): Promise<{ all: SubmissionReviewer[]; visible: SubmissionReviewer[] }> {
   const { data, error } = await client
     .from("submission_reviewers")
     .select(REVIEWER_COLUMNS)
@@ -182,57 +315,68 @@ export async function listSubmissionReviewers(
 
   const all = data.map(parseSubmissionReviewerRow)
   const seesAll = RANK[viewer.role] >= RANK[await roleOf(client, submission, submission.assignedBy)]
-  const count = (decision: SubmissionReviewer["decision"]): number => all.filter((reviewer) => reviewer.decision === decision).length
 
   return {
-    reviewers: seesAll ? all : all.filter((reviewer) => reviewer.userId === viewer.userId),
-    tally: {
-      approved: count("approved"),
-      changesRequested: count("changes_requested"),
-      counting: all.length - count("dismissed"),
-      total: all.length,
-    },
+    all,
+    visible: seesAll ? all : all.filter((reviewer) => reviewer.userId === viewer.userId || reviewer.assignedBy === viewer.userId),
   }
 }
 
-/**
- * Adds to an external reviewer's filters the submissions they review. Everyone
- * else's filters come back as they were.
- *
- * @param client - Trusted Supabase client.
- * @param filters - Validated actor scope and view filters.
- * @returns Filters that can be applied to a query.
- * @throws SubmissionServiceError when the read fails.
- */
-export async function withReviewedIds(client: SubmissionServiceClient, filters: SubmissionListFilters): Promise<SubmissionListFilters> {
-  if (filters.role !== "external_reviewer") {
-    return filters
-  }
-
+async function reviewerIdsOf(client: SubmissionServiceClient, submission: Submission): Promise<Set<string>> {
   const { data, error } = await client
     .from("submission_reviewers")
-    .select("submission_id")
-    .eq("org_id", filters.organizationId)
-    .eq("user_id", filters.actorUserId)
+    .select("user_id")
+    .eq("org_id", submission.organizationId)
+    .eq("submission_id", submission.id)
+    .eq("can_approve", true)
 
   if (error || !data) {
-    throw createSubmissionDatabaseError(error, "Unable to load the submissions you review.")
+    throw createSubmissionDatabaseError(error, "Unable to load the reviewers.")
   }
 
-  // ponytail: one read is capped at PostgREST's row limit; an external reviewer with that many reviews would need paging.
-  return { ...filters, reviewedIds: data.map((row) => String(row.submission_id)) }
+  return new Set(data.map((row) => String(row.user_id)))
 }
 
-/**
- * Whether the viewer is the person who assigned the reviewers, and so the one
- * who may set a change request aside.
- *
- * @param submission - The submission.
- * @param viewer - Who is looking.
- * @returns True for the assigner while they can still review.
- */
-export function isReviewRequester(submission: Submission, viewer: { role: OrganizationRole; userId: string }): boolean {
-  return submission.assignedBy === viewer.userId && (viewer.role === "owner_admin" || viewer.role === "manager")
+// Tells each person newly on a submission, other than whoever put them there.
+// The change is already kept, so a notice that fails is only logged.
+async function tell(
+  client: SubmissionServiceClient,
+  deps: SubmissionServiceDeps,
+  submission: Submission,
+  actorUserId: string,
+  level: "commenter" | "reviewer",
+  userIds: readonly string[]
+): Promise<void> {
+  const recipients = userIds.filter((id) => id !== actorUserId)
+
+  if (recipients.length === 0) return
+
+  try {
+    const message: SharedMessage = {
+      actorName: await nameOf(client, submission.organizationId, actorUserId),
+      id: submission.id,
+      kind: "submission",
+      level,
+      name: submission.title,
+    }
+    await Promise.all(recipients.map((id) => (deps.notify ?? sendNotice)(id, message)))
+  } catch (error) {
+    console.warn("submission_notice_failed", {
+      reason: error instanceof Error ? error.message : "Unknown notice error",
+      submissionId: submission.id,
+    })
+  }
+}
+
+async function nameOf(client: SubmissionServiceClient, organizationId: string, userId: string): Promise<string> {
+  const [membership, profile] = await Promise.all([
+    client.from("organization_memberships").select("workspace_display_name").eq("org_id", organizationId).eq("user_id", userId).maybeSingle(),
+    client.from("profiles").select("full_name,email").eq("id", userId).maybeSingle(),
+  ])
+  const shown = (membership.data as { workspace_display_name?: string | null } | null)?.workspace_display_name
+  const person = profile.data as { email?: string | null; full_name?: string | null } | null
+
+  return shown?.trim() || person?.full_name?.trim() || person?.email || "Someone"
 }
 
 // Someone who has left ranks lowest, so their reviewers are open to all.

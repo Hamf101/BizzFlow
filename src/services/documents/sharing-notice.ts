@@ -1,3 +1,4 @@
+import type { SharedMessage } from "@/components/sharing/sharing-notices"
 import { createAdminClient } from "@/lib/supabase/admin"
 import type { SharingNotice } from "@/services/documents/sharing-contracts"
 
@@ -23,14 +24,30 @@ export function noticeTopic(userId: string): string {
  * @throws Error when the channel takes no message; the caller decides whether that matters.
  */
 export async function broadcastSharingNotice(notice: SharingNotice, send: Send = sendWithRealtime): Promise<void> {
-  await send(noticeTopic(notice.recipientUserId), "shared", {
-    actorName: notice.actorName,
-    ...(notice.count ? { count: notice.count } : {}),
-    id: notice.resource.id,
-    kind: notice.resource.kind,
-    level: notice.level,
-    name: notice.resourceName,
-  })
+  await sendNotice(
+    notice.recipientUserId,
+    {
+      actorName: notice.actorName,
+      ...(notice.count ? { count: notice.count } : {}),
+      id: notice.resource.id,
+      kind: notice.resource.kind,
+      level: notice.level,
+      name: notice.resourceName,
+    },
+    send
+  )
+}
+
+/**
+ * Sends one member the pop-up message, if they are online.
+ *
+ * @param recipientUserId - Who it is for.
+ * @param message - What the pop-up says.
+ * @param send - Sends to a channel; defaults to Supabase Realtime over HTTP.
+ * @throws Error when the channel takes no message; the caller decides whether that matters.
+ */
+export async function sendNotice(recipientUserId: string, message: SharedMessage, send: Send = sendWithRealtime): Promise<void> {
+  await send(noticeTopic(recipientUserId), "shared", message)
 }
 
 async function sendWithRealtime(topic: string, event: string, message: object): Promise<void> {

@@ -9,6 +9,7 @@ import {
   createInternalSubmissionComment,
   createInternalSubmissionDraft,
   createInternalSubmissionFileDownloadUrl,
+  decideSubmissionSuggestion,
   dismissSubmissionChangesRequest,
   expireAbandonedSubmissionFiles,
   exportInternalSubmissionsCsv,
@@ -17,8 +18,10 @@ import {
   listSubmissionPage,
   saveInternalSubmissionDraft,
   setInternalSubmissionReviewers,
+  shareInternalSubmission,
   type ListSubmissionPageInput,
   submitInternalSubmission,
+  suggestSubmissionAnswers,
   supersedeInternalSubmissionFile,
   transitionInternalSubmission
 } from "@/services/submission-service"
@@ -1085,6 +1088,7 @@ function createReviewerRow(userId: string, overrides: FakeRow = {}): FakeRow {
   return {
     assigned_at: "2026-07-18T17:05:00.000Z",
     assigned_by: MANAGER_ID,
+    can_approve: true,
     decided_at: null,
     decision: "pending",
     note: null,
@@ -1188,8 +1192,8 @@ describe("several reviewers on one submission", () => {
           createMembership(EXTERNAL_ID, "external_reviewer")
         ],
         submission_reviewers: [
-          createReviewerRow(MANAGER_ID, { decision: "approved", decided_at: "2026-07-18T18:00:00.000Z" }),
-          createReviewerRow(SECOND_MANAGER_ID, { decision: "changes_requested", decided_at: "2026-07-18T18:05:00.000Z", note: "Total is wrong" })
+          createReviewerRow(MANAGER_ID, { assigned_by: assignedBy, decision: "approved", decided_at: "2026-07-18T18:00:00.000Z" }),
+          createReviewerRow(SECOND_MANAGER_ID, { assigned_by: assignedBy, decision: "changes_requested", decided_at: "2026-07-18T18:05:00.000Z", note: "Total is wrong" })
         ],
         submissions: [createAssignedSubmissionRow({ assigned_by: assignedBy, assigned_to: actorUserId === EXTERNAL_ID ? EXTERNAL_ID : MANAGER_ID, status: "needs_changes" })]
       })
@@ -1226,6 +1230,228 @@ describe("several reviewers on one submission", () => {
       expect((await detailFor(MANAGER_ID, MANAGER_ID)).isRequester).toBe(true)
       expect((await detailFor(SECOND_MANAGER_ID, MANAGER_ID)).isRequester).toBe(false)
       expect((await detailFor(OWNER_ID, MANAGER_ID)).isRequester).toBe(false)
+    })
+  })
+})
+
+describe("sharing a submission beyond its reviewers", () => {
+  const shared = (userId: string, overrides: FakeRow = {}) => createReviewerRow(userId, { assigned_by: STAFF_ID, can_approve: false, ...overrides })
+
+  it("shows staff what was shared with them, in the list and on its page, and still nothing else", async () => {
+    const client = createClient({
+      submissions: [
+        createAssignedSubmissionRow({ assigned_to: MANAGER_ID }),
+        createAssignedSubmissionRow({ id: OTHER_SUBMISSION_ID, created_by: OTHER_STAFF_ID, updated_by: OTHER_STAFF_ID })
+      ],
+      submission_reviewers: [shared(STAFF_ID, { submission_id: OTHER_SUBMISSION_ID })]
+    })
+    const open = (actorUserId: string, submissionId: string) =>
+      getInternalSubmission({ actorUserId, organizationId: ORGANIZATION_ID, submissionId }, { client: client as never })
+
+    const staffRows = (await listSubmissionPage(createPageInput(STAFF_ID), { client: client as never })).submissions
+    const otherRows = (await listSubmissionPage(createPageInput(OTHER_STAFF_ID), { client: client as never })).submissions
+
+    expect(staffRows.map((row) => row.id).sort()).toEqual([SUBMISSION_ID, OTHER_SUBMISSION_ID].sort())
+    expect(otherRows.map((row) => row.id)).toEqual([OTHER_SUBMISSION_ID])
+    await expect(open(STAFF_ID, OTHER_SUBMISSION_ID)).resolves.toMatchObject({ submission: { id: OTHER_SUBMISSION_ID } })
+    await expect(open(OTHER_STAFF_ID, SUBMISSION_ID)).rejects.toMatchObject({ statusCode: 404 })
+  })
+
+  it("leaves people it was shared with out of the approvals, but counts their change request", async () => {
+    const client = createClient({
+      submissions: [createAssignedSubmissionRow({ assigned_to: MANAGER_ID, status: "needs_changes" })],
+      submission_reviewers: [
+        createReviewerRow(MANAGER_ID, { decision: "approved", decided_at: "2026-07-18T18:00:00.000Z" }),
+        shared(OTHER_STAFF_ID, { decision: "changes_requested", decided_at: "2026-07-18T18:05:00.000Z", note: "Hours are wrong" })
+      ]
+    })
+
+    const detail = await getInternalSubmission({ actorUserId: MANAGER_ID, organizationId: ORGANIZATION_ID, submissionId: SUBMISSION_ID }, { client: client as never })
+
+    expect(detail.tally).toEqual({ approved: 1, changesRequested: 1, counting: 1, total: 1 })
+    expect(detail.reviewers.find((reviewer) => reviewer.userId === OTHER_STAFF_ID)).toMatchObject({ canApprove: false })
+  })
+
+  it("lets the person who submitted it, whoever chose the reviewers, and owners share it, and nobody while it is a draft", async () => {
+    const client = createClient({
+      organization_memberships: [
+        createMembership(OWNER_ID, "owner_admin"),
+        createMembership(MANAGER_ID, "manager"),
+        createMembership(SECOND_MANAGER_ID, "manager"),
+        createMembership(STAFF_ID, "staff")
+      ],
+      submissions: [createAssignedSubmissionRow({ assigned_to: MANAGER_ID })],
+      submission_reviewers: [createReviewerRow(MANAGER_ID)]
+    })
+    const canShare = async (actorUserId: string) =>
+      (await getInternalSubmission({ actorUserId, organizationId: ORGANIZATION_ID, submissionId: SUBMISSION_ID }, { client: client as never })).canShare
+
+    expect(await canShare(STAFF_ID)).toBe(true)
+    expect(await canShare(MANAGER_ID)).toBe(true)
+    expect(await canShare(OWNER_ID)).toBe(true)
+    expect(await canShare(SECOND_MANAGER_ID)).toBe(false)
+
+    client.tables.submissions = [createSubmissionRow()]
+    expect(await canShare(STAFF_ID)).toBe(false)
+  })
+
+  it("shows someone the people they shared it with, even when someone more senior chose the reviewers", async () => {
+    const client = createClient({
+      submissions: [createAssignedSubmissionRow({ assigned_to: MANAGER_ID })],
+      submission_reviewers: [createReviewerRow(MANAGER_ID), shared(EXTERNAL_ID), shared(OTHER_STAFF_ID, { assigned_by: MANAGER_ID })]
+    })
+
+    const detail = await getInternalSubmission({ actorUserId: STAFF_ID, organizationId: ORGANIZATION_ID, submissionId: SUBMISSION_ID }, { client: client as never })
+
+    expect(detail.reviewers.map((reviewer) => reviewer.userId)).toEqual([EXTERNAL_ID])
+  })
+
+  it("keeps it shared with the people this person cannot see, whatever they tick", async () => {
+    const client = createClient({
+      submissions: [createAssignedSubmissionRow({ assigned_to: MANAGER_ID })],
+      submission_reviewers: [createReviewerRow(MANAGER_ID), shared(OTHER_STAFF_ID, { assigned_by: MANAGER_ID })]
+    })
+    client.rpc.mockResolvedValue({ data: [EXTERNAL_ID], error: null })
+
+    await shareInternalSubmission(
+      { actorUserId: STAFF_ID, organizationId: ORGANIZATION_ID, submissionId: SUBMISSION_ID, userIds: [EXTERNAL_ID] },
+      { client: client as never, notify: vi.fn(async () => undefined) }
+    )
+
+    expect(client.rpc).toHaveBeenCalledWith("set_submission_sharing", expect.objectContaining({ target_user_ids: [EXTERNAL_ID, OTHER_STAFF_ID] }))
+  })
+
+  it("passes everyone on, tells only whoever was newly added, and turns away nonsense first", async () => {
+    const notify = vi.fn(async () => undefined)
+    const client = createClient({ profiles: [{ email: "staff@example.test", full_name: "Sam Staff", id: STAFF_ID }] })
+    client.rpc.mockResolvedValue({ data: [OTHER_STAFF_ID], error: null })
+    const share = (userIds: string[]) =>
+      shareInternalSubmission({ actorUserId: STAFF_ID, organizationId: ORGANIZATION_ID, submissionId: SUBMISSION_ID, userIds }, { client: client as never, notify })
+
+    await expect(share(["../x"])).rejects.toMatchObject({ statusCode: 400 })
+    await expect(share(Array.from({ length: 51 }, (_, index) => `20000000-0000-4000-8000-${String(100 + index).padStart(12, "0")}`))).rejects.toMatchObject({ statusCode: 400 })
+    expect(client.rpc).not.toHaveBeenCalled()
+
+    await expect(share([OTHER_STAFF_ID, EXTERNAL_ID, OTHER_STAFF_ID])).resolves.toEqual([OTHER_STAFF_ID])
+    expect(client.rpc).toHaveBeenCalledWith("set_submission_sharing", {
+      target_actor_user_id: STAFF_ID,
+      target_org_id: ORGANIZATION_ID,
+      target_submission_id: SUBMISSION_ID,
+      target_user_ids: [OTHER_STAFF_ID, EXTERNAL_ID]
+    })
+    expect(notify).toHaveBeenCalledTimes(1)
+    expect(notify).toHaveBeenCalledWith(OTHER_STAFF_ID, {
+      actorName: "Sam Staff",
+      id: SUBMISSION_ID,
+      kind: "submission",
+      level: "commenter",
+      name: "Vendor intake"
+    })
+  })
+})
+
+describe("telling reviewers they were asked", () => {
+  it("tells each newly named reviewer, but not whoever named them or anyone already reviewing, and a failed notice changes nothing", async () => {
+    const notify = vi.fn(async () => {
+      throw new Error("offline")
+    })
+    const client = createClient({
+      organization_memberships: [createMembership(MANAGER_ID, "manager"), createMembership(SECOND_MANAGER_ID, "manager"), createMembership(EXTERNAL_ID, "external_reviewer")],
+      submissions: [createAssignedSubmissionRow({ assigned_to: EXTERNAL_ID })],
+      submission_reviewers: [createReviewerRow(EXTERNAL_ID), createReviewerRow(OTHER_STAFF_ID, { can_approve: false })]
+    })
+    client.tables.profiles = [{ email: "maya@example.test", full_name: "Maya Manager", id: MANAGER_ID }]
+    client.rpc.mockResolvedValue({ data: createAssignedSubmissionRow(), error: null })
+
+    await expect(
+      setInternalSubmissionReviewers(
+        { actorUserId: MANAGER_ID, expectedRevision: 3, organizationId: ORGANIZATION_ID, requiredApprovals: null, reviewerIds: [MANAGER_ID, EXTERNAL_ID, SECOND_MANAGER_ID], submissionId: SUBMISSION_ID },
+        { client: client as never, notify }
+      )
+    ).resolves.toBeDefined()
+
+    expect(notify.mock.calls).toEqual([
+      [SECOND_MANAGER_ID, { actorName: "Maya Manager", id: SUBMISSION_ID, kind: "submission", level: "reviewer", name: "Vendor intake" }]
+    ])
+  })
+})
+
+describe("suggested changes", () => {
+  const suggest = (actorUserId: string, values: Record<string, unknown>, client: ReturnType<typeof createClient>) =>
+    suggestSubmissionAnswers({ actorUserId, organizationId: ORGANIZATION_ID, submissionId: SUBMISSION_ID, values }, { client: client as never })
+  const reviewing = () =>
+    createClient({
+      submissions: [createAssignedSubmissionRow({ assigned_to: MANAGER_ID, values: { notes: "", vendor_name: "Acme" } })],
+      submission_reviewers: [createReviewerRow(MANAGER_ID), createReviewerRow(EXTERNAL_ID)]
+    })
+
+  it("keeps only the typed answers a reviewer changed, and passes them on for the submitter to accept", async () => {
+    const client = reviewing()
+    client.rpc.mockResolvedValue({ data: 1, error: null })
+
+    await expect(suggest(MANAGER_ID, { notes: "", vendor_name: "Acme Ltd" }, client)).resolves.toBe(1)
+    expect(client.rpc).toHaveBeenCalledWith("suggest_submission_answers", {
+      target_actor_user_id: MANAGER_ID,
+      target_org_id: ORGANIZATION_ID,
+      target_submission_id: SUBMISSION_ID,
+      target_values: { vendor_name: "Acme Ltd" }
+    })
+  })
+
+  it("turns away staff, outside reviewers, and a form with nothing changed before the database is asked", async () => {
+    const client = reviewing()
+
+    await expect(suggest(STAFF_ID, { vendor_name: "Other" }, client)).rejects.toMatchObject({ statusCode: 403 })
+    await expect(suggest(EXTERNAL_ID, { vendor_name: "Other" }, client)).rejects.toMatchObject({ statusCode: 403 })
+    await expect(suggest(MANAGER_ID, { vendor_name: "Acme" }, client)).rejects.toMatchObject({ statusCode: 400 })
+    expect(client.rpc).not.toHaveBeenCalled()
+  })
+
+  it("offers suggesting only to an owner or manager reviewing it, while it is reviewed, and lists the trail", async () => {
+    const client = reviewing()
+    client.tables.submission_answer_suggestions = [
+      {
+        decided_at: null,
+        decided_by: null,
+        field_key: "vendor_name",
+        id: "90000000-0000-4000-8000-000000000001",
+        org_id: ORGANIZATION_ID,
+        previous_value: "Acme",
+        proposed_value: "Acme Ltd",
+        status: "pending",
+        submission_id: SUBMISSION_ID,
+        suggested_at: "2026-07-18T18:00:00.000Z",
+        suggested_by: MANAGER_ID
+      }
+    ]
+    const detail = (actorUserId: string) =>
+      getInternalSubmission({ actorUserId, organizationId: ORGANIZATION_ID, submissionId: SUBMISSION_ID }, { client: client as never })
+
+    expect(await detail(MANAGER_ID)).toMatchObject({ canSuggest: true, suggestions: [{ previousValue: "Acme", proposedValue: "Acme Ltd", status: "pending" }] })
+    expect((await detail(EXTERNAL_ID)).canSuggest).toBe(false)
+    expect((await detail(STAFF_ID)).canSuggest).toBe(false)
+
+    client.tables.submissions = [createAssignedSubmissionRow({ assigned_to: MANAGER_ID, status: "approved" })]
+    expect((await detail(MANAGER_ID)).canSuggest).toBe(false)
+  })
+
+  it("lets someone who may edit submissions accept or decline; the database checks it is theirs", async () => {
+    const client = reviewing()
+    client.rpc.mockResolvedValue({ data: createAssignedSubmissionRow(), error: null })
+    const decide = (actorUserId: string) =>
+      decideSubmissionSuggestion(
+        { accept: true, actorUserId, organizationId: ORGANIZATION_ID, submissionId: SUBMISSION_ID, suggestionId: "90000000-0000-4000-8000-000000000001" },
+        { client: client as never }
+      )
+
+    await expect(decide(EXTERNAL_ID)).rejects.toMatchObject({ statusCode: 403 })
+    await expect(decide(STAFF_ID)).resolves.toBeDefined()
+    expect(client.rpc).toHaveBeenCalledWith("decide_submission_suggestion", {
+      target_accept: true,
+      target_actor_user_id: STAFF_ID,
+      target_org_id: ORGANIZATION_ID,
+      target_submission_id: SUBMISSION_ID,
+      target_suggestion_id: "90000000-0000-4000-8000-000000000001"
     })
   })
 })

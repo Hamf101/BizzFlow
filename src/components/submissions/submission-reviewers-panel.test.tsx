@@ -33,9 +33,10 @@ const event = (eventType: SubmissionActivityEvent["eventType"], commentId: strin
 })
 const member = (userId: string, fullName: string, role: OrganizationMember["role"]): OrganizationMember =>
   ({ email: `${fullName}@example.test`, fullName, id: userId, role, status: "active", userId }) as OrganizationMember
-const reviewer = (userId: string, decision: SubmissionReviewer["decision"], note: string | null = null): SubmissionReviewer => ({
+const reviewer = (userId: string, decision: SubmissionReviewer["decision"], note: string | null = null, canApprove = true): SubmissionReviewer => ({
   assignedAt: at,
   assignedBy: MANAGER,
+  canApprove,
   decidedAt: decision === "pending" ? null : at,
   decision,
   note,
@@ -89,5 +90,45 @@ describe("SubmissionReviewersPanel", () => {
     expect(html).toContain("Approved")
     expect(html).toContain("Looks fine from outside")
     expect(html).toContain("1 of 2 approvals")
+  })
+
+  it("lists the people it was shared with apart from the reviewers, with their change request, and leaves them out of the count", () => {
+    const COLLEAGUE = "20000000-0000-4000-8000-000000000003"
+    const html = renderToStaticMarkup(
+      <SubmissionReviewersPanel
+        activity={[]}
+        comments={[]}
+        members={[member(COLLEAGUE, "Cara Colleague", "staff"), member(MANAGER, "Maya Manager", "manager")]}
+        reviewers={[reviewer(MANAGER, "pending"), reviewer(COLLEAGUE, "changes_requested", "The hours are wrong", false)]}
+        submission={submission}
+        tally={{ approved: 0, changesRequested: 1, counting: 1, total: 1 }}
+      />
+    )
+    const [reviewersPart, sharedPart] = html.split(`aria-label="Shared with"`)
+
+    expect(reviewersPart).toContain("Maya Manager")
+    expect(reviewersPart).not.toContain("Cara Colleague")
+    expect(reviewersPart).toContain("0 of 1 approval")
+    expect(sharedPart).toContain("Cara Colleague")
+    expect(sharedPart).toContain("Requested changes")
+    expect(sharedPart).toContain("The hours are wrong")
+  })
+
+  it("shows who it was shared with before any reviewer is chosen", () => {
+    const COLLEAGUE = "20000000-0000-4000-8000-000000000003"
+    const html = renderToStaticMarkup(
+      <SubmissionReviewersPanel
+        activity={[]}
+        comments={[]}
+        members={[member(COLLEAGUE, "Cara Colleague", "staff")]}
+        reviewers={[reviewer(COLLEAGUE, "pending", null, false)]}
+        submission={submission}
+        tally={{ approved: 0, changesRequested: 0, counting: 0, total: 0 }}
+      />
+    )
+
+    expect(html).toContain("Cara Colleague")
+    expect(html).not.toContain("approval")
+    expect(html).not.toContain("Waiting")
   })
 })

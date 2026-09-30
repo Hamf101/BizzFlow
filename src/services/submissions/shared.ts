@@ -223,11 +223,16 @@ export async function assertSubmissionVisible(
   submission: Submission,
   actorUserId: string
 ): Promise<void> {
-  if (role === "staff" && submission.createdBy !== actorUserId) {
+  // Staff see their own work and what was shared with them.
+  if (
+    role === "staff" &&
+    submission.createdBy !== actorUserId &&
+    (submission.status === "draft" || !(await isSubmissionReviewer(client, submission, actorUserId)))
+  ) {
     throw new SubmissionServiceError("Submission was not found.", 404)
   }
 
-  // An external reviewer sees a submitted piece of work only when they are one of its reviewers.
+  // An external reviewer sees a submitted piece of work only when they review it or it was shared with them.
   if (
     role === "external_reviewer" &&
     (submission.status === "draft" || !(await isSubmissionReviewer(client, submission, actorUserId)))

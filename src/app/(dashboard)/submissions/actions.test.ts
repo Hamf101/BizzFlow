@@ -7,9 +7,11 @@ import {
   assignInternalSubmission,
   createInternalSubmissionDraft,
   createInternalSubmissionComment,
+  decideSubmissionSuggestion,
   dismissSubmissionChangesRequest,
   saveInternalSubmissionDraft,
   setInternalSubmissionReviewers,
+  shareInternalSubmission,
   SubmissionServiceError,
   submitInternalSubmission,
   transitionInternalSubmission,
@@ -20,9 +22,11 @@ import {
   commentFromReviewAction,
   createSubmissionAction,
   createSubmissionCommentAction,
+  decideSuggestionAction,
   dismissChangesRequestAction,
   saveSubmissionAction,
   setSubmissionReviewersAction,
+  shareSubmissionAction,
   submitSubmissionAction,
   transitionSubmissionAction,
 } from "./actions"
@@ -64,9 +68,11 @@ vi.mock("@/services/submission-service", async (importOriginal) => {
     assignInternalSubmission: vi.fn(),
     createInternalSubmissionComment: vi.fn(),
     createInternalSubmissionDraft: vi.fn(),
+    decideSubmissionSuggestion: vi.fn(),
     dismissSubmissionChangesRequest: vi.fn(),
     saveInternalSubmissionDraft: vi.fn(),
     setInternalSubmissionReviewers: vi.fn(),
+    shareInternalSubmission: vi.fn(),
     submitInternalSubmission: vi.fn(),
     transitionInternalSubmission: vi.fn(),
   }
@@ -250,6 +256,47 @@ describe("submission review actions", () => {
     expect(redirectMock).not.toHaveBeenCalledWith(
       expect.stringContaining("Private+revision")
     )
+  })
+})
+
+describe("sharing and suggestion actions", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(getAuthenticatedUser).mockResolvedValue({ email: "staff@example.com", id: ACTOR_USER_ID } as never)
+    mockOrganizationContext("staff")
+    vi.spyOn(console, "warn").mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it("shares with everyone ticked, as the signed-in member, and says so", async () => {
+    const formData = createSubmissionFormData()
+    formData.append("sharedUserIds", ASSIGNEE_USER_ID)
+    formData.append("sharedUserIds", ACTOR_USER_ID)
+
+    await expect(shareSubmissionAction(formData)).rejects.toThrow(`NEXT_REDIRECT:/submissions/${SUBMISSION_ID}?feedback=submission_shared`)
+    expect(shareInternalSubmission).toHaveBeenCalledWith({
+      actorUserId: ACTOR_USER_ID,
+      organizationId: ORGANIZATION_ID,
+      submissionId: SUBMISSION_ID,
+      userIds: [ASSIGNEE_USER_ID, ACTOR_USER_ID],
+    })
+  })
+
+  it("accepts or declines by the button pressed, and reports a refusal without detail", async () => {
+    const formData = createSubmissionFormData()
+    formData.set("suggestionId", ASSIGNEE_USER_ID)
+    formData.set("decision", "accept")
+
+    await expect(decideSuggestionAction(formData)).rejects.toThrow("feedback=changes_saved")
+    expect(decideSubmissionSuggestion).toHaveBeenLastCalledWith(expect.objectContaining({ accept: true, suggestionId: ASSIGNEE_USER_ID }))
+
+    formData.set("decision", "decline")
+    vi.mocked(decideSubmissionSuggestion).mockRejectedValueOnce(new SubmissionServiceError("Only the person who submitted it can decide", 403))
+    await expect(decideSuggestionAction(formData)).rejects.toThrow("feedback=permission_denied")
+    expect(decideSubmissionSuggestion).toHaveBeenLastCalledWith(expect.objectContaining({ accept: false }))
   })
 })
 

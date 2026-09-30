@@ -1,5 +1,11 @@
-/** What the channel carries when something is shared with the member. */
-export type SharedMessage = { actorName: string; count?: number; id: string; kind: "document" | "folder" | "template"; level: string; name: string }
+const KINDS = ["document", "folder", "template", "submission"] as const
+
+/**
+ * What the channel carries when something is shared with the member. For a
+ * submission the level is "reviewer" (asked to review it) or "commenter"
+ * (shared with them: they comment and may ask for changes).
+ */
+export type SharedMessage = { actorName: string; count?: number; id: string; kind: (typeof KINDS)[number]; level: string; name: string }
 
 /**
  * Reads a message off the member's channel, ignoring anything that is not a share.
@@ -13,13 +19,13 @@ export function readSharedMessage(payload: unknown): SharedMessage | null {
   if (
     typeof message?.actorName === "string" &&
     typeof message.id === "string" &&
-    (message.kind === "document" || message.kind === "folder" || message.kind === "template") &&
+    KINDS.includes(message.kind as SharedMessage["kind"]) &&
     typeof message.level === "string" &&
     typeof message.name === "string"
   ) {
     const count = typeof message.count === "number" && message.count > 1 ? { count: message.count } : {}
 
-    return { actorName: message.actorName, ...count, id: message.id, kind: message.kind, level: message.level, name: message.name }
+    return { actorName: message.actorName, ...count, id: message.id, kind: message.kind as SharedMessage["kind"], level: message.level, name: message.name }
   }
 
   return null
@@ -33,6 +39,18 @@ export function readSharedMessage(payload: unknown): SharedMessage | null {
  */
 export function describeShare(message: SharedMessage): { detail: string; href: string; title: string } {
   const editor = message.level === "contributor" || message.level === "editor"
+
+  if (message.kind === "submission") {
+    const reviewer = message.level === "reviewer"
+
+    return {
+      detail: reviewer ? "You can approve it or ask for changes." : "You can comment and ask for changes.",
+      href: `/submissions/${message.id}`,
+      title: reviewer
+        ? `${message.actorName} asked you to review “${message.name}”`
+        : `${message.actorName} shared “${message.name}” with you`,
+    }
+  }
 
   if (message.count) {
     return {

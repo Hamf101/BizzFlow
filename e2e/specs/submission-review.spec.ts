@@ -1,4 +1,5 @@
 import { expect, test, uniqueName } from "../support/fixtures"
+import { waitForHydration } from "../support/hydration"
 import { seedSubmission, seedTemplate } from "../support/seed"
 
 /**
@@ -76,21 +77,23 @@ test.describe("submission review", () => {
     tenant,
   }) => {
     const template = await seedTemplate(admin, tenant.organizationId, uniqueName("Several"), "published")
-    const submissionId = await seedSubmission(
-      admin,
-      tenant.organizationId,
-      template,
-      uniqueName("Several run"),
-      tenant.users.staff.id
-    )
+    const title = uniqueName("Several run")
+    const submissionId = await seedSubmission(admin, tenant.organizationId, template, title, tenant.users.staff.id)
     const manager = await pageAs("manager")
     const owner = await pageAs("owner_admin")
+
+    // The owner is somewhere else in the app when they are named.
+    await owner.goto("/submissions")
+    await waitForHydration(owner.getByRole("heading", { level: 1 }).first())
 
     await manager.goto(`/submissions/${submissionId}`)
     await manager.getByRole("checkbox", { name: /^E2E manager/ }).check()
     await manager.getByRole("checkbox", { name: /^E2E owner_admin/ }).check()
     await manager.getByRole("button", { name: /start review/i }).click()
     await expectStatus(admin, submissionId, "in_review")
+
+    // They are told without reloading.
+    await expect(owner.getByText(`asked you to review “${title}”`)).toBeVisible({ timeout: 15_000 })
 
     // One of two approving is not enough.
     await manager.getByRole("button", { name: "Approve" }).click()
@@ -188,7 +191,83 @@ test.describe("submission review", () => {
     await manager.getByRole("button", { name: "Approve" }).click()
     await expectStatus(admin, submissionId, "approved")
   })
+
+  test("lets the person who submitted it share it with someone who can comment and hold it up, but not approve", async ({
+    admin,
+    pageAs,
+    tenant,
+  }) => {
+    const template = await seedTemplate(admin, tenant.organizationId, uniqueName("Shared"), "published")
+    const title = uniqueName("Shared run")
+    const submissionId = await seedSubmission(admin, tenant.organizationId, template, title, tenant.users.staff.id)
+    const manager = await pageAs("manager")
+    const staff = await pageAs("staff")
+    const outside = await pageAs("external_reviewer")
+
+    await manager.goto(`/submissions/${submissionId}`)
+    await manager.getByRole("checkbox", { name: /^E2E manager/ }).check()
+    await manager.getByRole("button", { name: /start review/i }).click()
+    await expectStatus(admin, submissionId, "in_review")
+
+    // Before it is shared, the outside reviewer cannot open it.
+    await outside.goto(`/submissions/${submissionId}`)
+    await expect(outside.getByText("Submission unavailable")).toBeVisible()
+
+    await staff.goto(`/submissions/${submissionId}`)
+    await staff.getByRole("checkbox", { name: /^E2E external_reviewer/ }).check()
+    await staff.getByRole("button", { name: "Save sharing" }).click()
+    await expect(staff.getByRole("region", { name: "Shared with" })).toContainText("E2E external_reviewer")
+
+    await outside.goto(`/submissions/${submissionId}`)
+    await expect(outside.getByRole("heading", { exact: true, level: 1, name: title })).toBeVisible()
+    await expect(outside.getByRole("button", { name: "Approve" })).toBeHidden()
+    await outside.getByLabel("Review note").fill("The dates overlap last month.")
+    await outside.getByRole("button", { name: "Request changes" }).click()
+    await expectStatus(admin, submissionId, "needs_changes")
+
+    // Their change request is the manager's to set aside, like any reviewer's.
+    await manager.goto(`/submissions/${submissionId}`)
+    await expect(manager.getByRole("region", { name: "Shared with" })).toContainText("The dates overlap last month.")
+    await manager.getByLabel(/Set aside E2E external_reviewer/).fill("Checked, they do not overlap.")
+    await manager.getByRole("button", { name: "Set aside and approve" }).click()
+    await expectStatus(admin, submissionId, "approved")
+  })
+
+  test("keeps a reviewer's suggested answer apart until the person who submitted it accepts it", async ({
+    admin,
+    pageAs,
+    tenant,
+  }) => {
+    const template = await seedTemplate(admin, tenant.organizationId, uniqueName("Suggest"), "published")
+    const submissionId = await seedSubmission(admin, tenant.organizationId, template, uniqueName("Suggest run"), tenant.users.staff.id)
+    const manager = await pageAs("manager")
+    const staff = await pageAs("staff")
+
+    await manager.goto(`/submissions/${submissionId}`)
+    await manager.getByRole("checkbox", { name: /^E2E manager/ }).check()
+    await manager.getByRole("button", { name: /start review/i }).click()
+    await expectStatus(admin, submissionId, "in_review")
+
+    await manager.getByRole("link", { name: "Suggest changes" }).click()
+    await manager.getByLabel("Client reference").fill("REF-9000")
+    await manager.getByRole("button", { name: "Send suggestions" }).click()
+    await expect(manager.getByText("Suggested changes", { exact: true })).toBeVisible()
+    await expect.poll(() => readAnswer(admin, submissionId, template.textFieldKey)).toBe("REF-4417")
+
+    await staff.goto(`/submissions/${submissionId}`)
+    await expect(staff.getByRole("listitem").filter({ hasText: "REF-9000" })).toContainText("REF-4417")
+    await staff.getByRole("button", { exact: true, name: "Accept" }).click()
+    await expect.poll(() => readAnswer(admin, submissionId, template.textFieldKey)).toBe("REF-9000")
+    await expect(staff.getByText("Accepted", { exact: true })).toBeVisible()
+    await expectStatus(admin, submissionId, "in_review")
+  })
 })
+
+async function readAnswer(admin: Parameters<typeof seedSubmission>[0], submissionId: string, fieldKey: string): Promise<unknown> {
+  const { data } = await admin.from("submissions").select("values").eq("id", submissionId).single()
+
+  return (data?.values as Record<string, unknown> | undefined)?.[fieldKey]
+}
 
 /**
  * Asserts the persisted status, retrying while the action settles.

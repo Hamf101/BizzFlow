@@ -19,6 +19,7 @@ import {
 } from "@/services/submissions/list-filters"
 import { isReviewRequester, listSubmissionReviewers, withReviewedIds } from "@/services/submissions/reviewer-service"
 import { listSubmissionReviewData } from "@/services/submissions/review-service"
+import { listSubmissionSuggestions } from "@/services/submissions/suggestion-service"
 import {
   assertSubmissionVisible,
   createSubmissionDatabaseError,
@@ -207,7 +208,7 @@ export async function getInternalSubmission(
       const client = getSubmissionClient(deps)
       const { role, submission } = await loadVisibleSubmission(client, input)
       const viewer = { role, userId: input.actorUserId }
-      const [files, reviewData, review] = await Promise.all([
+      const [files, reviewData, review, suggestions] = await Promise.all([
         listSubmissionFiles(
           client,
           input.organizationId,
@@ -222,9 +223,23 @@ export async function getInternalSubmission(
           input.submissionId
         ),
         listSubmissionReviewers(client, submission, viewer),
+        listSubmissionSuggestions(client, submission),
       ])
+      const reviewing = submission.status === "in_review" || submission.status === "needs_changes"
+      const mine = review.reviewers.find((reviewer) => reviewer.userId === input.actorUserId)
 
-      return { submission, files, ...reviewData, ...review, isRequester: isReviewRequester(submission, viewer) }
+      return {
+        submission,
+        files,
+        ...reviewData,
+        ...review,
+        canShare:
+          submission.status !== "draft" &&
+          (role === "owner_admin" || submission.createdBy === input.actorUserId || submission.assignedBy === input.actorUserId),
+        canSuggest: reviewing && (role === "owner_admin" || role === "manager") && mine?.canApprove === true,
+        isRequester: isReviewRequester(submission, viewer),
+        suggestions,
+      }
     }
   )
 }

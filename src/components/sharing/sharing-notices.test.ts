@@ -44,6 +44,27 @@ describe("describeShare", () => {
   })
 })
 
+describe("describeShare for a submission", () => {
+  const submission = { ...message, id: "s1", kind: "submission", name: "March timesheet" } as const
+
+  it("asks a reviewer to review it, and opens the submission", () => {
+    expect(readSharedMessage({ ...submission, level: "reviewer" })).toEqual({ ...submission, level: "reviewer" })
+    expect(describeShare({ ...submission, level: "reviewer" })).toEqual({
+      detail: "You can approve it or ask for changes.",
+      href: "/submissions/s1",
+      title: "Maya asked you to review “March timesheet”",
+    })
+  })
+
+  it("tells someone it was shared with what they can do", () => {
+    expect(describeShare({ ...submission, level: "commenter" })).toEqual({
+      detail: "You can comment and ask for changes.",
+      href: "/submissions/s1",
+      title: "Maya shared “March timesheet” with you",
+    })
+  })
+})
+
 describe("describeShare for a template", () => {
   const template = { ...message, id: "t1", kind: "template", name: "Lease form" } as const
 

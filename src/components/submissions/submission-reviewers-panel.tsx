@@ -69,7 +69,10 @@ export function SubmissionReviewersPanel({
   submission: Submission
   tally: SubmissionReviewTally
 }): ReactElement | null {
-  if (tally.total === 0) {
+  const approvers = reviewers.filter((reviewer) => reviewer.canApprove)
+  const shared = reviewers.filter((reviewer) => !reviewer.canApprove)
+
+  if (reviewers.length === 0 && tally.total === 0) {
     return null
   }
 
@@ -77,50 +80,64 @@ export function SubmissionReviewersPanel({
   const needed = Math.max(1, Math.min(submission.requiredApprovals ?? tally.counting, tally.counting))
   const byId = new Map(members.map((member) => [member.userId, member]))
   const open = tally.changesRequested > 0
+  const row = (reviewer: SubmissionReviewer): ReactElement => {
+    const member = byId.get(reviewer.userId)
+    const decision = DECISIONS[reviewer.decision]
+
+    return (
+      <li className="flex flex-col gap-1.5 py-2.5" key={reviewer.userId}>
+        <div className="flex items-start justify-between gap-3">
+          <span className="min-w-0 text-sm">
+            <span className="block truncate">{member ? member.fullName?.trim() || member.email : "A former member"}</span>
+            {member ? <span className="block text-xs text-muted-foreground">{ROLE_LABELS[member.role]}</span> : null}
+          </span>
+          {reviewer.canApprove || reviewer.decision !== "pending" ? <Badge variant={decision.variant}>{decision.label}</Badge> : null}
+        </div>
+        {reviewer.note ? (
+          <p className="whitespace-pre-wrap break-words border-l-2 pl-3 text-sm text-muted-foreground">{reviewer.note}</p>
+        ) : null}
+        {reviewer.decidedAt ? <p className="text-xs text-muted-foreground">{formatMediumDateTime(reviewer.decidedAt)}</p> : null}
+        {reviewerComments(reviewer.userId, comments, activity).map((comment) => (
+          <p className="whitespace-pre-wrap break-words rounded-md bg-muted/50 px-3 py-2 text-sm" key={comment.id}>
+            {comment.body}
+            <span className="mt-1 block text-xs text-muted-foreground">Commented {formatMediumDateTime(comment.createdAt)}</span>
+          </p>
+        ))}
+      </li>
+    )
+  }
 
   return (
-    <section aria-label="Reviewers" className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-        <h3 className="text-sm font-medium">Reviewers</h3>
-        <p className="text-xs text-muted-foreground">
-          {tally.approved} of {needed} {needed === 1 ? "approval" : "approvals"}
-          {submission.requiredApprovals === null && tally.counting > 1 ? " (everyone)" : ""}
-          {open ? " · held up by a change request" : ""}
-        </p>
-      </div>
-      <ul className="divide-y divide-border/60">
-        {reviewers.map((reviewer) => {
-          const member = byId.get(reviewer.userId)
-          const decision = DECISIONS[reviewer.decision]
-
-          return (
-            <li className="flex flex-col gap-1.5 py-2.5" key={reviewer.userId}>
-              <div className="flex items-start justify-between gap-3">
-                <span className="min-w-0 text-sm">
-                  <span className="block truncate">{member ? member.fullName?.trim() || member.email : "A former member"}</span>
-                  {member ? <span className="block text-xs text-muted-foreground">{ROLE_LABELS[member.role]}</span> : null}
-                </span>
-                <Badge variant={decision.variant}>{decision.label}</Badge>
-              </div>
-              {reviewer.note ? (
-                <p className="whitespace-pre-wrap break-words border-l-2 pl-3 text-sm text-muted-foreground">{reviewer.note}</p>
-              ) : null}
-              {reviewer.decidedAt ? <p className="text-xs text-muted-foreground">{formatMediumDateTime(reviewer.decidedAt)}</p> : null}
-              {reviewerComments(reviewer.userId, comments, activity).map((comment) => (
-                <p className="whitespace-pre-wrap break-words rounded-md bg-muted/50 px-3 py-2 text-sm" key={comment.id}>
-                  {comment.body}
-                  <span className="mt-1 block text-xs text-muted-foreground">Commented {formatMediumDateTime(comment.createdAt)}</span>
-                </p>
-              ))}
-            </li>
-          )
-        })}
-      </ul>
-      {reviewers.length < tally.total ? (
-        <p className="text-xs text-muted-foreground">
-          {tally.total - reviewers.length} more {tally.total - reviewers.length === 1 ? "reviewer was" : "reviewers were"} chosen by someone more senior, so only you are listed.
-        </p>
+    <div className="flex flex-col gap-5">
+      {tally.total > 0 ? (
+        <section aria-label="Reviewers" className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+            <h3 className="text-sm font-medium">Reviewers</h3>
+            <p className="text-xs text-muted-foreground">
+              {tally.approved} of {needed} {needed === 1 ? "approval" : "approvals"}
+              {submission.requiredApprovals === null && tally.counting > 1 ? " (everyone)" : ""}
+              {open ? " · held up by a change request" : ""}
+            </p>
+          </div>
+          <ul className="divide-y divide-border/60">{approvers.map(row)}</ul>
+          {approvers.length < tally.total ? (
+            <p className="text-xs text-muted-foreground">
+              {approvers.length > 0
+                ? `${tally.total - approvers.length} more ${tally.total - approvers.length === 1 ? "reviewer was" : "reviewers were"} chosen by someone more senior, so only you are listed.`
+                : `${tally.total} ${tally.total === 1 ? "reviewer was" : "reviewers were"} chosen by someone more senior, so they are not listed.`}
+            </p>
+          ) : null}
+        </section>
       ) : null}
-    </section>
+      {shared.length > 0 ? (
+        <section aria-label="Shared with" className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+            <h3 className="text-sm font-medium">Shared with</h3>
+            <p className="text-xs text-muted-foreground">Can comment and ask for changes</p>
+          </div>
+          <ul className="divide-y divide-border/60">{shared.map(row)}</ul>
+        </section>
+      ) : null}
+    </div>
   )
 }

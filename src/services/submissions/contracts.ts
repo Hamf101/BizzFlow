@@ -1,4 +1,5 @@
 import type { ListSort } from "@/lib/list-state"
+import type { SharedMessage } from "@/components/sharing/sharing-notices"
 import type { AdminSupabaseClient } from "@/lib/supabase/admin"
 import type {
   createSafeSubmissionFilename,
@@ -26,6 +27,7 @@ import type {
   SubmissionReviewer,
   SubmissionReviewTally,
   SubmissionReviewTransition,
+  SubmissionSuggestion,
 } from "@/types/submission-review"
 
 /** Narrow trusted Supabase client used by submission services. */
@@ -46,6 +48,12 @@ export type SubmissionDetail = {
   tally: SubmissionReviewTally
   /** Whether the viewer assigned the reviewers, so a change request is theirs to set aside. */
   isRequester: boolean
+  /** Whether the viewer may choose who else it is shared with. */
+  canShare: boolean
+  /** Whether the viewer may suggest new answers: an owner or manager reviewing it, while it is reviewed. */
+  canSuggest: boolean
+  /** Every suggested answer and what became of it, oldest first: the change trail. */
+  suggestions: SubmissionSuggestion[]
 }
 
 /** What the list's hover preview draws for one visible submission, and no more. */
@@ -145,6 +153,24 @@ export type DismissSubmissionChangesRequestInput = GetInternalSubmissionInput & 
   alsoApprove: boolean
 }
 
+/** Input for choosing who a submission is shared with, beyond its reviewers. */
+export type ShareInternalSubmissionInput = GetInternalSubmissionInput & {
+  /** Everyone it should be shared with; anyone left out is taken off. */
+  userIds: string[]
+}
+
+/** Input for a reviewer suggesting new answers. */
+export type SuggestSubmissionAnswersInput = GetInternalSubmissionInput & {
+  /** The form's untrusted answers; only those that change are kept. */
+  values: unknown
+}
+
+/** Input for the person who submitted it accepting or declining a suggestion. */
+export type DecideSubmissionSuggestionInput = GetInternalSubmissionInput & {
+  accept: boolean
+  suggestionId: string
+}
+
 /** Input for one binding submission review state change. */
 export type TransitionInternalSubmissionInput =
   GetInternalSubmissionInput & {
@@ -226,6 +252,8 @@ export type SubmissionServiceDeps = {
   createSignedSubmissionDownloadUrl?: typeof createSignedSubmissionDownloadUrl
   /** Largest submissions export; tests lower it. */
   maxExportRows?: number
+  /** Tells someone they were asked to review, or that it was shared with them. A failure never undoes the change. */
+  notify?: (recipientUserId: string, message: SharedMessage) => Promise<void>
 }
 
 /** Scalar values permitted in operation logs. */
