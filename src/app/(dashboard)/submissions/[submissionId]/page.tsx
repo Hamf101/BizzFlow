@@ -338,8 +338,11 @@ export default async function SubmissionDetailPage({
               canAssign={canAssign && !peopleResult.errorMessage}
               canReview={canReview}
               currentUserId={user.id}
+              isRequester={detail.isRequester}
               members={peopleResult.members}
+              reviewers={detail.reviewers}
               submission={submission}
+              tally={detail.tally}
             />
             <SubmissionDiscussionCard
               canComment={canComment}

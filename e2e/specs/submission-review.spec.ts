@@ -1,4 +1,3 @@
-import { chooseOption } from "../support/choose"
 import { expect, test, uniqueName } from "../support/fixtures"
 import { seedSubmission, seedTemplate } from "../support/seed"
 
@@ -42,7 +41,7 @@ test.describe("submission review", () => {
 
     // Assigning a submitted item is what starts its review — there is no
     // separate "begin" control.
-    await chooseOption(manager.getByRole("combobox", { name: "Reviewer" }), /^E2E manager/)
+    await manager.getByRole("checkbox", { name: /^E2E manager/ }).check()
     await manager.getByRole("button", { name: /start review/i }).click()
 
     await expectStatus(admin, submissionId, "in_review")
@@ -59,7 +58,7 @@ test.describe("submission review", () => {
     await expectStatus(admin, submissionId, "submitted")
 
     await manager.goto(`/submissions/${submissionId}`)
-    await chooseOption(manager.getByRole("combobox", { name: "Reviewer" }), /^E2E manager/)
+    await manager.getByRole("checkbox", { name: /^E2E manager/ }).check()
     await manager.getByRole("button", { name: /start review/i }).click()
     await manager.getByRole("button", { name: "Approve" }).click()
 
@@ -69,6 +68,54 @@ test.describe("submission review", () => {
     await manager.getByRole("button", { name: "Mark complete" }).click()
 
     await expectStatus(admin, submissionId, "completed")
+  })
+
+  test("waits for every reviewer, and a change request holds it until the person who assigned them sets it aside", async ({
+    admin,
+    pageAs,
+    tenant,
+  }) => {
+    const template = await seedTemplate(admin, tenant.organizationId, uniqueName("Several"), "published")
+    const submissionId = await seedSubmission(
+      admin,
+      tenant.organizationId,
+      template,
+      uniqueName("Several run"),
+      tenant.users.staff.id
+    )
+    const manager = await pageAs("manager")
+    const owner = await pageAs("owner_admin")
+
+    await manager.goto(`/submissions/${submissionId}`)
+    await manager.getByRole("checkbox", { name: /^E2E manager/ }).check()
+    await manager.getByRole("checkbox", { name: /^E2E owner_admin/ }).check()
+    await manager.getByRole("button", { name: /start review/i }).click()
+    await expectStatus(admin, submissionId, "in_review")
+
+    // One of two approving is not enough.
+    await manager.getByRole("button", { name: "Approve" }).click()
+    await expectStatus(admin, submissionId, "in_review")
+    await expect(manager.getByText("1 of 2 approvals")).toBeVisible()
+
+    // The other reviewer asks for changes, which holds it up.
+    await owner.goto(`/submissions/${submissionId}`)
+    await expect(owner.getByRole("region", { name: "Reviewers" })).toContainText("E2E manager")
+    await owner.getByLabel("Review note").fill("The total does not add up.")
+    await owner.getByRole("button", { name: "Request changes" }).click()
+    await expectStatus(admin, submissionId, "needs_changes")
+
+    // Only the person who assigned the reviewers can set it aside.
+    await owner.goto(`/submissions/${submissionId}`)
+    await expect(owner.getByLabel(/Set aside .*change request/)).toHaveCount(0)
+    await manager.goto(`/submissions/${submissionId}`)
+    await manager.getByLabel(/Set aside E2E owner_admin/).fill("I checked the total, it is right.")
+    await manager.getByRole("button", { name: "Set aside", exact: true }).click()
+    await expectStatus(admin, submissionId, "in_review")
+
+    // Everyone has now approved or had their request set aside; the last approval finishes it.
+    await owner.goto(`/submissions/${submissionId}`)
+    await owner.getByRole("button", { name: "Approve" }).click()
+    await expectStatus(admin, submissionId, "approved")
   })
 
   test("refuses to record changes or rejection without a note", async ({
@@ -93,7 +140,7 @@ test.describe("submission review", () => {
     const manager = await pageAs("manager")
 
     await manager.goto(`/submissions/${submissionId}`)
-    await chooseOption(manager.getByRole("combobox", { name: "Reviewer" }), /^E2E manager/)
+    await manager.getByRole("checkbox", { name: /^E2E manager/ }).check()
     await manager.getByRole("button", { name: /start review/i }).click()
 
     // Note deliberately left blank.
