@@ -64,7 +64,7 @@ let bundledPdfFontsPromise: Promise<{
 export async function renderPdfLibDocument(
   input: NormalizedPdfInput,
   pages: PdfPagePlan[],
-  readImage?: PdfLibRenderContext["readImage"]
+  { fillable = false, readImage }: { fillable?: boolean; readImage?: PdfLibRenderContext["readImage"] } = {}
 ): Promise<Buffer> {
   const document = await PDFDocument.create()
   const imageCache = new Map<string, PDFImage>()
@@ -79,6 +79,8 @@ export async function renderPdfLibDocument(
   // one-line document about 0.9 MB.
   const regularFont = await document.embedFont(fontBytes.regular, { subset: true })
   const boldFont = await document.embedFont(fontBytes.bold, { subset: true })
+  // The whole face, not a subset: whoever fills the form in may type any letter.
+  const formFont = fillable ? await document.embedFont(fontBytes.regular) : undefined
   // Slanted faces only for a document with italic words, so others stay as they were.
   const faces = new Map<string, Promise<PDFFont>>([
     ["bold", Promise.resolve(boldFont)],
@@ -156,6 +158,7 @@ export async function renderPdfLibDocument(
       content: input.content,
       document,
       faceFor,
+      formFont,
       freeImages,
       hasSigners: input.signers.length > 0,
       imageCache,
@@ -179,6 +182,11 @@ export async function renderPdfLibDocument(
     }
   }
 
+  // Drawn once every field is on its page, in a face that writes every answer.
+  if (formFont) {
+    document.getForm().updateFieldAppearances(formFont)
+  }
+
   // pdf-lib refreshes the modification date while pages and resources change,
   // so immutable metadata must be applied only after all drawing is complete.
   if (input.metadataTimestamp) {
@@ -190,7 +198,7 @@ export async function renderPdfLibDocument(
 
   // Plain indirect objects maximize compatibility with strict PDF processors
   // and print pipelines that do not reliably support compressed object streams.
-  return Buffer.from(await document.save({ useObjectStreams: false }))
+  return Buffer.from(await document.save({ updateFieldAppearances: false, useObjectStreams: false }))
 }
 
 async function loadBundledPdfFonts(): Promise<{
@@ -734,7 +742,16 @@ async function drawPdfLibField(
       y: topY - 2 - size,
     })
 
-    if (isFieldChecked(block, context.answers[block.fieldKey])) {
+    const checked = isFieldChecked(block, context.answers[block.fieldKey])
+
+    if (context.formFont) {
+      const box = context.document.getForm().createCheckBox(formFieldName(context, block.fieldKey))
+      box.addToPage(context.page, { borderWidth: 0, height: size, width: size, x: frame.x, y: topY - 2 - size })
+
+      if (checked) {
+        box.check()
+      }
+    } else if (checked) {
       context.page.drawLine({ color: ink, end: { x: frame.x + 4, y: topY - 10 }, start: { x: frame.x + 2, y: topY - 7 }, thickness: 1.2 })
       context.page.drawLine({ color: ink, end: { x: frame.x + 8.5, y: topY - 4 }, start: { x: frame.x + 4, y: topY - 10 }, thickness: 1.2 })
     }
@@ -769,20 +786,35 @@ async function drawPdfLibField(
           : (item.answerOverride ??
             formatFieldValue(block, context.answers[block.fieldKey]))
 
-      if (answer) {
+      if (context.formFont && FORM_FIELD_TYPES.has(block.type)) {
+        // The box keeps the height its answer takes, so both PDFs page alike.
+        contentBottom = boxTop - ANSWER_BOX_PADDING - (answer ? wrapPdfText(answer, context.regularFont, 10, inner).length * 15 : 0)
+      } else if (answer) {
         contentBottom = drawWrappedPdfText(context, answer, boxTop - ANSWER_BOX_PADDING, frame.x + ANSWER_BOX_PADDING, inner, 10, 15, context.regularFont, ink, "left")
       }
     }
 
     const boxHeight = Math.max(answerBoxHeight(block), boxTop - contentBottom + ANSWER_BOX_PADDING)
+
+    if (context.formFont && FORM_FIELD_TYPES.has(block.type)) {
+      addPdfFormField(context, item, block, { height: boxHeight, width: frame.width, x: frame.x, y: boxTop - boxHeight })
+    }
+
+    // A faint edge, so the page reads as a document and still shows where to write;
+    // a signature's foot is the full line it is signed on.
     context.page.drawRectangle({
-      borderColor: edge,
+      borderColor: rgb(0.85, 0.83, 0.81),
       borderWidth: 0.7,
       height: boxHeight,
       width: frame.width,
       x: frame.x,
       y: boxTop - boxHeight,
     })
+
+    if (block.type === "signature_field" || block.type === "initials_field") {
+      context.page.drawLine({ color: edge, end: { x: frame.x + frame.width, y: boxTop - boxHeight }, start: { x: frame.x, y: boxTop - boxHeight }, thickness: 0.7 })
+    }
+
     cursorY = boxTop - boxHeight
   }
 
@@ -804,4 +836,69 @@ async function drawPdfLibField(
   }
 
   return cursorY - 7
+}
+
+// Answers someone can type or pick in a PDF viewer; a signature is drawn in the viewer's own way.
+const FORM_FIELD_TYPES = new Set<PdfFieldBlock["type"]>(["date_field", "dropdown_field", "text_field"])
+
+/**
+ * A field's name in the PDF's form: its key, or its key and a number for the
+ * second box a field fills, such as the rest of an answer on the next page.
+ */
+function formFieldName(context: PdfLibRenderContext, fieldKey: string): string {
+  const form = context.document.getForm()
+  let name = fieldKey
+
+  for (let count = 2; form.getFieldMaybe(name); count += 1) {
+    name = `${fieldKey} ${count}`
+  }
+
+  return name
+}
+
+/**
+ * Puts a form field where an answer prints, holding the answer so far.
+ *
+ * @param context - The page being drawn, with the form's face.
+ * @param item - The field, or the part of a long answer on this page.
+ * @param block - The field.
+ * @param rectangle - Where its box prints.
+ */
+function addPdfFormField(
+  context: PdfLibRenderContext,
+  item: PdfBlockFlowItem,
+  block: PdfFieldBlock,
+  rectangle: { height: number; width: number; x: number; y: number }
+): void {
+  const form = context.document.getForm()
+  const name = formFieldName(context, block.fieldKey)
+  const value = item.answerOverride ?? formatFieldValue(block, context.answers[block.fieldKey])
+  const widget = { ...rectangle, borderWidth: 0, font: context.formFont }
+
+  if (block.type === "dropdown_field") {
+    const dropdown = form.createDropdown(name)
+    dropdown.addOptions(block.options)
+
+    if (value && !block.options.includes(value)) {
+      // An answer from before the choices changed stays as it was given.
+      dropdown.enableEditing()
+    }
+
+    if (value) {
+      dropdown.select(value, true)
+    }
+
+    dropdown.addToPage(context.page, widget)
+    return
+  }
+
+  const text = form.createTextField(name)
+
+  if (block.type === "text_field" && block.multiline) {
+    text.enableMultiline()
+  }
+
+  text.addToPage(context.page, widget)
+  text.setText(value)
+  text.setFontSize(10)
 }

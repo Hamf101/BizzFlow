@@ -33,12 +33,12 @@ type GeneratedDocumentPdfRouteContext = {
 /**
  * Delivers a private preview or redirects to the immutable finalized PDF.
  *
- * @param _request - Authenticated GET request.
+ * @param request - Authenticated GET request; `?fillable=1` asks for form fields.
  * @param context - Dynamic document route parameters.
  * @returns Preview PDF bytes, a signed final-download redirect, or a safe JSON error.
  */
 export async function GET(
-  _request: Request,
+  request: Request,
   context: GeneratedDocumentPdfRouteContext
 ): Promise<Response> {
   let requestedDocumentId: string | undefined
@@ -93,6 +93,8 @@ export async function GET(
       })
     }
 
+    // A signed document has no fillable copy: its answers stand as signed.
+    const fillable = new URL(request.url).searchParams.get("fillable") === "1"
     const pdf = await renderGeneratedDocumentPdf({
       documentId: view.document.id,
       title: view.document.title,
@@ -110,6 +112,7 @@ export async function GET(
         initialsDataUrl: recipient.initialsDataUrl,
       })),
     }, {
+      fillable,
       readImage: (asset) => readTemplateImage(organizationContext.organization.id, asset),
     })
 
@@ -119,7 +122,7 @@ export async function GET(
         "Cache-Control": "private, no-store",
         "Content-Disposition": `attachment; filename="${createPdfFilename(
           view.document.title,
-          "preview"
+          fillable ? "fillable" : "preview"
         )}"`,
         "Content-Length": String(pdf.length),
         "Content-Type": "application/pdf",

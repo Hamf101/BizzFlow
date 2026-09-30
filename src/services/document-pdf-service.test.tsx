@@ -10,6 +10,7 @@ import {
   type RenderGeneratedDocumentPdfInput
 } from "@/services/document-pdf-service"
 import { createPdfPagePlans } from "@/services/document-pdf/planner"
+import { createSampleDocumentInput } from "@/services/document-pdf/sample-document.test-support"
 import { normalizePdfInput } from "@/services/document-pdf/shared"
 import type { PdfFlowItem, PdfPagePlan } from "@/services/document-pdf/types"
 import { createPdfLayoutMetrics, getPdfColumnFrames, type PdfLayoutMetrics } from "@/services/document-pdf/layout"
@@ -542,6 +543,33 @@ describe("document PDF service", () => {
 
     expect(buffer.subarray(0, 5).toString("utf8")).toBe("%PDF-")
     expect(buffer.length).toBeGreaterThan(1_000)
+  })
+
+  it("gives a fillable PDF a form field for each answer, holding the answers so far", { timeout: PDF_RENDER_TIMEOUT_MS }, async () => {
+    const input = createSampleDocumentInput()
+    // A name the PDF's standard fonts cannot write, which a viewer must still show.
+    input.answers = { ...input.answers, client_name: "Zoë Łukasz — Ōsaka" }
+    const regular = await PDFDocument.load(await renderGeneratedDocumentPdf(input))
+    const fillable = await PDFDocument.load(await renderGeneratedDocumentPdf(input, { fillable: true }))
+    const form = fillable.getForm()
+    const [page] = fillable.getPages()
+
+    expect(regular.getForm().getFields()).toHaveLength(0)
+    expect(form.getTextField("client_name").getText()).toBe("Zoë Łukasz — Ōsaka")
+    expect(form.getTextField("effective_date").getText()).toBe("2026-07-17")
+    expect(form.getDropdown("engagement_type").getOptions()).toEqual(["Fixed fee", "Time and materials"])
+    expect(form.getDropdown("engagement_type").getSelected()).toEqual(["Fixed fee"])
+    expect(form.getCheckBox("terms_accepted").isChecked()).toBe(true)
+
+    for (const field of form.getFields()) {
+      for (const widget of field.acroField.getWidgets()) {
+        const box = widget.getRectangle()
+
+        expect(box.x).toBeGreaterThanOrEqual(0)
+        expect(box.x + box.width).toBeLessThanOrEqual(page.getWidth())
+        expect(box.height).toBeGreaterThan(8)
+      }
+    }
   })
 
   it("renders saved page size, orientation, and margins through pdf-lib", async () => {

@@ -7,8 +7,11 @@ import type { RenderGeneratedDocumentPdfInput } from "./document-pdf/types"
 
 export { DocumentPdfServiceError } from "./document-pdf/errors"
 
-/** Reads stored pictures' print copies, for documents that have them. */
-export type RenderGeneratedDocumentPdfOptions = { readImage?: PdfLibRenderContext["readImage"] }
+/**
+ * Reads stored pictures' print copies, for documents that have them; a
+ * fillable PDF holds its answers in form fields someone can change in a viewer.
+ */
+export type RenderGeneratedDocumentPdfOptions = { fillable?: boolean; readImage?: PdfLibRenderContext["readImage"] }
 export type {
   RenderGeneratedDocumentPdfInput,
 } from "./document-pdf/types"
@@ -17,7 +20,7 @@ export type {
  * Renders an immutable guided document snapshot to a PDF buffer.
  *
  * @param input - Generated document snapshot, answers, workflow, and signer state.
- * @param options - Reads stored pictures' print copies, for documents that have them.
+ * @param options - Reads stored pictures' print copies; `fillable` adds form fields.
  * @returns Complete PDF bytes suitable for download or private storage.
  * @throws DocumentPdfServiceError when validation or rendering fails.
  */
@@ -30,7 +33,7 @@ export async function renderGeneratedDocumentPdf(
   try {
     const normalizedInput = normalizePdfInput(input)
     const pages = createPdfPagePlans(normalizedInput)
-    const buffer = await renderPdfLibDocument(normalizedInput, pages, options.readImage)
+    const buffer = await renderPdfLibDocument(normalizedInput, pages, options)
 
     console.info("generated_document_pdf_rendered", {
       documentId: input.documentId,

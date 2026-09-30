@@ -42,7 +42,8 @@ export const SECTION_TITLE: CSSProperties = {
 // label, a box two lines tall (four when multi-line, 56 points for a
 // signature) padded by 6 points, and 7-point help beneath.
 const BOX_HEIGHT = { line: 3, lines: 6, drawing: 5.6 } as const
-// The printed box's edge; a box is only its edge, so the page shows through.
+// The printed edge of a checkbox and of a signature's line. An answer box's
+// edge is fainter, the page's own border colour, as it prints.
 const EDGE = "rgb(156 163 176)"
 // A control inside a box is bare: the box is the field.
 const BARE =
@@ -208,9 +209,21 @@ export function PaperField({
         {required}
       </span>
       <div
-        className={cn("relative flex flex-col focus-within:ring-2 focus-within:ring-ring/40", fill && "cursor-text")}
+        className={cn(
+          "relative flex flex-col border-border transition-colors focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/40",
+          fill && "cursor-text",
+          // Faint until a pointer comes over it, drawn in full while it takes an answer.
+          mode !== "read" && "hover:border-muted-foreground/60"
+        )}
         data-slot="paper-box"
-        style={{ border: `0.07em solid ${EDGE}`, lineHeight: 1.5, minHeight: `${sized ?? height}em`, padding: "0.6em" }}
+        style={{
+          borderBottomColor: height === BOX_HEIGHT.drawing ? EDGE : undefined,
+          borderStyle: "solid",
+          borderWidth: "0.07em",
+          lineHeight: 1.5,
+          minHeight: `${sized ?? height}em`,
+          padding: "0.6em",
+        }}
       >
         {answer}
         {edge}

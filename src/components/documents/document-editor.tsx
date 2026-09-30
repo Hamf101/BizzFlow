@@ -1,6 +1,6 @@
 "use client"
 
-import { Download, Files, History, MessageSquare, MoreHorizontal, Palette, Send } from "lucide-react"
+import { Download, FilePen, Files, History, MessageSquare, MoreHorizontal, Palette, Send } from "lucide-react"
 import { type ReactElement, useEffect, useMemo, useRef, useState } from "react"
 
 import type { DocumentContentInput } from "@/app/(editor)/documents/[documentId]/edit/actions"
@@ -417,6 +417,12 @@ export function DocumentEditor({
                 <Download />
                 Download PDF
               </DropdownMenuItem>
+              {completed ? null : (
+                <DropdownMenuItem render={<a href={`${pdfHref}?fillable=1`} rel="noreferrer" target="_blank" />}>
+                  <FilePen />
+                  Download fillable PDF
+                </DropdownMenuItem>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         }
