@@ -112,7 +112,8 @@ describe("internal submission visibility", () => {
           updated_by: OTHER_STAFF_ID,
           updated_at: "2026-07-18T17:00:00.000Z"
         })
-      ]
+      ],
+      submission_reviewers: [createReviewerRow(EXTERNAL_ID)]
     })
 
     const externalRows = (
@@ -176,6 +177,37 @@ describe("internal submission visibility", () => {
         toStatus: "in_review"
       })
     ])
+  })
+})
+
+describe("external reviewers", () => {
+  const detail = (actorUserId: string, client: ReturnType<typeof createClient>) =>
+    getInternalSubmission({ actorUserId, organizationId: ORGANIZATION_ID, submissionId: SUBMISSION_ID }, { client: client as never })
+
+  it("see a submission they were named a reviewer of, whoever leads, and nothing else", async () => {
+    const client = createClient({
+      submissions: [createAssignedSubmissionRow({ assigned_to: MANAGER_ID })],
+      submission_reviewers: [createReviewerRow(MANAGER_ID), createReviewerRow(EXTERNAL_ID)]
+    })
+    const outsider = createClient({ submissions: [createAssignedSubmissionRow({ assigned_to: MANAGER_ID })], submission_reviewers: [createReviewerRow(MANAGER_ID)] })
+
+    await expect(detail(EXTERNAL_ID, client)).resolves.toMatchObject({ submission: { id: SUBMISSION_ID } })
+    await expect(detail(EXTERNAL_ID, outsider)).rejects.toMatchObject({ statusCode: 404 })
+  })
+
+  it("may approve or ask for changes as a reviewer, but rejecting needs review permission", async () => {
+    const client = createClient({ submissions: [createAssignedSubmissionRow()] })
+    client.rpc.mockResolvedValue({ data: createAssignedSubmissionRow(), error: null })
+    const decide = (targetStatus: "approved" | "rejected" | "needs_changes") =>
+      transitionInternalSubmission(
+        { actorUserId: EXTERNAL_ID, comment: "Because", expectedRevision: 3, organizationId: ORGANIZATION_ID, submissionId: SUBMISSION_ID, targetStatus },
+        { client: client as never }
+      )
+
+    await expect(decide("approved")).resolves.toBeDefined()
+    await expect(decide("needs_changes")).resolves.toBeDefined()
+    await expect(decide("rejected")).rejects.toMatchObject({ statusCode: 403 })
+    expect(client.rpc).toHaveBeenCalledTimes(2)
   })
 })
 
@@ -371,7 +403,8 @@ describe("submission list pages", () => {
           id: getNumberedSubmissionId(3),
           updated_at: "2026-07-18T11:00:00.000Z"
         })
-      ]
+      ],
+      submission_reviewers: [createReviewerRow(EXTERNAL_ID, { submission_id: getNumberedSubmissionId(3) })]
     })
 
     const staff = await listSubmissionPage(createPageInput(STAFF_ID), {
@@ -432,7 +465,8 @@ describe("submission list pages", () => {
           status: "completed",
           updated_at: "2026-07-01T00:00:00.000Z"
         })
-      ]
+      ],
+      submission_reviewers: [3, 4, 5].map((row) => createReviewerRow(EXTERNAL_ID, { submission_id: getNumberedSubmissionId(row) }))
     })
     const count = (actorUserId: string, updatedSince?: string) =>
       countSubmissionsByStatus(

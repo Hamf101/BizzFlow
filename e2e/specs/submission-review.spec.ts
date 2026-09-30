@@ -150,80 +150,45 @@ test.describe("submission review", () => {
     await expect(manager.getByText(/note is required/i).first()).toBeVisible()
   })
 
-  test("withholds the binding decision from staff and external reviewers", async ({
+  test("lets an outside reviewer approve and comment as a reviewer, but not reject, and keeps staff from deciding", async ({
     admin,
     pageAs,
     tenant,
   }) => {
-    const template = await seedTemplate(
-      admin,
-      tenant.organizationId,
-      uniqueName("Guard"),
-      "published"
-    )
+    const template = await seedTemplate(admin, tenant.organizationId, uniqueName("Guard"), "published")
     const title = uniqueName("Guard run")
-    const submissionId = await seedSubmission(
-      admin,
-      tenant.organizationId,
-      template,
-      title,
-      tenant.users.staff.id
-    )
-    const { error: assignmentError } = await admin.rpc(
-      "assign_internal_submission",
-      {
-        target_actor_user_id: tenant.users.manager.id,
-        target_assignee_user_id: tenant.users.external_reviewer.id,
-        target_expected_revision: 1,
-        target_org_id: tenant.organizationId,
-        target_submission_id: submissionId,
-      }
-    )
-
-    expect(assignmentError).toBeNull()
-
+    const submissionId = await seedSubmission(admin, tenant.organizationId, template, title, tenant.users.staff.id)
+    const manager = await pageAs("manager")
     const staff = await pageAs("staff")
-    const reviewer = await pageAs("external_reviewer")
+    const outside = await pageAs("external_reviewer")
 
+    // The manager names the outside reviewer beside themselves.
+    await manager.goto(`/submissions/${submissionId}`)
+    await manager.getByRole("checkbox", { name: /^E2E manager/ }).check()
+    await manager.getByRole("checkbox", { name: /^E2E external_reviewer/ }).check()
+    await manager.getByRole("button", { name: /start review/i }).click()
+    await expectStatus(admin, submissionId, "in_review")
+
+    // Staff can read it and cannot decide.
     await staff.goto(`/submissions/${submissionId}`)
-    await reviewer.goto(`/submissions/${submissionId}`)
-
-    // Both can read the submission; neither may decide it. The external
-    // reviewer role exists precisely to make that distinction, so a regression
-    // here is a permissions failure with a customer on the other end of it.
-    const staffRouteHeading = staff.getByRole("heading", {
-      exact: true,
-      level: 1,
-      name: title,
-    })
-    const staffDocumentHeading = staff.getByRole("heading", {
-      exact: true,
-      level: 2,
-      name: title,
-    })
-    const reviewerRouteHeading = reviewer.getByRole("heading", {
-      exact: true,
-      level: 1,
-      name: title,
-    })
-    const reviewerDocumentHeading = reviewer.getByRole("heading", {
-      exact: true,
-      level: 2,
-      name: title,
-    })
-
-    await expect(staffRouteHeading).toHaveCount(1)
-    await expect(staffRouteHeading).toBeVisible()
-    await expect(staffDocumentHeading).toHaveCount(1)
-    await expect(staffDocumentHeading).toBeVisible()
-    await expect(reviewerRouteHeading).toHaveCount(1)
-    await expect(reviewerRouteHeading).toBeVisible()
-    await expect(reviewerDocumentHeading).toHaveCount(1)
-    await expect(reviewerDocumentHeading).toBeVisible()
-
+    await expect(staff.getByRole("heading", { exact: true, level: 1, name: title })).toBeVisible()
     await expect(staff.getByRole("button", { name: "Approve" })).toBeHidden()
-    await expect(reviewer.getByRole("button", { name: "Approve" })).toBeHidden()
-    await expect(reviewer.getByRole("button", { name: "Reject" })).toBeHidden()
+
+    // The outside reviewer sees it, comments as a reviewer, approves, and has no Reject.
+    await outside.goto(`/submissions/${submissionId}`)
+    await expect(outside.getByRole("heading", { exact: true, level: 1, name: title })).toBeVisible()
+    await expect(outside.getByRole("button", { name: "Reject" })).toBeHidden()
+    await outside.getByLabel("Review note").fill("Looks fine from outside.")
+    await outside.getByRole("button", { exact: true, name: "Comment" }).click()
+    await expect(outside.getByRole("region", { name: "Reviewers" })).toContainText("Looks fine from outside.")
+    await outside.getByRole("button", { name: "Approve" }).click()
+    await expectStatus(admin, submissionId, "in_review")
+    await expect(outside.getByText("1 of 2 approvals")).toBeVisible()
+
+    // Their decision counts: the manager's approval completes it.
+    await manager.goto(`/submissions/${submissionId}`)
+    await manager.getByRole("button", { name: "Approve" }).click()
+    await expectStatus(admin, submissionId, "approved")
   })
 })
 

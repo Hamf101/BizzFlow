@@ -48,6 +48,8 @@ export type SubmissionListFilters = {
   createdBy: string | undefined
   organizationId: string
   query: string | null
+  /** The submissions an external reviewer is a reviewer of; filled in by `withReviewedIds`. */
+  reviewedIds: readonly string[]
   role: OrganizationRole
   statuses: readonly SubmissionStatus[] | null
 }
@@ -88,6 +90,7 @@ export function createSubmissionListFilters(
     createdBy: normalizeSubmissionMember(input.createdBy, "author"),
     organizationId: input.organizationId,
     query: SUBMISSION_LIST_INPUT.search(input.query),
+    reviewedIds: [],
     role,
     statuses: normalizeSubmissionStatusFilter(input.statuses),
   }
@@ -97,7 +100,7 @@ export function createSubmissionListFilters(
  * Narrows a submissions query to what the actor may see, then to the view.
  *
  * Owners and managers see every organization submission, staff see the ones
- * they created, and external reviewers see their assigned non-drafts.
+ * they created, and external reviewers see the non-drafts they are a reviewer of.
  *
  * @param query - A submissions query builder.
  * @param filters - Validated actor scope and view filters.
@@ -116,7 +119,7 @@ export function filterVisibleSubmissions<TQuery>(
     filtered = filtered.eq("created_by", filters.actorUserId)
   } else if (filters.role === "external_reviewer") {
     filtered = filtered
-      .eq("assigned_to", filters.actorUserId)
+      .in("id", filters.reviewedIds)
       .in("status", REVIEWER_VISIBLE_STATUSES)
   }
 

@@ -17,7 +17,7 @@ import {
   SUBMISSION_LIST_INPUT,
   type SubmissionListFilters,
 } from "@/services/submissions/list-filters"
-import { listSubmissionReviewers, isReviewRequester } from "@/services/submissions/reviewer-service"
+import { isReviewRequester, listSubmissionReviewers, withReviewedIds } from "@/services/submissions/reviewer-service"
 import { listSubmissionReviewData } from "@/services/submissions/review-service"
 import {
   assertSubmissionVisible,
@@ -89,9 +89,9 @@ export async function listSubmissionPage(
       const page = SUBMISSION_LIST_INPUT.page(input.page)
       const pageSize = SUBMISSION_LIST_INPUT.pageSize(input.pageSize)
       const sort = normalizeSubmissionSort(input.sort)
-      const filters = createSubmissionListFilters(
-        input,
-        getOrganizationRoleFromSubject(permissionSubject)
+      const filters = await withReviewedIds(
+        client,
+        createSubmissionListFilters(input, getOrganizationRoleFromSubject(permissionSubject))
       )
       let query = filterVisibleSubmissions(
         client.from("submissions").select(SUBMISSION_COLUMNS, { count: "exact" }),
@@ -145,6 +145,7 @@ export async function countSubmissionsByStatus(
           "You cannot view internal submissions."
         )
       )
+      const scope = await withReviewedIds(client, createSubmissionListFilters(input, role))
       const counts = await Promise.all(
         input.statuses.map(async (status: SubmissionStatus) => {
           const selected = client
@@ -152,7 +153,7 @@ export async function countSubmissionsByStatus(
             .select("id", { count: "exact", head: true })
           const { count, error } = await filterVisibleSubmissions(
             input.updatedSince ? selected.gte("updated_at", input.updatedSince) : selected,
-            createSubmissionListFilters({ ...input, statuses: [status] }, role)
+            { ...scope, statuses: [status] }
           )
 
           if (error) {
@@ -282,7 +283,7 @@ async function loadVisibleSubmission(
     input.organizationId,
     input.submissionId
   )
-  assertSubmissionVisible(role, submission, input.actorUserId)
+  await assertSubmissionVisible(client, role, submission, input.actorUserId)
 
   return { role, submission }
 }

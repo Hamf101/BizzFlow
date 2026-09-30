@@ -211,26 +211,53 @@ export async function listSubmissionFiles(
 /**
  * Applies role-based submission visibility after a trusted admin query.
  *
+ * @param client - Trusted Supabase client.
  * @param role - Validated internal organization role.
  * @param submission - Tenant-scoped submission.
  * @param actorUserId - Requesting user identifier.
  * @throws SubmissionServiceError when the row is outside the actor's role scope.
  */
-export function assertSubmissionVisible(
+export async function assertSubmissionVisible(
+  client: SubmissionServiceClient,
   role: OrganizationRole,
   submission: Submission,
   actorUserId: string
-): void {
+): Promise<void> {
   if (role === "staff" && submission.createdBy !== actorUserId) {
     throw new SubmissionServiceError("Submission was not found.", 404)
   }
 
+  // An external reviewer sees a submitted piece of work only when they are one of its reviewers.
   if (
     role === "external_reviewer" &&
-    (submission.status === "draft" || submission.assignedTo !== actorUserId)
+    (submission.status === "draft" || !(await isSubmissionReviewer(client, submission, actorUserId)))
   ) {
     throw new SubmissionServiceError("Submission was not found.", 404)
   }
+}
+
+async function isSubmissionReviewer(
+  client: SubmissionServiceClient,
+  submission: Submission,
+  userId: string
+): Promise<boolean> {
+  if (submission.assignedTo === userId) {
+    return true
+  }
+
+  const { data, error } = await client
+    .from("submission_reviewers")
+    .select("user_id")
+    .eq("org_id", submission.organizationId)
+    .eq("submission_id", submission.id)
+    .eq("user_id", userId)
+    .maybeSingle()
+
+  if (error) {
+    throw createSubmissionDatabaseError(error, "Unable to check the reviewers.")
+  }
+
+  return data !== null
 }
 
 /**

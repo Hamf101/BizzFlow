@@ -17,6 +17,7 @@ import {
 
 import {
   assignSubmissionAction,
+  commentFromReviewAction,
   createSubmissionAction,
   createSubmissionCommentAction,
   dismissChangesRequestAction,
@@ -176,16 +177,18 @@ describe("submission review actions", () => {
     expect(dismissSubmissionChangesRequest).not.toHaveBeenCalled()
   })
 
-  it("blocks binding decisions from an external reviewer", async () => {
+  it("lets an external reviewer reach the decision, and shows what the service says when they may not reject", async () => {
     mockOrganizationContext("external_reviewer")
     const formData = createSubmissionFormData()
     formData.set("targetStatus", "approved")
 
-    await expect(transitionSubmissionAction(formData)).rejects.toThrow(
-      `NEXT_REDIRECT:/submissions/${SUBMISSION_ID}?feedback=permission_denied`
-    )
+    await expect(transitionSubmissionAction(formData)).rejects.toThrow("submission_review_updated")
+    expect(transitionInternalSubmission).toHaveBeenCalledWith(expect.objectContaining({ actorUserId: ACTOR_USER_ID, targetStatus: "approved" }))
 
-    expect(transitionInternalSubmission).not.toHaveBeenCalled()
+    vi.mocked(transitionInternalSubmission).mockRejectedValueOnce(new SubmissionServiceError("You cannot review internal submissions.", 403))
+    formData.set("targetStatus", "rejected")
+    formData.set("comment", "No")
+    await expect(transitionSubmissionAction(formData)).rejects.toThrow("permission_denied")
   })
 
   it("requires an explanatory note before rejecting", async () => {
@@ -356,3 +359,20 @@ function mockOrganizationContext(role: OrganizationRole): void {
     },
   })
 }
+
+describe("commenting from the review form", () => {
+  it("turns the review note into a comment and leaves the decision alone", async () => {
+    vi.spyOn(console, "info").mockImplementation(() => {})
+    vi.mocked(getAuthenticatedUser).mockResolvedValue({ id: ACTOR_USER_ID, email: "reviewer@example.com" })
+    mockOrganizationContext("external_reviewer")
+    const formData = createSubmissionFormData()
+    formData.set("comment", "Looks fine from outside")
+
+    await expect(commentFromReviewAction(formData)).rejects.toThrow("comment_added")
+
+    expect(createInternalSubmissionComment).toHaveBeenCalledWith(
+      expect.objectContaining({ actorUserId: ACTOR_USER_ID, body: "Looks fine from outside", submissionId: SUBMISSION_ID })
+    )
+    expect(transitionInternalSubmission).not.toHaveBeenCalled()
+  })
+})

@@ -5,7 +5,13 @@ import { formatMediumDateTime } from "@/lib/date-format"
 import type { OrganizationRole } from "@/lib/permissions"
 import type { OrganizationMember } from "@/types/organization"
 import type { Submission } from "@/types/submission"
-import type { SubmissionReviewer, SubmissionReviewerDecision, SubmissionReviewTally } from "@/types/submission-review"
+import type {
+  SubmissionActivityEvent,
+  SubmissionComment,
+  SubmissionReviewer,
+  SubmissionReviewerDecision,
+  SubmissionReviewTally,
+} from "@/types/submission-review"
 
 export const ROLE_LABELS: Record<OrganizationRole, string> = {
   owner_admin: "Owner admin",
@@ -22,6 +28,25 @@ const DECISIONS: Record<SubmissionReviewerDecision, { label: string; variant: "d
 }
 
 /**
+ * What a reviewer said in the discussion, apart from the notes that came with
+ * their decisions, which the panel already shows as the decision's note.
+ *
+ * @param userId - The reviewer.
+ * @param comments - Every comment on the submission.
+ * @param activity - Every event on the submission.
+ * @returns Their comments, oldest first.
+ */
+export function reviewerComments(
+  userId: string,
+  comments: readonly SubmissionComment[],
+  activity: readonly SubmissionActivityEvent[]
+): SubmissionComment[] {
+  const withDecisions = new Set(activity.filter((event) => event.eventType !== "commented").map((event) => event.commentId))
+
+  return comments.filter((comment) => comment.createdBy === userId && !withDecisions.has(comment.id))
+}
+
+/**
  * Says who reviews a submission and what each of them decided, the way a pull
  * request lists its reviewers, with how many approvals are needed and whether a
  * change request is holding it up.
@@ -30,11 +55,15 @@ const DECISIONS: Record<SubmissionReviewerDecision, { label: string; variant: "d
  * @returns The reviewers panel.
  */
 export function SubmissionReviewersPanel({
+  activity,
+  comments,
   members,
   reviewers,
   submission,
   tally,
 }: {
+  activity: readonly SubmissionActivityEvent[]
+  comments: readonly SubmissionComment[]
   members: readonly OrganizationMember[]
   reviewers: readonly SubmissionReviewer[]
   submission: Submission
@@ -76,6 +105,12 @@ export function SubmissionReviewersPanel({
                 <p className="whitespace-pre-wrap break-words border-l-2 pl-3 text-sm text-muted-foreground">{reviewer.note}</p>
               ) : null}
               {reviewer.decidedAt ? <p className="text-xs text-muted-foreground">{formatMediumDateTime(reviewer.decidedAt)}</p> : null}
+              {reviewerComments(reviewer.userId, comments, activity).map((comment) => (
+                <p className="whitespace-pre-wrap break-words rounded-md bg-muted/50 px-3 py-2 text-sm" key={comment.id}>
+                  {comment.body}
+                  <span className="mt-1 block text-xs text-muted-foreground">Commented {formatMediumDateTime(comment.createdAt)}</span>
+                </p>
+              ))}
             </li>
           )
         })}

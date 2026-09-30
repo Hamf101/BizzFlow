@@ -18,6 +18,7 @@ declare
   all_submission uuid := gen_random_uuid();
   some_submission uuid := gen_random_uuid();
   again_submission uuid := gen_random_uuid();
+  outside_submission uuid := gen_random_uuid();
   blank constant jsonb := '{"schemaVersion":3,"branding":{},"blocks":[],"layout":{},"sections":[],"fieldGroups":[],"blockRules":[]}';
   snapshot constant jsonb := '{"schemaVersion":3,"branding":{},"blocks":[],"layout":{},"sections":[],"fieldGroups":[],"blockRules":[]}';
   result public.submissions%rowtype;
@@ -57,7 +58,7 @@ begin
   )
   select submission_id, organization_id, 'Under review ' || position, template_id, 1, snapshot, '{}', 'submitted',
          staff_id, staff_id, staff_id, now()
-  from (values (all_submission, 1), (some_submission, 2), (again_submission, 3)) as made(submission_id, position);
+  from (values (all_submission, 1), (some_submission, 2), (again_submission, 3), (outside_submission, 4)) as made(submission_id, position);
 
   -- Only owners and managers name reviewers, and only owners and managers can be named.
   begin
@@ -67,8 +68,8 @@ begin
   end;
 
   begin
-    perform public.set_submission_reviewers(organization_id, all_submission, 1, array[first_id, external_id], null, first_id);
-    raise exception 'An external reviewer was named as a reviewer.';
+    perform public.set_submission_reviewers(organization_id, all_submission, 1, array[first_id, staff_id], null, first_id);
+    raise exception 'A staff member was named as a reviewer.';
   exception when sqlstate '22023' then null;
   end;
 
@@ -234,6 +235,35 @@ begin
   if result.assigned_to <> second_id
       or exists (select 1 from public.submission_reviewers where submission_id = again_submission and user_id = first_id) then
     raise exception 'Taking the lead off did not pass the lead on.';
+  end if;
+
+  -- An external reviewer is a reviewer like any other: named, counted, able to
+  -- comment and to approve, but not to reject.
+  select * into result from public.set_submission_reviewers(
+    organization_id, outside_submission, 1, array[first_id, external_id], null, first_id);
+  if not exists (select 1 from public.submission_reviewers where submission_id = outside_submission and user_id = external_id) then
+    raise exception 'An external reviewer could not be named.';
+  end if;
+
+  perform public.create_internal_submission_comment(
+    organization_id, outside_submission, gen_random_uuid(), 'Looks fine from outside', external_id);
+
+  begin
+    perform public.transition_internal_submission(organization_id, outside_submission, result.revision, 'rejected', 'No', external_id);
+    raise exception 'An external reviewer rejected a submission.' using errcode = 'XX001';
+  exception when sqlstate '42501' then null;
+  end;
+
+  select * into result from public.transition_internal_submission(
+    organization_id, outside_submission, result.revision, 'approved', null, external_id);
+  if result.status <> 'in_review' then
+    raise exception 'The external reviewer''s approval finished the review alone.';
+  end if;
+
+  select * into result from public.transition_internal_submission(
+    organization_id, outside_submission, result.revision, 'approved', null, first_id);
+  if result.status <> 'approved' then
+    raise exception 'Both reviewers approving did not approve the submission.';
   end if;
 
   -- Signed-in users reach none of it directly.

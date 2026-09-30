@@ -7,6 +7,7 @@ import type {
   SubmissionServiceDeps,
 } from "@/services/submissions/contracts"
 import { SubmissionServiceError } from "@/services/submissions/errors"
+import type { SubmissionListFilters } from "@/services/submissions/list-filters"
 import {
   createSubmissionDatabaseError,
   createSubmissionMutationError,
@@ -187,6 +188,34 @@ export async function listSubmissionReviewers(
     reviewers: seesAll ? all : all.filter((reviewer) => reviewer.userId === viewer.userId),
     tally: { approved: count("approved"), changesRequested: count("changes_requested"), total: all.length },
   }
+}
+
+/**
+ * Adds to an external reviewer's filters the submissions they review. Everyone
+ * else's filters come back as they were.
+ *
+ * @param client - Trusted Supabase client.
+ * @param filters - Validated actor scope and view filters.
+ * @returns Filters that can be applied to a query.
+ * @throws SubmissionServiceError when the read fails.
+ */
+export async function withReviewedIds(client: SubmissionServiceClient, filters: SubmissionListFilters): Promise<SubmissionListFilters> {
+  if (filters.role !== "external_reviewer") {
+    return filters
+  }
+
+  const { data, error } = await client
+    .from("submission_reviewers")
+    .select("submission_id")
+    .eq("org_id", filters.organizationId)
+    .eq("user_id", filters.actorUserId)
+
+  if (error || !data) {
+    throw createSubmissionDatabaseError(error, "Unable to load the submissions you review.")
+  }
+
+  // ponytail: one read is capped at PostgREST's row limit; an external reviewer with that many reviews would need paging.
+  return { ...filters, reviewedIds: data.map((row) => String(row.submission_id)) }
 }
 
 /**

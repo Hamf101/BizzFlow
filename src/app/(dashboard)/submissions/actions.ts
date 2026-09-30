@@ -248,6 +248,18 @@ export async function dismissChangesRequestAction(formData: FormData): Promise<v
 }
 
 /**
+ * Comments from the review form: the note written there becomes a comment,
+ * and the reviewer's decision stays as it is.
+ *
+ * @param formData - Submission id and the review note.
+ * @returns Never returns; redirects to the refreshed submission or an error.
+ */
+export async function commentFromReviewAction(formData: FormData): Promise<void> {
+  formData.set("body", getFormString(formData, "comment"))
+  await createSubmissionCommentAction(formData)
+}
+
+/**
  * Applies a binding manager review transition with optimistic revision matching.
  *
  * @param formData - Submission id, expected revision, transition, and review note.
@@ -262,8 +274,10 @@ export async function transitionSubmissionAction(
   let transition: SubmissionReviewTransition | null = null
 
   try {
+    // Whoever can see submissions gets this far; the service asks for review
+    // permission where the decision needs it, and the database checks the reviewer.
     const actionContext = await loadSubmissionActionContext(
-      "submissions:review"
+      "submissions:view"
     )
     transition = parseReviewTransition(getFormString(formData, "targetStatus"))
     const comment = getFormString(formData, "comment").trim()

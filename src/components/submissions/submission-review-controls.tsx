@@ -1,7 +1,8 @@
-import { Check, CheckCheck, RotateCcw, UserRoundCheck, X } from "lucide-react"
+import { Check, CheckCheck, MessageSquare, RotateCcw, UserRoundCheck, X } from "lucide-react"
 import type { ReactElement } from "react"
 
 import {
+  commentFromReviewAction,
   dismissChangesRequestAction,
   setSubmissionReviewersAction,
   transitionSubmissionAction,
@@ -19,10 +20,10 @@ import {
 import type { OrganizationRole } from "@/lib/permissions"
 import type { OrganizationMember } from "@/types/organization"
 import type { Submission } from "@/types/submission"
-import type { SubmissionReviewer, SubmissionReviewTally } from "@/types/submission-review"
+import type { SubmissionActivityEvent, SubmissionComment, SubmissionReviewer, SubmissionReviewTally } from "@/types/submission-review"
 
-// Only owners and managers decide, so only they can be reviewers.
-const eligibleReviewerRoles: readonly OrganizationRole[] = ["owner_admin", "manager"]
+// Anyone who reviews work can be named a reviewer, including people from outside.
+const eligibleReviewerRoles: readonly OrganizationRole[] = ["owner_admin", "manager", "external_reviewer"]
 
 /**
  * Renders the reviewers, how to name them, and the decisions each of them can
@@ -33,8 +34,10 @@ const eligibleReviewerRoles: readonly OrganizationRole[] = ["owner_admin", "mana
  * @returns Review controls allowed by the current status and the viewer's part in it.
  */
 export function SubmissionReviewControls({
+  activity,
   canAssign,
   canReview,
+  comments,
   currentUserId,
   isRequester,
   members,
@@ -42,8 +45,10 @@ export function SubmissionReviewControls({
   submission,
   tally,
 }: {
+  activity: SubmissionActivityEvent[]
   canAssign: boolean
   canReview: boolean
+  comments: SubmissionComment[]
   currentUserId: string
   isRequester: boolean
   members: OrganizationMember[]
@@ -56,7 +61,8 @@ export function SubmissionReviewControls({
     submission.status === "in_review" ||
     submission.status === "needs_changes"
   const mine = reviewers.find((reviewer) => reviewer.userId === currentUserId)
-  const canDecide = canReview && mine !== undefined
+  // Being named a reviewer is what lets someone approve or ask for changes, whatever their role.
+  const canDecide = mine !== undefined
   const startsReview = submission.status === "submitted"
   // Who was chosen is only editable by someone who can see every reviewer.
   const seesEveryone = reviewers.length === tally.total
@@ -79,7 +85,7 @@ export function SubmissionReviewControls({
         <CardTitle>Review</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-5">
-        <SubmissionReviewersPanel members={members} reviewers={reviewers} submission={submission} tally={tally} />
+        <SubmissionReviewersPanel activity={activity} comments={comments} members={members} reviewers={reviewers} submission={submission} tally={tally} />
 
         {canAssign && assignmentOpen && seesEveryone && (
           <form action={setSubmissionReviewersAction} className="flex flex-col gap-3 border-t pt-5 first:border-t-0 first:pt-0">
@@ -192,7 +198,7 @@ export function SubmissionReviewControls({
               id="review-comment-description"
             >
               A note is required for requested changes and rejection. It is
-              optional for approval. A change request holds the submission up
+              optional for approval, and a comment leaves your decision as it is. A change request holds the submission up
               until whoever chose the reviewers sets it aside.
             </p>
             <div className="flex flex-wrap gap-2">
@@ -209,20 +215,26 @@ export function SubmissionReviewControls({
                 <Check />
                 {mine?.decision === "approved" ? "Approved" : "Approve"}
               </Button>
-              <Button
-                name="targetStatus"
-                type="submit"
-                value="rejected"
-                variant="destructive"
-              >
-                <X />
-                Reject
+              {canReview && (
+                <Button
+                  name="targetStatus"
+                  type="submit"
+                  value="rejected"
+                  variant="destructive"
+                >
+                  <X />
+                  Reject
+                </Button>
+              )}
+              <Button formAction={commentFromReviewAction} type="submit" variant="ghost">
+                <MessageSquare />
+                Comment
               </Button>
             </div>
           </form>
         )}
 
-        {submission.status === "approved" && canDecide && (
+        {submission.status === "approved" && canDecide && canReview && (
           <form
             action={transitionSubmissionAction}
             className="flex flex-col gap-3 border-t pt-5"
