@@ -1,3 +1,5 @@
+import { cache } from "react"
+
 import type { TemplateAccessLevel } from "@/lib/supabase/admin"
 import { loadActiveMembership } from "@/services/organizations/active-membership"
 
@@ -100,7 +102,8 @@ export async function requireCanCreateTemplates(
 
 /**
  * Which templates a list must leave out and add for a member: restricted ones
- * they cannot open, and any status of the ones they may edit.
+ * they cannot open, and any status of the ones they may edit. A page's list and
+ * its category filter both ask, so within one render they share one answer.
  *
  * @param client - Service client.
  * @param organizationId - The workspace.
@@ -108,7 +111,7 @@ export async function requireCanCreateTemplates(
  * @returns Ids to hide, and ids they may edit.
  * @throws TemplateServiceError when a lookup fails.
  */
-export async function templateVisibility(
+export const templateVisibility = cache(async function templateVisibility(
   client: TemplateServiceClient,
   organizationId: string,
   actorUserId: string
@@ -124,7 +127,7 @@ export async function templateVisibility(
   }
 
   return { editable: editable.data ?? [], hidden: hidden.data ?? [] }
-}
+})
 
 type VisibilityQuery = {
   eq(column: string, value: string): VisibilityQuery
