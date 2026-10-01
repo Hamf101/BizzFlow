@@ -225,8 +225,8 @@ async function find(plan: Plan, actor: Actor, deps: WorkspaceFlowDeps, now: Date
     const documents = await (deps.searchFiles ?? searchFiles)({ ...actor, query })
     items = documents.map((document) => ({
       href:
-        document.sourceKind === "generated" && document.lifecycleState === "active"
-          ? `/documents/${encodeURIComponent(document.id)}/edit`
+        document.sourceKind === "generated" && (document.lifecycleState === "active" || document.lifecycleState === "archived")
+          ? `/documents/${encodeURIComponent(document.id)}/preview`
           : `/documents/${encodeURIComponent(document.id)}`,
       id: document.id,
       meta: `Edited ${formatDay(document.updatedAt)}`,

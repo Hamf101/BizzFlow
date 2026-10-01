@@ -119,9 +119,9 @@ export default async function DocumentDetailPage({
 
   if (
     detail.document.sourceKind === "generated" &&
-    detail.document.lifecycleState === "active"
+    (detail.document.lifecycleState === "active" || detail.document.lifecycleState === "archived")
   ) {
-    redirect(`/documents/${encodeURIComponent(detail.document.id)}/edit`)
+    redirect(`/documents/${encodeURIComponent(detail.document.id)}/preview`)
   }
 
   const isCollaborationReadable =

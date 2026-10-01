@@ -232,30 +232,35 @@ export function EditorFrame<Mode extends string>({
         ) : null}
         {narrow && modes && mode && onModeChange ? null : people?.(narrow)}
         {extra}
-        <Button
-          aria-label="Undo"
-          className="size-9 md:size-10"
-          disabled={!canUndo}
-          onClick={onUndo}
-          size="icon"
-          title="Undo"
-          type="button"
-          variant="ghost"
-        >
-          <Undo2 />
-        </Button>
-        <Button
-          aria-label="Redo"
-          className="size-9 md:size-10"
-          disabled={!canRedo}
-          onClick={onRedo}
-          size="icon"
-          title="Redo"
-          type="button"
-          variant="ghost"
-        >
-          <Redo2 />
-        </Button>
+        {/* Nothing to undo where nothing can be written, as in a preview. */}
+        {titleEditable || canUndo || canRedo ? (
+          <>
+            <Button
+              aria-label="Undo"
+              className="size-9 md:size-10"
+              disabled={!canUndo}
+              onClick={onUndo}
+              size="icon"
+              title="Undo"
+              type="button"
+              variant="ghost"
+            >
+              <Undo2 />
+            </Button>
+            <Button
+              aria-label="Redo"
+              className="size-9 md:size-10"
+              disabled={!canRedo}
+              onClick={onRedo}
+              size="icon"
+              title="Redo"
+              type="button"
+              variant="ghost"
+            >
+              <Redo2 />
+            </Button>
+          </>
+        ) : null}
         {menu}
         {primary}
       </header>
