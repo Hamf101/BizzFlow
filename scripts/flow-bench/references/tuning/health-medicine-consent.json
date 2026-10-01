@@ -1,0 +1,454 @@
+{
+  "request": "parental consent form for our primary school to give a pupil medicine during the school day",
+  "title": "Consent for the school to give medicine",
+  "description": "Use when a parent asks the school to give their child medicine during the school day: the child, the medicine and how to give it, how long for, contacts in an emergency, and the parent's consent.",
+  "maxPages": 2,
+  "content": {
+    "schemaVersion": 3,
+    "branding": {
+      "organizationName": "",
+      "logoAsset": null,
+      "logoDataUrl": null,
+      "logoAlignment": "left",
+      "logoWidthPercent": 24,
+      "primaryColor": "#3d2c5e",
+      "accentColor": "#6c4f9e"
+    },
+    "blocks": [
+      {
+        "id": "0b130000-0000-4000-8000-000000000001",
+        "type": "heading",
+        "text": "Consent for the school to give medicine",
+        "level": 1,
+        "alignment": "left"
+      },
+      {
+        "id": "0b130000-0000-4000-8000-000000000002",
+        "type": "paragraph",
+        "text": "The school can give your child medicine only when you have filled in and signed this form. Please use one form for each medicine.",
+        "alignment": "left"
+      },
+      {
+        "id": "0b130000-0000-4000-8000-000000000003",
+        "type": "paragraph",
+        "text": "Before you send the medicine: bring it to the school office yourself, in its original container with the pharmacy label, which must show your child's name, the dose and how often to give it. We cannot accept medicine that is out of date or has been put in another container. The only exception is insulin, which may come in a pen or pump rather than its original container.",
+        "runs": [
+          {
+            "text": "Before you send the medicine:",
+            "bold": true
+          },
+          {
+            "text": " bring it to the school office yourself, in its original container with the pharmacy label, which must show your child's name, the dose and how often to give it. We cannot accept medicine that is out of date or has been put in another container. The only exception is insulin, which may come in a pen or pump rather than its original container."
+          }
+        ],
+        "alignment": "left"
+      },
+      {
+        "id": "0b130000-0000-4000-8000-000000000004",
+        "type": "paragraph",
+        "text": "How we use your information: we use this form to give your child their medicine safely and to keep a record of each dose. We share it only with the staff who give the medicine or care for your child, and with emergency services if your child needs urgent help. We keep it on your child's school record.",
+        "runs": [
+          {
+            "text": "How we use your information:",
+            "bold": true
+          },
+          {
+            "text": " we use this form to give your child their medicine safely and to keep a record of each dose. We share it only with the staff who give the medicine or care for your child, and with emergency services if your child needs urgent help. We keep it on your child's school record."
+          }
+        ],
+        "alignment": "left"
+      },
+      {
+        "id": "0b130000-0000-4000-8000-000000000006",
+        "type": "text_field",
+        "fieldKey": "child_s_full_name",
+        "label": "Child's full name",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0b130000-0000-4000-8000-000000000007",
+        "type": "text_field",
+        "fieldKey": "class",
+        "label": "Class",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0b130000-0000-4000-8000-000000000009",
+        "type": "date_field",
+        "fieldKey": "child_s_date_of_birth",
+        "label": "Child's date of birth",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": "/",
+          "month": "number"
+        }
+      },
+      {
+        "id": "0b130000-0000-4000-8000-000000000010",
+        "type": "text_field",
+        "fieldKey": "what_does_your_child_need_it_for",
+        "label": "What does your child need it for?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0b130000-0000-4000-8000-000000000012",
+        "type": "text_field",
+        "fieldKey": "name_on_the_pharmacy_label",
+        "label": "Name on the pharmacy label",
+        "required": true,
+        "helpText": "Copy it exactly as it is written.",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0b130000-0000-4000-8000-000000000013",
+        "type": "text_field",
+        "fieldKey": "strength",
+        "label": "Strength",
+        "required": false,
+        "helpText": "For example, 5 mg in 5 ml.",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0b130000-0000-4000-8000-000000000014",
+        "type": "date_field",
+        "fieldKey": "expiry_date",
+        "label": "Expiry date",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": "/",
+          "month": "number"
+        }
+      },
+      {
+        "id": "0b130000-0000-4000-8000-000000000016",
+        "type": "text_field",
+        "fieldKey": "dose_to_give",
+        "label": "Dose to give",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0b130000-0000-4000-8000-000000000017",
+        "type": "text_field",
+        "fieldKey": "when_to_give_it",
+        "label": "When to give it",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0b130000-0000-4000-8000-000000000019",
+        "type": "dropdown_field",
+        "fieldKey": "how_is_it_given",
+        "label": "How is it given?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "By mouth",
+          "Inhaler",
+          "Cream or ointment",
+          "Eye or ear drops",
+          "Injection",
+          "Other"
+        ],
+        "display": "radios"
+      },
+      {
+        "id": "0b130000-0000-4000-8000-000000000020",
+        "type": "text_field",
+        "fieldKey": "other_way_given",
+        "label": "How else is it given?",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0b130000-0000-4000-8000-000000000019",
+          "operator": "equals",
+          "value": "Other"
+        },
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0b130000-0000-4000-8000-000000000021",
+        "type": "dropdown_field",
+        "fieldKey": "can_your_child_take_it_themselves",
+        "label": "Can your child take it themselves?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "Yes, with an adult watching",
+          "No, a member of staff must give it"
+        ],
+        "display": "radios"
+      },
+      {
+        "id": "0b130000-0000-4000-8000-000000000022",
+        "type": "text_field",
+        "fieldKey": "side_effects_storage_or_anything_else_staff_should_know",
+        "label": "Side effects, storage or anything else staff should know",
+        "required": false,
+        "helpText": null,
+        "boxHeight": 45,
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "0b130000-0000-4000-8000-000000000023",
+        "type": "text_field",
+        "fieldKey": "what_should_staff_do_in_an_emergency",
+        "label": "What should staff do in an emergency?",
+        "required": true,
+        "helpText": null,
+        "boxHeight": 60,
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "0b130000-0000-4000-8000-000000000024",
+        "type": "date_field",
+        "fieldKey": "from",
+        "label": "From",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": "/",
+          "month": "number"
+        }
+      },
+      {
+        "id": "0b130000-0000-4000-8000-000000000025",
+        "type": "date_field",
+        "fieldKey": "until",
+        "label": "Until",
+        "required": false,
+        "helpText": "Leave blank if your child needs it all year.",
+        "dateFormat": {
+          "order": "dmy",
+          "separator": "/",
+          "month": "number"
+        }
+      },
+      {
+        "id": "0b130000-0000-4000-8000-000000000028",
+        "type": "text_field",
+        "fieldKey": "parent_name",
+        "label": "Full name",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0b130000-0000-4000-8000-000000000029",
+        "type": "text_field",
+        "fieldKey": "parent_relationship",
+        "label": "Relationship",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0b130000-0000-4000-8000-000000000031",
+        "type": "text_field",
+        "fieldKey": "parent_phone",
+        "label": "Phone number",
+        "required": true,
+        "helpText": "We call if your child needs it more often than this form says, or refuses it.",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0b130000-0000-4000-8000-000000000032",
+        "type": "text_field",
+        "fieldKey": "parent_second_phone",
+        "label": "Other phone",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0b130000-0000-4000-8000-000000000035",
+        "type": "paragraph",
+        "text": "I will tell the school in writing straight away if the dose, the timing or anything else on this form changes, or if the medicine is stopped. I will collect any medicine that is left over or out of date. I can withdraw my consent at any time by telling the school in writing.",
+        "alignment": "left"
+      },
+      {
+        "id": "0b130000-0000-4000-8000-000000000036",
+        "type": "checkbox_field",
+        "fieldKey": "i_agree_that_school_staff_may_give_my_child_the_dose_describ",
+        "label": "I agree that school staff may give my child the dose described on this form, in line with the school's policy.",
+        "required": true,
+        "helpText": null,
+        "checkedByDefault": false
+      },
+      {
+        "id": "0b130000-0000-4000-8000-000000000037",
+        "type": "checkbox_field",
+        "fieldKey": "i_agree_that_the_school_may_share_the_information_on_this_fo",
+        "label": "I agree that the school may share the information on this form with the staff who care for my child, including on trips and in clubs.",
+        "required": true,
+        "helpText": null,
+        "checkedByDefault": false
+      },
+      {
+        "id": "0b130000-0000-4000-8000-000000000038",
+        "type": "signature_field",
+        "fieldKey": "signature_of_parent_or_carer",
+        "label": "Signature of parent or carer",
+        "required": true,
+        "helpText": null
+      },
+      {
+        "id": "0b130000-0000-4000-8000-000000000039",
+        "type": "date_field",
+        "fieldKey": "signed_date",
+        "label": "Date",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": "/",
+          "month": "number"
+        }
+      }
+    ],
+    "layout": {
+      "pageSize": "A4",
+      "orientation": "portrait",
+      "marginPreset": "generous",
+      "density": "balanced",
+      "fieldStyle": "line",
+      "sectionNumbers": "numbers",
+      "sectionStyle": "plain",
+      "printedTitle": {
+        "mode": "none"
+      },
+      "headerPolicy": "none",
+      "footerPolicy": "all_pages",
+      "pageNumbering": "none",
+      "footerText": {
+        "left": "{title}",
+        "right": "Page {page} of {pages}"
+      }
+    },
+    "sections": [
+      {
+        "id": "0b130000-0000-4000-8000-000000000005",
+        "label": "Your child",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0b130000-0000-4000-8000-000000000006"
+      },
+      {
+        "id": "0b130000-0000-4000-8000-000000000011",
+        "label": "The medicine",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0b130000-0000-4000-8000-000000000012"
+      },
+      {
+        "id": "0b130000-0000-4000-8000-000000000027",
+        "label": "Contact details",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0b130000-0000-4000-8000-000000000028"
+      },
+      {
+        "id": "0b130000-0000-4000-8000-000000000034",
+        "label": "Your consent",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0b130000-0000-4000-8000-000000000035"
+      }
+    ],
+    "fieldGroups": [
+      {
+        "id": "0b130000-0000-4000-8000-000000000008",
+        "label": null,
+        "startBlockId": "0b130000-0000-4000-8000-000000000006",
+        "endBlockId": "0b130000-0000-4000-8000-000000000007",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0b130000-0000-4000-8000-000000000015",
+        "label": null,
+        "startBlockId": "0b130000-0000-4000-8000-000000000013",
+        "endBlockId": "0b130000-0000-4000-8000-000000000014",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0b130000-0000-4000-8000-000000000018",
+        "label": null,
+        "startBlockId": "0b130000-0000-4000-8000-000000000016",
+        "endBlockId": "0b130000-0000-4000-8000-000000000017",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0b130000-0000-4000-8000-000000000026",
+        "label": "How long should the school give it?",
+        "startBlockId": "0b130000-0000-4000-8000-000000000024",
+        "endBlockId": "0b130000-0000-4000-8000-000000000025",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0b130000-0000-4000-8000-000000000030",
+        "label": "Parent or carer",
+        "startBlockId": "0b130000-0000-4000-8000-000000000028",
+        "endBlockId": "0b130000-0000-4000-8000-000000000029",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0b130000-0000-4000-8000-000000000033",
+        "label": null,
+        "startBlockId": "0b130000-0000-4000-8000-000000000031",
+        "endBlockId": "0b130000-0000-4000-8000-000000000032",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0b130000-0000-4000-8000-000000000040",
+        "label": null,
+        "startBlockId": "0b130000-0000-4000-8000-000000000038",
+        "endBlockId": "0b130000-0000-4000-8000-000000000039",
+        "columns": 2,
+        "keepTogether": false
+      }
+    ],
+    "blockRules": [
+      {
+        "blockId": "0b130000-0000-4000-8000-000000000035",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      }
+    ]
+  }
+}

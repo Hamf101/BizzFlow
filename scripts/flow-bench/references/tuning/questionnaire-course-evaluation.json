@@ -1,0 +1,417 @@
+{
+  "request": "end of course evaluation form for our first aid training courses",
+  "title": "First aid course evaluation",
+  "description": "Give to each learner at the end of a first aid course, to learn how much they gained, how relevant and well delivered it was, and what might stop them using what they learned.",
+  "maxPages": 2,
+  "content": {
+    "schemaVersion": 3,
+    "branding": {
+      "organizationName": "",
+      "logoAsset": null,
+      "logoDataUrl": null,
+      "logoAlignment": "left",
+      "logoWidthPercent": 24,
+      "primaryColor": "#252329",
+      "accentColor": "#635273"
+    },
+    "blocks": [
+      {
+        "id": "d5020000-0000-4000-8000-000000000001",
+        "type": "heading",
+        "text": "First aid course evaluation",
+        "level": 1,
+        "alignment": "left"
+      },
+      {
+        "id": "d5020000-0000-4000-8000-000000000002",
+        "type": "paragraph",
+        "text": "Please tell us what you thought of the course. Your answers help us improve it for the next group. You do not need to give your name, and your trainer sees the answers only together with everyone else's.",
+        "alignment": "left"
+      },
+      {
+        "id": "d5020000-0000-4000-8000-000000000003",
+        "type": "text_field",
+        "fieldKey": "course_name",
+        "label": "Course name",
+        "required": true,
+        "helpText": "For example Emergency first aid at work.",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d5020000-0000-4000-8000-000000000005",
+        "type": "date_field",
+        "fieldKey": "course_date",
+        "label": "Course date",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": " ",
+          "month": "short"
+        }
+      },
+      {
+        "id": "d5020000-0000-4000-8000-000000000007",
+        "type": "text_field",
+        "fieldKey": "trainer_name",
+        "label": "Trainer name",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d5020000-0000-4000-8000-000000000008",
+        "type": "dropdown_field",
+        "fieldKey": "how_would_you_rate_your_first_aid_knowledge_and_skills",
+        "label": "How would you rate your first aid knowledge and skills before the course?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Not at all knowledgeable",
+          "Slightly knowledgeable",
+          "Moderately knowledgeable",
+          "Very knowledgeable",
+          "Extremely knowledgeable"
+        ],
+        "display": "radios"
+      },
+      {
+        "id": "d5020000-0000-4000-8000-000000000010",
+        "type": "dropdown_field",
+        "fieldKey": "how_would_you_rate_your_first_aid_knowledge_and_skills_now",
+        "label": "How would you rate your first aid knowledge and skills now?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Not at all knowledgeable",
+          "Slightly knowledgeable",
+          "Moderately knowledgeable",
+          "Very knowledgeable",
+          "Extremely knowledgeable"
+        ],
+        "display": "radios"
+      },
+      {
+        "id": "d5020000-0000-4000-8000-000000000011",
+        "type": "dropdown_field",
+        "fieldKey": "how_relevant_is_this_course_to_your_work",
+        "label": "How relevant is this course to your work?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Not at all",
+          "Slightly",
+          "Moderately",
+          "Very",
+          "Extremely"
+        ],
+        "display": "radios"
+      },
+      {
+        "id": "d5020000-0000-4000-8000-000000000012",
+        "type": "dropdown_field",
+        "fieldKey": "how_confident_do_you_feel_about_acting_in_a_real_emergency",
+        "label": "How confident do you feel about acting in a real emergency?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Not confident",
+          "Fairly confident",
+          "Very confident"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "d5020000-0000-4000-8000-000000000013",
+        "type": "dropdown_field",
+        "fieldKey": "what_did_you_think_of_the_balance_between_talks_and_hands_on",
+        "label": "What did you think of the balance between talks and hands-on practice?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Too much talking and not enough practice",
+          "About the right balance",
+          "Too much practice and not enough explanation"
+        ],
+        "display": "radios"
+      },
+      {
+        "id": "d5020000-0000-4000-8000-000000000015",
+        "type": "dropdown_field",
+        "fieldKey": "how_clearly_did_the_trainer_explain_things",
+        "label": "How clearly did the trainer explain things?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Excellent",
+          "Good",
+          "Fair",
+          "Poor"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "d5020000-0000-4000-8000-000000000016",
+        "type": "dropdown_field",
+        "fieldKey": "how_well_did_the_trainer_answer_your_questions",
+        "label": "How well did the trainer answer your questions?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Excellent",
+          "Good",
+          "Fair",
+          "Poor"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "d5020000-0000-4000-8000-000000000017",
+        "type": "dropdown_field",
+        "fieldKey": "how_would_you_rate_the_practice_equipment_such_as_the",
+        "label": "How would you rate the practice equipment, such as the manikins and dressings?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Excellent",
+          "Good",
+          "Fair",
+          "Poor"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "d5020000-0000-4000-8000-000000000018",
+        "type": "dropdown_field",
+        "fieldKey": "how_would_you_rate_the_venue_and_facilities",
+        "label": "How would you rate the venue and facilities?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Excellent",
+          "Good",
+          "Fair",
+          "Poor"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "d5020000-0000-4000-8000-000000000019",
+        "type": "dropdown_field",
+        "fieldKey": "will_you_use_what_you_learned_in_your_work",
+        "label": "Will you use what you learned in your work?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Definitely yes",
+          "Probably yes",
+          "Possibly",
+          "Probably not",
+          "Definitely not",
+          "Not applicable, I learned nothing new"
+        ],
+        "display": "radios"
+      },
+      {
+        "id": "d5020000-0000-4000-8000-000000000021",
+        "type": "paragraph",
+        "text": "Could anything stop you using what you learned? Tick each that applies.",
+        "alignment": "left"
+      },
+      {
+        "id": "d5020000-0000-4000-8000-000000000022",
+        "type": "checkbox_field",
+        "fieldKey": "i_need_more_training_on_the_subject",
+        "label": "I need more training on the subject",
+        "required": false,
+        "helpText": null,
+        "checkedByDefault": false
+      },
+      {
+        "id": "d5020000-0000-4000-8000-000000000023",
+        "type": "checkbox_field",
+        "fieldKey": "i_will_not_have_the_equipment_or_supplies_i_need",
+        "label": "I will not have the equipment or supplies I need",
+        "required": false,
+        "helpText": null,
+        "checkedByDefault": false
+      },
+      {
+        "id": "d5020000-0000-4000-8000-000000000024",
+        "type": "checkbox_field",
+        "fieldKey": "i_will_not_get_the_chance_to_use_what_i_learned",
+        "label": "I will not get the chance to use what I learned",
+        "required": false,
+        "helpText": null,
+        "checkedByDefault": false
+      },
+      {
+        "id": "d5020000-0000-4000-8000-000000000025",
+        "type": "checkbox_field",
+        "fieldKey": "my_manager_or_colleagues_will_not_support_me_in_using_it",
+        "label": "My manager or colleagues will not support me in using it",
+        "required": false,
+        "helpText": null,
+        "checkedByDefault": false
+      },
+      {
+        "id": "d5020000-0000-4000-8000-000000000026",
+        "type": "checkbox_field",
+        "fieldKey": "the_course_was_not_relevant_to_my_work",
+        "label": "The course was not relevant to my work",
+        "required": false,
+        "helpText": null,
+        "checkedByDefault": false
+      },
+      {
+        "id": "d5020000-0000-4000-8000-000000000027",
+        "type": "checkbox_field",
+        "fieldKey": "something_else",
+        "label": "Something else",
+        "required": false,
+        "helpText": null,
+        "checkedByDefault": false
+      },
+      {
+        "id": "d5020000-0000-4000-8000-000000000028",
+        "type": "text_field",
+        "fieldKey": "what_else_could_stop_you",
+        "label": "What else could stop you?",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "d5020000-0000-4000-8000-000000000027",
+          "operator": "equals",
+          "value": true
+        },
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d5020000-0000-4000-8000-000000000029",
+        "type": "text_field",
+        "fieldKey": "which_part_of_the_course_helped_you_learn_the_most",
+        "label": "Which part of the course helped you learn the most?",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "d5020000-0000-4000-8000-000000000031",
+        "type": "text_field",
+        "fieldKey": "how_could_we_improve_the_course",
+        "label": "How could we improve the course?",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "d5020000-0000-4000-8000-000000000032",
+        "type": "text_field",
+        "fieldKey": "what_do_you_plan_to_put_into_practice_first",
+        "label": "What do you plan to put into practice first?",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": true
+      }
+    ],
+    "layout": {
+      "pageSize": "A4",
+      "orientation": "portrait",
+      "density": "compact",
+      "fieldStyle": "box",
+      "lineSpacing": 1.3,
+      "marginPreset": "compact",
+      "paragraphSpacing": 4,
+      "sectionStyle": "plain",
+      "printedTitle": {
+        "mode": "none"
+      },
+      "headerPolicy": "none",
+      "footerPolicy": "all_pages",
+      "pageNumbering": "none",
+      "footerText": {
+        "left": "{title}",
+        "right": "Page {page} of {pages}"
+      }
+    },
+    "sections": [
+      {
+        "id": "d5020000-0000-4000-8000-000000000004",
+        "label": "The course",
+        "startBlockId": "d5020000-0000-4000-8000-000000000003",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d5020000-0000-4000-8000-000000000009",
+        "label": "What you learned",
+        "startBlockId": "d5020000-0000-4000-8000-000000000008",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d5020000-0000-4000-8000-000000000014",
+        "label": "How it was taught",
+        "startBlockId": "d5020000-0000-4000-8000-000000000013",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d5020000-0000-4000-8000-000000000020",
+        "label": "Using what you learned",
+        "startBlockId": "d5020000-0000-4000-8000-000000000019",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d5020000-0000-4000-8000-000000000030",
+        "label": "Your comments",
+        "startBlockId": "d5020000-0000-4000-8000-000000000029",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      }
+    ],
+    "fieldGroups": [
+      {
+        "id": "d5020000-0000-4000-8000-000000000006",
+        "label": null,
+        "startBlockId": "d5020000-0000-4000-8000-000000000003",
+        "endBlockId": "d5020000-0000-4000-8000-000000000005",
+        "columns": 2,
+        "keepTogether": false,
+        "widths": [
+          8,
+          4
+        ]
+      }
+    ],
+    "blockRules": [
+      {
+        "blockId": "d5020000-0000-4000-8000-000000000021",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      }
+    ]
+  }
+}

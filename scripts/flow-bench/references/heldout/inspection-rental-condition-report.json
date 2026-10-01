@@ -1,0 +1,969 @@
+{
+  "request": "Check-in and check-out condition report for my furnished rental flats. Room by room, meter readings, keys, an inventory of the furniture, photos, and signatures from the landlord and the tenant at both ends of the tenancy.",
+  "title": "Check-in and check-out condition report",
+  "description": "Use at the start and end of a tenancy of a furnished flat, for the landlord and the tenant to record together the condition of each room, the furniture, the meters and the keys.",
+  "maxPages": 6,
+  "content": {
+    "schemaVersion": 3,
+    "branding": {
+      "organizationName": "",
+      "logoAsset": null,
+      "logoDataUrl": null,
+      "logoAlignment": "left",
+      "logoWidthPercent": 24,
+      "primaryColor": "#252329",
+      "accentColor": "#635273"
+    },
+    "blocks": [
+      {
+        "id": "d4050000-0000-4000-8000-000000000001",
+        "type": "heading",
+        "text": "Check-in and check-out condition report",
+        "level": 1,
+        "alignment": "left"
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000002",
+        "type": "paragraph",
+        "text": "The landlord or their agent and the tenant walk round the flat together at the start of the tenancy and again at the end, and record what they find. Agreeing the condition at the start helps settle fairly, at the end, whether anything is owed from the deposit. Take dated photos of each room on both visits.",
+        "alignment": "left"
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000003",
+        "type": "text_field",
+        "fieldKey": "property_address",
+        "label": "Property address",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": true,
+        "boxHeight": 45
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000005",
+        "type": "text_field",
+        "fieldKey": "landlord_or_agent_name",
+        "label": "Name",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000006",
+        "type": "text_field",
+        "fieldKey": "landlord_or_agent_phone",
+        "label": "Phone",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000008",
+        "type": "text_field",
+        "fieldKey": "tenant_names",
+        "label": "Tenant names",
+        "required": true,
+        "helpText": "Everyone named on the tenancy agreement.",
+        "placeholder": null,
+        "multiline": true,
+        "boxHeight": 30
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000009",
+        "type": "date_field",
+        "fieldKey": "tenancy_start_date",
+        "label": "Tenancy start date",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": " ",
+          "month": "long"
+        }
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000010",
+        "type": "text_field",
+        "fieldKey": "deposit_protection_scheme",
+        "label": "Deposit protection scheme",
+        "required": false,
+        "helpText": "The scheme that holds the tenant's deposit.",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000011",
+        "type": "date_field",
+        "fieldKey": "date_of_check_in_visit",
+        "label": "Check-in",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": " ",
+          "month": "long"
+        }
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000012",
+        "type": "date_field",
+        "fieldKey": "date_of_check_out_visit",
+        "label": "Check-out",
+        "required": false,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": " ",
+          "month": "long"
+        }
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000014",
+        "type": "text_field",
+        "fieldKey": "electricity_meter_reading_at_check_in",
+        "label": "Check-in",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000016",
+        "type": "text_field",
+        "fieldKey": "electricity_meter_reading_at_check_out",
+        "label": "Check-out",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000018",
+        "type": "text_field",
+        "fieldKey": "gas_meter_reading_at_check_in",
+        "label": "Check-in",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000019",
+        "type": "text_field",
+        "fieldKey": "gas_meter_reading_at_check_out",
+        "label": "Check-out",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000021",
+        "type": "text_field",
+        "fieldKey": "water_meter_reading_at_check_in",
+        "label": "Check-in",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000022",
+        "type": "text_field",
+        "fieldKey": "water_meter_reading_at_check_out",
+        "label": "Check-out",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000024",
+        "type": "text_field",
+        "fieldKey": "keys_fobs_and_cards_handed_over_at_check_in",
+        "label": "Keys, fobs and cards handed over at check-in",
+        "required": false,
+        "helpText": "Say how many of each, and what each one opens.",
+        "placeholder": null,
+        "multiline": true,
+        "boxHeight": 30
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000025",
+        "type": "text_field",
+        "fieldKey": "keys_fobs_and_cards_returned_at_check_out",
+        "label": "Keys, fobs and cards returned at check-out",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": true,
+        "boxHeight": 30
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000026",
+        "type": "paragraph",
+        "text": "Check the front door and its locks, walls, ceiling, flooring, lights, smoke alarm and any storage cupboard.",
+        "alignment": "left"
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000028",
+        "type": "dropdown_field",
+        "fieldKey": "entrance_condition_at_check_in",
+        "label": "Condition at check-in",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Good",
+          "Fair",
+          "Poor"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000029",
+        "type": "text_field",
+        "fieldKey": "entrance_noted_at_check_in",
+        "label": "What was noted at check-in?",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": true,
+        "boxHeight": 45
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000030",
+        "type": "dropdown_field",
+        "fieldKey": "entrance_condition_at_check_out",
+        "label": "Condition at check-out",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Good",
+          "Fair",
+          "Poor"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000031",
+        "type": "text_field",
+        "fieldKey": "entrance_noted_at_check_out",
+        "label": "What was noted at check-out?",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": true,
+        "boxHeight": 45
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000032",
+        "type": "paragraph",
+        "text": "Check walls, ceiling, flooring, windows and curtains or blinds, doors, lights, sockets and radiators.",
+        "alignment": "left"
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000034",
+        "type": "dropdown_field",
+        "fieldKey": "living_room_condition_at_check_in",
+        "label": "Condition at check-in",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Good",
+          "Fair",
+          "Poor"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000035",
+        "type": "text_field",
+        "fieldKey": "living_room_noted_at_check_in",
+        "label": "What was noted at check-in?",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": true,
+        "boxHeight": 45
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000036",
+        "type": "dropdown_field",
+        "fieldKey": "living_room_condition_at_check_out",
+        "label": "Condition at check-out",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Good",
+          "Fair",
+          "Poor"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000037",
+        "type": "text_field",
+        "fieldKey": "living_room_noted_at_check_out",
+        "label": "What was noted at check-out?",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": true,
+        "boxHeight": 45
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000038",
+        "type": "paragraph",
+        "text": "Check cupboards, worktops, sink and taps, the cooker, fridge, freezer and any other appliances, walls, flooring and the extractor.",
+        "alignment": "left"
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000040",
+        "type": "dropdown_field",
+        "fieldKey": "kitchen_condition_at_check_in",
+        "label": "Condition at check-in",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Good",
+          "Fair",
+          "Poor"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000041",
+        "type": "text_field",
+        "fieldKey": "kitchen_noted_at_check_in",
+        "label": "What was noted at check-in?",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": true,
+        "boxHeight": 45
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000042",
+        "type": "dropdown_field",
+        "fieldKey": "kitchen_condition_at_check_out",
+        "label": "Condition at check-out",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Good",
+          "Fair",
+          "Poor"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000043",
+        "type": "text_field",
+        "fieldKey": "kitchen_noted_at_check_out",
+        "label": "What was noted at check-out?",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": true,
+        "boxHeight": 45
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000044",
+        "type": "paragraph",
+        "text": "Check bath or shower, basin, toilet, taps, tiling and sealant, extractor fan, mirror, flooring and signs of damp or mould.",
+        "alignment": "left"
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000046",
+        "type": "dropdown_field",
+        "fieldKey": "bathroom_condition_at_check_in",
+        "label": "Condition at check-in",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Good",
+          "Fair",
+          "Poor"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000047",
+        "type": "text_field",
+        "fieldKey": "bathroom_noted_at_check_in",
+        "label": "What was noted at check-in?",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": true,
+        "boxHeight": 45
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000048",
+        "type": "dropdown_field",
+        "fieldKey": "bathroom_condition_at_check_out",
+        "label": "Condition at check-out",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Good",
+          "Fair",
+          "Poor"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000049",
+        "type": "text_field",
+        "fieldKey": "bathroom_noted_at_check_out",
+        "label": "What was noted at check-out?",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": true,
+        "boxHeight": 45
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000050",
+        "type": "paragraph",
+        "text": "Check walls, ceiling, flooring, windows and curtains or blinds, the bed and mattress, wardrobes and drawers.",
+        "alignment": "left"
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000052",
+        "type": "dropdown_field",
+        "fieldKey": "bedroom_1_condition_at_check_in",
+        "label": "Condition at check-in",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Good",
+          "Fair",
+          "Poor"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000053",
+        "type": "text_field",
+        "fieldKey": "bedroom_1_noted_at_check_in",
+        "label": "What was noted at check-in?",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": true,
+        "boxHeight": 45
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000054",
+        "type": "dropdown_field",
+        "fieldKey": "bedroom_1_condition_at_check_out",
+        "label": "Condition at check-out",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Good",
+          "Fair",
+          "Poor"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000055",
+        "type": "text_field",
+        "fieldKey": "bedroom_1_noted_at_check_out",
+        "label": "What was noted at check-out?",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": true,
+        "boxHeight": 45
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000056",
+        "type": "paragraph",
+        "text": "Check walls, ceiling, flooring, windows and curtains or blinds, the bed and mattress, wardrobes and drawers.",
+        "alignment": "left"
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000058",
+        "type": "dropdown_field",
+        "fieldKey": "bedroom_2_condition_at_check_in",
+        "label": "Condition at check-in",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Good",
+          "Fair",
+          "Poor"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000059",
+        "type": "text_field",
+        "fieldKey": "bedroom_2_noted_at_check_in",
+        "label": "What was noted at check-in?",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": true,
+        "boxHeight": 45
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000060",
+        "type": "dropdown_field",
+        "fieldKey": "bedroom_2_condition_at_check_out",
+        "label": "Condition at check-out",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Good",
+          "Fair",
+          "Poor"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000061",
+        "type": "text_field",
+        "fieldKey": "bedroom_2_noted_at_check_out",
+        "label": "What was noted at check-out?",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": true,
+        "boxHeight": 45
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000062",
+        "type": "paragraph",
+        "text": "List each item supplied with the flat, room by room, and describe its condition on each visit.",
+        "alignment": "left"
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000064",
+        "type": "table",
+        "headers": [
+          "Room",
+          "Item",
+          "Quantity",
+          "Condition at check-in",
+          "Condition at check-out"
+        ],
+        "rows": [
+          [
+            "",
+            "",
+            "",
+            "",
+            ""
+          ],
+          [
+            "",
+            "",
+            "",
+            "",
+            ""
+          ],
+          [
+            "",
+            "",
+            "",
+            "",
+            ""
+          ],
+          [
+            "",
+            "",
+            "",
+            "",
+            ""
+          ],
+          [
+            "",
+            "",
+            "",
+            "",
+            ""
+          ],
+          [
+            "",
+            "",
+            "",
+            "",
+            ""
+          ],
+          [
+            "",
+            "",
+            "",
+            "",
+            ""
+          ],
+          [
+            "",
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000065",
+        "type": "dropdown_field",
+        "fieldKey": "were_dated_photos_taken_at_check_in",
+        "label": "Were dated photos taken at check-in?",
+        "required": false,
+        "helpText": "Photos of every room, the meters and any damage. Keep a copy with this report.",
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000067",
+        "type": "dropdown_field",
+        "fieldKey": "were_dated_photos_taken_at_check_out",
+        "label": "Were dated photos taken at check-out?",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000068",
+        "type": "paragraph",
+        "text": "We agree that this report describes the flat, its contents, the meter readings and the keys at the start of the tenancy. The tenant may add comments within the time stated in the tenancy agreement.",
+        "alignment": "left"
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000070",
+        "type": "signature_field",
+        "fieldKey": "landlord_or_agent_signature_at_check_in",
+        "label": "Signature",
+        "required": true,
+        "helpText": null
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000071",
+        "type": "date_field",
+        "fieldKey": "date_signed_by_landlord_or_agent_at_check_in",
+        "label": "Date",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": " ",
+          "month": "long"
+        }
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000073",
+        "type": "signature_field",
+        "fieldKey": "tenant_signature_at_check_in",
+        "label": "Signature",
+        "required": true,
+        "helpText": null
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000074",
+        "type": "date_field",
+        "fieldKey": "date_signed_by_tenant_at_check_in",
+        "label": "Date",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": " ",
+          "month": "long"
+        }
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000076",
+        "type": "paragraph",
+        "text": "We agree that this report describes the flat, its contents, the meter readings and the keys at the end of the tenancy. Signing does not mean the tenant agrees to any deduction from the deposit. If the landlord and tenant cannot agree about a deduction, either of them can ask the deposit protection scheme to help resolve it.",
+        "alignment": "left"
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000078",
+        "type": "signature_field",
+        "fieldKey": "landlord_or_agent_signature_at_check_out",
+        "label": "Signature",
+        "required": false,
+        "helpText": null
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000079",
+        "type": "date_field",
+        "fieldKey": "date_signed_by_landlord_or_agent_at_check_out",
+        "label": "Date",
+        "required": false,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": " ",
+          "month": "long"
+        }
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000081",
+        "type": "signature_field",
+        "fieldKey": "tenant_signature_at_check_out",
+        "label": "Signature",
+        "required": false,
+        "helpText": null
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000082",
+        "type": "date_field",
+        "fieldKey": "date_signed_by_tenant_at_check_out",
+        "label": "Date",
+        "required": false,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": " ",
+          "month": "long"
+        }
+      }
+    ],
+    "layout": {
+      "pageSize": "A4",
+      "orientation": "portrait",
+      "density": "balanced",
+      "fieldStyle": "line",
+      "marginPreset": "generous",
+      "sectionNumbers": "numbers",
+      "sectionStyle": "band",
+      "printedTitle": {
+        "mode": "none"
+      },
+      "headerPolicy": "none",
+      "footerPolicy": "all_pages",
+      "pageNumbering": "none",
+      "footerText": {
+        "left": "{title}",
+        "right": "Page {page} of {pages}"
+      }
+    },
+    "sections": [
+      {
+        "id": "d4050000-0000-4000-8000-000000000004",
+        "label": "The property and the tenancy",
+        "startBlockId": "d4050000-0000-4000-8000-000000000003",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000015",
+        "label": "Meters and keys",
+        "startBlockId": "d4050000-0000-4000-8000-000000000014",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000027",
+        "label": "Entrance and hallway",
+        "startBlockId": "d4050000-0000-4000-8000-000000000026",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000033",
+        "label": "Living room",
+        "startBlockId": "d4050000-0000-4000-8000-000000000032",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000039",
+        "label": "Kitchen",
+        "startBlockId": "d4050000-0000-4000-8000-000000000038",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000045",
+        "label": "Bathroom",
+        "startBlockId": "d4050000-0000-4000-8000-000000000044",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000051",
+        "label": "Bedroom 1",
+        "startBlockId": "d4050000-0000-4000-8000-000000000050",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000057",
+        "label": "Bedroom 2",
+        "startBlockId": "d4050000-0000-4000-8000-000000000056",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000063",
+        "label": "Furniture and appliances",
+        "startBlockId": "d4050000-0000-4000-8000-000000000062",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000066",
+        "label": "Photographs",
+        "startBlockId": "d4050000-0000-4000-8000-000000000065",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000069",
+        "label": "Agreement at check-in",
+        "startBlockId": "d4050000-0000-4000-8000-000000000068",
+        "pageBreakBefore": false,
+        "keepTogether": true
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000077",
+        "label": "Agreement at check-out",
+        "startBlockId": "d4050000-0000-4000-8000-000000000076",
+        "pageBreakBefore": false,
+        "keepTogether": true
+      }
+    ],
+    "fieldGroups": [
+      {
+        "id": "d4050000-0000-4000-8000-000000000007",
+        "label": "Landlord or agent",
+        "startBlockId": "d4050000-0000-4000-8000-000000000005",
+        "endBlockId": "d4050000-0000-4000-8000-000000000006",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000013",
+        "label": "Dates of the visits",
+        "startBlockId": "d4050000-0000-4000-8000-000000000011",
+        "endBlockId": "d4050000-0000-4000-8000-000000000012",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000017",
+        "label": "Electricity meter reading",
+        "startBlockId": "d4050000-0000-4000-8000-000000000014",
+        "endBlockId": "d4050000-0000-4000-8000-000000000016",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000020",
+        "label": "Gas meter reading",
+        "startBlockId": "d4050000-0000-4000-8000-000000000018",
+        "endBlockId": "d4050000-0000-4000-8000-000000000019",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000023",
+        "label": "Water meter reading",
+        "startBlockId": "d4050000-0000-4000-8000-000000000021",
+        "endBlockId": "d4050000-0000-4000-8000-000000000022",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000072",
+        "label": "Landlord or agent",
+        "startBlockId": "d4050000-0000-4000-8000-000000000070",
+        "endBlockId": "d4050000-0000-4000-8000-000000000071",
+        "columns": 2,
+        "keepTogether": true,
+        "widths": [
+          7,
+          5
+        ]
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000075",
+        "label": "Tenant",
+        "startBlockId": "d4050000-0000-4000-8000-000000000073",
+        "endBlockId": "d4050000-0000-4000-8000-000000000074",
+        "columns": 2,
+        "keepTogether": true,
+        "widths": [
+          7,
+          5
+        ]
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000080",
+        "label": "Landlord or agent",
+        "startBlockId": "d4050000-0000-4000-8000-000000000078",
+        "endBlockId": "d4050000-0000-4000-8000-000000000079",
+        "columns": 2,
+        "keepTogether": true,
+        "widths": [
+          7,
+          5
+        ]
+      },
+      {
+        "id": "d4050000-0000-4000-8000-000000000083",
+        "label": "Tenant",
+        "startBlockId": "d4050000-0000-4000-8000-000000000081",
+        "endBlockId": "d4050000-0000-4000-8000-000000000082",
+        "columns": 2,
+        "keepTogether": true,
+        "widths": [
+          7,
+          5
+        ]
+      }
+    ],
+    "blockRules": [
+      {
+        "blockId": "d4050000-0000-4000-8000-000000000062",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      }
+    ]
+  }
+}

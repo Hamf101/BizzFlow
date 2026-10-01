@@ -1,0 +1,298 @@
+{
+  "request": "time off request form",
+  "title": "Time off request",
+  "description": "Use when a member of staff asks for time off: the kind of leave, the dates, who will cover their work, and their manager's decision.",
+  "maxPages": 1,
+  "content": {
+    "schemaVersion": 3,
+    "branding": {
+      "organizationName": "",
+      "logoAsset": null,
+      "logoDataUrl": null,
+      "logoAlignment": "left",
+      "logoWidthPercent": 24,
+      "primaryColor": "#264653",
+      "accentColor": "#e76f51"
+    },
+    "blocks": [
+      {
+        "id": "0c140000-0000-4000-8000-000000000001",
+        "type": "heading",
+        "text": "Time off request",
+        "level": 1,
+        "alignment": "left"
+      },
+      {
+        "id": "0c140000-0000-4000-8000-000000000002",
+        "type": "paragraph",
+        "text": "Ask as early as you can. For holiday, give at least twice as much notice as the time you want off, such as two weeks' notice for a week's holiday, unless your contract says otherwise. If your manager has to refuse a holiday request, they will tell you at least as far ahead as the length of the holiday you asked for.",
+        "alignment": "left"
+      },
+      {
+        "id": "0c140000-0000-4000-8000-000000000004",
+        "type": "text_field",
+        "fieldKey": "your_name",
+        "label": "Your name",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c140000-0000-4000-8000-000000000005",
+        "type": "text_field",
+        "fieldKey": "team_or_department",
+        "label": "Team or department",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c140000-0000-4000-8000-000000000007",
+        "type": "dropdown_field",
+        "fieldKey": "what_kind_of_time_off",
+        "label": "What kind of time off?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Annual leave",
+          "Unpaid leave",
+          "Time off for a dependant emergency",
+          "Compassionate leave",
+          "An appointment",
+          "Other"
+        ],
+        "display": "radios"
+      },
+      {
+        "id": "0c140000-0000-4000-8000-000000000008",
+        "type": "text_field",
+        "fieldKey": "what_is_the_time_off_for",
+        "label": "What is the time off for?",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0c140000-0000-4000-8000-000000000007",
+          "operator": "equals",
+          "value": "Other"
+        },
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c140000-0000-4000-8000-000000000009",
+        "type": "date_field",
+        "fieldKey": "first_day_off",
+        "label": "First day off",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": " ",
+          "month": "short"
+        }
+      },
+      {
+        "id": "0c140000-0000-4000-8000-000000000010",
+        "type": "date_field",
+        "fieldKey": "last_day_off",
+        "label": "Last day off",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": " ",
+          "month": "short"
+        }
+      },
+      {
+        "id": "0c140000-0000-4000-8000-000000000011",
+        "type": "text_field",
+        "fieldKey": "working_days",
+        "label": "Working days",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c140000-0000-4000-8000-000000000013",
+        "type": "dropdown_field",
+        "fieldKey": "is_any_of_it_a_half_day",
+        "label": "Is any of it a half day?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "No",
+          "Yes, a morning",
+          "Yes, an afternoon"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0c140000-0000-4000-8000-000000000014",
+        "type": "text_field",
+        "fieldKey": "anything_your_manager_should_know",
+        "label": "Anything your manager should know",
+        "required": false,
+        "helpText": "Such as who will cover your work while you are away.",
+        "boxHeight": 30,
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "0c140000-0000-4000-8000-000000000015",
+        "type": "signature_field",
+        "fieldKey": "your_signature",
+        "label": "Your signature",
+        "required": true,
+        "helpText": null,
+        "boxHeight": 40
+      },
+      {
+        "id": "0c140000-0000-4000-8000-000000000016",
+        "type": "date_field",
+        "fieldKey": "requested_date",
+        "label": "Date",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": " ",
+          "month": "short"
+        }
+      },
+      {
+        "id": "0c140000-0000-4000-8000-000000000019",
+        "type": "dropdown_field",
+        "fieldKey": "decision",
+        "label": "Decision",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Approved",
+          "Declined"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0c140000-0000-4000-8000-000000000020",
+        "type": "text_field",
+        "fieldKey": "why_the_request_was_declined",
+        "label": "Why the request was declined",
+        "required": true,
+        "helpText": "Suggest other dates if you can.",
+        "visibleWhen": {
+          "sourceBlockId": "0c140000-0000-4000-8000-000000000019",
+          "operator": "equals",
+          "value": "Declined"
+        },
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "0c140000-0000-4000-8000-000000000021",
+        "type": "text_field",
+        "fieldKey": "days_of_annual_leave_left_after_this_request",
+        "label": "Days of annual leave left after this request",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c140000-0000-4000-8000-000000000022",
+        "type": "signature_field",
+        "fieldKey": "manager_s_signature",
+        "label": "Manager's signature",
+        "required": true,
+        "helpText": null,
+        "boxHeight": 40
+      },
+      {
+        "id": "0c140000-0000-4000-8000-000000000023",
+        "type": "date_field",
+        "fieldKey": "decision_date",
+        "label": "Date",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": " ",
+          "month": "short"
+        }
+      }
+    ],
+    "layout": {
+      "pageSize": "A4",
+      "orientation": "portrait",
+      "marginPreset": "standard",
+      "density": "balanced",
+      "fieldStyle": "box",
+      "sectionStyle": "plain",
+      "printedTitle": {
+        "mode": "none"
+      },
+      "headerPolicy": "none",
+      "footerPolicy": "none",
+      "pageNumbering": "none"
+    },
+    "sections": [
+      {
+        "id": "0c140000-0000-4000-8000-000000000003",
+        "label": "Your request",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0c140000-0000-4000-8000-000000000004"
+      },
+      {
+        "id": "0c140000-0000-4000-8000-000000000018",
+        "label": "Manager's decision",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0c140000-0000-4000-8000-000000000019"
+      }
+    ],
+    "fieldGroups": [
+      {
+        "id": "0c140000-0000-4000-8000-000000000006",
+        "label": null,
+        "startBlockId": "0c140000-0000-4000-8000-000000000004",
+        "endBlockId": "0c140000-0000-4000-8000-000000000005",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0c140000-0000-4000-8000-000000000012",
+        "label": null,
+        "startBlockId": "0c140000-0000-4000-8000-000000000009",
+        "endBlockId": "0c140000-0000-4000-8000-000000000011",
+        "columns": 3,
+        "keepTogether": false
+      },
+      {
+        "id": "0c140000-0000-4000-8000-000000000017",
+        "label": null,
+        "startBlockId": "0c140000-0000-4000-8000-000000000015",
+        "endBlockId": "0c140000-0000-4000-8000-000000000016",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0c140000-0000-4000-8000-000000000024",
+        "label": null,
+        "startBlockId": "0c140000-0000-4000-8000-000000000022",
+        "endBlockId": "0c140000-0000-4000-8000-000000000023",
+        "columns": 2,
+        "keepTogether": false
+      }
+    ],
+    "blockRules": []
+  }
+}

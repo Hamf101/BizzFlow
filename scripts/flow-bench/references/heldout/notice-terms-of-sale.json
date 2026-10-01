@@ -1,0 +1,579 @@
+{
+  "request": "Terms and conditions of sale for my online shop selling handmade candles to customers in the UK. We deliver by Royal Mail within the UK only and dispatch orders within 3 working days. Customers can return unused candles within 14 days for a change of mind, at their own cost; personalised candles can't be returned unless they are faulty. Payment is by card or PayPal at checkout.",
+  "title": "Terms and conditions of sale",
+  "description": "Publish on the online shop and link from the checkout, so customers know how ordering, payment, delivery, returns and faulty goods work before they buy, with a cancellation form they can use.",
+  "maxPages": 6,
+  "content": {
+    "schemaVersion": 3,
+    "branding": {
+      "organizationName": "",
+      "logoAsset": null,
+      "logoDataUrl": null,
+      "logoAlignment": "left",
+      "logoWidthPercent": 24,
+      "primaryColor": "#252329",
+      "accentColor": "#635273"
+    },
+    "blocks": [
+      {
+        "id": "d6050000-0000-4000-8000-000000000001",
+        "type": "heading",
+        "text": "Terms and conditions of sale",
+        "level": 1,
+        "alignment": "left"
+      },
+      {
+        "id": "d6050000-0000-4000-8000-000000000002",
+        "type": "paragraph",
+        "text": "These terms apply to every order you place with us through our online shop. Please read them before you order. By placing an order, you agree to them. They do not affect your legal rights as a consumer.",
+        "alignment": "left"
+      },
+      {
+        "id": "d6050000-0000-4000-8000-000000000003",
+        "type": "text_field",
+        "fieldKey": "business_name",
+        "label": "Business name",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d6050000-0000-4000-8000-000000000005",
+        "type": "text_field",
+        "fieldKey": "business_address",
+        "label": "Business address",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": true,
+        "boxHeight": 45
+      },
+      {
+        "id": "d6050000-0000-4000-8000-000000000006",
+        "type": "text_field",
+        "fieldKey": "email_address",
+        "label": "Email address",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d6050000-0000-4000-8000-000000000007",
+        "type": "text_field",
+        "fieldKey": "phone_number",
+        "label": "Phone number",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d6050000-0000-4000-8000-000000000009",
+        "type": "text_field",
+        "fieldKey": "company_number",
+        "label": "Company number",
+        "required": false,
+        "helpText": "Leave blank if the business is not a company.",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d6050000-0000-4000-8000-000000000010",
+        "type": "text_field",
+        "fieldKey": "vat_number",
+        "label": "VAT number",
+        "required": false,
+        "helpText": "Leave blank if the business is not registered for VAT.",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d6050000-0000-4000-8000-000000000012",
+        "type": "dropdown_field",
+        "fieldKey": "which_law_governs_these_terms",
+        "label": "Which law governs these terms?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "England and Wales",
+          "Scotland",
+          "Northern Ireland"
+        ],
+        "display": "radios"
+      },
+      {
+        "id": "d6050000-0000-4000-8000-000000000013",
+        "type": "paragraph",
+        "text": "In these terms:",
+        "alignment": "left"
+      },
+      {
+        "id": "d6050000-0000-4000-8000-000000000015",
+        "type": "bullet_list",
+        "items": [
+          "we, us and our mean the business named in About us;",
+          "you and your mean the person buying from us, as a consumer, for their own use and not for business;",
+          "goods means the candles and other products we sell;",
+          "personalised goods means goods made to your own specification, such as a candle with a name, date or message you choose; and",
+          "working day means any day other than a Saturday, Sunday or bank holiday."
+        ],
+        "itemRuns": [
+          [
+            {
+              "text": "we",
+              "bold": true
+            },
+            {
+              "text": ", "
+            },
+            {
+              "text": "us",
+              "bold": true
+            },
+            {
+              "text": " and "
+            },
+            {
+              "text": "our",
+              "bold": true
+            },
+            {
+              "text": " mean the business named in About us;"
+            }
+          ],
+          [
+            {
+              "text": "you",
+              "bold": true
+            },
+            {
+              "text": " and "
+            },
+            {
+              "text": "your",
+              "bold": true
+            },
+            {
+              "text": " mean the person buying from us, as a consumer, for their own use and not for business;"
+            }
+          ],
+          [
+            {
+              "text": "goods",
+              "bold": true
+            },
+            {
+              "text": " means the candles and other products we sell;"
+            }
+          ],
+          [
+            {
+              "text": "personalised goods",
+              "bold": true
+            },
+            {
+              "text": " means goods made to your own specification, such as a candle with a name, date or message you choose; and"
+            }
+          ],
+          [
+            {
+              "text": "working day",
+              "bold": true
+            },
+            {
+              "text": " means any day other than a Saturday, Sunday or bank holiday."
+            }
+          ]
+        ]
+      },
+      {
+        "id": "d6050000-0000-4000-8000-000000000016",
+        "type": "numbered_list",
+        "items": [
+          "Every candle is made by hand, so each one varies slightly in colour, finish and scent from the photographs on our website and from other candles in the same range. These small differences are part of a handmade product and are not a fault.",
+          "We describe each product's size, wax, burn time and scent as accurately as we can. Burn times are a guide; the actual time depends on how and where the candle is burned.",
+          "Each candle comes with a safety label. Please read and follow it. In particular, never leave a burning candle unattended, keep it away from children, pets, draughts and anything that can catch fire, and burn it on a heat-resistant surface."
+        ]
+      },
+      {
+        "id": "d6050000-0000-4000-8000-000000000018",
+        "type": "numbered_list",
+        "items": [
+          "When you place an order, we send you an email to confirm that we have received it. This does not mean we have accepted it.",
+          "Our acceptance takes place, and a contract between you and us is formed, when we email you to confirm that your order has been dispatched.",
+          "We may decline an order, for example if an item is out of stock or a price on our website is clearly wrong. If we do, we will tell you and refund any payment in full.",
+          "Please check your order, and the wording of any personalised goods, carefully before you submit it. We make personalised goods exactly as you tell us, and we cannot accept responsibility for errors in the wording you give us."
+        ]
+      },
+      {
+        "id": "d6050000-0000-4000-8000-000000000020",
+        "type": "numbered_list",
+        "items": [
+          "The price of the goods and the delivery charge are shown on our website and in your basket before you order. Prices include VAT where it applies.",
+          "You pay in full when you place your order, by debit or credit card or by PayPal, at our secure checkout. We do not store your card details.",
+          "If a price on our website is clearly wrong, we will contact you before dispatch to ask whether you want to buy at the correct price or cancel your order."
+        ]
+      },
+      {
+        "id": "d6050000-0000-4000-8000-000000000022",
+        "type": "numbered_list",
+        "items": [
+          "We deliver within the United Kingdom only, using Royal Mail.",
+          "We dispatch orders within 3 working days of receiving them, and personalised goods within the time shown on the product page. The delivery times shown at checkout are Royal Mail's estimates and are not guaranteed.",
+          "If your order has not arrived within 30 days of the date you placed it, please contact us. Where we have failed to deliver it, you may cancel the order and we will refund you in full.",
+          "The goods are your responsibility from the time they are delivered to the address you give us, or to someone you have asked to receive them."
+        ]
+      },
+      {
+        "id": "d6050000-0000-4000-8000-000000000024",
+        "type": "numbered_list",
+        "items": [
+          "You may cancel your contract for goods that are not personalised, for any reason, within 14 days after the day you receive them. If your order arrives in more than one delivery, the 14 days run from the day you receive the last item.",
+          "To cancel, tell us clearly in writing, by email or post, using the details in About us. You may use the cancellation form at the end of these terms, but you do not have to.",
+          "You must send the goods back to us within 14 days after the day you tell us you are cancelling. You pay the cost of returning them, and we recommend a tracked service.",
+          "We will refund the price of the goods and the standard delivery charge you paid. We do this within 14 days after the day we receive the goods back or, if earlier, the day you show us proof that you have sent them. We refund using the method you paid with.",
+          "Please return candles unused and in their original packaging where you can. We may reduce your refund to reflect any loss in value caused by handling the goods more than was needed to look at them, such as burning a candle.",
+          "Personalised goods cannot be returned for a change of mind, because they are made to your own specification. This does not affect your rights if they are faulty or not as described."
+        ],
+        "itemRuns": [
+          null,
+          null,
+          null,
+          null,
+          null,
+          [
+            {
+              "text": "Personalised goods",
+              "bold": true
+            },
+            {
+              "text": " cannot be returned for a change of mind, because they are made to your own specification. This does not affect your rights if they are faulty or not as described."
+            }
+          ]
+        ]
+      },
+      {
+        "id": "d6050000-0000-4000-8000-000000000026",
+        "type": "paragraph",
+        "text": "The law requires the goods we sell to you to be as described, of satisfactory quality and fit for purpose. If they are not, you have legal rights. In summary:",
+        "alignment": "left"
+      },
+      {
+        "id": "d6050000-0000-4000-8000-000000000028",
+        "type": "bullet_list",
+        "items": [
+          "if you tell us within 30 days of receiving the goods, you can reject them and get a full refund;",
+          "after that, or if you prefer, you can ask us to repair or replace them; and",
+          "if a repair or replacement is not possible or does not put the problem right, you can have some or all of your money back."
+        ]
+      },
+      {
+        "id": "d6050000-0000-4000-8000-000000000029",
+        "type": "paragraph",
+        "text": "If your goods arrive damaged or faulty, please email us with your order number and a photograph of the problem. We will pay the reasonable cost of returning faulty goods. For full information about your rights, contact Citizens Advice, or Advice Direct Scotland if you live in Scotland.",
+        "alignment": "left"
+      },
+      {
+        "id": "d6050000-0000-4000-8000-000000000030",
+        "type": "numbered_list",
+        "items": [
+          "If we fail to keep to these terms, we are responsible for loss or damage you suffer that is a foreseeable result of our failure or of our failing to use reasonable care and skill. We are not responsible for loss or damage that is not foreseeable.",
+          "We are not responsible for loss or damage caused by not following the safety instructions supplied with the goods.",
+          "We sell goods for domestic and private use only. We are not responsible for any loss of profit, loss of business or business interruption.",
+          "Nothing in these terms limits or excludes our liability for death or personal injury caused by our negligence, for fraud, for breach of your legal rights in relation to the goods, or for anything else that cannot be limited or excluded by law."
+        ]
+      },
+      {
+        "id": "d6050000-0000-4000-8000-000000000032",
+        "type": "paragraph",
+        "text": "We are not responsible for delays or failures caused by events outside our reasonable control, such as severe weather or a disruption to postal services. If such an event delays your order, we will tell you as soon as we can and take steps to reduce the delay. If the delay is likely to be substantial, you may cancel your order and receive a refund for any goods you have paid for but not received.",
+        "alignment": "left"
+      },
+      {
+        "id": "d6050000-0000-4000-8000-000000000034",
+        "type": "paragraph",
+        "text": "We use the personal information you give us to process your order, deliver your goods, take payment and keep you informed about your order. Our privacy notice, which is on our website, explains how we use and protect your information and the rights you have.",
+        "alignment": "left"
+      },
+      {
+        "id": "d6050000-0000-4000-8000-000000000036",
+        "type": "paragraph",
+        "text": "If you have a problem or a complaint, please contact us using the details in About us. We aim to resolve every problem quickly and fairly. These terms are governed by the law of the part of the United Kingdom named in About us. If you live elsewhere in the United Kingdom, you may also bring proceedings in the courts where you live.",
+        "alignment": "left"
+      },
+      {
+        "id": "d6050000-0000-4000-8000-000000000038",
+        "type": "paragraph",
+        "text": "We may change these terms from time to time. The terms that apply to your order are the ones on our website when you place it.",
+        "alignment": "left"
+      },
+      {
+        "id": "d6050000-0000-4000-8000-000000000040",
+        "type": "paragraph",
+        "text": "Complete and return this form only if you wish to cancel your contract. Send it to us by email or post, using the details in About us.",
+        "alignment": "left"
+      },
+      {
+        "id": "d6050000-0000-4000-8000-000000000042",
+        "type": "text_field",
+        "fieldKey": "goods_you_are_cancelling",
+        "label": "Goods you are cancelling",
+        "required": true,
+        "helpText": "List each item, as shown on your order.",
+        "placeholder": null,
+        "multiline": true,
+        "boxHeight": 60
+      },
+      {
+        "id": "d6050000-0000-4000-8000-000000000043",
+        "type": "text_field",
+        "fieldKey": "order_number",
+        "label": "Order number",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d6050000-0000-4000-8000-000000000044",
+        "type": "date_field",
+        "fieldKey": "date_ordered",
+        "label": "Ordered on",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": " ",
+          "month": "long"
+        }
+      },
+      {
+        "id": "d6050000-0000-4000-8000-000000000045",
+        "type": "date_field",
+        "fieldKey": "date_received",
+        "label": "Received on",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": " ",
+          "month": "long"
+        }
+      },
+      {
+        "id": "d6050000-0000-4000-8000-000000000047",
+        "type": "text_field",
+        "fieldKey": "your_full_name",
+        "label": "Your full name",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d6050000-0000-4000-8000-000000000048",
+        "type": "text_field",
+        "fieldKey": "your_address",
+        "label": "Your address",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": true,
+        "boxHeight": 45
+      },
+      {
+        "id": "d6050000-0000-4000-8000-000000000049",
+        "type": "signature_field",
+        "fieldKey": "your_signature",
+        "label": "Your signature",
+        "required": false,
+        "helpText": "Only needed if you send this form on paper."
+      },
+      {
+        "id": "d6050000-0000-4000-8000-000000000050",
+        "type": "date_field",
+        "fieldKey": "date_of_cancellation",
+        "label": "Date",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": " ",
+          "month": "long"
+        }
+      }
+    ],
+    "layout": {
+      "pageSize": "A4",
+      "orientation": "portrait",
+      "density": "balanced",
+      "fieldStyle": "line",
+      "marginPreset": "generous",
+      "sectionNumbers": "numbers",
+      "sectionStyle": "plain",
+      "printedTitle": {
+        "mode": "none"
+      },
+      "headerPolicy": "none",
+      "footerPolicy": "all_pages",
+      "pageNumbering": "none",
+      "footerText": {
+        "left": "{title}",
+        "right": "Page {page} of {pages}"
+      }
+    },
+    "sections": [
+      {
+        "id": "d6050000-0000-4000-8000-000000000004",
+        "label": "About us",
+        "startBlockId": "d6050000-0000-4000-8000-000000000003",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6050000-0000-4000-8000-000000000014",
+        "label": "Meaning of words",
+        "startBlockId": "d6050000-0000-4000-8000-000000000013",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6050000-0000-4000-8000-000000000017",
+        "label": "Our goods",
+        "startBlockId": "d6050000-0000-4000-8000-000000000016",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6050000-0000-4000-8000-000000000019",
+        "label": "Ordering",
+        "startBlockId": "d6050000-0000-4000-8000-000000000018",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6050000-0000-4000-8000-000000000021",
+        "label": "Prices and payment",
+        "startBlockId": "d6050000-0000-4000-8000-000000000020",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6050000-0000-4000-8000-000000000023",
+        "label": "Delivery",
+        "startBlockId": "d6050000-0000-4000-8000-000000000022",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6050000-0000-4000-8000-000000000025",
+        "label": "Your right to change your mind",
+        "startBlockId": "d6050000-0000-4000-8000-000000000024",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6050000-0000-4000-8000-000000000027",
+        "label": "Faulty goods and your legal rights",
+        "startBlockId": "d6050000-0000-4000-8000-000000000026",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6050000-0000-4000-8000-000000000031",
+        "label": "Our responsibility to you",
+        "startBlockId": "d6050000-0000-4000-8000-000000000030",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6050000-0000-4000-8000-000000000033",
+        "label": "Events outside our control",
+        "startBlockId": "d6050000-0000-4000-8000-000000000032",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6050000-0000-4000-8000-000000000035",
+        "label": "Your information",
+        "startBlockId": "d6050000-0000-4000-8000-000000000034",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6050000-0000-4000-8000-000000000037",
+        "label": "Complaints and disputes",
+        "startBlockId": "d6050000-0000-4000-8000-000000000036",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6050000-0000-4000-8000-000000000039",
+        "label": "Changes to these terms",
+        "startBlockId": "d6050000-0000-4000-8000-000000000038",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6050000-0000-4000-8000-000000000041",
+        "label": "Cancellation form",
+        "startBlockId": "d6050000-0000-4000-8000-000000000040",
+        "pageBreakBefore": true,
+        "keepTogether": false
+      }
+    ],
+    "fieldGroups": [
+      {
+        "id": "d6050000-0000-4000-8000-000000000008",
+        "label": null,
+        "startBlockId": "d6050000-0000-4000-8000-000000000006",
+        "endBlockId": "d6050000-0000-4000-8000-000000000007",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "d6050000-0000-4000-8000-000000000011",
+        "label": null,
+        "startBlockId": "d6050000-0000-4000-8000-000000000009",
+        "endBlockId": "d6050000-0000-4000-8000-000000000010",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "d6050000-0000-4000-8000-000000000046",
+        "label": "Dates",
+        "startBlockId": "d6050000-0000-4000-8000-000000000044",
+        "endBlockId": "d6050000-0000-4000-8000-000000000045",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "d6050000-0000-4000-8000-000000000051",
+        "label": null,
+        "startBlockId": "d6050000-0000-4000-8000-000000000049",
+        "endBlockId": "d6050000-0000-4000-8000-000000000050",
+        "columns": 2,
+        "keepTogether": true,
+        "widths": [
+          7,
+          5
+        ]
+      }
+    ],
+    "blockRules": [
+      {
+        "blockId": "d6050000-0000-4000-8000-000000000013",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "d6050000-0000-4000-8000-000000000026",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      }
+    ]
+  }
+}

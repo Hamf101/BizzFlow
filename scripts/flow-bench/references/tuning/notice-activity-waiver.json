@@ -1,0 +1,667 @@
+{
+  "request": "liability waiver for customers of my kayak hire and guided paddling tours",
+  "title": "Participation agreement and release",
+  "description": "Have every customer read and sign before kayak hire, a guided paddle or a lesson, to explain the risks, record their acceptance and an emergency contact, and take a parent's signature for anyone under 18.",
+  "maxPages": 5,
+  "content": {
+    "schemaVersion": 3,
+    "branding": {
+      "organizationName": "",
+      "logoAsset": null,
+      "logoDataUrl": null,
+      "logoAlignment": "left",
+      "logoWidthPercent": 24,
+      "primaryColor": "#252329",
+      "accentColor": "#635273"
+    },
+    "blocks": [
+      {
+        "id": "d6010000-0000-4000-8000-000000000001",
+        "type": "heading",
+        "text": "Participation agreement and release",
+        "level": 1,
+        "alignment": "left"
+      },
+      {
+        "id": "d6010000-0000-4000-8000-000000000002",
+        "type": "paragraph",
+        "text": "Please read this whole document before you sign it. It explains the risks of paddling, what we do to keep you safe, what we ask of you, and the rights you give up by signing. If anything is unclear, ask a member of our team before you go on the water.",
+        "alignment": "left"
+      },
+      {
+        "id": "d6010000-0000-4000-8000-000000000003",
+        "type": "text_field",
+        "fieldKey": "full_name",
+        "label": "Full name",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d6010000-0000-4000-8000-000000000005",
+        "type": "date_field",
+        "fieldKey": "date_of_birth",
+        "label": "Date of birth",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": " ",
+          "month": "long"
+        }
+      },
+      {
+        "id": "d6010000-0000-4000-8000-000000000006",
+        "type": "text_field",
+        "fieldKey": "phone_number",
+        "label": "Phone number",
+        "required": true,
+        "helpText": "We call it if you are overdue back from a hire.",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d6010000-0000-4000-8000-000000000008",
+        "type": "text_field",
+        "fieldKey": "email_address",
+        "label": "Email address",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d6010000-0000-4000-8000-000000000009",
+        "type": "dropdown_field",
+        "fieldKey": "which_activity_are_you_booked_on",
+        "label": "Which activity are you booked on?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Kayak hire",
+          "Guided paddle",
+          "Lesson",
+          "Other"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "d6010000-0000-4000-8000-000000000010",
+        "type": "text_field",
+        "fieldKey": "which_other_activity_are_you_booked_on",
+        "label": "Which other activity are you booked on?",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "d6010000-0000-4000-8000-000000000009",
+          "operator": "equals",
+          "value": "Other"
+        },
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d6010000-0000-4000-8000-000000000011",
+        "type": "date_field",
+        "fieldKey": "date_of_activity",
+        "label": "Date of activity",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": " ",
+          "month": "long"
+        }
+      },
+      {
+        "id": "d6010000-0000-4000-8000-000000000012",
+        "type": "text_field",
+        "fieldKey": "emergency_contact_name",
+        "label": "Name",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d6010000-0000-4000-8000-000000000013",
+        "type": "text_field",
+        "fieldKey": "emergency_contact_phone_number",
+        "label": "Phone number",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d6010000-0000-4000-8000-000000000015",
+        "type": "paragraph",
+        "text": "In this document:",
+        "alignment": "left"
+      },
+      {
+        "id": "d6010000-0000-4000-8000-000000000017",
+        "type": "bullet_list",
+        "items": [
+          "we, us and our mean the business named on your booking, and its guides, instructors and staff;",
+          "you means the person named above who is taking part, and participant means anyone taking part;",
+          "the activity means the kayak hire, guided paddle, lesson or other activity you are booked on, including getting on and off the water, carrying boats and any time spent on the bank or shore during it; and",
+          "equipment means the kayaks, paddles, buoyancy aids, helmets, spray decks and any other kit we lend you."
+        ],
+        "itemRuns": [
+          [
+            {
+              "text": "we",
+              "bold": true
+            },
+            {
+              "text": ", "
+            },
+            {
+              "text": "us",
+              "bold": true
+            },
+            {
+              "text": " and "
+            },
+            {
+              "text": "our",
+              "bold": true
+            },
+            {
+              "text": " mean the business named on your booking, and its guides, instructors and staff;"
+            }
+          ],
+          [
+            {
+              "text": "you",
+              "bold": true
+            },
+            {
+              "text": " means the person named above who is taking part, and "
+            },
+            {
+              "text": "participant",
+              "bold": true
+            },
+            {
+              "text": " means anyone taking part;"
+            }
+          ],
+          [
+            {
+              "text": "the "
+            },
+            {
+              "text": "activity",
+              "bold": true
+            },
+            {
+              "text": " means the kayak hire, guided paddle, lesson or other activity you are booked on, including getting on and off the water, carrying boats and any time spent on the bank or shore during it; and"
+            }
+          ],
+          [
+            {
+              "text": "equipment",
+              "bold": true
+            },
+            {
+              "text": " means the kayaks, paddles, buoyancy aids, helmets, spray decks and any other kit we lend you."
+            }
+          ]
+        ]
+      },
+      {
+        "id": "d6010000-0000-4000-8000-000000000018",
+        "type": "paragraph",
+        "text": "Paddling is an outdoor adventure activity that takes place on moving and open water, in changing weather. Some risks remain however carefully the activity is run, and they are part of what makes it exciting. They include:",
+        "alignment": "left"
+      },
+      {
+        "id": "d6010000-0000-4000-8000-000000000020",
+        "type": "bullet_list",
+        "items": [
+          "capsizing, falling in, and being trapped under or against a boat;",
+          "cold water, which can cause sudden gasping, loss of strength and, over time, hypothermia;",
+          "currents, tides, waves, wind and weather that change quickly and can carry you away from where you meant to go;",
+          "collision with other boats, swimmers, rocks, bridges, banks and objects under the water;",
+          "slips, trips and falls while launching, landing or carrying boats;",
+          "strains, sprains, blisters, sunburn and dehydration;",
+          "illness caught from water, such as stomach upsets, and contact with wildlife and plants; and",
+          "rescue or medical help taking longer to reach you than it would on land."
+        ]
+      },
+      {
+        "id": "d6010000-0000-4000-8000-000000000021",
+        "type": "paragraph",
+        "text": "These risks can cause injury, illness, damage to or loss of your belongings and, in rare cases, death.",
+        "alignment": "left"
+      },
+      {
+        "id": "d6010000-0000-4000-8000-000000000022",
+        "type": "numbered_list",
+        "items": [
+          "We give every participant a safety briefing before the activity starts, covering how to use the equipment, what to do if you capsize, and the area you may use.",
+          "We provide equipment that is suitable for the activity and checked before use, including a buoyancy aid for every participant.",
+          "We check the weather and water conditions on the day, and we will change, delay or cancel the activity if we judge it unsafe. Our guides may also end the activity early at any time for safety reasons.",
+          "On guided paddles and lessons, our guides hold recognised paddlesport qualifications and carry safety and first aid equipment."
+        ]
+      },
+      {
+        "id": "d6010000-0000-4000-8000-000000000024",
+        "type": "paragraph",
+        "text": "You agree to:",
+        "alignment": "left"
+      },
+      {
+        "id": "d6010000-0000-4000-8000-000000000026",
+        "type": "numbered_list",
+        "items": [
+          "listen to the safety briefing and follow every instruction our staff give you, before and during the activity;",
+          "wear your buoyancy aid, fastened correctly, at all times on or near the water, and a helmet when we ask you to;",
+          "stay within the area and times we set for a hire, and return at the time agreed;",
+          "not take part under the influence of alcohol or drugs, or when you are too tired or unwell to paddle safely;",
+          "tell us before the activity about anything that could affect your safety or the safety of others, and tell your guide straight away if you feel unwell or unsure during it;",
+          "look after the equipment and return it in the condition you received it, apart from fair wear and tear; and",
+          "respect other water users, wildlife, landowners and the local rules of the waterway."
+        ]
+      },
+      {
+        "id": "d6010000-0000-4000-8000-000000000027",
+        "type": "paragraph",
+        "text": "We may refuse to let you take part, or stop you taking part, if we reasonably believe you are putting yourself or others at risk. When this happens because you have not followed these rules, you may not be entitled to a refund.",
+        "alignment": "left"
+      },
+      {
+        "id": "d6010000-0000-4000-8000-000000000028",
+        "type": "dropdown_field",
+        "fieldKey": "how_confident_are_you_in_the_water",
+        "label": "How confident are you in the water?",
+        "required": true,
+        "helpText": "Non-swimmers can take part in some activities, with a guide close by.",
+        "placeholder": null,
+        "options": [
+          "I can swim confidently",
+          "I can swim a little",
+          "I cannot swim"
+        ],
+        "display": "radios"
+      },
+      {
+        "id": "d6010000-0000-4000-8000-000000000030",
+        "type": "dropdown_field",
+        "fieldKey": "have_you_paddled_a_kayak_or_canoe_before",
+        "label": "Have you paddled a kayak or canoe before?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Never",
+          "A few times",
+          "Regularly"
+        ],
+        "display": "radios"
+      },
+      {
+        "id": "d6010000-0000-4000-8000-000000000031",
+        "type": "dropdown_field",
+        "fieldKey": "is_there_anything_about_your_fitness_that_could_affect_your",
+        "label": "Is there anything about your fitness that could affect your safety on the water?",
+        "required": true,
+        "helpText": "For example a condition that could cause you to faint or have a seizure, a recent injury, or anything that affects your breathing.",
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "d6010000-0000-4000-8000-000000000032",
+        "type": "text_field",
+        "fieldKey": "what_should_your_guide_know",
+        "label": "What should your guide know?",
+        "required": true,
+        "helpText": "We use this only to plan the activity safely and to tell emergency services if you need help.",
+        "visibleWhen": {
+          "sourceBlockId": "d6010000-0000-4000-8000-000000000031",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "placeholder": null,
+        "multiline": true,
+        "boxHeight": 45
+      },
+      {
+        "id": "d6010000-0000-4000-8000-000000000033",
+        "type": "numbered_list",
+        "items": [
+          "You take part in the activity voluntarily. You confirm that you have read and understood the risks described above, and that you accept them.",
+          "As far as the law allows, you release us from liability for any loss, damage, injury or illness that you suffer as a result of the risks that are part of the activity, where we have not been negligent and have not broken this agreement.",
+          "You are responsible for loss of or damage to the equipment caused by your carelessness or by not following our instructions, apart from fair wear and tear.",
+          "Nothing in this document limits or excludes our liability for death or personal injury caused by our negligence, for fraud, or for anything else that cannot be limited or excluded by law. It does not take away any rights you have by law."
+        ]
+      },
+      {
+        "id": "d6010000-0000-4000-8000-000000000035",
+        "type": "paragraph",
+        "text": "Our guides sometimes take photographs during the activity to share with participants and to show on our website and social media. We will only use photographs in which you can be recognised for publicity if you agree below. You can change your mind at any time by telling us.",
+        "alignment": "left"
+      },
+      {
+        "id": "d6010000-0000-4000-8000-000000000037",
+        "type": "checkbox_field",
+        "fieldKey": "i_agree_that_photographs_in_which_i_can_be_recognised_may_be",
+        "label": "I agree that photographs in which I can be recognised may be used on your website and social media",
+        "required": false,
+        "helpText": null,
+        "checkedByDefault": false
+      },
+      {
+        "id": "d6010000-0000-4000-8000-000000000038",
+        "type": "dropdown_field",
+        "fieldKey": "is_the_participant_under_18",
+        "label": "Is the participant under 18?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "d6010000-0000-4000-8000-000000000040",
+        "type": "paragraph",
+        "text": "A parent or guardian must sign for any participant under 18. By signing, the parent or guardian confirms that they have read this document, that they agree to it on the young person's behalf, and that the young person understands and will follow the rules above.",
+        "alignment": "left"
+      },
+      {
+        "id": "d6010000-0000-4000-8000-000000000041",
+        "type": "text_field",
+        "fieldKey": "parent_or_guardian_name",
+        "label": "Parent or guardian name",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "d6010000-0000-4000-8000-000000000038",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d6010000-0000-4000-8000-000000000042",
+        "type": "text_field",
+        "fieldKey": "relationship_to_the_participant",
+        "label": "Relationship to the participant",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "d6010000-0000-4000-8000-000000000038",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d6010000-0000-4000-8000-000000000044",
+        "type": "signature_field",
+        "fieldKey": "parent_or_guardian_signature",
+        "label": "Parent or guardian signature",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "d6010000-0000-4000-8000-000000000038",
+          "operator": "equals",
+          "value": "Yes"
+        }
+      },
+      {
+        "id": "d6010000-0000-4000-8000-000000000045",
+        "type": "date_field",
+        "fieldKey": "date_signed_by_parent_or_guardian",
+        "label": "Date signed by parent or guardian",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "d6010000-0000-4000-8000-000000000038",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "dateFormat": {
+          "order": "dmy",
+          "separator": " ",
+          "month": "long"
+        }
+      },
+      {
+        "id": "d6010000-0000-4000-8000-000000000047",
+        "type": "paragraph",
+        "text": "We use the details on this form to run the activity safely, to contact you or your emergency contact if we need to, and to keep a record of your agreement in case of an accident or claim. Your guide sees what you tell us about your fitness, and we share it with emergency services only if you need help. We keep this form for as long as we may need it in case of a claim, and then destroy it securely. You can ask to see the information we hold about you, and ask us to correct it.",
+        "alignment": "left"
+      },
+      {
+        "id": "d6010000-0000-4000-8000-000000000049",
+        "type": "checkbox_field",
+        "fieldKey": "i_have_read_and_understood_this_document_and_i_have_had_the",
+        "label": "I have read and understood this document, and I have had the chance to ask questions about it.",
+        "required": true,
+        "helpText": null,
+        "checkedByDefault": false
+      },
+      {
+        "id": "d6010000-0000-4000-8000-000000000051",
+        "type": "checkbox_field",
+        "fieldKey": "the_information_i_have_given_is_true_and_complete",
+        "label": "The information I have given is true and complete.",
+        "required": true,
+        "helpText": null,
+        "checkedByDefault": false
+      },
+      {
+        "id": "d6010000-0000-4000-8000-000000000052",
+        "type": "checkbox_field",
+        "fieldKey": "i_agree_to_take_part_on_the_terms_set_out_in_this_document",
+        "label": "I agree to take part on the terms set out in this document.",
+        "required": true,
+        "helpText": null,
+        "checkedByDefault": false
+      },
+      {
+        "id": "d6010000-0000-4000-8000-000000000053",
+        "type": "signature_field",
+        "fieldKey": "participant_signature",
+        "label": "Participant signature",
+        "required": true,
+        "helpText": null
+      },
+      {
+        "id": "d6010000-0000-4000-8000-000000000054",
+        "type": "date_field",
+        "fieldKey": "date_signed",
+        "label": "Date signed",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": " ",
+          "month": "long"
+        }
+      }
+    ],
+    "layout": {
+      "pageSize": "A4",
+      "orientation": "portrait",
+      "density": "balanced",
+      "fieldStyle": "line",
+      "marginPreset": "generous",
+      "sectionNumbers": "numbers",
+      "sectionStyle": "box",
+      "printedTitle": {
+        "mode": "none"
+      },
+      "headerPolicy": "none",
+      "footerPolicy": "all_pages",
+      "pageNumbering": "none",
+      "footerText": {
+        "left": "{title}",
+        "right": "Page {page} of {pages}"
+      }
+    },
+    "sections": [
+      {
+        "id": "d6010000-0000-4000-8000-000000000004",
+        "label": "Your details",
+        "startBlockId": "d6010000-0000-4000-8000-000000000003",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6010000-0000-4000-8000-000000000016",
+        "label": "Meaning of words",
+        "startBlockId": "d6010000-0000-4000-8000-000000000015",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6010000-0000-4000-8000-000000000019",
+        "label": "The risks of paddling",
+        "startBlockId": "d6010000-0000-4000-8000-000000000018",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6010000-0000-4000-8000-000000000023",
+        "label": "What we do to keep you safe",
+        "startBlockId": "d6010000-0000-4000-8000-000000000022",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6010000-0000-4000-8000-000000000025",
+        "label": "What we ask of you",
+        "startBlockId": "d6010000-0000-4000-8000-000000000024",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6010000-0000-4000-8000-000000000029",
+        "label": "Your fitness to take part",
+        "startBlockId": "d6010000-0000-4000-8000-000000000028",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6010000-0000-4000-8000-000000000034",
+        "label": "Acceptance of risk and release",
+        "startBlockId": "d6010000-0000-4000-8000-000000000033",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6010000-0000-4000-8000-000000000036",
+        "label": "Photographs",
+        "startBlockId": "d6010000-0000-4000-8000-000000000035",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6010000-0000-4000-8000-000000000039",
+        "label": "Participants under 18",
+        "startBlockId": "d6010000-0000-4000-8000-000000000038",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6010000-0000-4000-8000-000000000048",
+        "label": "Your information",
+        "startBlockId": "d6010000-0000-4000-8000-000000000047",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6010000-0000-4000-8000-000000000050",
+        "label": "Declaration",
+        "startBlockId": "d6010000-0000-4000-8000-000000000049",
+        "pageBreakBefore": false,
+        "keepTogether": true
+      }
+    ],
+    "fieldGroups": [
+      {
+        "id": "d6010000-0000-4000-8000-000000000007",
+        "label": null,
+        "startBlockId": "d6010000-0000-4000-8000-000000000005",
+        "endBlockId": "d6010000-0000-4000-8000-000000000006",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "d6010000-0000-4000-8000-000000000014",
+        "label": "Emergency contact who is not coming with you",
+        "startBlockId": "d6010000-0000-4000-8000-000000000012",
+        "endBlockId": "d6010000-0000-4000-8000-000000000013",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "d6010000-0000-4000-8000-000000000043",
+        "label": null,
+        "startBlockId": "d6010000-0000-4000-8000-000000000041",
+        "endBlockId": "d6010000-0000-4000-8000-000000000042",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "d6010000-0000-4000-8000-000000000046",
+        "label": null,
+        "startBlockId": "d6010000-0000-4000-8000-000000000044",
+        "endBlockId": "d6010000-0000-4000-8000-000000000045",
+        "columns": 2,
+        "keepTogether": true,
+        "widths": [
+          7,
+          5
+        ]
+      },
+      {
+        "id": "d6010000-0000-4000-8000-000000000055",
+        "label": null,
+        "startBlockId": "d6010000-0000-4000-8000-000000000053",
+        "endBlockId": "d6010000-0000-4000-8000-000000000054",
+        "columns": 2,
+        "keepTogether": true,
+        "widths": [
+          7,
+          5
+        ]
+      }
+    ],
+    "blockRules": [
+      {
+        "blockId": "d6010000-0000-4000-8000-000000000015",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "d6010000-0000-4000-8000-000000000018",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "d6010000-0000-4000-8000-000000000024",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      }
+    ]
+  }
+}

@@ -1,0 +1,357 @@
+{
+  "request": "fridge and freezer temperature log for my restaurant kitchen, morning and evening checks for a week, with what to do when it's too warm",
+  "title": "Fridge and freezer temperature log",
+  "description": "Use each week in the kitchen to record morning and evening temperatures of the fridges and the freezer, what was done about any high reading, and the manager's weekly sign-off.",
+  "maxPages": 2,
+  "content": {
+    "schemaVersion": 3,
+    "branding": {
+      "organizationName": "",
+      "logoAsset": null,
+      "logoDataUrl": null,
+      "logoAlignment": "left",
+      "logoWidthPercent": 24,
+      "primaryColor": "#252329",
+      "accentColor": "#635273"
+    },
+    "blocks": [
+      {
+        "id": "d4040000-0000-4000-8000-000000000001",
+        "type": "heading",
+        "text": "Fridge and freezer temperature log",
+        "level": 1,
+        "alignment": "left"
+      },
+      {
+        "id": "d4040000-0000-4000-8000-000000000002",
+        "type": "date_field",
+        "fieldKey": "week_beginning",
+        "label": "Week beginning",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": " ",
+          "month": "short"
+        }
+      },
+      {
+        "id": "d4040000-0000-4000-8000-000000000004",
+        "type": "text_field",
+        "fieldKey": "highest_temperature_allowed_in_the_fridges_c",
+        "label": "Highest temperature allowed in the fridges (°C)",
+        "required": true,
+        "helpText": "As your food safety plan sets it.",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d4040000-0000-4000-8000-000000000005",
+        "type": "text_field",
+        "fieldKey": "highest_temperature_allowed_in_the_freezer_c",
+        "label": "Highest temperature allowed in the freezer (°C)",
+        "required": true,
+        "helpText": "As your food safety plan sets it.",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d4040000-0000-4000-8000-000000000007",
+        "type": "text_field",
+        "fieldKey": "which_unit_is_fridge_1",
+        "label": "Which unit is fridge 1?",
+        "required": true,
+        "helpText": "For example the walk-in fridge.",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d4040000-0000-4000-8000-000000000008",
+        "type": "text_field",
+        "fieldKey": "which_unit_is_fridge_2",
+        "label": "Which unit is fridge 2?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d4040000-0000-4000-8000-000000000009",
+        "type": "text_field",
+        "fieldKey": "which_unit_is_the_freezer",
+        "label": "Which unit is the freezer?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d4040000-0000-4000-8000-000000000011",
+        "type": "paragraph",
+        "text": "Check each unit when the kitchen opens and before it closes, using the display or a clean probe thermometer in a glass of water left inside. Write the temperature in °C and your initials.",
+        "alignment": "left"
+      },
+      {
+        "id": "d4040000-0000-4000-8000-000000000013",
+        "type": "table",
+        "headers": [
+          "Day",
+          "Fridge 1 morning",
+          "Fridge 1 evening",
+          "Fridge 2 morning",
+          "Fridge 2 evening",
+          "Freezer morning",
+          "Freezer evening",
+          "Initials"
+        ],
+        "rows": [
+          [
+            "Monday",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            ""
+          ],
+          [
+            "Tuesday",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            ""
+          ],
+          [
+            "Wednesday",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            ""
+          ],
+          [
+            "Thursday",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            ""
+          ],
+          [
+            "Friday",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            ""
+          ],
+          [
+            "Saturday",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            ""
+          ],
+          [
+            "Sunday",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      },
+      {
+        "id": "d4040000-0000-4000-8000-000000000014",
+        "type": "bullet_list",
+        "items": [
+          "Check the door is shut properly, the seal is not split and the unit is not overloaded or iced up.",
+          "Check again a little later. If it is still too warm, move the food to another unit that is working properly and tell the manager.",
+          "The manager decides whether any food must be thrown away, and arranges for the unit to be repaired.",
+          "Write down every high reading and what was done about it below."
+        ]
+      },
+      {
+        "id": "d4040000-0000-4000-8000-000000000016",
+        "type": "table",
+        "headers": [
+          "Date and time",
+          "Unit",
+          "Reading (°C)",
+          "What was done",
+          "Initials"
+        ],
+        "rows": [
+          [
+            "",
+            "",
+            "",
+            "",
+            ""
+          ],
+          [
+            "",
+            "",
+            "",
+            "",
+            ""
+          ],
+          [
+            "",
+            "",
+            "",
+            "",
+            ""
+          ],
+          [
+            "",
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      },
+      {
+        "id": "d4040000-0000-4000-8000-000000000017",
+        "type": "text_field",
+        "fieldKey": "manager_name",
+        "label": "Manager name",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d4040000-0000-4000-8000-000000000019",
+        "type": "signature_field",
+        "fieldKey": "manager_signature",
+        "label": "Manager signature",
+        "required": true,
+        "helpText": null
+      },
+      {
+        "id": "d4040000-0000-4000-8000-000000000020",
+        "type": "date_field",
+        "fieldKey": "date_checked_by_manager",
+        "label": "Date checked by manager",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": " ",
+          "month": "short"
+        }
+      }
+    ],
+    "layout": {
+      "pageSize": "A4",
+      "orientation": "landscape",
+      "density": "compact",
+      "fieldStyle": "box",
+      "lineSpacing": 1.3,
+      "marginPreset": "compact",
+      "paragraphSpacing": 4,
+      "sectionStyle": "band",
+      "printedTitle": {
+        "mode": "none"
+      },
+      "headerPolicy": "none",
+      "footerPolicy": "all_pages",
+      "pageNumbering": "none",
+      "footerText": {
+        "left": "{title}",
+        "right": "Page {page} of {pages}"
+      }
+    },
+    "sections": [
+      {
+        "id": "d4040000-0000-4000-8000-000000000003",
+        "label": "This week",
+        "startBlockId": "d4040000-0000-4000-8000-000000000002",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d4040000-0000-4000-8000-000000000012",
+        "label": "Readings",
+        "startBlockId": "d4040000-0000-4000-8000-000000000011",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d4040000-0000-4000-8000-000000000015",
+        "label": "When a reading is too high",
+        "startBlockId": "d4040000-0000-4000-8000-000000000014",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d4040000-0000-4000-8000-000000000018",
+        "label": "Weekly sign-off",
+        "startBlockId": "d4040000-0000-4000-8000-000000000017",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      }
+    ],
+    "fieldGroups": [
+      {
+        "id": "d4040000-0000-4000-8000-000000000006",
+        "label": null,
+        "startBlockId": "d4040000-0000-4000-8000-000000000002",
+        "endBlockId": "d4040000-0000-4000-8000-000000000005",
+        "columns": 3,
+        "keepTogether": false,
+        "widths": [
+          3,
+          5,
+          4
+        ]
+      },
+      {
+        "id": "d4040000-0000-4000-8000-000000000010",
+        "label": null,
+        "startBlockId": "d4040000-0000-4000-8000-000000000007",
+        "endBlockId": "d4040000-0000-4000-8000-000000000009",
+        "columns": 3,
+        "keepTogether": false
+      },
+      {
+        "id": "d4040000-0000-4000-8000-000000000021",
+        "label": null,
+        "startBlockId": "d4040000-0000-4000-8000-000000000017",
+        "endBlockId": "d4040000-0000-4000-8000-000000000020",
+        "columns": 3,
+        "keepTogether": true,
+        "widths": [
+          4,
+          5,
+          3
+        ]
+      }
+    ],
+    "blockRules": [
+      {
+        "blockId": "d4040000-0000-4000-8000-000000000011",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      }
+    ]
+  }
+}

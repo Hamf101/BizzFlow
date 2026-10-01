@@ -1,0 +1,749 @@
+{
+  "request": "I run licensing at a district council. Draft an application form for street trading consent, for people who want to sell hot food or goods from a pitch, stall or vehicle in our consent streets. We need the applicant's details, the business, where and when they want to trade, what they'll sell, the stall or vehicle, food registration for food traders, two passport photos and a declaration about unspent convictions. The fee is in our separate fee schedule.",
+  "title": "Application for street trading consent",
+  "description": "Use when someone applies to the council for consent to trade from a pitch, stall or vehicle in a consent street: who they are, where, when and what they will sell, their unit, and their declaration.",
+  "maxPages": 3,
+  "content": {
+    "schemaVersion": 3,
+    "branding": {
+      "organizationName": "",
+      "logoAsset": null,
+      "logoDataUrl": null,
+      "logoAlignment": "left",
+      "logoWidthPercent": 24,
+      "primaryColor": "#1f3a5f",
+      "accentColor": "#2f6690"
+    },
+    "blocks": [
+      {
+        "id": "0a120000-0000-4000-8000-000000000001",
+        "type": "heading",
+        "text": "Application for street trading consent",
+        "level": 1,
+        "alignment": "left"
+      },
+      {
+        "id": "0a120000-0000-4000-8000-000000000002",
+        "type": "paragraph",
+        "text": "Use this form to apply for consent to trade in a street the council has designated as a consent street. Please answer every question that applies to you. We may refuse an application, or give consent for fewer days, times or places than you asked for.",
+        "alignment": "left"
+      },
+      {
+        "id": "0a120000-0000-4000-8000-000000000003",
+        "type": "heading",
+        "text": "Before you start",
+        "level": 2,
+        "alignment": "left"
+      },
+      {
+        "id": "0a120000-0000-4000-8000-000000000004",
+        "type": "bullet_list",
+        "items": [
+          "Read the list of consent streets and the standard conditions that come with every consent.",
+          "Have ready two recent passport-style photographs of yourself, a plan or photograph of your stall or vehicle, and your public liability insurance certificate.",
+          "If you will sell food or drink, your food business must be registered with the local authority where it is based at least 28 days before you start trading.",
+          "The fee is in the council's current schedule of fees. We cannot process the application until it is paid."
+        ]
+      },
+      {
+        "id": "0a120000-0000-4000-8000-000000000005",
+        "type": "paragraph",
+        "text": "How we use your information: the council uses the details on this form to decide your application and to manage your consent. We may share them with the police, the fire service and our environmental health team to check your application, and we publish the name, location and trading times of consent holders. We keep them for as long as your consent lasts and then for the period our retention schedule sets.",
+        "runs": [
+          {
+            "text": "How we use your information:",
+            "bold": true
+          },
+          {
+            "text": " the council uses the details on this form to decide your application and to manage your consent. We may share them with the police, the fire service and our environmental health team to check your application, and we publish the name, location and trading times of consent holders. We keep them for as long as your consent lasts and then for the period our retention schedule sets."
+          }
+        ],
+        "alignment": "left"
+      },
+      {
+        "id": "0a120000-0000-4000-8000-000000000007",
+        "type": "text_field",
+        "fieldKey": "first_name",
+        "label": "First name",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0a120000-0000-4000-8000-000000000008",
+        "type": "text_field",
+        "fieldKey": "last_name",
+        "label": "Last name",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0a120000-0000-4000-8000-000000000010",
+        "type": "date_field",
+        "fieldKey": "date_of_birth",
+        "label": "Date of birth",
+        "required": true,
+        "helpText": "Consent cannot be given to anyone under 17.",
+        "dateFormat": {
+          "order": "dmy",
+          "separator": "/",
+          "month": "number"
+        }
+      },
+      {
+        "id": "0a120000-0000-4000-8000-000000000011",
+        "type": "text_field",
+        "fieldKey": "home_address",
+        "label": "Home address",
+        "required": true,
+        "helpText": null,
+        "boxHeight": 48,
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "0a120000-0000-4000-8000-000000000012",
+        "type": "text_field",
+        "fieldKey": "phone_number",
+        "label": "Phone number",
+        "required": true,
+        "helpText": "We call if we need to check anything about your application.",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0a120000-0000-4000-8000-000000000013",
+        "type": "text_field",
+        "fieldKey": "email_address",
+        "label": "Email address",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0a120000-0000-4000-8000-000000000016",
+        "type": "dropdown_field",
+        "fieldKey": "are_you_applying_as",
+        "label": "Are you applying as",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "An individual",
+          "A partnership",
+          "A limited company"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0a120000-0000-4000-8000-000000000017",
+        "type": "text_field",
+        "fieldKey": "company_name",
+        "label": "Company name",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0a120000-0000-4000-8000-000000000016",
+          "operator": "equals",
+          "value": "A limited company"
+        },
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0a120000-0000-4000-8000-000000000018",
+        "type": "text_field",
+        "fieldKey": "company_number",
+        "label": "Company number",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0a120000-0000-4000-8000-000000000016",
+          "operator": "equals",
+          "value": "A limited company"
+        },
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0a120000-0000-4000-8000-000000000020",
+        "type": "text_field",
+        "fieldKey": "names_and_addresses_of_the_other_partners",
+        "label": "Names and addresses of the other partners",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0a120000-0000-4000-8000-000000000016",
+          "operator": "equals",
+          "value": "A partnership"
+        },
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "0a120000-0000-4000-8000-000000000021",
+        "type": "text_field",
+        "fieldKey": "trading_name_if_different_from_your_own_name",
+        "label": "Trading name, if different from your own name",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0a120000-0000-4000-8000-000000000023",
+        "type": "text_field",
+        "fieldKey": "street_and_exact_position_of_the_pitch",
+        "label": "Street and exact position of the pitch",
+        "required": true,
+        "helpText": "For example, outside 14 High Street, on the pavement by the bus stop.",
+        "boxHeight": 48,
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "0a120000-0000-4000-8000-000000000024",
+        "type": "date_field",
+        "fieldKey": "first_day_you_want_consent_for",
+        "label": "First day you want consent for",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": "/",
+          "month": "number"
+        }
+      },
+      {
+        "id": "0a120000-0000-4000-8000-000000000025",
+        "type": "date_field",
+        "fieldKey": "last_day_you_want_consent_for",
+        "label": "Last day you want consent for",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": "/",
+          "month": "number"
+        }
+      },
+      {
+        "id": "0a120000-0000-4000-8000-000000000027",
+        "type": "text_field",
+        "fieldKey": "days_of_the_week_you_want_to_trade",
+        "label": "Days of the week you want to trade",
+        "required": true,
+        "helpText": "For example, Monday to Saturday, or Sundays only.",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0a120000-0000-4000-8000-000000000028",
+        "type": "text_field",
+        "fieldKey": "start_time",
+        "label": "Start time",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0a120000-0000-4000-8000-000000000029",
+        "type": "text_field",
+        "fieldKey": "finish_time",
+        "label": "Finish time",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0a120000-0000-4000-8000-000000000032",
+        "type": "text_field",
+        "fieldKey": "describe_everything_you_will_sell",
+        "label": "Describe everything you will sell",
+        "required": true,
+        "helpText": null,
+        "boxHeight": 60,
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "0a120000-0000-4000-8000-000000000033",
+        "type": "dropdown_field",
+        "fieldKey": "will_you_sell_any_food_or_drink",
+        "label": "Will you sell any food or drink?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0a120000-0000-4000-8000-000000000034",
+        "type": "dropdown_field",
+        "fieldKey": "is_your_food_business_registered_with_a_local_authority",
+        "label": "Is your food business registered with a local authority?",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0a120000-0000-4000-8000-000000000033",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No",
+          "Applied, waiting to hear"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0a120000-0000-4000-8000-000000000035",
+        "type": "text_field",
+        "fieldKey": "which_local_authority_registered_it",
+        "label": "Which local authority registered it?",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0a120000-0000-4000-8000-000000000034",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0a120000-0000-4000-8000-000000000036",
+        "type": "text_field",
+        "fieldKey": "food_hygiene_rating_if_you_have_one",
+        "label": "Food hygiene rating, if you have one",
+        "required": false,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0a120000-0000-4000-8000-000000000034",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0a120000-0000-4000-8000-000000000039",
+        "type": "dropdown_field",
+        "fieldKey": "what_will_you_trade_from",
+        "label": "What will you trade from?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Stall or table",
+          "Barrow or handcart",
+          "Trailer",
+          "Vehicle",
+          "Other"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0a120000-0000-4000-8000-000000000040",
+        "type": "text_field",
+        "fieldKey": "other_trading_unit",
+        "label": "Describe what you will trade from",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0a120000-0000-4000-8000-000000000039",
+          "operator": "equals",
+          "value": "Other"
+        },
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0a120000-0000-4000-8000-000000000041",
+        "type": "text_field",
+        "fieldKey": "vehicle_registration_number",
+        "label": "Vehicle registration number",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0a120000-0000-4000-8000-000000000039",
+          "operator": "equals",
+          "value": "Vehicle"
+        },
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0a120000-0000-4000-8000-000000000042",
+        "type": "text_field",
+        "fieldKey": "length_in_metres",
+        "label": "Length in metres",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0a120000-0000-4000-8000-000000000043",
+        "type": "text_field",
+        "fieldKey": "width_in_metres",
+        "label": "Width in metres",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0a120000-0000-4000-8000-000000000044",
+        "type": "text_field",
+        "fieldKey": "height_in_metres",
+        "label": "Height in metres",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0a120000-0000-4000-8000-000000000046",
+        "type": "dropdown_field",
+        "fieldKey": "will_you_use_a_generator_bottled_gas_or_any_cooking_equipmen",
+        "label": "Will you use a generator, bottled gas or any cooking equipment?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0a120000-0000-4000-8000-000000000047",
+        "type": "text_field",
+        "fieldKey": "describe_the_generator_gas_or_cooking_equipment",
+        "label": "Describe the generator, gas or cooking equipment",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0a120000-0000-4000-8000-000000000046",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "0a120000-0000-4000-8000-000000000048",
+        "type": "dropdown_field",
+        "fieldKey": "will_anyone_else_work_on_the_pitch_with_you",
+        "label": "Will anyone else work on the pitch with you?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0a120000-0000-4000-8000-000000000049",
+        "type": "text_field",
+        "fieldKey": "names_and_addresses_of_the_people_who_will_work_with_you",
+        "label": "Names and addresses of the people who will work with you",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0a120000-0000-4000-8000-000000000048",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "0a120000-0000-4000-8000-000000000051",
+        "type": "file_field",
+        "fieldKey": "two_recent_passport_style_photographs_of_yourself",
+        "label": "Two recent passport-style photographs of yourself",
+        "required": true,
+        "helpText": null
+      },
+      {
+        "id": "0a120000-0000-4000-8000-000000000052",
+        "type": "file_field",
+        "fieldKey": "plan_or_photograph_of_your_stall_or_vehicle",
+        "label": "Plan or photograph of your stall or vehicle",
+        "required": true,
+        "helpText": null
+      },
+      {
+        "id": "0a120000-0000-4000-8000-000000000053",
+        "type": "file_field",
+        "fieldKey": "public_liability_insurance_certificate",
+        "label": "Public liability insurance certificate",
+        "required": true,
+        "helpText": null
+      },
+      {
+        "id": "0a120000-0000-4000-8000-000000000055",
+        "type": "paragraph",
+        "text": "You do not need to tell us about convictions that are spent under the Rehabilitation of Offenders Act 1974. A conviction will not necessarily stop you getting consent; we look at what it was for and when.",
+        "alignment": "left"
+      },
+      {
+        "id": "0a120000-0000-4000-8000-000000000056",
+        "type": "dropdown_field",
+        "fieldKey": "do_you_or_anyone_named_on_this_form_have_an_unspent_convicti",
+        "label": "Do you, or anyone named on this form, have an unspent conviction?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0a120000-0000-4000-8000-000000000057",
+        "type": "text_field",
+        "fieldKey": "tell_us_about_each_conviction_with_the_date_and_the_court",
+        "label": "Tell us about each conviction, with the date and the court",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0a120000-0000-4000-8000-000000000056",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "0a120000-0000-4000-8000-000000000059",
+        "type": "paragraph",
+        "text": "I apply for street trading consent as set out on this form. The information I have given is true and complete. I understand that giving false information may lead to the application being refused or the consent being revoked, and may be an offence.",
+        "alignment": "left"
+      },
+      {
+        "id": "0a120000-0000-4000-8000-000000000060",
+        "type": "checkbox_field",
+        "fieldKey": "i_have_read_the_standard_conditions_and_will_keep_to_them_if",
+        "label": "I have read the standard conditions and will keep to them if consent is given.",
+        "required": true,
+        "helpText": null,
+        "checkedByDefault": false
+      },
+      {
+        "id": "0a120000-0000-4000-8000-000000000061",
+        "type": "text_field",
+        "fieldKey": "declarant_full_name",
+        "label": "Full name",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0a120000-0000-4000-8000-000000000062",
+        "type": "signature_field",
+        "fieldKey": "signature_of_applicant",
+        "label": "Signature of applicant",
+        "required": true,
+        "helpText": null
+      },
+      {
+        "id": "0a120000-0000-4000-8000-000000000063",
+        "type": "date_field",
+        "fieldKey": "declaration_date",
+        "label": "Date",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": "/",
+          "month": "number"
+        }
+      }
+    ],
+    "layout": {
+      "pageSize": "A4",
+      "orientation": "portrait",
+      "marginPreset": "compact",
+      "density": "compact",
+      "fieldStyle": "cell",
+      "lineSpacing": 1.3,
+      "paragraphSpacing": 6,
+      "sectionNumbers": "letters",
+      "sectionStyle": "band",
+      "printedTitle": {
+        "mode": "none"
+      },
+      "headerPolicy": "none",
+      "footerPolicy": "all_pages",
+      "pageNumbering": "none",
+      "footerText": {
+        "left": "{title}",
+        "right": "Page {page} of {pages}"
+      }
+    },
+    "sections": [
+      {
+        "id": "0a120000-0000-4000-8000-000000000006",
+        "label": "Applicant",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0a120000-0000-4000-8000-000000000007"
+      },
+      {
+        "id": "0a120000-0000-4000-8000-000000000015",
+        "label": "Business",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0a120000-0000-4000-8000-000000000016"
+      },
+      {
+        "id": "0a120000-0000-4000-8000-000000000022",
+        "label": "Where and when you want to trade",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0a120000-0000-4000-8000-000000000023"
+      },
+      {
+        "id": "0a120000-0000-4000-8000-000000000031",
+        "label": "What you will sell",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0a120000-0000-4000-8000-000000000032"
+      },
+      {
+        "id": "0a120000-0000-4000-8000-000000000038",
+        "label": "Your stall or vehicle",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0a120000-0000-4000-8000-000000000039"
+      },
+      {
+        "id": "0a120000-0000-4000-8000-000000000050",
+        "label": "Photographs and documents",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0a120000-0000-4000-8000-000000000051"
+      },
+      {
+        "id": "0a120000-0000-4000-8000-000000000054",
+        "label": "Convictions",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0a120000-0000-4000-8000-000000000055"
+      },
+      {
+        "id": "0a120000-0000-4000-8000-000000000058",
+        "label": "Declaration",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0a120000-0000-4000-8000-000000000059"
+      }
+    ],
+    "fieldGroups": [
+      {
+        "id": "0a120000-0000-4000-8000-000000000009",
+        "label": null,
+        "startBlockId": "0a120000-0000-4000-8000-000000000007",
+        "endBlockId": "0a120000-0000-4000-8000-000000000008",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0a120000-0000-4000-8000-000000000014",
+        "label": null,
+        "startBlockId": "0a120000-0000-4000-8000-000000000012",
+        "endBlockId": "0a120000-0000-4000-8000-000000000013",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0a120000-0000-4000-8000-000000000019",
+        "label": null,
+        "startBlockId": "0a120000-0000-4000-8000-000000000017",
+        "endBlockId": "0a120000-0000-4000-8000-000000000018",
+        "columns": 2,
+        "keepTogether": false,
+        "widths": [
+          8,
+          4
+        ]
+      },
+      {
+        "id": "0a120000-0000-4000-8000-000000000026",
+        "label": null,
+        "startBlockId": "0a120000-0000-4000-8000-000000000024",
+        "endBlockId": "0a120000-0000-4000-8000-000000000025",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0a120000-0000-4000-8000-000000000030",
+        "label": null,
+        "startBlockId": "0a120000-0000-4000-8000-000000000028",
+        "endBlockId": "0a120000-0000-4000-8000-000000000029",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0a120000-0000-4000-8000-000000000037",
+        "label": null,
+        "startBlockId": "0a120000-0000-4000-8000-000000000035",
+        "endBlockId": "0a120000-0000-4000-8000-000000000036",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0a120000-0000-4000-8000-000000000045",
+        "label": "Size of the unit when set up, including any canopy",
+        "startBlockId": "0a120000-0000-4000-8000-000000000042",
+        "endBlockId": "0a120000-0000-4000-8000-000000000044",
+        "columns": 3,
+        "keepTogether": false
+      },
+      {
+        "id": "0a120000-0000-4000-8000-000000000064",
+        "label": null,
+        "startBlockId": "0a120000-0000-4000-8000-000000000062",
+        "endBlockId": "0a120000-0000-4000-8000-000000000063",
+        "columns": 2,
+        "keepTogether": false
+      }
+    ],
+    "blockRules": [
+      {
+        "blockId": "0a120000-0000-4000-8000-000000000003",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "0a120000-0000-4000-8000-000000000059",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      }
+    ]
+  }
+}

@@ -1,0 +1,570 @@
+{
+  "request": "weekly timesheet for our hourly staff",
+  "title": "Weekly timesheet",
+  "description": "Use each week for hourly, non-exempt staff to record the hours they worked each day, their unpaid meal breaks and total and overtime hours, signed by the employee and approved by their supervisor.",
+  "maxPages": 1,
+  "content": {
+    "schemaVersion": 3,
+    "branding": {
+      "organizationName": "",
+      "logoAsset": null,
+      "logoDataUrl": null,
+      "logoAlignment": "left",
+      "logoWidthPercent": 24,
+      "primaryColor": "#1f2937",
+      "accentColor": "#b45309"
+    },
+    "blocks": [
+      {
+        "id": "0c130000-0000-4000-8000-000000000001",
+        "type": "heading",
+        "text": "Weekly timesheet",
+        "level": 1,
+        "alignment": "left"
+      },
+      {
+        "id": "0c130000-0000-4000-8000-000000000002",
+        "type": "paragraph",
+        "text": "Record the times you actually start and finish work each day, including any time you work before or after your shift. Rest breaks of 20 minutes or less are paid and count as time worked. Record only meal breaks of 30 minutes or more, when you are fully relieved of duty, as unpaid, in minutes.",
+        "alignment": "left"
+      },
+      {
+        "id": "0c130000-0000-4000-8000-000000000003",
+        "type": "text_field",
+        "fieldKey": "employee_name",
+        "label": "Employee name",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c130000-0000-4000-8000-000000000004",
+        "type": "text_field",
+        "fieldKey": "employee_id",
+        "label": "Employee ID",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c130000-0000-4000-8000-000000000005",
+        "type": "date_field",
+        "fieldKey": "week_beginning",
+        "label": "Week beginning",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "mdy",
+          "separator": "/",
+          "month": "number"
+        }
+      },
+      {
+        "id": "0c130000-0000-4000-8000-000000000007",
+        "type": "text_field",
+        "fieldKey": "monday_start",
+        "label": "Monday start",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c130000-0000-4000-8000-000000000008",
+        "type": "text_field",
+        "fieldKey": "monday_meal_break_minutes",
+        "label": "Unpaid break, minutes",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c130000-0000-4000-8000-000000000009",
+        "type": "text_field",
+        "fieldKey": "monday_finish",
+        "label": "Finish",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c130000-0000-4000-8000-000000000010",
+        "type": "text_field",
+        "fieldKey": "monday_hours_worked",
+        "label": "Hours worked",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c130000-0000-4000-8000-000000000012",
+        "type": "text_field",
+        "fieldKey": "tuesday_start",
+        "label": "Tuesday start",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c130000-0000-4000-8000-000000000013",
+        "type": "text_field",
+        "fieldKey": "tuesday_meal_break_minutes",
+        "label": "Unpaid break, minutes",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c130000-0000-4000-8000-000000000014",
+        "type": "text_field",
+        "fieldKey": "tuesday_finish",
+        "label": "Finish",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c130000-0000-4000-8000-000000000015",
+        "type": "text_field",
+        "fieldKey": "tuesday_hours_worked",
+        "label": "Hours worked",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c130000-0000-4000-8000-000000000017",
+        "type": "text_field",
+        "fieldKey": "wednesday_start",
+        "label": "Wednesday start",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c130000-0000-4000-8000-000000000018",
+        "type": "text_field",
+        "fieldKey": "wednesday_meal_break_minutes",
+        "label": "Unpaid break, minutes",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c130000-0000-4000-8000-000000000019",
+        "type": "text_field",
+        "fieldKey": "wednesday_finish",
+        "label": "Finish",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c130000-0000-4000-8000-000000000020",
+        "type": "text_field",
+        "fieldKey": "wednesday_hours_worked",
+        "label": "Hours worked",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c130000-0000-4000-8000-000000000022",
+        "type": "text_field",
+        "fieldKey": "thursday_start",
+        "label": "Thursday start",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c130000-0000-4000-8000-000000000023",
+        "type": "text_field",
+        "fieldKey": "thursday_meal_break_minutes",
+        "label": "Unpaid break, minutes",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c130000-0000-4000-8000-000000000024",
+        "type": "text_field",
+        "fieldKey": "thursday_finish",
+        "label": "Finish",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c130000-0000-4000-8000-000000000025",
+        "type": "text_field",
+        "fieldKey": "thursday_hours_worked",
+        "label": "Hours worked",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c130000-0000-4000-8000-000000000027",
+        "type": "text_field",
+        "fieldKey": "friday_start",
+        "label": "Friday start",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c130000-0000-4000-8000-000000000028",
+        "type": "text_field",
+        "fieldKey": "friday_meal_break_minutes",
+        "label": "Unpaid break, minutes",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c130000-0000-4000-8000-000000000029",
+        "type": "text_field",
+        "fieldKey": "friday_finish",
+        "label": "Finish",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c130000-0000-4000-8000-000000000030",
+        "type": "text_field",
+        "fieldKey": "friday_hours_worked",
+        "label": "Hours worked",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c130000-0000-4000-8000-000000000032",
+        "type": "text_field",
+        "fieldKey": "saturday_start",
+        "label": "Saturday start",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c130000-0000-4000-8000-000000000033",
+        "type": "text_field",
+        "fieldKey": "saturday_meal_break_minutes",
+        "label": "Unpaid break, minutes",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c130000-0000-4000-8000-000000000034",
+        "type": "text_field",
+        "fieldKey": "saturday_finish",
+        "label": "Finish",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c130000-0000-4000-8000-000000000035",
+        "type": "text_field",
+        "fieldKey": "saturday_hours_worked",
+        "label": "Hours worked",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c130000-0000-4000-8000-000000000037",
+        "type": "text_field",
+        "fieldKey": "sunday_start",
+        "label": "Sunday start",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c130000-0000-4000-8000-000000000038",
+        "type": "text_field",
+        "fieldKey": "sunday_meal_break_minutes",
+        "label": "Unpaid break, minutes",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c130000-0000-4000-8000-000000000039",
+        "type": "text_field",
+        "fieldKey": "sunday_finish",
+        "label": "Finish",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c130000-0000-4000-8000-000000000040",
+        "type": "text_field",
+        "fieldKey": "sunday_hours_worked",
+        "label": "Hours worked",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c130000-0000-4000-8000-000000000042",
+        "type": "text_field",
+        "fieldKey": "total_hours_this_week",
+        "label": "Total hours this week",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c130000-0000-4000-8000-000000000043",
+        "type": "text_field",
+        "fieldKey": "overtime_hours_over_40",
+        "label": "Overtime hours, over 40",
+        "required": false,
+        "helpText": "Paid at least at one and a half times your regular rate.",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c130000-0000-4000-8000-000000000045",
+        "type": "paragraph",
+        "text": "I confirm that this timesheet shows all the hours I worked this week.",
+        "alignment": "left"
+      },
+      {
+        "id": "0c130000-0000-4000-8000-000000000046",
+        "type": "signature_field",
+        "fieldKey": "employee_s_signature",
+        "label": "Employee's signature",
+        "required": true,
+        "helpText": null,
+        "boxHeight": 36
+      },
+      {
+        "id": "0c130000-0000-4000-8000-000000000047",
+        "type": "date_field",
+        "fieldKey": "employee_signed_date",
+        "label": "Date",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "mdy",
+          "separator": "/",
+          "month": "number"
+        }
+      },
+      {
+        "id": "0c130000-0000-4000-8000-000000000048",
+        "type": "signature_field",
+        "fieldKey": "supervisor_s_approval",
+        "label": "Supervisor's approval",
+        "required": true,
+        "helpText": null,
+        "boxHeight": 36
+      },
+      {
+        "id": "0c130000-0000-4000-8000-000000000049",
+        "type": "date_field",
+        "fieldKey": "supervisor_signed_date",
+        "label": "Date",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "mdy",
+          "separator": "/",
+          "month": "number"
+        }
+      }
+    ],
+    "layout": {
+      "pageSize": "Letter",
+      "orientation": "portrait",
+      "marginPreset": "compact",
+      "density": "compact",
+      "fieldStyle": "cell",
+      "lineSpacing": 1.3,
+      "paragraphSpacing": 4,
+      "sectionStyle": "plain",
+      "printedTitle": {
+        "mode": "none"
+      },
+      "headerPolicy": "none",
+      "footerPolicy": "none",
+      "pageNumbering": "none"
+    },
+    "sections": [],
+    "fieldGroups": [
+      {
+        "id": "0c130000-0000-4000-8000-000000000006",
+        "label": null,
+        "startBlockId": "0c130000-0000-4000-8000-000000000003",
+        "endBlockId": "0c130000-0000-4000-8000-000000000005",
+        "columns": 3,
+        "keepTogether": false
+      },
+      {
+        "id": "0c130000-0000-4000-8000-000000000011",
+        "label": null,
+        "startBlockId": "0c130000-0000-4000-8000-000000000007",
+        "endBlockId": "0c130000-0000-4000-8000-000000000010",
+        "columns": 4,
+        "keepTogether": false,
+        "widths": [
+          3,
+          3,
+          3,
+          3
+        ]
+      },
+      {
+        "id": "0c130000-0000-4000-8000-000000000016",
+        "label": null,
+        "startBlockId": "0c130000-0000-4000-8000-000000000012",
+        "endBlockId": "0c130000-0000-4000-8000-000000000015",
+        "columns": 4,
+        "keepTogether": false,
+        "widths": [
+          3,
+          3,
+          3,
+          3
+        ]
+      },
+      {
+        "id": "0c130000-0000-4000-8000-000000000021",
+        "label": null,
+        "startBlockId": "0c130000-0000-4000-8000-000000000017",
+        "endBlockId": "0c130000-0000-4000-8000-000000000020",
+        "columns": 4,
+        "keepTogether": false,
+        "widths": [
+          3,
+          3,
+          3,
+          3
+        ]
+      },
+      {
+        "id": "0c130000-0000-4000-8000-000000000026",
+        "label": null,
+        "startBlockId": "0c130000-0000-4000-8000-000000000022",
+        "endBlockId": "0c130000-0000-4000-8000-000000000025",
+        "columns": 4,
+        "keepTogether": false,
+        "widths": [
+          3,
+          3,
+          3,
+          3
+        ]
+      },
+      {
+        "id": "0c130000-0000-4000-8000-000000000031",
+        "label": null,
+        "startBlockId": "0c130000-0000-4000-8000-000000000027",
+        "endBlockId": "0c130000-0000-4000-8000-000000000030",
+        "columns": 4,
+        "keepTogether": false,
+        "widths": [
+          3,
+          3,
+          3,
+          3
+        ]
+      },
+      {
+        "id": "0c130000-0000-4000-8000-000000000036",
+        "label": null,
+        "startBlockId": "0c130000-0000-4000-8000-000000000032",
+        "endBlockId": "0c130000-0000-4000-8000-000000000035",
+        "columns": 4,
+        "keepTogether": false,
+        "widths": [
+          3,
+          3,
+          3,
+          3
+        ]
+      },
+      {
+        "id": "0c130000-0000-4000-8000-000000000041",
+        "label": null,
+        "startBlockId": "0c130000-0000-4000-8000-000000000037",
+        "endBlockId": "0c130000-0000-4000-8000-000000000040",
+        "columns": 4,
+        "keepTogether": false,
+        "widths": [
+          3,
+          3,
+          3,
+          3
+        ]
+      },
+      {
+        "id": "0c130000-0000-4000-8000-000000000044",
+        "label": null,
+        "startBlockId": "0c130000-0000-4000-8000-000000000042",
+        "endBlockId": "0c130000-0000-4000-8000-000000000043",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0c130000-0000-4000-8000-000000000050",
+        "label": null,
+        "startBlockId": "0c130000-0000-4000-8000-000000000046",
+        "endBlockId": "0c130000-0000-4000-8000-000000000049",
+        "columns": 4,
+        "keepTogether": false,
+        "widths": [
+          4,
+          2,
+          4,
+          2
+        ]
+      }
+    ],
+    "blockRules": [
+      {
+        "blockId": "0c130000-0000-4000-8000-000000000045",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      }
+    ]
+  }
+}

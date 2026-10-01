@@ -1,0 +1,588 @@
+{
+  "request": "Privacy notice for our independent estate and letting agency. It needs to cover buyers, sellers, landlords and tenants, the identity checks we have to do, who we share details with, how long we keep things and people's rights.",
+  "title": "Privacy notice",
+  "description": "Publish on the agency's website and give to every buyer, seller, landlord and tenant, to explain what personal information the agency collects, why, who it shares it with, how long it keeps it and the rights people have.",
+  "maxPages": 4,
+  "content": {
+    "schemaVersion": 3,
+    "branding": {
+      "organizationName": "",
+      "logoAsset": null,
+      "logoDataUrl": null,
+      "logoAlignment": "left",
+      "logoWidthPercent": 24,
+      "primaryColor": "#252329",
+      "accentColor": "#635273"
+    },
+    "blocks": [
+      {
+        "id": "d6020000-0000-4000-8000-000000000001",
+        "type": "heading",
+        "text": "Privacy notice",
+        "level": 1,
+        "alignment": "left"
+      },
+      {
+        "id": "d6020000-0000-4000-8000-000000000002",
+        "type": "paragraph",
+        "text": "This notice explains how we collect and use personal information about the people we deal with when we sell, buy, let and manage property. It applies to sellers, buyers, landlords, tenants, guarantors and anyone else whose details reach us in the course of that work. Please read it carefully, and contact us if you have any questions.",
+        "alignment": "left"
+      },
+      {
+        "id": "d6020000-0000-4000-8000-000000000003",
+        "type": "paragraph",
+        "text": "We are responsible for deciding how your personal information is used, which makes us the controller of that information. Our details are set out below.",
+        "alignment": "left",
+        "runs": [
+          {
+            "text": "We are responsible for deciding how your personal information is used, which makes us the "
+          },
+          {
+            "text": "controller",
+            "bold": true
+          },
+          {
+            "text": " of that information. Our details are set out below."
+          }
+        ]
+      },
+      {
+        "id": "d6020000-0000-4000-8000-000000000005",
+        "type": "text_field",
+        "fieldKey": "business_name",
+        "label": "Business name",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d6020000-0000-4000-8000-000000000006",
+        "type": "text_field",
+        "fieldKey": "registered_or_trading_address",
+        "label": "Registered or trading address",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": true,
+        "boxHeight": 45
+      },
+      {
+        "id": "d6020000-0000-4000-8000-000000000007",
+        "type": "text_field",
+        "fieldKey": "email_address_for_privacy_questions",
+        "label": "Email address for privacy questions",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d6020000-0000-4000-8000-000000000008",
+        "type": "text_field",
+        "fieldKey": "phone_number",
+        "label": "Phone number",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d6020000-0000-4000-8000-000000000010",
+        "type": "text_field",
+        "fieldKey": "registration_number_with_the_data_protection_regulator",
+        "label": "Registration number with the data protection regulator",
+        "required": false,
+        "helpText": "Leave blank if the business is exempt from registering.",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d6020000-0000-4000-8000-000000000011",
+        "type": "paragraph",
+        "text": "In this notice, we, us and our mean the business named above, and you means the person whose information we hold. Personal information means any information about you from which you can be identified.",
+        "alignment": "left",
+        "runs": [
+          {
+            "text": "In this notice, "
+          },
+          {
+            "text": "we",
+            "bold": true
+          },
+          {
+            "text": ", "
+          },
+          {
+            "text": "us",
+            "bold": true
+          },
+          {
+            "text": " and "
+          },
+          {
+            "text": "our",
+            "bold": true
+          },
+          {
+            "text": " mean the business named above, and "
+          },
+          {
+            "text": "you",
+            "bold": true
+          },
+          {
+            "text": " means the person whose information we hold. "
+          },
+          {
+            "text": "Personal information",
+            "bold": true
+          },
+          {
+            "text": " means any information about you from which you can be identified."
+          }
+        ]
+      },
+      {
+        "id": "d6020000-0000-4000-8000-000000000012",
+        "type": "paragraph",
+        "text": "What we collect depends on how you deal with us. The main kinds of information are:",
+        "alignment": "left"
+      },
+      {
+        "id": "d6020000-0000-4000-8000-000000000014",
+        "type": "bullet_list",
+        "items": [
+          "Sellers and landlords: contact details, the property's address, proof of identity and of ownership, and bank details for payments to you.",
+          "Buyers: contact details, the property you want, your buying position, proof of identity, and how you will pay for the purchase, such as a mortgage offer or proof of funds.",
+          "Tenants and guarantors: contact details, past addresses, date of birth, proof of identity and of the right to rent, employment and income, references, and the results of credit checks.",
+          "Anyone who contacts us: contact details, what you asked us about, records of our calls, emails and meetings, and how you prefer to hear from us."
+        ],
+        "itemRuns": [
+          [
+            {
+              "text": "Sellers and landlords",
+              "bold": true
+            },
+            {
+              "text": ": contact details, the property's address, proof of identity and of ownership, and bank details for payments to you."
+            }
+          ],
+          [
+            {
+              "text": "Buyers",
+              "bold": true
+            },
+            {
+              "text": ": contact details, the property you want, your buying position, proof of identity, and how you will pay for the purchase, such as a mortgage offer or proof of funds."
+            }
+          ],
+          [
+            {
+              "text": "Tenants and guarantors",
+              "bold": true
+            },
+            {
+              "text": ": contact details, past addresses, date of birth, proof of identity and of the right to rent, employment and income, references, and the results of credit checks."
+            }
+          ],
+          [
+            {
+              "text": "Anyone who contacts us",
+              "bold": true
+            },
+            {
+              "text": ": contact details, what you asked us about, records of our calls, emails and meetings, and how you prefer to hear from us."
+            }
+          ]
+        ]
+      },
+      {
+        "id": "d6020000-0000-4000-8000-000000000015",
+        "type": "paragraph",
+        "text": "We do not ask for information about your health, beliefs or other special categories of information unless it is needed for a particular reason, such as adjustments to a viewing that you ask us to make. When we do, we explain why and use it only for that reason.",
+        "alignment": "left"
+      },
+      {
+        "id": "d6020000-0000-4000-8000-000000000016",
+        "type": "paragraph",
+        "text": "Most of the information we hold comes from you. We also receive information from:",
+        "alignment": "left"
+      },
+      {
+        "id": "d6020000-0000-4000-8000-000000000018",
+        "type": "bullet_list",
+        "items": [
+          "property portals and our website, when you register or enquire about a property;",
+          "the other side of a sale or letting, their solicitors or conveyancers, and their agents;",
+          "referencing and credit reference agencies, when you apply for a tenancy;",
+          "identity verification services, and public registers such as the land register; and",
+          "people who refer you to us, such as a previous landlord or a mortgage adviser."
+        ]
+      },
+      {
+        "id": "d6020000-0000-4000-8000-000000000019",
+        "type": "paragraph",
+        "text": "The law only allows us to use your personal information when we have a lawful basis for doing so. The table shows what we use it for and the basis we rely on.",
+        "alignment": "left"
+      },
+      {
+        "id": "d6020000-0000-4000-8000-000000000021",
+        "type": "table",
+        "headers": [
+          "What we use it for",
+          "Our lawful basis"
+        ],
+        "rows": [
+          [
+            "Marketing, selling or letting a property, arranging viewings and managing tenancies.",
+            "To carry out our contract with you, or to take steps you ask for before one."
+          ],
+          [
+            "Identity, anti-money laundering and right to rent checks, and protecting deposits.",
+            "To meet our legal obligations."
+          ],
+          [
+            "Referencing and credit checks before a tenancy.",
+            "Our legitimate interest, and our landlord's, in letting to tenants who can pay the rent."
+          ],
+          [
+            "Keeping records, handling complaints and dealing with legal claims.",
+            "Our legitimate interest in running our business properly."
+          ],
+          [
+            "Sending you property alerts and news about our services.",
+            "Your consent, which you can withdraw at any time."
+          ]
+        ]
+      },
+      {
+        "id": "d6020000-0000-4000-8000-000000000022",
+        "type": "paragraph",
+        "text": "Where we rely on our legitimate interests, we have weighed them against your interests and rights, and you can ask us for details of that assessment.",
+        "alignment": "left",
+        "runs": [
+          {
+            "text": "Where we rely on our "
+          },
+          {
+            "text": "legitimate interests",
+            "bold": true
+          },
+          {
+            "text": ", we have weighed them against your interests and rights, and you can ask us for details of that assessment."
+          }
+        ]
+      },
+      {
+        "id": "d6020000-0000-4000-8000-000000000023",
+        "type": "paragraph",
+        "text": "As an estate agency, we must check the identity of the people we act for, and in some cases the other party to a sale, under anti-money laundering law. We may also have to check where the money for a purchase comes from. We may use an electronic verification service to do this, which checks your details against records held by credit reference agencies and other sources; this leaves a mark on your credit file, but it does not affect your credit rating.",
+        "alignment": "left"
+      },
+      {
+        "id": "d6020000-0000-4000-8000-000000000025",
+        "type": "paragraph",
+        "text": "If we suspect money laundering or terrorist financing, the law may require us to report it to the authorities without telling you. If you do not give us the information we need for these checks, we cannot act for you.",
+        "alignment": "left"
+      },
+      {
+        "id": "d6020000-0000-4000-8000-000000000026",
+        "type": "paragraph",
+        "text": "We share your personal information only when we need to, and only with:",
+        "alignment": "left"
+      },
+      {
+        "id": "d6020000-0000-4000-8000-000000000028",
+        "type": "bullet_list",
+        "items": [
+          "the other side of a sale or letting, and their solicitors, conveyancers and agents, as far as needed to complete it;",
+          "property portals, when we advertise a property, though we never publish your contact details;",
+          "referencing, credit reference and identity verification agencies;",
+          "tenancy deposit protection schemes, and the property redress scheme we belong to if you complain;",
+          "contractors who carry out repairs at a property, who receive only the details they need to arrange access;",
+          "our professional advisers, insurers and the companies that provide our software and IT systems, all of whom must keep your information secure and use it only on our instructions; and",
+          "the police, regulators and other authorities, when the law requires us to."
+        ]
+      },
+      {
+        "id": "d6020000-0000-4000-8000-000000000029",
+        "type": "paragraph",
+        "text": "We never sell your personal information.",
+        "alignment": "left"
+      },
+      {
+        "id": "d6020000-0000-4000-8000-000000000030",
+        "type": "paragraph",
+        "text": "Some of our software providers store information on servers in other countries. When your information is sent abroad, we make sure it is protected to the standard the law requires, for example by using contract terms approved for that purpose. You can ask us for details of the protections in place.",
+        "alignment": "left"
+      },
+      {
+        "id": "d6020000-0000-4000-8000-000000000032",
+        "type": "paragraph",
+        "text": "We keep your personal information only for as long as we need it for the purposes described in this notice. In particular:",
+        "alignment": "left"
+      },
+      {
+        "id": "d6020000-0000-4000-8000-000000000034",
+        "type": "bullet_list",
+        "items": [
+          "we keep the records of our identity and anti-money laundering checks for five years after our business relationship with you ends, as anti-money laundering law requires;",
+          "we keep records of a sale or tenancy for as long as a claim could be brought about it; and",
+          "we keep marketing preferences until you ask us to stop contacting you."
+        ]
+      },
+      {
+        "id": "d6020000-0000-4000-8000-000000000035",
+        "type": "paragraph",
+        "text": "When we no longer need your information, we delete it or destroy it securely. Our retention schedule gives the period for each kind of record, and you can ask us for a copy.",
+        "alignment": "left"
+      },
+      {
+        "id": "d6020000-0000-4000-8000-000000000036",
+        "type": "paragraph",
+        "text": "You have the following rights over your personal information. Some apply only in certain circumstances.",
+        "alignment": "left"
+      },
+      {
+        "id": "d6020000-0000-4000-8000-000000000038",
+        "type": "bullet_list",
+        "items": [
+          "Right of access: to ask for a copy of the personal information we hold about you.",
+          "Right to rectification: to ask us to correct information that is wrong or incomplete.",
+          "Right to erasure: to ask us to delete your information when we no longer have a reason to keep it.",
+          "Right to restrict processing: to ask us to limit how we use your information while a concern is looked into.",
+          "Right to object: to object to our use of your information based on our legitimate interests, and to stop direct marketing at any time.",
+          "Right to data portability: to ask for information you gave us in a format that can be passed to another organisation.",
+          "Right to withdraw consent: where we rely on your consent, to withdraw it at any time, without affecting what we did before."
+        ],
+        "itemRuns": [
+          [
+            {
+              "text": "Right of access",
+              "bold": true
+            },
+            {
+              "text": ": to ask for a copy of the personal information we hold about you."
+            }
+          ],
+          [
+            {
+              "text": "Right to rectification",
+              "bold": true
+            },
+            {
+              "text": ": to ask us to correct information that is wrong or incomplete."
+            }
+          ],
+          [
+            {
+              "text": "Right to erasure",
+              "bold": true
+            },
+            {
+              "text": ": to ask us to delete your information when we no longer have a reason to keep it."
+            }
+          ],
+          [
+            {
+              "text": "Right to restrict processing",
+              "bold": true
+            },
+            {
+              "text": ": to ask us to limit how we use your information while a concern is looked into."
+            }
+          ],
+          [
+            {
+              "text": "Right to object",
+              "bold": true
+            },
+            {
+              "text": ": to object to our use of your information based on our legitimate interests, and to stop direct marketing at any time."
+            }
+          ],
+          [
+            {
+              "text": "Right to data portability",
+              "bold": true
+            },
+            {
+              "text": ": to ask for information you gave us in a format that can be passed to another organisation."
+            }
+          ],
+          [
+            {
+              "text": "Right to withdraw consent",
+              "bold": true
+            },
+            {
+              "text": ": where we rely on your consent, to withdraw it at any time, without affecting what we did before."
+            }
+          ]
+        ]
+      },
+      {
+        "id": "d6020000-0000-4000-8000-000000000039",
+        "type": "paragraph",
+        "text": "To use any of these rights, contact us using the details in section 1. We will not usually charge you, and we will respond within the time the law allows.",
+        "alignment": "left"
+      },
+      {
+        "id": "d6020000-0000-4000-8000-000000000040",
+        "type": "paragraph",
+        "text": "If you are unhappy with how we have used your personal information, please tell us first so that we can try to put it right. You also have the right to complain to the data protection regulator. In the United Kingdom, that is the Information Commissioner's Office, whose website is ico.org.uk.",
+        "alignment": "left"
+      },
+      {
+        "id": "d6020000-0000-4000-8000-000000000042",
+        "type": "paragraph",
+        "text": "We review this notice regularly and will update it when we change how we use personal information. The date below shows when it was last updated.",
+        "alignment": "left"
+      },
+      {
+        "id": "d6020000-0000-4000-8000-000000000044",
+        "type": "date_field",
+        "fieldKey": "last_updated",
+        "label": "Last updated",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": " ",
+          "month": "long"
+        }
+      }
+    ],
+    "layout": {
+      "pageSize": "A4",
+      "orientation": "portrait",
+      "density": "balanced",
+      "fieldStyle": "box",
+      "marginPreset": "standard",
+      "sectionStyle": "plain",
+      "printedTitle": {
+        "mode": "none"
+      },
+      "headerPolicy": "none",
+      "footerPolicy": "all_pages",
+      "pageNumbering": "none",
+      "footerText": {
+        "left": "{title}",
+        "right": "Page {page} of {pages}"
+      },
+      "sectionNumbers": "numbers"
+    },
+    "sections": [
+      {
+        "id": "d6020000-0000-4000-8000-000000000004",
+        "label": "Who we are",
+        "startBlockId": "d6020000-0000-4000-8000-000000000003",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6020000-0000-4000-8000-000000000013",
+        "label": "The information we collect",
+        "startBlockId": "d6020000-0000-4000-8000-000000000012",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6020000-0000-4000-8000-000000000017",
+        "label": "Where we get it from",
+        "startBlockId": "d6020000-0000-4000-8000-000000000016",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6020000-0000-4000-8000-000000000020",
+        "label": "Why we use it, and our lawful basis",
+        "startBlockId": "d6020000-0000-4000-8000-000000000019",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6020000-0000-4000-8000-000000000024",
+        "label": "Identity and anti-money laundering checks",
+        "startBlockId": "d6020000-0000-4000-8000-000000000023",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6020000-0000-4000-8000-000000000027",
+        "label": "Who we share it with",
+        "startBlockId": "d6020000-0000-4000-8000-000000000026",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6020000-0000-4000-8000-000000000031",
+        "label": "Sending information outside the country",
+        "startBlockId": "d6020000-0000-4000-8000-000000000030",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6020000-0000-4000-8000-000000000033",
+        "label": "How long we keep it",
+        "startBlockId": "d6020000-0000-4000-8000-000000000032",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6020000-0000-4000-8000-000000000037",
+        "label": "Your rights",
+        "startBlockId": "d6020000-0000-4000-8000-000000000036",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6020000-0000-4000-8000-000000000041",
+        "label": "Complaints",
+        "startBlockId": "d6020000-0000-4000-8000-000000000040",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6020000-0000-4000-8000-000000000043",
+        "label": "Changes to this notice",
+        "startBlockId": "d6020000-0000-4000-8000-000000000042",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      }
+    ],
+    "fieldGroups": [
+      {
+        "id": "d6020000-0000-4000-8000-000000000009",
+        "label": null,
+        "startBlockId": "d6020000-0000-4000-8000-000000000007",
+        "endBlockId": "d6020000-0000-4000-8000-000000000008",
+        "columns": 2,
+        "keepTogether": false
+      }
+    ],
+    "blockRules": [
+      {
+        "blockId": "d6020000-0000-4000-8000-000000000012",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "d6020000-0000-4000-8000-000000000016",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "d6020000-0000-4000-8000-000000000026",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "d6020000-0000-4000-8000-000000000032",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      }
+    ]
+  }
+}

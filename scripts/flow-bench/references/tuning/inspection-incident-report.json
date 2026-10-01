@@ -1,0 +1,688 @@
+{
+  "request": "accident and incident report form for our warehouse staff, covering injuries and near misses, witnesses, and what we did to stop it happening again",
+  "title": "Accident and incident report",
+  "description": "Use after any accident, injury or near miss in the warehouse, to record what happened, who saw it, and what is being done so it does not happen again.",
+  "maxPages": 4,
+  "content": {
+    "schemaVersion": 3,
+    "branding": {
+      "organizationName": "",
+      "logoAsset": null,
+      "logoDataUrl": null,
+      "logoAlignment": "left",
+      "logoWidthPercent": 24,
+      "primaryColor": "#252329",
+      "accentColor": "#635273"
+    },
+    "blocks": [
+      {
+        "id": "d4030000-0000-4000-8000-000000000001",
+        "type": "heading",
+        "text": "Accident and incident report",
+        "level": 1,
+        "alignment": "left"
+      },
+      {
+        "id": "d4030000-0000-4000-8000-000000000002",
+        "type": "paragraph",
+        "text": "Fill this in as soon as you can after any accident, injury or near miss, while the details are fresh. A near miss is worth reporting too: it shows where the next accident could happen.",
+        "alignment": "left"
+      },
+      {
+        "id": "d4030000-0000-4000-8000-000000000003",
+        "type": "paragraph",
+        "text": "Your information. This report holds personal details about the people involved. We use it to look into what happened, to make the workplace safer, and to deal with any insurance claim or report we must make to the authorities. Only the people who need it for those purposes see it, and we keep it for as long as the law and our insurer require.",
+        "alignment": "left",
+        "runs": [
+          {
+            "text": "Your information.",
+            "bold": true
+          },
+          {
+            "text": " This report holds personal details about the people involved. We use it to look into what happened, to make the workplace safer, and to deal with any insurance claim or report we must make to the authorities. Only the people who need it for those purposes see it, and we keep it for as long as the law and our insurer require."
+          }
+        ]
+      },
+      {
+        "id": "d4030000-0000-4000-8000-000000000004",
+        "type": "text_field",
+        "fieldKey": "your_full_name",
+        "label": "Your full name",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d4030000-0000-4000-8000-000000000006",
+        "type": "text_field",
+        "fieldKey": "your_position",
+        "label": "Your position",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d4030000-0000-4000-8000-000000000008",
+        "type": "text_field",
+        "fieldKey": "your_phone_number",
+        "label": "Your phone number",
+        "required": true,
+        "helpText": "We call if we need more details about what happened.",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d4030000-0000-4000-8000-000000000009",
+        "type": "date_field",
+        "fieldKey": "date_of_this_report",
+        "label": "Date of this report",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": " ",
+          "month": "short"
+        }
+      },
+      {
+        "id": "d4030000-0000-4000-8000-000000000011",
+        "type": "dropdown_field",
+        "fieldKey": "what_kind_of_incident_was_it",
+        "label": "What kind of incident was it?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Someone was injured",
+          "Near miss, no one was hurt",
+          "Damage to stock, equipment or the building",
+          "Someone became ill because of their work"
+        ],
+        "display": "radios"
+      },
+      {
+        "id": "d4030000-0000-4000-8000-000000000013",
+        "type": "date_field",
+        "fieldKey": "date_of_incident",
+        "label": "Date of incident",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": " ",
+          "month": "short"
+        }
+      },
+      {
+        "id": "d4030000-0000-4000-8000-000000000014",
+        "type": "text_field",
+        "fieldKey": "time_of_incident",
+        "label": "Time of incident",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d4030000-0000-4000-8000-000000000016",
+        "type": "text_field",
+        "fieldKey": "where_exactly_did_it_happen",
+        "label": "Where exactly did it happen?",
+        "required": true,
+        "helpText": "For example aisle 14, loading bay 2, or the mezzanine stairs.",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d4030000-0000-4000-8000-000000000017",
+        "type": "text_field",
+        "fieldKey": "what_was_happening_just_before_the_incident",
+        "label": "What was happening just before the incident?",
+        "required": true,
+        "helpText": "The task under way and any equipment, vehicle or materials being used, such as a forklift, pallet truck or ladder.",
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "d4030000-0000-4000-8000-000000000018",
+        "type": "text_field",
+        "fieldKey": "what_happened",
+        "label": "What happened?",
+        "required": true,
+        "helpText": "Describe the events in order, as plainly as you can.",
+        "placeholder": null,
+        "multiline": true,
+        "boxHeight": 90
+      },
+      {
+        "id": "d4030000-0000-4000-8000-000000000019",
+        "type": "text_field",
+        "fieldKey": "which_equipment_vehicle_or_materials_were_involved",
+        "label": "Which equipment, vehicle or materials were involved?",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d4030000-0000-4000-8000-000000000020",
+        "type": "paragraph",
+        "text": "Fill this section in when someone was injured or became ill.",
+        "alignment": "left"
+      },
+      {
+        "id": "d4030000-0000-4000-8000-000000000022",
+        "type": "text_field",
+        "fieldKey": "full_name_of_the_person_involved",
+        "label": "Full name of the person involved",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d4030000-0000-4000-8000-000000000023",
+        "type": "text_field",
+        "fieldKey": "their_job",
+        "label": "Their job",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d4030000-0000-4000-8000-000000000025",
+        "type": "dropdown_field",
+        "fieldKey": "who_are_they",
+        "label": "Who are they?",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Employee",
+          "Agency worker",
+          "Contractor",
+          "Visitor",
+          "Other"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "d4030000-0000-4000-8000-000000000026",
+        "type": "text_field",
+        "fieldKey": "who_else_are_they",
+        "label": "Who else are they?",
+        "required": true,
+        "helpText": "For example a delivery driver.",
+        "visibleWhen": {
+          "sourceBlockId": "d4030000-0000-4000-8000-000000000025",
+          "operator": "equals",
+          "value": "Other"
+        },
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d4030000-0000-4000-8000-000000000027",
+        "type": "text_field",
+        "fieldKey": "what_time_did_they_start_work_that_day",
+        "label": "What time did they start work that day?",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d4030000-0000-4000-8000-000000000028",
+        "type": "text_field",
+        "fieldKey": "what_was_the_injury_and_which_part_of_the_body_did_it_affect",
+        "label": "What was the injury, and which part of the body did it affect?",
+        "required": false,
+        "helpText": "Be specific, such as a cut to the left hand or a twisted right ankle.",
+        "visibleWhen": {
+          "sourceBlockId": "d4030000-0000-4000-8000-000000000011",
+          "operator": "equals",
+          "value": "Someone was injured"
+        },
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "d4030000-0000-4000-8000-000000000029",
+        "type": "dropdown_field",
+        "fieldKey": "was_first_aid_given",
+        "label": "Was first aid given?",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "d4030000-0000-4000-8000-000000000030",
+        "type": "text_field",
+        "fieldKey": "who_gave_first_aid",
+        "label": "Who gave first aid?",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "d4030000-0000-4000-8000-000000000029",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d4030000-0000-4000-8000-000000000031",
+        "type": "dropdown_field",
+        "fieldKey": "did_they_need_treatment_away_from_the_workplace",
+        "label": "Did they need treatment away from the workplace?",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "No",
+          "Yes, at a doctor's surgery or clinic",
+          "Yes, at a hospital emergency department",
+          "Yes, they were kept in hospital overnight"
+        ],
+        "display": "radios"
+      },
+      {
+        "id": "d4030000-0000-4000-8000-000000000032",
+        "type": "dropdown_field",
+        "fieldKey": "were_they_unable_to_do_their_normal_work_afterwards",
+        "label": "Were they unable to do their normal work afterwards?",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "d4030000-0000-4000-8000-000000000033",
+        "type": "text_field",
+        "fieldKey": "how_many_days_were_they_unable_to_do_their_normal_work",
+        "label": "How many days were they unable to do their normal work?",
+        "required": false,
+        "helpText": "Count from the day after the incident.",
+        "visibleWhen": {
+          "sourceBlockId": "d4030000-0000-4000-8000-000000000032",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d4030000-0000-4000-8000-000000000034",
+        "type": "text_field",
+        "fieldKey": "first_witness_name",
+        "label": "Witness name",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d4030000-0000-4000-8000-000000000036",
+        "type": "text_field",
+        "fieldKey": "first_witness_phone_number",
+        "label": "Witness phone number",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d4030000-0000-4000-8000-000000000038",
+        "type": "text_field",
+        "fieldKey": "second_witness_name",
+        "label": "Witness name",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d4030000-0000-4000-8000-000000000039",
+        "type": "text_field",
+        "fieldKey": "second_witness_phone_number",
+        "label": "Witness phone number",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d4030000-0000-4000-8000-000000000041",
+        "type": "dropdown_field",
+        "fieldKey": "were_photos_taken_of_the_scene",
+        "label": "Were photos taken of the scene?",
+        "required": false,
+        "helpText": "Photos taken before anything was moved, where it was safe to take them. Keep them with this report.",
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "d4030000-0000-4000-8000-000000000042",
+        "type": "paragraph",
+        "text": "For the manager who looks into the incident.",
+        "alignment": "left"
+      },
+      {
+        "id": "d4030000-0000-4000-8000-000000000044",
+        "type": "text_field",
+        "fieldKey": "what_directly_caused_the_incident",
+        "label": "What directly caused the incident?",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "d4030000-0000-4000-8000-000000000045",
+        "type": "text_field",
+        "fieldKey": "what_allowed_it_to_happen",
+        "label": "What allowed it to happen?",
+        "required": false,
+        "helpText": "Look beyond the person involved: the layout, equipment, training, instructions, staffing or time pressure.",
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "d4030000-0000-4000-8000-000000000046",
+        "type": "text_field",
+        "fieldKey": "what_will_be_done_to_stop_it_happening_again",
+        "label": "What will be done to stop it happening again?",
+        "required": false,
+        "helpText": "Say who will do each action and by when.",
+        "placeholder": null,
+        "multiline": true,
+        "boxHeight": 75
+      },
+      {
+        "id": "d4030000-0000-4000-8000-000000000047",
+        "type": "dropdown_field",
+        "fieldKey": "did_this_incident_have_to_be_reported_to_the_health_and",
+        "label": "Did this incident have to be reported to the health and safety authority?",
+        "required": false,
+        "helpText": "Some injuries, illnesses and dangerous occurrences must be reported. Check the rules where you work.",
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No",
+          "Not sure"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "d4030000-0000-4000-8000-000000000048",
+        "type": "text_field",
+        "fieldKey": "reference_number_given_by_the_authority",
+        "label": "Reference number given by the authority",
+        "required": false,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "d4030000-0000-4000-8000-000000000047",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d4030000-0000-4000-8000-000000000049",
+        "type": "date_field",
+        "fieldKey": "date_reported_to_the_authority",
+        "label": "Date reported to the authority",
+        "required": false,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "d4030000-0000-4000-8000-000000000047",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "dateFormat": {
+          "order": "dmy",
+          "separator": " ",
+          "month": "short"
+        }
+      },
+      {
+        "id": "d4030000-0000-4000-8000-000000000051",
+        "type": "signature_field",
+        "fieldKey": "signature_of_person_making_the_report",
+        "label": "Signature of person making the report",
+        "required": true,
+        "helpText": null
+      },
+      {
+        "id": "d4030000-0000-4000-8000-000000000053",
+        "type": "date_field",
+        "fieldKey": "date_signed_by_person_making_the_report",
+        "label": "Date signed",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": " ",
+          "month": "short"
+        }
+      },
+      {
+        "id": "d4030000-0000-4000-8000-000000000055",
+        "type": "text_field",
+        "fieldKey": "manager_name",
+        "label": "Manager name",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d4030000-0000-4000-8000-000000000056",
+        "type": "text_field",
+        "fieldKey": "manager_position",
+        "label": "Manager position",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d4030000-0000-4000-8000-000000000058",
+        "type": "signature_field",
+        "fieldKey": "manager_signature",
+        "label": "Manager signature",
+        "required": true,
+        "helpText": null
+      },
+      {
+        "id": "d4030000-0000-4000-8000-000000000059",
+        "type": "date_field",
+        "fieldKey": "date_signed_by_manager",
+        "label": "Date signed",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": " ",
+          "month": "short"
+        }
+      }
+    ],
+    "layout": {
+      "pageSize": "A4",
+      "orientation": "portrait",
+      "density": "balanced",
+      "fieldStyle": "box",
+      "marginPreset": "standard",
+      "sectionStyle": "box",
+      "printedTitle": {
+        "mode": "none"
+      },
+      "headerPolicy": "none",
+      "footerPolicy": "all_pages",
+      "pageNumbering": "none",
+      "footerText": {
+        "left": "{title}",
+        "right": "Page {page} of {pages}"
+      },
+      "sectionNumbers": "numbers"
+    },
+    "sections": [
+      {
+        "id": "d4030000-0000-4000-8000-000000000005",
+        "label": "About this report",
+        "startBlockId": "d4030000-0000-4000-8000-000000000004",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d4030000-0000-4000-8000-000000000012",
+        "label": "What happened",
+        "startBlockId": "d4030000-0000-4000-8000-000000000011",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d4030000-0000-4000-8000-000000000021",
+        "label": "The person involved",
+        "startBlockId": "d4030000-0000-4000-8000-000000000020",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d4030000-0000-4000-8000-000000000035",
+        "label": "Witnesses",
+        "startBlockId": "d4030000-0000-4000-8000-000000000034",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d4030000-0000-4000-8000-000000000043",
+        "label": "Investigation and actions",
+        "startBlockId": "d4030000-0000-4000-8000-000000000042",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d4030000-0000-4000-8000-000000000052",
+        "label": "Sign-off",
+        "startBlockId": "d4030000-0000-4000-8000-000000000051",
+        "pageBreakBefore": false,
+        "keepTogether": true
+      }
+    ],
+    "fieldGroups": [
+      {
+        "id": "d4030000-0000-4000-8000-000000000007",
+        "label": null,
+        "startBlockId": "d4030000-0000-4000-8000-000000000004",
+        "endBlockId": "d4030000-0000-4000-8000-000000000006",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "d4030000-0000-4000-8000-000000000010",
+        "label": null,
+        "startBlockId": "d4030000-0000-4000-8000-000000000008",
+        "endBlockId": "d4030000-0000-4000-8000-000000000009",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "d4030000-0000-4000-8000-000000000015",
+        "label": null,
+        "startBlockId": "d4030000-0000-4000-8000-000000000013",
+        "endBlockId": "d4030000-0000-4000-8000-000000000014",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "d4030000-0000-4000-8000-000000000024",
+        "label": null,
+        "startBlockId": "d4030000-0000-4000-8000-000000000022",
+        "endBlockId": "d4030000-0000-4000-8000-000000000023",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "d4030000-0000-4000-8000-000000000037",
+        "label": "First witness",
+        "startBlockId": "d4030000-0000-4000-8000-000000000034",
+        "endBlockId": "d4030000-0000-4000-8000-000000000036",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "d4030000-0000-4000-8000-000000000040",
+        "label": "Second witness",
+        "startBlockId": "d4030000-0000-4000-8000-000000000038",
+        "endBlockId": "d4030000-0000-4000-8000-000000000039",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "d4030000-0000-4000-8000-000000000050",
+        "label": null,
+        "startBlockId": "d4030000-0000-4000-8000-000000000048",
+        "endBlockId": "d4030000-0000-4000-8000-000000000049",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "d4030000-0000-4000-8000-000000000054",
+        "label": null,
+        "startBlockId": "d4030000-0000-4000-8000-000000000051",
+        "endBlockId": "d4030000-0000-4000-8000-000000000053",
+        "columns": 2,
+        "keepTogether": true,
+        "widths": [
+          8,
+          4
+        ]
+      },
+      {
+        "id": "d4030000-0000-4000-8000-000000000057",
+        "label": null,
+        "startBlockId": "d4030000-0000-4000-8000-000000000055",
+        "endBlockId": "d4030000-0000-4000-8000-000000000056",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "d4030000-0000-4000-8000-000000000060",
+        "label": null,
+        "startBlockId": "d4030000-0000-4000-8000-000000000058",
+        "endBlockId": "d4030000-0000-4000-8000-000000000059",
+        "columns": 2,
+        "keepTogether": true,
+        "widths": [
+          8,
+          4
+        ]
+      }
+    ],
+    "blockRules": []
+  }
+}
