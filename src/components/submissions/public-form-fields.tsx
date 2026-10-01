@@ -15,6 +15,7 @@ import {
 import { DatePicker } from "@/components/ui/date-picker"
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { RadioChoices } from "@/components/ui/radio-choices"
 import { Select } from "@/components/ui/select"
 import {
   groupTemplateRenderBlocks,
@@ -314,24 +315,36 @@ function PublicFormFieldBlock({
       return (
         <Field data-public-form-field-key={block.fieldKey}>
           <PublicFormFieldLabel block={block} />
-          <Select
-            id={block.id}
-            name={fieldName}
-            onChange={(event: ChangeEvent<HTMLSelectElement>): void =>
-              onAnswerChange(block.fieldKey, event.target.value)
-            }
-            required={block.required}
-            value={readStringAnswer(answers, block.fieldKey)}
-          >
-            <option value="">
-              {block.placeholder || "Choose an option..."}
-            </option>
-            {block.options.map((option: string) => (
-              <option key={option} value={option}>
-                {option}
+          {block.display === "radios" ? (
+            <RadioChoices
+              id={block.id}
+              label={block.label}
+              name={fieldName}
+              onChange={(value: string): void => onAnswerChange(block.fieldKey, value)}
+              options={block.options}
+              required={block.required}
+              value={readStringAnswer(answers, block.fieldKey)}
+            />
+          ) : (
+            <Select
+              id={block.id}
+              name={fieldName}
+              onChange={(event: ChangeEvent<HTMLSelectElement>): void =>
+                onAnswerChange(block.fieldKey, event.target.value)
+              }
+              required={block.required}
+              value={readStringAnswer(answers, block.fieldKey)}
+            >
+              <option value="">
+                {block.placeholder || "Choose an option..."}
               </option>
-            ))}
-          </Select>
+              {block.options.map((option: string) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </Select>
+          )}
           <PublicFormFieldHelpText block={block} />
         </Field>
       )

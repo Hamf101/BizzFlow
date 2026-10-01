@@ -28,6 +28,12 @@
         "alignment": "left"
       },
       {
+        "id": "a4000000-0000-4000-8000-000000000101",
+        "type": "paragraph",
+        "text": "We use your details only to arrange and carry out your cleaning and to contact you about it. We keep them for as long as we need them for that and for our records, and we do not share them with anyone else unless the law requires it.",
+        "alignment": "left"
+      },
+      {
         "id": "a4000000-0000-4000-8000-000000000003",
         "fieldKey": "first_name",
         "label": "First name",
@@ -52,7 +58,7 @@
         "fieldKey": "phone_number",
         "label": "Phone number",
         "required": true,
-        "helpText": null,
+        "helpText": "We call to arrange your first visit, and if we cannot get in.",
         "type": "text_field",
         "placeholder": null,
         "multiline": false
@@ -108,6 +114,35 @@
         "multiline": false
       },
       {
+        "id": "a4000000-0000-4000-8000-000000000102",
+        "type": "dropdown_field",
+        "fieldKey": "is_the_property_a_home_or_a_business",
+        "label": "Is the property a home or a business?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Home",
+          "Business"
+        ],
+        "display": "radios"
+      },
+      {
+        "id": "a4000000-0000-4000-8000-000000000103",
+        "type": "text_field",
+        "fieldKey": "business_name",
+        "label": "Business name",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "visibleWhen": {
+          "sourceBlockId": "a4000000-0000-4000-8000-000000000102",
+          "operator": "equals",
+          "value": "Business"
+        }
+      },
+      {
         "id": "a4000000-0000-4000-8000-000000000019",
         "fieldKey": "type_of_property",
         "label": "Type of property",
@@ -126,8 +161,8 @@
       },
       {
         "id": "a4000000-0000-4000-8000-000000000021",
-        "fieldKey": "please_specify",
-        "label": "Please specify",
+        "fieldKey": "what_type_of_property_is_it",
+        "label": "What type of property is it?",
         "required": true,
         "helpText": null,
         "visibleWhen": {
@@ -147,7 +182,12 @@
         "helpText": null,
         "type": "text_field",
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "visibleWhen": {
+          "sourceBlockId": "a4000000-0000-4000-8000-000000000102",
+          "operator": "equals",
+          "value": "Home"
+        }
       },
       {
         "id": "a4000000-0000-4000-8000-000000000023",
@@ -157,7 +197,12 @@
         "helpText": null,
         "type": "text_field",
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "visibleWhen": {
+          "sourceBlockId": "a4000000-0000-4000-8000-000000000102",
+          "operator": "equals",
+          "value": "Home"
+        }
       },
       {
         "id": "a4000000-0000-4000-8000-000000000026",
@@ -172,7 +217,8 @@
           "One-off deep clean",
           "End of tenancy clean",
           "After building work"
-        ]
+        ],
+        "display": "radios"
       },
       {
         "id": "a4000000-0000-4000-8000-000000000028",
@@ -185,9 +231,14 @@
         "options": [
           "Weekly",
           "Every two weeks",
-          "Every four weeks",
-          "One visit only"
-        ]
+          "Every four weeks"
+        ],
+        "display": "radios",
+        "visibleWhen": {
+          "sourceBlockId": "a4000000-0000-4000-8000-000000000026",
+          "operator": "equals",
+          "value": "Regular clean"
+        }
       },
       {
         "id": "a4000000-0000-4000-8000-000000000029",
@@ -209,7 +260,8 @@
           "Morning",
           "Afternoon",
           "No preference"
-        ]
+        ],
+        "display": "radios"
       },
       {
         "id": "a4000000-0000-4000-8000-000000000033",
@@ -235,7 +287,8 @@
           "Key safe",
           "We will hold a key",
           "Reception or concierge"
-        ]
+        ],
+        "display": "radios"
       },
       {
         "id": "a4000000-0000-4000-8000-000000000036",
@@ -246,18 +299,24 @@
         "type": "dropdown_field",
         "placeholder": null,
         "options": [
-          "Yours, please bring them",
-          "Mine, I will provide them"
-        ]
+          "Bring your own products",
+          "Use my products"
+        ],
+        "display": "radios"
       },
       {
         "id": "a4000000-0000-4000-8000-000000000037",
-        "fieldKey": "there_are_pets_at_the_property",
-        "label": "There are pets at the property",
-        "required": false,
+        "type": "dropdown_field",
+        "fieldKey": "are_there_pets_at_the_property",
+        "label": "Are there pets at the property?",
+        "required": true,
         "helpText": null,
-        "type": "checkbox_field",
-        "checkedByDefault": false
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios"
       },
       {
         "id": "a4000000-0000-4000-8000-000000000038",
@@ -268,7 +327,7 @@
         "visibleWhen": {
           "sourceBlockId": "a4000000-0000-4000-8000-000000000037",
           "operator": "equals",
-          "value": true
+          "value": "Yes"
         },
         "boxHeight": 45,
         "type": "text_field",
@@ -280,7 +339,7 @@
         "fieldKey": "products_or_scents_you_would_like_us_to_avoid",
         "label": "Products or scents you would like us to avoid",
         "required": false,
-        "helpText": null,
+        "helpText": "Just the product or scent; there is no need to say why.",
         "boxHeight": 45,
         "type": "text_field",
         "placeholder": null,
@@ -328,7 +387,7 @@
       {
         "id": "a4000000-0000-4000-8000-000000000020",
         "label": "About the property",
-        "startBlockId": "a4000000-0000-4000-8000-000000000019",
+        "startBlockId": "a4000000-0000-4000-8000-000000000102",
         "pageBreakBefore": false,
         "keepTogether": false
       },
@@ -381,14 +440,6 @@
         "label": null,
         "startBlockId": "a4000000-0000-4000-8000-000000000022",
         "endBlockId": "a4000000-0000-4000-8000-000000000023",
-        "columns": 2,
-        "keepTogether": false
-      },
-      {
-        "id": "a4000000-0000-4000-8000-000000000032",
-        "label": null,
-        "startBlockId": "a4000000-0000-4000-8000-000000000029",
-        "endBlockId": "a4000000-0000-4000-8000-000000000030",
         "columns": 2,
         "keepTogether": false
       }

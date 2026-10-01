@@ -916,9 +916,20 @@ function PreviewBlock({ block }: { block: TemplateBlock }): ReactElement {
           label={block.label}
           required={block.required}
         >
-          <div className="rounded-sm border border-border px-3 py-2 text-sm text-muted-foreground">
-            {block.placeholder || "Select an option"}
-          </div>
+          {block.display === "radios" ? (
+            <span className="flex flex-col gap-1.5 text-sm">
+              {block.options.map((option: string) => (
+                <span className="flex items-center gap-2" key={option}>
+                  <span aria-hidden="true" className="size-4 shrink-0 rounded-full border border-muted-foreground/40" />
+                  {option}
+                </span>
+              ))}
+            </span>
+          ) : (
+            <div className="rounded-sm border border-border px-3 py-2 text-sm text-muted-foreground">
+              {block.placeholder || "Select an option"}
+            </div>
+          )}
         </PreviewField>
       )
     case "text_field":

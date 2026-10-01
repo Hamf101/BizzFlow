@@ -42,6 +42,16 @@
         "multiline": false
       },
       {
+        "id": "a3000000-0000-4000-8000-000000000101",
+        "type": "text_field",
+        "fieldKey": "designer_address",
+        "label": "Designer address",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": true
+      },
+      {
         "id": "a3000000-0000-4000-8000-000000000007",
         "fieldKey": "client_name",
         "label": "Client name",
@@ -62,12 +72,14 @@
         "multiline": false
       },
       {
-        "id": "a3000000-0000-4000-8000-000000000011",
-        "fieldKey": "effective_date",
-        "label": "Effective date",
+        "id": "a3000000-0000-4000-8000-000000000102",
+        "type": "text_field",
+        "fieldKey": "client_address",
+        "label": "Client address",
         "required": true,
         "helpText": null,
-        "type": "date_field"
+        "placeholder": null,
+        "multiline": true
       },
       {
         "id": "a3000000-0000-4000-8000-000000000012",
@@ -84,7 +96,7 @@
         "id": "a3000000-0000-4000-8000-000000000014",
         "fieldKey": "rounds_of_revisions_included",
         "label": "Rounds of revisions included",
-        "required": false,
+        "required": true,
         "helpText": null,
         "type": "text_field",
         "placeholder": null,
@@ -100,6 +112,21 @@
         "type": "text_field",
         "placeholder": null,
         "multiline": true
+      },
+      {
+        "id": "a3000000-0000-4000-8000-000000000103",
+        "type": "dropdown_field",
+        "fieldKey": "do_the_fees_include_tax",
+        "label": "Do the fees include tax?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes, tax is included",
+          "No, tax is added",
+          "No tax applies"
+        ],
+        "display": "radios"
       },
       {
         "id": "a3000000-0000-4000-8000-000000000017",
@@ -122,11 +149,31 @@
         "multiline": false
       },
       {
+        "id": "a3000000-0000-4000-8000-000000000105",
+        "type": "text_field",
+        "fieldKey": "how_to_pay",
+        "label": "How to pay",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a3000000-0000-4000-8000-000000000104",
+        "type": "text_field",
+        "fieldKey": "if_payment_is_late",
+        "label": "If payment is late",
+        "required": false,
+        "helpText": "What happens when an invoice is overdue.",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
         "id": "a3000000-0000-4000-8000-000000000021",
         "fieldKey": "start_date",
         "label": "Start date",
         "required": true,
-        "helpText": null,
+        "helpText": "The agreement takes effect on this date.",
         "type": "date_field"
       },
       {
@@ -150,6 +197,16 @@
         "multiline": false
       },
       {
+        "id": "a3000000-0000-4000-8000-000000000106",
+        "type": "text_field",
+        "fieldKey": "time_to_put_a_breach_right",
+        "label": "Time to put a breach right",
+        "required": true,
+        "helpText": "How long a party has to fix a serious breach before the other may end the agreement at once.",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
         "id": "a3000000-0000-4000-8000-000000000028",
         "fieldKey": "limit_of_liability",
         "label": "Limit of liability",
@@ -166,6 +223,16 @@
         "required": true,
         "helpText": "The country or state whose law applies to this agreement.",
         "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a3000000-0000-4000-8000-000000000107",
+        "type": "text_field",
+        "fieldKey": "courts_that_hear_disputes",
+        "label": "Courts that hear disputes",
+        "required": true,
+        "helpText": null,
         "placeholder": null,
         "multiline": false
       },
@@ -192,7 +259,7 @@
       {
         "id": "a3000000-0000-4000-8000-000000000034",
         "type": "paragraph",
-        "text": "The client will pay the fees stated above. Any deposit stated above is payable before work starts. The designer will invoice the client, and each invoice is payable within the payment period stated above. The client will repay expenses only where it agreed them in writing beforehand.",
+        "text": "The client will pay the fees stated above. Any deposit stated above is payable before work starts. The designer will invoice the client, and each invoice is payable within the payment period stated above. The client will repay expenses only where it agreed them in writing beforehand. The fees include tax only as stated above. Payment is made as stated in how to pay, and a late payment is dealt with as stated above.",
         "alignment": "left"
       },
       {
@@ -205,7 +272,7 @@
       {
         "id": "a3000000-0000-4000-8000-000000000036",
         "type": "paragraph",
-        "text": "This agreement starts on the start date and continues for the term stated above. Either party may end it by giving the other written notice of at least the notice period stated above. Either party may end it at once, in writing, if the other seriously breaches it and does not put the breach right when asked. When this agreement ends, the client will pay for the work done up to that date.",
+        "text": "This agreement takes effect on the start date and continues for the term stated above. Either party may end it by giving the other written notice of at least the notice period stated above. Either party may end it at once, in writing, if the other seriously breaches it and does not put the breach right within the time to put a breach right stated above. When this agreement ends, the client will pay for the work done up to that date. The terms on payment, ownership of work and confidentiality continue after it ends.",
         "alignment": "left"
       },
       {
@@ -218,7 +285,7 @@
       {
         "id": "a3000000-0000-4000-8000-000000000038",
         "type": "paragraph",
-        "text": "When the client has paid the fees in full, the designer transfers ownership of the final approved designs to the client. The designer keeps ownership of drafts, unused concepts and anything the designer created before this agreement. Fonts, stock images and other material from third parties stay subject to their own licences. The designer may show the finished work in a portfolio unless the client asks in writing to keep it private.",
+        "text": "When the client has paid the fees in full, the designer transfers to the client the copyright and other intellectual property rights in the final approved designs. The designer keeps the rights in drafts, unused concepts and anything the designer made before or outside this agreement, and gives the client a permanent licence to use any of it that is part of the final approved designs. Fonts, stock images and other material from third parties stay subject to their own licences. The designer may show the finished work in a portfolio unless the client asks in writing to keep it private.",
         "alignment": "left"
       },
       {
@@ -261,6 +328,19 @@
         "alignment": "left"
       },
       {
+        "id": "a3000000-0000-4000-8000-000000000108",
+        "type": "heading",
+        "text": "Disputes",
+        "level": 2,
+        "alignment": "left"
+      },
+      {
+        "id": "a3000000-0000-4000-8000-000000000109",
+        "type": "paragraph",
+        "text": "If a dispute arises under this agreement, the parties will first try to settle it by talking to each other in good faith. If that does not settle it, they will try mediation before going to court. Only the courts stated above may hear a dispute under this agreement.",
+        "alignment": "left"
+      },
+      {
         "id": "a3000000-0000-4000-8000-000000000045",
         "type": "heading",
         "text": "General terms",
@@ -270,7 +350,7 @@
       {
         "id": "a3000000-0000-4000-8000-000000000046",
         "type": "paragraph",
-        "text": "The designer is an independent contractor and not an employee of the client. This agreement is the whole agreement between the parties about the services. Any change to it must be in writing and signed by both parties. Neither party may transfer it to someone else without the other's written consent. This agreement is governed by the governing law stated above.",
+        "text": "The designer is an independent contractor and not an employee of the client. This agreement is the whole agreement between the parties about the services. Any change to it must be in writing and signed by both parties. Neither party may transfer it to someone else without the other's written consent. Notices under this agreement are given in writing to the addresses or emails stated above. This agreement is governed by the governing law stated above.",
         "alignment": "left"
       },
       {
@@ -317,8 +397,8 @@
       },
       {
         "id": "a3000000-0000-4000-8000-000000000053",
-        "fieldKey": "designer_title",
-        "label": "Designer title",
+        "fieldKey": "designer_position",
+        "label": "Designer position",
         "required": false,
         "helpText": null,
         "type": "text_field",
@@ -327,8 +407,8 @@
       },
       {
         "id": "a3000000-0000-4000-8000-000000000054",
-        "fieldKey": "client_title",
-        "label": "Client title",
+        "fieldKey": "client_position",
+        "label": "Client position",
         "required": false,
         "helpText": null,
         "type": "text_field",
@@ -538,6 +618,11 @@
       },
       {
         "blockId": "a3000000-0000-4000-8000-000000000054",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "a3000000-0000-4000-8000-000000000108",
         "pageBreakBefore": false,
         "keepWithNext": true
       }

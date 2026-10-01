@@ -42,6 +42,16 @@
         "multiline": false
       },
       {
+        "id": "a6000000-0000-4000-8000-000000000101",
+        "type": "text_field",
+        "fieldKey": "bookkeeper_address",
+        "label": "Bookkeeper address",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": true
+      },
+      {
         "id": "a6000000-0000-4000-8000-000000000007",
         "fieldKey": "client_business_name",
         "label": "Client business name",
@@ -62,12 +72,14 @@
         "multiline": false
       },
       {
-        "id": "a6000000-0000-4000-8000-000000000011",
-        "fieldKey": "effective_date",
-        "label": "Effective date",
+        "id": "a6000000-0000-4000-8000-000000000102",
+        "type": "text_field",
+        "fieldKey": "client_address",
+        "label": "Client address",
         "required": true,
         "helpText": null,
-        "type": "date_field"
+        "placeholder": null,
+        "multiline": true
       },
       {
         "id": "a6000000-0000-4000-8000-000000000012",
@@ -81,6 +93,16 @@
         "multiline": true
       },
       {
+        "id": "a6000000-0000-4000-8000-000000000108",
+        "type": "text_field",
+        "fieldKey": "kinds_of_personal_data_the_bookkeeper_handles",
+        "label": "Kinds of personal data the bookkeeper handles",
+        "required": true,
+        "helpText": "For example, staff names, pay and bank details.",
+        "placeholder": null,
+        "multiline": true
+      },
+      {
         "id": "a6000000-0000-4000-8000-000000000014",
         "fieldKey": "fees",
         "label": "Fees",
@@ -90,6 +112,21 @@
         "type": "text_field",
         "placeholder": null,
         "multiline": true
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000103",
+        "type": "dropdown_field",
+        "fieldKey": "do_the_fees_include_tax",
+        "label": "Do the fees include tax?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes, tax is included",
+          "No, tax is added",
+          "No tax applies"
+        ],
+        "display": "radios"
       },
       {
         "id": "a6000000-0000-4000-8000-000000000016",
@@ -112,11 +149,31 @@
         "multiline": false
       },
       {
+        "id": "a6000000-0000-4000-8000-000000000105",
+        "type": "text_field",
+        "fieldKey": "how_to_pay",
+        "label": "How to pay",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000104",
+        "type": "text_field",
+        "fieldKey": "if_payment_is_late",
+        "label": "If payment is late",
+        "required": false,
+        "helpText": "What happens when an invoice is overdue.",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
         "id": "a6000000-0000-4000-8000-000000000020",
         "fieldKey": "start_date",
         "label": "Start date",
         "required": true,
-        "helpText": null,
+        "helpText": "The agreement takes effect on this date.",
         "type": "date_field"
       },
       {
@@ -140,6 +197,16 @@
         "multiline": false
       },
       {
+        "id": "a6000000-0000-4000-8000-000000000106",
+        "type": "text_field",
+        "fieldKey": "time_to_put_a_breach_right",
+        "label": "Time to put a breach right",
+        "required": true,
+        "helpText": "How long a party has to fix a serious breach before the other may end the agreement at once.",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
         "id": "a6000000-0000-4000-8000-000000000027",
         "fieldKey": "limit_of_liability",
         "label": "Limit of liability",
@@ -156,6 +223,16 @@
         "required": true,
         "helpText": "The country or state whose law applies to this agreement.",
         "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000107",
+        "type": "text_field",
+        "fieldKey": "courts_that_hear_disputes",
+        "label": "Courts that hear disputes",
+        "required": true,
+        "helpText": null,
         "placeholder": null,
         "multiline": false
       },
@@ -182,7 +259,7 @@
       {
         "id": "a6000000-0000-4000-8000-000000000033",
         "type": "paragraph",
-        "text": "The client will pay the fees stated above. The bookkeeper will invoice as often as stated above, and each invoice is payable within the payment period stated above. The bookkeeper may pause work while an invoice is overdue, after telling the client in writing. The client will repay expenses only where it agreed them in writing beforehand.",
+        "text": "The client will pay the fees stated above. The bookkeeper will invoice as often as stated above, and each invoice is payable within the payment period stated above. The bookkeeper may pause work while an invoice is overdue, after telling the client in writing. The client will repay expenses only where it agreed them in writing beforehand. The fees include tax only as stated above. Payment is made as stated in how to pay, and a late payment is dealt with as stated above.",
         "alignment": "left"
       },
       {
@@ -195,7 +272,7 @@
       {
         "id": "a6000000-0000-4000-8000-000000000035",
         "type": "paragraph",
-        "text": "This agreement starts on the start date and continues for the term stated above. Either party may end it by giving the other written notice of at least the notice period stated above. Either party may end it at once, in writing, if the other seriously breaches it and does not put the breach right when asked. When this agreement ends, the client will pay for the work done up to that date and the bookkeeper will return the client's records.",
+        "text": "This agreement takes effect on the start date and continues for the term stated above. Either party may end it by giving the other written notice of at least the notice period stated above. Either party may end it at once, in writing, if the other seriously breaches it and does not put the breach right within the time to put a breach right stated above. When this agreement ends, the client will pay for the work done up to that date and the bookkeeper will return the client's records. The terms on payment, ownership of work and confidentiality continue after it ends.",
         "alignment": "left"
       },
       {
@@ -208,7 +285,7 @@
       {
         "id": "a6000000-0000-4000-8000-000000000037",
         "type": "paragraph",
-        "text": "The client owns its financial records. When the client has paid the fees for it, the client also owns the reports, ledgers and other work the bookkeeper produces under this agreement. The bookkeeper keeps ownership of its own templates, methods and working papers, and may keep copies of records where the law requires it.",
+        "text": "The client owns its financial records. When the client has paid the fees for it, the client also owns the reports, ledgers and other work the bookkeeper produces under this agreement. The bookkeeper keeps ownership of its own templates, methods and working papers, gives the client a permanent licence to use any of them that form part of that work, and may keep copies of records where the law requires it.",
         "alignment": "left"
       },
       {
@@ -222,6 +299,19 @@
         "id": "a6000000-0000-4000-8000-000000000039",
         "type": "paragraph",
         "text": "The bookkeeper will keep the client's financial and business information private, store it securely, and use it only to provide the services. The bookkeeper will not share it with anyone else without the client's written permission, unless the law requires it. The client will keep the bookkeeper's confidential information private in the same way. These duties continue after this agreement ends.",
+        "alignment": "left"
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000109",
+        "type": "heading",
+        "text": "Data protection",
+        "level": 2,
+        "alignment": "left"
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000110",
+        "type": "paragraph",
+        "text": "Where the bookkeeper handles personal data for the client, such as the kinds stated above, it does so only on the client's written instructions. It keeps that data confidential and secure, uses another company to handle it only with the client's written permission, and helps the client answer requests from people about their data. When this agreement ends, it returns or deletes the data, keeping only what the law requires, and it allows the client reasonable checks that it follows this clause.",
         "alignment": "left"
       },
       {
@@ -251,6 +341,19 @@
         "alignment": "left"
       },
       {
+        "id": "a6000000-0000-4000-8000-000000000111",
+        "type": "heading",
+        "text": "Disputes",
+        "level": 2,
+        "alignment": "left"
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000112",
+        "type": "paragraph",
+        "text": "If a dispute arises under this agreement, the parties will first try to settle it by talking to each other in good faith. If that does not settle it, they will try mediation before going to court. Only the courts stated above may hear a dispute under this agreement.",
+        "alignment": "left"
+      },
+      {
         "id": "a6000000-0000-4000-8000-000000000044",
         "type": "heading",
         "text": "General terms",
@@ -260,7 +363,7 @@
       {
         "id": "a6000000-0000-4000-8000-000000000045",
         "type": "paragraph",
-        "text": "The bookkeeper is an independent contractor and not an employee of the client. This agreement is the whole agreement between the parties about the services. Any change to it must be in writing and signed by both parties. Neither party may transfer it to someone else without the other's written consent. This agreement is governed by the governing law stated above.",
+        "text": "The bookkeeper is an independent contractor and not an employee of the client. This agreement is the whole agreement between the parties about the services. Any change to it must be in writing and signed by both parties. Neither party may transfer it to someone else without the other's written consent. Notices under this agreement are given in writing to the addresses or emails stated above. This agreement is governed by the governing law stated above.",
         "alignment": "left"
       },
       {
@@ -307,8 +410,8 @@
       },
       {
         "id": "a6000000-0000-4000-8000-000000000052",
-        "fieldKey": "bookkeeper_title",
-        "label": "Bookkeeper title",
+        "fieldKey": "bookkeeper_position",
+        "label": "Bookkeeper position",
         "required": false,
         "helpText": null,
         "type": "text_field",
@@ -317,8 +420,8 @@
       },
       {
         "id": "a6000000-0000-4000-8000-000000000053",
-        "fieldKey": "client_title",
-        "label": "Client title",
+        "fieldKey": "client_position",
+        "label": "Client position",
         "required": false,
         "helpText": null,
         "type": "text_field",
@@ -528,6 +631,16 @@
       },
       {
         "blockId": "a6000000-0000-4000-8000-000000000053",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "a6000000-0000-4000-8000-000000000109",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "a6000000-0000-4000-8000-000000000111",
         "pageBreakBefore": false,
         "keepWithNext": true
       }

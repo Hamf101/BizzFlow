@@ -551,6 +551,10 @@ function expandBlockForPagination(
     case "dropdown_field": {
       const answer = formatFieldValue(block, answers[block.fieldKey])
 
+      if (block.type === "dropdown_field" && block.display === "radios") {
+        return splitRadioOptions(block, renderBlock, answer, availableWidth, room)
+      }
+
       return splitText(
         answer,
         resolveChunkCharacters(
@@ -591,6 +595,47 @@ function fitBoxToPage(renderBlock: TemplateRenderBlock, availableWidth: number, 
   const most = Math.floor(room - estimateFieldLabelHeight(block, availableWidth) - estimateHelpHeight(block, availableWidth) - 13)
 
   return block.boxHeight <= most ? renderBlock : { ...renderBlock, block: { ...block, boxHeight: Math.max(most, 27) } }
+}
+
+// Radio buttons print an option a line, in pieces a page holds; an answer
+// given before the options changed prints as one more, chosen.
+function splitRadioOptions(
+  block: Extract<TemplateBlock, { type: "dropdown_field" }>,
+  renderBlock: TemplateRenderBlock,
+  answer: string,
+  availableWidth: number,
+  room: number
+): PdfBlockFlowItem[] {
+  const options = answer && !block.options.includes(answer) ? [...block.options, answer] : block.options
+  const most = room - estimateFieldLabelHeight(block, availableWidth) - estimateHelpHeight(block, availableWidth) - 13
+  const pieces: string[][] = [[]]
+  let height = 0
+
+  for (const option of options) {
+    const optionHeight = estimateRadioOptionHeight(option, availableWidth)
+    const piece = pieces[pieces.length - 1]
+
+    if (piece.length > 0 && height + optionHeight > most) {
+      pieces.push([option])
+      height = optionHeight
+    } else {
+      piece.push(option)
+      height += optionHeight
+    }
+  }
+
+  return pieces.map(
+    (piece: string[], index: number): PdfBlockFlowItem => ({
+      kind: "block",
+      block: { ...block, options: piece },
+      renderBlock,
+      fieldContinued: index > 0
+    })
+  )
+}
+
+function estimateRadioOptionHeight(option: string, availableWidth: number): number {
+  return estimateWrappedTextHeight(option, scalePdfCharacterEstimate(88, availableWidth - CHECKBOX_LABEL_INSET), 15)
 }
 
 function splitListBlock(
@@ -1057,6 +1102,15 @@ function estimateBlockHeight(
       return labelHeight + noticeHeight + helpHeight + 20
     }
     default: {
+      if (block.type === "dropdown_field" && block.display === "radios") {
+        return (
+          estimateFieldLabelHeight(block, availableWidth) +
+          block.options.reduce((height: number, option: string): number => height + estimateRadioOptionHeight(option, availableWidth), 0) +
+          estimateHelpHeight(block, availableWidth) +
+          13
+        )
+      }
+
       const answer =
         answerOverride ?? formatFieldValue(block, answers[block.fieldKey])
       const answerHeight = answer

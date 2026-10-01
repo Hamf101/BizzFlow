@@ -62,6 +62,16 @@
         "multiline": false
       },
       {
+        "id": "a5000000-0000-4000-8000-000000000101",
+        "type": "text_field",
+        "fieldKey": "business_address",
+        "label": "Business address",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": true
+      },
+      {
         "id": "a5000000-0000-4000-8000-000000000011",
         "fieldKey": "customer_company",
         "label": "Customer company",
@@ -113,6 +123,16 @@
         "multiline": true
       },
       {
+        "id": "a5000000-0000-4000-8000-000000000102",
+        "type": "text_field",
+        "fieldKey": "billing_address",
+        "label": "Billing address",
+        "required": false,
+        "helpText": "If it is different from the site address.",
+        "placeholder": null,
+        "multiline": true
+      },
+      {
         "id": "a5000000-0000-4000-8000-000000000019",
         "fieldKey": "quote_number",
         "label": "Quote number",
@@ -126,7 +146,7 @@
         "id": "a5000000-0000-4000-8000-000000000021",
         "fieldKey": "quote_date",
         "label": "Quote date",
-        "required": false,
+        "required": true,
         "helpText": null,
         "type": "date_field"
       },
@@ -173,12 +193,13 @@
           "Every two weeks",
           "Monthly",
           "Other"
-        ]
+        ],
+        "display": "radios"
       },
       {
         "id": "a5000000-0000-4000-8000-000000000030",
-        "fieldKey": "please_specify",
-        "label": "Please specify",
+        "fieldKey": "how_often_should_we_visit",
+        "label": "How often should we visit?",
         "required": true,
         "helpText": null,
         "visibleWhen": {
@@ -201,7 +222,7 @@
         ],
         "rows": [
           [
-            "Maintenance visits",
+            "Maintenance visits (number over the service period)",
             "",
             "",
             ""
@@ -286,7 +307,7 @@
         "id": "a5000000-0000-4000-8000-000000000040",
         "fieldKey": "payment_due",
         "label": "Payment due",
-        "required": false,
+        "required": true,
         "helpText": "How long the customer has to pay each invoice.",
         "type": "text_field",
         "placeholder": null,
@@ -304,6 +325,16 @@
         "multiline": true
       },
       {
+        "id": "a5000000-0000-4000-8000-000000000103",
+        "type": "text_field",
+        "fieldKey": "if_payment_is_late",
+        "label": "If payment is late",
+        "required": false,
+        "helpText": "What you charge or do when a payment is overdue.",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
         "id": "a5000000-0000-4000-8000-000000000044",
         "fieldKey": "service_start_date",
         "label": "Service start date",
@@ -318,6 +349,26 @@
         "required": false,
         "helpText": null,
         "type": "date_field"
+      },
+      {
+        "id": "a5000000-0000-4000-8000-000000000104",
+        "type": "text_field",
+        "fieldKey": "ending_the_service_early",
+        "label": "Ending the service early",
+        "required": true,
+        "helpText": "The notice either side gives to stop the service before the end date.",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a5000000-0000-4000-8000-000000000105",
+        "type": "text_field",
+        "fieldKey": "price_review",
+        "label": "Price review",
+        "required": false,
+        "helpText": "When and how the price may change during the service.",
+        "placeholder": null,
+        "multiline": false
       },
       {
         "id": "a5000000-0000-4000-8000-000000000049",
@@ -343,11 +394,21 @@
       },
       {
         "id": "a5000000-0000-4000-8000-000000000055",
-        "fieldKey": "printed_name",
-        "label": "Printed name",
+        "fieldKey": "customer_printed_name",
+        "label": "Customer printed name",
         "required": true,
         "helpText": null,
         "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a5000000-0000-4000-8000-000000000107",
+        "type": "text_field",
+        "fieldKey": "customer_position",
+        "label": "Customer position",
+        "required": true,
+        "helpText": null,
         "placeholder": null,
         "multiline": false
       }
@@ -429,6 +490,13 @@
         "keepTogether": false
       },
       {
+        "id": "a5000000-0000-4000-8000-000000000106",
+        "label": "Changes and ending the service",
+        "startBlockId": "a5000000-0000-4000-8000-000000000104",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
         "id": "a5000000-0000-4000-8000-000000000050",
         "label": "Acceptance",
         "startBlockId": "a5000000-0000-4000-8000-000000000049",
@@ -499,6 +567,14 @@
           8,
           4
         ],
+        "keepTogether": false
+      },
+      {
+        "id": "a5000000-0000-4000-8000-000000000108",
+        "label": null,
+        "startBlockId": "a5000000-0000-4000-8000-000000000055",
+        "endBlockId": "a5000000-0000-4000-8000-000000000107",
+        "columns": 2,
         "keepTogether": false
       }
     ],

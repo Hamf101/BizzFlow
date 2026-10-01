@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises"
 import * as fontkit from "fontkit"
 import {
   PDFDocument,
+  PDFRadioGroup,
   rgb,
   type PDFFont,
   type PDFImage,
@@ -757,6 +758,41 @@ async function drawPdfLibField(
     }
 
     cursorY = drawWrappedPdfText(context, label, topY, frame.x + CHECKBOX_LABEL_INSET, frame.width - CHECKBOX_LABEL_INSET, 10, 15, context.regularFont, ink, "left")
+  } else if (block.type === "dropdown_field" && block.display === "radios") {
+    // Radio buttons print as the editor shows them: under the label, each
+    // option on its own line beside a circle, the chosen one filled.
+    const size = 10
+    const answer = formatFieldValue(block, context.answers[block.fieldKey])
+    const form = context.document.getForm()
+    // A piece carried to the next page answers the question its first piece began.
+    const earlier = item.fieldContinued ? form.getFieldMaybe(block.fieldKey) : undefined
+    const group = context.formFont
+      ? earlier instanceof PDFRadioGroup
+        ? earlier
+        : form.createRadioGroup(formFieldName(context, block.fieldKey))
+      : null
+
+    cursorY = drawWrappedPdfText(context, label, topY, frame.x, frame.width, 9, 13, context.boldFont, ink, "left") - 3
+
+    for (const option of block.options) {
+      const circle = { x: frame.x + size / 2, y: cursorY - 2 - size / 2 }
+
+      if (group) {
+        group.addOptionToPage(option, context.page, { borderColor: edge, borderWidth: 0.7, height: size, textColor: ink, width: size, x: frame.x, y: cursorY - 2 - size })
+      } else {
+        context.page.drawCircle({ ...circle, borderColor: edge, borderWidth: 0.7, size: size / 2 })
+
+        if (option === answer) {
+          context.page.drawCircle({ ...circle, color: ink, size: 2.5 })
+        }
+      }
+
+      cursorY = drawWrappedPdfText(context, option, cursorY, frame.x + CHECKBOX_LABEL_INSET, frame.width - CHECKBOX_LABEL_INSET, 10, 15, context.regularFont, ink, "left")
+    }
+
+    if (group && block.options.includes(answer)) {
+      group.select(answer)
+    }
   } else {
     cursorY = drawWrappedPdfText(context, label, topY, frame.x, frame.width, 9, 13, context.boldFont, ink, "left") - 3
 

@@ -42,6 +42,12 @@ import { storeTemplateImage } from "./template-image"
 const CONTROL_CLASS_NAME =
   "w-full rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
 
+// A choice shows as a dropdown, or with every option on show as radio buttons.
+const CHOICE_DISPLAYS = [
+  { label: "Dropdown", value: "dropdown" },
+  { label: "Radio buttons", value: "radios" },
+] as const
+
 const BLOCK_LABELS: Record<TemplateBlock["type"], string> = {
   heading: "Heading",
   paragraph: "Paragraph",
@@ -322,13 +328,33 @@ export function BlockFields({
     case "dropdown_field":
       return (
         <FieldBlockFields block={block} blocks={blocks} onChange={onChange}>
-          <PlaceholderField
-            blockId={block.id}
-            onChange={(placeholder: string | null): void =>
-              onChange({ ...block, placeholder })
-            }
-            value={block.placeholder}
-          />
+          <fieldset className="grid gap-2">
+            <FieldLegend variant="label">Show as</FieldLegend>
+            <Segmented
+              className="w-fit"
+              label="Show as"
+              onChange={(display): void => {
+                const next: typeof block = { ...block, display: "radios" }
+
+                if (display === "dropdown") {
+                  delete next.display
+                }
+
+                onChange(next)
+              }}
+              options={CHOICE_DISPLAYS}
+              value={block.display ?? "dropdown"}
+            />
+          </fieldset>
+          {block.display === "radios" ? null : (
+            <PlaceholderField
+              blockId={block.id}
+              onChange={(placeholder: string | null): void =>
+                onChange({ ...block, placeholder })
+              }
+              value={block.placeholder}
+            />
+          )}
           <OptionsField block={block} blocks={blocks} onChange={onChange} />
         </FieldBlockFields>
       )

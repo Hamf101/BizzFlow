@@ -572,6 +572,65 @@ describe("document PDF service", () => {
     }
   })
 
+  it("prints a choice shown as radio buttons one option a line, inside the room the planner left, as one radio group", { timeout: PDF_RENDER_TIMEOUT_MS }, async () => {
+    const input = createPdfInput({ repeatHeader: false, repeatFooter: false })
+    const content = requireVersionThreeContent(input)
+    const radios = (index: number, options: string[]) => ({
+      id: `52000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
+      type: "dropdown_field" as const,
+      display: "radios" as const,
+      fieldKey: `choice_${index}`,
+      label: `Question ${index + 1}`,
+      required: false,
+      helpText: "Choose one.",
+      placeholder: null,
+      options
+    })
+    // The worst case: more options, and longer, than one page holds.
+    const many = Array.from({ length: 100 }, (_value: unknown, index: number): string => `Option ${index + 1} ${"long words ".repeat(20).trim()}`)
+
+    content.blocks = [
+      ...Array.from({ length: 24 }, (_value: unknown, index: number) => radios(index, index % 2 ? ["Yes", "No"] : ["Never", "Monthly", "Weekly", "Daily"])),
+      radios(24, many),
+      { id: "52000000-0000-4000-8000-000000000099", type: "text_field", fieldKey: "after", label: "After", required: false, helpText: null, placeholder: null, multiline: false }
+    ]
+    content.sections = []
+    content.fieldGroups = []
+    content.blockRules = []
+    input.answers = { choice_1: "No", choice_24: many[99], after: "Next" }
+    input.signers = []
+
+    const normalized = normalizePdfInput(input)
+    const metrics = createPdfLayoutMetrics(normalized.renderPlan.geometry, normalized.renderPlan.layout)
+    const fillable = await PDFDocument.load(await renderGeneratedDocumentPdf(input, { fillable: true }))
+    const form = fillable.getForm()
+
+    expect(form.getRadioGroup("choice_1").getOptions()).toEqual(["Yes", "No"])
+    expect(form.getRadioGroup("choice_1").getSelected()).toBe("No")
+    expect(form.getRadioGroup("choice_0").getOptions()).toEqual(["Never", "Monthly", "Weekly", "Daily"])
+    expect(form.getRadioGroup("choice_0").getSelected()).toBeUndefined()
+    // Carried over pages, it is still one question with one answer.
+    expect(form.getRadioGroup("choice_24").getOptions()).toEqual(many)
+    expect(form.getRadioGroup("choice_24").getSelected()).toBe(many[99])
+
+    // Drawn in order, each option sits below the last on its page, and none
+    // below the page's flow: the planner reserved what the renderer drew.
+    const widgets = form.getFields().flatMap((field) => field.acroField.getWidgets())
+    const flowBottom = metrics.flowTopY - metrics.pageCapacity
+
+    expect(fillable.getPageCount()).toBeGreaterThan(2)
+    widgets.forEach((widget, index) => {
+      const box = widget.getRectangle()
+      const previous = widgets[index - 1]
+
+      expect(box.y).toBeGreaterThanOrEqual(flowBottom - 0.5)
+
+      if (previous && previous.P() === widget.P()) {
+        expect(box.y + box.height).toBeLessThanOrEqual(previous.getRectangle().y)
+      }
+    })
+  })
+
   it("renders saved page size, orientation, and margins through pdf-lib", async () => {
     const input = createPdfInput({
       repeatHeader: false,

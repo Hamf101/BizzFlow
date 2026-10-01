@@ -629,9 +629,9 @@ function LineBreaks({ blockId }: { blockId: string }): ReactElement | null {
 
 type BoxedField = Extract<TemplateBlock, { type: "date_field" | "dropdown_field" | "initials_field" | "signature_field" | "text_field" }>
 
-// The fields that print an answer box, whose height can be changed.
+// The fields that print an answer box, whose height can be changed; radio buttons print none.
 function isBoxed(block: TemplateBlock): block is BoxedField {
-  return ["date_field", "dropdown_field", "initials_field", "signature_field", "text_field"].includes(block.type)
+  return ["date_field", "dropdown_field", "initials_field", "signature_field", "text_field"].includes(block.type) && !(block.type === "dropdown_field" && block.display === "radios")
 }
 
 // A box at a height, held between a line and its padding and the most a page

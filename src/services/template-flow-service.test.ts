@@ -26,6 +26,7 @@ import {
   type TemplateContentV3
 } from "@/types/template"
 import type { TemplateFlowMessage } from "@/types/template-flow"
+import { createLongDocumentContent } from "@/types/long-document.test-support"
 
 const TEMPLATE_ID = "00000000-0000-4000-8000-000000000010"
 const PARAGRAPH_ID = "00000000-0000-4000-8000-000000000011"
@@ -900,7 +901,7 @@ describe("template Flow service", () => {
     expect(dropdown?.type).toBe("dropdown_field")
     expect(companions).toHaveLength(1)
     expect(companions[0]).toMatchObject({
-      label: "Please specify",
+      label: "Other request category",
       required: true,
       visibleWhen: {
         sourceBlockId: dropdown?.id,
@@ -1236,9 +1237,22 @@ describe("Flow checking its own draft", () => {
 })
 
 describe("Flow reading a document longer than it can take in", () => {
+  it("reads a 50-page document whole", async () => {
+    const { aiProvider, run } = runFlow(createLongDocumentContent(), [])
+
+    await run
+
+    const { currentDraft } = JSON.parse(String(readProviderRequests(aiProvider)[0]?.input)) as {
+      currentDraft: { blocks: unknown[]; omitted: { blocks: number }; pages: number }
+    }
+
+    expect(currentDraft.omitted.blocks).toBe(0)
+    expect(currentDraft.pages).toBeGreaterThanOrEqual(50)
+  })
+
   it("sends as many blocks as fit, and says how many it left out", async () => {
     const content = createContent()
-    content.blocks = Array.from({ length: 250 }, (_, index) => ({
+    content.blocks = Array.from({ length: 1_200 }, (_, index) => ({
       id: `70000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
       type: "paragraph" as const,
       text: `Clause ${index}: ${"the supplier keeps records for the period the client sets out. ".repeat(6)}`,
@@ -1254,11 +1268,11 @@ describe("Flow reading a document longer than it can take in", () => {
     const sent = JSON.stringify(currentDraft).length
     const oneMore = JSON.stringify(content.blocks[currentDraft.blocks.length]).length
 
-    expect(currentDraft.blocks.length + currentDraft.omitted.blocks).toBe(250)
+    expect(currentDraft.blocks.length + currentDraft.omitted.blocks).toBe(1_200)
     expect(currentDraft.omitted.blocks).toBeGreaterThan(0)
     // Full to the limit and no further: the next block would not have fitted.
-    expect(sent).toBeLessThan(55_010)
-    expect(sent + oneMore).toBeGreaterThan(55_000)
+    expect(sent).toBeLessThan(400_010)
+    expect(sent + oneMore).toBeGreaterThan(400_000)
   })
 })
 
@@ -1271,7 +1285,7 @@ describe("Flow building with the blocks it adds", () => {
         summary: "Asked the pet's name",
         payload: { afterBlockId: "new:has_pet", block: { type: "text_field", fieldKey: "name", label: "Pet's name", required: false, helpText: null, placeholder: null, multiline: false, visibleWhen: { sourceBlockId: "new:has_pet", operator: "equals", value: true } } },
       },
-      { type: "add_block", summary: "Asked the kind of pet", payload: { ref: "b_kind", afterBlockId: null, block: { type: "dropdown_field", fieldKey: "kind", label: "Kind of pet", required: false, helpText: null, placeholder: null, options: ["Dog", "Cat", "Other"] } } },
+      { type: "add_block", summary: "Asked the kind of pet", payload: { ref: "b_kind", afterBlockId: null, block: { type: "dropdown_field", fieldKey: "kind", label: "Kind of pet", required: false, helpText: null, placeholder: null, options: ["Dog", "Cat", "Other"], otherLabel: "What kind of pet is it?" } } },
       { type: "add_block", summary: "Thanked them", payload: { afterBlockId: "b_kind", block: { type: "paragraph", text: "Thank you.", alignment: "left" } } },
     ])
     const blocks = (await run).proposal!.candidateDraft.content.blocks
@@ -1282,12 +1296,13 @@ describe("Flow building with the blocks it adds", () => {
       "Has a pet",
       "Pet's name",
       "Kind of pet",
-      // Added after the new dropdown, the paragraph still leaves its "Other" answer beside it.
-      "Please specify",
+      // Added after the new dropdown, the paragraph still leaves its "Other" answer beside it,
+      // asked as the question Flow wrote for it.
+      "What kind of pet is it?",
       "paragraph",
     ])
     expect(named("Pet's name")).toMatchObject({ visibleWhen: { sourceBlockId: named("Has a pet").id, value: true } })
-    expect(named("Please specify")).toMatchObject({ visibleWhen: { sourceBlockId: named("Kind of pet").id } })
+    expect(named("What kind of pet is it?")).toMatchObject({ visibleWhen: { sourceBlockId: named("Kind of pet").id } })
   })
 
   it("keeps every section and row on the blocks it named when an \"Other\" answer is slotted in above them", async () => {
@@ -1309,7 +1324,8 @@ describe("Flow building with the blocks it adds", () => {
     const label = (blockId: string) => blocks.flatMap((block: TemplateBlock) => (block.id === blockId && "label" in block ? [block.label] : []))[0]
 
     expect(blocks.flatMap((block: TemplateBlock) => ("label" in block ? [block.label] : []))).toEqual([
-      "Property type", "Please specify", "Bedrooms", "Bathrooms", "Access instructions", "Signature", "Date signed",
+      // No question written for it: named after its dropdown.
+      "Property type", "Other property type", "Bedrooms", "Bathrooms", "Access instructions", "Signature", "Date signed",
     ])
     expect(fieldGroups.map((row) => [label(row.startBlockId), label(row.endBlockId)])).toEqual([
       ["Bedrooms", "Bathrooms"],
@@ -1695,7 +1711,6 @@ function readOtherCompanions(
       block: TemplateBlock
     ): block is Extract<TemplateBlock, { type: "text_field" }> =>
       block.type === "text_field" &&
-      block.label === "Please specify" &&
       block.required &&
       block.visibleWhen?.sourceBlockId === dropdownId &&
       block.visibleWhen.operator === "equals" &&

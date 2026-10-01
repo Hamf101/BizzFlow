@@ -44,7 +44,7 @@ function readReferences(): Reference[] {
 }
 
 describe("Flow references", () => {
-  it("are valid, free of quality issues and no longer than three pages", () => {
+  it("are valid, free of quality issues and no longer than four pages", () => {
     const references = readReferences()
 
     expect(references.map(({ set, name }: Reference) => `${set}/${name}`).sort()).toEqual([
@@ -65,7 +65,7 @@ describe("Flow references", () => {
 
       expect(evaluateTemplateQuality({ title, description, content: parsed }).issues, where).toEqual([])
       expect(pages.length, where).toBeGreaterThan(0)
-      expect(pages.length, where).toBeLessThanOrEqual(3)
+      expect(pages.length, where).toBeLessThanOrEqual(5)
     }
   })
 

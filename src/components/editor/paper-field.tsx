@@ -77,6 +77,13 @@ export function PaperField({
   const set = (next: unknown): void => onAnswerChange(block.fieldKey, next)
   const textName = getGeneratedDocumentAnswerName("text", block.fieldKey)
   const required = block.required ? <span className="text-destructive"> *</span> : null
+  // Not a <label>: a press on it takes the field to arrange it, and the box takes answers.
+  const title = (
+    <span className="font-bold" style={{ fontSize: "0.9em", lineHeight: 13 / 9, marginBottom: "0.3em" }}>
+      {block.label}
+      {required}
+    </span>
+  )
 
   if (block.type === "checkbox_field") {
     const checked = value === undefined ? block.checkedByDefault : value === true
@@ -201,13 +208,52 @@ export function PaperField({
       break
   }
 
+  // Radio buttons print with no box: each option on its line beside a circle.
+  if (block.type === "dropdown_field" && block.display === "radios") {
+    const Option = fill ? "label" : "div"
+
+    return (
+      <div className="flex flex-col">
+        {title}
+        <div aria-label={fill ? block.label : undefined} role={fill ? "radiogroup" : undefined} style={{ lineHeight: 1.5 }}>
+          {/* Nothing chosen still answers, as an empty dropdown does. */}
+          {fill ? <input name={textName} type="hidden" value="" /> : null}
+          {block.options.map((option: string) => {
+            const chosen = mode !== "design" && text === option
+
+            return (
+              <Option className={cn("relative block", fill && "cursor-pointer")} key={option} style={{ paddingLeft: "1.6em" }}>
+                {fill ? (
+                  <input
+                    checked={chosen}
+                    className="peer absolute top-[0.2em] left-0 size-[1em] cursor-pointer opacity-0"
+                    name={textName}
+                    onChange={() => set(option)}
+                    type="radio"
+                    value={option}
+                  />
+                ) : null}
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute top-[0.2em] left-0 flex size-[1em] items-center justify-center rounded-full peer-focus-visible:ring-2 peer-focus-visible:ring-ring/40"
+                  style={{ border: `0.07em solid ${EDGE}` }}
+                >
+                  {chosen ? <span className="size-[0.5em] rounded-full bg-current" /> : null}
+                </span>
+                {chosen && !fill ? <span className="sr-only">Chosen: </span> : null}
+                {option}
+              </Option>
+            )
+          })}
+        </div>
+        <Help block={block} />
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col">
-      {/* Not a <label>: a press on it takes the field to arrange it, and the box takes answers. */}
-      <span className="font-bold" style={{ fontSize: "0.9em", lineHeight: 13 / 9, marginBottom: "0.3em" }}>
-        {block.label}
-        {required}
-      </span>
+      {title}
       <div
         className={cn(
           "relative flex flex-col border-border transition-colors focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/40",

@@ -25,6 +25,7 @@ import {
 } from "@/components/templates/template-render-groups"
 import { DatePicker } from "@/components/ui/date-picker"
 import { Input } from "@/components/ui/input"
+import { RadioChoices } from "@/components/ui/radio-choices"
 import { Select } from "@/components/ui/select"
 import { formatDateAnswer } from "@/lib/date-format"
 import { resolveDocumentSurfaceInk } from "@/lib/document-surface"
@@ -653,9 +654,17 @@ export function GeneratedBlock({
       return (
         <AnswerFieldFrame
           block={block}
-          labelFor={editable ? block.id : undefined}
+          labelFor={editable && block.display !== "radios" ? block.id : undefined}
         >
-          {editable ? (
+          {editable && block.display === "radios" ? (
+            <RadioChoices
+              label={block.label}
+              name={getGeneratedDocumentAnswerName("text", block.fieldKey)}
+              onChange={(value: string): void => onAnswerChange(block.fieldKey, value)}
+              options={block.options}
+              value={readStringAnswer(answers, block.fieldKey)}
+            />
+          ) : editable ? (
             <Select
               id={block.id}
               name={getGeneratedDocumentAnswerName("text", block.fieldKey)}

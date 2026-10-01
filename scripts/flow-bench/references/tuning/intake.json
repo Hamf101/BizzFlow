@@ -28,6 +28,12 @@
         "alignment": "left"
       },
       {
+        "id": "a1000000-0000-4000-8000-000000000101",
+        "type": "paragraph",
+        "text": "We use your details only to arrange and carry out your detailing and to contact you about it. We keep them for as long as we need them for that and for our records, and we do not share them with anyone else unless the law requires it.",
+        "alignment": "left"
+      },
+      {
         "id": "a1000000-0000-4000-8000-000000000003",
         "fieldKey": "first_name",
         "label": "First name",
@@ -52,7 +58,7 @@
         "fieldKey": "phone_number",
         "label": "Phone number",
         "required": true,
-        "helpText": null,
+        "helpText": "We call to confirm your booking, and on the day if we are running late.",
         "type": "text_field",
         "placeholder": null,
         "multiline": false
@@ -121,12 +127,13 @@
           "On the street",
           "Car park",
           "Other"
-        ]
+        ],
+        "display": "radios"
       },
       {
         "id": "a1000000-0000-4000-8000-000000000020",
-        "fieldKey": "please_specify",
-        "label": "Please specify",
+        "fieldKey": "where_else_will_the_vehicle_be_parked",
+        "label": "Where else will the vehicle be parked?",
         "required": true,
         "helpText": null,
         "visibleWhen": {
@@ -192,8 +199,24 @@
           "Estate",
           "SUV or 4x4",
           "People carrier",
-          "Van or pickup"
+          "Van or pickup",
+          "Other"
         ]
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000102",
+        "type": "text_field",
+        "fieldKey": "other_vehicle_type",
+        "label": "Other vehicle type",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "visibleWhen": {
+          "sourceBlockId": "a1000000-0000-4000-8000-000000000030",
+          "operator": "equals",
+          "value": "Other"
+        }
       },
       {
         "id": "a1000000-0000-4000-8000-000000000031",
@@ -232,34 +255,52 @@
           "Morning",
           "Afternoon",
           "No preference"
-        ]
+        ],
+        "display": "radios"
       },
       {
         "id": "a1000000-0000-4000-8000-000000000037",
-        "fieldKey": "there_is_an_outdoor_tap_we_can_use",
-        "label": "There is an outdoor tap we can use",
-        "required": false,
+        "type": "dropdown_field",
+        "fieldKey": "is_there_an_outdoor_tap_we_can_use",
+        "label": "Is there an outdoor tap we can use?",
+        "required": true,
         "helpText": null,
-        "type": "checkbox_field",
-        "checkedByDefault": false
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No",
+          "Not sure"
+        ],
+        "display": "radios"
       },
       {
         "id": "a1000000-0000-4000-8000-000000000039",
-        "fieldKey": "there_is_a_mains_power_socket_we_can_use",
-        "label": "There is a mains power socket we can use",
-        "required": false,
+        "type": "dropdown_field",
+        "fieldKey": "is_there_a_mains_power_socket_we_can_use",
+        "label": "Is there a mains power socket we can use?",
+        "required": true,
         "helpText": null,
-        "type": "checkbox_field",
-        "checkedByDefault": false
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No",
+          "Not sure"
+        ],
+        "display": "radios"
       },
       {
         "id": "a1000000-0000-4000-8000-000000000040",
-        "fieldKey": "the_vehicle_has_existing_damage",
-        "label": "The vehicle has existing damage",
-        "required": false,
-        "helpText": "For example scratches, dents or stone chips.",
-        "type": "checkbox_field",
-        "checkedByDefault": false
+        "type": "dropdown_field",
+        "fieldKey": "does_the_vehicle_have_any_existing_damage",
+        "label": "Does the vehicle have any existing damage?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios"
       },
       {
         "id": "a1000000-0000-4000-8000-000000000041",
@@ -270,7 +311,7 @@
         "visibleWhen": {
           "sourceBlockId": "a1000000-0000-4000-8000-000000000040",
           "operator": "equals",
-          "value": true
+          "value": "Yes"
         },
         "boxHeight": 60,
         "type": "text_field",
@@ -380,14 +421,6 @@
         "label": null,
         "startBlockId": "a1000000-0000-4000-8000-000000000026",
         "endBlockId": "a1000000-0000-4000-8000-000000000027",
-        "columns": 2,
-        "keepTogether": false
-      },
-      {
-        "id": "a1000000-0000-4000-8000-000000000036",
-        "label": null,
-        "startBlockId": "a1000000-0000-4000-8000-000000000033",
-        "endBlockId": "a1000000-0000-4000-8000-000000000034",
         "columns": 2,
         "keepTogether": false
       }

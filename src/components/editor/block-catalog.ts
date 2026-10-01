@@ -57,7 +57,7 @@ export const INSERT_CHOICES: readonly InsertChoice[] = [
   { action: { kind: "block", type: "text_field" }, group: "fields", icon: TextCursorInput, id: "text-field", keywords: ["input", "answer", "name"], label: "Text field" },
   { action: { kind: "block", type: "date_field" }, group: "fields", icon: CalendarDays, id: "date-field", keywords: ["day", "when"], label: "Date" },
   { action: { kind: "block", type: "checkbox_field" }, group: "fields", icon: SquareCheck, id: "checkbox-field", keywords: ["tick", "agree", "consent"], label: "Checkbox" },
-  { action: { kind: "block", type: "dropdown_field" }, group: "fields", icon: ChevronDown, id: "dropdown-field", keywords: ["choice", "select", "options"], label: "Dropdown" },
+  { action: { kind: "block", type: "dropdown_field" }, group: "fields", icon: ChevronDown, id: "dropdown-field", keywords: ["choice", "select", "options", "radio", "yes/no"], label: "Dropdown" },
   { action: { kind: "block", type: "initials_field" }, group: "fields", icon: PenLine, id: "initials-field", keywords: ["initial"], label: "Initials" },
   { action: { kind: "block", type: "signature_field" }, group: "fields", icon: Signature, id: "signature-field", keywords: ["sign", "signer"], label: "Signature" },
   { action: { kind: "block", type: "file_field" }, group: "fields", icon: FileUp, id: "file-field", keywords: ["upload", "attachment"], label: "File upload" },

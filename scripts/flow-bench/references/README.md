@@ -5,7 +5,7 @@ Six gold documents: the intake form, quote and service agreement a careful profe
 - `tuning/` may be shown to Flow as examples of good work.
 - `heldout/` is never used as prompt material. The benchmark's drafts for the same requests are judged against it, so it stays unseen.
 
-Each file holds the request a user would type, the title, the description and the content. `references.test.ts` checks that every one is valid, raises no quality issue and prints on three pages or fewer. To render them to PDF:
+Each file holds the request a user would type, the title, the description and the content. `references.test.ts` checks that every one is valid, raises no quality issue and prints on five pages or fewer. To render them to PDF:
 
 ```bash
 FLOW_BENCH=1 pnpm vitest run scripts/flow-bench/references.test.ts

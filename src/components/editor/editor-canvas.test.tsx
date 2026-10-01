@@ -3,6 +3,8 @@ import { act, useEffect, useState } from "react"
 import { createRoot, type Root } from "react-dom/client"
 import { afterEach, beforeAll, expect, it } from "vitest"
 
+import { parseGeneratedDocumentAnswers } from "@/components/documents/generated-document-form-data"
+
 import { INSERT_CHOICES } from "./block-catalog"
 import { EditorCanvas } from "./editor-canvas"
 import { useEditorController, type EditorController } from "./use-editor-controller"
@@ -243,4 +245,20 @@ it("makes an answer box taller or shorter from the keyboard, back to its usual h
   for (let step = 0; step < 4; step += 1) await press("ArrowUp")
   expect(height()).toBe(27)
   expect(templateContentV3Schema.safeParse(controller.content).success).toBe(true)
+})
+
+it("offers a choice as radio buttons that answer under the dropdown's own name, empty until one is chosen", async () => {
+  const choice = { fieldKey: "renew", helpText: null, id: B, label: "Renew automatically?", options: ["Yes", "No"], placeholder: null, required: true, type: "dropdown_field" as const, display: "radios" as const }
+  const form = document.body.appendChild(document.createElement("form"))
+  root = createRoot(form.appendChild(document.createElement("div")))
+  await act(async () => root.render(<Canvas fields="fill" initial={templateContentV3Schema.parse({ ...createEmptyDocumentContent(), blocks: [choice] })} />))
+  const group = document.querySelector('[role="radiogroup"][aria-label="Renew automatically?"]')
+  const radios = [...(group?.querySelectorAll<HTMLInputElement>('input[type="radio"]') ?? [])]
+
+  expect(radios.map((radio) => radio.value)).toEqual(["Yes", "No"])
+  expect(parseGeneratedDocumentAnswers(new FormData(form))).toEqual({ renew: "" })
+
+  await act(async () => radios[1]!.click())
+
+  expect(parseGeneratedDocumentAnswers(new FormData(form))).toEqual({ renew: "No" })
 })

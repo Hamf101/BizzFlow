@@ -62,6 +62,16 @@
         "multiline": false
       },
       {
+        "id": "a2000000-0000-4000-8000-000000000101",
+        "type": "text_field",
+        "fieldKey": "business_address",
+        "label": "Business address",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": true
+      },
+      {
         "id": "a2000000-0000-4000-8000-000000000011",
         "fieldKey": "customer_name",
         "label": "Customer name",
@@ -116,7 +126,7 @@
         "id": "a2000000-0000-4000-8000-000000000020",
         "fieldKey": "quote_date",
         "label": "Quote date",
-        "required": false,
+        "required": true,
         "helpText": null,
         "type": "date_field"
       },
@@ -275,6 +285,16 @@
         "multiline": true
       },
       {
+        "id": "a2000000-0000-4000-8000-000000000102",
+        "type": "text_field",
+        "fieldKey": "if_payment_is_late",
+        "label": "If payment is late",
+        "required": false,
+        "helpText": "What you charge or do when a payment is overdue.",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
         "id": "a2000000-0000-4000-8000-000000000042",
         "fieldKey": "estimated_start_date",
         "label": "Estimated start date",
@@ -289,6 +309,21 @@
         "required": false,
         "helpText": null,
         "type": "date_field"
+      },
+      {
+        "id": "a2000000-0000-4000-8000-000000000103",
+        "type": "paragraph",
+        "text": "You can cancel within 14 days of accepting this quote, by telling us in writing or by email, without giving a reason. If you ask us to start work within those 14 days and then cancel, you pay for the work done up to then.",
+        "alignment": "left"
+      },
+      {
+        "id": "a2000000-0000-4000-8000-000000000104",
+        "type": "checkbox_field",
+        "fieldKey": "please_start_the_work_within_the_14_days",
+        "label": "Please start the work within the 14 days",
+        "required": false,
+        "helpText": null,
+        "checkedByDefault": false
       },
       {
         "id": "a2000000-0000-4000-8000-000000000047",
@@ -314,8 +349,8 @@
       },
       {
         "id": "a2000000-0000-4000-8000-000000000053",
-        "fieldKey": "printed_name",
-        "label": "Printed name",
+        "fieldKey": "customer_printed_name",
+        "label": "Customer printed name",
         "required": true,
         "helpText": null,
         "type": "text_field",
@@ -396,6 +431,13 @@
         "id": "a2000000-0000-4000-8000-000000000043",
         "label": "Dates",
         "startBlockId": "a2000000-0000-4000-8000-000000000042",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "a2000000-0000-4000-8000-000000000105",
+        "label": "Your right to cancel",
+        "startBlockId": "a2000000-0000-4000-8000-000000000103",
         "pageBreakBefore": false,
         "keepTogether": false
       },
