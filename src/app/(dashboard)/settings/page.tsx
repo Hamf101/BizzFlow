@@ -15,6 +15,7 @@ import {
 import { Field, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
+import { NoticeSoundSwitch } from "@/components/sharing/notice-sound-switch"
 import { RolesAndAccessSettings } from "@/components/settings/roles-and-access-settings"
 import { buildFeedbackRedirect } from "@/lib/action-result"
 import { formatMediumDateTime } from "@/lib/date-format"
@@ -42,6 +43,9 @@ import {
   updateOrganizationRoleAction,
   updateProfileAction,
 } from "./actions"
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Settings" }
 
 export default async function SettingsPage(): Promise<ReactElement> {
   const user = await loadAuthenticatedPageUser("/settings")
@@ -180,6 +184,9 @@ export default async function SettingsPage(): Promise<ReactElement> {
                 Save
               </Button>
             </form>
+            <div className="mt-6 border-t border-border/60 pt-6">
+              <NoticeSoundSwitch />
+            </div>
           </CardContent>
         </Card>
       </div>

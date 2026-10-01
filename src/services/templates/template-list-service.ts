@@ -24,6 +24,7 @@ import type {
   TemplateServiceClient,
   TemplateServiceDeps,
 } from "./contracts"
+import { onlyVisibleTemplates, templateVisibility } from "./access"
 import { TemplateServiceError } from "./errors"
 import {
   createDatabaseError,
@@ -54,6 +55,10 @@ const TEMPLATE_SORT_COLUMNS: Record<TemplateSortKey, string> = {
 /** Who is asking, and which of their visible templates a view shows. */
 type TemplateListFilters = {
   canManage: boolean
+  /** Templates this member may edit in any status; only those beyond what is published. */
+  editable: readonly string[]
+  /** Restricted templates this member cannot open. */
+  hidden: readonly string[]
   /** A category, null for uncategorised templates, or undefined for all. */
   category: string | null | undefined
   organizationId: string
@@ -66,6 +71,8 @@ type TemplateListFilters = {
 // up (TS2589), and every filter returns the same builder at runtime.
 type TemplateFilterQuery = {
   eq(column: string, value: string): TemplateFilterQuery
+  not(column: string, operator: string, value: string): TemplateFilterQuery
+  or(filters: string): TemplateFilterQuery
   ilike(column: string, pattern: string): TemplateFilterQuery
   in(column: string, values: readonly string[]): TemplateFilterQuery
   is(column: string, value: null): TemplateFilterQuery
@@ -108,8 +115,11 @@ export async function listTemplatePage(
       const page = TEMPLATE_LIST_INPUT.page(input.page)
       const pageSize = TEMPLATE_LIST_INPUT.pageSize(input.pageSize)
       const sort = TEMPLATE_LIST_INPUT.sort(input.sort)
+      const { editable, hidden } = await templateVisibility(client, input.organizationId, input.actorUserId)
       const filters: TemplateListFilters = {
         canManage: canPerformOrganizationAction(subject, "templates:manage"),
+        editable,
+        hidden,
         category:
           input.category === undefined
             ? undefined
@@ -138,15 +148,12 @@ export async function listTemplatePage(
           createDatabaseError(error, "Unable to load document templates.")
       )
 
-      const summaries = (rows as unknown as DocumentTemplateSummaryRow[]).map(
-        mapDocumentTemplateSummary
-      )
-      const contents = await readTemplateCardContents(
-        client,
-        input.organizationId,
-        summaries.map((summary: DocumentTemplateSummary): string => summary.id),
-        !filters.canManage
-      )
+      const editableIds = new Set(filters.editable)
+      const summaries = (
+        await withPublishedVersions(client, input.organizationId, rows as unknown as DocumentTemplateSummaryRow[], editableIds, templateRelation(filters) === "document_templates")
+      ).map(mapDocumentTemplateSummary)
+      // Cards show the working copy to those who edit that template and what was published to everyone else.
+      const contents = await readTemplateCardContents(client, input.organizationId, summaries, editableIds)
 
       return {
         page,
@@ -154,6 +161,7 @@ export async function listTemplatePage(
         templates: summaries.map(
           (summary: DocumentTemplateSummary): DocumentTemplateCard => ({
             ...summary,
+            canEdit: editableIds.has(summary.id),
             content: contents.get(summary.id) ?? null,
           })
         ),
@@ -173,34 +181,38 @@ export async function listTemplatePage(
 async function readTemplateCardContents(
   client: TemplateServiceClient,
   organizationId: string,
-  templateIds: readonly string[],
-  publishedOnly: boolean
+  summaries: readonly DocumentTemplateSummary[],
+  editable: ReadonlySet<string>
 ): Promise<Map<string, TemplateContent>> {
   const contents = new Map<string, TemplateContent>()
 
-  if (templateIds.length === 0) {
-    return contents
-  }
+  for (const publishedOnly of [false, true]) {
+    const templateIds = summaries.map((summary) => summary.id).filter((id) => editable.has(id) !== publishedOnly)
 
-  const { data, error } = await client.rpc("document_template_card_contents", {
-    published_only: publishedOnly,
-    target_org_id: organizationId,
-    template_ids: [...templateIds],
-  })
+    if (templateIds.length === 0) {
+      continue
+    }
 
-  if (error) {
-    console.warn("template_card_contents_unavailable", {
-      organizationId,
-      reason: error.message,
+    const { data, error } = await client.rpc("document_template_card_contents", {
+      published_only: publishedOnly,
+      target_org_id: organizationId,
+      template_ids: templateIds,
     })
-    return contents
-  }
 
-  for (const row of data ?? []) {
-    const parsed = templateContentSchema.safeParse(row.content)
+    if (error) {
+      console.warn("template_card_contents_unavailable", {
+        organizationId,
+        reason: error.message,
+      })
+      continue
+    }
 
-    if (parsed.success) {
-      contents.set(row.id, parsed.data)
+    for (const row of data ?? []) {
+      const parsed = templateContentSchema.safeParse(row.content)
+
+      if (parsed.success) {
+        contents.set(row.id, parsed.data)
+      }
     }
   }
 
@@ -212,11 +224,46 @@ async function readTemplateCardContents(
   )
 }
 
-// Authors list working copies; everyone else what was published.
+// Those who manage templates list working copies; everyone else what was
+// published, along with the working copies of the templates they may edit.
+function mixesWorkingCopies(filters: TemplateListFilters): boolean {
+  return !filters.canManage && filters.editable.length > 0
+}
+
 function templateRelation(
   filters: TemplateListFilters
 ): "document_templates" | "published_document_templates" {
-  return filters.canManage ? "document_templates" : "published_document_templates"
+  return filters.canManage || mixesWorkingCopies(filters) ? "document_templates" : "published_document_templates"
+}
+
+// A published template someone else is still changing shows as it was published,
+// not as its working copy stands.
+async function withPublishedVersions(
+  client: TemplateServiceClient,
+  organizationId: string,
+  rows: DocumentTemplateSummaryRow[],
+  editable: ReadonlySet<string>,
+  fromWorkingCopies: boolean
+): Promise<DocumentTemplateSummaryRow[]> {
+  const others = fromWorkingCopies ? rows.filter((row) => !editable.has(row.id)) : []
+
+  if (others.length === 0) {
+    return rows
+  }
+
+  const { data, error } = await client
+    .from("published_document_templates")
+    .select(TEMPLATE_SUMMARY_COLUMNS)
+    .eq("org_id", organizationId)
+    .in("id", others.map((row) => row.id))
+
+  if (error) {
+    throw createDatabaseError(error, "Unable to load document templates.")
+  }
+
+  const published = new Map((data as unknown as DocumentTemplateSummaryRow[]).map((row) => [row.id, row]))
+
+  return rows.map((row) => published.get(row.id) ?? row)
 }
 
 function filterVisibleTemplates<TQuery>(
@@ -227,6 +274,8 @@ function filterVisibleTemplates<TQuery>(
     "org_id",
     filters.organizationId
   )
+
+  filtered = onlyVisibleTemplates(filtered, filters, filters.canManage)
 
   if (filters.statuses !== null) {
     filtered = filtered.in("status", filters.statuses)

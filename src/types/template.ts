@@ -1097,6 +1097,8 @@ export type DocumentTemplateSummary = Pick<
 
 /** A template in the library, with the content its card draws its first page from. */
 export type DocumentTemplateCard = DocumentTemplateSummary & {
+  /** Whether the viewer may edit this template, by their role or because it was shared with them. */
+  canEdit: boolean
   /** Large images are left behind; null when the content could not be read. */
   content: TemplateContent | null
 }

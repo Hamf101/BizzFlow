@@ -17,7 +17,9 @@ import {
   SUBMISSION_LIST_INPUT,
   type SubmissionListFilters,
 } from "@/services/submissions/list-filters"
+import { isReviewRequester, listSubmissionReviewers, withReviewedIds } from "@/services/submissions/reviewer-service"
 import { listSubmissionReviewData } from "@/services/submissions/review-service"
+import { listSubmissionSuggestions } from "@/services/submissions/suggestion-service"
 import {
   assertSubmissionVisible,
   createSubmissionDatabaseError,
@@ -88,9 +90,9 @@ export async function listSubmissionPage(
       const page = SUBMISSION_LIST_INPUT.page(input.page)
       const pageSize = SUBMISSION_LIST_INPUT.pageSize(input.pageSize)
       const sort = normalizeSubmissionSort(input.sort)
-      const filters = createSubmissionListFilters(
-        input,
-        getOrganizationRoleFromSubject(permissionSubject)
+      const filters = await withReviewedIds(
+        client,
+        createSubmissionListFilters(input, getOrganizationRoleFromSubject(permissionSubject))
       )
       let query = filterVisibleSubmissions(
         client.from("submissions").select(SUBMISSION_COLUMNS, { count: "exact" }),
@@ -144,6 +146,7 @@ export async function countSubmissionsByStatus(
           "You cannot view internal submissions."
         )
       )
+      const scope = await withReviewedIds(client, createSubmissionListFilters(input, role))
       const counts = await Promise.all(
         input.statuses.map(async (status: SubmissionStatus) => {
           const selected = client
@@ -151,7 +154,7 @@ export async function countSubmissionsByStatus(
             .select("id", { count: "exact", head: true })
           const { count, error } = await filterVisibleSubmissions(
             input.updatedSince ? selected.gte("updated_at", input.updatedSince) : selected,
-            createSubmissionListFilters({ ...input, statuses: [status] }, role)
+            { ...scope, statuses: [status] }
           )
 
           if (error) {
@@ -204,7 +207,8 @@ export async function getInternalSubmission(
     async (): Promise<SubmissionDetail> => {
       const client = getSubmissionClient(deps)
       const { role, submission } = await loadVisibleSubmission(client, input)
-      const [files, reviewData] = await Promise.all([
+      const viewer = { role, userId: input.actorUserId }
+      const [files, reviewData, review, suggestions] = await Promise.all([
         listSubmissionFiles(
           client,
           input.organizationId,
@@ -218,9 +222,24 @@ export async function getInternalSubmission(
           input.organizationId,
           input.submissionId
         ),
+        listSubmissionReviewers(client, submission, viewer),
+        listSubmissionSuggestions(client, submission),
       ])
+      const reviewing = submission.status === "in_review" || submission.status === "needs_changes"
+      const mine = review.reviewers.find((reviewer) => reviewer.userId === input.actorUserId)
 
-      return { submission, files, ...reviewData }
+      return {
+        submission,
+        files,
+        ...reviewData,
+        ...review,
+        canShare:
+          submission.status !== "draft" &&
+          (role === "owner_admin" || submission.createdBy === input.actorUserId || submission.assignedBy === input.actorUserId),
+        canSuggest: reviewing && (role === "owner_admin" || role === "manager") && mine?.canApprove === true,
+        isRequester: isReviewRequester(submission, viewer),
+        suggestions,
+      }
     }
   )
 }
@@ -279,7 +298,7 @@ async function loadVisibleSubmission(
     input.organizationId,
     input.submissionId
   )
-  assertSubmissionVisible(role, submission, input.actorUserId)
+  await assertSubmissionVisible(client, role, submission, input.actorUserId)
 
   return { role, submission }
 }

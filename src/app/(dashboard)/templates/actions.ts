@@ -10,7 +10,6 @@ import {
   getActionErrorFeedbackCode,
 } from "@/lib/action-result"
 import { buildRedirect, getFormString } from "@/lib/form-utils"
-import { canPerformOrganizationAction } from "@/lib/permissions"
 import { getCurrentOrganizationContext } from "@/services/organization-service"
 import {
   archiveDocumentTemplate,
@@ -444,12 +443,7 @@ async function loadTemplateActionContext(): Promise<TemplateActionContext> {
     )
   }
 
-  if (
-    !canPerformOrganizationAction(context.membership, "templates:manage")
-  ) {
-    throw new TemplateActionError("You cannot manage document templates.", 403)
-  }
-
+  // The service judges each template, since sharing can let someone edit one their role could not.
   return { actorUserId: user.id, context }
 }
 

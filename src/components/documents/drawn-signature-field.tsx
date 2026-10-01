@@ -10,6 +10,7 @@ import {
 
 import { Button } from "@/components/ui/button"
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
+import { Input } from "@/components/ui/input"
 
 type DrawnSignatureFieldProps = {
   /** Only the drawing area, filling the box it is put in, as a page shows it. */
@@ -22,8 +23,13 @@ type DrawnSignatureFieldProps = {
   saved?: string
 }
 
+// System handwriting faces first; any cursive face reads as a signature.
+const TYPED_FONT = '64px "Snell Roundhand", "Segoe Script", "Brush Script MT", cursive'
+
 /**
- * Captures a basic pointer-drawn signature or initials as a PNG data URL.
+ * Captures a basic pointer-drawn signature or initials as a PNG data URL, or a
+ * typed name written onto the same canvas, so a keyboard alone can sign and the
+ * server receives the same kind of picture either way.
  *
  * @param props - Form field name, label, helper text, and required state.
  * @returns Responsive canvas with a hidden form value and clear control.
@@ -42,6 +48,7 @@ export function DrawnSignatureField({
   const strokeChangedRef = useRef<boolean>(false)
   const [dataUrl, setDataUrl] = useState<string>("")
   const [redrawing, setRedrawing] = useState<boolean>(false)
+  const [typed, setTyped] = useState<string>("")
 
   function handlePointerDown(
     event: ReactPointerEvent<HTMLCanvasElement>
@@ -56,6 +63,13 @@ export function DrawnSignatureField({
 
     if (!context) {
       return
+    }
+
+    // Drawing replaces a typed name, so the picture always matches what was last done.
+    if (typed) {
+      context.clearRect(0, 0, canvas.width, canvas.height)
+      setTyped("")
+      setDataUrl("")
     }
 
     // A bare area takes its box's size, so a stroke is not stretched.
@@ -128,6 +142,32 @@ export function DrawnSignatureField({
     strokeChangedRef.current = false
     setDataUrl("")
     setRedrawing(false)
+    setTyped("")
+  }
+
+  function writeTypedName(value: string): void {
+    const canvas = canvasRef.current
+    const context = canvas?.getContext("2d")
+
+    setTyped(value)
+
+    if (!canvas || !context) {
+      return
+    }
+
+    context.clearRect(0, 0, canvas.width, canvas.height)
+
+    if (value.trim() === "") {
+      setDataUrl("")
+      return
+    }
+
+    context.font = TYPED_FONT
+    context.fillStyle = "#252329"
+    context.textBaseline = "middle"
+    // maxWidth squeezes a long name to fit rather than running off the picture.
+    context.fillText(value.trim(), 24, canvas.height / 2, canvas.width - 48)
+    setDataUrl(canvas.toDataURL("image/png"))
   }
 
   const handlers = {
@@ -176,7 +216,7 @@ export function DrawnSignatureField({
           // Overhangs its row, so the label sits where every field's label
           // sits and lines up with the fields beside it in a row.
           className="-my-2"
-          disabled={!dataUrl}
+          disabled={!dataUrl && !typed}
           onClick={clearDrawing}
           size="sm"
           type="button"
@@ -197,6 +237,14 @@ export function DrawnSignatureField({
       />
       <input name={name} type="hidden" value={dataUrl} />
       <FieldDescription>{description}</FieldDescription>
+      <FieldLabel htmlFor={`${fieldId}-typed`}>Or type your {label.toLowerCase()}</FieldLabel>
+      <Input
+        autoComplete="off"
+        id={`${fieldId}-typed`}
+        maxLength={60}
+        onChange={(event) => writeTypedName(event.target.value)}
+        value={typed}
+      />
     </Field>
   )
 }

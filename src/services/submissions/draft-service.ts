@@ -1,6 +1,7 @@
 import type {
   CreateInternalSubmissionDraftInput,
   SaveInternalSubmissionDraftInput,
+  SubmissionServiceClient,
   SubmissionServiceDeps,
   SubmitInternalSubmissionInput,
 } from "@/services/submissions/contracts"
@@ -56,6 +57,7 @@ export async function createInternalSubmissionDraft(
       )
 
       const title = normalizeSubmissionTitle(input.title)
+      await requireTemplateUse(client, input)
       const { data: template, error: templateError } = await client
         .from("published_document_templates")
         .select("content")
@@ -313,4 +315,29 @@ function normalizeSubmissionId(submissionId: string): string {
   }
 
   return normalizedSubmissionId
+}
+
+// A restricted template is only for those it was shared with, and to use it
+// they need more than the right to look at it.
+async function requireTemplateUse(
+  client: SubmissionServiceClient,
+  input: { actorUserId: string; organizationId: string; templateId: string }
+): Promise<void> {
+  const { data: level, error } = await client.rpc("get_template_access_level", {
+    target_actor_user_id: input.actorUserId,
+    target_org_id: input.organizationId,
+    target_template_id: input.templateId,
+  })
+
+  if (error) {
+    throw createSubmissionDatabaseError(error, "Unable to check access to the submission template.")
+  }
+
+  if (!level) {
+    throw new SubmissionServiceError("Published submission template was not found.", 404)
+  }
+
+  if (level === "viewer") {
+    throw new SubmissionServiceError("You cannot start submissions from this template.", 403)
+  }
 }

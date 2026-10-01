@@ -1,4 +1,3 @@
-import { canPerformOrganizationAction } from "@/lib/permissions"
 import {
   createBlankTemplateContent,
   parseTemplateContent,
@@ -22,6 +21,7 @@ import type {
   DuplicateDocumentTemplateInput,
   SetDocumentTemplateCategoryInput,
 } from "./contracts"
+import { getTemplateAccess, onlyVisibleTemplates, requireCanCreateTemplates, requireTemplateAccess, templateVisibility } from "./access"
 import { TemplateServiceError } from "./errors"
 import { evaluateTemplateQuality } from "./template-quality-service"
 import {
@@ -43,6 +43,7 @@ import {
 } from "./shared"
 import { requireStoredImages, TemplateImageServiceError } from "@/services/template-image-service"
 import { withoutImageUrls } from "@/types/template-images"
+import { canPerformOrganizationAction } from "@/lib/permissions"
 
 /**
  * Lists the templates a member can start from: each published template as it
@@ -76,10 +77,15 @@ export async function listDocumentTemplates(
         "templates:view",
         "You cannot view document templates."
       )
-      let query = client
-        .from("published_document_templates")
-        .select(TEMPLATE_COLUMNS)
-        .eq("org_id", input.organizationId)
+      // The published view holds no drafts, so only restricted templates need leaving out.
+      let query = onlyVisibleTemplates(
+        client
+          .from("published_document_templates")
+          .select(TEMPLATE_COLUMNS)
+          .eq("org_id", input.organizationId),
+        await templateVisibility(client, input.organizationId, input.actorUserId),
+        true
+      )
 
       // hasOwnProperty, not a truthiness test: `null` is the meaningful
       // "uncategorised only" filter and would otherwise read as "no filter".
@@ -124,23 +130,22 @@ export async function listDocumentTemplateCategories(
     input,
     async (): Promise<string[]> => {
       const client = getClient(deps)
-      const role = await requirePermission(
+      const subject = await requirePermission(
         client,
         input.organizationId,
         input.actorUserId,
         "templates:view",
         "You cannot view document templates."
       )
-      let query = client
-        .from("document_templates")
-        .select("category")
-        .eq("org_id", input.organizationId)
-
-      if (!canPerformOrganizationAction(role, "templates:manage")) {
-        query = query.eq("status", "published")
-      }
-
-      const { data, error } = await query
+      // Restricted templates they cannot open, and drafts only editors see, are left out.
+      const { data, error } = await onlyVisibleTemplates(
+        client
+          .from("document_templates")
+          .select("category")
+          .eq("org_id", input.organizationId),
+        await templateVisibility(client, input.organizationId, input.actorUserId),
+        canPerformOrganizationAction(subject, "templates:manage")
+      )
 
       if (error || !data) {
         throw createDatabaseError(
@@ -182,18 +187,30 @@ export async function getDocumentTemplate(
     input,
     async (): Promise<DocumentTemplate> => {
       const client = getClient(deps)
-      const role = await requirePermission(
-        client,
-        input.organizationId,
-        input.actorUserId,
-        "templates:view",
-        "You cannot view document templates."
-      )
-      return canPerformOrganizationAction(role, "templates:manage")
+      const level = await requireTemplateAccess(client, input, "viewer", "You cannot view document templates.")
+
+      // Editors get the working copy; everyone else the version last published.
+      return level === "editor"
         ? getTemplateById(client, input.organizationId, input.templateId)
         : getPublishedTemplateById(client, input.organizationId, input.templateId)
     }
   )
+}
+
+/**
+ * Whether a member may edit one template: the person who made it, an editor it
+ * was shared with, a manager of templates, or an owner admin.
+ *
+ * @param input - Actor, organization, and template identifiers.
+ * @param deps - Optional injected dependencies for tests.
+ * @returns True only for an editor; false for everyone else, including someone who cannot open it.
+ * @throws TemplateServiceError when the lookup itself fails.
+ */
+export async function canEditDocumentTemplate(
+  input: GetDocumentTemplateInput,
+  deps: TemplateServiceDeps = {}
+): Promise<boolean> {
+  return (await getTemplateAccess(getClient(deps), input)) === "editor"
 }
 
 /**
@@ -217,13 +234,7 @@ export async function createDocumentTemplate(
     async (): Promise<DocumentTemplate> => {
       const client = getClient(deps)
 
-      await requirePermission(
-        client,
-        input.organizationId,
-        input.actorUserId,
-        "templates:manage",
-        "You cannot manage document templates."
-      )
+      await requireCanCreateTemplates(client, input.organizationId, input.actorUserId)
 
       // Signed picture addresses expire; only the pictures themselves are kept.
       const content = withoutImageUrls(
@@ -286,13 +297,7 @@ export async function updateDocumentTemplate(
     async (): Promise<DocumentTemplate> => {
       const client = getClient(deps)
 
-      await requirePermission(
-        client,
-        input.organizationId,
-        input.actorUserId,
-        "templates:manage",
-        "You cannot manage document templates."
-      )
+      await requireTemplateAccess(client, input, "editor", "You cannot manage document templates.")
       assertRevision(input.expectedRevision)
 
       const existing = await getTemplateById(
@@ -412,13 +417,7 @@ export async function publishDocumentTemplate(
     async (): Promise<DocumentTemplate> => {
       const client = getClient(deps)
 
-      await requirePermission(
-        client,
-        input.organizationId,
-        input.actorUserId,
-        "templates:manage",
-        "You cannot manage document templates."
-      )
+      await requireTemplateAccess(client, input, "editor", "You cannot manage document templates.")
       assertRevision(input.expectedRevision)
 
       const existing = await getTemplateById(
@@ -520,13 +519,16 @@ export async function listDocumentTemplateVersions(
     async (): Promise<DocumentTemplateVersion[]> => {
       const client = getClient(deps)
 
-      await requirePermission(
-        client,
-        input.organizationId,
-        input.actorUserId,
-        "templates:manage",
-        "You cannot manage document templates."
+      // A template that is not here has no versions, as for another workspace's.
+      const held = await requireTemplateAccess(client, input, "editor", "You cannot manage document templates.").catch(
+        (error: unknown) => {
+          if (error instanceof TemplateServiceError && error.statusCode === 404) return null
+
+          throw error
+        }
       )
+
+      if (!held) return []
 
       const { data, error } = await client
         .from("document_template_versions")
@@ -566,13 +568,7 @@ export async function getDocumentTemplateVersion(
     async (): Promise<Pick<DocumentTemplate, "content" | "description" | "title">> => {
       const client = getClient(deps)
 
-      await requirePermission(
-        client,
-        input.organizationId,
-        input.actorUserId,
-        "templates:manage",
-        "You cannot manage document templates."
-      )
+      await requireTemplateAccess(client, input, "editor", "You cannot manage document templates.")
       assertRevision(input.revision)
 
       const { data, error } = await client
@@ -616,13 +612,7 @@ export async function archiveDocumentTemplate(
     async (): Promise<DocumentTemplate> => {
       const client = getClient(deps)
 
-      await requirePermission(
-        client,
-        input.organizationId,
-        input.actorUserId,
-        "templates:manage",
-        "You cannot manage document templates."
-      )
+      await requireTemplateAccess(client, input, "editor", "You cannot manage document templates.")
       const existing = await getTemplateById(
         client,
         input.organizationId,
@@ -683,13 +673,7 @@ export async function restoreDocumentTemplate(
     async (): Promise<DocumentTemplate> => {
       const client = getClient(deps)
 
-      await requirePermission(
-        client,
-        input.organizationId,
-        input.actorUserId,
-        "templates:manage",
-        "You cannot manage document templates."
-      )
+      await requireTemplateAccess(client, input, "editor", "You cannot manage document templates.")
       const existing = await getTemplateById(client, input.organizationId, input.templateId)
 
       if (existing.status !== "archived") {
@@ -744,13 +728,7 @@ export async function setDocumentTemplateCategory(
     async () => {
       const client = getClient(deps)
 
-      await requirePermission(
-        client,
-        input.organizationId,
-        input.actorUserId,
-        "templates:manage",
-        "You cannot manage document templates."
-      )
+      await requireTemplateAccess(client, input, "editor", "You cannot manage document templates.")
       const category = normalizeCategory(input.category)
       const existing = await getTemplateById(client, input.organizationId, input.templateId)
 
@@ -799,13 +777,8 @@ export async function duplicateDocumentTemplate(
     async (): Promise<DocumentTemplate> => {
       const client = getClient(deps)
 
-      await requirePermission(
-        client,
-        input.organizationId,
-        input.actorUserId,
-        "templates:manage",
-        "You cannot manage document templates."
-      )
+      await requireCanCreateTemplates(client, input.organizationId, input.actorUserId)
+      await requireTemplateAccess(client, input, "user", "You cannot copy this template.")
 
       const existing = await getTemplateById(
         client,

@@ -191,6 +191,13 @@ export function FileIconsLayout({
           slot="file-tile"
           style={riseDelay(index)}
         >
+          {/* First in the markup so Tab meets it where the eye does, at the
+              tile's top corner, before the name below the picture. */}
+          {entry.menu ? (
+            <div className="absolute top-1 right-1 z-10 opacity-0 transition-opacity group-focus-within/tile:opacity-100 group-hover/tile:opacity-100 has-[[data-popup-open]]:opacity-100 [@media(hover:none)]:opacity-100">
+              {entry.menu}
+            </div>
+          ) : null}
           <span className="grid h-[70px] w-[58px] items-end justify-items-center sm:h-[86px] sm:w-[72px]">
             <FileArt entry={entry} size="icon" />
           </span>
@@ -211,11 +218,6 @@ export function FileIconsLayout({
             {entry.note ??
               (entry.count === null ? entry.modified : describeCount(entry.count))}
           </span>
-          {entry.menu ? (
-            <div className="absolute top-1 right-1 z-10 opacity-0 transition-opacity group-focus-within/tile:opacity-100 group-hover/tile:opacity-100 has-[[data-popup-open]]:opacity-100 [@media(hover:none)]:opacity-100">
-              {entry.menu}
-            </div>
-          ) : null}
         </SelectableFileItem>
       ))}
     </ul>

@@ -255,6 +255,27 @@ describe("document archive and download lifecycle", () => {
     })
   })
 
+  it("opens a PDF or picture in the browser, and only ever downloads anything else", async () => {
+    const open = async (contentType: string) => {
+      const deps = createDeps(
+        new FakeSupabaseClient({
+          organization_memberships: [createMembershipRow("staff")],
+          documents: [createDocumentRow()],
+          document_versions: [createVersionRow({ content_type: contentType })],
+        })
+      )
+
+      await createDocumentDownloadUrl({ actorUserId: "user-1", organizationId: "org-1", documentId: "document-1", view: true }, deps)
+      return vi.mocked(deps.createSignedDocumentDownloadUrl!).mock.calls[0]?.[0]
+    }
+
+    expect(await open("application/pdf")).toMatchObject({ viewAs: "application/pdf" })
+    expect(await open("image/png")).toMatchObject({ viewAs: "image/png" })
+    // Markup would run as a page on the storage origin.
+    expect(await open("image/svg+xml")).not.toHaveProperty("viewAs")
+    expect(await open("text/html")).not.toHaveProperty("viewAs")
+  })
+
   it("does not return a signed URL when the required download audit fails", async () => {
     const client = new FakeSupabaseClient({
       organization_memberships: [createMembershipRow("staff")],

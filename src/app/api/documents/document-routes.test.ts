@@ -278,7 +278,7 @@ describe("document API routes", () => {
     expect(createDocumentDownloadUrl).not.toHaveBeenCalled()
   })
 
-  it("passes an optional historical version id to the download service", async () => {
+  it("passes an optional historical version id, and a request to view it, to the download service", async () => {
     vi.mocked(createDocumentDownloadUrl).mockResolvedValue({
       documentId: "document-1",
       versionId: "version-1",
@@ -289,7 +289,7 @@ describe("document API routes", () => {
     const response = await downloadUrlPost(
       jsonRequest(
         "http://localhost/api/documents/document-1/download-url",
-        { organizationId: "org-1", versionId: "version-1" }
+        { organizationId: "org-1", versionId: "version-1", view: true }
       ),
       { params: Promise.resolve({ documentId: "document-1" }) }
     )
@@ -303,6 +303,7 @@ describe("document API routes", () => {
       organizationId: "org-1",
       documentId: "document-1",
       versionId: "version-1",
+      view: true,
     })
   })
 })

@@ -1,6 +1,6 @@
 "use client"
 
-import { Archive, FilePenLine, Files, History, Link2, ListChecks, MessageSquare, MoreHorizontal, Palette } from "lucide-react"
+import { Archive, FilePenLine, Files, History, Link2, ListChecks, MessageSquare, MoreHorizontal, Palette, UserPlus } from "lucide-react"
 import Link from "next/link"
 import { type ReactElement, useEffect, useMemo, useRef, useState, useTransition } from "react"
 
@@ -25,6 +25,7 @@ import {
   PageSetupPanel,
   TemplateBrandingPanel,
   TemplateChecksPanel,
+  ShareDialog,
 } from "@/components/editor/lazy-panels"
 import { useLiveRoom } from "@/components/editor/use-live-room"
 import { useRoomPlace } from "@/components/editor/use-room-place"
@@ -155,6 +156,7 @@ export function TemplateEditor({
     setCarried(request)
   })
   const [detailsOpen, setDetailsOpen] = useState(false)
+  const [sharing, setSharing] = useState(false)
   const [savedState, setSavedState] = useState(initial)
   const [, startTransition] = useTransition()
   const revisionRef = useRef(template.revision)
@@ -501,6 +503,11 @@ export function TemplateEditor({
                   Public links
                 </DropdownMenuItem>
               ) : null}
+              {/* Whoever can open the editor can edit the template, which is what sharing it takes. */}
+              <DropdownMenuItem onClick={() => setSharing(true)}>
+                <UserPlus />
+                Share…
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={() => {
@@ -617,6 +624,7 @@ export function TemplateEditor({
           />
         )}
       </EditorFrame>
+      {sharing ? <ShareDialog name={template.title} onOpenChange={setSharing} open resources={[{ id: template.id, kind: "template" }]} /> : null}
       <Dialog onOpenChange={setDetailsOpen} open={detailsOpen}>
         <DialogContent>
           <DialogHeader>

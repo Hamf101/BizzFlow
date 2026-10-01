@@ -7,6 +7,7 @@ const loadFlowPanel = () => import("@/components/templates/template-flow-panel")
 const loadRoom = () => import("@/components/editor/room-ui")
 const loadPageSetup = () => import("@/components/editor/page-setup-panel")
 const loadBranding = () => import("@/components/templates/template-branding-panel")
+const loadShare = () => import("@/components/sharing/share-dialog")
 const loadChecks = () => import("@/components/templates/template-checks-panel")
 
 // Panels no page needs to draw at first; they arrive while the page is idle.
@@ -15,6 +16,8 @@ export const TemplateFlowPanel = dynamic(() => loadFlowPanel().then((panel) => p
 export const PageSetupPanel = dynamic(() => loadPageSetup().then((panel) => panel.PageSetupPanel))
 export const TemplateBrandingPanel = dynamic(() => loadBranding().then((panel) => panel.TemplateBrandingPanel))
 export const TemplateChecksPanel = dynamic(() => loadChecks().then((panel) => panel.TemplateChecksPanel))
+// Opened from a menu, so it loads when asked for.
+export const ShareDialog = dynamic(() => loadShare().then((panel) => panel.ShareDialog))
 // What editing together shows, once a room is open.
 export const RoomCheckpoints = dynamic(() => loadRoom().then((room) => room.RoomCheckpoints))
 export const RoomComments = dynamic(() => loadRoom().then((room) => room.RoomComments))

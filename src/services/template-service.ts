@@ -12,6 +12,7 @@ export {
 export { changeDocumentTemplates } from "./templates/template-bulk-service"
 export {
   archiveDocumentTemplate,
+  canEditDocumentTemplate,
   createDocumentTemplate,
   duplicateDocumentTemplate,
   getDocumentTemplate,

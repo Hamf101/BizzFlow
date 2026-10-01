@@ -1,4 +1,5 @@
 import { PostgrestReadQuery, type FakeRow } from "@/services/postgrest-fake.test-support"
+import { answerTemplateAccess } from "@/services/templates/access.test-support"
 import { templateContentV3Schema } from "@/types/template"
 
 export const ORG_ID = "10000000-0000-4000-8000-000000000001"
@@ -117,6 +118,10 @@ export function fakeClient(tables: Tables, onAppend?: () => void, onRead?: (tabl
       },
     }),
     rpc: async (name: string, args: Record<string, unknown>) => {
+      if (name === "get_template_access_level") {
+        return answerTemplateAccess(tables as never, name, args)
+      }
+
       const room = tables.working_copy_rooms.find((candidate) => candidate.id === args.target_room_id && candidate.org_id === args.target_org_id)
 
       if (name === "append_working_copy_update") {

@@ -14,7 +14,9 @@ export const ROUTE_BUDGETS = [
   {
     label: "Public form",
     route: "/forms/[token]/page",
-    ceilingKiB: 55,
+    // 56 from 55 (2026-10-01): side-by-side rows, radios and section numbers
+    // joined in-place field errors; what remains is drawn, not dead code.
+    ceilingKiB: 56,
   },
   {
     label: "Public signing",

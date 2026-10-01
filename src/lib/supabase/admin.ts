@@ -132,6 +132,21 @@ type DocumentAccessGrantRow = Record<string, unknown> & {
   updated_at: string
 }
 
+/** What a template is shared at: read it, make documents from it, or edit it. */
+export type TemplateAccessLevel = "viewer" | "user" | "editor"
+
+type TemplateAccessGrantRow = Record<string, unknown> & {
+  id: string
+  org_id: string
+  template_id: string
+  user_id: string | null
+  organization_role: DatabaseOrganizationRole | null
+  access_level: TemplateAccessLevel
+  granted_by: string | null
+  created_at: string
+  updated_at: string
+}
+
 type FolderAccessGrantRow = Record<string, unknown> & {
   id: string
   org_id: string
@@ -232,6 +247,32 @@ type AdminSubmissionRow = Record<string, unknown> & {
   updated_at: string
   submitted_at: string | null
   assigned_at: string | null
+}
+
+type AdminSubmissionReviewerRow = Record<string, unknown> & {
+  submission_id: string
+  org_id: string
+  user_id: string
+  assigned_by: string | null
+  assigned_at: string
+  can_approve: boolean
+  decision: "pending" | "approved" | "changes_requested" | "dismissed"
+  note: string | null
+  decided_at: string | null
+}
+
+type AdminSubmissionSuggestionRow = Record<string, unknown> & {
+  id: string
+  org_id: string
+  submission_id: string
+  field_key: string
+  previous_value: string | boolean | null
+  proposed_value: string | boolean
+  suggested_by: string | null
+  suggested_at: string
+  status: "pending" | "accepted" | "declined"
+  decided_by: string | null
+  decided_at: string | null
 }
 
 type AdminSubmissionFileRow = Record<string, unknown> & {
@@ -390,6 +431,8 @@ type DocumentAccessGrantInsert = Partial<DocumentAccessGrantRow> &
     DocumentAccessGrantRow,
     "org_id" | "document_id" | "access_level"
   >
+type TemplateAccessGrantInsert = Partial<TemplateAccessGrantRow> &
+  Pick<TemplateAccessGrantRow, "org_id" | "template_id" | "access_level">
 type FolderAccessGrantInsert = Partial<FolderAccessGrantRow> &
   Pick<FolderAccessGrantRow, "org_id" | "folder_id" | "access_level">
 type DocumentVersionInsert = Partial<AdminDocumentVersionRow> &
@@ -527,6 +570,11 @@ export type AdminDatabase = {
         DocumentAccessGrantInsert,
         Partial<DocumentAccessGrantRow>
       >
+      template_access_grants: DatabaseTable<
+        TemplateAccessGrantRow,
+        TemplateAccessGrantInsert,
+        Partial<TemplateAccessGrantRow>
+      >
       folder_access_grants: DatabaseTable<
         FolderAccessGrantRow,
         FolderAccessGrantInsert,
@@ -591,6 +639,8 @@ export type AdminDatabase = {
           >,
         Partial<AdminSubmissionRow>
       >
+      submission_reviewers: DatabaseTable<AdminSubmissionReviewerRow, never, never>
+      submission_answer_suggestions: DatabaseTable<AdminSubmissionSuggestionRow, never, never>
       submission_files: DatabaseTable<
         AdminSubmissionFileRow,
         Partial<AdminSubmissionFileRow> &
@@ -667,6 +717,22 @@ export type AdminDatabase = {
           target_user_id: string
         }
         Returns: CurrentOrganizationContextRow[]
+      }
+      get_template_access_level: {
+        Args: {
+          target_org_id: string
+          target_template_id: string
+          target_actor_user_id: string
+        }
+        Returns: TemplateAccessLevel | null
+      }
+      hidden_template_ids: {
+        Args: { target_org_id: string; target_actor_user_id: string }
+        Returns: string[]
+      }
+      editable_template_ids: {
+        Args: { target_org_id: string; target_actor_user_id: string }
+        Returns: string[]
       }
       get_document_access_level: {
         Args: {
@@ -1042,6 +1108,57 @@ export type AdminDatabase = {
           target_submission_id: string
           target_expected_revision: number
           target_assignee_user_id: string
+          target_actor_user_id: string
+        }
+        Returns: AdminSubmissionRow
+      }
+      set_submission_reviewers: {
+        Args: {
+          target_org_id: string
+          target_submission_id: string
+          target_expected_revision: number
+          target_reviewer_ids: string[]
+          target_required_approvals: number | null
+          target_actor_user_id: string
+        }
+        Returns: AdminSubmissionRow
+      }
+      set_submission_sharing: {
+        Args: {
+          target_org_id: string
+          target_submission_id: string
+          target_user_ids: string[]
+          target_actor_user_id: string
+        }
+        Returns: string[]
+      }
+      suggest_submission_answers: {
+        Args: {
+          target_org_id: string
+          target_submission_id: string
+          target_values: Record<string, string | boolean>
+          target_actor_user_id: string
+        }
+        Returns: number
+      }
+      decide_submission_suggestion: {
+        Args: {
+          target_org_id: string
+          target_submission_id: string
+          target_suggestion_id: string
+          target_accept: boolean
+          target_actor_user_id: string
+        }
+        Returns: AdminSubmissionRow
+      }
+      dismiss_submission_changes_request: {
+        Args: {
+          target_org_id: string
+          target_submission_id: string
+          target_expected_revision: number
+          target_reviewer_user_id: string
+          target_comment: string
+          target_also_approve: boolean
           target_actor_user_id: string
         }
         Returns: AdminSubmissionRow

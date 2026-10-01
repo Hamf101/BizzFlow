@@ -15,6 +15,7 @@ import {
   revokeInviteAction,
   updateMemberAccessAction,
 } from "./actions"
+import type { Metadata } from "next"
 
 /**
  * Lists the organization's people, narrowed by any words search sent along.
@@ -22,6 +23,8 @@ import {
  * @param props - The words, as `q`.
  * @returns The People workspace, or a user-safe load failure.
  */
+export const metadata: Metadata = { title: "People" }
+
 export default async function PeoplePage({
   searchParams,
 }: {

@@ -19,6 +19,8 @@ export type SelectableFile = {
   id: string
   kind: "document" | "folder"
   labels: readonly FileLifecycleAction["label"][]
+  /** Whether the member may choose who else can open it. */
+  shareable: boolean
 }
 
 type FileExtras = {
@@ -63,6 +65,16 @@ export function FileSelection({
       <FileExtrasContext.Provider value={extras}>{children}</FileExtrasContext.Provider>
     </SelectionProvider>
   )
+}
+
+/**
+ * The items a Share would cover, or null unless the member may share every one of them.
+ *
+ * @param items - The item, or the selection.
+ * @returns The documents and folders to share.
+ */
+export function shareableResources(items: readonly SelectableFile[]): { id: string; kind: "document" | "folder" }[] | null {
+  return items.length > 0 && items.every((item) => item.shareable) ? items.map(({ id, kind }) => ({ id, kind })) : null
 }
 
 /**

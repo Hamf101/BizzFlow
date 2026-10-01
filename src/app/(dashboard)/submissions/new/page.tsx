@@ -26,12 +26,15 @@ import { listDocumentTemplates } from "@/services/template-service"
 import type { DocumentTemplate } from "@/types/template"
 
 import { createSubmissionAction } from "../actions"
+import type { Metadata } from "next"
 
 /**
  * Presents published organization templates that can start an internal draft.
  *
  * @returns Published-template selection and submission title form.
  */
+export const metadata: Metadata = { title: "New submission" }
+
 export default async function NewSubmissionPage(): Promise<ReactElement> {
   const user = await loadAuthenticatedPageUser("/submissions/new")
   const contextResult = await loadPageOrganizationContext({

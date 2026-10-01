@@ -22,6 +22,7 @@ import type {
   TemplateServiceClient,
   TemplateServiceDeps
 } from "./contracts"
+import { requireTemplateAccess } from "./access"
 import { TemplateServiceError } from "./errors"
 import {
   createDatabaseError,
@@ -97,11 +98,10 @@ export async function createGeneratedDocument(
           )
         }
 
-        await requirePermission(
+        await requireTemplateAccess(
           client,
-          input.organizationId,
-          input.actorUserId,
-          "templates:view",
+          { actorUserId: input.actorUserId, organizationId: input.organizationId, templateId },
+          "user",
           "You cannot use document templates."
         )
         const { status } = await getTemplateById(client, input.organizationId, templateId)

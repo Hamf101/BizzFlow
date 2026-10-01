@@ -1,11 +1,12 @@
 "use client"
 
-import { Archive, Copy, RotateCcw, Tag } from "lucide-react"
+import { Archive, Copy, RotateCcw, Tag, UserPlus } from "lucide-react"
 import { createContext, type ReactElement, type ReactNode, useContext, useState, useTransition } from "react"
 
 import { changeTemplatesAction, type TemplateChange } from "@/app/(dashboard)/templates/actions"
 import { BAR_BUTTON, SelectionBarShell } from "@/components/data/selection-bar"
 import { SelectableItem, SelectionProvider, useSelection } from "@/components/data/selection"
+import { ShareDialog } from "@/components/sharing/share-dialog"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Field, FieldLabel } from "@/components/ui/field"
@@ -14,8 +15,15 @@ import { bizflowToast } from "@/components/ui/toaster"
 import type { TemplateBulkResult } from "@/services/template-service"
 import type { DocumentTemplateStatus } from "@/types/template"
 
-/** One template the library shows, with the state that decides what may change. */
-export type SelectableTemplate = { id: string; status: DocumentTemplateStatus }
+/** One template the library shows, with the state and rights that decide what may change. */
+export type SelectableTemplate = {
+  /** The viewer may make a copy of it. */
+  canDuplicate: boolean
+  /** The viewer may edit it, and so archive, file and share it. */
+  canEdit: boolean
+  id: string
+  status: DocumentTemplateStatus
+}
 
 /** A change the selection offers, named as its button and menu item are. */
 export type TemplateChangeLabel = "Archive" | "Category" | "Duplicate" | "Restore"
@@ -161,10 +169,38 @@ export function useTemplateChanges(targets: Targets | null): {
   }
 
   const archived = targets?.filter((template) => template.status === "archived").length ?? 0
+  // Each change is offered only when every template allows it to this viewer.
+  const every = (allowed: (template: SelectableTemplate) => boolean): boolean => Boolean(targets?.every(allowed))
+  const editable = every((template) => template.canEdit)
   const labels: TemplateChangeLabel[] =
-    !targets || targets.length === 0 ? [] : archived === targets.length ? ["Restore"] : archived === 0 ? ["Archive", "Duplicate", "Category"] : []
+    !targets || targets.length === 0
+      ? []
+      : archived === targets.length
+        ? editable
+          ? ["Restore"]
+          : []
+        : archived === 0
+          ? [
+              ...(editable ? (["Archive"] as const) : []),
+              ...(every((template) => template.canDuplicate) ? (["Duplicate"] as const) : []),
+              ...(editable ? (["Category"] as const) : []),
+            ]
+          : []
 
   return { labels, run }
+}
+
+/**
+ * The templates a Share would cover, or null unless the viewer may edit every
+ * one of them and none is archived.
+ *
+ * @param targets - The template, or the selection.
+ * @returns The templates to share.
+ */
+export function shareableTemplates(targets: Targets): { id: string; kind: "template" }[] | null {
+  return targets.length > 0 && targets.every((template) => template.canEdit && template.status !== "archived")
+    ? targets.map(({ id }) => ({ id, kind: "template" as const }))
+    : null
 }
 
 /**
@@ -266,6 +302,8 @@ export function TemplateSelectionBar(): ReactElement {
   const open = targets.length > 0
   const { labels, run } = useTemplateChanges(open ? targets : null)
   const [filing, setFiling] = useState(false)
+  const [sharing, setSharing] = useState(false)
+  const share = shareableTemplates(targets)
   // What the bar last showed, so it keeps its words while it sinks away.
   const [shown, setShown] = useState<{ count: number; labels: TemplateChangeLabel[] }>({ count: 0, labels: [] })
 
@@ -275,6 +313,17 @@ export function TemplateSelectionBar(): ReactElement {
 
   return (
     <SelectionBarShell count={shown.count} onClear={selection?.clear} open={open}>
+      {share ? (
+        <button
+          aria-label={`Share ${share.length} ${share.length === 1 ? "template" : "templates"}`}
+          className={BAR_BUTTON}
+          onClick={() => setSharing(true)}
+          type="button"
+        >
+          <UserPlus aria-hidden="true" className="size-4 opacity-80" />
+          <span className="max-md:hidden">Share</span>
+        </button>
+      ) : null}
       {shown.labels.map((label) => {
         const Icon = CHANGE_ICONS[label]
 
@@ -292,6 +341,7 @@ export function TemplateSelectionBar(): ReactElement {
         )
       })}
       <CategoryDialog count={shown.count} onChoose={(category) => run("Category", category)} onOpenChange={setFiling} open={filing} />
+      {share ? <ShareDialog name="" onOpenChange={setSharing} open={sharing} resources={share} /> : null}
     </SelectionBarShell>
   )
 }

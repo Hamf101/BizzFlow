@@ -37,11 +37,14 @@ import {
   seedSampleSubmissionsAction,
   seedStarterTemplatesAction,
 } from "./actions"
+import type { Metadata } from "next"
 
 // ponytail: the queue ranks the first page of each source (20 submissions per
 // kind, 50 open tasks, the 20 documents you generated most recently); page
 // through them when an organization outgrows that.
 const PAGE = 20
+
+export const metadata: Metadata = { title: "Dashboard" }
 
 export default async function DashboardPage(): Promise<ReactElement> {
   const user = await loadAuthenticatedPageUser("/dashboard")

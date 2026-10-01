@@ -11,6 +11,7 @@ import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
 import {
   buildFeedbackRedirect,
   getActionErrorFeedbackCode,
+  type ActionFeedbackCode,
 } from "@/lib/action-result"
 import { buildRedirect, getFormString } from "@/lib/form-utils"
 import {
@@ -22,8 +23,13 @@ import {
   assignInternalSubmission,
   createInternalSubmissionComment,
   createInternalSubmissionDraft,
+  decideSubmissionSuggestion,
+  dismissSubmissionChangesRequest,
   saveInternalSubmissionDraft,
+  setInternalSubmissionReviewers,
+  shareInternalSubmission,
   submitInternalSubmission,
+  suggestSubmissionAnswers,
   transitionInternalSubmission,
   type SubmissionReviewTransition,
 } from "@/services/submission-service"
@@ -163,6 +169,145 @@ export async function assignSubmissionAction(formData: FormData): Promise<void> 
 }
 
 /**
+ * Names the reviewers of a submission and how many of them must approve. This
+ * starts the review when it has not started.
+ *
+ * @param formData - Submission id, expected revision, the reviewers, and the approvals needed (blank for everyone).
+ * @returns Never returns; redirects to the refreshed submission or an error.
+ */
+export async function setSubmissionReviewersAction(formData: FormData): Promise<void> {
+  const submissionId = getFormString(formData, "submissionId")
+  const submissionPath = getSubmissionPath(submissionId)
+  const startedAt = Date.now()
+
+  try {
+    const actionContext = await loadSubmissionActionContext("submissions:assign")
+    const needed = getFormString(formData, "requiredApprovals").trim()
+
+    await setInternalSubmissionReviewers({
+      actorUserId: actionContext.actorUserId,
+      expectedRevision: parseExpectedRevision(getFormString(formData, "expectedRevision")),
+      organizationId: actionContext.context.organization.id,
+      requiredApprovals: needed ? Number(needed) : null,
+      reviewerIds: formData.getAll("reviewerIds").map((id) => String(id)),
+      submissionId: requireIdentifier(submissionId, "Submission id"),
+    })
+
+    revalidateSubmissionPaths(submissionId)
+  } catch (error: unknown) {
+    handleSubmissionActionFailure({
+      error,
+      eventName: "submission_reviewers_action_failed",
+      nextPath: submissionPath,
+      startedAt,
+      submissionId,
+    })
+  }
+
+  redirect(buildFeedbackRedirect(submissionPath, "submission_assigned"))
+}
+
+/**
+ * Sets one reviewer's change request aside, with a note, and optionally
+ * approves in the same step. Only the person who assigned the reviewers may.
+ *
+ * @param formData - Submission id, expected revision, the reviewer, the note, and `alsoApprove`.
+ * @returns Never returns; redirects to the refreshed submission or an error.
+ */
+export async function dismissChangesRequestAction(formData: FormData): Promise<void> {
+  const submissionId = getFormString(formData, "submissionId")
+  const submissionPath = getSubmissionPath(submissionId)
+  const startedAt = Date.now()
+
+  try {
+    const actionContext = await loadSubmissionActionContext("submissions:review")
+    const comment = getFormString(formData, "comment").trim()
+
+    if (!comment) {
+      throw new SubmissionActionError("Add a note saying why the change request is set aside.")
+    }
+
+    await dismissSubmissionChangesRequest({
+      actorUserId: actionContext.actorUserId,
+      alsoApprove: getFormString(formData, "alsoApprove") === "yes",
+      comment,
+      expectedRevision: parseExpectedRevision(getFormString(formData, "expectedRevision")),
+      organizationId: actionContext.context.organization.id,
+      reviewerUserId: requireIdentifier(getFormString(formData, "reviewerUserId"), "Reviewer"),
+      submissionId: requireIdentifier(submissionId, "Submission id"),
+    })
+
+    revalidateSubmissionPaths(submissionId)
+  } catch (error: unknown) {
+    handleSubmissionActionFailure({
+      error,
+      eventName: "submission_dismiss_action_failed",
+      nextPath: submissionPath,
+      startedAt,
+      submissionId,
+    })
+  }
+
+  redirect(buildFeedbackRedirect(submissionPath, "submission_review_updated"))
+}
+
+/**
+ * Sets who a submission is shared with beyond its reviewers. The database
+ * decides whether this person may.
+ *
+ * @param formData - Submission id and everyone it should be shared with.
+ * @returns Never returns; redirects to the refreshed submission or an error.
+ */
+export async function shareSubmissionAction(formData: FormData): Promise<void> {
+  await runSubmissionFormAction(formData, "submissions:view", "submission_shared", (actor, submissionId) =>
+    shareInternalSubmission({ ...actor, submissionId, userIds: formData.getAll("sharedUserIds").map(String) })
+  )
+}
+
+/**
+ * Keeps a reviewer's suggested answers for the person who submitted it to accept.
+ *
+ * @param formData - Submission id and the form's answers.
+ * @returns Never returns; redirects to the refreshed submission or an error.
+ */
+export async function suggestSubmissionChangesAction(formData: FormData): Promise<void> {
+  await runSubmissionFormAction(formData, "submissions:review", "changes_suggested", (actor, submissionId) =>
+    suggestSubmissionAnswers({ ...actor, submissionId, values: parseGeneratedDocumentAnswers(formData) })
+  )
+}
+
+/**
+ * Accepts or declines one suggested answer.
+ *
+ * @param formData - Submission id, the suggestion, and `decision` of accept or decline.
+ * @returns Never returns; redirects to the refreshed submission or an error.
+ */
+export async function decideSuggestionAction(formData: FormData): Promise<void> {
+  const accept = getFormString(formData, "decision") === "accept"
+
+  await runSubmissionFormAction(formData, "submissions:edit", accept ? "changes_saved" : "submission_review_updated", (actor, submissionId) =>
+    decideSubmissionSuggestion({
+      ...actor,
+      accept,
+      submissionId,
+      suggestionId: requireIdentifier(getFormString(formData, "suggestionId"), "Suggestion"),
+    })
+  )
+}
+
+/**
+ * Comments from the review form: the note written there becomes a comment,
+ * and the reviewer's decision stays as it is.
+ *
+ * @param formData - Submission id and the review note.
+ * @returns Never returns; redirects to the refreshed submission or an error.
+ */
+export async function commentFromReviewAction(formData: FormData): Promise<void> {
+  formData.set("body", getFormString(formData, "comment"))
+  await createSubmissionCommentAction(formData)
+}
+
+/**
  * Applies a binding manager review transition with optimistic revision matching.
  *
  * @param formData - Submission id, expected revision, transition, and review note.
@@ -177,8 +322,10 @@ export async function transitionSubmissionAction(
   let transition: SubmissionReviewTransition | null = null
 
   try {
+    // Whoever can see submissions gets this far; the service asks for review
+    // permission where the decision needs it, and the database checks the reviewer.
     const actionContext = await loadSubmissionActionContext(
-      "submissions:review"
+      "submissions:view"
     )
     transition = parseReviewTransition(getFormString(formData, "targetStatus"))
     const comment = getFormString(formData, "comment").trim()
@@ -336,6 +483,30 @@ async function mutateSubmissionFromForm(
       operation === "save" ? "changes_saved" : "submission_submitted"
     )
   )
+}
+
+// Parses the submission, runs one service call as the signed-in member, and
+// redirects back with how it went.
+async function runSubmissionFormAction(
+  formData: FormData,
+  permission: OrganizationPermissionAction,
+  feedback: ActionFeedbackCode,
+  run: (actor: { actorUserId: string; organizationId: string }, submissionId: string) => Promise<unknown>
+): Promise<never> {
+  const submissionId = getFormString(formData, "submissionId")
+  const submissionPath = getSubmissionPath(submissionId)
+  const startedAt = Date.now()
+
+  try {
+    const { actorUserId, context } = await loadSubmissionActionContext(permission)
+
+    await run({ actorUserId, organizationId: context.organization.id }, requireIdentifier(submissionId, "Submission id"))
+    revalidateSubmissionPaths(submissionId)
+  } catch (error: unknown) {
+    handleSubmissionActionFailure({ error, eventName: `submission_${feedback}_action_failed`, nextPath: submissionPath, startedAt, submissionId })
+  }
+
+  redirect(buildFeedbackRedirect(submissionPath, feedback))
 }
 
 async function loadSubmissionActionContext(

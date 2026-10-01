@@ -24,6 +24,7 @@ import { DocumentSigningServiceError } from "@/services/document-signing/errors"
 import { runOperation } from "@/services/operation"
 import { POSTGREST_BATCH_SIZE, readAllInBatches } from "@/services/postgrest-paging"
 import { requireStoredImages, TemplateImageServiceError, withTemplateImageUrls } from "@/services/template-image-service"
+import { requireTemplateAccess } from "@/services/templates/access"
 import { TemplateServiceError } from "@/services/templates/errors"
 import { publishDocumentTemplate } from "@/services/templates/template-lifecycle-service"
 import {
@@ -32,7 +33,6 @@ import {
   normalizeCategory,
   normalizeDescription,
   normalizeTitle,
-  requirePermission,
 } from "@/services/templates/shared"
 import { type DocumentTemplate, type TemplateContent, upgradeV2TemplateContentToV3 } from "@/types/template"
 import { mapImageAssets, withoutImageUrls } from "@/types/template-images"
@@ -356,7 +356,12 @@ export async function signWorkingCopyPictures(
 }
 
 async function requireEditableTemplate(client: WorkingCopyServiceClient, input: TemplateRoomInput): Promise<DocumentTemplate> {
-  await requirePermission(client, input.organizationId, input.actorUserId, "templates:manage", "You cannot edit templates.")
+  await requireTemplateAccess(
+    client,
+    { actorUserId: input.actorUserId, organizationId: input.organizationId, templateId: input.templateId },
+    "editor",
+    "You cannot edit templates."
+  )
   const template = await getTemplateById(client, input.organizationId, input.templateId)
 
   if (template.status === "archived") {

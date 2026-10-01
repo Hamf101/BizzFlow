@@ -22,6 +22,9 @@ export type RateLimitBucket =
   | "public_form_file_upload"
   | "working_copy_write"
   | "working_copy_read"
+  | "request_ip"
+  | "member_request"
+  | "member_export"
 
 /**
  * How a bucket behaves when a configured limiter cannot be reached.
@@ -67,6 +70,13 @@ const BUCKET_CONFIGS: Readonly<Record<RateLimitBucket, BucketConfig>> = {
   // and reads each change the others make.
   working_copy_write: { limit: 300, windowSeconds: 60, failMode: "open" },
   working_copy_read: { limit: 900, windowSeconds: 60, failMode: "open" },
+  // Backstops for what has no bucket of its own; see request-rate-limit.ts.
+  // Roomy on purpose: an office shares one address, and a page prefetches links.
+  // 1,200 a minute refused real pages when two browsers ran the e2e suite.
+  request_ip: { limit: 6_000, windowSeconds: 60, failMode: "open" },
+  member_request: { limit: 600, windowSeconds: 60, failMode: "open" },
+  // A CSV export reads a whole list; nobody needs more than a few a minute.
+  member_export: { limit: 6, windowSeconds: 60, failMode: "open" },
 }
 
 /** The subset of an Upstash ratelimit decision the check depends on. */
@@ -117,8 +127,9 @@ export class RateLimitError extends Error {
  * Two distinct "no limiter" states behave differently on purpose:
  *
  * - **Unconfigured** (local dev, CI, tests): every bucket allows, including
- *   fail-closed ones. Route tests depend on this, and a missing env var on the
- *   host should degrade protection rather than kill the feature outright.
+ *   fail-closed ones. Route tests depend on this. In production the same gap
+ *   falls back to a per-process in-memory limiter (see {@link createMemoryLimiter}),
+ *   so a missing env var degrades to a weaker ceiling, never to none.
  * - **Configured but unreachable** (Redis outage): fail-open buckets log and
  *   allow; fail-closed buckets deny, so a third-party spend ceiling is never
  *   silently removed.
@@ -194,28 +205,81 @@ export function hashRateLimitKeyPart(value: string): string {
     .digest("hex")
 }
 
+/**
+ * Counts requests in this process only, for a host with no Redis.
+ *
+ * A fixed window per key with a bounded key table, so rotating keys cannot grow
+ * memory without limit (the oldest key is dropped to make room).
+ * ponytail: per-process, so N instances allow N times the limit; set the
+ * Upstash variables to share one budget across instances.
+ *
+ * @param config - The bucket's budget, plus a clock and key-table size for tests.
+ * @returns A limiter with the same contract as the Upstash one.
+ */
+export function createMemoryLimiter(config: {
+  limit: number
+  windowSeconds: number
+  now?: () => number
+  maxKeys?: number
+}): LimiterLike {
+  const { limit, windowSeconds, now = Date.now, maxKeys = 10_000 } = config
+  const windows = new Map<string, { count: number; reset: number }>()
+
+  return {
+    limit: async (key: string): Promise<LimiterDecision> => {
+      const current = now()
+      const existing = windows.get(key)
+      const window =
+        existing && existing.reset > current
+          ? existing
+          : { count: 0, reset: current + windowSeconds * 1000 }
+
+      if (window.count >= limit) {
+        return { success: false, reset: window.reset }
+      }
+
+      window.count += 1
+      windows.delete(key)
+      windows.set(key, window)
+
+      if (windows.size > maxKeys) {
+        windows.delete(windows.keys().next().value as string)
+      }
+
+      return { success: true, reset: window.reset }
+    },
+  }
+}
+
 let hasWarnedUnconfigured = false
 
 function warnWhenUnconfiguredInProduction(): void {
-  if (hasWarnedUnconfigured || process.env.NODE_ENV !== "production") {
+  if (hasWarnedUnconfigured) {
     return
   }
 
   hasWarnedUnconfigured = true
   console.warn("rate_limit_unconfigured", {
     reason:
-      "UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN are unset; every bucket allows all requests.",
+      "UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN are unset; limits are counted per process, not shared across instances.",
   })
 }
 
 function createDefaultLimiter(bucket: RateLimitBucket): LimiterLike | null {
+  const config = BUCKET_CONFIGS[bucket]
+
   if (!isUpstashRedisEnvConfigured()) {
+    // Local dev, CI and tests stay unthrottled; a production host without
+    // Redis still gets a per-process ceiling rather than none.
+    if (process.env.NODE_ENV !== "production") {
+      return null
+    }
+
     warnWhenUnconfiguredInProduction()
-    return null
+    return createMemoryLimiter(config)
   }
 
   const environment = getUpstashRedisEnv()
-  const config = BUCKET_CONFIGS[bucket]
 
   return new Ratelimit({
     redis: new Redis({

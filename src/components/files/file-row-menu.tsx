@@ -1,6 +1,6 @@
 "use client"
 
-import { Archive, Ellipsis, FolderInput, RotateCcw, Trash2 } from "lucide-react"
+import { Archive, Ellipsis, FolderInput, RotateCcw, Trash2, UserPlus } from "lucide-react"
 import { type ReactElement, type ReactNode, useState, useTransition } from "react"
 
 import {
@@ -10,10 +10,12 @@ import {
 } from "@/app/(dashboard)/documents/actions"
 import {
   type SelectableFile,
+  shareableResources,
   useFileSelection,
   useOpensOnRightClick,
 } from "@/components/files/file-selection"
 import { MoveToDialog } from "@/components/files/move-to-dialog"
+import { ShareDialog } from "@/components/sharing/share-dialog"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -189,6 +191,7 @@ export function FileRowMenu({
   purgeForm?: ReactNode
 }): ReactElement {
   const [moving, setMoving] = useState(false)
+  const [sharing, setSharing] = useState(false)
   const [purging, setPurging] = useState(false)
   const selection = useFileSelection()
   const targets =
@@ -198,6 +201,14 @@ export function FileRowMenu({
   const bulk = useSelectionChanges(targets)
   // Only active items move, which is exactly where Archive is offered.
   const item = selection?.items.find((entry: SelectableFile) => entry.id === itemId) ?? null
+  // The whole selection when the item is part of one, otherwise just the item.
+  const share = shareableResources(targets ?? (item ? [item] : []))
+  const shareItem = share ? (
+    <DropdownMenuItem onClick={() => setSharing(true)}>
+      <UserPlus aria-hidden="true" />
+      {share.length > 1 ? `Share ${share.length} items…` : "Share…"}
+    </DropdownMenuItem>
+  ) : null
   const moves = targets
     ? bulk.labels.includes("Archive")
     : (item?.labels.includes("Archive") ?? false)
@@ -211,8 +222,9 @@ export function FileRowMenu({
   // right-click anywhere on the row or tile.
   const opensOnRightClick = useOpensOnRightClick()
   const items = targets ? (
-    bulk.labels.length > 0 ? (
+    bulk.labels.length > 0 || share ? (
       <>
+        {shareItem}
         {moveTo}
         {bulk.labels.map((label: LifecycleLabel) => {
           const Icon = ACTION_ICONS[label]
@@ -234,6 +246,7 @@ export function FileRowMenu({
     )
   ) : (
     <>
+      {shareItem}
       {moveTo}
       {actions.map((action: FileLifecycleAction) => {
         const Icon = ACTION_ICONS[action.label]
@@ -305,6 +318,7 @@ export function FileRowMenu({
           open={moving}
         />
       ) : null}
+      {share ? <ShareDialog name={name} onOpenChange={setSharing} open={sharing} resources={share} /> : null}
       {purgeForm ? (
         <Dialog onOpenChange={setPurging} open={purging}>
           <DialogContent>

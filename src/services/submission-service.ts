@@ -35,6 +35,15 @@ export {
   createInternalSubmissionComment,
   transitionInternalSubmission,
 } from "@/services/submissions/review-service"
+export {
+  dismissSubmissionChangesRequest,
+  setInternalSubmissionReviewers,
+  shareInternalSubmission,
+} from "@/services/submissions/reviewer-service"
+export {
+  decideSubmissionSuggestion,
+  suggestSubmissionAnswers,
+} from "@/services/submissions/suggestion-service"
 export type {
   SubmissionActivityEvent,
   SubmissionComment,

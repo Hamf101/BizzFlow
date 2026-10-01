@@ -13,7 +13,7 @@ import {
  * Expires abandoned public drafts and dead uploads, then removes the expired
  * R2 objects they and cancelled uploads left behind.
  *
- * @param request - Vercel Cron request authenticated with `CRON_SECRET`.
+ * @param request - Scheduler request (any host's cron) authenticated with `CRON_SECRET`.
  * @returns Bounded cleanup counts without exposing object keys.
  */
 export async function GET(request: Request): Promise<Response> {

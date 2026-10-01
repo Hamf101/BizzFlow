@@ -1,6 +1,6 @@
 "use client"
 
-import { FolderInput } from "lucide-react"
+import { FolderInput, UserPlus } from "lucide-react"
 import { type ReactElement, useState } from "react"
 
 import { BAR_BUTTON, SelectionBarShell } from "@/components/data/selection-bar"
@@ -10,8 +10,9 @@ import {
   type FileLifecycleAction,
   useSelectionChanges,
 } from "@/components/files/file-row-menu"
-import { useFileSelection } from "@/components/files/file-selection"
+import { shareableResources, useFileSelection } from "@/components/files/file-selection"
 import { MoveToDialog } from "@/components/files/move-to-dialog"
+import { ShareDialog } from "@/components/sharing/share-dialog"
 
 type Shown = { count: number; labels: FileLifecycleAction["label"][] }
 
@@ -29,6 +30,8 @@ export function SelectionBar(): ReactElement {
   const open = targets.length > 0
   const { labels, run } = useSelectionChanges(open ? targets : null)
   const [moving, setMoving] = useState(false)
+  const [sharing, setSharing] = useState(false)
+  const share = shareableResources(targets)
   // Only active items move, which is exactly where Archive is offered.
   const moves = labels.includes("Archive")
   // What the bar last showed, so it keeps its words while it sinks away.
@@ -40,6 +43,17 @@ export function SelectionBar(): ReactElement {
 
   return (
     <SelectionBarShell count={shown.count} onClear={selection?.clear} open={open}>
+      {share ? (
+        <button
+          aria-label={`Share ${share.length} ${share.length === 1 ? "item" : "items"}`}
+          className={BAR_BUTTON}
+          onClick={() => setSharing(true)}
+          type="button"
+        >
+          <UserPlus aria-hidden="true" className="size-4 opacity-80" />
+          <span className="max-md:hidden">Share</span>
+        </button>
+      ) : null}
       {moves ? (
         <button
           aria-label={`Move ${shown.count} ${shown.count === 1 ? "item" : "items"}`}
@@ -67,6 +81,7 @@ export function SelectionBar(): ReactElement {
           </button>
         )
       })}
+      {share ? <ShareDialog name="" onOpenChange={setSharing} open={sharing} resources={share} /> : null}
       {selection && moves ? (
         <MoveToDialog
           destinations={selection.destinations}

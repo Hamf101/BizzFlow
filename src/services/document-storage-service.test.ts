@@ -191,6 +191,17 @@ describe("document signed URL helpers", () => {
     )
   })
 
+  it("signs an inline response of the stored type for viewing", async () => {
+    const result = await createSignedDocumentDownloadUrl(
+      { storageKey: "organizations/org-1/documents/doc-1/versions/ver-1/original.pdf", viewAs: "application/pdf" },
+      { r2Client: createTestR2Client(), r2Env }
+    )
+    const signedUrl = new URL(result.downloadUrl)
+
+    expect(signedUrl.searchParams.get("response-content-disposition")).toBe("inline")
+    expect(signedUrl.searchParams.get("response-content-type")).toBe("application/pdf")
+  })
+
   it("uses an injected signer with a PutObjectCommand for uploads", async () => {
     const r2Client = {} as S3Client
     const signingDate = new Date("2026-08-03T16:00:00.000Z")

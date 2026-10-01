@@ -16,6 +16,7 @@ import type { DocumentFolder } from "@/types/document"
 import type { DocumentTemplate } from "@/types/template"
 
 import { createGeneratedDocumentAction } from "../actions"
+import type { Metadata } from "next"
 
 type NewDocumentSearchParams = Promise<{
   folderId?: string
@@ -27,6 +28,8 @@ type NewDocumentSearchParams = Promise<{
  * @param props - The target folder.
  * @returns The centered choice between uploading and creating.
  */
+export const metadata: Metadata = { title: "New document" }
+
 export default async function NewDocumentPage({
   searchParams
 }: {

@@ -1,6 +1,6 @@
 "use client"
 
-import { Download, FilePen, Files, History, MessageSquare, MoreHorizontal, Palette, Send } from "lucide-react"
+import { Download, FilePen, Files, History, MessageSquare, MoreHorizontal, Palette, Send, UserPlus } from "lucide-react"
 import { type ReactElement, useEffect, useMemo, useRef, useState } from "react"
 
 import type { DocumentContentInput } from "@/app/(editor)/documents/[documentId]/edit/actions"
@@ -24,6 +24,7 @@ import {
   TemplateFlowPanel,
   PageSetupPanel,
   TemplateBrandingPanel,
+  ShareDialog,
 } from "@/components/editor/lazy-panels"
 import { useLiveRoom } from "@/components/editor/use-live-room"
 import { useRoomPlace } from "@/components/editor/use-room-place"
@@ -71,6 +72,8 @@ type DocumentEditorProps = {
   backHref: string
   canFill: boolean
   canSend: boolean
+  /** Whether the member may choose who else can open this document. */
+  canShare: boolean
   /** Where this person keeps the dock and zoom. */
   editorLayout?: EditorLayoutStore
   /** Who is writing, as the others in the room see them. */
@@ -94,6 +97,7 @@ export function DocumentEditor({
   backHref,
   canFill,
   canSend,
+  canShare,
   editorLayout,
   me,
   resendAction,
@@ -136,6 +140,7 @@ export function DocumentEditor({
   const [answers, setAnswers] = useState<Record<string, unknown>>(view.answers)
   const [drawings, setDrawings] = useState(0)
   const [sending, setSending] = useState(false)
+  const [sharing, setSharing] = useState(false)
   const [savedPage, setSavedPage] = useState(initial)
   const [savedAnswers, setSavedAnswers] = useState<Record<string, unknown>>(view.answers)
   const [proposal, setProposal] = useState<TemplateFlowProposal | null>(null)
@@ -423,6 +428,12 @@ export function DocumentEditor({
                   Download fillable PDF
                 </DropdownMenuItem>
               )}
+              {canShare ? (
+                <DropdownMenuItem onClick={() => setSharing(true)}>
+                  <UserPlus />
+                  Share…
+                </DropdownMenuItem>
+              ) : null}
             </DropdownMenuContent>
           </DropdownMenu>
         }
@@ -539,6 +550,9 @@ export function DocumentEditor({
           <DocumentRecipientCollection action={sendAction} documentId={document.id} />
         </DialogContent>
       </Dialog>
+      {canShare && sharing ? (
+        <ShareDialog name={document.title} onOpenChange={setSharing} open resources={[{ id: document.id, kind: "document" }]} />
+      ) : null}
     </>
   )
 }

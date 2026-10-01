@@ -138,6 +138,42 @@ function formatActivityDescription(
     return "approved the submission."
   }
 
+  if (event.eventType === "review_approved") {
+    return "approved. The review stays open until enough reviewers have."
+  }
+
+  if (event.eventType === "changes_dismissed") {
+    const reviewer = event.assigneeUserId ? memberLabels.get(event.assigneeUserId) ?? "a team member" : "a team member"
+    return `set aside ${reviewer}’s change request.`
+  }
+
+  if (event.eventType === "reviewer_removed") {
+    const reviewer = event.assigneeUserId ? memberLabels.get(event.assigneeUserId) ?? "a team member" : "a team member"
+    return `took ${reviewer} off the review.`
+  }
+
+  const person = event.assigneeUserId ? memberLabels.get(event.assigneeUserId) ?? "a team member" : "a team member"
+
+  if (event.eventType === "shared") {
+    return `shared it with ${person}.`
+  }
+
+  if (event.eventType === "unshared") {
+    return `stopped sharing it with ${person}.`
+  }
+
+  if (event.eventType === "answers_suggested") {
+    return "suggested changes to the answers."
+  }
+
+  if (event.eventType === "suggestion_accepted") {
+    return `accepted a change ${person} suggested.`
+  }
+
+  if (event.eventType === "suggestion_declined") {
+    return `declined a change ${person} suggested.`
+  }
+
   if (event.eventType === "rejected") {
     return "rejected the submission."
   }

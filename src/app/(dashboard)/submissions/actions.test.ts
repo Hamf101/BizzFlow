@@ -7,7 +7,11 @@ import {
   assignInternalSubmission,
   createInternalSubmissionDraft,
   createInternalSubmissionComment,
+  decideSubmissionSuggestion,
+  dismissSubmissionChangesRequest,
   saveInternalSubmissionDraft,
+  setInternalSubmissionReviewers,
+  shareInternalSubmission,
   SubmissionServiceError,
   submitInternalSubmission,
   transitionInternalSubmission,
@@ -15,9 +19,14 @@ import {
 
 import {
   assignSubmissionAction,
+  commentFromReviewAction,
   createSubmissionAction,
   createSubmissionCommentAction,
+  decideSuggestionAction,
+  dismissChangesRequestAction,
   saveSubmissionAction,
+  setSubmissionReviewersAction,
+  shareSubmissionAction,
   submitSubmissionAction,
   transitionSubmissionAction,
 } from "./actions"
@@ -59,7 +68,11 @@ vi.mock("@/services/submission-service", async (importOriginal) => {
     assignInternalSubmission: vi.fn(),
     createInternalSubmissionComment: vi.fn(),
     createInternalSubmissionDraft: vi.fn(),
+    decideSubmissionSuggestion: vi.fn(),
+    dismissSubmissionChangesRequest: vi.fn(),
     saveInternalSubmissionDraft: vi.fn(),
+    setInternalSubmissionReviewers: vi.fn(),
+    shareInternalSubmission: vi.fn(),
     submitInternalSubmission: vi.fn(),
     transitionInternalSubmission: vi.fn(),
   }
@@ -108,16 +121,80 @@ describe("submission review actions", () => {
     )
   })
 
-  it("blocks binding decisions from an external reviewer", async () => {
+  it("names the reviewers and the approvals needed, taking the tenant and actor from the server", async () => {
+    const formData = createSubmissionFormData()
+    formData.append("reviewerIds", ASSIGNEE_USER_ID)
+    formData.append("reviewerIds", ACTOR_USER_ID)
+    formData.set("requiredApprovals", "2")
+    formData.set("organizationId", "untrusted-organization")
+
+    await expect(setSubmissionReviewersAction(formData)).rejects.toThrow(
+      `NEXT_REDIRECT:/submissions/${SUBMISSION_ID}?feedback=submission_assigned`
+    )
+
+    expect(setInternalSubmissionReviewers).toHaveBeenCalledWith({
+      actorUserId: ACTOR_USER_ID,
+      expectedRevision: 3,
+      organizationId: ORGANIZATION_ID,
+      requiredApprovals: 2,
+      reviewerIds: [ASSIGNEE_USER_ID, ACTOR_USER_ID],
+      submissionId: SUBMISSION_ID,
+    })
+  })
+
+  it("asks for everyone to approve when no number is given, and turns staff away", async () => {
+    const formData = createSubmissionFormData()
+    formData.append("reviewerIds", ASSIGNEE_USER_ID)
+
+    await expect(setSubmissionReviewersAction(formData)).rejects.toThrow("submission_assigned")
+    expect(setInternalSubmissionReviewers).toHaveBeenCalledWith(expect.objectContaining({ requiredApprovals: null }))
+
+    vi.mocked(setInternalSubmissionReviewers).mockClear()
+    mockOrganizationContext("staff")
+    await expect(setSubmissionReviewersAction(formData)).rejects.toThrow("permission_denied")
+    expect(setInternalSubmissionReviewers).not.toHaveBeenCalled()
+  })
+
+  it("sets a change request aside with a note, and approves too when asked", async () => {
+    const formData = createSubmissionFormData()
+    formData.set("reviewerUserId", ASSIGNEE_USER_ID)
+    formData.set("comment", "  Seen it, fine  ")
+    formData.set("alsoApprove", "yes")
+
+    await expect(dismissChangesRequestAction(formData)).rejects.toThrow("submission_review_updated")
+
+    expect(dismissSubmissionChangesRequest).toHaveBeenCalledWith({
+      actorUserId: ACTOR_USER_ID,
+      alsoApprove: true,
+      comment: "Seen it, fine",
+      expectedRevision: 3,
+      organizationId: ORGANIZATION_ID,
+      reviewerUserId: ASSIGNEE_USER_ID,
+      submissionId: SUBMISSION_ID,
+    })
+  })
+
+  it("will not set a change request aside without a note", async () => {
+    const formData = createSubmissionFormData()
+    formData.set("reviewerUserId", ASSIGNEE_USER_ID)
+    formData.set("comment", "  ")
+
+    await expect(dismissChangesRequestAction(formData)).rejects.toThrow("NEXT_REDIRECT")
+    expect(dismissSubmissionChangesRequest).not.toHaveBeenCalled()
+  })
+
+  it("lets an external reviewer reach the decision, and shows what the service says when they may not reject", async () => {
     mockOrganizationContext("external_reviewer")
     const formData = createSubmissionFormData()
     formData.set("targetStatus", "approved")
 
-    await expect(transitionSubmissionAction(formData)).rejects.toThrow(
-      `NEXT_REDIRECT:/submissions/${SUBMISSION_ID}?feedback=permission_denied`
-    )
+    await expect(transitionSubmissionAction(formData)).rejects.toThrow("submission_review_updated")
+    expect(transitionInternalSubmission).toHaveBeenCalledWith(expect.objectContaining({ actorUserId: ACTOR_USER_ID, targetStatus: "approved" }))
 
-    expect(transitionInternalSubmission).not.toHaveBeenCalled()
+    vi.mocked(transitionInternalSubmission).mockRejectedValueOnce(new SubmissionServiceError("You cannot review internal submissions.", 403))
+    formData.set("targetStatus", "rejected")
+    formData.set("comment", "No")
+    await expect(transitionSubmissionAction(formData)).rejects.toThrow("permission_denied")
   })
 
   it("requires an explanatory note before rejecting", async () => {
@@ -179,6 +256,47 @@ describe("submission review actions", () => {
     expect(redirectMock).not.toHaveBeenCalledWith(
       expect.stringContaining("Private+revision")
     )
+  })
+})
+
+describe("sharing and suggestion actions", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(getAuthenticatedUser).mockResolvedValue({ email: "staff@example.com", id: ACTOR_USER_ID } as never)
+    mockOrganizationContext("staff")
+    vi.spyOn(console, "warn").mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it("shares with everyone ticked, as the signed-in member, and says so", async () => {
+    const formData = createSubmissionFormData()
+    formData.append("sharedUserIds", ASSIGNEE_USER_ID)
+    formData.append("sharedUserIds", ACTOR_USER_ID)
+
+    await expect(shareSubmissionAction(formData)).rejects.toThrow(`NEXT_REDIRECT:/submissions/${SUBMISSION_ID}?feedback=submission_shared`)
+    expect(shareInternalSubmission).toHaveBeenCalledWith({
+      actorUserId: ACTOR_USER_ID,
+      organizationId: ORGANIZATION_ID,
+      submissionId: SUBMISSION_ID,
+      userIds: [ASSIGNEE_USER_ID, ACTOR_USER_ID],
+    })
+  })
+
+  it("accepts or declines by the button pressed, and reports a refusal without detail", async () => {
+    const formData = createSubmissionFormData()
+    formData.set("suggestionId", ASSIGNEE_USER_ID)
+    formData.set("decision", "accept")
+
+    await expect(decideSuggestionAction(formData)).rejects.toThrow("feedback=changes_saved")
+    expect(decideSubmissionSuggestion).toHaveBeenLastCalledWith(expect.objectContaining({ accept: true, suggestionId: ASSIGNEE_USER_ID }))
+
+    formData.set("decision", "decline")
+    vi.mocked(decideSubmissionSuggestion).mockRejectedValueOnce(new SubmissionServiceError("Only the person who submitted it can decide", 403))
+    await expect(decideSuggestionAction(formData)).rejects.toThrow("feedback=permission_denied")
+    expect(decideSubmissionSuggestion).toHaveBeenLastCalledWith(expect.objectContaining({ accept: false }))
   })
 })
 
@@ -288,3 +406,20 @@ function mockOrganizationContext(role: OrganizationRole): void {
     },
   })
 }
+
+describe("commenting from the review form", () => {
+  it("turns the review note into a comment and leaves the decision alone", async () => {
+    vi.spyOn(console, "info").mockImplementation(() => {})
+    vi.mocked(getAuthenticatedUser).mockResolvedValue({ id: ACTOR_USER_ID, email: "reviewer@example.com" })
+    mockOrganizationContext("external_reviewer")
+    const formData = createSubmissionFormData()
+    formData.set("comment", "Looks fine from outside")
+
+    await expect(commentFromReviewAction(formData)).rejects.toThrow("comment_added")
+
+    expect(createInternalSubmissionComment).toHaveBeenCalledWith(
+      expect.objectContaining({ actorUserId: ACTOR_USER_ID, body: "Looks fine from outside", submissionId: SUBMISSION_ID })
+    )
+    expect(transitionInternalSubmission).not.toHaveBeenCalled()
+  })
+})

@@ -1,22 +1,29 @@
 /**
- * Extracts the client IP from platform-set forwarding headers.
+ * Extracts the client IP from the header the deployment's reverse proxy sets.
  *
- * On Vercel `x-real-ip` is set by the platform and trustworthy; the first
- * `x-forwarded-for` entry is the fallback. Revisit this trust decision if
- * hosting ever moves off Vercel.
+ * Which header and how many proxies to trust depend on the host, so both are
+ * configuration rather than a guess:
+ *
+ * - `CLIENT_IP_HEADER` (default `x-forwarded-for`): e.g. `cf-connecting-ip`,
+ *   `x-real-ip`, `fly-client-ip`, whatever the edge in front of the app sets.
+ * - `TRUSTED_PROXY_COUNT` (default `1`): how many proxies append to that header
+ *   before it reaches the app. The client's address is that many entries from
+ *   the right; anything further left was written by the client and is ignored.
+ *
+ * Running with no proxy that overwrites or appends the header lets any caller
+ * pick their own address, which defeats every per-IP limit.
  *
  * @param headers - Incoming request headers.
- * @returns The client IP, or `"unknown"` when no forwarding header is set.
+ * @returns The client IP, or `"unknown"` when the header is missing or too short.
  */
 export function getClientIp(headers: Headers): string {
-  const realIp = headers.get("x-real-ip")?.trim()
+  const name = process.env.CLIENT_IP_HEADER?.trim() || "x-forwarded-for"
+  const trusted = Number.parseInt(process.env.TRUSTED_PROXY_COUNT ?? "", 10)
+  const fromRight = trusted >= 1 ? trusted : 1
+  const entries = (headers.get(name) ?? "")
+    .split(",")
+    .map((entry: string): string => entry.trim())
+    .filter((entry: string): boolean => entry.length > 0)
 
-  if (realIp) {
-    return realIp
-  }
-
-  const forwardedFor = headers.get("x-forwarded-for")
-  const firstEntry = forwardedFor?.split(",")[0]?.trim()
-
-  return firstEntry && firstEntry.length > 0 ? firstEntry : "unknown"
+  return entries[entries.length - fromRight] ?? "unknown"
 }

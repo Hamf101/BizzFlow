@@ -4,6 +4,7 @@ import * as Sentry from "@sentry/nextjs"
 import { redirect } from "next/navigation"
 import { Suspense, type ReactElement, type ReactNode } from "react"
 
+import { SharingNoticesListener } from "@/components/sharing/sharing-notices-listener"
 import { PostHogProvider } from "@/components/analytics/posthog-provider"
 import { DashboardContentSkeleton } from "@/components/dashboard/dashboard-content-skeleton"
 import { FlowLauncher } from "@/components/flow/flow-launcher"
@@ -145,11 +146,18 @@ export default async function DashboardLayout({
         <ActionFeedback />
       </Suspense>
       <div className="flex min-h-dvh flex-col bg-canvas text-foreground" data-ground="canvas">
+        {/* The sidebar has a dozen stops; this is the first, so a keyboard user can skip them. */}
+        <a
+          className="sr-only focus-visible:not-sr-only focus-visible:fixed focus-visible:top-3 focus-visible:left-3 focus-visible:z-[70] focus-visible:rounded-[10px] focus-visible:bg-foreground focus-visible:px-4 focus-visible:py-2.5 focus-visible:text-sm focus-visible:text-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          href="#main-content"
+        >
+          Skip to content
+        </a>
         <MobileTopBar account={account} signOutAction={signOutAction} />
         <div className="flex w-full flex-1 flex-col md:flex-row">
           <DashboardSidebar account={account} signOutAction={signOutAction} />
           <div className="flex min-w-0 flex-1 flex-col px-3 pt-3 md:pt-4 md:pr-4 md:pl-1">
-            <main className="flex flex-1 flex-col rounded-t-[18px] border-x border-t border-border/70 bg-background">
+            <main className="flex flex-1 flex-col rounded-t-[18px] border-x border-t border-border/70 bg-background outline-none" id="main-content" tabIndex={-1}>
               <div className="min-w-0 flex-1 px-5 pt-6 pb-[calc(8.25rem+env(safe-area-inset-bottom))] sm:px-7 sm:pt-7 md:pb-20">
                 <Suspense fallback={<DashboardContentSkeleton />}>
                   <DashboardUserScope />
@@ -161,6 +169,7 @@ export default async function DashboardLayout({
         </div>
         <MobileTabBar role={account.permissionSubject} />
         {account.navigation?.organizationId ? <FlowLauncher /> : null}
+        {userId ? <SharingNoticesListener /> : null}
         {/* Beside the sidebar rather than in a boundary of its own, so its
             buttons never come alive before the search they open. */}
         {account.permissionSubject ? <WorkspaceSearch role={account.permissionSubject} /> : null}

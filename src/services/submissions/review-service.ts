@@ -122,15 +122,20 @@ export async function transitionInternalSubmission(
     async (): Promise<Submission> => {
       const client = getSubmissionClient(deps)
 
+      const targetStatus = normalizeReviewTransition(input.targetStatus)
+      // Approving or asking for changes is for whoever was named a reviewer,
+      // whatever their role; the database checks that they were. Rejecting and
+      // completing stay with those who may review.
+      const decidesAsReviewer = targetStatus === "approved" || targetStatus === "needs_changes"
+
       await requireSubmissionPermission(
         client,
         input.organizationId,
         input.actorUserId,
-        "submissions:review",
+        decidesAsReviewer ? "submissions:view" : "submissions:review",
         "You cannot review internal submissions."
       )
       const expectedRevision = normalizeExpectedRevision(input.expectedRevision)
-      const targetStatus = normalizeReviewTransition(input.targetStatus)
       const comment = normalizeReviewComment(input.comment)
 
       if (
@@ -201,7 +206,7 @@ export async function createInternalSubmissionComment(
         input.organizationId,
         input.submissionId
       )
-      assertSubmissionVisible(role, submission, input.actorUserId)
+      await assertSubmissionVisible(client, role, submission, input.actorUserId)
 
       if (submission.status === "draft") {
         throw new SubmissionServiceError(

@@ -47,6 +47,7 @@ const submissionRowShape = {
   updated_by: actorIdSchema,
   created_at: timestampSchema,
   updated_at: timestampSchema,
+  required_approvals: z.number().int().positive().nullish(),
 } as const
 
 const draftSubmissionRowSchema = z.object({
@@ -212,6 +213,8 @@ export type SubmissionBase = {
   assignedTo: string | null
   assignedBy: string | null
   assignedAt: string | null
+  /** How many reviewers must approve; null means all of them. */
+  requiredApprovals: number | null
   createdAt: string
   updatedAt: string
 }
@@ -310,6 +313,7 @@ export function parseSubmissionRow(value: unknown): Submission {
     SubmissionBase,
     "assignedTo" | "assignedBy" | "assignedAt"
   > = {
+    requiredApprovals: row.required_approvals ?? null,
     id: row.id,
     organizationId: row.org_id,
     title: row.title,

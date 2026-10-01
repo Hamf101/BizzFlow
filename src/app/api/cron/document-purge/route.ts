@@ -8,7 +8,7 @@ import { processDueResourcePurges } from "@/services/document-service"
 /**
  * Processes a bounded batch of due document and folder purge work.
  *
- * @param request - Vercel Cron request authenticated with `CRON_SECRET`.
+ * @param request - Scheduler request (any host's cron) authenticated with `CRON_SECRET`.
  * @returns Content-free queue, object, retry, and finalization counts.
  */
 export async function GET(request: Request): Promise<Response> {

@@ -76,6 +76,13 @@ class TemplateFlowClient {
     return new TemplateFlowQuery(this.tables[tableName] ?? [])
   }
 
+  // Stands in for get_template_access_level for these tests: whoever the role lets manage templates edits.
+  async rpc(): Promise<{ data: "editor" | null; error: null }> {
+    const roleDefinition = this.tables.organization_memberships?.[0]?.role_definition as { permissions: string[] | null } | undefined
+
+    return { data: roleDefinition?.permissions?.includes("templates:manage") ? "editor" : null, error: null }
+  }
+
   setMembershipPermissions(permissions: string[] | null): void {
     const membership = this.tables.organization_memberships?.[0]
     if (membership) {

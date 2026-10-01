@@ -4,8 +4,6 @@ import { setTimeout as delay } from "node:timers/promises"
 import { z } from "zod"
 
 import {
-  canPerformOrganizationAction,
-  createOrganizationPermissionSubject,
   isOrganizationRole
 } from "@/lib/permissions"
 import {
@@ -438,7 +436,7 @@ type FlowCandidateValidationResult =
       issuePath: string
       detail?: string
     }
-type TemplateFlowClient = Pick<AdminSupabaseClient, "from">
+type TemplateFlowClient = Pick<AdminSupabaseClient, "from" | "rpc">
 
 export type ExecuteTemplateFlowInput = {
   actorUserId: string
@@ -3008,27 +3006,23 @@ async function requireTemplateManagement(
     )
   }
 
-  const subject = createOrganizationPermissionSubject(
-    membership.role,
-    membership.role_definition?.permissions
-  )
-
-  if (!subject) {
-    throw new TemplateFlowServiceError(
-      "Database returned unsupported role permissions.",
-      500
-    )
-  }
-
-  if (!canPerformOrganizationAction(subject, "templates:manage")) {
-    throw new TemplateFlowServiceError(
-      "You do not have permission to manage templates.",
-      403
-    )
-  }
-
   if (!template?.id) {
     throw new TemplateFlowServiceError("Template not found.", 404)
+  }
+
+  // Editing is the template's own answer: its maker, an editor it was shared with, or a manager.
+  const { data: level, error: levelError } = await client.rpc("get_template_access_level", {
+    target_actor_user_id: input.actorUserId,
+    target_org_id: input.organizationId,
+    target_template_id: input.templateId,
+  })
+
+  if (levelError) {
+    throw new TemplateFlowServiceError("Unable to verify template editing access.", 500)
+  }
+
+  if (level !== "editor") {
+    throw new TemplateFlowServiceError("You do not have permission to manage templates.", 403)
   }
 
   if (template.status === "archived") {

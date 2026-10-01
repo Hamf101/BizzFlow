@@ -153,7 +153,9 @@ export async function executeWorkspaceFlow(
   const actor = { actorUserId: input.actorUserId, organizationId: input.organizationId }
   const membership = await (deps.loadMembership ?? loadMembership)(actor)
   const creatable = (["template", "document"] as const).filter((target) =>
-    canPerformOrganizationAction(membership, target === "template" ? "templates:manage" : "documents:create")
+    target === "template"
+      ? canPerformOrganizationAction(membership, "templates:create") || canPerformOrganizationAction(membership, "templates:manage")
+      : canPerformOrganizationAction(membership, "documents:create")
   )
   const plan = await requestPlan(message.data, historySchema.parse(input.history), creatable, deps)
 
@@ -223,8 +225,8 @@ async function find(plan: Plan, actor: Actor, deps: WorkspaceFlowDeps, now: Date
     const documents = await (deps.searchFiles ?? searchFiles)({ ...actor, query })
     items = documents.map((document) => ({
       href:
-        document.sourceKind === "generated" && document.lifecycleState === "active"
-          ? `/documents/${encodeURIComponent(document.id)}/edit`
+        document.sourceKind === "generated" && (document.lifecycleState === "active" || document.lifecycleState === "archived")
+          ? `/documents/${encodeURIComponent(document.id)}/preview`
           : `/documents/${encodeURIComponent(document.id)}`,
       id: document.id,
       meta: `Edited ${formatDay(document.updatedAt)}`,

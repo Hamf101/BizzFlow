@@ -10,7 +10,8 @@ const BUDGETS: Record<string, number> = {
   "/documents": 13,
   "/submissions": 10,
   "/tasks": 10,
-  "/templates": 8,
+  // Two of these ask which templates are shared with the member.
+  "/templates": 10,
   "/people": 8,
   "/settings": 5,
   "/audit-log": 10,

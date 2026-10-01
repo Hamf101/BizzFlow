@@ -1,6 +1,6 @@
 "use client"
 
-import { Download } from "lucide-react"
+import { Download, ExternalLink } from "lucide-react"
 import { type ReactElement, useState } from "react"
 
 import { Button } from "@/components/ui/button"
@@ -13,19 +13,23 @@ type DocumentDownloadButtonProps = {
   disabled?: boolean
   label?: string
   versionId?: string | null
+  /** Open it in the browser, as the primary action, rather than save it. */
+  view?: boolean
 }
 
 /**
- * Requests a signed download URL and opens it in a new tab.
+ * Requests a signed URL and opens it in a new tab, to save the file or, with
+ * view, to show it there.
  *
  * @param props - Organization and document identifiers for the signed URL API.
  * @returns Download button with transient error state.
  */
 export function DocumentDownloadButton({
+  view = false,
   organizationId,
   documentId,
   disabled = false,
-  label = "Download",
+  label = view ? "Open" : "Download",
   versionId = null,
 }: DocumentDownloadButtonProps): ReactElement {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
@@ -50,7 +54,7 @@ export function DocumentDownloadButton({
         {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ organizationId, versionId }),
+          body: JSON.stringify({ organizationId, versionId, view }),
         }
       )
 
@@ -81,9 +85,9 @@ export function DocumentDownloadButton({
         disabled={disabled || isLoading}
         onClick={handleDownload}
         type="button"
-        variant="outline"
+        variant={view ? "default" : "outline"}
       >
-        <Download data-icon="inline-start" />
+        {view ? <ExternalLink data-icon="inline-start" /> : <Download data-icon="inline-start" />}
         {isLoading ? "Preparing" : label}
       </Button>
       {errorMessage && (

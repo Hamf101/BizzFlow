@@ -31,6 +31,7 @@ import {
   type TemplateContentV3
 } from "@/types/template"
 import { insertTemplateBlock } from "@/types/template-structure"
+import { answerTemplateAccess } from "@/services/templates/access.test-support"
 
 type FakeRow = Record<string, unknown>
 type FakeTables = Record<string, FakeRow[]>
@@ -169,6 +170,21 @@ class FakeQuery implements PromiseLike<FakeResult> {
     return this
   }
 
+  // Only "not in (a,b)" is used: leaving out hidden templates.
+  not(column: string, operator: string, value: string): FakeQuery {
+    const ids = operator === "in" ? value.slice(1, -1).split(",") : []
+    this.filters.push((row: FakeRow): boolean => !ids.includes(row[column] as string))
+    return this
+  }
+
+  // Only "status.eq.published,id.in.(a,b)" is used: published, or one of a list.
+  or(expression: string): FakeQuery {
+    const [, status] = /status\.eq\.(\w+)/.exec(expression) ?? []
+    const ids = (/id\.in\.\(([^)]*)\)/.exec(expression)?.[1] ?? "").split(",")
+    this.filters.push((row: FakeRow): boolean => row.status === status || ids.includes(row.id as string))
+    return this
+  }
+
   order(column: string, options: { ascending: boolean }): FakeQuery {
     this.orderColumn = column
     this.orderAscending = options.ascending
@@ -284,9 +300,22 @@ class FakeClient {
   }
 
   async rpc(
-    functionName: "get_document_access_level" | "get_folder_access_level",
+    functionName:
+      | "get_document_access_level"
+      | "get_folder_access_level"
+      | "get_template_access_level"
+      | "hidden_template_ids"
+      | "editable_template_ids",
     args: Record<string, unknown>
-  ): Promise<{ data: "viewer" | "contributor" | null; error: null }> {
+  ): Promise<{ data: unknown; error: null }> {
+    if (
+      functionName === "get_template_access_level" ||
+      functionName === "hidden_template_ids" ||
+      functionName === "editable_template_ids"
+    ) {
+      return answerTemplateAccess(this.tables, functionName, args)
+    }
+
     const membership = this.tables.organization_memberships.find(
       (row: FakeRow): boolean =>
         row.org_id === args.target_org_id &&
@@ -1353,23 +1382,17 @@ describe("template service", () => {
       expect(duplicated.title).toBe("Draft handbook (Copy)")
     })
 
-    it("denies access to staff without templates:manage", async () => {
+    it("lets staff copy a template they can use, and refuses reviewers", async () => {
       const tables = createBaseTables()
       const client = new FakeClient(tables)
+      const deps = { client: client as never, createId: (): string => "30000000-0000-4000-8000-000000000099" }
 
       await expect(
-        duplicateDocumentTemplate(
-          {
-            actorUserId: STAFF_ID,
-            organizationId: ORG_ID,
-            templateId: TEMPLATE_ID
-          },
-          { client: client as never }
-        )
-      ).rejects.toMatchObject({
-        message: "You cannot manage document templates.",
-        statusCode: 403
-      })
+        duplicateDocumentTemplate({ actorUserId: STAFF_ID, organizationId: ORG_ID, templateId: TEMPLATE_ID }, deps)
+      ).resolves.toMatchObject({ createdBy: STAFF_ID, status: "draft" })
+      await expect(
+        duplicateDocumentTemplate({ actorUserId: EXTERNAL_ID, organizationId: ORG_ID, templateId: TEMPLATE_ID }, deps)
+      ).rejects.toMatchObject({ message: "You cannot create templates.", statusCode: 403 })
     })
 
     it("rejects duplicating a non-existent template", async () => {
@@ -1536,12 +1559,16 @@ describe("changing several templates at once", () => {
     expect(result).toMatchObject({ changed: [TEMPLATE_ID, DRAFT_TEMPLATE_ID], failed: 1 })
   })
 
-  it("lets a person without templates:manage change nothing", async () => {
+  it("changes nothing for a person who may not edit those templates, and refuses reviewers", async () => {
     const tables = createBaseTables()
     const client = new FakeClient(tables)
 
+    // Staff make templates, but this one is the manager's: it is left alone and counted as not changed.
     await expect(
       changeDocumentTemplates({ ...ask("archive", [TEMPLATE_ID]), actorUserId: STAFF_ID }, { client: client as never })
+    ).resolves.toMatchObject({ changed: [], failed: 1 })
+    await expect(
+      changeDocumentTemplates({ ...ask("archive", [TEMPLATE_ID]), actorUserId: EXTERNAL_ID }, { client: client as never })
     ).rejects.toMatchObject({ statusCode: 403 })
     expect(templateIn(tables, TEMPLATE_ID).status).toBe("published")
   })
@@ -1586,5 +1613,88 @@ describe("changing several templates at once", () => {
     await expect(
       changeDocumentTemplates(ask("archive", Array.from({ length: 201 }, (_, index) => `30000000-0000-4000-8000-${String(index).padStart(12, "0")}`)), { client: client as never })
     ).rejects.toMatchObject({ statusCode: 400 })
+  })
+})
+
+describe("templates that are shared, and kept to chosen people", () => {
+  const OTHER_MANAGER_ID = "20000000-0000-4000-8000-000000000009"
+  const RESTRICTED_ID = "30000000-0000-4000-8000-000000000050"
+  const OWN_DRAFT_ID = "30000000-0000-4000-8000-000000000051"
+
+  // A restricted template the manager made, and a draft staff made.
+  function tablesWithShares(): FakeTables {
+    const tables = createBaseTables()
+    tables.organization_memberships.push(createMembership(OTHER_MANAGER_ID, "manager"))
+    tables.document_templates.push(
+      { ...createTemplateRow(RESTRICTED_ID, "published"), access_restricted: true, title: "Private lease" },
+      { ...createTemplateRow(OWN_DRAFT_ID, "draft"), created_by: STAFF_ID, title: "Staff draft" }
+    )
+    tables.template_access_grants = []
+    return tables
+  }
+
+  const grant = (tables: FakeTables, templateId: string, level: string, who: { role?: string; userId?: string }): void => {
+    tables.template_access_grants?.push({ access_level: level, org_id: ORG_ID, organization_role: who.role ?? null, template_id: templateId, user_id: who.userId ?? null })
+  }
+  const edit = (actorUserId: string, templateId: string) => ({ actorUserId, content: createBlankTemplateContent(), expectedRevision: 1, organizationId: ORG_ID, templateId, title: "Changed" })
+
+  it("lets staff make templates, and reviewers not", async () => {
+    const client = new FakeClient(tablesWithShares())
+
+    await expect(
+      createDocumentTemplate({ actorUserId: STAFF_ID, organizationId: ORG_ID, title: "Mine" }, { client: client as never, createId: () => NEW_TEMPLATE_ID })
+    ).resolves.toMatchObject({ createdBy: STAFF_ID, title: "Mine" })
+    await expect(
+      createDocumentTemplate({ actorUserId: EXTERNAL_ID, organizationId: ORG_ID, title: "Theirs" }, { client: client as never })
+    ).rejects.toMatchObject({ statusCode: 403 })
+  })
+
+  it("lets staff edit what they made, and nothing else unless it is shared with them as an editor", async () => {
+    const tables = tablesWithShares()
+    const client = new FakeClient(tables)
+    const deps = { client: client as never, now: () => new Date("2026-07-18T10:00:00.000Z") }
+
+    await expect(updateDocumentTemplate(edit(STAFF_ID, OWN_DRAFT_ID), deps)).resolves.toMatchObject({ title: "Changed" })
+    await expect(updateDocumentTemplate(edit(STAFF_ID, DRAFT_TEMPLATE_ID), deps)).rejects.toMatchObject({ statusCode: 403 })
+
+    // Being able to use it is not being able to change it.
+    grant(tables, DRAFT_TEMPLATE_ID, "user", { userId: STAFF_ID })
+    await expect(updateDocumentTemplate(edit(STAFF_ID, DRAFT_TEMPLATE_ID), deps)).rejects.toMatchObject({ statusCode: 403 })
+
+    tables.template_access_grants = []
+    grant(tables, DRAFT_TEMPLATE_ID, "editor", { role: "staff" })
+    await expect(updateDocumentTemplate(edit(STAFF_ID, DRAFT_TEMPLATE_ID), deps)).resolves.toMatchObject({ title: "Changed" })
+  })
+
+  it("keeps a restricted template from everyone it was not shared with, including other managers", async () => {
+    const tables = tablesWithShares()
+    const client = new FakeClient(tables)
+    const deps = { client: client as never }
+    const as = (actorUserId: string) => ({ actorUserId, organizationId: ORG_ID, templateId: RESTRICTED_ID })
+
+    await expect(getDocumentTemplate(as(MANAGER_ID), deps)).resolves.toMatchObject({ title: "Private lease" })
+    await expect(getDocumentTemplate(as(OTHER_MANAGER_ID), deps)).rejects.toMatchObject({ statusCode: 404 })
+    await expect(getDocumentTemplate(as(STAFF_ID), deps)).rejects.toMatchObject({ statusCode: 404 })
+    await expect(updateDocumentTemplate(edit(OTHER_MANAGER_ID, RESTRICTED_ID), deps)).rejects.toMatchObject({ statusCode: 404 })
+    await expect(createGeneratedDocument(as(STAFF_ID), deps)).rejects.toMatchObject({ statusCode: 404 })
+
+    const listed = async (actorUserId: string) =>
+      (await listDocumentTemplates({ actorUserId, organizationId: ORG_ID }, deps)).map((template) => template.id)
+    expect(await listed(OTHER_MANAGER_ID)).not.toContain(RESTRICTED_ID)
+    expect(await listed(MANAGER_ID)).toContain(RESTRICTED_ID)
+
+    // Shared with a person to use, and with a role to view.
+    grant(tables, RESTRICTED_ID, "user", { userId: STAFF_ID })
+    grant(tables, RESTRICTED_ID, "viewer", { role: "manager" })
+    expect(await listed(STAFF_ID)).toContain(RESTRICTED_ID)
+    expect(await listed(OTHER_MANAGER_ID)).toContain(RESTRICTED_ID)
+    await expect(getDocumentTemplate(as(OTHER_MANAGER_ID), deps)).resolves.toMatchObject({ title: "Private lease" })
+    await expect(updateDocumentTemplate(edit(OTHER_MANAGER_ID, RESTRICTED_ID), deps)).rejects.toMatchObject({ statusCode: 403 })
+    await expect(updateDocumentTemplate(edit(STAFF_ID, RESTRICTED_ID), deps)).rejects.toMatchObject({ statusCode: 403 })
+    await expect(
+      createGeneratedDocument({ ...as(STAFF_ID) }, { ...deps, createId: () => CREATED_DOCUMENT_ID })
+    ).resolves.toMatchObject({ title: "Private lease" })
+    // A viewer may look but not make documents from it.
+    await expect(createGeneratedDocument(as(OTHER_MANAGER_ID), deps)).rejects.toMatchObject({ statusCode: 403 })
   })
 })

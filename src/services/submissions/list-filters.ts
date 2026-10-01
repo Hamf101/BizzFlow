@@ -48,6 +48,8 @@ export type SubmissionListFilters = {
   createdBy: string | undefined
   organizationId: string
   query: string | null
+  /** The submissions a staff member or external reviewer reviews or had shared with them; filled in by `withReviewedIds`. */
+  reviewedIds: readonly string[]
   role: OrganizationRole
   statuses: readonly SubmissionStatus[] | null
 }
@@ -61,6 +63,7 @@ type SubmissionFilterQuery = {
   ilike(column: string, pattern: string): SubmissionFilterQuery
   in(column: string, values: readonly string[]): SubmissionFilterQuery
   is(column: string, value: null): SubmissionFilterQuery
+  or(filters: string): SubmissionFilterQuery
 }
 
 /**
@@ -88,6 +91,7 @@ export function createSubmissionListFilters(
     createdBy: normalizeSubmissionMember(input.createdBy, "author"),
     organizationId: input.organizationId,
     query: SUBMISSION_LIST_INPUT.search(input.query),
+    reviewedIds: [],
     role,
     statuses: normalizeSubmissionStatusFilter(input.statuses),
   }
@@ -97,7 +101,8 @@ export function createSubmissionListFilters(
  * Narrows a submissions query to what the actor may see, then to the view.
  *
  * Owners and managers see every organization submission, staff see the ones
- * they created, and external reviewers see their assigned non-drafts.
+ * they created or that were shared with them, and external reviewers see the
+ * non-drafts they review or that were shared with them.
  *
  * @param query - A submissions query builder.
  * @param filters - Validated actor scope and view filters.
@@ -113,10 +118,12 @@ export function filterVisibleSubmissions<TQuery>(
   )
 
   if (filters.role === "staff") {
-    filtered = filtered.eq("created_by", filters.actorUserId)
+    filtered = filters.reviewedIds.length
+      ? filtered.or(`created_by.eq.${filters.actorUserId},id.in.(${filters.reviewedIds.join(",")})`)
+      : filtered.eq("created_by", filters.actorUserId)
   } else if (filters.role === "external_reviewer") {
     filtered = filtered
-      .eq("assigned_to", filters.actorUserId)
+      .in("id", filters.reviewedIds)
       .in("status", REVIEWER_VISIBLE_STATUSES)
   }
 

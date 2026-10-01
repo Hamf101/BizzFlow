@@ -27,7 +27,10 @@ afterEach(() => {
 
 async function duplicateAction(): Promise<void> {}
 
-async function openMenu(status: "archived" | "draft" | "published"): Promise<void> {
+async function openMenu(
+  status: "archived" | "draft" | "published",
+  rights: { canDuplicate?: boolean; canEdit?: boolean } = {}
+): Promise<void> {
   const container = document.createElement("div")
   document.body.append(container)
 
@@ -36,6 +39,8 @@ async function openMenu(status: "archived" | "draft" | "published"): Promise<voi
   act(() =>
     root.render(
       <TemplateRowMenu
+        canDuplicate={rights.canDuplicate ?? true}
+        canEdit={rights.canEdit ?? true}
         duplicateAction={duplicateAction}
         status={status}
         templateId={TEMPLATE_ID}
@@ -73,6 +78,7 @@ describe("TemplateRowMenu", () => {
 
     expect(readItems()).toEqual([
       ["Edit", `/templates/${TEMPLATE_ID}/edit`],
+      ["Share…", null],
       ["Duplicate", null],
       ["Archive", null],
       ["Category…", null],
@@ -91,10 +97,23 @@ describe("TemplateRowMenu", () => {
     expect(readItems()).toEqual([
       ["Edit", `/templates/${TEMPLATE_ID}/edit`],
       ["Public links", `/templates/${TEMPLATE_ID}/links`],
+      ["Share…", null],
       ["Duplicate", null],
       ["Archive", null],
       ["Category…", null],
     ])
+  })
+
+  it("offers someone who can only make copies just that, and someone who can only edit no copy", async () => {
+    await openMenu("published", { canEdit: false })
+
+    expect(readItems()).toEqual([["Duplicate", null]])
+  })
+
+  it("lets someone who was given the template to edit share it without being able to copy it", async () => {
+    await openMenu("draft", { canDuplicate: false })
+
+    expect(readItems().map(([label]) => label)).toEqual(["Edit", "Share…", "Archive", "Category…"])
   })
 
   it("duplicates by submitting the template's id from inside the menu", async () => {

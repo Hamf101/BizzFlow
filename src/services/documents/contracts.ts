@@ -148,6 +148,8 @@ export type CreateDocumentDownloadUrlInput = {
   organizationId: string
   documentId: string
   versionId?: string | null
+  /** Open it in the browser where that is safe; anything else still downloads. */
+  view?: boolean
 }
 
 export type DocumentServiceDeps = {

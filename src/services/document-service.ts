@@ -33,3 +33,15 @@ export {
   requestDocumentPurge,
   requestFolderPurge,
 } from "@/services/documents/purge-service"
+export type {
+  SharingGrant,
+  SharingLevel,
+  SharingPerson,
+  SharingResource,
+  SharingView,
+} from "@/services/documents/sharing-contracts"
+export {
+  getSharingMany,
+  setSharingAccessMany,
+  setSharingInheritanceMany,
+} from "@/services/documents/sharing-many"

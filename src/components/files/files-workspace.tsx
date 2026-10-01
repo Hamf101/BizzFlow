@@ -221,8 +221,14 @@ export function FilesWorkspace({
           }))
       : []
 
+  // Anyone who can edit an item, and anyone who manages folders, may share it while it is active.
+  const canShare = (item: { accessLevel: string; lifecycleState: DocumentLifecycleState }): boolean =>
+    item.lifecycleState === "active" && (item.accessLevel === "contributor" || canManageFolders)
+
   function folderMenu(folder: AccessibleDocumentFolder): ReactNode {
-    if (!canManageFolders || !isManageable(folder)) {
+    const manageable = canManageFolders && isManageable(folder)
+
+    if (!manageable && !canShare(folder)) {
       return null
     }
 
@@ -230,7 +236,7 @@ export function FilesWorkspace({
 
     return (
       <FileRowMenu
-        actions={lifecycleActions(
+        actions={manageable ? lifecycleActions(
           folder.lifecycleState,
           {
             archive: actions.archiveFolder,
@@ -238,11 +244,11 @@ export function FilesWorkspace({
             trash: actions.trashFolder,
           },
           fields
-        )}
+        ) : []}
         itemId={folder.id}
         name={folder.name}
         purgeForm={
-          folder.lifecycleState === "trashed" ? (
+          manageable && folder.lifecycleState === "trashed" ? (
             <PurgeRequestForm
               action={actions.requestFolderPurge}
               confirmationFieldName="confirmationName"
@@ -261,7 +267,9 @@ export function FilesWorkspace({
   }
 
   function documentMenu(document: AccessibleDocumentSummary): ReactNode {
-    if (!canManageDocuments || !isManageable(document)) {
+    const manageable = canManageDocuments && isManageable(document)
+
+    if (!manageable && !canShare(document)) {
       return null
     }
 
@@ -269,7 +277,7 @@ export function FilesWorkspace({
 
     return (
       <FileRowMenu
-        actions={lifecycleActions(
+        actions={manageable ? lifecycleActions(
           document.lifecycleState,
           {
             archive: actions.archiveDocument,
@@ -277,11 +285,11 @@ export function FilesWorkspace({
             trash: actions.trashDocument,
           },
           fields
-        )}
+        ) : []}
         itemId={document.id}
         name={document.title}
         purgeForm={
-          document.lifecycleState === "trashed" ? (
+          manageable && document.lifecycleState === "trashed" ? (
             <PurgeRequestForm
               action={actions.requestDocumentPurge}
               confirmationFieldName="confirmationTitle"
@@ -370,6 +378,7 @@ export function FilesWorkspace({
           canManageFolders && isManageable(folder)
             ? LIFECYCLE_LABELS[folder.lifecycleState]
             : [],
+        shareable: canShare(folder),
       })
     ),
     ...inFolder.documents.map(
@@ -380,6 +389,7 @@ export function FilesWorkspace({
           canManageDocuments && isManageable(document)
             ? LIFECYCLE_LABELS[document.lifecycleState]
             : [],
+        shareable: canShare(document),
       })
     ),
   ]
