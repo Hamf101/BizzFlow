@@ -1114,7 +1114,7 @@ function validateFlowCandidate(input: {
       success: false,
       issueCode: "unrequested_removal",
       issuePath: "operations",
-      detail: `the user did not ask to remove anything. Keep ${nameRemovedBlocks(input.response, input.request.draft.content)} and make the other changes; if something must go, return needsConfirmation=true with one question and no operations`
+      detail: `the user did not ask to remove anything. Keep ${nameRemovedBlocks(input.response, input.request.draft.content)} and make the other changes. To set more beside each other, a row holds three short fields. A field may go when this turn adds or rewrites one in its place; otherwise return needsConfirmation=true with one question and no operations`
     }
   }
 
@@ -1783,9 +1783,46 @@ function readRequiredConfirmation(
       operationRemovesExistingImage(operation, content)
   )
 
-  return removesImage
-    ? "That change may remove an existing image or logo. Should I remove it?"
+  if (removesImage) {
+    return "That change may remove an existing image or logo. Should I remove it?"
+  }
+
+  return removalsReplaced(response, content)
+    ? null
     : `That change would remove ${nameRemovedBlocks(response, content)}. Should I go ahead?`
+}
+
+// Two name fields merged into one, or a question rebuilt in a new section, is
+// a change rather than a loss: removals pass when the same turn adds or
+// rewrites at least as many blocks of each kind. Each shows in the receipt.
+function removalsReplaced(response: FlowProviderResponse, content: TemplateContent): boolean {
+  const kind = (type: string): string => (type.endsWith("_field") ? "field" : type)
+  const balance = new Map<string, number>()
+
+  for (const operation of response.operations) {
+    if (operation.type === "remove_block") {
+      const block = content.blocks.find((candidate: TemplateBlock): boolean => candidate.id === operation.payload.blockId)
+      const removed = kind(block?.type ?? "unknown")
+
+      balance.set(removed, (balance.get(removed) ?? 0) - 1)
+    } else if (operation.type === "add_block" || (operation.type === "update_block" && asksSomethingNew(operation.payload, content))) {
+      const added = kind(operation.payload.block.type)
+
+      balance.set(added, (balance.get(added) ?? 0) + 1)
+    }
+  }
+
+  return [...balance.values()].every((count: number): boolean => count >= 0)
+}
+
+// A rewrite replaces something only when it now says something else; clearer
+// help text on the same question does not make up for a question gone.
+function asksSomethingNew(payload: FlowOperationPayload<"update_block">, content: TemplateContent): boolean {
+  const before = content.blocks.find((candidate: TemplateBlock): boolean => candidate.id === payload.blockId)
+  const words = (block: object | undefined): unknown =>
+    block && "label" in block ? block.label : block && "text" in block ? block.text : undefined
+
+  return words(before) !== words(payload.block)
 }
 
 // What a response would remove, in the user's words: up to three, then a count.

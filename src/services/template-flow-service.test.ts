@@ -305,6 +305,42 @@ describe("template Flow service", () => {
     expect(result.proposal?.candidateDraft).toMatchObject({ title: "Short agreement", content: { blocks: [{ id: PARAGRAPH_ID }] } })
   })
 
+  it("lets a field go when the same turn puts one in its place, and hands back removals that outnumber their replacements", async () => {
+    const nameField = (id: string, fieldKey: string, label: string) =>
+      ({ id, type: "text_field", fieldKey, label, required: false, helpText: null, placeholder: null, multiline: false }) as const
+    const content = createContent()
+    content.blocks.push(nameField(FIELD_ID, "first_name", "First name"), nameField(COMPANION_ID, "last_name", "Last name"))
+    const merge: TestFlowOperation = {
+      type: "update_block",
+      summary: "Asked for the full name in one field",
+      payload: { blockId: FIELD_ID, block: { ...nameField(FIELD_ID, "first_name", "Full name"), id: undefined } },
+    }
+    const dropLast: TestFlowOperation = { type: "remove_block", summary: "Removed last name, now part of full name", payload: { blockId: COMPANION_ID } }
+    const merged = runFlow(content, [merge, dropLast])
+    const result = await merged.run
+
+    expect(readProviderRequests(merged.aiProvider)).toHaveLength(1)
+    expect(result.needsConfirmation).toBe(false)
+    expect(result.proposal?.candidateDraft.content.blocks.map((block) => block.id)).toEqual([PARAGRAPH_ID, FIELD_ID])
+
+    // Two fields and the introduction go for one field changed: not a replacement.
+    const sweep = runFlow(content, [merge, dropLast, { type: "remove_block", summary: "Removed introduction", payload: { blockId: PARAGRAPH_ID } }], [merge])
+
+    await sweep.run
+    expect(String(readProviderRequests(sweep.aiProvider)[1]?.input)).toMatch(/unrequested_removal.*A long introduction/)
+
+    // Clearer help on the same question replaces nothing.
+    const reworded: TestFlowOperation = {
+      type: "update_block",
+      summary: "Clearer help",
+      payload: { blockId: FIELD_ID, block: { ...nameField(FIELD_ID, "first_name", "First name"), helpText: "As on your passport.", id: undefined } },
+    }
+    const masked = runFlow(content, [reworded, dropLast], [reworded])
+
+    await masked.run
+    expect(String(readProviderRequests(masked.aiProvider)[1]?.input)).toMatch(/unrequested_removal.*Last name/)
+  })
+
   it("asks before a removal the model insists on, naming what would go, and leaves the draft unchanged", async () => {
     const content = createContent()
     const aiProvider = createTestAiProvider([
