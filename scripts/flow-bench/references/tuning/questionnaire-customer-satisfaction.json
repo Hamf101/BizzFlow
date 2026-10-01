@@ -118,21 +118,23 @@
         "across": true
       },
       {
-        "id": "d5010000-0000-4000-8000-000000000011",
-        "type": "dropdown_field",
-        "fieldKey": "how_would_you_rate_the_welcome_you_received",
-        "label": "How would you rate the welcome you received?",
+        "id": "d5010000-0000-4000-8000-000000000025",
+        "type": "choice_grid_field",
+        "fieldKey": "salon_ratings",
+        "label": "How would you rate each of these?",
         "required": true,
         "helpText": null,
-        "placeholder": null,
+        "rows": [
+          "The welcome you received",
+          "The cleanliness of the salon",
+          "The value for money"
+        ],
         "options": [
           "Excellent",
           "Good",
           "Fair",
           "Poor"
-        ],
-        "display": "radios",
-        "across": true
+        ]
       },
       {
         "id": "d5010000-0000-4000-8000-000000000012",
@@ -163,40 +165,6 @@
           "Happy",
           "Unhappy",
           "Very unhappy"
-        ],
-        "display": "radios",
-        "across": true
-      },
-      {
-        "id": "d5010000-0000-4000-8000-000000000014",
-        "type": "dropdown_field",
-        "fieldKey": "how_would_you_rate_the_cleanliness_of_the_salon",
-        "label": "How would you rate the cleanliness of the salon?",
-        "required": true,
-        "helpText": null,
-        "placeholder": null,
-        "options": [
-          "Excellent",
-          "Good",
-          "Fair",
-          "Poor"
-        ],
-        "display": "radios",
-        "across": true
-      },
-      {
-        "id": "d5010000-0000-4000-8000-000000000015",
-        "type": "dropdown_field",
-        "fieldKey": "how_would_you_rate_the_value_for_money",
-        "label": "How would you rate the value for money?",
-        "required": true,
-        "helpText": null,
-        "placeholder": null,
-        "options": [
-          "Excellent",
-          "Good",
-          "Fair",
-          "Poor"
         ],
         "display": "radios",
         "across": true

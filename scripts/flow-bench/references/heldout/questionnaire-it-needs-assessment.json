@@ -72,7 +72,8 @@
         "required": true,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "phone"
       },
       {
         "id": "d5050000-0000-4000-8000-000000000010",
@@ -82,7 +83,8 @@
         "required": true,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "email"
       },
       {
         "id": "d5050000-0000-4000-8000-000000000012",
@@ -103,7 +105,8 @@
         "required": true,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "number"
       },
       {
         "id": "d5050000-0000-4000-8000-000000000014",
@@ -113,7 +116,8 @@
         "required": true,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "number"
       },
       {
         "id": "d5050000-0000-4000-8000-000000000016",
@@ -139,7 +143,8 @@
         "required": false,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "number"
       },
       {
         "id": "d5050000-0000-4000-8000-000000000019",
@@ -149,7 +154,8 @@
         "required": false,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "number"
       },
       {
         "id": "d5050000-0000-4000-8000-000000000020",
@@ -159,7 +165,8 @@
         "required": false,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "number"
       },
       {
         "id": "d5050000-0000-4000-8000-000000000022",
@@ -416,15 +423,36 @@
         "display": "radios"
       },
       {
-        "id": "d5050000-0000-4000-8000-000000000042",
-        "type": "text_field",
+        "id": "d5050000-0000-4000-8000-000000000061",
+        "type": "dropdown_field",
         "fieldKey": "where_is_the_business_s_important_information_kept",
         "label": "Where is the business's important information kept?",
         "required": false,
-        "helpText": "For example on each computer, a shared drive in the office, or cloud storage.",
+        "helpText": "Tick each that applies.",
         "placeholder": null,
-        "multiline": true,
-        "boxHeight": 45
+        "options": [
+          "On each computer",
+          "An office server or shared drive",
+          "Cloud storage",
+          "Somewhere else"
+        ],
+        "multiple": true,
+        "across": true
+      },
+      {
+        "id": "d5050000-0000-4000-8000-000000000062",
+        "type": "text_field",
+        "fieldKey": "where_else_is_it_kept",
+        "label": "Where else is it kept?",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "visibleWhen": {
+          "sourceBlockId": "d5050000-0000-4000-8000-000000000061",
+          "operator": "equals",
+          "value": "Somewhere else"
+        }
       },
       {
         "id": "d5050000-0000-4000-8000-000000000044",
@@ -655,7 +683,7 @@
       {
         "id": "d5050000-0000-4000-8000-000000000043",
         "label": "Your data and backups",
-        "startBlockId": "d5050000-0000-4000-8000-000000000042",
+        "startBlockId": "d5050000-0000-4000-8000-000000000061",
         "pageBreakBefore": false,
         "keepTogether": false
       },

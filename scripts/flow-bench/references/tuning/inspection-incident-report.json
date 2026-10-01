@@ -71,7 +71,8 @@
         "required": true,
         "helpText": "We call if we need more details about what happened.",
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "phone"
       },
       {
         "id": "d4030000-0000-4000-8000-000000000009",
@@ -123,7 +124,8 @@
         "required": true,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "time"
       },
       {
         "id": "d4030000-0000-4000-8000-000000000016",
@@ -233,7 +235,8 @@
         "required": false,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "time"
       },
       {
         "id": "d4030000-0000-4000-8000-000000000028",
@@ -324,7 +327,8 @@
           "value": "Yes"
         },
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "number"
       },
       {
         "id": "d4030000-0000-4000-8000-000000000034",
@@ -344,7 +348,8 @@
         "required": false,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "phone"
       },
       {
         "id": "d4030000-0000-4000-8000-000000000038",
@@ -364,7 +369,8 @@
         "required": false,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "phone"
       },
       {
         "id": "d4030000-0000-4000-8000-000000000041",

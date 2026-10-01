@@ -140,7 +140,8 @@
         "required": true,
         "helpText": "We call to arrange viewings and to give you our decision.",
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "phone"
       },
       {
         "id": "0a110000-0000-4000-8000-000000000015",
@@ -150,7 +151,8 @@
         "required": true,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "email"
       },
       {
         "id": "0a110000-0000-4000-8000-000000000017",
@@ -191,7 +193,8 @@
         "required": true,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "number"
       },
       {
         "id": "0a110000-0000-4000-8000-000000000021",
@@ -201,7 +204,8 @@
         "required": true,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "number"
       },
       {
         "id": "0a110000-0000-4000-8000-000000000023",
@@ -483,11 +487,14 @@
         "id": "0a110000-0000-4000-8000-000000000047",
         "type": "text_field",
         "fieldKey": "your_yearly_income_before_tax",
-        "label": "Your yearly income before tax",
+        "label": "Your income before tax",
         "required": true,
         "helpText": "Include all regular income, such as wages, pensions and benefits.",
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "money",
+        "prefix": "£",
+        "suffix": "a year"
       },
       {
         "id": "0a110000-0000-4000-8000-000000000048",
@@ -533,7 +540,8 @@
           "value": "Yes"
         },
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "phone"
       },
       {
         "id": "0a110000-0000-4000-8000-000000000053",

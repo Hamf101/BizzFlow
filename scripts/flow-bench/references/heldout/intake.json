@@ -61,7 +61,8 @@
         "helpText": "We call to arrange your first visit, and if we cannot get in.",
         "type": "text_field",
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "phone"
       },
       {
         "id": "a4000000-0000-4000-8000-000000000009",
@@ -71,7 +72,8 @@
         "helpText": null,
         "type": "text_field",
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "email"
       },
       {
         "id": "a4000000-0000-4000-8000-000000000012",
@@ -188,7 +190,8 @@
           "sourceBlockId": "a4000000-0000-4000-8000-000000000102",
           "operator": "equals",
           "value": "Home"
-        }
+        },
+        "format": "number"
       },
       {
         "id": "a4000000-0000-4000-8000-000000000023",
@@ -203,7 +206,8 @@
           "sourceBlockId": "a4000000-0000-4000-8000-000000000102",
           "operator": "equals",
           "value": "Home"
-        }
+        },
+        "format": "number"
       },
       {
         "id": "a4000000-0000-4000-8000-000000000026",

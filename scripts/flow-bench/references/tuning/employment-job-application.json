@@ -201,7 +201,8 @@
         "required": true,
         "helpText": "We call to arrange interviews.",
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "phone"
       },
       {
         "id": "0c110000-0000-4000-8000-000000000025",
@@ -211,7 +212,8 @@
         "required": true,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "email"
       },
       {
         "id": "0c110000-0000-4000-8000-000000000027",
@@ -335,7 +337,9 @@
         "required": false,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "money",
+        "prefix": "£"
       },
       {
         "id": "0c110000-0000-4000-8000-000000000041",
@@ -376,165 +380,31 @@
         "alignment": "left"
       },
       {
-        "id": "0c110000-0000-4000-8000-000000000047",
-        "type": "text_field",
-        "fieldKey": "first_previous_employer",
-        "label": "Employer",
+        "id": "0c110000-0000-4000-8000-000000000111",
+        "type": "table_field",
+        "fieldKey": "previous_jobs",
+        "label": "Previous jobs",
         "required": false,
-        "helpText": null,
-        "placeholder": null,
-        "multiline": false
-      },
-      {
-        "id": "0c110000-0000-4000-8000-000000000048",
-        "type": "text_field",
-        "fieldKey": "first_previous_position",
-        "label": "Position",
-        "required": false,
-        "helpText": null,
-        "placeholder": null,
-        "multiline": false
-      },
-      {
-        "id": "0c110000-0000-4000-8000-000000000050",
-        "type": "text_field",
-        "fieldKey": "first_previous_from",
-        "label": "From",
-        "required": false,
-        "helpText": "Month and year.",
-        "placeholder": null,
-        "multiline": false
-      },
-      {
-        "id": "0c110000-0000-4000-8000-000000000051",
-        "type": "text_field",
-        "fieldKey": "first_previous_to",
-        "label": "To",
-        "required": false,
-        "helpText": "Month and year.",
-        "placeholder": null,
-        "multiline": false
-      },
-      {
-        "id": "0c110000-0000-4000-8000-000000000053",
-        "type": "text_field",
-        "fieldKey": "first_previous_reason_for_leaving",
-        "label": "Why you left",
-        "required": false,
-        "helpText": null,
-        "placeholder": null,
-        "multiline": false
-      },
-      {
-        "id": "0c110000-0000-4000-8000-000000000054",
-        "type": "text_field",
-        "fieldKey": "second_previous_employer",
-        "label": "Employer",
-        "required": false,
-        "helpText": null,
-        "placeholder": null,
-        "multiline": false
-      },
-      {
-        "id": "0c110000-0000-4000-8000-000000000055",
-        "type": "text_field",
-        "fieldKey": "second_previous_position",
-        "label": "Position",
-        "required": false,
-        "helpText": null,
-        "placeholder": null,
-        "multiline": false
-      },
-      {
-        "id": "0c110000-0000-4000-8000-000000000057",
-        "type": "text_field",
-        "fieldKey": "second_previous_from",
-        "label": "From",
-        "required": false,
-        "helpText": "Month and year.",
-        "placeholder": null,
-        "multiline": false
-      },
-      {
-        "id": "0c110000-0000-4000-8000-000000000058",
-        "type": "text_field",
-        "fieldKey": "second_previous_to",
-        "label": "To",
-        "required": false,
-        "helpText": "Month and year.",
-        "placeholder": null,
-        "multiline": false
-      },
-      {
-        "id": "0c110000-0000-4000-8000-000000000060",
-        "type": "text_field",
-        "fieldKey": "second_previous_reason_for_leaving",
-        "label": "Why you left",
-        "required": false,
-        "helpText": null,
-        "placeholder": null,
-        "multiline": false
-      },
-      {
-        "id": "0c110000-0000-4000-8000-000000000061",
-        "type": "text_field",
-        "fieldKey": "third_previous_employer",
-        "label": "Employer",
-        "required": false,
-        "helpText": null,
-        "placeholder": null,
-        "multiline": false
-      },
-      {
-        "id": "0c110000-0000-4000-8000-000000000062",
-        "type": "text_field",
-        "fieldKey": "third_previous_position",
-        "label": "Position",
-        "required": false,
-        "helpText": null,
-        "placeholder": null,
-        "multiline": false
-      },
-      {
-        "id": "0c110000-0000-4000-8000-000000000064",
-        "type": "text_field",
-        "fieldKey": "third_previous_from",
-        "label": "From",
-        "required": false,
-        "helpText": "Month and year.",
-        "placeholder": null,
-        "multiline": false
-      },
-      {
-        "id": "0c110000-0000-4000-8000-000000000065",
-        "type": "text_field",
-        "fieldKey": "third_previous_to",
-        "label": "To",
-        "required": false,
-        "helpText": "Month and year.",
-        "placeholder": null,
-        "multiline": false
-      },
-      {
-        "id": "0c110000-0000-4000-8000-000000000067",
-        "type": "text_field",
-        "fieldKey": "third_previous_reason_for_leaving",
-        "label": "Why you left",
-        "required": false,
-        "helpText": null,
-        "placeholder": null,
-        "multiline": false
-      },
-      {
-        "id": "0c110000-0000-4000-8000-000000000068",
-        "type": "text_field",
-        "fieldKey": "earlier_jobs",
-        "label": "Earlier jobs",
-        "required": false,
-        "helpText": "Employer, position, dates and why you left, for any jobs before these.",
-        "boxHeight": 75,
-        "placeholder": null,
-        "multiline": true
+        "helpText": "Give the month and year you started and left each job.",
+        "columns": [
+          {
+            "label": "Employer"
+          },
+          {
+            "label": "Position"
+          },
+          {
+            "label": "From"
+          },
+          {
+            "label": "To"
+          },
+          {
+            "label": "Why you left"
+          }
+        ],
+        "rows": 5,
+        "addRows": true
       },
       {
         "id": "0c110000-0000-4000-8000-000000000069",
@@ -549,14 +419,27 @@
       },
       {
         "id": "0c110000-0000-4000-8000-000000000071",
-        "type": "text_field",
+        "type": "table_field",
         "fieldKey": "qualifications",
         "label": "Qualifications",
         "required": false,
-        "helpText": "The qualification, the subject, the grade, and the year you gained it. Start with the most relevant to this job.",
-        "boxHeight": 105,
-        "placeholder": null,
-        "multiline": true
+        "helpText": "Start with the most relevant to this job.",
+        "columns": [
+          {
+            "label": "Qualification"
+          },
+          {
+            "label": "Subject"
+          },
+          {
+            "label": "Grade"
+          },
+          {
+            "label": "Year"
+          }
+        ],
+        "rows": 5,
+        "addRows": true
       },
       {
         "id": "0c110000-0000-4000-8000-000000000072",
@@ -651,7 +534,8 @@
         "required": false,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "phone"
       },
       {
         "id": "0c110000-0000-4000-8000-000000000086",
@@ -661,7 +545,8 @@
         "required": true,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "email"
       },
       {
         "id": "0c110000-0000-4000-8000-000000000088",
@@ -711,7 +596,8 @@
         "required": false,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "phone"
       },
       {
         "id": "0c110000-0000-4000-8000-000000000095",
@@ -721,7 +607,8 @@
         "required": true,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "email"
       },
       {
         "id": "0c110000-0000-4000-8000-000000000097",
@@ -902,7 +789,7 @@
       {
         "id": "0c110000-0000-4000-8000-000000000070",
         "label": "Education, qualifications and training",
-        "pageBreakBefore": false,
+        "pageBreakBefore": true,
         "keepTogether": false,
         "startBlockId": "0c110000-0000-4000-8000-000000000071"
       },
@@ -992,54 +879,6 @@
         "label": null,
         "startBlockId": "0c110000-0000-4000-8000-000000000040",
         "endBlockId": "0c110000-0000-4000-8000-000000000041",
-        "columns": 2,
-        "keepTogether": false
-      },
-      {
-        "id": "0c110000-0000-4000-8000-000000000049",
-        "label": "Previous job",
-        "startBlockId": "0c110000-0000-4000-8000-000000000047",
-        "endBlockId": "0c110000-0000-4000-8000-000000000048",
-        "columns": 2,
-        "keepTogether": false
-      },
-      {
-        "id": "0c110000-0000-4000-8000-000000000052",
-        "label": null,
-        "startBlockId": "0c110000-0000-4000-8000-000000000050",
-        "endBlockId": "0c110000-0000-4000-8000-000000000051",
-        "columns": 2,
-        "keepTogether": false
-      },
-      {
-        "id": "0c110000-0000-4000-8000-000000000056",
-        "label": "The job before that",
-        "startBlockId": "0c110000-0000-4000-8000-000000000054",
-        "endBlockId": "0c110000-0000-4000-8000-000000000055",
-        "columns": 2,
-        "keepTogether": false
-      },
-      {
-        "id": "0c110000-0000-4000-8000-000000000059",
-        "label": null,
-        "startBlockId": "0c110000-0000-4000-8000-000000000057",
-        "endBlockId": "0c110000-0000-4000-8000-000000000058",
-        "columns": 2,
-        "keepTogether": false
-      },
-      {
-        "id": "0c110000-0000-4000-8000-000000000063",
-        "label": "The job before that",
-        "startBlockId": "0c110000-0000-4000-8000-000000000061",
-        "endBlockId": "0c110000-0000-4000-8000-000000000062",
-        "columns": 2,
-        "keepTogether": false
-      },
-      {
-        "id": "0c110000-0000-4000-8000-000000000066",
-        "label": null,
-        "startBlockId": "0c110000-0000-4000-8000-000000000064",
-        "endBlockId": "0c110000-0000-4000-8000-000000000065",
         "columns": 2,
         "keepTogether": false
       },

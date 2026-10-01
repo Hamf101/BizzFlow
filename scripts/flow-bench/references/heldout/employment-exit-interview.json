@@ -174,122 +174,26 @@
         "multiline": true
       },
       {
-        "id": "0c160000-0000-4000-8000-000000000017",
-        "type": "paragraph",
-        "text": "How far do you agree with each statement?",
-        "alignment": "left"
-      },
-      {
-        "id": "0c160000-0000-4000-8000-000000000018",
-        "type": "dropdown_field",
-        "fieldKey": "i_understood_what_was_expected_of_me",
-        "label": "I understood what was expected of me",
+        "id": "0c160000-0000-4000-8000-000000000034",
+        "type": "choice_grid_field",
+        "fieldKey": "your_experience_here",
+        "label": "How far do you agree with each statement?",
         "required": false,
         "helpText": null,
-        "placeholder": null,
+        "rows": [
+          "I understood what was expected of me",
+          "I had the training I needed to do my job well",
+          "My manager supported me and gave me useful feedback",
+          "My workload and hours were manageable",
+          "My pay was fair for the work I did",
+          "I was treated with respect by the people I worked with",
+          "I would recommend working here to a friend"
+        ],
         "options": [
           "Agree",
           "Partly agree",
           "Disagree"
-        ],
-        "display": "radios",
-        "across": true
-      },
-      {
-        "id": "0c160000-0000-4000-8000-000000000019",
-        "type": "dropdown_field",
-        "fieldKey": "i_had_the_training_i_needed_to_do_my_job_well",
-        "label": "I had the training I needed to do my job well",
-        "required": false,
-        "helpText": null,
-        "placeholder": null,
-        "options": [
-          "Agree",
-          "Partly agree",
-          "Disagree"
-        ],
-        "display": "radios",
-        "across": true
-      },
-      {
-        "id": "0c160000-0000-4000-8000-000000000020",
-        "type": "dropdown_field",
-        "fieldKey": "my_manager_supported_me_and_gave_me_useful_feedback",
-        "label": "My manager supported me and gave me useful feedback",
-        "required": false,
-        "helpText": null,
-        "placeholder": null,
-        "options": [
-          "Agree",
-          "Partly agree",
-          "Disagree"
-        ],
-        "display": "radios",
-        "across": true
-      },
-      {
-        "id": "0c160000-0000-4000-8000-000000000021",
-        "type": "dropdown_field",
-        "fieldKey": "my_workload_and_hours_were_manageable",
-        "label": "My workload and hours were manageable",
-        "required": false,
-        "helpText": null,
-        "placeholder": null,
-        "options": [
-          "Agree",
-          "Partly agree",
-          "Disagree"
-        ],
-        "display": "radios",
-        "across": true
-      },
-      {
-        "id": "0c160000-0000-4000-8000-000000000022",
-        "type": "dropdown_field",
-        "fieldKey": "my_pay_was_fair_for_the_work_i_did",
-        "label": "My pay was fair for the work I did",
-        "required": false,
-        "helpText": null,
-        "placeholder": null,
-        "options": [
-          "Agree",
-          "Partly agree",
-          "Disagree"
-        ],
-        "display": "radios",
-        "across": true
-      },
-      {
-        "id": "0c160000-0000-4000-8000-000000000023",
-        "type": "dropdown_field",
-        "fieldKey": "i_was_treated_with_respect_by_the_people_i_worked_with",
-        "label": "I was treated with respect by the people I worked with",
-        "required": false,
-        "helpText": null,
-        "placeholder": null,
-        "options": [
-          "Agree",
-          "Partly agree",
-          "Disagree"
-        ],
-        "display": "radios",
-        "across": true
-      },
-      {
-        "id": "0c160000-0000-4000-8000-000000000024",
-        "type": "dropdown_field",
-        "fieldKey": "i_would_recommend_working_here_to_a_friend",
-        "label": "I would recommend working here to a friend",
-        "required": false,
-        "helpText": null,
-        "placeholder": null,
-        "options": [
-          "Agree",
-          "Partly agree",
-          "Disagree"
-        ],
-        "display": "radios",
-        "across": true
+        ]
       },
       {
         "id": "0c160000-0000-4000-8000-000000000025",
@@ -415,9 +319,9 @@
       {
         "id": "0c160000-0000-4000-8000-000000000016",
         "label": "Your experience here",
-        "pageBreakBefore": false,
+        "pageBreakBefore": true,
         "keepTogether": false,
-        "startBlockId": "0c160000-0000-4000-8000-000000000017"
+        "startBlockId": "0c160000-0000-4000-8000-000000000034"
       },
       {
         "id": "0c160000-0000-4000-8000-000000000028",
@@ -445,12 +349,6 @@
         "keepTogether": false
       }
     ],
-    "blockRules": [
-      {
-        "blockId": "0c160000-0000-4000-8000-000000000017",
-        "pageBreakBefore": false,
-        "keepWithNext": true
-      }
-    ]
+    "blockRules": []
   }
 }

@@ -71,7 +71,8 @@
         "required": true,
         "helpText": "We call to arrange your first session.",
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "phone"
       },
       {
         "id": "0a150000-0000-4000-8000-000000000009",
@@ -81,7 +82,8 @@
         "required": false,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "email"
       },
       {
         "id": "0a150000-0000-4000-8000-000000000011",
@@ -137,7 +139,8 @@
           "value": "No"
         },
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "phone"
       },
       {
         "id": "0a150000-0000-4000-8000-000000000017",
@@ -190,7 +193,8 @@
           "value": "Yes"
         },
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "number"
       },
       {
         "id": "0a150000-0000-4000-8000-000000000020",
@@ -214,15 +218,40 @@
         "across": true
       },
       {
-        "id": "0a150000-0000-4000-8000-000000000022",
-        "type": "text_field",
-        "fieldKey": "which_days_and_times_can_you_usually_help",
-        "label": "Which days and times can you usually help?",
+        "id": "0a150000-0000-4000-8000-000000000057",
+        "type": "dropdown_field",
+        "fieldKey": "which_days_can_you_usually_help",
+        "label": "Which days can you usually help?",
         "required": true,
-        "helpText": "For example, Tuesday mornings and the first Saturday of the month.",
-        "boxHeight": 45,
+        "helpText": null,
         "placeholder": null,
-        "multiline": true
+        "options": [
+          "Monday",
+          "Tuesday",
+          "Wednesday",
+          "Thursday",
+          "Friday",
+          "Saturday",
+          "Sunday"
+        ],
+        "multiple": true,
+        "across": true
+      },
+      {
+        "id": "0a150000-0000-4000-8000-000000000058",
+        "type": "dropdown_field",
+        "fieldKey": "which_times_of_day_suit_you",
+        "label": "Which times of day suit you?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Morning",
+          "Afternoon",
+          "Evening"
+        ],
+        "multiple": true,
+        "across": true
       },
       {
         "id": "0a150000-0000-4000-8000-000000000023",
@@ -321,7 +350,8 @@
         "required": false,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "phone"
       },
       {
         "id": "0a150000-0000-4000-8000-000000000035",
@@ -331,7 +361,8 @@
         "required": false,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "email"
       },
       {
         "id": "0a150000-0000-4000-8000-000000000037",
@@ -361,7 +392,8 @@
         "required": false,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "phone"
       },
       {
         "id": "0a150000-0000-4000-8000-000000000041",
@@ -371,7 +403,8 @@
         "required": false,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "email"
       },
       {
         "id": "0a150000-0000-4000-8000-000000000044",
@@ -401,7 +434,8 @@
         "required": true,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "phone"
       },
       {
         "id": "0a150000-0000-4000-8000-000000000049",
@@ -516,7 +550,7 @@
         "label": "When you can help",
         "pageBreakBefore": false,
         "keepTogether": false,
-        "startBlockId": "0a150000-0000-4000-8000-000000000022"
+        "startBlockId": "0a150000-0000-4000-8000-000000000057"
       },
       {
         "id": "0a150000-0000-4000-8000-000000000025",

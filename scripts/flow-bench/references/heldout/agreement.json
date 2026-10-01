@@ -39,7 +39,8 @@
         "helpText": null,
         "type": "text_field",
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "email"
       },
       {
         "id": "a6000000-0000-4000-8000-000000000101",
@@ -69,7 +70,8 @@
         "helpText": null,
         "type": "text_field",
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "email"
       },
       {
         "id": "a6000000-0000-4000-8000-000000000102",

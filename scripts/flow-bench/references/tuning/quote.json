@@ -49,7 +49,8 @@
         "helpText": null,
         "type": "text_field",
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "phone"
       },
       {
         "id": "a2000000-0000-4000-8000-000000000008",
@@ -59,7 +60,8 @@
         "helpText": null,
         "type": "text_field",
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "email"
       },
       {
         "id": "a2000000-0000-4000-8000-000000000101",
@@ -89,7 +91,8 @@
         "helpText": null,
         "type": "text_field",
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "phone"
       },
       {
         "id": "a2000000-0000-4000-8000-000000000014",
@@ -99,7 +102,8 @@
         "helpText": null,
         "type": "text_field",
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "email"
       },
       {
         "id": "a2000000-0000-4000-8000-000000000017",
@@ -172,58 +176,64 @@
         "multiline": true
       },
       {
-        "id": "a2000000-0000-4000-8000-000000000029",
-        "type": "table",
-        "headers": [
-          "Item",
-          "Quantity",
-          "Unit price",
-          "Amount"
+        "id": "a2000000-0000-4000-8000-000000000106",
+        "type": "table_field",
+        "fieldKey": "cost_items",
+        "label": "Items",
+        "required": false,
+        "helpText": "For example preparation and repairs, walls and ceilings, woodwork and doors, and paint and materials.",
+        "columns": [
+          {
+            "label": "Item"
+          },
+          {
+            "label": "Quantity",
+            "format": "number"
+          },
+          {
+            "label": "Unit price",
+            "format": "money"
+          },
+          {
+            "label": "Amount",
+            "format": "money"
+          }
         ],
-        "rows": [
-          [
-            "Preparation and repairs",
-            "",
-            "",
-            ""
-          ],
-          [
-            "Walls and ceilings",
-            "",
-            "",
-            ""
-          ],
-          [
-            "Woodwork and doors",
-            "",
-            "",
-            ""
-          ],
-          [
-            "Paint and materials",
-            "",
-            "",
-            ""
-          ],
-          [
-            "Subtotal",
-            "",
-            "",
-            ""
-          ],
-          [
-            "Tax",
-            "",
-            "",
-            ""
-          ],
-          [
-            "Total",
-            "",
-            "",
-            ""
-          ]
-        ]
+        "rows": 4,
+        "addRows": true
+      },
+      {
+        "id": "a2000000-0000-4000-8000-000000000107",
+        "type": "text_field",
+        "fieldKey": "subtotal",
+        "label": "Subtotal",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "format": "money"
+      },
+      {
+        "id": "a2000000-0000-4000-8000-000000000108",
+        "type": "text_field",
+        "fieldKey": "tax",
+        "label": "Tax",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "format": "money"
+      },
+      {
+        "id": "a2000000-0000-4000-8000-000000000109",
+        "type": "text_field",
+        "fieldKey": "total",
+        "label": "Total",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "format": "money"
       },
       {
         "id": "a2000000-0000-4000-8000-000000000031",
@@ -261,7 +271,8 @@
         "helpText": "The amount to pay before work starts, if any.",
         "type": "text_field",
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "money"
       },
       {
         "id": "a2000000-0000-4000-8000-000000000038",
@@ -402,7 +413,7 @@
       {
         "id": "a2000000-0000-4000-8000-000000000030",
         "label": "Costs",
-        "startBlockId": "a2000000-0000-4000-8000-000000000029",
+        "startBlockId": "a2000000-0000-4000-8000-000000000106",
         "pageBreakBefore": false,
         "keepTogether": false
       },
@@ -483,6 +494,14 @@
         "label": null,
         "startBlockId": "a2000000-0000-4000-8000-000000000018",
         "endBlockId": "a2000000-0000-4000-8000-000000000021",
+        "columns": 3,
+        "keepTogether": false
+      },
+      {
+        "id": "a2000000-0000-4000-8000-000000000110",
+        "label": null,
+        "startBlockId": "a2000000-0000-4000-8000-000000000107",
+        "endBlockId": "a2000000-0000-4000-8000-000000000109",
         "columns": 3,
         "keepTogether": false
       },

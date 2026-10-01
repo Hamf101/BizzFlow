@@ -2,7 +2,7 @@
   "request": "Weekly site safety inspection form for our building sites. Cover site set-up, scaffolding and work at height, excavations, housekeeping and fire, plant and PPE, then whether work can carry on safely, the actions needed, and sign-off by the inspector and the site manager.",
   "title": "Weekly site safety inspection",
   "description": "Use each week, and after bad weather or changes to the work, for a competent person to inspect a building site, record what needs action and hand the report to the site manager.",
-  "maxPages": 3,
+  "maxPages": 4,
   "content": {
     "schemaVersion": 3,
     "branding": {
@@ -90,7 +90,8 @@
         "required": true,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "time"
       },
       {
         "id": "d4020000-0000-4000-8000-000000000012",
@@ -145,372 +146,102 @@
         "multiline": false
       },
       {
-        "id": "d4020000-0000-4000-8000-000000000017",
-        "type": "dropdown_field",
-        "fieldKey": "is_the_site_boundary_secure_with_the_public_kept_out_of_the",
-        "label": "Is the site boundary secure, with the public kept out of the work area?",
+        "id": "d4020000-0000-4000-8000-000000000063",
+        "type": "choice_grid_field",
+        "fieldKey": "site_set_up_checks",
+        "label": "Security, signs, welfare and lighting",
         "required": true,
         "helpText": null,
-        "placeholder": null,
+        "rows": [
+          "Is the site boundary secure, with the public kept out of the work area?",
+          "Are site rules, emergency contacts and required signs on display?",
+          "Are toilets, washing facilities and a rest area provided and clean?",
+          "Is there a stocked first aid kit, and does everyone know who the first aider is?",
+          "Are pedestrian routes kept apart from vehicles and plant?",
+          "Is lighting adequate in work areas and on access routes?"
+        ],
         "options": [
           "Satisfactory",
           "Action needed",
           "Not applicable"
-        ],
-        "display": "radios",
-        "across": true
+        ]
       },
       {
-        "id": "d4020000-0000-4000-8000-000000000019",
-        "type": "dropdown_field",
-        "fieldKey": "are_site_rules_emergency_contacts_and_required_signs_on",
-        "label": "Are site rules, emergency contacts and required signs on display?",
+        "id": "d4020000-0000-4000-8000-000000000064",
+        "type": "choice_grid_field",
+        "fieldKey": "work_at_height_checks",
+        "label": "Scaffolds, ladders, openings and towers",
         "required": true,
         "helpText": null,
-        "placeholder": null,
+        "rows": [
+          "Has each scaffold been inspected in the last seven days, with its tag or record up to date?",
+          "Are guard rails, mid rails and toe boards in place on every working platform?",
+          "Are ladders in good condition, secured, and used only for short, light work?",
+          "Are openings and fragile surfaces covered or protected, and marked?",
+          "Are mobile towers and access platforms set up as their instructions require?"
+        ],
         "options": [
           "Satisfactory",
           "Action needed",
           "Not applicable"
-        ],
-        "display": "radios",
-        "across": true
+        ]
       },
       {
-        "id": "d4020000-0000-4000-8000-000000000020",
-        "type": "dropdown_field",
-        "fieldKey": "are_toilets_washing_facilities_and_a_rest_area_provided_and",
-        "label": "Are toilets, washing facilities and a rest area provided and clean?",
+        "id": "d4020000-0000-4000-8000-000000000065",
+        "type": "choice_grid_field",
+        "fieldKey": "excavation_checks",
+        "label": "Sides, edges, access and services",
         "required": true,
         "helpText": null,
-        "placeholder": null,
+        "rows": [
+          "Are excavation sides supported, stepped or battered back?",
+          "Are edges protected, so no one and nothing can fall in?",
+          "Is there a safe way in and out of each excavation?",
+          "Are spoil, materials and plant kept back from the edges?",
+          "Were underground services located and marked before digging?"
+        ],
         "options": [
           "Satisfactory",
           "Action needed",
           "Not applicable"
-        ],
-        "display": "radios",
-        "across": true
+        ]
       },
       {
-        "id": "d4020000-0000-4000-8000-000000000021",
-        "type": "dropdown_field",
-        "fieldKey": "is_there_a_stocked_first_aid_kit_and_does_everyone_know_who",
-        "label": "Is there a stocked first aid kit, and does everyone know who the first aider is?",
+        "id": "d4020000-0000-4000-8000-000000000066",
+        "type": "choice_grid_field",
+        "fieldKey": "housekeeping_fire_and_electrics_checks",
+        "label": "Routes, storage, fire points and electrics",
         "required": true,
         "helpText": null,
-        "placeholder": null,
+        "rows": [
+          "Are walkways, stairs and access routes clear of materials and waste?",
+          "Are materials stored safely and waste removed regularly?",
+          "Are fire points equipped, escape routes clear, and flammable materials stored safely?",
+          "Are temporary electrics, leads and tools in good condition and protected from damage?"
+        ],
         "options": [
           "Satisfactory",
           "Action needed",
           "Not applicable"
-        ],
-        "display": "radios",
-        "across": true
+        ]
       },
       {
-        "id": "d4020000-0000-4000-8000-000000000022",
-        "type": "dropdown_field",
-        "fieldKey": "are_pedestrian_routes_kept_apart_from_vehicles_and_plant",
-        "label": "Are pedestrian routes kept apart from vehicles and plant?",
+        "id": "d4020000-0000-4000-8000-000000000067",
+        "type": "choice_grid_field",
+        "fieldKey": "plant_and_protective_equipment_checks",
+        "label": "Operators, lifting and protective equipment",
         "required": true,
         "helpText": null,
-        "placeholder": null,
+        "rows": [
+          "Is plant operated only by trained people, with daily checks recorded?",
+          "Are lifting operations planned, with lifting equipment inspected and in date?",
+          "Is everyone wearing the protective equipment the work needs, such as hard hats, high-visibility clothing, safety boots, gloves, and eye and hearing protection?"
+        ],
         "options": [
           "Satisfactory",
           "Action needed",
           "Not applicable"
-        ],
-        "display": "radios",
-        "across": true
-      },
-      {
-        "id": "d4020000-0000-4000-8000-000000000023",
-        "type": "dropdown_field",
-        "fieldKey": "is_lighting_adequate_in_work_areas_and_on_access_routes",
-        "label": "Is lighting adequate in work areas and on access routes?",
-        "required": true,
-        "helpText": null,
-        "placeholder": null,
-        "options": [
-          "Satisfactory",
-          "Action needed",
-          "Not applicable"
-        ],
-        "display": "radios",
-        "across": true
-      },
-      {
-        "id": "d4020000-0000-4000-8000-000000000024",
-        "type": "dropdown_field",
-        "fieldKey": "has_each_scaffold_been_inspected_in_the_last_seven_days_with",
-        "label": "Has each scaffold been inspected in the last seven days, with its tag or record up to date?",
-        "required": true,
-        "helpText": null,
-        "placeholder": null,
-        "options": [
-          "Satisfactory",
-          "Action needed",
-          "Not applicable"
-        ],
-        "display": "radios",
-        "across": true
-      },
-      {
-        "id": "d4020000-0000-4000-8000-000000000026",
-        "type": "dropdown_field",
-        "fieldKey": "are_guard_rails_mid_rails_and_toe_boards_in_place_on_every",
-        "label": "Are guard rails, mid rails and toe boards in place on every working platform?",
-        "required": true,
-        "helpText": null,
-        "placeholder": null,
-        "options": [
-          "Satisfactory",
-          "Action needed",
-          "Not applicable"
-        ],
-        "display": "radios",
-        "across": true
-      },
-      {
-        "id": "d4020000-0000-4000-8000-000000000027",
-        "type": "dropdown_field",
-        "fieldKey": "are_ladders_in_good_condition_secured_and_used_only_for",
-        "label": "Are ladders in good condition, secured, and used only for short, light work?",
-        "required": true,
-        "helpText": null,
-        "placeholder": null,
-        "options": [
-          "Satisfactory",
-          "Action needed",
-          "Not applicable"
-        ],
-        "display": "radios",
-        "across": true
-      },
-      {
-        "id": "d4020000-0000-4000-8000-000000000028",
-        "type": "dropdown_field",
-        "fieldKey": "are_openings_and_fragile_surfaces_covered_or_protected_and",
-        "label": "Are openings and fragile surfaces covered or protected, and marked?",
-        "required": true,
-        "helpText": null,
-        "placeholder": null,
-        "options": [
-          "Satisfactory",
-          "Action needed",
-          "Not applicable"
-        ],
-        "display": "radios",
-        "across": true
-      },
-      {
-        "id": "d4020000-0000-4000-8000-000000000029",
-        "type": "dropdown_field",
-        "fieldKey": "are_mobile_towers_and_access_platforms_set_up_as_their",
-        "label": "Are mobile towers and access platforms set up as their instructions require?",
-        "required": true,
-        "helpText": null,
-        "placeholder": null,
-        "options": [
-          "Satisfactory",
-          "Action needed",
-          "Not applicable"
-        ],
-        "display": "radios",
-        "across": true
-      },
-      {
-        "id": "d4020000-0000-4000-8000-000000000030",
-        "type": "dropdown_field",
-        "fieldKey": "are_excavation_sides_supported_stepped_or_battered_back",
-        "label": "Are excavation sides supported, stepped or battered back?",
-        "required": true,
-        "helpText": null,
-        "placeholder": null,
-        "options": [
-          "Satisfactory",
-          "Action needed",
-          "Not applicable"
-        ],
-        "display": "radios",
-        "across": true
-      },
-      {
-        "id": "d4020000-0000-4000-8000-000000000032",
-        "type": "dropdown_field",
-        "fieldKey": "are_edges_protected_so_no_one_and_nothing_can_fall_in",
-        "label": "Are edges protected, so no one and nothing can fall in?",
-        "required": true,
-        "helpText": null,
-        "placeholder": null,
-        "options": [
-          "Satisfactory",
-          "Action needed",
-          "Not applicable"
-        ],
-        "display": "radios",
-        "across": true
-      },
-      {
-        "id": "d4020000-0000-4000-8000-000000000033",
-        "type": "dropdown_field",
-        "fieldKey": "is_there_a_safe_way_in_and_out_of_each_excavation",
-        "label": "Is there a safe way in and out of each excavation?",
-        "required": true,
-        "helpText": null,
-        "placeholder": null,
-        "options": [
-          "Satisfactory",
-          "Action needed",
-          "Not applicable"
-        ],
-        "display": "radios",
-        "across": true
-      },
-      {
-        "id": "d4020000-0000-4000-8000-000000000034",
-        "type": "dropdown_field",
-        "fieldKey": "are_spoil_materials_and_plant_kept_back_from_the_edges",
-        "label": "Are spoil, materials and plant kept back from the edges?",
-        "required": true,
-        "helpText": null,
-        "placeholder": null,
-        "options": [
-          "Satisfactory",
-          "Action needed",
-          "Not applicable"
-        ],
-        "display": "radios",
-        "across": true
-      },
-      {
-        "id": "d4020000-0000-4000-8000-000000000035",
-        "type": "dropdown_field",
-        "fieldKey": "were_underground_services_located_and_marked_before_digging",
-        "label": "Were underground services located and marked before digging?",
-        "required": true,
-        "helpText": null,
-        "placeholder": null,
-        "options": [
-          "Satisfactory",
-          "Action needed",
-          "Not applicable"
-        ],
-        "display": "radios",
-        "across": true
-      },
-      {
-        "id": "d4020000-0000-4000-8000-000000000036",
-        "type": "dropdown_field",
-        "fieldKey": "are_walkways_stairs_and_access_routes_clear_of_materials_and",
-        "label": "Are walkways, stairs and access routes clear of materials and waste?",
-        "required": true,
-        "helpText": null,
-        "placeholder": null,
-        "options": [
-          "Satisfactory",
-          "Action needed",
-          "Not applicable"
-        ],
-        "display": "radios",
-        "across": true
-      },
-      {
-        "id": "d4020000-0000-4000-8000-000000000038",
-        "type": "dropdown_field",
-        "fieldKey": "are_materials_stored_safely_and_waste_removed_regularly",
-        "label": "Are materials stored safely and waste removed regularly?",
-        "required": true,
-        "helpText": null,
-        "placeholder": null,
-        "options": [
-          "Satisfactory",
-          "Action needed",
-          "Not applicable"
-        ],
-        "display": "radios",
-        "across": true
-      },
-      {
-        "id": "d4020000-0000-4000-8000-000000000039",
-        "type": "dropdown_field",
-        "fieldKey": "are_fire_points_equipped_escape_routes_clear_and_flammable",
-        "label": "Are fire points equipped, escape routes clear, and flammable materials stored safely?",
-        "required": true,
-        "helpText": null,
-        "placeholder": null,
-        "options": [
-          "Satisfactory",
-          "Action needed",
-          "Not applicable"
-        ],
-        "display": "radios",
-        "across": true
-      },
-      {
-        "id": "d4020000-0000-4000-8000-000000000040",
-        "type": "dropdown_field",
-        "fieldKey": "are_temporary_electrics_leads_and_tools_in_good_condition",
-        "label": "Are temporary electrics, leads and tools in good condition and protected from damage?",
-        "required": true,
-        "helpText": null,
-        "placeholder": null,
-        "options": [
-          "Satisfactory",
-          "Action needed",
-          "Not applicable"
-        ],
-        "display": "radios",
-        "across": true
-      },
-      {
-        "id": "d4020000-0000-4000-8000-000000000041",
-        "type": "dropdown_field",
-        "fieldKey": "is_plant_operated_only_by_trained_people_with_daily_checks",
-        "label": "Is plant operated only by trained people, with daily checks recorded?",
-        "required": true,
-        "helpText": null,
-        "placeholder": null,
-        "options": [
-          "Satisfactory",
-          "Action needed",
-          "Not applicable"
-        ],
-        "display": "radios",
-        "across": true
-      },
-      {
-        "id": "d4020000-0000-4000-8000-000000000043",
-        "type": "dropdown_field",
-        "fieldKey": "are_lifting_operations_planned_with_lifting_equipment",
-        "label": "Are lifting operations planned, with lifting equipment inspected and in date?",
-        "required": true,
-        "helpText": null,
-        "placeholder": null,
-        "options": [
-          "Satisfactory",
-          "Action needed",
-          "Not applicable"
-        ],
-        "display": "radios",
-        "across": true
-      },
-      {
-        "id": "d4020000-0000-4000-8000-000000000044",
-        "type": "dropdown_field",
-        "fieldKey": "is_everyone_wearing_the_protective_equipment_the_work_needs",
-        "label": "Is everyone wearing the protective equipment the work needs?",
-        "required": true,
-        "helpText": "For example hard hats, high-visibility clothing, safety boots, gloves, and eye and hearing protection.",
-        "placeholder": null,
-        "options": [
-          "Satisfactory",
-          "Action needed",
-          "Not applicable"
-        ],
-        "display": "radios",
-        "across": true
+        ]
       },
       {
         "id": "d4020000-0000-4000-8000-000000000045",
@@ -575,52 +306,29 @@
         "alignment": "left"
       },
       {
-        "id": "d4020000-0000-4000-8000-000000000051",
-        "type": "table",
-        "headers": [
-          "Action needed",
-          "Who will do it",
-          "By when",
-          "Done"
+        "id": "d4020000-0000-4000-8000-000000000068",
+        "type": "table_field",
+        "fieldKey": "actions_needed",
+        "label": "Action plan",
+        "required": false,
+        "helpText": null,
+        "columns": [
+          {
+            "label": "Action needed"
+          },
+          {
+            "label": "Who will do it"
+          },
+          {
+            "label": "By when",
+            "format": "date"
+          },
+          {
+            "label": "Done"
+          }
         ],
-        "rows": [
-          [
-            "",
-            "",
-            "",
-            ""
-          ],
-          [
-            "",
-            "",
-            "",
-            ""
-          ],
-          [
-            "",
-            "",
-            "",
-            ""
-          ],
-          [
-            "",
-            "",
-            "",
-            ""
-          ],
-          [
-            "",
-            "",
-            "",
-            ""
-          ],
-          [
-            "",
-            "",
-            "",
-            ""
-          ]
-        ]
+        "rows": 6,
+        "addRows": true
       },
       {
         "id": "d4020000-0000-4000-8000-000000000052",
@@ -727,35 +435,35 @@
       {
         "id": "d4020000-0000-4000-8000-000000000018",
         "label": "Site set-up and welfare",
-        "startBlockId": "d4020000-0000-4000-8000-000000000017",
+        "startBlockId": "d4020000-0000-4000-8000-000000000063",
         "pageBreakBefore": false,
         "keepTogether": false
       },
       {
         "id": "d4020000-0000-4000-8000-000000000025",
         "label": "Scaffolding and work at height",
-        "startBlockId": "d4020000-0000-4000-8000-000000000024",
+        "startBlockId": "d4020000-0000-4000-8000-000000000064",
         "pageBreakBefore": false,
         "keepTogether": false
       },
       {
         "id": "d4020000-0000-4000-8000-000000000031",
         "label": "Excavations",
-        "startBlockId": "d4020000-0000-4000-8000-000000000030",
+        "startBlockId": "d4020000-0000-4000-8000-000000000065",
         "pageBreakBefore": false,
         "keepTogether": false
       },
       {
         "id": "d4020000-0000-4000-8000-000000000037",
         "label": "Housekeeping, fire and electrics",
-        "startBlockId": "d4020000-0000-4000-8000-000000000036",
+        "startBlockId": "d4020000-0000-4000-8000-000000000066",
         "pageBreakBefore": false,
         "keepTogether": false
       },
       {
         "id": "d4020000-0000-4000-8000-000000000042",
         "label": "Plant and personal protective equipment",
-        "startBlockId": "d4020000-0000-4000-8000-000000000041",
+        "startBlockId": "d4020000-0000-4000-8000-000000000067",
         "pageBreakBefore": false,
         "keepTogether": false
       },
@@ -770,7 +478,7 @@
         "id": "d4020000-0000-4000-8000-000000000054",
         "label": "Sign-off",
         "startBlockId": "d4020000-0000-4000-8000-000000000053",
-        "pageBreakBefore": false,
+        "pageBreakBefore": true,
         "keepTogether": false
       }
     ],

@@ -99,21 +99,23 @@
         "across": true
       },
       {
-        "id": "d5040000-0000-4000-8000-000000000009",
-        "type": "dropdown_field",
-        "fieldKey": "how_would_you_rate_the_range_of_producers_exhibiting",
-        "label": "How would you rate the range of producers exhibiting?",
+        "id": "d5040000-0000-4000-8000-000000000022",
+        "type": "choice_grid_field",
+        "fieldKey": "show_ratings",
+        "label": "How would you rate each of these?",
         "required": true,
         "helpText": null,
-        "placeholder": null,
+        "rows": [
+          "The range of producers exhibiting",
+          "The venue, including parking and facilities",
+          "The organisation on the day"
+        ],
         "options": [
           "Excellent",
           "Good",
           "Fair",
           "Poor"
-        ],
-        "display": "radios",
-        "across": true
+        ]
       },
       {
         "id": "d5040000-0000-4000-8000-000000000010",
@@ -131,40 +133,6 @@
           "Did not attend"
         ],
         "display": "radios"
-      },
-      {
-        "id": "d5040000-0000-4000-8000-000000000011",
-        "type": "dropdown_field",
-        "fieldKey": "how_would_you_rate_the_venue_including_parking_and",
-        "label": "How would you rate the venue, including parking and facilities?",
-        "required": true,
-        "helpText": null,
-        "placeholder": null,
-        "options": [
-          "Excellent",
-          "Good",
-          "Fair",
-          "Poor"
-        ],
-        "display": "radios",
-        "across": true
-      },
-      {
-        "id": "d5040000-0000-4000-8000-000000000012",
-        "type": "dropdown_field",
-        "fieldKey": "how_would_you_rate_the_organisation_on_the_day",
-        "label": "How would you rate the organisation on the day?",
-        "required": true,
-        "helpText": null,
-        "placeholder": null,
-        "options": [
-          "Excellent",
-          "Good",
-          "Fair",
-          "Poor"
-        ],
-        "display": "radios",
-        "across": true
       },
       {
         "id": "d5040000-0000-4000-8000-000000000013",
@@ -266,7 +234,8 @@
           "value": true
         },
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "email"
       }
     ],
     "layout": {

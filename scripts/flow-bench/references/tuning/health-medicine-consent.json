@@ -278,7 +278,8 @@
         "required": true,
         "helpText": "We call if your child needs it more often than this form says, or refuses it.",
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "phone"
       },
       {
         "id": "0b130000-0000-4000-8000-000000000032",
@@ -288,7 +289,8 @@
         "required": false,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "phone"
       },
       {
         "id": "0b130000-0000-4000-8000-000000000035",

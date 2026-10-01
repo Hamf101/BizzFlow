@@ -49,7 +49,8 @@
         "helpText": null,
         "type": "text_field",
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "phone"
       },
       {
         "id": "a5000000-0000-4000-8000-000000000008",
@@ -59,7 +60,8 @@
         "helpText": null,
         "type": "text_field",
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "email"
       },
       {
         "id": "a5000000-0000-4000-8000-000000000101",
@@ -99,7 +101,8 @@
         "helpText": null,
         "type": "text_field",
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "phone"
       },
       {
         "id": "a5000000-0000-4000-8000-000000000017",
@@ -109,7 +112,8 @@
         "helpText": null,
         "type": "text_field",
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "email"
       },
       {
         "id": "a5000000-0000-4000-8000-000000000018",
@@ -212,58 +216,64 @@
         "multiline": false
       },
       {
-        "id": "a5000000-0000-4000-8000-000000000031",
-        "type": "table",
-        "headers": [
-          "Item",
-          "Quantity",
-          "Unit price",
-          "Amount"
+        "id": "a5000000-0000-4000-8000-000000000109",
+        "type": "table_field",
+        "fieldKey": "cost_items",
+        "label": "Items",
+        "required": false,
+        "helpText": "For example maintenance visits, with the number over the service period, planting and mulching, green waste removal, and materials.",
+        "columns": [
+          {
+            "label": "Item"
+          },
+          {
+            "label": "Quantity",
+            "format": "number"
+          },
+          {
+            "label": "Unit price",
+            "format": "money"
+          },
+          {
+            "label": "Amount",
+            "format": "money"
+          }
         ],
-        "rows": [
-          [
-            "Maintenance visits (number over the service period)",
-            "",
-            "",
-            ""
-          ],
-          [
-            "Planting and mulching",
-            "",
-            "",
-            ""
-          ],
-          [
-            "Green waste removal",
-            "",
-            "",
-            ""
-          ],
-          [
-            "Materials",
-            "",
-            "",
-            ""
-          ],
-          [
-            "Subtotal",
-            "",
-            "",
-            ""
-          ],
-          [
-            "Tax",
-            "",
-            "",
-            ""
-          ],
-          [
-            "Total",
-            "",
-            "",
-            ""
-          ]
-        ]
+        "rows": 4,
+        "addRows": true
+      },
+      {
+        "id": "a5000000-0000-4000-8000-000000000110",
+        "type": "text_field",
+        "fieldKey": "subtotal",
+        "label": "Subtotal",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "format": "money"
+      },
+      {
+        "id": "a5000000-0000-4000-8000-000000000111",
+        "type": "text_field",
+        "fieldKey": "tax",
+        "label": "Tax",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "format": "money"
+      },
+      {
+        "id": "a5000000-0000-4000-8000-000000000112",
+        "type": "text_field",
+        "fieldKey": "total",
+        "label": "Total",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "format": "money"
       },
       {
         "id": "a5000000-0000-4000-8000-000000000033",
@@ -457,7 +467,7 @@
       {
         "id": "a5000000-0000-4000-8000-000000000032",
         "label": "Costs",
-        "startBlockId": "a5000000-0000-4000-8000-000000000031",
+        "startBlockId": "a5000000-0000-4000-8000-000000000109",
         "pageBreakBefore": false,
         "keepTogether": false
       },
@@ -538,6 +548,14 @@
         "label": null,
         "startBlockId": "a5000000-0000-4000-8000-000000000019",
         "endBlockId": "a5000000-0000-4000-8000-000000000022",
+        "columns": 3,
+        "keepTogether": false
+      },
+      {
+        "id": "a5000000-0000-4000-8000-000000000113",
+        "label": null,
+        "startBlockId": "a5000000-0000-4000-8000-000000000110",
+        "endBlockId": "a5000000-0000-4000-8000-000000000112",
         "columns": 3,
         "keepTogether": false
       },

@@ -111,11 +111,13 @@
         "id": "0c140000-0000-4000-8000-000000000011",
         "type": "text_field",
         "fieldKey": "working_days",
-        "label": "Working days",
+        "label": "Time off",
         "required": true,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "number",
+        "suffix": "working days"
       },
       {
         "id": "0c140000-0000-4000-8000-000000000013",
@@ -200,11 +202,13 @@
         "id": "0c140000-0000-4000-8000-000000000021",
         "type": "text_field",
         "fieldKey": "days_of_annual_leave_left_after_this_request",
-        "label": "Days of annual leave left after this request",
+        "label": "Annual leave left after this request",
         "required": false,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "number",
+        "suffix": "days"
       },
       {
         "id": "0c140000-0000-4000-8000-000000000022",

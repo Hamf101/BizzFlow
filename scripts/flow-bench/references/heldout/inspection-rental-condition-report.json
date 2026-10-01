@@ -57,7 +57,8 @@
         "required": true,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "phone"
       },
       {
         "id": "d4050000-0000-4000-8000-000000000008",
@@ -127,7 +128,8 @@
         "required": false,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "number"
       },
       {
         "id": "d4050000-0000-4000-8000-000000000016",
@@ -137,7 +139,8 @@
         "required": false,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "number"
       },
       {
         "id": "d4050000-0000-4000-8000-000000000018",
@@ -147,7 +150,8 @@
         "required": false,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "number"
       },
       {
         "id": "d4050000-0000-4000-8000-000000000019",
@@ -157,7 +161,8 @@
         "required": false,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "number"
       },
       {
         "id": "d4050000-0000-4000-8000-000000000021",
@@ -167,7 +172,8 @@
         "required": false,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "number"
       },
       {
         "id": "d4050000-0000-4000-8000-000000000022",
@@ -177,7 +183,8 @@
         "required": false,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "number"
       },
       {
         "id": "d4050000-0000-4000-8000-000000000024",
@@ -568,73 +575,32 @@
         "alignment": "left"
       },
       {
-        "id": "d4050000-0000-4000-8000-000000000064",
-        "type": "table",
-        "headers": [
-          "Room",
-          "Item",
-          "Quantity",
-          "Condition at check-in",
-          "Condition at check-out"
+        "id": "d4050000-0000-4000-8000-000000000084",
+        "type": "table_field",
+        "fieldKey": "furniture_and_appliances",
+        "label": "Items supplied",
+        "required": false,
+        "helpText": null,
+        "columns": [
+          {
+            "label": "Room"
+          },
+          {
+            "label": "Item"
+          },
+          {
+            "label": "Quantity",
+            "format": "number"
+          },
+          {
+            "label": "Condition at check-in"
+          },
+          {
+            "label": "Condition at check-out"
+          }
         ],
-        "rows": [
-          [
-            "",
-            "",
-            "",
-            "",
-            ""
-          ],
-          [
-            "",
-            "",
-            "",
-            "",
-            ""
-          ],
-          [
-            "",
-            "",
-            "",
-            "",
-            ""
-          ],
-          [
-            "",
-            "",
-            "",
-            "",
-            ""
-          ],
-          [
-            "",
-            "",
-            "",
-            "",
-            ""
-          ],
-          [
-            "",
-            "",
-            "",
-            "",
-            ""
-          ],
-          [
-            "",
-            "",
-            "",
-            "",
-            ""
-          ],
-          [
-            "",
-            "",
-            "",
-            "",
-            ""
-          ]
-        ]
+        "rows": 12,
+        "addRows": true
       },
       {
         "id": "d4050000-0000-4000-8000-000000000065",

@@ -61,7 +61,8 @@
         "helpText": "We call to confirm your booking, and on the day if we are running late.",
         "type": "text_field",
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "phone"
       },
       {
         "id": "a1000000-0000-4000-8000-000000000009",
@@ -71,7 +72,8 @@
         "helpText": null,
         "type": "text_field",
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "email"
       },
       {
         "id": "a1000000-0000-4000-8000-000000000012",

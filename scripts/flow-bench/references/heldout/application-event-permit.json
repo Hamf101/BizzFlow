@@ -125,7 +125,8 @@
         "required": true,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "phone"
       },
       {
         "id": "0a160000-0000-4000-8000-000000000013",
@@ -135,7 +136,8 @@
         "required": true,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "email"
       },
       {
         "id": "0a160000-0000-4000-8000-000000000015",
@@ -166,7 +168,8 @@
         "required": true,
         "helpText": "Must be reachable throughout the event.",
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "phone"
       },
       {
         "id": "0a160000-0000-4000-8000-000000000020",
@@ -253,7 +256,8 @@
         "required": true,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "time"
       },
       {
         "id": "0a160000-0000-4000-8000-000000000027",
@@ -263,7 +267,8 @@
         "required": true,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "time"
       },
       {
         "id": "0a160000-0000-4000-8000-000000000028",
@@ -273,7 +278,8 @@
         "required": true,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "time"
       },
       {
         "id": "0a160000-0000-4000-8000-000000000029",
@@ -283,7 +289,8 @@
         "required": true,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "time"
       },
       {
         "id": "0a160000-0000-4000-8000-000000000031",
@@ -323,7 +330,8 @@
         "required": true,
         "helpText": "Include staff, volunteers and performers.",
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "number"
       },
       {
         "id": "0a160000-0000-4000-8000-000000000034",
@@ -421,7 +429,8 @@
           "value": "Yes"
         },
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "time"
       },
       {
         "id": "0a160000-0000-4000-8000-000000000042",
@@ -436,7 +445,8 @@
           "value": "Yes"
         },
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "time"
       },
       {
         "id": "0a160000-0000-4000-8000-000000000044",
@@ -541,7 +551,8 @@
           "value": "Yes"
         },
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "number"
       },
       {
         "id": "0a160000-0000-4000-8000-000000000052",
@@ -601,7 +612,8 @@
           "value": "Yes"
         },
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "number"
       },
       {
         "id": "0a160000-0000-4000-8000-000000000057",

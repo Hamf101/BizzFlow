@@ -112,7 +112,8 @@
         "required": true,
         "helpText": "We call if we need to check anything about your application.",
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "phone"
       },
       {
         "id": "0a120000-0000-4000-8000-000000000013",
@@ -122,7 +123,8 @@
         "required": false,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "email"
       },
       {
         "id": "0a120000-0000-4000-8000-000000000016",
@@ -168,7 +170,8 @@
           "value": "A limited company"
         },
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "comb": 8
       },
       {
         "id": "0a120000-0000-4000-8000-000000000020",
@@ -234,13 +237,23 @@
       },
       {
         "id": "0a120000-0000-4000-8000-000000000027",
-        "type": "text_field",
+        "type": "dropdown_field",
         "fieldKey": "days_of_the_week_you_want_to_trade",
         "label": "Days of the week you want to trade",
         "required": true,
-        "helpText": "For example, Monday to Saturday, or Sundays only.",
+        "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "options": [
+          "Monday",
+          "Tuesday",
+          "Wednesday",
+          "Thursday",
+          "Friday",
+          "Saturday",
+          "Sunday"
+        ],
+        "multiple": true,
+        "across": true
       },
       {
         "id": "0a120000-0000-4000-8000-000000000028",
@@ -250,7 +263,8 @@
         "required": true,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "time"
       },
       {
         "id": "0a120000-0000-4000-8000-000000000029",
@@ -260,7 +274,8 @@
         "required": true,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "time"
       },
       {
         "id": "0a120000-0000-4000-8000-000000000032",
@@ -391,31 +406,37 @@
         "id": "0a120000-0000-4000-8000-000000000042",
         "type": "text_field",
         "fieldKey": "length_in_metres",
-        "label": "Length in metres",
+        "label": "Length",
         "required": true,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "number",
+        "suffix": "metres"
       },
       {
         "id": "0a120000-0000-4000-8000-000000000043",
         "type": "text_field",
         "fieldKey": "width_in_metres",
-        "label": "Width in metres",
+        "label": "Width",
         "required": true,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "number",
+        "suffix": "metres"
       },
       {
         "id": "0a120000-0000-4000-8000-000000000044",
         "type": "text_field",
         "fieldKey": "height_in_metres",
-        "label": "Height in metres",
+        "label": "Height",
         "required": true,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "number",
+        "suffix": "metres"
       },
       {
         "id": "0a120000-0000-4000-8000-000000000046",

@@ -84,7 +84,8 @@
         "required": false,
         "helpText": "On your payslips, P60 or HMRC app. Leave blank if you do not have one yet.",
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "comb": 9
       },
       {
         "id": "0c120000-0000-4000-8000-000000000011",
@@ -105,7 +106,8 @@
         "required": true,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "phone"
       },
       {
         "id": "0c120000-0000-4000-8000-000000000013",
@@ -115,7 +117,8 @@
         "required": true,
         "helpText": "Your payslips are sent here.",
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "email"
       },
       {
         "id": "0c120000-0000-4000-8000-000000000016",
@@ -151,7 +154,8 @@
         "required": true,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "comb": 6
       },
       {
         "id": "0c120000-0000-4000-8000-000000000020",
@@ -161,7 +165,8 @@
         "required": true,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "comb": 8
       },
       {
         "id": "0c120000-0000-4000-8000-000000000022",
@@ -323,7 +328,8 @@
         "required": true,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "phone"
       },
       {
         "id": "0c120000-0000-4000-8000-000000000039",
@@ -394,11 +400,13 @@
         "id": "0c120000-0000-4000-8000-000000000047",
         "type": "text_field",
         "fieldKey": "hours_a_week",
-        "label": "Hours a week",
+        "label": "Working hours",
         "required": true,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "number",
+        "suffix": "hours a week"
       },
       {
         "id": "0c120000-0000-4000-8000-000000000048",
@@ -408,7 +416,9 @@
         "required": true,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "money",
+        "prefix": "£"
       },
       {
         "id": "0c120000-0000-4000-8000-000000000050",

@@ -39,7 +39,8 @@
         "helpText": null,
         "type": "text_field",
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "email"
       },
       {
         "id": "a3000000-0000-4000-8000-000000000101",
@@ -69,7 +70,8 @@
         "helpText": null,
         "type": "text_field",
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "email"
       },
       {
         "id": "a3000000-0000-4000-8000-000000000102",
@@ -100,7 +102,8 @@
         "helpText": null,
         "type": "text_field",
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "number"
       },
       {
         "id": "a3000000-0000-4000-8000-000000000015",
@@ -136,7 +139,8 @@
         "helpText": "The amount to pay before work starts, if any.",
         "type": "text_field",
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "money"
       },
       {
         "id": "a3000000-0000-4000-8000-000000000018",

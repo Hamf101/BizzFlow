@@ -191,7 +191,9 @@
           "value": "A fixed fee for each tax return"
         },
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "money",
+        "prefix": "£"
       },
       {
         "id": "d6060000-0000-4000-8000-000000000027",

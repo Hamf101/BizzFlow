@@ -111,7 +111,8 @@
         "required": false,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "comb": 10
       },
       {
         "id": "0b110000-0000-4000-8000-000000000014",
@@ -178,7 +179,8 @@
         "required": false,
         "helpText": "We use this to contact you about appointments and results.",
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "phone"
       },
       {
         "id": "0b110000-0000-4000-8000-000000000021",
@@ -188,7 +190,8 @@
         "required": false,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "email"
       },
       {
         "id": "0b110000-0000-4000-8000-000000000024",
@@ -520,45 +523,25 @@
         "alignment": "left"
       },
       {
-        "id": "0b110000-0000-4000-8000-000000000052",
-        "type": "table",
-        "headers": [
-          "Name",
-          "Strength",
-          "How much, and how often"
+        "id": "0b110000-0000-4000-8000-000000000112",
+        "type": "table_field",
+        "fieldKey": "things_you_take_regularly",
+        "label": "Each thing you take",
+        "required": false,
+        "helpText": null,
+        "columns": [
+          {
+            "label": "Name"
+          },
+          {
+            "label": "Strength"
+          },
+          {
+            "label": "How much, and how often"
+          }
         ],
-        "rows": [
-          [
-            "",
-            "",
-            ""
-          ],
-          [
-            "",
-            "",
-            ""
-          ],
-          [
-            "",
-            "",
-            ""
-          ],
-          [
-            "",
-            "",
-            ""
-          ],
-          [
-            "",
-            "",
-            ""
-          ],
-          [
-            "",
-            "",
-            ""
-          ]
-        ]
+        "rows": 6,
+        "addRows": true
       },
       {
         "id": "0b110000-0000-4000-8000-000000000053",
@@ -943,7 +926,8 @@
           "value": "Yes"
         },
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "phone"
       },
       {
         "id": "0b110000-0000-4000-8000-000000000089",
@@ -973,7 +957,8 @@
         "required": true,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "phone"
       },
       {
         "id": "0b110000-0000-4000-8000-000000000094",

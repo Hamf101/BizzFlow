@@ -66,7 +66,8 @@
         "required": true,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "email"
       },
       {
         "id": "d6040000-0000-4000-8000-000000000009",
@@ -76,7 +77,8 @@
         "required": true,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "phone"
       },
       {
         "id": "d6040000-0000-4000-8000-000000000011",
@@ -121,9 +123,11 @@
         "fieldKey": "acknowledge_a_complaint_within",
         "label": "Acknowledge a complaint within",
         "required": true,
-        "helpText": "In working days.",
+        "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "number",
+        "suffix": "working days"
       },
       {
         "id": "d6040000-0000-4000-8000-000000000018",
@@ -131,9 +135,11 @@
         "fieldKey": "send_our_stage_one_response_within",
         "label": "Send our stage one response within",
         "required": true,
-        "helpText": "In working days.",
+        "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "number",
+        "suffix": "working days"
       },
       {
         "id": "d6040000-0000-4000-8000-000000000020",
@@ -141,9 +147,11 @@
         "fieldKey": "ask_us_for_a_stage_two_review_within",
         "label": "Ask us for a stage two review within",
         "required": true,
-        "helpText": "In working days after our stage one response.",
+        "helpText": "After our stage one response.",
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "number",
+        "suffix": "working days"
       },
       {
         "id": "d6040000-0000-4000-8000-000000000021",
@@ -151,9 +159,11 @@
         "fieldKey": "send_our_final_response_within",
         "label": "Send our final response within",
         "required": true,
-        "helpText": "In working days after a review is asked for.",
+        "helpText": "After a review is asked for.",
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "number",
+        "suffix": "working days"
       },
       {
         "id": "d6040000-0000-4000-8000-000000000023",
@@ -334,7 +344,8 @@
         "required": true,
         "helpText": "We call to talk through your complaint if that helps.",
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "phone"
       },
       {
         "id": "d6040000-0000-4000-8000-000000000057",
@@ -344,7 +355,8 @@
         "required": false,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "email"
       },
       {
         "id": "d6040000-0000-4000-8000-000000000058",

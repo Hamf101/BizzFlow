@@ -39,21 +39,25 @@
         "id": "d4040000-0000-4000-8000-000000000004",
         "type": "text_field",
         "fieldKey": "highest_temperature_allowed_in_the_fridges_c",
-        "label": "Highest temperature allowed in the fridges (°C)",
+        "label": "Highest temperature allowed in the fridges",
         "required": true,
         "helpText": "As your food safety plan sets it.",
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "number",
+        "suffix": "°C"
       },
       {
         "id": "d4040000-0000-4000-8000-000000000005",
         "type": "text_field",
         "fieldKey": "highest_temperature_allowed_in_the_freezer_c",
-        "label": "Highest temperature allowed in the freezer (°C)",
+        "label": "Highest temperature allowed in the freezer",
         "required": true,
         "helpText": "As your food safety plan sets it.",
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "number",
+        "suffix": "°C"
       },
       {
         "id": "d4040000-0000-4000-8000-000000000007",
@@ -92,90 +96,45 @@
         "alignment": "left"
       },
       {
-        "id": "d4040000-0000-4000-8000-000000000013",
-        "type": "table",
-        "headers": [
-          "Day",
-          "Fridge 1 morning",
-          "Fridge 1 evening",
-          "Fridge 2 morning",
-          "Fridge 2 evening",
-          "Freezer morning",
-          "Freezer evening",
-          "Initials"
+        "id": "d4040000-0000-4000-8000-000000000022",
+        "type": "table_field",
+        "fieldKey": "daily_readings",
+        "label": "Morning and evening checks",
+        "required": true,
+        "helpText": null,
+        "columns": [
+          {
+            "label": "Day"
+          },
+          {
+            "label": "Fridge 1 morning",
+            "format": "number"
+          },
+          {
+            "label": "Fridge 1 evening",
+            "format": "number"
+          },
+          {
+            "label": "Fridge 2 morning",
+            "format": "number"
+          },
+          {
+            "label": "Fridge 2 evening",
+            "format": "number"
+          },
+          {
+            "label": "Freezer morning",
+            "format": "number"
+          },
+          {
+            "label": "Freezer evening",
+            "format": "number"
+          },
+          {
+            "label": "Initials"
+          }
         ],
-        "rows": [
-          [
-            "Monday",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            ""
-          ],
-          [
-            "Tuesday",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            ""
-          ],
-          [
-            "Wednesday",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            ""
-          ],
-          [
-            "Thursday",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            ""
-          ],
-          [
-            "Friday",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            ""
-          ],
-          [
-            "Saturday",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            ""
-          ],
-          [
-            "Sunday",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            ""
-          ]
-        ]
+        "rows": 7
       },
       {
         "id": "d4040000-0000-4000-8000-000000000014",
@@ -188,45 +147,37 @@
         ]
       },
       {
-        "id": "d4040000-0000-4000-8000-000000000016",
-        "type": "table",
-        "headers": [
-          "Date and time",
-          "Unit",
-          "Reading (°C)",
-          "What was done",
-          "Initials"
+        "id": "d4040000-0000-4000-8000-000000000023",
+        "type": "table_field",
+        "fieldKey": "high_readings",
+        "label": "High readings and what was done",
+        "required": false,
+        "helpText": null,
+        "columns": [
+          {
+            "label": "Date",
+            "format": "date"
+          },
+          {
+            "label": "Time",
+            "format": "time"
+          },
+          {
+            "label": "Unit"
+          },
+          {
+            "label": "Reading (°C)",
+            "format": "number"
+          },
+          {
+            "label": "What was done"
+          },
+          {
+            "label": "Initials"
+          }
         ],
-        "rows": [
-          [
-            "",
-            "",
-            "",
-            "",
-            ""
-          ],
-          [
-            "",
-            "",
-            "",
-            "",
-            ""
-          ],
-          [
-            "",
-            "",
-            "",
-            "",
-            ""
-          ],
-          [
-            "",
-            "",
-            "",
-            "",
-            ""
-          ]
-        ]
+        "rows": 4,
+        "addRows": true
       },
       {
         "id": "d4040000-0000-4000-8000-000000000017",

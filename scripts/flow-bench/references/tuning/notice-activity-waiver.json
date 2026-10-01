@@ -59,7 +59,8 @@
         "required": true,
         "helpText": "We call it if you are overdue back from a hire.",
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "phone"
       },
       {
         "id": "d6010000-0000-4000-8000-000000000008",
@@ -69,7 +70,8 @@
         "required": false,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "email"
       },
       {
         "id": "d6010000-0000-4000-8000-000000000009",
@@ -134,7 +136,8 @@
         "required": true,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "phone"
       },
       {
         "id": "d6010000-0000-4000-8000-000000000015",

@@ -74,11 +74,13 @@
         "id": "d6030000-0000-4000-8000-000000000008",
         "type": "text_field",
         "fieldKey": "paid_holiday_days_a_year",
-        "label": "Paid holiday days a year",
+        "label": "Paid holiday a year",
         "required": true,
-        "helpText": "In days, including bank holidays, for someone working full time.",
+        "helpText": "Including bank holidays, for someone working full time.",
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "number",
+        "suffix": "days"
       },
       {
         "id": "d6030000-0000-4000-8000-000000000010",

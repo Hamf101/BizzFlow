@@ -65,7 +65,8 @@
         "required": true,
         "helpText": "We call if a class you booked is cancelled.",
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "phone"
       },
       {
         "id": "0a140000-0000-4000-8000-000000000008",
@@ -75,7 +76,8 @@
         "required": true,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "email"
       },
       {
         "id": "0a140000-0000-4000-8000-000000000010",
@@ -118,7 +120,9 @@
         "required": true,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "money",
+        "prefix": "£"
       },
       {
         "id": "0a140000-0000-4000-8000-000000000016",
@@ -207,7 +211,8 @@
         "required": true,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "phone"
       },
       {
         "id": "0a140000-0000-4000-8000-000000000027",

@@ -84,7 +84,8 @@
         "required": true,
         "helpText": "We call if we need to move your appointment.",
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "phone"
       },
       {
         "id": "0b160000-0000-4000-8000-000000000010",
@@ -94,7 +95,8 @@
         "required": false,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "email"
       },
       {
         "id": "0b160000-0000-4000-8000-000000000012",
@@ -312,64 +314,22 @@
         "alignment": "left"
       },
       {
-        "id": "0b160000-0000-4000-8000-000000000031",
-        "type": "dropdown_field",
-        "fieldKey": "since_this_started_have_you_had_any_change_in_controlling_yo",
-        "label": "Since this started, have you had any change in controlling your bladder or bowels?",
+        "id": "0b160000-0000-4000-8000-000000000055",
+        "type": "choice_grid_field",
+        "fieldKey": "warning_signs",
+        "label": "Bladder, bowels, weight and cancer",
         "required": true,
         "helpText": null,
-        "placeholder": null,
+        "rows": [
+          "Since this started, have you had any change in controlling your bladder or bowels?",
+          "Do you have numbness around your bottom or genitals?",
+          "Have you lost weight without trying?",
+          "Have you ever been treated for cancer?"
+        ],
         "options": [
           "Yes",
           "No"
-        ],
-        "display": "radios",
-        "across": true
-      },
-      {
-        "id": "0b160000-0000-4000-8000-000000000032",
-        "type": "dropdown_field",
-        "fieldKey": "do_you_have_numbness_around_your_bottom_or_genitals",
-        "label": "Do you have numbness around your bottom or genitals?",
-        "required": true,
-        "helpText": null,
-        "placeholder": null,
-        "options": [
-          "Yes",
-          "No"
-        ],
-        "display": "radios",
-        "across": true
-      },
-      {
-        "id": "0b160000-0000-4000-8000-000000000033",
-        "type": "dropdown_field",
-        "fieldKey": "have_you_lost_weight_without_trying",
-        "label": "Have you lost weight without trying?",
-        "required": true,
-        "helpText": null,
-        "placeholder": null,
-        "options": [
-          "Yes",
-          "No"
-        ],
-        "display": "radios",
-        "across": true
-      },
-      {
-        "id": "0b160000-0000-4000-8000-000000000034",
-        "type": "dropdown_field",
-        "fieldKey": "have_you_ever_been_treated_for_cancer",
-        "label": "Have you ever been treated for cancer?",
-        "required": true,
-        "helpText": null,
-        "placeholder": null,
-        "options": [
-          "Yes",
-          "No"
-        ],
-        "display": "radios",
-        "across": true
+        ]
       },
       {
         "id": "0b160000-0000-4000-8000-000000000035",

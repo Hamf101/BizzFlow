@@ -46,7 +46,9 @@
         "required": true,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "number",
+        "suffix": "miles"
       },
       {
         "id": "d4010000-0000-4000-8000-000000000007",
@@ -79,232 +81,51 @@
         "required": true,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "time"
       },
       {
-        "id": "d4010000-0000-4000-8000-000000000011",
-        "type": "dropdown_field",
-        "fieldKey": "tyres_and_wheels",
-        "label": "Tyres and wheels",
+        "id": "d4010000-0000-4000-8000-000000000047",
+        "type": "choice_grid_field",
+        "fieldKey": "outside_checks",
+        "label": "Walk-round checks",
         "required": true,
-        "helpText": "Tread, cuts and bulges, pressure, and wheel nuts in place.",
-        "placeholder": null,
+        "helpText": "Ask someone to help you check the brake lights.",
+        "rows": [
+          "Tyres and wheels: tread, cuts and bulges, pressure, and wheel nuts in place",
+          "Lights, indicators and reflectors: all working, clean and not cracked",
+          "Mirrors and glass: mirrors secure and adjusted; windscreen free of cracks in your line of sight",
+          "Wipers and washers",
+          "Bodywork and doors: no sharp edges or loose panels; every door shuts and locks",
+          "Load and load restraints: the load is secure, evenly spread and within the vehicle's limits",
+          "Number plates: clean, readable and secure",
+          "Leaks under the vehicle: fuel, oil, coolant or other fluid on the ground"
+        ],
         "options": [
           "OK",
           "Defect"
-        ],
-        "display": "radios",
-        "across": true
+        ]
       },
       {
-        "id": "d4010000-0000-4000-8000-000000000013",
-        "type": "dropdown_field",
-        "fieldKey": "lights_indicators_and_reflectors",
-        "label": "Lights, indicators and reflectors",
-        "required": true,
-        "helpText": "All working, clean and not cracked. Ask someone to help you check the brake lights.",
-        "placeholder": null,
-        "options": [
-          "OK",
-          "Defect"
-        ],
-        "display": "radios",
-        "across": true
-      },
-      {
-        "id": "d4010000-0000-4000-8000-000000000014",
-        "type": "dropdown_field",
-        "fieldKey": "mirrors_and_glass",
-        "label": "Mirrors and glass",
-        "required": true,
-        "helpText": "Mirrors secure and adjusted; windscreen free of cracks in your line of sight.",
-        "placeholder": null,
-        "options": [
-          "OK",
-          "Defect"
-        ],
-        "display": "radios",
-        "across": true
-      },
-      {
-        "id": "d4010000-0000-4000-8000-000000000015",
-        "type": "dropdown_field",
-        "fieldKey": "wipers_and_washers",
-        "label": "Wipers and washers",
+        "id": "d4010000-0000-4000-8000-000000000048",
+        "type": "choice_grid_field",
+        "fieldKey": "cab_checks",
+        "label": "Brakes, controls and equipment",
         "required": true,
         "helpText": null,
-        "placeholder": null,
+        "rows": [
+          "Brakes, including the parking brake",
+          "Steering: no excessive play or stiffness",
+          "Horn",
+          "Dashboard warning lights: none stay lit once the engine is running",
+          "Seat belts: each belt fastens, releases and retracts",
+          "Fuel, oil and fluid levels",
+          "Safety equipment on board: for example the fire extinguisher, first aid kit, warning triangle and high-visibility vest"
+        ],
         "options": [
           "OK",
           "Defect"
-        ],
-        "display": "radios",
-        "across": true
-      },
-      {
-        "id": "d4010000-0000-4000-8000-000000000016",
-        "type": "dropdown_field",
-        "fieldKey": "bodywork_and_doors",
-        "label": "Bodywork and doors",
-        "required": true,
-        "helpText": "No sharp edges or loose panels; every door shuts and locks.",
-        "placeholder": null,
-        "options": [
-          "OK",
-          "Defect"
-        ],
-        "display": "radios",
-        "across": true
-      },
-      {
-        "id": "d4010000-0000-4000-8000-000000000017",
-        "type": "dropdown_field",
-        "fieldKey": "load_and_load_restraints",
-        "label": "Load and load restraints",
-        "required": true,
-        "helpText": "The load is secure, evenly spread and within the vehicle's limits.",
-        "placeholder": null,
-        "options": [
-          "OK",
-          "Defect"
-        ],
-        "display": "radios",
-        "across": true
-      },
-      {
-        "id": "d4010000-0000-4000-8000-000000000018",
-        "type": "dropdown_field",
-        "fieldKey": "number_plates",
-        "label": "Number plates",
-        "required": true,
-        "helpText": "Clean, readable and secure.",
-        "placeholder": null,
-        "options": [
-          "OK",
-          "Defect"
-        ],
-        "display": "radios",
-        "across": true
-      },
-      {
-        "id": "d4010000-0000-4000-8000-000000000019",
-        "type": "dropdown_field",
-        "fieldKey": "leaks_under_the_vehicle",
-        "label": "Leaks under the vehicle",
-        "required": true,
-        "helpText": "Fuel, oil, coolant or other fluid on the ground.",
-        "placeholder": null,
-        "options": [
-          "OK",
-          "Defect"
-        ],
-        "display": "radios",
-        "across": true
-      },
-      {
-        "id": "d4010000-0000-4000-8000-000000000020",
-        "type": "dropdown_field",
-        "fieldKey": "brakes_including_the_parking_brake",
-        "label": "Brakes, including the parking brake",
-        "required": true,
-        "helpText": null,
-        "placeholder": null,
-        "options": [
-          "OK",
-          "Defect"
-        ],
-        "display": "radios",
-        "across": true
-      },
-      {
-        "id": "d4010000-0000-4000-8000-000000000022",
-        "type": "dropdown_field",
-        "fieldKey": "steering",
-        "label": "Steering",
-        "required": true,
-        "helpText": "No excessive play or stiffness.",
-        "placeholder": null,
-        "options": [
-          "OK",
-          "Defect"
-        ],
-        "display": "radios",
-        "across": true
-      },
-      {
-        "id": "d4010000-0000-4000-8000-000000000023",
-        "type": "dropdown_field",
-        "fieldKey": "horn",
-        "label": "Horn",
-        "required": true,
-        "helpText": null,
-        "placeholder": null,
-        "options": [
-          "OK",
-          "Defect"
-        ],
-        "display": "radios",
-        "across": true
-      },
-      {
-        "id": "d4010000-0000-4000-8000-000000000024",
-        "type": "dropdown_field",
-        "fieldKey": "dashboard_warning_lights",
-        "label": "Dashboard warning lights",
-        "required": true,
-        "helpText": "None stay lit once the engine is running.",
-        "placeholder": null,
-        "options": [
-          "OK",
-          "Defect"
-        ],
-        "display": "radios",
-        "across": true
-      },
-      {
-        "id": "d4010000-0000-4000-8000-000000000025",
-        "type": "dropdown_field",
-        "fieldKey": "seat_belts",
-        "label": "Seat belts",
-        "required": true,
-        "helpText": "Each belt fastens, releases and retracts.",
-        "placeholder": null,
-        "options": [
-          "OK",
-          "Defect"
-        ],
-        "display": "radios",
-        "across": true
-      },
-      {
-        "id": "d4010000-0000-4000-8000-000000000026",
-        "type": "dropdown_field",
-        "fieldKey": "fuel_oil_and_fluid_levels",
-        "label": "Fuel, oil and fluid levels",
-        "required": true,
-        "helpText": null,
-        "placeholder": null,
-        "options": [
-          "OK",
-          "Defect"
-        ],
-        "display": "radios",
-        "across": true
-      },
-      {
-        "id": "d4010000-0000-4000-8000-000000000027",
-        "type": "dropdown_field",
-        "fieldKey": "safety_equipment_on_board",
-        "label": "Safety equipment on board",
-        "required": true,
-        "helpText": "For example the fire extinguisher, first aid kit, warning triangle and high-visibility vest.",
-        "placeholder": null,
-        "options": [
-          "OK",
-          "Defect"
-        ],
-        "display": "radios",
-        "across": true
+        ]
       },
       {
         "id": "d4010000-0000-4000-8000-000000000028",
@@ -490,14 +311,14 @@
       {
         "id": "d4010000-0000-4000-8000-000000000012",
         "label": "Outside the vehicle",
-        "startBlockId": "d4010000-0000-4000-8000-000000000011",
+        "startBlockId": "d4010000-0000-4000-8000-000000000047",
         "pageBreakBefore": false,
         "keepTogether": false
       },
       {
         "id": "d4010000-0000-4000-8000-000000000021",
         "label": "In the cab",
-        "startBlockId": "d4010000-0000-4000-8000-000000000020",
+        "startBlockId": "d4010000-0000-4000-8000-000000000048",
         "pageBreakBefore": false,
         "keepTogether": false
       },

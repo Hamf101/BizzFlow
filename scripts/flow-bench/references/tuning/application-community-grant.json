@@ -280,7 +280,9 @@
         "required": true,
         "helpText": "Use your most recent accounts. A new group can give its income so far.",
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "money",
+        "prefix": "£"
       },
       {
         "id": "0a130000-0000-4000-8000-000000000025",
@@ -310,7 +312,8 @@
         "required": true,
         "helpText": "We call if the panel has a question about your application.",
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "phone"
       },
       {
         "id": "0a130000-0000-4000-8000-000000000029",
@@ -320,7 +323,8 @@
         "required": true,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "email"
       },
       {
         "id": "0a130000-0000-4000-8000-000000000031",
@@ -350,7 +354,8 @@
         "required": true,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "phone"
       },
       {
         "id": "0a130000-0000-4000-8000-000000000035",
@@ -360,7 +365,8 @@
         "required": true,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "email"
       },
       {
         "id": "0a130000-0000-4000-8000-000000000037",
@@ -428,7 +434,8 @@
         "required": true,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "number"
       },
       {
         "id": "0a130000-0000-4000-8000-000000000044",
@@ -517,60 +524,26 @@
         "alignment": "left"
       },
       {
-        "id": "0a130000-0000-4000-8000-000000000055",
-        "type": "table",
-        "headers": [
-          "Item",
-          "What it is for",
-          "Cost"
+        "id": "0a130000-0000-4000-8000-000000000090",
+        "type": "table_field",
+        "fieldKey": "budget_items",
+        "label": "Items the grant will pay for",
+        "required": true,
+        "helpText": null,
+        "columns": [
+          {
+            "label": "Item"
+          },
+          {
+            "label": "What it is for"
+          },
+          {
+            "label": "Cost",
+            "format": "money"
+          }
         ],
-        "rows": [
-          [
-            "",
-            "",
-            ""
-          ],
-          [
-            "",
-            "",
-            ""
-          ],
-          [
-            "",
-            "",
-            ""
-          ],
-          [
-            "",
-            "",
-            ""
-          ],
-          [
-            "",
-            "",
-            ""
-          ],
-          [
-            "",
-            "",
-            ""
-          ],
-          [
-            "",
-            "",
-            ""
-          ],
-          [
-            "",
-            "",
-            ""
-          ],
-          [
-            "Total",
-            "",
-            ""
-          ]
-        ]
+        "rows": 8,
+        "addRows": true
       },
       {
         "id": "0a130000-0000-4000-8000-000000000056",
@@ -580,7 +553,9 @@
         "required": true,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "money",
+        "prefix": "£"
       },
       {
         "id": "0a130000-0000-4000-8000-000000000057",
@@ -590,7 +565,9 @@
         "required": true,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "money",
+        "prefix": "£"
       },
       {
         "id": "0a130000-0000-4000-8000-000000000059",
@@ -669,37 +646,19 @@
         "multiline": true
       },
       {
-        "id": "0a130000-0000-4000-8000-000000000065",
-        "type": "paragraph",
-        "text": "Tick each statement that is true for your organisation.",
-        "alignment": "left"
-      },
-      {
-        "id": "0a130000-0000-4000-8000-000000000066",
-        "type": "checkbox_field",
-        "fieldKey": "we_have_a_safeguarding_policy_reviewed_in_the_last_two_years",
-        "label": "We have a safeguarding policy, reviewed in the last two years.",
+        "id": "0a130000-0000-4000-8000-000000000091",
+        "type": "dropdown_field",
+        "fieldKey": "policies_and_insurance_your_organisation_has",
+        "label": "Which of these does your organisation have?",
         "required": false,
-        "helpText": null,
-        "checkedByDefault": false
-      },
-      {
-        "id": "0a130000-0000-4000-8000-000000000067",
-        "type": "checkbox_field",
-        "fieldKey": "we_have_public_liability_insurance_that_will_cover_the_proje",
-        "label": "We have public liability insurance that will cover the project.",
-        "required": false,
-        "helpText": null,
-        "checkedByDefault": false
-      },
-      {
-        "id": "0a130000-0000-4000-8000-000000000068",
-        "type": "checkbox_field",
-        "fieldKey": "we_have_an_equal_opportunities_policy",
-        "label": "We have an equal opportunities policy.",
-        "required": false,
-        "helpText": null,
-        "checkedByDefault": false
+        "helpText": "Tick each that applies.",
+        "placeholder": null,
+        "options": [
+          "A safeguarding policy, reviewed in the last two years",
+          "Public liability insurance that will cover the project",
+          "An equal opportunities policy"
+        ],
+        "multiple": true
       },
       {
         "id": "0a130000-0000-4000-8000-000000000070",
@@ -735,7 +694,8 @@
         "required": true,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "comb": 6
       },
       {
         "id": "0a130000-0000-4000-8000-000000000074",
@@ -745,7 +705,8 @@
         "required": true,
         "helpText": null,
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "comb": 8
       },
       {
         "id": "0a130000-0000-4000-8000-000000000076",
@@ -884,7 +845,7 @@
       {
         "id": "0a130000-0000-4000-8000-000000000053",
         "label": "Budget",
-        "pageBreakBefore": false,
+        "pageBreakBefore": true,
         "keepTogether": false,
         "startBlockId": "0a130000-0000-4000-8000-000000000054"
       },
@@ -1020,11 +981,6 @@
       },
       {
         "blockId": "0a130000-0000-4000-8000-000000000054",
-        "pageBreakBefore": false,
-        "keepWithNext": true
-      },
-      {
-        "blockId": "0a130000-0000-4000-8000-000000000065",
         "pageBreakBefore": false,
         "keepWithNext": true
       },

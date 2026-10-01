@@ -456,11 +456,13 @@
         "id": "0c150000-0000-4000-8000-000000000049",
         "type": "text_field",
         "fieldKey": "cpd_hours_recorded_in_the_period_reviewed",
-        "label": "CPD hours recorded in the period reviewed",
+        "label": "CPD recorded in the period reviewed",
         "required": false,
         "helpText": "For registered veterinary surgeons and nurses.",
         "placeholder": null,
-        "multiline": false
+        "multiline": false,
+        "format": "number",
+        "suffix": "hours"
       },
       {
         "id": "0c150000-0000-4000-8000-000000000051",

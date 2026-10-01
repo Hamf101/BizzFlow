@@ -2,7 +2,7 @@
   "request": "anonymous staff engagement survey for our 40-person manufacturing company",
   "title": "Staff engagement survey",
   "description": "Send to every employee once a year, anonymously, to measure how engaged they feel and how they see their work, their manager, their team, their development, fair treatment, workload, pay and leadership.",
-  "maxPages": 3,
+  "maxPages": 4,
   "content": {
     "schemaVersion": 3,
     "branding": {
@@ -35,490 +35,201 @@
         "alignment": "left"
       },
       {
-        "id": "d5060000-0000-4000-8000-000000000004",
-        "type": "dropdown_field",
-        "fieldKey": "i_find_my_work_interesting",
-        "label": "I find my work interesting.",
+        "id": "d5060000-0000-4000-8000-000000000049",
+        "type": "choice_grid_field",
+        "fieldKey": "your_work",
+        "label": "How far do you agree with each statement?",
         "required": true,
         "helpText": null,
-        "placeholder": null,
+        "rows": [
+          "I find my work interesting.",
+          "I have a clear idea of what is expected of me.",
+          "I have enough say in how I do my work."
+        ],
         "options": [
           "Strongly agree",
           "Agree",
           "Neutral",
           "Disagree",
           "Strongly disagree"
-        ],
-        "display": "radios",
-        "across": true
+        ]
       },
       {
-        "id": "d5060000-0000-4000-8000-000000000006",
-        "type": "dropdown_field",
-        "fieldKey": "i_have_a_clear_idea_of_what_is_expected_of_me",
-        "label": "I have a clear idea of what is expected of me.",
+        "id": "d5060000-0000-4000-8000-000000000050",
+        "type": "choice_grid_field",
+        "fieldKey": "our_purpose",
+        "label": "How far do you agree with each statement?",
         "required": true,
         "helpText": null,
-        "placeholder": null,
+        "rows": [
+          "I understand how my work helps the company meet its goals.",
+          "I know what the company is trying to achieve over the next year."
+        ],
         "options": [
           "Strongly agree",
           "Agree",
           "Neutral",
           "Disagree",
           "Strongly disagree"
-        ],
-        "display": "radios",
-        "across": true
+        ]
       },
       {
-        "id": "d5060000-0000-4000-8000-000000000007",
-        "type": "dropdown_field",
-        "fieldKey": "i_have_enough_say_in_how_i_do_my_work",
-        "label": "I have enough say in how I do my work.",
+        "id": "d5060000-0000-4000-8000-000000000051",
+        "type": "choice_grid_field",
+        "fieldKey": "your_manager",
+        "label": "How far do you agree with each statement?",
         "required": true,
         "helpText": null,
-        "placeholder": null,
+        "rows": [
+          "My manager gives me useful feedback on my work.",
+          "My manager recognises it when I do my job well.",
+          "I can talk to my manager about anything that worries me."
+        ],
         "options": [
           "Strongly agree",
           "Agree",
           "Neutral",
           "Disagree",
           "Strongly disagree"
-        ],
-        "display": "radios",
-        "across": true
+        ]
       },
       {
-        "id": "d5060000-0000-4000-8000-000000000008",
-        "type": "dropdown_field",
-        "fieldKey": "i_understand_how_my_work_helps_the_company_meet_its_goals",
-        "label": "I understand how my work helps the company meet its goals.",
+        "id": "d5060000-0000-4000-8000-000000000052",
+        "type": "choice_grid_field",
+        "fieldKey": "your_team",
+        "label": "How far do you agree with each statement?",
         "required": true,
         "helpText": null,
-        "placeholder": null,
+        "rows": [
+          "The people in my team work well together.",
+          "The people in my team treat each other with respect."
+        ],
         "options": [
           "Strongly agree",
           "Agree",
           "Neutral",
           "Disagree",
           "Strongly disagree"
-        ],
-        "display": "radios",
-        "across": true
+        ]
       },
       {
-        "id": "d5060000-0000-4000-8000-000000000010",
-        "type": "dropdown_field",
-        "fieldKey": "i_know_what_the_company_is_trying_to_achieve_over_the_next",
-        "label": "I know what the company is trying to achieve over the next year.",
+        "id": "d5060000-0000-4000-8000-000000000053",
+        "type": "choice_grid_field",
+        "fieldKey": "learning_and_development",
+        "label": "How far do you agree with each statement?",
         "required": true,
         "helpText": null,
-        "placeholder": null,
+        "rows": [
+          "I can get the training I need to do my job well.",
+          "I can see a way to develop or progress here."
+        ],
         "options": [
           "Strongly agree",
           "Agree",
           "Neutral",
           "Disagree",
           "Strongly disagree"
-        ],
-        "display": "radios",
-        "across": true
+        ]
       },
       {
-        "id": "d5060000-0000-4000-8000-000000000011",
-        "type": "dropdown_field",
-        "fieldKey": "my_manager_gives_me_useful_feedback_on_my_work",
-        "label": "My manager gives me useful feedback on my work.",
+        "id": "d5060000-0000-4000-8000-000000000054",
+        "type": "choice_grid_field",
+        "fieldKey": "fair_treatment_and_safety",
+        "label": "How far do you agree with each statement?",
         "required": true,
         "helpText": null,
-        "placeholder": null,
+        "rows": [
+          "I am treated fairly at work.",
+          "I feel safe to raise a concern about health and safety.",
+          "I feel able to report bullying or harassment without fear of what will happen."
+        ],
         "options": [
           "Strongly agree",
           "Agree",
           "Neutral",
           "Disagree",
           "Strongly disagree"
-        ],
-        "display": "radios",
-        "across": true
+        ]
       },
       {
-        "id": "d5060000-0000-4000-8000-000000000013",
-        "type": "dropdown_field",
-        "fieldKey": "my_manager_recognises_it_when_i_do_my_job_well",
-        "label": "My manager recognises it when I do my job well.",
+        "id": "d5060000-0000-4000-8000-000000000055",
+        "type": "choice_grid_field",
+        "fieldKey": "resources_and_workload",
+        "label": "How far do you agree with each statement?",
         "required": true,
         "helpText": null,
-        "placeholder": null,
+        "rows": [
+          "I have the tools and equipment I need to do my job.",
+          "My workload is manageable."
+        ],
         "options": [
           "Strongly agree",
           "Agree",
           "Neutral",
           "Disagree",
           "Strongly disagree"
-        ],
-        "display": "radios",
-        "across": true
+        ]
       },
       {
-        "id": "d5060000-0000-4000-8000-000000000014",
-        "type": "dropdown_field",
-        "fieldKey": "i_can_talk_to_my_manager_about_anything_that_worries_me",
-        "label": "I can talk to my manager about anything that worries me.",
+        "id": "d5060000-0000-4000-8000-000000000056",
+        "type": "choice_grid_field",
+        "fieldKey": "pay_and_benefits",
+        "label": "How far do you agree with each statement?",
         "required": true,
         "helpText": null,
-        "placeholder": null,
+        "rows": [
+          "My pay is fair for the work I do.",
+          "I understand the benefits the company offers."
+        ],
         "options": [
           "Strongly agree",
           "Agree",
           "Neutral",
           "Disagree",
           "Strongly disagree"
-        ],
-        "display": "radios",
-        "across": true
+        ]
       },
       {
-        "id": "d5060000-0000-4000-8000-000000000015",
-        "type": "dropdown_field",
-        "fieldKey": "the_people_in_my_team_work_well_together",
-        "label": "The people in my team work well together.",
+        "id": "d5060000-0000-4000-8000-000000000057",
+        "type": "choice_grid_field",
+        "fieldKey": "leadership_and_change",
+        "label": "How far do you agree with each statement?",
         "required": true,
         "helpText": null,
-        "placeholder": null,
+        "rows": [
+          "The management team keeps us informed about what is happening.",
+          "When changes are made, I understand why.",
+          "I have confidence in the decisions the management team makes."
+        ],
         "options": [
           "Strongly agree",
           "Agree",
           "Neutral",
           "Disagree",
           "Strongly disagree"
-        ],
-        "display": "radios",
-        "across": true
+        ]
       },
       {
-        "id": "d5060000-0000-4000-8000-000000000017",
-        "type": "dropdown_field",
-        "fieldKey": "the_people_in_my_team_treat_each_other_with_respect",
-        "label": "The people in my team treat each other with respect.",
+        "id": "d5060000-0000-4000-8000-000000000058",
+        "type": "choice_grid_field",
+        "fieldKey": "how_you_feel_about_working_here",
+        "label": "How far do you agree with each statement?",
         "required": true,
         "helpText": null,
-        "placeholder": null,
+        "rows": [
+          "I am proud to tell people where I work.",
+          "I would recommend the company as a good place to work.",
+          "I feel a real sense of belonging here.",
+          "Working here makes me want to do my best.",
+          "I want to help the company succeed."
+        ],
         "options": [
           "Strongly agree",
           "Agree",
           "Neutral",
           "Disagree",
           "Strongly disagree"
-        ],
-        "display": "radios",
-        "across": true
-      },
-      {
-        "id": "d5060000-0000-4000-8000-000000000018",
-        "type": "dropdown_field",
-        "fieldKey": "i_can_get_the_training_i_need_to_do_my_job_well",
-        "label": "I can get the training I need to do my job well.",
-        "required": true,
-        "helpText": null,
-        "placeholder": null,
-        "options": [
-          "Strongly agree",
-          "Agree",
-          "Neutral",
-          "Disagree",
-          "Strongly disagree"
-        ],
-        "display": "radios",
-        "across": true
-      },
-      {
-        "id": "d5060000-0000-4000-8000-000000000020",
-        "type": "dropdown_field",
-        "fieldKey": "i_can_see_a_way_to_develop_or_progress_here",
-        "label": "I can see a way to develop or progress here.",
-        "required": true,
-        "helpText": null,
-        "placeholder": null,
-        "options": [
-          "Strongly agree",
-          "Agree",
-          "Neutral",
-          "Disagree",
-          "Strongly disagree"
-        ],
-        "display": "radios",
-        "across": true
-      },
-      {
-        "id": "d5060000-0000-4000-8000-000000000021",
-        "type": "dropdown_field",
-        "fieldKey": "i_am_treated_fairly_at_work",
-        "label": "I am treated fairly at work.",
-        "required": true,
-        "helpText": null,
-        "placeholder": null,
-        "options": [
-          "Strongly agree",
-          "Agree",
-          "Neutral",
-          "Disagree",
-          "Strongly disagree"
-        ],
-        "display": "radios",
-        "across": true
-      },
-      {
-        "id": "d5060000-0000-4000-8000-000000000023",
-        "type": "dropdown_field",
-        "fieldKey": "i_feel_safe_to_raise_a_concern_about_health_and_safety",
-        "label": "I feel safe to raise a concern about health and safety.",
-        "required": true,
-        "helpText": null,
-        "placeholder": null,
-        "options": [
-          "Strongly agree",
-          "Agree",
-          "Neutral",
-          "Disagree",
-          "Strongly disagree"
-        ],
-        "display": "radios",
-        "across": true
-      },
-      {
-        "id": "d5060000-0000-4000-8000-000000000024",
-        "type": "dropdown_field",
-        "fieldKey": "i_feel_able_to_report_bullying_or_harassment_without_fear_of",
-        "label": "I feel able to report bullying or harassment without fear of what will happen.",
-        "required": true,
-        "helpText": null,
-        "placeholder": null,
-        "options": [
-          "Strongly agree",
-          "Agree",
-          "Neutral",
-          "Disagree",
-          "Strongly disagree"
-        ],
-        "display": "radios",
-        "across": true
-      },
-      {
-        "id": "d5060000-0000-4000-8000-000000000025",
-        "type": "dropdown_field",
-        "fieldKey": "i_have_the_tools_and_equipment_i_need_to_do_my_job",
-        "label": "I have the tools and equipment I need to do my job.",
-        "required": true,
-        "helpText": null,
-        "placeholder": null,
-        "options": [
-          "Strongly agree",
-          "Agree",
-          "Neutral",
-          "Disagree",
-          "Strongly disagree"
-        ],
-        "display": "radios",
-        "across": true
-      },
-      {
-        "id": "d5060000-0000-4000-8000-000000000027",
-        "type": "dropdown_field",
-        "fieldKey": "my_workload_is_manageable",
-        "label": "My workload is manageable.",
-        "required": true,
-        "helpText": null,
-        "placeholder": null,
-        "options": [
-          "Strongly agree",
-          "Agree",
-          "Neutral",
-          "Disagree",
-          "Strongly disagree"
-        ],
-        "display": "radios",
-        "across": true
-      },
-      {
-        "id": "d5060000-0000-4000-8000-000000000028",
-        "type": "dropdown_field",
-        "fieldKey": "my_pay_is_fair_for_the_work_i_do",
-        "label": "My pay is fair for the work I do.",
-        "required": true,
-        "helpText": null,
-        "placeholder": null,
-        "options": [
-          "Strongly agree",
-          "Agree",
-          "Neutral",
-          "Disagree",
-          "Strongly disagree"
-        ],
-        "display": "radios",
-        "across": true
-      },
-      {
-        "id": "d5060000-0000-4000-8000-000000000030",
-        "type": "dropdown_field",
-        "fieldKey": "i_understand_the_benefits_the_company_offers",
-        "label": "I understand the benefits the company offers.",
-        "required": true,
-        "helpText": null,
-        "placeholder": null,
-        "options": [
-          "Strongly agree",
-          "Agree",
-          "Neutral",
-          "Disagree",
-          "Strongly disagree"
-        ],
-        "display": "radios",
-        "across": true
-      },
-      {
-        "id": "d5060000-0000-4000-8000-000000000031",
-        "type": "dropdown_field",
-        "fieldKey": "the_management_team_keeps_us_informed_about_what_is",
-        "label": "The management team keeps us informed about what is happening.",
-        "required": true,
-        "helpText": null,
-        "placeholder": null,
-        "options": [
-          "Strongly agree",
-          "Agree",
-          "Neutral",
-          "Disagree",
-          "Strongly disagree"
-        ],
-        "display": "radios",
-        "across": true
-      },
-      {
-        "id": "d5060000-0000-4000-8000-000000000033",
-        "type": "dropdown_field",
-        "fieldKey": "when_changes_are_made_i_understand_why",
-        "label": "When changes are made, I understand why.",
-        "required": true,
-        "helpText": null,
-        "placeholder": null,
-        "options": [
-          "Strongly agree",
-          "Agree",
-          "Neutral",
-          "Disagree",
-          "Strongly disagree"
-        ],
-        "display": "radios",
-        "across": true
-      },
-      {
-        "id": "d5060000-0000-4000-8000-000000000034",
-        "type": "dropdown_field",
-        "fieldKey": "i_have_confidence_in_the_decisions_the_management_team_makes",
-        "label": "I have confidence in the decisions the management team makes.",
-        "required": true,
-        "helpText": null,
-        "placeholder": null,
-        "options": [
-          "Strongly agree",
-          "Agree",
-          "Neutral",
-          "Disagree",
-          "Strongly disagree"
-        ],
-        "display": "radios",
-        "across": true
-      },
-      {
-        "id": "d5060000-0000-4000-8000-000000000035",
-        "type": "dropdown_field",
-        "fieldKey": "i_am_proud_to_tell_people_where_i_work",
-        "label": "I am proud to tell people where I work.",
-        "required": true,
-        "helpText": null,
-        "placeholder": null,
-        "options": [
-          "Strongly agree",
-          "Agree",
-          "Neutral",
-          "Disagree",
-          "Strongly disagree"
-        ],
-        "display": "radios",
-        "across": true
-      },
-      {
-        "id": "d5060000-0000-4000-8000-000000000037",
-        "type": "dropdown_field",
-        "fieldKey": "i_would_recommend_the_company_as_a_good_place_to_work",
-        "label": "I would recommend the company as a good place to work.",
-        "required": true,
-        "helpText": null,
-        "placeholder": null,
-        "options": [
-          "Strongly agree",
-          "Agree",
-          "Neutral",
-          "Disagree",
-          "Strongly disagree"
-        ],
-        "display": "radios",
-        "across": true
-      },
-      {
-        "id": "d5060000-0000-4000-8000-000000000038",
-        "type": "dropdown_field",
-        "fieldKey": "i_feel_a_real_sense_of_belonging_here",
-        "label": "I feel a real sense of belonging here.",
-        "required": true,
-        "helpText": null,
-        "placeholder": null,
-        "options": [
-          "Strongly agree",
-          "Agree",
-          "Neutral",
-          "Disagree",
-          "Strongly disagree"
-        ],
-        "display": "radios",
-        "across": true
-      },
-      {
-        "id": "d5060000-0000-4000-8000-000000000039",
-        "type": "dropdown_field",
-        "fieldKey": "working_here_makes_me_want_to_do_my_best",
-        "label": "Working here makes me want to do my best.",
-        "required": true,
-        "helpText": null,
-        "placeholder": null,
-        "options": [
-          "Strongly agree",
-          "Agree",
-          "Neutral",
-          "Disagree",
-          "Strongly disagree"
-        ],
-        "display": "radios",
-        "across": true
-      },
-      {
-        "id": "d5060000-0000-4000-8000-000000000040",
-        "type": "dropdown_field",
-        "fieldKey": "i_want_to_help_the_company_succeed",
-        "label": "I want to help the company succeed.",
-        "required": true,
-        "helpText": null,
-        "placeholder": null,
-        "options": [
-          "Strongly agree",
-          "Agree",
-          "Neutral",
-          "Disagree",
-          "Strongly disagree"
-        ],
-        "display": "radios",
-        "across": true
+        ]
       },
       {
         "id": "d5060000-0000-4000-8000-000000000041",
@@ -619,70 +330,70 @@
       {
         "id": "d5060000-0000-4000-8000-000000000005",
         "label": "Your work",
-        "startBlockId": "d5060000-0000-4000-8000-000000000004",
+        "startBlockId": "d5060000-0000-4000-8000-000000000049",
         "pageBreakBefore": false,
         "keepTogether": false
       },
       {
         "id": "d5060000-0000-4000-8000-000000000009",
         "label": "Our purpose",
-        "startBlockId": "d5060000-0000-4000-8000-000000000008",
+        "startBlockId": "d5060000-0000-4000-8000-000000000050",
         "pageBreakBefore": false,
         "keepTogether": false
       },
       {
         "id": "d5060000-0000-4000-8000-000000000012",
         "label": "Your manager",
-        "startBlockId": "d5060000-0000-4000-8000-000000000011",
+        "startBlockId": "d5060000-0000-4000-8000-000000000051",
         "pageBreakBefore": false,
         "keepTogether": false
       },
       {
         "id": "d5060000-0000-4000-8000-000000000016",
         "label": "Your team",
-        "startBlockId": "d5060000-0000-4000-8000-000000000015",
+        "startBlockId": "d5060000-0000-4000-8000-000000000052",
         "pageBreakBefore": false,
         "keepTogether": false
       },
       {
         "id": "d5060000-0000-4000-8000-000000000019",
         "label": "Learning and development",
-        "startBlockId": "d5060000-0000-4000-8000-000000000018",
+        "startBlockId": "d5060000-0000-4000-8000-000000000053",
         "pageBreakBefore": false,
         "keepTogether": false
       },
       {
         "id": "d5060000-0000-4000-8000-000000000022",
         "label": "Fair treatment and safety",
-        "startBlockId": "d5060000-0000-4000-8000-000000000021",
+        "startBlockId": "d5060000-0000-4000-8000-000000000054",
         "pageBreakBefore": false,
         "keepTogether": false
       },
       {
         "id": "d5060000-0000-4000-8000-000000000026",
         "label": "Resources and workload",
-        "startBlockId": "d5060000-0000-4000-8000-000000000025",
+        "startBlockId": "d5060000-0000-4000-8000-000000000055",
         "pageBreakBefore": false,
         "keepTogether": false
       },
       {
         "id": "d5060000-0000-4000-8000-000000000029",
         "label": "Pay and benefits",
-        "startBlockId": "d5060000-0000-4000-8000-000000000028",
+        "startBlockId": "d5060000-0000-4000-8000-000000000056",
         "pageBreakBefore": false,
         "keepTogether": false
       },
       {
         "id": "d5060000-0000-4000-8000-000000000032",
         "label": "Leadership and change",
-        "startBlockId": "d5060000-0000-4000-8000-000000000031",
+        "startBlockId": "d5060000-0000-4000-8000-000000000057",
         "pageBreakBefore": false,
         "keepTogether": false
       },
       {
         "id": "d5060000-0000-4000-8000-000000000036",
         "label": "How you feel about working here",
-        "startBlockId": "d5060000-0000-4000-8000-000000000035",
+        "startBlockId": "d5060000-0000-4000-8000-000000000058",
         "pageBreakBefore": false,
         "keepTogether": false
       },
@@ -690,7 +401,7 @@
         "id": "d5060000-0000-4000-8000-000000000042",
         "label": "Your comments",
         "startBlockId": "d5060000-0000-4000-8000-000000000041",
-        "pageBreakBefore": false,
+        "pageBreakBefore": true,
         "keepTogether": false
       },
       {

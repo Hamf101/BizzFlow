@@ -116,50 +116,22 @@
         "alignment": "left"
       },
       {
-        "id": "0b120000-0000-4000-8000-000000000015",
-        "type": "date_field",
-        "fieldKey": "mmr_first_date",
-        "label": "Date given",
+        "id": "0b120000-0000-4000-8000-000000000060",
+        "type": "table_field",
+        "fieldKey": "mmr_doses",
+        "label": "Doses given",
         "required": false,
         "helpText": null,
-        "dateFormat": {
-          "order": "dmy",
-          "separator": "/",
-          "month": "number"
-        }
-      },
-      {
-        "id": "0b120000-0000-4000-8000-000000000016",
-        "type": "text_field",
-        "fieldKey": "mmr_first_batch",
-        "label": "Batch number",
-        "required": false,
-        "helpText": null,
-        "placeholder": null,
-        "multiline": false
-      },
-      {
-        "id": "0b120000-0000-4000-8000-000000000018",
-        "type": "date_field",
-        "fieldKey": "mmr_second_date",
-        "label": "Date given",
-        "required": false,
-        "helpText": null,
-        "dateFormat": {
-          "order": "dmy",
-          "separator": "/",
-          "month": "number"
-        }
-      },
-      {
-        "id": "0b120000-0000-4000-8000-000000000019",
-        "type": "text_field",
-        "fieldKey": "mmr_second_batch",
-        "label": "Batch number",
-        "required": false,
-        "helpText": null,
-        "placeholder": null,
-        "multiline": false
+        "columns": [
+          {
+            "label": "Date given",
+            "format": "date"
+          },
+          {
+            "label": "Batch number"
+          }
+        ],
+        "rows": 2
       },
       {
         "id": "0b120000-0000-4000-8000-000000000022",
@@ -178,70 +150,27 @@
         "across": true
       },
       {
-        "id": "0b120000-0000-4000-8000-000000000023",
-        "type": "date_field",
-        "fieldKey": "varicella_first_date",
-        "label": "Date given",
+        "id": "0b120000-0000-4000-8000-000000000061",
+        "type": "table_field",
+        "fieldKey": "varicella_doses",
+        "label": "Doses given",
         "required": false,
         "helpText": null,
+        "columns": [
+          {
+            "label": "Date given",
+            "format": "date"
+          },
+          {
+            "label": "Batch number"
+          }
+        ],
+        "rows": 2,
         "visibleWhen": {
           "sourceBlockId": "0b120000-0000-4000-8000-000000000022",
           "operator": "equals",
           "value": "No"
-        },
-        "dateFormat": {
-          "order": "dmy",
-          "separator": "/",
-          "month": "number"
         }
-      },
-      {
-        "id": "0b120000-0000-4000-8000-000000000024",
-        "type": "text_field",
-        "fieldKey": "varicella_first_batch",
-        "label": "Batch number",
-        "required": false,
-        "helpText": null,
-        "visibleWhen": {
-          "sourceBlockId": "0b120000-0000-4000-8000-000000000022",
-          "operator": "equals",
-          "value": "No"
-        },
-        "placeholder": null,
-        "multiline": false
-      },
-      {
-        "id": "0b120000-0000-4000-8000-000000000026",
-        "type": "date_field",
-        "fieldKey": "varicella_second_date",
-        "label": "Date given",
-        "required": false,
-        "helpText": null,
-        "visibleWhen": {
-          "sourceBlockId": "0b120000-0000-4000-8000-000000000022",
-          "operator": "equals",
-          "value": "No"
-        },
-        "dateFormat": {
-          "order": "dmy",
-          "separator": "/",
-          "month": "number"
-        }
-      },
-      {
-        "id": "0b120000-0000-4000-8000-000000000027",
-        "type": "text_field",
-        "fieldKey": "varicella_second_batch",
-        "label": "Batch number",
-        "required": false,
-        "helpText": null,
-        "visibleWhen": {
-          "sourceBlockId": "0b120000-0000-4000-8000-000000000022",
-          "operator": "equals",
-          "value": "No"
-        },
-        "placeholder": null,
-        "multiline": false
       },
       {
         "id": "0b120000-0000-4000-8000-000000000030",
@@ -259,103 +188,27 @@
         "across": true
       },
       {
-        "id": "0b120000-0000-4000-8000-000000000031",
-        "type": "date_field",
-        "fieldKey": "hepatitis_b_first_date",
-        "label": "Date given",
+        "id": "0b120000-0000-4000-8000-000000000062",
+        "type": "table_field",
+        "fieldKey": "hepatitis_b_doses",
+        "label": "Doses given",
         "required": false,
         "helpText": null,
+        "columns": [
+          {
+            "label": "Date given",
+            "format": "date"
+          },
+          {
+            "label": "Batch number"
+          }
+        ],
+        "rows": 3,
         "visibleWhen": {
           "sourceBlockId": "0b120000-0000-4000-8000-000000000030",
           "operator": "equals",
           "value": "Yes"
-        },
-        "dateFormat": {
-          "order": "dmy",
-          "separator": "/",
-          "month": "number"
         }
-      },
-      {
-        "id": "0b120000-0000-4000-8000-000000000032",
-        "type": "text_field",
-        "fieldKey": "hepatitis_b_first_batch",
-        "label": "Batch number",
-        "required": false,
-        "helpText": null,
-        "visibleWhen": {
-          "sourceBlockId": "0b120000-0000-4000-8000-000000000030",
-          "operator": "equals",
-          "value": "Yes"
-        },
-        "placeholder": null,
-        "multiline": false
-      },
-      {
-        "id": "0b120000-0000-4000-8000-000000000034",
-        "type": "date_field",
-        "fieldKey": "hepatitis_b_second_date",
-        "label": "Date given",
-        "required": false,
-        "helpText": null,
-        "visibleWhen": {
-          "sourceBlockId": "0b120000-0000-4000-8000-000000000030",
-          "operator": "equals",
-          "value": "Yes"
-        },
-        "dateFormat": {
-          "order": "dmy",
-          "separator": "/",
-          "month": "number"
-        }
-      },
-      {
-        "id": "0b120000-0000-4000-8000-000000000035",
-        "type": "text_field",
-        "fieldKey": "hepatitis_b_second_batch",
-        "label": "Batch number",
-        "required": false,
-        "helpText": null,
-        "visibleWhen": {
-          "sourceBlockId": "0b120000-0000-4000-8000-000000000030",
-          "operator": "equals",
-          "value": "Yes"
-        },
-        "placeholder": null,
-        "multiline": false
-      },
-      {
-        "id": "0b120000-0000-4000-8000-000000000037",
-        "type": "date_field",
-        "fieldKey": "hepatitis_b_third_date",
-        "label": "Date given",
-        "required": false,
-        "helpText": null,
-        "visibleWhen": {
-          "sourceBlockId": "0b120000-0000-4000-8000-000000000030",
-          "operator": "equals",
-          "value": "Yes"
-        },
-        "dateFormat": {
-          "order": "dmy",
-          "separator": "/",
-          "month": "number"
-        }
-      },
-      {
-        "id": "0b120000-0000-4000-8000-000000000038",
-        "type": "text_field",
-        "fieldKey": "hepatitis_b_third_batch",
-        "label": "Batch number",
-        "required": false,
-        "helpText": null,
-        "visibleWhen": {
-          "sourceBlockId": "0b120000-0000-4000-8000-000000000030",
-          "operator": "equals",
-          "value": "Yes"
-        },
-        "placeholder": null,
-        "multiline": false
       },
       {
         "id": "0b120000-0000-4000-8000-000000000040",
@@ -596,62 +449,6 @@
         "label": null,
         "startBlockId": "0b120000-0000-4000-8000-000000000008",
         "endBlockId": "0b120000-0000-4000-8000-000000000009",
-        "columns": 2,
-        "keepTogether": false
-      },
-      {
-        "id": "0b120000-0000-4000-8000-000000000017",
-        "label": "First dose",
-        "startBlockId": "0b120000-0000-4000-8000-000000000015",
-        "endBlockId": "0b120000-0000-4000-8000-000000000016",
-        "columns": 2,
-        "keepTogether": false
-      },
-      {
-        "id": "0b120000-0000-4000-8000-000000000020",
-        "label": "Second dose",
-        "startBlockId": "0b120000-0000-4000-8000-000000000018",
-        "endBlockId": "0b120000-0000-4000-8000-000000000019",
-        "columns": 2,
-        "keepTogether": false
-      },
-      {
-        "id": "0b120000-0000-4000-8000-000000000025",
-        "label": "First dose",
-        "startBlockId": "0b120000-0000-4000-8000-000000000023",
-        "endBlockId": "0b120000-0000-4000-8000-000000000024",
-        "columns": 2,
-        "keepTogether": false
-      },
-      {
-        "id": "0b120000-0000-4000-8000-000000000028",
-        "label": "Second dose",
-        "startBlockId": "0b120000-0000-4000-8000-000000000026",
-        "endBlockId": "0b120000-0000-4000-8000-000000000027",
-        "columns": 2,
-        "keepTogether": false
-      },
-      {
-        "id": "0b120000-0000-4000-8000-000000000033",
-        "label": "First dose",
-        "startBlockId": "0b120000-0000-4000-8000-000000000031",
-        "endBlockId": "0b120000-0000-4000-8000-000000000032",
-        "columns": 2,
-        "keepTogether": false
-      },
-      {
-        "id": "0b120000-0000-4000-8000-000000000036",
-        "label": "Second dose",
-        "startBlockId": "0b120000-0000-4000-8000-000000000034",
-        "endBlockId": "0b120000-0000-4000-8000-000000000035",
-        "columns": 2,
-        "keepTogether": false
-      },
-      {
-        "id": "0b120000-0000-4000-8000-000000000039",
-        "label": "Third dose",
-        "startBlockId": "0b120000-0000-4000-8000-000000000037",
-        "endBlockId": "0b120000-0000-4000-8000-000000000038",
         "columns": 2,
         "keepTogether": false
       },
