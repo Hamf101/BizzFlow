@@ -4,6 +4,8 @@ import { Check } from "lucide-react"
 import type { CSSProperties, ReactElement, ReactNode } from "react"
 
 import { DrawnSignatureField } from "@/components/documents/drawn-signature-field"
+import { Affixed, PaperComb, PaperGrid, PaperTable, readChoiceList } from "@/components/editor/paper-answer-kinds"
+import { typedInput } from "@/components/ui/typed-input"
 import { getGeneratedDocumentAnswerName } from "@/components/documents/generated-document-form-data"
 import { DatePicker } from "@/components/ui/date-picker"
 import { Select } from "@/components/ui/select"
@@ -97,6 +99,21 @@ export function PaperField({
     </span>
   )
 
+  // A grid and a table print with their own rules, under the field's title.
+  if (block.type === "choice_grid_field" || block.type === "table_field") {
+    return (
+      <div className="flex flex-col">
+        {title}
+        {block.type === "choice_grid_field" ? (
+          <PaperGrid block={block} mode={mode} onChange={set} value={value} />
+        ) : (
+          <PaperTable block={block} mode={mode} onChange={set} value={value} />
+        )}
+        <Help block={block} />
+      </div>
+    )
+  }
+
   if (block.type === "checkbox_field") {
     const checked = value === undefined ? block.checkedByDefault : value === true
     const booleanName = getGeneratedDocumentAnswerName("boolean", block.fieldKey)
@@ -161,20 +178,30 @@ export function PaperField({
         ) : (
           <input
             aria-label={block.label}
-            className="w-full min-w-0 bg-transparent outline-none placeholder:text-muted-foreground"
+            className={cn(
+              "w-full min-w-0 bg-transparent outline-none placeholder:text-muted-foreground",
+              // One character a box: a fixed face spaced to the boxes' width.
+              block.comb && "absolute inset-0 font-mono tracking-[calc(var(--comb)-1ch)] [padding-inline:calc((var(--comb)-1ch)/2)] leading-none"
+            )}
             id={block.id}
-            maxLength={20_000}
+            maxLength={block.comb ?? 20_000}
             name={textName}
             onChange={(event) => set(event.target.value)}
-            placeholder={block.placeholder ?? undefined}
+            placeholder={block.comb ? undefined : (block.placeholder ?? undefined)}
             value={text}
+            {...typedInput(block.format)}
           />
         )
       ) : mode === "read" ? (
         <span className="whitespace-pre-wrap">{text}</span>
       ) : (
-        placeholder(block.placeholder || "Text")
+        placeholder(block.placeholder || (block.comb ? "" : "Text"))
       )
+      if (block.comb) {
+        answer = <PaperComb block={{ ...block, comb: block.comb }} input={fill ? (answer as ReactElement) : undefined} text={text} />
+      }
+
+      answer = <Affixed block={block}>{answer}</Affixed>
       break
     case "date_field":
       answer = fill ? (
@@ -223,9 +250,12 @@ export function PaperField({
       break
   }
 
-  // Radio buttons print with no box: each option beside a circle, one a line or side by side.
-  if (block.type === "dropdown_field" && block.display === "radios") {
+  // Radio buttons and checkboxes print with no box: each option beside a
+  // circle, or a square when any number may be ticked, one a line or side by side.
+  if (block.type === "dropdown_field" && (block.display === "radios" || block.multiple)) {
     const Option = fill ? "label" : "div"
+    const several = block.multiple === true
+    const ticked = readChoiceList(value)
 
     return (
       <div className="flex flex-col">
@@ -233,13 +263,19 @@ export function PaperField({
         <div
           aria-label={fill ? block.label : undefined}
           className={cn(block.across && "flex flex-wrap gap-x-[1.8em]")}
-          role={fill ? "radiogroup" : undefined}
+          role={fill ? (several ? "group" : "radiogroup") : undefined}
           style={{ lineHeight: 1.5 }}
         >
           {/* Nothing chosen still answers, as an empty dropdown does. */}
-          {fill ? <input name={textName} type="hidden" value="" /> : null}
+          {fill ? (
+            several ? (
+              <input name={getGeneratedDocumentAnswerName("json", block.fieldKey)} type="hidden" value={JSON.stringify(ticked)} />
+            ) : (
+              <input name={textName} type="hidden" value="" />
+            )
+          ) : null}
           {block.options.map((option: string) => {
-            const chosen = mode !== "design" && text === option
+            const chosen = mode !== "design" && (several ? ticked.includes(option) : text === option)
 
             return (
               <Option className={cn("relative block", fill && "cursor-pointer")} key={option} style={{ paddingLeft: "1.6em" }}>
@@ -247,18 +283,24 @@ export function PaperField({
                   <input
                     checked={chosen}
                     className="peer absolute top-[0.2em] left-0 size-[1em] cursor-pointer opacity-0"
-                    name={textName}
-                    onChange={() => set(option)}
-                    type="radio"
+                    name={several ? undefined : textName}
+                    onChange={() =>
+                      // Ticks keep the options' order, whatever order they were ticked in.
+                      set(several ? block.options.filter((other) => (other === option ? !chosen : ticked.includes(other))) : option)
+                    }
+                    type={several ? "checkbox" : "radio"}
                     value={option}
                   />
                 ) : null}
                 <span
                   aria-hidden="true"
-                  className="pointer-events-none absolute top-[0.2em] left-0 flex size-[1em] items-center justify-center rounded-full peer-focus-visible:ring-2 peer-focus-visible:ring-ring/40"
+                  className={cn(
+                    "pointer-events-none absolute top-[0.2em] left-0 flex size-[1em] items-center justify-center peer-focus-visible:ring-2 peer-focus-visible:ring-ring/40",
+                    !several && "rounded-full"
+                  )}
                   style={{ border: `0.07em solid ${EDGE}` }}
                 >
-                  {chosen ? <span className="size-[0.5em] rounded-full bg-current" /> : null}
+                  {chosen ? several ? <Check className="size-[0.85em]" strokeWidth={3} /> : <span className="size-[0.5em] rounded-full bg-current" /> : null}
                 </span>
                 {chosen && !fill ? <span className="sr-only">Chosen: </span> : null}
                 {option}
@@ -343,6 +385,17 @@ export function PaperField({
             {answer}
           </div>
         </div>
+        <Help block={block} />
+      </div>
+    )
+  }
+
+  // Comb boxes are the answer's box.
+  if (block.type === "text_field" && block.comb) {
+    return (
+      <div className="flex flex-col">
+        {title}
+        {answer}
         <Help block={block} />
       </div>
     )

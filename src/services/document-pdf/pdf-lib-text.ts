@@ -95,7 +95,8 @@ export function wrapPdfText(
         currentLine = ""
       }
 
-      const wordParts = splitPdfWord(word, font, size, maximumWidth)
+      // Only a word too long for a line is cut, a letter at a time.
+      const wordParts = font.widthOfTextAtSize(word, size) <= maximumWidth ? [word] : splitPdfWord(word, font, size, maximumWidth)
       lines.push(...wordParts.slice(0, -1))
       currentLine = wordParts.at(-1) ?? ""
     }

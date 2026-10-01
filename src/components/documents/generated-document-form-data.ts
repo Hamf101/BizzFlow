@@ -1,13 +1,16 @@
 import type { TemplateBlock, TemplateContent } from "@/types/template"
+import { isStructuredAnswerBlock } from "@/types/template-answer-kinds"
 import { getVisibleTemplateBlocks } from "@/types/template-visibility"
 
 const ANSWER_TEXT_PREFIX = "answer.text."
 const ANSWER_BOOLEAN_PREFIX = "answer.boolean."
 const ANSWER_DRAWING_PREFIX = "answer.drawing."
+const ANSWER_JSON_PREFIX = "answer.json."
 const BASELINE_TEXT_PREFIX = "answer-baseline.text."
 const BASELINE_BOOLEAN_PREFIX = "answer-baseline.boolean."
+const BASELINE_JSON_PREFIX = "answer-baseline.json."
 
-export type GeneratedDocumentAnswerKind = "text" | "boolean" | "drawing"
+export type GeneratedDocumentAnswerKind = "text" | "boolean" | "drawing" | "json"
 
 export type GeneratedDocumentAnswerBaselineField = {
   name: string
@@ -17,6 +20,7 @@ export type GeneratedDocumentAnswerBaselineField = {
 type GeneratedDocumentFormDataParserOptions = {
   booleanPrefix: string
   drawingPrefix?: string
+  jsonPrefix: string
   malformedBooleanMessage: string
   textPrefix: string
 }
@@ -65,6 +69,7 @@ export function parseGeneratedDocumentAnswers(
   return parseNamespacedGeneratedDocumentAnswers(formData, {
     booleanPrefix: ANSWER_BOOLEAN_PREFIX,
     drawingPrefix: ANSWER_DRAWING_PREFIX,
+    jsonPrefix: ANSWER_JSON_PREFIX,
     malformedBooleanMessage: "A checkbox answer was malformed.",
     textPrefix: ANSWER_TEXT_PREFIX
   })
@@ -110,6 +115,7 @@ export function parseGeneratedDocumentAnswerBaseline(
 ): Record<string, unknown> {
   return parseNamespacedGeneratedDocumentAnswers(formData, {
     booleanPrefix: BASELINE_BOOLEAN_PREFIX,
+    jsonPrefix: BASELINE_JSON_PREFIX,
     malformedBooleanMessage: "A checkbox answer baseline was malformed.",
     textPrefix: BASELINE_TEXT_PREFIX
   })
@@ -141,6 +147,11 @@ function parseNamespacedGeneratedDocumentAnswers(
       }
 
       values[fieldKey] = entry === "true"
+      continue
+    }
+
+    if (name.startsWith(options.jsonPrefix)) {
+      values[readFieldKey(name, options.jsonPrefix)] = parseJsonAnswer(entry)
       continue
     }
 
@@ -183,6 +194,17 @@ function createBaselineField(
     return null
   }
 
+  if (isStructuredAnswerBlock(block)) {
+    const value =
+      answers[block.fieldKey] ??
+      (block.type === "choice_grid_field" ? {} : [])
+
+    return {
+      name: `${BASELINE_JSON_PREFIX}${block.fieldKey}`,
+      value: JSON.stringify(value)
+    }
+  }
+
   const value = answers[block.fieldKey]
   return {
     name: `${BASELINE_TEXT_PREFIX}${block.fieldKey}`,
@@ -199,7 +221,19 @@ function getAnswerPrefix(kind: GeneratedDocumentAnswerKind): string {
     return ANSWER_DRAWING_PREFIX
   }
 
+  if (kind === "json") {
+    return ANSWER_JSON_PREFIX
+  }
+
   return ANSWER_TEXT_PREFIX
+}
+
+function parseJsonAnswer(entry: string): unknown {
+  try {
+    return JSON.parse(entry) as unknown
+  } catch {
+    throw new GeneratedDocumentFormDataError("A structured answer was malformed.")
+  }
 }
 
 function readFieldKey(name: string, prefix: string): string {

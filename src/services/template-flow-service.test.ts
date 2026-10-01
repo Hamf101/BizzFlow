@@ -312,6 +312,30 @@ describe("template Flow service", () => {
     expect(result.proposal?.candidateDraft).toMatchObject({ title: "Short agreement", content: { blocks: [{ id: PARAGRAPH_ID }] } })
   })
 
+  it("drafts typed answers with units, choose-several ticks, question grids and fill-in tables", async () => {
+    const add = (summary: string, block: Record<string, unknown>): TestFlowOperation => ({ type: "add_block", summary, payload: { afterBlockId: null, block } })
+    const { aiProvider, run } = runFlow(createContent(), [
+      add("Asked the rent", { type: "text_field", fieldKey: "rent", label: "Monthly rent", required: true, helpText: null, placeholder: null, multiline: false, format: "money", prefix: "£", suffix: "per month" }),
+      add("Asked the reference", { type: "text_field", fieldKey: "ni_number", label: "National Insurance number", required: false, helpText: null, placeholder: null, multiline: false, comb: 9 }),
+      add("Asked the days", { type: "dropdown_field", fieldKey: "days", label: "Days you can work", required: false, helpText: null, placeholder: null, options: ["Mon", "Tue", "Wed"], multiple: true, across: true }),
+      add("Asked the checks", { type: "choice_grid_field", fieldKey: "checks", label: "Vehicle checks", required: true, helpText: null, rows: ["Tyres", "Lights"], options: ["OK", "Defect"] }),
+      add("Asked the hours", { type: "table_field", fieldKey: "hours", label: "Hours worked", required: false, helpText: null, columns: [{ label: "Date", format: "date" }, { label: "Hours", format: "number" }], rows: 7, addRows: true }),
+    ])
+    const result = await run
+    const instruction = String(readProviderRequests(aiProvider)[0]?.systemInstruction)
+
+    expect(result.proposal?.candidateDraft.content.blocks.slice(1)).toMatchObject([
+      { format: "money", prefix: "£", suffix: "per month", type: "text_field" },
+      { comb: 9, type: "text_field" },
+      { multiple: true, type: "dropdown_field" },
+      { options: ["OK", "Defect"], rows: ["Tyres", "Lights"], type: "choice_grid_field" },
+      { addRows: true, rows: 7, type: "table_field" },
+    ])
+    for (const kind of ["choice_grid_field", "table_field", '"multiple"', '"format"', '"comb"']) {
+      expect(instruction).toContain(kind)
+    }
+  })
+
   it("lets a field go when the same turn puts one in its place, and hands back removals that outnumber their replacements", async () => {
     const nameField = (id: string, fieldKey: string, label: string) =>
       ({ id, type: "text_field", fieldKey, label, required: false, helpText: null, placeholder: null, multiline: false }) as const

@@ -29,6 +29,7 @@ import type {
   SubmissionCommentRow,
 } from "@/types/submission-review"
 import type { SavedViewRecord } from "@/types/saved-view"
+import type { TemplateAnswerValue } from "@/types/template-answer"
 
 type DatabaseOrganizationRole =
   | "owner_admin"
@@ -228,7 +229,7 @@ type AdminSubmissionRow = Record<string, unknown> & {
   template_id: string
   template_revision: number
   template_snapshot: TemplateContent
-  values: Record<string, string | boolean>
+  values: Record<string, TemplateAnswerValue>
   status:
     | "draft"
     | "submitted"
@@ -266,8 +267,8 @@ type AdminSubmissionSuggestionRow = Record<string, unknown> & {
   org_id: string
   submission_id: string
   field_key: string
-  previous_value: string | boolean | null
-  proposed_value: string | boolean
+  previous_value: TemplateAnswerValue | null
+  proposed_value: TemplateAnswerValue
   suggested_by: string | null
   suggested_at: string
   status: "pending" | "accepted" | "declined"
@@ -1031,7 +1032,7 @@ export type AdminDatabase = {
           target_org_id: string
           target_submission_id: string
           target_expected_revision: number
-          target_values: Record<string, string | boolean>
+          target_values: Record<string, TemplateAnswerValue>
           target_actor_user_id: string
         }
         Returns: AdminSubmissionRow
@@ -1097,7 +1098,7 @@ export type AdminDatabase = {
           target_org_id: string
           target_submission_id: string
           target_expected_revision: number
-          target_values: Record<string, string | boolean>
+          target_values: Record<string, TemplateAnswerValue>
           target_actor_user_id: string
         }
         Returns: AdminSubmissionRow
@@ -1136,7 +1137,7 @@ export type AdminDatabase = {
         Args: {
           target_org_id: string
           target_submission_id: string
-          target_values: Record<string, string | boolean>
+          target_values: Record<string, TemplateAnswerValue>
           target_actor_user_id: string
         }
         Returns: number

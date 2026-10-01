@@ -1,3 +1,8 @@
+import { readFileSync } from "node:fs"
+
+import * as fontkit from "fontkit"
+import type { PDFFont } from "pdf-lib"
+
 import {
   shouldRenderTemplateFooter,
   shouldRenderTemplateHeader,
@@ -11,9 +16,12 @@ import {
   LIST_ENTRY_CHUNK_CHARACTERS,
   PAGE_FLOW_HEIGHT,
   PARAGRAPH_CHUNK_CHARACTERS,
+  PDF_BOLD_FONT_PATH,
+  PDF_REGULAR_FONT_PATH,
   TABLE_CHUNK_HEIGHT
 } from "./constants"
 import { DocumentPdfServiceError } from "./errors"
+import { wrapPdfText } from "./pdf-lib-text"
 import {
   boxedPdfMetrics,
   createPdfLayoutMetrics,
@@ -24,6 +32,7 @@ import {
   type PdfLayoutMetrics
 } from "./layout"
 import {
+  AFFIX_GAP,
   ANSWER_BOX_PADDING,
   answerBoxHeight,
   CAPTION_GAP,
@@ -32,10 +41,17 @@ import {
   CELL_LABEL_LEADING,
   CELL_PADDING,
   CHECKBOX_LABEL_INSET,
+  COMB_HEIGHT,
+  combBoxes,
   drawingRoom,
   FIELD_GAP_BELOW,
   FIELD_RULE_WIDTH,
+  GRID_HEADER,
+  GRID_ROW_PADDING,
+  GRID_STATEMENT_GAP,
+  gridOptionWidth,
   isCellRow,
+  isChoiceList,
   isStyledField,
   isStyledRow,
   LINE_LABEL_GAP,
@@ -44,8 +60,12 @@ import {
   packRadioOptions,
   formatFieldValue,
   normalizeDrawingDataUrl,
+  printedOptions,
   RULED_LINE_PITCH,
   SIGNER_NOTE,
+  TABLE_CELL_PADDING,
+  TABLE_ROW_LEAST,
+  tableRows,
   type StyledFieldBlock
 } from "./shared"
 import type {
@@ -95,9 +115,13 @@ export function createPdfPagePlans(input: NormalizedPdfInput): PdfPagePlan[] {
     // gap reserved under the one above. (A box always opens with its section's
     // title, so no cell sits on one across a box's edge.)
     const above = currentPage.plan.items.at(-1)
-    const joins = above !== undefined && isCellItem(above, metrics) && isCellItem(unit.item, metrics)
+    // A grid's or table's next rows go on under its last ones, without its title and header again.
+    const rowsJoin = above !== undefined && continuesRows(above, unit.item)
+    const joins = above !== undefined && (continuesRows(above, unit.item) || (isCellItem(above, metrics) && isCellItem(unit.item, metrics)))
     const joinCredit = joins
-      ? estimateFlowItemHeight(above, input, metrics) - estimateFlowItemHeight({ ...above, joinsNext: true }, input, metrics)
+      ? estimateFlowItemHeight(above, input, metrics) -
+        estimateFlowItemHeight({ ...above, joinsNext: true }, input, metrics) +
+        (rowsJoin ? itemHeight - estimateFlowItemHeight({ ...(unit.item as PdfBlockFlowItem), joinsAbove: true }, input, metrics) : 0)
       : 0
     const usableEmptyCapacity = getEmptyPageContentCapacity(
       input,
@@ -170,6 +194,10 @@ export function createPdfPagePlans(input: NormalizedPdfInput): PdfPagePlan[] {
       above.joinsNext = true
     }
 
+    if (rowsJoin) {
+      ;(unit.item as PdfBlockFlowItem).joinsAbove = true
+    }
+
     currentPage.plan.items.push(unit.item)
     currentPage.height += itemHeight - joinCredit
     currentPage.contentItemCount += 1
@@ -188,6 +216,11 @@ export function createPdfPagePlans(input: NormalizedPdfInput): PdfPagePlan[] {
   }
 
   return pages
+}
+
+// The next piece of the grid or table the item above is a piece of.
+function continuesRows(above: PdfFlowItem, item: PdfFlowItem): above is PdfBlockFlowItem {
+  return above.kind === "block" && item.kind === "block" && item.rows !== undefined && item.fieldContinued === true && above.block.id === item.block.id
 }
 
 // A styled field drawn as a cell, alone or in a row of cells.
@@ -506,7 +539,7 @@ function createRowPaginationUnits(
 
     const frames = getPdfRowFrames(metrics, { cells: row, widths })
     const cellItems = row.map((renderBlock: TemplateRenderBlock, column: number): PdfBlockFlowItem[] =>
-      expandBlockForPagination(renderBlock, input.answers, frames[column]?.width ?? metrics.contentWidth, metrics, emptyPageRoom(input, metrics))
+      expandBlockForPagination(renderBlock, input.answers, frames[column]?.width ?? metrics.contentWidth, metrics, emptyPageRoom(input, metrics), false)
     )
     const pieceCount = Math.max(...cellItems.map((items) => items.length))
     const keepTogetherKeys = Array.from(
@@ -570,7 +603,8 @@ function expandBlockForPagination(
   answers: Record<string, unknown>,
   availableWidth: number,
   metrics: PdfLayoutMetrics,
-  room: number
+  room: number,
+  joinRows = true
 ): PdfBlockFlowItem[] {
   const { pageCapacity } = metrics
   // A line or a cell can stand up to a ruled line taller than a box of the same height.
@@ -615,13 +649,16 @@ function expandBlockForPagination(
     case "file_field":
     case "checkbox_field":
       return [{ kind: "block", block, renderBlock }]
+    case "choice_grid_field":
+    case "table_field":
+      return splitRowsField(block, renderBlock, answers, availableWidth, room, joinRows)
     case "text_field":
     case "date_field":
     case "dropdown_field": {
       const answer = formatFieldValue(block, answers[block.fieldKey])
 
-      if (block.type === "dropdown_field" && block.display === "radios") {
-        return splitRadioOptions(block, renderBlock, answer, availableWidth, room)
+      if (isChoiceList(block)) {
+        return splitRadioOptions(block, renderBlock, printedOptions(block, answers[block.fieldKey]), availableWidth, room)
       }
 
       return splitText(
@@ -666,16 +703,15 @@ function fitBoxToPage(renderBlock: TemplateRenderBlock, availableWidth: number, 
   return block.boxHeight <= most ? renderBlock : { ...renderBlock, block: { ...block, boxHeight: Math.max(most, 27) } }
 }
 
-// Radio buttons print an option a line, in pieces a page holds; an answer
-// given before the options changed prints as one more, chosen.
+// Radio buttons or checkboxes print an option a line, in pieces a page holds;
+// an answer given before the options changed prints as one more, chosen.
 function splitRadioOptions(
   block: Extract<TemplateBlock, { type: "dropdown_field" }>,
   renderBlock: TemplateRenderBlock,
-  answer: string,
+  options: string[],
   availableWidth: number,
   room: number
 ): PdfBlockFlowItem[] {
-  const options = answer && !block.options.includes(answer) ? [...block.options, answer] : block.options
   const most = room - estimateFieldLabelHeight(block, availableWidth) - estimateHelpHeight(block, availableWidth) - 13
   const pieces: string[][] = [[]]
   let height = 0
@@ -706,6 +742,137 @@ function splitRadioOptions(
       fieldContinued: index > 0
     })
   )
+}
+
+type RowsFieldBlock = Extract<TemplateBlock, { type: "choice_grid_field" | "table_field" }>
+
+/**
+ * A grid's or table's rows in pieces. In the flow, a row apiece, so a page
+ * holds as many as fit and the rows on the next go on under its title and
+ * header again; in a row of columns, as many as a page holds. A table's row
+ * too tall for a page is cut into rows that fit.
+ */
+function splitRowsField(
+  block: RowsFieldBlock,
+  renderBlock: TemplateRenderBlock,
+  answers: Record<string, unknown>,
+  width: number,
+  room: number,
+  joinRows: boolean
+): PdfBlockFlowItem[] {
+  const most = room - estimateRowsHead(block, width) - estimateHelpHeight(block, width) - FIELD_GAP_BELOW
+  const rows =
+    block.type === "choice_grid_field"
+      ? block.rows.map((row: string, index: number) => ({ cells: [row], index }))
+      : tableRows(block, answers[block.fieldKey]).flatMap((cells: string[], index: number) =>
+          (estimateRowHeight(block, cells, width) > most ? splitTableRow(cells, block.columns.length, width) : [cells]).map((segment: string[]) => ({ cells: segment, index }))
+        )
+  const pieces: Array<typeof rows> = [[]]
+  let height = 0
+
+  for (const row of rows) {
+    const rowHeight = estimateRowHeight(block, row.cells, width)
+    const piece = pieces[pieces.length - 1]
+
+    if (piece.length > 0 && (joinRows || height + rowHeight > most)) {
+      pieces.push([row])
+      height = rowHeight
+    } else {
+      piece.push(row)
+      height += rowHeight
+    }
+  }
+
+  return pieces.map(
+    (piece, index: number): PdfBlockFlowItem => ({ block, fieldContinued: index > 0, kind: "block", last: index === pieces.length - 1, renderBlock, rows: piece })
+  )
+}
+
+// A piece of a grid or table: its title and header row unless it goes on
+// under the piece above, its rows, then the gap under it, and help after the last.
+function estimateRowsPiece(item: PdfBlockFlowItem, width: number): number {
+  const block = item.block as RowsFieldBlock
+
+  return (
+    (item.joinsAbove ? 0 : estimateRowsHead(block, width)) +
+    (item.rows ?? []).reduce((height: number, row): number => height + estimateRowHeight(block, row.cells, width), 0) +
+    FIELD_GAP_BELOW +
+    (item.last ? estimateHelpHeight(block, width) : 0)
+  )
+}
+
+// Grids and tables are measured in the faces they print in and wrapped as the
+// renderer wraps them, so their rows fill a page and never run off it: a
+// count of characters left a quarter of each page of a long table blank.
+let measuringFaces: { bold: PDFFont; regular: PDFFont } | undefined
+const rowHeights = new WeakMap<readonly string[], Map<number, number>>()
+
+function measuringFace(bold: boolean): PDFFont {
+  measuringFaces ??= { bold: measuringFont(PDF_BOLD_FONT_PATH), regular: measuringFont(PDF_REGULAR_FONT_PATH) }
+
+  return bold ? measuringFaces.bold : measuringFaces.regular
+}
+
+// A face that measures words as pdf-lib measures an embedded one, glyph by glyph.
+function measuringFont(path: string): PDFFont {
+  const font = fontkit.create(readFileSync(path)) as Awaited<ReturnType<typeof fontkit.create>>
+  const scale = 1000 / font.unitsPerEm
+
+  return {
+    encodeText: (): void => undefined,
+    widthOfTextAtSize: (text: string, size: number): number =>
+      font.layout(text).glyphs.reduce((total: number, glyph): number => total + glyph.advanceWidth * scale, 0) * (size / 1000)
+  } as unknown as PDFFont
+}
+
+function lineCount(text: string, bold: boolean, size: number, width: number): number {
+  return text.trim() ? wrapPdfText(text, measuringFace(bold), size, width).length : 0
+}
+
+// The title, as long as it reads continued, and the header row of options or columns.
+function estimateRowsHead(block: RowsFieldBlock, width: number): number {
+  const title = lineCount(`${block.label} (continued)`, true, 9, width) * 13 + 3
+
+  if (block.type === "choice_grid_field") {
+    const across = gridOptionWidth(block, width) - 4
+
+    return title + Math.max(...block.options.map((option: string): number => lineCount(option, false, GRID_HEADER.size, across))) * GRID_HEADER.leading + GRID_HEADER.padding * 2
+  }
+
+  const across = width / block.columns.length - TABLE_CELL_PADDING.across * 2
+
+  return title + Math.max(...block.columns.map((column): number => lineCount(column.label, true, 9, across))) * 13 + TABLE_CELL_PADDING.across * 2
+}
+
+// A grid's statement beside its choices, or a table's row of cells, a blank one its least height.
+function estimateRowHeight(block: RowsFieldBlock, cells: readonly string[], width: number): number {
+  const known = rowHeights.get(cells)?.get(width)
+
+  if (known !== undefined) {
+    return known
+  }
+
+  let height: number
+
+  if (block.type === "choice_grid_field") {
+    height = Math.max(1, lineCount(cells[0] ?? "", false, 10, width - gridOptionWidth(block, width) * block.options.length - GRID_STATEMENT_GAP)) * 15 + GRID_ROW_PADDING * 2
+  } else {
+    const across = width / block.columns.length - TABLE_CELL_PADDING.across * 2
+
+    height = Math.max(TABLE_ROW_LEAST, Math.max(0, ...cells.map((cell: string): number => lineCount(cell, false, 10, across))) * 15 + TABLE_CELL_PADDING.down * 2)
+  }
+
+  rowHeights.set(cells, (rowHeights.get(cells) ?? new Map<number, number>()).set(width, height))
+
+  return height
+}
+
+// The width a typed answer has between its prefix and suffix, each allowed a
+// whole em a character: never less than the renderer leaves it.
+function estimateAnswerWidth(block: TemplateBlock, width: number): number {
+  const room = (text: string | undefined): number => (text ? text.length * 10 + AFFIX_GAP : 0)
+
+  return block.type === "text_field" ? Math.max(width * 0.3, width - room(block.prefix) - room(block.suffix)) : width
 }
 
 // A generous guess at a side-by-side option's width at 10 points, so a line
@@ -1036,10 +1203,9 @@ function estimateFlowItemHeight(
       return item.height
     case "block":
       baseHeight = estimateBlockHeight(
-        item.block,
+        item,
         input.answers,
         item.frame ? (metrics.contentWidth * item.frame.width) / 100 : metrics.contentWidth,
-        item.answerOverride,
         metrics.lineSpacing,
         metrics.fieldStyle
       )
@@ -1049,10 +1215,9 @@ function estimateFlowItemHeight(
       const heights = item.cells.map((cell, column: number): number =>
         cell
           ? estimateBlockHeight(
-              cell.block,
+              cell,
               input.answers,
               frames[column]?.width ?? metrics.contentWidth,
-              cell.answerOverride,
               metrics.lineSpacing,
               metrics.fieldStyle
             )
@@ -1090,22 +1255,28 @@ function estimateFlowItemHeight(
       break
   }
 
-  // A cell another sits on gives up the gap under it and overlaps the edge they share.
+  // A cell another sits on gives up the gap under it and overlaps the edge they
+  // share; rows another piece goes on under give up the gap alone.
   if ((item.kind === "block" || item.kind === "columns") && item.joinsNext) {
-    return baseHeight - FIELD_GAP_BELOW - FIELD_RULE_WIDTH
+    return baseHeight - FIELD_GAP_BELOW - (item.kind === "block" && item.rows ? 0 : FIELD_RULE_WIDTH)
   }
 
   return Math.max(1, baseHeight + metrics.densityItemGapAdjustment)
 }
 
 function estimateBlockHeight(
-  block: TemplateBlock,
+  item: PdfBlockFlowItem,
   answers: Record<string, unknown>,
   availableWidth: number,
-  answerOverride?: string,
   lineSpacing?: number,
   fieldStyle: PdfLayoutMetrics["fieldStyle"] = "box"
 ): number {
+  const { answerOverride, block } = item
+
+  if (item.rows) {
+    return estimateRowsPiece(item, availableWidth)
+  }
+
   if (fieldStyle !== "box" && isStyledField(block)) {
     return estimateStyledFieldHeight(block, answers, availableWidth, answerOverride, fieldStyle)
   }
@@ -1212,7 +1383,7 @@ function estimateBlockHeight(
       return labelHeight + noticeHeight + helpHeight + 20
     }
     default: {
-      if (block.type === "dropdown_field" && block.display === "radios") {
+      if (isChoiceList(block)) {
         const lines = block.across ? packRadioOptions(block.options, availableWidth, estimateRadioOptionWidth) : block.options.map((option: string): string[] => [option])
 
         return (
@@ -1228,14 +1399,15 @@ function estimateBlockHeight(
       const answerHeight = answer
         ? estimateWrappedTextHeight(
             answer,
-            scalePdfCharacterEstimate(88, availableWidth - ANSWER_BOX_PADDING * 2),
+            scalePdfCharacterEstimate(88, estimateAnswerWidth(block, availableWidth - ANSWER_BOX_PADDING * 2)),
             15
           )
         : 0
 
       return (
         estimateFieldLabelHeight(block, availableWidth) +
-        Math.max(answerBoxHeight(block), answerHeight + ANSWER_BOX_PADDING * 2) +
+        // A comb's row of boxes stands in for the box.
+        (combBoxes(block, answer) ? COMB_HEIGHT : Math.max(answerBoxHeight(block), answerHeight + ANSWER_BOX_PADDING * 2)) +
         estimateHelpHeight(block, availableWidth) +
         13
       )
@@ -1293,7 +1465,7 @@ function estimateStyledFieldHeight(
       CELL_PADDING * 2 +
       estimateWrappedTextHeight(label, scalePdfCharacterEstimate(110, inner), CELL_LABEL_LEADING) +
       CELL_LABEL_GAP +
-      Math.max(least, estimateWordWrappedHeight(answer, inner, 15)) +
+      (combBoxes(block, answer) ? COMB_HEIGHT : Math.max(least, estimateWordWrappedHeight(answer, estimateAnswerWidth(block, inner), 15))) +
       help(inner) +
       FIELD_GAP_BELOW
     )
@@ -1319,14 +1491,19 @@ function estimateLineFieldDepth(block: StyledFieldBlock, answers: Record<string,
 
   const answer = answerOverride ?? formatFieldValue(block, answers[block.fieldKey])
 
+  // A comb's row of boxes sits on the line beside its label.
+  if (combBoxes(block, answer)) {
+    return Math.max(estimateWordWrappedHeight(label, width * LINE_LABEL_SHARE, 15) + LINE_RULE_DROP, COMB_HEIGHT)
+  }
+
   if (block.type === "text_field" && block.multiline) {
-    const needed = answer ? estimateWordWrappedHeight(answer, width, RULED_LINE_PITCH) : 0
+    const needed = answer ? estimateWordWrappedHeight(answer, estimateAnswerWidth(block, width), RULED_LINE_PITCH) : 0
 
     return estimateWordWrappedHeight(label, width, 15) + 3 + RULED_LINE_PITCH * Math.max(1, Math.round(Math.max(answerBoxHeight(block), needed) / RULED_LINE_PITCH))
   }
 
   // The label takes at most its share of the width; the answer at least the rest.
-  return Math.max(estimateWordWrappedHeight(label, width * LINE_LABEL_SHARE, 15), estimateWordWrappedHeight(answer, width * (1 - LINE_LABEL_SHARE) - LINE_LABEL_GAP, 15)) + LINE_RULE_DROP
+  return Math.max(estimateWordWrappedHeight(label, width * LINE_LABEL_SHARE, 15), estimateWordWrappedHeight(answer, estimateAnswerWidth(block, width * (1 - LINE_LABEL_SHARE) - LINE_LABEL_GAP), 15)) + LINE_RULE_DROP
 }
 
 function estimateFieldLabelHeight(block: PdfFieldBlock, availableWidth: number): number {

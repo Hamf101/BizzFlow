@@ -1,3 +1,5 @@
+import { isDeepStrictEqual } from "node:util"
+
 import type {
   DecideSubmissionSuggestionInput,
   SubmissionServiceClient,
@@ -21,7 +23,14 @@ const SUGGESTION_COLUMNS =
   "id,field_key,previous_value,proposed_value,suggested_by,suggested_at,status,decided_by,decided_at"
 
 // Typed answers only: drawings are the submitter's own mark, and files are uploads.
-const SUGGESTABLE = new Set(["text_field", "date_field", "checkbox_field", "dropdown_field"])
+const SUGGESTABLE = new Set([
+  "text_field",
+  "date_field",
+  "checkbox_field",
+  "dropdown_field",
+  "choice_grid_field",
+  "table_field",
+])
 
 /**
  * Keeps an owner's or manager's suggested answers on a submission they review.
@@ -55,7 +64,7 @@ export async function suggestSubmissionAnswers(
       const merged = await mergeAndNormalizeSubmissionAnswers(submission, input.values, deps)
       const changed = Object.fromEntries(
         suggestableKeys(submission)
-          .filter((key) => key in merged && merged[key] !== submission.values[key])
+          .filter((key) => key in merged && !isDeepStrictEqual(merged[key], submission.values[key]))
           .map((key) => [key, merged[key]])
       )
 

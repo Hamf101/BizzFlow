@@ -4,6 +4,10 @@ import {
   templateContentSchema,
   type TemplateContent,
 } from "@/types/template"
+import {
+  templateAnswerValueSchema,
+  type TemplateAnswerValue,
+} from "@/types/template-answer"
 
 const FIELD_KEY_PATTERN = /^[A-Za-z][A-Za-z0-9_-]{0,79}$/
 const SHA256_PATTERN = /^[a-f0-9]{64}$/
@@ -12,10 +16,7 @@ const SAFE_FILENAME_PATTERN = /^(?!\.{1,2}$)[A-Za-z0-9._-]+$/
 const uuidSchema = z.string().uuid()
 const timestampSchema = z.string().datetime({ offset: true })
 const actorIdSchema = uuidSchema.nullable()
-const answerValuesSchema = z.record(
-  z.string(),
-  z.union([z.string(), z.boolean()])
-)
+const answerValuesSchema = z.record(z.string(), templateAnswerValueSchema)
 
 const submittedRowShape = {
   submitted_by: actorIdSchema,
@@ -192,8 +193,8 @@ export const SUBMISSION_SEARCH_MAX_LENGTH = 100
 /** Storage-verification states for a single submission file. */
 export type SubmissionFileStatus = "upload_pending" | "available"
 
-/** Canonical scalar value persisted for one non-file template answer. */
-export type SubmissionAnswerValue = string | boolean
+/** Canonical value persisted for one non-file template answer. */
+export type SubmissionAnswerValue = TemplateAnswerValue
 
 /** Normalized answers keyed by immutable template field key. */
 export type SubmissionAnswers = Record<string, SubmissionAnswerValue>

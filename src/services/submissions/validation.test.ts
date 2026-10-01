@@ -7,6 +7,10 @@ import {
 import { mergeAndNormalizeSubmissionAnswers } from "@/services/submissions/shared"
 import type { Submission } from "@/types/submission"
 import { parseTemplateContent, type TemplateContent } from "@/types/template"
+import {
+  createStructuredAnswerContent,
+  STRUCTURED_ANSWERS
+} from "@/types/template-answer.test-support"
 
 const DRAWING_DATA_URL =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAAAgCAYAAACinX6EAAAAqklEQVR4nOXQyw2EMAwFwLTAbTug/wqztxUCIRYIjBMfIkX52H5Tps9cl6vWWjKtsgbIBvHbZIXYHGSD2L3IAnH4YHSIvx+OCnH6w2gQlz+OAnG7QO8QzQr1CtG8YG8QjxXuBeLxBtEhXmsUFeL1htEgmHwUCAYQBYIDaAgeXEPwwBqCB9UQPKCG4ME0BA+kIXgQDcEDaAg+uIbgA2sIPqiG4ANqCD6YhvgCi4+tg797B8QAAAAASUVORK5CYII="
@@ -280,6 +284,73 @@ describe("submission answer validation", () => {
       code: "invalid_submission_snapshot",
       statusCode: 500
     })
+  })
+})
+
+describe("structured submission answers", () => {
+  const STRUCTURED = createStructuredAnswerContent()
+
+  it("normalizes each structured kind to one canonical shape", async () => {
+    await expect(
+      normalizeSubmissionDraftAnswers(STRUCTURED, {
+        tools: [" Saw ", "Ladder"],
+        checks: { "Lights work": " No ", "Exits clear": "" },
+        hours: [["", " ", ""], [" 2026-10-01 ", "-1,234.5", " x "]],
+        log: Array.from({ length: 100 }, () => [""]),
+        amount: "-1,200.50",
+        ref: "AB12"
+      })
+    ).resolves.toEqual({
+      tools: ["Ladder", "Saw"],
+      checks: { "Lights work": "No" },
+      hours: [["2026-10-01", "-1,234.5", "x"]],
+      log: [],
+      amount: "-1,200.50",
+      ref: "AB12"
+    })
+  })
+
+  it("submits only once every required structured answer is complete", async () => {
+    await expect(
+      validateSubmissionForSubmit(STRUCTURED, STRUCTURED_ANSWERS, new Set())
+    ).resolves.toEqual(STRUCTURED_ANSWERS)
+
+    for (const incomplete of [
+      { tools: [] },
+      { checks: { "Exits clear": "Yes" } },
+      { hours: [["", "", ""]] }
+    ]) {
+      await expect(
+        validateSubmissionForSubmit(
+          STRUCTURED,
+          { ...STRUCTURED_ANSWERS, ...incomplete },
+          new Set()
+        )
+      ).rejects.toMatchObject({ code: "incomplete_submission" })
+    }
+  })
+
+  it.each([
+    ["a choice that is not an option", { tools: ["Hammer"] }],
+    ["a choice ticked twice", { tools: ["Saw", "Saw"] }],
+    ["several choices sent as text", { tools: "Saw" }],
+    ["a grid key that is not a row", { checks: { "Roof sound": "Yes" } }],
+    ["a __proto__ grid key", { checks: JSON.parse('{"__proto__":"Yes"}') }],
+    ["a grid choice that is not an option", { checks: { "Exits clear": "Maybe" } }],
+    ["a grid sent as a list", { checks: ["Yes"] }],
+    ["a table row with too many cells", { hours: [["2026-10-01", "1", "x", "extra"]] }],
+    ["a table cell that is not text", { hours: [["2026-10-01", 1, "x"]] }],
+    ["a table cell over 500 characters", { log: [["x".repeat(501)]] }],
+    ["a date cell that is not a date", { hours: [["2026-02-30", "1", ""]] }],
+    ["a number cell that is not a number", { hours: [["", "1.2.3", ""]] }],
+    ["more rows than a fixed table shows", { hours: [["", "1", ""], ["", "2", ""], ["", "3", ""]] }],
+    ["a 10k-row table", { log: Array.from({ length: 10_000 }, () => ["x"]) }],
+    ["money to three decimals", { amount: "1.005" }],
+    ["a reference longer than its boxes", { ref: "ABCDE" }]
+  ])("rejects %s", async (_case, answers) => {
+    await expect(
+      normalizeSubmissionDraftAnswers(STRUCTURED, answers)
+    ).rejects.toMatchObject({ code: "invalid_submission_answers", statusCode: 400 })
   })
 })
 

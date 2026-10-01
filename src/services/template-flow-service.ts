@@ -58,7 +58,9 @@ import {
   templateFieldGroupSchema,
   templateLayoutSchema,
   textRunSchema,
-  textFieldBlockSchema,
+  textFieldBlockObjectSchema,
+  choiceGridFieldBlockSchema,
+  tableFieldBlockSchema,
   upgradeV2TemplateContentToV3,
   type TemplateBlock,
   type TemplateContent,
@@ -146,7 +148,7 @@ const generatedBlockSchema = z.discriminatedUnion("type", [
   numberedListBlockObjectSchema.omit({ id: true, itemRuns: true }),
   tableBlockSchema.omit({ id: true }),
   dividerBlockSchema.omit({ id: true }),
-  textFieldBlockSchema
+  textFieldBlockObjectSchema
     .omit({ id: true, fieldKey: true })
     .extend({ fieldKey: generatedFieldKeySchema })
     .strict(),
@@ -162,6 +164,14 @@ const generatedBlockSchema = z.discriminatedUnion("type", [
     .omit({ id: true, fieldKey: true })
     // The question its "Other" answer asks; it names the field Flow adds for it.
     .extend({ fieldKey: generatedFieldKeySchema, otherLabel: z.string().trim().min(1).max(160).optional() })
+    .strict(),
+  choiceGridFieldBlockSchema
+    .omit({ id: true, fieldKey: true })
+    .extend({ fieldKey: generatedFieldKeySchema })
+    .strict(),
+  tableFieldBlockSchema
+    .omit({ id: true, fieldKey: true })
+    .extend({ fieldKey: generatedFieldKeySchema })
     .strict(),
   initialsFieldBlockSchema
     .omit({ id: true, fieldKey: true })
@@ -1460,7 +1470,7 @@ function createFlowSystemInstruction(): string {
     "A section prints its label as the title above its first block, so never add a heading block that repeats it. Write section labels and headings in sentence case.",
     "Use set_section to give related blocks a titled section, set_row to set short related fields side by side such as first and last name or a date beside a signature, stand_alone to take a block out of its row, and set_block_rule for page breaks, keeping a heading with what follows, space and position.",
     "Lay out with restraint: prefer sections and rows. Give long answers and any field likely to wrap a line of its own. Use frame and spaceAbove only for closing blocks such as a signature or date set to one side, with spaceAbove usually 0 to 48; never frame a block that is in a row. Set boxHeight only when an answer needs visibly more or less room than the default.",
-    "Use only canonical block types: heading, paragraph, bullet_list, numbered_list, table, divider, text_field, date_field, checkbox_field, dropdown_field, initials_field, signature_field, or file_field.",
+    "Use only canonical block types: heading, paragraph, bullet_list, numbered_list, table, divider, text_field, date_field, checkbox_field, dropdown_field, choice_grid_field, table_field, initials_field, signature_field, or file_field.",
     "List items are plain strings. Never use a generic list type or objects for list items.",
     "Every operation must include type, summary, and payloadJson.",
     "payloadJson must be one compact valid JSON object encoded as a string, with no Markdown or commentary.",
@@ -1495,13 +1505,16 @@ function createFlowPayloadContract(): string {
     'numbered_list {"type":"numbered_list","items":["Plain text"]};',
     'table {"type":"table","headers":["Header"],"rows":[["Cell"]]};',
     'divider {"type":"divider"};',
-    'text_field {"type":"text_field","fieldKey":"stable_key","label":"Label","required":true,"helpText":null,"placeholder":null,"multiline":false,"boxHeight":optional 27 to 600,"visibleWhen":{"sourceBlockId":"earlier-dropdown-or-checkbox-uuid","operator":"equals","value":"Other"}};',
+    'text_field {"type":"text_field","fieldKey":"stable_key","label":"Label","required":true,"helpText":null,"placeholder":null,"multiline":false,"format":optional "number|money|email|phone|time|month","prefix":optional "£","suffix":optional "per month","comb":optional 2 to 40,"boxHeight":optional 27 to 600,"visibleWhen":{"sourceBlockId":"earlier-dropdown-or-checkbox-uuid","operator":"equals","value":"Other"}};',
+    "format checks what is typed and gives a phone the right keys: number, money, email, phone, time (HH:MM) or month (a month and year). prefix and suffix are short words printed either side of the answer, such as a currency or a unit: '£', 'kg', '°C', 'hours'. comb prints one box a character for a code of known length, such as a reference, sort code or postcode; a comb or formatted field is one line.",
     'date_field {"type":"date_field","fieldKey":"stable_key","label":"Label","required":true,"helpText":null,"dateFormat":optional {"order":"dmy"|"mdy"|"ymd","separator":"/"|"."|"-"|" ","month":"number"|"short"|"long"},"visibleWhen":optional};',
     'initials_field {"type":"initials_field","fieldKey":"stable_key","label":"Label","required":true,"helpText":null,"visibleWhen":optional};',
     'signature_field {"type":"signature_field","fieldKey":"stable_key","label":"Label","required":true,"helpText":null,"visibleWhen":optional};',
     'file_field {"type":"file_field","fieldKey":"stable_key","label":"Label","required":true,"helpText":null,"visibleWhen":optional};',
     'checkbox_field {"type":"checkbox_field","fieldKey":"stable_key","label":"Label","required":true,"helpText":null,"checkedByDefault":false,"visibleWhen":optional};',
-    'dropdown_field {"type":"dropdown_field","fieldKey":"stable_key","label":"Label","required":true,"helpText":null,"placeholder":null,"options":["Known choice A","Known choice B","Other"],"otherLabel":"Question for an Other answer, only with an Other choice","display":"radios" or omitted for a dropdown list,"across":true to set radios side by side or omitted for one a line,"visibleWhen":optional}.',
+    'dropdown_field {"type":"dropdown_field","fieldKey":"stable_key","label":"Label","required":true,"helpText":null,"placeholder":null,"options":["Known choice A","Known choice B","Other"],"otherLabel":"Question for an Other answer, only with an Other choice","display":"radios" or omitted for a dropdown list,"across":true to set radios side by side or omitted for one a line,"multiple":true for checkboxes where any number may be ticked, or omitted for one answer,"visibleWhen":optional};',
+    'choice_grid_field {"type":"choice_grid_field","fieldKey":"stable_key","label":"Label","required":true,"helpText":null,"rows":["Statement or item, 1 to 40, each once"],"options":["Shared choice, 2 to 10, each once, at most 60 characters"],"visibleWhen":optional};',
+    'table_field {"type":"table_field","fieldKey":"stable_key","label":"Label","required":false,"helpText":null,"columns":[{"label":"Column, 1 to 8, each once, at most 60 characters","format":optional "number|money|date|time"}],"rows":blank rows to print, 1 to 50,"addRows":optional true so people on a screen can add rows,"visibleWhen":optional}.',
     "A label is at most 160 characters, a dropdown choice 240 and help text 500. A longer statement, such as a consent or a declaration, is a paragraph followed by a checkbox_field with a short label such as 'I agree'.",
     "boxHeight is also optional on date_field, dropdown_field, initials_field and signature_field, never on checkbox_field or file_field. Omit visibleWhen when it is not needed. When present, encode it as an object with sourceBlockId, operator='equals', and a declared string choice or checkbox boolean. Its source must be a dropdown or checkbox placed before the field; a condition that cannot hold is refused, not dropped."
   ].join(" ")
@@ -1938,6 +1951,8 @@ function describeBlockTarget(block: GeneratedBlock | TemplateBlock): string {
     case "date_field":
     case "checkbox_field":
     case "dropdown_field":
+    case "choice_grid_field":
+    case "table_field":
     case "initials_field":
     case "signature_field":
     case "file_field":

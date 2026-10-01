@@ -25,6 +25,7 @@ export type TemplateQualityIssueCode =
   | "unresolved_needs_input"
   | "dropdown_insufficient_choices"
   | "dropdown_placeholder_choices"
+  | "placeholder_answer_parts"
   | "generic_field_label"
   | "invalid_field_key"
   | "duplicate_title_heading"
@@ -64,6 +65,9 @@ export type TemplateQualityEvaluation = Readonly<{
 const NEEDS_INPUT_PATTERN = /\bneeds\s+input\s*:/i
 const PLACEHOLDER_CHOICE_PATTERN =
   /^(?:option|choice)\s*(?:[-_#]\s*)?(?:\d+|[a-z]|one|two|three|four|five)$/i
+// The words a new grid or table starts with, until its author writes their own.
+const PLACEHOLDER_PART_PATTERN =
+  /^(?:(?:first|second|third|fourth|fifth)\s+statement|(?:statement|row|column|item)\s*(?:[-_#]\s*)?\d+)$/i
 // Questions about a person's health. Kept narrow: a notice that fires on a
 // safety checklist or a pet's records teaches people to ignore it.
 const HEALTH_INFORMATION_PATTERN =
@@ -312,6 +316,28 @@ export function evaluateTemplateQuality(
       severity: "critical",
       message: "Replace placeholder dropdown choices with meaningful options.",
       affectedBlockIds: placeholderDropdownIds
+    })
+  }
+
+  const placeholderPartIds = blocks
+    .filter((block: TemplateBlock): boolean => {
+      const parts =
+        block.type === "choice_grid_field"
+          ? [...block.rows, ...block.options]
+          : block.type === "table_field"
+            ? block.columns.map((column): string => column.label)
+            : []
+
+      return parts.some((part: string): boolean => PLACEHOLDER_PART_PATTERN.test(part.trim()) || PLACEHOLDER_CHOICE_PATTERN.test(part.trim()))
+    })
+    .map((block: TemplateBlock): string => block.id)
+
+  if (placeholderPartIds.length > 0) {
+    issues.push({
+      code: "placeholder_answer_parts",
+      severity: "critical",
+      message: "Replace placeholder statements, choices and column names with real ones.",
+      affectedBlockIds: placeholderPartIds
     })
   }
 
@@ -630,8 +656,14 @@ function getVisibleBlockText(block: TemplateBlock): readonly string[] {
       return [
         block.label,
         block.helpText ?? "",
-        block.placeholder ?? ""
+        block.placeholder ?? "",
+        block.prefix ?? "",
+        block.suffix ?? ""
       ]
+    case "choice_grid_field":
+      return [block.label, block.helpText ?? "", ...block.rows, ...block.options]
+    case "table_field":
+      return [block.label, block.helpText ?? "", ...block.columns.map((column) => column.label)]
     case "dropdown_field":
       return [
         block.label,

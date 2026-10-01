@@ -9,19 +9,28 @@ import { formatMediumDateTime } from "@/lib/date-format"
 import type { OrganizationMember } from "@/types/organization"
 import type { Submission } from "@/types/submission"
 import type { SubmissionSuggestion } from "@/types/submission-review"
+import type { TemplateAnswerValue } from "@/types/template-answer"
 
 const OPEN_STATUSES: readonly Submission["status"][] = ["submitted", "in_review", "needs_changes"]
 
 /**
- * Says how an answer reads: a tick box as ticked or not, and a blank as blank.
+ * Says how an answer reads: a tick box as ticked or not, lists and grids as
+ * one line of text, and a blank as blank.
  *
  * @param value - The answer.
  * @returns Words for it.
  */
-export function describeAnswer(value: string | boolean | null): string {
+export function describeAnswer(value: TemplateAnswerValue | null): string {
   if (typeof value === "boolean") return value ? "Ticked" : "Not ticked"
 
-  return value?.trim() ? value : "Blank"
+  // Choices ticked, a table's rows with their cells, or each grid row's choice.
+  const text = Array.isArray(value)
+    ? value.map((item) => (Array.isArray(item) ? item.join(" · ") : item)).join("; ")
+    : value && typeof value === "object"
+      ? Object.entries(value).map(([row, choice]) => `${row}: ${choice}`).join("; ")
+      : value
+
+  return text?.trim() ? text : "Blank"
 }
 
 /**

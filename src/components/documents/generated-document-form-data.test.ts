@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import { createBlankTemplateContent } from "@/types/template"
+import { createStructuredAnswerContent } from "@/types/template-answer.test-support"
 
 import {
   GeneratedDocumentFormDataError,
@@ -196,5 +197,43 @@ describe("generated document form data", () => {
         value: "Custom request"
       }
     ])
+  })
+
+  it("reads a structured answer from its JSON input and refuses malformed JSON", () => {
+    const formData = new FormData()
+    formData.append(getGeneratedDocumentAnswerName("json", "checks"), "{\"Exits clear\":\"Yes\"}")
+    formData.append(getGeneratedDocumentAnswerName("json", "tools"), "[\"Saw\"]")
+
+    expect(parseGeneratedDocumentAnswers(formData)).toEqual({
+      checks: { "Exits clear": "Yes" },
+      tools: ["Saw"]
+    })
+
+    formData.set(getGeneratedDocumentAnswerName("json", "tools"), "[\"Saw\"")
+    expect(() => parseGeneratedDocumentAnswers(formData)).toThrow(
+      GeneratedDocumentFormDataError
+    )
+  })
+
+  it("round-trips structured baselines, empty when unanswered", () => {
+    const content = createStructuredAnswerContent()
+    const fields = getGeneratedDocumentAnswerBaselineFields(content, {
+      checks: { "Exits clear": "Yes" },
+      hours: [["2026-10-01", "8", ""]]
+    })
+    const formData = new FormData()
+
+    for (const field of fields) {
+      formData.append(field.name, field.value)
+    }
+
+    expect(parseGeneratedDocumentAnswerBaseline(formData)).toEqual({
+      tools: [],
+      checks: { "Exits clear": "Yes" },
+      hours: [["2026-10-01", "8", ""]],
+      log: [],
+      amount: "",
+      ref: ""
+    })
   })
 })

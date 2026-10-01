@@ -1,6 +1,10 @@
 import { z } from "zod"
 
 import type { SubmissionStatus } from "@/types/submission"
+import {
+  templateAnswerValueSchema,
+  type TemplateAnswerValue,
+} from "@/types/template-answer"
 
 /** Immutable activity kinds recorded by the submission review workflow. */
 export const SUBMISSION_ACTIVITY_EVENT_TYPES = [
@@ -278,21 +282,20 @@ export type SubmissionSuggestion = {
   decidedBy: string | null
   fieldKey: string
   id: string
-  previousValue: string | boolean | null
-  proposedValue: string | boolean
+  previousValue: TemplateAnswerValue | null
+  proposedValue: TemplateAnswerValue
   status: SubmissionSuggestionStatus
   suggestedAt: string
   suggestedBy: string | null
 }
 
-const answerValueSchema = z.union([z.string(), z.boolean()])
 const submissionSuggestionRowSchema = z.object({
   decided_at: timestampSchema.nullable(),
   decided_by: nullableUuidSchema,
   field_key: z.string().min(1),
   id: uuidSchema,
-  previous_value: answerValueSchema.nullable(),
-  proposed_value: answerValueSchema,
+  previous_value: templateAnswerValueSchema.nullable(),
+  proposed_value: templateAnswerValueSchema,
   status: z.enum(["pending", "accepted", "declined"]),
   suggested_at: timestampSchema,
   suggested_by: nullableUuidSchema,

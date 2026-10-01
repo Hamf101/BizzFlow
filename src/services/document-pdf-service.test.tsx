@@ -1279,6 +1279,169 @@ describe("document PDF service", () => {
     expect(spans[0].end).toBeLessThanOrEqual(spans[1].x)
     expect(spans[1].end).toBeLessThanOrEqual(spans[2].x)
   })
+
+  it("prints a prefix and suffix, a comb, a checkbox group, a choice grid and a fill-in table, answered or blank, and fills each in", { timeout: PDF_RENDER_TIMEOUT_MS }, async () => {
+    const input = createSampleDocumentInput()
+    const metrics = pdfMetrics(input)
+    const font = await probeFont()
+    const texts = (pdf: PDFDocument) => pdf.getPages().flatMap((_page, index: number) => drawnTexts(pdf, index))
+    const printed = texts(await PDFDocument.load(await renderGeneratedDocumentPdf(input)))
+    const blank = texts(await PDFDocument.load(await renderGeneratedDocumentPdf({ ...input, answers: {} })))
+    const has = (drawn: ReturnType<typeof texts>, text: string, size: number): boolean => drawn.some((piece) => piece.text === text && piece.size === size)
+
+    // The words around an answer, the grid's choices and statements, the table's columns: blank or not.
+    for (const drawn of [printed, blank]) {
+      expect(["£", "per month", "Discovery", "Training", "Requirements are agreed"].every((text) => has(drawn, text, 10))).toBe(true)
+      expect(["Yes", "No", "Not yet known"].every((text) => has(drawn, text, 8))).toBe(true)
+      expect(["Name", "Role", "Phone"].every((text) => has(drawn, text, 9))).toBe(true)
+    }
+
+    // Answers print only when given: the comb a character a box, 16 points apart.
+    const comb = printed.filter((piece) => piece.size === 10 && piece.text.length === 1 && "PO2026AB".includes(piece.text))
+    const centres = comb.map((piece) => piece.x + font.widthOfTextAtSize(piece.text, 10) / 2)
+
+    expect(comb.map((piece) => piece.text).join("")).toBe("PO2026AB")
+    centres.slice(1).forEach((centre: number, index: number) => expect(centre - centres[index]).toBeCloseTo(16, 5))
+    expect(has(printed, "1,250", 10) && has(printed, "Robin Hale", 10)).toBe(true)
+    expect(blank.some((piece) => ["1,250", "Robin Hale", "P"].includes(piece.text))).toBe(false)
+
+    const form = (await PDFDocument.load(await renderGeneratedDocumentPdf(input, { fillable: true }))).getForm()
+    const rectangle = (name: string) => form.getField(name).acroField.getWidgets()[0].getRectangle()
+    const fee = rectangle("monthly_fee")
+    const reference = form.getTextField("po_reference")
+
+    // The answer sits between its prefix and suffix, inside the box.
+    expect(form.getTextField("monthly_fee").getText()).toBe("1,250")
+    expect(fee.x).toBeGreaterThan(metrics.margin + 6 + font.widthOfTextAtSize("£", 10))
+    expect(fee.x + fee.width).toBeLessThan(metrics.margin + metrics.contentWidth - font.widthOfTextAtSize("per month", 10))
+    expect([reference.getText(), reference.getMaxLength(), reference.isCombed()]).toEqual(["PO2026AB", 8, true])
+    expect(rectangle("po_reference")).toMatchObject({ height: 22, width: 128, x: metrics.margin })
+    expect([1, 2, 3, 4].map((index) => form.getCheckBox(`services.${index}`).isChecked())).toEqual([true, false, true, false])
+    expect(form.getRadioGroup("readiness.1").getOptions()).toEqual(["Yes", "No", "Not yet known"])
+    expect([1, 2, 3].map((index) => form.getRadioGroup(`readiness.${index}`).getSelected())).toEqual(["Yes", "No", undefined])
+    expect(form.getTextField("contacts.1.1").getText()).toBe("Robin Hale")
+    // Blank rows to the table's length, a field a cell, and no more.
+    expect(form.getTextField("contacts.3.3").getText()).toBeUndefined()
+    expect(form.getFieldMaybe("contacts.4.1")).toBeUndefined()
+  })
+
+  it("splits a long table and grid between rows over pages, the header atop each page and every row inside the flow", { timeout: 60_000 }, async () => {
+    const input = createPdfInput({ repeatHeader: true, repeatFooter: true })
+    const content = requireVersionThreeContent(input)
+    const columns = Array.from({ length: 8 }, (_value: unknown, index: number) => ({ label: `Column ${index + 1}` }))
+    const options = Array.from({ length: 10 }, (_value: unknown, index: number): string => String(index + 1))
+    const many = Array.from({ length: 100 }, (_value: unknown, index: number): string => `Choice ${index + 1}`)
+
+    // The worst case: fifty rows of eight 500-character cells, and forty long statements against ten choices.
+    content.blocks = [
+      { id: "56000000-0000-4000-8000-000000000001", type: "table_field", fieldKey: "log", label: "Site log", required: false, helpText: "One row a visit.", columns, rows: 50 },
+      { id: "56000000-0000-4000-8000-000000000002", type: "choice_grid_field", fieldKey: "audit", label: "Audit", required: false, helpText: "One choice a row.", options, rows: Array.from({ length: 40 }, (_value: unknown, index: number): string => `Statement ${index + 1} ${"lengthy ".repeat(27).trim()}`) },
+      { id: "56000000-0000-4000-8000-000000000003", type: "dropdown_field", fieldKey: "picks", label: "Picks", required: false, helpText: null, placeholder: null, options: many, multiple: true }
+    ]
+    content.sections = []
+    content.fieldGroups = []
+    content.blockRules = []
+    input.answers = {
+      log: Array.from({ length: 50 }, (_row: unknown, row: number) => columns.map((_column, column: number): string => `${row + 1}x${column + 1} ${"cellword ".repeat(55)}`.slice(0, 500))),
+      audit: { [`Statement 3 ${"lengthy ".repeat(27).trim()}`]: "1" },
+      // A choice since taken away prints as one more, ticked.
+      picks: [many[99], "Retired choice"]
+    }
+    input.signers = []
+
+    const metrics = pdfMetrics(input)
+    const flowBottom = metrics.flowTopY - metrics.pageCapacity
+    const pdf = await PDFDocument.load(await renderGeneratedDocumentPdf(input))
+
+    expect(pdf.getPageCount()).toBeGreaterThan(4)
+    pdf.getPages().forEach((_page, index: number) => {
+      const drawn = drawnTexts(pdf, index)
+      const body = drawn.filter((piece) => piece.size === 10)
+
+      // Nothing runs past the foot of the flow.
+      expect(Math.min(...body.map((piece) => piece.y))).toBeGreaterThanOrEqual(flowBottom - 0.5)
+
+      // A page with the table's rows has its header once, at its top; so does one with the grid's.
+      for (const [word, header, size] of [["cellword", "Column 8", 9], ["lengthy", "10", 8]] as const) {
+        const rows = body.filter((piece) => piece.text.includes(word))
+        const headers = drawn.filter((piece) => piece.size === size && piece.text === header)
+
+        if (rows.length > 0) {
+          expect(headers).toHaveLength(1)
+          expect(Math.max(...rows.map((piece) => piece.y))).toBeLessThan(headers[0].y)
+        }
+      }
+    })
+
+    const fillable = await PDFDocument.load(await renderGeneratedDocumentPdf(input, { fillable: true }))
+    const fields = fillable.getForm().getFields()
+    const names = fields.map((field) => field.getName())
+
+    expect(fillable.getPageCount()).toBe(pdf.getPageCount())
+    expect(new Set(names).size).toBe(names.length)
+    expect(names).toContain("log.50.8")
+    expect(fillable.getForm().getRadioGroup("audit.3").getSelected()).toBe("1")
+    // Checkboxes over pages are named by their place among all the choices.
+    expect(["picks.1", "picks.100", "picks.101"].map((name) => fillable.getForm().getCheckBox(name).isChecked())).toEqual([false, true, true])
+    fields.forEach((field) => {
+      field.acroField.getWidgets().forEach((widget) => {
+        const box = widget.getRectangle()
+
+        expect(box.y).toBeGreaterThanOrEqual(flowBottom - 0.5)
+        expect(box.x + box.width).toBeLessThanOrEqual(metrics.margin + metrics.contentWidth + 0.5)
+      })
+    })
+
+    // Blank rows alone on a page fill it to within one row, 20 points, and its gap of the foot.
+    const lone = createPdfInput({ repeatHeader: false, repeatFooter: false })
+    const loneContent = requireVersionThreeContent(lone)
+
+    loneContent.layout = { ...loneContent.layout, printedTitle: { mode: "none" } }
+    loneContent.blocks = [content.blocks[0]]
+    loneContent.sections = []
+    loneContent.fieldGroups = []
+    loneContent.blockRules = []
+
+    const loneMetrics = pdfMetrics(lone)
+    const blank = await PDFDocument.load(await renderGeneratedDocumentPdf({ ...lone, answers: {}, signers: [] }, { fillable: true }))
+    const firstPage = blank.getPage(0).ref
+    const lowest = Math.min(...blank.getForm().getFields().flatMap((field) => field.acroField.getWidgets().filter((widget) => widget.P() === firstPage).map((widget) => widget.getRectangle().y)))
+
+    expect(blank.getPageCount()).toBe(2)
+    expect(lowest - (loneMetrics.flowTopY - loneMetrics.pageCapacity)).toBeLessThan(20 + 10)
+  })
+
+  it("prints an answer of the wrong shape as unanswered, and never fails on one", { timeout: PDF_RENDER_TIMEOUT_MS }, async () => {
+    const input = createPdfInput({ repeatHeader: false, repeatFooter: false })
+    const content = requireVersionThreeContent(input)
+    // An own "__proto__" key is a real answer from JSON; an inherited one, as polluted, is not.
+    const grid: Record<string, unknown> = JSON.parse('{"__proto__": "Agree", "Ghost": "Agree", "Clean": 5}')
+
+    Object.setPrototypeOf(grid, { Tidy: "Agree" })
+    content.blocks = [
+      { id: "57000000-0000-4000-8000-000000000001", type: "choice_grid_field", fieldKey: "grid", label: "Grid", required: false, helpText: null, rows: ["__proto__", "Tidy", "Clean"], options: ["Agree", "Disagree"] },
+      { id: "57000000-0000-4000-8000-000000000002", type: "dropdown_field", fieldKey: "picks", label: "Picks", required: false, helpText: null, placeholder: null, options: ["Cleaning", "Laundry"], multiple: true },
+      { id: "57000000-0000-4000-8000-000000000003", type: "table_field", fieldKey: "log", label: "Log", required: false, helpText: null, columns: [{ label: "What" }, { label: "When" }], rows: 2 },
+      { id: "57000000-0000-4000-8000-000000000004", type: "text_field", fieldKey: "ref", label: "Reference", required: false, helpText: null, placeholder: null, multiline: false, comb: 4 }
+    ]
+    content.sections = []
+    content.fieldGroups = []
+    content.blockRules = []
+    input.answers = { grid, picks: "Cleaning", log: [["kept", 5], "row", null, { 0: "x" }], ref: "TOO-LONG-FOR-COMB" }
+    input.signers = []
+
+    const printed = await PDFDocument.load(await renderGeneratedDocumentPdf(input))
+    const form = (await PDFDocument.load(await renderGeneratedDocumentPdf(input, { fillable: true }))).getForm()
+
+    expect([1, 2, 3].map((index) => form.getRadioGroup(`grid.${index}`).getSelected())).toEqual(["Agree", undefined, undefined])
+    expect([1, 2].map((index) => form.getCheckBox(`picks.${index}`).isChecked())).toEqual([false, false])
+    expect([form.getTextField("log.1.1").getText(), form.getTextField("log.1.2").getText()]).toEqual(["kept", undefined])
+    expect(form.getFieldMaybe("log.3.1")).toBeUndefined()
+    // Too long for its boxes, an answer prints whole in a plain one.
+    expect([form.getTextField("ref").getText(), form.getTextField("ref").isCombed()]).toEqual(["TOO-LONG-FOR-COMB", false])
+    expect(drawnTexts(printed, 0).map((piece) => piece.text)).toEqual(expect.arrayContaining(["kept", "TOO-LONG-FOR-COMB"]))
+    expect(drawnTexts(printed, 0).some((piece) => piece.text === "5" || piece.text === "x")).toBe(false)
+  })
 }, PDF_RENDER_TIMEOUT_MS)
 
 function pdfMetrics(input: RenderGeneratedDocumentPdfInput): PdfLayoutMetrics {

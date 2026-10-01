@@ -363,6 +363,12 @@ The bulk access smoke test checks that Files' batched access lookups answer exac
 npx supabase db query --db-url "$SUPABASE_DB_URL" --file supabase/tests/resource-access-levels-live-rpc.sql
 ```
 
+The structured-answers check confirms the database keeps several ticked choices, choice grids and tables, refuses malformed ones, and requires them as the application does. It writes nothing:
+
+```bash
+npx supabase db query --local --file supabase/tests/structured-answers-live-rpc.sql
+```
+
 Signed-in users have no direct Data API access to tenant tables: tenant data reaches them only through the service layer, which checks current role-definition permissions. `supabase/tests/migration-security.test.ts`, part of `pnpm test`, reads every migration and fails if a table lacks forced row-level security, if signed-in users regain a table privilege, or if a function stays executable by them.
 
 ### Customize workspace navigation

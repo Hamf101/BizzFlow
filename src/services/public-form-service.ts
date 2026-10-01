@@ -22,6 +22,7 @@ import type {
   TemplateContent,
 } from "@/types/template"
 import { parseTemplateContent } from "@/types/template"
+import { isStructuredAnswerBlock } from "@/types/template-answer"
 import { isTemplateBlockVisible } from "@/types/template-visibility"
 import { mapDocumentTemplate } from "@/services/templates/shared"
 
@@ -957,6 +958,7 @@ export async function supersedePublicFormFile(
  * Browsers post a checkbox as a string when ticked and omit it entirely when
  * not, so every declared checkbox is resolved to a boolean here. File fields
  * are dropped because their completion is proven by verified storage rows.
+ * Structured answers are parsed from JSON text and checked by the validator.
  */
 function coercePublicFormValues(
   snapshot: TemplateContent,
@@ -977,6 +979,23 @@ function coercePublicFormValues(
 
     if (block.type === "file_field") {
       delete coerced[block.fieldKey]
+      continue
+    }
+
+    // Several choices, a grid or a table arrive as one JSON string; blank is unanswered.
+    const raw = values[block.fieldKey]
+
+    if (isStructuredAnswerBlock(block) && typeof raw === "string") {
+      if (raw.trim() === "") {
+        delete coerced[block.fieldKey]
+        continue
+      }
+
+      try {
+        coerced[block.fieldKey] = JSON.parse(raw) as unknown
+      } catch {
+        // Left as text, which the validator refuses for this kind with a 400.
+      }
     }
   }
 

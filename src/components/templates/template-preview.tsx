@@ -26,6 +26,7 @@ import {
   resolveDocumentSurfaceInk,
   type DocumentSurface
 } from "@/lib/document-surface"
+import { PaperGrid, PaperTable } from "@/components/editor/paper-answer-kinds"
 import { cn } from "@/lib/utils"
 import {
   shouldRenderTemplateFooter,
@@ -916,11 +917,11 @@ function PreviewBlock({ block }: { block: TemplateBlock }): ReactElement {
           label={block.label}
           required={block.required}
         >
-          {block.display === "radios" ? (
+          {block.display === "radios" || block.multiple ? (
             <span className={cn("flex gap-1.5 text-sm", block.across ? "flex-wrap gap-x-5" : "flex-col")}>
               {block.options.map((option: string) => (
                 <span className="flex items-center gap-2" key={option}>
-                  <span aria-hidden="true" className="size-4 shrink-0 rounded-full border border-muted-foreground/40" />
+                  <span aria-hidden="true" className={cn("size-4 shrink-0 border border-muted-foreground/40", !block.multiple && "rounded-full")} />
                   {option}
                 </span>
               ))}
@@ -929,6 +930,17 @@ function PreviewBlock({ block }: { block: TemplateBlock }): ReactElement {
             <div className="rounded-sm border border-border px-3 py-2 text-sm text-muted-foreground">
               {block.placeholder || "Select an option"}
             </div>
+          )}
+        </PreviewField>
+      )
+    case "choice_grid_field":
+    case "table_field":
+      return (
+        <PreviewField helpText={block.helpText} label={block.label} required={block.required}>
+          {block.type === "choice_grid_field" ? (
+            <PaperGrid block={block} mode="design" onChange={() => undefined} value={undefined} />
+          ) : (
+            <PaperTable block={block} mode="design" onChange={() => undefined} value={undefined} />
           )}
         </PreviewField>
       )

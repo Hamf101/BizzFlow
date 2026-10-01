@@ -509,6 +509,30 @@ describe("template quality helpers", () => {
   })
 })
 
+describe("grids and fill-in tables", () => {
+  it("flags the editor's starting statements and column names, and passes real ones", () => {
+    const field = { helpText: null, required: false } as const
+    const issueFor = (blocks: TemplateBlock[]) =>
+      evaluateTemplateQuality({ content: createVersionThreeContent(blocks), description: "Daily vehicle check.", title: "Vehicle check" }).issues.find(
+        (issue) => issue.code === "placeholder_answer_parts"
+      )
+
+    expect(
+      issueFor([
+        { ...field, fieldKey: "checks", id: FIRST_BLOCK_ID, label: "Checks", options: ["Yes", "No"], rows: ["First statement", "Tyres"], type: "choice_grid_field" },
+        { ...field, columns: [{ label: "Date" }, { label: "Column 2" }], fieldKey: "log", id: SECOND_BLOCK_ID, label: "Log", rows: 5, type: "table_field" },
+        { ...field, fieldKey: "rating", id: THIRD_BLOCK_ID, label: "Rating", options: ["Option 1", "Option 2"], rows: ["Service"], type: "choice_grid_field" },
+      ])?.affectedBlockIds
+    ).toEqual([FIRST_BLOCK_ID, SECOND_BLOCK_ID, THIRD_BLOCK_ID])
+    expect(
+      issueFor([
+        { ...field, fieldKey: "checks", id: FIRST_BLOCK_ID, label: "Checks", options: ["OK", "Defect", "N/A"], rows: ["Tyres", "First aid kit"], type: "choice_grid_field" },
+        { ...field, columns: [{ label: "Date", format: "date" }, { label: "Odometer reading" }], fieldKey: "log", id: SECOND_BLOCK_ID, label: "Log", rows: 5, type: "table_field" },
+      ])
+    ).toBeUndefined()
+  })
+})
+
 function createVersionTwoContent(
   blocks: TemplateBlock[]
 ): TemplateContent {

@@ -172,7 +172,11 @@ function isTemplateBlockVisibleInternal(
   }
 
   const effectiveSourceValue = readEffectiveSourceValue(sourceBlock, values)
-  return Object.is(effectiveSourceValue, block.visibleWhen.value)
+
+  // "Equals" on several choices means the value is among those ticked.
+  return Array.isArray(effectiveSourceValue)
+    ? effectiveSourceValue.includes(block.visibleWhen.value)
+    : Object.is(effectiveSourceValue, block.visibleWhen.value)
 }
 
 function isVisibilitySourceBlock(
@@ -186,7 +190,7 @@ function isVisibilitySourceBlock(
 function readEffectiveSourceValue(
   sourceBlock: VisibilitySourceBlock,
   values: Readonly<Record<string, unknown>>
-): boolean | string {
+): boolean | string | unknown[] {
   if (!Object.prototype.hasOwnProperty.call(values, sourceBlock.fieldKey)) {
     return sourceBlock.type === "checkbox_field"
       ? sourceBlock.checkedByDefault
@@ -197,6 +201,10 @@ function readEffectiveSourceValue(
 
   if (sourceBlock.type === "checkbox_field") {
     return typeof value === "boolean" ? value : false
+  }
+
+  if (sourceBlock.multiple) {
+    return Array.isArray(value) ? value : []
   }
 
   return typeof value === "string" ? value : ""

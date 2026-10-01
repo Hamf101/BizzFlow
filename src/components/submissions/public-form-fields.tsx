@@ -5,7 +5,9 @@ import {
   type ComponentProps,
   type FormEvent,
   Fragment,
+  lazy,
   type ReactElement,
+  Suspense,
   useMemo,
   useState
 } from "react"
@@ -16,10 +18,10 @@ import {
 } from "@/components/templates/template-static-block"
 import { DatePicker } from "@/components/ui/date-picker"
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
-import { Input } from "@/components/ui/input"
-import { RadioChoices } from "@/components/ui/radio-choices"
+import { CheckboxChoices, RadioChoices } from "@/components/ui/radio-choices"
 import { Select } from "@/components/ui/select"
 import { describeInvalidField } from "@/components/ui/toaster"
+import { TypedInput } from "@/components/ui/typed-input"
 import {
   groupTemplateRenderBlocks,
   rowGridStyle,
@@ -259,7 +261,8 @@ function PublicFormFieldBlock({
               value={readStringAnswer(answers, block.fieldKey)}
             />
           ) : (
-            <Input
+            <TypedInput
+              block={block}
               id={block.id}
               name={fieldName}
               onChange={(event: ChangeEvent<HTMLInputElement>): void =>
@@ -267,7 +270,6 @@ function PublicFormFieldBlock({
               }
               placeholder={block.placeholder ?? ""}
               required={block.required}
-              type="text"
               value={readStringAnswer(answers, block.fieldKey)}
             />
           )}
@@ -325,7 +327,17 @@ function PublicFormFieldBlock({
       return (
         <ErrorField block={block} data-public-form-field-key={block.fieldKey}>
           <PublicFormFieldLabel block={block} />
-          {block.display === "radios" ? (
+          {block.multiple ? (
+            <CheckboxChoices
+              across={block.across}
+              id={block.id}
+              label={block.label}
+              name={fieldName}
+              onChange={(value: string[]): void => onAnswerChange(block.fieldKey, value)}
+              options={block.options}
+              value={readListAnswer(answers, block.fieldKey)}
+            />
+          ) : block.display === "radios" ? (
             <RadioChoices
               across={block.across}
               id={block.id}
@@ -360,9 +372,35 @@ function PublicFormFieldBlock({
         </ErrorField>
       )
 
+    // Grids and tables load only on the forms that have them.
+    case "choice_grid_field":
+    case "table_field":
+      return (
+        <ErrorField block={block} data-public-form-field-key={block.fieldKey}>
+          <PublicFormFieldLabel block={block} />
+          <Suspense fallback={null}>
+            {block.type === "choice_grid_field" ? (
+              <PaperGrid block={block} mode="fill" name={fieldName} onChange={(value) => onAnswerChange(block.fieldKey, value)} value={answers[block.fieldKey]} />
+            ) : (
+              <PaperTable block={block} mode="fill" name={fieldName} onChange={(value) => onAnswerChange(block.fieldKey, value)} value={answers[block.fieldKey]} />
+            )}
+          </Suspense>
+          <PublicFormFieldHelpText block={block} />
+        </ErrorField>
+      )
+
     default:
       return null
   }
+}
+
+const PaperGrid = lazy(() => import("@/components/editor/paper-answer-kinds").then((kinds) => ({ default: kinds.PaperGrid })))
+const PaperTable = lazy(() => import("@/components/editor/paper-answer-kinds").then((kinds) => ({ default: kinds.PaperTable })))
+
+function readListAnswer(answers: Readonly<Record<string, unknown>>, fieldKey: string): string[] {
+  const value = answers[fieldKey]
+
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []
 }
 
 type FieldControl = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement

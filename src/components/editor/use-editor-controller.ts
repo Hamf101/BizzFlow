@@ -56,7 +56,7 @@ export type FocusRequest = CaretTarget & Readonly<{ nonce: number }>
 export type EditorController = ReturnType<typeof useEditorController>
 
 // Blocks that cannot be used until they are set up open their settings at once.
-const NEEDS_SETUP: ReadonlySet<TemplateBlock["type"]> = new Set(["dropdown_field", "image"])
+const NEEDS_SETUP: ReadonlySet<TemplateBlock["type"]> = new Set(["choice_grid_field", "dropdown_field", "image", "table_field"])
 
 /**
  * Turns choices into content changes and keeps what is selected, where the
@@ -193,7 +193,9 @@ export function useEditorController({
     const size = options.table
     // A table picked from the size grid has that many columns, and rows counting its heading row.
     const block: TemplateBlock =
-      created.type === "table" && size
+      created.type === "dropdown_field" && choice.action.several
+        ? { ...created, label: "Choose all that apply", multiple: true, placeholder: null }
+        : created.type === "table" && size
         ? {
             ...created,
             headers: Array.from({ length: size.columns }, (_, index) => `Column ${index + 1}`),

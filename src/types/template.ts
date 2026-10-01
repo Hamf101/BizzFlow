@@ -267,16 +267,28 @@ export const dividerBlockSchema = z
   })
   .strict()
 
-/** Single-line or multiline text input block. */
-export const textFieldBlockSchema = z
+/** What a typed answer holds; absent, any text. Each checks what is written and suits a phone's keyboard. */
+export const TEXT_FORMATS = ["number", "money", "email", "phone", "time", "month"] as const
+
+/** Single-line or multiline text input block, as a plain object to build other shapes from. */
+export const textFieldBlockObjectSchema = z
   .object({
     ...fieldBlockShape,
     boxHeight: boxHeightSchema,
     type: z.literal("text_field"),
     placeholder: shortTextSchema.nullable().default(null),
-    multiline: z.boolean().default(false)
+    multiline: z.boolean().default(false),
+    format: z.enum(TEXT_FORMATS).optional(),
+    // Printed before and after the answer, outside it: "£", "kg", "per month".
+    prefix: z.string().trim().min(1).max(12).optional(),
+    suffix: z.string().trim().min(1).max(24).optional(),
+    // One box a character, as a reference or account number is printed.
+    comb: z.number().int().min(2).max(40).optional()
   })
   .strict()
+
+/** Single-line or multiline text input block. */
+export const textFieldBlockSchema = textFieldBlockObjectSchema.refine((block) => !(block.comb && block.multiline), { message: "Comb boxes hold one line.", path: ["comb"] })
 
 /** How a date is written, built from three choices the author makes. */
 export const dateFormatSchema = z
@@ -317,9 +329,51 @@ export const dropdownFieldBlockSchema = z
     // Every option on show, one tick apiece; absent, a dropdown. The answer is the same.
     display: z.literal("radios").optional(),
     // Radio buttons set side by side along a line, wrapping; absent, one a line.
-    across: z.literal(true).optional()
+    across: z.literal(true).optional(),
+    // Any number of the choices, each ticked; the answer is the list ticked.
+    multiple: z.literal(true).optional()
   })
   .strict()
+
+// Words that name an answer are told apart as a person reads them.
+const distinctWords = (words: readonly string[]): boolean =>
+  new Set(words.map((word: string): string => word.trim().toLowerCase())).size === words.length
+
+/**
+ * Statements against shared choices, one choice a row: a rating scale, or
+ * Yes, No and N/A down a checklist. The answer names each row's choice.
+ */
+export const choiceGridFieldBlockSchema = z
+  .object({
+    ...fieldBlockShape,
+    type: z.literal("choice_grid_field"),
+    rows: z.array(z.string().trim().min(1).max(240)).min(1).max(40).refine(distinctWords, "Each row is said once."),
+    options: z.array(z.string().trim().min(1).max(60)).min(2).max(10).refine(distinctWords, "Each choice is said once.")
+  })
+  .strict()
+
+/** What a table column holds; absent, any text. */
+export const TABLE_COLUMN_FORMATS = ["number", "money", "date", "time"] as const
+
+/**
+ * A table filled in row by row: a log, a timesheet, an inventory. It shows
+ * its rows blank, and a person on a screen may add more where allowed.
+ */
+export const tableFieldBlockSchema = z
+  .object({
+    ...fieldBlockShape,
+    type: z.literal("table_field"),
+    columns: z
+      .array(z.object({ label: z.string().trim().min(1).max(60), format: z.enum(TABLE_COLUMN_FORMATS).optional() }).strict())
+      .min(1)
+      .max(8)
+      .refine((columns) => distinctWords(columns.map((column) => column.label)), "Each column is named once."),
+    rows: z.number().int().min(1).max(50),
+    addRows: z.literal(true).optional()
+  })
+  .strict()
+
+export { MAX_TABLE_FIELD_ROWS } from "@/types/template-answer-kinds"
 
 /** Drawn initials input block. */
 export const initialsFieldBlockSchema = z
@@ -360,6 +414,8 @@ export const templateBlockSchema = z.discriminatedUnion("type", [
   dateFieldBlockSchema,
   checkboxFieldBlockSchema,
   dropdownFieldBlockSchema,
+  choiceGridFieldBlockSchema,
+  tableFieldBlockSchema,
   initialsFieldBlockSchema,
   signatureFieldBlockSchema,
   fileFieldBlockSchema
@@ -611,6 +667,9 @@ export type HeadingBlock = z.infer<typeof headingBlockSchema>
 export type ParagraphBlock = z.infer<typeof paragraphBlockSchema>
 export type CheckboxFieldBlock = z.infer<typeof checkboxFieldBlockSchema>
 export type DropdownFieldBlock = z.infer<typeof dropdownFieldBlockSchema>
+export type ChoiceGridFieldBlock = z.infer<typeof choiceGridFieldBlockSchema>
+export type TableFieldBlock = z.infer<typeof tableFieldBlockSchema>
+export type TextFieldBlock = z.infer<typeof textFieldBlockSchema>
 export type TemplateBlock = z.infer<typeof templateBlockSchema>
 export type TemplateBranding = z.infer<typeof templateBrandingSchema>
 export type TemplateImageAsset = z.infer<typeof templateImageAssetSchema>

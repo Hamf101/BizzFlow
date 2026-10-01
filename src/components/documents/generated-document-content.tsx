@@ -24,8 +24,9 @@ import {
   type TemplateWebRenderGroup
 } from "@/components/templates/template-render-groups"
 import { DatePicker } from "@/components/ui/date-picker"
-import { Input } from "@/components/ui/input"
-import { RadioChoices } from "@/components/ui/radio-choices"
+import { PaperGrid, PaperTable, readChoiceList } from "@/components/editor/paper-answer-kinds"
+import { CheckboxChoices, RadioChoices } from "@/components/ui/radio-choices"
+import { TypedInput } from "@/components/ui/typed-input"
 import { Select } from "@/components/ui/select"
 import { formatDateAnswer } from "@/lib/date-format"
 import { resolveDocumentSurfaceInk } from "@/lib/document-surface"
@@ -560,10 +561,10 @@ export function GeneratedBlock({
                 value={readStringAnswer(answers, block.fieldKey)}
               />
             ) : (
-              <Input
+              <TypedInput
+                block={block}
                 className="border-input"
                 id={block.id}
-                maxLength={20_000}
                 name={getGeneratedDocumentAnswerName("text", block.fieldKey)}
                 onChange={(event: ChangeEvent<HTMLInputElement>): void =>
                   onAnswerChange(block.fieldKey, event.target.value)
@@ -654,9 +655,22 @@ export function GeneratedBlock({
       return (
         <AnswerFieldFrame
           block={block}
-          labelFor={editable && block.display !== "radios" ? block.id : undefined}
+          labelFor={editable && block.display !== "radios" && !block.multiple ? block.id : undefined}
         >
-          {editable && block.display === "radios" ? (
+          {block.multiple ? (
+            editable ? (
+              <CheckboxChoices
+                across={block.across}
+                label={block.label}
+                name={getGeneratedDocumentAnswerName("json", block.fieldKey)}
+                onChange={(value: string[]): void => onAnswerChange(block.fieldKey, value)}
+                options={block.options}
+                value={readChoiceList(answers[block.fieldKey])}
+              />
+            ) : (
+              <ReadOnlyAnswer value={readChoiceList(answers[block.fieldKey]).join(", ")} />
+            )
+          ) : editable && block.display === "radios" ? (
             <RadioChoices
               across={block.across}
               label={block.label}
@@ -685,6 +699,17 @@ export function GeneratedBlock({
             </Select>
           ) : (
             <ReadOnlyAnswer value={readStringAnswer(answers, block.fieldKey)} />
+          )}
+        </AnswerFieldFrame>
+      )
+    case "choice_grid_field":
+    case "table_field":
+      return (
+        <AnswerFieldFrame block={block}>
+          {block.type === "choice_grid_field" ? (
+            <PaperGrid block={block} mode={editable ? "fill" : "read"} onChange={(value) => onAnswerChange(block.fieldKey, value)} value={answers[block.fieldKey]} />
+          ) : (
+            <PaperTable block={block} mode={editable ? "fill" : "read"} onChange={(value) => onAnswerChange(block.fieldKey, value)} value={answers[block.fieldKey]} />
           )}
         </AnswerFieldFrame>
       )

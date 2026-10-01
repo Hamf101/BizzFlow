@@ -16,7 +16,9 @@ export const ROUTE_BUDGETS = [
     route: "/forms/[token]/page",
     // 56 from 55 (2026-10-01): side-by-side rows, radios and section numbers
     // joined in-place field errors; what remains is drawn, not dead code.
-    ceilingKiB: 56,
+    // 57 from 56 (2026-10-01): typed answers, checkboxes and their visibility;
+    // grids and tables load only on forms that have them.
+    ceilingKiB: 57,
   },
   {
     label: "Public signing",

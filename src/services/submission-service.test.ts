@@ -27,6 +27,7 @@ import {
 } from "@/services/submission-service"
 import { PostgrestReadQuery } from "@/services/postgrest-fake.test-support"
 import { parseTemplateContent, type TemplateContent } from "@/types/template"
+import { createStructuredAnswerContent } from "@/types/template-answer.test-support"
 
 type FakeRow = Record<string, unknown>
 type FakeTables = Record<string, FakeRow[]>
@@ -1396,6 +1397,26 @@ describe("suggested changes", () => {
       target_submission_id: SUBMISSION_ID,
       target_values: { vendor_name: "Acme Ltd" }
     })
+  })
+
+  it("suggests a structured answer only when its content changed, whatever its key order", async () => {
+    const client = createClient({
+      submissions: [
+        createAssignedSubmissionRow({
+          assigned_to: MANAGER_ID,
+          template_snapshot: createStructuredAnswerContent(),
+          values: { checks: { "Lights work": "No", "Exits clear": "Yes" }, tools: ["Ladder"] }
+        })
+      ],
+      submission_reviewers: [createReviewerRow(MANAGER_ID)]
+    })
+    client.rpc.mockResolvedValue({ data: 1, error: null })
+
+    await suggest(MANAGER_ID, { checks: { "Exits clear": "Yes", "Lights work": "No" }, tools: ["Ladder", "Saw"] }, client)
+    expect(client.rpc).toHaveBeenCalledWith(
+      "suggest_submission_answers",
+      expect.objectContaining({ target_values: { tools: ["Ladder", "Saw"] } })
+    )
   })
 
   it("turns away staff, outside reviewers, and a form with nothing changed before the database is asked", async () => {

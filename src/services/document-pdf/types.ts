@@ -47,6 +47,12 @@ export type PdfBlockFlowItem = {
   frame?: BlockFrame
   /** A cell that the next cell on its page sits on, with no gap between. */
   joinsNext?: boolean
+  /** A grid's or table's rows this piece prints, each with its place among them. */
+  rows?: ReadonlyArray<Readonly<{ cells: readonly string[]; index: number }>>
+  /** Rows printed straight under the piece above, without the title and header row. */
+  joinsAbove?: boolean
+  /** A grid's or table's last piece, which its help follows. */
+  last?: boolean
 }
 
 /** Where an item of a boxed section sits in its box: whether it opens it, closes it, or both. */

@@ -12,12 +12,24 @@ import {
   type TemplateBlock,
   type TemplateContent
 } from "@/types/template"
+import { createStructuredAnswerContent } from "@/types/template-answer.test-support"
 
 const CHECKBOX_ID = "70000000-0000-4000-8000-000000000001"
 const DROPDOWN_ID = "70000000-0000-4000-8000-000000000002"
 const CONDITIONAL_ID = "70000000-0000-4000-8000-000000000003"
 
 describe("template visibility", () => {
+  it("shows a field while its several-choice source has the value ticked", () => {
+    const content = createStructuredAnswerContent()
+    const note = content.blocks[1] as TemplateBlock
+
+    expect(isTemplateBlockVisible(content, note, { tools: ["Ladder", "Drill"] })).toBe(true)
+    expect(isTemplateBlockVisible(content, note, { tools: ["Ladder"] })).toBe(false)
+    expect(isTemplateBlockVisible(content, note, {})).toBe(false)
+    // A single answer where a list belongs reveals nothing.
+    expect(isTemplateBlockVisible(content, note, { tools: "Drill" })).toBe(false)
+  })
+
   it("keeps every version-two block visible", () => {
     const content = createV2Content()
     const block = content.blocks[0] as TemplateBlock
