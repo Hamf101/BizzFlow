@@ -65,6 +65,8 @@ export type CreateSignedDocumentUploadUrlInput = BuildDocumentObjectKeyInput &
 
 export type CreateSignedDocumentDownloadUrlInput = {
   storageKey: string
+  /** Shown in the browser as this type, rather than saved. */
+  viewAs?: string
 }
 
 export type VerifyDocumentUploadInput = {
@@ -254,7 +256,8 @@ export async function createSignedDocumentDownloadUrl(
     const command = new GetObjectCommand({
       Bucket: r2Env.CLOUDFLARE_R2_BUCKET_NAME,
       Key: input.storageKey,
-      ResponseContentDisposition: "attachment",
+      ResponseContentDisposition: input.viewAs ? "inline" : "attachment",
+      ResponseContentType: input.viewAs,
     })
     const downloadUrl = await signer(r2Client, command, {
       expiresIn: r2Env.CLOUDFLARE_R2_SIGNED_URL_TTL_SECONDS,

@@ -144,6 +144,20 @@ export type CreateDocumentUploadUrlResponse = {
   expiresInSeconds: number
 }
 
+// Types a browser shows without running anything. Markup such as HTML or SVG
+// would run as a page on the storage origin, so it only ever downloads.
+const VIEWABLE_TYPES = new Set(["application/pdf", "image/gif", "image/jpeg", "image/png", "image/webp"])
+
+/**
+ * Whether a stored file may open in the browser rather than download.
+ *
+ * @param contentType - The file's stored type.
+ * @returns Whether it is safe to show inline.
+ */
+export function isViewableDocumentType(contentType: string): boolean {
+  return VIEWABLE_TYPES.has(contentType)
+}
+
 export type CreateDocumentDownloadUrlResponse = {
   documentId: string
   versionId: string

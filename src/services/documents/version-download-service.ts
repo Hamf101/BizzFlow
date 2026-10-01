@@ -15,7 +15,7 @@ import {
   runDocumentOperation,
 } from "@/services/documents/shared"
 import { getDocumentVersionById } from "@/services/documents/version-shared"
-import type { CreateDocumentDownloadUrlResponse } from "@/types/document"
+import { type CreateDocumentDownloadUrlResponse, isViewableDocumentType } from "@/types/document"
 
 /**
  * Creates a signed download URL for the current or selected document version.
@@ -91,9 +91,11 @@ export async function createDocumentDownloadUrl(
       const createSignedDocumentDownloadUrl =
         deps.createSignedDocumentDownloadUrl ??
         defaultCreateSignedDocumentDownloadUrl
-      const signedUrl = await createSignedDocumentDownloadUrl({
-        storageKey: version.storageKey,
-      })
+      const signedUrl = await createSignedDocumentDownloadUrl(
+        input.view && isViewableDocumentType(version.contentType)
+          ? { storageKey: version.storageKey, viewAs: version.contentType }
+          : { storageKey: version.storageKey }
+      )
 
       await recordRequiredDocumentAuditLog(deps, {
         organizationId: input.organizationId,
