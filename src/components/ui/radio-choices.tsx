@@ -5,13 +5,14 @@ import type { ReactElement } from "react"
 import { cn } from "@/lib/utils"
 
 /**
- * A choice with every option on show, one a line: native radio buttons under
+ * A choice with every option on show, one a line or side by side: native radio buttons under
  * one name, so a form posts the chosen option as a select would.
  *
  * @param props - The group's accessible name, its form name, options, answer and change callback.
  * @returns The radio group.
  */
 export function RadioChoices({
+  across,
   className,
   id,
   label,
@@ -21,6 +22,7 @@ export function RadioChoices({
   required,
   value,
 }: {
+  across?: boolean
   className?: string
   id?: string
   label: string
@@ -31,7 +33,7 @@ export function RadioChoices({
   value: string
 }): ReactElement {
   return (
-    <div aria-label={label} className={cn("flex flex-col gap-2", className)} data-slot="radio-group" id={id} role="radiogroup">
+    <div aria-label={label} className={cn("flex gap-2", across ? "flex-wrap gap-x-5" : "flex-col", className)} data-slot="radio-group" id={id} role="radiogroup">
       {/* Nothing chosen still posts an empty answer, as an unchosen select does. */}
       <input name={name} type="hidden" value="" />
       {options.map((option: string) => (

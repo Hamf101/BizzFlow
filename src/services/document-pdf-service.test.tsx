@@ -631,6 +631,60 @@ describe("document PDF service", () => {
     })
   })
 
+  it("prints radio buttons set side by side along a line, wrapping onto the next, inside the room the planner left", { timeout: PDF_RENDER_TIMEOUT_MS }, async () => {
+    const input = createPdfInput({ repeatHeader: false, repeatFooter: false })
+    const content = requireVersionThreeContent(input)
+    // The worst case: a line of many options, and one option wider than the page.
+    const sets = [["Yes", "No"], Array.from({ length: 14 }, (_value: unknown, index: number): string => `Choice ${index + 1}`), ["Short", "words ".repeat(40).trim(), "After"]]
+
+    content.blocks = Array.from({ length: 30 }, (_value: unknown, index: number) => ({
+      id: `53000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
+      type: "dropdown_field" as const,
+      display: "radios" as const,
+      across: true as const,
+      fieldKey: `across_${index}`,
+      label: `Question ${index + 1}`,
+      required: false,
+      helpText: null,
+      placeholder: null,
+      options: sets[index % 3]
+    }))
+    content.sections = []
+    content.fieldGroups = []
+    content.blockRules = []
+    input.answers = { across_0: "No" }
+    input.signers = []
+
+    const normalized = normalizePdfInput(input)
+    const metrics = createPdfLayoutMetrics(normalized.renderPlan.geometry, normalized.renderPlan.layout)
+    const form = (await PDFDocument.load(await renderGeneratedDocumentPdf(input, { fillable: true }))).getForm()
+    const boxes = (key: string) => form.getRadioGroup(key).acroField.getWidgets().map((widget) => widget.getRectangle())
+    const [yes, no] = boxes("across_0")
+    const many = boxes("across_1")
+    const [short, long, after] = boxes("across_2")
+    const flowBottom = metrics.flowTopY - metrics.pageCapacity
+
+    expect(form.getRadioGroup("across_0").getSelected()).toBe("No")
+    expect(no.y).toBe(yes.y)
+    expect(no.x).toBeGreaterThan(yes.x + 20)
+    // Many options fill a line, then go on to the next.
+    expect(new Set(many.map((box) => box.y)).size).toBeGreaterThan(1)
+    expect(many[1].y).toBe(many[0].y)
+    // An option too wide to share a line takes one of its own.
+    expect(long.y).toBeLessThan(short.y)
+    expect(after.y).toBeLessThan(long.y - 15)
+    form.getFields().forEach((field) => {
+      field.acroField.getWidgets().forEach((widget) => {
+        const box = widget.getRectangle()
+
+        // A widget's rectangle takes in half its border.
+        expect(box.x).toBeGreaterThanOrEqual(metrics.margin - 0.5)
+        expect(box.x + box.width).toBeLessThanOrEqual(metrics.margin + metrics.contentWidth + 0.5)
+        expect(box.y).toBeGreaterThanOrEqual(flowBottom - 0.5)
+      })
+    })
+  })
+
   it("renders saved page size, orientation, and margins through pdf-lib", async () => {
     const input = createPdfInput({
       repeatHeader: false,

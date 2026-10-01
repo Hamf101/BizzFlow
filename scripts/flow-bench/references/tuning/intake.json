@@ -256,7 +256,8 @@
           "Afternoon",
           "No preference"
         ],
-        "display": "radios"
+        "display": "radios",
+        "across": true
       },
       {
         "id": "a1000000-0000-4000-8000-000000000037",
@@ -271,7 +272,8 @@
           "No",
           "Not sure"
         ],
-        "display": "radios"
+        "display": "radios",
+        "across": true
       },
       {
         "id": "a1000000-0000-4000-8000-000000000039",
@@ -286,7 +288,8 @@
           "No",
           "Not sure"
         ],
-        "display": "radios"
+        "display": "radios",
+        "across": true
       },
       {
         "id": "a1000000-0000-4000-8000-000000000040",
@@ -300,7 +303,8 @@
           "Yes",
           "No"
         ],
-        "display": "radios"
+        "display": "radios",
+        "across": true
       },
       {
         "id": "a1000000-0000-4000-8000-000000000041",

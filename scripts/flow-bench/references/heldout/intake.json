@@ -125,7 +125,8 @@
           "Home",
           "Business"
         ],
-        "display": "radios"
+        "display": "radios",
+        "across": true
       },
       {
         "id": "a4000000-0000-4000-8000-000000000103",
@@ -261,7 +262,8 @@
           "Afternoon",
           "No preference"
         ],
-        "display": "radios"
+        "display": "radios",
+        "across": true
       },
       {
         "id": "a4000000-0000-4000-8000-000000000033",
@@ -316,7 +318,8 @@
           "Yes",
           "No"
         ],
-        "display": "radios"
+        "display": "radios",
+        "across": true
       },
       {
         "id": "a4000000-0000-4000-8000-000000000038",

@@ -24,6 +24,7 @@ import {
   ANSWER_BOX_PADDING,
   answerBoxHeight,
   CHECKBOX_LABEL_INSET,
+  packRadioOptions,
   formatFieldValue,
   normalizeDrawingDataUrl
 } from "./shared"
@@ -611,6 +612,11 @@ function splitRadioOptions(
   const pieces: string[][] = [[]]
   let height = 0
 
+  // Options side by side stay together, as a checkbox does.
+  if (block.across) {
+    return [{ kind: "block", block: { ...block, options }, renderBlock }]
+  }
+
   for (const option of options) {
     const optionHeight = estimateRadioOptionHeight(option, availableWidth)
     const piece = pieces[pieces.length - 1]
@@ -632,6 +638,12 @@ function splitRadioOptions(
       fieldContinued: index > 0
     })
   )
+}
+
+// A generous guess at a side-by-side option's width at 10 points, so a line
+// the renderer measures never holds fewer options than the planner reserved.
+function estimateRadioOptionWidth(option: string): number {
+  return CHECKBOX_LABEL_INSET + option.length * 6
 }
 
 function estimateRadioOptionHeight(option: string, availableWidth: number): number {
@@ -1103,9 +1115,11 @@ function estimateBlockHeight(
     }
     default: {
       if (block.type === "dropdown_field" && block.display === "radios") {
+        const lines = block.across ? packRadioOptions(block.options, availableWidth, estimateRadioOptionWidth) : block.options.map((option: string): string[] => [option])
+
         return (
           estimateFieldLabelHeight(block, availableWidth) +
-          block.options.reduce((height: number, option: string): number => height + estimateRadioOptionHeight(option, availableWidth), 0) +
+          lines.reduce((height: number, line: string[]): number => height + Math.max(...line.map((option: string): number => estimateRadioOptionHeight(option, availableWidth))), 0) +
           estimateHelpHeight(block, availableWidth) +
           13
         )

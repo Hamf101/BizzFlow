@@ -37,7 +37,9 @@ import {
   CHECKBOX_LABEL_INSET,
   formatFieldValue,
   isFieldChecked,
-  normalizeDrawingDataUrl
+  normalizeDrawingDataUrl,
+  packRadioOptions,
+  RADIO_ACROSS_GAP
 } from "./shared"
 import type {
   NormalizedPdfInput,
@@ -774,20 +776,32 @@ async function drawPdfLibField(
 
     cursorY = drawWrappedPdfText(context, label, topY, frame.x, frame.width, 9, 13, context.boldFont, ink, "left") - 3
 
-    for (const option of block.options) {
-      const circle = { x: frame.x + size / 2, y: cursorY - 2 - size / 2 }
+    // Side by side, options share a line until it is full; otherwise one a line.
+    const measure = (option: string): number => CHECKBOX_LABEL_INSET + context.regularFont.widthOfTextAtSize(option, 10)
+    const lines = block.across ? packRadioOptions(block.options, frame.width, measure) : block.options.map((option: string): string[] => [option])
 
-      if (group) {
-        group.addOptionToPage(option, context.page, { borderColor: edge, borderWidth: 0.7, height: size, textColor: ink, width: size, x: frame.x, y: cursorY - 2 - size })
-      } else {
-        context.page.drawCircle({ ...circle, borderColor: edge, borderWidth: 0.7, size: size / 2 })
+    for (const line of lines) {
+      let x = frame.x
+      let lineBottom = cursorY
 
-        if (option === answer) {
-          context.page.drawCircle({ ...circle, color: ink, size: 2.5 })
+      for (const option of line) {
+        const circle = { x: x + size / 2, y: cursorY - 2 - size / 2 }
+
+        if (group) {
+          group.addOptionToPage(option, context.page, { borderColor: edge, borderWidth: 0.7, height: size, textColor: ink, width: size, x, y: cursorY - 2 - size })
+        } else {
+          context.page.drawCircle({ ...circle, borderColor: edge, borderWidth: 0.7, size: size / 2 })
+
+          if (option === answer) {
+            context.page.drawCircle({ ...circle, color: ink, size: 2.5 })
+          }
         }
+
+        lineBottom = Math.min(lineBottom, drawWrappedPdfText(context, option, cursorY, x + CHECKBOX_LABEL_INSET, frame.x + frame.width - x - CHECKBOX_LABEL_INSET, 10, 15, context.regularFont, ink, "left"))
+        x += measure(option) + RADIO_ACROSS_GAP
       }
 
-      cursorY = drawWrappedPdfText(context, option, cursorY, frame.x + CHECKBOX_LABEL_INSET, frame.width - CHECKBOX_LABEL_INSET, 10, 15, context.regularFont, ink, "left")
+      cursorY = lineBottom
     }
 
     if (group && block.options.includes(answer)) {

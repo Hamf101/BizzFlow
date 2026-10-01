@@ -208,14 +208,19 @@ export function PaperField({
       break
   }
 
-  // Radio buttons print with no box: each option on its line beside a circle.
+  // Radio buttons print with no box: each option beside a circle, one a line or side by side.
   if (block.type === "dropdown_field" && block.display === "radios") {
     const Option = fill ? "label" : "div"
 
     return (
       <div className="flex flex-col">
         {title}
-        <div aria-label={fill ? block.label : undefined} role={fill ? "radiogroup" : undefined} style={{ lineHeight: 1.5 }}>
+        <div
+          aria-label={fill ? block.label : undefined}
+          className={cn(block.across && "flex flex-wrap gap-x-[1.8em]")}
+          role={fill ? "radiogroup" : undefined}
+          style={{ lineHeight: 1.5 }}
+        >
           {/* Nothing chosen still answers, as an empty dropdown does. */}
           {fill ? <input name={textName} type="hidden" value="" /> : null}
           {block.options.map((option: string) => {

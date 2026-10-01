@@ -315,7 +315,9 @@ export const dropdownFieldBlockSchema = z
     placeholder: shortTextSchema.nullable().default(null),
     options: z.array(z.string().trim().min(1).max(240)).max(100),
     // Every option on show, one tick apiece; absent, a dropdown. The answer is the same.
-    display: z.literal("radios").optional()
+    display: z.literal("radios").optional(),
+    // Radio buttons set side by side along a line, wrapping; absent, one a line.
+    across: z.literal(true).optional()
   })
   .strict()
 

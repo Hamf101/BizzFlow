@@ -48,6 +48,12 @@ const CHOICE_DISPLAYS = [
   { label: "Radio buttons", value: "radios" },
 ] as const
 
+// Radio buttons go one a line, or side by side along a line.
+const RADIO_LAYOUTS = [
+  { label: "One a line", value: "down" },
+  { label: "Side by side", value: "across" },
+] as const
+
 const BLOCK_LABELS: Record<TemplateBlock["type"], string> = {
   heading: "Heading",
   paragraph: "Paragraph",
@@ -338,6 +344,7 @@ export function BlockFields({
 
                 if (display === "dropdown") {
                   delete next.display
+                  delete next.across
                 }
 
                 onChange(next)
@@ -346,7 +353,26 @@ export function BlockFields({
               value={block.display ?? "dropdown"}
             />
           </fieldset>
-          {block.display === "radios" ? null : (
+          {block.display === "radios" ? (
+            <fieldset className="grid gap-2">
+              <FieldLegend variant="label">Layout</FieldLegend>
+              <Segmented
+                className="w-fit"
+                label="Layout"
+                onChange={(layout): void => {
+                  const next: typeof block = { ...block, across: true }
+
+                  if (layout === "down") {
+                    delete next.across
+                  }
+
+                  onChange(next)
+                }}
+                options={RADIO_LAYOUTS}
+                value={block.across ? "across" : "down"}
+              />
+            </fieldset>
+          ) : (
             <PlaceholderField
               blockId={block.id}
               onChange={(placeholder: string | null): void =>

@@ -164,6 +164,37 @@ export const ANSWER_BOX_PADDING = 6
 /** How far a checkbox's label sits from the box's left edge, in points. */
 export const CHECKBOX_LABEL_INSET = 16
 
+/** The space between radio buttons set side by side. */
+export const RADIO_ACROSS_GAP = 18
+
+/**
+ * Sets radio options side by side in lines no wider than the room, in order.
+ * An option too wide to share a line takes one of its own.
+ *
+ * @param options - The options, in order.
+ * @param width - The width of a line.
+ * @param measure - An option's width, its circle included.
+ * @returns The options on each line.
+ */
+export function packRadioOptions(options: readonly string[], width: number, measure: (option: string) => number): string[][] {
+  const lines: string[][] = []
+  let used = width
+
+  for (const option of options) {
+    const size = measure(option)
+
+    if (used + RADIO_ACROSS_GAP + size > width) {
+      lines.push([option])
+      used = size
+    } else {
+      lines[lines.length - 1].push(option)
+      used += RADIO_ACROSS_GAP + size
+    }
+  }
+
+  return lines
+}
+
 /**
  * Reads an optional drawing data URL from supported answer shapes.
  *

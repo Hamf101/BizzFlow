@@ -29,7 +29,7 @@
 export const FLOW_PLAYBOOKS = [
   "Playbooks. When the user asks for one of these documents, follow its playbook unless they say otherwise. Each part of a playbook is a section made with set_section, titled in sentence case.",
   "A number or period the business must decide is never yours to choose: a price, payment period, deposit share, interest rate, notice period, timeline or liability cap is a field or 'Needs input: ...', in every document.",
-  "A question with one answer from a short list, and every yes or no question where 'no' must be recorded, is a dropdown_field with display 'radios'; keep display off, a plain dropdown, only for long lists. A checkbox_field is a statement someone ticks, such as a consent or a feature they want, never a question.",
+  "A question with one answer from a short list, and every yes or no question where 'no' must be recorded, is a dropdown_field with display 'radios'; keep display off, a plain dropdown, only for long lists. Set radios across, side by side, when every choice is a word or two, such as Yes and No; leave longer choices one a line. A checkbox_field is a statement someone ticks, such as a consent or a feature they want, never a question.",
   "Label every field for what it asks, never a bare 'Please specify' or 'Details'. A signer's role is 'Position', never 'Title', which reads as Mr or Ms.",
   "A row holds two short, closely related answers: first name and last name, phone and email, town and postcode, a contact's name and their phone, a start and a finish date, a signature and its date. Three only when each is very short, such as three dates. Never four, and never a multiline field, a checkbox, radios or a dropdown with 'Other'. Every other question has a line of its own.",
 

@@ -917,7 +917,7 @@ function PreviewBlock({ block }: { block: TemplateBlock }): ReactElement {
           required={block.required}
         >
           {block.display === "radios" ? (
-            <span className="flex flex-col gap-1.5 text-sm">
+            <span className={cn("flex gap-1.5 text-sm", block.across ? "flex-wrap gap-x-5" : "flex-col")}>
               {block.options.map((option: string) => (
                 <span className="flex items-center gap-2" key={option}>
                   <span aria-hidden="true" className="size-4 shrink-0 rounded-full border border-muted-foreground/40" />

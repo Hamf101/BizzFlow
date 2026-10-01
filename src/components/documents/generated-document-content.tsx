@@ -658,6 +658,7 @@ export function GeneratedBlock({
         >
           {editable && block.display === "radios" ? (
             <RadioChoices
+              across={block.across}
               label={block.label}
               name={getGeneratedDocumentAnswerName("text", block.fieldKey)}
               onChange={(value: string): void => onAnswerChange(block.fieldKey, value)}

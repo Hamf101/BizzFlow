@@ -317,6 +317,7 @@ function PublicFormFieldBlock({
           <PublicFormFieldLabel block={block} />
           {block.display === "radios" ? (
             <RadioChoices
+              across={block.across}
               id={block.id}
               label={block.label}
               name={fieldName}
