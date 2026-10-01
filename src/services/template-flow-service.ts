@@ -39,6 +39,7 @@ import {
   evaluateTemplateQuality,
   type TemplateQualityIssue
 } from "@/services/templates/template-quality-service"
+import { resizeTemplateLayout } from "@/services/templates/template-render-plan"
 import {
   bulletListBlockObjectSchema,
   checkboxFieldBlockSchema,
@@ -56,13 +57,16 @@ import {
   templateBlockSchema,
   templateContentSchema,
   templateContentV3Schema,
+  templateFieldGroupSchema,
   templateLayoutSchema,
+  textRunSchema,
   textFieldBlockSchema,
   upgradeV2TemplateContentToV3,
   type TemplateBlock,
   type TemplateContent,
   type TemplateContentV3
 } from "@/types/template"
+import { applyDocumentStyle, DOCUMENT_STYLES, type DocumentStyle } from "@/types/template-styles"
 import {
   createUniqueTemplateFieldKey,
   deleteTemplateBlock,
@@ -135,10 +139,11 @@ const flowRequestSchema = z
     instruction: z.string().trim().min(2).max(2_000)
   })
   .strict()
+const generatedRunSchema = textRunSchema.pick({ bold: true, italic: true, text: true, underline: true }).strict()
 const generatedBlockSchema = z.discriminatedUnion("type", [
-  // Flow writes words; formatting stays the editor's.
-  headingBlockObjectSchema.omit({ id: true, runs: true }),
-  paragraphBlockObjectSchema.omit({ id: true, runs: true }),
+  // Flow may make words bold, italic or underlined; fonts, sizes and colours stay the editor's.
+  headingBlockObjectSchema.omit({ id: true }).extend({ runs: z.array(generatedRunSchema).max(200).optional() }).strict(),
+  paragraphBlockObjectSchema.omit({ id: true }).extend({ runs: z.array(generatedRunSchema).max(200).optional() }).strict(),
   bulletListBlockObjectSchema.omit({ id: true, itemRuns: true }),
   numberedListBlockObjectSchema.omit({ id: true, itemRuns: true }),
   tableBlockSchema.omit({ id: true }),
@@ -200,9 +205,7 @@ const flowWireOperationSchema = z.discriminatedUnion("type", [
           accentColor: hexColorSchema.optional(),
           logoAlignment: z.enum(["left", "center", "right"]).optional(),
           logoWidthPercent: z.number().int().min(10).max(60).optional(),
-          removeLogo: z.boolean().optional(),
-          // How answers are drawn, which is the document's look as much as its colours are.
-          fieldStyle: templateLayoutSchema.shape.fieldStyle
+          removeLogo: z.boolean().optional()
         })
         .strict()
     })
@@ -290,7 +293,35 @@ const flowWireOperationSchema = z.discriminatedUnion("type", [
         .object({
           blockIds: z.array(uuidSchema).min(2).max(MAX_ROW_COLUMNS),
           // Twelfths of the page's width, one for each block.
-          widths: z.array(z.number().int()).min(2).max(MAX_ROW_COLUMNS).optional()
+          widths: z.array(z.number().int()).min(2).max(MAX_ROW_COLUMNS).optional(),
+          // A small heading over the row, such as "Applicant"; null takes it away.
+          label: templateFieldGroupSchema.shape.label.optional()
+        })
+        .strict()
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal("set_layout"),
+      summary: operationSummarySchema,
+      payload: z
+        .object({
+          // A whole look at once; anything else given here is set after it.
+          style: z.enum(Object.keys(DOCUMENT_STYLES) as [DocumentStyle, ...DocumentStyle[]]).optional(),
+          pageSize: templateLayoutSchema.shape.pageSize.unwrap().optional(),
+          orientation: templateLayoutSchema.shape.orientation.unwrap().optional(),
+          marginPreset: templateLayoutSchema.shape.marginPreset.unwrap().optional(),
+          lineSpacing: templateLayoutSchema.shape.lineSpacing,
+          paragraphSpacing: templateLayoutSchema.shape.paragraphSpacing,
+          fieldStyle: templateLayoutSchema.shape.fieldStyle,
+          sectionStyle: templateLayoutSchema.shape.sectionStyle,
+          // "none" takes numbering away, where absent leaves it as it is.
+          sectionNumbers: z.enum(["letters", "numbers", "none"]).optional(),
+          headerText: templateLayoutSchema.shape.headerText,
+          footerText: templateLayoutSchema.shape.footerText,
+          headerPolicy: templateLayoutSchema.shape.headerPolicy.unwrap().optional(),
+          footerPolicy: templateLayoutSchema.shape.footerPolicy.unwrap().optional(),
+          pageNumbering: templateLayoutSchema.shape.pageNumbering.unwrap().optional()
         })
         .strict()
     })
@@ -1447,19 +1478,21 @@ function createFlowPayloadContract(): string {
     "Operation payload contracts:",
     'set_title => {"value":"Document title"}.',
     'set_description => {"value":"Document description"}.',
-    'set_branding => include only requested properties from {"organizationName":"Name","primaryColor":"#RRGGBB","accentColor":"#RRGGBB","logoAlignment":"left|center|right","logoWidthPercent":25,"removeLogo":false,"fieldStyle":"box|line|cell"}. fieldStyle is how every answer is drawn: box, a box under its label, for modern forms; line, the label beside a line to write on, for classic printed forms, letters and agreements; cell, bordered cells with small labels that share their edges, for dense official, government and medical forms. Choose it when you draft a whole document, to suit its kind, or when the user asks for a style.',
+    'set_branding => include only requested properties from {"organizationName":"Name","primaryColor":"#RRGGBB","accentColor":"#RRGGBB","logoAlignment":"left|center|right","logoWidthPercent":25,"removeLogo":false}.',
+    'set_layout => include only what changes from {"style":"modern|classic|official|compact","pageSize":"A4|Letter|Legal|A5|A3","orientation":"portrait|landscape","marginPreset":"compact|standard|generous","lineSpacing":1.5,"paragraphSpacing":8,"fieldStyle":"box|line|cell","sectionStyle":"plain|band|box","sectionNumbers":"letters|numbers|none","headerText":{"left":"","center":"","right":""},"footerText":{"left":"","center":"","right":""},"headerPolicy":"first_page|all_pages|none","footerPolicy":"first_page|all_pages|none","pageNumbering":"page_x_of_y|none"}. style sets the whole look first and the rest is set after it: modern, boxed answers and plain sections, for intake forms and sign-ups filled in on a screen; classic, answers on lines and numbered sections, for agreements, letters and printed applications; official, answers in bordered cells under lettered bars, dense, for government, medical and other official forms; compact, tight boxed answers, for checklists and logs. fieldStyle box is a box under its label, line the label beside a line to write on, cell a bordered cell with a small label in its corner. sectionStyle band puts a section title in a filled bar, box draws a border round the section. Margin text takes {page}, {pages} and {title}, such as a footer of {"left":"{title}","right":"Page {page} of {pages}"}; never invent a form number or revision. Choose a style when you draft a whole document, to suit its kind, and when the user asks for a look.',
     'add_block => {"ref":optional "new:1","afterBlockId":"existing-uuid, earlier ref, or null for the end of the document","block":{...new block without id}}.',
     'update_block => {"blockId":"existing-uuid","block":{...complete replacement block without id}}.',
     'update_image => {"blockId":"existing-uuid","altText":"Description","caption":null,"alignment":"left|center|right","widthPercent":50}.',
     'move_block => {"blockId":"existing-uuid","afterBlockId":"existing-uuid, or null for the start of the document"}.',
     'remove_block => {"blockId":"existing-uuid"}.',
-    'set_section => {"blockId":"the block the section opens with","label":"Section title, or null to end the section that opens there","pageBreakBefore":optional false,"keepTogether":optional false}.',
-    'set_row => {"blockIds":["2 to 4 different blocks, left to right"],"widths":optional [8,4] whole twelfths, each 2 or more, one per block, adding up to 12}. The blocks are moved together beside the first.',
+    'set_section => {"blockId":"the block the section opens with","label":"Section title, or null to end the section that opens there","pageBreakBefore":optional false,"keepTogether":optional false}. keepTogether keeps a short section on one page, such as a signature block; never on a section longer than half a page. Never number a section title yourself: numbering is set with set_layout.',
+    'set_row => {"blockIds":["2 to 4 different blocks, left to right"],"widths":optional [8,4] whole twelfths, each 2 or more, one per block, adding up to 12,"label":optional "Small heading over the row, such as Applicant or Emergency contact", or null to take it away}. The blocks are moved together beside the first.',
     'stand_alone => {"blockId":"a block in a row"}.',
     'set_block_rule => {"blockId":"existing-uuid","pageBreakBefore":optional true,"keepWithNext":optional true,"spaceAbove":optional 24,"frame":optional {"left":50,"width":50} or null for the full width}. Include only what changes.',
     "Block contracts:",
     'heading {"type":"heading","text":"Text","level":1|2|3,"alignment":"left|center|right"};',
-    'paragraph {"type":"paragraph","text":"Text","alignment":"left|center|right"};',
+    'paragraph {"type":"paragraph","text":"Text","alignment":"left|center|right","runs":optional [{"text":"Please read:","bold":true},{"text":" the rest of the text"}]};',
+    "runs, on a heading or paragraph, split its text into pieces that join to exactly the text, each optionally bold, italic or underline. Use them sparingly: a lead-in such as 'Note:' or 'Important:', a defined term where it is defined, or a word the reader must not miss. Omit runs for plain text.",
     'bullet_list {"type":"bullet_list","items":["Plain text"]};',
     'numbered_list {"type":"numbered_list","items":["Plain text"]};',
     'table {"type":"table","headers":["Header"],"rows":[["Cell"]]};',
@@ -1817,6 +1850,8 @@ function describeOperationTarget(
       return "Document description"
     case "set_branding":
       return "Document branding"
+    case "set_layout":
+      return "Page setup"
     case "add_block":
       return describeBlockTarget(operation.payload.block)
     case "set_row":
@@ -1969,6 +2004,7 @@ function readOperationBlockReferences(
     case "set_title":
     case "set_description":
     case "set_branding":
+    case "set_layout":
       return []
     case "add_block":
       return operation.payload.afterBlockId === null
@@ -2314,7 +2350,36 @@ function applyFlowOperation(
       return applyStandAloneOperation(draft, operation.payload, createId)
     case "set_block_rule":
       return applySetBlockRuleOperation(draft, operation.payload)
+    case "set_layout":
+      applySetLayoutOperation(draft, operation.payload)
+      return []
   }
+}
+
+// A style first, then what else was asked, so a request such as "official,
+// but with answers on lines" keeps both. New paper keeps every line in place.
+function applySetLayoutOperation(
+  draft: EditableFlowDraft,
+  payload: FlowOperationPayload<"set_layout">
+): void {
+  const { orientation, pageSize, sectionNumbers, style, ...rest } = payload
+  let layout = style === undefined ? draft.content.layout : applyDocumentStyle(draft.content.layout, style)
+
+  if (pageSize !== undefined || orientation !== undefined) {
+    layout = resizeTemplateLayout(layout, { orientation, pageSize })
+  }
+
+  layout = { ...layout, ...Object.fromEntries(Object.entries(rest).filter(([, value]) => value !== undefined)) }
+
+  if (sectionNumbers !== undefined) {
+    layout.sectionNumbers = sectionNumbers === "none" ? undefined : sectionNumbers
+  }
+
+  if (rest.marginPreset !== undefined) {
+    layout.margins = undefined
+  }
+
+  draft.content.layout = layout
 }
 
 // The editor's own helpers leave the document as it was when they cannot do
@@ -2434,7 +2499,13 @@ function applySetRowOperation(
     throw invalidOperationError("these blocks cannot share one row")
   }
 
-  draft.content = widths === undefined ? content : setRowWidths(content, row.id, widths)
+  content = widths === undefined ? content : setRowWidths(content, row.id, widths)
+
+  if (payload.label !== undefined) {
+    content = { ...content, fieldGroups: content.fieldGroups.map((group) => (group.id === row.id ? { ...group, label: payload.label ?? null } : group)) }
+  }
+
+  draft.content = content
   return [...blockIds]
 }
 
@@ -2501,9 +2572,6 @@ function applyBrandingOperation(
   }
   if (payload.logoWidthPercent !== undefined) {
     draft.content.branding.logoWidthPercent = payload.logoWidthPercent
-  }
-  if (payload.fieldStyle !== undefined) {
-    draft.content.layout.fieldStyle = payload.fieldStyle
   }
   if (payload.removeLogo === true) {
     draft.content.branding.logoAsset = null

@@ -1,4 +1,11 @@
-import { blockSpacingAdjustment, columnGap, type TemplatePageGeometry } from "@/services/templates/template-render-plan"
+import {
+  blockSpacingAdjustment,
+  columnGap,
+  SECTION_BOX_EDGE,
+  SECTION_BOX_GAP,
+  SECTION_BOX_INSET,
+  type TemplatePageGeometry
+} from "@/services/templates/template-render-plan"
 import type { TemplateBlock, TemplateLayout } from "@/types/template"
 
 import { PDF_CONTENT_WIDTH } from "./constants"
@@ -20,7 +27,29 @@ export type PdfLayoutMetrics = Readonly<{
   densityItemGapAdjustment: number
   /** How answers print: in a box, on a line, or in a cell. */
   fieldStyle: NonNullable<TemplateLayout["fieldStyle"]>
+  /** How a section's title prints: as a heading, in a bar, or atop a box around the section. */
+  sectionStyle: NonNullable<TemplateLayout["sectionStyle"]>
 }>
+
+// The box's measurements, which the editor draws too.
+export { SECTION_BOX_EDGE, SECTION_BOX_GAP, SECTION_BOX_INSET }
+
+/**
+ * The measurements a boxed section's blocks are laid out in: the box's inside,
+ * an inset narrower each side, on a page that holds less by the box's top,
+ * foot and the space under it.
+ *
+ * @param metrics - The page's measurements.
+ * @returns The measurements inside the box.
+ */
+export function boxedPdfMetrics(metrics: PdfLayoutMetrics): PdfLayoutMetrics {
+  return {
+    ...metrics,
+    contentWidth: metrics.contentWidth - SECTION_BOX_INSET * 2,
+    margin: metrics.margin + SECTION_BOX_INSET,
+    pageCapacity: metrics.pageCapacity - SECTION_BOX_INSET * 2 - SECTION_BOX_GAP
+  }
+}
 
 type RenderPlanGeometry = Pick<
   TemplatePageGeometry,
@@ -54,7 +83,8 @@ export function createPdfLayoutMetrics(
     pageCapacity: geometry.contentHeightPoints,
     columnGap: columnGap(geometry.contentWidthPoints),
     densityItemGapAdjustment: blockSpacingAdjustment(layout),
-    fieldStyle: layout.fieldStyle ?? "box"
+    fieldStyle: layout.fieldStyle ?? "box",
+    sectionStyle: layout.sectionStyle ?? "plain"
   }
 }
 

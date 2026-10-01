@@ -3,11 +3,33 @@
 import { NumberField } from "@base-ui/react/number-field"
 import type { ReactElement, ReactNode } from "react"
 
+import { FieldDescription, FieldLegend, FieldSet } from "@/components/ui/field"
+import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { cn } from "@/lib/utils"
 import { maxMargin, paragraphGap, resizeTemplateLayout, resolvePageGeometry } from "@/services/templates/template-render-plan"
 import type { TemplateLayout } from "@/types/template"
+import { applyDocumentStyle, type DocumentStyle, documentStyleOf } from "@/types/template-styles"
+
+// A whole look at once; a page changed by hand afterwards is in a style of its own.
+const STYLES: ReadonlyArray<readonly [DocumentStyle, string]> = [
+  ["modern", "Modern"],
+  ["classic", "Classic"],
+  ["official", "Official"],
+  ["compact", "Compact"],
+]
+
+const MARGIN_TEXTS = [
+  ["headerText", "Header"],
+  ["footerText", "Footer"],
+] as const
+
+const MARGIN_SLOTS = [
+  ["left", "Left"],
+  ["center", "Centre"],
+  ["right", "Right"],
+] as const
 
 const MARGIN_SIDES = [
   ["top", "Top"],
@@ -33,9 +55,25 @@ export function PageSetupPanel({
   onChange: (layout: TemplateLayout, coalesceKey?: string) => void
 }): ReactElement {
   const geometry = resolvePageGeometry(layout)
+  const style = documentStyleOf(layout)
 
   return (
     <div className="grid gap-3.5" data-slot="page-setup">
+      <Row label="Style">
+        <Select
+          aria-label="Style"
+          className="w-32 md:h-9"
+          onChange={(event) => onChange(applyDocumentStyle(layout, event.target.value as DocumentStyle))}
+          value={style ?? "custom"}
+        >
+          {style ? null : <option value="custom">Custom</option>}
+          {STYLES.map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </Select>
+      </Row>
       <Row label="Paper">
         <Select
           aria-label="Paper"
@@ -117,6 +155,27 @@ export function PageSetupPanel({
         ]}
         value={layout.fieldStyle ?? "box"}
       />
+      {/* Plain and no numbering are saved as nothing, as a layout made before them is. */}
+      <Choice
+        label="Sections"
+        onChange={(sectionStyle) => onChange({ ...layout, sectionStyle: sectionStyle === "plain" ? undefined : sectionStyle })}
+        options={[
+          ["plain", "Plain"],
+          ["band", "Bar"],
+          ["box", "Box"],
+        ]}
+        value={layout.sectionStyle ?? "plain"}
+      />
+      <Choice
+        label="Numbering"
+        onChange={(sectionNumbers) => onChange({ ...layout, sectionNumbers: sectionNumbers === "none" ? undefined : sectionNumbers })}
+        options={[
+          ["none", "None"],
+          ["letters", "A, B, C"],
+          ["numbers", "1, 2, 3"],
+        ]}
+        value={layout.sectionNumbers ?? "none"}
+      />
       <div className="grid gap-1 border-t border-border pt-2">
         <Toggle
           checked={layout.printedTitle.mode !== "none"}
@@ -140,8 +199,51 @@ export function PageSetupPanel({
           }
         />
       </div>
+      <div className="grid gap-2.5 border-t border-border pt-2.5" data-slot="margin-text">
+        <span className="text-sm">Margin text</span>
+        {MARGIN_TEXTS.map(([key, label]) => (
+          <FieldSet className="gap-1" key={key}>
+            <FieldLegend className="mb-0 font-normal text-muted-foreground" variant="label">
+              {label}
+            </FieldLegend>
+            <div className="grid grid-cols-3 gap-1.5">
+              {MARGIN_SLOTS.map(([slot, slotLabel]) => (
+                <Input
+                  aria-label={`${label} ${slotLabel.toLowerCase()}`}
+                  className="h-8 px-2 text-xs md:h-8 md:text-xs"
+                  key={slot}
+                  maxLength={120}
+                  onChange={(event) => onChange(setMarginText(layout, key, slot, event.target.value), `${key}:${slot}`)}
+                  placeholder={slotLabel}
+                  value={layout[key]?.[slot] ?? ""}
+                />
+              ))}
+            </div>
+          </FieldSet>
+        ))}
+        <FieldDescription className="text-xs">Use {"{page}"}, {"{pages}"} and {"{title}"}.</FieldDescription>
+      </div>
     </div>
   )
+}
+
+// An emptied slot is removed, and a margin with none left drops its text.
+// Words written in a margin that is off turn it on, so they show.
+function setMarginText(
+  layout: TemplateLayout,
+  key: "headerText" | "footerText",
+  slot: "left" | "center" | "right",
+  value: string
+): TemplateLayout {
+  const text = Object.fromEntries(Object.entries({ ...layout[key], [slot]: value }).filter(([, words]) => words?.trim()))
+  const policy = key === "headerText" ? "headerPolicy" : "footerPolicy"
+  const written = Object.keys(text).length > 0
+
+  return {
+    ...layout,
+    [key]: written ? text : undefined,
+    [policy]: written && layout[policy] === "none" ? "all_pages" : layout[policy],
+  }
 }
 
 function Row({ children, label }: { children: ReactNode; label: string }): ReactElement {

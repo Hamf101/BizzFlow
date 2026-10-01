@@ -49,7 +49,10 @@ export type PdfBlockFlowItem = {
   joinsNext?: boolean
 }
 
-export type PdfFlowItem =
+/** Where an item of a boxed section sits in its box: whether it opens it, closes it, or both. */
+export type PdfSectionBox = Readonly<{ closes: boolean; opens: boolean; sectionId: string }>
+
+export type PdfFlowItem = (
   | { kind: "branding" }
   | { kind: "title"; title: string }
   | { kind: "section_label"; label: string }
@@ -68,6 +71,10 @@ export type PdfFlowItem =
   | { kind: "space"; height: number }
   | { kind: "signing_intro" }
   | { kind: "signer"; signer: DocumentPdfSigner }
+) & {
+  /** In a boxed section, laid out inside its box. */
+  box?: PdfSectionBox
+}
 
 export type PdfPagePlan = {
   items: PdfFlowItem[]

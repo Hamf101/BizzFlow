@@ -1,4 +1,7 @@
-import { decodePDFRawStream, PDFArray, PDFDocument, PDFName, PDFRawStream, PDFRef } from "pdf-lib"
+import { readFile } from "node:fs/promises"
+
+import * as fontkit from "fontkit"
+import { decodePDFRawStream, PDFArray, PDFDict, PDFDocument, PDFName, PDFRawStream, PDFRef, type PDFFont } from "pdf-lib"
 import { describe, expect, it } from "vitest"
 
 import {
@@ -9,6 +12,7 @@ import {
   renderGeneratedDocumentPdf,
   type RenderGeneratedDocumentPdfInput
 } from "@/services/document-pdf-service"
+import { PDF_BOLD_FONT_PATH, PDF_REGULAR_FONT_PATH } from "@/services/document-pdf/constants"
 import { createPdfPagePlans } from "@/services/document-pdf/planner"
 import { createSampleDocumentInput } from "@/services/document-pdf/sample-document.test-support"
 import { normalizePdfInput } from "@/services/document-pdf/shared"
@@ -843,6 +847,178 @@ describe("document PDF service", () => {
     }
   })
 
+  it("numbers sections in order and prints each title in a bar of the primary colour across the page, in words that read on it", { timeout: PDF_RENDER_TIMEOUT_MS }, async () => {
+    const input = createPdfInput({ repeatHeader: false, repeatFooter: false })
+    const content = requireVersionThreeContent(input)
+    const blocks = Array.from({ length: 29 }, (_value: unknown, index: number) => ({
+      id: `56000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
+      type: "paragraph" as const,
+      text: `Clause ${index}.`,
+      alignment: "left" as const
+    }))
+
+    // Past Z the letters go on as a spreadsheet's columns; what comes before
+    // the first section has no title and takes no letter.
+    content.layout = { ...content.layout, sectionNumbers: "letters", sectionStyle: "band" }
+    content.blocks = blocks
+    content.sections = blocks.slice(1).map((block, index: number) => ({
+      id: `57000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
+      label: `Part ${index + 1}`,
+      startBlockId: block.id,
+      pageBreakBefore: false,
+      keepTogether: false
+    }))
+    content.fieldGroups = []
+    content.blockRules = []
+    input.signers = []
+
+    const metrics = pdfMetrics(input)
+    const letters = [..."ABCDEFGHIJKLMNOPQRSTUVWXYZ", "AA", "AB"]
+    const titles = async (primaryColor: string) => {
+      content.branding = { ...content.branding, primaryColor }
+
+      const pdf = await PDFDocument.load(await renderGeneratedDocumentPdf(input))
+
+      return Array.from({ length: pdf.getPageCount() }, (_value: unknown, index: number) => {
+        const fills = drawnFills(pdf, index)
+        const texts = drawnTexts(pdf, index)
+
+        return texts.flatMap((drawn, at: number) => {
+          const bar = fills.find((fill) => fill.width > 0 && fill.y < drawn.y && drawn.y < fill.y + fill.height)
+
+          return drawn.size === 11
+            ? [{ ...drawn, bar, color: fills.find((fill) => fill.width === 0 && fill.x === drawn.x && fill.y === drawn.y)?.color, under: texts[at + 1] }]
+            : []
+        })
+      }).flat()
+    }
+    const dark = await titles("#17324D")
+
+    expect(dark.map((title) => title.text)).toEqual(letters.map((letter: string, index: number) => `${letter}. Part ${index + 1}`))
+    dark.forEach((title) => {
+      // Words 6 points in from the bar's ends, 5 under its top, white on the
+      // primary colour; the bar fills the page's width, and 8 points under it the clause starts.
+      expect(title.x).toBeCloseTo(metrics.margin + 6, 5)
+      expect(title.color).toEqual([1, 1, 1])
+      expect(title.bar?.color.map((channel: number) => Math.round(channel * 255))).toEqual([0x17, 0x32, 0x4d])
+      expect(title.bar?.x).toBeCloseTo(metrics.margin, 5)
+      expect(title.bar?.width).toBeCloseTo(metrics.contentWidth, 5)
+      expect((title.bar?.y ?? 0) + (title.bar?.height ?? 0) - title.y).toBeCloseTo(5 + 11, 5)
+      expect(title.bar?.height).toBeCloseTo(5 + 15 + 5, 5)
+      expect((title.bar?.y ?? 0) - (title.under?.y ?? 0)).toBeCloseTo(8 + 10, 5)
+    })
+    // A bar too light for white takes the page's ink.
+    expect((await titles("#F2C94C")).map((title) => title.color)).toEqual(letters.map(() => [0.07, 0.09, 0.13]))
+  })
+
+  it("holds a boxed section's rows, cells and long text inside its edge over pages, open where a page breaks it", { timeout: PDF_RENDER_TIMEOUT_MS }, async () => {
+    const input = createPdfInput({ repeatHeader: false, repeatFooter: false })
+    const content = requireVersionThreeContent(input)
+    const id = (index: number): string => `58000000-0000-4000-8000-${String(index).padStart(12, "0")}`
+    const fields = Array.from({ length: 30 }, (_value: unknown, index: number) => ({
+      id: id(index + 10),
+      type: "text_field" as const,
+      fieldKey: `boxed_${index}`,
+      label: `Question ${index + 1}, as the office asks it`,
+      required: index % 2 === 0,
+      helpText: index % 3 === 0 ? "Write it out in full, as on the papers you were given." : null,
+      placeholder: null,
+      multiline: index % 5 === 0
+    }))
+
+    // The worst case: long text, a row of cells three wide whose help hangs
+    // under some, then cells with long answers, carried over pages.
+    content.layout = { ...content.layout, fieldStyle: "cell", sectionStyle: "box" }
+    content.blocks = [
+      { id: id(1), type: "paragraph", text: "Read every question before you answer.", alignment: "left" },
+      { id: id(2), type: "paragraph", text: "The applicant declares that every answer given here is true. ".repeat(40).trim(), alignment: "left" },
+      { id: id(3), type: "dropdown_field", display: "radios", fieldKey: "boxed_choice", label: "How should we reach you?", required: false, helpText: null, placeholder: null, options: ["By post", "By telephone", "By email"] },
+      ...fields,
+      { id: id(4), type: "paragraph", text: "Signed on the day written above.", alignment: "left" }
+    ]
+    content.sections = [
+      { id: id(5), label: "Applicant details", startBlockId: id(2), pageBreakBefore: false, keepTogether: false },
+      { id: id(6), label: "Declaration", startBlockId: id(4), pageBreakBefore: false, keepTogether: false }
+    ]
+    content.fieldGroups = [{ id: id(7), label: null, startBlockId: fields[0].id, endBlockId: fields[17].id, columns: 3, keepTogether: false }]
+    content.blockRules = []
+    input.answers = Object.fromEntries(
+      fields.map((block, index: number) => [block.fieldKey, index < 18 ? "Yes" : `Answer ${index} ${"long words ".repeat(index * 2).trim()}`])
+    )
+    input.signers = []
+
+    const metrics = pdfMetrics(input)
+    const pdf = await PDFDocument.load(await renderGeneratedDocumentPdf(input, { fillable: true }))
+    const bold = await probeFont(PDF_BOLD_FONT_PATH)
+    const regular = await probeFont()
+    const flowBottom = metrics.flowTopY - metrics.pageCapacity
+    const right = metrics.margin + metrics.contentWidth
+    const pages = pdf.getPageCount()
+
+    expect(pages).toBeGreaterThan(2)
+
+    for (let index = 0; index < pages; index += 1) {
+      const edges = boxEdges(pdf, index)
+      const sides = edges.filter(([x1, , x2]) => x1 === x2)
+      const across = edges.filter(([, y1, , y2]) => y1 === y2)
+      const foot = Math.min(...sides.flatMap(([, y1, , y2]) => [y1, y2]))
+      const head = Math.max(...sides.flatMap(([, y1, , y2]) => [y1, y2]))
+
+      // The edge runs down both sides, inside the margins and the page's flow.
+      expect(new Set(sides.map(([x]) => x))).toEqual(new Set([metrics.margin + 0.35, right - 0.35]))
+      expect(foot).toBeGreaterThanOrEqual(flowBottom - 0.5)
+      expect(head).toBeLessThanOrEqual(metrics.flowTopY + 0.5)
+      across.forEach(([x1, , x2]) => expect([x1, x2]).toEqual([metrics.margin, right]))
+
+      // Where the section runs on, the box is open at the page's foot and the next page's head.
+      if (index < pages - 1) {
+        expect(across.filter(([, y]) => Math.abs(y - foot) < 1)).toEqual([])
+      }
+
+      if (index > 0) {
+        expect(across.filter(([, y]) => Math.abs(y - head) < 1)).toEqual([])
+      }
+
+      // Every word sits inside the box, but the title and the line before the section.
+      const faces = drawnFills(pdf, index)
+
+      drawnTexts(pdf, index).forEach((drawn) => {
+        const inset = ["Professional services agreement", "Read every question before you answer."].includes(drawn.text) ? 0 : 8.7
+        const font = faces.find((fill) => fill.x === drawn.x && fill.y === drawn.y)?.bold ? bold : regular
+
+        expect(drawn.x === metrics.margin ? drawn.text : "boxed").toBe(inset ? "boxed" : drawn.text)
+        expect(drawn.x).toBeGreaterThanOrEqual(metrics.margin + inset - 0.01)
+        expect(drawn.x + font.widthOfTextAtSize(drawn.text, drawn.size)).toBeLessThanOrEqual(right - inset + 0.01)
+        expect(drawn.y).toBeGreaterThanOrEqual(flowBottom - 0.5)
+      })
+    }
+
+    // Each box opens and closes once.
+    expect(Array.from({ length: pages }, (_value: unknown, index: number) => boxEdges(pdf, index).filter(([, y1, , y2]) => y1 === y2)).flat()).toHaveLength(4)
+    pdf.getForm().getFields().forEach((field) => {
+      field.acroField.getWidgets().forEach((widget) => {
+        const rectangle = widget.getRectangle()
+
+        expect(rectangle.x).toBeGreaterThanOrEqual(metrics.margin + 8.7 - 0.5)
+        expect(rectangle.x + rectangle.width).toBeLessThanOrEqual(right - 8.7 + 0.5)
+        expect(rectangle.y).toBeGreaterThanOrEqual(flowBottom - 0.5)
+      })
+    })
+
+    // Many small boxes to a page: each one's top, foot and the space under it
+    // is room the planner left, so the last box on a page still closes inside it.
+    content.blocks = Array.from({ length: 40 }, (_value: unknown, index: number) => ({ id: id(100 + index), type: "paragraph" as const, text: `Clause ${index}.`, alignment: "left" as const }))
+    content.sections = content.blocks.map((block, index: number) => ({ id: id(200 + index), label: `Part ${index + 1}`, startBlockId: block.id, pageBreakBefore: false, keepTogether: false }))
+    content.fieldGroups = []
+
+    const stacked = await PDFDocument.load(await renderGeneratedDocumentPdf(input))
+
+    expect(stacked.getPageCount()).toBeGreaterThan(1)
+    stacked.getPages().forEach((_page, index: number) => {
+      expect(Math.min(...boxEdges(stacked, index).flatMap(([, y1, , y2]) => [y1, y2]))).toBeGreaterThanOrEqual(flowBottom - 0.5)
+    })
+  })
+
   it("renders saved page size, orientation, and margins through pdf-lib", async () => {
     const input = createPdfInput({
       repeatHeader: false,
@@ -1042,11 +1218,100 @@ describe("document PDF service", () => {
     // what its PNG pixel allowance is counted from.
     expect(bytes.toString("latin1").match(/\/Subtype \/Image/g)).toHaveLength(1)
   })
+
+  it("prints the margin words filled in on each page, in the margins, with the page number written once", async () => {
+    const input = createPdfInput({ longBody: true, repeatHeader: true, repeatFooter: true })
+    const content = requireVersionThreeContent(input)
+
+    content.layout = {
+      ...content.layout,
+      footerText: { left: "PA 1671 {title}", right: "Page {page} of {pages}" },
+      headerText: { right: "Confidential" }
+    }
+
+    const metrics = pdfMetrics(input)
+    const pdf = await PDFDocument.load(await renderGeneratedDocumentPdf({ ...input, signers: [] }))
+    const pages = pdf.getPageCount()
+    const font = await probeFont()
+    const end = metrics.margin + metrics.contentWidth
+    const headerY = metrics.pageHeight - (metrics.pageHeight - metrics.flowTopY) / 2 - 2.5
+
+    expect(pages).toBe(3)
+
+    for (let index = 0; index < pages; index += 1) {
+      const words = drawnTexts(pdf, index).filter((drawn) => drawn.size === 7.5)
+      const pageLabel = `Page ${index + 1} of ${pages}`
+      const right = words.find((drawn) => drawn.text === pageLabel)
+      const confidential = words.find((drawn) => drawn.text === "Confidential")
+
+      expect(words.map((drawn) => drawn.text).sort()).toEqual(["Confidential", "PA 1671 Professional services agreement", pageLabel])
+      expect(words.find((drawn) => drawn.text.startsWith("PA 1671"))).toMatchObject({ x: metrics.margin, y: metrics.marginBottom / 2 })
+      expect(right?.y).toBe(metrics.marginBottom / 2)
+      expect(Math.abs((right?.x ?? 0) + font.widthOfTextAtSize(pageLabel, 7.5) - end)).toBeLessThan(0.5)
+      expect(Math.abs((confidential?.x ?? 0) + font.widthOfTextAtSize("Confidential", 7.5) - end)).toBeLessThan(0.5)
+      expect(Math.abs((confidential?.y ?? 0) - headerY)).toBeLessThan(0.01)
+      expect(confidential?.y).toBeGreaterThan(metrics.flowTopY)
+      // Written once: the default 7pt "Page X of Y" gives way to the words set there.
+      expect(drawnTexts(pdf, index).filter((drawn) => drawn.size === 7)).toEqual([])
+    }
+  })
+
+  it("cuts margin words too long for a third of the line so none overlap or cross the margins", async () => {
+    const input = createPdfInput({ repeatHeader: false, repeatFooter: true })
+    const content = requireVersionThreeContent(input)
+    const long = "W".repeat(120)
+
+    // The header is off, so its words print nowhere.
+    content.layout = { ...content.layout, footerText: { center: long, left: long, right: long }, headerText: { left: long } }
+
+    const metrics = pdfMetrics(input)
+    const pdf = await PDFDocument.load(await renderGeneratedDocumentPdf({ ...input, signers: [] }))
+    const font = await probeFont()
+    const spans = drawnTexts(pdf, 0)
+      .filter((drawn) => drawn.size === 7.5)
+      .map((drawn) => ({ ...drawn, end: drawn.x + font.widthOfTextAtSize(drawn.text, 7.5) }))
+      .sort((a, b) => a.x - b.x)
+
+    expect(spans).toHaveLength(3)
+    expect(spans.every((span) => span.text.endsWith("…") && span.text.length < 120)).toBe(true)
+    expect(spans[0].x).toBeGreaterThanOrEqual(metrics.margin - 0.01)
+    expect(spans[2].end).toBeLessThanOrEqual(metrics.margin + metrics.contentWidth + 0.01)
+    expect(spans[0].end).toBeLessThanOrEqual(spans[1].x)
+    expect(spans[1].end).toBeLessThanOrEqual(spans[2].x)
+  })
 }, PDF_RENDER_TIMEOUT_MS)
 
-// Where each piece of text on a page is drawn, and at what size, read from its content.
-function drawnTexts(pdf: PDFDocument, pageIndex: number): Array<{ size: number; x: number; y: number }> {
-  const contents = pdf.getPage(pageIndex).node.Contents()
+function pdfMetrics(input: RenderGeneratedDocumentPdfInput): PdfLayoutMetrics {
+  const { renderPlan } = normalizePdfInput(input)
+
+  return createPdfLayoutMetrics(renderPlan.geometry, renderPlan.layout)
+}
+
+// The face the PDF prints regular words in, or another, to measure them.
+async function probeFont(path: string = PDF_REGULAR_FONT_PATH): Promise<PDFFont> {
+  const probe = await PDFDocument.create()
+
+  probe.registerFontkit(fontkit)
+
+  return probe.embedFont(await readFile(path))
+}
+
+// Where each piece of text on a page is drawn, its words and size, read from its content.
+function drawnTexts(pdf: PDFDocument, pageIndex: number): Array<{ size: number; text: string; x: number; y: number }> {
+  const page = pdf.getPage(pageIndex)
+  const fonts = page.node.Resources()?.lookup(PDFName.of("Font"), PDFDict)
+  // Each embedded face maps its glyph ids back to letters in its ToUnicode map.
+  const letters = (fontName: string, hex: string): string => {
+    const map = fonts?.lookup(PDFName.of(fontName), PDFDict).lookup(PDFName.of("ToUnicode"))
+    const table = new Map(
+      [...(map instanceof PDFRawStream ? Buffer.from(decodePDFRawStream(map).decode()).toString("latin1") : "").matchAll(/<([0-9A-F]{4})> <([0-9A-F]+)>/gi)].map(
+        ([, glyph, code]): [string, string] => [glyph.toUpperCase(), String.fromCharCode(...(code.match(/.{4}/g) ?? []).map((unit) => Number.parseInt(unit, 16)))]
+      )
+    )
+
+    return (hex.toUpperCase().match(/.{4}/g) ?? []).map((glyph) => table.get(glyph) ?? "").join("")
+  }
+  const contents = page.node.Contents()
   const entries = contents instanceof PDFArray ? contents.asArray() : [contents]
   const source = entries
     .map((entry) => {
@@ -1057,10 +1322,13 @@ function drawnTexts(pdf: PDFDocument, pageIndex: number): Array<{ size: number; 
     .join("\n")
 
   return source.split("BT").slice(1).flatMap((piece: string) => {
-    const size = /([\d.]+) Tf/.exec(piece)
+    const size = /\/(\S+) ([\d.]+) Tf/.exec(piece)
     const at = /(-?[\d.]+) (-?[\d.]+) Tm/.exec(piece)
+    const words = /<([0-9A-Fa-f]*)> Tj/.exec(piece)
 
-    return size && at ? [{ size: Number(size[1]), x: Number(at[1]), y: Number(at[2]) }] : []
+    return size && at
+      ? [{ size: Number(size[2]), text: words ? letters(size[1], words[1]) : "", x: Number(at[1]), y: Number(at[2]) }]
+      : []
   })
 }
 
@@ -1334,4 +1602,44 @@ function createDensityPdfInput(
   input.signers = []
 
   return input
+}
+
+// A page's drawing as its content reads, cut into what each q … Q draws.
+function drawnPieces(pdf: PDFDocument, pageIndex: number): string[] {
+  const contents = pdf.getPage(pageIndex).node.Contents()
+
+  return (contents instanceof PDFArray ? contents.asArray() : [contents]).flatMap((entry) => {
+    const stream = entry ? pdf.context.lookup(entry) : undefined
+
+    return stream instanceof PDFRawStream ? Buffer.from(decodePDFRawStream(stream).decode()).toString("latin1").split(/^Q$/m) : []
+  })
+}
+
+// What a page fills, with its colour: each line of text where it starts, with
+// no size and whether its face is bold, and each rectangle by its corner and size.
+function drawnFills(pdf: PDFDocument, pageIndex: number): Array<{ bold?: boolean; color: number[]; height: number; width: number; x: number; y: number }> {
+  const fonts = pdf.getPage(pageIndex).node.Resources()?.lookup(PDFName.of("Font"), PDFDict)
+
+  return drawnPieces(pdf, pageIndex).flatMap((piece: string) => {
+    const color = (/(-?[\d.]+) (-?[\d.]+) (-?[\d.]+) rg/.exec(piece) ?? []).slice(1).map(Number)
+    const text = /\/(\S+) [\d.]+ Tf[\s\S]*?(-?[\d.]+) (-?[\d.]+) Tm/.exec(piece)
+    const box = /1 0 0 1 (-?[\d.]+) (-?[\d.]+) cm[\s\S]*?0 0 m\s+([\d.]+) 0 l\s+[\d.]+ ([\d.]+) l[\s\S]*?\nf\n?$/.exec(piece)
+
+    if (text) {
+      const bold = String(fonts?.lookup(PDFName.of(text[1]), PDFDict).get(PDFName.of("BaseFont"))).includes("Bold")
+
+      return [{ bold, color, height: 0, width: 0, x: Number(text[2]), y: Number(text[3]) }]
+    }
+
+    return box ? [{ color, height: Number(box[4]), width: Number(box[3]), x: Number(box[1]), y: Number(box[2]) - Number(box[4]) }] : []
+  })
+}
+
+// The lines drawn in a boxed section's edge, 0.7 points of the edge colour, as [x1, y1, x2, y2].
+function boxEdges(pdf: PDFDocument, pageIndex: number): number[][] {
+  return drawnPieces(pdf, pageIndex).flatMap((piece: string) => {
+    const line = /0\.61 0\.64 0\.69 RG\s+0\.7 w[\s\S]*?(-?[\d.]+) (-?[\d.]+) m\s+(-?[\d.]+) (-?[\d.]+) l\s+S/.exec(piece)
+
+    return line ? [line.slice(1, 5).map(Number)] : []
+  })
 }

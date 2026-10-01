@@ -150,7 +150,11 @@ export type CanvasUnit = Readonly<{
   keepWithNext: boolean
   pageBreakBefore: boolean
   sectionLabel: string | null
+  /** The number its section's title prints with, as "A.", where it starts one. */
+  sectionNumber: string | null
   sectionId: string | null
+  /** In a boxed section: whether it opens the box, closes it, or both. */
+  box: Readonly<{ closes: boolean; opens: boolean }> | null
   together: readonly string[]
 }>
 
@@ -165,7 +169,7 @@ export function createUnits(plan: TemplateRenderPlan): CanvasUnit[] {
   const blocks = plan.blocks.filter(({ block }) => !(block.type === "image" && block.placement))
 
   if (plan.title) {
-    units.push({ blocks: [], columns: 1, frame: null, space: 0, widths: null, groupLabel: null, id: "title", keepWithNext: false, pageBreakBefore: false, sectionLabel: null, sectionId: null, together: [] })
+    units.push({ blocks: [], box: null, columns: 1, frame: null, space: 0, widths: null, groupLabel: null, id: "title", keepWithNext: false, pageBreakBefore: false, sectionLabel: null, sectionNumber: null, sectionId: null, together: [] })
   }
 
   let index = 0
@@ -200,7 +204,13 @@ export function createUnits(plan: TemplateRenderPlan): CanvasUnit[] {
       keepWithNext: grouped.at(-1)?.keepWithNext ?? false,
       pageBreakBefore: first.pageBreakBefore,
       sectionLabel: startsSection ? first.sectionLabel : null,
+      sectionNumber: startsSection ? first.sectionNumber : null,
       sectionId: startsSection ? first.sectionId : null,
+      // A box holds a section from its title to its last block, as the PDF draws it.
+      box:
+        plan.layout.sectionStyle === "box" && first.sectionId !== null
+          ? { closes: blocks[index + grouped.length]?.sectionId !== first.sectionId, opens: startsSection }
+          : null,
       // A kept section holds its groups too, so its key alone decides, as in the PDF.
       together: keptSection ? [`section:${first.sectionId}`] : first.fieldGroupId && first.keepTogether ? [`group:${first.fieldGroupId}`] : [],
     })

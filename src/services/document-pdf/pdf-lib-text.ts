@@ -1,5 +1,7 @@
 import { rgb, type PDFFont, type RGB } from "pdf-lib"
 
+import { SECTION_BAR_LIGHT } from "@/services/templates/template-render-plan"
+
 import type { PdfLibRenderContext } from "./pdf-lib-types"
 import type { PdfTextAlignment } from "./types"
 
@@ -146,6 +148,27 @@ export function hexToPdfColor(value: string): RGB {
     Number.parseInt(value.slice(3, 5), 16) / 255,
     Number.parseInt(value.slice(5, 7), 16) / 255
   )
+}
+
+/**
+ * The colour words on a fill read in: white, or the page's ink on a fill too
+ * light for white, judged by its OKLab lightness as the editor's CSS judges it.
+ *
+ * @param fill - A six-digit hex colour.
+ * @returns White or the page's ink.
+ */
+export function readablePdfTextOn(fill: string): RGB {
+  const [red, green, blue] = [1, 3, 5].map((at: number): number => {
+    const channel = Number.parseInt(fill.slice(at, at + 2), 16) / 255
+
+    return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4
+  }) as [number, number, number]
+  const lightness =
+    0.2104542553 * Math.cbrt(0.4122214708 * red + 0.5363325363 * green + 0.0514459929 * blue) +
+    0.793617785 * Math.cbrt(0.2119034982 * red + 0.6806995451 * green + 0.1073969566 * blue) -
+    0.0040720468 * Math.cbrt(0.0883024619 * red + 0.2817188376 * green + 0.6299787005 * blue)
+
+  return lightness > SECTION_BAR_LIGHT ? rgb(0.07, 0.09, 0.13) : rgb(1, 1, 1)
 }
 
 function splitPdfWord(

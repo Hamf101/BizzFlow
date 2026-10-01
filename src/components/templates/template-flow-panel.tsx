@@ -651,7 +651,8 @@ const OPERATION_ICONS: Record<TemplateFlowOperationType, LucideIcon> = {
   set_section: Section,
   set_row: Columns2,
   stand_alone: Rows2,
-  set_block_rule: LayoutTemplate
+  set_block_rule: LayoutTemplate,
+  set_layout: LayoutTemplate
 }
 
 function renderOperationIcon(type: TemplateFlowOperationType): ReactElement {
@@ -673,7 +674,8 @@ function formatOperationType(type: TemplateFlowOperationType): string {
     set_section: "Section",
     set_row: "Row",
     stand_alone: "Separate",
-    set_block_rule: "Lay out"
+    set_block_rule: "Lay out",
+    set_layout: "Page setup"
   }
 
   return labels[type]

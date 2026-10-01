@@ -44,8 +44,9 @@ export const SECTION_TITLE: CSSProperties = {
 // signature) padded by 6 points, and 7-point help beneath.
 const BOX_HEIGHT = { line: 3, lines: 6, drawing: 5.6 } as const
 // The printed edge of a checkbox and of a signature's line. An answer box's
-// edge is fainter, the page's own border colour, as it prints.
-const EDGE = "rgb(156 163 176)"
+// edge is fainter, the page's own border colour, as it prints. A boxed
+// section's edge is this one too.
+export const EDGE = "rgb(156 163 176)"
 // A long answer in the line style is written on rules 20 points apart, the
 // page's faint edge colour, as it prints.
 const RULED: CSSProperties = {

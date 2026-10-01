@@ -186,7 +186,6 @@ describe("template Flow service", () => {
             summary: "Updated logo placement",
             payload: {
               accentColor: "#635273",
-              fieldStyle: "cell",
               logoAlignment: "right",
               logoWidthPercent: 32
             }
@@ -248,7 +247,6 @@ describe("template Flow service", () => {
     expect(result.proposal?.candidateDraft.content.branding.accentColor).toBe("#635273")
     expect(result.proposal?.candidateDraft.content.branding.logoAlignment).toBe("right")
     expect(result.proposal?.candidateDraft.content.branding.logoWidthPercent).toBe(32)
-    expect(result.proposal?.candidateDraft.content).toMatchObject({ layout: { fieldStyle: "cell" } })
     expect(result.proposal?.changedBlockIds).toEqual([PARAGRAPH_ID])
     expect(result.messages[1].operations).toHaveLength(2)
     expect(result.messages[1].receiptStatus).toBe("proposed")
@@ -1430,6 +1428,29 @@ describe("Flow laying out a document", () => {
     expect(content.blocks.find((block) => block.id === id("Notes"))).toMatchObject({ boxHeight: 120 })
     // The row's two blocks are both marked as changed, for the page to show.
     expect(proposal.operations.find((operation) => operation.type === "set_row")?.affectedBlockIds).toEqual([id("Full name"), id("Phone")])
+  })
+
+  it("sets the page up in a style with what the user asked beyond it, labels a row, and makes words bold", async () => {
+    const { run } = runFlow(createContent(), [
+      add("new:1", null, { type: "paragraph", text: "Please read: this form is confidential.", runs: [{ text: "Please read:", bold: true }, { text: " this form is confidential." }], alignment: "left" }),
+      add("new:2", "new:1", field("Last name")),
+      add("new:3", "new:2", field("First name")),
+      { type: "set_row", summary: "Set the names side by side", payload: { blockIds: ["new:2", "new:3"], label: "Applicant" } },
+      {
+        type: "set_layout",
+        summary: "Set the page up as an official form",
+        payload: { style: "official", fieldStyle: "line", sectionNumbers: "none", pageSize: "Letter", footerText: { left: "Form 12 {title}", right: "Page {page} of {pages}" }, footerPolicy: "all_pages" },
+      },
+    ])
+    const content = templateContentV3Schema.parse((await run).proposal!.candidateDraft.content)
+
+    // The style's settings, less the two the user changed.
+    expect(content.layout).toMatchObject({ density: "compact", fieldStyle: "line", footerPolicy: "all_pages", footerText: { left: "Form 12 {title}", right: "Page {page} of {pages}" }, marginPreset: "compact", pageSize: "Letter", sectionStyle: "band" })
+    expect(content.layout.sectionNumbers).toBeUndefined()
+    // New paper keeps every line where it was, scaled to fit.
+    expect(content.layout.contentScale).toBeCloseTo(612 / 595.28, 3)
+    expect(content.fieldGroups).toMatchObject([{ label: "Applicant" }])
+    expect(content.blocks.find((block) => block.type === "paragraph" && block.text.startsWith("Please"))).toMatchObject({ runs: [{ bold: true, text: "Please read:" }, { text: " this form is confidential." }] })
   })
 
   it("makes a row of part of a wider one where it stands, takes a row apart, and ends a section, moving nothing else", async () => {

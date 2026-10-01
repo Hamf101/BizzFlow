@@ -167,7 +167,13 @@ export function PublicFormFieldList({
 
         return (
           <Fragment key={group.id ?? first?.block.id ?? index}>
-            {opensSection && <h2 className="pt-2 text-base font-semibold">{first.sectionLabel}</h2>}
+            {opensSection && (
+              <h2 className="pt-2 text-base font-semibold">
+                {/* Numbered as it prints, so words such as "see section B" hold. */}
+                {first.sectionNumber ? `${first.sectionNumber} ` : null}
+                {first.sectionLabel}
+              </h2>
+            )}
             {group.label && <h3 className="text-sm font-medium text-muted-foreground">{group.label}</h3>}
             {group.columns > 1 ? (
               // A row stacks on a phone and sits side by side, at its widths, from sm up.

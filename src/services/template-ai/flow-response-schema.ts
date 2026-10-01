@@ -15,6 +15,7 @@ export const TEMPLATE_FLOW_OPERATION_TYPES = [
   "set_row",
   "stand_alone",
   "set_block_rule",
+  "set_layout",
 ] as const satisfies readonly TemplateFlowOperationType[]
 
 /**

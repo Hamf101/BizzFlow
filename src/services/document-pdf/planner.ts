@@ -15,9 +15,12 @@ import {
 } from "./constants"
 import { DocumentPdfServiceError } from "./errors"
 import {
+  boxedPdfMetrics,
   createPdfLayoutMetrics,
   getPdfRowFrames,
   scalePdfCharacterEstimate,
+  SECTION_BOX_GAP,
+  SECTION_BOX_INSET,
   type PdfLayoutMetrics
 } from "./layout"
 import {
@@ -89,7 +92,8 @@ export function createPdfPagePlans(input: NormalizedPdfInput): PdfPagePlan[] {
     const unit = units[unitIndex]
     const itemHeight = estimateFlowItemHeight(unit.item, input, metrics)
     // A cell put under another on the same page sits on it, taking back the
-    // gap reserved under the one above.
+    // gap reserved under the one above. (A box always opens with its section's
+    // title, so no cell sits on one across a box's edge.)
     const above = currentPage.plan.items.at(-1)
     const joins = above !== undefined && isCellItem(above, metrics) && isCellItem(unit.item, metrics)
     const joinCredit = joins
@@ -317,10 +321,15 @@ function createBlockPaginationUnits(
       startsFieldGroup
     )
     const space = spaceAbove(renderBlock)
+    // A boxed section's blocks are laid out inside its box.
+    const boxed = metrics.sectionStyle === "box" ? renderBlock.sectionId : null
+    const inner = boxed ? boxedPdfMetrics(metrics) : metrics
+    const inBox = (list: readonly PdfPaginationUnit[]): PdfPaginationUnit[] =>
+      list.map((unit: PdfPaginationUnit): PdfPaginationUnit => (boxed ? { ...unit, item: { ...unit.item, box: { closes: false, opens: false, sectionId: boxed } } } : unit))
 
-    // The space asked for above a block goes before its section's title and
-    // starts the page they start; a row's rows take theirs as they come.
-    units.push(...space, ...clearLeadingPageBreak(structureLabelUnits, space.length > 0))
+    // The space asked for above a block goes before its section's title, and
+    // its box, and starts the page they start; a row's rows take theirs as they come.
+    units.push(...(startsSection ? space : inBox(space)), ...inBox(clearLeadingPageBreak(structureLabelUnits, space.length > 0)))
 
     if (renderBlock.fieldGroupId && renderBlock.fieldGroupColumns > 1) {
       const groupedBlocks: TemplateRenderBlock[] = []
@@ -337,14 +346,14 @@ function createBlockPaginationUnits(
       const columnUnits = createRowPaginationUnits(
           groupedBlocks,
           input,
-          metrics
+          inner
         )
 
       units.push(
-        ...clearLeadingPageBreak(
+        ...inBox(clearLeadingPageBreak(
           columnUnits,
           structureLabelUnits.length > 0 || space.length > 0
-        )
+        ))
       )
       blockIndex = groupIndex
       continue
@@ -353,15 +362,32 @@ function createBlockPaginationUnits(
     const blockUnits = createSingleBlockPaginationUnits(
       renderBlock,
       input,
-      metrics
+      inner
     )
     units.push(
-      ...clearLeadingPageBreak(blockUnits, structureLabelUnits.length > 0 || space.length > 0)
+      ...inBox(clearLeadingPageBreak(blockUnits, structureLabelUnits.length > 0 || space.length > 0))
     )
     blockIndex += 1
   }
 
-  return units
+  // A box opens at its section's first item and closes at its last.
+  return units.map((unit: PdfPaginationUnit, index: number): PdfPaginationUnit => {
+    const box = unit.item.box
+
+    return box
+      ? {
+          ...unit,
+          item: {
+            ...unit.item,
+            box: {
+              closes: units[index + 1]?.item.box?.sectionId !== box.sectionId,
+              opens: units[index - 1]?.item.box?.sectionId !== box.sectionId,
+              sectionId: box.sectionId
+            }
+          }
+        }
+      : unit
+  })
 }
 
 // Space left above a block, moving with it to the next page.
@@ -382,7 +408,10 @@ function createStructureLabelUnits(
 
   if (startsSection && renderBlock.sectionLabel) {
     units.push({
-      item: { kind: "section_label", label: renderBlock.sectionLabel },
+      item: {
+        kind: "section_label",
+        label: renderBlock.sectionNumber ? `${renderBlock.sectionNumber} ${renderBlock.sectionLabel}` : renderBlock.sectionLabel
+      },
       pageBreakBefore: renderBlock.pageBreakBefore,
       keepTogetherKeys,
       keepWithNext: true
@@ -962,6 +991,17 @@ function estimateFlowItemHeight(
 ): number {
   let baseHeight: number
 
+  // Inside a box, laid out in its frame, with its top or foot and the space under it.
+  if (item.box) {
+    const { closes, opens } = item.box
+
+    return (
+      estimateFlowItemHeight({ ...item, box: undefined }, input, boxedPdfMetrics(metrics)) +
+      (opens ? SECTION_BOX_INSET : 0) +
+      (closes ? SECTION_BOX_INSET + SECTION_BOX_GAP : 0)
+    )
+  }
+
   switch (item.kind) {
     case "branding":
       baseHeight = estimateBrandingHeight(input.content)
@@ -975,8 +1015,10 @@ function estimateFlowItemHeight(
         ) + 16
       break
     case "section_label":
-      baseHeight =
-        estimateWrappedTextHeight(
+      // In a bar: 11 points on 15, padded 5 above and below, 8 under the bar.
+      baseHeight = metrics.sectionStyle === "band"
+        ? estimateWrappedTextHeight(item.label, scalePdfCharacterEstimate(88, metrics.contentWidth - 12), 15) + 18
+        : estimateWrappedTextHeight(
           item.label,
           scalePdfCharacterEstimate(65, metrics.contentWidth),
           22

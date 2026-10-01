@@ -395,6 +395,15 @@ const templateBrandingDefault = {
   accentColor: "#635273"
 } as const
 
+// Words for the left, centre and right of a page's top or bottom margin.
+const marginTextSchema = z
+  .object({
+    left: z.string().trim().max(120).optional(),
+    center: z.string().trim().max(120).optional(),
+    right: z.string().trim().max(120).optional()
+  })
+  .strict()
+
 /** Page and repeated-element controls captured in version-three snapshots. */
 export const templateLayoutSchema = z
   .object({
@@ -426,6 +435,22 @@ export const templateLayoutSchema = z
      * beside and below it, as on a printed government form. Absent, a box.
      */
     fieldStyle: z.enum(["box", "line", "cell"]).optional(),
+    /**
+     * How a section's title prints: as a heading (absent), in a filled bar
+     * of the primary colour, or as the top of a bordered box that holds the
+     * section, carried over pages.
+     */
+    sectionStyle: z.enum(["plain", "band", "box"]).optional(),
+    // Titled sections numbered in order: A, B, C or 1, 2, 3. Absent, none.
+    sectionNumbers: z.enum(["letters", "numbers"]).optional(),
+    /**
+     * Words in the top and bottom margins, left, centre and right, such as a
+     * form's number and revision. {page}, {pages} and {title} are filled in
+     * on each page. The header's show on the pages the header policy says,
+     * the footer's on the pages the footer policy says.
+     */
+    headerText: marginTextSchema.optional(),
+    footerText: marginTextSchema.optional(),
     printedTitle: z
       .discriminatedUnion("mode", [
         z.object({ mode: z.literal("linked") }).strict(),

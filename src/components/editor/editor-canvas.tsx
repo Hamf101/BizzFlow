@@ -52,9 +52,9 @@ import { type CanvasUnit, createUnits, paginate, type PageFrame, type Pagination
 import { usePageSelection } from "@/components/editor/page-selection"
 import { bizflowToast } from "@/components/ui/toaster"
 import { SectionPieces } from "./section-pieces"
-import { EditorSection } from "./editor-section"
+import { EditorSection, PrintedSectionTitle, sectionBoxStyle } from "./editor-section"
 import { MarginGuides } from "@/components/editor/margin-guides"
-import { PRINTED_HEADING, printedSpace, SECTION_TITLE } from "@/components/editor/paper-field"
+import { PRINTED_HEADING, printedSpace } from "@/components/editor/paper-field"
 import { SlashMenu } from "@/components/editor/slash-menu"
 import { SNAP_PX, snapBox } from "@/components/editor/image-placement"
 import { type DragBox, type DragLine, type DropTarget, useBlockDrag } from "@/components/editor/use-block-drag"
@@ -67,8 +67,10 @@ import {
   createTemplateRenderPlan,
   blockSpacingAdjustment,
   columnGap,
+  resolveTemplateMarginWords,
   shouldRenderTemplateFooter,
   shouldRenderTemplateHeader,
+  type TemplateMarginWords,
   type TemplateRenderPlan,
 } from "@/services/templates/template-render-plan"
 import type { BlockFrame, TextRun } from "@/types/template"
@@ -203,6 +205,9 @@ export function EditorCanvas({
     hasBranding && shouldRenderTemplateHeader(plan.layout, page + 1)
   const footerOn = (page: number): boolean =>
     shouldRenderTemplateFooter(plan.layout, page + 1) && plan.layout.pageNumbering === "page_x_of_y"
+  // The words in a page's margins, filled in for that page as they print.
+  const marginWords = (page: number, pages: number): ReturnType<typeof resolveTemplateMarginWords> =>
+    resolveTemplateMarginWords(plan.layout, page + 1, pages, plan.title || documentTitle)
   const frame: PageFrame = {
     gap: PAGE_GAP_PX,
     height: pageHeight,
@@ -878,7 +883,13 @@ export function EditorCanvas({
         data-cell-top={cellUnit(unit) && !unit.space && !unit.sectionId && !unit.sectionLabel && !unit.groupLabel ? "" : undefined}
         data-unit-id={unit.id}
         // The space asked for above it; a phone's column keeps its own rhythm.
-        style={narrow || !unit.space ? undefined : { paddingTop: unit.space * point }}
+        // In a boxed section, the box's edges and padding around it too.
+        data-section-box={unit.box ? "" : undefined}
+        style={
+          unit.box
+            ? sectionBoxStyle(unit.box, narrow ? 0 : unit.space * point, point)
+            : narrow || !unit.space ? undefined : { paddingTop: unit.space * point }
+        }
         data-section-id={unit.blocks[0]?.sectionId ?? undefined}
         ref={(element) => {
           if (element) {
@@ -965,6 +976,10 @@ export function EditorCanvas({
   )
 
   if (narrow) {
+    // One column, no pages: the margin words once above it and once below,
+    // each as wide as it needs where the column has room.
+    const columnWords = marginWords(0, 1)
+
     return (
       <div
         className="relative mx-auto w-full max-w-2xl bg-card px-5 py-6 shadow-sm"
@@ -975,9 +990,11 @@ export function EditorCanvas({
       >
         {PRINTED_FACE}
         {CELL_JOINS}
+        <MarginWords className="mb-4 flex justify-between gap-3 text-[11px]" words={columnWords.header} />
         <BlockContextMenu actions={actions}>{flow}</BlockContextMenu>
         {textEditable ? <SectionPieces root={rootRef} sectionId={controller.currentSectionId} narrow zoom={1} revision={content} /> : null}
         {units.length === 0 ? <EmptyPageLine actions={actions} onStart={() => focusPageEnd(0)} /> : null}
+        <MarginWords className="mt-6 flex justify-between gap-3 text-[11px]" words={columnWords.footer} />
         {textEditable ? (
           <AddPageButton className="mt-6" onClick={() => controller.addPage(content.blocks.at(-1)?.id ?? null)} />
         ) : null}
@@ -998,6 +1015,9 @@ export function EditorCanvas({
 
   const pageCount = Math.max(layout.pageCount, ...placedImages.map(({ page }) => page))
   const stackHeight = pageCount * (pageHeight + PAGE_GAP_PX) + (textEditable ? 56 : 0)
+  const pageWords = Array.from({ length: pageCount }, (_, page) => marginWords(page, pageCount))
+  const wordsSize = 7.5 * point
+  const wordsInset: CSSProperties = { fontSize: wordsSize, left: margins.left, right: margins.right }
 
   return (
     <div
@@ -1063,14 +1083,25 @@ export function EditorCanvas({
                 zone={{ height: margins.top, top: 0 }}
               />
             ) : null}
-            {footerOn(page) ? (
+            {/* Baselines as the PDF sets them: midway down the top margin, midway up the bottom. */}
+            <MarginWords
+              className="absolute"
+              style={{ ...wordsInset, top: margins.top / 2 + 2.5 * point - WORDS_ASCENT_EM * wordsSize }}
+              words={pageWords[page].header}
+            />
+            <MarginWords
+              className="absolute"
+              style={{ ...wordsInset, bottom: margins.bottom / 2 - (WORDS_LINE_EM - WORDS_ASCENT_EM) * wordsSize }}
+              words={pageWords[page].footer}
+            />
+            {pageWords[page].pageLabel ? (
               <p
                 className="absolute text-muted-foreground tabular-nums"
                 style={{ bottom: margins.bottom * 0.55, fontSize: 8 * point, right: margins.right }}
               >
-                Page {page + 1} of {pageCount}
+                {pageWords[page].pageLabel}
               </p>
-            ) : textEditable ? (
+            ) : textEditable && !footerOn(page) && Object.keys(pageWords[page].footer).length === 0 ? (
               <MarginPill
                 label="Page numbers"
                 onClick={() =>
@@ -1131,11 +1162,9 @@ function UnitBlocks({ actions, unit }: { actions: CanvasActions; unit: CanvasUni
   return (
     <>
       {unit.sectionId && actions.textEditable ? (
-        <EditorSection controller={actions.controller} section={actions.controller.content.sections.find((section) => section.id === unit.sectionId)!} />
+        <EditorSection controller={actions.controller} number={unit.sectionNumber} section={actions.controller.content.sections.find((section) => section.id === unit.sectionId)!} />
       ) : unit.sectionLabel ? (
-        <p className="font-bold" style={SECTION_TITLE}>
-          {unit.sectionLabel}
-        </p>
+        <PrintedSectionTitle label={unit.sectionLabel} number={unit.sectionNumber} sectionStyle={actions.controller.content.layout.sectionStyle} />
       ) : null}
       {unit.groupLabel ? (
         <p className="font-bold text-muted-foreground uppercase" style={{ fontSize: "0.9em", lineHeight: 13 / 9, marginBottom: printedSpace(8) }}>
@@ -1177,12 +1206,14 @@ const PRINTED_FACE = <link href="/fonts/default/font.css" precedence="document-f
 // together, and its caption and help hang below.
 // Cells share their edges, as a printed form's grid does: a row's cells
 // overlap by one edge, and so do its lines when it wraps. The space under
-// the cells is the unit's, and goes when cells follow.
+// the cells is the unit's, and goes when cells follow. The foot of a boxed
+// section's box comes after it (see sectionBoxStyle).
 const CELL_JOINS = (
   <style href="paper-cell-joins" precedence="document-fonts">{`
+[data-section-box] { padding-bottom: var(--box-foot) }
 [data-cell-bottom] [data-block-id] { margin-bottom: -0.07em !important }
 [data-cell-bottom] [data-paper-cell] { margin-bottom: 0 !important }
-[data-cell-bottom] { padding-bottom: calc(0.07em + 3 * var(--doc-pt) + max(0px, calc(7 * var(--doc-pt) + var(--doc-adjust, 0px)))) }
+[data-cell-bottom] { padding-bottom: calc(0.07em + 3 * var(--doc-pt) + max(0px, calc(7 * var(--doc-pt) + var(--doc-adjust, 0px))) + var(--box-foot, 0px)) }
 [data-cell-bottom]:has(+ [data-cell-top]) { padding-bottom: 0 }
 [data-cell-bottom] [data-cell-row] > [data-block-id] + [data-block-id] { margin-left: -0.07em }
 [data-line-row] > [data-block-id] { display: grid; grid-row: span 2; grid-template-rows: subgrid }
@@ -1354,6 +1385,38 @@ function AddPageButton({
       <Plus aria-hidden="true" className="size-3.5" />
       Add page
     </button>
+  )
+}
+
+// Margin words sit on a line this many ems tall, their baseline this far down it.
+const WORDS_LINE_EM = 1.3
+const WORDS_ASCENT_EM = 1
+
+// Words in a margin, each in its third of the line and cut short where they
+// would run into the next, as the PDF prints them.
+function MarginWords({
+  className,
+  style,
+  words,
+}: {
+  className?: string
+  style?: CSSProperties
+  words: TemplateMarginWords
+}): ReactElement | null {
+  if (!words.left && !words.center && !words.right) {
+    return null
+  }
+
+  return (
+    <div
+      className={cn("pointer-events-none grid grid-cols-3 text-muted-foreground tabular-nums", className)}
+      data-slot="margin-words"
+      style={{ lineHeight: WORDS_LINE_EM, ...style }}
+    >
+      <span className="min-w-0 truncate">{words.left}</span>
+      <span className="min-w-0 truncate text-center">{words.center}</span>
+      <span className="min-w-0 truncate text-right">{words.right}</span>
+    </div>
   )
 }
 

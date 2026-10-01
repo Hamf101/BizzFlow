@@ -16,6 +16,7 @@ import {
 } from "pdf-lib"
 
 import { DocumentFontError, getDocumentFontAsset, resolveDocumentFont } from "@/services/document-font-service"
+import { resolveTemplateMarginWords, type TemplateMarginWords } from "@/services/templates/template-render-plan"
 import type { TemplateBlock } from "@/types/template"
 
 import {
@@ -32,10 +33,18 @@ import {
   drawWrappedPdfText,
   hexToPdfColor,
   normalizeStandardFontText,
+  readablePdfTextOn,
   wrapPdfText
 } from "./pdf-lib-text"
 import type { PdfLibRenderContext } from "./pdf-lib-types"
-import { createPdfLayoutMetrics, getPdfRowFrames } from "./layout"
+import {
+  boxedPdfMetrics,
+  createPdfLayoutMetrics,
+  getPdfRowFrames,
+  SECTION_BOX_EDGE,
+  SECTION_BOX_GAP,
+  SECTION_BOX_INSET
+} from "./layout"
 import {
   ANSWER_BOX_PADDING,
   answerBoxHeight,
@@ -71,7 +80,8 @@ import type {
   PdfBlockFlowItem,
   PdfFieldBlock,
   PdfFlowItem,
-  PdfPagePlan
+  PdfPagePlan,
+  PdfSectionBox
 } from "./types"
 
 type PdfContentFrame = Readonly<{ x: number; width: number }>
@@ -201,7 +211,7 @@ export async function renderPdfLibDocument(
       context,
       pages[pageIndex],
       pageIndex + 1,
-      pages.length
+      resolveTemplateMarginWords(input.renderPlan.layout, pageIndex + 1, pages.length, input.renderPlan.title || input.title)
     )
 
     // Drawn on the page the content was designed on, then printed on its paper.
@@ -245,7 +255,7 @@ async function drawPdfLibPage(
   context: PdfLibRenderContext,
   plan: PdfPagePlan,
   pageNumber: number,
-  totalPages: number
+  words: ReturnType<typeof resolveTemplateMarginWords>
 ): Promise<void> {
   let cursorY = context.layout.flowTopY
 
@@ -253,9 +263,12 @@ async function drawPdfLibPage(
     cursorY = await drawPdfLibFlowItem(item, context, cursorY)
   }
 
-  if (plan.showPageNumber) {
-    drawPdfLibFooter(context, pageNumber, totalPages)
+  if (words.pageLabel || Object.keys(words.footer).length > 0) {
+    drawPdfLibFooter(context, words.pageLabel, words.footer)
   }
+
+  // Midway down the top margin, as the page number sits midway up the bottom one.
+  drawPdfLibMarginWords(context, words.header, context.layout.pageHeight - (context.layout.pageHeight - context.layout.flowTopY) / 2 - 2.5)
 
   for (const block of context.freeImages) {
     if (block.placement?.page === pageNumber) {
@@ -293,8 +306,8 @@ async function drawPdfLibPlacedImage(
 
 function drawPdfLibFooter(
   context: PdfLibRenderContext,
-  pageNumber: number,
-  totalPages: number
+  pageLabel: string | null,
+  words: TemplateMarginWords
 ): void {
   const { contentWidth, margin } = context.layout
   const footerTop = context.layout.marginBottom
@@ -306,7 +319,12 @@ function drawPdfLibFooter(
     thickness: 0.8
   })
 
-  const pageLabel = `Page ${pageNumber} of ${totalPages}`
+  drawPdfLibMarginWords(context, words, context.layout.marginBottom / 2)
+
+  if (!pageLabel) {
+    return
+  }
+
   const safeLabel = normalizeStandardFontText(pageLabel, context.regularFont)
   const labelWidth = context.regularFont.widthOfTextAtSize(safeLabel, 7)
 
@@ -319,11 +337,43 @@ function drawPdfLibFooter(
   })
 }
 
+// Words in a margin, each in its third of the line: cut short with an ellipsis
+// where they would run into the next, so they never meet.
+function drawPdfLibMarginWords(context: PdfLibRenderContext, words: TemplateMarginWords, y: number): void {
+  const { contentWidth, margin } = context.layout
+  const font = context.regularFont
+  const size = 7.5
+
+  for (const [slot, text] of Object.entries(words)) {
+    let letters = Array.from(normalizeStandardFontText(text, font))
+    let line = letters.join("")
+
+    while (font.widthOfTextAtSize(line, size) > contentWidth / 3 && letters.length > 0) {
+      letters = letters.slice(0, -1)
+      line = `${letters.join("").trimEnd()}…`
+    }
+
+    const width = font.widthOfTextAtSize(line, size)
+
+    context.page.drawText(line, {
+      color: rgb(0.42, 0.45, 0.5),
+      font,
+      size,
+      x: margin + (slot === "left" ? 0 : slot === "center" ? (contentWidth - width) / 2 : contentWidth - width),
+      y,
+    })
+  }
+}
+
 async function drawPdfLibFlowItem(
   item: PdfFlowItem,
   context: PdfLibRenderContext,
   topY: number
 ): Promise<number> {
+  if (item.box) {
+    return drawPdfLibBoxed(item, item.box, context, topY)
+  }
+
   const fullFrame: PdfContentFrame = {
     x: context.layout.margin,
     width: context.layout.contentWidth
@@ -351,18 +401,20 @@ async function drawPdfLibFlowItem(
       break
     case "section_label":
       bottomY =
-        drawWrappedPdfText(
-          context,
-          item.label,
-          topY,
-          fullFrame.x,
-          fullFrame.width,
-          15,
-          22,
-          context.boldFont,
-          hexToPdfColor(context.content.branding.primaryColor),
-          "left"
-        ) - 10
+        context.layout.sectionStyle === "band"
+          ? drawPdfLibSectionBar(context, item.label, topY)
+          : drawWrappedPdfText(
+              context,
+              item.label,
+              topY,
+              fullFrame.x,
+              fullFrame.width,
+              15,
+              22,
+              context.boldFont,
+              hexToPdfColor(context.content.branding.primaryColor),
+              "left"
+            ) - 10
       break
     case "field_group_label":
       bottomY =
@@ -404,6 +456,45 @@ async function drawPdfLibFlowItem(
 
   // A cell another sits on ends at their shared edge, with no gap to adjust.
   return (item.kind === "block" || item.kind === "columns") && item.joinsNext ? bottomY : bottomY - context.layout.densityItemGapAdjustment
+}
+
+// An item of a boxed section, drawn inside the box, with the box's edge down
+// both sides, along its top where it opens and its foot where it closes, then
+// the space under it. A page break leaves the box open where it falls.
+async function drawPdfLibBoxed(item: PdfFlowItem, box: PdfSectionBox, context: PdfLibRenderContext, topY: number): Promise<number> {
+  const { contentWidth, margin } = context.layout
+  const right = margin + contentWidth
+  const half = SECTION_BOX_EDGE / 2
+  const inside = await drawPdfLibFlowItem({ ...item, box: undefined }, { ...context, layout: boxedPdfMetrics(context.layout) }, topY - (box.opens ? SECTION_BOX_INSET : 0))
+  const bottomY = inside - (box.closes ? SECTION_BOX_INSET : 0)
+  const edge = (start: { x: number; y: number }, end: { x: number; y: number }): void =>
+    context.page.drawLine({ color: rgb(0.61, 0.64, 0.69), end, start, thickness: SECTION_BOX_EDGE })
+
+  edge({ x: margin + half, y: topY }, { x: margin + half, y: bottomY })
+  edge({ x: right - half, y: topY }, { x: right - half, y: bottomY })
+
+  if (box.opens) {
+    edge({ x: margin, y: topY - half }, { x: right, y: topY - half })
+  }
+
+  if (box.closes) {
+    edge({ x: margin, y: bottomY + half }, { x: right, y: bottomY + half })
+  }
+
+  return bottomY - (box.closes ? SECTION_BOX_GAP : 0)
+}
+
+// A section's title in a bar of the primary colour across the frame: bold 11
+// points on 15, padded 5 above and below and 6 at the ends, 8 under the bar.
+function drawPdfLibSectionBar(context: PdfLibRenderContext, label: string, topY: number): number {
+  const { contentWidth, margin } = context.layout
+  const { primaryColor } = context.content.branding
+  const height = wrapPdfText(label, context.boldFont, 11, contentWidth - 12).length * 15 + 10
+
+  context.page.drawRectangle({ color: hexToPdfColor(primaryColor), height, width: contentWidth, x: margin, y: topY - height })
+  drawWrappedPdfText(context, label, topY - 5, margin + 6, contentWidth - 12, 11, 15, context.boldFont, readablePdfTextOn(primaryColor), "left")
+
+  return topY - height - 8
 }
 
 async function drawPdfLibBranding(
