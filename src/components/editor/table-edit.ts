@@ -1,9 +1,9 @@
-import type { TemplateBlock } from "@/types/template"
+import { MAX_TABLE_ROWS, type TemplateBlock } from "@/types/template"
 
 type TableBlock = Extract<TemplateBlock, { type: "table" }>
 
 /** The most rows and columns a saved table holds. */
-export const MAX_TABLE_ROWS = 100
+export { MAX_TABLE_ROWS }
 export const MAX_TABLE_COLUMNS = 12
 
 /** A change to a table's rows or columns, made from a cell. */

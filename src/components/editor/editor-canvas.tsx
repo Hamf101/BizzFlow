@@ -22,6 +22,7 @@ import {
 } from "@/components/editor/block-catalog"
 import type { TextCaret } from "@/components/editor/editable-text"
 import {
+  BlockContextMenu,
   CanvasBlock,
   type CanvasActions,
   isLine,
@@ -642,6 +643,11 @@ export function EditorCanvas({
       if (cut.ok) {
         const pasted = insertLines(cut.content, point(from), lines, () => crypto.randomUUID())
 
+        if (pasted.tooLong) {
+          bizflowToast.info("That is more than one document can hold. Paste it in parts, or into a new document.")
+          return
+        }
+
         controller.change(() => pasted.content)
         controller.requestFocus(pasted.focus)
       }
@@ -961,7 +967,7 @@ export function EditorCanvas({
         style={inkStyle}
       >
         {PRINTED_FACE}
-        {flow}
+        <BlockContextMenu actions={actions}>{flow}</BlockContextMenu>
         {textEditable ? <SectionPieces root={rootRef} sectionId={controller.currentSectionId} narrow zoom={1} revision={content} /> : null}
         {units.length === 0 ? <EmptyPageLine actions={actions} onStart={() => focusPageEnd(0)} /> : null}
         {textEditable ? (
@@ -1087,7 +1093,9 @@ export function EditorCanvas({
           data-slot="page-flow"
           style={{ paddingLeft: margins.left, paddingRight: margins.right, paddingTop: frame.marginTop(0) }}
         >
-          <PageBreaks.Provider value={layout.inside}>{flow}</PageBreaks.Provider>
+          <PageBreaks.Provider value={layout.inside}>
+            <BlockContextMenu actions={actions}>{flow}</BlockContextMenu>
+          </PageBreaks.Provider>
           {units.length === 0 ? (
             <div className="pointer-events-auto">
               <EmptyPageLine actions={actions} onStart={() => focusPageEnd(0)} />

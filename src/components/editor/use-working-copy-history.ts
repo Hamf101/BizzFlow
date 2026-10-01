@@ -54,6 +54,14 @@ export function useWorkingCopyHistory<State>(
     () => local.state
   )
 
+  // Read on its own: a save that is kept changes the status and nothing else,
+  // and React redraws only for a snapshot that changed.
+  const liveStatus = useSyncExternalStore(
+    active?.subscribe ?? subscribeNever,
+    () => active?.status() ?? null,
+    () => null
+  )
+
   useEffect(() => {
     localState.current = local.state
   })
@@ -119,7 +127,7 @@ export function useWorkingCopyHistory<State>(
   return {
     canRedo: active ? active.canRedo() : local.canRedo,
     canUndo: active ? active.canUndo() : local.canUndo,
-    liveStatus: active ? active.status() : null,
+    liveStatus,
     redo,
     set,
     state,

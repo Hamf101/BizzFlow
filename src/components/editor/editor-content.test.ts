@@ -15,6 +15,7 @@ import {
   turnLineIntoSection,
   turnSectionIntoLine,
 } from "@/components/editor/editor-content"
+import { MAX_TEMPLATE_BLOCK_COUNT } from "@/types/template"
 import {
   createEmptyDocumentContent,
   templateContentV3Schema,
@@ -301,5 +302,18 @@ describe("words selected across blocks", () => {
     const listed = insertLines(content, { blockId: D, item: 0, offset: 4 }, ["", "Gate fob"], () => C + "9")
 
     expect(listed.content.blocks[3]).toMatchObject({ items: ["Keys", "Gate fob", "Alarm code"] })
+  })
+
+  it("leaves the page as it was when a paste would take it past what a document holds", () => {
+    let id = 0
+    const newId = (): string => `90000000-0000-4000-8000-${String((id += 1)).padStart(12, "0")}`
+    const lines = Array.from({ length: MAX_TEMPLATE_BLOCK_COUNT }, (_, line) => `Line ${line}`)
+    const paragraphs = insertLines(content, { blockId: B, offset: 8 }, lines, newId)
+    const items = insertLines(content, { blockId: D, item: 0, offset: 4 }, lines, newId)
+
+    for (const refused of [paragraphs, items]) {
+      expect(refused.content).toBe(content)
+      expect(refused.tooLong).toBe(true)
+    }
   })
 })

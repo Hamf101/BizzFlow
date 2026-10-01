@@ -96,3 +96,39 @@ it("never shows the room's copy without what was typed before it opened, so the 
   act(() => root.unmount())
   host.remove()
 })
+
+it("shows the room's save status as it changes, when nothing else on the page does", async () => {
+  let status: "saved" | "saving" = "saving"
+  const session = fakeSession({ words: "Hello" })
+  const listeners = new Set<() => void>()
+  const live: LiveSession<Words> = {
+    ...session,
+    status: () => status,
+    subscribe: (listener) => {
+      listeners.add(listener)
+      const off = session.subscribe(listener)
+      return () => {
+        listeners.delete(listener)
+        off()
+      }
+    },
+  }
+  function Editor() {
+    return <p>{useWorkingCopyHistory({ words: "Hello" }, live).liveStatus}</p>
+  }
+  const host = document.body.appendChild(document.createElement("div"))
+  const root = createRoot(host)
+
+  await act(async () => root.render(<Editor />))
+  expect(host.textContent).toBe("saving")
+
+  // Kept on the server: the words are the same, only the status moves on.
+  act(() => {
+    status = "saved"
+    listeners.forEach((listener) => listener())
+  })
+  expect(host.textContent).toBe("saved")
+
+  act(() => root.unmount())
+  host.remove()
+})

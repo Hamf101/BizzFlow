@@ -31,6 +31,7 @@ import {
   useContext,
   useEffect,
   useRef,
+  useState,
 } from "react"
 
 import type { Editor } from "@tiptap/core"
@@ -158,7 +159,6 @@ export function CanvasBlock({
   const field = isField(block)
   const text = isLine(block) || isList(block)
   const canSelect = actions.textEditable || (actions.designable && field)
-  const pointer = useRef("")
 
   useEffect(() => {
     if (selected) {
@@ -267,29 +267,11 @@ export function CanvasBlock({
       const box = event.currentTarget.getBoundingClientRect()
 
       event.preventDefault()
-      pointer.current = "keyboard"
       event.currentTarget.dispatchEvent(new globalThis.MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: box.left + 8, clientY: box.top + 8 }))
     }
   }
 
   return (
-    <ContextMenu
-      disabled={!canSelect}
-      // A press and hold on a touch screen picks the block up; its toolbar has the same actions.
-      onOpenChange={(open, details) => {
-        if (open && pointer.current === "touch") details.cancel()
-      }}
-    >
-      <ContextMenuTrigger
-        className="contents"
-        // Words being typed in keep the browser's own menu, with its spelling and pasting.
-        onContextMenuCapture={(event) => {
-          if (!selected && (event.target as Element).closest("[data-line-key]")) event.stopPropagation()
-        }}
-        onPointerDownCapture={(event) => {
-          pointer.current = event.pointerType
-        }}
-      >
     <div
       className={cn(
         "rounded-[0.35em] outline-none",
@@ -314,6 +296,10 @@ export function CanvasBlock({
         }
       }}
       onKeyDown={handleKeyDown}
+      // Words being typed in keep the browser's own menu, with its spelling and pasting.
+      onContextMenuCapture={(event) => {
+        if (!selected && (event.target as Element).closest("[data-line-key]")) event.stopPropagation()
+      }}
       onMouseDown={handleMouseDown}
       // A picture placed on a page moves on its page instead.
       onPointerDown={placed ? undefined : (event) => actions.startDrag?.(event, block.id)}
@@ -328,8 +314,51 @@ export function CanvasBlock({
       ) : null}
       <BlockBody actions={actions} block={block} placed={placed} />
     </div>
+  )
+}
+
+/**
+ * One menu for every block on the page: a right-click, or the menu key on a
+ * chosen block, opens it for the block under it. One for each block made
+ * every keystroke redraw hundreds of menus in a long document.
+ *
+ * @param props - What the canvas does, and the page it covers.
+ * @returns The page, with the menu.
+ */
+export function BlockContextMenu({ actions, children }: { actions: CanvasActions; children: ReactNode }): ReactElement {
+  const [blockId, setBlockId] = useState<string | null>(null)
+  const target = useRef<string | null>(null)
+  const pointer = useRef("")
+  const block = actions.controller.content.blocks.find((candidate) => candidate.id === blockId)
+
+  return (
+    <ContextMenu
+      onOpenChange={(open, details) => {
+        const chosen = actions.controller.content.blocks.find((candidate) => candidate.id === target.current)
+        const canSelect = chosen && (actions.textEditable || (actions.designable && isField(chosen)))
+
+        // A press and hold on a touch screen picks the block up; its toolbar has the same actions.
+        if (open && (!canSelect || pointer.current === "touch")) {
+          details.cancel()
+        }
+      }}
+    >
+      <ContextMenuTrigger
+        className="contents"
+        onContextMenuCapture={(event) => {
+          target.current = (event.target as Element).closest<HTMLElement>("[data-block-id]")?.dataset.blockId ?? null
+          setBlockId(target.current)
+        }}
+        onKeyDownCapture={() => {
+          pointer.current = "keyboard"
+        }}
+        onPointerDownCapture={(event) => {
+          pointer.current = event.pointerType
+        }}
+      >
+        {children}
       </ContextMenuTrigger>
-      <BlockMenu actions={actions} block={block} />
+      {block ? <BlockMenu actions={actions} block={block} /> : null}
     </ContextMenu>
   )
 }

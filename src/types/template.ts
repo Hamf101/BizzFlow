@@ -13,8 +13,17 @@ import { IMAGE_DATA_URL_PATTERN, MAX_IMAGE_DATA_URL_LENGTH } from "@/types/templ
 /** Maximum serialized size accepted for one complete guided document layout. */
 export const MAX_TEMPLATE_CONTENT_JSON_LENGTH = 8_000_000
 
-/** Maximum number of ordered blocks accepted in one canonical document. */
-export const MAX_TEMPLATE_BLOCK_COUNT = 250
+/**
+ * Maximum number of ordered blocks accepted in one canonical document: room
+ * for a 50-page agreement or handbook, at up to 50 blocks a page.
+ */
+export const MAX_TEMPLATE_BLOCK_COUNT = 2_500
+
+/** The most rows one table holds; a long price list prints over several pages. */
+export const MAX_TABLE_ROWS = 500
+
+/** The most items one list holds. */
+export const MAX_LIST_ITEMS = 500
 
 const FIELD_KEY_PATTERN = /^[A-Za-z][A-Za-z0-9_-]{0,79}$/
 const HEX_COLOR_PATTERN = /^#[0-9A-Fa-f]{6}$/
@@ -188,9 +197,9 @@ export const paragraphBlockObjectSchema = z
 
 const listItemsShape = {
   id: blockIdSchema,
-  items: z.array(z.string().trim().min(1).max(2_000)).min(1).max(100),
+  items: z.array(z.string().trim().min(1).max(2_000)).min(1).max(MAX_LIST_ITEMS),
   // Each item's formatting, beside it; null for a plain item.
-  itemRuns: z.array(textRunsSchema.nullable()).max(100).optional()
+  itemRuns: z.array(textRunsSchema.nullable()).max(MAX_LIST_ITEMS).optional()
 } as const
 
 export const bulletListBlockObjectSchema = z
@@ -246,7 +255,7 @@ export const tableBlockSchema = z
     id: blockIdSchema,
     type: z.literal("table"),
     headers: z.array(z.string().trim().min(1).max(240)).min(1).max(12),
-    rows: z.array(z.array(z.string().trim().max(2_000)).min(1).max(12)).max(100)
+    rows: z.array(z.array(z.string().trim().max(2_000)).min(1).max(12)).max(MAX_TABLE_ROWS)
   })
   .strict()
 

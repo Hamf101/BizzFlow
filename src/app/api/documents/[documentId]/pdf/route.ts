@@ -26,6 +26,9 @@ import {
 } from "@/services/organization-service"
 import { readTemplateImage } from "@/services/template-image-service"
 
+// A long document renders in a few seconds; this leaves room for pictures and a busy moment.
+export const maxDuration = 300
+
 type GeneratedDocumentPdfRouteContext = {
   params: Promise<{ documentId: string }>
 }

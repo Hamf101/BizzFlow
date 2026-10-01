@@ -1,4 +1,12 @@
-import { fitRuns, ruleHasEffect, type TemplateBlock, type TemplateContentV3, type TextRun } from "@/types/template"
+import {
+  fitRuns,
+  MAX_LIST_ITEMS,
+  MAX_TEMPLATE_BLOCK_COUNT,
+  ruleHasEffect,
+  type TemplateBlock,
+  type TemplateContentV3,
+  type TextRun,
+} from "@/types/template"
 import {
   deleteTemplateBlock,
   evaluateTemplateBlockDeletion,
@@ -625,9 +633,15 @@ export function deleteAcross(
  * @param at - The caret.
  * @param lines - The lines put in.
  * @param newId - Makes an id for each new line.
- * @returns The page, and the caret at the end of the pasted words.
+ * @returns The page, and the caret at the end of the pasted words; the page
+ *   as it was, and `tooLong`, when the lines would not fit in one document.
  */
-export function insertLines(content: TemplateContentV3, at: CaretTarget, lines: readonly string[], newId: () => string): { content: TemplateContentV3; focus: CaretTarget } {
+export function insertLines(
+  content: TemplateContentV3,
+  at: CaretTarget,
+  lines: readonly string[],
+  newId: () => string
+): { content: TemplateContentV3; focus: CaretTarget; tooLong?: true } {
   const block = content.blocks.find((candidate) => candidate.id === at.blockId)
   const entries = entriesOf(block)
   const kept = lines.filter((line, index) => line.trim() || index === 0 || index === lines.length - 1)
@@ -647,6 +661,11 @@ export function insertLines(content: TemplateContentV3, at: CaretTarget, lines: 
           joinEntries({ text: kept.at(-1)! }, cut(entry, at.offset)),
         ]
   const offset = (kept.length === 1 ? at.offset : 0) + kept.at(-1)!.length
+  const added = pasted.length - 1
+
+  if (isList(block) ? entries.length + added > MAX_LIST_ITEMS : content.blocks.length + added > MAX_TEMPLATE_BLOCK_COUNT) {
+    return { content, focus: at, tooLong: true }
+  }
 
   if (isList(block)) {
     const listed = withEntries(block, [...entries.slice(0, item), ...pasted, ...entries.slice(item + 1)])

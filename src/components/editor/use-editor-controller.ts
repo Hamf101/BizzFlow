@@ -108,7 +108,7 @@ export function useEditorController({
       return true
     }
 
-    bizflowToast.info(`A page can hold up to ${MAX_TEMPLATE_BLOCK_COUNT} blocks.`)
+    bizflowToast.info(`A document can hold up to ${MAX_TEMPLATE_BLOCK_COUNT.toLocaleString("en")} blocks.`)
     return false
   }
 

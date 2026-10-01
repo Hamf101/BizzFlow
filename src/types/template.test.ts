@@ -91,17 +91,11 @@ describe("template content schema", () => {
     })
   })
 
-  it("accepts exactly 250 canonical document blocks", () => {
-    const content = createContentWithParagraphs(MAX_TEMPLATE_BLOCK_COUNT)
-
-    expect(parseTemplateContent(content).blocks).toHaveLength(250)
-  })
-
-  it("rejects more than 250 blocks with a clear validation message", () => {
-    const content = createContentWithParagraphs(MAX_TEMPLATE_BLOCK_COUNT + 1)
-
-    expect(() => parseTemplateContent(content)).toThrow(
-      "Template content cannot contain more than 250 blocks."
+  // A 50-page document fits well inside the cap; long-document.test.ts proves that.
+  it("accepts a document at the block cap and refuses one block more, saying so", () => {
+    expect(parseTemplateContent(createContentWithParagraphs(MAX_TEMPLATE_BLOCK_COUNT)).blocks).toHaveLength(MAX_TEMPLATE_BLOCK_COUNT)
+    expect(() => parseTemplateContent(createContentWithParagraphs(MAX_TEMPLATE_BLOCK_COUNT + 1))).toThrow(
+      `Template content cannot contain more than ${MAX_TEMPLATE_BLOCK_COUNT} blocks.`
     )
   })
 
