@@ -45,6 +45,8 @@ export type PdfBlockFlowItem = {
   listMarkers?: string[]
   /** Where it sits across the page, when not across the whole of it. */
   frame?: BlockFrame
+  /** A cell that the next cell on its page sits on, with no gap between. */
+  joinsNext?: boolean
 }
 
 export type PdfFlowItem =
@@ -59,6 +61,8 @@ export type PdfFlowItem =
       widths: readonly number[]
       /** One cell per column, left to right; null where a column is empty. */
       cells: readonly (PdfBlockFlowItem | null)[]
+      /** A row of cells that the next cell on its page sits on, with no gap between. */
+      joinsNext?: boolean
     }
   /** Space left above a block, in points. */
   | { kind: "space"; height: number }

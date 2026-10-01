@@ -1,7 +1,8 @@
 import { blockSpacingAdjustment, columnGap, type TemplatePageGeometry } from "@/services/templates/template-render-plan"
-import type { TemplateLayout } from "@/types/template"
+import type { TemplateBlock, TemplateLayout } from "@/types/template"
 
 import { PDF_CONTENT_WIDTH } from "./constants"
+import { FIELD_RULE_WIDTH, isCellRow } from "./shared"
 
 /** Resolved physical measurements shared by PDF planning and drawing. */
 export type PdfLayoutMetrics = Readonly<{
@@ -17,6 +18,8 @@ export type PdfLayoutMetrics = Readonly<{
   pageCapacity: number
   columnGap: number
   densityItemGapAdjustment: number
+  /** How answers print: in a box, on a line, or in a cell. */
+  fieldStyle: NonNullable<TemplateLayout["fieldStyle"]>
 }>
 
 type RenderPlanGeometry = Pick<
@@ -50,7 +53,8 @@ export function createPdfLayoutMetrics(
     flowTopY: geometry.heightPoints - geometry.margins.top,
     pageCapacity: geometry.contentHeightPoints,
     columnGap: columnGap(geometry.contentWidthPoints),
-    densityItemGapAdjustment: blockSpacingAdjustment(layout)
+    densityItemGapAdjustment: blockSpacingAdjustment(layout),
+    fieldStyle: layout.fieldStyle ?? "box"
   }
 }
 
@@ -77,20 +81,37 @@ export function scalePdfCharacterEstimate(
  *
  * @param metrics - Active PDF layout measurements.
  * @param widths - Each column's width in twelfths.
+ * @param gap - The space between columns; negative to overlap them.
  * @returns Each column's left edge and width, left to right.
  */
 export function getPdfColumnFrames(
   metrics: PdfLayoutMetrics,
-  widths: readonly number[]
+  widths: readonly number[],
+  gap: number = metrics.columnGap
 ): Array<Readonly<{ x: number; width: number }>> {
-  const shared = metrics.contentWidth - metrics.columnGap * (widths.length - 1)
+  const shared = metrics.contentWidth - gap * (widths.length - 1)
   let x = metrics.margin
 
   return widths.map((twelfths: number) => {
     const frame = { width: (shared * twelfths) / 12, x }
 
-    x += frame.width + metrics.columnGap
+    x += frame.width + gap
 
     return frame
   })
+}
+
+/**
+ * Places a printed row's columns: cells that touch overlap by their edge, so
+ * neighbours share one; anything else keeps the usual gap.
+ *
+ * @param metrics - Active PDF layout measurements.
+ * @param row - The row's column widths and blocks.
+ * @returns Each column's left edge and width, left to right.
+ */
+export function getPdfRowFrames(
+  metrics: PdfLayoutMetrics,
+  row: Readonly<{ cells: readonly ({ block: TemplateBlock } | null)[]; widths: readonly number[] }>
+): Array<Readonly<{ x: number; width: number }>> {
+  return getPdfColumnFrames(metrics, row.widths, isCellRow(row.cells, metrics.fieldStyle) ? -FIELD_RULE_WIDTH : metrics.columnGap)
 }

@@ -2,11 +2,16 @@ import { readFile } from "node:fs/promises"
 
 import * as fontkit from "fontkit"
 import {
+  drawTextField,
   PDFDocument,
   PDFRadioGroup,
   rgb,
+  setFillingColor,
+  setFontAndSize,
+  type AppearanceProviderFor,
   type PDFFont,
   type PDFImage,
+  type PDFTextField,
   type RGB
 } from "pdf-lib"
 
@@ -30,16 +35,36 @@ import {
   wrapPdfText
 } from "./pdf-lib-text"
 import type { PdfLibRenderContext } from "./pdf-lib-types"
-import { createPdfLayoutMetrics, getPdfColumnFrames } from "./layout"
+import { createPdfLayoutMetrics, getPdfRowFrames } from "./layout"
 import {
   ANSWER_BOX_PADDING,
   answerBoxHeight,
+  CAPTION_GAP,
+  CAPTION_LEADING,
+  CAPTION_SIZE,
+  CELL_LABEL_GAP,
+  CELL_LABEL_LEADING,
+  CELL_LABEL_SIZE,
+  CELL_PADDING,
   CHECKBOX_LABEL_INSET,
+  drawingRoom,
+  FIELD_GAP_BELOW,
+  FIELD_RULE_WIDTH,
   formatFieldValue,
+  isCellRow,
   isFieldChecked,
+  isStyledField,
+  isStyledRow,
+  LINE_LABEL_GAP,
+  LINE_LABEL_SHARE,
+  LINE_RULE_DROP,
   normalizeDrawingDataUrl,
   packRadioOptions,
-  RADIO_ACROSS_GAP
+  RADIO_ACROSS_GAP,
+  RULED_LINE_PITCH,
+  RULED_TEXT_RISE,
+  SIGNER_NOTE,
+  type StyledFieldBlock
 } from "./shared"
 import type {
   NormalizedPdfInput,
@@ -377,7 +402,8 @@ async function drawPdfLibFlowItem(
       break
   }
 
-  return bottomY - context.layout.densityItemGapAdjustment
+  // A cell another sits on ends at their shared edge, with no gap to adjust.
+  return (item.kind === "block" || item.kind === "columns") && item.joinsNext ? bottomY : bottomY - context.layout.densityItemGapAdjustment
 }
 
 async function drawPdfLibBranding(
@@ -545,14 +571,29 @@ async function drawPdfLibColumns(
   context: PdfLibRenderContext,
   topY: number
 ): Promise<number> {
-  const frames = getPdfColumnFrames(context.layout, item.widths)
+  const frames = getPdfRowFrames(context.layout, item)
+  const cellRow = isCellRow(item.cells, context.layout.fieldStyle)
+  // Fields on lines side by side drop so their writing lines sit level with the lowest.
+  const depths = item.cells.map((cell, column: number): number =>
+    cell && context.layout.fieldStyle === "line" && isStyledRow(item.cells) ? measurePdfLibLineField(cell, context, frames[column]?.width ?? 0).depth : 0
+  )
+  const deepest = Math.max(0, ...depths)
+  // Cells side by side stand as tall as the tallest, so the next row sits on all of them.
+  const rowHeight = cellRow
+    ? Math.max(0, ...item.cells.map((cell, column: number): number => (cell ? measurePdfLibCell(cell, context, frames[column]?.width ?? 0).height : 0)))
+    : 0
   let bottom = topY
 
   for (const [column, cell] of item.cells.entries()) {
     const frame = frames[column]
 
     if (cell && frame) {
-      bottom = Math.min(bottom, await drawPdfLibBlock(cell, context, topY, frame))
+      bottom = Math.min(
+        bottom,
+        cellRow
+          ? await drawPdfLibField({ ...cell, joinsNext: item.joinsNext }, context, topY, frame, rowHeight)
+          : await drawPdfLibBlock(cell, context, topY - (deepest - (depths[column] ?? 0)), frame)
+      )
     }
   }
 
@@ -723,12 +764,11 @@ async function drawPdfLibField(
   item: PdfBlockFlowItem,
   context: PdfLibRenderContext,
   topY: number,
-  frame: PdfContentFrame
+  frame: PdfContentFrame,
+  cellHeight = 0
 ): Promise<number> {
   const block = item.block as PdfFieldBlock
-  const label = `${block.label}${
-    item.fieldContinued ? " (continued)" : block.required ? " *" : ""
-  }`
+  const label = fieldLabel(item)
   const ink = rgb(0.07, 0.09, 0.13)
   const edge = rgb(0.61, 0.64, 0.69)
   let cursorY: number
@@ -807,6 +847,10 @@ async function drawPdfLibField(
     if (group && block.options.includes(answer)) {
       group.select(answer)
     }
+  } else if (context.layout.fieldStyle === "cell" && isStyledField(block)) {
+    return drawPdfLibCell(item, block, context, topY, frame, cellHeight)
+  } else if (context.layout.fieldStyle === "line" && isStyledField(block)) {
+    cursorY = await drawPdfLibLineField(item, block, context, topY, frame)
   } else {
     cursorY = drawWrappedPdfText(context, label, topY, frame.x, frame.width, 9, 13, context.boldFont, ink, "left") - 3
 
@@ -832,7 +876,7 @@ async function drawPdfLibField(
       const answer =
         (block.type === "signature_field" || block.type === "initials_field") &&
         context.hasSigners
-          ? "Captured per signer in signing record below"
+          ? SIGNER_NOTE
           : (item.answerOverride ??
             formatFieldValue(block, context.answers[block.fieldKey]))
 
@@ -886,6 +930,222 @@ async function drawPdfLibField(
   }
 
   return cursorY - 7
+}
+
+// A field's label, marked when it must be answered or when it carries on from the last page.
+function fieldLabel(item: PdfBlockFlowItem): string {
+  const block = item.block as PdfFieldBlock
+
+  return `${block.label}${item.fieldContinued ? " (continued)" : block.required ? " *" : ""}`
+}
+
+// What a styled field prints as its answer: a signature's drawing or note, or the answer written so far.
+function styledAnswer(item: PdfBlockFlowItem, block: StyledFieldBlock, context: PdfLibRenderContext): { answer: string; drawing: string | null } {
+  if (block.type === "signature_field" || block.type === "initials_field") {
+    const drawing = normalizeDrawingDataUrl(context.answers[block.fieldKey])
+
+    return { answer: !drawing && context.hasSigners ? SIGNER_NOTE : "", drawing }
+  }
+
+  return { answer: item.answerOverride ?? formatFieldValue(block, context.answers[block.fieldKey]), drawing: null }
+}
+
+// Puts a drawing already made where a signature goes, fitted as the boxed style fits it.
+async function drawPdfLibDrawing(context: PdfLibRenderContext, dataUrl: string, x: number, topY: number, width: number): Promise<void> {
+  const drawing = await embedPdfLibImage(context, dataUrl)
+  const size = fitPdfImage(drawing, Math.min(150, width), 45)
+
+  context.page.drawImage(drawing, { height: size.height, width: size.width, x, y: topY - size.height })
+}
+
+/**
+ * Where a field on a line puts its writing line: how far under its top it sits
+ * (under the band of label and answer, at the foot of the room to sign in, or
+ * the last ruled line of a long answer), the label's width beside a short
+ * answer, and how many ruled lines a long one has.
+ */
+function measurePdfLibLineField(
+  item: PdfBlockFlowItem,
+  context: PdfLibRenderContext,
+  width: number
+): { answerLines: number; count: number; depth: number; labelLines: number; labelWidth: number } {
+  const block = item.block as StyledFieldBlock
+  const font = context.regularFont
+  const label = fieldLabel(item)
+  const { answer, drawing } = styledAnswer(item, block, context)
+
+  if (block.type === "signature_field" || block.type === "initials_field") {
+    const noteHeight = answer ? wrapPdfText(answer, font, 10, width - ANSWER_BOX_PADDING * 2).length * 15 + ANSWER_BOX_PADDING * 2 : 0
+
+    return { answerLines: 0, count: 0, depth: Math.max(drawingRoom(block, Boolean(drawing)), noteHeight), labelLines: 0, labelWidth: 0 }
+  }
+
+  if (block.type === "text_field" && block.multiline) {
+    const needed = answer ? wrapPdfText(answer, font, 10, width).length * RULED_LINE_PITCH : 0
+    const count = Math.max(1, Math.round(Math.max(answerBoxHeight(block), needed) / RULED_LINE_PITCH))
+
+    return { answerLines: 0, count, depth: wrapPdfText(label, font, 10, width).length * 15 + 3 + count * RULED_LINE_PITCH, labelLines: 0, labelWidth: 0 }
+  }
+
+  const labelWidth = Math.min(font.widthOfTextAtSize(normalizeStandardFontText(label, font), 10), width * LINE_LABEL_SHARE)
+  const labelLines = wrapPdfText(label, font, 10, labelWidth).length
+  const answerLines = wrapPdfText(answer, font, 10, width - labelWidth - LINE_LABEL_GAP).length
+
+  return { answerLines, count: 0, depth: Math.max(labelLines, answerLines) * 15 + LINE_RULE_DROP, labelLines, labelWidth }
+}
+
+/**
+ * Draws a field on a line: a short answer on a line beside its label, a long
+ * one on ruled lines under it, and a signature over a line with its label as
+ * a caption beneath.
+ *
+ * @returns Where the line, or the caption, ends; help text follows.
+ */
+async function drawPdfLibLineField(
+  item: PdfBlockFlowItem,
+  block: StyledFieldBlock,
+  context: PdfLibRenderContext,
+  topY: number,
+  frame: PdfContentFrame
+): Promise<number> {
+  const ink = rgb(0.07, 0.09, 0.13)
+  const edge = rgb(0.61, 0.64, 0.69)
+  const font = context.regularFont
+  const right = frame.x + frame.width
+  const label = fieldLabel(item)
+  const { answer, drawing } = styledAnswer(item, block, context)
+  const fillable = Boolean(context.formFont) && FORM_FIELD_TYPES.has(block.type)
+  const rule = (from: number, y: number, color = edge): void => {
+    context.page.drawLine({ color, end: { x: right, y }, start: { x: from, y }, thickness: FIELD_RULE_WIDTH })
+  }
+  const { answerLines, count, depth, labelLines, labelWidth } = measurePdfLibLineField(item, context, frame.width)
+  const lineY = topY - depth
+
+  if (block.type === "signature_field" || block.type === "initials_field") {
+    const inner = frame.width - ANSWER_BOX_PADDING * 2
+
+    if (drawing) {
+      await drawPdfLibDrawing(context, drawing, frame.x + ANSWER_BOX_PADDING, topY - ANSWER_BOX_PADDING, inner)
+    } else if (answer) {
+      drawWrappedPdfText(context, answer, topY - ANSWER_BOX_PADDING, frame.x + ANSWER_BOX_PADDING, inner, 10, 15, font, ink, "left")
+    }
+
+    rule(frame.x, lineY)
+
+    return drawWrappedPdfText(context, label, lineY - CAPTION_GAP, frame.x, frame.width, CAPTION_SIZE, CAPTION_LEADING, font, rgb(0.42, 0.45, 0.5), "left")
+  }
+
+  if (block.type === "text_field" && block.multiline) {
+    const areaTop = drawWrappedPdfText(context, label, topY, frame.x, frame.width, 10, 15, font, ink, "left") - 3
+
+    if (fillable) {
+      // Typed in a viewer, which spaces the words its own way: one line under
+      // the room, not rules the words would miss.
+      rule(frame.x, areaTop - count * RULED_LINE_PITCH)
+      addPdfFormField(context, item, block, { height: count * RULED_LINE_PITCH, width: frame.width, x: frame.x, y: areaTop - count * RULED_LINE_PITCH })
+      return lineY
+    }
+
+    for (let line = 1; line <= count; line += 1) {
+      rule(frame.x, areaTop - line * RULED_LINE_PITCH, rgb(0.85, 0.83, 0.81))
+    }
+
+    if (answer) {
+      // Each line of text sits just above its rule.
+      drawWrappedPdfText(context, answer, areaTop - RULED_TEXT_RISE, frame.x, frame.width, 10, RULED_LINE_PITCH, font, ink, "left")
+    }
+
+    return lineY
+  }
+
+  const answerX = frame.x + labelWidth + LINE_LABEL_GAP
+  // Label and answer end on the band's last line, just above the rule.
+  const band = depth - LINE_RULE_DROP
+
+  drawWrappedPdfText(context, label, lineY + LINE_RULE_DROP + labelLines * 15, frame.x, labelWidth, 10, 15, font, ink, "left")
+
+  // A form field holds the answer when there is one.
+  if (fillable) {
+    addPdfFormField(context, item, block, { height: band, width: right - answerX, x: answerX, y: lineY })
+  } else if (answer) {
+    drawWrappedPdfText(context, answer, lineY + LINE_RULE_DROP + answerLines * 15, answerX, right - answerX, 10, 15, font, ink, "left")
+  }
+
+  rule(answerX, lineY)
+
+  return lineY
+}
+
+// A cell's answer area and whole height, as drawPdfLibCell draws them.
+function measurePdfLibCell(item: PdfBlockFlowItem, context: PdfLibRenderContext, width: number): { area: number; height: number } {
+  const block = item.block as StyledFieldBlock
+  const font = context.regularFont
+  const inner = width - CELL_PADDING * 2
+  const { answer, drawing } = styledAnswer(item, block, context)
+  const least =
+    block.type === "signature_field" || block.type === "initials_field"
+      ? drawingRoom(block, Boolean(drawing))
+      : block.type === "text_field" && block.multiline
+        ? answerBoxHeight(block) - ANSWER_BOX_PADDING * 2
+        : 15
+  const area = Math.max(least, wrapPdfText(answer, font, 10, inner).length * 15)
+  const help = block.helpText && !item.fieldContinued ? wrapPdfText(block.helpText, font, 7, inner).length * 10 : 0
+
+  return {
+    area,
+    height: CELL_PADDING + wrapPdfText(fieldLabel(item), font, CELL_LABEL_SIZE, inner).length * CELL_LABEL_LEADING + CELL_LABEL_GAP + area + help + CELL_PADDING
+  }
+}
+
+/**
+ * Draws a field as a bordered cell, as on a printed form: a small label in its
+ * corner, the answer under it, and any help inside. Cells touch: one that the
+ * next sits on ends at their shared edge.
+ *
+ * @param minimumHeight - The height of the row it stands in, when taller than it needs.
+ * @returns Where the next item starts.
+ */
+async function drawPdfLibCell(
+  item: PdfBlockFlowItem,
+  block: StyledFieldBlock,
+  context: PdfLibRenderContext,
+  topY: number,
+  frame: PdfContentFrame,
+  minimumHeight: number
+): Promise<number> {
+  const font = context.regularFont
+  const muted = rgb(0.42, 0.45, 0.5)
+  const x = frame.x + CELL_PADDING
+  const inner = frame.width - CELL_PADDING * 2
+  const { area, height } = measurePdfLibCell(item, context, frame.width)
+  const bottom = topY - Math.max(height, minimumHeight)
+  const { answer, drawing } = styledAnswer(item, block, context)
+
+  // The edge lies inside the cell, so a neighbour overlapping by its width draws over the same edge.
+  context.page.drawRectangle({
+    borderColor: rgb(0.61, 0.64, 0.69),
+    borderWidth: FIELD_RULE_WIDTH,
+    height: topY - bottom - FIELD_RULE_WIDTH,
+    width: frame.width - FIELD_RULE_WIDTH,
+    x: frame.x + FIELD_RULE_WIDTH / 2,
+    y: bottom + FIELD_RULE_WIDTH / 2
+  })
+
+  const answerTop = drawWrappedPdfText(context, fieldLabel(item), topY - CELL_PADDING, x, inner, CELL_LABEL_SIZE, CELL_LABEL_LEADING, font, muted, "left") - CELL_LABEL_GAP
+
+  if (drawing) {
+    await drawPdfLibDrawing(context, drawing, x, answerTop, inner)
+  } else if (context.formFont && FORM_FIELD_TYPES.has(block.type)) {
+    addPdfFormField(context, item, block, { height: area, width: inner, x, y: answerTop - area })
+  } else if (answer) {
+    drawWrappedPdfText(context, answer, answerTop, x, inner, 10, 15, font, rgb(0.07, 0.09, 0.13), "left")
+  }
+
+  if (block.helpText && !item.fieldContinued) {
+    drawWrappedPdfText(context, block.helpText, answerTop - area, x, inner, 7, 10, font, muted, "left")
+  }
+
+  return item.joinsNext ? bottom + FIELD_RULE_WIDTH : bottom - FIELD_GAP_BELOW
 }
 
 // Answers someone can type or pick in a PDF viewer; a signature is drawn in the viewer's own way.
@@ -951,4 +1211,44 @@ function addPdfFormField(
   text.addToPage(context.page, widget)
   text.setText(value)
   text.setFontSize(10)
+
+  if (text.isMultiline() && context.formFont) {
+    text.updateAppearances(context.formFont, wrappedAnswerAppearance)
+  }
+}
+
+/**
+ * How a long answer shows in a PDF viewer that draws what the file gives it:
+ * wrapped a word at a time, 10 points on 15. pdf-lib's own fits each line by
+ * measuring all the rest of the answer, a word shorter each time, which took
+ * seconds a field.
+ */
+const wrappedAnswerAppearance: AppearanceProviderFor<PDFTextField> = (field, widget, font) => {
+  const { height, width } = widget.getRectangle()
+  const black = rgb(0, 0, 0)
+
+  field.acroField.setDefaultAppearance(`${setFillingColor(black)}\n${setFontAndSize(font.name, 10)}`)
+
+  return drawTextField({
+    // No box or fill of its own: the page draws the field's edges.
+    borderColor: undefined,
+    borderWidth: 0,
+    color: undefined,
+    font: font.name,
+    fontSize: 10,
+    height,
+    padding: 1,
+    textColor: black,
+    textLines: wrapPdfText(field.getText() ?? "", font, 10, width - 2).map((line: string, index: number) => ({
+      encoded: font.encodeText(line),
+      height: font.heightAtSize(10),
+      text: line,
+      width: font.widthOfTextAtSize(line, 10),
+      x: 1,
+      y: height - 15 * (index + 1) + 4,
+    })),
+    width,
+    x: 0,
+    y: 0,
+  })
 }

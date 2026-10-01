@@ -62,7 +62,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
-import { answerBoxHeight, BOX_HEIGHT_POINTS, type TemplateBlock, type TextRun } from "@/types/template"
+import { answerBoxHeight, BOX_HEIGHT_POINTS, type TemplateBlock, type TemplateLayout, type TextRun } from "@/types/template"
 
 export type LineBlock = Extract<TemplateBlock, { type: "heading" | "paragraph" }>
 export type ListBlock = Extract<TemplateBlock, { type: "bullet_list" | "numbered_list" }>
@@ -80,6 +80,8 @@ export type CanvasActions = Readonly<{
   fields: "design" | "fill" | "read"
   /** Blocks the answers so far would hide, shown faded while the page is built. */
   hiddenByRule: ReadonlySet<string>
+  /** How the document draws its answers: in a box, on a line, or in a cell. */
+  fieldStyle: NonNullable<TemplateLayout["fieldStyle"]>
   /** Whether the page is a phone's reflowed column rather than sheets of paper. */
   narrow: boolean
   /** The caret request for one line, when it is that line's turn. */
@@ -511,6 +513,7 @@ function BlockBody({ actions, block, placed }: { actions: CanvasActions; block: 
           answers={actions.answers}
           block={block}
           edge={isBoxed(block) && actions.textEditable && !actions.narrow ? <BoxEdge block={block} controller={actions.controller} /> : undefined}
+          fieldStyle={actions.fieldStyle}
           mode={actions.fields}
           onAnswerChange={actions.onAnswerChange}
         />
@@ -630,7 +633,7 @@ function LineBreaks({ blockId }: { blockId: string }): ReactElement | null {
 type BoxedField = Extract<TemplateBlock, { type: "date_field" | "dropdown_field" | "initials_field" | "signature_field" | "text_field" }>
 
 // The fields that print an answer box, whose height can be changed; radio buttons print none.
-function isBoxed(block: TemplateBlock): block is BoxedField {
+export function isBoxed(block: TemplateBlock): block is BoxedField {
   return ["date_field", "dropdown_field", "initials_field", "signature_field", "text_field"].includes(block.type) && !(block.type === "dropdown_field" && block.display === "radios")
 }
 

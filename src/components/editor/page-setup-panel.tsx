@@ -107,6 +107,16 @@ export function PageSetupPanel({
           value={paragraphGap(layout)}
         />
       </Row>
+      <Choice
+        label="Answers"
+        onChange={(fieldStyle) => onChange({ ...layout, fieldStyle })}
+        options={[
+          ["box", "Box"],
+          ["line", "Line"],
+          ["cell", "Cell"],
+        ]}
+        value={layout.fieldStyle ?? "box"}
+      />
       <div className="grid gap-1 border-t border-border pt-2">
         <Toggle
           checked={layout.printedTitle.mode !== "none"}

@@ -419,6 +419,13 @@ export const templateLayoutSchema = z
     density: z
       .enum(["balanced", "compact", "comfortable"])
       .default("balanced"),
+    /**
+     * How answers are drawn: a box under the label; a line beside the label,
+     * ruled lines for a long answer and a caption under a signature; or a
+     * bordered cell with a small label in its corner, touching the cells
+     * beside and below it, as on a printed government form. Absent, a box.
+     */
+    fieldStyle: z.enum(["box", "line", "cell"]).optional(),
     printedTitle: z
       .discriminatedUnion("mode", [
         z.object({ mode: z.literal("linked") }).strict(),

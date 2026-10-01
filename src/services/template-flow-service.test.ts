@@ -186,6 +186,7 @@ describe("template Flow service", () => {
             summary: "Updated logo placement",
             payload: {
               accentColor: "#635273",
+              fieldStyle: "cell",
               logoAlignment: "right",
               logoWidthPercent: 32
             }
@@ -247,6 +248,7 @@ describe("template Flow service", () => {
     expect(result.proposal?.candidateDraft.content.branding.accentColor).toBe("#635273")
     expect(result.proposal?.candidateDraft.content.branding.logoAlignment).toBe("right")
     expect(result.proposal?.candidateDraft.content.branding.logoWidthPercent).toBe(32)
+    expect(result.proposal?.candidateDraft.content).toMatchObject({ layout: { fieldStyle: "cell" } })
     expect(result.proposal?.changedBlockIds).toEqual([PARAGRAPH_ID])
     expect(result.messages[1].operations).toHaveLength(2)
     expect(result.messages[1].receiptStatus).toBe("proposed")

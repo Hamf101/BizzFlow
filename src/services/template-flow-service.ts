@@ -56,6 +56,7 @@ import {
   templateBlockSchema,
   templateContentSchema,
   templateContentV3Schema,
+  templateLayoutSchema,
   textFieldBlockSchema,
   upgradeV2TemplateContentToV3,
   type TemplateBlock,
@@ -199,7 +200,9 @@ const flowWireOperationSchema = z.discriminatedUnion("type", [
           accentColor: hexColorSchema.optional(),
           logoAlignment: z.enum(["left", "center", "right"]).optional(),
           logoWidthPercent: z.number().int().min(10).max(60).optional(),
-          removeLogo: z.boolean().optional()
+          removeLogo: z.boolean().optional(),
+          // How answers are drawn, which is the document's look as much as its colours are.
+          fieldStyle: templateLayoutSchema.shape.fieldStyle
         })
         .strict()
     })
@@ -1444,7 +1447,7 @@ function createFlowPayloadContract(): string {
     "Operation payload contracts:",
     'set_title => {"value":"Document title"}.',
     'set_description => {"value":"Document description"}.',
-    'set_branding => include only requested properties from {"organizationName":"Name","primaryColor":"#RRGGBB","accentColor":"#RRGGBB","logoAlignment":"left|center|right","logoWidthPercent":25,"removeLogo":false}.',
+    'set_branding => include only requested properties from {"organizationName":"Name","primaryColor":"#RRGGBB","accentColor":"#RRGGBB","logoAlignment":"left|center|right","logoWidthPercent":25,"removeLogo":false,"fieldStyle":"box|line|cell"}. fieldStyle is how every answer is drawn: box, a box under its label, for modern forms; line, the label beside a line to write on, for classic printed forms, letters and agreements; cell, bordered cells with small labels that share their edges, for dense official, government and medical forms. Choose it when you draft a whole document, to suit its kind, or when the user asks for a style.',
     'add_block => {"ref":optional "new:1","afterBlockId":"existing-uuid, earlier ref, or null for the end of the document","block":{...new block without id}}.',
     'update_block => {"blockId":"existing-uuid","block":{...complete replacement block without id}}.',
     'update_image => {"blockId":"existing-uuid","altText":"Description","caption":null,"alignment":"left|center|right","widthPercent":50}.',
@@ -2498,6 +2501,9 @@ function applyBrandingOperation(
   }
   if (payload.logoWidthPercent !== undefined) {
     draft.content.branding.logoWidthPercent = payload.logoWidthPercent
+  }
+  if (payload.fieldStyle !== undefined) {
+    draft.content.layout.fieldStyle = payload.fieldStyle
   }
   if (payload.removeLogo === true) {
     draft.content.branding.logoAsset = null

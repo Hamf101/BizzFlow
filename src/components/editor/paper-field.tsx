@@ -9,9 +9,10 @@ import { DatePicker } from "@/components/ui/date-picker"
 import { Select } from "@/components/ui/select"
 import { describeDateFormat, formatDateAnswer } from "@/lib/date-format"
 import { cn } from "@/lib/utils"
-import type { TemplateBlock } from "@/types/template"
+import type { TemplateBlock, TemplateLayout } from "@/types/template"
 
 type FieldBlock = Extract<TemplateBlock, { fieldKey: string }>
+type FieldStyle = NonNullable<TemplateLayout["fieldStyle"]>
 
 /**
  * Space the PDF leaves around a block, as CSS: its own points, plus what the
@@ -45,6 +46,13 @@ const BOX_HEIGHT = { line: 3, lines: 6, drawing: 5.6 } as const
 // The printed edge of a checkbox and of a signature's line. An answer box's
 // edge is fainter, the page's own border colour, as it prints.
 const EDGE = "rgb(156 163 176)"
+// A long answer in the line style is written on rules 20 points apart, the
+// page's faint edge colour, as it prints.
+const RULED: CSSProperties = {
+  backgroundImage: "linear-gradient(to bottom, transparent calc(2em - 0.07em), var(--color-border) calc(2em - 0.07em))",
+  backgroundSize: "100% 2em",
+  lineHeight: 2,
+}
 // A control inside a box is bare: the box is the field.
 const BARE =
   "h-auto min-h-0 rounded-none border-0 bg-transparent p-0 text-[1em] leading-[1.5] shadow-none focus-visible:border-0 focus-visible:ring-0 data-popup-open:border-0 md:h-auto md:text-[1em]"
@@ -61,6 +69,7 @@ export function PaperField({
   answers,
   block,
   edge,
+  fieldStyle = "box",
   mode,
   onAnswerChange,
 }: {
@@ -68,6 +77,8 @@ export function PaperField({
   block: FieldBlock
   /** What changes the box's height, along its foot. */
   edge?: ReactNode
+  /** How the document draws its answers: in a box, on a line, or in a cell. */
+  fieldStyle?: FieldStyle
   mode: "design" | "fill" | "read"
   onAnswerChange: (fieldKey: string, value: unknown) => void
 }): ReactElement {
@@ -125,6 +136,9 @@ export function PaperField({
   // A box its author made taller or shorter, in ems of the 10-point text.
   const sized = "boxHeight" in block && block.boxHeight !== undefined ? block.boxHeight / 10 : undefined
   const placeholder = (words: string): ReactElement => <span className="text-muted-foreground">{words}</span>
+  // A long answer's rules, as many as its box is tall to the nearest 20 points.
+  const rules = Math.max(1, Math.round((sized ?? BOX_HEIGHT.lines) / 2))
+  const ruled = fieldStyle === "line" && block.type === "text_field" && block.multiline
 
   switch (block.type) {
     case "text_field":
@@ -140,7 +154,7 @@ export function PaperField({
             onChange={(event) => set(event.target.value)}
             placeholder={block.placeholder ?? undefined}
             // It grows with its answer, as the printed box does.
-            style={{ fieldSizing: "content", minHeight: `${(sized ?? BOX_HEIGHT.lines) - 1.2}em` }}
+            style={ruled ? { ...RULED, fieldSizing: "content", minHeight: `${rules * 2}em` } : { fieldSizing: "content", minHeight: `${(sized ?? BOX_HEIGHT.lines) - 1.2}em` }}
             value={text}
           />
         ) : (
@@ -250,6 +264,83 @@ export function PaperField({
               </Option>
             )
           })}
+        </div>
+        <Help block={block} />
+      </div>
+    )
+  }
+
+  if (fieldStyle !== "box" && block.type !== "file_field") {
+    const drawing = height === BOX_HEIGHT.drawing
+
+    return fieldStyle === "cell" ? (
+      // A bordered cell, its label small in the corner and its help inside, so
+      // cells beside and below it share their edges (see the canvas's rules).
+      <div
+        // A row's cells are as tall as its tallest, so the next row sits on all of them.
+        className={cn("relative flex h-full flex-col transition-colors focus-within:ring-2 focus-within:ring-ring/40", fill && "cursor-text")}
+        data-paper-cell=""
+        style={{ border: `0.07em solid ${EDGE}`, lineHeight: 1.5, marginBottom: "calc(3 * var(--doc-pt))", padding: "0.4em" }}
+      >
+        <span className="text-muted-foreground" style={{ fontSize: "0.7em", lineHeight: 10 / 7, marginBottom: "calc(0.2em / 0.7)" }}>
+          {block.label}
+          {required}
+        </span>
+        <div className="relative flex flex-col" style={{ minHeight: `${drawing ? (sized ?? height) : block.type === "text_field" && block.multiline ? (sized ?? BOX_HEIGHT.lines) - 1.2 : 1.5}em` }}>
+          {answer}
+          {edge}
+        </div>
+        {block.helpText ? (
+          <span className="text-muted-foreground" style={{ fontSize: "0.7em", lineHeight: 10 / 7 }}>
+            {block.helpText}
+          </span>
+        ) : null}
+      </div>
+    ) : drawing ? (
+      // Signed on a line, named by a caption under it.
+      <div className="flex flex-col" data-paper-line="">
+        <div className="relative flex flex-col" style={{ borderBottom: `0.07em solid ${EDGE}`, lineHeight: 1.5, minHeight: `${sized ?? height}em` }}>
+          {answer}
+          {edge}
+        </div>
+        <div className="flex flex-col">
+          <span className="text-muted-foreground" style={{ fontSize: "0.8em", lineHeight: 11 / 8, marginTop: "calc(0.2em / 0.8)" }}>
+            {block.label}
+            {required}
+          </span>
+          <Help block={block} />
+        </div>
+      </div>
+    ) : ruled ? (
+      // A long answer: its label, then lines to write on.
+      <div className="flex flex-col" data-paper-line="">
+        <div className="flex flex-col">
+          <span style={{ lineHeight: 1.5, marginBottom: "calc(3 * var(--doc-pt))" }}>
+            {block.label}
+            {required}
+          </span>
+          <div className="relative flex flex-col transition-colors focus-within:ring-2 focus-within:ring-ring/40" style={fill ? undefined : { ...RULED, minHeight: `${rules * 2}em` }}>
+            {fill ? answer : <span className="whitespace-pre-wrap">{answer}</span>}
+            {edge}
+          </div>
+        </div>
+        <Help block={block} />
+      </div>
+    ) : (
+      // The label, and beside it the line its answer is written on.
+      <div className="flex flex-col" data-paper-line="">
+        {/* A wrapped label's last line and the answer sit together on the line. */}
+        <div className="flex items-end" style={{ gap: "0.6em", lineHeight: 1.5 }}>
+          <span className="max-w-[45%] shrink-0" style={{ paddingBottom: "0.27em" }}>
+            {block.label}
+            {required}
+          </span>
+          <div
+            className={cn("min-w-0 flex-1 transition-colors focus-within:border-ring focus-within:shadow-[0_0.07em_0_0_var(--color-ring)]", fill && "cursor-text")}
+            style={{ borderBottom: `0.07em solid ${EDGE}`, paddingBottom: "0.2em" }}
+          >
+            {answer}
+          </div>
         </div>
         <Help block={block} />
       </div>

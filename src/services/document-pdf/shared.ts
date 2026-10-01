@@ -1,7 +1,9 @@
 import { formatDateAnswer } from "@/lib/date-format"
 import { createTemplateRenderPlan } from "@/services/templates/template-render-plan"
 import {
+  answerBoxHeight,
   parseTemplateContent,
+  type TemplateBlock,
   type TemplateContent,
 } from "@/types/template"
 
@@ -163,6 +165,91 @@ export { answerBoxHeight } from "@/types/template"
 export const ANSWER_BOX_PADDING = 6
 /** How far a checkbox's label sits from the box's left edge, in points. */
 export const CHECKBOX_LABEL_INSET = 16
+
+/** What a signature or initials field prints in its room when signers sign in the signing record. */
+export const SIGNER_NOTE = "Captured per signer in signing record below"
+
+/**
+ * The room a signature or initials field leaves to sign in: its box, taller
+ * when a drawing already made goes in it.
+ *
+ * @param block - The signature or initials field.
+ * @param hasDrawing - Whether a drawing is printed in it.
+ * @returns The room's height, in points.
+ */
+export function drawingRoom(block: TemplateBlock, hasDrawing: boolean): number {
+  return hasDrawing ? Math.max(answerBoxHeight(block), 45 + ANSWER_BOX_PADDING * 2) : answerBoxHeight(block)
+}
+
+// The field styles' measurements, in points; the editor draws them alike.
+/** The space under a field: 3 above its help, 7 after. */
+export const FIELD_GAP_BELOW = 10
+/** The weight of an answer's line and a cell's edge; touching cells overlap by it, so they share one edge. */
+export const FIELD_RULE_WIDTH = 0.7
+/** Line style: the most of a field's width its label takes beside the line. */
+export const LINE_LABEL_SHARE = 0.45
+/** Line style: the space between a label and its line. */
+export const LINE_LABEL_GAP = 6
+/** Line style: how far the line sits under the band of text it is written on. */
+export const LINE_RULE_DROP = 2
+/** Line style: the space between the ruled lines of a long answer. */
+export const RULED_LINE_PITCH = 20
+/** Line style: how far a long answer's text sits above its ruled line. */
+export const RULED_TEXT_RISE = 5
+/** Line style: the gap between a signature's line and its caption. */
+export const CAPTION_GAP = 2
+/** Line style: a signature caption's text size and line height. */
+export const CAPTION_SIZE = 8
+export const CAPTION_LEADING = 11
+/** Cell style: the space inside a cell's outer edge. */
+export const CELL_PADDING = 4
+/** Cell style: a cell's label's text size and line height. */
+export const CELL_LABEL_SIZE = 7
+export const CELL_LABEL_LEADING = 10
+/** Cell style: the gap between a cell's label and its answer. */
+export const CELL_LABEL_GAP = 2
+
+/** A field the layout's field style draws; a checkbox, radio buttons and an upload print as they always do. */
+export type StyledFieldBlock = Extract<TemplateBlock, { type: "date_field" | "dropdown_field" | "initials_field" | "signature_field" | "text_field" }>
+
+/**
+ * Whether a field takes the layout's field style.
+ *
+ * @param block - Any block.
+ * @returns True for a text, date, dropdown, signature or initials field; not radio buttons.
+ */
+export function isStyledField(block: TemplateBlock): block is StyledFieldBlock {
+  return (
+    block.type === "text_field" ||
+    block.type === "date_field" ||
+    block.type === "signature_field" ||
+    block.type === "initials_field" ||
+    (block.type === "dropdown_field" && block.display !== "radios")
+  )
+}
+
+/**
+ * Whether a row prints as cells that touch: the cell style, and every block in
+ * it a styled field.
+ *
+ * @param cells - The row's blocks, left to right; null where a column is empty.
+ * @param style - The layout's field style.
+ * @returns True when the row's cells share their edges.
+ */
+export function isCellRow(cells: readonly ({ block: TemplateBlock } | null | undefined)[], style: string): boolean {
+  return style === "cell" && isStyledRow(cells)
+}
+
+/**
+ * Whether every block in a row is a styled field, so its fields line up as one:
+ * cells that touch, or lines on one level.
+ *
+ * @param cells - The row's blocks, left to right; null where a column is empty.
+ * @returns True for a row with at least one block, all of them styled fields.
+ */
+export function isStyledRow(cells: readonly ({ block: TemplateBlock } | null | undefined)[]): boolean {
+  return cells.some(Boolean) && cells.every((cell) => !cell || isStyledField(cell.block))
+}
 
 /** The space between radio buttons set side by side. */
 export const RADIO_ACROSS_GAP = 18

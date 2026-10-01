@@ -25,6 +25,7 @@ import {
   BlockContextMenu,
   CanvasBlock,
   type CanvasActions,
+  isBoxed,
   isLine,
   isList,
   type LineBlock,
@@ -625,6 +626,7 @@ export function EditorCanvas({
     designable,
     dragging,
     fields,
+    fieldStyle: plan.layout.fieldStyle ?? "box",
     hiddenByRule,
     narrow,
     focusFor(caretKey: string): FocusRequest | null {
@@ -859,6 +861,8 @@ export function EditorCanvas({
     fontFamily: '"bf-default", sans-serif',
     fontSize: 10 * point,
   } as CSSProperties
+  // A unit whose every block is an answer drawn as a cell.
+  const cellUnit = (unit: CanvasUnit): boolean => actions.fieldStyle === "cell" && unit.blocks.length > 0 && unit.blocks.every(({ block }) => isBoxed(block))
   const unitNode = (unit: CanvasUnit): ReactElement => (
     <Fragment key={unit.id}>
       {!narrow && layout.spacers[unit.id] ? (
@@ -869,6 +873,9 @@ export function EditorCanvas({
       ) : null}
       <div
         className="pointer-events-auto"
+        // Cells touch the cells below them; a title or space above a unit parts them, as in print.
+        data-cell-bottom={cellUnit(unit) ? "" : undefined}
+        data-cell-top={cellUnit(unit) && !unit.space && !unit.sectionId && !unit.sectionLabel && !unit.groupLabel ? "" : undefined}
         data-unit-id={unit.id}
         // The space asked for above it; a phone's column keeps its own rhythm.
         style={narrow || !unit.space ? undefined : { paddingTop: unit.space * point }}
@@ -967,6 +974,7 @@ export function EditorCanvas({
         style={inkStyle}
       >
         {PRINTED_FACE}
+        {CELL_JOINS}
         <BlockContextMenu actions={actions}>{flow}</BlockContextMenu>
         {textEditable ? <SectionPieces root={rootRef} sectionId={controller.currentSectionId} narrow zoom={1} revision={content} /> : null}
         {units.length === 0 ? <EmptyPageLine actions={actions} onStart={() => focusPageEnd(0)} /> : null}
@@ -1005,6 +1013,7 @@ export function EditorCanvas({
         style={{ ...inkStyle, height: stackHeight, transform: `scale(${zoom})`, width: pageWidth }}
       >
         {PRINTED_FACE}
+        {CELL_JOINS}
         {Array.from({ length: pageCount }, (_, page) => (
           <div
             aria-label={`Page ${page + 1} of ${pageCount}`}
@@ -1135,10 +1144,12 @@ function UnitBlocks({ actions, unit }: { actions: CanvasActions; unit: CanvasUni
       ) : null}
       <div
         className="relative grid"
+        data-cell-row={unit.columns > 1 && !actions.narrow ? "" : undefined}
+        data-line-row={actions.fieldStyle === "line" && unit.columns > 1 && !actions.narrow && unit.blocks.every(({ block }) => isBoxed(block)) ? "" : undefined}
         // A row stacks on a phone, where there is no room beside a block.
         // Each block keeps the space the PDF leaves under it, so rows need no gap of their own.
         style={{
-          columnGap: "var(--doc-column-gap)",
+          columnGap: actions.fieldStyle === "cell" && unit.blocks.every(({ block }) => isBoxed(block)) ? 0 : "var(--doc-column-gap)",
           gridTemplateColumns: actions.narrow ? undefined : rowGridColumns(unit.columns, unit.widths),
           // A block moved across the page sits where it was put.
           ...(unit.frame && !actions.narrow ? { marginLeft: `${unit.frame.left}%`, width: `${unit.frame.width}%` } : {}),
@@ -1161,6 +1172,24 @@ function UnitBlocks({ actions, unit }: { actions: CanvasActions; unit: CanvasUni
 // families some words use.
 // eslint-disable-next-line @next/next/no-css-tags -- the document face, served by the fonts route like the others
 const PRINTED_FACE = <link href="/fonts/default/font.css" precedence="document-fonts" rel="stylesheet" />
+
+// A row of answers on lines writes on one level: each field's lines end
+// together, and its caption and help hang below.
+// Cells share their edges, as a printed form's grid does: a row's cells
+// overlap by one edge, and so do its lines when it wraps. The space under
+// the cells is the unit's, and goes when cells follow.
+const CELL_JOINS = (
+  <style href="paper-cell-joins" precedence="document-fonts">{`
+[data-cell-bottom] [data-block-id] { margin-bottom: -0.07em !important }
+[data-cell-bottom] [data-paper-cell] { margin-bottom: 0 !important }
+[data-cell-bottom] { padding-bottom: calc(0.07em + 3 * var(--doc-pt) + max(0px, calc(7 * var(--doc-pt) + var(--doc-adjust, 0px)))) }
+[data-cell-bottom]:has(+ [data-cell-top]) { padding-bottom: 0 }
+[data-cell-bottom] [data-cell-row] > [data-block-id] + [data-block-id] { margin-left: -0.07em }
+[data-line-row] > [data-block-id] { display: grid; grid-row: span 2; grid-template-rows: subgrid }
+[data-line-row] > [data-block-id] > [data-paper-line] { display: grid; grid-row: span 2; grid-template-rows: subgrid }
+[data-line-row] [data-paper-line] > :first-child { align-self: end }
+`}</style>
+)
 
 // The sides of a block alone on its line: drag one to make the block
 // narrower or wider, lining up with the margins, the page's middle and other
