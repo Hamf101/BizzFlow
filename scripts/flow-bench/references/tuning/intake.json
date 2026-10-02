@@ -1,0 +1,436 @@
+{
+  "request": "new client intake form for a mobile car detailing business",
+  "title": "New client intake form",
+  "description": "Use when a new client books mobile car detailing, to collect their contact details, their vehicle and where the work will happen.",
+  "content": {
+    "schemaVersion": 3,
+    "branding": {
+      "organizationName": "",
+      "logoAsset": null,
+      "logoDataUrl": null,
+      "logoAlignment": "left",
+      "logoWidthPercent": 24,
+      "primaryColor": "#252329",
+      "accentColor": "#635273"
+    },
+    "blocks": [
+      {
+        "id": "a1000000-0000-4000-8000-000000000001",
+        "type": "heading",
+        "text": "New client intake form",
+        "level": 1,
+        "alignment": "left"
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000002",
+        "type": "paragraph",
+        "text": "Please tell us about you and your vehicle so we can arrive prepared.",
+        "alignment": "left"
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000101",
+        "type": "paragraph",
+        "text": "We use your details only to arrange and carry out your detailing and to contact you about it. We keep them for as long as we need them for that and for our records, and we do not share them with anyone else unless the law requires it.",
+        "alignment": "left"
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000003",
+        "fieldKey": "first_name",
+        "label": "First name",
+        "required": true,
+        "helpText": null,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000005",
+        "fieldKey": "last_name",
+        "label": "Last name",
+        "required": true,
+        "helpText": null,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000008",
+        "fieldKey": "phone_number",
+        "label": "Phone number",
+        "required": true,
+        "helpText": "We call to confirm your booking, and on the day if we are running late.",
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false,
+        "format": "phone"
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000009",
+        "fieldKey": "email_address",
+        "label": "Email address",
+        "required": false,
+        "helpText": null,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false,
+        "format": "email"
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000012",
+        "fieldKey": "address_line_1",
+        "label": "Address line 1",
+        "required": true,
+        "helpText": "The address where the vehicle will be when we detail it.",
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000014",
+        "fieldKey": "address_line_2",
+        "label": "Address line 2",
+        "required": false,
+        "helpText": null,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000015",
+        "fieldKey": "town_or_city",
+        "label": "Town or city",
+        "required": true,
+        "helpText": null,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000016",
+        "fieldKey": "postcode",
+        "label": "Postcode",
+        "required": true,
+        "helpText": null,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000019",
+        "fieldKey": "where_will_the_vehicle_be_parked",
+        "label": "Where will the vehicle be parked?",
+        "required": false,
+        "helpText": null,
+        "type": "dropdown_field",
+        "placeholder": null,
+        "options": [
+          "Driveway",
+          "Garage",
+          "On the street",
+          "Car park",
+          "Other"
+        ],
+        "display": "radios"
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000020",
+        "fieldKey": "where_else_will_the_vehicle_be_parked",
+        "label": "Where else will the vehicle be parked?",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "a1000000-0000-4000-8000-000000000019",
+          "operator": "equals",
+          "value": "Other"
+        },
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000021",
+        "fieldKey": "make",
+        "label": "Make",
+        "required": true,
+        "helpText": null,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000023",
+        "fieldKey": "model",
+        "label": "Model",
+        "required": true,
+        "helpText": null,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000026",
+        "fieldKey": "year",
+        "label": "Year",
+        "required": false,
+        "helpText": null,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000027",
+        "fieldKey": "colour",
+        "label": "Colour",
+        "required": false,
+        "helpText": null,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000030",
+        "fieldKey": "vehicle_type",
+        "label": "Vehicle type",
+        "required": true,
+        "helpText": "The size of the vehicle affects how long the work takes.",
+        "type": "dropdown_field",
+        "placeholder": null,
+        "options": [
+          "Hatchback",
+          "Saloon",
+          "Estate",
+          "SUV or 4x4",
+          "People carrier",
+          "Van or pickup",
+          "Other"
+        ]
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000102",
+        "type": "text_field",
+        "fieldKey": "other_vehicle_type",
+        "label": "Other vehicle type",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "visibleWhen": {
+          "sourceBlockId": "a1000000-0000-4000-8000-000000000030",
+          "operator": "equals",
+          "value": "Other"
+        }
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000031",
+        "fieldKey": "which_service_would_you_like",
+        "label": "Which service would you like?",
+        "required": true,
+        "helpText": null,
+        "type": "dropdown_field",
+        "placeholder": null,
+        "options": [
+          "Exterior wash and wax",
+          "Interior valet",
+          "Full valet, inside and out",
+          "Machine polish and paint correction",
+          "Ceramic coating",
+          "Not sure yet"
+        ]
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000033",
+        "fieldKey": "preferred_date",
+        "label": "Preferred date",
+        "required": false,
+        "helpText": null,
+        "type": "date_field"
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000034",
+        "fieldKey": "preferred_time_of_day",
+        "label": "Preferred time of day",
+        "required": false,
+        "helpText": null,
+        "type": "dropdown_field",
+        "placeholder": null,
+        "options": [
+          "Morning",
+          "Afternoon",
+          "No preference"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000037",
+        "type": "dropdown_field",
+        "fieldKey": "is_there_an_outdoor_tap_we_can_use",
+        "label": "Is there an outdoor tap we can use?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No",
+          "Not sure"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000039",
+        "type": "dropdown_field",
+        "fieldKey": "is_there_a_mains_power_socket_we_can_use",
+        "label": "Is there a mains power socket we can use?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No",
+          "Not sure"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000040",
+        "type": "dropdown_field",
+        "fieldKey": "does_the_vehicle_have_any_existing_damage",
+        "label": "Does the vehicle have any existing damage?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000041",
+        "fieldKey": "describe_the_damage",
+        "label": "Describe the damage",
+        "required": true,
+        "helpText": "Tell us where it is so we can take extra care around it.",
+        "visibleWhen": {
+          "sourceBlockId": "a1000000-0000-4000-8000-000000000040",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "boxHeight": 60,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000042",
+        "fieldKey": "anything_else_we_should_know",
+        "label": "Anything else we should know",
+        "required": false,
+        "helpText": "For example pet hair, stains or how to find you.",
+        "boxHeight": 72,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": true
+      }
+    ],
+    "layout": {
+      "pageSize": "A4",
+      "orientation": "portrait",
+      "marginPreset": "standard",
+      "density": "balanced",
+      "printedTitle": {
+        "mode": "none"
+      },
+      "headerPolicy": "none",
+      "footerPolicy": "none",
+      "pageNumbering": "none"
+    },
+    "sections": [
+      {
+        "id": "a1000000-0000-4000-8000-000000000004",
+        "label": "Your details",
+        "startBlockId": "a1000000-0000-4000-8000-000000000003",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000013",
+        "label": "Where we will work",
+        "startBlockId": "a1000000-0000-4000-8000-000000000012",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000022",
+        "label": "Your vehicle",
+        "startBlockId": "a1000000-0000-4000-8000-000000000021",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000032",
+        "label": "The service you would like",
+        "startBlockId": "a1000000-0000-4000-8000-000000000031",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000038",
+        "label": "Things we should know",
+        "startBlockId": "a1000000-0000-4000-8000-000000000037",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      }
+    ],
+    "fieldGroups": [
+      {
+        "id": "a1000000-0000-4000-8000-000000000007",
+        "label": null,
+        "startBlockId": "a1000000-0000-4000-8000-000000000003",
+        "endBlockId": "a1000000-0000-4000-8000-000000000005",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000011",
+        "label": null,
+        "startBlockId": "a1000000-0000-4000-8000-000000000008",
+        "endBlockId": "a1000000-0000-4000-8000-000000000009",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000018",
+        "label": null,
+        "startBlockId": "a1000000-0000-4000-8000-000000000015",
+        "endBlockId": "a1000000-0000-4000-8000-000000000016",
+        "columns": 2,
+        "widths": [
+          8,
+          4
+        ],
+        "keepTogether": false
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000025",
+        "label": null,
+        "startBlockId": "a1000000-0000-4000-8000-000000000021",
+        "endBlockId": "a1000000-0000-4000-8000-000000000023",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000029",
+        "label": null,
+        "startBlockId": "a1000000-0000-4000-8000-000000000026",
+        "endBlockId": "a1000000-0000-4000-8000-000000000027",
+        "columns": 2,
+        "keepTogether": false
+      }
+    ],
+    "blockRules": []
+  }
+}

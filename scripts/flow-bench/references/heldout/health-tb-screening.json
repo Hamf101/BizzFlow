@@ -1,0 +1,807 @@
+{
+  "request": "TB screening form for new hires at our dialysis clinics in Texas, following the CDC's baseline screening for health care personnel: risk assessment, symptom check, TB history, the test result and clearance by employee health.",
+  "title": "Baseline tuberculosis screening",
+  "description": "Use when a new member of staff joins, before they start work with patients: their TB risk, any signs of TB disease, their TB history, the baseline test result and clearance by employee health.",
+  "maxPages": 3,
+  "content": {
+    "schemaVersion": 3,
+    "branding": {
+      "organizationName": "",
+      "logoAsset": null,
+      "logoDataUrl": null,
+      "logoAlignment": "left",
+      "logoWidthPercent": 24,
+      "primaryColor": "#1e3a5f",
+      "accentColor": "#3b6ea8"
+    },
+    "blocks": [
+      {
+        "id": "0b150000-0000-4000-8000-000000000001",
+        "type": "heading",
+        "text": "Baseline tuberculosis screening",
+        "level": 1,
+        "alignment": "left"
+      },
+      {
+        "id": "0b150000-0000-4000-8000-000000000002",
+        "type": "paragraph",
+        "text": "Everyone who joins us to work in our clinics is screened for tuberculosis (TB) before they start. Screening has four parts: a TB risk assessment, a check for signs of TB disease, a TB blood or skin test, and further checks if any of these suggest them. The employee completes sections A to D and signs section G; employee health completes sections E and F.",
+        "alignment": "left"
+      },
+      {
+        "id": "0b150000-0000-4000-8000-000000000003",
+        "type": "paragraph",
+        "text": "How we use your information: employee health uses this form to decide whether you can start work safely and to offer you follow-up care. It is kept in a confidential employee health file, separate from your personnel file, and seen only by employee health staff. We share it with the health department only when the law requires us to report TB.",
+        "runs": [
+          {
+            "text": "How we use your information:",
+            "bold": true
+          },
+          {
+            "text": " employee health uses this form to decide whether you can start work safely and to offer you follow-up care. It is kept in a confidential employee health file, separate from your personnel file, and seen only by employee health staff. We share it with the health department only when the law requires us to report TB."
+          }
+        ],
+        "alignment": "left"
+      },
+      {
+        "id": "0b150000-0000-4000-8000-000000000005",
+        "type": "text_field",
+        "fieldKey": "first_name",
+        "label": "First name",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0b150000-0000-4000-8000-000000000006",
+        "type": "text_field",
+        "fieldKey": "last_name",
+        "label": "Last name",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0b150000-0000-4000-8000-000000000008",
+        "type": "date_field",
+        "fieldKey": "date_of_birth",
+        "label": "Date of birth",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "mdy",
+          "separator": "/",
+          "month": "number"
+        }
+      },
+      {
+        "id": "0b150000-0000-4000-8000-000000000009",
+        "type": "text_field",
+        "fieldKey": "employee_id",
+        "label": "Employee ID",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0b150000-0000-4000-8000-000000000011",
+        "type": "text_field",
+        "fieldKey": "position",
+        "label": "Position",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0b150000-0000-4000-8000-000000000012",
+        "type": "text_field",
+        "fieldKey": "clinic",
+        "label": "Clinic",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0b150000-0000-4000-8000-000000000014",
+        "type": "date_field",
+        "fieldKey": "start_date",
+        "label": "Start date",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "mdy",
+          "separator": "/",
+          "month": "number"
+        }
+      },
+      {
+        "id": "0b150000-0000-4000-8000-000000000015",
+        "type": "text_field",
+        "fieldKey": "phone_number",
+        "label": "Phone number",
+        "required": true,
+        "helpText": "Employee health calls you with your test result.",
+        "placeholder": null,
+        "multiline": false,
+        "format": "phone"
+      },
+      {
+        "id": "0b150000-0000-4000-8000-000000000018",
+        "type": "paragraph",
+        "text": "Answer each question for your whole life, not just recent years.",
+        "alignment": "left"
+      },
+      {
+        "id": "0b150000-0000-4000-8000-000000000019",
+        "type": "dropdown_field",
+        "fieldKey": "have_you_ever_lived_for_one_month_or_more_in_a_country_with",
+        "label": "Have you ever lived for one month or more in a country with a high rate of TB?",
+        "required": true,
+        "helpText": "Answer yes for any country other than the United States, Canada, Australia, New Zealand, or a country in western or northern Europe.",
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0b150000-0000-4000-8000-000000000020",
+        "type": "dropdown_field",
+        "fieldKey": "do_you_have_or_expect_to_have_a_weakened_immune_system",
+        "label": "Do you have, or expect to have, a weakened immune system?",
+        "required": true,
+        "helpText": "For example, from HIV, an organ transplant, or high-dose steroids or other drugs that suppress the immune system.",
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0b150000-0000-4000-8000-000000000021",
+        "type": "dropdown_field",
+        "fieldKey": "have_you_ever_been_in_close_contact_with_someone_who_had_inf",
+        "label": "Have you ever been in close contact with someone who had infectious TB?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0b150000-0000-4000-8000-000000000069",
+        "type": "choice_grid_field",
+        "fieldKey": "signs_of_tb_disease",
+        "label": "Do you have any of the following now, or have you had them in the last three weeks?",
+        "required": true,
+        "helpText": null,
+        "rows": [
+          "A cough that has lasted three weeks or longer",
+          "Coughing up blood",
+          "Fever or chills without another explanation",
+          "Drenching sweats at night",
+          "Weight loss you cannot explain",
+          "Tiredness that is not usual for you"
+        ],
+        "options": [
+          "Yes",
+          "No"
+        ]
+      },
+      {
+        "id": "0b150000-0000-4000-8000-000000000030",
+        "type": "paragraph",
+        "text": "If you answered yes to any of these, tell employee health before your start date. You will be checked for TB disease, usually with a chest X-ray, before you work with patients.",
+        "runs": [
+          {
+            "text": "If you answered yes to any of these,",
+            "bold": true
+          },
+          {
+            "text": " tell employee health before your start date. You will be checked for TB disease, usually with a chest X-ray, before you work with patients."
+          }
+        ],
+        "alignment": "left"
+      },
+      {
+        "id": "0b150000-0000-4000-8000-000000000032",
+        "type": "dropdown_field",
+        "fieldKey": "have_you_ever_had_a_positive_tb_blood_test_or_skin_test",
+        "label": "Have you ever had a positive TB blood test or skin test?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0b150000-0000-4000-8000-000000000033",
+        "type": "dropdown_field",
+        "fieldKey": "which_test",
+        "label": "Which test?",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0b150000-0000-4000-8000-000000000032",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "placeholder": null,
+        "options": [
+          "Blood test",
+          "Skin test",
+          "Not sure"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0b150000-0000-4000-8000-000000000034",
+        "type": "date_field",
+        "fieldKey": "when_was_it",
+        "label": "When was it?",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0b150000-0000-4000-8000-000000000032",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "dateFormat": {
+          "order": "mdy",
+          "separator": "/",
+          "month": "number"
+        }
+      },
+      {
+        "id": "0b150000-0000-4000-8000-000000000035",
+        "type": "dropdown_field",
+        "fieldKey": "were_you_treated_for_latent_tb_infection_or_tb_disease",
+        "label": "Were you treated for latent TB infection or TB disease?",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0b150000-0000-4000-8000-000000000032",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No",
+          "Not sure"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0b150000-0000-4000-8000-000000000036",
+        "type": "text_field",
+        "fieldKey": "what_were_you_treated_with_and_when_did_you_finish",
+        "label": "What were you treated with, and when did you finish?",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0b150000-0000-4000-8000-000000000035",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0b150000-0000-4000-8000-000000000037",
+        "type": "file_field",
+        "fieldKey": "documentation_of_earlier_tb_tests_x_rays_or_treatment",
+        "label": "Documentation of earlier TB tests, X-rays or treatment",
+        "required": false,
+        "helpText": "For example, a letter from a previous employer or a health department."
+      },
+      {
+        "id": "0b150000-0000-4000-8000-000000000038",
+        "type": "dropdown_field",
+        "fieldKey": "have_you_had_the_bcg_vaccine",
+        "label": "Have you had the BCG vaccine?",
+        "required": false,
+        "helpText": "BCG can cause a positive skin test, so employee health prefers a blood test for you.",
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No",
+          "Not sure"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0b150000-0000-4000-8000-000000000040",
+        "type": "paragraph",
+        "text": "Completed by employee health. People who have had a positive test before do not need another test; they have a symptom check and, if needed, a chest X-ray.",
+        "alignment": "left"
+      },
+      {
+        "id": "0b150000-0000-4000-8000-000000000041",
+        "type": "dropdown_field",
+        "fieldKey": "test_used",
+        "label": "Test used",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "TB blood test (IGRA)",
+          "TB skin test (TST)",
+          "Not tested: previous positive"
+        ],
+        "display": "radios"
+      },
+      {
+        "id": "0b150000-0000-4000-8000-000000000042",
+        "type": "date_field",
+        "fieldKey": "date_blood_drawn",
+        "label": "Date blood drawn",
+        "required": false,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0b150000-0000-4000-8000-000000000041",
+          "operator": "equals",
+          "value": "TB blood test (IGRA)"
+        },
+        "dateFormat": {
+          "order": "mdy",
+          "separator": "/",
+          "month": "number"
+        }
+      },
+      {
+        "id": "0b150000-0000-4000-8000-000000000043",
+        "type": "dropdown_field",
+        "fieldKey": "blood_test_result",
+        "label": "Blood test result",
+        "required": false,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0b150000-0000-4000-8000-000000000041",
+          "operator": "equals",
+          "value": "TB blood test (IGRA)"
+        },
+        "placeholder": null,
+        "options": [
+          "Negative",
+          "Positive",
+          "Indeterminate",
+          "Borderline"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0b150000-0000-4000-8000-000000000044",
+        "type": "date_field",
+        "fieldKey": "date_placed",
+        "label": "Date placed",
+        "required": false,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0b150000-0000-4000-8000-000000000041",
+          "operator": "equals",
+          "value": "TB skin test (TST)"
+        },
+        "dateFormat": {
+          "order": "mdy",
+          "separator": "/",
+          "month": "number"
+        }
+      },
+      {
+        "id": "0b150000-0000-4000-8000-000000000045",
+        "type": "date_field",
+        "fieldKey": "date_read",
+        "label": "Date read",
+        "required": false,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0b150000-0000-4000-8000-000000000041",
+          "operator": "equals",
+          "value": "TB skin test (TST)"
+        },
+        "dateFormat": {
+          "order": "mdy",
+          "separator": "/",
+          "month": "number"
+        }
+      },
+      {
+        "id": "0b150000-0000-4000-8000-000000000046",
+        "type": "text_field",
+        "fieldKey": "induration_in_mm",
+        "label": "Induration",
+        "required": false,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0b150000-0000-4000-8000-000000000041",
+          "operator": "equals",
+          "value": "TB skin test (TST)"
+        },
+        "placeholder": null,
+        "multiline": false,
+        "format": "number",
+        "suffix": "mm"
+      },
+      {
+        "id": "0b150000-0000-4000-8000-000000000048",
+        "type": "dropdown_field",
+        "fieldKey": "skin_test_result",
+        "label": "Skin test result",
+        "required": false,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0b150000-0000-4000-8000-000000000041",
+          "operator": "equals",
+          "value": "TB skin test (TST)"
+        },
+        "placeholder": null,
+        "options": [
+          "Negative",
+          "Positive"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0b150000-0000-4000-8000-000000000049",
+        "type": "dropdown_field",
+        "fieldKey": "chest_x_ray_needed",
+        "label": "Chest X-ray needed?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0b150000-0000-4000-8000-000000000050",
+        "type": "date_field",
+        "fieldKey": "date_of_chest_x_ray",
+        "label": "Date of chest X-ray",
+        "required": false,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0b150000-0000-4000-8000-000000000049",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "dateFormat": {
+          "order": "mdy",
+          "separator": "/",
+          "month": "number"
+        }
+      },
+      {
+        "id": "0b150000-0000-4000-8000-000000000051",
+        "type": "dropdown_field",
+        "fieldKey": "chest_x_ray_result",
+        "label": "Chest X-ray result",
+        "required": false,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0b150000-0000-4000-8000-000000000049",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "placeholder": null,
+        "options": [
+          "Normal",
+          "Abnormal"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0b150000-0000-4000-8000-000000000053",
+        "type": "dropdown_field",
+        "fieldKey": "outcome",
+        "label": "Outcome",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Cleared to start work",
+          "Not cleared: referred for further evaluation"
+        ],
+        "display": "radios"
+      },
+      {
+        "id": "0b150000-0000-4000-8000-000000000054",
+        "type": "text_field",
+        "fieldKey": "follow_up_arranged",
+        "label": "Follow-up arranged",
+        "required": false,
+        "helpText": "Who the employee was referred to, and when.",
+        "visibleWhen": {
+          "sourceBlockId": "0b150000-0000-4000-8000-000000000053",
+          "operator": "equals",
+          "value": "Not cleared: referred for further evaluation"
+        },
+        "boxHeight": 45,
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "0b150000-0000-4000-8000-000000000055",
+        "type": "text_field",
+        "fieldKey": "reviewer_name",
+        "label": "Name",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0b150000-0000-4000-8000-000000000056",
+        "type": "text_field",
+        "fieldKey": "reviewer_position",
+        "label": "Position",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0b150000-0000-4000-8000-000000000058",
+        "type": "signature_field",
+        "fieldKey": "reviewer_s_signature",
+        "label": "Reviewer's signature",
+        "required": true,
+        "helpText": null
+      },
+      {
+        "id": "0b150000-0000-4000-8000-000000000059",
+        "type": "date_field",
+        "fieldKey": "reviewed_date",
+        "label": "Date",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "mdy",
+          "separator": "/",
+          "month": "number"
+        }
+      },
+      {
+        "id": "0b150000-0000-4000-8000-000000000062",
+        "type": "paragraph",
+        "text": "Tick each statement you agree to.",
+        "alignment": "left"
+      },
+      {
+        "id": "0b150000-0000-4000-8000-000000000063",
+        "type": "checkbox_field",
+        "fieldKey": "i_agree_to_be_tested_for_tb_as_part_of_my_pre_placement_scre",
+        "label": "I agree to be tested for TB as part of my pre-placement screening.",
+        "required": true,
+        "helpText": null,
+        "checkedByDefault": false
+      },
+      {
+        "id": "0b150000-0000-4000-8000-000000000064",
+        "type": "checkbox_field",
+        "fieldKey": "i_have_been_told_the_signs_of_tb_disease_and_i_will_tell_emp",
+        "label": "I have been told the signs of TB disease, and I will tell employee health if I have any of them in the future.",
+        "required": true,
+        "helpText": null,
+        "checkedByDefault": false
+      },
+      {
+        "id": "0b150000-0000-4000-8000-000000000065",
+        "type": "paragraph",
+        "text": "I confirm that my answers on this form are true and complete.",
+        "alignment": "left"
+      },
+      {
+        "id": "0b150000-0000-4000-8000-000000000066",
+        "type": "signature_field",
+        "fieldKey": "employee_s_signature",
+        "label": "Employee's signature",
+        "required": true,
+        "helpText": null
+      },
+      {
+        "id": "0b150000-0000-4000-8000-000000000067",
+        "type": "date_field",
+        "fieldKey": "employee_signed_date",
+        "label": "Date",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "mdy",
+          "separator": "/",
+          "month": "number"
+        }
+      }
+    ],
+    "layout": {
+      "pageSize": "Letter",
+      "orientation": "portrait",
+      "marginPreset": "compact",
+      "density": "compact",
+      "fieldStyle": "cell",
+      "lineSpacing": 1.3,
+      "paragraphSpacing": 6,
+      "sectionNumbers": "letters",
+      "sectionStyle": "band",
+      "printedTitle": {
+        "mode": "none"
+      },
+      "headerPolicy": "all_pages",
+      "footerPolicy": "all_pages",
+      "pageNumbering": "none",
+      "footerText": {
+        "left": "{title}",
+        "right": "Page {page} of {pages}"
+      },
+      "headerText": {
+        "right": "Confidential employee health record"
+      }
+    },
+    "sections": [
+      {
+        "id": "0b150000-0000-4000-8000-000000000004",
+        "label": "Employee",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0b150000-0000-4000-8000-000000000005"
+      },
+      {
+        "id": "0b150000-0000-4000-8000-000000000017",
+        "label": "TB risk assessment",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0b150000-0000-4000-8000-000000000018"
+      },
+      {
+        "id": "0b150000-0000-4000-8000-000000000022",
+        "label": "Signs of TB disease",
+        "pageBreakBefore": true,
+        "keepTogether": false,
+        "startBlockId": "0b150000-0000-4000-8000-000000000069"
+      },
+      {
+        "id": "0b150000-0000-4000-8000-000000000031",
+        "label": "Your TB history",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0b150000-0000-4000-8000-000000000032"
+      },
+      {
+        "id": "0b150000-0000-4000-8000-000000000039",
+        "label": "Baseline test",
+        "pageBreakBefore": false,
+        "keepTogether": true,
+        "startBlockId": "0b150000-0000-4000-8000-000000000040"
+      },
+      {
+        "id": "0b150000-0000-4000-8000-000000000052",
+        "label": "Clearance",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0b150000-0000-4000-8000-000000000053"
+      },
+      {
+        "id": "0b150000-0000-4000-8000-000000000061",
+        "label": "Employee acknowledgment",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0b150000-0000-4000-8000-000000000062"
+      }
+    ],
+    "fieldGroups": [
+      {
+        "id": "0b150000-0000-4000-8000-000000000007",
+        "label": null,
+        "startBlockId": "0b150000-0000-4000-8000-000000000005",
+        "endBlockId": "0b150000-0000-4000-8000-000000000006",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0b150000-0000-4000-8000-000000000010",
+        "label": null,
+        "startBlockId": "0b150000-0000-4000-8000-000000000008",
+        "endBlockId": "0b150000-0000-4000-8000-000000000009",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0b150000-0000-4000-8000-000000000013",
+        "label": null,
+        "startBlockId": "0b150000-0000-4000-8000-000000000011",
+        "endBlockId": "0b150000-0000-4000-8000-000000000012",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0b150000-0000-4000-8000-000000000016",
+        "label": null,
+        "startBlockId": "0b150000-0000-4000-8000-000000000014",
+        "endBlockId": "0b150000-0000-4000-8000-000000000015",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0b150000-0000-4000-8000-000000000047",
+        "label": "Skin test",
+        "startBlockId": "0b150000-0000-4000-8000-000000000044",
+        "endBlockId": "0b150000-0000-4000-8000-000000000046",
+        "columns": 3,
+        "keepTogether": false
+      },
+      {
+        "id": "0b150000-0000-4000-8000-000000000057",
+        "label": "Reviewed by",
+        "startBlockId": "0b150000-0000-4000-8000-000000000055",
+        "endBlockId": "0b150000-0000-4000-8000-000000000056",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0b150000-0000-4000-8000-000000000060",
+        "label": null,
+        "startBlockId": "0b150000-0000-4000-8000-000000000058",
+        "endBlockId": "0b150000-0000-4000-8000-000000000059",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0b150000-0000-4000-8000-000000000068",
+        "label": null,
+        "startBlockId": "0b150000-0000-4000-8000-000000000066",
+        "endBlockId": "0b150000-0000-4000-8000-000000000067",
+        "columns": 2,
+        "keepTogether": false
+      }
+    ],
+    "blockRules": [
+      {
+        "blockId": "0b150000-0000-4000-8000-000000000018",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "0b150000-0000-4000-8000-000000000040",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "0b150000-0000-4000-8000-000000000062",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "0b150000-0000-4000-8000-000000000065",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      }
+    ]
+  }
+}

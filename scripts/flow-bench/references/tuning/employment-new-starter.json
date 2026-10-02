@@ -1,0 +1,684 @@
+{
+  "request": "New starter form for payroll and HR. Personal details, bank details for wages, the tax information HMRC's starter checklist asks for, student loans, emergency contact, and the job details we fill in. It's confidential.",
+  "title": "New starter details",
+  "description": "Use when someone joins the payroll: their personal details, bank account for wages, the starter tax statement and student loans, an emergency contact, and the job details HR fills in.",
+  "maxPages": 3,
+  "content": {
+    "schemaVersion": 3,
+    "branding": {
+      "organizationName": "",
+      "logoAsset": null,
+      "logoDataUrl": null,
+      "logoAlignment": "left",
+      "logoWidthPercent": 24,
+      "primaryColor": "#3c3c3c",
+      "accentColor": "#6b7280"
+    },
+    "blocks": [
+      {
+        "id": "0c120000-0000-4000-8000-000000000001",
+        "type": "heading",
+        "text": "New starter details",
+        "level": 1,
+        "alignment": "left"
+      },
+      {
+        "id": "0c120000-0000-4000-8000-000000000002",
+        "type": "paragraph",
+        "text": "Welcome. Please fill in sections A to E before your first day, so that we can pay you correctly and on time. HR fills in section F.",
+        "alignment": "left"
+      },
+      {
+        "id": "0c120000-0000-4000-8000-000000000003",
+        "type": "paragraph",
+        "text": "How we use your information: payroll uses these details to pay you, to work out your tax and student loan deductions and to report your pay to HM Revenue and Customs. HR uses them to keep your employment record and to contact someone in an emergency. They are kept in your confidential personnel file while you work here and for as long afterwards as tax and employment law require.",
+        "runs": [
+          {
+            "text": "How we use your information:",
+            "bold": true
+          },
+          {
+            "text": " payroll uses these details to pay you, to work out your tax and student loan deductions and to report your pay to HM Revenue and Customs. HR uses them to keep your employment record and to contact someone in an emergency. They are kept in your confidential personnel file while you work here and for as long afterwards as tax and employment law require."
+          }
+        ],
+        "alignment": "left"
+      },
+      {
+        "id": "0c120000-0000-4000-8000-000000000005",
+        "type": "text_field",
+        "fieldKey": "first_name",
+        "label": "First name",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c120000-0000-4000-8000-000000000006",
+        "type": "text_field",
+        "fieldKey": "last_name",
+        "label": "Last name",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c120000-0000-4000-8000-000000000008",
+        "type": "date_field",
+        "fieldKey": "date_of_birth",
+        "label": "Date of birth",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": "/",
+          "month": "number"
+        }
+      },
+      {
+        "id": "0c120000-0000-4000-8000-000000000009",
+        "type": "text_field",
+        "fieldKey": "national_insurance_number",
+        "label": "National Insurance number",
+        "required": false,
+        "helpText": "On your payslips, P60 or HMRC app. Leave blank if you do not have one yet.",
+        "placeholder": null,
+        "multiline": false,
+        "comb": 9
+      },
+      {
+        "id": "0c120000-0000-4000-8000-000000000011",
+        "type": "text_field",
+        "fieldKey": "home_address",
+        "label": "Home address",
+        "required": true,
+        "helpText": null,
+        "boxHeight": 45,
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "0c120000-0000-4000-8000-000000000012",
+        "type": "text_field",
+        "fieldKey": "phone_number",
+        "label": "Phone number",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "format": "phone"
+      },
+      {
+        "id": "0c120000-0000-4000-8000-000000000013",
+        "type": "text_field",
+        "fieldKey": "personal_email_address",
+        "label": "Personal email address",
+        "required": true,
+        "helpText": "Your payslips are sent here.",
+        "placeholder": null,
+        "multiline": false,
+        "format": "email"
+      },
+      {
+        "id": "0c120000-0000-4000-8000-000000000016",
+        "type": "paragraph",
+        "text": "We pay wages by bank transfer. Tell payroll in writing if your bank details change. We will never ask you for your PIN, card number or online banking password.",
+        "alignment": "left"
+      },
+      {
+        "id": "0c120000-0000-4000-8000-000000000017",
+        "type": "text_field",
+        "fieldKey": "name_on_the_account",
+        "label": "Name on the account",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c120000-0000-4000-8000-000000000018",
+        "type": "text_field",
+        "fieldKey": "bank_or_building_society",
+        "label": "Bank or building society",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c120000-0000-4000-8000-000000000019",
+        "type": "text_field",
+        "fieldKey": "sort_code",
+        "label": "Sort code",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "comb": 6
+      },
+      {
+        "id": "0c120000-0000-4000-8000-000000000020",
+        "type": "text_field",
+        "fieldKey": "account_number",
+        "label": "Account number",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "comb": 8
+      },
+      {
+        "id": "0c120000-0000-4000-8000-000000000022",
+        "type": "text_field",
+        "fieldKey": "building_society_roll_number_if_it_has_one",
+        "label": "Building society roll number, if it has one",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c120000-0000-4000-8000-000000000024",
+        "type": "paragraph",
+        "text": "These questions are the ones on HMRC's starter checklist. Your answers tell us which tax code to use until HMRC sends us yours.",
+        "alignment": "left"
+      },
+      {
+        "id": "0c120000-0000-4000-8000-000000000025",
+        "type": "dropdown_field",
+        "fieldKey": "do_you_have_a_p45_from_a_job_you_left_since_6_april_this_yea",
+        "label": "Do you have a P45 from a job you left since 6 April this year?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0c120000-0000-4000-8000-000000000026",
+        "type": "file_field",
+        "fieldKey": "your_p45_parts_2_and_3",
+        "label": "Your P45, parts 2 and 3",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0c120000-0000-4000-8000-000000000025",
+          "operator": "equals",
+          "value": "Yes"
+        }
+      },
+      {
+        "id": "0c120000-0000-4000-8000-000000000027",
+        "type": "dropdown_field",
+        "fieldKey": "which_statement_is_true_for_you",
+        "label": "Which statement is true for you?",
+        "required": false,
+        "helpText": "Only if you do not have a P45. Choose the first statement that is true for you.",
+        "placeholder": null,
+        "options": [
+          "A: This is my first job since 6 April. I have not received Jobseeker's Allowance, Employment and Support Allowance or Incapacity Benefit, or a state or work pension.",
+          "B: This is now my only job, but since 6 April I have had another job or received one of those benefits. I do not receive a state or work pension.",
+          "C: As well as this job, I have another job, or I receive a state or work pension."
+        ],
+        "display": "radios"
+      },
+      {
+        "id": "0c120000-0000-4000-8000-000000000029",
+        "type": "dropdown_field",
+        "fieldKey": "do_you_have_a_student_loan_that_is_not_fully_repaid",
+        "label": "Do you have a student loan that is not fully repaid?",
+        "required": true,
+        "helpText": "Answer no if it will be repaid in full before 6 April.",
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0c120000-0000-4000-8000-000000000030",
+        "type": "dropdown_field",
+        "fieldKey": "which_plan_are_you_repaying",
+        "label": "Which plan are you repaying?",
+        "required": true,
+        "helpText": "Your plan is shown in your online student loan repayment account.",
+        "visibleWhen": {
+          "sourceBlockId": "0c120000-0000-4000-8000-000000000029",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "placeholder": null,
+        "options": [
+          "Plan 1",
+          "Plan 2",
+          "Plan 4",
+          "Plan 5",
+          "Not sure"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0c120000-0000-4000-8000-000000000031",
+        "type": "dropdown_field",
+        "fieldKey": "did_you_finish_or_leave_your_studies_before_6_april_this_yea",
+        "label": "Did you finish or leave your studies before 6 April this year?",
+        "required": true,
+        "helpText": "Repayments start only from the April after you leave your course.",
+        "visibleWhen": {
+          "sourceBlockId": "0c120000-0000-4000-8000-000000000029",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0c120000-0000-4000-8000-000000000032",
+        "type": "dropdown_field",
+        "fieldKey": "do_you_have_a_postgraduate_loan_that_is_not_fully_repaid",
+        "label": "Do you have a postgraduate loan that is not fully repaid?",
+        "required": true,
+        "helpText": "For a master's or doctoral course.",
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0c120000-0000-4000-8000-000000000034",
+        "type": "text_field",
+        "fieldKey": "emergency_contact_name",
+        "label": "Name",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c120000-0000-4000-8000-000000000035",
+        "type": "text_field",
+        "fieldKey": "emergency_contact_relationship",
+        "label": "Relationship to you",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c120000-0000-4000-8000-000000000036",
+        "type": "text_field",
+        "fieldKey": "emergency_contact_phone",
+        "label": "Phone number",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "format": "phone"
+      },
+      {
+        "id": "0c120000-0000-4000-8000-000000000039",
+        "type": "paragraph",
+        "text": "Filled in by HR.",
+        "alignment": "left"
+      },
+      {
+        "id": "0c120000-0000-4000-8000-000000000040",
+        "type": "text_field",
+        "fieldKey": "position",
+        "label": "Position",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c120000-0000-4000-8000-000000000041",
+        "type": "text_field",
+        "fieldKey": "department",
+        "label": "Department",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c120000-0000-4000-8000-000000000043",
+        "type": "date_field",
+        "fieldKey": "start_date",
+        "label": "Start date",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": "/",
+          "month": "number"
+        }
+      },
+      {
+        "id": "0c120000-0000-4000-8000-000000000044",
+        "type": "text_field",
+        "fieldKey": "line_manager",
+        "label": "Line manager",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c120000-0000-4000-8000-000000000046",
+        "type": "dropdown_field",
+        "fieldKey": "contract",
+        "label": "Contract",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Permanent",
+          "Fixed term",
+          "Casual"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0c120000-0000-4000-8000-000000000047",
+        "type": "text_field",
+        "fieldKey": "hours_a_week",
+        "label": "Working hours",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "format": "number",
+        "suffix": "hours a week"
+      },
+      {
+        "id": "0c120000-0000-4000-8000-000000000048",
+        "type": "text_field",
+        "fieldKey": "salary_or_hourly_rate",
+        "label": "Salary or hourly rate",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "format": "money",
+        "prefix": "£"
+      },
+      {
+        "id": "0c120000-0000-4000-8000-000000000050",
+        "type": "dropdown_field",
+        "fieldKey": "right_to_work_check",
+        "label": "Right to work check",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Seen and copied",
+          "Online check done",
+          "Not yet done"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0c120000-0000-4000-8000-000000000051",
+        "type": "paragraph",
+        "text": "Pension: if you are eligible, we will enrol you in our workplace pension and write to you with the details, including how to opt out if you choose to.",
+        "runs": [
+          {
+            "text": "Pension:",
+            "bold": true
+          },
+          {
+            "text": " if you are eligible, we will enrol you in our workplace pension and write to you with the details, including how to opt out if you choose to."
+          }
+        ],
+        "alignment": "left"
+      },
+      {
+        "id": "0c120000-0000-4000-8000-000000000053",
+        "type": "paragraph",
+        "text": "I confirm that the information I have given is correct. I will tell payroll straight away if any of it changes.",
+        "alignment": "left"
+      },
+      {
+        "id": "0c120000-0000-4000-8000-000000000054",
+        "type": "signature_field",
+        "fieldKey": "employee_s_signature",
+        "label": "Employee's signature",
+        "required": true,
+        "helpText": null
+      },
+      {
+        "id": "0c120000-0000-4000-8000-000000000055",
+        "type": "date_field",
+        "fieldKey": "employee_signed_date",
+        "label": "Date",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": "/",
+          "month": "number"
+        }
+      },
+      {
+        "id": "0c120000-0000-4000-8000-000000000057",
+        "type": "signature_field",
+        "fieldKey": "signature_for_hr",
+        "label": "Signature for HR",
+        "required": true,
+        "helpText": null
+      },
+      {
+        "id": "0c120000-0000-4000-8000-000000000058",
+        "type": "date_field",
+        "fieldKey": "hr_signed_date",
+        "label": "Date",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": "/",
+          "month": "number"
+        }
+      }
+    ],
+    "layout": {
+      "pageSize": "A4",
+      "orientation": "portrait",
+      "marginPreset": "compact",
+      "density": "compact",
+      "fieldStyle": "cell",
+      "lineSpacing": 1.3,
+      "paragraphSpacing": 6,
+      "sectionNumbers": "letters",
+      "sectionStyle": "band",
+      "printedTitle": {
+        "mode": "none"
+      },
+      "headerPolicy": "all_pages",
+      "footerPolicy": "all_pages",
+      "pageNumbering": "none",
+      "footerText": {
+        "left": "{title}",
+        "right": "Page {page} of {pages}"
+      },
+      "headerText": {
+        "left": "Confidential",
+        "right": "Payroll and HR"
+      }
+    },
+    "sections": [
+      {
+        "id": "0c120000-0000-4000-8000-000000000004",
+        "label": "Personal details",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0c120000-0000-4000-8000-000000000005"
+      },
+      {
+        "id": "0c120000-0000-4000-8000-000000000015",
+        "label": "Bank details for your wages",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0c120000-0000-4000-8000-000000000016"
+      },
+      {
+        "id": "0c120000-0000-4000-8000-000000000023",
+        "label": "Tax",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0c120000-0000-4000-8000-000000000024"
+      },
+      {
+        "id": "0c120000-0000-4000-8000-000000000028",
+        "label": "Student and postgraduate loans",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0c120000-0000-4000-8000-000000000029"
+      },
+      {
+        "id": "0c120000-0000-4000-8000-000000000033",
+        "label": "Emergency contact",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0c120000-0000-4000-8000-000000000034"
+      },
+      {
+        "id": "0c120000-0000-4000-8000-000000000038",
+        "label": "Job details",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0c120000-0000-4000-8000-000000000039"
+      },
+      {
+        "id": "0c120000-0000-4000-8000-000000000052",
+        "label": "Declaration",
+        "pageBreakBefore": false,
+        "keepTogether": true,
+        "startBlockId": "0c120000-0000-4000-8000-000000000053"
+      }
+    ],
+    "fieldGroups": [
+      {
+        "id": "0c120000-0000-4000-8000-000000000007",
+        "label": null,
+        "startBlockId": "0c120000-0000-4000-8000-000000000005",
+        "endBlockId": "0c120000-0000-4000-8000-000000000006",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0c120000-0000-4000-8000-000000000010",
+        "label": null,
+        "startBlockId": "0c120000-0000-4000-8000-000000000008",
+        "endBlockId": "0c120000-0000-4000-8000-000000000009",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0c120000-0000-4000-8000-000000000014",
+        "label": null,
+        "startBlockId": "0c120000-0000-4000-8000-000000000012",
+        "endBlockId": "0c120000-0000-4000-8000-000000000013",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0c120000-0000-4000-8000-000000000021",
+        "label": null,
+        "startBlockId": "0c120000-0000-4000-8000-000000000019",
+        "endBlockId": "0c120000-0000-4000-8000-000000000020",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0c120000-0000-4000-8000-000000000037",
+        "label": null,
+        "startBlockId": "0c120000-0000-4000-8000-000000000034",
+        "endBlockId": "0c120000-0000-4000-8000-000000000036",
+        "columns": 3,
+        "keepTogether": false
+      },
+      {
+        "id": "0c120000-0000-4000-8000-000000000042",
+        "label": null,
+        "startBlockId": "0c120000-0000-4000-8000-000000000040",
+        "endBlockId": "0c120000-0000-4000-8000-000000000041",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0c120000-0000-4000-8000-000000000045",
+        "label": null,
+        "startBlockId": "0c120000-0000-4000-8000-000000000043",
+        "endBlockId": "0c120000-0000-4000-8000-000000000044",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0c120000-0000-4000-8000-000000000049",
+        "label": null,
+        "startBlockId": "0c120000-0000-4000-8000-000000000047",
+        "endBlockId": "0c120000-0000-4000-8000-000000000048",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0c120000-0000-4000-8000-000000000056",
+        "label": null,
+        "startBlockId": "0c120000-0000-4000-8000-000000000054",
+        "endBlockId": "0c120000-0000-4000-8000-000000000055",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0c120000-0000-4000-8000-000000000059",
+        "label": null,
+        "startBlockId": "0c120000-0000-4000-8000-000000000057",
+        "endBlockId": "0c120000-0000-4000-8000-000000000058",
+        "columns": 2,
+        "keepTogether": false
+      }
+    ],
+    "blockRules": [
+      {
+        "blockId": "0c120000-0000-4000-8000-000000000016",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "0c120000-0000-4000-8000-000000000024",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "0c120000-0000-4000-8000-000000000039",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "0c120000-0000-4000-8000-000000000053",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      }
+    ]
+  }
+}

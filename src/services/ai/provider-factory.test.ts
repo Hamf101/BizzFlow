@@ -9,11 +9,9 @@ afterEach(() => {
 })
 
 describe("AI provider factory", () => {
-  it("constructs the registered provider with the exact configured model", () => {
+  it("runs with no model configured, on the approved model that follows Gemini's newest", () => {
     process.env = {
       NODE_ENV: "test",
-      AI_PROVIDER: "gemini",
-      AI_MODEL: "gemini-exact-runtime-model",
       AI_TIMEOUT_MS: "14000",
       GEMINI_API_KEY: "test-provider-key",
     }
@@ -21,9 +19,21 @@ describe("AI provider factory", () => {
     const runtime = createAiRuntime()
 
     expect(runtime.provider.id).toBe("gemini")
-    expect(runtime.model).toEqual({
-      provider: "gemini",
-      model: "gemini-exact-runtime-model",
+    expect(runtime.model).toEqual({ provider: "gemini", model: "gemini-flash-latest" })
+  })
+
+  it("refuses a model the benchmark has not approved, unless a benchmark asks for it", () => {
+    process.env = {
+      NODE_ENV: "test",
+      AI_PROVIDER: "openrouter",
+      AI_MODEL: "vendor/untested-model",
+      OPENROUTER_API_KEY: "test-provider-key",
+    }
+
+    expect(() => createAiRuntime()).toThrow("not approved")
+    expect(createAiRuntime({ requireApproved: false }).model).toEqual({
+      provider: "openrouter",
+      model: "vendor/untested-model",
     })
   })
 
@@ -35,7 +45,7 @@ describe("AI provider factory", () => {
       AI_TIMEOUT_MS: "14000",
     }
 
-    expect(() => createAiRuntime()).toThrow(
+    expect(() => createAiRuntime({ requireApproved: false })).toThrow(
       "Unsupported AI provider: future-provider"
     )
   })

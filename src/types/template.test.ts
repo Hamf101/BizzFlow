@@ -91,17 +91,11 @@ describe("template content schema", () => {
     })
   })
 
-  it("accepts exactly 250 canonical document blocks", () => {
-    const content = createContentWithParagraphs(MAX_TEMPLATE_BLOCK_COUNT)
-
-    expect(parseTemplateContent(content).blocks).toHaveLength(250)
-  })
-
-  it("rejects more than 250 blocks with a clear validation message", () => {
-    const content = createContentWithParagraphs(MAX_TEMPLATE_BLOCK_COUNT + 1)
-
-    expect(() => parseTemplateContent(content)).toThrow(
-      "Template content cannot contain more than 250 blocks."
+  // A 50-page document fits well inside the cap; long-document.test.ts proves that.
+  it("accepts a document at the block cap and refuses one block more, saying so", () => {
+    expect(parseTemplateContent(createContentWithParagraphs(MAX_TEMPLATE_BLOCK_COUNT)).blocks).toHaveLength(MAX_TEMPLATE_BLOCK_COUNT)
+    expect(() => parseTemplateContent(createContentWithParagraphs(MAX_TEMPLATE_BLOCK_COUNT + 1))).toThrow(
+      `Template content cannot contain more than ${MAX_TEMPLATE_BLOCK_COUNT} blocks.`
     )
   })
 
@@ -131,6 +125,21 @@ describe("template content schema", () => {
         "A field group cannot cross a section boundary."
       ])
     )
+  })
+
+  it("lets a section start partway down, leaving the fields above it outside any section", () => {
+    const content = createConditionalContent()
+    content.sections = [
+      {
+        id: THIRD_BLOCK_ID,
+        label: "Notes",
+        startBlockId: THIRD_BLOCK_ID,
+        pageBreakBefore: true,
+        keepTogether: false
+      }
+    ]
+
+    expect(templateContentV3Schema.safeParse(content).error?.issues).toBeUndefined()
   })
 
   it("rejects later, self, or incompatible visibility sources", () => {
@@ -389,3 +398,33 @@ describe("formatted text", () => {
   })
 })
 
+
+describe("answer kinds", () => {
+  const field = { id: FIRST_BLOCK_ID, fieldKey: "answer", label: "Answer", required: false, helpText: null }
+  const parses = (block: object): boolean => templateBlockSchema.safeParse(block).success
+
+  it("takes typed text with units, comb boxes, choose-several choices, question grids and fillable tables", () => {
+    expect(parses({ ...field, type: "text_field", format: "money", prefix: "£", suffix: "per month" })).toBe(true)
+    expect(parses({ ...field, type: "text_field", comb: 9 })).toBe(true)
+    expect(parses({ ...field, type: "dropdown_field", options: ["Email", "Phone"], multiple: true, across: true })).toBe(true)
+    expect(parses({ ...field, type: "choice_grid_field", rows: ["Staff were helpful", "The room was clean"], options: ["Yes", "No", "N/A"] })).toBe(true)
+    expect(
+      parses({ ...field, type: "table_field", columns: [{ label: "Date", format: "date" }, { label: "Hours", format: "number" }, { label: "Task" }], rows: 7, addRows: true })
+    ).toBe(true)
+  })
+
+  it("refuses shapes that cannot be filled in or printed", () => {
+    // Comb boxes hold one line of characters.
+    expect(parses({ ...field, type: "text_field", comb: 9, multiline: true })).toBe(false)
+    expect(parses({ ...field, type: "text_field", comb: 1 })).toBe(false)
+    expect(parses({ ...field, type: "text_field", suffix: "x".repeat(25) })).toBe(false)
+    expect(parses({ ...field, type: "text_field", format: "script" })).toBe(false)
+    // A grid's rows name its answers, so each is said once; it needs two columns to choose between.
+    expect(parses({ ...field, type: "choice_grid_field", rows: ["Clean", "clean "], options: ["Yes", "No"] })).toBe(false)
+    expect(parses({ ...field, type: "choice_grid_field", rows: ["Clean"], options: ["Yes"] })).toBe(false)
+    expect(parses({ ...field, type: "choice_grid_field", rows: Array.from({ length: 41 }, (_, i) => `Row ${i}`), options: ["Yes", "No"] })).toBe(false)
+    expect(parses({ ...field, type: "table_field", columns: Array.from({ length: 9 }, (_, i) => ({ label: `C${i}` })), rows: 3 })).toBe(false)
+    expect(parses({ ...field, type: "table_field", columns: [{ label: "Item" }], rows: 0 })).toBe(false)
+    expect(parses({ ...field, type: "table_field", columns: [{ label: "Item" }], rows: 51 })).toBe(false)
+  })
+})

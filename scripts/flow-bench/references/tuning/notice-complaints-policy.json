@@ -1,0 +1,652 @@
+{
+  "request": "complaints policy and procedure for our lettings agency, to give to landlords and tenants, with a form they can use to complain",
+  "title": "Complaints policy and procedure",
+  "description": "Give to landlords and tenants, and publish on the agency's website, to explain how to complain, what happens at each stage and when, how to take a complaint to the redress scheme, with a form for making a complaint.",
+  "maxPages": 5,
+  "content": {
+    "schemaVersion": 3,
+    "branding": {
+      "organizationName": "",
+      "logoAsset": null,
+      "logoDataUrl": null,
+      "logoAlignment": "left",
+      "logoWidthPercent": 24,
+      "primaryColor": "#252329",
+      "accentColor": "#635273"
+    },
+    "blocks": [
+      {
+        "id": "d6040000-0000-4000-8000-000000000001",
+        "type": "heading",
+        "text": "Complaints policy and procedure",
+        "level": 1,
+        "alignment": "left"
+      },
+      {
+        "id": "d6040000-0000-4000-8000-000000000002",
+        "type": "paragraph",
+        "text": "We want every landlord and tenant we work with to be happy with our service. When something goes wrong, we want to hear about it, so that we can put it right and learn from it. This policy explains how to complain, what we will do and when, and what you can do if you are still not satisfied.",
+        "alignment": "left"
+      },
+      {
+        "id": "d6040000-0000-4000-8000-000000000003",
+        "type": "text_field",
+        "fieldKey": "agency_name",
+        "label": "Agency name",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d6040000-0000-4000-8000-000000000005",
+        "type": "text_field",
+        "fieldKey": "name_of_person_who_handles_complaints",
+        "label": "Name of person who handles complaints",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d6040000-0000-4000-8000-000000000006",
+        "type": "text_field",
+        "fieldKey": "their_position",
+        "label": "Their position",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d6040000-0000-4000-8000-000000000008",
+        "type": "text_field",
+        "fieldKey": "email_address_for_complaints",
+        "label": "Email address for complaints",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "format": "email"
+      },
+      {
+        "id": "d6040000-0000-4000-8000-000000000009",
+        "type": "text_field",
+        "fieldKey": "phone_number_for_complaints",
+        "label": "Phone number for complaints",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "format": "phone"
+      },
+      {
+        "id": "d6040000-0000-4000-8000-000000000011",
+        "type": "text_field",
+        "fieldKey": "address_for_complaints_by_post",
+        "label": "Address for complaints by post",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": true,
+        "boxHeight": 45
+      },
+      {
+        "id": "d6040000-0000-4000-8000-000000000012",
+        "type": "text_field",
+        "fieldKey": "redress_scheme_we_belong_to",
+        "label": "Redress scheme we belong to",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d6040000-0000-4000-8000-000000000013",
+        "type": "text_field",
+        "fieldKey": "our_membership_number",
+        "label": "Our membership number",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d6040000-0000-4000-8000-000000000015",
+        "type": "paragraph",
+        "text": "We will keep to the times below. They are counted in working days, which means any day other than a Saturday, Sunday or bank holiday.",
+        "alignment": "left"
+      },
+      {
+        "id": "d6040000-0000-4000-8000-000000000017",
+        "type": "text_field",
+        "fieldKey": "acknowledge_a_complaint_within",
+        "label": "Acknowledge a complaint within",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "format": "number",
+        "suffix": "working days"
+      },
+      {
+        "id": "d6040000-0000-4000-8000-000000000018",
+        "type": "text_field",
+        "fieldKey": "send_our_stage_one_response_within",
+        "label": "Send our stage one response within",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "format": "number",
+        "suffix": "working days"
+      },
+      {
+        "id": "d6040000-0000-4000-8000-000000000020",
+        "type": "text_field",
+        "fieldKey": "ask_us_for_a_stage_two_review_within",
+        "label": "Ask us for a stage two review within",
+        "required": true,
+        "helpText": "After our stage one response.",
+        "placeholder": null,
+        "multiline": false,
+        "format": "number",
+        "suffix": "working days"
+      },
+      {
+        "id": "d6040000-0000-4000-8000-000000000021",
+        "type": "text_field",
+        "fieldKey": "send_our_final_response_within",
+        "label": "Send our final response within",
+        "required": true,
+        "helpText": "After a review is asked for.",
+        "placeholder": null,
+        "multiline": false,
+        "format": "number",
+        "suffix": "working days"
+      },
+      {
+        "id": "d6040000-0000-4000-8000-000000000023",
+        "type": "paragraph",
+        "text": "When you complain, we will:",
+        "alignment": "left"
+      },
+      {
+        "id": "d6040000-0000-4000-8000-000000000025",
+        "type": "bullet_list",
+        "items": [
+          "make it easy for you to complain, in the way that suits you;",
+          "treat your complaint seriously, fairly and in confidence;",
+          "listen to what you tell us, and ask what you would like to happen;",
+          "keep you informed, and tell you if anything is going to take longer than we said;",
+          "give you a clear answer that explains our decision and the reasons for it;",
+          "put things right where we have got them wrong; and",
+          "use what we learn to improve our service."
+        ]
+      },
+      {
+        "id": "d6040000-0000-4000-8000-000000000026",
+        "type": "paragraph",
+        "text": "Making a complaint will not affect how we treat you or the service we give you.",
+        "alignment": "left"
+      },
+      {
+        "id": "d6040000-0000-4000-8000-000000000027",
+        "type": "paragraph",
+        "text": "A complaint is any expression of dissatisfaction with our service, our staff, or how we have handled something, that needs a response. This could be about how a property was marketed, a delay in dealing with a repair, how a deposit was handled, the way a member of staff behaved, or a fee you were charged.",
+        "alignment": "left",
+        "runs": [
+          {
+            "text": "A "
+          },
+          {
+            "text": "complaint",
+            "bold": true
+          },
+          {
+            "text": " is any expression of dissatisfaction with our service, our staff, or how we have handled something, that needs a response. This could be about how a property was marketed, a delay in dealing with a repair, how a deposit was handled, the way a member of staff behaved, or a fee you were charged."
+          }
+        ]
+      },
+      {
+        "id": "d6040000-0000-4000-8000-000000000029",
+        "type": "paragraph",
+        "text": "Some matters are dealt with by other procedures. A dispute about a deduction from a tenancy deposit goes to the deposit protection scheme that holds the deposit, and a repair that the landlord is responsible for is first reported as a repair. We will tell you if another procedure applies, and help you use it.",
+        "alignment": "left"
+      },
+      {
+        "id": "d6040000-0000-4000-8000-000000000030",
+        "type": "paragraph",
+        "text": "You can complain in writing, by email or by post, or by phone, using the details above, or by filling in the form at the end of this policy. Please give us:",
+        "alignment": "left"
+      },
+      {
+        "id": "d6040000-0000-4000-8000-000000000032",
+        "type": "bullet_list",
+        "items": [
+          "your name and contact details, and the address of the property concerned;",
+          "whether you are a landlord, a tenant or someone else;",
+          "what went wrong, when it happened, and who you dealt with; and",
+          "what you would like us to do to put it right."
+        ]
+      },
+      {
+        "id": "d6040000-0000-4000-8000-000000000033",
+        "type": "paragraph",
+        "text": "Please complain as soon as you can after the problem happens, while events are fresh. If you need help to make a complaint, for example because of a disability or because English is not your first language, tell us and we will make reasonable adjustments. You can also ask someone else, such as a friend, relative or adviser, to complain on your behalf; we will need your written consent before we discuss your complaint with them.",
+        "alignment": "left"
+      },
+      {
+        "id": "d6040000-0000-4000-8000-000000000034",
+        "type": "paragraph",
+        "text": "We deal with complaints in two stages, within the timescales set out above.",
+        "alignment": "left"
+      },
+      {
+        "id": "d6040000-0000-4000-8000-000000000036",
+        "type": "table",
+        "headers": [
+          "Stage",
+          "What we do",
+          "When"
+        ],
+        "rows": [
+          [
+            "Acknowledgement",
+            "We confirm we have received your complaint and who is dealing with it.",
+            "Within the acknowledgement time"
+          ],
+          [
+            "Stage one",
+            "The manager of the branch looks into it and writes to you with the outcome.",
+            "Within the stage one time"
+          ],
+          [
+            "Stage two",
+            "A senior person not involved before reviews the complaint and the stage one response.",
+            "Within the final response time"
+          ]
+        ]
+      },
+      {
+        "id": "d6040000-0000-4000-8000-000000000037",
+        "type": "paragraph",
+        "text": "The manager responsible for the service you complained about will investigate your complaint. They will look at our records, speak to the staff involved, and contact you if they need more information. They will then write to you explaining what they found, whether they uphold your complaint, and what we will do about it.",
+        "alignment": "left"
+      },
+      {
+        "id": "d6040000-0000-4000-8000-000000000039",
+        "type": "paragraph",
+        "text": "If you are not satisfied with our stage one response, tell us within the time for asking for a review set out above, and explain why. A senior member of staff who was not involved at stage one will review your complaint, the investigation and the response, and will send you our final response. The final response is the end of our own procedure, and it will tell you how to take your complaint to the redress scheme.",
+        "alignment": "left"
+      },
+      {
+        "id": "d6040000-0000-4000-8000-000000000041",
+        "type": "paragraph",
+        "text": "If you remain unhappy after our final response, or if we have not sent our final response within the time set out above, you can refer your complaint to the redress scheme named in our details. The scheme is independent of us, and its service is free for you to use. It usually expects you to have completed our complaints procedure first, and it sets its own time limits for accepting complaints, so please check its website or contact it as soon as you can.",
+        "alignment": "left"
+      },
+      {
+        "id": "d6040000-0000-4000-8000-000000000043",
+        "type": "paragraph",
+        "text": "If we find that we got something wrong, we will try to put you back in the position you would have been in if it had not happened. Depending on the circumstances, this may include:",
+        "alignment": "left"
+      },
+      {
+        "id": "d6040000-0000-4000-8000-000000000045",
+        "type": "bullet_list",
+        "items": [
+          "an apology and an explanation of what went wrong;",
+          "taking the action we should have taken in the first place;",
+          "correcting our records, or refunding a fee or charge; and",
+          "a payment to reflect any financial loss, inconvenience or distress we caused."
+        ]
+      },
+      {
+        "id": "d6040000-0000-4000-8000-000000000046",
+        "type": "paragraph",
+        "text": "We understand that people who complain are often frustrated or upset, and we will be patient. However, we will not accept abusive, threatening or offensive behaviour towards our staff. If this happens, we may limit how you can contact us, for example by asking you to write to one named person only. We will tell you in writing if we do this, and why.",
+        "alignment": "left"
+      },
+      {
+        "id": "d6040000-0000-4000-8000-000000000048",
+        "type": "paragraph",
+        "text": "We keep a record of every complaint and its outcome. Our senior team reviews these records regularly to find patterns and improve our service, and we share what we learn with our staff.",
+        "alignment": "left"
+      },
+      {
+        "id": "d6040000-0000-4000-8000-000000000050",
+        "type": "paragraph",
+        "text": "We use the information you give us only to deal with your complaint, to keep a record of it, and to improve our service. We share it only with the staff who need it, with the landlord or tenant concerned where that is needed to resolve the complaint, and with the redress scheme if you take your complaint to it. We keep complaint records for as long as we need them for these purposes, as explained in our privacy notice.",
+        "alignment": "left"
+      },
+      {
+        "id": "d6040000-0000-4000-8000-000000000052",
+        "type": "paragraph",
+        "text": "Use this form to make a complaint. Send it to us by email or post, using the details at the start of this policy.",
+        "alignment": "left"
+      },
+      {
+        "id": "d6040000-0000-4000-8000-000000000054",
+        "type": "text_field",
+        "fieldKey": "your_full_name",
+        "label": "Your full name",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d6040000-0000-4000-8000-000000000055",
+        "type": "text_field",
+        "fieldKey": "phone_number",
+        "label": "Phone number",
+        "required": true,
+        "helpText": "We call to talk through your complaint if that helps.",
+        "placeholder": null,
+        "multiline": false,
+        "format": "phone"
+      },
+      {
+        "id": "d6040000-0000-4000-8000-000000000057",
+        "type": "text_field",
+        "fieldKey": "email_address",
+        "label": "Email address",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "format": "email"
+      },
+      {
+        "id": "d6040000-0000-4000-8000-000000000058",
+        "type": "text_field",
+        "fieldKey": "address_of_the_property_concerned",
+        "label": "Address of the property concerned",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": true,
+        "boxHeight": 45
+      },
+      {
+        "id": "d6040000-0000-4000-8000-000000000059",
+        "type": "dropdown_field",
+        "fieldKey": "are_you_a_landlord_or_a_tenant",
+        "label": "Are you a landlord or a tenant?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Landlord",
+          "Tenant",
+          "Someone else"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "d6040000-0000-4000-8000-000000000060",
+        "type": "text_field",
+        "fieldKey": "what_is_your_connection_to_the_property",
+        "label": "What is your connection to the property?",
+        "required": true,
+        "helpText": "For example a guarantor, a neighbour, or someone complaining for a landlord or tenant.",
+        "visibleWhen": {
+          "sourceBlockId": "d6040000-0000-4000-8000-000000000059",
+          "operator": "equals",
+          "value": "Someone else"
+        },
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d6040000-0000-4000-8000-000000000061",
+        "type": "text_field",
+        "fieldKey": "what_went_wrong",
+        "label": "What went wrong?",
+        "required": true,
+        "helpText": "Say what happened, when, and who you dealt with.",
+        "placeholder": null,
+        "multiline": true,
+        "boxHeight": 120
+      },
+      {
+        "id": "d6040000-0000-4000-8000-000000000062",
+        "type": "text_field",
+        "fieldKey": "what_would_you_like_us_to_do_to_put_it_right",
+        "label": "What would you like us to do to put it right?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": true,
+        "boxHeight": 60
+      },
+      {
+        "id": "d6040000-0000-4000-8000-000000000063",
+        "type": "signature_field",
+        "fieldKey": "your_signature",
+        "label": "Your signature",
+        "required": true,
+        "helpText": null
+      },
+      {
+        "id": "d6040000-0000-4000-8000-000000000064",
+        "type": "date_field",
+        "fieldKey": "date_of_complaint",
+        "label": "Date",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": "/",
+          "month": "number"
+        }
+      }
+    ],
+    "layout": {
+      "pageSize": "A4",
+      "orientation": "portrait",
+      "density": "compact",
+      "fieldStyle": "box",
+      "lineSpacing": 1.3,
+      "marginPreset": "compact",
+      "paragraphSpacing": 4,
+      "sectionStyle": "box",
+      "printedTitle": {
+        "mode": "none"
+      },
+      "headerPolicy": "none",
+      "footerPolicy": "all_pages",
+      "pageNumbering": "none",
+      "footerText": {
+        "left": "{title}",
+        "right": "Page {page} of {pages}"
+      }
+    },
+    "sections": [
+      {
+        "id": "d6040000-0000-4000-8000-000000000004",
+        "label": "Our details",
+        "startBlockId": "d6040000-0000-4000-8000-000000000003",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6040000-0000-4000-8000-000000000016",
+        "label": "Our timescales",
+        "startBlockId": "d6040000-0000-4000-8000-000000000015",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6040000-0000-4000-8000-000000000024",
+        "label": "Our commitment",
+        "startBlockId": "d6040000-0000-4000-8000-000000000023",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6040000-0000-4000-8000-000000000028",
+        "label": "What counts as a complaint",
+        "startBlockId": "d6040000-0000-4000-8000-000000000027",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6040000-0000-4000-8000-000000000031",
+        "label": "How to complain",
+        "startBlockId": "d6040000-0000-4000-8000-000000000030",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6040000-0000-4000-8000-000000000035",
+        "label": "What happens next",
+        "startBlockId": "d6040000-0000-4000-8000-000000000034",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6040000-0000-4000-8000-000000000038",
+        "label": "Stage one: investigation",
+        "startBlockId": "d6040000-0000-4000-8000-000000000037",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6040000-0000-4000-8000-000000000040",
+        "label": "Stage two: review",
+        "startBlockId": "d6040000-0000-4000-8000-000000000039",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6040000-0000-4000-8000-000000000042",
+        "label": "If you are still not satisfied",
+        "startBlockId": "d6040000-0000-4000-8000-000000000041",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6040000-0000-4000-8000-000000000044",
+        "label": "Putting things right",
+        "startBlockId": "d6040000-0000-4000-8000-000000000043",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6040000-0000-4000-8000-000000000047",
+        "label": "Unreasonable behaviour",
+        "startBlockId": "d6040000-0000-4000-8000-000000000046",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6040000-0000-4000-8000-000000000049",
+        "label": "Learning from complaints",
+        "startBlockId": "d6040000-0000-4000-8000-000000000048",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6040000-0000-4000-8000-000000000051",
+        "label": "Your information",
+        "startBlockId": "d6040000-0000-4000-8000-000000000050",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6040000-0000-4000-8000-000000000053",
+        "label": "Complaint form",
+        "startBlockId": "d6040000-0000-4000-8000-000000000052",
+        "pageBreakBefore": true,
+        "keepTogether": false
+      }
+    ],
+    "fieldGroups": [
+      {
+        "id": "d6040000-0000-4000-8000-000000000007",
+        "label": null,
+        "startBlockId": "d6040000-0000-4000-8000-000000000005",
+        "endBlockId": "d6040000-0000-4000-8000-000000000006",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "d6040000-0000-4000-8000-000000000010",
+        "label": null,
+        "startBlockId": "d6040000-0000-4000-8000-000000000008",
+        "endBlockId": "d6040000-0000-4000-8000-000000000009",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "d6040000-0000-4000-8000-000000000014",
+        "label": null,
+        "startBlockId": "d6040000-0000-4000-8000-000000000012",
+        "endBlockId": "d6040000-0000-4000-8000-000000000013",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "d6040000-0000-4000-8000-000000000019",
+        "label": null,
+        "startBlockId": "d6040000-0000-4000-8000-000000000017",
+        "endBlockId": "d6040000-0000-4000-8000-000000000018",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "d6040000-0000-4000-8000-000000000022",
+        "label": null,
+        "startBlockId": "d6040000-0000-4000-8000-000000000020",
+        "endBlockId": "d6040000-0000-4000-8000-000000000021",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "d6040000-0000-4000-8000-000000000056",
+        "label": null,
+        "startBlockId": "d6040000-0000-4000-8000-000000000054",
+        "endBlockId": "d6040000-0000-4000-8000-000000000055",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "d6040000-0000-4000-8000-000000000065",
+        "label": null,
+        "startBlockId": "d6040000-0000-4000-8000-000000000063",
+        "endBlockId": "d6040000-0000-4000-8000-000000000064",
+        "columns": 2,
+        "keepTogether": true,
+        "widths": [
+          8,
+          4
+        ]
+      }
+    ],
+    "blockRules": [
+      {
+        "blockId": "d6040000-0000-4000-8000-000000000023",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "d6040000-0000-4000-8000-000000000030",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "d6040000-0000-4000-8000-000000000034",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "d6040000-0000-4000-8000-000000000043",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      }
+    ]
+  }
+}

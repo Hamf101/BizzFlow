@@ -34,7 +34,7 @@ import { runOperation } from "@/services/operation"
 
 /** Columns required by the canonical submission row parser. */
 export const SUBMISSION_COLUMNS =
-  "id,org_id,title,template_id,template_revision,template_snapshot,values,status,revision,created_by,updated_by,submitted_by,assigned_to,assigned_by,created_at,updated_at,submitted_at,assigned_at"
+  "id,org_id,title,template_id,template_revision,template_snapshot,values,status,revision,created_by,updated_by,submitted_by,assigned_to,assigned_by,created_at,updated_at,submitted_at,assigned_at,required_approvals"
 
 /** Columns required by the canonical submission-file row parser. */
 export const SUBMISSION_FILE_COLUMNS =
@@ -211,26 +211,58 @@ export async function listSubmissionFiles(
 /**
  * Applies role-based submission visibility after a trusted admin query.
  *
+ * @param client - Trusted Supabase client.
  * @param role - Validated internal organization role.
  * @param submission - Tenant-scoped submission.
  * @param actorUserId - Requesting user identifier.
  * @throws SubmissionServiceError when the row is outside the actor's role scope.
  */
-export function assertSubmissionVisible(
+export async function assertSubmissionVisible(
+  client: SubmissionServiceClient,
   role: OrganizationRole,
   submission: Submission,
   actorUserId: string
-): void {
-  if (role === "staff" && submission.createdBy !== actorUserId) {
-    throw new SubmissionServiceError("Submission was not found.", 404)
-  }
-
+): Promise<void> {
+  // Staff see their own work and what was shared with them.
   if (
-    role === "external_reviewer" &&
-    (submission.status === "draft" || submission.assignedTo !== actorUserId)
+    role === "staff" &&
+    submission.createdBy !== actorUserId &&
+    (submission.status === "draft" || !(await isSubmissionReviewer(client, submission, actorUserId)))
   ) {
     throw new SubmissionServiceError("Submission was not found.", 404)
   }
+
+  // An external reviewer sees a submitted piece of work only when they review it or it was shared with them.
+  if (
+    role === "external_reviewer" &&
+    (submission.status === "draft" || !(await isSubmissionReviewer(client, submission, actorUserId)))
+  ) {
+    throw new SubmissionServiceError("Submission was not found.", 404)
+  }
+}
+
+async function isSubmissionReviewer(
+  client: SubmissionServiceClient,
+  submission: Submission,
+  userId: string
+): Promise<boolean> {
+  if (submission.assignedTo === userId) {
+    return true
+  }
+
+  const { data, error } = await client
+    .from("submission_reviewers")
+    .select("user_id")
+    .eq("org_id", submission.organizationId)
+    .eq("submission_id", submission.id)
+    .eq("user_id", userId)
+    .maybeSingle()
+
+  if (error) {
+    throw createSubmissionDatabaseError(error, "Unable to check the reviewers.")
+  }
+
+  return data !== null
 }
 
 /**
@@ -440,6 +472,17 @@ function getKnownMutationMessage(message: string | undefined): string | null {
     "Files cannot be",
     "Only the submission creator",
     "Only the assigned reviewer",
+    "Only an assigned reviewer",
+    "Only the person who assigned the reviewers",
+    "A reviewer who has already decided",
+    "A note of up to 2000",
+    "Change request identifiers",
+    "Choose between 1 and 20 reviewers",
+    "Reviewers must be",
+    "That reviewer has no change request",
+    "The approvals needed",
+    "There is no change request",
+    "Your change request",
     "Published submission template",
     "Required submission",
     "Review comment",
@@ -451,6 +494,7 @@ function getKnownMutationMessage(message: string | undefined): string | null {
     "Submission file",
     "Submission identifier",
     "Submission review",
+    "Submission reviewers",
     "Submission revision",
     "Submission status",
     "Submission timestamp",

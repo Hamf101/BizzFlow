@@ -1,0 +1,651 @@
+{
+  "request": "Draft a service agreement between a freelance bookkeeper and a small business client: scope of services, fees and invoicing, confidentiality, term and termination",
+  "title": "Bookkeeping service agreement",
+  "description": "Use when a freelance bookkeeper takes on a small business client, to record the services, the fees and the terms both sides agree to.",
+  "content": {
+    "schemaVersion": 3,
+    "branding": {
+      "organizationName": "",
+      "logoAsset": null,
+      "logoDataUrl": null,
+      "logoAlignment": "left",
+      "logoWidthPercent": 24,
+      "primaryColor": "#252329",
+      "accentColor": "#635273"
+    },
+    "blocks": [
+      {
+        "id": "a6000000-0000-4000-8000-000000000001",
+        "type": "heading",
+        "text": "Bookkeeping service agreement",
+        "level": 1,
+        "alignment": "left"
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000002",
+        "fieldKey": "bookkeeper_name",
+        "label": "Bookkeeper name",
+        "required": true,
+        "helpText": null,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000004",
+        "fieldKey": "bookkeeper_email",
+        "label": "Bookkeeper email",
+        "required": false,
+        "helpText": null,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false,
+        "format": "email"
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000101",
+        "type": "text_field",
+        "fieldKey": "bookkeeper_address",
+        "label": "Bookkeeper address",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000007",
+        "fieldKey": "client_business_name",
+        "label": "Client business name",
+        "required": true,
+        "helpText": null,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000008",
+        "fieldKey": "client_email",
+        "label": "Client email",
+        "required": false,
+        "helpText": null,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false,
+        "format": "email"
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000102",
+        "type": "text_field",
+        "fieldKey": "client_address",
+        "label": "Client address",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000012",
+        "fieldKey": "bookkeeping_services",
+        "label": "Bookkeeping services",
+        "required": true,
+        "helpText": "For example recording transactions, bank reconciliation, payroll and monthly reports.",
+        "boxHeight": 72,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000108",
+        "type": "text_field",
+        "fieldKey": "kinds_of_personal_data_the_bookkeeper_handles",
+        "label": "Kinds of personal data the bookkeeper handles",
+        "required": true,
+        "helpText": "For example, staff names, pay and bank details.",
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000014",
+        "fieldKey": "fees",
+        "label": "Fees",
+        "required": true,
+        "helpText": "A fixed fee for each period, or an hourly rate.",
+        "boxHeight": 45,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000103",
+        "type": "dropdown_field",
+        "fieldKey": "do_the_fees_include_tax",
+        "label": "Do the fees include tax?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes, tax is included",
+          "No, tax is added",
+          "No tax applies"
+        ],
+        "display": "radios"
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000016",
+        "fieldKey": "how_often_the_bookkeeper_invoices",
+        "label": "How often the bookkeeper invoices",
+        "required": true,
+        "helpText": null,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000017",
+        "fieldKey": "payment_period",
+        "label": "Payment period",
+        "required": true,
+        "helpText": "How long the client has to pay each invoice.",
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000105",
+        "type": "text_field",
+        "fieldKey": "how_to_pay",
+        "label": "How to pay",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000104",
+        "type": "text_field",
+        "fieldKey": "if_payment_is_late",
+        "label": "If payment is late",
+        "required": false,
+        "helpText": "What happens when an invoice is overdue.",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000020",
+        "fieldKey": "start_date",
+        "label": "Start date",
+        "required": true,
+        "helpText": "The agreement takes effect on this date.",
+        "type": "date_field"
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000022",
+        "fieldKey": "term",
+        "label": "Term",
+        "required": true,
+        "helpText": "How long this agreement lasts.",
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000023",
+        "fieldKey": "notice_period",
+        "label": "Notice period",
+        "required": true,
+        "helpText": "The written notice needed to end it.",
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000106",
+        "type": "text_field",
+        "fieldKey": "time_to_put_a_breach_right",
+        "label": "Time to put a breach right",
+        "required": true,
+        "helpText": "How long a party has to fix a serious breach before the other may end the agreement at once.",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000027",
+        "fieldKey": "limit_of_liability",
+        "label": "Limit of liability",
+        "required": true,
+        "helpText": "The most either party can be asked to pay the other under this agreement.",
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000028",
+        "fieldKey": "governing_law",
+        "label": "Governing law",
+        "required": true,
+        "helpText": "The country or state whose law applies to this agreement.",
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000107",
+        "type": "text_field",
+        "fieldKey": "courts_that_hear_disputes",
+        "label": "Courts that hear disputes",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000029",
+        "type": "heading",
+        "text": "Services",
+        "level": 2,
+        "alignment": "left"
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000031",
+        "type": "paragraph",
+        "text": "The bookkeeper will provide the bookkeeping services described above with reasonable skill and care. The client will give the bookkeeper the records, and the access to accounts and software, that the services need, in good time. The bookkeeper relies on the information the client provides and does not audit it. The client stays responsible for its own accounts, tax returns and filing deadlines unless the services described above say otherwise. Any other work must be agreed in writing, with the price, before that work starts.",
+        "alignment": "left"
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000032",
+        "type": "heading",
+        "text": "Fees and payment",
+        "level": 2,
+        "alignment": "left"
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000033",
+        "type": "paragraph",
+        "text": "The client will pay the fees stated above. The bookkeeper will invoice as often as stated above, and each invoice is payable within the payment period stated above. The bookkeeper may pause work while an invoice is overdue, after telling the client in writing. The client will repay expenses only where it agreed them in writing beforehand. The fees include tax only as stated above. Payment is made as stated in how to pay, and a late payment is dealt with as stated above.",
+        "alignment": "left"
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000034",
+        "type": "heading",
+        "text": "Term and termination",
+        "level": 2,
+        "alignment": "left"
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000035",
+        "type": "paragraph",
+        "text": "This agreement takes effect on the start date and continues for the term stated above. Either party may end it by giving the other written notice of at least the notice period stated above. Either party may end it at once, in writing, if the other seriously breaches it and does not put the breach right within the time to put a breach right stated above. When this agreement ends, the client will pay for the work done up to that date and the bookkeeper will return the client's records. The terms on payment, ownership of work and confidentiality continue after it ends.",
+        "alignment": "left"
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000036",
+        "type": "heading",
+        "text": "Ownership of work",
+        "level": 2,
+        "alignment": "left"
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000037",
+        "type": "paragraph",
+        "text": "The client owns its financial records. When the client has paid the fees for it, the client also owns the reports, ledgers and other work the bookkeeper produces under this agreement. The bookkeeper keeps ownership of its own templates, methods and working papers, gives the client a permanent licence to use any of them that form part of that work, and may keep copies of records where the law requires it.",
+        "alignment": "left"
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000038",
+        "type": "heading",
+        "text": "Confidentiality",
+        "level": 2,
+        "alignment": "left"
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000039",
+        "type": "paragraph",
+        "text": "The bookkeeper will keep the client's financial and business information private, store it securely, and use it only to provide the services. The bookkeeper will not share it with anyone else without the client's written permission, unless the law requires it. The client will keep the bookkeeper's confidential information private in the same way. These duties continue after this agreement ends.",
+        "alignment": "left"
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000109",
+        "type": "heading",
+        "text": "Data protection",
+        "level": 2,
+        "alignment": "left"
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000110",
+        "type": "paragraph",
+        "text": "Where the bookkeeper handles personal data for the client, such as the kinds stated above, it does so only on the client's written instructions. It keeps that data confidential and secure, uses another company to handle it only with the client's written permission, and helps the client answer requests from people about their data. When this agreement ends, it returns or deletes the data, keeping only what the law requires, and it allows the client reasonable checks that it follows this clause.",
+        "alignment": "left"
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000040",
+        "type": "heading",
+        "text": "Warranties",
+        "level": 2,
+        "alignment": "left"
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000041",
+        "type": "paragraph",
+        "text": "Each party confirms that it has the right to enter this agreement. The bookkeeper confirms that it has the skills and experience to provide the services. The client confirms that the information it provides will be complete and accurate to the best of its knowledge. Neither party makes any other promise about the services unless it is written in this agreement.",
+        "alignment": "left"
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000042",
+        "type": "heading",
+        "text": "Limitation of liability",
+        "level": 2,
+        "alignment": "left"
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000043",
+        "type": "paragraph",
+        "text": "Each party's total liability to the other under this agreement is limited to the limit of liability stated above. Neither party is liable for loss of profit or for indirect loss. The bookkeeper is not liable for loss caused by incomplete, late or inaccurate information from the client. Nothing in this agreement limits liability that the law does not allow to be limited.",
+        "alignment": "left"
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000111",
+        "type": "heading",
+        "text": "Disputes",
+        "level": 2,
+        "alignment": "left"
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000112",
+        "type": "paragraph",
+        "text": "If a dispute arises under this agreement, the parties will first try to settle it by talking to each other in good faith. If that does not settle it, they will try mediation before going to court. Only the courts stated above may hear a dispute under this agreement.",
+        "alignment": "left"
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000044",
+        "type": "heading",
+        "text": "General terms",
+        "level": 2,
+        "alignment": "left"
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000045",
+        "type": "paragraph",
+        "text": "The bookkeeper is an independent contractor and not an employee of the client. This agreement is the whole agreement between the parties about the services. Any change to it must be in writing and signed by both parties. Neither party may transfer it to someone else without the other's written consent. Notices under this agreement are given in writing to the addresses or emails stated above. This agreement is governed by the governing law stated above.",
+        "alignment": "left"
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000046",
+        "type": "paragraph",
+        "text": "By signing below, each party agrees to the terms of this agreement.",
+        "alignment": "left"
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000048",
+        "fieldKey": "bookkeeper_signature",
+        "label": "Bookkeeper signature",
+        "required": true,
+        "helpText": null,
+        "type": "signature_field"
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000049",
+        "fieldKey": "client_signature",
+        "label": "Client signature",
+        "required": true,
+        "helpText": null,
+        "type": "signature_field"
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000050",
+        "fieldKey": "bookkeeper_printed_name",
+        "label": "Bookkeeper printed name",
+        "required": true,
+        "helpText": null,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000051",
+        "fieldKey": "client_printed_name",
+        "label": "Client printed name",
+        "required": true,
+        "helpText": null,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000052",
+        "fieldKey": "bookkeeper_position",
+        "label": "Bookkeeper position",
+        "required": false,
+        "helpText": null,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000053",
+        "fieldKey": "client_position",
+        "label": "Client position",
+        "required": false,
+        "helpText": null,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000054",
+        "fieldKey": "date_signed_by_bookkeeper",
+        "label": "Date signed by bookkeeper",
+        "required": true,
+        "helpText": null,
+        "type": "date_field"
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000055",
+        "fieldKey": "date_signed_by_client",
+        "label": "Date signed by client",
+        "required": true,
+        "helpText": null,
+        "type": "date_field"
+      }
+    ],
+    "layout": {
+      "pageSize": "A4",
+      "orientation": "portrait",
+      "marginPreset": "standard",
+      "density": "balanced",
+      "printedTitle": {
+        "mode": "none"
+      },
+      "headerPolicy": "none",
+      "footerPolicy": "none",
+      "pageNumbering": "none"
+    },
+    "sections": [
+      {
+        "id": "a6000000-0000-4000-8000-000000000003",
+        "label": "The parties",
+        "startBlockId": "a6000000-0000-4000-8000-000000000002",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000013",
+        "label": "Scope of services",
+        "startBlockId": "a6000000-0000-4000-8000-000000000012",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000015",
+        "label": "Fees and invoicing",
+        "startBlockId": "a6000000-0000-4000-8000-000000000014",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000021",
+        "label": "Term, liability and law",
+        "startBlockId": "a6000000-0000-4000-8000-000000000020",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000030",
+        "label": "Terms and conditions",
+        "startBlockId": "a6000000-0000-4000-8000-000000000029",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000047",
+        "label": "Signatures",
+        "startBlockId": "a6000000-0000-4000-8000-000000000046",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      }
+    ],
+    "fieldGroups": [
+      {
+        "id": "a6000000-0000-4000-8000-000000000006",
+        "label": null,
+        "startBlockId": "a6000000-0000-4000-8000-000000000002",
+        "endBlockId": "a6000000-0000-4000-8000-000000000004",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000010",
+        "label": null,
+        "startBlockId": "a6000000-0000-4000-8000-000000000007",
+        "endBlockId": "a6000000-0000-4000-8000-000000000008",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000019",
+        "label": null,
+        "startBlockId": "a6000000-0000-4000-8000-000000000016",
+        "endBlockId": "a6000000-0000-4000-8000-000000000017",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000025",
+        "label": null,
+        "startBlockId": "a6000000-0000-4000-8000-000000000020",
+        "endBlockId": "a6000000-0000-4000-8000-000000000023",
+        "columns": 3,
+        "keepTogether": false
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000057",
+        "label": null,
+        "startBlockId": "a6000000-0000-4000-8000-000000000048",
+        "endBlockId": "a6000000-0000-4000-8000-000000000049",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000059",
+        "label": null,
+        "startBlockId": "a6000000-0000-4000-8000-000000000050",
+        "endBlockId": "a6000000-0000-4000-8000-000000000051",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000061",
+        "label": null,
+        "startBlockId": "a6000000-0000-4000-8000-000000000052",
+        "endBlockId": "a6000000-0000-4000-8000-000000000053",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "a6000000-0000-4000-8000-000000000063",
+        "label": null,
+        "startBlockId": "a6000000-0000-4000-8000-000000000054",
+        "endBlockId": "a6000000-0000-4000-8000-000000000055",
+        "columns": 2,
+        "keepTogether": false
+      }
+    ],
+    "blockRules": [
+      {
+        "blockId": "a6000000-0000-4000-8000-000000000029",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "a6000000-0000-4000-8000-000000000032",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "a6000000-0000-4000-8000-000000000034",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "a6000000-0000-4000-8000-000000000036",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "a6000000-0000-4000-8000-000000000038",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "a6000000-0000-4000-8000-000000000040",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "a6000000-0000-4000-8000-000000000042",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "a6000000-0000-4000-8000-000000000044",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "a6000000-0000-4000-8000-000000000046",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "a6000000-0000-4000-8000-000000000048",
+        "pageBreakBefore": false,
+        "keepWithNext": false,
+        "spaceAbove": 8
+      },
+      {
+        "blockId": "a6000000-0000-4000-8000-000000000049",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "a6000000-0000-4000-8000-000000000051",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "a6000000-0000-4000-8000-000000000053",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "a6000000-0000-4000-8000-000000000109",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "a6000000-0000-4000-8000-000000000111",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      }
+    ]
+  }
+}

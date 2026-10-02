@@ -35,13 +35,19 @@ export function ListFilterChips({
   // Measured after layout, so until then, and without script, the selected
   // pill paints its own fill.
   useLayoutEffect(() => {
+    const nav = navRef.current
+    const pill = nav?.querySelectorAll<HTMLElement>(
+      '[data-slot="list-filter-chip"]'
+    )[selectedIndex]
+
+    // A choice past the row's edge on a phone scrolls into sight.
+    if (nav && pill && pill.offsetLeft + pill.offsetWidth > nav.scrollLeft + nav.clientWidth) {
+      nav.scrollLeft = pill.offsetLeft - 16
+    }
+
     if (!glide) {
       return
     }
-
-    const pill = navRef.current?.querySelectorAll<HTMLElement>(
-      '[data-slot="list-filter-chip"]'
-    )[selectedIndex]
 
     setGlider(
       pill
@@ -58,7 +64,9 @@ export function ListFilterChips({
   return (
     <nav
       aria-label={label}
-      className="relative -mx-1 flex gap-1 overflow-x-auto px-1 pb-1"
+      // Pills past the edge fade out, which says the row scrolls; the room
+      // at its end lets the last one scroll clear of the fade.
+      className="relative -mx-1 flex snap-x snap-proximity gap-1 overflow-x-auto pr-7 pb-1 pl-1 [mask-image:linear-gradient(to_right,black_calc(100%-28px),transparent)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       data-slot="list-filter-chips"
       ref={navRef}
     >
@@ -78,7 +86,7 @@ export function ListFilterChips({
         <Link
           aria-current={option.selected ? "true" : undefined}
           className={cn(
-            "relative inline-flex min-h-9 shrink-0 items-center rounded-full px-3 text-sm font-normal whitespace-nowrap text-muted-foreground outline-none transition-colors hover:bg-secondary/55 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/35",
+            "relative inline-flex min-h-9 shrink-0 snap-start items-center rounded-full px-3 text-sm font-normal whitespace-nowrap text-muted-foreground outline-none transition-colors hover:bg-secondary/55 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/35",
             option.selected && "text-secondary-foreground",
             option.selected && glider === null && "bg-secondary"
           )}

@@ -1,5 +1,8 @@
 import {
+  isPinnedBlock,
+  MAX_ROW_COLUMNS,
   MAX_TEMPLATE_BLOCK_COUNT,
+  ruleHasEffect,
   type TemplateBlock,
   type TemplateContentV3,
   type TemplateFieldGroup,
@@ -7,6 +10,7 @@ import {
 } from "@/types/template"
 
 type TemplateFieldBlock = Extract<TemplateBlock, { fieldKey: string }>
+type TemplateBlockRule = TemplateContentV3["blockRules"][number]
 type TemplateDropdownFieldBlock = Extract<
   TemplateBlock,
   { type: "dropdown_field" }
@@ -58,6 +62,44 @@ export type TemplateVisibilityStructureEditResult =
       message: string
       dependentBlockIds: readonly string[]
     }>
+
+/**
+ * A place a block can be moved to, counted among the other blocks with it
+ * lifted out: before the block at `index`, or at the end.
+ */
+export type TemplateBlockSlot = Readonly<{
+  index: number
+  /** The section whose title it goes under, as its first block; null to follow what comes before. */
+  opens: string | null
+  /** Whether it stays in its own group of fields. */
+  inGroup: boolean
+}>
+
+/** A move made, or refused because a conditional field would come before its source. */
+export type TemplateMoveResult =
+  | Readonly<{ success: true; content: TemplateContentV3 }>
+  | Extract<TemplateVisibilityStructureEditResult, { success: false }>
+  | Readonly<{
+      success: false
+      code: "row_full" | "pinned_block"
+      message: string
+      dependentBlockIds: readonly string[]
+    }>
+
+type LiftedBlock = Readonly<{
+  at: number
+  block: TemplateBlock
+  /** The section with no other block, whose title stays where the block was. */
+  emptied: string | null
+  /** Its own group, when the group has other fields, by where they sit among `rest`. */
+  own: Readonly<{ group: TemplateFieldGroup; start: number; end: number }> | null
+  opens: string | null
+  /** Every other group's fields, by where they sit among `rest`. */
+  others: readonly Readonly<{ start: number; end: number }>[]
+  rest: readonly TemplateBlock[]
+  /** Where each section's first block sits among `rest`. */
+  starts: ReadonlyMap<number, string>
+}>
 
 type IndexedFieldGroup = {
   group: TemplateFieldGroup
@@ -203,65 +245,6 @@ export function evaluateTemplateBlockDeletion(
     dependentBlockIds: dependents.map(
       (dependent: TemplateFieldBlock): string => dependent.id
     )
-  }
-}
-
-/**
- * Validates an adjacent block move without placing conditional fields before
- * their checkbox or dropdown visibility source.
- *
- * @param blocks - Current canonical block order.
- * @param blockId - Block proposed for movement.
- * @param direction - Adjacent movement direction.
- * @returns Success for a safe or boundary move, or an actionable refusal with
- * every conditional field made invalid by the proposed order.
- */
-export function evaluateTemplateBlockMove(
-  blocks: readonly TemplateBlock[],
-  blockId: string,
-  direction: "up" | "down"
-): TemplateVisibilityStructureEditResult {
-  const blockIndex = blocks.findIndex(
-    (block: TemplateBlock): boolean => block.id === blockId
-  )
-
-  if (blockIndex === -1) {
-    return createVisibilityStructureEditFailure(
-      "block_not_found",
-      "The block is no longer available. Select it again before moving it."
-    )
-  }
-
-  const targetIndex = direction === "up" ? blockIndex - 1 : blockIndex + 1
-
-  if (targetIndex < 0 || targetIndex >= blocks.length) {
-    return { success: true }
-  }
-
-  const proposedBlocks = [...blocks]
-  const block = proposedBlocks[blockIndex]
-  const targetBlock = proposedBlocks[targetIndex]
-
-  if (block === undefined || targetBlock === undefined) {
-    return { success: true }
-  }
-
-  proposedBlocks[blockIndex] = targetBlock
-  proposedBlocks[targetIndex] = block
-
-  const dependentBlockIds = findVisibilityOrderConflicts(proposedBlocks)
-
-  if (dependentBlockIds.length === 0) {
-    return { success: true }
-  }
-
-  const fieldWord = dependentBlockIds.length === 1 ? "field" : "fields"
-
-  return {
-    success: false,
-    code: "visibility_order_conflict",
-    message: `This move would place ${dependentBlockIds.length} conditional ${fieldWord} before the checkbox or dropdown that controls visibility. Keep each source above the fields it controls, or change the affected conditions first.`,
-    dependentBlockIds
   }
 }
 
@@ -416,6 +399,572 @@ export function getTemplateSectionForBlock(
 }
 
 /**
+ * Starts a section at a block. A block inside a row of side-by-side fields
+ * starts it at the row's first field, since a section never splits a row.
+ *
+ * @param content - Editable version-three content.
+ * @param blockId - The block the section opens with.
+ * @param sectionId - A fresh id for the section.
+ * @param label - Its printed title; defaults to an editable placeholder.
+ * @returns The content with the section, or unchanged when the block is
+ * missing or already opens a section.
+ */
+export function startTemplateSection(
+  content: TemplateContentV3,
+  blockId: string,
+  sectionId: string,
+  label = "Section title"
+): TemplateContentV3 {
+  const index = content.blocks.findIndex((block: TemplateBlock): boolean => block.id === blockId)
+  const row = getIndexedFieldGroups(content).find(
+    (group: IndexedFieldGroup): boolean => index >= group.startIndex && index <= group.endIndex
+  )
+  const startIndex = row?.startIndex ?? index
+  const startBlockId = content.blocks[startIndex]?.id
+
+  if (
+    startBlockId === undefined ||
+    content.sections.some((section: TemplateSection): boolean => section.startBlockId === startBlockId)
+  ) {
+    return content
+  }
+
+  return reconcileTemplateStructure(
+    content,
+    content.blocks,
+    [
+      ...getIndexedSections(content),
+      { section: { id: sectionId, label, startBlockId, pageBreakBefore: false, keepTogether: false }, startIndex },
+    ],
+    getIndexedFieldGroups(content)
+  )
+}
+
+/**
+ * Changes a section's title or its page rules.
+ *
+ * @param content - Editable version-three content.
+ * @param sectionId - The section.
+ * @param change - Its new title, whether it starts a new page, and whether it
+ * stays on one page.
+ * @returns The content with the section changed.
+ */
+export function updateTemplateSection(
+  content: TemplateContentV3,
+  sectionId: string,
+  change: Partial<Pick<TemplateSection, "keepTogether" | "label" | "pageBreakBefore">>
+): TemplateContentV3 {
+  return {
+    ...content,
+    sections: content.sections.map(
+      (section: TemplateSection): TemplateSection => (section.id === sectionId ? { ...section, ...change } : section)
+    ),
+  }
+}
+
+/**
+ * Removes a section's boundary and title, keeping everything in it.
+ *
+ * @param content - Editable version-three content.
+ * @param sectionId - The section.
+ * @returns The content, its blocks now part of the section before.
+ */
+export function removeTemplateSection(content: TemplateContentV3, sectionId: string): TemplateContentV3 {
+  return {
+    ...content,
+    sections: content.sections.filter((section: TemplateSection): boolean => section.id !== sectionId),
+  }
+}
+
+/**
+ * Puts a block beside another, to its left or right: any block, not only
+ * fields. It joins the other block's row, widening it by a column, or the two
+ * start a row of their own. The block moves into the other block's section,
+ * and a row holds at most four blocks. Pinned blocks stay out of rows.
+ *
+ * @param content - Editable version-three content.
+ * @param blockId - The block to move.
+ * @param targetId - The block it goes beside.
+ * @param side - Which side of the target.
+ * @param newId - Makes fresh ids, for a new row or the line an emptied section keeps.
+ * @returns The content, or a refusal saying why the block cannot go there.
+ */
+export function placeBeside(
+  content: TemplateContentV3,
+  blockId: string,
+  targetId: string,
+  side: "left" | "right",
+  newId: () => string
+): TemplateMoveResult {
+  const moving = content.blocks.find((block: TemplateBlock): boolean => block.id === blockId)
+  const targetAt = content.blocks.findIndex((block: TemplateBlock): boolean => block.id === targetId)
+  const target = content.blocks[targetAt]
+
+  if (!moving || !target) {
+    return { code: "block_not_found", dependentBlockIds: [], message: "The block is no longer available. Select it again before moving it.", success: false }
+  }
+
+  if (blockId === targetId) {
+    return { content, success: true }
+  }
+
+  if (isPinnedBlock(moving) || isPinnedBlock(target)) {
+    return { code: "pinned_block", dependentBlockIds: [], message: "A block pinned to its page can't share a row. Put it back in line first.", success: false }
+  }
+
+  const row = getIndexedFieldGroups(content).find(({ endIndex, startIndex }) => targetAt >= startIndex && targetAt <= endIndex)
+  const ownRow = row !== undefined && content.blocks.slice(row.startIndex, row.endIndex + 1).includes(moving)
+  const members = row ? row.endIndex - row.startIndex + 1 : 1
+
+  if (row && !ownRow && members >= MAX_ROW_COLUMNS && members <= row.group.columns) {
+    return { code: "row_full", dependentBlockIds: [], message: "A row holds at most four blocks side by side.", success: false }
+  }
+
+  const rest = content.blocks.filter((block: TemplateBlock): boolean => block.id !== blockId)
+  const slot: TemplateBlockSlot = {
+    index: rest.findIndex((block: TemplateBlock): boolean => block.id === targetId) + (side === "right" ? 1 : 0),
+    inGroup: ownRow,
+    // Left of a section's first block, the block opens that section instead.
+    opens: side === "left" ? (content.sections.find((section) => section.startBlockId === targetId)?.id ?? null) : null,
+  }
+  const moved = moveTemplateBlockTo(content, blockId, slot, newId())
+
+  if (!moved.success || ownRow) {
+    return moved
+  }
+
+  const next = moved.content
+  const index = createBlockIndex(next.blocks)
+  const blockAt = index.get(blockId) ?? 0
+  const at = index.get(targetId) ?? 0
+  const held = next.fieldGroups.find((group) => (index.get(group.startBlockId) ?? -1) <= at && at <= (index.get(group.endBlockId) ?? -1))
+  const fieldGroups = held
+    ? next.fieldGroups.map((group: TemplateFieldGroup): TemplateFieldGroup => {
+        if (group !== held) {
+          return group
+        }
+
+        const start = Math.min(index.get(group.startBlockId) ?? blockAt, blockAt)
+        const end = Math.max(index.get(group.endBlockId) ?? blockAt, blockAt)
+        // A single row gains a column; a range that already wraps just takes one more.
+        const widened = members <= group.columns ? { ...withoutWidths(group), columns: Math.min(MAX_ROW_COLUMNS, members + 1) } : group
+
+        return { ...widened, endBlockId: next.blocks[end]?.id ?? blockId, startBlockId: next.blocks[start]?.id ?? blockId }
+      })
+    : [
+        ...next.fieldGroups,
+        {
+          columns: 2,
+          endBlockId: blockAt > at ? blockId : targetId,
+          id: newId(),
+          keepTogether: false,
+          label: null,
+          startBlockId: blockAt > at ? targetId : blockId,
+        },
+      ].sort((left, right) => (index.get(left.startBlockId) ?? 0) - (index.get(right.startBlockId) ?? 0))
+
+  return { content: { ...next, fieldGroups }, success: true }
+}
+
+/**
+ * Finds the row or group a block is in.
+ *
+ * @param content - Editable version-three content.
+ * @param blockId - The block.
+ * @returns Its group, or undefined when it is on a line of its own.
+ */
+export function rowOf(content: TemplateContentV3, blockId: string): TemplateFieldGroup | undefined {
+  const index = content.blocks.findIndex((block: TemplateBlock): boolean => block.id === blockId)
+
+  return getIndexedFieldGroups(content).find(({ endIndex, startIndex }) => index >= startIndex && index <= endIndex)?.group
+}
+
+/**
+ * Takes a block out of its row and puts it on its own line just below it.
+ * The row loses a column, and a row left with one block is undone unless it
+ * has a label or keeps together.
+ *
+ * @param content - Editable version-three content.
+ * @param blockId - The block.
+ * @param newId - Makes a fresh id, for the line an emptied section keeps.
+ * @returns The content, unchanged when the block is in no row.
+ */
+export function standAlone(content: TemplateContentV3, blockId: string, newId: () => string): TemplateMoveResult {
+  const at = content.blocks.findIndex((block: TemplateBlock): boolean => block.id === blockId)
+  const row = getIndexedFieldGroups(content).find(({ endIndex, startIndex }) => at >= startIndex && at <= endIndex)
+
+  // Lifted out, the row's last block sits one place earlier, so its end is the place after it.
+  return row ? moveTemplateBlockTo(content, blockId, { inGroup: false, index: row.endIndex, opens: null }, newId()) : { content, success: true }
+}
+
+/**
+ * Sizes a row's columns in twelfths of the page's width. Equal columns keep
+ * no widths at all.
+ *
+ * @param content - Editable version-three content.
+ * @param groupId - The row.
+ * @param widths - One width per column, each at least two twelfths, filling twelve.
+ * @returns The content, unchanged when the widths do not fit the row.
+ */
+export function setRowWidths(content: TemplateContentV3, groupId: string, widths: readonly number[]): TemplateContentV3 {
+  const group = content.fieldGroups.find((candidate: TemplateFieldGroup): boolean => candidate.id === groupId)
+  const fits =
+    group !== undefined &&
+    widths.length === group.columns &&
+    widths.every((width: number): boolean => Number.isInteger(width) && width >= 2) &&
+    widths.reduce((total: number, width: number): number => total + width, 0) === 12
+
+  if (!fits) {
+    return content
+  }
+
+  const equal = widths.every((width: number): boolean => width === widths[0])
+
+  return {
+    ...content,
+    fieldGroups: content.fieldGroups.map(
+      (candidate: TemplateFieldGroup): TemplateFieldGroup =>
+        candidate.id !== groupId ? candidate : equal ? withoutWidths(candidate) : { ...candidate, widths: [...widths] }
+    ),
+  }
+}
+
+/**
+ * Changes what a group of fields shares: the label printed above it, and
+ * whether it stays on one page. An emptied label takes the label away.
+ *
+ * @param content - Editable version-three content.
+ * @param groupId - The group.
+ * @param change - Its new label, as typed, or whether it keeps together.
+ * @returns The content with the group changed.
+ */
+export function updateTemplateFieldGroup(
+  content: TemplateContentV3,
+  groupId: string,
+  change: Readonly<{ keepTogether?: boolean; label?: string }>
+): TemplateContentV3 {
+  return {
+    ...content,
+    fieldGroups: content.fieldGroups.map(
+      (group: TemplateFieldGroup): TemplateFieldGroup =>
+        group.id !== groupId
+          ? group
+          : {
+              ...group,
+              keepTogether: change.keepTogether ?? group.keepTogether,
+              label: change.label === undefined ? group.label : change.label || null,
+            }
+    ),
+  }
+}
+
+/**
+ * Keeps a block on the same page as the one after it, or lets it go.
+ *
+ * @param content - Editable version-three content.
+ * @param blockId - The block.
+ * @param keepWithNext - Whether it stays with the next block.
+ * @returns The content with the block's rule changed, keeping the rest of its rule.
+ */
+export function setBlockKeepWithNext(
+  content: TemplateContentV3,
+  blockId: string,
+  keepWithNext: boolean
+): TemplateContentV3 {
+  return setBlockRule(content, blockId, { keepWithNext })
+}
+
+/**
+ * Changes how a block is laid out: its page break, whether it stays with the
+ * next, the space above it and where it sits across the page. What is not
+ * named stays as it was, and a rule left changing nothing is dropped.
+ *
+ * @param content - Editable version-three content.
+ * @param blockId - The block.
+ * @param change - What changes; an undefined space or frame is taken away.
+ * @returns The content with the block's rule changed.
+ */
+export function setBlockRule(
+  content: TemplateContentV3,
+  blockId: string,
+  change: Partial<Omit<TemplateBlockRule, "blockId">>
+): TemplateContentV3 {
+  if (!content.blocks.some((block: TemplateBlock): boolean => block.id === blockId)) {
+    return content
+  }
+
+  const existing = content.blockRules.find((rule): boolean => rule.blockId === blockId)
+  const rule: TemplateBlockRule = { blockId, keepWithNext: false, pageBreakBefore: false, ...existing, ...change }
+  const others = content.blockRules.filter((candidate): boolean => candidate.blockId !== blockId)
+
+  // Held down past the most a page allows, a space stops there.
+  if (rule.spaceAbove) rule.spaceAbove = Math.min(rule.spaceAbove, 600)
+  // None of it left, a rule would say nothing.
+  if (!rule.spaceAbove) delete rule.spaceAbove
+  if (!rule.frame) delete rule.frame
+
+  if (!ruleHasEffect(rule)) {
+    return { ...content, blockRules: others }
+  }
+
+  return {
+    ...content,
+    blockRules: existing
+      ? content.blockRules.map((candidate) => (candidate.blockId === blockId ? rule : candidate))
+      : [...content.blockRules, rule],
+  }
+}
+
+/**
+ * Where a block sits across the page, as its rule keeps it: none when it
+ * fills the line, and to a tenth of a percent otherwise.
+ *
+ * @param left - Its left edge, in percentages of the line.
+ * @param width - Its width, in the same.
+ * @returns The frame, or undefined for the whole line.
+ */
+export function frameOf(left: number, width: number): TemplateBlockRule["frame"] {
+  const round = (value: number): number => Math.round(value * 10) / 10
+
+  // Pushed past either edge, a block stops at it, and never narrower than a twentieth.
+  const at = round(Math.min(Math.max(left, 0), 95))
+
+  return at < 0.5 && width > 99.5 ? undefined : { left: at, width: round(Math.min(Math.max(width, 5), 100 - at)) }
+}
+
+/**
+ * Lists every place a block can be moved to, top to bottom. A row of fields
+ * is one piece that a block goes above or below, and a section's title has a
+ * place on each side: before it, closing the section above, and under it,
+ * opening its section.
+ *
+ * @param content - Editable version-three content.
+ * @param blockId - The block to move.
+ * @param withinGroup - Whether the places inside the block's own group count,
+ *   as they do for moving it a step at a time; a drag goes only beside rows.
+ * @returns The places, or none when the block is missing.
+ */
+export function listTemplateBlockSlots(
+  content: TemplateContentV3,
+  blockId: string,
+  withinGroup: boolean
+): TemplateBlockSlot[] {
+  const lifted = liftTemplateBlock(content, blockId)
+
+  if (!lifted) {
+    return []
+  }
+
+  const { emptied, others, own, rest, starts } = lifted
+  const inside = (gap: number, range: Readonly<{ start: number; end: number }>): boolean => gap > range.start && gap <= range.end
+  const slots: TemplateBlockSlot[] = []
+
+  for (let gap = 0; gap <= rest.length; gap += 1) {
+    const opens = starts.get(gap) ?? null
+
+    if (others.some((range) => inside(gap, range))) {
+      continue
+    }
+
+    if (own && inside(gap, own)) {
+      if (withinGroup) {
+        slots.push({ index: gap, inGroup: true, opens: null })
+      }
+
+      continue
+    }
+
+    if (withinGroup && own?.end === gap - 1) {
+      slots.push({ index: gap, inGroup: true, opens: null })
+    }
+
+    slots.push({ index: gap, inGroup: false, opens: null })
+
+    if (emptied && gap === lifted.at) {
+      slots.push({ index: gap, inGroup: false, opens: emptied })
+    }
+
+    if (opens) {
+      slots.push({ index: gap, inGroup: false, opens })
+    }
+
+    if (withinGroup && own?.start === gap) {
+      slots.push({ index: gap, inGroup: true, opens })
+    }
+  }
+
+  return slots
+}
+
+/**
+ * The place a block has now, as `listTemplateBlockSlots` counts places.
+ *
+ * @param content - Editable version-three content.
+ * @param blockId - The block.
+ * @returns Its place, or null for a missing block.
+ */
+export function getTemplateBlockSlot(content: TemplateContentV3, blockId: string): TemplateBlockSlot | null {
+  const lifted = liftTemplateBlock(content, blockId)
+
+  return lifted ? currentSlot(lifted) : null
+}
+
+/**
+ * The place one step up or down from where a block is.
+ *
+ * @param content - Editable version-three content.
+ * @param blockId - The block to move.
+ * @param direction - Which way.
+ * @returns The place, or null at the top or bottom, or for a missing block.
+ */
+export function stepTemplateBlockSlot(
+  content: TemplateContentV3,
+  blockId: string,
+  direction: "up" | "down"
+): TemplateBlockSlot | null {
+  const current = getTemplateBlockSlot(content, blockId)
+  const slots = listTemplateBlockSlots(content, blockId, true)
+  const at = current ? slots.findIndex((slot) => isSameSlot(slot, current)) : -1
+
+  return at === -1 ? null : (slots[at + (direction === "up" ? -1 : 1)] ?? null)
+}
+
+/**
+ * Moves a block to a place. Only the block moves: every other block keeps
+ * its section and its row, and the block keeps its id, key, condition and
+ * rules. It joins the section of its place and leaves its row unless it
+ * stays in it; a row left with one field is undone, and a section it leaves
+ * with nothing keeps its title over an empty line.
+ *
+ * @param content - Editable version-three content.
+ * @param blockId - The block to move.
+ * @param slot - Where to, from `listTemplateBlockSlots`.
+ * @param newBlockId - A fresh id, for the line a section it empties keeps.
+ * @returns The moved content, or a refusal naming every conditional field
+ *   the move would put above its checkbox or dropdown.
+ */
+export function moveTemplateBlockTo(
+  content: TemplateContentV3,
+  blockId: string,
+  slot: TemplateBlockSlot,
+  newBlockId: string
+): TemplateMoveResult {
+  const lifted = liftTemplateBlock(content, blockId)
+
+  if (!lifted) {
+    return { code: "block_not_found", dependentBlockIds: [], message: "The block is no longer available. Select it again before moving it.", success: false }
+  }
+
+  if (isSameSlot(slot, currentSlot(lifted)) || slot.index < 0 || slot.index > lifted.rest.length) {
+    return { content, success: true }
+  }
+
+  const { at, block, emptied, own, rest } = lifted
+  const follower = content.blocks[at + 1]
+  const blocks = [...rest.slice(0, slot.index), block, ...rest.slice(slot.index)]
+  const filler: TemplateBlock | null = emptied ? { alignment: "left", id: newBlockId, text: "", type: "paragraph" } : null
+
+  if (filler) {
+    // The emptied section's title sat just above what followed the block, or
+    // just above the block when it now opens the section after that title.
+    const where = slot.index === at && slot.opens !== null ? blocks.indexOf(block) : follower ? blocks.indexOf(follower) : blocks.length
+
+    blocks.splice(where, 0, filler)
+  }
+
+  const conflicts = findVisibilityOrderConflicts(blocks)
+
+  if (conflicts.length > 0) {
+    return createOrderConflict(conflicts)
+  }
+
+  const index = createBlockIndex(blocks)
+  const sections = content.sections
+    .map((section: TemplateSection): TemplateSection => {
+      if (section.id === slot.opens) {
+        return { ...section, startBlockId: block.id }
+      }
+
+      if (section.id === emptied && filler) {
+        return { ...section, startBlockId: filler.id }
+      }
+
+      // A section the block opened is opened by the block after it instead.
+      return section.startBlockId === block.id && follower ? { ...section, startBlockId: follower.id } : section
+    })
+    .sort((left, right) => (index.get(left.startBlockId) ?? 0) - (index.get(right.startBlockId) ?? 0))
+  const fieldGroups = content.fieldGroups.flatMap((group: TemplateFieldGroup): TemplateFieldGroup[] => {
+    const members = content.blocks
+      .slice(content.blocks.findIndex((candidate) => candidate.id === group.startBlockId), content.blocks.findIndex((candidate) => candidate.id === group.endBlockId) + 1)
+      .filter((member) => member.id !== block.id || (slot.inGroup && group.id === own?.group.id))
+      .map((member) => index.get(member.id) ?? 0)
+      .sort((left, right) => left - right)
+    const first = blocks[members[0] ?? -1]
+    const last = blocks[members.at(-1) ?? -1]
+
+    // One field on its own has nothing to sit beside.
+    if (!first || !last || (members.length < 2 && group.label === null && !group.keepTogether)) {
+      return []
+    }
+
+    return [fitRow({ ...group, endBlockId: last.id, startBlockId: first.id }, members.length)]
+  })
+
+  return { content: { ...content, blocks, fieldGroups, sections }, success: true }
+}
+
+/**
+ * Moves a section, with everything in it, above the section before it or
+ * below the one after. Writing before the first section has no section to
+ * swap with, so it stays first.
+ *
+ * @param content - Editable version-three content.
+ * @param sectionId - The section.
+ * @param direction - Which way.
+ * @returns The moved content, unchanged at either end, or a refusal naming
+ *   every conditional field the move would put above its source.
+ */
+export function moveTemplateSection(
+  content: TemplateContentV3,
+  sectionId: string,
+  direction: "up" | "down"
+): TemplateMoveResult {
+  const indexed = getIndexedSections(content).sort((left, right) => left.startIndex - right.startIndex)
+  const at = indexed.findIndex(({ section }) => section.id === sectionId)
+  const other = at + (direction === "up" ? -1 : 1)
+  const upper = indexed[Math.min(at, other)]
+  const lower = indexed[Math.max(at, other)]
+
+  if (at === -1 || !upper || !lower) {
+    return { content, success: true }
+  }
+
+  const end = indexed[Math.max(at, other) + 1]?.startIndex ?? content.blocks.length
+  const blocks = [
+    ...content.blocks.slice(0, upper.startIndex),
+    ...content.blocks.slice(lower.startIndex, end),
+    ...content.blocks.slice(upper.startIndex, lower.startIndex),
+    ...content.blocks.slice(end),
+  ]
+  const conflicts = findVisibilityOrderConflicts(blocks)
+
+  if (conflicts.length > 0) {
+    return createOrderConflict(conflicts)
+  }
+
+  const index = createBlockIndex(blocks)
+
+  return {
+    content: {
+      ...content,
+      blocks,
+      sections: [...content.sections].sort((left, right) => (index.get(left.startBlockId) ?? 0) - (index.get(right.startBlockId) ?? 0)),
+    },
+    success: true,
+  }
+}
+
+/**
  * Inserts a block while retaining version-three structural references.
  *
  * @param content - Current editable version-three content.
@@ -454,11 +1003,13 @@ export function insertTemplateBlock(
     return reconcileTemplateStructure(content, blocks, [], [])
   }
 
+  // A section that opens the page keeps a block typed above it; one that
+  // starts partway down moves along with its first block.
   const sections = getIndexedSections(content).map(
-    ({ section, startIndex }: IndexedSection, sectionIndex: number) => ({
+    ({ section, startIndex }: IndexedSection) => ({
       section,
       startIndex:
-        insertIndex === 0 && sectionIndex === 0
+        insertIndex === 0 && startIndex === 0
           ? 0
           : startIndex >= insertIndex
             ? startIndex + 1
@@ -694,118 +1245,87 @@ export function deleteTemplateBlock(
   )
 }
 
-/**
- * Moves one block by one position while section and group boundaries stay put.
- *
- * Root blocks remain the sole ordering source; boundary ids are remapped to the
- * blocks now occupying their established positions.
- *
- * @param content - Current editable version-three content.
- * @param blockId - Existing block id to move.
- * @param direction - Adjacent movement direction.
- * @returns New content with repaired structural references.
- */
-export function moveTemplateBlock(
-  content: TemplateContentV3,
-  blockId: string,
-  direction: "up" | "down"
-): TemplateContentV3 {
-  const blockIndex = content.blocks.findIndex(
-    (block: TemplateBlock): boolean => block.id === blockId
-  )
-  const targetIndex = direction === "up" ? blockIndex - 1 : blockIndex + 1
+// The block taken out of the flow, and where everything else sits without it.
+function liftTemplateBlock(content: TemplateContentV3, blockId: string): LiftedBlock | null {
+  const at = content.blocks.findIndex((block: TemplateBlock): boolean => block.id === blockId)
+  const block = content.blocks[at]
 
-  if (
-    blockIndex < 0 ||
-    targetIndex < 0 ||
-    targetIndex >= content.blocks.length
-  ) {
-    return content
+  if (!block) {
+    return null
   }
 
-  const blocks = [...content.blocks]
-  const targetBlock = blocks[targetIndex]
-  const selectedBlock = blocks[blockIndex]
+  const rest = content.blocks.filter((candidate: TemplateBlock): boolean => candidate.id !== blockId)
+  const restIndex = createBlockIndex(rest)
+  const follower = content.blocks[at + 1]
+  const starts = new Map<number, string>()
+  let emptied: string | null = null
+  let opens: string | null = null
 
-  if (targetBlock === undefined || selectedBlock === undefined) {
-    return content
+  for (const section of content.sections) {
+    if (section.startBlockId !== blockId) {
+      const start = restIndex.get(section.startBlockId)
+
+      if (start !== undefined) {
+        starts.set(start, section.id)
+      }
+    } else if (follower && !content.sections.some((candidate) => candidate.startBlockId === follower.id)) {
+      opens = section.id
+      starts.set(at, section.id)
+    } else {
+      opens = section.id
+      emptied = section.id
+    }
   }
 
-  blocks[blockIndex] = targetBlock
-  blocks[targetIndex] = selectedBlock
+  const ranges = getIndexedFieldGroups(content).map(({ endIndex, group, startIndex }) => ({
+    end: at <= endIndex ? endIndex - 1 : endIndex,
+    group,
+    holds: at >= startIndex && at <= endIndex,
+    start: at < startIndex ? startIndex - 1 : startIndex,
+  }))
+  const own = ranges.find((range) => range.holds && range.end >= range.start) ?? null
 
-  return reconcileTemplateStructure(
-    content,
-    blocks,
-    getIndexedSections(content),
-    getIndexedFieldGroups(content)
-  )
+  return {
+    at,
+    block,
+    emptied,
+    opens,
+    others: ranges.filter((range) => !range.holds),
+    own: own && { end: own.end, group: own.group, start: own.start },
+    rest,
+    starts,
+  }
+}
+
+function currentSlot(lifted: LiftedBlock): TemplateBlockSlot {
+  return { index: lifted.at, inGroup: lifted.own !== null, opens: lifted.opens }
+}
+
+function isSameSlot(left: TemplateBlockSlot, right: TemplateBlockSlot): boolean {
+  return left.index === right.index && left.opens === right.opens && left.inGroup === right.inGroup
+}
+
+function createOrderConflict(dependentBlockIds: readonly string[]): Extract<TemplateMoveResult, { success: false }> {
+  const fieldWord = dependentBlockIds.length === 1 ? "field" : "fields"
+
+  return {
+    code: "visibility_order_conflict",
+    dependentBlockIds,
+    message: `This move would place ${dependentBlockIds.length} conditional ${fieldWord} before the checkbox or dropdown that controls visibility. Keep each source above the fields it controls, or change the affected conditions first.`,
+    success: false,
+  }
 }
 
 /**
- * Moves one block to an arbitrary canonical position.
+ * Lets go of structure that no longer fits its blocks, as when two people's
+ * edits meet: a section, group or rule on a block that is gone, a group that
+ * now crosses a section, a condition on a field that moved above its source.
  *
- * Section and field-group boundaries retain their established root positions
- * and are remapped to the blocks occupying those positions after the move.
- * Visibility conditions made invalid by the new order are removed.
- *
- * @param content - Current editable version-three content.
- * @param blockId - Existing block id to move.
- * @param afterBlockId - Destination block id, or null for the beginning.
- * @returns New content with repaired structural references, or the original
- * content when either reference is invalid.
+ * @param content - Content whose blocks are settled.
+ * @returns The content with only the structure its blocks still support.
  */
-export function moveTemplateBlockAfter(
-  content: TemplateContentV3,
-  blockId: string,
-  afterBlockId: string | null
-): TemplateContentV3 {
-  const sourceIndex = content.blocks.findIndex(
-    (block: TemplateBlock): boolean => block.id === blockId
-  )
-  const destinationIndex =
-    afterBlockId === null
-      ? -1
-      : content.blocks.findIndex(
-          (block: TemplateBlock): boolean => block.id === afterBlockId
-        )
-
-  if (
-    sourceIndex === -1 ||
-    afterBlockId === blockId ||
-    (afterBlockId !== null && destinationIndex === -1)
-  ) {
-    return content
-  }
-
-  const blocks = [...content.blocks]
-  const [selectedBlock] = blocks.splice(sourceIndex, 1)
-
-  if (selectedBlock === undefined) {
-    return content
-  }
-
-  const remainingDestinationIndex =
-    afterBlockId === null
-      ? -1
-      : blocks.findIndex(
-          (block: TemplateBlock): boolean => block.id === afterBlockId
-        )
-  const insertIndex =
-    afterBlockId === null ? 0 : remainingDestinationIndex + 1
-
-  if (insertIndex === sourceIndex) {
-    return content
-  }
-
-  blocks.splice(insertIndex, 0, selectedBlock)
-
-  return reconcileTemplateStructure(
-    content,
-    blocks,
-    getIndexedSections(content),
-    getIndexedFieldGroups(content)
-  )
+export function repairTemplateStructure(content: TemplateContentV3): TemplateContentV3 {
+  return reconcileTemplateStructure(content, content.blocks, getIndexedSections(content), getIndexedFieldGroups(content))
 }
 
 function reconcileTemplateStructure(
@@ -836,7 +1356,7 @@ function reconcileTemplateStructure(
     if (
       !existingBlockIds.has(rule.blockId) ||
       seenRuleBlockIds.has(rule.blockId) ||
-      (!rule.pageBreakBefore && !rule.keepWithNext)
+      !ruleHasEffect(rule)
     ) {
       return false
     }
@@ -858,7 +1378,8 @@ function repairSections(
   blocks: readonly TemplateBlock[],
   indexedSections: readonly IndexedSection[]
 ): TemplateSection[] {
-  // Content without sections is one implicit, unlabeled section.
+  // Content without sections is one implicit, unlabeled section, and what
+  // comes before the first section belongs to none.
   if (blocks.length === 0 || indexedSections.length === 0) {
     return []
   }
@@ -869,23 +1390,6 @@ function repairSections(
     if (startIndex >= 0 && startIndex < blocks.length) {
       sectionByStartIndex.set(startIndex, section)
     }
-  }
-
-  if (!sectionByStartIndex.has(0)) {
-    const firstExistingSection = [...sectionByStartIndex.entries()].sort(
-      ([leftIndex], [rightIndex]): number => leftIndex - rightIndex
-    )[0]?.[1]
-
-    sectionByStartIndex.set(
-      0,
-      firstExistingSection ?? {
-        id: blocks[0]?.id ?? "",
-        label: "Section 1",
-        startBlockId: blocks[0]?.id ?? "",
-        pageBreakBefore: false,
-        keepTogether: false
-      }
-    )
   }
 
   const seenSectionIds = new Set<string>()
@@ -936,13 +1440,7 @@ function repairFieldGroups(
     )
     const endSectionIndex = findSectionIndex(sectionStartIndices, endIndex)
 
-    if (
-      startSectionIndex === -1 ||
-      startSectionIndex !== endSectionIndex ||
-      groupedBlocks.some(
-        (block: TemplateBlock): boolean => !isTemplateFieldBlock(block)
-      )
-    ) {
+    if (startSectionIndex !== endSectionIndex || groupedBlocks.some(isPinnedBlock)) {
       continue
     }
 
@@ -953,16 +1451,29 @@ function repairFieldGroups(
       continue
     }
 
-    groups.push({
-      ...group,
-      startBlockId: startBlock.id,
-      endBlockId: endBlock.id
-    })
+    groups.push(
+      fitRow({ ...group, startBlockId: startBlock.id, endBlockId: endBlock.id }, groupedBlocks.length)
+    )
     seenGroupIds.add(group.id)
     priorEndIndex = endIndex
   }
 
   return groups
+}
+
+// A row sets its blocks side by side, so it never has more columns than
+// blocks; widths size columns, so they go when the count changes.
+function fitRow(group: TemplateFieldGroup, members: number): TemplateFieldGroup {
+  const columns = Math.max(1, Math.min(group.columns, members))
+  const fitted = columns === group.columns ? group : { ...group, columns }
+
+  return fitted.widths !== undefined && fitted.widths.length !== columns ? withoutWidths(fitted) : fitted
+}
+
+function withoutWidths(group: TemplateFieldGroup): TemplateFieldGroup {
+  const { widths, ...rest } = group
+
+  return widths === undefined ? group : rest
 }
 
 function removeInvalidVisibilityConditions(

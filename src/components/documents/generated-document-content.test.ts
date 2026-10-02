@@ -48,7 +48,7 @@ describe("GeneratedDocumentContent", () => {
     expect(markup).toContain("data-template-field-group-columns=\"2\"")
     expect(markup).toContain("Decision")
     expect(markup).toContain(
-      "sm:grid-cols-[repeat(2,minmax(0,1fr))]"
+      "--row-columns:repeat(2, minmax(0, 1fr))"
     )
     expect(markup).toContain("break-before:page")
     expect(markup).toContain("break-inside:avoid-page")

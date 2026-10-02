@@ -11,6 +11,7 @@ import {
 import { ListFilterChips } from "@/components/data/list-filter-chips"
 import { ListPagination } from "@/components/data/list-pagination"
 import { type ListSavedViews, ListViewMenu, ListViewTitle } from "@/components/data/list-view-menu"
+import { DatedTitle } from "@/components/navigation/dated-title"
 import { formatMediumDateTime } from "@/lib/date-format"
 import { getLastPage } from "@/lib/list-state"
 import type { AuditLogEntry } from "@/types/audit"
@@ -55,15 +56,17 @@ export function AuditLogWorkspace({
     <section className="flex flex-col gap-5" data-slot="audit-log-workspace">
       <div className="flex items-center justify-between gap-3">
         {/* The real space keeps the accessible name "Audit log 2 events". */}
-        <h1 className="text-2xl leading-none font-medium tracking-[-0.02em]">
-          <ListViewTitle title="Audit log" views={listViews} />{" "}
-          <span
-            aria-label={`${total} ${total === 1 ? "event" : "events"}`}
-            className="ml-0.5 text-xl font-normal text-muted-foreground"
-          >
-            {total}
-          </span>
-        </h1>
+        <DatedTitle>
+          <h1 className="text-2xl leading-none font-medium tracking-[-0.02em]">
+            <ListViewTitle title="Audit log" views={listViews} />{" "}
+            <span
+              aria-label={`${total} ${total === 1 ? "event" : "events"}`}
+              className="ml-0.5 text-xl font-normal text-muted-foreground"
+            >
+              {total}
+            </span>
+          </h1>
+        </DatedTitle>
         <div className="flex items-center gap-2">
           {integrity}
           <ListViewMenu

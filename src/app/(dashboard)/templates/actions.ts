@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
+import { z } from "zod"
 
 import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
 import {
@@ -9,18 +10,23 @@ import {
   getActionErrorFeedbackCode,
 } from "@/lib/action-result"
 import { buildRedirect, getFormString } from "@/lib/form-utils"
-import { canPerformOrganizationAction } from "@/lib/permissions"
 import { getCurrentOrganizationContext } from "@/services/organization-service"
 import {
   archiveDocumentTemplate,
+  changeDocumentTemplates,
   createDocumentTemplate,
   duplicateDocumentTemplate,
   getDocumentTemplate,
+  getDocumentTemplateVersion,
   publishDocumentTemplate,
+  MAX_BULK_TEMPLATES,
+  type TemplateBulkResult,
   TemplateServiceError,
   updateDocumentTemplate,
 } from "@/services/template-service"
 import type { SaveResult } from "@/components/editor/use-autosave"
+import { withTemplateImageUrls } from "@/services/template-image-service"
+import { publishTemplateRoom } from "@/services/working-copy-service"
 import {
   createEmptyDocumentContent,
   parseTemplateContent,
@@ -175,19 +181,33 @@ export async function publishTemplateAction(formData: FormData): Promise<void> {
   const templateId = getFormString(formData, "templateId")
   const editorPath = getEditorPath(templateId)
   const startedAt = Date.now()
+  let outcome: "template_published" | "template_updated" = "template_published"
 
   try {
     const actionContext = await loadTemplateActionContext()
-    const savedTemplate = await persistTemplateDraftOrConfirmUnchanged(
-      formData,
-      actionContext
-    )
-    const template = await publishDocumentTemplate({
-      actorUserId: actionContext.actorUserId,
-      organizationId: actionContext.context.organization.id,
-      templateId: savedTemplate.id,
-      expectedRevision: savedTemplate.revision,
-    })
+    const roomId = getFormString(formData, "roomId")
+    // Edited live, the template already holds what was typed: publish it as the room shows it.
+    const savedTemplate = roomId
+      ? await getDocumentTemplate({
+          actorUserId: actionContext.actorUserId,
+          organizationId: actionContext.context.organization.id,
+          templateId: requireTemplateId(templateId),
+        })
+      : await persistTemplateDraftOrConfirmUnchanged(formData, actionContext)
+    const template = roomId
+      ? await publishTemplateRoom({
+          actorUserId: actionContext.actorUserId,
+          organizationId: actionContext.context.organization.id,
+          roomId,
+          roomRevision: parseRoomRevision(getFormString(formData, "roomRevision")),
+          templateId: savedTemplate.id,
+        })
+      : await publishDocumentTemplate({
+          actorUserId: actionContext.actorUserId,
+          organizationId: actionContext.context.organization.id,
+          templateId: savedTemplate.id,
+          expectedRevision: savedTemplate.revision,
+        })
 
     revalidateTemplatePaths(template.id)
     console.info("template_publish_action_completed", {
@@ -195,6 +215,7 @@ export async function publishTemplateAction(formData: FormData): Promise<void> {
       organizationId: actionContext.context.organization.id,
       templateId: template.id,
     })
+    outcome = savedTemplate.status === "published" ? "template_updated" : "template_published"
   } catch (error: unknown) {
     handleTemplateActionFailure({
       error,
@@ -205,7 +226,48 @@ export async function publishTemplateAction(formData: FormData): Promise<void> {
     })
   }
 
-  redirect(buildFeedbackRedirect(editorPath, "template_published"))
+  redirect(buildFeedbackRedirect(editorPath, outcome))
+}
+
+/** What a published version held, for the editor to bring back. */
+export type TemplateVersionResult =
+  | Readonly<{ ok: true; version: Pick<DocumentTemplate, "content" | "description" | "title"> }>
+  | Readonly<{ message: string; ok: false }>
+
+/**
+ * Loads a published version so the editor can bring it back into the working
+ * copy, where it saves like any edit and Undo takes it back.
+ *
+ * @param templateId - The template the version belongs to.
+ * @param revision - The revision it was published at.
+ * @returns The version's title, description, and content, or why not.
+ */
+export async function loadTemplateVersionAction(templateId: string, revision: number): Promise<TemplateVersionResult> {
+  try {
+    const actionContext = await loadTemplateActionContext()
+    const organizationId = actionContext.context.organization.id
+    const version = await getDocumentTemplateVersion({
+      actorUserId: actionContext.actorUserId,
+      organizationId,
+      revision,
+      templateId: requireTemplateId(templateId),
+    })
+
+    // Pictures get addresses this person can load, as the editor page gives them.
+    return { ok: true, version: { ...version, content: await withTemplateImageUrls(version.content, organizationId) } }
+  } catch (error: unknown) {
+    logTemplateActionFailure("template_version_load_failed", {
+      reason: getUnknownErrorMessage(error),
+      templateId,
+    })
+    return {
+      message:
+        error instanceof TemplateServiceError && error.statusCode !== 500
+          ? error.message
+          : "That version could not be loaded.",
+      ok: false,
+    }
+  }
 }
 
 /**
@@ -291,6 +353,47 @@ export async function duplicateTemplateAction(formData: FormData): Promise<void>
   )
 }
 
+const templateChangeSchema = z.object({
+  category: z.string().nullable().optional(),
+  change: z.enum(["archive", "restore", "duplicate", "category"]),
+  templateIds: z.array(z.string().uuid()).min(1).max(MAX_BULK_TEMPLATES),
+})
+
+/** One change for several of the library's selected templates. */
+export type TemplateChange = z.infer<typeof templateChangeSchema>
+
+/**
+ * Changes several templates at once for the library's selection. The service
+ * runs each through its single-change checks and reports what changed, so the
+ * page can say so and offer Undo.
+ *
+ * @param input - The change and the selected templates.
+ * @returns The templates that changed, any copies made, the categories they had, and how many failed.
+ */
+export async function changeTemplatesAction(input: TemplateChange): Promise<TemplateBulkResult> {
+  const change = templateChangeSchema.parse(input)
+  let actionContext: TemplateActionContext
+
+  try {
+    actionContext = await loadTemplateActionContext()
+  } catch (error: unknown) {
+    if (error instanceof AuthenticationError) {
+      redirect(buildRedirect("/login", { next: "/templates" }))
+    }
+
+    throw error
+  }
+
+  const result = await changeDocumentTemplates({
+    ...change,
+    actorUserId: actionContext.actorUserId,
+    organizationId: actionContext.context.organization.id,
+  })
+
+  revalidatePath("/templates")
+  return result
+}
+
 async function persistTemplateDraftOrConfirmUnchanged(
   formData: FormData,
   actionContext: TemplateActionContext
@@ -340,12 +443,7 @@ async function loadTemplateActionContext(): Promise<TemplateActionContext> {
     )
   }
 
-  if (
-    !canPerformOrganizationAction(context.membership, "templates:manage")
-  ) {
-    throw new TemplateActionError("You cannot manage document templates.", 403)
-  }
-
+  // The service judges each template, since sharing can let someone edit one their role could not.
   return { actorUserId: user.id, context }
 }
 
@@ -385,6 +483,17 @@ function parseExpectedRevision(value: string): number {
   const revision = Number(value)
 
   if (!Number.isInteger(revision) || revision < 1) {
+    throw new TemplateActionError("Template revision is invalid.")
+  }
+
+  return revision
+}
+
+// A room starts at revision 0, before anyone's change is kept.
+function parseRoomRevision(value: string): number {
+  const revision = Number(value)
+
+  if (!Number.isSafeInteger(revision) || revision < 0) {
     throw new TemplateActionError("Template revision is invalid.")
   }
 

@@ -6,6 +6,7 @@ export type ContentSecurityPolicyInput = {
   posthogHost?: string
   posthogKey?: string
   r2Endpoint?: string
+  supabaseUrl?: string
 }
 
 /**
@@ -30,6 +31,13 @@ export function buildContentSecurityPolicy(
   if (r2Origin) {
     connectSources.add(r2Origin)
     imageSources.add(r2Origin)
+  }
+
+  // Editors hear each other through Supabase's live channel, a WebSocket to the same host.
+  const supabaseOrigin = getHttpOrigin(input.supabaseUrl)
+
+  if (supabaseOrigin) {
+    connectSources.add(supabaseOrigin.replace(/^http/, "ws"))
   }
 
   if (input.posthogKey?.trim()) {

@@ -29,7 +29,7 @@ afterEach(() => {
   window.localStorage.clear()
 })
 
-it("keeps a trial run's answers when the author edits or previews and comes back", async () => {
+it("lets an author try the form by typing into its boxes while editing, and clear the try-out", async () => {
   const container = document.body.appendChild(document.createElement("div"))
   const root = createRoot(container)
   roots.push(root)
@@ -39,6 +39,8 @@ it("keeps a trial run's answers when the author edits or previews and comes back
       <TemplateEditor
         archiveAction={vi.fn()}
         initialFlowMessages={[]}
+        me={{ id: "20000000-0000-4000-8000-000000000001", name: "Test editor" }}
+        loadVersionAction={vi.fn()}
         publishAction={vi.fn()}
         saveDraftAction={vi.fn(async () => ({ ok: true as const, version: "1" }))}
         template={createTemplate()}
@@ -46,17 +48,12 @@ it("keeps a trial run's answers when the author edits or previews and comes back
     )
   })
 
-  await chooseMode("Test")
   typeInto(nameInput(), "Ada Lovelace")
-
-  // Fixing wording mid-test, or checking the printed page, must not lose what was typed.
-  await chooseMode("Edit")
-  await chooseMode("Test")
   expect(nameInput().value).toBe("Ada Lovelace")
 
-  await chooseMode("Preview")
-  await chooseMode("Test")
-  expect(nameInput().value).toBe("Ada Lovelace")
+  const clear = [...document.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent?.trim() === "Clear")
+  await act(async () => clear?.click())
+  expect(nameInput().value).toBe("")
 })
 
 it("asks Flow with only the title, description and content its request accepts", async () => {
@@ -71,6 +68,8 @@ it("asks Flow with only the title, description and content its request accepts",
       <TemplateEditor
         archiveAction={vi.fn()}
         initialFlowMessages={[]}
+        me={{ id: "20000000-0000-4000-8000-000000000001", name: "Test editor" }}
+        loadVersionAction={vi.fn()}
         publishAction={vi.fn()}
         saveDraftAction={vi.fn(async () => ({ ok: true as const, version: "1" }))}
         template={createTemplate()}
@@ -78,27 +77,25 @@ it("asks Flow with only the title, description and content its request accepts",
     )
   })
 
-  const prompt = [...document.querySelectorAll<HTMLButtonElement>("button")].find(
-    (button) => button.textContent?.trim() === "Explain the structure of this document"
-  )
-  await act(async () => prompt?.click())
+  // A busy machine can take a moment to show the prompts and send the request.
+  const prompt = await vi.waitFor(() => {
+    const found = [...document.querySelectorAll<HTMLButtonElement>("button")].find(
+      (button) => button.textContent?.trim() === "Explain the structure of this document"
+    )
+    expect(found).toBeDefined()
+    return found!
+  })
+  await act(async () => prompt.click())
 
-  const [, request] = fetchFlow.mock.calls[0] as unknown as [string, { body: string }]
+  // The room opens with its own request; this is the one to Flow.
+  const [, request] = await vi.waitFor(() => {
+    const call = (fetchFlow.mock.calls as unknown as Array<[string, { body: string }]>).find(([url]) => url.includes("/flow"))
+    expect(call).toBeDefined()
+    return call!
+  })
   expect(Object.keys(JSON.parse(request.body).draft).sort()).toEqual(["content", "description", "title"])
   vi.unstubAllGlobals()
 })
-
-async function chooseMode(name: string): Promise<void> {
-  const radio = [...document.querySelectorAll<HTMLButtonElement>('[role="radio"]')].find(
-    (candidate) => candidate.textContent?.trim() === name
-  )
-
-  if (!radio) {
-    throw new Error(`Expected a "${name}" mode.`)
-  }
-
-  await act(async () => radio.click())
-}
 
 function nameInput(): HTMLInputElement {
   const input = document.getElementById(NAME_BLOCK_ID)
@@ -144,6 +141,7 @@ function createTemplate(): DocumentTemplate {
     organizationId: "10000000-0000-4000-8000-000000000002",
     publishedAt: null,
     publishedBy: null,
+    publishedRevision: null,
     revision: 1,
     status: "draft",
     title: "Client agreement",

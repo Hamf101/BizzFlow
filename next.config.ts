@@ -16,6 +16,7 @@ const contentSecurityPolicy = buildContentSecurityPolicy({
   posthogHost: process.env.NEXT_PUBLIC_POSTHOG_HOST,
   posthogKey: process.env.NEXT_PUBLIC_POSTHOG_KEY,
   r2Endpoint: process.env.CLOUDFLARE_R2_ENDPOINT,
+  supabaseUrl: process.env.SUPABASE_URL,
 })
 
 const securityHeaders: Array<{ key: string; value: string }> = [
@@ -39,6 +40,9 @@ const securityHeaders: Array<{ key: string; value: string }> = [
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  // Yjs warns "already imported" when the server bundles it once for route
+  // handlers and again for rendering; a shared copy keeps its class checks true.
+  serverExternalPackages: ["yjs"],
   experimental: {
     // Embedded logos/images are validated and capped by the template schema.
     serverActions: { bodySizeLimit: "10mb" },

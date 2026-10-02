@@ -9,10 +9,14 @@ import {
   Image,
   List,
   ListOrdered,
+  Grid3x3,
+  ListChecks,
+  TableProperties,
   type LucideIcon,
   Minus,
   PenLine,
   Pilcrow,
+  Section,
   Signature,
   SquareCheck,
   Table,
@@ -22,11 +26,13 @@ import {
 import type { TextBlockKind } from "@/components/editor/editor-content"
 import type { TemplateBlock } from "@/types/template"
 
-/** What choosing an item adds: a kind of line, a block, or a new page. */
+/** What choosing an item adds: a kind of line, a block, a new page, or a section. */
 export type InsertAction =
   | Readonly<{ kind: "text"; value: TextBlockKind }>
-  | Readonly<{ kind: "block"; type: TemplateBlock["type"] }>
+  // "several" makes a dropdown into ticks, any number of them.
+  | Readonly<{ kind: "block"; type: TemplateBlock["type"]; several?: true }>
   | Readonly<{ kind: "page" }>
+  | Readonly<{ kind: "section" }>
 
 /** One thing a person can add to the page, from the dock or by typing /. */
 export type InsertChoice = Readonly<{
@@ -51,10 +57,14 @@ export const INSERT_CHOICES: readonly InsertChoice[] = [
   { action: { kind: "block", type: "image" }, group: "page", icon: Image, id: "image", keywords: ["picture", "photo", "logo"], label: "Image" },
   { action: { kind: "block", type: "divider" }, group: "page", icon: Minus, id: "divider", keywords: ["line", "rule", "separator"], label: "Divider" },
   { action: { kind: "page" }, group: "page", icon: FilePlus2, id: "page", keywords: ["page break", "new page"], label: "New page" },
-  { action: { kind: "block", type: "text_field" }, group: "fields", icon: TextCursorInput, id: "text-field", keywords: ["input", "answer", "name"], label: "Text field" },
+  { action: { kind: "section" }, group: "page", icon: Section, id: "section", keywords: ["part", "chapter"], label: "Section" },
+  { action: { kind: "block", type: "text_field" }, group: "fields", icon: TextCursorInput, id: "text-field", keywords: ["input", "answer", "name", "number", "money", "email", "phone", "time", "units"], label: "Text field" },
   { action: { kind: "block", type: "date_field" }, group: "fields", icon: CalendarDays, id: "date-field", keywords: ["day", "when"], label: "Date" },
   { action: { kind: "block", type: "checkbox_field" }, group: "fields", icon: SquareCheck, id: "checkbox-field", keywords: ["tick", "agree", "consent"], label: "Checkbox" },
-  { action: { kind: "block", type: "dropdown_field" }, group: "fields", icon: ChevronDown, id: "dropdown-field", keywords: ["choice", "select", "options"], label: "Dropdown" },
+  { action: { kind: "block", type: "dropdown_field" }, group: "fields", icon: ChevronDown, id: "dropdown-field", keywords: ["choice", "select", "options", "radio", "yes/no"], label: "Dropdown" },
+  { action: { kind: "block", several: true, type: "dropdown_field" }, group: "fields", icon: ListChecks, id: "checkboxes-field", keywords: ["tick", "several", "multiple", "all that apply"], label: "Checkboxes" },
+  { action: { kind: "block", type: "choice_grid_field" }, group: "fields", icon: Grid3x3, id: "grid-field", keywords: ["matrix", "rating", "scale", "likert", "checklist", "pass", "fail"], label: "Question grid" },
+  { action: { kind: "block", type: "table_field" }, group: "fields", icon: TableProperties, id: "table-field", keywords: ["log", "timesheet", "inventory", "rows", "fill"], label: "Fill-in table" },
   { action: { kind: "block", type: "initials_field" }, group: "fields", icon: PenLine, id: "initials-field", keywords: ["initial"], label: "Initials" },
   { action: { kind: "block", type: "signature_field" }, group: "fields", icon: Signature, id: "signature-field", keywords: ["sign", "signer"], label: "Signature" },
   { action: { kind: "block", type: "file_field" }, group: "fields", icon: FileUp, id: "file-field", keywords: ["upload", "attachment"], label: "File upload" },

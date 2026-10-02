@@ -15,6 +15,11 @@ export type TemplateFlowOperationType =
   | "update_image"
   | "move_block"
   | "remove_block"
+  | "set_section"
+  | "set_row"
+  | "stand_alone"
+  | "set_block_rule"
+  | "set_layout"
 
 export type TemplateFlowLedgerItem = {
   id: string

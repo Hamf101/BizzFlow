@@ -28,10 +28,11 @@ import { listDocumentActivity } from "@/services/document-activity-service"
 import { listDocumentComments } from "@/services/document-comment-service"
 import type { DocumentActivityEvent } from "@/types/activity"
 import type { DocumentComment } from "@/types/comment"
-import type {
-  DocumentDetail,
-  DocumentLifecycleState,
-  DocumentVersion,
+import {
+  type DocumentDetail,
+  type DocumentLifecycleState,
+  type DocumentVersion,
+  isViewableDocumentType,
 } from "@/types/document"
 import type { OrganizationContext } from "@/types/organization"
 
@@ -42,10 +43,13 @@ import {
   restoreDocumentAction,
   trashDocumentAction,
 } from "../actions"
+import type { Metadata } from "next"
 
 type DocumentDetailParams = Promise<{
   documentId: string
 }>
+
+export const metadata: Metadata = { title: "File" }
 
 export default async function DocumentDetailPage({
   params,
@@ -116,9 +120,9 @@ export default async function DocumentDetailPage({
 
   if (
     detail.document.sourceKind === "generated" &&
-    detail.document.lifecycleState === "active"
+    (detail.document.lifecycleState === "active" || detail.document.lifecycleState === "archived")
   ) {
-    redirect(`/documents/${encodeURIComponent(detail.document.id)}/edit`)
+    redirect(`/documents/${encodeURIComponent(detail.document.id)}/preview`)
   }
 
   const isCollaborationReadable =
@@ -550,6 +554,7 @@ function DocumentActionsCard({
     document.lifecycleState === "archived"
   const hasLifecycleAction =
     canContribute && document.lifecycleState !== "purge_pending"
+  const current = detail.versions.find((version) => version.id === document.currentVersionId && version.status === "available")
 
   return (
     <Card>
@@ -557,6 +562,9 @@ function DocumentActionsCard({
         <CardTitle>Actions</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
+        {canDownload && current && isViewableDocumentType(current.contentType) ? (
+          <DocumentDownloadButton documentId={document.id} organizationId={context.organization.id} view />
+        ) : null}
         {canDownload ? (
           <DocumentDownloadButton
             disabled={!document.currentVersionId}

@@ -33,6 +33,8 @@ export type DashboardAccount = {
   email: string
   organizationName: string | null
   role: OrganizationRole | null
+  /** The workspace's own name for the member's role, when it has one. */
+  roleName?: string | null
   permissionSubject: OrganizationPermissionSubject | null
 }
 
@@ -82,7 +84,7 @@ export function DashboardAccountMenu({
 }: DashboardAccountMenuProps): ReactElement {
   const { resolvedTheme, setTheme } = useTheme()
   const isDark = resolvedTheme === "dark"
-  const roleLabel = account.role ? roleLabels[account.role] : null
+  const roleLabel = account.roleName ?? (account.role ? roleLabels[account.role] : null)
 
   function toggleTheme(): void {
     setTheme(isDark ? "light" : "dark")
@@ -115,7 +117,7 @@ export function DashboardAccountMenu({
             {account.displayName}
           </span>
           <span className="block truncate text-xs text-foreground/75">
-            {account.organizationName ?? account.email}
+            {roleLabel ?? account.email}
           </span>
         </span>
         <ChevronUp

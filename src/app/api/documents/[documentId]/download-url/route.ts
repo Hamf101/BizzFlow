@@ -41,6 +41,7 @@ export async function POST(
       organizationId,
       documentId,
       versionId,
+      view: body.view === true,
     })
 
     return NextResponse.json(result, {

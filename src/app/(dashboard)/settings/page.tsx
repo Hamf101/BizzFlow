@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation"
 import type { ReactElement, ReactNode } from "react"
 
+import { DatedTitle } from "@/components/navigation/dated-title"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -14,6 +15,7 @@ import {
 import { Field, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
+import { NoticeSoundSwitch } from "@/components/sharing/notice-sound-switch"
 import { RolesAndAccessSettings } from "@/components/settings/roles-and-access-settings"
 import { buildFeedbackRedirect } from "@/lib/action-result"
 import { formatMediumDateTime } from "@/lib/date-format"
@@ -41,6 +43,9 @@ import {
   updateOrganizationRoleAction,
   updateProfileAction,
 } from "./actions"
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Settings" }
 
 export default async function SettingsPage(): Promise<ReactElement> {
   const user = await loadAuthenticatedPageUser("/settings")
@@ -101,12 +106,9 @@ export default async function SettingsPage(): Promise<ReactElement> {
 
   return (
     <SettingsShell>
-      <section className="flex flex-col gap-2">
+      <DatedTitle>
         <h1 className="text-2xl font-medium tracking-normal">Settings</h1>
-        <p className="text-[13px] text-muted-foreground">
-          {context.organization.name}
-        </p>
-      </section>
+      </DatedTitle>
 
       {isOwner ? (
         <RolesAndAccessSection
@@ -182,6 +184,9 @@ export default async function SettingsPage(): Promise<ReactElement> {
                 Save
               </Button>
             </form>
+            <div className="mt-6 border-t border-border/60 pt-6">
+              <NoticeSoundSwitch />
+            </div>
           </CardContent>
         </Card>
       </div>

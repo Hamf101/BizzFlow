@@ -109,7 +109,7 @@ const lines = [
   "ANALYTICS_PROVIDER=disabled",
   "NEXT_PUBLIC_ANALYTICS_PROVIDER=disabled",
   "AI_PROVIDER=gemini",
-  "AI_MODEL=gemini-3.6-flash",
+  "AI_MODEL=gemini-flash-latest",
   "AI_TIMEOUT_MS=30000",
   "",
   "# Rate limiting is disabled when Upstash is unset, which is what a suite",

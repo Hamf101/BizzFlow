@@ -37,21 +37,24 @@ import { createSampleDocumentInput } from "@/services/document-pdf/sample-docume
 // so the rendered metadata and the visible signature timestamps agree.
 const FIXED_METADATA_TIMESTAMP = "2026-07-17T19:30:00.000Z"
 
-const EXPECTED_PAGE_COUNT = 3
+const EXPECTED_PAGE_COUNT = 4
 
-// A4 at 72dpi — A4_WIDTH/A4_HEIGHT in document-pdf/constants.ts, rounded.
+// A4 at 72dpi (595.28 x 841.89 points, as template-render-plan.ts sizes it), rounded.
 // Deliberately written out rather than imported: importing the constants would
 // make both sides of the assertion move together, so switching the renderer to
 // Letter would silently pass.
 const EXPECTED_PAGE_SIZE = { height: 842, width: 595 }
 
+// The sample gained a prefix and suffix, a comb, a checkbox group, a choice
+// grid and a fill-in table (2026-10-01), which pushed it onto a fourth page.
 const EXPECTED_CONTENT_STREAM_SHA256: readonly string[] = [
-  "69c4701fdcc99aa5bee1053387e28076cc3cede52603050e987f9128943dc4ed",
-  "c3112ee6a52a946d1f4af740f336b7bb2cb2f258910e2a1a93df140ae0ef4b5c",
-  "89c3c949fca732dd1211c8a5c7d68d53e28be3235652a5280548a337f6a3564d"
+  "471b0b3c0b59254c140fb76bc202586f6fa3df694f09bcaea6989addbb66cc4e",
+  "f870402627999a036d326ecd4c06d0dbd9772bf1e45cff984d726036fb86f523",
+  "f95bc2718e26a2b359a84de7ba146f55ba401352b58f4b84ce3a2396db91eb38",
+  "315bfe826b97d99d6729678a3744a5023c50d8af162a7927d539ead8b52d83b7"
 ]
 
-// Three pages of text with a few fields and a signature. Whole font files made
+// Four pages of text with a few fields and a signature. Whole font files made
 // even a one-line document about 0.9 MB; only the glyphs drawn are embedded.
 const MAX_SAMPLE_BYTES = 150 * 1024
 

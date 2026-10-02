@@ -47,6 +47,7 @@ import {
   trashDocumentAction,
   trashFolderAction,
 } from "./actions"
+import type { Metadata } from "next"
 
 /**
  * Lists the current folder of Files — the member's documents and uploads —
@@ -56,6 +57,8 @@ import {
  * @param props - View state in search parameters.
  * @returns The Files workspace, or a user-safe access or load failure.
  */
+export const metadata: Metadata = { title: "Files" }
+
 export default async function FilesPage({
   searchParams,
 }: {

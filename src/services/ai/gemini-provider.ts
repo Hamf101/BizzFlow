@@ -1,19 +1,24 @@
 import { GoogleGenAI, type Interactions } from "@google/genai"
 
 import type {
+  AiEffort,
   AiProvider,
   AiStructuredGenerationRequest,
   AiStructuredGenerationResult,
   AiTokenUsage,
 } from "@/services/ai/contracts"
 import {
-  AI_PROVIDER_ERROR_CODES,
   AiProviderError,
-  type AiProviderErrorCode,
+  assertModelBelongsTo,
+  classifyProviderFailure,
+  createProviderError,
+  UNUSABLE_RESPONSE,
 } from "@/services/ai/errors"
 
 const GEMINI_PROVIDER_ID = "gemini" as const
 const GEMINI_STABLE_API_VERSION = "v1"
+/** Google serves its "-latest" aliases on the beta API only; a fixed version stays on the stable one. */
+const GEMINI_ALIAS_API_VERSION = "v1beta"
 
 type GeminiInteractionResponse = Pick<
   Interactions.Interaction,
@@ -33,6 +38,8 @@ export type GeminiInteractionExecutor = (
 export type GeminiAiProviderOptions = {
   apiKey: string
   timeoutMs: number
+  /** Gemini's thinking level; defaults to low. */
+  effort?: AiEffort
   executeInteraction?: GeminiInteractionExecutor
 }
 
@@ -47,6 +54,7 @@ type UpstreamErrorDetails = {
 export class GeminiAiProvider implements AiProvider {
   readonly id = GEMINI_PROVIDER_ID
 
+  private readonly effort: AiEffort
   private readonly executeInteraction: GeminiInteractionExecutor
   private readonly timeoutMs: number
 
@@ -56,6 +64,7 @@ export class GeminiAiProvider implements AiProvider {
    * @param options - API credential, timeout, and optional test executor.
    */
   constructor(options: GeminiAiProviderOptions) {
+    this.effort = options.effort ?? "low"
     this.timeoutMs = options.timeoutMs
     this.executeInteraction =
       options.executeInteraction ?? createSdkInteractionExecutor(options.apiKey)
@@ -74,21 +83,12 @@ export class GeminiAiProvider implements AiProvider {
   async generateStructured(
     request: AiStructuredGenerationRequest
   ): Promise<AiStructuredGenerationResult> {
-    if (request.model.provider !== this.id) {
-      throw new AiProviderError({
-        code: AI_PROVIDER_ERROR_CODES.INVALID_REQUEST,
-        message: "The AI model does not belong to this provider.",
-        model: request.model,
-        provider: this.id,
-        retryable: false,
-        statusCode: null,
-        traceId: request.traceId,
-      })
-    }
+    assertModelBelongsTo(request, this.id)
 
     try {
       const response = await this.executeInteraction(
         {
+          ...(request.model.model.endsWith("-latest") ? { api_version: GEMINI_ALIAS_API_VERSION } : {}),
           model: request.model.model,
           input: request.input,
           system_instruction: request.systemInstruction,
@@ -100,7 +100,7 @@ export class GeminiAiProvider implements AiProvider {
           },
           generation_config: {
             max_output_tokens: request.maxOutputTokens,
-            thinking_level: "low",
+            thinking_level: this.effort,
             thinking_summaries: "none",
           },
         },
@@ -115,14 +115,11 @@ export class GeminiAiProvider implements AiProvider {
         typeof response.output_text !== "string" ||
         response.output_text.trim().length === 0
       ) {
-        throw new AiProviderError({
-          code: AI_PROVIDER_ERROR_CODES.INVALID_RESPONSE,
-          message: "The AI provider did not return usable structured text.",
-          model: request.model,
+        throw createProviderError({
+          failure: UNUSABLE_RESPONSE,
           provider: this.id,
-          retryable: false,
-          statusCode: null,
-          traceId: response.id || request.traceId,
+          request,
+          traceId: response.id || null,
         })
       }
 
@@ -181,99 +178,15 @@ function mapGeminiError(
 ): AiProviderError {
   const details = readUpstreamErrorDetails(error)
   const statusCode = details.status ?? details.statusCode ?? null
-  const classification = classifyGeminiError(statusCode, details.name)
 
-  return new AiProviderError({
-    code: classification.code,
-    message: classification.message,
-    model: request.model,
-    provider: GEMINI_PROVIDER_ID,
-    retryable: classification.retryable,
-    statusCode,
-    traceId: readUpstreamTraceId(details.headers) ?? request.traceId,
+  return createProviderError({
     cause: error,
+    failure: classifyProviderFailure(statusCode, details.name),
+    provider: GEMINI_PROVIDER_ID,
+    request,
+    statusCode,
+    traceId: readUpstreamTraceId(details.headers),
   })
-}
-
-function classifyGeminiError(
-  statusCode: number | null,
-  errorName: string | undefined
-): {
-  code: AiProviderErrorCode
-  message: string
-  retryable: boolean
-} {
-  if (
-    statusCode === 408 ||
-    errorName === "APIConnectionTimeoutError" ||
-    errorName === "TimeoutError"
-  ) {
-    return {
-      code: AI_PROVIDER_ERROR_CODES.REQUEST_TIMEOUT,
-      message: "The AI provider request timed out.",
-      retryable: true,
-    }
-  }
-
-  switch (statusCode) {
-    case 400:
-    case 409:
-    case 422:
-      return {
-        code: AI_PROVIDER_ERROR_CODES.INVALID_REQUEST,
-        message: "The AI provider rejected the request.",
-        retryable: false,
-      }
-    case 401:
-      return {
-        code: AI_PROVIDER_ERROR_CODES.AUTHENTICATION_FAILED,
-        message: "The AI provider credential was rejected.",
-        retryable: false,
-      }
-    case 403:
-      return {
-        code: AI_PROVIDER_ERROR_CODES.PERMISSION_DENIED,
-        message: "The AI provider denied the request.",
-        retryable: false,
-      }
-    case 404:
-      return {
-        code: AI_PROVIDER_ERROR_CODES.MODEL_NOT_FOUND,
-        message: "The configured AI model was not found.",
-        retryable: false,
-      }
-    case 429:
-      return {
-        code: AI_PROVIDER_ERROR_CODES.RATE_LIMITED,
-        message: "The AI provider rate limit was reached.",
-        retryable: true,
-      }
-    default:
-      if (statusCode !== null && statusCode >= 500) {
-        return {
-          code: AI_PROVIDER_ERROR_CODES.UPSTREAM_UNAVAILABLE,
-          message: "The AI provider is temporarily unavailable.",
-          retryable: true,
-        }
-      }
-
-      if (
-        errorName === "APIConnectionError" ||
-        errorName === "TypeError"
-      ) {
-        return {
-          code: AI_PROVIDER_ERROR_CODES.NETWORK_ERROR,
-          message: "The AI provider could not be reached.",
-          retryable: true,
-        }
-      }
-
-      return {
-        code: AI_PROVIDER_ERROR_CODES.UNKNOWN,
-        message: "The AI provider request failed.",
-        retryable: false,
-      }
-  }
 }
 
 function readUpstreamErrorDetails(error: unknown): UpstreamErrorDetails {

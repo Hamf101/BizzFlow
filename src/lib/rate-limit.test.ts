@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 import {
+  createMemoryLimiter,
   createRateLimitCheck,
   hashRateLimitKeyPart,
   RateLimitError,
@@ -168,3 +169,50 @@ describe("hashRateLimitKeyPart", () => {
 
     await expect(check("public_form_submission", "127.0.0.1")).rejects.toThrow(RateLimitError)
   })
+
+describe("createMemoryLimiter", () => {
+  it("denies past the limit until the window ends, per key", async () => {
+    let now = 0
+    const limiter = createMemoryLimiter({ limit: 2, windowSeconds: 60, now: () => now })
+
+    expect((await limiter.limit("a")).success).toBe(true)
+    expect((await limiter.limit("a")).success).toBe(true)
+    expect(await limiter.limit("a")).toEqual({ success: false, reset: 60_000 })
+    expect((await limiter.limit("b")).success).toBe(true)
+
+    now = 60_000
+    expect((await limiter.limit("a")).success).toBe(true)
+  })
+
+  it("stays bounded when an attacker rotates keys", async () => {
+    const limiter = createMemoryLimiter({ limit: 1, windowSeconds: 60, maxKeys: 2, now: () => 0 })
+
+    await limiter.limit("a")
+    await limiter.limit("b")
+    await limiter.limit("c")
+
+    // "a" was the oldest and was dropped to make room; "c" is still counted.
+    expect((await limiter.limit("a")).success).toBe(true)
+    expect((await limiter.limit("c")).success).toBe(false)
+  })
+})
+
+describe("production without Redis", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  it("still throttles from process memory instead of allowing everything", async () => {
+    vi.stubEnv("NODE_ENV", "production")
+    vi.stubEnv("UPSTASH_REDIS_REST_URL", "")
+    vi.stubEnv("UPSTASH_REDIS_REST_TOKEN", "")
+    vi.spyOn(console, "warn").mockImplementation(() => undefined)
+    const check = createRateLimitCheck()
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      await check("public_form_submission", "198.51.100.5")
+    }
+
+    await expect(check("public_form_submission", "198.51.100.5")).rejects.toThrow(RateLimitError)
+  })
+})

@@ -1,0 +1,701 @@
+{
+  "request": "Write the conduct, absence and holidays chapter of the employee handbook for our three cafés in England. Cover the standards we expect, food hygiene and reporting sickness, phones and social media, how to report absence, sick pay, holidays, other kinds of leave, and the disciplinary and grievance procedures. Staff sign to say they have read it.",
+  "title": "Conduct, absence and holidays",
+  "description": "Give to every new member of staff with the employee handbook, to set out the standards of conduct, how to report absence, how holidays and other leave work, and the disciplinary and grievance procedures, with a signed acknowledgement.",
+  "maxPages": 6,
+  "content": {
+    "schemaVersion": 3,
+    "branding": {
+      "organizationName": "",
+      "logoAsset": null,
+      "logoDataUrl": null,
+      "logoAlignment": "left",
+      "logoWidthPercent": 24,
+      "primaryColor": "#252329",
+      "accentColor": "#635273"
+    },
+    "blocks": [
+      {
+        "id": "d6030000-0000-4000-8000-000000000001",
+        "type": "heading",
+        "text": "Conduct, absence and holidays",
+        "level": 1,
+        "alignment": "left"
+      },
+      {
+        "id": "d6030000-0000-4000-8000-000000000002",
+        "type": "paragraph",
+        "text": "This chapter of the employee handbook explains the standards we expect from everyone who works in our cafés, what to do when you cannot come to work, how holidays and other leave work, and how we deal with problems at work, whether they are raised by us or by you. Please read it carefully, ask your manager about anything that is unclear, and sign the acknowledgement at the end.",
+        "alignment": "left"
+      },
+      {
+        "id": "d6030000-0000-4000-8000-000000000003",
+        "type": "paragraph",
+        "text": "The details below apply throughout this chapter.",
+        "alignment": "left"
+      },
+      {
+        "id": "d6030000-0000-4000-8000-000000000005",
+        "type": "text_field",
+        "fieldKey": "business_name",
+        "label": "Business name",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d6030000-0000-4000-8000-000000000006",
+        "type": "date_field",
+        "fieldKey": "this_chapter_applies_from",
+        "label": "This chapter applies from",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": " ",
+          "month": "long"
+        }
+      },
+      {
+        "id": "d6030000-0000-4000-8000-000000000007",
+        "type": "date_field",
+        "fieldKey": "holiday_year_starts",
+        "label": "Holiday year starts",
+        "required": true,
+        "helpText": "The day each holiday year begins.",
+        "dateFormat": {
+          "order": "dmy",
+          "separator": " ",
+          "month": "short"
+        }
+      },
+      {
+        "id": "d6030000-0000-4000-8000-000000000008",
+        "type": "text_field",
+        "fieldKey": "paid_holiday_days_a_year",
+        "label": "Paid holiday a year",
+        "required": true,
+        "helpText": "Including bank holidays, for someone working full time.",
+        "placeholder": null,
+        "multiline": false,
+        "format": "number",
+        "suffix": "days"
+      },
+      {
+        "id": "d6030000-0000-4000-8000-000000000010",
+        "type": "text_field",
+        "fieldKey": "notice_needed_to_book_holiday",
+        "label": "Notice needed to book holiday",
+        "required": true,
+        "helpText": "For example two weeks for each week of holiday.",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d6030000-0000-4000-8000-000000000011",
+        "type": "text_field",
+        "fieldKey": "who_to_call_about_absence",
+        "label": "Who to call about absence",
+        "required": true,
+        "helpText": "A role and a phone number, such as the café manager on the café's phone.",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d6030000-0000-4000-8000-000000000012",
+        "type": "text_field",
+        "fieldKey": "latest_time_to_call",
+        "label": "Latest time to call",
+        "required": true,
+        "helpText": "For example an hour before your shift starts.",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d6030000-0000-4000-8000-000000000013",
+        "type": "dropdown_field",
+        "fieldKey": "what_pay_do_staff_receive_when_they_are_off_sick",
+        "label": "What pay do staff receive when they are off sick?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Statutory Sick Pay only, for those who qualify",
+          "Company sick pay, as set out below"
+        ],
+        "display": "radios"
+      },
+      {
+        "id": "d6030000-0000-4000-8000-000000000014",
+        "type": "text_field",
+        "fieldKey": "company_sick_pay_arrangements",
+        "label": "Company sick pay arrangements",
+        "required": true,
+        "helpText": "How much is paid, for how long, and who qualifies.",
+        "visibleWhen": {
+          "sourceBlockId": "d6030000-0000-4000-8000-000000000013",
+          "operator": "equals",
+          "value": "Company sick pay, as set out below"
+        },
+        "placeholder": null,
+        "multiline": true,
+        "boxHeight": 60
+      },
+      {
+        "id": "d6030000-0000-4000-8000-000000000015",
+        "type": "paragraph",
+        "text": "In this chapter:",
+        "alignment": "left"
+      },
+      {
+        "id": "d6030000-0000-4000-8000-000000000017",
+        "type": "bullet_list",
+        "items": [
+          "we, us and our mean the business named in the details above;",
+          "you means any employee who works for us, whether full time, part time or on a fixed-term contract;",
+          "your manager means the manager of the café where you work, or the person they ask to act for them; and",
+          "working day means a day other than a Saturday, Sunday or bank holiday."
+        ],
+        "itemRuns": [
+          [
+            {
+              "text": "we",
+              "bold": true
+            },
+            {
+              "text": ", "
+            },
+            {
+              "text": "us",
+              "bold": true
+            },
+            {
+              "text": " and "
+            },
+            {
+              "text": "our",
+              "bold": true
+            },
+            {
+              "text": " mean the business named in the details above;"
+            }
+          ],
+          [
+            {
+              "text": "you",
+              "bold": true
+            },
+            {
+              "text": " means any employee who works for us, whether full time, part time or on a fixed-term contract;"
+            }
+          ],
+          [
+            {
+              "text": "your manager",
+              "bold": true
+            },
+            {
+              "text": " means the manager of the café where you work, or the person they ask to act for them; and"
+            }
+          ],
+          [
+            {
+              "text": "working day",
+              "bold": true
+            },
+            {
+              "text": " means a day other than a Saturday, Sunday or bank holiday."
+            }
+          ]
+        ]
+      },
+      {
+        "id": "d6030000-0000-4000-8000-000000000018",
+        "type": "paragraph",
+        "text": "This chapter sits alongside your written statement of employment particulars, which sets out your pay, hours and other terms. If anything in this chapter seems to conflict with your written statement, your written statement applies. We may update this chapter from time to time, and we will tell you when we do.",
+        "alignment": "left"
+      },
+      {
+        "id": "d6030000-0000-4000-8000-000000000019",
+        "type": "paragraph",
+        "text": "Our customers come back because of the people who serve them. We expect everyone to:",
+        "alignment": "left"
+      },
+      {
+        "id": "d6030000-0000-4000-8000-000000000021",
+        "type": "numbered_list",
+        "items": [
+          "arrive on time for each shift, ready to work and in the correct uniform;",
+          "treat customers, colleagues and suppliers with courtesy and respect, and never bully, harass or discriminate against anyone;",
+          "follow the food safety, health and safety and cash handling procedures you are trained in;",
+          "be honest, including about the hours you work, the money you handle and the stock you use;",
+          "keep information about customers, colleagues and the business confidential;",
+          "never work under the influence of alcohol or drugs, and tell your manager if a prescribed medicine could affect your safety at work; and",
+          "look after our equipment and premises, and report anything that is broken or unsafe."
+        ]
+      },
+      {
+        "id": "d6030000-0000-4000-8000-000000000022",
+        "type": "paragraph",
+        "text": "Everyone who handles food must keep high standards of personal hygiene. In particular:",
+        "alignment": "left"
+      },
+      {
+        "id": "d6030000-0000-4000-8000-000000000024",
+        "type": "bullet_list",
+        "items": [
+          "wash your hands before starting work, after a break, after using the toilet, after handling raw food or waste, and whenever they may have become dirty;",
+          "keep your hair tied back and covered as your manager directs, keep nails short and clean, and wear only the jewellery we allow;",
+          "cover any cut or sore with a brightly coloured waterproof dressing; and",
+          "do not eat, smoke or vape in food preparation areas."
+        ]
+      },
+      {
+        "id": "d6030000-0000-4000-8000-000000000025",
+        "type": "paragraph",
+        "text": "Important: if you have diarrhoea or vomiting, you must not come to work. Tell your manager straight away, and do not return until 48 hours after your symptoms have stopped. You must also tell your manager before you start a shift if you have an infected wound, a skin infection or any other illness that could contaminate food. This keeps our customers and your colleagues safe, and you will not be penalised for reporting it.",
+        "alignment": "left",
+        "runs": [
+          {
+            "text": "Important:",
+            "bold": true
+          },
+          {
+            "text": " if you have diarrhoea or vomiting, you must not come to work. Tell your manager straight away, and do not return until 48 hours after your symptoms have stopped. You must also tell your manager before you start a shift if you have an infected wound, a skin infection or any other illness that could contaminate food. This keeps our customers and your colleagues safe, and you will not be penalised for reporting it."
+          }
+        ]
+      },
+      {
+        "id": "d6030000-0000-4000-8000-000000000026",
+        "type": "paragraph",
+        "text": "Keep your personal phone in the staff area during your shift, and use it only on your breaks unless your manager agrees otherwise. Do not take photographs or videos of customers, or of areas the public cannot see, without your manager's permission.",
+        "alignment": "left"
+      },
+      {
+        "id": "d6030000-0000-4000-8000-000000000028",
+        "type": "paragraph",
+        "text": "What you post online in your own time is your own business, but please do not post anything that could identify a customer, share confidential information about the business, or harass or embarrass a colleague. Posts like these may be treated as misconduct.",
+        "alignment": "left"
+      },
+      {
+        "id": "d6030000-0000-4000-8000-000000000029",
+        "type": "paragraph",
+        "text": "If you cannot come to work for any reason, follow these steps:",
+        "alignment": "left"
+      },
+      {
+        "id": "d6030000-0000-4000-8000-000000000031",
+        "type": "numbered_list",
+        "items": [
+          "Call the person set out in the details above, by the latest time set out there. Call yourself unless you are too unwell to do so; a text or a social media message is not enough.",
+          "Say why you cannot come in, how long you expect to be away, and whether any of your work needs covering.",
+          "Keep your manager updated on each day of your absence, unless you agree a different arrangement with them.",
+          "If you are off sick for seven days or fewer, fill in a self-certification form when you return.",
+          "If you are off sick for more than seven days in a row, counting days you would not normally work, get a fit note from a doctor or other healthcare professional and give it to your manager."
+        ]
+      },
+      {
+        "id": "d6030000-0000-4000-8000-000000000032",
+        "type": "paragraph",
+        "text": "Absence that is not reported in this way may be unpaid, and it may be dealt with under the disciplinary procedure.",
+        "alignment": "left"
+      },
+      {
+        "id": "d6030000-0000-4000-8000-000000000033",
+        "type": "paragraph",
+        "text": "When you are off sick, you will be paid as set out in the details above. Statutory Sick Pay is paid to employees who qualify for it under the government's rules, and your manager can tell you whether you qualify.",
+        "alignment": "left"
+      },
+      {
+        "id": "d6030000-0000-4000-8000-000000000035",
+        "type": "paragraph",
+        "text": "When you return after any period of sickness, your manager will have a short conversation with you to welcome you back, check that you are well enough to work, and talk about any support you need, such as a phased return or changes to your duties. If your absences become frequent or long, we will meet you to talk about how we can help, and we may ask for your consent to get advice from your doctor or an occupational health adviser.",
+        "alignment": "left"
+      },
+      {
+        "id": "d6030000-0000-4000-8000-000000000036",
+        "type": "paragraph",
+        "text": "You are entitled to paid holiday each holiday year, as set out in the details above. This is at least the minimum the law gives, which for a full-time worker is 5.6 weeks a year. Part-time staff receive the same entitlement in proportion to the hours they work, and staff who join or leave part way through a holiday year receive a proportion of it.",
+        "alignment": "left"
+      },
+      {
+        "id": "d6030000-0000-4000-8000-000000000038",
+        "type": "numbered_list",
+        "items": [
+          "Ask your manager for holiday in writing, giving at least the notice set out in the details above.",
+          "Holiday is approved in the order it is requested, while making sure each café has enough staff. Busy periods, such as school holidays and the weeks before Christmas, may be limited.",
+          "Do not book travel until your manager has approved your holiday.",
+          "We encourage you to take all your holiday within the holiday year. You may only carry unused holiday into the next year when the law allows it or your manager agrees in writing.",
+          "When you leave, we pay you for holiday you have earned but not taken. If you have taken more holiday than you have earned, we may deduct the difference from your final pay."
+        ]
+      },
+      {
+        "id": "d6030000-0000-4000-8000-000000000039",
+        "type": "paragraph",
+        "text": "You may be entitled to other kinds of leave. The table shows the main kinds and how to ask for them. The rules on who qualifies, how much leave is given and whether it is paid are set by law, and your manager can explain how they apply to you.",
+        "alignment": "left"
+      },
+      {
+        "id": "d6030000-0000-4000-8000-000000000041",
+        "type": "table",
+        "headers": [
+          "Kind of leave",
+          "How to ask for it"
+        ],
+        "rows": [
+          [
+            "Maternity, paternity, adoption and shared parental leave",
+            "Tell your manager as early as you can, and in writing by the deadlines the law sets."
+          ],
+          [
+            "Time off for dependants in an emergency",
+            "Tell your manager as soon as you can, why you need the time and how long."
+          ],
+          [
+            "Parental leave for a child's welfare",
+            "Ask your manager in writing, giving as much notice as you can."
+          ],
+          [
+            "Bereavement and compassionate leave",
+            "Speak to your manager, who will agree time off with you."
+          ],
+          [
+            "Jury service and other public duties",
+            "Show your manager the summons or details as soon as you receive them."
+          ]
+        ]
+      },
+      {
+        "id": "d6030000-0000-4000-8000-000000000042",
+        "type": "paragraph",
+        "text": "Most problems are best sorted out by an informal conversation with your manager, and we will try to do that first. When a problem is more serious, or carries on after an informal conversation, we use the disciplinary procedure below.",
+        "alignment": "left"
+      },
+      {
+        "id": "d6030000-0000-4000-8000-000000000044",
+        "type": "paragraph",
+        "text": "Misconduct means breaking the standards in this chapter in a way that is not serious enough to justify dismissal for a first offence, such as:",
+        "alignment": "left",
+        "runs": [
+          {
+            "text": "Misconduct",
+            "bold": true
+          },
+          {
+            "text": " means breaking the standards in this chapter in a way that is not serious enough to justify dismissal for a first offence, such as:"
+          }
+        ]
+      },
+      {
+        "id": "d6030000-0000-4000-8000-000000000045",
+        "type": "bullet_list",
+        "items": [
+          "repeated lateness, or absence that is not reported as this chapter requires;",
+          "not following a reasonable instruction from your manager;",
+          "careless work, or not following the food safety and hygiene procedures you are trained in; and",
+          "inappropriate use of your phone or social media."
+        ]
+      },
+      {
+        "id": "d6030000-0000-4000-8000-000000000046",
+        "type": "paragraph",
+        "text": "Gross misconduct means conduct so serious that it may lead to dismissal without notice, even for a first offence, such as:",
+        "alignment": "left",
+        "runs": [
+          {
+            "text": "Gross misconduct",
+            "bold": true
+          },
+          {
+            "text": " means conduct so serious that it may lead to dismissal without notice, even for a first offence, such as:"
+          }
+        ]
+      },
+      {
+        "id": "d6030000-0000-4000-8000-000000000047",
+        "type": "bullet_list",
+        "items": [
+          "theft, fraud, or falsifying time records or till records;",
+          "violence, threats of violence, bullying, harassment or discrimination;",
+          "working under the influence of alcohol or drugs;",
+          "deliberately or recklessly putting the safety of customers or colleagues at risk, including serious breaches of food safety rules; and",
+          "deliberately damaging our property or reputation."
+        ]
+      },
+      {
+        "id": "d6030000-0000-4000-8000-000000000048",
+        "type": "numbered_list",
+        "items": [
+          "Investigation. We will look into the facts without unreasonable delay. If you are suspended while we do so, you will be paid, and suspension is not a disciplinary action.",
+          "Invitation. If there is a case to answer, we will write to you explaining what is alleged and what could happen, with copies of the evidence, and invite you to a meeting.",
+          "The meeting. You can explain your side, present evidence and ask about the evidence against you. You may bring a colleague or a trade union representative with you.",
+          "The decision. We will tell you our decision in writing. Depending on how serious the matter is, the outcome may be no action, a written warning, a final written warning, or dismissal.",
+          "Appeal. If you disagree with the decision, you may appeal in writing within the time stated in the decision letter. Where possible, a manager who was not involved before will hear the appeal, and their decision is final."
+        ],
+        "itemRuns": [
+          [
+            {
+              "text": "Investigation.",
+              "bold": true
+            },
+            {
+              "text": " We will look into the facts without unreasonable delay. If you are suspended while we do so, you will be paid, and suspension is not a disciplinary action."
+            }
+          ],
+          [
+            {
+              "text": "Invitation.",
+              "bold": true
+            },
+            {
+              "text": " If there is a case to answer, we will write to you explaining what is alleged and what could happen, with copies of the evidence, and invite you to a meeting."
+            }
+          ],
+          [
+            {
+              "text": "The meeting.",
+              "bold": true
+            },
+            {
+              "text": " You can explain your side, present evidence and ask about the evidence against you. You may bring a colleague or a trade union representative with you."
+            }
+          ],
+          [
+            {
+              "text": "The decision.",
+              "bold": true
+            },
+            {
+              "text": " We will tell you our decision in writing. Depending on how serious the matter is, the outcome may be no action, a written warning, a final written warning, or dismissal."
+            }
+          ],
+          [
+            {
+              "text": "Appeal.",
+              "bold": true
+            },
+            {
+              "text": " If you disagree with the decision, you may appeal in writing within the time stated in the decision letter. Where possible, a manager who was not involved before will hear the appeal, and their decision is final."
+            }
+          ]
+        ]
+      },
+      {
+        "id": "d6030000-0000-4000-8000-000000000050",
+        "type": "paragraph",
+        "text": "If you have a concern or complaint about your work, the people you work with or how you have been treated, please raise it with your manager informally first. If that does not resolve it, or if your concern is about your manager, put it in writing to a more senior manager or the owner. We will meet you to discuss it, you may bring a colleague or a trade union representative with you, and we will tell you our decision in writing. If you are not satisfied with the decision, you may appeal in writing.",
+        "alignment": "left"
+      },
+      {
+        "id": "d6030000-0000-4000-8000-000000000052",
+        "type": "paragraph",
+        "text": "Raising a genuine concern will never count against you.",
+        "alignment": "left"
+      },
+      {
+        "id": "d6030000-0000-4000-8000-000000000053",
+        "type": "paragraph",
+        "text": "I have received and read this chapter of the employee handbook, and I understand that I must follow it.",
+        "alignment": "left"
+      },
+      {
+        "id": "d6030000-0000-4000-8000-000000000055",
+        "type": "text_field",
+        "fieldKey": "employee_name",
+        "label": "Employee name",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d6030000-0000-4000-8000-000000000056",
+        "type": "signature_field",
+        "fieldKey": "employee_signature",
+        "label": "Employee signature",
+        "required": true,
+        "helpText": null
+      },
+      {
+        "id": "d6030000-0000-4000-8000-000000000057",
+        "type": "date_field",
+        "fieldKey": "date_signed",
+        "label": "Date signed",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": " ",
+          "month": "long"
+        }
+      }
+    ],
+    "layout": {
+      "pageSize": "A4",
+      "orientation": "portrait",
+      "density": "balanced",
+      "fieldStyle": "line",
+      "marginPreset": "generous",
+      "sectionNumbers": "numbers",
+      "sectionStyle": "band",
+      "printedTitle": {
+        "mode": "none"
+      },
+      "headerPolicy": "none",
+      "footerPolicy": "all_pages",
+      "pageNumbering": "none",
+      "footerText": {
+        "left": "{title}",
+        "right": "Page {page} of {pages}"
+      }
+    },
+    "sections": [
+      {
+        "id": "d6030000-0000-4000-8000-000000000004",
+        "label": "Details of this chapter",
+        "startBlockId": "d6030000-0000-4000-8000-000000000003",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6030000-0000-4000-8000-000000000016",
+        "label": "About this chapter",
+        "startBlockId": "d6030000-0000-4000-8000-000000000015",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6030000-0000-4000-8000-000000000020",
+        "label": "Standards of conduct",
+        "startBlockId": "d6030000-0000-4000-8000-000000000019",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6030000-0000-4000-8000-000000000023",
+        "label": "Food hygiene and fitness to work",
+        "startBlockId": "d6030000-0000-4000-8000-000000000022",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6030000-0000-4000-8000-000000000027",
+        "label": "Phones and social media",
+        "startBlockId": "d6030000-0000-4000-8000-000000000026",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6030000-0000-4000-8000-000000000030",
+        "label": "Reporting absence",
+        "startBlockId": "d6030000-0000-4000-8000-000000000029",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6030000-0000-4000-8000-000000000034",
+        "label": "Sick pay and returning to work",
+        "startBlockId": "d6030000-0000-4000-8000-000000000033",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6030000-0000-4000-8000-000000000037",
+        "label": "Holidays",
+        "startBlockId": "d6030000-0000-4000-8000-000000000036",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6030000-0000-4000-8000-000000000040",
+        "label": "Other leave",
+        "startBlockId": "d6030000-0000-4000-8000-000000000039",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6030000-0000-4000-8000-000000000043",
+        "label": "Disciplinary rules",
+        "startBlockId": "d6030000-0000-4000-8000-000000000042",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6030000-0000-4000-8000-000000000049",
+        "label": "Disciplinary procedure",
+        "startBlockId": "d6030000-0000-4000-8000-000000000048",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6030000-0000-4000-8000-000000000051",
+        "label": "Raising a grievance",
+        "startBlockId": "d6030000-0000-4000-8000-000000000050",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6030000-0000-4000-8000-000000000054",
+        "label": "Acknowledgement",
+        "startBlockId": "d6030000-0000-4000-8000-000000000053",
+        "pageBreakBefore": false,
+        "keepTogether": true
+      }
+    ],
+    "fieldGroups": [
+      {
+        "id": "d6030000-0000-4000-8000-000000000009",
+        "label": null,
+        "startBlockId": "d6030000-0000-4000-8000-000000000007",
+        "endBlockId": "d6030000-0000-4000-8000-000000000008",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "d6030000-0000-4000-8000-000000000058",
+        "label": null,
+        "startBlockId": "d6030000-0000-4000-8000-000000000056",
+        "endBlockId": "d6030000-0000-4000-8000-000000000057",
+        "columns": 2,
+        "keepTogether": true,
+        "widths": [
+          7,
+          5
+        ]
+      }
+    ],
+    "blockRules": [
+      {
+        "blockId": "d6030000-0000-4000-8000-000000000015",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "d6030000-0000-4000-8000-000000000019",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "d6030000-0000-4000-8000-000000000022",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "d6030000-0000-4000-8000-000000000029",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "d6030000-0000-4000-8000-000000000044",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "d6030000-0000-4000-8000-000000000046",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      }
+    ]
+  }
+}

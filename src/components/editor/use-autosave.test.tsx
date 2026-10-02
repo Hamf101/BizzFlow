@@ -30,7 +30,9 @@ it("never sends one version twice, however many saves are asked for at once", as
   let controls: { flush: () => Promise<boolean> } | null = null
 
   function Editor({ value }: { value: string }): null {
-    const autosave = useAutosave({ delay: 5, enabled: true, initialVersion: "1", save, value })
+    // Longer than the test may run, so only the flushes below ever save. At
+    // 5 ms a loaded machine let the timer save first and hang the test.
+    const autosave = useAutosave({ delay: 60_000, enabled: true, initialVersion: "1", save, value })
     controls = autosave
     return null
   }

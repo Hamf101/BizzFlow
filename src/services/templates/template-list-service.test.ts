@@ -5,6 +5,7 @@ import {
   PostgrestReadQuery,
   type FakeRow,
 } from "@/services/postgrest-fake.test-support"
+import { answerTemplateAccess } from "@/services/templates/access.test-support"
 import {
   listTemplatePage,
   type ListTemplatePageInput,
@@ -32,17 +33,21 @@ class TemplateListClient {
   }
 
   // Stands in for document_template_card_contents: the requested templates of
-  // one organization, each with its stored content.
+  // one organization, each with its working copy or what was published.
   async rpc(
     functionName: string,
-    args: { target_org_id: string; template_ids: string[] }
+    args: { published_only: boolean; target_org_id: string; template_ids: string[] }
   ): Promise<{ data: FakeRow[] | null; error: { message: string } | null }> {
+    if (["get_template_access_level", "hidden_template_ids", "editable_template_ids"].includes(functionName)) {
+      return answerTemplateAccess(this.tables, functionName, args as never) as never
+    }
+
     if (functionName !== "document_template_card_contents") {
       throw new Error(`Unexpected function ${functionName}`)
     }
 
     return {
-      data: (this.tables.document_templates ?? [])
+      data: (this.tables[args.published_only ? "published_document_templates" : "document_templates"] ?? [])
         .filter(
           (row: FakeRow): boolean =>
             row.org_id === args.target_org_id &&
@@ -89,10 +94,13 @@ function createMembership(userId: string, role: string, orgId = ORG_ID): FakeRow
   return { org_id: orgId, role, role_definition: null, status: "active", user_id: userId }
 }
 
-function createDeps(templates: FakeRow[]): { client: never } {
+// Each published template was last published as its working copy stands,
+// unless a test gives what was published.
+function createDeps(templates: FakeRow[], published = templates.filter((row) => row.status === "published")): { client: never } {
   return {
     client: new TemplateListClient({
       document_templates: templates,
+      published_document_templates: published,
       organization_memberships: [
         createMembership(MANAGER_ID, "manager"),
         createMembership(STAFF_ID, "staff"),
@@ -169,8 +177,9 @@ describe("listTemplatePage", () => {
 
     const page = await listTemplatePage(createPageInput(MANAGER_ID), deps)
 
-    expect(rpc).toHaveBeenCalledTimes(1)
+    expect(rpc.mock.calls.filter(([name]) => name === "document_template_card_contents")).toHaveLength(1)
     expect(rpc).toHaveBeenCalledWith("document_template_card_contents", {
+      published_only: false,
       target_org_id: ORG_ID,
       template_ids: [templateId(1), templateId(2)],
     })
@@ -185,10 +194,13 @@ describe("listTemplatePage", () => {
 
   it("still lists every template when their contents cannot be read", async () => {
     const deps = createDeps(lifecycle)
-    vi.spyOn(deps.client as unknown as TemplateListClient, "rpc").mockResolvedValue({
-      data: null,
-      error: { message: "Could not find the function" },
-    })
+    const client = deps.client as unknown as TemplateListClient
+    const answer = client.rpc.bind(client)
+    vi.spyOn(client, "rpc").mockImplementation(async (name, args) =>
+      name === "document_template_card_contents"
+        ? { data: null, error: { message: "Could not find the function" } }
+        : answer(name, args)
+    )
 
     const page = await listTemplatePage(createPageInput(MANAGER_ID), deps)
 
@@ -197,11 +209,69 @@ describe("listTemplatePage", () => {
     )
   })
 
-  it("shows members who cannot manage templates only published ones, whatever they ask for", async () => {
-    expect(await listIds(STAFF_ID, lifecycle)).toEqual([1, 4].map(templateId))
+  it("shows members who cannot manage templates only what was published, whatever they ask for", async () => {
+    // Templates 1 and 4 have edits in their working copies not yet published.
+    const published = [1, 4].map((number) =>
+      createTemplateRow(number, { content: createBlankTemplateContent(), title: `Published ${number}` })
+    )
+    const deps = createDeps(lifecycle, published)
+    const rpc = vi.spyOn(deps.client as unknown as TemplateListClient, "rpc")
+    const page = await listTemplatePage(createPageInput(STAFF_ID), deps)
+
+    expect(page.templates.map((template) => [template.id, template.title, template.content?.blocks.length])).toEqual([
+      [templateId(1), "Published 1", createBlankTemplateContent().blocks.length],
+      [templateId(4), "Published 4", createBlankTemplateContent().blocks.length],
+    ])
+    expect(rpc).toHaveBeenCalledWith("document_template_card_contents", expect.objectContaining({ published_only: true }))
     expect(
       await listIds(STAFF_ID, lifecycle, { statuses: ["draft", "archived"] })
     ).toEqual([])
+  })
+
+  it("shows staff the drafts they made beside what is published, and keeps restricted templates from those they were not shared with", async () => {
+    const templates = [
+      createTemplateRow(1, { title: "Working 1" }),
+      createTemplateRow(2, { status: "draft" }),
+      createTemplateRow(5, { created_by: STAFF_ID, status: "draft", title: "Staff draft" }),
+      createTemplateRow(6, { access_restricted: true, created_by: REVIEWER_ID, title: "Private" }),
+      createTemplateRow(7, { access_restricted: true, created_by: REVIEWER_ID, title: "Shared with staff" }),
+    ]
+    const published = [createTemplateRow(1, { title: "Published 1" }), createTemplateRow(6, { title: "Private" }), createTemplateRow(7, { title: "Shared with staff" })]
+    const client = new TemplateListClient({
+      document_templates: templates,
+      organization_memberships: [createMembership(MANAGER_ID, "manager"), createMembership(STAFF_ID, "staff")],
+      published_document_templates: published,
+      template_access_grants: [
+        { access_level: "user", org_id: ORG_ID, organization_role: null, template_id: templateId(7), user_id: STAFF_ID },
+      ],
+    })
+    const seen = async (actorUserId: string) =>
+      (await listTemplatePage(createPageInput(actorUserId), { client: client as never })).templates.map((template) => template.title)
+
+    // Someone else's template is shown as published; their own draft as it stands.
+    expect((await seen(STAFF_ID)).sort()).toEqual(["Published 1", "Shared with staff", "Staff draft"])
+    // The manager manages the rest, but the two private ones are someone else's and were not shared with them.
+    expect((await seen(MANAGER_ID)).sort()).toEqual(["Staff draft", "Template 0002", "Working 1"])
+  })
+
+  it("marks the templates each member may edit, so a card offers only what they can do", async () => {
+    const client = new TemplateListClient({
+      document_templates: [
+        createTemplateRow(1, { title: "Someone else's" }),
+        createTemplateRow(5, { created_by: STAFF_ID, status: "draft", title: "Staff draft" }),
+        createTemplateRow(7, { access_restricted: true, created_by: REVIEWER_ID, title: "Shared to edit" }),
+      ],
+      organization_memberships: [createMembership(MANAGER_ID, "manager"), createMembership(STAFF_ID, "staff")],
+      published_document_templates: [createTemplateRow(1, { title: "Someone else's" }), createTemplateRow(7, { title: "Shared to edit" })],
+      template_access_grants: [{ access_level: "editor", org_id: ORG_ID, organization_role: null, template_id: templateId(7), user_id: STAFF_ID }],
+    })
+    const editable = async (actorUserId: string) =>
+      Object.fromEntries(
+        (await listTemplatePage(createPageInput(actorUserId), { client: client as never })).templates.map((template) => [template.title, template.canEdit])
+      )
+
+    expect(await editable(STAFF_ID)).toEqual({ "Someone else's": false, "Shared to edit": true, "Staff draft": true })
+    expect(await editable(MANAGER_ID)).toEqual({ "Someone else's": true, "Staff draft": true })
   })
 
   it("filters a manager's templates by status", async () => {

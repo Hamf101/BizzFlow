@@ -14,6 +14,8 @@ const MEDIUM_DATE: DateFormat = { month: "short", order: "mdy", separator: " " }
 /** What a date picker takes: its stored value, how it reads, and its form name. */
 export type DatePickerProps = {
   "aria-describedby"?: string
+  "aria-label"?: string
+  className?: string
   format?: DateFormat
   id?: string
   name?: string
@@ -43,6 +45,8 @@ export function DatePicker(props: DatePickerProps): ReactElement {
     <div className="relative">
       <FieldFace
         aria-describedby={props["aria-describedby"]}
+        aria-label={props["aria-label"]}
+        className={props.className}
         haspopup="dialog"
         icon={<CalendarDays aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />}
         id={props.id}

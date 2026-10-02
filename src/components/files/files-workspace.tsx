@@ -47,6 +47,7 @@ import { FilesLayoutSwitch } from "@/components/files/files-layout-switch"
 import type { MoveDestination } from "@/components/files/move-to-dialog"
 import { NewFileMenu, type NewFolderForm } from "@/components/files/new-file-menu"
 import { SelectionBar } from "@/components/files/selection-bar"
+import { DatedTitle } from "@/components/navigation/dated-title"
 import { formatMediumDate } from "@/lib/date-format"
 import { buildDocumentFolderPath } from "@/lib/page-document-folders"
 import {
@@ -220,8 +221,14 @@ export function FilesWorkspace({
           }))
       : []
 
+  // Anyone who can edit an item, and anyone who manages folders, may share it while it is active.
+  const canShare = (item: { accessLevel: string; lifecycleState: DocumentLifecycleState }): boolean =>
+    item.lifecycleState === "active" && (item.accessLevel === "contributor" || canManageFolders)
+
   function folderMenu(folder: AccessibleDocumentFolder): ReactNode {
-    if (!canManageFolders || !isManageable(folder)) {
+    const manageable = canManageFolders && isManageable(folder)
+
+    if (!manageable && !canShare(folder)) {
       return null
     }
 
@@ -229,7 +236,7 @@ export function FilesWorkspace({
 
     return (
       <FileRowMenu
-        actions={lifecycleActions(
+        actions={manageable ? lifecycleActions(
           folder.lifecycleState,
           {
             archive: actions.archiveFolder,
@@ -237,11 +244,11 @@ export function FilesWorkspace({
             trash: actions.trashFolder,
           },
           fields
-        )}
+        ) : []}
         itemId={folder.id}
         name={folder.name}
         purgeForm={
-          folder.lifecycleState === "trashed" ? (
+          manageable && folder.lifecycleState === "trashed" ? (
             <PurgeRequestForm
               action={actions.requestFolderPurge}
               confirmationFieldName="confirmationName"
@@ -260,7 +267,9 @@ export function FilesWorkspace({
   }
 
   function documentMenu(document: AccessibleDocumentSummary): ReactNode {
-    if (!canManageDocuments || !isManageable(document)) {
+    const manageable = canManageDocuments && isManageable(document)
+
+    if (!manageable && !canShare(document)) {
       return null
     }
 
@@ -268,7 +277,7 @@ export function FilesWorkspace({
 
     return (
       <FileRowMenu
-        actions={lifecycleActions(
+        actions={manageable ? lifecycleActions(
           document.lifecycleState,
           {
             archive: actions.archiveDocument,
@@ -276,11 +285,11 @@ export function FilesWorkspace({
             trash: actions.trashDocument,
           },
           fields
-        )}
+        ) : []}
         itemId={document.id}
         name={document.title}
         purgeForm={
-          document.lifecycleState === "trashed" ? (
+          manageable && document.lifecycleState === "trashed" ? (
             <PurgeRequestForm
               action={actions.requestDocumentPurge}
               confirmationFieldName="confirmationTitle"
@@ -369,6 +378,7 @@ export function FilesWorkspace({
           canManageFolders && isManageable(folder)
             ? LIFECYCLE_LABELS[folder.lifecycleState]
             : [],
+        shareable: canShare(folder),
       })
     ),
     ...inFolder.documents.map(
@@ -379,6 +389,7 @@ export function FilesWorkspace({
           canManageDocuments && isManageable(document)
             ? LIFECYCLE_LABELS[document.lifecycleState]
             : [],
+        shareable: canShare(document),
       })
     ),
   ]
@@ -474,15 +485,17 @@ export function FilesWorkspace({
         {/* The real space keeps the accessible name "Files 12 items" rather
             than "Files12 items". */}
         <div className="flex items-center justify-between gap-3">
-          <h1 className="min-w-0 text-2xl leading-none font-medium tracking-[-0.02em]">
-            <ListViewTitle title="Files" views={listViews} />{" "}
-            <span
-              aria-label={`${total} ${total === 1 ? "item" : "items"}`}
-              className="ml-0.5 text-xl font-normal text-muted-foreground"
-            >
-              {total}
-            </span>
-          </h1>
+          <DatedTitle>
+            <h1 className="min-w-0 text-2xl leading-none font-medium tracking-[-0.02em]">
+              <ListViewTitle title="Files" views={listViews} />{" "}
+              <span
+                aria-label={`${total} ${total === 1 ? "item" : "items"}`}
+                className="ml-0.5 text-xl font-normal text-muted-foreground"
+              >
+                {total}
+              </span>
+            </h1>
+          </DatedTitle>
           <div className="flex shrink-0 gap-2">
             <ListViewMenu
               adjusted={isFileViewAdjusted(view)}

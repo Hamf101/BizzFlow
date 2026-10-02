@@ -49,12 +49,17 @@ const aiEnvSchema = z.object({
   AI_TIMEOUT_MS: z.preprocess(
     parseIntegerEnvValue,
     z.number().int().min(1000).max(120000).default(90000)
-  )
+  ),
+  // Overrides the approved model's reasoning effort, for benchmark sweeps.
+  AI_EFFORT: z.enum(["minimal", "low", "medium", "high"]).optional()
 })
 
-const geminiEnvSchema = z.object({
-  GEMINI_API_KEY: z.string().trim().min(1)
-})
+// Each registered AI provider's credential. Read only when that provider is
+// the one configured, so an unused provider needs no key.
+const AI_PROVIDER_KEY_NAMES = {
+  gemini: "GEMINI_API_KEY",
+  openrouter: "OPENROUTER_API_KEY"
+} as const
 
 const r2EnvSchema = z.object({
   CLOUDFLARE_R2_ACCOUNT_ID: z.string().min(1),
@@ -162,14 +167,13 @@ export type ResendEmailEnv = {
   RESEND_FROM_EMAIL: string
 }
 export type AiEnv = z.infer<typeof aiEnvSchema>
-export type GeminiEnv = z.infer<typeof geminiEnvSchema>
+export type AiKeyedProvider = keyof typeof AI_PROVIDER_KEY_NAMES
 export type R2Env = z.infer<typeof r2EnvSchema>
 export type FileUploadPolicyEnv = z.infer<typeof fileUploadPolicySchema>
 export type InngestEnv = z.infer<typeof inngestEnvSchema>
 export type SentryEnv = z.infer<typeof sentryEnvSchema>
 export type UpstashRedisEnv = z.infer<typeof upstashRedisEnvSchema>
 export type SmsEnv = z.infer<typeof smsEnvSchema>
-export type PosthogEnv = z.infer<typeof posthogEnvSchema>
 
 function emptyStringToUndefined(value: unknown): unknown {
   return typeof value === "string" && value.trim().length === 0
@@ -357,11 +361,12 @@ export function getAiEnv(): AiEnv {
     AI_MODEL: readCanonicalOrDeprecatedEnvValue(
       process.env.AI_MODEL,
       provider === "gemini" ? process.env.GEMINI_MODEL : undefined
-    ) ?? (provider === "gemini" ? "gemini-3.6-flash" : undefined),
+    ) ?? (provider === "gemini" ? "gemini-flash-latest" : undefined),
     AI_TIMEOUT_MS: readCanonicalOrDeprecatedEnvValue(
       process.env.AI_TIMEOUT_MS,
       provider === "gemini" ? process.env.GEMINI_TIMEOUT_MS : undefined
     ),
+    AI_EFFORT: process.env.AI_EFFORT?.trim() || undefined,
   })
 
   if (!result.success) {
@@ -374,21 +379,21 @@ export function getAiEnv(): AiEnv {
 }
 
 /**
- * Reads and validates the credential for the Gemini infrastructure adapter.
+ * Reads one AI provider's API key.
  *
- * @returns Server-only Gemini credential.
- * @throws Error when the Gemini credential is missing or invalid.
+ * @param provider - The registered provider whose key is needed.
+ * @returns The trimmed key.
+ * @throws Error naming the missing variable.
  */
-export function getGeminiEnv(): GeminiEnv {
-  const result = geminiEnvSchema.safeParse(process.env)
+export function getAiProviderKey(provider: AiKeyedProvider): string {
+  const name = AI_PROVIDER_KEY_NAMES[provider]
+  const value = process.env[name]?.trim()
 
-  if (!result.success) {
-    throw new Error(
-      `Invalid Gemini environment: ${formatEnvError(result.error)}`
-    )
+  if (!value) {
+    throw new Error(`Invalid AI environment: ${name} is required.`)
   }
 
-  return result.data
+  return value
 }
 
 function readCanonicalOrDeprecatedEnvValue(

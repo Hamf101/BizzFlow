@@ -51,7 +51,7 @@ import { mapImageAssets, PRINT_MAX_WIDTH } from "@/types/template-images"
 import { runOperation, type LogValue } from "@/services/operation"
 
 export const TEMPLATE_COLUMNS =
-  "id,org_id,title,description,category,status,revision,content,created_by,updated_by,published_by,archived_by,created_at,updated_at,published_at,archived_at"
+  "id,org_id,title,description,category,status,revision,content,created_by,updated_by,published_by,archived_by,created_at,updated_at,published_at,archived_at,published_revision"
 
 /** Columns the templates list reads; template content stays behind. */
 export const TEMPLATE_SUMMARY_COLUMNS =
@@ -142,6 +142,35 @@ export async function getTemplateById(
   return mapDocumentTemplate(data as DocumentTemplateRow)
 }
 
+/**
+ * Loads a template as the members who use it get it: the version last
+ * published, never the working copy an author is still changing.
+ *
+ * @throws TemplateServiceError 404 when there is no published template by that id.
+ */
+export async function getPublishedTemplateById(
+  client: TemplateServiceClient,
+  organizationId: string,
+  templateId: string
+): Promise<DocumentTemplate> {
+  const { data, error } = await client
+    .from("published_document_templates")
+    .select(TEMPLATE_COLUMNS)
+    .eq("id", templateId)
+    .eq("org_id", organizationId)
+    .maybeSingle()
+
+  if (error) {
+    throw createDatabaseError(error, "Unable to load document template.")
+  }
+
+  if (!data) {
+    throw new TemplateServiceError("Document template was not found.", 404)
+  }
+
+  return mapDocumentTemplate(data as DocumentTemplateRow)
+}
+
 export async function requireActiveFolder(
   client: TemplateServiceClient,
   organizationId: string,
@@ -206,6 +235,7 @@ export function mapDocumentTemplate(
     updatedAt: row.updated_at,
     publishedAt: row.published_at,
     archivedAt: row.archived_at,
+    publishedRevision: row.published_revision ?? null,
   }
 }
 

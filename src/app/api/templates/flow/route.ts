@@ -5,6 +5,9 @@ import { executeTemplateFlow } from "@/services/template-flow-service"
 
 import { createTemplateRouteErrorResponse, startFlowTurn } from "../_utils"
 
+// A turn is up to three model calls: two to get a valid draft and one rewrite.
+export const maxDuration = 300
+
 /**
  * Completes one authenticated Flow chat turn and returns a pending proposal.
  *

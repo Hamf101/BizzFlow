@@ -42,6 +42,39 @@ import { storeTemplateImage } from "./template-image"
 const CONTROL_CLASS_NAME =
   "w-full rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
 
+// A choice shows as a dropdown, or with every option on show as radio
+// buttons, or as checkboxes when any number may be ticked.
+const CHOICE_DISPLAYS = [
+  { label: "Dropdown", value: "dropdown" },
+  { label: "Radio buttons", value: "radios" },
+  { label: "Checkboxes", value: "checkboxes" },
+] as const
+
+// What a typed answer holds, so it is checked and a phone shows the right keys.
+const TEXT_FORMATS = [
+  { label: "Any text", value: "" },
+  { label: "Number", value: "number" },
+  { label: "Money", value: "money" },
+  { label: "Email", value: "email" },
+  { label: "Phone", value: "phone" },
+  { label: "Time", value: "time" },
+  { label: "Month and year", value: "month" },
+] as const
+
+const COLUMN_FORMATS = [
+  { label: "Text", value: "" },
+  { label: "Number", value: "number" },
+  { label: "Money", value: "money" },
+  { label: "Date", value: "date" },
+  { label: "Time", value: "time" },
+] as const
+
+// Radio buttons go one a line, or side by side along a line.
+const RADIO_LAYOUTS = [
+  { label: "One a line", value: "down" },
+  { label: "Side by side", value: "across" },
+] as const
+
 const BLOCK_LABELS: Record<TemplateBlock["type"], string> = {
   heading: "Heading",
   paragraph: "Paragraph",
@@ -54,6 +87,8 @@ const BLOCK_LABELS: Record<TemplateBlock["type"], string> = {
   date_field: "Date field",
   checkbox_field: "Checkbox",
   dropdown_field: "Dropdown",
+  choice_grid_field: "Question grid",
+  table_field: "Fill-in table",
   initials_field: "Initials field",
   signature_field: "Signature field",
   file_field: "File upload",
@@ -83,6 +118,8 @@ type TemplateFieldBlock = Extract<
       | "date_field"
       | "checkbox_field"
       | "dropdown_field"
+      | "choice_grid_field"
+      | "table_field"
       | "initials_field"
       | "signature_field"
       | "file_field"
@@ -289,6 +326,30 @@ export function BlockFields({
     case "text_field":
       return (
         <FieldBlockFields block={block} blocks={blocks} onChange={onChange}>
+          <Field>
+            <FieldLabel htmlFor={`${block.id}-format`}>Answer</FieldLabel>
+            <Select
+              id={`${block.id}-format`}
+              onChange={(event: ChangeEvent<HTMLSelectElement>): void => {
+                const format = event.target.value as NonNullable<typeof block.format> | ""
+                const next: typeof block = { ...block, format: format || undefined }
+
+                // A typed answer is one line.
+                onChange(format ? { ...next, multiline: false } : next)
+              }}
+              value={block.format ?? ""}
+            >
+              {TEXT_FORMATS.map((format) => (
+                <option key={format.value} value={format.value}>
+                  {format.label}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <AffixField blockId={block.id} label="Before" maxLength={12} onChange={(prefix) => onChange({ ...block, prefix })} value={block.prefix} />
+            <AffixField blockId={block.id} label="After" maxLength={24} onChange={(suffix) => onChange({ ...block, suffix })} value={block.suffix} />
+          </div>
           <PlaceholderField
             blockId={block.id}
             onChange={(placeholder: string | null): void =>
@@ -296,14 +357,35 @@ export function BlockFields({
             }
             value={block.placeholder}
           />
-          <CheckboxControl
-            checked={block.multiline}
-            id={`${block.id}-multiline`}
-            label="Allow multiple lines"
-            onChange={(multiline: boolean): void =>
-              onChange({ ...block, multiline })
-            }
-          />
+          <Field>
+            <FieldLabel htmlFor={`${block.id}-comb`}>Character boxes</FieldLabel>
+            <Input
+              id={`${block.id}-comb`}
+              inputMode="numeric"
+              max={40}
+              min={2}
+              onChange={(event: ChangeEvent<HTMLInputElement>): void => {
+                const count = Number(event.target.value)
+                const next: typeof block = { ...block, comb: undefined }
+
+                // One box a character, for a reference or account number; blank is none.
+                onChange(Number.isInteger(count) && count >= 2 && count <= 40 ? { ...next, comb: count, multiline: false } : next)
+              }}
+              placeholder="None"
+              type="number"
+              value={block.comb ?? ""}
+            />
+          </Field>
+          {block.format || block.comb ? null : (
+            <CheckboxControl
+              checked={block.multiline}
+              id={`${block.id}-multiline`}
+              label="Allow multiple lines"
+              onChange={(multiline: boolean): void =>
+                onChange({ ...block, multiline })
+              }
+            />
+          )}
         </FieldBlockFields>
       )
     case "checkbox_field":
@@ -322,13 +404,59 @@ export function BlockFields({
     case "dropdown_field":
       return (
         <FieldBlockFields block={block} blocks={blocks} onChange={onChange}>
-          <PlaceholderField
-            blockId={block.id}
-            onChange={(placeholder: string | null): void =>
-              onChange({ ...block, placeholder })
-            }
-            value={block.placeholder}
-          />
+          <fieldset className="grid gap-2">
+            <FieldLegend variant="label">Show as</FieldLegend>
+            <Segmented
+              className="w-fit"
+              label="Show as"
+              onChange={(display): void => {
+                const next: typeof block = { ...block, display: "radios" }
+
+                delete next.multiple
+
+                if (display === "checkboxes") {
+                  next.multiple = true
+                }
+
+                if (display === "dropdown") {
+                  delete next.display
+                  delete next.across
+                }
+
+                onChange(next)
+              }}
+              options={CHOICE_DISPLAYS}
+              value={block.multiple ? "checkboxes" : (block.display ?? "dropdown")}
+            />
+          </fieldset>
+          {block.display === "radios" || block.multiple ? (
+            <fieldset className="grid gap-2">
+              <FieldLegend variant="label">Layout</FieldLegend>
+              <Segmented
+                className="w-fit"
+                label="Layout"
+                onChange={(layout): void => {
+                  const next: typeof block = { ...block, across: true }
+
+                  if (layout === "down") {
+                    delete next.across
+                  }
+
+                  onChange(next)
+                }}
+                options={RADIO_LAYOUTS}
+                value={block.across ? "across" : "down"}
+              />
+            </fieldset>
+          ) : (
+            <PlaceholderField
+              blockId={block.id}
+              onChange={(placeholder: string | null): void =>
+                onChange({ ...block, placeholder })
+              }
+              value={block.placeholder}
+            />
+          )}
           <OptionsField block={block} blocks={blocks} onChange={onChange} />
         </FieldBlockFields>
       )
@@ -338,6 +466,51 @@ export function BlockFields({
           <DateFormatField block={block} onChange={onChange} />
         </FieldBlockFields>
       )
+    case "choice_grid_field":
+      return (
+        <FieldBlockFields block={block} blocks={blocks} onChange={onChange}>
+          <WordListField legend="Statements" max={40} maxLength={240} min={1} noun="statement" onChange={(rows) => onChange({ ...block, rows })} values={block.rows} />
+          <WordListField legend="Choices" max={10} maxLength={60} min={2} noun="choice" onChange={(options) => onChange({ ...block, options })} values={block.options} />
+        </FieldBlockFields>
+      )
+    case "table_field":
+      return (
+        <FieldBlockFields block={block} blocks={blocks} onChange={onChange}>
+          <TableColumnsField block={block} onChange={onChange} />
+          <Field>
+            <FieldLabel htmlFor={`${block.id}-rows`}>Rows</FieldLabel>
+            <Input
+              id={`${block.id}-rows`}
+              inputMode="numeric"
+              max={50}
+              min={1}
+              onChange={(event: ChangeEvent<HTMLInputElement>): void => {
+                const rows = Number(event.target.value)
+
+                if (Number.isInteger(rows) && rows >= 1 && rows <= 50) {
+                  onChange({ ...block, rows })
+                }
+              }}
+              type="number"
+              value={block.rows}
+            />
+          </Field>
+          <CheckboxControl
+            checked={block.addRows === true}
+            id={`${block.id}-add-rows`}
+            label="People can add rows"
+            onChange={(addRows: boolean): void => {
+              const next: typeof block = { ...block, addRows: true }
+
+              if (!addRows) {
+                delete next.addRows
+              }
+
+              onChange(next)
+            }}
+          />
+        </FieldBlockFields>
+      )
     case "initials_field":
     case "signature_field":
     case "file_field":
@@ -345,6 +518,189 @@ export function BlockFields({
         <FieldBlockFields block={block} blocks={blocks} onChange={onChange} />
       )
   }
+}
+
+function AffixField({
+  blockId,
+  label,
+  maxLength,
+  onChange,
+  value,
+}: {
+  blockId: string
+  label: "After" | "Before"
+  maxLength: number
+  onChange: (value: string | undefined) => void
+  value: string | undefined
+}): ReactElement {
+  const id = `${blockId}-${label.toLowerCase()}`
+
+  return (
+    <Field>
+      <FieldLabel htmlFor={id}>{label}</FieldLabel>
+      <Input
+        id={id}
+        maxLength={maxLength}
+        onChange={(event: ChangeEvent<HTMLInputElement>): void => onChange(event.target.value.trim() || undefined)}
+        placeholder={label === "Before" ? "£" : "kg"}
+        value={value ?? ""}
+      />
+    </Field>
+  )
+}
+
+/**
+ * A grid's statements or choices, each its own input. The saved list changes
+ * only once what is typed is a list the grid can use: filled, each said once,
+ * and enough of them.
+ */
+function WordListField({
+  legend,
+  max,
+  maxLength,
+  min,
+  noun,
+  onChange,
+  values,
+}: {
+  legend: string
+  max: number
+  maxLength: number
+  min: number
+  noun: string
+  onChange: (values: string[]) => void
+  values: readonly string[]
+}): ReactElement {
+  const [draft, setDraft] = useState<readonly string[]>(values)
+  const [seen, setSeen] = useState<readonly string[]>(values)
+  const usable = (list: readonly string[]): boolean => {
+    const words = filled(list)
+
+    return words.length >= min && words.length <= max && new Set(words.map((word) => word.trim().toLowerCase())).size === words.length
+  }
+
+  // Undo or Flow changed the list: show theirs, unless this list says the same.
+  if (values !== seen) {
+    setSeen(values)
+
+    if (!sameOptions(filled(draft).map((word) => word.trim()), values)) {
+      setDraft(values)
+    }
+  }
+
+  return (
+    <fieldset className="grid gap-2">
+      <FieldLegend variant="label">{legend}</FieldLegend>
+      <OptionList
+        maxLength={maxLength}
+        noun={noun}
+        onChange={(next: readonly string[]): void => {
+          setDraft(next)
+
+          if (usable(next) && !sameOptions(filled(next), values)) {
+            onChange(filled(next).map((word) => word.trim()))
+          }
+        }}
+        options={draft}
+      />
+      {usable(draft) ? null : (
+        <p className="text-xs text-destructive" role="alert">
+          {`Needs ${min === 1 ? "a" : `at least ${min}`} ${noun}${min === 1 ? "" : "s"}, each said once${max ? `, ${max} at most` : ""}.`}
+        </p>
+      )}
+    </fieldset>
+  )
+}
+
+function TableColumnsField({
+  block,
+  onChange,
+}: {
+  block: Extract<TemplateBlock, { type: "table_field" }>
+  onChange: (block: TemplateBlock) => void
+}): ReactElement {
+  const columns = block.columns
+  // Names as typed; one blank or said twice waits there until it is a name of its own.
+  const [names, setNames] = useState<readonly string[]>(columns.map((column) => column.label))
+  const [seen, setSeen] = useState(columns)
+
+  if (columns !== seen) {
+    setSeen(columns)
+
+    if (!sameOptions(names.map((name) => name.trim()), columns.map((column) => column.label.trim()))) {
+      setNames(columns.map((column) => column.label))
+    }
+  }
+
+  return (
+    <fieldset className="grid gap-2">
+      <FieldLegend variant="label">Columns</FieldLegend>
+      <div className="grid gap-1.5">
+        {columns.map((column, index: number) => (
+          <div className="flex items-center gap-1" key={index}>
+            <Input
+              aria-label={`Column ${index + 1}`}
+              maxLength={60}
+              onChange={(event: ChangeEvent<HTMLInputElement>): void => {
+                const label = event.target.value
+
+                setNames(names.map((name, at) => (at === index ? label : name)))
+
+                if (label.trim() && !columns.some((other, at) => at !== index && other.label.trim().toLowerCase() === label.trim().toLowerCase())) {
+                  onChange({ ...block, columns: columns.map((other, at) => (at === index ? { ...other, label } : other)) })
+                }
+              }}
+              value={names[index] ?? column.label}
+            />
+            <Select
+              aria-label={`Column ${index + 1} holds`}
+              className="w-28"
+              onChange={(event: ChangeEvent<HTMLSelectElement>): void => {
+                const format = event.target.value as NonNullable<typeof column.format> | ""
+
+                onChange({ ...block, columns: columns.map((other, at) => (at === index ? { label: other.label, ...(format ? { format } : {}) } : other)) })
+              }}
+              value={column.format ?? ""}
+            >
+              {COLUMN_FORMATS.map((format) => (
+                <option key={format.value} value={format.value}>
+                  {format.label}
+                </option>
+              ))}
+            </Select>
+            <Button
+              aria-label={`Remove column ${index + 1}`}
+              disabled={columns.length === 1}
+              onClick={(): void => onChange({ ...block, columns: columns.filter((_, at) => at !== index) })}
+              size="icon-sm"
+              title="Remove"
+              type="button"
+              variant="ghost"
+            >
+              <X />
+            </Button>
+          </div>
+        ))}
+      </div>
+      {columns.length < 8 ? (
+        <Button
+          className="justify-self-start"
+          onClick={(): void => {
+            const taken = new Set(columns.map((column) => column.label.toLowerCase()))
+            const label = Array.from({ length: 9 }, (_, at) => `Column ${at + 1}`).find((name) => !taken.has(name.toLowerCase())) ?? "Column"
+
+            onChange({ ...block, columns: [...columns, { label }] })
+          }}
+          size="sm"
+          type="button"
+          variant="ghost"
+        >
+          <Plus />
+          Add column
+        </Button>
+      ) : null}
+    </fieldset>
+  )
 }
 
 function DateFormatField({
@@ -471,9 +827,13 @@ function sameOptions(left: readonly string[], right: readonly string[]): boolean
  * option starts the next one.
  */
 function OptionList({
+  maxLength = 240,
+  noun = "option",
   onChange,
   options,
 }: {
+  maxLength?: number
+  noun?: string
   onChange: (options: readonly string[]) => void
   options: readonly string[]
 }): ReactElement {
@@ -494,8 +854,8 @@ function OptionList({
         // Options may repeat or be blank while being written, so their place names them.
         <div className="flex items-center gap-1" key={index}>
           <Input
-            aria-label={`Option ${index + 1}`}
-            maxLength={240}
+            aria-label={`${noun[0]?.toUpperCase()}${noun.slice(1)} ${index + 1}`}
+            maxLength={maxLength}
             onChange={(event: ChangeEvent<HTMLInputElement>): void =>
               onChange(options.map((candidate: string, at: number) =>
                 at === index ? event.target.value : candidate
@@ -510,7 +870,7 @@ function OptionList({
             value={option}
           />
           <Button
-            aria-label={`Remove option ${index + 1}`}
+            aria-label={`Remove ${noun} ${index + 1}`}
             onClick={(): void => {
               onChange(options.filter((_: string, at: number): boolean => at !== index))
               focusOption(Math.max(0, index - 1))
@@ -532,7 +892,7 @@ function OptionList({
         variant="ghost"
       >
         <Plus />
-        Add option
+        Add {noun}
       </Button>
     </div>
   )
@@ -916,7 +1276,7 @@ function VisibilityFields({
   )
 }
 
-function CheckboxControl({
+export function CheckboxControl({
   checked,
   id,
   label,

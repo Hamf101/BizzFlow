@@ -1,4 +1,5 @@
 import type { ListSort } from "@/lib/list-state"
+import type { SharedMessage } from "@/components/sharing/sharing-notices"
 import type { AdminSupabaseClient } from "@/lib/supabase/admin"
 import type {
   createSafeSubmissionFilename,
@@ -23,7 +24,10 @@ import type {
 import type {
   SubmissionActivityEvent,
   SubmissionComment,
+  SubmissionReviewer,
+  SubmissionReviewTally,
   SubmissionReviewTransition,
+  SubmissionSuggestion,
 } from "@/types/submission-review"
 
 /** Narrow trusted Supabase client used by submission services. */
@@ -38,6 +42,18 @@ export type SubmissionDetail = {
   files: SubmissionFile[]
   comments: SubmissionComment[]
   activity: SubmissionActivityEvent[]
+  /** The reviewers this viewer may see, with what each decided. */
+  reviewers: SubmissionReviewer[]
+  /** How all the reviewers stand, including any this viewer may not see. */
+  tally: SubmissionReviewTally
+  /** Whether the viewer assigned the reviewers, so a change request is theirs to set aside. */
+  isRequester: boolean
+  /** Whether the viewer may choose who else it is shared with. */
+  canShare: boolean
+  /** Whether the viewer may suggest new answers: an owner or manager reviewing it, while it is reviewed. */
+  canSuggest: boolean
+  /** Every suggested answer and what became of it, oldest first: the change trail. */
+  suggestions: SubmissionSuggestion[]
 }
 
 /** What the list's hover preview draws for one visible submission, and no more. */
@@ -117,6 +133,42 @@ export type SubmitInternalSubmissionInput = GetInternalSubmissionInput & {
 export type AssignInternalSubmissionInput = GetInternalSubmissionInput & {
   expectedRevision: number
   assignedTo: string
+}
+
+/** Input for naming who reviews a submission. */
+export type SetInternalSubmissionReviewersInput = GetInternalSubmissionInput & {
+  expectedRevision: number
+  /** The first of them leads. */
+  reviewerIds: string[]
+  /** How many must approve; null means all of them. */
+  requiredApprovals: number | null
+}
+
+/** Input for setting one reviewer's change request aside. */
+export type DismissSubmissionChangesRequestInput = GetInternalSubmissionInput & {
+  expectedRevision: number
+  reviewerUserId: string
+  comment: string
+  /** Also record the assigner's own approval. */
+  alsoApprove: boolean
+}
+
+/** Input for choosing who a submission is shared with, beyond its reviewers. */
+export type ShareInternalSubmissionInput = GetInternalSubmissionInput & {
+  /** Everyone it should be shared with; anyone left out is taken off. */
+  userIds: string[]
+}
+
+/** Input for a reviewer suggesting new answers. */
+export type SuggestSubmissionAnswersInput = GetInternalSubmissionInput & {
+  /** The form's untrusted answers; only those that change are kept. */
+  values: unknown
+}
+
+/** Input for the person who submitted it accepting or declining a suggestion. */
+export type DecideSubmissionSuggestionInput = GetInternalSubmissionInput & {
+  accept: boolean
+  suggestionId: string
 }
 
 /** Input for one binding submission review state change. */
@@ -200,12 +252,8 @@ export type SubmissionServiceDeps = {
   createSignedSubmissionDownloadUrl?: typeof createSignedSubmissionDownloadUrl
   /** Largest submissions export; tests lower it. */
   maxExportRows?: number
-}
-
-/** Full normalized values sent to mutation RPCs. */
-export type NormalizedSubmissionMutation = {
-  submission: Submission
-  values: SubmissionAnswers
+  /** Tells someone they were asked to review, or that it was shared with them. A failure never undoes the change. */
+  notify?: (recipientUserId: string, message: SharedMessage) => Promise<void>
 }
 
 /** Scalar values permitted in operation logs. */

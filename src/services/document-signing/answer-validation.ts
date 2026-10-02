@@ -1,6 +1,12 @@
+import { isDeepStrictEqual } from "node:util"
+
 import { normalizeRequiredDrawing } from "@/services/document-signing/drawing-validation"
 import { DocumentSigningServiceError } from "@/services/document-signing/errors"
 import type { TemplateBlock, TemplateContent } from "@/types/template"
+import {
+  isTemplateAnswerComplete,
+  normalizeTemplateAnswer
+} from "@/types/template-answer"
 import {
   getVisibleTemplateBlocks,
   pruneHiddenTemplateFieldValues,
@@ -8,7 +14,10 @@ import {
 } from "@/types/template-visibility"
 
 /** Fillable template block indexed by its stable field key. */
-export type FieldBlock = Extract<TemplateBlock, { fieldKey: string }>
+export type FieldBlock = Exclude<
+  Extract<TemplateBlock, { fieldKey: string }>,
+  { type: "file_field" }
+>
 
 /**
  * Collects every generated-document answer block in a snapshot.
@@ -97,7 +106,7 @@ export function deriveChangedAnswerPatch(
   for (const [fieldKey, value] of Object.entries(submittedValues)) {
     if (
       !Object.prototype.hasOwnProperty.call(baselineValues, fieldKey) ||
-      !Object.is(value, baselineValues[fieldKey])
+      !isDeepStrictEqual(value, baselineValues[fieldKey])
     ) {
       changedValues[fieldKey] = value
     }
@@ -180,7 +189,7 @@ export function assertRequiredAnswersComplete(
       visibleFieldKeys.has(block.fieldKey) &&
       block.type !== "signature_field" &&
       block.type !== "initials_field" &&
-      !isRequiredAnswerComplete(block, values[block.fieldKey])
+      !isTemplateAnswerComplete(block, values[block.fieldKey])
     ) {
       throw new DocumentSigningServiceError(
         `${block.label} must be completed before the final signature.`,
@@ -220,15 +229,12 @@ async function normalizeFieldAnswer(
   block: FieldBlock,
   value: unknown
 ): Promise<unknown> {
-  if (block.type === "checkbox_field") {
-    if (typeof value !== "boolean") {
-      throw new DocumentSigningServiceError(
-        `${block.label} must be checked or unchecked.`,
-        400
-      )
-    }
-
-    return value
+  if (block.type !== "signature_field" && block.type !== "initials_field") {
+    return normalizeTemplateAnswer(
+      block,
+      value,
+      (message: string) => new DocumentSigningServiceError(message, 400)
+    )
   }
 
   if (typeof value !== "string") {
@@ -237,55 +243,7 @@ async function normalizeFieldAnswer(
 
   const normalizedValue = value.trim()
 
-  if (block.type === "signature_field" || block.type === "initials_field") {
-    return normalizedValue.length === 0
-      ? ""
-      : (await normalizeRequiredDrawing(normalizedValue, block.label)).dataUrl
-  }
-
-  if (normalizedValue.length > 20_000) {
-    throw new DocumentSigningServiceError(`${block.label} is too long.`, 400)
-  }
-
-  if (block.type === "date_field" && normalizedValue.length > 0) {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(normalizedValue)) {
-      throw new DocumentSigningServiceError(
-        `${block.label} must use YYYY-MM-DD format.`,
-        400
-      )
-    }
-
-    const parsedDate = new Date(`${normalizedValue}T00:00:00.000Z`)
-
-    if (
-      Number.isNaN(parsedDate.getTime()) ||
-      parsedDate.toISOString().slice(0, 10) !== normalizedValue
-    ) {
-      throw new DocumentSigningServiceError(
-        `${block.label} must be a valid date.`,
-        400
-      )
-    }
-  }
-
-  if (
-    block.type === "dropdown_field" &&
-    normalizedValue.length > 0 &&
-    !block.options.includes(normalizedValue)
-  ) {
-    throw new DocumentSigningServiceError(
-      `${block.label} must use one of the available options.`,
-      400
-    )
-  }
-
-  return normalizedValue
-}
-
-function isRequiredAnswerComplete(block: FieldBlock, value: unknown): boolean {
-  if (block.type === "checkbox_field") {
-    return value === true
-  }
-
-  return typeof value === "string" && value.trim().length > 0
+  return normalizedValue.length === 0
+    ? ""
+    : (await normalizeRequiredDrawing(normalizedValue, block.label)).dataUrl
 }

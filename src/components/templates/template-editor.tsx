@@ -1,27 +1,38 @@
 "use client"
 
-import { Archive, FilePenLine, Files, Link2, ListChecks, MoreHorizontal, Palette } from "lucide-react"
+import { Archive, FilePenLine, Files, History, Link2, ListChecks, MessageSquare, MoreHorizontal, Palette, UserPlus } from "lucide-react"
 import Link from "next/link"
-import { type ReactElement, useMemo, useRef, useState, useTransition } from "react"
+import { type ReactElement, useEffect, useMemo, useRef, useState, useTransition } from "react"
 
-import type { TemplateDraftInput } from "@/app/(dashboard)/templates/actions"
+import type { TemplateDraftInput, TemplateVersionResult } from "@/app/(dashboard)/templates/actions"
 import { useFlowHandoff } from "@/components/flow/flow-handoff"
 import { EditorCanvas } from "@/components/editor/editor-canvas"
 import { normalizeContentForSave } from "@/components/editor/editor-content"
 import { type DockTool, EditorDock } from "@/components/editor/editor-dock"
 import { FormatBar } from "@/components/editor/format-bar"
-import { FlowWindow } from "@/components/flow/flow-window"
+import { FlowDockSlot, FlowWindow } from "@/components/flow/flow-window"
 import { EditorFrame, type EditorLayoutStore, EditorNotice, EditorSidePanel } from "@/components/editor/editor-frame"
-import { PageSetupPanel } from "@/components/editor/page-setup-panel"
 import { type SaveResult, useAutosave } from "@/components/editor/use-autosave"
 import { useEditorController } from "@/components/editor/use-editor-controller"
-import { useEditorHistory } from "@/components/editor/use-editor-history"
+import {
+  preloadPanels,
+  RoomCheckpoints,
+  RoomComments,
+  RoomLayer,
+  RoomPeople,
+  TemplateBlockEditor,
+  TemplateFlowPanel,
+  PageSetupPanel,
+  TemplateBrandingPanel,
+  TemplateChecksPanel,
+  ShareDialog,
+} from "@/components/editor/lazy-panels"
+import { useLiveRoom } from "@/components/editor/use-live-room"
+import { useRoomPlace } from "@/components/editor/use-room-place"
 import { useLocalRecovery } from "@/components/editor/use-local-recovery"
-import { TemplateBlockEditor } from "@/components/templates/template-block-editor"
-import { TemplateBrandingPanel } from "@/components/templates/template-branding-panel"
-import { TemplateChecksPanel } from "@/components/templates/template-checks-panel"
+import { useMissingPictureAddresses, usePictureAddresses } from "@/components/editor/use-picture-addresses"
+import { useWorkingCopyHistory } from "@/components/editor/use-working-copy-history"
 import type { TemplateEditorState } from "@/components/templates/template-editor-state"
-import { TemplateFlowPanel } from "@/components/templates/template-flow-panel"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -40,6 +51,7 @@ import {
 import { Field, FieldLabel } from "@/components/ui/field"
 import { SuggestInput } from "@/components/ui/suggest-input"
 import { bizflowToast } from "@/components/ui/toaster"
+import type { WorkingCopy } from "@/lib/collaboration/working-copy-doc"
 import { createTemplateFlowDraftFingerprint } from "@/services/template-flow-proposal-state"
 import { resolvePageGeometry } from "@/services/templates/template-render-plan"
 import {
@@ -48,6 +60,7 @@ import {
 } from "@/services/templates/template-quality-service"
 import {
   type DocumentTemplate,
+  type DocumentTemplateVersion,
   type TemplateContentV3,
   upgradeV2TemplateContentToV3,
 } from "@/types/template"
@@ -55,13 +68,6 @@ import type { TemplateFlowMessage, TemplateFlowProposal } from "@/types/template
 import { withGeneratedFieldKeys } from "@/types/template-structure"
 import { applyVisibleTemplateFieldValue } from "@/types/template-visibility"
 
-type Mode = "edit" | "preview" | "test"
-
-const MODES = [
-  { label: "Edit", value: "edit" },
-  { label: "Preview", value: "preview" },
-  { label: "Test", value: "test" },
-] as const
 
 type TemplateEditorProps = {
   archiveAction: (formData: FormData) => Promise<void>
@@ -70,15 +76,22 @@ type TemplateEditorProps = {
   /** Where this person keeps the dock and zoom. */
   editorLayout?: EditorLayoutStore
   initialFlowMessages: TemplateFlowMessage[]
+  loadVersionAction: (templateId: string, revision: number) => Promise<TemplateVersionResult>
+  /** Who is editing, as the others in the room see them. */
+  me: Readonly<{ id: string; name: string }>
   publishAction: (formData: FormData) => Promise<void>
   saveDraftAction: (input: TemplateDraftInput) => Promise<SaveResult>
   template: DocumentTemplate
+  /** The versions it was published at, newest first. */
+  versions?: readonly DocumentTemplateVersion[]
 }
 
 /**
  * The template studio in the editor canvas: pages to type on, the dock with
- * everything that can be added, Flow and Checks, and Edit, Preview and Test.
- * A draft saves as it changes; a published template changes on Update.
+ * everything that can be added, Flow and Checks. The page is the printed
+ * page, and its boxes take answers, so the author tries the form as it grows.
+ * A draft saves as it changes. A published template's changes stay on this
+ * device until Save, and reach staff on Update.
  *
  * @param props - The template, its Flow history, and the server actions.
  * @returns The full-screen template editor.
@@ -88,9 +101,12 @@ export function TemplateEditor({
   categorySuggestions = [],
   editorLayout,
   initialFlowMessages,
+  loadVersionAction,
+  me,
   publishAction,
   saveDraftAction,
   template,
+  versions = [],
 }: TemplateEditorProps): ReactElement {
   const initial = useMemo(
     (): TemplateEditorState => ({
@@ -102,11 +118,32 @@ export function TemplateEditor({
     }),
     [template]
   )
-  const history = useEditorHistory<TemplateEditorState>(initial)
+  const pictures = usePictureAddresses(initial.content as TemplateContentV3)
+  const livePath = `/api/templates/${template.id}/room`
+  const fromCopy = (copy: WorkingCopy): TemplateEditorState => ({
+    category: copy.category ?? "",
+    content: pictures.attach(copy.content),
+    description: copy.description ?? "",
+    title: copy.title,
+  })
+  const live = useLiveRoom<TemplateEditorState>({
+    enabled: template.status !== "archived",
+    fromCopy,
+    me,
+    onRefused: (message) => bizflowToast.error(message),
+    path: livePath,
+    toCopy: (next) => {
+      pictures.remember(next.content as TemplateContentV3)
+      return { category: next.category, content: next.content as TemplateContentV3, description: next.description, title: next.title }
+    },
+  })
+  const history = useWorkingCopyHistory(initial, live.session)
+  const room = live.session && live.roomId ? { path: livePath, roomId: live.roomId, seen: live.notesSeen } : null
+  const liveMode = history.liveStatus !== null
+  const editable = history.liveStatus !== "stopped"
   const state = history.state
   const content = state.content as TemplateContentV3
-  const [mode, setMode] = useState<Mode>("edit")
-  // Test answers belong to the editor, so switching modes keeps a trial run.
+  // What the author types into the boxes to try the form; never saved.
   const [testAnswers, setTestAnswers] = useState<Record<string, unknown>>({})
   const [proposal, setProposal] = useState<TemplateFlowProposal | null>(null)
   const [flowUndo, setFlowUndo] = useState<{ messageId: string; state: TemplateEditorState } | null>(null)
@@ -119,6 +156,7 @@ export function TemplateEditor({
     setCarried(request)
   })
   const [detailsOpen, setDetailsOpen] = useState(false)
+  const [sharing, setSharing] = useState(false)
   const [savedState, setSavedState] = useState(initial)
   const [, startTransition] = useTransition()
   const revisionRef = useRef(template.revision)
@@ -134,13 +172,21 @@ export function TemplateEditor({
     content,
     undo: history.undo,
   })
+  useEffect(preloadPanels, [])
+
+  // Where this person is, for the others in the room.
+  useRoomPlace(controller, live.setPlace)
+
+  // Pictures someone else added arrive without an address this page can load.
+  useMissingPictureAddresses({ content, path: livePath, pictures, roomId: live.roomId, session: live.session })
+
   const candidate = useMemo(
     () => (proposal ? upgradeV2TemplateContentToV3(proposal.candidateDraft.content) : content),
     [content, proposal]
   )
   const preview = useEditorController({ change: () => undefined, content: candidate, undo: () => undefined })
   const autosave = useAutosave<TemplateEditorState>({
-    enabled: isDraft && validationErrors === 0,
+    enabled: !live.session && live.unavailable && isDraft && validationErrors === 0,
     initialVersion: String(template.revision),
     save: async (value, version) => {
       const result = await saveDraftAction(toDraftInput(template.id, Number(version), value))
@@ -154,10 +200,20 @@ export function TemplateEditor({
     },
     value: state,
   })
-  const recovery = useLocalRecovery({ key: `template:${template.id}`, saved: savedState, value: state })
+  const recovery = useLocalRecovery({
+    key: `template:${template.id}`,
+    // Live, what the room has kept is saved; anything waiting stays on this device too.
+    saved: !liveMode ? savedState : history.liveStatus === "saved" ? state : initial,
+    value: state,
+  })
   const settingsBlock = content.blocks.find((block) => block.id === controller.settingsBlockId) ?? null
   const settingsIndex = settingsBlock ? content.blocks.indexOf(settingsBlock) : -1
-  const unsaved = JSON.stringify(state) !== JSON.stringify(savedState)
+  // Live, every change is kept as it is made, so there is nothing to save by hand.
+  const unsaved = !liveMode && JSON.stringify(state) !== JSON.stringify(savedState)
+  // On a published template the button saves first, then publishes.
+  const needsSave = !isDraft && unsaved
+  // Changes staff don't have yet: saved past what was published, or made since this opened.
+  const unpublished = template.revision !== template.publishedRevision || stableJson(state) !== stableJson(initial)
   const geometry = resolvePageGeometry(content.layout)
 
   function submit(action: (formData: FormData) => Promise<void>): void {
@@ -189,42 +245,78 @@ export function TemplateEditor({
   }
 
   async function publish(): Promise<void> {
-    if (blockedByChecks("publish")) {
+    if (blockedByChecks(isDraft ? "publish" : "update")) {
       return
     }
 
-    await autosave.flush()
+    const session = live.session
 
-    if (autosave.status !== "conflict") {
+    if (session && live.roomId) {
+      // Everything made here is kept, and everything others made is here, before it goes out.
+      if (!(await session.flush())) {
+        bizflowToast.error("Your latest changes haven't been saved yet. Try again in a moment.")
+        return
+      }
+
+      await session.catchUp()
+      const formData = new FormData()
+      formData.set("templateId", template.id)
+      formData.set("roomId", live.roomId)
+      formData.set("roomRevision", String(session.revision()))
+      startTransition(() => publishAction(formData))
+      return
+    }
+
+    // What isn't saved yet saves first, so Update publishes what is on screen.
+    if (await autosave.flush()) {
       submit(publishAction)
     }
   }
 
-  async function update(): Promise<void> {
-    if (blockedByChecks("update")) {
+  // A published template's changes save to its working copy only when asked.
+  // Until then they stay on this device, and a lost connection retries. Live,
+  // every change is kept as it is made, so saving keeps a checkpoint instead.
+  async function save(): Promise<void> {
+    if (live.session) {
+      await live.checkpoint("Checkpoint")
       return
     }
 
-    const result = await saveDraftAction(toDraftInput(template.id, revisionRef.current, state))
-
-    if (result.ok) {
-      revisionRef.current = Number(result.version)
-      setSavedState(state)
-      bizflowToast.success("Template updated")
-    } else {
-      bizflowToast.error(result.message)
+    if (validationErrors > 0) {
+      bizflowToast.error(`Fix ${validationErrors} ${validationErrors === 1 ? "check" : "checks"} before you save.`)
+      return
     }
+
+    await autosave.flush()
   }
 
-  function changeMode(next: Mode): void {
-    setMode(next)
-    controller.select(null)
+  // An old version comes back as an edit: Undo takes it back, Save keeps it,
+  // and staff get it only on Update.
+  async function restore(revision: number): Promise<boolean> {
+    if (proposal) {
+      bizflowToast.info("Apply or reject Flow's suggestion first.")
+      return false
+    }
+
+    const result = await loadVersionAction(template.id, revision)
+
+    if (!result.ok) {
+      bizflowToast.error(result.message)
+      return false
+    }
+
+    history.set((current) => ({
+      ...current,
+      content: withGeneratedFieldKeys(upgradeV2TemplateContentToV3(result.version.content)),
+      description: result.version.description ?? "",
+      title: result.version.title,
+    }))
+    return true
   }
 
   function stageProposal(next: TemplateFlowProposal): void {
     setProposal(next)
     controller.select(null)
-    setMode("preview")
   }
 
   function applyProposal(next: TemplateFlowProposal, messageId: string): void {
@@ -242,7 +334,6 @@ export function TemplateEditor({
       content: upgradeV2TemplateContentToV3(next.candidateDraft.content),
     }))
     setProposal(null)
-    setMode("edit")
   }
 
   const tools: DockTool[] = [
@@ -270,7 +361,6 @@ export function TemplateEditor({
           content={content}
           description={state.description}
           onSelectBlock={(blockId: string) => {
-            changeMode("edit")
             controller.select(blockId)
             close()
           }}
@@ -282,6 +372,58 @@ export function TemplateEditor({
       label: "Checks",
       wide: true,
     },
+    ...(room
+      ? [
+          {
+            content: (close: () => void) => (
+              <RoomComments
+                blocks={content.blocks}
+                onShow={(blockId: string) => {
+                        controller.select(blockId)
+                  close()
+                }}
+                others={live.others}
+                room={room}
+                target={controller.selectedBlockId ?? controller.activeBlockId}
+              />
+            ),
+            icon: MessageSquare,
+            id: "comments",
+            label: "Comments",
+            wide: true,
+          },
+        ]
+      : []),
+    ...(room || versions.length > 0
+      ? [
+          {
+            content: (close: () => void) => (
+              <div className="grid gap-4">
+                {room ? (
+                  <RoomCheckpoints onRestore={(copy: WorkingCopy) => history.set(() => fromCopy(copy))} onSave={live.checkpoint} room={room} />
+                ) : null}
+                {versions.length > 0 ? (
+                  <section className="grid gap-1">
+                    {room ? <h3 className="px-1 pt-1 text-[12.5px] font-medium text-muted-foreground">Published</h3> : null}
+                    <TemplateVersions
+                      live={template.publishedRevision}
+                      onRestore={async (revision) => {
+                        if (await restore(revision)) {
+                          close()
+                        }
+                      }}
+                      versions={versions}
+                    />
+                  </section>
+                ) : null}
+              </div>
+            ),
+            icon: History,
+            id: "versions",
+            label: "Versions",
+          },
+        ]
+      : []),
   ]
 
   return (
@@ -322,18 +464,21 @@ export function TemplateEditor({
             >
               {proposal.status === "stale" ? "Flow's suggestion is out of date" : "Flow's suggestion"}
             </EditorNotice>
+          ) : Object.keys(testAnswers).length > 0 ? (
+            <EditorNotice actions={[{ label: "Clear", onClick: () => setTestAnswers({}) }]}>Answers typed here are a try-out</EditorNotice>
           ) : null
         }
         canRedo={history.canRedo}
         canUndo={history.canUndo}
         dock={(narrow, orientation) =>
-          // The tools need Edit; Flow has a button of its own, always there.
-          mode === "edit" && !proposal ? (
+          // Flow has a button of its own, always there.
+          !proposal ? (
             <EditorDock
               lead={narrow ? <FormatBar allowFiles controller={controller} narrow /> : undefined}
               narrow={narrow}
               orientation={orientation}
               tools={tools}
+              trail={narrow ? <FlowDockSlot /> : undefined}
             />
           ) : null
         }
@@ -358,6 +503,11 @@ export function TemplateEditor({
                   Public links
                 </DropdownMenuItem>
               ) : null}
+              {/* Whoever can open the editor can edit the template, which is what sharing it takes. */}
+              <DropdownMenuItem onClick={() => setSharing(true)}>
+                <UserPlus />
+                Share…
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={() => {
@@ -373,14 +523,13 @@ export function TemplateEditor({
             </DropdownMenuContent>
           </DropdownMenu>
         }
-        mode={mode}
-        modes={MODES}
-        onModeChange={changeMode}
         onRedo={history.redo}
-        onRetrySave={() => void autosave.flush()}
+        onRetrySave={() => void (live.session ? live.session.flush() : autosave.flush())}
+        onSave={() => void save()}
         onTitleChange={(title) => history.set((current) => ({ ...current, title }), "title")}
         onUndo={history.undo}
         pageWidthPoints={geometry.widthPoints * geometry.scale}
+        people={(narrow) => (room ? <RoomPeople me={me} narrow={narrow} others={live.others} room={room} /> : null)}
         panel={(narrow) => (
           <>
             <EditorSidePanel
@@ -404,8 +553,8 @@ export function TemplateEditor({
                 />
               ) : null}
             </EditorSidePanel>
-            {/* On a phone Flow's button rests above the tools' row. */}
-            <FlowWindow onOpenChange={setFlowOpen} open={flowOpen} phoneBottom={mode === "edit" && !proposal ? 84 : 16}>
+            {/* On a phone Flow's button rests in the tools' row, or above the page without it. */}
+            <FlowWindow onOpenChange={setFlowOpen} open={flowOpen} phoneBottom={!proposal ? 84 : 16}>
               <TemplateFlowPanel
                 canUndo={flowUndo !== null}
                 draft={state}
@@ -430,37 +579,52 @@ export function TemplateEditor({
         )}
         primary={
           <Button
+            aria-keyshortcuts={needsSave ? "Meta+S Control+S" : undefined}
             className="h-10 px-4"
-            disabled={!isDraft && !unsaved}
-            onClick={() => void (isDraft ? publish() : update())}
+            disabled={!unpublished && !unsaved}
+            onClick={() => void (needsSave ? save() : publish())}
             type="button"
           >
-            {isDraft ? "Publish" : "Update"}
+            {isDraft ? "Publish" : needsSave ? "Save" : "Update"}
           </Button>
         }
-        saveStatus={isDraft ? (validationErrors > 0 ? "blocked" : autosave.status) : unsaved ? "unsaved-local" : null}
+        saveStatus={
+          history.liveStatus
+            ? history.liveStatus
+            : validationErrors > 0
+            ? "blocked"
+            : isDraft || ["conflict", "error", "offline", "saving"].includes(autosave.status)
+              ? autosave.status
+              : unsaved
+                ? "unsaved-local"
+                : unpublished
+                  ? "saved"
+                  : null
+        }
         title={state.title}
-        titleEditable={mode === "edit" && !proposal}
-        toolbar={mode === "edit" && !proposal ? <FormatBar allowFiles controller={controller} narrow={false} /> : undefined}
+        titleEditable={editable && !proposal}
+        toolbar={!proposal ? <FormatBar allowFiles controller={controller} narrow={false} /> : undefined}
       >
         {({ narrow, zoom }) => (
           <EditorCanvas
             allowFiles
-            answers={mode === "test" ? testAnswers : undefined}
+            answers={proposal ? undefined : testAnswers}
             controller={proposal ? preview : controller}
-            designable={mode === "edit" && !proposal}
+            designable={editable && !proposal}
             documentTitle={proposal ? proposal.candidateDraft.title : state.title}
-            fields={proposal || mode === "preview" ? "read" : mode === "test" ? "fill" : "design"}
+            // The boxes take answers, so the author tries the form as they build it.
+            fields={proposal ? "read" : "fill"}
             narrow={narrow}
             onAnswerChange={(fieldKey, value) =>
               setTestAnswers((answers) => applyVisibleTemplateFieldValue(content, answers, fieldKey, value))
             }
-            surface={proposal || mode === "preview" ? "paper" : "screen"}
-            textEditable={mode === "edit" && !proposal}
+            overlay={room && !proposal ? <RoomLayer narrow={narrow} others={live.others} revision={content} room={room} /> : null}
+            textEditable={editable && !proposal}
             zoom={zoom}
           />
         )}
       </EditorFrame>
+      {sharing ? <ShareDialog name={template.title} onOpenChange={setSharing} open resources={[{ id: template.id, kind: "template" }]} /> : null}
       <Dialog onOpenChange={setDetailsOpen} open={detailsOpen}>
         <DialogContent>
           <DialogHeader>
@@ -501,6 +665,33 @@ export function TemplateEditor({
   )
 }
 
+// Newest first; the live one is what staff get now.
+function TemplateVersions({
+  live,
+  onRestore,
+  versions,
+}: {
+  live: number | null
+  onRestore: (revision: number) => Promise<void>
+  versions: readonly DocumentTemplateVersion[]
+}): ReactElement {
+  return (
+    <ul className="grid gap-1" data-slot="template-versions">
+      {versions.map((version) => (
+        <li className="flex min-h-11 items-center gap-3 rounded-[8px] px-2 hover:bg-muted/60" key={version.revision}>
+          <span className="min-w-0 flex-1 truncate text-sm">
+            {new Date(version.publishedAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}
+          </span>
+          {version.revision === live ? <span className="text-[12.5px] text-muted-foreground">Live</span> : null}
+          <Button onClick={() => void onRestore(version.revision)} size="sm" type="button" variant="outline">
+            Restore
+          </Button>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
 function toDraftInput(templateId: string, revision: number, state: TemplateEditorState): TemplateDraftInput {
   return {
     category: state.category,
@@ -510,4 +701,13 @@ function toDraftInput(templateId: string, revision: number, state: TemplateEdito
     templateId,
     title: state.title,
   }
+}
+
+// The same state reads the same whatever order its keys were written in.
+function stableJson(value: unknown): string {
+  return JSON.stringify(value, (_key, entry: unknown) =>
+    entry && typeof entry === "object" && !Array.isArray(entry)
+      ? Object.fromEntries(Object.entries(entry).sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0)))
+      : entry
+  )
 }

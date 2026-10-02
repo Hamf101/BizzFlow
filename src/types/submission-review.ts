@@ -1,6 +1,10 @@
 import { z } from "zod"
 
 import type { SubmissionStatus } from "@/types/submission"
+import {
+  templateAnswerValueSchema,
+  type TemplateAnswerValue,
+} from "@/types/template-answer"
 
 /** Immutable activity kinds recorded by the submission review workflow. */
 export const SUBMISSION_ACTIVITY_EVENT_TYPES = [
@@ -12,6 +16,14 @@ export const SUBMISSION_ACTIVITY_EVENT_TYPES = [
   "approved",
   "rejected",
   "completed",
+  "review_approved",
+  "changes_dismissed",
+  "reviewer_removed",
+  "shared",
+  "unshared",
+  "answers_suggested",
+  "suggestion_accepted",
+  "suggestion_declined",
 ] as const
 
 /** Binding state changes available to submission reviewers. */
@@ -80,6 +92,39 @@ export type SubmissionActivityEvent = {
   createdAt: string
 }
 
+/** What one reviewer has decided so far. */
+export const SUBMISSION_REVIEWER_DECISIONS = [
+  "pending",
+  "approved",
+  "changes_requested",
+  "dismissed",
+] as const
+
+/** One reviewer's decision on a submission. */
+export type SubmissionReviewerDecision = (typeof SUBMISSION_REVIEWER_DECISIONS)[number]
+
+/** A person reviewing a submission, or someone it was shared with, and what they decided. */
+export type SubmissionReviewer = {
+  assignedAt: string
+  assignedBy: string | null
+  /** False for someone it was shared with: they comment and may ask for changes, but never approve. */
+  canApprove: boolean
+  decidedAt: string | null
+  decision: SubmissionReviewerDecision
+  note: string | null
+  userId: string
+}
+
+/** How the reviewers who can approve stand together, counting all of them. */
+export type SubmissionReviewTally = {
+  approved: number
+  /** Open change requests, from reviewers and from people it was shared with alike. */
+  changesRequested: number
+  /** Reviewers whose approval still counts: everyone but those whose change request was set aside. */
+  counting: number
+  total: number
+}
+
 /** Comments and state history shown with one visible submission. */
 export type SubmissionReviewData = {
   comments: SubmissionComment[]
@@ -120,6 +165,15 @@ const submissionCommentRowSchema = z.object({
   body: z.string().trim().min(1).max(2_000),
   created_by: nullableUuidSchema,
   created_at: timestampSchema,
+})
+const submissionReviewerRowSchema = z.object({
+  assigned_at: timestampSchema,
+  assigned_by: nullableUuidSchema,
+  can_approve: z.boolean(),
+  decided_at: timestampSchema.nullable(),
+  decision: z.enum(SUBMISSION_REVIEWER_DECISIONS),
+  note: z.string().nullable(),
+  user_id: uuidSchema,
 })
 const submissionActivityEventRowSchema = z.object({
   id: uuidSchema,
@@ -191,5 +245,85 @@ export function parseSubmissionActivityEventRow(
     commentId: result.data.comment_id,
     submissionRevision: result.data.submission_revision,
     createdAt: result.data.created_at,
+  }
+}
+
+/**
+ * Parses an unknown database row into a submission reviewer.
+ *
+ * @param value - Untrusted persistence data.
+ * @returns The reviewer and their decision.
+ * @throws SubmissionReviewDomainError when the row is invalid.
+ */
+export function parseSubmissionReviewerRow(value: unknown): SubmissionReviewer {
+  const result = submissionReviewerRowSchema.safeParse(value)
+
+  if (!result.success) {
+    throw new SubmissionReviewDomainError("Database returned an invalid submission reviewer.")
+  }
+
+  return {
+    assignedAt: result.data.assigned_at,
+    assignedBy: result.data.assigned_by,
+    canApprove: result.data.can_approve,
+    decidedAt: result.data.decided_at,
+    decision: result.data.decision,
+    note: result.data.note,
+    userId: result.data.user_id,
+  }
+}
+
+/** What became of a reviewer's suggested answer. */
+export type SubmissionSuggestionStatus = "pending" | "accepted" | "declined"
+
+/** A reviewer's suggested answer, kept with what became of it as the change trail. */
+export type SubmissionSuggestion = {
+  decidedAt: string | null
+  decidedBy: string | null
+  fieldKey: string
+  id: string
+  previousValue: TemplateAnswerValue | null
+  proposedValue: TemplateAnswerValue
+  status: SubmissionSuggestionStatus
+  suggestedAt: string
+  suggestedBy: string | null
+}
+
+const submissionSuggestionRowSchema = z.object({
+  decided_at: timestampSchema.nullable(),
+  decided_by: nullableUuidSchema,
+  field_key: z.string().min(1),
+  id: uuidSchema,
+  previous_value: templateAnswerValueSchema.nullable(),
+  proposed_value: templateAnswerValueSchema,
+  status: z.enum(["pending", "accepted", "declined"]),
+  suggested_at: timestampSchema,
+  suggested_by: nullableUuidSchema,
+})
+
+/**
+ * Parses an unknown database row into a suggested answer.
+ *
+ * @param value - Untrusted persistence data.
+ * @returns The suggestion and what became of it.
+ * @throws SubmissionReviewDomainError when the row is invalid.
+ */
+export function parseSubmissionSuggestionRow(value: unknown): SubmissionSuggestion {
+  const result = submissionSuggestionRowSchema.safeParse(value)
+
+  if (!result.success) {
+    throw new SubmissionReviewDomainError("Database returned an invalid suggested answer.")
+  }
+
+  return {
+    decidedAt: result.data.decided_at,
+    decidedBy: result.data.decided_by,
+    fieldKey: result.data.field_key,
+    id: result.data.id,
+    previousValue: result.data.previous_value,
+    proposedValue: result.data.proposed_value,
+    status: result.data.status,
+    suggestedAt: result.data.suggested_at,
+    suggestedBy: result.data.suggested_by,
   }
 }

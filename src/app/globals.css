@@ -346,12 +346,46 @@
 }
 
 /*
+ * An author's colours were chosen for paper. A light page shows them exactly:
+ * lightness = 0 + 1 x l. A dark page is that paper turned over: lightness =
+ * 1.19 - l, so black ink reads as near-white, and an ink too pale to read in
+ * print is as hard to read here. 1.19 puts the default ink on the theme's own.
+ */
+:root {
+  --doc-ink-from: 0;
+  --doc-ink-by: 1;
+}
+
+.dark {
+  --doc-ink-from: 1.19;
+  --doc-ink-by: -1;
+}
+
+/*
+ * Forced colours (Windows High Contrast and the like) remove box-shadows, and
+ * most controls draw their focus ring with one. An outline survives, in the
+ * system's own highlight colour, so every focused control keeps a visible mark.
+ */
+@media (forced-colors: active) {
+  :focus-visible {
+    outline: 2px solid Highlight !important;
+    outline-offset: 2px !important;
+  }
+}
+
+/*
  * Words an author coloured or highlighted were coloured for paper. On a dark
- * screen they stay legible: a colour lightens, and a highlight becomes a tint
- * behind the screen's own ink. Paper, and the PDF, keep them exactly.
+ * screen a colour turns over with the page, as the brand's ink does, and a
+ * highlight becomes a tint behind the screen's own ink. Paper, and the PDF,
+ * keep them exactly.
  */
 .dark .doc-ink:not([data-document-surface="paper"] *) {
-  color: oklch(from var(--doc-ink) max(l, 0.78) c h) !important;
+  color: oklch(from var(--doc-ink) calc(var(--doc-ink-from) + var(--doc-ink-by) * l) c h) !important;
+}
+
+/* A drawn signature is dark ink for paper; a dark screen shows it light. */
+.dark .doc-drawing:not([data-document-surface="paper"] *) {
+  filter: invert(1);
 }
 
 .dark .doc-highlight:not([data-document-surface="paper"] *) {
@@ -367,6 +401,9 @@
  * in both themes by design.
  */
 [data-document-surface="paper"] {
+  /* Words with no colour of their own inherit the theme's, which is light on a
+     dark screen and vanishes on paper: the paper sets its own. */
+  color: #2f2b33;
   --card: #f7f4ee;
   --card-foreground: #2f2b33;
   --foreground: #2f2b33;

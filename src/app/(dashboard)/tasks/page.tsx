@@ -24,6 +24,7 @@ import type { OrganizationMember } from "@/types/organization"
 import { isTerminalTaskStatus, type Task } from "@/types/task"
 
 import { createTaskAction } from "./actions"
+import type { Metadata } from "next"
 
 type TasksSearchParams = Promise<RawSearchParams>
 
@@ -34,6 +35,8 @@ type TasksSearchParams = Promise<RawSearchParams>
  * @param props - View state in search parameters.
  * @returns Tenant task workspace, or a user-safe access or load failure.
  */
+export const metadata: Metadata = { title: "Tasks" }
+
 export default async function TasksPage({
   searchParams,
 }: {

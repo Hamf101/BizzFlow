@@ -1,0 +1,764 @@
+{
+  "request": "A needs assessment questionnaire we send to new small-business clients before our IT support onboarding call. Ask about their business, the devices and software they use, their network and sign-in security, backups, what happens if something goes wrong, and what they want from us.",
+  "title": "IT support needs assessment",
+  "description": "Send to a new small-business client before the onboarding call, so the IT support provider understands their devices, software, security and backups, and what support they need.",
+  "maxPages": 4,
+  "content": {
+    "schemaVersion": 3,
+    "branding": {
+      "organizationName": "",
+      "logoAsset": null,
+      "logoDataUrl": null,
+      "logoAlignment": "left",
+      "logoWidthPercent": 24,
+      "primaryColor": "#252329",
+      "accentColor": "#635273"
+    },
+    "blocks": [
+      {
+        "id": "d5050000-0000-4000-8000-000000000001",
+        "type": "heading",
+        "text": "IT support needs assessment",
+        "level": 1,
+        "alignment": "left"
+      },
+      {
+        "id": "d5050000-0000-4000-8000-000000000002",
+        "type": "paragraph",
+        "text": "Please answer these questions before our onboarding call. They help us understand how your business uses technology today and where you would like help. Answer as far as you can; it is fine to say you are not sure, and we will go through anything unclear on the call.",
+        "alignment": "left"
+      },
+      {
+        "id": "d5050000-0000-4000-8000-000000000003",
+        "type": "paragraph",
+        "text": "We use your answers only to plan and provide our support to your business, and we keep them with your client records for as long as we support you. We do not share them with anyone else. Please do not write any passwords on this form.",
+        "alignment": "left"
+      },
+      {
+        "id": "d5050000-0000-4000-8000-000000000004",
+        "type": "text_field",
+        "fieldKey": "business_name",
+        "label": "Business name",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d5050000-0000-4000-8000-000000000006",
+        "type": "text_field",
+        "fieldKey": "contact_name",
+        "label": "Contact name",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d5050000-0000-4000-8000-000000000007",
+        "type": "text_field",
+        "fieldKey": "position",
+        "label": "Position",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d5050000-0000-4000-8000-000000000009",
+        "type": "text_field",
+        "fieldKey": "phone_number",
+        "label": "Phone number",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "format": "phone"
+      },
+      {
+        "id": "d5050000-0000-4000-8000-000000000010",
+        "type": "text_field",
+        "fieldKey": "email_address",
+        "label": "Email address",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "format": "email"
+      },
+      {
+        "id": "d5050000-0000-4000-8000-000000000012",
+        "type": "text_field",
+        "fieldKey": "business_address",
+        "label": "Business address",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": true,
+        "boxHeight": 45
+      },
+      {
+        "id": "d5050000-0000-4000-8000-000000000013",
+        "type": "text_field",
+        "fieldKey": "number_of_staff",
+        "label": "Number of staff",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "format": "number"
+      },
+      {
+        "id": "d5050000-0000-4000-8000-000000000014",
+        "type": "text_field",
+        "fieldKey": "number_of_sites",
+        "label": "Number of sites",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "format": "number"
+      },
+      {
+        "id": "d5050000-0000-4000-8000-000000000016",
+        "type": "dropdown_field",
+        "fieldKey": "where_do_your_staff_mostly_work",
+        "label": "Where do your staff mostly work?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "At our premises",
+          "From home",
+          "A mix of both",
+          "Out on the road"
+        ],
+        "display": "radios"
+      },
+      {
+        "id": "d5050000-0000-4000-8000-000000000017",
+        "type": "text_field",
+        "fieldKey": "desktops",
+        "label": "Desktops",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "format": "number"
+      },
+      {
+        "id": "d5050000-0000-4000-8000-000000000019",
+        "type": "text_field",
+        "fieldKey": "laptops",
+        "label": "Laptops",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "format": "number"
+      },
+      {
+        "id": "d5050000-0000-4000-8000-000000000020",
+        "type": "text_field",
+        "fieldKey": "mobile_devices",
+        "label": "Mobile devices",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "format": "number"
+      },
+      {
+        "id": "d5050000-0000-4000-8000-000000000022",
+        "type": "dropdown_field",
+        "fieldKey": "which_operating_system_do_most_of_your_computers_use",
+        "label": "Which operating system do most of your computers use?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Windows",
+          "macOS",
+          "A mix of Windows and macOS",
+          "Linux",
+          "Not sure",
+          "Other"
+        ],
+        "display": "radios"
+      },
+      {
+        "id": "d5050000-0000-4000-8000-000000000023",
+        "type": "text_field",
+        "fieldKey": "which_other_operating_system_do_you_use",
+        "label": "Which other operating system do you use?",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "d5050000-0000-4000-8000-000000000022",
+          "operator": "equals",
+          "value": "Other"
+        },
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d5050000-0000-4000-8000-000000000024",
+        "type": "dropdown_field",
+        "fieldKey": "who_looks_after_your_devices_now",
+        "label": "Who looks after your devices now?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "No one in particular",
+          "Someone on our staff",
+          "Another IT company",
+          "Each person looks after their own"
+        ],
+        "display": "radios"
+      },
+      {
+        "id": "d5050000-0000-4000-8000-000000000025",
+        "type": "dropdown_field",
+        "fieldKey": "do_staff_use_their_own_phones_or_computers_for_work",
+        "label": "Do staff use their own phones or computers for work?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No",
+          "Some do"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "d5050000-0000-4000-8000-000000000026",
+        "type": "dropdown_field",
+        "fieldKey": "do_you_keep_a_list_of_all_the_devices_the_business_owns",
+        "label": "Do you keep a list of all the devices the business owns?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "d5050000-0000-4000-8000-000000000027",
+        "type": "dropdown_field",
+        "fieldKey": "which_email_service_does_the_business_use",
+        "label": "Which email service does the business use?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Microsoft 365",
+          "Google Workspace",
+          "Email from our website host",
+          "Not sure",
+          "Other"
+        ],
+        "display": "radios"
+      },
+      {
+        "id": "d5050000-0000-4000-8000-000000000029",
+        "type": "text_field",
+        "fieldKey": "which_other_email_service_do_you_use",
+        "label": "Which other email service do you use?",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "d5050000-0000-4000-8000-000000000027",
+          "operator": "equals",
+          "value": "Other"
+        },
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d5050000-0000-4000-8000-000000000030",
+        "type": "text_field",
+        "fieldKey": "which_software_does_the_business_depend_on",
+        "label": "Which software does the business depend on?",
+        "required": false,
+        "helpText": "For example accounts, bookings, stock control or design software.",
+        "placeholder": null,
+        "multiline": true,
+        "boxHeight": 60
+      },
+      {
+        "id": "d5050000-0000-4000-8000-000000000031",
+        "type": "dropdown_field",
+        "fieldKey": "are_updates_for_computers_and_software_installed",
+        "label": "Are updates for computers and software installed automatically?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes, on all devices",
+          "On some devices",
+          "No",
+          "Not sure"
+        ],
+        "display": "radios"
+      },
+      {
+        "id": "d5050000-0000-4000-8000-000000000032",
+        "type": "dropdown_field",
+        "fieldKey": "is_any_of_your_software_or_equipment_no_longer_supported_by",
+        "label": "Is any of your software or equipment no longer supported by its maker?",
+        "required": false,
+        "helpText": "Such as an old version of Windows that no longer gets updates.",
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "d5050000-0000-4000-8000-000000000033",
+        "type": "text_field",
+        "fieldKey": "internet_provider",
+        "label": "Internet provider",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d5050000-0000-4000-8000-000000000035",
+        "type": "text_field",
+        "fieldKey": "connection_type",
+        "label": "Connection type",
+        "required": false,
+        "helpText": "For example fibre or 4G.",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d5050000-0000-4000-8000-000000000037",
+        "type": "dropdown_field",
+        "fieldKey": "do_visitors_use_a_separate_guest_wi_fi_network",
+        "label": "Do visitors use a separate guest Wi-Fi network?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No",
+          "No guest Wi-Fi"
+        ],
+        "display": "radios"
+      },
+      {
+        "id": "d5050000-0000-4000-8000-000000000038",
+        "type": "dropdown_field",
+        "fieldKey": "do_staff_sign_in_with_a_second_step_such_as_a_code_on_their",
+        "label": "Do staff sign in with a second step, such as a code on their phone, as well as a password?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes, everyone",
+          "Some people",
+          "No",
+          "Not sure"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "d5050000-0000-4000-8000-000000000039",
+        "type": "dropdown_field",
+        "fieldKey": "does_each_person_have_their_own_sign_in_rather_than_shared",
+        "label": "Does each person have their own sign-in, rather than shared accounts?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No",
+          "Some shared"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "d5050000-0000-4000-8000-000000000040",
+        "type": "dropdown_field",
+        "fieldKey": "when_someone_leaves_is_their_access_removed_straight_away",
+        "label": "When someone leaves, is their access removed straight away?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Always",
+          "Usually",
+          "Not always",
+          "Not sure"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "d5050000-0000-4000-8000-000000000041",
+        "type": "dropdown_field",
+        "fieldKey": "have_your_staff_had_any_training_on_spotting_phishing_emails",
+        "label": "Have your staff had any training on spotting phishing emails?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes, in the past year",
+          "Yes, longer ago",
+          "No"
+        ],
+        "display": "radios"
+      },
+      {
+        "id": "d5050000-0000-4000-8000-000000000061",
+        "type": "dropdown_field",
+        "fieldKey": "where_is_the_business_s_important_information_kept",
+        "label": "Where is the business's important information kept?",
+        "required": false,
+        "helpText": "Tick each that applies.",
+        "placeholder": null,
+        "options": [
+          "On each computer",
+          "An office server or shared drive",
+          "Cloud storage",
+          "Somewhere else"
+        ],
+        "multiple": true,
+        "across": true
+      },
+      {
+        "id": "d5050000-0000-4000-8000-000000000062",
+        "type": "text_field",
+        "fieldKey": "where_else_is_it_kept",
+        "label": "Where else is it kept?",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "visibleWhen": {
+          "sourceBlockId": "d5050000-0000-4000-8000-000000000061",
+          "operator": "equals",
+          "value": "Somewhere else"
+        }
+      },
+      {
+        "id": "d5050000-0000-4000-8000-000000000044",
+        "type": "dropdown_field",
+        "fieldKey": "how_is_that_information_backed_up",
+        "label": "How is that information backed up?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Automatically, to the cloud",
+          "Automatically, to a drive in the office",
+          "Someone does it by hand",
+          "It is not backed up",
+          "Not sure"
+        ],
+        "display": "radios"
+      },
+      {
+        "id": "d5050000-0000-4000-8000-000000000045",
+        "type": "date_field",
+        "fieldKey": "when_were_the_backups_last_tested_by_restoring_a_file",
+        "label": "When were the backups last tested by restoring a file?",
+        "required": false,
+        "helpText": "Leave blank if they have never been tested.",
+        "dateFormat": {
+          "order": "dmy",
+          "separator": " ",
+          "month": "long"
+        }
+      },
+      {
+        "id": "d5050000-0000-4000-8000-000000000046",
+        "type": "dropdown_field",
+        "fieldKey": "is_there_antivirus_or_other_malware_protection_on_every",
+        "label": "Is there antivirus or other malware protection on every computer?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "d5050000-0000-4000-8000-000000000047",
+        "type": "dropdown_field",
+        "fieldKey": "do_you_have_a_written_plan_for_what_to_do_if_your_systems",
+        "label": "Do you have a written plan for what to do if your systems are attacked or stop working?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "d5050000-0000-4000-8000-000000000049",
+        "type": "dropdown_field",
+        "fieldKey": "in_the_past_two_years_has_the_business_had_a_security",
+        "label": "In the past two years, has the business had a security incident, such as a virus, a hacked account or a payment fraud?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "d5050000-0000-4000-8000-000000000050",
+        "type": "text_field",
+        "fieldKey": "what_happened_and_how_was_it_dealt_with",
+        "label": "What happened, and how was it dealt with?",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "d5050000-0000-4000-8000-000000000049",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "placeholder": null,
+        "multiline": true,
+        "boxHeight": 60
+      },
+      {
+        "id": "d5050000-0000-4000-8000-000000000051",
+        "type": "text_field",
+        "fieldKey": "which_systems_could_the_business_not_work_without_for_a_day",
+        "label": "Which systems could the business not work without for a day?",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": true,
+        "boxHeight": 45
+      },
+      {
+        "id": "d5050000-0000-4000-8000-000000000052",
+        "type": "text_field",
+        "fieldKey": "what_problems_would_you_most_like_us_to_solve_first",
+        "label": "What problems would you most like us to solve first?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": true,
+        "boxHeight": 60
+      },
+      {
+        "id": "d5050000-0000-4000-8000-000000000054",
+        "type": "dropdown_field",
+        "fieldKey": "when_do_you_most_need_support_to_be_available",
+        "label": "When do you most need support to be available?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Office hours on weekdays",
+          "Early mornings, evenings or weekends as well",
+          "Around the clock"
+        ],
+        "display": "radios"
+      },
+      {
+        "id": "d5050000-0000-4000-8000-000000000055",
+        "type": "dropdown_field",
+        "fieldKey": "are_there_any_projects_coming_up_such_as_a_move_or_new_staff",
+        "label": "Are there any projects coming up, such as a move or new staff?",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "d5050000-0000-4000-8000-000000000056",
+        "type": "text_field",
+        "fieldKey": "anything_else_we_should_know_before_the_call",
+        "label": "Anything else we should know before the call",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": true,
+        "boxHeight": 45
+      },
+      {
+        "id": "d5050000-0000-4000-8000-000000000057",
+        "type": "text_field",
+        "fieldKey": "name_of_person_completing_this_form",
+        "label": "Name of person completing this form",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d5050000-0000-4000-8000-000000000059",
+        "type": "date_field",
+        "fieldKey": "date_completed",
+        "label": "Date completed",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": " ",
+          "month": "long"
+        }
+      }
+    ],
+    "layout": {
+      "pageSize": "A4",
+      "orientation": "portrait",
+      "density": "balanced",
+      "fieldStyle": "line",
+      "marginPreset": "generous",
+      "sectionNumbers": "numbers",
+      "sectionStyle": "box",
+      "printedTitle": {
+        "mode": "none"
+      },
+      "headerPolicy": "none",
+      "footerPolicy": "all_pages",
+      "pageNumbering": "none",
+      "footerText": {
+        "left": "{title}",
+        "right": "Page {page} of {pages}"
+      }
+    },
+    "sections": [
+      {
+        "id": "d5050000-0000-4000-8000-000000000005",
+        "label": "About your business",
+        "startBlockId": "d5050000-0000-4000-8000-000000000004",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d5050000-0000-4000-8000-000000000018",
+        "label": "Your devices",
+        "startBlockId": "d5050000-0000-4000-8000-000000000017",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d5050000-0000-4000-8000-000000000028",
+        "label": "Software and email",
+        "startBlockId": "d5050000-0000-4000-8000-000000000027",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d5050000-0000-4000-8000-000000000034",
+        "label": "Network and sign-in security",
+        "startBlockId": "d5050000-0000-4000-8000-000000000033",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d5050000-0000-4000-8000-000000000043",
+        "label": "Your data and backups",
+        "startBlockId": "d5050000-0000-4000-8000-000000000061",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d5050000-0000-4000-8000-000000000048",
+        "label": "If something goes wrong",
+        "startBlockId": "d5050000-0000-4000-8000-000000000047",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d5050000-0000-4000-8000-000000000053",
+        "label": "What you would like from us",
+        "startBlockId": "d5050000-0000-4000-8000-000000000052",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d5050000-0000-4000-8000-000000000058",
+        "label": "Completed by",
+        "startBlockId": "d5050000-0000-4000-8000-000000000057",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      }
+    ],
+    "fieldGroups": [
+      {
+        "id": "d5050000-0000-4000-8000-000000000008",
+        "label": null,
+        "startBlockId": "d5050000-0000-4000-8000-000000000006",
+        "endBlockId": "d5050000-0000-4000-8000-000000000007",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "d5050000-0000-4000-8000-000000000011",
+        "label": null,
+        "startBlockId": "d5050000-0000-4000-8000-000000000009",
+        "endBlockId": "d5050000-0000-4000-8000-000000000010",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "d5050000-0000-4000-8000-000000000015",
+        "label": null,
+        "startBlockId": "d5050000-0000-4000-8000-000000000013",
+        "endBlockId": "d5050000-0000-4000-8000-000000000014",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "d5050000-0000-4000-8000-000000000021",
+        "label": "How many of each does the business use?",
+        "startBlockId": "d5050000-0000-4000-8000-000000000017",
+        "endBlockId": "d5050000-0000-4000-8000-000000000020",
+        "columns": 3,
+        "keepTogether": false
+      },
+      {
+        "id": "d5050000-0000-4000-8000-000000000036",
+        "label": null,
+        "startBlockId": "d5050000-0000-4000-8000-000000000033",
+        "endBlockId": "d5050000-0000-4000-8000-000000000035",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "d5050000-0000-4000-8000-000000000060",
+        "label": null,
+        "startBlockId": "d5050000-0000-4000-8000-000000000057",
+        "endBlockId": "d5050000-0000-4000-8000-000000000059",
+        "columns": 2,
+        "keepTogether": false
+      }
+    ],
+    "blockRules": []
+  }
+}

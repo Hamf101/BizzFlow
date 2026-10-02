@@ -36,6 +36,10 @@ import {
   templateContentV3Schema,
   type TemplateContentV3,
 } from "@/types/template"
+import {
+  createStructuredAnswerContent,
+  STRUCTURED_ANSWERS,
+} from "@/types/template-answer.test-support"
 
 function seedValidLink(
   extra: Partial<Record<FakeTableName, FakeRow[]>> = {}
@@ -105,14 +109,20 @@ describe("createPublicFormLink", () => {
 })
 
 describe("getPublicFormLinkByToken", () => {
-  it("resolves an active link with its template", async () => {
+  it("resolves an active link with its template as published, not the working copy", async () => {
+    const published = createTemplateRow({ title: "Visitor Form" })
     const preview = await getPublicFormLinkByToken(
       PUBLIC_TOKEN,
-      createDeps(seedValidLink())
+      createDeps(
+        seedValidLink({
+          document_templates: [createTemplateRow({ revision: 4, title: "Visitor Form, being rewritten" })],
+          published_document_templates: [published],
+        })
+      )
     )
 
     expect(preview.valid).toBe(true)
-    expect(preview.template?.id).toBe(TEMPLATE_ID)
+    expect(preview.template).toMatchObject({ id: TEMPLATE_ID, revision: 3, title: "Visitor Form" })
     expect(preview.organizationName).toBe("Acme")
   })
 
@@ -805,6 +815,57 @@ describe("submitPublicForm", () => {
     ).rejects.toMatchObject({ statusCode: 500 })
     expect(client.tables.public_form_links[0].submission_count).toBe(0)
     expect(client.tables.submissions).toMatchObject([{ status: "draft" }])
+  })
+})
+
+describe("structured public answers", () => {
+  const seedStructured = (): FakePublicFormClient =>
+    seedValidLink({
+      document_templates: [
+        createTemplateRow({ content: createStructuredAnswerContent() }),
+      ],
+    })
+  const asFormFields = (answers: Record<string, unknown>) =>
+    Object.fromEntries(
+      Object.entries(answers).map(([key, value]) => [key, JSON.stringify(value)])
+    )
+
+  it("submits structured answers posted as JSON text", async () => {
+    const client = seedStructured()
+
+    await submitPublicForm(
+      { token: PUBLIC_TOKEN, values: { ...asFormFields(STRUCTURED_ANSWERS), log: "" } },
+      createDeps(client, [SUBMISSION_ID])
+    )
+
+    expect(client.tables.submissions[0]?.values).toEqual(STRUCTURED_ANSWERS)
+  })
+
+  it.each([
+    ["malformed JSON", { tools: "[\"Ladder\"" }],
+    ["a grid key that is not a row", asFormFields({ checks: { "Roof sound": "Yes" } })],
+  ])("refuses %s with a 400 before the database is asked", async (_case, attack) => {
+    const client = seedStructured()
+
+    await expect(
+      submitPublicForm(
+        { token: PUBLIC_TOKEN, values: { ...asFormFields(STRUCTURED_ANSWERS), ...attack } },
+        createDeps(client, [SUBMISSION_ID])
+      )
+    ).rejects.toMatchObject({ statusCode: 400 })
+    expect(client.rpcCalls).toHaveLength(0)
+  })
+
+  it("keeps structured answers in a JSON draft and restores them", async () => {
+    const client = seedStructured()
+    const checkpoint = await savePublicFormDraft(
+      { token: PUBLIC_TOKEN, draftToken: null, expectedRevision: null, values: { ...STRUCTURED_ANSWERS } },
+      createDeps(client, [SUBMISSION_ID])
+    )
+
+    await expect(
+      getPublicFormDraftState(PUBLIC_TOKEN, checkpoint.draftToken, createDeps(client))
+    ).resolves.toMatchObject({ values: STRUCTURED_ANSWERS })
   })
 })
 

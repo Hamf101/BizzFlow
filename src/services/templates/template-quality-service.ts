@@ -25,10 +25,12 @@ export type TemplateQualityIssueCode =
   | "unresolved_needs_input"
   | "dropdown_insufficient_choices"
   | "dropdown_placeholder_choices"
+  | "placeholder_answer_parts"
   | "generic_field_label"
   | "invalid_field_key"
   | "duplicate_title_heading"
   | "heading_level_jump"
+  | "collects_health_information"
   | "missing_description"
 
 /** One actionable, high-confidence usability problem in a template draft. */
@@ -63,6 +65,13 @@ export type TemplateQualityEvaluation = Readonly<{
 const NEEDS_INPUT_PATTERN = /\bneeds\s+input\s*:/i
 const PLACEHOLDER_CHOICE_PATTERN =
   /^(?:option|choice)\s*(?:[-_#]\s*)?(?:\d+|[a-z]|one|two|three|four|five)$/i
+// The words a new grid or table starts with, until its author writes their own.
+const PLACEHOLDER_PART_PATTERN =
+  /^(?:(?:first|second|third|fourth|fifth)\s+statement|(?:statement|row|column|item)\s*(?:[-_#]\s*)?\d+)$/i
+// Questions about a person's health. Kept narrow: a notice that fires on a
+// safety checklist or a pet's records teaches people to ignore it.
+const HEALTH_INFORMATION_PATTERN =
+  /\b(?:medications?|medicines?|prescriptions?|allerg(?:y|ies)|diagnos[ei]s|symptoms?|medical (?:history|conditions?|records?)|health (?:conditions?|history|concerns?|insurance)|surger(?:y|ies)|pregnan(?:t|cy))\b/i
 const MAX_TEMPLATE_TITLE_LENGTH = 180
 const MAX_TEMPLATE_DESCRIPTION_LENGTH = 2_000
 
@@ -310,6 +319,28 @@ export function evaluateTemplateQuality(
     })
   }
 
+  const placeholderPartIds = blocks
+    .filter((block: TemplateBlock): boolean => {
+      const parts =
+        block.type === "choice_grid_field"
+          ? [...block.rows, ...block.options]
+          : block.type === "table_field"
+            ? block.columns.map((column): string => column.label)
+            : []
+
+      return parts.some((part: string): boolean => PLACEHOLDER_PART_PATTERN.test(part.trim()) || PLACEHOLDER_CHOICE_PATTERN.test(part.trim()))
+    })
+    .map((block: TemplateBlock): string => block.id)
+
+  if (placeholderPartIds.length > 0) {
+    issues.push({
+      code: "placeholder_answer_parts",
+      severity: "critical",
+      message: "Replace placeholder statements, choices and column names with real ones.",
+      affectedBlockIds: placeholderPartIds
+    })
+  }
+
   const fieldBlocks = blocks.filter(isFieldBlock)
   const genericFieldLabelIds = fieldBlocks
     .filter((block): boolean =>
@@ -386,6 +417,24 @@ export function evaluateTemplateQuality(
       message:
         "Fix heading levels that skip a level in the document hierarchy.",
       affectedBlockIds: headingLevelJumpIds
+    })
+  }
+
+  const healthFieldIds = blocks
+    .filter(
+      (block) =>
+        "fieldKey" in block &&
+        HEALTH_INFORMATION_PATTERN.test(`${block.label} ${block.helpText ?? ""}`)
+    )
+    .map((block) => block.id)
+
+  if (healthFieldIds.length > 0) {
+    issues.push({
+      code: "collects_health_information",
+      severity: "warning",
+      message:
+        "This form asks for health information. BizFlow is not set up for HIPAA-covered records, so check the rules that apply to you before using it.",
+      affectedBlockIds: healthFieldIds
     })
   }
 
@@ -607,8 +656,14 @@ function getVisibleBlockText(block: TemplateBlock): readonly string[] {
       return [
         block.label,
         block.helpText ?? "",
-        block.placeholder ?? ""
+        block.placeholder ?? "",
+        block.prefix ?? "",
+        block.suffix ?? ""
       ]
+    case "choice_grid_field":
+      return [block.label, block.helpText ?? "", ...block.rows, ...block.options]
+    case "table_field":
+      return [block.label, block.helpText ?? "", ...block.columns.map((column) => column.label)]
     case "dropdown_field":
       return [
         block.label,

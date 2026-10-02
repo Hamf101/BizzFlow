@@ -1,0 +1,501 @@
+{
+  "request": "staff immunisation record for a care home",
+  "title": "Staff immunisation record",
+  "description": "Use when a care home member of staff starts, and each year after, to record the vaccines that protect them and the residents: MMR, chickenpox, hepatitis B where their role needs it, flu and COVID-19.",
+  "maxPages": 2,
+  "content": {
+    "schemaVersion": 3,
+    "branding": {
+      "organizationName": "",
+      "logoAsset": null,
+      "logoDataUrl": null,
+      "logoAlignment": "left",
+      "logoWidthPercent": 24,
+      "primaryColor": "#2b2d42",
+      "accentColor": "#8d5a97"
+    },
+    "blocks": [
+      {
+        "id": "0b120000-0000-4000-8000-000000000001",
+        "type": "heading",
+        "text": "Staff immunisation record",
+        "level": 1,
+        "alignment": "left"
+      },
+      {
+        "id": "0b120000-0000-4000-8000-000000000002",
+        "type": "paragraph",
+        "text": "Vaccines protect you, the residents you care for and your colleagues. This record shows which vaccines you have had, so that we can offer you any you are missing. Having a vaccine is your choice.",
+        "alignment": "left"
+      },
+      {
+        "id": "0b120000-0000-4000-8000-000000000003",
+        "type": "paragraph",
+        "text": "How we use your information: we use this record to offer you vaccines and to plan staffing during outbreaks. Only the manager and the person who keeps staff health records can see it. It is kept separately from your personnel file for as long as you work here, and we share it with an occupational health service only with your agreement.",
+        "runs": [
+          {
+            "text": "How we use your information:",
+            "bold": true
+          },
+          {
+            "text": " we use this record to offer you vaccines and to plan staffing during outbreaks. Only the manager and the person who keeps staff health records can see it. It is kept separately from your personnel file for as long as you work here, and we share it with an occupational health service only with your agreement."
+          }
+        ],
+        "alignment": "left"
+      },
+      {
+        "id": "0b120000-0000-4000-8000-000000000005",
+        "type": "text_field",
+        "fieldKey": "full_name",
+        "label": "Full name",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0b120000-0000-4000-8000-000000000006",
+        "type": "text_field",
+        "fieldKey": "position",
+        "label": "Position",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0b120000-0000-4000-8000-000000000008",
+        "type": "date_field",
+        "fieldKey": "date_you_started_here",
+        "label": "Date you started here",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": "/",
+          "month": "number"
+        }
+      },
+      {
+        "id": "0b120000-0000-4000-8000-000000000009",
+        "type": "text_field",
+        "fieldKey": "gp_practice",
+        "label": "GP practice",
+        "required": false,
+        "helpText": "Where your vaccinations are recorded.",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0b120000-0000-4000-8000-000000000011",
+        "type": "dropdown_field",
+        "fieldKey": "does_your_role_involve_personal_care_of_residents",
+        "label": "Does your role involve personal care of residents?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0b120000-0000-4000-8000-000000000012",
+        "type": "file_field",
+        "fieldKey": "copy_of_your_vaccination_record_if_you_have_one",
+        "label": "Copy of your vaccination record, if you have one",
+        "required": false,
+        "helpText": "For example, a page from your red book, a GP printout or a record from a previous employer."
+      },
+      {
+        "id": "0b120000-0000-4000-8000-000000000014",
+        "type": "paragraph",
+        "text": "Two doses of MMR give lasting protection. If you are not sure you have had two, it is safe to have them again.",
+        "alignment": "left"
+      },
+      {
+        "id": "0b120000-0000-4000-8000-000000000060",
+        "type": "table_field",
+        "fieldKey": "mmr_doses",
+        "label": "Doses given",
+        "required": false,
+        "helpText": null,
+        "columns": [
+          {
+            "label": "Date given",
+            "format": "date"
+          },
+          {
+            "label": "Batch number"
+          }
+        ],
+        "rows": 2
+      },
+      {
+        "id": "0b120000-0000-4000-8000-000000000022",
+        "type": "dropdown_field",
+        "fieldKey": "have_you_had_chickenpox_or_shingles",
+        "label": "Have you had chickenpox or shingles?",
+        "required": true,
+        "helpText": "If you are not sure, a blood test can show whether you are protected.",
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No",
+          "Not sure"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0b120000-0000-4000-8000-000000000061",
+        "type": "table_field",
+        "fieldKey": "varicella_doses",
+        "label": "Doses given",
+        "required": false,
+        "helpText": null,
+        "columns": [
+          {
+            "label": "Date given",
+            "format": "date"
+          },
+          {
+            "label": "Batch number"
+          }
+        ],
+        "rows": 2,
+        "visibleWhen": {
+          "sourceBlockId": "0b120000-0000-4000-8000-000000000022",
+          "operator": "equals",
+          "value": "No"
+        }
+      },
+      {
+        "id": "0b120000-0000-4000-8000-000000000030",
+        "type": "dropdown_field",
+        "fieldKey": "could_your_work_bring_you_into_contact_with_blood_or_body_fl",
+        "label": "Could your work bring you into contact with blood or body fluids, for example from a needle or a bite?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0b120000-0000-4000-8000-000000000062",
+        "type": "table_field",
+        "fieldKey": "hepatitis_b_doses",
+        "label": "Doses given",
+        "required": false,
+        "helpText": null,
+        "columns": [
+          {
+            "label": "Date given",
+            "format": "date"
+          },
+          {
+            "label": "Batch number"
+          }
+        ],
+        "rows": 3,
+        "visibleWhen": {
+          "sourceBlockId": "0b120000-0000-4000-8000-000000000030",
+          "operator": "equals",
+          "value": "Yes"
+        }
+      },
+      {
+        "id": "0b120000-0000-4000-8000-000000000040",
+        "type": "dropdown_field",
+        "fieldKey": "hepatitis_b_antibody_result",
+        "label": "Result of the blood test after the course",
+        "required": false,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0b120000-0000-4000-8000-000000000030",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "placeholder": null,
+        "options": [
+          "Protected",
+          "Not protected",
+          "Not tested"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0b120000-0000-4000-8000-000000000041",
+        "type": "date_field",
+        "fieldKey": "hepatitis_b_antibody_date",
+        "label": "Date of the blood test",
+        "required": false,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0b120000-0000-4000-8000-000000000030",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "dateFormat": {
+          "order": "dmy",
+          "separator": "/",
+          "month": "number"
+        }
+      },
+      {
+        "id": "0b120000-0000-4000-8000-000000000043",
+        "type": "paragraph",
+        "text": "Care home staff are offered a flu vaccine each autumn, and a COVID-19 vaccine when the national programme includes them. Record the most recent dose of each.",
+        "alignment": "left"
+      },
+      {
+        "id": "0b120000-0000-4000-8000-000000000044",
+        "type": "date_field",
+        "fieldKey": "flu_date",
+        "label": "Date given",
+        "required": false,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": "/",
+          "month": "number"
+        }
+      },
+      {
+        "id": "0b120000-0000-4000-8000-000000000045",
+        "type": "text_field",
+        "fieldKey": "flu_season",
+        "label": "Season",
+        "required": false,
+        "helpText": "For example, winter 2026 to 2027.",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0b120000-0000-4000-8000-000000000047",
+        "type": "date_field",
+        "fieldKey": "covid_19_date",
+        "label": "Date given",
+        "required": false,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": "/",
+          "month": "number"
+        }
+      },
+      {
+        "id": "0b120000-0000-4000-8000-000000000048",
+        "type": "text_field",
+        "fieldKey": "covid_19_season",
+        "label": "Season",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0b120000-0000-4000-8000-000000000050",
+        "type": "checkbox_field",
+        "fieldKey": "i_have_been_offered_this_season_s_vaccines_and_have_chosen_n",
+        "label": "I have been offered this season's vaccines and have chosen not to have one or more of them.",
+        "required": false,
+        "helpText": null,
+        "checkedByDefault": false
+      },
+      {
+        "id": "0b120000-0000-4000-8000-000000000052",
+        "type": "paragraph",
+        "text": "I confirm that this record is correct as far as I know. I will tell the manager when I have another vaccine.",
+        "alignment": "left"
+      },
+      {
+        "id": "0b120000-0000-4000-8000-000000000053",
+        "type": "checkbox_field",
+        "fieldKey": "i_agree_that_this_record_may_be_shared_with_the_occupational",
+        "label": "I agree that this record may be shared with the occupational health service that advises the home. I can withdraw my agreement at any time.",
+        "required": false,
+        "helpText": null,
+        "checkedByDefault": false
+      },
+      {
+        "id": "0b120000-0000-4000-8000-000000000054",
+        "type": "signature_field",
+        "fieldKey": "signature",
+        "label": "Signature",
+        "required": true,
+        "helpText": null,
+        "boxHeight": 40
+      },
+      {
+        "id": "0b120000-0000-4000-8000-000000000055",
+        "type": "date_field",
+        "fieldKey": "signed_date",
+        "label": "Date",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": "/",
+          "month": "number"
+        }
+      },
+      {
+        "id": "0b120000-0000-4000-8000-000000000057",
+        "type": "text_field",
+        "fieldKey": "checked_by_name",
+        "label": "Name",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0b120000-0000-4000-8000-000000000058",
+        "type": "date_field",
+        "fieldKey": "checked_date",
+        "label": "Date",
+        "required": false,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": "/",
+          "month": "number"
+        }
+      }
+    ],
+    "layout": {
+      "pageSize": "A4",
+      "orientation": "portrait",
+      "marginPreset": "compact",
+      "density": "compact",
+      "fieldStyle": "box",
+      "lineSpacing": 1.3,
+      "paragraphSpacing": 4,
+      "sectionStyle": "plain",
+      "printedTitle": {
+        "mode": "none"
+      },
+      "headerPolicy": "none",
+      "footerPolicy": "all_pages",
+      "pageNumbering": "none",
+      "footerText": {
+        "left": "{title}",
+        "right": "Page {page} of {pages}"
+      }
+    },
+    "sections": [
+      {
+        "id": "0b120000-0000-4000-8000-000000000004",
+        "label": "About you",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0b120000-0000-4000-8000-000000000005"
+      },
+      {
+        "id": "0b120000-0000-4000-8000-000000000013",
+        "label": "Measles, mumps and rubella (MMR)",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0b120000-0000-4000-8000-000000000014"
+      },
+      {
+        "id": "0b120000-0000-4000-8000-000000000021",
+        "label": "Chickenpox (varicella)",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0b120000-0000-4000-8000-000000000022"
+      },
+      {
+        "id": "0b120000-0000-4000-8000-000000000029",
+        "label": "Hepatitis B",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0b120000-0000-4000-8000-000000000030"
+      },
+      {
+        "id": "0b120000-0000-4000-8000-000000000042",
+        "label": "Seasonal vaccines",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0b120000-0000-4000-8000-000000000043"
+      },
+      {
+        "id": "0b120000-0000-4000-8000-000000000051",
+        "label": "Your agreement",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0b120000-0000-4000-8000-000000000052"
+      }
+    ],
+    "fieldGroups": [
+      {
+        "id": "0b120000-0000-4000-8000-000000000007",
+        "label": null,
+        "startBlockId": "0b120000-0000-4000-8000-000000000005",
+        "endBlockId": "0b120000-0000-4000-8000-000000000006",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0b120000-0000-4000-8000-000000000010",
+        "label": null,
+        "startBlockId": "0b120000-0000-4000-8000-000000000008",
+        "endBlockId": "0b120000-0000-4000-8000-000000000009",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0b120000-0000-4000-8000-000000000046",
+        "label": "Flu",
+        "startBlockId": "0b120000-0000-4000-8000-000000000044",
+        "endBlockId": "0b120000-0000-4000-8000-000000000045",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0b120000-0000-4000-8000-000000000049",
+        "label": "COVID-19",
+        "startBlockId": "0b120000-0000-4000-8000-000000000047",
+        "endBlockId": "0b120000-0000-4000-8000-000000000048",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0b120000-0000-4000-8000-000000000056",
+        "label": null,
+        "startBlockId": "0b120000-0000-4000-8000-000000000054",
+        "endBlockId": "0b120000-0000-4000-8000-000000000055",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0b120000-0000-4000-8000-000000000059",
+        "label": "Checked by",
+        "startBlockId": "0b120000-0000-4000-8000-000000000057",
+        "endBlockId": "0b120000-0000-4000-8000-000000000058",
+        "columns": 2,
+        "keepTogether": false
+      }
+    ],
+    "blockRules": [
+      {
+        "blockId": "0b120000-0000-4000-8000-000000000043",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "0b120000-0000-4000-8000-000000000052",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      }
+    ]
+  }
+}

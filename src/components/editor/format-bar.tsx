@@ -21,6 +21,7 @@ import {
   Plus,
   RemoveFormatting,
   Strikethrough,
+  Section,
   Table,
   TextCursorInput,
   Underline,
@@ -29,7 +30,7 @@ import { type FormEvent, type ReactElement, type ReactNode, useEffect, useState 
 
 import { findInsertChoices, INSERT_CHOICES, type InsertChoice } from "@/components/editor/block-catalog"
 import { isLine, isList } from "@/components/editor/editor-block"
-import { convertTextBlock, liftListItem, type TextBlockKind } from "@/components/editor/editor-content"
+import { convertTextBlock, liftListItem, sectionOfTitle, type TextBlockKind } from "@/components/editor/editor-content"
 import { FontPicker } from "@/components/editor/font-picker"
 import type { EditorController } from "@/components/editor/use-editor-controller"
 import { Button } from "@/components/ui/button"
@@ -128,6 +129,7 @@ export function FormatBar({
   const [linkOpen, setLinkOpen] = useState(false)
   const content = controller.content
   const block = content.blocks.find((candidate) => candidate.id === controller.activeBlockId)
+  const sectionId = sectionOfTitle(controller.activeBlockId)
   const textBlock = isLine(block) || isList(block) ? block : undefined
   // A list's line is keyed by its item, `block:item`.
   const item = Number(line?.view.dom.dataset.caretKey?.split(":")[1] ?? 0)
@@ -163,6 +165,7 @@ export function FormatBar({
   }
 
   function setStyle(kind: LineKind): void {
+    if (sectionId) { controller.turnSectionInto(sectionId, kind); return }
     if (!textBlock) {
       return
     }
@@ -289,6 +292,7 @@ export function FormatBar({
             <Minus />
             Horizontal line
           </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => add("section")}><Section />Section</DropdownMenuItem>
           <DropdownMenuItem onClick={() => add("page")}>
             <FilePlus2 />
             Page break
@@ -298,7 +302,7 @@ export function FormatBar({
       <Divider />
       <DropdownMenu>
         <DropdownMenuTrigger
-          disabled={!textBlock}
+          disabled={!textBlock && !sectionId}
           render={
             <Button
               aria-label="Text style"
@@ -307,12 +311,13 @@ export function FormatBar({
               type="button"
               variant="ghost"
             >
-              {isList(block) ? "Normal text" : (style?.[0] ?? "Normal text")}
+              {sectionId ? "Section" : isList(block) ? "Normal text" : (style?.[0] ?? "Normal text")}
               <ChevronDown aria-hidden="true" className="size-3.5 text-muted-foreground" />
             </Button>
           }
         />
         <DropdownMenuContent className="w-44" side={narrow ? "top" : "bottom"}>
+          <DropdownMenuItem disabled={!isLine(block) || block.text.trim().length > 160 || content.sections.some((section) => section.startBlockId === block?.id)} onClick={() => block && controller.turnIntoSection(block.id)}><Section />Section</DropdownMenuItem>
           {STYLES.map(([label, kind]) => (
             <DropdownMenuItem key={label} onClick={() => setStyle(kind)}>
               <span style={kind.type === "heading" ? { fontSize: `${[1.35, 1.2, 1.05][kind.level - 1]}em`, fontWeight: 600 } : undefined}>

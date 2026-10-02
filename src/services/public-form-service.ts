@@ -22,7 +22,9 @@ import type {
   TemplateContent,
 } from "@/types/template"
 import { parseTemplateContent } from "@/types/template"
+import { isStructuredAnswerBlock } from "@/types/template-answer"
 import { isTemplateBlockVisible } from "@/types/template-visibility"
+import { mapDocumentTemplate } from "@/services/templates/shared"
 
 /**
  * Retention marker written when a public upload is allocated.
@@ -381,9 +383,10 @@ export async function getPublicFormLinkByToken(
     return invalid("max_submissions_reached", link)
   }
 
+  // A public form serves what was published, not the working copy.
   const [templateRes, orgRes] = await Promise.all([
     client
-      .from("document_templates")
+      .from("published_document_templates")
       .select("*")
       .eq("id", link.templateId)
       .eq("org_id", link.organizationId)
@@ -399,25 +402,7 @@ export async function getPublicFormLinkByToken(
     return invalid("not_found", link)
   }
 
-  const rawTemplate = templateRes.data as DocumentTemplateRow
-  const template: DocumentTemplate = {
-    id: rawTemplate.id,
-    organizationId: rawTemplate.org_id,
-    title: rawTemplate.title,
-    description: rawTemplate.description,
-    category: rawTemplate.category ?? null,
-    status: rawTemplate.status,
-    revision: rawTemplate.revision,
-    content: parseTemplateContent(rawTemplate.content),
-    createdBy: rawTemplate.created_by,
-    updatedBy: rawTemplate.updated_by,
-    publishedBy: rawTemplate.published_by,
-    archivedBy: rawTemplate.archived_by,
-    createdAt: rawTemplate.created_at,
-    updatedAt: rawTemplate.updated_at,
-    publishedAt: rawTemplate.published_at,
-    archivedAt: rawTemplate.archived_at,
-  }
+  const template = mapDocumentTemplate(templateRes.data as DocumentTemplateRow)
 
   return {
     valid: true,
@@ -973,6 +958,7 @@ export async function supersedePublicFormFile(
  * Browsers post a checkbox as a string when ticked and omit it entirely when
  * not, so every declared checkbox is resolved to a boolean here. File fields
  * are dropped because their completion is proven by verified storage rows.
+ * Structured answers are parsed from JSON text and checked by the validator.
  */
 function coercePublicFormValues(
   snapshot: TemplateContent,
@@ -993,6 +979,23 @@ function coercePublicFormValues(
 
     if (block.type === "file_field") {
       delete coerced[block.fieldKey]
+      continue
+    }
+
+    // Several choices, a grid or a table arrive as one JSON string; blank is unanswered.
+    const raw = values[block.fieldKey]
+
+    if (isStructuredAnswerBlock(block) && typeof raw === "string") {
+      if (raw.trim() === "") {
+        delete coerced[block.fieldKey]
+        continue
+      }
+
+      try {
+        coerced[block.fieldKey] = JSON.parse(raw) as unknown
+      } catch {
+        // Left as text, which the validator refuses for this kind with a 400.
+      }
     }
   }
 

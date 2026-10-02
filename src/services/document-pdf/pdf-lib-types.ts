@@ -17,6 +17,8 @@ export type PdfLibRenderContext = {
    */
   faceFor: (bold: boolean, italic: boolean, font?: string, character?: string) => Promise<PDFFont>
   /** Pictures placed on a page rather than in the flow, printed over it. */
+  /** The whole regular face, for a fillable PDF's form fields; absent in a PDF to print. */
+  formFont?: PDFFont
   freeImages: Array<Extract<TemplateBlock, { type: "image" }>>
   hasSigners: boolean
   imageCache: Map<string, PDFImage>

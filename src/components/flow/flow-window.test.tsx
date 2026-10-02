@@ -134,7 +134,7 @@ it("rests as a swarm of dots that never stop orbiting, each at its own pace, and
     configurable: true,
     value(_: Keyframe[], timing?: KeyframeAnimationOptions) {
       orbits.push(timing)
-      return { cancel() {}, effect: { getComputedTiming: () => ({ progress: 0 }) }, updatePlaybackRate() {} }
+      return { cancel() {}, effect: { getComputedTiming: () => ({ progress: 0 }) }, pause() {}, play() {}, updatePlaybackRate() {} }
     },
   })
   await render()

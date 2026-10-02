@@ -5,9 +5,11 @@ import {
   type SubmissionAnswerValue
 } from "@/types/submission"
 import type { TemplateBlock, TemplateContent } from "@/types/template"
+import {
+  isTemplateAnswerComplete,
+  normalizeTemplateAnswer
+} from "@/types/template-answer"
 import { getVisibleTemplateBlocks } from "@/types/template-visibility"
-
-const MAX_TEXT_ANSWER_LENGTH = 20_000
 
 type SubmissionFieldBlock = Extract<TemplateBlock, { fieldKey: string }>
 
@@ -89,7 +91,7 @@ export async function validateSubmissionForSubmit(
     const isComplete =
       field.type === "file_field"
         ? availableFileFieldKeys.has(field.fieldKey)
-        : isRequiredAnswerComplete(field, normalizedAnswers[field.fieldKey])
+        : isTemplateAnswerComplete(field, normalizedAnswers[field.fieldKey])
 
     if (!isComplete) {
       throw new SubmissionDomainError(
@@ -149,12 +151,8 @@ async function normalizeFieldAnswer(
     throw invalidAnswers(`${field.label} must be uploaded as a file.`)
   }
 
-  if (field.type === "checkbox_field") {
-    if (typeof value !== "boolean") {
-      throw invalidAnswers(`${field.label} must be checked or unchecked.`)
-    }
-
-    return value
+  if (field.type !== "signature_field" && field.type !== "initials_field") {
+    return normalizeTemplateAnswer(field, value, invalidAnswers)
   }
 
   if (typeof value !== "string") {
@@ -163,41 +161,16 @@ async function normalizeFieldAnswer(
 
   const normalizedValue = value.trim()
 
-  if (field.type === "signature_field" || field.type === "initials_field") {
-    if (normalizedValue.length === 0) {
-      return ""
-    }
-
-    try {
-      const drawing = await normalizeOptionalDrawing(
-        normalizedValue,
-        field.label
-      )
-      return drawing?.dataUrl ?? ""
-    } catch {
-      throw invalidAnswers(`The drawn ${field.label.toLowerCase()} is invalid.`)
-    }
+  if (normalizedValue.length === 0) {
+    return ""
   }
 
-  if (normalizedValue.length > MAX_TEXT_ANSWER_LENGTH) {
-    throw invalidAnswers(`${field.label} is too long.`)
+  try {
+    const drawing = await normalizeOptionalDrawing(normalizedValue, field.label)
+    return drawing?.dataUrl ?? ""
+  } catch {
+    throw invalidAnswers(`The drawn ${field.label.toLowerCase()} is invalid.`)
   }
-
-  if (field.type === "date_field" && normalizedValue.length > 0) {
-    assertValidDateAnswer(field.label, normalizedValue)
-  }
-
-  if (
-    field.type === "dropdown_field" &&
-    normalizedValue.length > 0 &&
-    !field.options.includes(normalizedValue)
-  ) {
-    throw invalidAnswers(
-      `${field.label} must use one of the available options.`
-    )
-  }
-
-  return normalizedValue
 }
 
 function assertAvailableFileFieldKeys(
@@ -213,32 +186,6 @@ function assertAvailableFileFieldKeys(
       )
     }
   }
-}
-
-function assertValidDateAnswer(label: string, value: string): void {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    throw invalidAnswers(`${label} must use YYYY-MM-DD format.`)
-  }
-
-  const parsedDate = new Date(`${value}T00:00:00.000Z`)
-
-  if (
-    Number.isNaN(parsedDate.getTime()) ||
-    parsedDate.toISOString().slice(0, 10) !== value
-  ) {
-    throw invalidAnswers(`${label} must be a valid date.`)
-  }
-}
-
-function isRequiredAnswerComplete(
-  field: Exclude<SubmissionFieldBlock, { type: "file_field" }>,
-  value: SubmissionAnswerValue | undefined
-): boolean {
-  if (field.type === "checkbox_field") {
-    return value === true
-  }
-
-  return typeof value === "string" && value.length > 0
 }
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {

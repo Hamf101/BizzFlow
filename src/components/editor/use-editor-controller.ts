@@ -9,25 +9,44 @@ import {
   convertTextBlock,
   hasPageBreak,
   insertPageAfter,
+  insertSectionAfter,
   removePageBreak,
+  sectionOfTitle,
+  sectionTitleKey,
   type TextBlockKind,
+  turnLineIntoSection,
+  turnSectionIntoLine,
 } from "@/components/editor/editor-content"
 import { createTemplateBlock } from "@/components/templates/template-editor-state"
 import { bizflowToast } from "@/components/ui/toaster"
 import {
+  type BlockFrame,
   MAX_TEMPLATE_BLOCK_COUNT,
   type TemplateBlock,
   type TemplateContentV3,
   type TemplateLayout,
+  type TemplateSection,
 } from "@/types/template"
 import {
   deleteTemplateBlock,
   duplicateTemplateBlock,
   evaluateTemplateBlockDeletion,
-  evaluateTemplateBlockMove,
   insertTemplateBlock,
-  moveTemplateBlock,
+  getTemplateSectionForBlock,
+  moveTemplateBlockTo,
+  moveTemplateSection,
+  removeTemplateSection,
+  placeBeside as placeBlockBeside,
+  setBlockKeepWithNext,
+  setBlockRule,
+  setRowWidths as setTemplateRowWidths,
+  standAlone as standBlockAlone,
+  stepTemplateBlockSlot,
+  type TemplateBlockSlot,
+  type TemplateMoveResult,
   updateTemplateBlock,
+  updateTemplateFieldGroup,
+  updateTemplateSection,
 } from "@/types/template-structure"
 
 /** A caret the canvas should place, with a nonce so the same spot can be asked for twice. */
@@ -37,7 +56,7 @@ export type FocusRequest = CaretTarget & Readonly<{ nonce: number }>
 export type EditorController = ReturnType<typeof useEditorController>
 
 // Blocks that cannot be used until they are set up open their settings at once.
-const NEEDS_SETUP: ReadonlySet<TemplateBlock["type"]> = new Set(["dropdown_field", "image"])
+const NEEDS_SETUP: ReadonlySet<TemplateBlock["type"]> = new Set(["choice_grid_field", "dropdown_field", "image", "table_field"])
 
 /**
  * Turns choices into content changes and keeps what is selected, where the
@@ -63,6 +82,8 @@ export function useEditorController({
   const [settingsBlockId, setSettingsBlockId] = useState<string | null>(null)
   // The line the caret was last in: what the toolbar formats.
   const [line, setLine] = useState<Editor | null>(null)
+  // What a screen reader says after a move.
+  const [announcement, setAnnouncement] = useState("")
 
   function requestFocus(target: CaretTarget): void {
     setSelectedBlockId(null)
@@ -87,7 +108,7 @@ export function useEditorController({
       return true
     }
 
-    bizflowToast.info(`A page can hold up to ${MAX_TEMPLATE_BLOCK_COUNT} blocks.`)
+    bizflowToast.info(`A document can hold up to ${MAX_TEMPLATE_BLOCK_COUNT.toLocaleString("en")} blocks.`)
     return false
   }
 
@@ -106,10 +127,32 @@ export function useEditorController({
     } = {}
   ): void {
     const replaceBlockId = options.replaceBlockId
+    // With the caret in a section's title, what is added goes just under it.
+    const titled = content.sections.find((section) => section.id === sectionOfTitle(activeBlockId))
+    const titledIndex = content.blocks.findIndex((block) => block.id === titled?.startBlockId)
     const afterBlockId =
       options.afterBlockId !== undefined
         ? options.afterBlockId
-        : (activeBlockId ?? content.blocks.at(-1)?.id ?? null)
+        : titled
+          ? (content.blocks[titledIndex - 1]?.id ?? null)
+          : (activeBlockId ?? content.blocks.at(-1)?.id ?? null)
+    const underTitle = (current: TemplateContentV3, blockId: string): TemplateContentV3 =>
+      titled && options.afterBlockId === undefined
+        ? { ...current, sections: current.sections.map((section) => (section.id === titled.id ? { ...section, startBlockId: blockId } : section)) }
+        : current
+
+    if (choice.action.kind === "section") {
+      if (!replaceBlockId && !hasRoom()) return
+      const sectionId = crypto.randomUUID()
+
+      change((current) =>
+        replaceBlockId
+          ? turnLineIntoSection(current, replaceBlockId, sectionId).content
+          : insertSectionAfter(current, afterBlockId, sectionId, crypto.randomUUID()).content
+      )
+      requestFocus({ blockId: sectionTitleKey(sectionId), offset: 0 })
+      return
+    }
 
     if (choice.action.kind === "page") {
       if (replaceBlockId) {
@@ -137,7 +180,7 @@ export function useEditorController({
       }
 
       const block = createTextBlock(crypto.randomUUID(), choice.action.value)
-      change((current) => insertTemplateBlock(current, afterBlockId, block))
+      change((current) => underTitle(insertTemplateBlock(current, afterBlockId, block), block.id))
       requestFocus({ blockId: block.id, item: "items" in block ? 0 : undefined, offset: 0 })
       return
     }
@@ -150,7 +193,9 @@ export function useEditorController({
     const size = options.table
     // A table picked from the size grid has that many columns, and rows counting its heading row.
     const block: TemplateBlock =
-      created.type === "table" && size
+      created.type === "dropdown_field" && choice.action.several
+        ? { ...created, label: "Choose all that apply", multiple: true, placeholder: null }
+        : created.type === "table" && size
         ? {
             ...created,
             headers: Array.from({ length: size.columns }, (_, index) => `Column ${index + 1}`),
@@ -160,7 +205,7 @@ export function useEditorController({
 
     change((current) => {
       if (!replaceBlockId) {
-        return insertTemplateBlock(current, afterBlockId, block)
+        return underTitle(insertTemplateBlock(current, afterBlockId, block), block.id)
       }
 
       // The empty line gives way to the block, which keeps any page break.
@@ -210,15 +255,116 @@ export function useEditorController({
     select(id)
   }
 
-  function move(blockId: string, direction: "up" | "down"): void {
-    const evaluation = evaluateTemplateBlockMove(content.blocks, blockId, direction)
+  /**
+   * Moves a block to a place, leaving everything else where it is, and says
+   * where it went; a move that would put a conditional field above the field
+   * it depends on is refused with the reason.
+   *
+   * @param blockId - The block.
+   * @param slot - Where to.
+   * @returns Whether it moved.
+   */
+  function moveTo(blockId: string, slot: TemplateBlockSlot): boolean {
+    const result = moveTemplateBlockTo(content, blockId, slot, crypto.randomUUID())
 
-    if (!evaluation.success) {
-      bizflowToast.error(evaluation.message)
-      return
+    if (!applyMove(result) || !result.success) {
+      return false
     }
 
-    change((current) => moveTemplateBlock(current, blockId, direction))
+    setAnnouncement(describeMove(result.content, blockId))
+    return true
+  }
+
+  /**
+   * Puts a block beside another, joining or starting a row, and says where
+   * it went; a place it may not go is refused with the reason.
+   *
+   * @param blockId - The block.
+   * @param targetId - The block it goes beside.
+   * @param side - Which side of it.
+   * @returns Whether it moved.
+   */
+  function placeBeside(blockId: string, targetId: string, side: "left" | "right"): boolean {
+    const result = placeBlockBeside(content, blockId, targetId, side, () => crypto.randomUUID())
+    // In a row the block takes its column, with none of the space or spot it had alone.
+    const placed = result.success ? { ...result, content: setBlockRule(result.content, blockId, { frame: undefined, spaceAbove: undefined }) } : result
+
+    if (!applyMove(placed) || !placed.success) {
+      return false
+    }
+
+    setAnnouncement(describeMove(placed.content, blockId))
+    return true
+  }
+
+  /**
+   * Puts a block where it was let go: at a place in the text, the space above
+   * it and where it sits across the page.
+   *
+   * @param blockId - The block.
+   * @param slot - Its place in the text, or null to keep the one it has.
+   * @param layout - The space above it in points, and its spot across the page, or null for the whole width.
+   * @returns Whether anything changed.
+   */
+  function placeAt(blockId: string, slot: TemplateBlockSlot | null, layout: Readonly<{ frame: BlockFrame | null; spaceAbove: number }>): boolean {
+    const moved = slot ? moveTemplateBlockTo(content, blockId, slot, crypto.randomUUID()) : ({ content, success: true } as const)
+    const placed = moved.success
+      ? { ...moved, content: setBlockRule(moved.content, blockId, { frame: layout.frame ?? undefined, spaceAbove: layout.spaceAbove || undefined }) }
+      : moved
+
+    if (!applyMove(placed) || !placed.success) {
+      return false
+    }
+
+    setAnnouncement(describeMove(placed.content, blockId))
+    return true
+  }
+
+  // Takes a block out of its row onto a line of its own below it.
+  function standAlone(blockId: string): void {
+    const result = standBlockAlone(content, blockId, () => crypto.randomUUID())
+
+    if (applyMove(result) && result.success) {
+      setAnnouncement(describeMove(result.content, blockId))
+    }
+  }
+
+  // One step up or down: past a row as one piece, and past a section's title.
+  function move(blockId: string, direction: "up" | "down"): void {
+    const slot = stepTemplateBlockSlot(content, blockId, direction)
+
+    if (slot) {
+      moveTo(blockId, slot)
+    }
+  }
+
+  /**
+   * Moves a section, with all it holds, above or below its neighbour.
+   *
+   * @param sectionId - The section.
+   * @param direction - Which way.
+   */
+  function moveSection(sectionId: string, direction: "up" | "down"): void {
+    const label = content.sections.find((section) => section.id === sectionId)?.label ?? "Section"
+
+    if (applyMove(moveTemplateSection(content, sectionId, direction))) {
+      setAnnouncement(`${label} moved ${direction}.`)
+    }
+  }
+
+  function applyMove(result: TemplateMoveResult): boolean {
+    if (!result.success) {
+      bizflowToast.error(result.message)
+      return false
+    }
+
+    // A section a move empties keeps a line, which a full page has no room for.
+    if (result.content === content || (result.content.blocks.length > content.blocks.length && !hasRoom())) {
+      return false
+    }
+
+    change(() => result.content)
+    return true
   }
 
   function remove(blockId: string): void {
@@ -246,6 +392,63 @@ export function useEditorController({
     change((current) => updateTemplateBlock(current, block), coalesceKey)
   }
 
+  /**
+   * Changes a section's title or page rules; typing the title makes one undo step.
+   *
+   * @param sectionId - The section.
+   * @param patch - Its new title or rules.
+   * @param coalesceKey - Joins a run of keystrokes into one undo step.
+   */
+  function updateSection(
+    sectionId: string,
+    patch: Partial<Pick<TemplateSection, "keepTogether" | "label" | "pageBreakBefore">>,
+    coalesceKey?: string
+  ): void {
+    change((current) => updateTemplateSection(current, sectionId, patch), coalesceKey)
+  }
+
+  /**
+   * Takes a section's title and boundary away, keeping what it held, and puts
+   * the caret at the start of its first line.
+   *
+   * @param sectionId - The section.
+   */
+  function removeSection(sectionId: string): void {
+    const start = content.blocks.find((block) => block.id === content.sections.find((section) => section.id === sectionId)?.startBlockId)
+
+    change((current) => removeTemplateSection(current, sectionId))
+
+    if (start && (start.type === "paragraph" || start.type === "heading")) {
+      requestFocus({ blockId: start.id, offset: 0 })
+    }
+  }
+
+  /**
+   * Turns a line into the title of a section holding what follows it.
+   *
+   * @param blockId - The line.
+   */
+  function turnIntoSection(blockId: string): void {
+    const sectionId = crypto.randomUUID()
+    const result = turnLineIntoSection(content, blockId, sectionId)
+    change(() => result.content)
+    requestFocus(result.focus)
+  }
+
+  /**
+   * Turns a section's title back into a line where it stands.
+   *
+   * @param sectionId - The section.
+   * @param kind - The kind of line the title becomes.
+   */
+  function turnSectionInto(sectionId: string, kind: TextBlockKind): void {
+    const id = crypto.randomUUID()
+    const label = content.sections.find((section) => section.id === sectionId)?.label ?? ""
+
+    change((current) => turnSectionIntoLine(current, sectionId, kind, id).content)
+    requestFocus({ blockId: id, offset: label.length })
+  }
+
   // A drag or a run of keystrokes on one setting makes one undo step.
   function setLayout(layout: TemplateLayout, coalesceKey?: string): void {
     change((current) => ({ ...current, layout }), coalesceKey)
@@ -254,7 +457,12 @@ export function useEditorController({
   return {
     activeBlockId,
     addPage,
+    announcement,
+    /** Whether a block has somewhere to go, one step up or down. */
+    canMove: (blockId: string, direction: "up" | "down") => stepTemplateBlockSlot(content, blockId, direction) !== null,
     change,
+    /** The section the caret is in, or its title's section, or null before any. */
+    currentSectionId: sectionOfTitle(activeBlockId) ?? (activeBlockId ? getTemplateSectionForBlock(content, activeBlockId)?.id ?? null : null),
     closeSettings: () => setSettingsBlockId(null),
     content,
     duplicate,
@@ -262,16 +470,32 @@ export function useEditorController({
     insert,
     line,
     move,
+    moveSection,
+    moveTo,
+    placeAt,
+    placeBeside,
     openSettings: setSettingsBlockId,
     remove,
+    removeSection,
     requestFocus,
     select,
     selectedBlockId,
     setActiveBlockId,
+    setKeepWithNext: (blockId: string, keep: boolean) => change((current) => setBlockKeepWithNext(current, blockId, keep)),
     setLayout,
     setLine,
+    // Dragging a column's edge makes one undo step.
+    setRowWidths: (groupId: string, widths: readonly number[], coalesceKey?: string) =>
+      change((current) => setTemplateRowWidths(current, groupId, widths), coalesceKey),
     settingsBlockId,
+    standAlone,
+    turnIntoSection,
+    turnSectionInto,
     updateBlock,
+    // Typing a group's label makes one undo step.
+    updateGroup: (groupId: string, patch: Readonly<{ keepTogether?: boolean; label?: string }>, coalesceKey?: string) =>
+      change((current) => updateTemplateFieldGroup(current, groupId, patch), coalesceKey),
+    updateSection,
   }
 }
 
@@ -309,4 +533,30 @@ function createTextBlock(id: string, kind: TextBlockKind): TemplateBlock {
     default:
       return { id, items: [""], type: kind.type }
   }
+}
+
+// Where a block now is, as a screen reader should hear it.
+function describeMove(content: TemplateContentV3, blockId: string): string {
+  const index = content.blocks.findIndex((block) => block.id === blockId)
+  const block = content.blocks[index]
+  const section = getTemplateSectionForBlock(content, blockId)
+  const name =
+    block && "label" in block
+      ? block.label
+      : block && "text" in block && block.text.trim()
+        ? `“${block.text.trim().split(/\s+/).slice(0, 6).join(" ")}”`
+        : "Block"
+
+  const row = content.fieldGroups.find((group) => {
+    const start = content.blocks.findIndex((candidate) => candidate.id === group.startBlockId)
+    const end = content.blocks.findIndex((candidate) => candidate.id === group.endBlockId)
+
+    return group.columns > 1 && index >= start && index <= end
+  })
+  const rowStart = row ? content.blocks.findIndex((candidate) => candidate.id === row.startBlockId) : -1
+  const where = row
+    ? `column ${((index - rowStart) % row.columns) + 1} of ${row.columns} in a row`
+    : `${index + 1} of ${content.blocks.length}`
+
+  return `${name} moved to ${where}${section ? `, in ${section.label}` : ""}.`
 }

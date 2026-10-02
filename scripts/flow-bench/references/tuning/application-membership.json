@@ -1,0 +1,363 @@
+{
+  "request": "one page gym membership application",
+  "title": "Membership application",
+  "description": "Use when someone joins the gym: their details, the membership they chose and how they pay, a short check that exercise is safe for them, an emergency contact and their signature.",
+  "maxPages": 1,
+  "content": {
+    "schemaVersion": 3,
+    "branding": {
+      "organizationName": "",
+      "logoAsset": null,
+      "logoDataUrl": null,
+      "logoAlignment": "left",
+      "logoWidthPercent": 24,
+      "primaryColor": "#1c1c28",
+      "accentColor": "#d9480f"
+    },
+    "blocks": [
+      {
+        "id": "0a140000-0000-4000-8000-000000000001",
+        "type": "heading",
+        "text": "Membership application",
+        "level": 1,
+        "alignment": "left"
+      },
+      {
+        "id": "0a140000-0000-4000-8000-000000000002",
+        "type": "paragraph",
+        "text": "How we use your information: we use your details to run your membership, to take payments and to contact you in an emergency. We keep them while you are a member and for as long afterwards as our accounts require, and share them only with our payment provider.",
+        "runs": [
+          {
+            "text": "How we use your information:",
+            "bold": true
+          },
+          {
+            "text": " we use your details to run your membership, to take payments and to contact you in an emergency. We keep them while you are a member and for as long afterwards as our accounts require, and share them only with our payment provider."
+          }
+        ],
+        "alignment": "left"
+      },
+      {
+        "id": "0a140000-0000-4000-8000-000000000004",
+        "type": "text_field",
+        "fieldKey": "first_name",
+        "label": "First name",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0a140000-0000-4000-8000-000000000005",
+        "type": "text_field",
+        "fieldKey": "last_name",
+        "label": "Last name",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0a140000-0000-4000-8000-000000000007",
+        "type": "text_field",
+        "fieldKey": "phone_number",
+        "label": "Phone number",
+        "required": true,
+        "helpText": "We call if a class you booked is cancelled.",
+        "placeholder": null,
+        "multiline": false,
+        "format": "phone"
+      },
+      {
+        "id": "0a140000-0000-4000-8000-000000000008",
+        "type": "text_field",
+        "fieldKey": "email_address",
+        "label": "Email address",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "format": "email"
+      },
+      {
+        "id": "0a140000-0000-4000-8000-000000000010",
+        "type": "text_field",
+        "fieldKey": "address",
+        "label": "Address",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0a140000-0000-4000-8000-000000000011",
+        "type": "date_field",
+        "fieldKey": "date_of_birth",
+        "label": "Date of birth",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": "/",
+          "month": "number"
+        }
+      },
+      {
+        "id": "0a140000-0000-4000-8000-000000000014",
+        "type": "text_field",
+        "fieldKey": "membership_type",
+        "label": "Membership type",
+        "required": true,
+        "helpText": "As shown on our current price list.",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0a140000-0000-4000-8000-000000000015",
+        "type": "text_field",
+        "fieldKey": "monthly_fee",
+        "label": "Monthly fee",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "format": "money",
+        "prefix": "£"
+      },
+      {
+        "id": "0a140000-0000-4000-8000-000000000016",
+        "type": "date_field",
+        "fieldKey": "start_date",
+        "label": "Start date",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": "/",
+          "month": "number"
+        }
+      },
+      {
+        "id": "0a140000-0000-4000-8000-000000000018",
+        "type": "dropdown_field",
+        "fieldKey": "how_will_you_pay",
+        "label": "How will you pay?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Direct Debit",
+          "Card",
+          "Paid in full"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0a140000-0000-4000-8000-000000000020",
+        "type": "dropdown_field",
+        "fieldKey": "has_a_doctor_ever_told_you_to_do_only_the_physical_activity",
+        "label": "Has a doctor ever told you to do only the physical activity they recommend?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0a140000-0000-4000-8000-000000000021",
+        "type": "dropdown_field",
+        "fieldKey": "do_you_get_pain_in_your_chest_when_you_are_active_or_have_yo",
+        "label": "Do you get pain in your chest when you are active, or have you lost consciousness in the last year?",
+        "required": true,
+        "helpText": "If you answer yes to either question, please speak to your doctor before you start, and tell a member of staff.",
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0a140000-0000-4000-8000-000000000022",
+        "type": "text_field",
+        "fieldKey": "emergency_contact_name",
+        "label": "Name",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0a140000-0000-4000-8000-000000000023",
+        "type": "text_field",
+        "fieldKey": "emergency_contact_relationship",
+        "label": "Relationship to you",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0a140000-0000-4000-8000-000000000024",
+        "type": "text_field",
+        "fieldKey": "emergency_contact_phone",
+        "label": "Phone number",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "format": "phone"
+      },
+      {
+        "id": "0a140000-0000-4000-8000-000000000027",
+        "type": "paragraph",
+        "text": "I have read the membership terms, including the minimum term, how to cancel and the notice I must give. I will follow the gym rules and the instructions of staff, and tell staff if anything changes that affects whether exercise is safe for me.",
+        "alignment": "left"
+      },
+      {
+        "id": "0a140000-0000-4000-8000-000000000028",
+        "type": "checkbox_field",
+        "fieldKey": "send_me_news_and_offers_by_email_i_can_stop_these_at_any_tim",
+        "label": "Send me news and offers by email. I can stop these at any time.",
+        "required": false,
+        "helpText": null,
+        "checkedByDefault": false
+      },
+      {
+        "id": "0a140000-0000-4000-8000-000000000029",
+        "type": "signature_field",
+        "fieldKey": "signature",
+        "label": "Signature",
+        "required": true,
+        "helpText": null,
+        "boxHeight": 40
+      },
+      {
+        "id": "0a140000-0000-4000-8000-000000000030",
+        "type": "date_field",
+        "fieldKey": "signed_date",
+        "label": "Date",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": "/",
+          "month": "number"
+        }
+      }
+    ],
+    "layout": {
+      "pageSize": "A4",
+      "orientation": "portrait",
+      "marginPreset": "compact",
+      "density": "compact",
+      "fieldStyle": "box",
+      "lineSpacing": 1.3,
+      "paragraphSpacing": 4,
+      "sectionStyle": "plain",
+      "printedTitle": {
+        "mode": "none"
+      },
+      "headerPolicy": "none",
+      "footerPolicy": "none",
+      "pageNumbering": "none"
+    },
+    "sections": [
+      {
+        "id": "0a140000-0000-4000-8000-000000000003",
+        "label": "About you",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0a140000-0000-4000-8000-000000000004"
+      },
+      {
+        "id": "0a140000-0000-4000-8000-000000000013",
+        "label": "Your membership",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0a140000-0000-4000-8000-000000000014"
+      },
+      {
+        "id": "0a140000-0000-4000-8000-000000000019",
+        "label": "Before you exercise",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0a140000-0000-4000-8000-000000000020"
+      },
+      {
+        "id": "0a140000-0000-4000-8000-000000000026",
+        "label": "Your agreement",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0a140000-0000-4000-8000-000000000027"
+      }
+    ],
+    "fieldGroups": [
+      {
+        "id": "0a140000-0000-4000-8000-000000000006",
+        "label": null,
+        "startBlockId": "0a140000-0000-4000-8000-000000000004",
+        "endBlockId": "0a140000-0000-4000-8000-000000000005",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0a140000-0000-4000-8000-000000000009",
+        "label": null,
+        "startBlockId": "0a140000-0000-4000-8000-000000000007",
+        "endBlockId": "0a140000-0000-4000-8000-000000000008",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0a140000-0000-4000-8000-000000000012",
+        "label": null,
+        "startBlockId": "0a140000-0000-4000-8000-000000000010",
+        "endBlockId": "0a140000-0000-4000-8000-000000000011",
+        "columns": 2,
+        "keepTogether": false,
+        "widths": [
+          8,
+          4
+        ]
+      },
+      {
+        "id": "0a140000-0000-4000-8000-000000000017",
+        "label": null,
+        "startBlockId": "0a140000-0000-4000-8000-000000000014",
+        "endBlockId": "0a140000-0000-4000-8000-000000000016",
+        "columns": 3,
+        "keepTogether": false
+      },
+      {
+        "id": "0a140000-0000-4000-8000-000000000025",
+        "label": "Emergency contact",
+        "startBlockId": "0a140000-0000-4000-8000-000000000022",
+        "endBlockId": "0a140000-0000-4000-8000-000000000024",
+        "columns": 3,
+        "keepTogether": false
+      },
+      {
+        "id": "0a140000-0000-4000-8000-000000000031",
+        "label": null,
+        "startBlockId": "0a140000-0000-4000-8000-000000000029",
+        "endBlockId": "0a140000-0000-4000-8000-000000000030",
+        "columns": 2,
+        "keepTogether": false
+      }
+    ],
+    "blockRules": [
+      {
+        "blockId": "0a140000-0000-4000-8000-000000000027",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      }
+    ]
+  }
+}

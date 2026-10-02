@@ -1,0 +1,555 @@
+{
+  "request": "Weekly site safety inspection form for our building sites. Cover site set-up, scaffolding and work at height, excavations, housekeeping and fire, plant and PPE, then whether work can carry on safely, the actions needed, and sign-off by the inspector and the site manager.",
+  "title": "Weekly site safety inspection",
+  "description": "Use each week, and after bad weather or changes to the work, for a competent person to inspect a building site, record what needs action and hand the report to the site manager.",
+  "maxPages": 4,
+  "content": {
+    "schemaVersion": 3,
+    "branding": {
+      "organizationName": "",
+      "logoAsset": null,
+      "logoDataUrl": null,
+      "logoAlignment": "left",
+      "logoWidthPercent": 24,
+      "primaryColor": "#252329",
+      "accentColor": "#635273"
+    },
+    "blocks": [
+      {
+        "id": "d4020000-0000-4000-8000-000000000001",
+        "type": "heading",
+        "text": "Weekly site safety inspection",
+        "level": 1,
+        "alignment": "left"
+      },
+      {
+        "id": "d4020000-0000-4000-8000-000000000002",
+        "type": "paragraph",
+        "text": "Walk the whole site and answer every question. Mark anything that needs putting right as Action needed and add it to the actions in section G. Finish the report before the end of the working day and give a copy to the site manager.",
+        "alignment": "left"
+      },
+      {
+        "id": "d4020000-0000-4000-8000-000000000003",
+        "type": "text_field",
+        "fieldKey": "site_name",
+        "label": "Site name",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d4020000-0000-4000-8000-000000000005",
+        "type": "text_field",
+        "fieldKey": "job_number",
+        "label": "Job number",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d4020000-0000-4000-8000-000000000007",
+        "type": "text_field",
+        "fieldKey": "site_address",
+        "label": "Site address",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": true,
+        "boxHeight": 45
+      },
+      {
+        "id": "d4020000-0000-4000-8000-000000000008",
+        "type": "text_field",
+        "fieldKey": "inspection_carried_out_for",
+        "label": "Inspection carried out for",
+        "required": true,
+        "helpText": "The client or principal contractor the inspection is for.",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d4020000-0000-4000-8000-000000000009",
+        "type": "date_field",
+        "fieldKey": "date_of_inspection",
+        "label": "Date of inspection",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": "/",
+          "month": "number"
+        }
+      },
+      {
+        "id": "d4020000-0000-4000-8000-000000000010",
+        "type": "text_field",
+        "fieldKey": "time_of_inspection",
+        "label": "Time of inspection",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "format": "time"
+      },
+      {
+        "id": "d4020000-0000-4000-8000-000000000012",
+        "type": "text_field",
+        "fieldKey": "inspector_name",
+        "label": "Inspector name",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d4020000-0000-4000-8000-000000000013",
+        "type": "text_field",
+        "fieldKey": "inspector_position",
+        "label": "Inspector position",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d4020000-0000-4000-8000-000000000015",
+        "type": "dropdown_field",
+        "fieldKey": "why_is_this_inspection_being_done",
+        "label": "Why is this inspection being done?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Routine weekly inspection",
+          "Before first use",
+          "After bad weather",
+          "After alteration or damage",
+          "Other"
+        ],
+        "display": "radios"
+      },
+      {
+        "id": "d4020000-0000-4000-8000-000000000016",
+        "type": "text_field",
+        "fieldKey": "what_other_reason_is_there_for_this_inspection",
+        "label": "What other reason is there for this inspection?",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "d4020000-0000-4000-8000-000000000015",
+          "operator": "equals",
+          "value": "Other"
+        },
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d4020000-0000-4000-8000-000000000063",
+        "type": "choice_grid_field",
+        "fieldKey": "site_set_up_checks",
+        "label": "Security, signs, welfare and lighting",
+        "required": true,
+        "helpText": null,
+        "rows": [
+          "Is the site boundary secure, with the public kept out of the work area?",
+          "Are site rules, emergency contacts and required signs on display?",
+          "Are toilets, washing facilities and a rest area provided and clean?",
+          "Is there a stocked first aid kit, and does everyone know who the first aider is?",
+          "Are pedestrian routes kept apart from vehicles and plant?",
+          "Is lighting adequate in work areas and on access routes?"
+        ],
+        "options": [
+          "Satisfactory",
+          "Action needed",
+          "Not applicable"
+        ]
+      },
+      {
+        "id": "d4020000-0000-4000-8000-000000000064",
+        "type": "choice_grid_field",
+        "fieldKey": "work_at_height_checks",
+        "label": "Scaffolds, ladders, openings and towers",
+        "required": true,
+        "helpText": null,
+        "rows": [
+          "Has each scaffold been inspected in the last seven days, with its tag or record up to date?",
+          "Are guard rails, mid rails and toe boards in place on every working platform?",
+          "Are ladders in good condition, secured, and used only for short, light work?",
+          "Are openings and fragile surfaces covered or protected, and marked?",
+          "Are mobile towers and access platforms set up as their instructions require?"
+        ],
+        "options": [
+          "Satisfactory",
+          "Action needed",
+          "Not applicable"
+        ]
+      },
+      {
+        "id": "d4020000-0000-4000-8000-000000000065",
+        "type": "choice_grid_field",
+        "fieldKey": "excavation_checks",
+        "label": "Sides, edges, access and services",
+        "required": true,
+        "helpText": null,
+        "rows": [
+          "Are excavation sides supported, stepped or battered back?",
+          "Are edges protected, so no one and nothing can fall in?",
+          "Is there a safe way in and out of each excavation?",
+          "Are spoil, materials and plant kept back from the edges?",
+          "Were underground services located and marked before digging?"
+        ],
+        "options": [
+          "Satisfactory",
+          "Action needed",
+          "Not applicable"
+        ]
+      },
+      {
+        "id": "d4020000-0000-4000-8000-000000000066",
+        "type": "choice_grid_field",
+        "fieldKey": "housekeeping_fire_and_electrics_checks",
+        "label": "Routes, storage, fire points and electrics",
+        "required": true,
+        "helpText": null,
+        "rows": [
+          "Are walkways, stairs and access routes clear of materials and waste?",
+          "Are materials stored safely and waste removed regularly?",
+          "Are fire points equipped, escape routes clear, and flammable materials stored safely?",
+          "Are temporary electrics, leads and tools in good condition and protected from damage?"
+        ],
+        "options": [
+          "Satisfactory",
+          "Action needed",
+          "Not applicable"
+        ]
+      },
+      {
+        "id": "d4020000-0000-4000-8000-000000000067",
+        "type": "choice_grid_field",
+        "fieldKey": "plant_and_protective_equipment_checks",
+        "label": "Operators, lifting and protective equipment",
+        "required": true,
+        "helpText": null,
+        "rows": [
+          "Is plant operated only by trained people, with daily checks recorded?",
+          "Are lifting operations planned, with lifting equipment inspected and in date?",
+          "Is everyone wearing the protective equipment the work needs, such as hard hats, high-visibility clothing, safety boots, gloves, and eye and hearing protection?"
+        ],
+        "options": [
+          "Satisfactory",
+          "Action needed",
+          "Not applicable"
+        ]
+      },
+      {
+        "id": "d4020000-0000-4000-8000-000000000045",
+        "type": "text_field",
+        "fieldKey": "what_did_you_find_that_could_put_anyone_s_health_or_safety",
+        "label": "What did you find that could put anyone's health or safety at risk?",
+        "required": true,
+        "helpText": "Describe each matter and where on site it is. Write None if you found nothing.",
+        "placeholder": null,
+        "multiline": true,
+        "boxHeight": 75
+      },
+      {
+        "id": "d4020000-0000-4000-8000-000000000047",
+        "type": "dropdown_field",
+        "fieldKey": "can_work_carry_on_safely",
+        "label": "Can work carry on safely?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "d4020000-0000-4000-8000-000000000048",
+        "type": "text_field",
+        "fieldKey": "who_was_told_to_stop_work",
+        "label": "Who was told to stop work?",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "d4020000-0000-4000-8000-000000000047",
+          "operator": "equals",
+          "value": "No"
+        },
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d4020000-0000-4000-8000-000000000049",
+        "type": "text_field",
+        "fieldKey": "their_position",
+        "label": "Their position",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "d4020000-0000-4000-8000-000000000047",
+          "operator": "equals",
+          "value": "No"
+        },
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d4020000-0000-4000-8000-000000000050",
+        "type": "paragraph",
+        "text": "List each action needed, who will take it and by when, and tick it off when it is done.",
+        "alignment": "left"
+      },
+      {
+        "id": "d4020000-0000-4000-8000-000000000068",
+        "type": "table_field",
+        "fieldKey": "actions_needed",
+        "label": "Action plan",
+        "required": false,
+        "helpText": null,
+        "columns": [
+          {
+            "label": "Action needed"
+          },
+          {
+            "label": "Who will do it"
+          },
+          {
+            "label": "By when",
+            "format": "date"
+          },
+          {
+            "label": "Done"
+          }
+        ],
+        "rows": 6,
+        "addRows": true
+      },
+      {
+        "id": "d4020000-0000-4000-8000-000000000052",
+        "type": "text_field",
+        "fieldKey": "any_other_action_taken_during_the_inspection",
+        "label": "Any other action taken during the inspection",
+        "required": false,
+        "helpText": "For example an area fenced off or a tool taken out of use.",
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "d4020000-0000-4000-8000-000000000053",
+        "type": "signature_field",
+        "fieldKey": "inspector_signature",
+        "label": "Inspector signature",
+        "required": true,
+        "helpText": null
+      },
+      {
+        "id": "d4020000-0000-4000-8000-000000000055",
+        "type": "date_field",
+        "fieldKey": "date_signed_by_inspector",
+        "label": "Date signed by inspector",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": "/",
+          "month": "number"
+        }
+      },
+      {
+        "id": "d4020000-0000-4000-8000-000000000057",
+        "type": "text_field",
+        "fieldKey": "report_received_by",
+        "label": "Report received by",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d4020000-0000-4000-8000-000000000058",
+        "type": "text_field",
+        "fieldKey": "position_of_person_receiving_the_report",
+        "label": "Position of person receiving the report",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d4020000-0000-4000-8000-000000000060",
+        "type": "signature_field",
+        "fieldKey": "signature_of_person_receiving_the_report",
+        "label": "Signature of person receiving the report",
+        "required": true,
+        "helpText": null
+      },
+      {
+        "id": "d4020000-0000-4000-8000-000000000061",
+        "type": "date_field",
+        "fieldKey": "date_received",
+        "label": "Date received",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": "/",
+          "month": "number"
+        }
+      }
+    ],
+    "layout": {
+      "pageSize": "A4",
+      "orientation": "portrait",
+      "density": "compact",
+      "fieldStyle": "cell",
+      "lineSpacing": 1.3,
+      "marginPreset": "compact",
+      "paragraphSpacing": 6,
+      "sectionNumbers": "letters",
+      "sectionStyle": "band",
+      "printedTitle": {
+        "mode": "none"
+      },
+      "headerPolicy": "none",
+      "footerPolicy": "all_pages",
+      "pageNumbering": "none",
+      "footerText": {
+        "left": "{title}",
+        "right": "Page {page} of {pages}"
+      }
+    },
+    "sections": [
+      {
+        "id": "d4020000-0000-4000-8000-000000000004",
+        "label": "Inspection details",
+        "startBlockId": "d4020000-0000-4000-8000-000000000003",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d4020000-0000-4000-8000-000000000018",
+        "label": "Site set-up and welfare",
+        "startBlockId": "d4020000-0000-4000-8000-000000000063",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d4020000-0000-4000-8000-000000000025",
+        "label": "Scaffolding and work at height",
+        "startBlockId": "d4020000-0000-4000-8000-000000000064",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d4020000-0000-4000-8000-000000000031",
+        "label": "Excavations",
+        "startBlockId": "d4020000-0000-4000-8000-000000000065",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d4020000-0000-4000-8000-000000000037",
+        "label": "Housekeeping, fire and electrics",
+        "startBlockId": "d4020000-0000-4000-8000-000000000066",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d4020000-0000-4000-8000-000000000042",
+        "label": "Plant and personal protective equipment",
+        "startBlockId": "d4020000-0000-4000-8000-000000000067",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d4020000-0000-4000-8000-000000000046",
+        "label": "Findings and actions",
+        "startBlockId": "d4020000-0000-4000-8000-000000000045",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d4020000-0000-4000-8000-000000000054",
+        "label": "Sign-off",
+        "startBlockId": "d4020000-0000-4000-8000-000000000053",
+        "pageBreakBefore": true,
+        "keepTogether": false
+      }
+    ],
+    "fieldGroups": [
+      {
+        "id": "d4020000-0000-4000-8000-000000000006",
+        "label": null,
+        "startBlockId": "d4020000-0000-4000-8000-000000000003",
+        "endBlockId": "d4020000-0000-4000-8000-000000000005",
+        "columns": 2,
+        "keepTogether": false,
+        "widths": [
+          8,
+          4
+        ]
+      },
+      {
+        "id": "d4020000-0000-4000-8000-000000000011",
+        "label": null,
+        "startBlockId": "d4020000-0000-4000-8000-000000000009",
+        "endBlockId": "d4020000-0000-4000-8000-000000000010",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "d4020000-0000-4000-8000-000000000014",
+        "label": null,
+        "startBlockId": "d4020000-0000-4000-8000-000000000012",
+        "endBlockId": "d4020000-0000-4000-8000-000000000013",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "d4020000-0000-4000-8000-000000000056",
+        "label": null,
+        "startBlockId": "d4020000-0000-4000-8000-000000000053",
+        "endBlockId": "d4020000-0000-4000-8000-000000000055",
+        "columns": 2,
+        "keepTogether": true,
+        "widths": [
+          8,
+          4
+        ]
+      },
+      {
+        "id": "d4020000-0000-4000-8000-000000000059",
+        "label": null,
+        "startBlockId": "d4020000-0000-4000-8000-000000000057",
+        "endBlockId": "d4020000-0000-4000-8000-000000000058",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "d4020000-0000-4000-8000-000000000062",
+        "label": null,
+        "startBlockId": "d4020000-0000-4000-8000-000000000060",
+        "endBlockId": "d4020000-0000-4000-8000-000000000061",
+        "columns": 2,
+        "keepTogether": true,
+        "widths": [
+          8,
+          4
+        ]
+      }
+    ],
+    "blockRules": [
+      {
+        "blockId": "d4020000-0000-4000-8000-000000000050",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      }
+    ]
+  }
+}

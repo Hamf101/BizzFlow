@@ -1,0 +1,369 @@
+{
+  "request": "monthly fire safety checklist for a small office",
+  "title": "Monthly fire safety checks",
+  "description": "Use once a month to check an office's escape routes, fire alarm, emergency lighting, extinguishers and housekeeping, and to record any problem and what is being done about it.",
+  "maxPages": 2,
+  "content": {
+    "schemaVersion": 3,
+    "branding": {
+      "organizationName": "",
+      "logoAsset": null,
+      "logoDataUrl": null,
+      "logoAlignment": "left",
+      "logoWidthPercent": 24,
+      "primaryColor": "#252329",
+      "accentColor": "#635273"
+    },
+    "blocks": [
+      {
+        "id": "d4060000-0000-4000-8000-000000000001",
+        "type": "heading",
+        "text": "Monthly fire safety checks",
+        "level": 1,
+        "alignment": "left"
+      },
+      {
+        "id": "d4060000-0000-4000-8000-000000000002",
+        "type": "paragraph",
+        "text": "Walk the whole office and answer each question. Any No needs action: describe it under Problems found so it can be put right.",
+        "alignment": "left"
+      },
+      {
+        "id": "d4060000-0000-4000-8000-000000000003",
+        "type": "text_field",
+        "fieldKey": "premises",
+        "label": "Premises",
+        "required": true,
+        "helpText": "The office name or address.",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d4060000-0000-4000-8000-000000000005",
+        "type": "date_field",
+        "fieldKey": "date_of_check",
+        "label": "Date of check",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "ymd",
+          "separator": "-",
+          "month": "number"
+        }
+      },
+      {
+        "id": "d4060000-0000-4000-8000-000000000007",
+        "type": "text_field",
+        "fieldKey": "checked_by",
+        "label": "Checked by",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d4060000-0000-4000-8000-000000000008",
+        "type": "text_field",
+        "fieldKey": "position",
+        "label": "Position",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d4060000-0000-4000-8000-000000000043",
+        "type": "choice_grid_field",
+        "fieldKey": "escape_route_checks",
+        "label": "Routes, exits, signs and doors",
+        "required": true,
+        "helpText": null,
+        "rows": [
+          "Are all escape routes, corridors and stairs clear of anything that could block them or catch fire?",
+          "Do all fire exits open easily from the inside, without a key?",
+          "Are fire exit signs in place and easy to see?",
+          "Do fire doors close fully on their own, with none wedged open?"
+        ],
+        "options": [
+          "Yes",
+          "No"
+        ]
+      },
+      {
+        "id": "d4060000-0000-4000-8000-000000000044",
+        "type": "choice_grid_field",
+        "fieldKey": "alarm_and_lighting_checks",
+        "label": "Alarm tests, panel and lights",
+        "required": true,
+        "helpText": null,
+        "rows": [
+          "Was the fire alarm tested each week this month, with each test written in the fire log book?",
+          "Could the alarm be heard clearly in every part of the office?",
+          "Is the alarm panel free of fault warnings?",
+          "Did every emergency light come on in this month's short test?"
+        ],
+        "options": [
+          "Yes",
+          "No"
+        ]
+      },
+      {
+        "id": "d4060000-0000-4000-8000-000000000045",
+        "type": "choice_grid_field",
+        "fieldKey": "extinguisher_checks",
+        "label": "Position, seals, gauges and labels",
+        "required": true,
+        "helpText": null,
+        "rows": [
+          "Is each extinguisher in its place, mounted or on its stand, with nothing in front of it?",
+          "Is each safety pin and tamper seal in place?",
+          "Does each pressure gauge read in the green?",
+          "Is each extinguisher free of damage, with its instructions readable?",
+          "Is each extinguisher's service label within date?"
+        ],
+        "options": [
+          "Yes",
+          "No"
+        ]
+      },
+      {
+        "id": "d4060000-0000-4000-8000-000000000046",
+        "type": "choice_grid_field",
+        "fieldKey": "housekeeping_checks",
+        "label": "Waste, heaters, sockets, notices and new starters",
+        "required": true,
+        "helpText": null,
+        "rows": [
+          "Is waste paper and packaging cleared away rather than left to build up?",
+          "Are heaters kept well away from paper, furniture and curtains?",
+          "Are sockets free of overloaded adaptors and extension leads plugged into each other?",
+          "Are fire action notices on display beside the call points and exits?",
+          "Has everyone who started this month been shown the escape routes and assembly point?"
+        ],
+        "options": [
+          "Yes",
+          "No"
+        ]
+      },
+      {
+        "id": "d4060000-0000-4000-8000-000000000032",
+        "type": "date_field",
+        "fieldKey": "date_of_the_last_fire_drill",
+        "label": "Date of the last fire drill",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "ymd",
+          "separator": "-",
+          "month": "number"
+        }
+      },
+      {
+        "id": "d4060000-0000-4000-8000-000000000033",
+        "type": "dropdown_field",
+        "fieldKey": "did_you_find_any_problem",
+        "label": "Did you find any problem?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "d4060000-0000-4000-8000-000000000035",
+        "type": "text_field",
+        "fieldKey": "what_did_you_find_and_where",
+        "label": "What did you find, and where?",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "d4060000-0000-4000-8000-000000000033",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "d4060000-0000-4000-8000-000000000036",
+        "type": "text_field",
+        "fieldKey": "what_is_being_done_about_it",
+        "label": "What is being done about it?",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "d4060000-0000-4000-8000-000000000033",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "d4060000-0000-4000-8000-000000000037",
+        "type": "text_field",
+        "fieldKey": "who_is_putting_it_right",
+        "label": "Who is putting it right?",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "d4060000-0000-4000-8000-000000000033",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d4060000-0000-4000-8000-000000000038",
+        "type": "date_field",
+        "fieldKey": "to_be_put_right_by",
+        "label": "To be put right by",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "d4060000-0000-4000-8000-000000000033",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "dateFormat": {
+          "order": "ymd",
+          "separator": "-",
+          "month": "number"
+        }
+      },
+      {
+        "id": "d4060000-0000-4000-8000-000000000040",
+        "type": "signature_field",
+        "fieldKey": "signature_of_person_who_did_the_check",
+        "label": "Signature of person who did the check",
+        "required": true,
+        "helpText": null
+      },
+      {
+        "id": "d4060000-0000-4000-8000-000000000041",
+        "type": "date_field",
+        "fieldKey": "date_signed",
+        "label": "Date signed",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "ymd",
+          "separator": "-",
+          "month": "number"
+        }
+      }
+    ],
+    "layout": {
+      "pageSize": "A4",
+      "orientation": "portrait",
+      "density": "compact",
+      "fieldStyle": "box",
+      "lineSpacing": 1.3,
+      "marginPreset": "compact",
+      "paragraphSpacing": 4,
+      "sectionStyle": "box",
+      "printedTitle": {
+        "mode": "none"
+      },
+      "headerPolicy": "none",
+      "footerPolicy": "all_pages",
+      "pageNumbering": "none",
+      "footerText": {
+        "left": "{title}",
+        "right": "Page {page} of {pages}"
+      }
+    },
+    "sections": [
+      {
+        "id": "d4060000-0000-4000-8000-000000000004",
+        "label": "About this check",
+        "startBlockId": "d4060000-0000-4000-8000-000000000003",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d4060000-0000-4000-8000-000000000011",
+        "label": "Escape routes and fire doors",
+        "startBlockId": "d4060000-0000-4000-8000-000000000043",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d4060000-0000-4000-8000-000000000016",
+        "label": "Fire alarm and emergency lighting",
+        "startBlockId": "d4060000-0000-4000-8000-000000000044",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d4060000-0000-4000-8000-000000000021",
+        "label": "Fire extinguishers",
+        "startBlockId": "d4060000-0000-4000-8000-000000000045",
+        "pageBreakBefore": true,
+        "keepTogether": false
+      },
+      {
+        "id": "d4060000-0000-4000-8000-000000000027",
+        "label": "Housekeeping and people",
+        "startBlockId": "d4060000-0000-4000-8000-000000000046",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d4060000-0000-4000-8000-000000000034",
+        "label": "Problems found and sign-off",
+        "startBlockId": "d4060000-0000-4000-8000-000000000033",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      }
+    ],
+    "fieldGroups": [
+      {
+        "id": "d4060000-0000-4000-8000-000000000006",
+        "label": null,
+        "startBlockId": "d4060000-0000-4000-8000-000000000003",
+        "endBlockId": "d4060000-0000-4000-8000-000000000005",
+        "columns": 2,
+        "keepTogether": false,
+        "widths": [
+          8,
+          4
+        ]
+      },
+      {
+        "id": "d4060000-0000-4000-8000-000000000009",
+        "label": null,
+        "startBlockId": "d4060000-0000-4000-8000-000000000007",
+        "endBlockId": "d4060000-0000-4000-8000-000000000008",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "d4060000-0000-4000-8000-000000000039",
+        "label": null,
+        "startBlockId": "d4060000-0000-4000-8000-000000000037",
+        "endBlockId": "d4060000-0000-4000-8000-000000000038",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "d4060000-0000-4000-8000-000000000042",
+        "label": null,
+        "startBlockId": "d4060000-0000-4000-8000-000000000040",
+        "endBlockId": "d4060000-0000-4000-8000-000000000041",
+        "columns": 2,
+        "keepTogether": true,
+        "widths": [
+          8,
+          4
+        ]
+      }
+    ],
+    "blockRules": []
+  }
+}

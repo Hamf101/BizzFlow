@@ -1,11 +1,12 @@
 import { Plus } from "lucide-react"
 import Link from "next/link"
-import type { CSSProperties, ReactElement } from "react"
+import type { CSSProperties, ReactElement, ReactNode } from "react"
 
 import { ListFilterChips } from "@/components/data/list-filter-chips"
 import { ListPagination } from "@/components/data/list-pagination"
 import { ListQuery } from "@/components/data/list-query"
 import { type ListSavedViews, ListViewMenu, ListViewTitle } from "@/components/data/list-view-menu"
+import { DatedTitle } from "@/components/navigation/dated-title"
 import {
   getTemplateStatusOptions,
   getTemplateViewMenuSections,
@@ -15,6 +16,11 @@ import {
 } from "@/components/templates/template-list-view"
 import { TemplatePageThumbnail } from "@/components/templates/template-page-thumbnail"
 import { TemplateRowMenu } from "@/components/templates/template-row-menu"
+import {
+  SelectableTemplateCard,
+  TemplateSelection,
+  TemplateSelectionBar,
+} from "@/components/templates/template-selection"
 import { buttonVariants } from "@/components/ui/button"
 import { formatMediumDate } from "@/lib/date-format"
 import { getLastPage } from "@/lib/list-state"
@@ -44,6 +50,7 @@ const STATUS_LOOKS: Record<DocumentTemplateStatus, { dot: string; label: string 
  * @returns The Templates workspace.
  */
 export function TemplatesWorkspace({
+  canCreate,
   canManage,
   categories,
   duplicateAction,
@@ -52,6 +59,9 @@ export function TemplatesWorkspace({
   total,
   view,
 }: {
+  /** The viewer may start templates and copy the ones they can use. */
+  canCreate: boolean
+  /** The viewer manages every template, so sees drafts, archives and statuses. */
   canManage: boolean
   categories: string[]
   duplicateAction: (formData: FormData) => Promise<void>
@@ -66,7 +76,7 @@ export function TemplatesWorkspace({
   )
   // A new template starts from the library's front page, as a document app's
   // home does; filtered views and later pages keep to what they show.
-  const offersNew = canManage && !filtered && view.page === 1
+  const offersNew = canCreate && !filtered && view.page === 1
 
   const listViews: ListSavedViews = {
     list: "templates",
@@ -79,15 +89,17 @@ export function TemplatesWorkspace({
       {/* The real space keeps the accessible name "Templates 12 templates"
           rather than "Templates12 templates". */}
       <div className="flex items-center justify-between gap-3">
-        <h1 className="min-w-0 text-2xl leading-none font-medium tracking-[-0.02em]">
-          <ListViewTitle title="Templates" views={listViews} />{" "}
-          <span
-            aria-label={`${total} ${total === 1 ? "template" : "templates"}`}
-            className="ml-0.5 text-xl font-normal text-muted-foreground"
-          >
-            {total}
-          </span>
-        </h1>
+        <DatedTitle>
+          <h1 className="min-w-0 text-2xl leading-none font-medium tracking-[-0.02em]">
+            <ListViewTitle title="Templates" views={listViews} />{" "}
+            <span
+              aria-label={`${total} ${total === 1 ? "template" : "templates"}`}
+              className="ml-0.5 text-xl font-normal text-muted-foreground"
+            >
+              {total}
+            </span>
+          </h1>
+        </DatedTitle>
         <div className="flex shrink-0 gap-2">
           <ListViewMenu
             adjusted={isTemplateViewAdjusted(view)}
@@ -95,7 +107,7 @@ export function TemplatesWorkspace({
             sections={getTemplateViewMenuSections(view, categories)}
             views={listViews}
           />
-          {canManage ? (
+          {canCreate ? (
             <Link
               className={cn(
                 buttonVariants(),
@@ -133,22 +145,25 @@ export function TemplatesWorkspace({
           {filtered ? "No templates match this view." : "No templates yet."}
         </p>
       ) : (
-        <ul
-          aria-label="Templates"
-          className="grid grid-cols-2 gap-2.5 sm:grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] sm:gap-4 xl:grid-cols-[repeat(auto-fill,minmax(14rem,1fr))]"
-          data-slot="template-library"
-        >
-          {offersNew ? <NewTemplateTile /> : null}
-          {templates.map((template: DocumentTemplateCard, index: number) => (
-            <TemplateCard
-              canManage={canManage}
-              duplicateAction={duplicateAction}
-              index={index}
-              key={template.id}
-              template={template}
-            />
-          ))}
-        </ul>
+        <SelectableLibrary canCreate={canCreate} categories={categories} templates={templates}>
+          <ul
+            aria-label="Templates"
+            className="grid grid-cols-2 gap-2.5 sm:grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] sm:gap-4 xl:grid-cols-[repeat(auto-fill,minmax(14rem,1fr))]"
+            data-slot="template-library"
+          >
+            {offersNew ? <NewTemplateTile /> : null}
+            {templates.map((template: DocumentTemplateCard, index: number) => (
+              <TemplateCard
+                canCreate={canCreate}
+                canManage={canManage}
+                duplicateAction={duplicateAction}
+                index={index}
+                key={template.id}
+                template={template}
+              />
+            ))}
+          </ul>
+        </SelectableLibrary>
       )}
       {templates.length === 0 && offersNew ? (
         // The tile invites the first template; this says why the rest is empty.
@@ -180,6 +195,42 @@ export function TemplatesWorkspace({
   )
 }
 
+/**
+ * Lets people who can act on templates select several cards, as Files does:
+ * the selection, its bar and each card's right-click menu. Everyone else gets
+ * the plain list.
+ */
+function SelectableLibrary({
+  canCreate,
+  categories,
+  children,
+  templates,
+}: {
+  canCreate: boolean
+  categories: string[]
+  children: ReactNode
+  templates: DocumentTemplateCard[]
+}): ReactElement {
+  if (!templates.some((template) => actsOn(template, canCreate))) {
+    return <>{children}</>
+  }
+
+  return (
+    <TemplateSelection
+      categories={categories}
+      templates={templates
+        .filter((template) => actsOn(template, canCreate))
+        .map((template) => ({ canDuplicate: canCreate, canEdit: template.canEdit, id: template.id, status: template.status }))}
+    >
+      {children}
+      <TemplateSelectionBar />
+    </TemplateSelection>
+  )
+}
+
+// A card has something to offer when the viewer may edit it or copy it.
+const actsOn = (template: DocumentTemplateCard, canCreate: boolean): boolean => template.canEdit || canCreate
+
 function NewTemplateTile(): ReactElement {
   return (
     <li className="grid" data-slot="template-new">
@@ -203,18 +254,23 @@ function NewTemplateTile(): ReactElement {
 }
 
 function TemplateCard({
+  canCreate,
   canManage,
   duplicateAction,
   index,
   template,
 }: {
+  canCreate: boolean
   canManage: boolean
   duplicateAction: (formData: FormData) => Promise<void>
   index: number
   template: DocumentTemplateCard
 }): ReactElement {
   // An archived template is read only, even for people who manage templates.
-  const editable = canManage && template.status !== "archived"
+  const editable = template.canEdit && template.status !== "archived"
+  const acts = actsOn(template, canCreate)
+  // Statuses are for those who work on the template; everyone else sees what was published.
+  const showsStatus = canManage || template.canEdit
   const status = STATUS_LOOKS[template.status]
   const detail =
     template.category ?? `Updated ${formatMediumDate(template.updatedAt)}`
@@ -226,9 +282,10 @@ function TemplateCard({
     "line-clamp-2 min-h-[2.6em] min-w-0 flex-1 text-[11.5px] leading-[1.3] font-medium text-balance text-foreground sm:line-clamp-1 sm:min-h-0 sm:text-[13.5px] sm:leading-snug"
 
   return (
-    <li
+    <Card
+      acts={acts}
       className="relative grid grid-rows-[auto_1fr_auto] overflow-hidden rounded-[12px] border border-border bg-card/70 transition-[translate,box-shadow,border-color] duration-200 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-1 motion-safe:fill-mode-backwards motion-safe:[--tw-animation-delay:var(--card-delay)] sm:hover:border-primary/35 sm:hover:shadow-[0_10px_24px_rgba(37,35,41,0.1)] sm:motion-safe:hover:-translate-y-0.5"
-      data-slot="template-card"
+      id={template.id}
       style={riseDelay}
     >
       <div className="flex min-w-0 items-start gap-2 px-2.5 pt-2.5 pb-2 sm:px-3.5 sm:pt-3">
@@ -249,13 +306,15 @@ function TemplateCard({
             {template.title}
           </span>
         )}
-        {editable ? (
+        {acts ? (
           // Above the card's own link, so the menu opens instead of the editor.
           // Phones keep it at the card's foot, so the title keeps the full width.
           <div className="relative z-10 -my-1 -mr-1.5 max-sm:absolute max-sm:right-1.5 max-sm:bottom-0 max-sm:m-0">
             <TemplateRowMenu
+              canDuplicate={canCreate}
+              canEdit={template.canEdit}
               duplicateAction={duplicateAction}
-              published={template.status === "published"}
+              status={template.status}
               templateId={template.id}
               title={template.title}
             />
@@ -279,7 +338,7 @@ function TemplateCard({
         )}
         data-slot="template-meta"
       >
-        {canManage ? (
+        {showsStatus ? (
           <>
             <span
               aria-hidden="true"
@@ -289,10 +348,10 @@ function TemplateCard({
           </>
         ) : null}
         <span
-          className={cn("truncate", canManage && "max-sm:hidden")}
+          className={cn("truncate", showsStatus && "max-sm:hidden")}
           data-slot="template-detail"
         >
-          {canManage ? (
+          {showsStatus ? (
             <span aria-hidden="true" className="mr-1.5 opacity-50">
               ·
             </span>
@@ -300,6 +359,31 @@ function TemplateCard({
           {detail}
         </span>
       </div>
+    </Card>
+  )
+}
+
+// A card someone can act on selects; every other is a plain one.
+function Card({
+  acts,
+  children,
+  className,
+  id,
+  style,
+}: {
+  acts: boolean
+  children: ReactNode
+  className: string
+  id: string
+  style: CSSProperties
+}): ReactElement {
+  return acts ? (
+    <SelectableTemplateCard as="li" className={className} itemId={id} style={style}>
+      {children}
+    </SelectableTemplateCard>
+  ) : (
+    <li className={className} data-slot="template-card" style={style}>
+      {children}
     </li>
   )
 }

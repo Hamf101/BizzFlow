@@ -2,14 +2,20 @@ import { describe, expect, it } from "vitest"
 
 import {
   convertTextBlock,
+  deleteAcross,
+  insertLines,
   insertPageAfter,
+  insertSectionAfter,
   liftListItem,
   mergeIntoPrevious,
   normalizeContentForSave,
   readMarkdownShortcut,
   removePageBreak,
   splitTextBlock,
+  turnLineIntoSection,
+  turnSectionIntoLine,
 } from "@/components/editor/editor-content"
+import { MAX_TEMPLATE_BLOCK_COUNT } from "@/types/template"
 import {
   createEmptyDocumentContent,
   templateContentV3Schema,
@@ -167,5 +173,147 @@ describe("lifting a list item out", () => {
     expect(liftListItem(single, A, 0, { type: "paragraph" }, [B, C]).content.blocks).toEqual([
       { alignment: "left", id: A, text: "Windows", type: "paragraph" },
     ])
+  })
+})
+
+describe("sections typed on the page", () => {
+  const S = "70000000-0000-4000-8000-000000000011"
+  const N = "70000000-0000-4000-8000-000000000012"
+  const line = (id: string, text: string): TemplateBlock => ({ alignment: "left", id, text, type: "paragraph" })
+  const heading = (id: string, text: string): TemplateBlock => ({ alignment: "left", id, level: 2, text, type: "heading" })
+
+  it("turns a heading into the title of a section holding what follows, and back again", () => {
+    const made = turnLineIntoSection(page([line(A, "Intro"), heading(B, "Terms"), line(C, "Pay monthly.")]), B, S)
+    const undone = turnSectionIntoLine(made.content, S, { level: 2, type: "heading" }, N)
+
+    expect(texts(made.content)).toEqual(["Intro", "Pay monthly."])
+    expect(made.content.sections).toEqual([
+      { id: S, keepTogether: false, label: "Terms", pageBreakBefore: false, startBlockId: C },
+    ])
+    expect(made.focus).toEqual({ blockId: `section:${S}`, offset: 5 })
+    expect(templateContentV3Schema.safeParse(made.content).success).toBe(true)
+    expect(undone.content.blocks.map((block) => [block.type, texts(page([block]))[0]])).toEqual([
+      ["paragraph", "Intro"],
+      ["heading", "Terms"],
+      ["paragraph", "Pay monthly."],
+    ])
+    expect(undone.content.sections).toEqual([])
+    expect(undone.focus).toEqual({ blockId: N, offset: 5 })
+  })
+
+  it("moves a page break from the line to the section, and keeps an empty last line to hold it", () => {
+    const made = turnLineIntoSection(insertPageAfter(page([line(A, "Intro")]), A, B), B, S)
+    const undone = turnSectionIntoLine(made.content, S, { type: "paragraph" }, N)
+
+    expect(made.content.blocks.map((block) => block.id)).toEqual([A, B])
+    expect(made.content.sections).toEqual([
+      { id: S, keepTogether: false, label: "Section title", pageBreakBefore: true, startBlockId: B },
+    ])
+    expect(made.content.blockRules).toEqual([])
+    expect(undone.content.blockRules).toEqual([{ blockId: N, keepWithNext: false, pageBreakBefore: true }])
+  })
+
+  it("starts a section after the caret's block, at the next block or on a new empty line", () => {
+    const content = page([line(A, "Intro"), line(C, "Pay monthly.")])
+    const split = insertSectionAfter(content, A, S, N)
+    const atEnd = insertSectionAfter(content, C, S, N)
+
+    expect(split.content.sections).toEqual([
+      { id: S, keepTogether: false, label: "Section title", pageBreakBefore: false, startBlockId: C },
+    ])
+    expect(split.focus).toEqual({ blockId: `section:${S}`, offset: 0 })
+    expect(templateContentV3Schema.safeParse(split.content).success).toBe(true)
+    expect(templateContentV3Schema.safeParse(atEnd.content).success).toBe(true)
+    expect(atEnd.content.blocks.map((block) => block.id)).toEqual([A, C, N])
+    expect(atEnd.content.sections.map((section) => section.startBlockId)).toEqual([N])
+  })
+
+  it("inserts a section before an existing first section without moving its boundary", () => {
+    const content = { ...page([line(A, "Terms body")]), sections: [{ id: S, label: "Terms", startBlockId: A, pageBreakBefore: false, keepTogether: false }] }
+    const added = insertSectionAfter(content, null, B, N).content
+    expect(added.sections.map((section) => [section.id, section.startBlockId])).toEqual([[B, N], [S, A]])
+    expect(templateContentV3Schema.safeParse(added).success).toBe(true)
+  })
+
+  it("keeps a line longer than the section title limit unchanged", () => {
+    const content = page([line(A, "a".repeat(161)), line(B, "Body")])
+    expect(turnLineIntoSection(content, A, S).content).toBe(content)
+  })
+
+  it("leaves a line that already opens a section as it is", () => {
+    const content = {
+      ...page([line(A, "Intro"), heading(B, "Terms")]),
+      sections: [{ id: S, keepTogether: false, label: "Legal", pageBreakBefore: false, startBlockId: B }],
+    }
+
+    expect(turnLineIntoSection(content, B, N).content).toBe(content)
+  })
+})
+
+describe("words selected across blocks", () => {
+  const D = "70000000-0000-4000-8000-000000000004"
+  const E = "70000000-0000-4000-8000-000000000005"
+  const content = page([
+    { alignment: "left", id: A, level: 2, runs: [{ bold: true, text: "Payment" }, { text: " terms" }], text: "Payment terms", type: "heading" },
+    { alignment: "left", id: B, text: "Rent is due monthly.", type: "paragraph" },
+    { fieldKey: "tenant", helpText: null, id: C, label: "Tenant", multiline: false, placeholder: null, required: false, type: "text_field" },
+    { id: D, items: ["Keys", "Alarm code"], type: "bullet_list" },
+    { alignment: "left", id: E, text: "Signed below.", type: "paragraph" },
+  ])
+
+  it("takes out what lies between two points, joining the words either side and keeping their formatting", () => {
+    const cut = deleteAcross(content, { blockId: A, offset: 4 }, { blockId: D, item: 1, offset: 6 })
+
+    // Everything between goes, the field too; the list keeps nothing before the point.
+    expect(cut.ok && texts(cut.content)).toEqual(["Paymcode", "Signed below."])
+    expect(cut.ok && cut.content.blocks[0]).toMatchObject({ runs: [{ bold: true, text: "Paym" }, { text: "code" }], type: "heading" })
+    expect(cut.ok && cut.focus).toEqual({ blockId: A, offset: 4 })
+    // Picked backwards, it is the same cut.
+    expect(deleteAcross(content, { blockId: D, item: 1, offset: 6 }, { blockId: A, offset: 4 })).toEqual(cut)
+    expect(cut.ok && templateContentV3Schema.safeParse(cut.content).success).toBe(true)
+  })
+
+  it("keeps a list's items after the point, and inside one line cuts only the words", () => {
+    const listed = deleteAcross(content, { blockId: B, offset: 4 }, { blockId: D, item: 0, offset: 2 })
+
+    expect(listed.ok && texts(listed.content)).toEqual(["Payment terms", "Rentys", "bullet_list", "Signed below."])
+    expect(listed.ok && listed.content.blocks[2]).toMatchObject({ items: ["Alarm code"] })
+
+    const words = deleteAcross(content, { blockId: B, offset: 0 }, { blockId: B, offset: 8 })
+
+    expect(words.ok && texts(words.content)[1]).toBe("due monthly.")
+  })
+
+  it("refuses to take out a field another field's rule depends on", () => {
+    const ruled = page([
+      ...content.blocks,
+      { fieldKey: "pets", helpText: null, id: "70000000-0000-4000-8000-000000000006", label: "Pets", multiline: false, placeholder: null, required: false, type: "text_field", visibleWhen: { operator: "equals", sourceBlockId: C, value: "yes" } },
+    ])
+
+    expect(deleteAcross(ruled, { blockId: B, offset: 2 }, { blockId: D, item: 0, offset: 1 }).ok).toBe(false)
+  })
+
+  it("pastes several lines as a line each, the words after the caret after the last", () => {
+    const pasted = insertLines(content, { blockId: B, offset: 8 }, ["paid", "", "in full "], () => C + "9")
+
+    expect(texts(pasted.content).slice(0, 4)).toEqual(["Payment terms", "Rent is paid", "in full due monthly.", "text_field"])
+    expect(pasted.focus).toEqual({ blockId: pasted.content.blocks[2]!.id, offset: 8 })
+
+    const listed = insertLines(content, { blockId: D, item: 0, offset: 4 }, ["", "Gate fob"], () => C + "9")
+
+    expect(listed.content.blocks[3]).toMatchObject({ items: ["Keys", "Gate fob", "Alarm code"] })
+  })
+
+  it("leaves the page as it was when a paste would take it past what a document holds", () => {
+    let id = 0
+    const newId = (): string => `90000000-0000-4000-8000-${String((id += 1)).padStart(12, "0")}`
+    const lines = Array.from({ length: MAX_TEMPLATE_BLOCK_COUNT }, (_, line) => `Line ${line}`)
+    const paragraphs = insertLines(content, { blockId: B, offset: 8 }, lines, newId)
+    const items = insertLines(content, { blockId: D, item: 0, offset: 4 }, lines, newId)
+
+    for (const refused of [paragraphs, items]) {
+      expect(refused.content).toBe(content)
+      expect(refused.tooLong).toBe(true)
+    }
   })
 })

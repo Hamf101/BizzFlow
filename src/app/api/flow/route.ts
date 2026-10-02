@@ -4,6 +4,9 @@ import { createTemplateRouteErrorResponse, startFlowTurn } from "@/app/api/templ
 import { readTrustedJsonObject } from "@/lib/request-security"
 import { executeWorkspaceFlow } from "@/services/workspace-flow-service"
 
+// A turn is up to three model calls: two to get a valid draft and one rewrite.
+export const maxDuration = 300
+
 /**
  * Completes one Flow turn sent from a workspace page.
  *

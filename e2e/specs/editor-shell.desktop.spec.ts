@@ -5,25 +5,6 @@ import { waitForHydration } from "../support/hydration"
 import { authStatePath } from "../support/paths"
 import { seedTemplate } from "../support/seed"
 
-test("the mode switch moves with the arrow keys and keeps one tab stop", async ({ admin, pageAs, tenant }) => {
-  const template = await seedTemplate(admin, tenant.organizationId, uniqueName("Modes"))
-  const page = await pageAs("owner_admin")
-
-  await page.goto(`/templates/${template.id}/edit`)
-  const edit = page.getByRole("radio", { name: "Edit" })
-  await waitForHydration(edit)
-  await edit.focus()
-  await page.keyboard.press("ArrowRight")
-
-  const preview = page.getByRole("radio", { name: "Preview" })
-  await expect(preview).toBeChecked()
-  await expect(preview).toBeFocused()
-  // Roving focus: only the chosen mode takes a Tab stop.
-  await expect(page.locator('[role="radiogroup"] [tabindex="0"]')).toHaveCount(1)
-  await page.keyboard.press("ArrowLeft")
-  await expect(edit).toBeChecked()
-})
-
 test("a touch tablet held upright gets the phone's canvas, not a shrunken page", async ({
   admin,
   browser,
@@ -38,8 +19,7 @@ test("a touch tablet held upright gets the phone's canvas, not a shrunken page",
   await waitForHydration(dock.getByRole("button").first())
 
   // The dock rests at the bottom and the page is not scaled down to fit.
-  const box = await dock.boundingBox()
-  expect(box && box.y > (page.viewportSize()?.height ?? 0) / 2).toBe(true)
+  await expect.poll(async () => (await dock.boundingBox())?.y ?? 0).toBeGreaterThan((page.viewportSize()?.height ?? 0) / 2)
   await expect(page.locator('[data-slot="editor-zoom"]')).toHaveCount(0)
   await context.close()
 })

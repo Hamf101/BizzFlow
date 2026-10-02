@@ -15,7 +15,9 @@ import {
  *
  * It deliberately exercises every renderer path that can regress: multi-page
  * flow, repeated headers, a table, a bullet list, all four field types, a
- * divider, embedded PNG signatures and initials, and centre/right alignment.
+ * typed answer between a prefix and suffix, a comb, a checkbox group, a choice
+ * grid, a fill-in table, a divider, embedded PNG signatures and initials, and
+ * centre/right alignment.
  */
 
 const SAMPLE_SIGNATURE_DATA_URL =
@@ -126,6 +128,62 @@ export function createSampleDocumentContent(): TemplateContent {
         checkedByDefault: false
       },
       {
+        id: "00000000-0000-4000-8000-000000000013",
+        type: "text_field",
+        fieldKey: "monthly_fee",
+        label: "Monthly retainer",
+        required: false,
+        helpText: null,
+        placeholder: null,
+        multiline: false,
+        format: "money",
+        prefix: "£",
+        suffix: "per month"
+      },
+      {
+        id: "00000000-0000-4000-8000-000000000014",
+        type: "text_field",
+        fieldKey: "po_reference",
+        label: "Purchase order reference",
+        required: false,
+        helpText: null,
+        placeholder: null,
+        multiline: false,
+        comb: 8
+      },
+      {
+        id: "00000000-0000-4000-8000-000000000015",
+        type: "dropdown_field",
+        fieldKey: "services",
+        label: "Services included",
+        required: false,
+        helpText: "Tick every one that applies.",
+        placeholder: null,
+        options: ["Discovery", "Implementation", "Training", "Support"],
+        multiple: true,
+        across: true
+      },
+      {
+        id: "00000000-0000-4000-8000-000000000016",
+        type: "choice_grid_field",
+        fieldKey: "readiness",
+        label: "Readiness check",
+        required: false,
+        helpText: null,
+        rows: ["Requirements are agreed", "A project lead is named", "Access to systems is arranged"],
+        options: ["Yes", "No", "Not yet known"]
+      },
+      {
+        id: "00000000-0000-4000-8000-000000000017",
+        type: "table_field",
+        fieldKey: "contacts",
+        label: "Project contacts",
+        required: false,
+        helpText: "Add anyone the team should copy in.",
+        columns: [{ label: "Name" }, { label: "Role" }, { label: "Phone" }],
+        rows: 3
+      },
+      {
         id: "00000000-0000-4000-8000-000000000010",
         type: "divider"
       },
@@ -166,7 +224,12 @@ export function createSampleDocumentInput(
       client_name: "Northstar Labs LLC",
       effective_date: "2026-07-17",
       engagement_type: "Fixed fee",
-      terms_accepted: true
+      terms_accepted: true,
+      monthly_fee: "1,250",
+      po_reference: "PO2026AB",
+      services: ["Discovery", "Training"],
+      readiness: { "Requirements are agreed": "Yes", "A project lead is named": "No" },
+      contacts: [["Robin Hale", "Sponsor", "555 0100"]]
     },
     workflowStatus: "completed",
     signers: [

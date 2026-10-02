@@ -17,6 +17,8 @@ import {
 import { BLOCK_GAP, pageStyle, PlacedImages, printableMargin } from "@/components/templates/printed-page"
 import {
   groupTemplateRenderBlocks,
+  ROW_GRID,
+  rowGridStyle,
   type TemplateWebRenderGroup
 } from "@/components/templates/template-render-groups"
 import { Button } from "@/components/ui/button"
@@ -24,6 +26,7 @@ import {
   resolveDocumentSurfaceInk,
   type DocumentSurface
 } from "@/lib/document-surface"
+import { PaperGrid, PaperTable } from "@/components/editor/paper-answer-kinds"
 import { cn } from "@/lib/utils"
 import {
   shouldRenderTemplateFooter,
@@ -507,13 +510,12 @@ function PreviewFieldGroup({
         />
       )}
       <div
+        style={rowGridStyle(group)}
         className={cn(
-          "grid min-w-0",
-          group.columns === 1
-            ? "grid-cols-1"
-            : "grid-cols-1 sm:grid-cols-[repeat(2,minmax(0,1fr))]",
+          // Rows stack on a phone and are laid out as they print from sm up.
+          ROW_GRID,
           BLOCK_GAP[density],
-          group.columns === 2 && twoColumnContentPadding
+          group.columns > 1 && twoColumnContentPadding
         )}
       >
         {group.blocks.map(
@@ -529,7 +531,7 @@ function PreviewFieldGroup({
                 canMoveUp={visibleIndex > 0}
                 changed={changedBlockIds.has(renderBlock.block.id)}
                 contentPadding={
-                  group.columns === 2 ? "min-w-0" : contentPadding
+                  group.columns > 1 ? "min-w-0" : contentPadding
                 }
                 key={renderBlock.block.id}
                 onBlockSelect={onBlockSelect}
@@ -915,9 +917,31 @@ function PreviewBlock({ block }: { block: TemplateBlock }): ReactElement {
           label={block.label}
           required={block.required}
         >
-          <div className="rounded-sm border border-border px-3 py-2 text-sm text-muted-foreground">
-            {block.placeholder || "Select an option"}
-          </div>
+          {block.display === "radios" || block.multiple ? (
+            <span className={cn("flex gap-1.5 text-sm", block.across ? "flex-wrap gap-x-5" : "flex-col")}>
+              {block.options.map((option: string) => (
+                <span className="flex items-center gap-2" key={option}>
+                  <span aria-hidden="true" className={cn("size-4 shrink-0 border border-muted-foreground/40", !block.multiple && "rounded-full")} />
+                  {option}
+                </span>
+              ))}
+            </span>
+          ) : (
+            <div className="rounded-sm border border-border px-3 py-2 text-sm text-muted-foreground">
+              {block.placeholder || "Select an option"}
+            </div>
+          )}
+        </PreviewField>
+      )
+    case "choice_grid_field":
+    case "table_field":
+      return (
+        <PreviewField helpText={block.helpText} label={block.label} required={block.required}>
+          {block.type === "choice_grid_field" ? (
+            <PaperGrid block={block} mode="design" value={undefined} />
+          ) : (
+            <PaperTable block={block} mode="design" value={undefined} />
+          )}
         </PreviewField>
       )
     case "text_field":

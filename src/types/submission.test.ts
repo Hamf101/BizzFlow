@@ -93,7 +93,14 @@ describe("submission persistence types", () => {
       updatedAt: UPDATED_AT,
       submittedAt: null,
       assignedAt: null,
+      requiredApprovals: null,
     })
+  })
+
+  it("reads how many approvals a submission needs, and reads nothing as everyone", () => {
+    expect(parseSubmissionRow({ ...DRAFT_ROW, required_approvals: 2 }).requiredApprovals).toBe(2)
+    expect(parseSubmissionRow({ ...DRAFT_ROW, required_approvals: null }).requiredApprovals).toBeNull()
+    expect(() => parseSubmissionRow({ ...DRAFT_ROW, required_approvals: 0 })).toThrow()
   })
 
   it("preserves submitted lifecycle metadata while unassigned", () => {

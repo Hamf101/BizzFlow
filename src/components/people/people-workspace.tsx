@@ -15,6 +15,7 @@ import {
 } from "react"
 
 import { ListQuery } from "@/components/data/list-query"
+import { DatedTitle } from "@/components/navigation/dated-title"
 import { getMemberDisplayName, getMemberRoleName } from "@/components/people/member-name"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -131,18 +132,20 @@ export function PeopleWorkspace({
         <div className="flex items-center justify-between gap-3">
           {/* The real space keeps the accessible name "People 3 members"
               rather than "People3 members"; the small margin keeps the gap. */}
-          <h1
-            className="min-w-0 text-2xl leading-none font-medium tracking-[-0.02em]"
-            data-slot="people-heading"
-          >
-            People{" "}
-            <span
-              aria-label={`${members.length} members`}
-              className="ml-0.5 text-xl font-normal text-muted-foreground"
+          <DatedTitle>
+            <h1
+              className="min-w-0 text-2xl leading-none font-medium tracking-[-0.02em]"
+              data-slot="people-heading"
             >
-              {members.length}
-            </span>
-          </h1>
+              People{" "}
+              <span
+                aria-label={`${members.length} members`}
+                className="ml-0.5 text-xl font-normal text-muted-foreground"
+              >
+                {members.length}
+              </span>
+            </h1>
+          </DatedTitle>
           {canInviteMembers(actorRole) ? (
             <InviteWorkspace
               createInviteAction={createInviteAction}
@@ -367,7 +370,8 @@ function MemberProfilePreview({
   return (
     <PreviewCard handle={previewHandle}>
       <span
-        className="min-w-0"
+        // A flex box, so a long name is cut short beside its role, not under it.
+        className="flex min-w-0"
         onClick={() => previewHandle.open(triggerId)}
         onFocus={() => previewHandle.open(triggerId)}
       >

@@ -19,10 +19,14 @@ import {
 import { BLOCK_GAP, pageStyle, PlacedImages, printableMargin } from "@/components/templates/printed-page"
 import {
   groupTemplateRenderBlocks,
+  ROW_GRID,
+  rowGridStyle,
   type TemplateWebRenderGroup
 } from "@/components/templates/template-render-groups"
 import { DatePicker } from "@/components/ui/date-picker"
-import { Input } from "@/components/ui/input"
+import { PaperGrid, PaperTable, readChoiceList } from "@/components/editor/paper-answer-kinds"
+import { CheckboxChoices, RadioChoices } from "@/components/ui/radio-choices"
+import { TypedInput } from "@/components/ui/typed-input"
 import { Select } from "@/components/ui/select"
 import { formatDateAnswer } from "@/lib/date-format"
 import { resolveDocumentSurfaceInk } from "@/lib/document-surface"
@@ -35,14 +39,13 @@ import {
   type TemplateRenderPlan,
   type TemplateRenderSection
 } from "@/services/templates/template-render-plan"
-import {
-  IMAGE_DATA_URL_PATTERN,
-  MAX_IMAGE_DATA_URL_LENGTH,
-  type TemplateBlock,
-  type TemplateBranding,
-  type TemplateContent,
-  type TemplateLayout
+import type {
+  TemplateBlock,
+  TemplateBranding,
+  TemplateContent,
+  TemplateLayout
 } from "@/types/template"
+import { IMAGE_DATA_URL_PATTERN, MAX_IMAGE_DATA_URL_LENGTH } from "@/types/template-limits"
 import {
   applyVisibleTemplateFieldValue,
   pruneHiddenTemplateFieldValues
@@ -151,9 +154,7 @@ export function GeneratedDocumentContent({
     )
   }
   // This component is only ever an editing or review surface: every caller
-  // renders it inside the themed app, and none offers a print view. Fidelity
-  // to the author's brand colours belongs to the Studio's Preview mode and to
-  // the finalized PDF, both of which draw on real paper.
+  // renders it inside the themed app, so the brand's colours go through the theme.
   const ink = resolveDocumentSurfaceInk("screen", renderPlan.branding)
   const paperStyle = {
     "--document-accent": ink.accent,
@@ -437,11 +438,10 @@ function GeneratedFieldGroup({
         </h3>
       )}
       <div
+        style={rowGridStyle(group)}
         className={cn(
-          "grid min-w-0",
-          group.columns === 1
-            ? "grid-cols-1"
-            : "grid-cols-1 sm:grid-cols-[repeat(2,minmax(0,1fr))]",
+          // Rows stack on a phone and are laid out as they print from sm up.
+          ROW_GRID,
           BLOCK_GAP[density]
         )}
       >
@@ -561,10 +561,10 @@ export function GeneratedBlock({
                 value={readStringAnswer(answers, block.fieldKey)}
               />
             ) : (
-              <Input
+              <TypedInput
+                block={block}
                 className="border-input"
                 id={block.id}
-                maxLength={20_000}
                 name={getGeneratedDocumentAnswerName("text", block.fieldKey)}
                 onChange={(event: ChangeEvent<HTMLInputElement>): void =>
                   onAnswerChange(block.fieldKey, event.target.value)
@@ -655,9 +655,31 @@ export function GeneratedBlock({
       return (
         <AnswerFieldFrame
           block={block}
-          labelFor={editable ? block.id : undefined}
+          labelFor={editable && block.display !== "radios" && !block.multiple ? block.id : undefined}
         >
-          {editable ? (
+          {block.multiple ? (
+            editable ? (
+              <CheckboxChoices
+                across={block.across}
+                label={block.label}
+                name={getGeneratedDocumentAnswerName("json", block.fieldKey)}
+                onChange={(value: string[]): void => onAnswerChange(block.fieldKey, value)}
+                options={block.options}
+                value={readChoiceList(answers[block.fieldKey])}
+              />
+            ) : (
+              <ReadOnlyAnswer value={readChoiceList(answers[block.fieldKey]).join(", ")} />
+            )
+          ) : editable && block.display === "radios" ? (
+            <RadioChoices
+              across={block.across}
+              label={block.label}
+              name={getGeneratedDocumentAnswerName("text", block.fieldKey)}
+              onChange={(value: string): void => onAnswerChange(block.fieldKey, value)}
+              options={block.options}
+              value={readStringAnswer(answers, block.fieldKey)}
+            />
+          ) : editable ? (
             <Select
               id={block.id}
               name={getGeneratedDocumentAnswerName("text", block.fieldKey)}
@@ -677,6 +699,17 @@ export function GeneratedBlock({
             </Select>
           ) : (
             <ReadOnlyAnswer value={readStringAnswer(answers, block.fieldKey)} />
+          )}
+        </AnswerFieldFrame>
+      )
+    case "choice_grid_field":
+    case "table_field":
+      return (
+        <AnswerFieldFrame block={block}>
+          {block.type === "choice_grid_field" ? (
+            <PaperGrid block={block} mode={editable ? "fill" : "read"} onChange={(value) => onAnswerChange(block.fieldKey, value)} value={answers[block.fieldKey]} />
+          ) : (
+            <PaperTable block={block} mode={editable ? "fill" : "read"} onChange={(value) => onAnswerChange(block.fieldKey, value)} value={answers[block.fieldKey]} />
           )}
         </AnswerFieldFrame>
       )

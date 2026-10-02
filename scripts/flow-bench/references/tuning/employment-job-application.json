@@ -1,0 +1,990 @@
+{
+  "request": "Job application form for a housing association. Include guidance notes for applicants, personal details, right to work, current job, employment history with gaps explained, education and qualifications, a supporting statement against the person specification, two references, criminal convictions, adjustments for interview and a declaration. Equal opportunities monitoring is on a separate sheet so leave it out.",
+  "title": "Job application form",
+  "description": "Use when someone applies for a job: guidance for applicants, then the job, their details, right to work, current job, employment history, qualifications, supporting statement, references, convictions, interview adjustments and a declaration.",
+  "maxPages": 7,
+  "content": {
+    "schemaVersion": 3,
+    "branding": {
+      "organizationName": "",
+      "logoAsset": null,
+      "logoDataUrl": null,
+      "logoAlignment": "left",
+      "logoWidthPercent": 24,
+      "primaryColor": "#283618",
+      "accentColor": "#606c38"
+    },
+    "blocks": [
+      {
+        "id": "0c110000-0000-4000-8000-000000000001",
+        "type": "heading",
+        "text": "Job application form",
+        "level": 1,
+        "alignment": "left"
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000002",
+        "type": "paragraph",
+        "text": "Thank you for your interest in working with us. Please read these notes before you fill in the form. We shortlist only from what you tell us on it, so take your time and give us the full picture.",
+        "alignment": "left"
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000003",
+        "type": "heading",
+        "text": "Filling in the form",
+        "level": 2,
+        "alignment": "left"
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000004",
+        "type": "bullet_list",
+        "items": [
+          "Answer every question. If a question does not apply to you, write \"not applicable\".",
+          "We do not accept CVs in place of this form, but you may attach one as well.",
+          "Fill in the form yourself. If you need help, or the form in another format, contact the recruitment team using the details in the job advert.",
+          "Send your application by the closing date in the advert. We cannot consider late applications."
+        ]
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000005",
+        "type": "heading",
+        "text": "Your supporting statement",
+        "level": 2,
+        "alignment": "left"
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000006",
+        "type": "paragraph",
+        "text": "The supporting statement in section 7 is the most important part of the form. The person specification for the job lists what someone needs to do it well. For each point, tell us how you meet it, with an example from your work, studies, volunteering or life outside work. Say what you did, how you did it and what happened as a result. Experience from any part of your life counts.",
+        "alignment": "left"
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000007",
+        "type": "heading",
+        "text": "What happens next",
+        "level": 2,
+        "alignment": "left"
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000008",
+        "type": "paragraph",
+        "text": "A panel compares each application with the person specification and invites the closest matches to interview. We will tell you whether you have been shortlisted. Any offer we make depends on satisfactory references, proof of your right to work in the UK and, where the job needs it, a criminal record check.",
+        "alignment": "left"
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000009",
+        "type": "heading",
+        "text": "Equal opportunities",
+        "level": 2,
+        "alignment": "left"
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000010",
+        "type": "paragraph",
+        "text": "We welcome applications from everyone. A separate equality monitoring form comes with this application. It is optional, it is kept apart from your application, and the people who shortlist and interview never see it. We do not ask your age, marital status or other personal circumstances on this form, because they play no part in our decision.",
+        "alignment": "left"
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000011",
+        "type": "paragraph",
+        "text": "How we use your information: we use the information on this form only to assess your application and, if you are successful, to set up your employment. It is seen by the recruitment team and the shortlisting and interview panel. If you are not successful we keep it only for the period our recruitment privacy notice sets, and then delete it.",
+        "runs": [
+          {
+            "text": "How we use your information:",
+            "bold": true
+          },
+          {
+            "text": " we use the information on this form only to assess your application and, if you are successful, to set up your employment. It is seen by the recruitment team and the shortlisting and interview panel. If you are not successful we keep it only for the period our recruitment privacy notice sets, and then delete it."
+          }
+        ],
+        "alignment": "left"
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000013",
+        "type": "text_field",
+        "fieldKey": "job_title",
+        "label": "Job title",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000014",
+        "type": "text_field",
+        "fieldKey": "reference",
+        "label": "Reference",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000016",
+        "type": "dropdown_field",
+        "fieldKey": "where_did_you_see_the_job_advertised",
+        "label": "Where did you see the job advertised?",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Our website",
+          "A job website",
+          "Social media",
+          "A newspaper or magazine",
+          "Jobcentre Plus",
+          "Someone told me about it",
+          "Other"
+        ]
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000017",
+        "type": "text_field",
+        "fieldKey": "where_else_did_you_see_it",
+        "label": "Where else did you see it?",
+        "required": false,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0c110000-0000-4000-8000-000000000016",
+          "operator": "equals",
+          "value": "Other"
+        },
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000019",
+        "type": "text_field",
+        "fieldKey": "first_name",
+        "label": "First name",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000020",
+        "type": "text_field",
+        "fieldKey": "last_name",
+        "label": "Last name",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000022",
+        "type": "text_field",
+        "fieldKey": "other_names_you_have_been_known_by",
+        "label": "Other names you have been known by",
+        "required": false,
+        "helpText": "We need these to check your references and any criminal record check.",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000023",
+        "type": "text_field",
+        "fieldKey": "address",
+        "label": "Address",
+        "required": true,
+        "helpText": null,
+        "boxHeight": 45,
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000024",
+        "type": "text_field",
+        "fieldKey": "phone_number",
+        "label": "Phone number",
+        "required": true,
+        "helpText": "We call to arrange interviews.",
+        "placeholder": null,
+        "multiline": false,
+        "format": "phone"
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000025",
+        "type": "text_field",
+        "fieldKey": "email_address",
+        "label": "Email address",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "format": "email"
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000027",
+        "type": "dropdown_field",
+        "fieldKey": "how_should_we_contact_you",
+        "label": "How should we contact you?",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Phone",
+          "Email",
+          "Either"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000029",
+        "type": "paragraph",
+        "text": "By law we must check that everyone we employ has the right to work in the UK before they start. We check this for every candidate we offer a job to, in the same way.",
+        "alignment": "left"
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000030",
+        "type": "dropdown_field",
+        "fieldKey": "do_you_have_the_right_to_work_in_the_uk",
+        "label": "Do you have the right to work in the UK?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No",
+          "Not sure"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000031",
+        "type": "dropdown_field",
+        "fieldKey": "will_you_need_us_to_sponsor_you_for_a_visa",
+        "label": "Will you need us to sponsor you for a visa?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000032",
+        "type": "text_field",
+        "fieldKey": "what_immigration_permission_do_you_have",
+        "label": "What immigration permission do you have?",
+        "required": false,
+        "helpText": "For example, a visa type or settled status. We will talk it through with you.",
+        "visibleWhen": {
+          "sourceBlockId": "0c110000-0000-4000-8000-000000000030",
+          "operator": "equals",
+          "value": "Not sure"
+        },
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000034",
+        "type": "text_field",
+        "fieldKey": "current_employer",
+        "label": "Employer",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000035",
+        "type": "text_field",
+        "fieldKey": "current_position",
+        "label": "Your position",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000037",
+        "type": "date_field",
+        "fieldKey": "current_start_date",
+        "label": "Date you started",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": " ",
+          "month": "long"
+        }
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000038",
+        "type": "date_field",
+        "fieldKey": "current_end_date",
+        "label": "Date you left",
+        "required": false,
+        "helpText": "Leave blank if you still work there.",
+        "dateFormat": {
+          "order": "dmy",
+          "separator": " ",
+          "month": "long"
+        }
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000040",
+        "type": "text_field",
+        "fieldKey": "salary_or_hourly_rate",
+        "label": "Salary or hourly rate",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "format": "money",
+        "prefix": "£"
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000041",
+        "type": "text_field",
+        "fieldKey": "notice_period",
+        "label": "Notice period",
+        "required": false,
+        "helpText": "The notice you must give, such as one month.",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000043",
+        "type": "text_field",
+        "fieldKey": "your_main_duties_and_responsibilities",
+        "label": "Your main duties and responsibilities",
+        "required": true,
+        "helpText": null,
+        "boxHeight": 105,
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000044",
+        "type": "text_field",
+        "fieldKey": "why_do_you_want_to_leave_or_why_did_you_leave",
+        "label": "Why do you want to leave, or why did you leave?",
+        "required": true,
+        "helpText": null,
+        "boxHeight": 45,
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000046",
+        "type": "paragraph",
+        "text": "List your previous jobs, most recent first, including part-time and temporary work and volunteering. Then explain any gaps in your employment; there is no need to give reasons you would rather keep private.",
+        "alignment": "left"
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000111",
+        "type": "table_field",
+        "fieldKey": "previous_jobs",
+        "label": "Previous jobs",
+        "required": false,
+        "helpText": "Give the month and year you started and left each job.",
+        "columns": [
+          {
+            "label": "Employer"
+          },
+          {
+            "label": "Position"
+          },
+          {
+            "label": "From"
+          },
+          {
+            "label": "To"
+          },
+          {
+            "label": "Why you left"
+          }
+        ],
+        "rows": 5,
+        "addRows": true
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000069",
+        "type": "text_field",
+        "fieldKey": "gaps_in_your_employment",
+        "label": "Gaps in your employment",
+        "required": false,
+        "helpText": "The dates of each gap, and what you were doing, such as caring, studying or travelling.",
+        "boxHeight": 60,
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000071",
+        "type": "table_field",
+        "fieldKey": "qualifications",
+        "label": "Qualifications",
+        "required": false,
+        "helpText": "Start with the most relevant to this job.",
+        "columns": [
+          {
+            "label": "Qualification"
+          },
+          {
+            "label": "Subject"
+          },
+          {
+            "label": "Grade"
+          },
+          {
+            "label": "Year"
+          }
+        ],
+        "rows": 5,
+        "addRows": true
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000072",
+        "type": "text_field",
+        "fieldKey": "professional_memberships",
+        "label": "Professional memberships",
+        "required": false,
+        "helpText": "The body, your level of membership and your membership number.",
+        "boxHeight": 45,
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000073",
+        "type": "text_field",
+        "fieldKey": "other_training_or_courses_relevant_to_this_job",
+        "label": "Other training or courses relevant to this job",
+        "required": false,
+        "helpText": null,
+        "boxHeight": 75,
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000075",
+        "type": "paragraph",
+        "text": "Tell us how you meet each point in the person specification, with examples. You may continue on a separate sheet, marked with your name and the job title.",
+        "alignment": "left"
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000076",
+        "type": "text_field",
+        "fieldKey": "your_supporting_statement",
+        "label": "Your supporting statement",
+        "required": true,
+        "helpText": null,
+        "boxHeight": 520,
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000078",
+        "type": "paragraph",
+        "text": "Give two referees who can comment on your work. One must be your current or most recent employer. Referees must not be related to you. We contact referees only after we offer you a job, unless you tell us we may contact them sooner.",
+        "alignment": "left"
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000079",
+        "type": "text_field",
+        "fieldKey": "first_referee_name",
+        "label": "Full name",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000080",
+        "type": "text_field",
+        "fieldKey": "first_referee_position",
+        "label": "Position",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000082",
+        "type": "text_field",
+        "fieldKey": "first_referee_organisation",
+        "label": "Organisation",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000083",
+        "type": "text_field",
+        "fieldKey": "first_referee_relationship",
+        "label": "Relationship",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000085",
+        "type": "text_field",
+        "fieldKey": "first_referee_phone",
+        "label": "Phone number",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "format": "phone"
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000086",
+        "type": "text_field",
+        "fieldKey": "first_referee_email",
+        "label": "Email address",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "format": "email"
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000088",
+        "type": "text_field",
+        "fieldKey": "second_referee_name",
+        "label": "Full name",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000089",
+        "type": "text_field",
+        "fieldKey": "second_referee_position",
+        "label": "Position",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000091",
+        "type": "text_field",
+        "fieldKey": "second_referee_organisation",
+        "label": "Organisation",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000092",
+        "type": "text_field",
+        "fieldKey": "second_referee_relationship",
+        "label": "Relationship",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000094",
+        "type": "text_field",
+        "fieldKey": "second_referee_phone",
+        "label": "Phone number",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "format": "phone"
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000095",
+        "type": "text_field",
+        "fieldKey": "second_referee_email",
+        "label": "Email address",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "format": "email"
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000097",
+        "type": "dropdown_field",
+        "fieldKey": "may_we_contact_your_referees_before_we_make_you_an_offer",
+        "label": "May we contact your referees before we make you an offer?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000099",
+        "type": "paragraph",
+        "text": "You do not need to tell us about convictions, cautions, reprimands or final warnings that are spent under the Rehabilitation of Offenders Act 1974, unless the job advert says the job needs a standard or enhanced criminal record check. Having a criminal record will not necessarily stop you getting the job. We consider each case fairly, taking into account the offence, when it happened and its relevance to the job.",
+        "alignment": "left"
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000100",
+        "type": "dropdown_field",
+        "fieldKey": "do_you_have_any_unspent_convictions_cautions_reprimands_or_f",
+        "label": "Do you have any unspent convictions, cautions, reprimands or final warnings?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000101",
+        "type": "text_field",
+        "fieldKey": "tell_us_about_each_one_what_it_was_for_the_date_and_the_sent",
+        "label": "Tell us about each one: what it was for, the date, and the sentence or outcome",
+        "required": true,
+        "helpText": "You may send these details in a sealed envelope marked confidential instead.",
+        "visibleWhen": {
+          "sourceBlockId": "0c110000-0000-4000-8000-000000000100",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "boxHeight": 75,
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000103",
+        "type": "dropdown_field",
+        "fieldKey": "do_you_need_any_adjustments_or_support_to_attend_an_intervie",
+        "label": "Do you need any adjustments or support to attend an interview?",
+        "required": true,
+        "helpText": "For example, step-free access, extra time, or a sign language interpreter.",
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000104",
+        "type": "text_field",
+        "fieldKey": "what_would_help",
+        "label": "What would help?",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0c110000-0000-4000-8000-000000000103",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "boxHeight": 45,
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000105",
+        "type": "text_field",
+        "fieldKey": "dates_you_cannot_attend_an_interview",
+        "label": "Dates you cannot attend an interview",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000107",
+        "type": "paragraph",
+        "text": "I confirm that the information I have given on this form is true and complete. I understand that if I have given false information, or left out anything relevant, any offer may be withdrawn or my employment ended.",
+        "alignment": "left"
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000108",
+        "type": "signature_field",
+        "fieldKey": "signature",
+        "label": "Signature",
+        "required": true,
+        "helpText": null
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000109",
+        "type": "date_field",
+        "fieldKey": "signed_date",
+        "label": "Date",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": " ",
+          "month": "long"
+        }
+      }
+    ],
+    "layout": {
+      "pageSize": "A4",
+      "orientation": "portrait",
+      "marginPreset": "generous",
+      "density": "balanced",
+      "fieldStyle": "line",
+      "sectionNumbers": "numbers",
+      "sectionStyle": "plain",
+      "printedTitle": {
+        "mode": "none"
+      },
+      "headerPolicy": "none",
+      "footerPolicy": "all_pages",
+      "pageNumbering": "none",
+      "footerText": {
+        "left": "{title}",
+        "right": "Page {page} of {pages}"
+      }
+    },
+    "sections": [
+      {
+        "id": "0c110000-0000-4000-8000-000000000012",
+        "label": "The job",
+        "pageBreakBefore": true,
+        "keepTogether": false,
+        "startBlockId": "0c110000-0000-4000-8000-000000000013"
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000018",
+        "label": "Your details",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0c110000-0000-4000-8000-000000000019"
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000028",
+        "label": "Right to work in the UK",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0c110000-0000-4000-8000-000000000029"
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000033",
+        "label": "Your current or most recent job",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0c110000-0000-4000-8000-000000000034"
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000045",
+        "label": "Employment history",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0c110000-0000-4000-8000-000000000046"
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000070",
+        "label": "Education, qualifications and training",
+        "pageBreakBefore": true,
+        "keepTogether": false,
+        "startBlockId": "0c110000-0000-4000-8000-000000000071"
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000074",
+        "label": "Supporting statement",
+        "pageBreakBefore": true,
+        "keepTogether": false,
+        "startBlockId": "0c110000-0000-4000-8000-000000000075"
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000077",
+        "label": "References",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0c110000-0000-4000-8000-000000000078"
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000098",
+        "label": "Criminal convictions",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0c110000-0000-4000-8000-000000000099"
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000102",
+        "label": "Interview arrangements",
+        "pageBreakBefore": false,
+        "keepTogether": true,
+        "startBlockId": "0c110000-0000-4000-8000-000000000103"
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000106",
+        "label": "Declaration",
+        "pageBreakBefore": false,
+        "keepTogether": true,
+        "startBlockId": "0c110000-0000-4000-8000-000000000107"
+      }
+    ],
+    "fieldGroups": [
+      {
+        "id": "0c110000-0000-4000-8000-000000000015",
+        "label": null,
+        "startBlockId": "0c110000-0000-4000-8000-000000000013",
+        "endBlockId": "0c110000-0000-4000-8000-000000000014",
+        "columns": 2,
+        "keepTogether": false,
+        "widths": [
+          8,
+          4
+        ]
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000021",
+        "label": null,
+        "startBlockId": "0c110000-0000-4000-8000-000000000019",
+        "endBlockId": "0c110000-0000-4000-8000-000000000020",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000026",
+        "label": null,
+        "startBlockId": "0c110000-0000-4000-8000-000000000024",
+        "endBlockId": "0c110000-0000-4000-8000-000000000025",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000036",
+        "label": null,
+        "startBlockId": "0c110000-0000-4000-8000-000000000034",
+        "endBlockId": "0c110000-0000-4000-8000-000000000035",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000039",
+        "label": null,
+        "startBlockId": "0c110000-0000-4000-8000-000000000037",
+        "endBlockId": "0c110000-0000-4000-8000-000000000038",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000042",
+        "label": null,
+        "startBlockId": "0c110000-0000-4000-8000-000000000040",
+        "endBlockId": "0c110000-0000-4000-8000-000000000041",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000081",
+        "label": "First referee",
+        "startBlockId": "0c110000-0000-4000-8000-000000000079",
+        "endBlockId": "0c110000-0000-4000-8000-000000000080",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000084",
+        "label": null,
+        "startBlockId": "0c110000-0000-4000-8000-000000000082",
+        "endBlockId": "0c110000-0000-4000-8000-000000000083",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000087",
+        "label": null,
+        "startBlockId": "0c110000-0000-4000-8000-000000000085",
+        "endBlockId": "0c110000-0000-4000-8000-000000000086",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000090",
+        "label": "Second referee",
+        "startBlockId": "0c110000-0000-4000-8000-000000000088",
+        "endBlockId": "0c110000-0000-4000-8000-000000000089",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000093",
+        "label": null,
+        "startBlockId": "0c110000-0000-4000-8000-000000000091",
+        "endBlockId": "0c110000-0000-4000-8000-000000000092",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000096",
+        "label": null,
+        "startBlockId": "0c110000-0000-4000-8000-000000000094",
+        "endBlockId": "0c110000-0000-4000-8000-000000000095",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0c110000-0000-4000-8000-000000000110",
+        "label": null,
+        "startBlockId": "0c110000-0000-4000-8000-000000000108",
+        "endBlockId": "0c110000-0000-4000-8000-000000000109",
+        "columns": 2,
+        "keepTogether": false
+      }
+    ],
+    "blockRules": [
+      {
+        "blockId": "0c110000-0000-4000-8000-000000000003",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "0c110000-0000-4000-8000-000000000005",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "0c110000-0000-4000-8000-000000000007",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "0c110000-0000-4000-8000-000000000009",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "0c110000-0000-4000-8000-000000000046",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "0c110000-0000-4000-8000-000000000075",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "0c110000-0000-4000-8000-000000000078",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "0c110000-0000-4000-8000-000000000099",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "0c110000-0000-4000-8000-000000000107",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      }
+    ]
+  }
+}

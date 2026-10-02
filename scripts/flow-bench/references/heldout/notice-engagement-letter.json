@@ -1,0 +1,600 @@
+{
+  "request": "engagement letter for my accountancy practice: preparing a sole trader's annual self assessment tax return",
+  "title": "Letter of engagement",
+  "description": "Send to a new sole trader client before starting work, to confirm that the practice will prepare their annual self assessment tax return, what each side is responsible for, the fees and the terms, for the client to sign and return.",
+  "maxPages": 5,
+  "content": {
+    "schemaVersion": 3,
+    "branding": {
+      "organizationName": "",
+      "logoAsset": null,
+      "logoDataUrl": null,
+      "logoAlignment": "left",
+      "logoWidthPercent": 24,
+      "primaryColor": "#252329",
+      "accentColor": "#635273"
+    },
+    "blocks": [
+      {
+        "id": "d6060000-0000-4000-8000-000000000001",
+        "type": "heading",
+        "text": "Letter of engagement",
+        "level": 1,
+        "alignment": "left"
+      },
+      {
+        "id": "d6060000-0000-4000-8000-000000000002",
+        "type": "paragraph",
+        "text": "Self assessment tax return for a sole trader",
+        "alignment": "left"
+      },
+      {
+        "id": "d6060000-0000-4000-8000-000000000003",
+        "type": "text_field",
+        "fieldKey": "our_reference",
+        "label": "Our reference",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d6060000-0000-4000-8000-000000000004",
+        "type": "date_field",
+        "fieldKey": "date_of_this_letter",
+        "label": "Date of this letter",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": " ",
+          "month": "long"
+        }
+      },
+      {
+        "id": "d6060000-0000-4000-8000-000000000006",
+        "type": "text_field",
+        "fieldKey": "client_name",
+        "label": "Client name",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d6060000-0000-4000-8000-000000000007",
+        "type": "text_field",
+        "fieldKey": "client_address",
+        "label": "Client address",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": true,
+        "boxHeight": 45
+      },
+      {
+        "id": "d6060000-0000-4000-8000-000000000008",
+        "type": "text_field",
+        "fieldKey": "name_of_the_practice",
+        "label": "Name of the practice",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d6060000-0000-4000-8000-000000000009",
+        "type": "paragraph",
+        "text": "Thank you for asking us to act for you. This letter sets out the work we will do for you, what we need from you, and the terms on which we will do it. Please read it carefully and, if you agree, sign and return a copy. If anything does not match your understanding, please tell us before you sign.",
+        "alignment": "left"
+      },
+      {
+        "id": "d6060000-0000-4000-8000-000000000010",
+        "type": "paragraph",
+        "text": "We act for you alone, as the person named above, in your capacity as an individual who is self-employed as a sole trader. We do not act for your spouse or partner, any other member of your family, or any business partner, unless we agree that in a separate letter.",
+        "alignment": "left"
+      },
+      {
+        "id": "d6060000-0000-4000-8000-000000000012",
+        "type": "paragraph",
+        "text": "For each tax year covered by this letter, we will:",
+        "alignment": "left"
+      },
+      {
+        "id": "d6060000-0000-4000-8000-000000000014",
+        "type": "numbered_list",
+        "items": [
+          "prepare your self-employment accounts for the tax return, from the books, records and other information you give us;",
+          "prepare your self assessment tax return, with the supporting schedules for your self-employment and any other income you tell us about;",
+          "calculate the income tax and National Insurance contributions you owe, and tell you how much to pay and when, including any payments on account;",
+          "send the draft return to you to check, and submit it to HMRC online once you have approved and signed it; and",
+          "deal with HMRC's routine correspondence about the return we have submitted, if you authorise us to act as your agent."
+        ]
+      },
+      {
+        "id": "d6060000-0000-4000-8000-000000000015",
+        "type": "paragraph",
+        "text": "Our fee does not include the following work. We will be happy to provide it, but it will be agreed with you separately, and charged in addition:",
+        "alignment": "left"
+      },
+      {
+        "id": "d6060000-0000-4000-8000-000000000017",
+        "type": "bullet_list",
+        "items": [
+          "bookkeeping, or putting your records into order before we can prepare your accounts;",
+          "VAT returns, payroll, or tax returns for any other person or business;",
+          "advice on tax planning, or on starting or ending your business; and",
+          "dealing with an HMRC enquiry into your return, or any other investigation."
+        ]
+      },
+      {
+        "id": "d6060000-0000-4000-8000-000000000018",
+        "type": "paragraph",
+        "text": "You are legally responsible for your own tax return and for paying the right amount of tax on time, even though we prepare the return for you. To allow us to do our work, you agree to:",
+        "alignment": "left"
+      },
+      {
+        "id": "d6060000-0000-4000-8000-000000000020",
+        "type": "numbered_list",
+        "items": [
+          "keep complete and accurate records of your business income and expenses, and keep them for as long as the law requires;",
+          "give us all your records and information for each tax year by the date set out below, and tell us promptly about any other income, gains or changes in your circumstances;",
+          "answer our questions fully and promptly, and tell us if anything you have given us turns out to be wrong;",
+          "check the draft return carefully, and approve it only when you are satisfied it is correct and complete; and",
+          "pay your tax by the due dates. HMRC charges penalties and interest on late returns and late payments, and these are your responsibility unless they result from our own default."
+        ]
+      },
+      {
+        "id": "d6060000-0000-4000-8000-000000000021",
+        "type": "date_field",
+        "fieldKey": "date_we_need_your_records_by_each_year",
+        "label": "Date we need your records by each year",
+        "required": true,
+        "helpText": "This leaves us time to prepare the return before the filing deadline.",
+        "dateFormat": {
+          "order": "dmy",
+          "separator": " ",
+          "month": "short"
+        }
+      },
+      {
+        "id": "d6060000-0000-4000-8000-000000000022",
+        "type": "paragraph",
+        "text": "We will carry out our work with reasonable skill and care, and in line with the ethical and professional standards of the professional body we belong to. We will prepare your return from the information you give us. We will not audit or check that information, though we will tell you about anything that appears to be wrong or incomplete.",
+        "alignment": "left"
+      },
+      {
+        "id": "d6060000-0000-4000-8000-000000000024",
+        "type": "dropdown_field",
+        "fieldKey": "how_is_our_fee_worked_out",
+        "label": "How is our fee worked out?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "A fixed fee for each tax return",
+          "Our hourly rates for the time we spend",
+          "A fixed fee, with hourly rates for any extra work"
+        ],
+        "display": "radios"
+      },
+      {
+        "id": "d6060000-0000-4000-8000-000000000026",
+        "type": "text_field",
+        "fieldKey": "fixed_fee_for_each_tax_return",
+        "label": "Fixed fee for each tax return",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "d6060000-0000-4000-8000-000000000024",
+          "operator": "equals",
+          "value": "A fixed fee for each tax return"
+        },
+        "placeholder": null,
+        "multiline": false,
+        "format": "money",
+        "prefix": "£"
+      },
+      {
+        "id": "d6060000-0000-4000-8000-000000000027",
+        "type": "text_field",
+        "fieldKey": "our_hourly_rates",
+        "label": "Our hourly rates",
+        "required": true,
+        "helpText": "The rate for each grade of staff.",
+        "visibleWhen": {
+          "sourceBlockId": "d6060000-0000-4000-8000-000000000024",
+          "operator": "equals",
+          "value": "Our hourly rates for the time we spend"
+        },
+        "placeholder": null,
+        "multiline": true,
+        "boxHeight": 45
+      },
+      {
+        "id": "d6060000-0000-4000-8000-000000000028",
+        "type": "text_field",
+        "fieldKey": "fixed_fee_and_hourly_rates",
+        "label": "Fixed fee and hourly rates",
+        "required": true,
+        "helpText": "The fixed fee for each tax return, and the hourly rates for extra work.",
+        "visibleWhen": {
+          "sourceBlockId": "d6060000-0000-4000-8000-000000000024",
+          "operator": "equals",
+          "value": "A fixed fee, with hourly rates for any extra work"
+        },
+        "placeholder": null,
+        "multiline": true,
+        "boxHeight": 45
+      },
+      {
+        "id": "d6060000-0000-4000-8000-000000000029",
+        "type": "text_field",
+        "fieldKey": "when_our_invoices_are_due",
+        "label": "When our invoices are due",
+        "required": true,
+        "helpText": "For example within 14 days of the invoice date.",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d6060000-0000-4000-8000-000000000030",
+        "type": "text_field",
+        "fieldKey": "what_happens_if_an_invoice_is_paid_late",
+        "label": "What happens if an invoice is paid late",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d6060000-0000-4000-8000-000000000031",
+        "type": "paragraph",
+        "text": "Our fees are reviewed each year, and we will tell you in writing of any change before it takes effect.",
+        "alignment": "left"
+      },
+      {
+        "id": "d6060000-0000-4000-8000-000000000032",
+        "type": "paragraph",
+        "text": "Like all accountancy practices in the United Kingdom, we must follow anti-money laundering law. Before we start work, we must confirm your identity and address, and we may use an electronic verification service to do so. We may ask for more information during our work. If we know or suspect that someone is involved in money laundering, which includes the proceeds of tax evasion, the law requires us to report it to the National Crime Agency, and it does not allow us to tell you that we have done so.",
+        "alignment": "left"
+      },
+      {
+        "id": "d6060000-0000-4000-8000-000000000034",
+        "type": "paragraph",
+        "text": "We keep information about your affairs confidential, except where the law or our professional rules require or allow us to disclose it, or where you agree. We use your personal information to provide our services and to meet our legal obligations. Our privacy notice, which we will give you with this letter, explains how we use and protect it and the rights you have.",
+        "alignment": "left"
+      },
+      {
+        "id": "d6060000-0000-4000-8000-000000000036",
+        "type": "paragraph",
+        "text": "We will return your original records to you once your return has been submitted. We keep our own working papers and copies for as long as we need them to meet our legal and professional obligations, after which we destroy them securely. You must keep your own business records for as long as the law requires, even after we have returned them.",
+        "alignment": "left"
+      },
+      {
+        "id": "d6060000-0000-4000-8000-000000000038",
+        "type": "paragraph",
+        "text": "Our liability to you for any loss arising from our work under this letter is limited to the amount below. Nothing in this letter limits or excludes our liability for death or personal injury caused by our negligence, for fraud, or for anything else that cannot be limited or excluded by law.",
+        "alignment": "left"
+      },
+      {
+        "id": "d6060000-0000-4000-8000-000000000040",
+        "type": "text_field",
+        "fieldKey": "our_total_liability_is_limited_to",
+        "label": "Our total liability is limited to",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d6060000-0000-4000-8000-000000000041",
+        "type": "paragraph",
+        "text": "We aim to give you a high standard of service. If you are unhappy with any part of it, please contact the person responsible for your work first. If we cannot resolve your concern, you may complain to the professional body we belong to, named below.",
+        "alignment": "left"
+      },
+      {
+        "id": "d6060000-0000-4000-8000-000000000043",
+        "type": "text_field",
+        "fieldKey": "professional_body_we_belong_to",
+        "label": "Professional body we belong to",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d6060000-0000-4000-8000-000000000044",
+        "type": "paragraph",
+        "text": "This letter applies to each tax year from the date you sign it until either of us ends it. If the services you need change, we will agree the changes with you in writing. Either of us may end this engagement by giving the other written notice of the period set out below. You will pay for the work we have done up to the date it ends. If our engagement ends, we will co-operate with any accountant who takes over your affairs.",
+        "alignment": "left"
+      },
+      {
+        "id": "d6060000-0000-4000-8000-000000000046",
+        "type": "text_field",
+        "fieldKey": "notice_needed_to_end_this_engagement",
+        "label": "Notice needed to end this engagement",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d6060000-0000-4000-8000-000000000047",
+        "type": "paragraph",
+        "text": "This letter is governed by the law of the part of the United Kingdom set out below, and the courts of that part of the United Kingdom will hear any dispute about it.",
+        "alignment": "left"
+      },
+      {
+        "id": "d6060000-0000-4000-8000-000000000049",
+        "type": "dropdown_field",
+        "fieldKey": "which_law_governs_this_letter",
+        "label": "Which law governs this letter?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "England and Wales",
+          "Scotland",
+          "Northern Ireland"
+        ],
+        "display": "radios"
+      },
+      {
+        "id": "d6060000-0000-4000-8000-000000000050",
+        "type": "paragraph",
+        "text": "Please sign below to confirm that you have read and understood this letter and agree to its terms, and return a copy to us. We will not start work until we have received it.",
+        "alignment": "left"
+      },
+      {
+        "id": "d6060000-0000-4000-8000-000000000052",
+        "type": "signature_field",
+        "fieldKey": "client_signature",
+        "label": "Signature",
+        "required": true,
+        "helpText": null
+      },
+      {
+        "id": "d6060000-0000-4000-8000-000000000053",
+        "type": "date_field",
+        "fieldKey": "date_signed_by_client",
+        "label": "Date",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": " ",
+          "month": "long"
+        }
+      },
+      {
+        "id": "d6060000-0000-4000-8000-000000000055",
+        "type": "text_field",
+        "fieldKey": "client_printed_name",
+        "label": "Printed name",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d6060000-0000-4000-8000-000000000056",
+        "type": "signature_field",
+        "fieldKey": "practice_signature",
+        "label": "Signature",
+        "required": true,
+        "helpText": null
+      },
+      {
+        "id": "d6060000-0000-4000-8000-000000000057",
+        "type": "date_field",
+        "fieldKey": "date_signed_for_the_practice",
+        "label": "Date",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": " ",
+          "month": "long"
+        }
+      },
+      {
+        "id": "d6060000-0000-4000-8000-000000000059",
+        "type": "text_field",
+        "fieldKey": "practice_signer_printed_name",
+        "label": "Printed name",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d6060000-0000-4000-8000-000000000060",
+        "type": "text_field",
+        "fieldKey": "practice_signer_position",
+        "label": "Position",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      }
+    ],
+    "layout": {
+      "pageSize": "A4",
+      "orientation": "portrait",
+      "density": "balanced",
+      "fieldStyle": "line",
+      "marginPreset": "generous",
+      "sectionStyle": "plain",
+      "printedTitle": {
+        "mode": "none"
+      },
+      "headerPolicy": "none",
+      "footerPolicy": "all_pages",
+      "pageNumbering": "none",
+      "footerText": {
+        "left": "{title}",
+        "right": "Page {page} of {pages}"
+      }
+    },
+    "sections": [
+      {
+        "id": "d6060000-0000-4000-8000-000000000011",
+        "label": "Who we act for",
+        "startBlockId": "d6060000-0000-4000-8000-000000000010",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6060000-0000-4000-8000-000000000013",
+        "label": "The services we will provide",
+        "startBlockId": "d6060000-0000-4000-8000-000000000012",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6060000-0000-4000-8000-000000000016",
+        "label": "What is not included",
+        "startBlockId": "d6060000-0000-4000-8000-000000000015",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6060000-0000-4000-8000-000000000019",
+        "label": "Your responsibilities",
+        "startBlockId": "d6060000-0000-4000-8000-000000000018",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6060000-0000-4000-8000-000000000023",
+        "label": "Our responsibilities",
+        "startBlockId": "d6060000-0000-4000-8000-000000000022",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6060000-0000-4000-8000-000000000025",
+        "label": "Fees",
+        "startBlockId": "d6060000-0000-4000-8000-000000000024",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6060000-0000-4000-8000-000000000033",
+        "label": "Identity checks and money laundering",
+        "startBlockId": "d6060000-0000-4000-8000-000000000032",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6060000-0000-4000-8000-000000000035",
+        "label": "Confidentiality and your information",
+        "startBlockId": "d6060000-0000-4000-8000-000000000034",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6060000-0000-4000-8000-000000000037",
+        "label": "Your records",
+        "startBlockId": "d6060000-0000-4000-8000-000000000036",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6060000-0000-4000-8000-000000000039",
+        "label": "Limitation of liability",
+        "startBlockId": "d6060000-0000-4000-8000-000000000038",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6060000-0000-4000-8000-000000000042",
+        "label": "If you are not happy",
+        "startBlockId": "d6060000-0000-4000-8000-000000000041",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6060000-0000-4000-8000-000000000045",
+        "label": "Changes and ending this engagement",
+        "startBlockId": "d6060000-0000-4000-8000-000000000044",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6060000-0000-4000-8000-000000000048",
+        "label": "Law that applies",
+        "startBlockId": "d6060000-0000-4000-8000-000000000047",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d6060000-0000-4000-8000-000000000051",
+        "label": "Agreement",
+        "startBlockId": "d6060000-0000-4000-8000-000000000050",
+        "pageBreakBefore": false,
+        "keepTogether": true
+      }
+    ],
+    "fieldGroups": [
+      {
+        "id": "d6060000-0000-4000-8000-000000000005",
+        "label": null,
+        "startBlockId": "d6060000-0000-4000-8000-000000000003",
+        "endBlockId": "d6060000-0000-4000-8000-000000000004",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "d6060000-0000-4000-8000-000000000054",
+        "label": "Client",
+        "startBlockId": "d6060000-0000-4000-8000-000000000052",
+        "endBlockId": "d6060000-0000-4000-8000-000000000053",
+        "columns": 2,
+        "keepTogether": true,
+        "widths": [
+          7,
+          5
+        ]
+      },
+      {
+        "id": "d6060000-0000-4000-8000-000000000058",
+        "label": "For the practice",
+        "startBlockId": "d6060000-0000-4000-8000-000000000056",
+        "endBlockId": "d6060000-0000-4000-8000-000000000057",
+        "columns": 2,
+        "keepTogether": true,
+        "widths": [
+          7,
+          5
+        ]
+      },
+      {
+        "id": "d6060000-0000-4000-8000-000000000061",
+        "label": null,
+        "startBlockId": "d6060000-0000-4000-8000-000000000059",
+        "endBlockId": "d6060000-0000-4000-8000-000000000060",
+        "columns": 2,
+        "keepTogether": false
+      }
+    ],
+    "blockRules": [
+      {
+        "blockId": "d6060000-0000-4000-8000-000000000012",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "d6060000-0000-4000-8000-000000000015",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "d6060000-0000-4000-8000-000000000018",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      }
+    ]
+  }
+}

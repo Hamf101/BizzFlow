@@ -86,7 +86,7 @@ export const bizflowToast = {
  * @param field - The first invalid control of the submission.
  * @returns A short sentence for the toast.
  */
-function describeInvalidField(
+export function describeInvalidField(
   field: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
 ): string {
   const label = field.labels?.[0]?.textContent?.replace(/\s*\*$/, "").trim()

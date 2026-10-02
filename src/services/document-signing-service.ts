@@ -4,16 +4,6 @@
  * Keep application imports pointed at this module while cohesive implementation
  * details remain isolated under `services/document-signing/`.
  */
-export type {
-  CompletePublicDocumentSigningInput,
-  DocumentSigningServiceDeps,
-  GetGeneratedDocumentSigningViewInput,
-  GetPublicDocumentSigningViewInput,
-  ResendDocumentSigningInvitationInput,
-  SaveGeneratedDocumentAnswersInput,
-  SendDocumentForSigningInput,
-  UpdateGeneratedDocumentContentInput,
-} from "@/services/document-signing/contracts"
 export { DocumentSigningServiceError } from "@/services/document-signing/errors"
 export {
   completePublicDocumentSigning,

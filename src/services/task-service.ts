@@ -1,23 +1,11 @@
 export type {
-  AssignTaskInput,
-  CancelTaskReminderInput,
-  CreateTaskInput,
-  GetTaskInput,
-  ListTaskPageInput,
-  ListTasksInput,
   NotifyTaskAssigneeInput,
-  ScheduleTaskReminderInput,
   TaskAssignedNotification,
-  TaskAuditLogInput,
   TaskDetail,
   TaskNotificationResult,
-  TaskNotificationSkipReason,
   TaskPage,
   TaskReminderRunSummary,
-  TaskServiceClient,
   TaskServiceDeps,
-  TransitionTaskStatusInput,
-  UpdateTaskInput,
 } from "@/services/tasks/contracts"
 export { TaskServiceError } from "@/services/tasks/errors"
 export {
@@ -39,7 +27,5 @@ export {
 } from "@/services/tasks/task-service"
 export type {
   SendTaskEmailInput,
-  TaskEmailDeps,
-  TaskEmailKind,
 } from "@/services/tasks/task-email"
 export { sendTaskEmail } from "@/services/tasks/task-email"

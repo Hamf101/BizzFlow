@@ -430,7 +430,7 @@ export async function createInternalSubmissionFileDownloadUrl(
         input.organizationId,
         input.submissionId
       )
-      assertSubmissionVisible(role, submission, input.actorUserId)
+      await assertSubmissionVisible(client, role, submission, input.actorUserId)
       const files = await listSubmissionFiles(
         client,
         input.organizationId,

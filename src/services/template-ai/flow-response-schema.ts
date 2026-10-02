@@ -11,6 +11,11 @@ export const TEMPLATE_FLOW_OPERATION_TYPES = [
   "update_image",
   "move_block",
   "remove_block",
+  "set_section",
+  "set_row",
+  "stand_alone",
+  "set_block_rule",
+  "set_layout",
 ] as const satisfies readonly TemplateFlowOperationType[]
 
 /**
@@ -39,9 +44,10 @@ export function createTemplateFlowResponseSchema(): FlowJsonSchema {
       description:
         "Clarification question when confirmation is needed; otherwise an empty string.",
     },
+    // Shape only: strict modes on several providers reject size limits, so
+    // Flow's own validation enforces how many operations a turn may carry.
     operations: {
       type: "array",
-      maxItems: 24,
       items: createClosedObjectSchema({
         type: {
           type: "string",

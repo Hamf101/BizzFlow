@@ -71,6 +71,31 @@ export type ChangeDocumentTemplateStatusInput = GetDocumentTemplateInput
 
 export type DuplicateDocumentTemplateInput = GetDocumentTemplateInput
 
+export type SetDocumentTemplateCategoryInput = GetDocumentTemplateInput & {
+  category: string | null
+}
+
+/** Most templates one bulk change may cover; a larger selection is chunked by the caller. */
+export const MAX_BULK_TEMPLATES = 200
+
+export type ChangeDocumentTemplatesInput = TemplateActorInput & {
+  change: "archive" | "restore" | "duplicate" | "category"
+  /** The category to set; only read by the `category` change. */
+  category?: string | null
+  templateIds: readonly string[]
+}
+
+/** What a bulk change did, with what Undo needs to put it back. */
+export type ChangeDocumentTemplatesResult = {
+  /** The templates that changed (for a duplicate, the ones copied). */
+  changed: string[]
+  /** The new drafts a duplicate made, in the order of `changed`. */
+  created: string[]
+  failed: number
+  /** For a category change: what each changed template's category was. */
+  previousCategories: Record<string, string | null>
+}
+
 export type CreateGeneratedDocumentInput = TemplateActorInput & {
   folderId?: string | null
   templateId?: string | null

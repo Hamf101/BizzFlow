@@ -1,7 +1,7 @@
 "use client"
 
-import { Download, Files, MoreHorizontal, Palette, Send } from "lucide-react"
-import { type ReactElement, useMemo, useRef, useState } from "react"
+import { Download, FilePen, Files, History, MessageSquare, MoreHorizontal, Palette, Send, UserPlus } from "lucide-react"
+import { type ReactElement, useEffect, useMemo, useRef, useState } from "react"
 
 import type { DocumentContentInput } from "@/app/(editor)/documents/[documentId]/edit/actions"
 import { DocumentRecipientCollection } from "@/components/documents/document-recipient-collection"
@@ -10,16 +10,28 @@ import { EditorCanvas } from "@/components/editor/editor-canvas"
 import { normalizeContentForSave } from "@/components/editor/editor-content"
 import { type DockTool, EditorDock } from "@/components/editor/editor-dock"
 import { FormatBar } from "@/components/editor/format-bar"
-import { FlowWindow } from "@/components/flow/flow-window"
+import { FlowDockSlot, FlowWindow } from "@/components/flow/flow-window"
 import { EditorFrame, type EditorLayoutStore, EditorNotice, EditorSidePanel } from "@/components/editor/editor-frame"
-import { PageSetupPanel } from "@/components/editor/page-setup-panel"
 import { type SaveResult, useAutosave } from "@/components/editor/use-autosave"
 import { useEditorController } from "@/components/editor/use-editor-controller"
-import { useEditorHistory } from "@/components/editor/use-editor-history"
+import {
+  preloadPanels,
+  RoomCheckpoints,
+  RoomComments,
+  RoomLayer,
+  RoomPeople,
+  TemplateBlockEditor,
+  TemplateFlowPanel,
+  PageSetupPanel,
+  TemplateBrandingPanel,
+  ShareDialog,
+} from "@/components/editor/lazy-panels"
+import { useLiveRoom } from "@/components/editor/use-live-room"
+import { useRoomPlace } from "@/components/editor/use-room-place"
 import { useLocalRecovery } from "@/components/editor/use-local-recovery"
-import { TemplateBlockEditor } from "@/components/templates/template-block-editor"
-import { TemplateBrandingPanel } from "@/components/templates/template-branding-panel"
-import { type FlowStarter, TemplateFlowPanel } from "@/components/templates/template-flow-panel"
+import { useMissingPictureAddresses, usePictureAddresses } from "@/components/editor/use-picture-addresses"
+import { useWorkingCopyHistory } from "@/components/editor/use-working-copy-history"
+import type { FlowStarter } from "@/components/templates/template-flow-panel"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import {
@@ -30,6 +42,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { bizflowToast } from "@/components/ui/toaster"
+import type { WorkingCopy } from "@/lib/collaboration/working-copy-doc"
 import { formatMediumDateTime } from "@/lib/date-format"
 import { SigningRecipientStatusBadge } from "@/lib/page-status-badges"
 import { cn } from "@/lib/utils"
@@ -59,8 +72,12 @@ type DocumentEditorProps = {
   backHref: string
   canFill: boolean
   canSend: boolean
+  /** Whether the member may choose who else can open this document. */
+  canShare: boolean
   /** Where this person keeps the dock and zoom. */
   editorLayout?: EditorLayoutStore
+  /** Who is writing, as the others in the room see them. */
+  me: Readonly<{ id: string; name: string }>
   resendAction: (formData: FormData) => Promise<void>
   saveAnswersAction: (formData: FormData) => Promise<SaveResult>
   saveContentAction: (input: DocumentContentInput) => Promise<SaveResult>
@@ -80,7 +97,9 @@ export function DocumentEditor({
   backHref,
   canFill,
   canSend,
+  canShare,
   editorLayout,
+  me,
   resendAction,
   saveAnswersAction,
   saveContentAction,
@@ -98,11 +117,30 @@ export function DocumentEditor({
     (): DocumentPage => ({ content: upgradeV2TemplateContentToV3(document.templateSnapshot), title: document.title }),
     [document]
   )
-  const history = useEditorHistory<DocumentPage>(initial)
+  // A draft's pages are written together; its answers save on their own, field by field.
+  const pictures = usePictureAddresses(initial.content)
+  const livePath = `/api/documents/${document.id}/room`
+  const fromCopy = (copy: WorkingCopy): DocumentPage => ({ content: pictures.attach(copy.content), title: copy.title })
+  const live = useLiveRoom<DocumentPage>({
+    enabled: writable,
+    fromCopy,
+    me,
+    onRefused: (message) => bizflowToast.error(message),
+    path: livePath,
+    toCopy: (next) => {
+      pictures.remember(next.content)
+      return { content: next.content, title: next.title }
+    },
+  })
+  const history = useWorkingCopyHistory(initial, live.session)
+  const room = live.session && live.roomId ? { path: livePath, roomId: live.roomId, seen: live.notesSeen } : null
+  const liveMode = history.liveStatus !== null
+  const editable = writable && history.liveStatus !== "stopped"
   const page = history.state
   const [answers, setAnswers] = useState<Record<string, unknown>>(view.answers)
   const [drawings, setDrawings] = useState(0)
   const [sending, setSending] = useState(false)
+  const [sharing, setSharing] = useState(false)
   const [savedPage, setSavedPage] = useState(initial)
   const [savedAnswers, setSavedAnswers] = useState<Record<string, unknown>>(view.answers)
   const [proposal, setProposal] = useState<TemplateFlowProposal | null>(null)
@@ -129,7 +167,8 @@ export function DocumentEditor({
     undo: history.undo,
   })
   const content = useAutosave<DocumentPage>({
-    enabled: writable,
+    // Saving on its own is for when the room can't be reached.
+    enabled: writable && !live.session && live.unavailable,
     initialVersion: document.updatedAt,
     save: async (value, version) => {
       const result = await saveContentAction({
@@ -152,7 +191,7 @@ export function DocumentEditor({
     initialVersion: "answers",
     save: async (value) => {
       // New fields reach the server before their answers do.
-      await content.flush()
+      await (live.session ? live.session.flush() : content.flush())
 
       const formData = new FormData(formRef.current ?? undefined)
       formData.set("documentId", document.id)
@@ -172,13 +211,22 @@ export function DocumentEditor({
   // in the page itself and are drawn again.
   const recovery = useLocalRecovery({
     key: `document:${document.id}`,
-    saved: { answers: savedAnswers, page: savedPage },
+    // Live, what the room has kept is saved; anything waiting stays on this device too.
+    saved: { answers: savedAnswers, page: !liveMode ? savedPage : history.liveStatus === "saved" ? page : initial },
     value: { answers, page },
   })
   const settingsBlock = page.content.blocks.find((block) => block.id === controller.settingsBlockId) ?? null
   const settingsIndex = settingsBlock ? page.content.blocks.indexOf(settingsBlock) : -1
   const geometry = resolvePageGeometry(page.content.layout)
-  const saveStatus = [content.status, answered.status].find((status) => status !== "saved") ?? "saved"
+  const saveStatus = [history.liveStatus ?? content.status, answered.status].find((status) => status !== "saved") ?? "saved"
+
+  useEffect(preloadPanels, [])
+
+  // Where this person is, for the others in the room.
+  useRoomPlace(controller, live.setPlace)
+
+  // Pictures someone else added arrive without an address this page can load.
+  useMissingPictureAddresses({ content: page.content, path: livePath, pictures, roomId: live.roomId, session: live.session })
   const pdfHref = `/api/documents/${encodeURIComponent(document.id)}/pdf`
 
   const tools: DockTool[] = [
@@ -199,6 +247,36 @@ export function DocumentEditor({
       id: "brand",
       label: "Brand",
     },
+    ...(room
+      ? [
+          {
+            content: (close: () => void) => (
+              <RoomComments
+                blocks={page.content.blocks}
+                onShow={(blockId: string) => {
+                  controller.select(blockId)
+                  close()
+                }}
+                others={live.others}
+                room={room}
+                target={controller.selectedBlockId ?? controller.activeBlockId}
+              />
+            ),
+            icon: MessageSquare,
+            id: "comments",
+            label: "Comments",
+            wide: true,
+          },
+          {
+            content: () => (
+              <RoomCheckpoints onRestore={(copy: WorkingCopy) => history.set(() => fromCopy(copy))} onSave={live.checkpoint} room={room} />
+            ),
+            icon: History,
+            id: "versions",
+            label: "Versions",
+          },
+        ]
+      : []),
   ]
 
   function applyProposal(next: TemplateFlowProposal, messageId: string): void {
@@ -218,7 +296,7 @@ export function DocumentEditor({
   async function openSend(): Promise<void> {
     // Signers must receive what the sender sees, so a save that did not land
     // stops the send rather than sending the stored copy.
-    const pageSaved = await content.flush()
+    const pageSaved = await (live.session ? live.session.flush() : content.flush())
     const answersSaved = await answered.flush()
 
     if (!pageSaved || !answersSaved) {
@@ -284,6 +362,7 @@ export function DocumentEditor({
               narrow={narrow}
               orientation={orientation}
               tools={tools}
+              trail={narrow ? <FlowDockSlot /> : undefined}
             />
           ) : null
         }
@@ -343,17 +422,31 @@ export function DocumentEditor({
                 <Download />
                 Download PDF
               </DropdownMenuItem>
+              {completed ? null : (
+                <DropdownMenuItem render={<a href={`${pdfHref}?fillable=1`} rel="noreferrer" target="_blank" />}>
+                  <FilePen />
+                  Download fillable PDF
+                </DropdownMenuItem>
+              )}
+              {canShare ? (
+                <DropdownMenuItem onClick={() => setSharing(true)}>
+                  <UserPlus />
+                  Share…
+                </DropdownMenuItem>
+              ) : null}
             </DropdownMenuContent>
           </DropdownMenu>
         }
         onRedo={history.redo}
         onRetrySave={() => {
-          void content.flush()
+          void (live.session ? live.session.flush() : content.flush())
           void answered.flush()
         }}
+        onSave={live.session ? () => void live.checkpoint("Checkpoint") : undefined}
         onTitleChange={(title) => history.set((current) => ({ ...current, title }), "title")}
         onUndo={history.undo}
         pageWidthPoints={geometry.widthPoints * geometry.scale}
+        people={(narrow) => (room ? <RoomPeople me={me} narrow={narrow} others={live.others} room={room} /> : null)}
         panel={(narrow) => (
           <>
             <EditorSidePanel
@@ -377,7 +470,7 @@ export function DocumentEditor({
                 />
               ) : null}
             </EditorSidePanel>
-            {/* On a phone Flow's button rests above the tools' row. */}
+            {/* On a phone Flow's button rests in the tools' row, or above the page without it. */}
             <FlowWindow onOpenChange={setFlowOpen} open={flowOpen} phoneBottom={writable && !proposal ? 84 : 16}>
               <TemplateFlowPanel
                 canUndo={flowUndo !== null}
@@ -420,7 +513,7 @@ export function DocumentEditor({
         }
         saveStatus={writable || fillable ? saveStatus : null}
         title={page.title}
-        titleEditable={writable && !proposal}
+        titleEditable={editable && !proposal}
         toolbar={writable && !proposal ? <FormatBar allowFiles={false} controller={controller} narrow={false} /> : undefined}
       >
         {({ narrow, zoom }) => (
@@ -435,15 +528,15 @@ export function DocumentEditor({
               allowFiles={false}
               answers={answers}
               controller={proposal ? preview : controller}
-              designable={writable && !proposal}
+              designable={editable && !proposal}
               documentTitle={proposal ? proposal.candidateDraft.title : page.title}
               fields={fillable && !proposal ? "fill" : "read"}
               narrow={narrow}
               onAnswerChange={(fieldKey, value) =>
                 setAnswers((current) => applyVisibleTemplateFieldValue(page.content, current, fieldKey, value))
               }
-              surface={proposal ? "paper" : "screen"}
-              textEditable={writable && !proposal}
+              overlay={room && !proposal ? <RoomLayer narrow={narrow} others={live.others} revision={page.content} room={room} /> : null}
+              textEditable={editable && !proposal}
               zoom={zoom}
             />
           </form>
@@ -457,6 +550,9 @@ export function DocumentEditor({
           <DocumentRecipientCollection action={sendAction} documentId={document.id} />
         </DialogContent>
       </Dialog>
+      {canShare && sharing ? (
+        <ShareDialog name={document.title} onOpenChange={setSharing} open resources={[{ id: document.id, kind: "document" }]} />
+      ) : null}
     </>
   )
 }

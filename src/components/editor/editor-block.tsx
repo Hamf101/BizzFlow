@@ -7,12 +7,16 @@ import {
   ArrowDown,
   ArrowUp,
   Asterisk,
-  CalendarDays,
   BringToFront,
   ChevronDown,
   Copy,
+  GripVertical,
+  Link2,
+  Rows2,
+  Section,
   Settings2,
   Trash2,
+  Undo2,
   WrapText,
 } from "lucide-react"
 import {
@@ -21,38 +25,44 @@ import {
   Fragment,
   type KeyboardEvent,
   type MouseEvent,
+  type PointerEvent,
   type ReactElement,
   type ReactNode,
   useContext,
   useEffect,
   useRef,
+  useState,
 } from "react"
 
 import type { Editor } from "@tiptap/core"
 
-import { GeneratedBlock } from "@/components/documents/generated-document-content"
 import { INSERT_CHOICES } from "@/components/editor/block-catalog"
 import type { TextCaret } from "@/components/editor/editable-text"
 import { convertTextBlock, type TextBlockKind } from "@/components/editor/editor-content"
 import { EditorImage } from "@/components/editor/editor-image"
 import { EditorTable } from "@/components/editor/editor-table"
-import { placeImage, placementOf } from "@/components/editor/image-placement"
+import { PaperField, PRINTED_HEADING, printedSpace } from "@/components/editor/paper-field"
+import { placeImage, placementOf, SNAP_PX } from "@/components/editor/image-placement"
 import { RichLine } from "@/components/editor/rich-line"
 import type { EditorController, FocusRequest } from "@/components/editor/use-editor-controller"
+import { frameOf, rowOf, setBlockRule } from "@/types/template-structure"
 import { RichText } from "@/components/templates/rich-text"
+import { FieldGroupSettings } from "@/components/editor/field-group-settings"
 import { BlockFields } from "@/components/templates/template-block-editor"
 import { TemplateStaticBlock } from "@/components/templates/template-static-block"
 import { Button } from "@/components/ui/button"
+import { ContextMenu, ContextMenuTrigger } from "@/components/ui/context-menu"
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
-import { describeDateFormat } from "@/lib/date-format"
-import type { TemplateBlock, TextRun } from "@/types/template"
+import { answerBoxHeight, BOX_HEIGHT_POINTS, type TemplateBlock, type TemplateLayout, type TextRun } from "@/types/template"
 
 export type LineBlock = Extract<TemplateBlock, { type: "heading" | "paragraph" }>
 export type ListBlock = Extract<TemplateBlock, { type: "bullet_list" | "numbered_list" }>
@@ -65,24 +75,55 @@ export type CanvasActions = Readonly<{
   answers: Record<string, unknown>
   controller: EditorController
   designable: boolean
+  /** The block being dragged to a new place, if any. */
+  dragging: string | null
   fields: "design" | "fill" | "read"
+  /** Blocks the answers so far would hide, shown faded while the page is built. */
+  hiddenByRule: ReadonlySet<string>
+  /** How the document draws its answers: in a box, on a line, or in a cell. */
+  fieldStyle: NonNullable<TemplateLayout["fieldStyle"]>
+  /** Whether the page is a phone's reflowed column rather than sheets of paper. */
+  narrow: boolean
   /** The caret request for one line, when it is that line's turn. */
   focusFor: (caretKey: string) => FocusRequest | null
   onAnswerChange: (fieldKey: string, value: unknown) => void
   onLineInput: (block: LineBlock, text: string, runs: TextRun[] | undefined, caret: number) => void
   onLineKeyDown: (event: globalThis.KeyboardEvent, caret: TextCaret, block: LineBlock) => void
+  /** Puts words pasted over several lines in a line, from one place to another, as a line each. */
+  onPasteLines: (caretKey: string, lines: readonly string[], from: number, to: number) => void
   onListInput: (block: ListBlock, item: number, text: string, runs: TextRun[] | undefined) => void
   onListKeyDown: (event: globalThis.KeyboardEvent, caret: TextCaret, block: ListBlock, item: number) => void
   placeholderFor: (blockId: string) => string | undefined
+  /** Starts dragging a block, from a press on it or on its grip; absent where blocks cannot move. */
+  startDrag?: (event: PointerEvent<HTMLElement>, blockId: string, grip?: boolean) => void
   textEditable: boolean
 }>
 
+// Headings at the PDF's sizes and lines: 20 points on 29, 16 on 24, 13 on 20.
 // A phone's reflowed column is narrow, so its headings step down less steeply.
 const HEADING_STYLE = {
-  1: { fontSize: "var(--doc-h1, 2em)", lineHeight: "var(--doc-line-height, 1.35)" },
-  2: { fontSize: "var(--doc-h2, 1.6em)", lineHeight: "var(--doc-line-height, 1.4)" },
-  3: { fontSize: "var(--doc-h3, 1.3em)", lineHeight: "var(--doc-line-height, 1.45)" },
+  1: { ...PRINTED_HEADING, fontSize: "var(--doc-h1, 2em)", lineHeight: `var(--doc-line-height, ${29 / 20})` },
+  2: { ...PRINTED_HEADING, fontSize: "var(--doc-h2, 1.6em)", lineHeight: `var(--doc-line-height, ${24 / 16})` },
+  3: { ...PRINTED_HEADING, fontSize: "var(--doc-h3, 1.3em)", lineHeight: `var(--doc-line-height, ${20 / 13})` },
 } as const
+
+// The points the PDF leaves above and below each kind of block (see
+// drawPdfLibBlock); a field leaves 3 under its box, inside it, and 7 more.
+const PRINTED_SPACE: Partial<Record<TemplateBlock["type"], readonly [above: number, below: number]>> = {
+  bullet_list: [0, 5],
+  divider: [6, 14],
+  heading: [10, 6],
+  image: [0, 4],
+  numbered_list: [0, 5],
+  paragraph: [0, 8],
+  table: [0, 10],
+}
+
+function printedMargins(block: TemplateBlock): CSSProperties {
+  const [above, below] = PRINTED_SPACE[block.type] ?? [0, 7]
+
+  return { marginBottom: printedSpace(below), marginTop: above ? printedSpace(above, false) : undefined }
+}
 
 /**
  * One block on the page. Text is typed in place; anything else is selected by
@@ -118,6 +159,7 @@ export function CanvasBlock({
   const selected = controller.selectedBlockId === block.id
   const wrapper = useRef<HTMLDivElement>(null)
   const field = isField(block)
+  const text = isLine(block) || isList(block)
   const canSelect = actions.textEditable || (actions.designable && field)
 
   useEffect(() => {
@@ -139,6 +181,31 @@ export function CanvasBlock({
     controller.select(block.id)
   }
 
+  // Alt and an arrow move a block alone on its line across the page, or
+  // down; with Shift, across makes it narrower or wider.
+  function nudgeFrame(event: KeyboardEvent<HTMLDivElement>): boolean {
+    const content = controller.content
+    const inRow = (rowOf(content, block.id)?.columns ?? 1) > 1
+
+    if (actions.narrow || inRow || !(actions.textEditable || actions.designable)) {
+      return false
+    }
+
+    const rule = content.blockRules.find((candidate) => candidate.blockId === block.id)
+    const { left, width } = rule?.frame ?? { left: 0, width: 100 }
+    const step = event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 1
+
+    if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+      controller.change((current) => setBlockRule(current, block.id, { spaceAbove: Math.max(0, (rule?.spaceAbove ?? 0) + step * 2) }), `space:${block.id}`)
+    } else if (event.shiftKey) {
+      controller.change((current) => setBlockRule(current, block.id, { frame: frameOf(left, Math.max(5, width + step)) }), `frame:${block.id}`)
+    } else {
+      controller.change((current) => setBlockRule(current, block.id, { frame: frameOf(Math.min(Math.max(0, left + step), 100 - width), width) }), `frame:${block.id}`)
+    }
+
+    return true
+  }
+
   function handleKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
     if (event.target !== event.currentTarget) {
       return
@@ -152,6 +219,18 @@ export function CanvasBlock({
     if (nudged && block.type === "image") {
       event.preventDefault()
       controller.updateBlock({ ...block, placement: nudged }, `image:${block.id}`)
+    } else if (
+      event.altKey &&
+      event.shiftKey &&
+      (event.key === "ArrowUp" || event.key === "ArrowDown") &&
+      isBoxed(block) &&
+      (actions.textEditable || actions.designable)
+    ) {
+      // With Shift, up and down make an answer box shorter or taller.
+      event.preventDefault()
+      controller.updateBlock(sizedBox(block, answerBoxHeight(block) + (event.key === "ArrowUp" ? -2 : 2)), `box:${block.id}`)
+    } else if (event.altKey && event.key.startsWith("Arrow") && nudgeFrame(event)) {
+      event.preventDefault()
     } else if (event.key === "Backspace" || event.key === "Delete") {
       event.preventDefault()
       controller.remove(block.id)
@@ -185,6 +264,12 @@ export function CanvasBlock({
     } else if (mod && event.key.toLowerCase() === "d") {
       event.preventDefault()
       controller.duplicate(block.id)
+    } else if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
+      // The menu key opens the block's menu at its corner, as a right-click would.
+      const box = event.currentTarget.getBoundingClientRect()
+
+      event.preventDefault()
+      event.currentTarget.dispatchEvent(new globalThis.MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: box.left + 8, clientY: box.top + 8 }))
     }
   }
 
@@ -194,20 +279,150 @@ export function CanvasBlock({
         "rounded-[0.35em] outline-none",
         placed ? "pointer-events-auto absolute" : "relative",
         canSelect && field && actions.fields === "design" && "cursor-default",
-        selected && "ring-2 ring-primary ring-offset-[0.4em] ring-offset-card"
+        selected && actions.dragging !== block.id && "ring-2 ring-primary ring-offset-[0.4em] ring-offset-card",
+        // Words held still are ready to drag; a block being dragged rides above the page.
+        "data-held:ring-2 data-held:ring-primary/40 data-held:ring-offset-[0.4em] data-held:ring-offset-card",
+        actions.dragging === block.id && "z-40 bg-card opacity-70 shadow-xl",
+        // Hidden by its rule for these answers: there to edit, faded as it won't print.
+        actions.hiddenByRule.has(block.id) && "opacity-45"
       )}
       data-block-id={block.id}
       data-block-type={block.type}
+      data-hidden-by-rule={actions.hiddenByRule.has(block.id) ? "" : undefined}
+      title={actions.hiddenByRule.has(block.id) ? "Hidden for these answers by its rule" : undefined}
       data-selected={selected || undefined}
+      // Typing in its words or cells again, the block is no longer chosen as a whole.
+      onFocus={(event) => {
+        if (selected && event.target !== event.currentTarget && event.target.closest('[contenteditable]:not([contenteditable="false"])')) {
+          controller.select(null)
+        }
+      }}
       onKeyDown={handleKeyDown}
+      // Words being typed in keep the browser's own menu, with its spelling and pasting.
+      onContextMenuCapture={(event) => {
+        if (!selected && (event.target as Element).closest("[data-line-key]")) event.stopPropagation()
+      }}
       onMouseDown={handleMouseDown}
+      // A picture placed on a page moves on its page instead.
+      onPointerDown={placed ? undefined : (event) => actions.startDrag?.(event, block.id)}
       ref={wrapper}
-      style={placed && block.type === "image" && block.placement ? boxStyle(block.placement) : undefined}
+      style={placed && block.type === "image" && block.placement ? boxStyle(block.placement) : printedMargins(block)}
       tabIndex={selected ? -1 : undefined}
     >
-      {selected && canSelect ? <BlockToolbar actions={actions} block={block} /> : null}
+      {selected && canSelect && actions.dragging !== block.id ? <BlockToolbar actions={actions} block={block} /> : null}
+      {/* On a touch screen the block in use shows a grip beside it: in a row, between the columns. */}
+      {!placed && (selected || (text && controller.activeBlockId === block.id)) ? (
+        <Grip actions={actions} blockId={block.id} />
+      ) : null}
       <BlockBody actions={actions} block={block} placed={placed} />
     </div>
+  )
+}
+
+/**
+ * One menu for every block on the page: a right-click, or the menu key on a
+ * chosen block, opens it for the block under it. One for each block made
+ * every keystroke redraw hundreds of menus in a long document.
+ *
+ * @param props - What the canvas does, and the page it covers.
+ * @returns The page, with the menu.
+ */
+export function BlockContextMenu({ actions, children }: { actions: CanvasActions; children: ReactNode }): ReactElement {
+  const [blockId, setBlockId] = useState<string | null>(null)
+  const target = useRef<string | null>(null)
+  const pointer = useRef("")
+  const block = actions.controller.content.blocks.find((candidate) => candidate.id === blockId)
+
+  return (
+    <ContextMenu
+      onOpenChange={(open, details) => {
+        const chosen = actions.controller.content.blocks.find((candidate) => candidate.id === target.current)
+        const canSelect = chosen && (actions.textEditable || (actions.designable && isField(chosen)))
+
+        // A press and hold on a touch screen picks the block up; its toolbar has the same actions.
+        if (open && (!canSelect || pointer.current === "touch")) {
+          details.cancel()
+        }
+      }}
+    >
+      <ContextMenuTrigger
+        className="contents"
+        onContextMenuCapture={(event) => {
+          target.current = (event.target as Element).closest<HTMLElement>("[data-block-id]")?.dataset.blockId ?? null
+          setBlockId(target.current)
+        }}
+        onKeyDownCapture={() => {
+          pointer.current = "keyboard"
+        }}
+        onPointerDownCapture={(event) => {
+          pointer.current = event.pointerType
+        }}
+      >
+        {children}
+      </ContextMenuTrigger>
+      {block ? <BlockMenu actions={actions} block={block} /> : null}
+    </ContextMenu>
+  )
+}
+
+// What the block's toolbar does, from a right-click or the menu key.
+function BlockMenu({ actions, block }: { actions: CanvasActions; block: TemplateBlock }): ReactElement {
+  const { controller } = actions
+  const content = controller.content
+  const rule = content.blockRules.find((candidate) => candidate.blockId === block.id)
+  const inRow = (rowOf(content, block.id)?.columns ?? 1) > 1
+  // A picture placed on a page has no place in the order.
+  const pinned = block.type === "image" && block.placement !== undefined
+
+  return (
+    <DropdownMenuContent className="w-52">
+      {inRow ? (
+        <DropdownMenuItem onClick={() => controller.standAlone(block.id)}>
+          <Rows2 aria-hidden="true" />
+          Stand alone
+        </DropdownMenuItem>
+      ) : null}
+      {pinned ? null : (
+        <>
+          <DropdownMenuCheckboxItem
+            checked={rule?.keepWithNext ?? false}
+            disabled={content.blocks.at(-1)?.id === block.id}
+            onCheckedChange={(on) => controller.setKeepWithNext(block.id, on)}
+          >
+            <Link2 aria-hidden="true" />
+            Keep with next
+          </DropdownMenuCheckboxItem>
+          {rule?.frame || rule?.spaceAbove ? (
+            <DropdownMenuItem onClick={() => controller.change((current) => setBlockRule(current, block.id, { frame: undefined, spaceAbove: 0 }))}>
+              <Undo2 aria-hidden="true" />
+              Reset position
+            </DropdownMenuItem>
+          ) : null}
+          <DropdownMenuSeparator />
+        </>
+      )}
+      <DropdownMenuItem onClick={() => controller.duplicate(block.id)}>
+        <Copy aria-hidden="true" />
+        Duplicate
+      </DropdownMenuItem>
+      {pinned ? null : (
+        <>
+          <DropdownMenuItem disabled={!controller.canMove(block.id, "up")} onClick={() => controller.move(block.id, "up")}>
+            <ArrowUp aria-hidden="true" />
+            Move up
+          </DropdownMenuItem>
+          <DropdownMenuItem disabled={!controller.canMove(block.id, "down")} onClick={() => controller.move(block.id, "down")}>
+            <ArrowDown aria-hidden="true" />
+            Move down
+          </DropdownMenuItem>
+        </>
+      )}
+      <DropdownMenuSeparator />
+      <DropdownMenuItem onClick={() => controller.remove(block.id)} variant="destructive">
+        <Trash2 aria-hidden="true" />
+        Delete
+      </DropdownMenuItem>
+    </DropdownMenuContent>
   )
 }
 
@@ -222,7 +437,7 @@ function BlockBody({ actions, block, placed }: { actions: CanvasActions; block: 
           as={`h${block.level}`}
           blockId={block.id}
           caretKey={block.id}
-          className="font-semibold"
+          className="font-bold"
           label={`Heading ${block.level}`}
           onChange={(text, runs, caret) => actions.onLineInput(block, text, runs, caret)}
           onKeyDown={(event, caret) => actions.onLineKeyDown(event, caret, block)}
@@ -257,8 +472,9 @@ function BlockBody({ actions, block, placed }: { actions: CanvasActions; block: 
 
       return (
         <List
-          className={cn(block.type === "bullet_list" ? "list-disc" : "list-decimal", "grid gap-[0.2em]")}
-          style={{ lineHeight: "var(--doc-line-height, 1.5)", paddingLeft: "1.4em" }}
+          className={cn(block.type === "bullet_list" ? "list-disc" : "list-decimal", "grid gap-[0.3em]")}
+          // Each item leaves 3 points under it, as the PDF does.
+          style={{ lineHeight: "var(--doc-line-height, 1.5)", paddingBottom: "0.3em", paddingLeft: "1.4em" }}
         >
           {block.items.map((item: string, index: number) => (
             <TextLine
@@ -292,17 +508,14 @@ function BlockBody({ actions, block, placed }: { actions: CanvasActions; block: 
         />
       )
     default:
-      return actions.fields === "design" ? (
-        <DesignField block={block} />
-      ) : (
-        <GeneratedBlock
+      return (
+        <PaperField
           answers={actions.answers}
           block={block}
-          editable={actions.fields === "fill"}
-          fileFieldContent={{}}
+          edge={isBoxed(block) && actions.textEditable && !actions.narrow ? <BoxEdge block={block} controller={actions.controller} /> : undefined}
+          fieldStyle={actions.fieldStyle}
+          mode={actions.fields}
           onAnswerChange={actions.onAnswerChange}
-          recipientSigned={false}
-          recipientSigning={false}
         />
       )
   }
@@ -370,6 +583,7 @@ function TextLine({
       }}
       onGone={(editor: Editor) => controller.setLine((line) => (line === editor ? null : line))}
       onKeyDown={onKeyDown}
+      onPasteLines={(lines, from, to) => actions.onPasteLines(caretKey, lines, from, to)}
       placeholder={placeholder}
       runs={runs}
       style={style}
@@ -416,75 +630,60 @@ function LineBreaks({ blockId }: { blockId: string }): ReactElement | null {
   ) : null
 }
 
-/**
- * A field as the author sees it while building: its label and the space the
- * answer will take, the way the PDF draws it.
- *
- * @param props - The field.
- * @returns The field's placeholder.
- */
-function DesignField({ block }: { block: FieldBlock }): ReactElement {
-  const box = "rounded-[0.35em] border border-border px-[0.7em] text-muted-foreground"
-  const label = (
-    <span className="font-semibold" style={{ fontSize: "0.9em" }}>
-      {block.label}
-      {block.required ? <span className="text-destructive"> *</span> : null}
-    </span>
-  )
-  let answer: ReactNode
+type BoxedField = Extract<TemplateBlock, { type: "date_field" | "dropdown_field" | "initials_field" | "signature_field" | "text_field" }>
 
-  switch (block.type) {
-    case "checkbox_field":
-      return (
-        <span className="flex items-center gap-[0.6em]">
-          <span aria-hidden="true" className="size-[1.1em] rounded-[0.2em] border border-muted-foreground/50" />
-          {label}
-        </span>
-      )
-    case "text_field":
-      answer = (
-        <span className={cn(box, "flex py-[0.45em]")} style={{ minHeight: block.multiline ? "5em" : undefined }}>
-          {block.placeholder || "Text"}
-        </span>
-      )
-      break
-    case "date_field":
-      answer = (
-        <span className={cn(box, "flex items-center justify-between py-[0.45em]")}>
-          {describeDateFormat(block.dateFormat)}
-          <CalendarDays aria-hidden="true" className="size-[1.1em]" />
-        </span>
-      )
-      break
-    case "dropdown_field":
-      answer = (
-        <span className={cn(box, "flex items-center justify-between py-[0.45em]")}>
-          {block.placeholder || "Choose an option"}
-          <ChevronDown aria-hidden="true" className="size-[1.1em]" />
-        </span>
-      )
-      break
-    case "initials_field":
-      answer = <span className={cn(box, "flex h-[4em] w-[9em] items-end border-dashed pb-[0.4em]")}>Initials</span>
-      break
-    case "signature_field":
-      answer = <span className={cn(box, "flex h-[5.5em] items-end border-dashed pb-[0.4em]")}>Sign here</span>
-      break
-    case "file_field":
-      answer = <span className={cn(box, "flex border-dashed py-[0.9em]")}>Choose a file</span>
-      break
+// The fields that print an answer box, whose height can be changed; radio buttons print none.
+export function isBoxed(block: TemplateBlock): block is BoxedField {
+  return ["date_field", "dropdown_field", "initials_field", "signature_field", "text_field"].includes(block.type) && !(block.type === "dropdown_field" && block.display === "radios")
+}
+
+// A box at a height, held between a line and its padding and the most a page
+// allows; at its usual height it keeps none of its own.
+function sizedBox(block: BoxedField, points: number): BoxedField {
+  const sized: BoxedField = { ...block, boxHeight: Math.round(Math.min(Math.max(points, BOX_HEIGHT_POINTS.min), BOX_HEIGHT_POINTS.max)) }
+
+  if (sized.boxHeight === answerBoxHeight({ ...block, boxHeight: undefined })) {
+    delete sized.boxHeight
+  }
+
+  return sized
+}
+
+// The foot of an answer box: dragged, the box grows or shrinks, lining up
+// with its usual height and with the other boxes on the page.
+function BoxEdge({ block, controller }: { block: BoxedField; controller: EditorController }): ReactElement {
+  function drag(event: PointerEvent<HTMLDivElement>): void {
+    const box = event.currentTarget.parentElement
+
+    if (!box || !event.currentTarget.hasPointerCapture(event.pointerId)) {
+      return
+    }
+
+    // The box's text is 10 points, so a tenth of its em is a point on screen.
+    const point = parseFloat(getComputedStyle(box).fontSize) / 10
+    const top = box.getBoundingClientRect().top
+    const heights = [
+      answerBoxHeight({ ...block, boxHeight: undefined }),
+      ...[...document.querySelectorAll<HTMLElement>("[data-slot=paper-box]")].filter((other) => other !== box).map((other) => other.getBoundingClientRect().height / point),
+    ]
+    const asked = (event.clientY - top) / point
+    const near = heights.reduce((best, height) => (Math.abs(height - asked) < Math.abs(best - asked) ? height : best), Infinity)
+
+    controller.updateBlock(sizedBox(block, Math.abs(near - asked) * point <= SNAP_PX ? near : asked), `box:${block.id}`)
   }
 
   return (
-    <span className="grid gap-[0.4em]">
-      {label}
-      {answer}
-      {block.helpText ? (
-        <span className="text-muted-foreground" style={{ fontSize: "0.85em" }}>
-          {block.helpText}
-        </span>
-      ) : null}
-    </span>
+    <div
+      aria-hidden="true"
+      className="absolute inset-x-0 top-full z-30 h-2.5 cursor-ns-resize touch-none after:absolute after:inset-x-0 after:top-0 after:h-0.5 after:rounded-full after:bg-primary after:opacity-0 after:transition-opacity hover:after:opacity-60"
+      data-slot="box-edge"
+      onPointerDown={(event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        event.currentTarget.setPointerCapture(event.pointerId)
+      }}
+      onPointerMove={drag}
+    />
   )
 }
 
@@ -492,6 +691,10 @@ function BlockToolbar({ actions, block }: { actions: CanvasActions; block: Templ
   const { controller } = actions
   const blocks = controller.content.blocks
   const index = blocks.findIndex((candidate) => candidate.id === block.id)
+
+  const group = rowOf(controller.content, block.id)
+  const inRow = group !== undefined && group.columns > 1
+  const keepWithNext = controller.content.blockRules.some((rule) => rule.blockId === block.id && rule.keepWithNext)
 
   // A picture let out of the text stays exactly where it was on its page.
   function placeFreely(image: ImageBlock): void {
@@ -510,7 +713,11 @@ function BlockToolbar({ actions, block }: { actions: CanvasActions; block: Templ
 
   return (
     <div
-      className="absolute right-0 bottom-full z-30 mb-[0.8em] flex items-center gap-0.5 rounded-[12px] border border-border bg-popover p-1 text-sm text-popover-foreground shadow-lg"
+      className={cn(
+        "absolute bottom-full z-30 mb-[0.8em] flex w-max max-w-[calc(100vw-3rem)] flex-wrap items-center gap-0.5 rounded-[12px] border border-border bg-popover p-1 text-sm text-popover-foreground shadow-lg",
+        // Rows stack on a phone, so every block there is the column's full width.
+        "right-0 justify-end"
+      )}
       data-slot="block-toolbar"
       role="toolbar"
       aria-label="Block"
@@ -526,6 +733,7 @@ function BlockToolbar({ actions, block }: { actions: CanvasActions; block: Templ
             }
           />
           <DropdownMenuContent align="start" className="w-44">
+            {isLine(block) ? <DropdownMenuItem disabled={block.text.trim().length > 160 || controller.content.sections.some((section) => section.startBlockId === block.id)} onClick={() => controller.turnIntoSection(block.id)}><Section />Section</DropdownMenuItem> : null}
             {INSERT_CHOICES.filter((choice) => choice.action.kind === "text").map((choice) => {
               const Icon = choice.icon
 
@@ -564,6 +772,12 @@ function BlockToolbar({ actions, block }: { actions: CanvasActions; block: Templ
           </DropdownMenuContent>
         </DropdownMenu>
       ) : null}
+      {inRow ? (
+        <ToolButton label="Stand alone" onClick={() => controller.standAlone(block.id)}><Rows2 /></ToolButton>
+      ) : null}
+      {!(block.type === "image" && block.placement) ? (
+        <ToolButton disabled={index === blocks.length - 1} label="Keep with next" onClick={() => controller.setKeepWithNext(block.id, !keepWithNext)} pressed={keepWithNext}><Link2 /></ToolButton>
+      ) : null}
       {isField(block) ? (
         <ToolButton
           label={block.required ? "Make optional" : "Make required"}
@@ -588,31 +802,35 @@ function BlockToolbar({ actions, block }: { actions: CanvasActions; block: Templ
           <PopoverContent className="w-80">
             <PopoverTitle className="mb-3 font-semibold">Field settings</PopoverTitle>
             <BlockFields block={block} blocks={blocks} onChange={(next) => controller.updateBlock(next, `settings:${block.id}`)} />
+            {group ? <FieldGroupSettings controller={controller} group={group} /> : null}
           </PopoverContent>
         </Popover>
       ) : null}
       {block.type === "image" ? (
         <>
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <Button className="h-10 gap-1 px-2 font-normal md:pointer-fine:h-8" size="sm" type="button" variant="ghost">
-                  {block.placement ? "In front of text" : "In line"}
-                  <ChevronDown aria-hidden="true" className="size-3.5 text-muted-foreground" />
-                </Button>
-              }
-            />
-            <DropdownMenuContent align="start" className="w-48">
-              <DropdownMenuItem onClick={() => controller.updateBlock({ ...block, placement: undefined })}>
-                <WrapText aria-hidden="true" />
-                In line
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => !block.placement && placeFreely(block)}>
-                <BringToFront aria-hidden="true" />
-                In front of text
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {/* A phone's column has no pages to place a picture on, only a way back into the text. */}
+          {block.placement || !actions.narrow ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button className="h-10 gap-1 px-2 font-normal md:pointer-fine:h-8" size="sm" type="button" variant="ghost">
+                    {block.placement ? "In front of text" : "In line"}
+                    <ChevronDown aria-hidden="true" className="size-3.5 text-muted-foreground" />
+                  </Button>
+                }
+              />
+              <DropdownMenuContent align="start" className="w-48">
+                <DropdownMenuItem onClick={() => controller.updateBlock({ ...block, placement: undefined })}>
+                  <WrapText aria-hidden="true" />
+                  In line
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => !block.placement && placeFreely(block)}>
+                  <BringToFront aria-hidden="true" />
+                  In front of text
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null}
           <ToolButton label="Settings" onClick={() => controller.openSettings(block.id)}>
             <Settings2 />
           </ToolButton>
@@ -625,11 +843,17 @@ function BlockToolbar({ actions, block }: { actions: CanvasActions; block: Templ
       {/* A picture placed on a page has no place in the order to move to. */}
       {block.type === "image" && block.placement ? null : (
         <>
-          <ToolButton disabled={index <= 0} label="Move up" onClick={() => controller.move(block.id, "up")}>
+          <ToolButton
+            disabled={!controller.canMove(block.id, "up")}
+            keys="Control+Shift+ArrowUp Meta+Shift+ArrowUp"
+            label="Move up"
+            onClick={() => controller.move(block.id, "up")}
+          >
             <ArrowUp />
           </ToolButton>
           <ToolButton
-            disabled={index >= blocks.length - 1}
+            disabled={!controller.canMove(block.id, "down")}
+            keys="Control+Shift+ArrowDown Meta+Shift+ArrowDown"
             label="Move down"
             onClick={() => controller.move(block.id, "down")}
           >
@@ -647,18 +871,22 @@ function BlockToolbar({ actions, block }: { actions: CanvasActions; block: Templ
 function ToolButton({
   children,
   disabled,
+  keys,
   label,
   onClick,
   pressed,
 }: {
   children: ReactNode
   disabled?: boolean
+  /** The keys that do the same, for screen readers. */
+  keys?: string
   label: string
   onClick: () => void
   pressed?: boolean
 }): ReactElement {
   return (
     <Button
+      aria-keyshortcuts={keys}
       aria-label={label}
       aria-pressed={pressed}
       className={cn("size-10 md:pointer-fine:size-8", pressed && "bg-secondary text-secondary-foreground")}
@@ -671,6 +899,42 @@ function ToolButton({
     >
       {children}
     </Button>
+  )
+}
+
+/**
+ * What a finger drags a block by, shown only on a touch screen: a press that
+ * travels moves the block, a tap selects it, and the arrow keys move it a
+ * step at a time.
+ *
+ * @param props - The block, and what the canvas lends it.
+ * @returns The grip, or nothing where blocks cannot move.
+ */
+function Grip({ actions, blockId }: { actions: CanvasActions; blockId: string }): ReactElement | null {
+  const { controller, startDrag } = actions
+
+  if (!startDrag) {
+    return null
+  }
+
+  return (
+    <button
+      aria-keyshortcuts="ArrowUp ArrowDown"
+      aria-label="Move"
+      className="absolute top-0 -right-5 hidden h-[1.5em] w-5 touch-none place-items-center rounded-md text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/40 pointer-coarse:grid"
+      onClick={() => controller.select(blockId)}
+      onKeyDown={(event) => {
+        if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+          event.preventDefault()
+          controller.move(blockId, event.key === "ArrowUp" ? "up" : "down")
+        }
+      }}
+      onPointerDown={(event) => startDrag(event, blockId, true)}
+      title="Drag to move"
+      type="button"
+    >
+      <GripVertical aria-hidden="true" className="size-4" />
+    </button>
   )
 }
 

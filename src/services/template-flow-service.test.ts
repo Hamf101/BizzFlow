@@ -20,10 +20,13 @@ import {
 } from "@/services/template-flow-service"
 import {
   createBlankTemplateContent,
+  templateContentV3Schema,
   type TemplateBlock,
-  type TemplateContent
+  type TemplateContent,
+  type TemplateContentV3
 } from "@/types/template"
 import type { TemplateFlowMessage } from "@/types/template-flow"
+import { createLongDocumentContent } from "@/types/long-document.test-support"
 
 const TEMPLATE_ID = "00000000-0000-4000-8000-000000000010"
 const PARAGRAPH_ID = "00000000-0000-4000-8000-000000000011"
@@ -71,6 +74,13 @@ class TemplateFlowClient {
 
   from(tableName: string): TemplateFlowQuery {
     return new TemplateFlowQuery(this.tables[tableName] ?? [])
+  }
+
+  // Stands in for get_template_access_level for these tests: whoever the role lets manage templates edits.
+  async rpc(): Promise<{ data: "editor" | null; error: null }> {
+    const roleDefinition = this.tables.organization_memberships?.[0]?.role_definition as { permissions: string[] | null } | undefined
+
+    return { data: roleDefinition?.permissions?.includes("templates:manage") ? "editor" : null, error: null }
   }
 
   setMembershipPermissions(permissions: string[] | null): void {
@@ -291,7 +301,78 @@ describe("template Flow service", () => {
     expect(responseSchema).not.toContain('"target"')
   })
 
-  it("asks before an ambiguous removal and leaves the draft unchanged", async () => {
+  it("hands back a removal nobody asked for, and keeps the rest of the turn when the rewrite leaves the block alone", async () => {
+    const removal: TestFlowOperation = { type: "remove_block", summary: "Removed introduction", payload: { blockId: PARAGRAPH_ID } }
+    const rename: TestFlowOperation = { type: "set_title", summary: "Renamed it", payload: { value: "Short agreement" } }
+    const { aiProvider, run } = runFlow(createContent(), [removal, rename], [rename])
+    const result = await run
+
+    expect(String(readProviderRequests(aiProvider)[1]?.input)).toMatch(/unrequested_removal.*A long introduction/)
+    expect(result.needsConfirmation).toBe(false)
+    expect(result.proposal?.candidateDraft).toMatchObject({ title: "Short agreement", content: { blocks: [{ id: PARAGRAPH_ID }] } })
+  })
+
+  it("drafts typed answers with units, choose-several ticks, question grids and fill-in tables", async () => {
+    const add = (summary: string, block: Record<string, unknown>): TestFlowOperation => ({ type: "add_block", summary, payload: { afterBlockId: null, block } })
+    const { aiProvider, run } = runFlow(createContent(), [
+      add("Asked the rent", { type: "text_field", fieldKey: "rent", label: "Monthly rent", required: true, helpText: null, placeholder: null, multiline: false, format: "money", prefix: "£", suffix: "per month" }),
+      add("Asked the reference", { type: "text_field", fieldKey: "ni_number", label: "National Insurance number", required: false, helpText: null, placeholder: null, multiline: false, comb: 9 }),
+      add("Asked the days", { type: "dropdown_field", fieldKey: "days", label: "Days you can work", required: false, helpText: null, placeholder: null, options: ["Mon", "Tue", "Wed"], multiple: true, across: true }),
+      add("Asked the checks", { type: "choice_grid_field", fieldKey: "checks", label: "Vehicle checks", required: true, helpText: null, rows: ["Tyres", "Lights"], options: ["OK", "Defect"] }),
+      add("Asked the hours", { type: "table_field", fieldKey: "hours", label: "Hours worked", required: false, helpText: null, columns: [{ label: "Date", format: "date" }, { label: "Hours", format: "number" }], rows: 7, addRows: true }),
+    ])
+    const result = await run
+    const instruction = String(readProviderRequests(aiProvider)[0]?.systemInstruction)
+
+    expect(result.proposal?.candidateDraft.content.blocks.slice(1)).toMatchObject([
+      { format: "money", prefix: "£", suffix: "per month", type: "text_field" },
+      { comb: 9, type: "text_field" },
+      { multiple: true, type: "dropdown_field" },
+      { options: ["OK", "Defect"], rows: ["Tyres", "Lights"], type: "choice_grid_field" },
+      { addRows: true, rows: 7, type: "table_field" },
+    ])
+    for (const kind of ["choice_grid_field", "table_field", '"multiple"', '"format"', '"comb"']) {
+      expect(instruction).toContain(kind)
+    }
+  })
+
+  it("lets a field go when the same turn puts one in its place, and hands back removals that outnumber their replacements", async () => {
+    const nameField = (id: string, fieldKey: string, label: string) =>
+      ({ id, type: "text_field", fieldKey, label, required: false, helpText: null, placeholder: null, multiline: false }) as const
+    const content = createContent()
+    content.blocks.push(nameField(FIELD_ID, "first_name", "First name"), nameField(COMPANION_ID, "last_name", "Last name"))
+    const merge: TestFlowOperation = {
+      type: "update_block",
+      summary: "Asked for the full name in one field",
+      payload: { blockId: FIELD_ID, block: { ...nameField(FIELD_ID, "first_name", "Full name"), id: undefined } },
+    }
+    const dropLast: TestFlowOperation = { type: "remove_block", summary: "Removed last name, now part of full name", payload: { blockId: COMPANION_ID } }
+    const merged = runFlow(content, [merge, dropLast])
+    const result = await merged.run
+
+    expect(readProviderRequests(merged.aiProvider)).toHaveLength(1)
+    expect(result.needsConfirmation).toBe(false)
+    expect(result.proposal?.candidateDraft.content.blocks.map((block) => block.id)).toEqual([PARAGRAPH_ID, FIELD_ID])
+
+    // Two fields and the introduction go for one field changed: not a replacement.
+    const sweep = runFlow(content, [merge, dropLast, { type: "remove_block", summary: "Removed introduction", payload: { blockId: PARAGRAPH_ID } }], [merge])
+
+    await sweep.run
+    expect(String(readProviderRequests(sweep.aiProvider)[1]?.input)).toMatch(/unrequested_removal.*A long introduction/)
+
+    // Clearer help on the same question replaces nothing.
+    const reworded: TestFlowOperation = {
+      type: "update_block",
+      summary: "Clearer help",
+      payload: { blockId: FIELD_ID, block: { ...nameField(FIELD_ID, "first_name", "First name"), helpText: "As on your passport.", id: undefined } },
+    }
+    const masked = runFlow(content, [reworded, dropLast], [reworded])
+
+    await masked.run
+    expect(String(readProviderRequests(masked.aiProvider)[1]?.input)).toMatch(/unrequested_removal.*Last name/)
+  })
+
+  it("asks before a removal the model insists on, naming what would go, and leaves the draft unchanged", async () => {
     const content = createContent()
     const aiProvider = createTestAiProvider([
       flowProviderResult({
@@ -317,8 +398,9 @@ describe("template Flow service", () => {
 
     expect(result.needsConfirmation).toBe(true)
     expect(result.proposal).toBeNull()
-    expect(result.messages[1].content).toContain("Which content")
+    expect(result.messages[1].content).toContain("A long introduction")
     expect(result.messages[1].operations).toEqual([])
+    expect(readProviderRequests(aiProvider)).toHaveLength(2)
   })
 
   it("keeps appended free-form blocks in provider operation order", async () => {
@@ -886,7 +968,7 @@ describe("template Flow service", () => {
     expect(dropdown?.type).toBe("dropdown_field")
     expect(companions).toHaveLength(1)
     expect(companions[0]).toMatchObject({
-      label: "Please specify",
+      label: "Other request category",
       required: true,
       visibleWhen: {
         sourceBlockId: dropdown?.id,
@@ -965,28 +1047,19 @@ describe("template Flow service", () => {
     ])
   })
 
-  it("preserves the stable companion while repairing reorder and duplicates", async () => {
+  it("keeps the stable companion: a duplicate is dropped, and a move above its dropdown is refused with the reason", async () => {
     const content = createDropdownContent(
       ["Billing", "Support", "Other"],
       true
     )
+    const reply = (operations: TestFlowOperation[]) =>
+      flowProviderResult({ assistantMessage: "I proposed reorganizing the category fields.", needsConfirmation: false, confirmationQuestion: "", operations })
     const aiProvider = createTestAiProvider([
-      flowProviderResult({
-        assistantMessage: "I proposed reorganizing the category fields.",
-        needsConfirmation: false,
-        confirmationQuestion: "",
-        operations: [
-          createConditionalCompanionOperation(DROPDOWN_ID),
-          {
-            type: "move_block",
-            summary: "Moved explanation field",
-            payload: {
-              blockId: COMPANION_ID,
-              afterBlockId: null
-            }
-          }
-        ]
-      })
+      reply([
+        createConditionalCompanionOperation(DROPDOWN_ID),
+        { type: "move_block", summary: "Moved explanation field", payload: { blockId: COMPANION_ID, afterBlockId: null } }
+      ]),
+      reply([createConditionalCompanionOperation(DROPDOWN_ID)])
     ])
 
     const result = await executeTemplateFlow(
@@ -995,6 +1068,8 @@ describe("template Flow service", () => {
     )
     const blocks = result.proposal?.candidateDraft.content.blocks ?? []
     const companions = readOtherCompanions(blocks, DROPDOWN_ID)
+
+    expect(String(readProviderRequests(aiProvider)[1]?.input)).toMatch(/operations\[1\] move_block: .*conditional field/)
 
     expect(companions).toHaveLength(1)
     expect(companions[0]).toMatchObject({
@@ -1162,6 +1237,354 @@ describe("Flow and date formats", () => {
       dateFormat: { month: "number", order: "dmy", separator: "/" },
       required: true,
     })
+  })
+})
+
+describe("Flow checking its own draft", () => {
+  const service = (options: string[], label = "Service needed"): TestFlowOperation[] => [
+    { type: "add_block", summary: "Asked which service", payload: { afterBlockId: null, block: { type: "dropdown_field", fieldKey: "service", label, required: true, helpText: null, placeholder: null, options } } },
+  ]
+  const reply = (operations: TestFlowOperation[]) => flowProviderResult({ assistantMessage: "Done.", needsConfirmation: false, confirmationQuestion: "", operations })
+  const placeholders = service(["Option 1", "Option 2"])
+  const choices = (result: Awaited<ReturnType<typeof executeTemplateFlow>>) =>
+    result.proposal?.candidateDraft.content.blocks.flatMap((block: TemplateBlock) => (block.type === "dropdown_field" ? block.options : []))
+
+  it("rewrites once when its draft has a fault it can see, and proposes the better draft", async () => {
+    const { aiProvider, run } = runFlow(createContent(), placeholders, service(["Deep clean", "Regular clean"]))
+    const result = await run
+    const requests = readProviderRequests(aiProvider)
+
+    expect(requests).toHaveLength(2)
+    expect((JSON.parse(String(requests[1]?.input)) as { revision: unknown }).revision).toMatchObject({
+      faults: [{ blocks: [expect.stringContaining("Service needed")] }],
+      priorResponse: expect.stringContaining("Option 1"),
+    })
+    expect(choices(result)).toEqual(["Deep clean", "Regular clean"])
+    expect(result.proposal?.qualityIssues.map((issue) => issue.code)).not.toContain("dropdown_placeholder_choices")
+  })
+
+  it("keeps its first draft when the rewrite is no better, unreadable or never arrives", async () => {
+    for (const second of [reply(service(["Choice 1", "Choice 2"])), { ...reply(placeholders), text: "not-json" }, temporaryProviderOutage()]) {
+      const aiProvider = createTestAiProvider([reply(placeholders), second])
+      const result = await executeTemplateFlow(createInput(createContent(), "Build the form."), createDependencies({ aiProvider }))
+
+      expect(choices(result)).toEqual(["Option 1", "Option 2"])
+      expect(readProviderRequests(aiProvider)).toHaveLength(2)
+    }
+  })
+
+  it("spends no call on what it cannot fix, on faults that were already there, or when time is short", async () => {
+    // A decision only the author can make, a health question, and no description.
+    const open = runFlow(createContent(), [
+      { type: "add_block", summary: "Left the fee open", payload: { afterBlockId: null, block: { type: "paragraph", text: "Needs input: the hourly fee.", alignment: "left" } } },
+      { type: "add_block", summary: "Asked about medication", payload: { afterBlockId: null, block: { type: "text_field", fieldKey: "medications", label: "Current medications", required: false, helpText: null, placeholder: null, multiline: true } } },
+    ])
+
+    expect((await open.run).proposal?.qualityIssues.map((issue) => issue.code)).toEqual(
+      expect.arrayContaining(["unresolved_needs_input", "collects_health_information"])
+    )
+    expect(readProviderRequests(open.aiProvider)).toHaveLength(1)
+
+    // The author's own placeholder choices, which this turn was not asked to touch.
+    const content = createContent()
+    content.blocks.push({ id: FIELD_ID, type: "dropdown_field", fieldKey: "plan", label: "Plan", required: false, helpText: null, placeholder: null, options: ["Option 1", "Option 2"] })
+    const untouched = runFlow(content, [{ type: "set_title", summary: "Renamed it", payload: { value: "Cleaning intake" } }])
+
+    await untouched.run
+    expect(readProviderRequests(untouched.aiProvider)).toHaveLength(1)
+
+    // A first answer that took so long a second would run past the request's time.
+    const clock = vi.spyOn(performance, "now").mockReturnValueOnce(0).mockReturnValue(101_000)
+    const late = runFlow(createContent(), placeholders, service(["Deep clean", "Regular clean"]))
+
+    expect(choices(await late.run)).toEqual(["Option 1", "Option 2"])
+    expect(readProviderRequests(late.aiProvider)).toHaveLength(1)
+    clock.mockRestore()
+  })
+})
+
+describe("Flow reading a document longer than it can take in", () => {
+  it("reads a 50-page document whole", async () => {
+    const { aiProvider, run } = runFlow(createLongDocumentContent(), [])
+
+    await run
+
+    const { currentDraft } = JSON.parse(String(readProviderRequests(aiProvider)[0]?.input)) as {
+      currentDraft: { blocks: unknown[]; omitted: { blocks: number }; pages: number }
+    }
+
+    expect(currentDraft.omitted.blocks).toBe(0)
+    expect(currentDraft.pages).toBeGreaterThanOrEqual(50)
+  })
+
+  it("sends as many blocks as fit, and says how many it left out", async () => {
+    const content = createContent()
+    content.blocks = Array.from({ length: 1_200 }, (_, index) => ({
+      id: `70000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
+      type: "paragraph" as const,
+      text: `Clause ${index}: ${"the supplier keeps records for the period the client sets out. ".repeat(6)}`,
+      alignment: "left" as const,
+    }))
+    const { aiProvider, run } = runFlow(content, [])
+
+    await run
+
+    const { currentDraft } = JSON.parse(String(readProviderRequests(aiProvider)[0]?.input)) as {
+      currentDraft: { blocks: unknown[]; omitted: { blocks: number } }
+    }
+    const sent = JSON.stringify(currentDraft).length
+    const oneMore = JSON.stringify(content.blocks[currentDraft.blocks.length]).length
+
+    expect(currentDraft.blocks.length + currentDraft.omitted.blocks).toBe(1_200)
+    expect(currentDraft.omitted.blocks).toBeGreaterThan(0)
+    // Full to the limit and no further: the next block would not have fitted.
+    expect(sent).toBeLessThan(400_010)
+    expect(sent + oneMore).toBeGreaterThan(400_000)
+  })
+})
+
+describe("Flow building with the blocks it adds", () => {
+  it("lets one turn say where its new blocks go and what shows them, by whatever names it gave them", async () => {
+    const { run } = runFlow(createContent(), [
+      { type: "add_block", summary: "Asked about pets", payload: { ref: "new:has_pet", afterBlockId: null, block: { type: "checkbox_field", fieldKey: "pet", label: "Has a pet", required: false, helpText: null, checkedByDefault: false } } },
+      {
+        type: "add_block",
+        summary: "Asked the pet's name",
+        payload: { afterBlockId: "new:has_pet", block: { type: "text_field", fieldKey: "name", label: "Pet's name", required: false, helpText: null, placeholder: null, multiline: false, visibleWhen: { sourceBlockId: "new:has_pet", operator: "equals", value: true } } },
+      },
+      { type: "add_block", summary: "Asked the kind of pet", payload: { ref: "b_kind", afterBlockId: null, block: { type: "dropdown_field", fieldKey: "kind", label: "Kind of pet", required: false, helpText: null, placeholder: null, options: ["Dog", "Cat", "Other"], otherLabel: "What kind of pet is it?" } } },
+      { type: "add_block", summary: "Thanked them", payload: { afterBlockId: "b_kind", block: { type: "paragraph", text: "Thank you.", alignment: "left" } } },
+    ])
+    const blocks = (await run).proposal!.candidateDraft.content.blocks
+    const named = (label: string) => blocks.find((block: TemplateBlock) => "label" in block && block.label === label)!
+
+    expect(blocks.map((block: TemplateBlock) => ("label" in block ? block.label : block.type))).toEqual([
+      "paragraph",
+      "Has a pet",
+      "Pet's name",
+      "Kind of pet",
+      // Added after the new dropdown, the paragraph still leaves its "Other" answer beside it,
+      // asked as the question Flow wrote for it.
+      "What kind of pet is it?",
+      "paragraph",
+    ])
+    expect(named("Pet's name")).toMatchObject({ visibleWhen: { sourceBlockId: named("Has a pet").id, value: true } })
+    expect(named("What kind of pet is it?")).toMatchObject({ visibleWhen: { sourceBlockId: named("Kind of pet").id } })
+  })
+
+  it("keeps every section and row on the blocks it named when an \"Other\" answer is slotted in above them", async () => {
+    const field = (label: string) => ({ type: "text_field", fieldKey: "key", label, required: false, helpText: null, placeholder: null, multiline: false })
+    const add = (ref: string, afterBlockId: string | null, block: Record<string, unknown>): TestFlowOperation => ({ type: "add_block", summary: `Added ${String(block.label)}`, payload: { ref, afterBlockId, block } })
+    const { run } = runFlow(createContent(), [
+      add("kind", PARAGRAPH_ID, { type: "dropdown_field", fieldKey: "kind", label: "Property type", required: false, helpText: null, placeholder: null, options: ["House", "Flat", "Other"] }),
+      // Written after the dropdown, as a model writes them: the "Other" answer has to go in between.
+      add("bedrooms", "kind", field("Bedrooms")),
+      add("bathrooms", "bedrooms", field("Bathrooms")),
+      add("access", "bathrooms", field("Access instructions")),
+      add("signature", "access", { type: "signature_field", fieldKey: "signature", label: "Signature", required: true, helpText: null }),
+      add("signed", "signature", { type: "date_field", fieldKey: "signed", label: "Date signed", required: true, helpText: null }),
+      { type: "set_row", summary: "Set the rooms side by side", payload: { blockIds: ["bedrooms", "bathrooms"] } },
+      { type: "set_section", summary: "Started the access section", payload: { blockId: "access", label: "Access" } },
+      { type: "set_row", summary: "Set signature and date side by side", payload: { blockIds: ["signature", "signed"] } },
+    ])
+    const { blocks, fieldGroups, sections } = (await run).proposal!.candidateDraft.content as TemplateContentV3
+    const label = (blockId: string) => blocks.flatMap((block: TemplateBlock) => (block.id === blockId && "label" in block ? [block.label] : []))[0]
+
+    expect(blocks.flatMap((block: TemplateBlock) => ("label" in block ? [block.label] : []))).toEqual([
+      // No question written for it: named after its dropdown.
+      "Property type", "Other property type", "Bedrooms", "Bathrooms", "Access instructions", "Signature", "Date signed",
+    ])
+    expect(fieldGroups.map((row) => [label(row.startBlockId), label(row.endBlockId)])).toEqual([
+      ["Bedrooms", "Bathrooms"],
+      ["Signature", "Date signed"],
+    ])
+    expect(sections.filter((section) => section.label === "Access").map((section) => label(section.startBlockId))).toEqual(["Access instructions"])
+  })
+
+  it("keeps the formatting of words it leaves alone, and the height a box was given", async () => {
+    const content = createContent()
+    content.blocks = [
+      { id: PARAGRAPH_ID, type: "heading", level: 2, alignment: "left", text: "Rental terms", runs: [{ text: "Rental " }, { text: "terms", bold: true }] },
+      { id: FIELD_ID, type: "text_field", fieldKey: "notes", label: "Notes", required: false, helpText: null, placeholder: null, multiline: true, boxHeight: 90 },
+    ]
+    const { run } = runFlow(content, [
+      { type: "update_block", summary: "Made it the main heading", payload: { blockId: PARAGRAPH_ID, block: { type: "heading", level: 1, alignment: "left", text: "Rental terms" } } },
+      { type: "update_block", summary: "Reworded the label", payload: { blockId: FIELD_ID, block: { type: "text_field", fieldKey: "notes", label: "Notes for the landlord", required: false, helpText: null, placeholder: null, multiline: true } } },
+    ])
+
+    expect((await run).proposal?.candidateDraft.content.blocks).toMatchObject([
+      { level: 1, runs: [{ text: "Rental " }, { text: "terms", bold: true }] },
+      { label: "Notes for the landlord", boxHeight: 90 },
+    ])
+  })
+
+  it("tells the model which operation failed and why, so its one correction lands", async () => {
+    const add = { type: "add_block", summary: "Added a note", payload: { ref: "new:1", afterBlockId: null, block: { type: "paragraph", text: "A note.", alignment: "left" } } }
+    const { aiProvider, run } = runFlow(createContent(), [add, { type: "move_block", summary: "Moved it up", payload: { blockId: "new:2", afterBlockId: null } }], [add])
+    const result = await run
+
+    expect(String(readProviderRequests(aiProvider)[1]?.input)).toMatch(/operations\[1\] move_block: .*new:2/)
+    expect(result.proposal?.candidateDraft.content.blocks).toHaveLength(2)
+    expect(readProviderRequests(aiProvider)).toHaveLength(2)
+  })
+
+  it("refuses, and says why, what it would otherwise drop or mistake, and survives a payload nested without end", async () => {
+    const checkbox = { id: FIELD_ID, type: "checkbox_field" as const, fieldKey: "pet", label: "Has a pet", required: false, helpText: null, checkedByDefault: false }
+    const paragraph = { type: "paragraph", text: "A note.", alignment: "left" }
+    const refused: Array<[RegExp, TestFlowOperation[]]> = [
+      // A name given to two new blocks.
+      [/operations\[1\] add_block: .*new:1/, [1, 2].map(() => ({ type: "add_block", summary: "Added a note", payload: { ref: "new:1", afterBlockId: null, block: paragraph } }))],
+      // A name that is an existing block's id, which would turn every later mention of that block to the new one.
+      [/operations\[0\] add_block: ref .*short name/, [{ type: "add_block", summary: "Added a note", payload: { ref: PARAGRAPH_ID, afterBlockId: null, block: paragraph } }]],
+      // A condition on a field that comes later: once dropped without a word.
+      [
+        /operations\[0\] add_block: .*visibleWhen/,
+        [{ type: "add_block", summary: "Asked the pet's name", payload: { afterBlockId: PARAGRAPH_ID, block: { type: "text_field", fieldKey: "name", label: "Pet's name", required: false, helpText: null, placeholder: null, multiline: false, visibleWhen: { sourceBlockId: FIELD_ID, operator: "equals", value: true } } } }],
+      ],
+      // A move that puts a field's source after it: the field would show for everyone.
+      [/operations\[0\] move_block: .*conditional field/, [{ type: "move_block", summary: "Moved the question down", payload: { blockId: FIELD_ID, afterBlockId: COMPANION_ID } }]],
+    ]
+
+    for (const [reason, operations] of refused) {
+      const content = createContent()
+      content.blocks.push(checkbox, { id: COMPANION_ID, type: "text_field", fieldKey: "age", label: "Pet's age", required: false, helpText: null, placeholder: null, multiline: false, visibleWhen: { sourceBlockId: FIELD_ID, operator: "equals", value: true } })
+      const { aiProvider, run } = runFlow(content, operations)
+
+      await expect(run).rejects.toMatchObject({ statusCode: 502 })
+      expect(String(readProviderRequests(aiProvider)[1]?.input)).toMatch(reason)
+    }
+
+    const nested = rawFlowProviderResult({
+      assistantMessage: "Done.",
+      needsConfirmation: false,
+      confirmationQuestion: "",
+      operations: [{ type: "move_block", summary: "Moved it", payloadJson: `${'{"a":'.repeat(7_000)}1${"}".repeat(7_000)}` }],
+    })
+
+    await expect(
+      executeTemplateFlow(createInput(createContent(), "Build the form."), createDependencies({ aiProvider: createTestAiProvider([nested]) }))
+    ).rejects.toMatchObject({ statusCode: 502 })
+  })
+})
+
+describe("Flow laying out a document", () => {
+  const field = (label: string, more: Record<string, unknown> = {}) => ({ type: "text_field", fieldKey: "key", label, required: false, helpText: null, placeholder: null, multiline: false, ...more })
+  const add = (ref: string, afterBlockId: string | null, block: Record<string, unknown>): TestFlowOperation => ({ type: "add_block", summary: `Added ${String(block.label)}`, payload: { ref, afterBlockId, block } })
+
+  it("builds a section, a row, a tall box and a closing signature set to one side, all in one turn", async () => {
+    const { run } = runFlow(createContent(), [
+      add("new:1", null, field("Full name")),
+      add("new:2", "new:1", field("Phone")),
+      add("new:3", "new:2", field("Notes", { multiline: true, boxHeight: 120 })),
+      add("new:4", "new:3", { type: "signature_field", fieldKey: "key", label: "Signature", required: true, helpText: null }),
+      { type: "set_section", summary: "Started the contact section", payload: { blockId: "new:1", label: "Contact details", keepTogether: true } },
+      { type: "set_row", summary: "Set name and phone side by side", payload: { blockIds: ["new:1", "new:2"], widths: [8, 4] } },
+      { type: "set_block_rule", summary: "Started notes on a new page", payload: { blockId: "new:3", pageBreakBefore: true } },
+      { type: "set_block_rule", summary: "Set the signature to the right", payload: { blockId: "new:4", spaceAbove: 24, frame: { left: 50, width: 50 } } },
+    ])
+    const proposal = (await run).proposal!
+    const content = templateContentV3Schema.parse(proposal.candidateDraft.content)
+    const id = (label: string) => content.blocks.find((block) => "label" in block && block.label === label)!.id
+
+    expect(content.sections).toMatchObject([{ keepTogether: true, label: "Contact details", pageBreakBefore: false, startBlockId: id("Full name") }])
+    expect(content.fieldGroups).toMatchObject([{ columns: 2, endBlockId: id("Phone"), startBlockId: id("Full name"), widths: [8, 4] }])
+    expect(content.blockRules).toEqual([
+      { blockId: id("Notes"), keepWithNext: false, pageBreakBefore: true },
+      { blockId: id("Signature"), frame: { left: 50, width: 50 }, keepWithNext: false, pageBreakBefore: false, spaceAbove: 24 },
+    ])
+    expect(content.blocks.find((block) => block.id === id("Notes"))).toMatchObject({ boxHeight: 120 })
+    // The row's two blocks are both marked as changed, for the page to show.
+    expect(proposal.operations.find((operation) => operation.type === "set_row")?.affectedBlockIds).toEqual([id("Full name"), id("Phone")])
+  })
+
+  it("sets the page up in a style with what the user asked beyond it, labels a row, and makes words bold", async () => {
+    const { run } = runFlow(createContent(), [
+      add("new:1", null, { type: "paragraph", text: "Please read: this form is confidential.", runs: [{ text: "Please read:", bold: true }, { text: " this form is confidential." }], alignment: "left" }),
+      add("new:2", "new:1", field("Last name")),
+      add("new:3", "new:2", field("First name")),
+      { type: "set_row", summary: "Set the names side by side", payload: { blockIds: ["new:2", "new:3"], label: "Applicant" } },
+      {
+        type: "set_layout",
+        summary: "Set the page up as an official form",
+        payload: { style: "official", fieldStyle: "line", sectionNumbers: "none", pageSize: "Letter", footerText: { left: "Form 12 {title}", right: "Page {page} of {pages}" }, footerPolicy: "all_pages" },
+      },
+    ])
+    const content = templateContentV3Schema.parse((await run).proposal!.candidateDraft.content)
+
+    // The style's settings, less the two the user changed.
+    expect(content.layout).toMatchObject({ density: "compact", fieldStyle: "line", footerPolicy: "all_pages", footerText: { left: "Form 12 {title}", right: "Page {page} of {pages}" }, marginPreset: "compact", pageSize: "Letter", sectionStyle: "band" })
+    expect(content.layout.sectionNumbers).toBeUndefined()
+    // New paper keeps every line where it was, scaled to fit.
+    expect(content.layout.contentScale).toBeCloseTo(612 / 595.28, 3)
+    expect(content.fieldGroups).toMatchObject([{ label: "Applicant" }])
+    expect(content.blocks.find((block) => block.type === "paragraph" && block.text.startsWith("Please"))).toMatchObject({ runs: [{ bold: true, text: "Please read:" }, { text: " this form is confidential." }] })
+  })
+
+  it("makes a row of part of a wider one where it stands, takes a row apart, and ends a section, moving nothing else", async () => {
+    const { run: built } = runFlow(createContent(), [
+      add("new:1", null, field("Full name")),
+      add("new:2", "new:1", field("Phone")),
+      add("new:3", "new:2", field("Email")),
+      { type: "set_section", summary: "Started the contact section", payload: { blockId: "new:1", label: "Contact details" } },
+      { type: "set_row", summary: "Set three side by side", payload: { blockIds: ["new:1", "new:2", "new:3"] } },
+    ])
+    const start = (await built).proposal!.candidateDraft.content as TemplateContentV3
+    const [, name, phone, email] = start.blocks.map((block) => block.id)
+    const order = start.blocks.map((block) => block.id)
+    const { run } = runFlow(start, [
+      // Email, not named, steps out of the row; the two named stay where they are.
+      { type: "set_row", summary: "Left name and phone side by side, the name wider", payload: { blockIds: [name, phone], widths: [9, 3] } },
+      { type: "set_section", summary: "Ended the section", payload: { blockId: name, label: null } },
+      { type: "set_block_rule", summary: "Kept the email with what follows", payload: { blockId: email, frame: null, keepWithNext: true } },
+    ])
+    const content = (await run).proposal!.candidateDraft.content as TemplateContentV3
+
+    // The same row, narrowed and resized in place: its id is the one it had.
+    expect(content.fieldGroups).toMatchObject([{ columns: 2, endBlockId: phone, id: start.fieldGroups[0]!.id, startBlockId: name, widths: [9, 3] }])
+    expect(content.sections).toEqual([])
+    expect(content.blockRules).toEqual([{ blockId: email, keepWithNext: true, pageBreakBefore: false }])
+    expect(content.blocks.map((block) => block.id)).toEqual(order)
+
+    const { run: apart } = runFlow(content, [{ type: "stand_alone", summary: "Put the phone on its own line", payload: { blockId: phone } }])
+    const alone = (await apart).proposal!.candidateDraft.content as TemplateContentV3
+
+    expect(alone.fieldGroups).toEqual([])
+    expect(alone.blocks.map((block) => block.id)).toEqual(order)
+  })
+
+  it("holds what it is given within the page, and refuses by name what cannot be laid out", async () => {
+    const { run: built } = runFlow(createContent(), [
+      add("new:1", null, field("Full name")),
+      add("new:2", "new:1", field("Phone")),
+      add("new:3", "new:2", field("Email")),
+      { type: "set_row", summary: "Set two side by side", payload: { blockIds: ["new:1", "new:2"] } },
+    ])
+    const start = (await built).proposal!.candidateDraft.content as TemplateContentV3
+    const [paragraph, name, phone, email] = start.blocks.map((block) => block.id)
+    const { run } = runFlow(start, [{ type: "set_block_rule", summary: "Pushed it far down and off the edge", payload: { blockId: email, spaceAbove: 9_999, frame: { left: 90, width: 50 } } }])
+
+    expect(((await run).proposal!.candidateDraft.content as TemplateContentV3).blockRules).toEqual([
+      { blockId: email, frame: { left: 90, width: 10 }, keepWithNext: false, pageBreakBefore: false, spaceAbove: 600 },
+    ])
+
+    const refused: Array<[RegExp, TestFlowOperation]> = [
+      [/set_block_rule: .*row/, { type: "set_block_rule", summary: "Framed a row member", payload: { blockId: name, frame: { left: 50, width: 50 } } }],
+      [/set_block_rule: /, { type: "set_block_rule", summary: "Changed nothing", payload: { blockId: email } }],
+      [/set_row: .*12/, { type: "set_row", summary: "Widths that do not fill the row", payload: { blockIds: [name, phone], widths: [8, 8] } }],
+      [/set_row: .*12/, { type: "set_row", summary: "A width for a block not there", payload: { blockIds: [name, phone], widths: [4, 4, 4] } }],
+      [/blockIds/, { type: "set_row", summary: "Five in a row", payload: { blockIds: [paragraph, name, phone, email, email] } }],
+      [/set_row: .*different/, { type: "set_row", summary: "The same block twice", payload: { blockIds: [email, email] } }],
+      [/stand_alone: .*row/, { type: "stand_alone", summary: "Took out a block in no row", payload: { blockId: email } }],
+      [/set_section: /, { type: "set_section", summary: "Ended a section that is not there", payload: { blockId: email, label: null } }],
+      [/set_section: /, { type: "set_section", summary: "Started one at a missing block", payload: { blockId: TEMPLATE_ID, label: "Extras" } }],
+    ]
+
+    for (const [reason, operation] of refused) {
+      const { aiProvider, run: attempt } = runFlow(start, [operation])
+
+      await expect(attempt, operation.summary).rejects.toMatchObject({ statusCode: 502 })
+      expect(String(readProviderRequests(aiProvider)[1]?.input), operation.summary).toMatch(reason)
+    }
   })
 })
 
@@ -1378,12 +1801,20 @@ function readOtherCompanions(
       block: TemplateBlock
     ): block is Extract<TemplateBlock, { type: "text_field" }> =>
       block.type === "text_field" &&
-      block.label === "Please specify" &&
       block.required &&
       block.visibleWhen?.sourceBlockId === dropdownId &&
       block.visibleWhen.operator === "equals" &&
       block.visibleWhen.value === "Other"
   )
+}
+
+// One Flow turn over a document: what the model replies with first, and after a correction.
+function runFlow(content: TemplateContent, ...replies: TestFlowOperation[][]) {
+  const aiProvider = createTestAiProvider(
+    replies.map((operations: TestFlowOperation[]) => flowProviderResult({ assistantMessage: "Done.", needsConfirmation: false, confirmationQuestion: "", operations }))
+  )
+
+  return { aiProvider, run: executeTemplateFlow(createInput(content, "Build the form."), createDependencies({ aiProvider })) }
 }
 
 function createContent(): TemplateContent {

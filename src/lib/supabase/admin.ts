@@ -20,6 +20,7 @@ import type {
   DocumentSigningRecipientRow,
   DocumentSourceKind,
   DocumentTemplateRow,
+  DocumentTemplateVersionRow,
   TemplateContent,
 } from "@/types/template"
 import type { TemplateFlowMessageRow } from "@/types/template-flow"
@@ -27,6 +28,8 @@ import type {
   SubmissionActivityEventRow,
   SubmissionCommentRow,
 } from "@/types/submission-review"
+import type { SavedViewRecord } from "@/types/saved-view"
+import type { TemplateAnswerValue } from "@/types/template-answer"
 
 type DatabaseOrganizationRole =
   | "owner_admin"
@@ -130,6 +133,21 @@ type DocumentAccessGrantRow = Record<string, unknown> & {
   updated_at: string
 }
 
+/** What a template is shared at: read it, make documents from it, or edit it. */
+export type TemplateAccessLevel = "viewer" | "user" | "editor"
+
+type TemplateAccessGrantRow = Record<string, unknown> & {
+  id: string
+  org_id: string
+  template_id: string
+  user_id: string | null
+  organization_role: DatabaseOrganizationRole | null
+  access_level: TemplateAccessLevel
+  granted_by: string | null
+  created_at: string
+  updated_at: string
+}
+
 type FolderAccessGrantRow = Record<string, unknown> & {
   id: string
   org_id: string
@@ -211,7 +229,7 @@ type AdminSubmissionRow = Record<string, unknown> & {
   template_id: string
   template_revision: number
   template_snapshot: TemplateContent
-  values: Record<string, string | boolean>
+  values: Record<string, TemplateAnswerValue>
   status:
     | "draft"
     | "submitted"
@@ -230,6 +248,32 @@ type AdminSubmissionRow = Record<string, unknown> & {
   updated_at: string
   submitted_at: string | null
   assigned_at: string | null
+}
+
+type AdminSubmissionReviewerRow = Record<string, unknown> & {
+  submission_id: string
+  org_id: string
+  user_id: string
+  assigned_by: string | null
+  assigned_at: string
+  can_approve: boolean
+  decision: "pending" | "approved" | "changes_requested" | "dismissed"
+  note: string | null
+  decided_at: string | null
+}
+
+type AdminSubmissionSuggestionRow = Record<string, unknown> & {
+  id: string
+  org_id: string
+  submission_id: string
+  field_key: string
+  previous_value: TemplateAnswerValue | null
+  proposed_value: TemplateAnswerValue
+  suggested_by: string | null
+  suggested_at: string
+  status: "pending" | "accepted" | "declined"
+  decided_by: string | null
+  decided_at: string | null
 }
 
 type AdminSubmissionFileRow = Record<string, unknown> & {
@@ -291,6 +335,71 @@ type AdminTaskReminderRow = Record<string, unknown> & {
   updated_at: string
 }
 
+/** A room where a working copy is edited together; bytes arrive as PostgREST writes bytea, `\\x` and hex. */
+export type WorkingCopyRoomRow = Record<string, unknown> & {
+  id: string
+  org_id: string
+  template_id: string | null
+  document_id: string | null
+  revision: number
+  state: string
+  state_revision: number
+  schema_version: number
+  saved_hash: string
+  created_at: string
+  updated_at: string
+}
+
+/** One update a room kept, in the order it was kept. */
+export type WorkingCopyUpdateRow = Record<string, unknown> & {
+  org_id: string
+  room_id: string
+  revision: number
+  update: string
+  actor_user_id: string | null
+  created_at: string
+}
+
+type WorkingCopyRoomInsert = Pick<WorkingCopyRoomRow, "id" | "org_id" | "saved_hash" | "state"> &
+  Partial<Pick<WorkingCopyRoomRow, "document_id" | "template_id">>
+
+type WorkingCopyCheckpointRow = Record<string, unknown> & {
+  id: string
+  org_id: string
+  room_id: string
+  revision: number
+  label: string
+  value: unknown
+  value_hash: string
+  schema_version: number
+  restored_from: string | null
+  created_by: string | null
+  created_at: string
+}
+
+type WorkingCopyCommentRow = Record<string, unknown> & {
+  id: string
+  org_id: string
+  room_id: string
+  thread_id: string
+  block_id: string | null
+  quote: string | null
+  body: string
+  author_id: string | null
+  created_at: string
+  resolved_at: string | null
+  resolved_by: string | null
+}
+
+type WorkingCopyChatRow = Record<string, unknown> & {
+  id: string
+  org_id: string
+  room_id: string
+  body: string
+  author_id: string | null
+  created_at: string
+}
+
 export type AdminPublicFormLinkRow = Record<string, unknown> & {
   id: string
   org_id: string
@@ -323,6 +432,8 @@ type DocumentAccessGrantInsert = Partial<DocumentAccessGrantRow> &
     DocumentAccessGrantRow,
     "org_id" | "document_id" | "access_level"
   >
+type TemplateAccessGrantInsert = Partial<TemplateAccessGrantRow> &
+  Pick<TemplateAccessGrantRow, "org_id" | "template_id" | "access_level">
 type FolderAccessGrantInsert = Partial<FolderAccessGrantRow> &
   Pick<FolderAccessGrantRow, "org_id" | "folder_id" | "access_level">
 type DocumentVersionInsert = Partial<AdminDocumentVersionRow> &
@@ -422,12 +533,12 @@ export type AdminDatabase = {
         Partial<OrganizationRoleRow>
       >
       saved_list_views: DatabaseTable<
-        import("@/types/saved-view").SavedViewRecord,
+        SavedViewRecord,
         Pick<
-          import("@/types/saved-view").SavedViewRecord,
+          SavedViewRecord,
           "list" | "name" | "org_id" | "query" | "user_id"
         >,
-        Partial<Pick<import("@/types/saved-view").SavedViewRecord, "name">>
+        Partial<Pick<SavedViewRecord, "name">>
       >
       invites: DatabaseTable<
         InviteRow,
@@ -460,6 +571,11 @@ export type AdminDatabase = {
         DocumentAccessGrantInsert,
         Partial<DocumentAccessGrantRow>
       >
+      template_access_grants: DatabaseTable<
+        TemplateAccessGrantRow,
+        TemplateAccessGrantInsert,
+        Partial<TemplateAccessGrantRow>
+      >
       folder_access_grants: DatabaseTable<
         FolderAccessGrantRow,
         FolderAccessGrantInsert,
@@ -485,6 +601,16 @@ export type AdminDatabase = {
         DocumentTemplateInsert,
         Partial<DocumentTemplateRow>
       >
+      document_template_versions: DatabaseTable<DocumentTemplateVersionRow, DocumentTemplateVersionRow, never>
+      working_copy_rooms: DatabaseTable<WorkingCopyRoomRow, WorkingCopyRoomInsert, never>
+      working_copy_updates: DatabaseTable<WorkingCopyUpdateRow, never, never>
+      working_copy_checkpoints: DatabaseTable<WorkingCopyCheckpointRow, Omit<WorkingCopyCheckpointRow, "created_at">, never>
+      working_copy_comments: DatabaseTable<
+        WorkingCopyCommentRow,
+        Omit<WorkingCopyCommentRow, "created_at" | "resolved_at" | "resolved_by">,
+        Pick<WorkingCopyCommentRow, "resolved_at" | "resolved_by">
+      >
+      working_copy_messages: DatabaseTable<WorkingCopyChatRow, Omit<WorkingCopyChatRow, "created_at">, never>
       template_flow_messages: DatabaseTable<
         TemplateFlowMessageRow,
         TemplateFlowMessageInsert,
@@ -514,6 +640,8 @@ export type AdminDatabase = {
           >,
         Partial<AdminSubmissionRow>
       >
+      submission_reviewers: DatabaseTable<AdminSubmissionReviewerRow, never, never>
+      submission_answer_suggestions: DatabaseTable<AdminSubmissionSuggestionRow, never, never>
       submission_files: DatabaseTable<
         AdminSubmissionFileRow,
         Partial<AdminSubmissionFileRow> &
@@ -555,6 +683,27 @@ export type AdminDatabase = {
     }
     Views: Record<string, never>
     Functions: {
+      append_working_copy_update: {
+        Args: {
+          target_org_id: string
+          target_room_id: string
+          expected_revision: number
+          target_update: string
+          target_actor_user_id: string
+          saved_working_copy?: Record<string, unknown> | null
+          saved_hash?: string | null
+        }
+        Returns: number | null
+      }
+      compact_working_copy_room: {
+        Args: {
+          target_org_id: string
+          target_room_id: string
+          target_state: string
+          target_state_revision: number
+        }
+        Returns: boolean
+      }
       accept_organization_invite: {
         Args: {
           target_invite_id: string
@@ -569,6 +718,22 @@ export type AdminDatabase = {
           target_user_id: string
         }
         Returns: CurrentOrganizationContextRow[]
+      }
+      get_template_access_level: {
+        Args: {
+          target_org_id: string
+          target_template_id: string
+          target_actor_user_id: string
+        }
+        Returns: TemplateAccessLevel | null
+      }
+      hidden_template_ids: {
+        Args: { target_org_id: string; target_actor_user_id: string }
+        Returns: string[]
+      }
+      editable_template_ids: {
+        Args: { target_org_id: string; target_actor_user_id: string }
+        Returns: string[]
       }
       get_document_access_level: {
         Args: {
@@ -640,6 +805,7 @@ export type AdminDatabase = {
       }
       document_template_card_contents: {
         Args: {
+          published_only: boolean
           target_org_id: string
           template_ids: string[]
         }
@@ -866,7 +1032,7 @@ export type AdminDatabase = {
           target_org_id: string
           target_submission_id: string
           target_expected_revision: number
-          target_values: Record<string, string | boolean>
+          target_values: Record<string, TemplateAnswerValue>
           target_actor_user_id: string
         }
         Returns: AdminSubmissionRow
@@ -932,7 +1098,7 @@ export type AdminDatabase = {
           target_org_id: string
           target_submission_id: string
           target_expected_revision: number
-          target_values: Record<string, string | boolean>
+          target_values: Record<string, TemplateAnswerValue>
           target_actor_user_id: string
         }
         Returns: AdminSubmissionRow
@@ -943,6 +1109,57 @@ export type AdminDatabase = {
           target_submission_id: string
           target_expected_revision: number
           target_assignee_user_id: string
+          target_actor_user_id: string
+        }
+        Returns: AdminSubmissionRow
+      }
+      set_submission_reviewers: {
+        Args: {
+          target_org_id: string
+          target_submission_id: string
+          target_expected_revision: number
+          target_reviewer_ids: string[]
+          target_required_approvals: number | null
+          target_actor_user_id: string
+        }
+        Returns: AdminSubmissionRow
+      }
+      set_submission_sharing: {
+        Args: {
+          target_org_id: string
+          target_submission_id: string
+          target_user_ids: string[]
+          target_actor_user_id: string
+        }
+        Returns: string[]
+      }
+      suggest_submission_answers: {
+        Args: {
+          target_org_id: string
+          target_submission_id: string
+          target_values: Record<string, TemplateAnswerValue>
+          target_actor_user_id: string
+        }
+        Returns: number
+      }
+      decide_submission_suggestion: {
+        Args: {
+          target_org_id: string
+          target_submission_id: string
+          target_suggestion_id: string
+          target_accept: boolean
+          target_actor_user_id: string
+        }
+        Returns: AdminSubmissionRow
+      }
+      dismiss_submission_changes_request: {
+        Args: {
+          target_org_id: string
+          target_submission_id: string
+          target_expected_revision: number
+          target_reviewer_user_id: string
+          target_comment: string
+          target_also_approve: boolean
           target_actor_user_id: string
         }
         Returns: AdminSubmissionRow

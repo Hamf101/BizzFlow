@@ -10,11 +10,11 @@ import { imageBlockSchema, type TemplateLayout, type TemplateBlock } from "@/typ
 const RENDER_TIMEOUT_MS = 30_000
 const ids = (index: number): string => `70000000-0000-4000-8000-${String(index).padStart(12, "0")}`
 
-async function render(blocks: TemplateBlock[], layout?: Partial<TemplateLayout>): Promise<PDFDocument> {
+async function render(blocks: TemplateBlock[], layout?: Partial<TemplateLayout>, blockRules: unknown[] = []): Promise<PDFDocument> {
   const sample = createSampleDocumentInput("2026-07-17T19:30:00.000Z")
   const bytes = await renderGeneratedDocumentPdf({
     ...sample,
-    content: { ...(sample.content as Record<string, unknown>), blockRules: [], blocks, fieldGroups: [], sections: [], ...(layout ? { layout } : {}) },
+    content: { ...(sample.content as Record<string, unknown>), blockRules, blocks, fieldGroups: [], sections: [], ...(layout ? { layout } : {}) },
     signers: [],
   })
 
@@ -290,6 +290,83 @@ describe("fonts, placed pictures and spacing in a PDF", () => {
       expect(lines.map((line, index) => Math.round((lines[index - 1] ?? line) - line))).toEqual([0, 20, 38, 20])
       // The first line starts at the left margin, its baseline 10pt below the top one.
       expect(contents(document)[0]).toContain(`1 0 0 1 70 ${841.89 - 60 - 10} Tm`)
+    },
+    RENDER_TIMEOUT_MS
+  )
+
+  it(
+    "prints a block moved across and down the page where it was put, and the rest after it",
+    async () => {
+      const layout = { footerPolicy: "none", headerPolicy: "none", margins: { bottom: 40, left: 40, right: 40, top: 40 }, printedTitle: { mode: "none" } } as const
+      const blocks = [1, 2, 3].map((index) => ({ alignment: "left" as const, id: ids(index), text: `Line ${index}`, type: "paragraph" as const }))
+      const where = (document: PDFDocument): number[][] =>
+        [...contents(document)[0]!.matchAll(/1 0 0 1 ([\d.]+) ([\d.]+) Tm/g)].map(([, x, y]) => [Number(x), Number(y)])
+      const [plain, moved] = await Promise.all([
+        render(blocks, layout),
+        render(blocks, layout, [{ blockId: ids(2), frame: { left: 50, width: 50 }, keepWithNext: false, pageBreakBefore: false, spaceAbove: 30 }]),
+      ])
+      const [first, second, third] = where(plain)
+
+      // Halfway across the space between the margins, 30pt lower; the next line follows it down.
+      expect(where(moved)).toEqual([first, [40 + (595.28 - 80) / 2, second![1]! - 30], [third![0], third![1]! - 30]])
+    },
+    RENDER_TIMEOUT_MS
+  )
+
+  it(
+    "prints an answer box as tall or short as it was made, with what follows moved to fit",
+    async () => {
+      const layout = { footerPolicy: "none", headerPolicy: "none", margins: { bottom: 40, left: 40, right: 40, top: 40 }, printedTitle: { mode: "none" } } as const
+      const field = (boxHeight?: number) => ({ fieldKey: "notes", helpText: null, id: ids(1), label: "Notes", multiline: false, placeholder: null, required: false, type: "text_field" as const, ...(boxHeight ? { boxHeight } : {}) })
+      const after = { alignment: "left" as const, id: ids(2), text: "After", type: "paragraph" as const }
+      // Where the paragraph under the box starts: the box ends just above it.
+      const read = (document: PDFDocument) => ({ after: Number([...contents(document)[0]!.matchAll(/1 0 0 1 [\d.]+ ([\d.]+) Tm/g)].at(-1)![1]) })
+      const [plain, tall, short] = (await Promise.all([render([field(), after], layout), render([field(120), after], layout), render([field(27), after], layout)])).map(read)
+
+      expect(plain.after - tall.after).toBeCloseTo(120 - 30, 1)
+      // As short as a box goes: a line and its padding.
+      expect(short.after - plain.after).toBeCloseTo(30 - 27, 1)
+    },
+    RENDER_TIMEOUT_MS
+  )
+
+  it(
+    "prints a box taller than a page, or a title squeezed too narrow for one, rather than refusing the document",
+    async () => {
+      const layout = { footerPolicy: "none", headerPolicy: "none", margins: { bottom: 144, left: 144, right: 144, top: 144 }, printedTitle: { mode: "none" } } as const
+      const shared = { boxHeight: 600, helpText: null, required: false }
+      const document = await render(
+        [
+          { ...shared, fieldKey: "notes", id: ids(1), label: "Notes", multiline: true, placeholder: null, type: "text_field" },
+          { ...shared, fieldKey: "signed", id: ids(2), label: "Signed", type: "signature_field" },
+          { alignment: "left", id: ids(3), level: 1, text: "A long title ".repeat(12).trim(), type: "heading" },
+        ],
+        layout,
+        [{ blockId: ids(3), frame: { left: 95, width: 5 }, keepWithNext: false, pageBreakBefore: false }]
+      )
+
+      // Each box keeps a page of its own, and the title prints across the page.
+      expect(document.getPageCount()).toBe(3)
+      expect(contents(document)[2]).toContain("Tj")
+    },
+    RENDER_TIMEOUT_MS
+  )
+
+  it(
+    "prints every word when each block asks for the most space, the narrowest place at the far edge, and to stay with the next",
+    async () => {
+      const text = "Words that wrap many times in a column this narrow and run on and on."
+      const blocks = [1, 2, 3, 4].map((index) => ({ alignment: "left" as const, id: ids(index), text, type: "paragraph" as const }))
+      const plain = await render(blocks)
+      const document = await render(
+        blocks,
+        undefined,
+        blocks.map((block) => ({ blockId: block.id, frame: { left: 95, width: 5 }, keepWithNext: true, pageBreakBefore: false, spaceAbove: 600 }))
+      )
+
+      // Nothing is lost to a gap taller than what is left of a page, and the gaps alone do not run on without end.
+      expect(textShown(document)).toBeGreaterThanOrEqual(textShown(plain))
+      expect(document.getPageCount()).toBeLessThanOrEqual(12)
     },
     RENDER_TIMEOUT_MS
   )

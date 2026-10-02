@@ -1,0 +1,418 @@
+{
+  "request": "anonymous staff engagement survey for our 40-person manufacturing company",
+  "title": "Staff engagement survey",
+  "description": "Send to every employee once a year, anonymously, to measure how engaged they feel and how they see their work, their manager, their team, their development, fair treatment, workload, pay and leadership.",
+  "maxPages": 4,
+  "content": {
+    "schemaVersion": 3,
+    "branding": {
+      "organizationName": "",
+      "logoAsset": null,
+      "logoDataUrl": null,
+      "logoAlignment": "left",
+      "logoWidthPercent": 24,
+      "primaryColor": "#252329",
+      "accentColor": "#635273"
+    },
+    "blocks": [
+      {
+        "id": "d5060000-0000-4000-8000-000000000001",
+        "type": "heading",
+        "text": "Staff engagement survey",
+        "level": 1,
+        "alignment": "left"
+      },
+      {
+        "id": "d5060000-0000-4000-8000-000000000002",
+        "type": "paragraph",
+        "text": "This survey asks how you feel about working here. It is anonymous: please do not write your name anywhere on it. We only ever report results for groups of at least five people, so no one's answers can be picked out, and the questions about you at the end are optional.",
+        "alignment": "left"
+      },
+      {
+        "id": "d5060000-0000-4000-8000-000000000003",
+        "type": "paragraph",
+        "text": "For each statement, choose the answer closest to how you feel. There are no right or wrong answers, and honest answers help us most. We will share the overall results with everyone and tell you what we plan to do about them.",
+        "alignment": "left"
+      },
+      {
+        "id": "d5060000-0000-4000-8000-000000000049",
+        "type": "choice_grid_field",
+        "fieldKey": "your_work",
+        "label": "How far do you agree with each statement?",
+        "required": true,
+        "helpText": null,
+        "rows": [
+          "I find my work interesting.",
+          "I have a clear idea of what is expected of me.",
+          "I have enough say in how I do my work."
+        ],
+        "options": [
+          "Strongly agree",
+          "Agree",
+          "Neutral",
+          "Disagree",
+          "Strongly disagree"
+        ]
+      },
+      {
+        "id": "d5060000-0000-4000-8000-000000000050",
+        "type": "choice_grid_field",
+        "fieldKey": "our_purpose",
+        "label": "How far do you agree with each statement?",
+        "required": true,
+        "helpText": null,
+        "rows": [
+          "I understand how my work helps the company meet its goals.",
+          "I know what the company is trying to achieve over the next year."
+        ],
+        "options": [
+          "Strongly agree",
+          "Agree",
+          "Neutral",
+          "Disagree",
+          "Strongly disagree"
+        ]
+      },
+      {
+        "id": "d5060000-0000-4000-8000-000000000051",
+        "type": "choice_grid_field",
+        "fieldKey": "your_manager",
+        "label": "How far do you agree with each statement?",
+        "required": true,
+        "helpText": null,
+        "rows": [
+          "My manager gives me useful feedback on my work.",
+          "My manager recognises it when I do my job well.",
+          "I can talk to my manager about anything that worries me."
+        ],
+        "options": [
+          "Strongly agree",
+          "Agree",
+          "Neutral",
+          "Disagree",
+          "Strongly disagree"
+        ]
+      },
+      {
+        "id": "d5060000-0000-4000-8000-000000000052",
+        "type": "choice_grid_field",
+        "fieldKey": "your_team",
+        "label": "How far do you agree with each statement?",
+        "required": true,
+        "helpText": null,
+        "rows": [
+          "The people in my team work well together.",
+          "The people in my team treat each other with respect."
+        ],
+        "options": [
+          "Strongly agree",
+          "Agree",
+          "Neutral",
+          "Disagree",
+          "Strongly disagree"
+        ]
+      },
+      {
+        "id": "d5060000-0000-4000-8000-000000000053",
+        "type": "choice_grid_field",
+        "fieldKey": "learning_and_development",
+        "label": "How far do you agree with each statement?",
+        "required": true,
+        "helpText": null,
+        "rows": [
+          "I can get the training I need to do my job well.",
+          "I can see a way to develop or progress here."
+        ],
+        "options": [
+          "Strongly agree",
+          "Agree",
+          "Neutral",
+          "Disagree",
+          "Strongly disagree"
+        ]
+      },
+      {
+        "id": "d5060000-0000-4000-8000-000000000054",
+        "type": "choice_grid_field",
+        "fieldKey": "fair_treatment_and_safety",
+        "label": "How far do you agree with each statement?",
+        "required": true,
+        "helpText": null,
+        "rows": [
+          "I am treated fairly at work.",
+          "I feel safe to raise a concern about health and safety.",
+          "I feel able to report bullying or harassment without fear of what will happen."
+        ],
+        "options": [
+          "Strongly agree",
+          "Agree",
+          "Neutral",
+          "Disagree",
+          "Strongly disagree"
+        ]
+      },
+      {
+        "id": "d5060000-0000-4000-8000-000000000055",
+        "type": "choice_grid_field",
+        "fieldKey": "resources_and_workload",
+        "label": "How far do you agree with each statement?",
+        "required": true,
+        "helpText": null,
+        "rows": [
+          "I have the tools and equipment I need to do my job.",
+          "My workload is manageable."
+        ],
+        "options": [
+          "Strongly agree",
+          "Agree",
+          "Neutral",
+          "Disagree",
+          "Strongly disagree"
+        ]
+      },
+      {
+        "id": "d5060000-0000-4000-8000-000000000056",
+        "type": "choice_grid_field",
+        "fieldKey": "pay_and_benefits",
+        "label": "How far do you agree with each statement?",
+        "required": true,
+        "helpText": null,
+        "rows": [
+          "My pay is fair for the work I do.",
+          "I understand the benefits the company offers."
+        ],
+        "options": [
+          "Strongly agree",
+          "Agree",
+          "Neutral",
+          "Disagree",
+          "Strongly disagree"
+        ]
+      },
+      {
+        "id": "d5060000-0000-4000-8000-000000000057",
+        "type": "choice_grid_field",
+        "fieldKey": "leadership_and_change",
+        "label": "How far do you agree with each statement?",
+        "required": true,
+        "helpText": null,
+        "rows": [
+          "The management team keeps us informed about what is happening.",
+          "When changes are made, I understand why.",
+          "I have confidence in the decisions the management team makes."
+        ],
+        "options": [
+          "Strongly agree",
+          "Agree",
+          "Neutral",
+          "Disagree",
+          "Strongly disagree"
+        ]
+      },
+      {
+        "id": "d5060000-0000-4000-8000-000000000058",
+        "type": "choice_grid_field",
+        "fieldKey": "how_you_feel_about_working_here",
+        "label": "How far do you agree with each statement?",
+        "required": true,
+        "helpText": null,
+        "rows": [
+          "I am proud to tell people where I work.",
+          "I would recommend the company as a good place to work.",
+          "I feel a real sense of belonging here.",
+          "Working here makes me want to do my best.",
+          "I want to help the company succeed."
+        ],
+        "options": [
+          "Strongly agree",
+          "Agree",
+          "Neutral",
+          "Disagree",
+          "Strongly disagree"
+        ]
+      },
+      {
+        "id": "d5060000-0000-4000-8000-000000000041",
+        "type": "text_field",
+        "fieldKey": "what_is_the_best_thing_about_working_here",
+        "label": "What is the best thing about working here?",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "d5060000-0000-4000-8000-000000000043",
+        "type": "text_field",
+        "fieldKey": "what_one_change_would_most_improve_working_here",
+        "label": "What one change would most improve working here?",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "d5060000-0000-4000-8000-000000000044",
+        "type": "paragraph",
+        "text": "These questions let us compare results between groups. Answer only if you are comfortable doing so.",
+        "alignment": "left"
+      },
+      {
+        "id": "d5060000-0000-4000-8000-000000000046",
+        "type": "dropdown_field",
+        "fieldKey": "which_part_of_the_company_do_you_work_in",
+        "label": "Which part of the company do you work in?",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Production",
+          "Warehouse and dispatch",
+          "Maintenance",
+          "Office and administration",
+          "Sales",
+          "Prefer not to say"
+        ],
+        "display": "radios"
+      },
+      {
+        "id": "d5060000-0000-4000-8000-000000000047",
+        "type": "dropdown_field",
+        "fieldKey": "how_long_have_you_worked_here",
+        "label": "How long have you worked here?",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Less than a year",
+          "1 to 5 years",
+          "More than 5 years",
+          "Prefer not to say"
+        ],
+        "display": "radios"
+      },
+      {
+        "id": "d5060000-0000-4000-8000-000000000048",
+        "type": "dropdown_field",
+        "fieldKey": "do_you_manage_other_people",
+        "label": "Do you manage other people?",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No",
+          "Prefer not to say"
+        ],
+        "display": "radios"
+      }
+    ],
+    "layout": {
+      "pageSize": "A4",
+      "orientation": "portrait",
+      "density": "balanced",
+      "fieldStyle": "box",
+      "marginPreset": "standard",
+      "sectionStyle": "plain",
+      "printedTitle": {
+        "mode": "none"
+      },
+      "headerPolicy": "none",
+      "footerPolicy": "all_pages",
+      "pageNumbering": "none",
+      "footerText": {
+        "left": "{title}",
+        "right": "Page {page} of {pages}"
+      },
+      "sectionNumbers": "letters"
+    },
+    "sections": [
+      {
+        "id": "d5060000-0000-4000-8000-000000000005",
+        "label": "Your work",
+        "startBlockId": "d5060000-0000-4000-8000-000000000049",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d5060000-0000-4000-8000-000000000009",
+        "label": "Our purpose",
+        "startBlockId": "d5060000-0000-4000-8000-000000000050",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d5060000-0000-4000-8000-000000000012",
+        "label": "Your manager",
+        "startBlockId": "d5060000-0000-4000-8000-000000000051",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d5060000-0000-4000-8000-000000000016",
+        "label": "Your team",
+        "startBlockId": "d5060000-0000-4000-8000-000000000052",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d5060000-0000-4000-8000-000000000019",
+        "label": "Learning and development",
+        "startBlockId": "d5060000-0000-4000-8000-000000000053",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d5060000-0000-4000-8000-000000000022",
+        "label": "Fair treatment and safety",
+        "startBlockId": "d5060000-0000-4000-8000-000000000054",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d5060000-0000-4000-8000-000000000026",
+        "label": "Resources and workload",
+        "startBlockId": "d5060000-0000-4000-8000-000000000055",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d5060000-0000-4000-8000-000000000029",
+        "label": "Pay and benefits",
+        "startBlockId": "d5060000-0000-4000-8000-000000000056",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d5060000-0000-4000-8000-000000000032",
+        "label": "Leadership and change",
+        "startBlockId": "d5060000-0000-4000-8000-000000000057",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d5060000-0000-4000-8000-000000000036",
+        "label": "How you feel about working here",
+        "startBlockId": "d5060000-0000-4000-8000-000000000058",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d5060000-0000-4000-8000-000000000042",
+        "label": "Your comments",
+        "startBlockId": "d5060000-0000-4000-8000-000000000041",
+        "pageBreakBefore": true,
+        "keepTogether": false
+      },
+      {
+        "id": "d5060000-0000-4000-8000-000000000045",
+        "label": "About you (optional)",
+        "startBlockId": "d5060000-0000-4000-8000-000000000044",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      }
+    ],
+    "fieldGroups": [],
+    "blockRules": []
+  }
+}

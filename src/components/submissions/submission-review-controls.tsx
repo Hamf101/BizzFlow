@@ -1,10 +1,14 @@
-import { Check, CheckCheck, RotateCcw, UserRoundCheck, X } from "lucide-react"
+import { Check, CheckCheck, MessageSquare, RotateCcw, UserRoundCheck, UserRoundPlus, X } from "lucide-react"
 import type { ReactElement } from "react"
 
 import {
-  assignSubmissionAction,
+  commentFromReviewAction,
+  dismissChangesRequestAction,
+  setSubmissionReviewersAction,
+  shareSubmissionAction,
   transitionSubmissionAction,
 } from "@/app/(dashboard)/submissions/actions"
+import { ROLE_LABELS, SubmissionReviewersPanel } from "@/components/submissions/submission-reviewers-panel"
 import { Button } from "@/components/ui/button"
 import { Select } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
@@ -17,52 +21,75 @@ import {
 import type { OrganizationRole } from "@/lib/permissions"
 import type { OrganizationMember } from "@/types/organization"
 import type { Submission } from "@/types/submission"
+import type { SubmissionActivityEvent, SubmissionComment, SubmissionReviewer, SubmissionReviewTally } from "@/types/submission-review"
 
-const eligibleAssigneeRoles: readonly OrganizationRole[] = [
-  "owner_admin",
-  "manager",
-  "external_reviewer",
-]
-
-const roleLabels: Record<OrganizationRole, string> = {
-  owner_admin: "Owner admin",
-  manager: "Manager",
-  staff: "Staff",
-  external_reviewer: "External reviewer",
-}
+// Anyone who reviews work can be named a reviewer, including people from outside.
+const eligibleReviewerRoles: readonly OrganizationRole[] = ["owner_admin", "manager", "external_reviewer"]
 
 /**
- * Renders assignment and binding review actions for a submission manager.
+ * Renders the reviewers, how to name them, and the decisions each of them can
+ * record: approve, request changes (which holds the submission up), or reject.
+ * The person who assigned the reviewers can set a change request aside. The
+ * person who submitted it, whoever chose the reviewers and owners can share it
+ * with others, who comment and may ask for changes but never approve.
  *
- * @param props - Submission, actor permissions, and active organization members.
- * @returns Review controls allowed by the current status and assignment.
+ * @param props - Submission, what the viewer may do, the reviewers they can see, and the members.
+ * @returns Review controls allowed by the current status and the viewer's part in it.
  */
 export function SubmissionReviewControls({
+  activity,
   canAssign,
   canReview,
+  canShare,
+  comments,
   currentUserId,
+  isRequester,
   members,
+  reviewers,
   submission,
+  tally,
 }: {
+  activity: SubmissionActivityEvent[]
   canAssign: boolean
   canReview: boolean
+  canShare: boolean
+  comments: SubmissionComment[]
   currentUserId: string
+  isRequester: boolean
   members: OrganizationMember[]
+  reviewers: SubmissionReviewer[]
   submission: Submission
+  tally: SubmissionReviewTally
 }): ReactElement | null {
   const assignmentOpen =
     submission.status === "submitted" ||
     submission.status === "in_review" ||
     submission.status === "needs_changes"
-  const canMakeBindingDecision =
-    canReview && submission.assignedTo === currentUserId
+  const mine = reviewers.find((reviewer) => reviewer.userId === currentUserId)
+  // Being named a reviewer is what lets someone approve or ask for changes, whatever their role;
+  // someone it was shared with may ask for changes but not approve.
+  const canDecide = mine !== undefined
+  const approvers = reviewers.filter((reviewer) => reviewer.canApprove)
   const startsReview = submission.status === "submitted"
+  // Who was chosen is only editable by someone who can see every reviewer.
+  const seesEveryone = approvers.length === tally.total
+  const shareable = members.filter(
+    (member: OrganizationMember): boolean =>
+      member.status === "active" &&
+      member.userId !== submission.createdBy &&
+      member.userId !== currentUserId &&
+      !approvers.some((reviewer) => reviewer.userId === member.userId)
+  )
   const eligibleMembers = members.filter(
     (member: OrganizationMember): boolean =>
-      member.status === "active" && eligibleAssigneeRoles.includes(member.role)
+      member.status === "active" && eligibleReviewerRoles.includes(member.role)
   )
+  const asideCandidates =
+    isRequester && submission.status === "needs_changes"
+      ? reviewers.filter((reviewer) => reviewer.decision === "changes_requested")
+      : []
 
-  if (!canAssign && !canReview) {
+  if (!canAssign && !canReview && !canShare && reviewers.length === 0) {
     return null
   }
 
@@ -72,55 +99,121 @@ export function SubmissionReviewControls({
         <CardTitle>Review</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-5">
-        {canAssign && assignmentOpen && (
-          <form action={assignSubmissionAction} className="flex flex-col gap-3">
+        <SubmissionReviewersPanel activity={activity} comments={comments} members={members} reviewers={reviewers} submission={submission} tally={tally} />
+
+        {canAssign && assignmentOpen && seesEveryone && (
+          <form action={setSubmissionReviewersAction} className="flex flex-col gap-3 border-t pt-5 first:border-t-0 first:pt-0">
             <input name="submissionId" type="hidden" value={submission.id} />
-            <input
-              name="expectedRevision"
-              type="hidden"
-              value={submission.revision}
-            />
-            <label
-              className="text-sm font-medium"
-              htmlFor="submission-assignee"
-            >
-              {startsReview
-                ? "Reviewer"
-                : submission.assignedTo
-                  ? "Reassign review"
-                  : "Assign review"}
-            </label>
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <Select
-                defaultValue={submission.assignedTo ?? ""}
-                id="submission-assignee"
-                name="assignedTo"
-                required
-              >
-                {!submission.assignedTo && (
-                  <option disabled value="">
-                    Choose a reviewer
-                  </option>
-                )}
-                {eligibleMembers.map((member: OrganizationMember) => (
-                  <option key={member.id} value={member.userId}>
-                    {formatMemberLabel(member)} · {roleLabels[member.role]}
-                  </option>
-                ))}
-              </Select>
-              <Button type="submit" variant="outline">
-                <UserRoundCheck />
-                {startsReview
-                  ? "Start review"
-                  : submission.assignedTo
-                    ? "Reassign"
-                    : "Assign"}
-              </Button>
-            </div>
+            <input name="expectedRevision" type="hidden" value={submission.revision} />
+            <fieldset className="flex flex-col gap-1.5">
+              <legend className="pb-1 text-sm font-medium">
+                {startsReview ? "Reviewers" : tally.total > 0 ? "Change reviewers" : "Add reviewers"}
+              </legend>
+              {eligibleMembers.map((member: OrganizationMember) => (
+                <label className="flex items-center gap-2.5 text-sm" key={member.id}>
+                  <input
+                    className="size-4 accent-primary"
+                    defaultChecked={approvers.some((reviewer) => reviewer.userId === member.userId)}
+                    name="reviewerIds"
+                    type="checkbox"
+                    value={member.userId}
+                  />
+                  <span className="min-w-0 truncate">
+                    {formatMemberLabel(member)} · {ROLE_LABELS[member.role]}
+                  </span>
+                </label>
+              ))}
+            </fieldset>
+            {eligibleMembers.length > 1 && (
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium" htmlFor="submission-required-approvals">
+                  Approvals needed
+                </label>
+                <Select
+                  defaultValue={submission.requiredApprovals === null ? "" : String(submission.requiredApprovals)}
+                  id="submission-required-approvals"
+                  name="requiredApprovals"
+                >
+                  <option value="">Everyone must approve</option>
+                  {eligibleMembers.map((member: OrganizationMember, index: number) => (
+                    <option key={member.id} value={String(index + 1)}>
+                      At least {index + 1}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            )}
+            <Button className="w-fit" type="submit" variant="outline">
+              <UserRoundCheck />
+              {startsReview ? "Start review" : "Save reviewers"}
+            </Button>
           </form>
         )}
 
-        {submission.status === "in_review" && canMakeBindingDecision && (
+        {canAssign && assignmentOpen && !seesEveryone && (
+          <p className="border-t pt-5 text-sm text-muted-foreground">
+            Someone more senior chose the other reviewers, so only they or an owner can change them.
+          </p>
+        )}
+
+        {canShare && shareable.length > 0 && (
+          <form action={shareSubmissionAction} className="flex flex-col gap-3 border-t pt-5 first:border-t-0 first:pt-0">
+            <input name="submissionId" type="hidden" value={submission.id} />
+            <fieldset className="flex flex-col gap-1.5">
+              <legend className="pb-1 text-sm font-medium">Share with</legend>
+              <p className="pb-1 text-xs text-muted-foreground">They can read it, comment and ask for changes, but not approve.</p>
+              {shareable.map((member: OrganizationMember) => (
+                <label className="flex items-center gap-2.5 text-sm" key={member.id}>
+                  <input
+                    className="size-4 accent-primary"
+                    defaultChecked={reviewers.some((reviewer) => !reviewer.canApprove && reviewer.userId === member.userId)}
+                    name="sharedUserIds"
+                    type="checkbox"
+                    value={member.userId}
+                  />
+                  <span className="min-w-0 truncate">
+                    {formatMemberLabel(member)} · {ROLE_LABELS[member.role]}
+                  </span>
+                </label>
+              ))}
+            </fieldset>
+            <Button className="w-fit" type="submit" variant="outline">
+              <UserRoundPlus />
+              Save sharing
+            </Button>
+          </form>
+        )}
+
+        {asideCandidates.map((reviewer) => (
+          <form action={dismissChangesRequestAction} className="flex flex-col gap-3 border-t pt-5" key={reviewer.userId}>
+            <input name="submissionId" type="hidden" value={submission.id} />
+            <input name="expectedRevision" type="hidden" value={submission.revision} />
+            <input name="reviewerUserId" type="hidden" value={reviewer.userId} />
+            <label className="text-sm font-medium" htmlFor={`aside-${reviewer.userId}`}>
+              Set aside {formatReviewerName(members, reviewer.userId)}’s change request
+            </label>
+            <Textarea
+              className="min-h-20"
+              id={`aside-${reviewer.userId}`}
+              maxLength={2_000}
+              name="comment"
+              placeholder="Why it does not need to hold this up"
+              required
+            />
+            <div className="flex flex-wrap gap-2">
+              <Button type="submit" variant="outline">
+                <RotateCcw />
+                Set aside
+              </Button>
+              <Button name="alsoApprove" type="submit" value="yes">
+                <Check />
+                Set aside and approve
+              </Button>
+            </div>
+          </form>
+        ))}
+
+        {submission.status === "in_review" && canDecide && (
           <form
             action={transitionSubmissionAction}
             className="flex flex-col gap-3 border-t pt-5"
@@ -146,8 +239,9 @@ export function SubmissionReviewControls({
               className="text-xs text-muted-foreground"
               id="review-comment-description"
             >
-              A note is required for requested changes and rejection. It is
-              optional for approval.
+              {mine?.canApprove === false
+                ? "It was shared with you, so you can comment or ask for changes, which holds it up until whoever chose the reviewers sets it aside. A note is required to ask for changes."
+                : "A note is required for requested changes and rejection. It is optional for approval, and a comment leaves your decision as it is. A change request holds the submission up until whoever chose the reviewers sets it aside."}
             </p>
             <div className="flex flex-wrap gap-2">
               <Button
@@ -159,24 +253,32 @@ export function SubmissionReviewControls({
                 <RotateCcw />
                 Request changes
               </Button>
-              <Button name="targetStatus" type="submit" value="approved">
-                <Check />
-                Approve
-              </Button>
-              <Button
-                name="targetStatus"
-                type="submit"
-                value="rejected"
-                variant="destructive"
-              >
-                <X />
-                Reject
+              {mine?.canApprove ? (
+                <Button name="targetStatus" type="submit" value="approved">
+                  <Check />
+                  {mine.decision === "approved" ? "Approved" : "Approve"}
+                </Button>
+              ) : null}
+              {canReview && (
+                <Button
+                  name="targetStatus"
+                  type="submit"
+                  value="rejected"
+                  variant="destructive"
+                >
+                  <X />
+                  Reject
+                </Button>
+              )}
+              <Button formAction={commentFromReviewAction} type="submit" variant="ghost">
+                <MessageSquare />
+                Comment
               </Button>
             </div>
           </form>
         )}
 
-        {submission.status === "approved" && canMakeBindingDecision && (
+        {submission.status === "approved" && mine?.canApprove && canReview && (
           <form
             action={transitionSubmissionAction}
             className="flex flex-col gap-3 border-t pt-5"
@@ -202,10 +304,10 @@ export function SubmissionReviewControls({
         {canReview &&
           (submission.status === "in_review" ||
             submission.status === "approved") &&
-          !canMakeBindingDecision && (
+          !mine?.canApprove && (
             <p className="border-t pt-5 text-sm text-muted-foreground">
-              The assigned owner or manager records the binding decision.
-              Reassign this review to yourself or another manager to continue.
+              Only the reviewers record decisions. Add yourself as a reviewer to
+              continue.
             </p>
           )}
       </CardContent>
@@ -215,4 +317,10 @@ export function SubmissionReviewControls({
 
 function formatMemberLabel(member: OrganizationMember): string {
   return member.fullName?.trim() || member.email
+}
+
+function formatReviewerName(members: readonly OrganizationMember[], userId: string): string {
+  const member = members.find((candidate) => candidate.userId === userId)
+
+  return member ? formatMemberLabel(member) : "a former member"
 }

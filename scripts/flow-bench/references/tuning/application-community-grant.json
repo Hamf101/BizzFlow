@@ -1,0 +1,999 @@
+{
+  "request": "Community grant application form for our town's small grants fund. Grants are for local groups running projects that bring people together. Include proper guidance notes, who can and can't apply, the organisation, the project, the difference it will make, a budget, safeguarding, bank details and a declaration signed by two people.",
+  "title": "Community grant application",
+  "description": "Use when a local group applies to the small grants fund: guidance and eligibility first, then the organisation, the project and its difference, the budget, safeguarding, bank details and a declaration signed by two people.",
+  "maxPages": 8,
+  "content": {
+    "schemaVersion": 3,
+    "branding": {
+      "organizationName": "",
+      "logoAsset": null,
+      "logoDataUrl": null,
+      "logoAlignment": "left",
+      "logoWidthPercent": 24,
+      "primaryColor": "#24543c",
+      "accentColor": "#3f8f5e"
+    },
+    "blocks": [
+      {
+        "id": "0a130000-0000-4000-8000-000000000001",
+        "type": "heading",
+        "text": "Community grant application",
+        "level": 1,
+        "alignment": "left"
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000002",
+        "type": "paragraph",
+        "text": "This fund gives small grants to local groups for projects that bring people together and make the town a better place to live. Please read the guidance on these first pages before you start, and keep it beside you while you fill in the form.",
+        "alignment": "left"
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000003",
+        "type": "heading",
+        "text": "Who can apply",
+        "level": 2,
+        "alignment": "left"
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000004",
+        "type": "bullet_list",
+        "items": [
+          "Voluntary and community groups, registered charities, community interest companies and charitable incorporated organisations.",
+          "Schools, health bodies and parish councils, for projects that go beyond what they must already provide.",
+          "Your group must have a governing document, such as a constitution or set of rules, and a bank account in the group's name.",
+          "At least two people who are not related, do not live at the same address and are not in a relationship must run the group and sign this form."
+        ]
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000005",
+        "type": "heading",
+        "text": "What we cannot fund",
+        "level": 2,
+        "alignment": "left"
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000006",
+        "type": "bullet_list",
+        "items": [
+          "Individuals, or projects that benefit only one person.",
+          "Organisations that aim to make a profit for private gain.",
+          "Activities that promote religious beliefs or a political party, although faith and political groups may apply for open community activities.",
+          "Anything bought, or any activity that takes place, before we tell you our decision.",
+          "Loans, fundraising events for other causes, or paying off debts."
+        ]
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000007",
+        "type": "heading",
+        "text": "How much you can ask for",
+        "level": 2,
+        "alignment": "left"
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000008",
+        "type": "paragraph",
+        "text": "The most and least you can ask for, how long a project can last and the closing date for each round are published with this form on the fund's web page. Ask only for what the project needs: a smaller, well-costed request is often stronger than a large one.",
+        "alignment": "left"
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000009",
+        "type": "heading",
+        "text": "How we decide",
+        "level": 2,
+        "alignment": "left"
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000010",
+        "type": "paragraph",
+        "text": "A panel of residents and council officers reads every eligible application. They ask four questions of each one:",
+        "alignment": "left"
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000011",
+        "type": "numbered_list",
+        "items": [
+          "Need: is there a clear local need, and do you show how you know about it?",
+          "People: have the people who will take part helped to plan the project?",
+          "Difference: will the project bring people together, and will you be able to tell?",
+          "Value: is the budget realistic, and does every cost relate to the project?"
+        ],
+        "itemRuns": [
+          [
+            {
+              "text": "Need:",
+              "bold": true
+            },
+            {
+              "text": " is there a clear local need, and do you show how you know about it?"
+            }
+          ],
+          [
+            {
+              "text": "People:",
+              "bold": true
+            },
+            {
+              "text": " have the people who will take part helped to plan the project?"
+            }
+          ],
+          [
+            {
+              "text": "Difference:",
+              "bold": true
+            },
+            {
+              "text": " will the project bring people together, and will you be able to tell?"
+            }
+          ],
+          [
+            {
+              "text": "Value:",
+              "bold": true
+            },
+            {
+              "text": " is the budget realistic, and does every cost relate to the project?"
+            }
+          ]
+        ]
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000012",
+        "type": "heading",
+        "text": "How to fill in the form",
+        "level": 2,
+        "alignment": "left"
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000013",
+        "type": "bullet_list",
+        "items": [
+          "Write in plain words, as if to someone who does not know your group. The panel only knows what you tell them.",
+          "Answer every question. Where a question does not apply to you, say so.",
+          "Attach your governing document and your most recent accounts, or bank statements for the last three months if your group is new.",
+          "The main contact and the second contact must both sign the declaration in section 7."
+        ]
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000014",
+        "type": "paragraph",
+        "text": "How we use your information: we use the details on this form to assess your application, to pay and monitor any grant, and to tell people about the projects we fund. We share them with the panel members who assess applications and with our auditors. We keep them for as long as our records retention schedule sets for grant files, which we will send you on request.",
+        "runs": [
+          {
+            "text": "How we use your information:",
+            "bold": true
+          },
+          {
+            "text": " we use the details on this form to assess your application, to pay and monitor any grant, and to tell people about the projects we fund. We share them with the panel members who assess applications and with our auditors. We keep them for as long as our records retention schedule sets for grant files, which we will send you on request."
+          }
+        ],
+        "alignment": "left"
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000015",
+        "type": "paragraph",
+        "text": "Help: if you would like to talk about your idea before you apply, or need this form in another format, contact the grants team using the details on the fund's web page.",
+        "runs": [
+          {
+            "text": "Help:",
+            "bold": true
+          },
+          {
+            "text": " if you would like to talk about your idea before you apply, or need this form in another format, contact the grants team using the details on the fund's web page."
+          }
+        ],
+        "alignment": "left"
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000017",
+        "type": "text_field",
+        "fieldKey": "name_of_your_organisation",
+        "label": "Name of your organisation",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000018",
+        "type": "text_field",
+        "fieldKey": "address_of_your_organisation",
+        "label": "Address of your organisation",
+        "required": true,
+        "helpText": null,
+        "boxHeight": 48,
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000019",
+        "type": "dropdown_field",
+        "fieldKey": "what_type_of_organisation_are_you",
+        "label": "What type of organisation are you?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Unregistered voluntary or community group",
+          "Registered charity",
+          "Charitable incorporated organisation",
+          "Community interest company",
+          "School",
+          "Parish or town council",
+          "Other"
+        ]
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000020",
+        "type": "text_field",
+        "fieldKey": "other_organisation_type",
+        "label": "Describe your type of organisation",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0a130000-0000-4000-8000-000000000019",
+          "operator": "equals",
+          "value": "Other"
+        },
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000021",
+        "type": "text_field",
+        "fieldKey": "charity_or_company_number_if_you_have_one",
+        "label": "Charity or company number, if you have one",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000022",
+        "type": "date_field",
+        "fieldKey": "when_was_your_organisation_set_up",
+        "label": "When was your organisation set up?",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": " ",
+          "month": "long"
+        }
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000023",
+        "type": "text_field",
+        "fieldKey": "what_does_your_organisation_do_and_who_for",
+        "label": "What does your organisation do, and who for?",
+        "required": true,
+        "helpText": null,
+        "boxHeight": 90,
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000024",
+        "type": "text_field",
+        "fieldKey": "income_in_your_last_financial_year",
+        "label": "Income in your last financial year",
+        "required": true,
+        "helpText": "Use your most recent accounts. A new group can give its income so far.",
+        "placeholder": null,
+        "multiline": false,
+        "format": "money",
+        "prefix": "£"
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000025",
+        "type": "text_field",
+        "fieldKey": "main_contact_name",
+        "label": "Full name",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000026",
+        "type": "text_field",
+        "fieldKey": "main_contact_position",
+        "label": "Position in the organisation",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000028",
+        "type": "text_field",
+        "fieldKey": "main_contact_phone",
+        "label": "Phone number",
+        "required": true,
+        "helpText": "We call if the panel has a question about your application.",
+        "placeholder": null,
+        "multiline": false,
+        "format": "phone"
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000029",
+        "type": "text_field",
+        "fieldKey": "main_contact_email",
+        "label": "Email address",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "format": "email"
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000031",
+        "type": "text_field",
+        "fieldKey": "second_contact_name",
+        "label": "Full name",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000032",
+        "type": "text_field",
+        "fieldKey": "second_contact_position",
+        "label": "Position in the organisation",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000034",
+        "type": "text_field",
+        "fieldKey": "second_contact_phone",
+        "label": "Phone number",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "format": "phone"
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000035",
+        "type": "text_field",
+        "fieldKey": "second_contact_email",
+        "label": "Email address",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "format": "email"
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000037",
+        "type": "dropdown_field",
+        "fieldKey": "are_the_two_contacts_related_or_do_they_live_at_the_same_add",
+        "label": "Are the two contacts related, or do they live at the same address?",
+        "required": true,
+        "helpText": "We need two contacts who are independent of each other.",
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000039",
+        "type": "text_field",
+        "fieldKey": "project_name",
+        "label": "Project name",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000040",
+        "type": "text_field",
+        "fieldKey": "describe_your_project_in_two_or_three_sentences",
+        "label": "Describe your project in two or three sentences",
+        "required": true,
+        "helpText": null,
+        "boxHeight": 75,
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000041",
+        "type": "text_field",
+        "fieldKey": "what_need_will_it_meet_and_how_do_you_know_about_that_need",
+        "label": "What need will it meet, and how do you know about that need?",
+        "required": true,
+        "helpText": "For example, what local people have told you, waiting lists, or figures about the area.",
+        "boxHeight": 120,
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000042",
+        "type": "text_field",
+        "fieldKey": "who_will_take_part_or_benefit",
+        "label": "Who will take part, or benefit?",
+        "required": true,
+        "helpText": null,
+        "boxHeight": 75,
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000043",
+        "type": "text_field",
+        "fieldKey": "about_how_many_people_will_take_part",
+        "label": "About how many people will take part?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "format": "number"
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000044",
+        "type": "text_field",
+        "fieldKey": "how_have_the_people_who_will_take_part_helped_to_plan_the_pr",
+        "label": "How have the people who will take part helped to plan the project?",
+        "required": true,
+        "helpText": null,
+        "boxHeight": 90,
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000045",
+        "type": "text_field",
+        "fieldKey": "where_will_the_project_happen",
+        "label": "Where will the project happen?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000046",
+        "type": "date_field",
+        "fieldKey": "start_date",
+        "label": "Start date",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": " ",
+          "month": "long"
+        }
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000047",
+        "type": "date_field",
+        "fieldKey": "end_date",
+        "label": "End date",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": " ",
+          "month": "long"
+        }
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000050",
+        "type": "text_field",
+        "fieldKey": "what_will_be_different_because_of_your_project",
+        "label": "What will be different because of your project?",
+        "required": true,
+        "helpText": "Tell us about changes for people, not the activities themselves.",
+        "boxHeight": 120,
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000051",
+        "type": "text_field",
+        "fieldKey": "how_will_you_know_whether_it_has_worked",
+        "label": "How will you know whether it has worked?",
+        "required": true,
+        "helpText": "For example, attendance, feedback or what people go on to do.",
+        "boxHeight": 90,
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000052",
+        "type": "text_field",
+        "fieldKey": "what_will_happen_when_the_grant_has_been_spent",
+        "label": "What will happen when the grant has been spent?",
+        "required": true,
+        "helpText": null,
+        "boxHeight": 75,
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000054",
+        "type": "paragraph",
+        "text": "List each thing you want the grant to pay for, with its cost. Include VAT if you cannot claim it back. Round each cost to the nearest pound, and attach a supplier's quote for any single large item, such as equipment.",
+        "alignment": "left"
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000090",
+        "type": "table_field",
+        "fieldKey": "budget_items",
+        "label": "Items the grant will pay for",
+        "required": true,
+        "helpText": null,
+        "columns": [
+          {
+            "label": "Item"
+          },
+          {
+            "label": "What it is for"
+          },
+          {
+            "label": "Cost",
+            "format": "money"
+          }
+        ],
+        "rows": 8,
+        "addRows": true
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000056",
+        "type": "text_field",
+        "fieldKey": "total_cost_of_the_project",
+        "label": "Total cost of the project",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "format": "money",
+        "prefix": "£"
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000057",
+        "type": "text_field",
+        "fieldKey": "amount_you_are_asking_for",
+        "label": "Amount you are asking for",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "format": "money",
+        "prefix": "£"
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000059",
+        "type": "dropdown_field",
+        "fieldKey": "is_any_other_money_paying_for_this_project",
+        "label": "Is any other money paying for this project?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000060",
+        "type": "text_field",
+        "fieldKey": "who_else_is_paying_for_it_how_much_and_is_it_confirmed",
+        "label": "Who else is paying for it, how much, and is it confirmed?",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0a130000-0000-4000-8000-000000000059",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000061",
+        "type": "dropdown_field",
+        "fieldKey": "is_your_organisation_registered_for_vat",
+        "label": "Is your organisation registered for VAT?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000063",
+        "type": "dropdown_field",
+        "fieldKey": "will_the_project_involve_children_young_people_or_adults_at",
+        "label": "Will the project involve children, young people or adults at risk?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000064",
+        "type": "text_field",
+        "fieldKey": "how_will_you_keep_them_safe",
+        "label": "How will you keep them safe?",
+        "required": true,
+        "helpText": "Tell us about your safeguarding policy, who leads on it, and any checks volunteers will have.",
+        "visibleWhen": {
+          "sourceBlockId": "0a130000-0000-4000-8000-000000000063",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "boxHeight": 90,
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000091",
+        "type": "dropdown_field",
+        "fieldKey": "policies_and_insurance_your_organisation_has",
+        "label": "Which of these does your organisation have?",
+        "required": false,
+        "helpText": "Tick each that applies.",
+        "placeholder": null,
+        "options": [
+          "A safeguarding policy, reviewed in the last two years",
+          "Public liability insurance that will cover the project",
+          "An equal opportunities policy"
+        ],
+        "multiple": true
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000070",
+        "type": "paragraph",
+        "text": "We pay grants only into a bank account in the name of your organisation, which needs at least two unrelated people to approve payments. We will never ask for your PIN, card details or online banking password.",
+        "alignment": "left"
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000071",
+        "type": "text_field",
+        "fieldKey": "name_on_the_account",
+        "label": "Name on the account",
+        "required": true,
+        "helpText": "Exactly as it appears on your bank statement.",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000072",
+        "type": "text_field",
+        "fieldKey": "bank_or_building_society",
+        "label": "Bank or building society",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000073",
+        "type": "text_field",
+        "fieldKey": "sort_code",
+        "label": "Sort code",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "comb": 6
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000074",
+        "type": "text_field",
+        "fieldKey": "account_number",
+        "label": "Account number",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "comb": 8
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000076",
+        "type": "file_field",
+        "fieldKey": "a_recent_bank_statement_for_this_account",
+        "label": "A recent bank statement for this account",
+        "required": true,
+        "helpText": "Less than three months old, showing the account name and number."
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000077",
+        "type": "file_field",
+        "fieldKey": "your_governing_document",
+        "label": "Your governing document",
+        "required": true,
+        "helpText": null
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000078",
+        "type": "file_field",
+        "fieldKey": "your_most_recent_accounts_or_three_months_of_bank_statements",
+        "label": "Your most recent accounts, or three months of bank statements",
+        "required": true,
+        "helpText": null
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000080",
+        "type": "paragraph",
+        "text": "We confirm that the information in this application is true, and that we are authorised to apply on behalf of the organisation. If we receive a grant, we agree to spend it only on the project described here, to tell the fund at once about any change, to send a short report when the project ends, to return any money we do not spend, and to say in our publicity that the project was funded by the fund.",
+        "alignment": "left"
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000081",
+        "type": "signature_field",
+        "fieldKey": "main_contact_s_signature",
+        "label": "Main contact's signature",
+        "required": true,
+        "helpText": null
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000082",
+        "type": "signature_field",
+        "fieldKey": "second_contact_s_signature",
+        "label": "Second contact's signature",
+        "required": true,
+        "helpText": null
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000084",
+        "type": "text_field",
+        "fieldKey": "main_contact_s_printed_name",
+        "label": "Main contact's printed name",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000085",
+        "type": "text_field",
+        "fieldKey": "second_contact_s_printed_name",
+        "label": "Second contact's printed name",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000087",
+        "type": "date_field",
+        "fieldKey": "date_signed_by_the_main_contact",
+        "label": "Date signed by the main contact",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": " ",
+          "month": "long"
+        }
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000088",
+        "type": "date_field",
+        "fieldKey": "date_signed_by_the_second_contact",
+        "label": "Date signed by the second contact",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": " ",
+          "month": "long"
+        }
+      }
+    ],
+    "layout": {
+      "pageSize": "A4",
+      "orientation": "portrait",
+      "marginPreset": "standard",
+      "density": "balanced",
+      "fieldStyle": "box",
+      "sectionStyle": "box",
+      "printedTitle": {
+        "mode": "none"
+      },
+      "headerPolicy": "none",
+      "footerPolicy": "all_pages",
+      "pageNumbering": "none",
+      "footerText": {
+        "left": "{title}",
+        "right": "Page {page} of {pages}"
+      },
+      "sectionNumbers": "numbers"
+    },
+    "sections": [
+      {
+        "id": "0a130000-0000-4000-8000-000000000016",
+        "label": "Your organisation",
+        "pageBreakBefore": true,
+        "keepTogether": false,
+        "startBlockId": "0a130000-0000-4000-8000-000000000017"
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000038",
+        "label": "Your project",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0a130000-0000-4000-8000-000000000039"
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000049",
+        "label": "The difference it will make",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0a130000-0000-4000-8000-000000000050"
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000053",
+        "label": "Budget",
+        "pageBreakBefore": true,
+        "keepTogether": false,
+        "startBlockId": "0a130000-0000-4000-8000-000000000054"
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000062",
+        "label": "Safeguarding and policies",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0a130000-0000-4000-8000-000000000063"
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000069",
+        "label": "Bank details",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0a130000-0000-4000-8000-000000000070"
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000079",
+        "label": "Declaration",
+        "pageBreakBefore": false,
+        "keepTogether": true,
+        "startBlockId": "0a130000-0000-4000-8000-000000000080"
+      }
+    ],
+    "fieldGroups": [
+      {
+        "id": "0a130000-0000-4000-8000-000000000027",
+        "label": "Main contact",
+        "startBlockId": "0a130000-0000-4000-8000-000000000025",
+        "endBlockId": "0a130000-0000-4000-8000-000000000026",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000030",
+        "label": null,
+        "startBlockId": "0a130000-0000-4000-8000-000000000028",
+        "endBlockId": "0a130000-0000-4000-8000-000000000029",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000033",
+        "label": "Second contact",
+        "startBlockId": "0a130000-0000-4000-8000-000000000031",
+        "endBlockId": "0a130000-0000-4000-8000-000000000032",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000036",
+        "label": null,
+        "startBlockId": "0a130000-0000-4000-8000-000000000034",
+        "endBlockId": "0a130000-0000-4000-8000-000000000035",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000048",
+        "label": null,
+        "startBlockId": "0a130000-0000-4000-8000-000000000046",
+        "endBlockId": "0a130000-0000-4000-8000-000000000047",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000058",
+        "label": null,
+        "startBlockId": "0a130000-0000-4000-8000-000000000056",
+        "endBlockId": "0a130000-0000-4000-8000-000000000057",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000075",
+        "label": null,
+        "startBlockId": "0a130000-0000-4000-8000-000000000073",
+        "endBlockId": "0a130000-0000-4000-8000-000000000074",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000083",
+        "label": null,
+        "startBlockId": "0a130000-0000-4000-8000-000000000081",
+        "endBlockId": "0a130000-0000-4000-8000-000000000082",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000086",
+        "label": null,
+        "startBlockId": "0a130000-0000-4000-8000-000000000084",
+        "endBlockId": "0a130000-0000-4000-8000-000000000085",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0a130000-0000-4000-8000-000000000089",
+        "label": null,
+        "startBlockId": "0a130000-0000-4000-8000-000000000087",
+        "endBlockId": "0a130000-0000-4000-8000-000000000088",
+        "columns": 2,
+        "keepTogether": false
+      }
+    ],
+    "blockRules": [
+      {
+        "blockId": "0a130000-0000-4000-8000-000000000003",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "0a130000-0000-4000-8000-000000000005",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "0a130000-0000-4000-8000-000000000007",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "0a130000-0000-4000-8000-000000000009",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "0a130000-0000-4000-8000-000000000012",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "0a130000-0000-4000-8000-000000000054",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "0a130000-0000-4000-8000-000000000070",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "0a130000-0000-4000-8000-000000000080",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      }
+    ]
+  }
+}

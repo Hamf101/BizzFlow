@@ -7,19 +7,24 @@ import {
   type DateFormat
 } from "@/lib/date-format"
 import type { DocumentLifecycleState } from "@/types/document"
+import { IMAGE_DATA_URL_PATTERN, MAX_IMAGE_DATA_URL_LENGTH } from "@/types/template-limits"
 
-/** Maximum encoded length accepted for an embedded PNG or JPEG image. */
-export const MAX_IMAGE_DATA_URL_LENGTH = 2_800_000
 
 /** Maximum serialized size accepted for one complete guided document layout. */
 export const MAX_TEMPLATE_CONTENT_JSON_LENGTH = 8_000_000
 
-/** Maximum number of ordered blocks accepted in one canonical document. */
-export const MAX_TEMPLATE_BLOCK_COUNT = 250
+/**
+ * Maximum number of ordered blocks accepted in one canonical document: room
+ * for a 50-page agreement or handbook, at up to 50 blocks a page.
+ */
+export const MAX_TEMPLATE_BLOCK_COUNT = 2_500
 
-/** Canonical data URI pattern accepted for embedded PNG and JPEG images. */
-export const IMAGE_DATA_URL_PATTERN =
-  /^data:image\/(?:png|jpeg);base64,[A-Za-z0-9+/]+={0,2}$/
+/** The most rows one table holds; a long price list prints over several pages. */
+export const MAX_TABLE_ROWS = 500
+
+/** The most items one list holds. */
+export const MAX_LIST_ITEMS = 500
+
 const FIELD_KEY_PATTERN = /^[A-Za-z][A-Za-z0-9_-]{0,79}$/
 const HEX_COLOR_PATTERN = /^#[0-9A-Fa-f]{6}$/
 
@@ -66,6 +71,17 @@ const fieldBlockShape = {
   helpText: z.string().trim().max(500).nullable().default(null),
   visibleWhen: templateFieldVisibilitySchema.optional()
 } as const
+
+/** One handwritten line of an answer box, in points. */
+const ANSWER_BOX_LINE = 15
+/** Room to sign in, in points. */
+const ANSWER_BOX_SIGNATURE = 56
+
+// How tall a field's answer box prints, in points, when its author has made it
+// taller or shorter: never less than a written line and its padding (15 + 6 + 6),
+// and it still grows to hold what is written in it.
+export const BOX_HEIGHT_POINTS = { max: 600, min: 27 } as const
+const boxHeightSchema = z.number().min(BOX_HEIGHT_POINTS.min).max(BOX_HEIGHT_POINTS.max).optional()
 
 // A link opens a web page or writes an email, never runs anything.
 const LINK_PATTERN = /^(?:https?:\/\/|mailto:)\S+$/i
@@ -181,9 +197,9 @@ export const paragraphBlockObjectSchema = z
 
 const listItemsShape = {
   id: blockIdSchema,
-  items: z.array(z.string().trim().min(1).max(2_000)).min(1).max(100),
+  items: z.array(z.string().trim().min(1).max(2_000)).min(1).max(MAX_LIST_ITEMS),
   // Each item's formatting, beside it; null for a plain item.
-  itemRuns: z.array(textRunsSchema.nullable()).max(100).optional()
+  itemRuns: z.array(textRunsSchema.nullable()).max(MAX_LIST_ITEMS).optional()
 } as const
 
 export const bulletListBlockObjectSchema = z
@@ -239,7 +255,7 @@ export const tableBlockSchema = z
     id: blockIdSchema,
     type: z.literal("table"),
     headers: z.array(z.string().trim().min(1).max(240)).min(1).max(12),
-    rows: z.array(z.array(z.string().trim().max(2_000)).min(1).max(12)).max(100)
+    rows: z.array(z.array(z.string().trim().max(2_000)).min(1).max(12)).max(MAX_TABLE_ROWS)
   })
   .strict()
 
@@ -251,15 +267,28 @@ export const dividerBlockSchema = z
   })
   .strict()
 
-/** Single-line or multiline text input block. */
-export const textFieldBlockSchema = z
+/** What a typed answer holds; absent, any text. Each checks what is written and suits a phone's keyboard. */
+export const TEXT_FORMATS = ["number", "money", "email", "phone", "time", "month"] as const
+
+/** Single-line or multiline text input block, as a plain object to build other shapes from. */
+export const textFieldBlockObjectSchema = z
   .object({
     ...fieldBlockShape,
+    boxHeight: boxHeightSchema,
     type: z.literal("text_field"),
     placeholder: shortTextSchema.nullable().default(null),
-    multiline: z.boolean().default(false)
+    multiline: z.boolean().default(false),
+    format: z.enum(TEXT_FORMATS).optional(),
+    // Printed before and after the answer, outside it: "£", "kg", "per month".
+    prefix: z.string().trim().min(1).max(12).optional(),
+    suffix: z.string().trim().min(1).max(24).optional(),
+    // One box a character, as a reference or account number is printed.
+    comb: z.number().int().min(2).max(40).optional()
   })
   .strict()
+
+/** Single-line or multiline text input block. */
+export const textFieldBlockSchema = textFieldBlockObjectSchema.refine((block) => !(block.comb && block.multiline), { message: "Comb boxes hold one line.", path: ["comb"] })
 
 /** How a date is written, built from three choices the author makes. */
 export const dateFormatSchema = z
@@ -274,6 +303,7 @@ export const dateFormatSchema = z
 export const dateFieldBlockSchema = z
   .object({
     ...fieldBlockShape,
+    boxHeight: boxHeightSchema,
     type: z.literal("date_field"),
     dateFormat: dateFormatSchema.optional()
   })
@@ -292,16 +322,64 @@ export const checkboxFieldBlockSchema = z
 export const dropdownFieldBlockSchema = z
   .object({
     ...fieldBlockShape,
+    boxHeight: boxHeightSchema,
     type: z.literal("dropdown_field"),
     placeholder: shortTextSchema.nullable().default(null),
-    options: z.array(z.string().trim().min(1).max(240)).max(100)
+    options: z.array(z.string().trim().min(1).max(240)).max(100),
+    // Every option on show, one tick apiece; absent, a dropdown. The answer is the same.
+    display: z.literal("radios").optional(),
+    // Radio buttons set side by side along a line, wrapping; absent, one a line.
+    across: z.literal(true).optional(),
+    // Any number of the choices, each ticked; the answer is the list ticked.
+    multiple: z.literal(true).optional()
   })
   .strict()
+
+// Words that name an answer are told apart as a person reads them.
+const distinctWords = (words: readonly string[]): boolean =>
+  new Set(words.map((word: string): string => word.trim().toLowerCase())).size === words.length
+
+/**
+ * Statements against shared choices, one choice a row: a rating scale, or
+ * Yes, No and N/A down a checklist. The answer names each row's choice.
+ */
+export const choiceGridFieldBlockSchema = z
+  .object({
+    ...fieldBlockShape,
+    type: z.literal("choice_grid_field"),
+    rows: z.array(z.string().trim().min(1).max(240)).min(1).max(40).refine(distinctWords, "Each row is said once."),
+    options: z.array(z.string().trim().min(1).max(60)).min(2).max(10).refine(distinctWords, "Each choice is said once.")
+  })
+  .strict()
+
+/** What a table column holds; absent, any text. */
+export const TABLE_COLUMN_FORMATS = ["number", "money", "date", "time"] as const
+
+/**
+ * A table filled in row by row: a log, a timesheet, an inventory. It shows
+ * its rows blank, and a person on a screen may add more where allowed.
+ */
+export const tableFieldBlockSchema = z
+  .object({
+    ...fieldBlockShape,
+    type: z.literal("table_field"),
+    columns: z
+      .array(z.object({ label: z.string().trim().min(1).max(60), format: z.enum(TABLE_COLUMN_FORMATS).optional() }).strict())
+      .min(1)
+      .max(8)
+      .refine((columns) => distinctWords(columns.map((column) => column.label)), "Each column is named once."),
+    rows: z.number().int().min(1).max(50),
+    addRows: z.literal(true).optional()
+  })
+  .strict()
+
+export { MAX_TABLE_FIELD_ROWS } from "@/types/template-answer-kinds"
 
 /** Drawn initials input block. */
 export const initialsFieldBlockSchema = z
   .object({
     ...fieldBlockShape,
+    boxHeight: boxHeightSchema,
     type: z.literal("initials_field")
   })
   .strict()
@@ -310,6 +388,7 @@ export const initialsFieldBlockSchema = z
 export const signatureFieldBlockSchema = z
   .object({
     ...fieldBlockShape,
+    boxHeight: boxHeightSchema,
     type: z.literal("signature_field")
   })
   .strict()
@@ -335,6 +414,8 @@ export const templateBlockSchema = z.discriminatedUnion("type", [
   dateFieldBlockSchema,
   checkboxFieldBlockSchema,
   dropdownFieldBlockSchema,
+  choiceGridFieldBlockSchema,
+  tableFieldBlockSchema,
   initialsFieldBlockSchema,
   signatureFieldBlockSchema,
   fileFieldBlockSchema
@@ -370,6 +451,15 @@ const templateBrandingDefault = {
   accentColor: "#635273"
 } as const
 
+// Words for the left, centre and right of a page's top or bottom margin.
+const marginTextSchema = z
+  .object({
+    left: z.string().trim().max(120).optional(),
+    center: z.string().trim().max(120).optional(),
+    right: z.string().trim().max(120).optional()
+  })
+  .strict()
+
 /** Page and repeated-element controls captured in version-three snapshots. */
 export const templateLayoutSchema = z
   .object({
@@ -394,6 +484,29 @@ export const templateLayoutSchema = z
     density: z
       .enum(["balanced", "compact", "comfortable"])
       .default("balanced"),
+    /**
+     * How answers are drawn: a box under the label; a line beside the label,
+     * ruled lines for a long answer and a caption under a signature; or a
+     * bordered cell with a small label in its corner, touching the cells
+     * beside and below it, as on a printed government form. Absent, a box.
+     */
+    fieldStyle: z.enum(["box", "line", "cell"]).optional(),
+    /**
+     * How a section's title prints: as a heading (absent), in a filled bar
+     * of the primary colour, or as the top of a bordered box that holds the
+     * section, carried over pages.
+     */
+    sectionStyle: z.enum(["plain", "band", "box"]).optional(),
+    // Titled sections numbered in order: A, B, C or 1, 2, 3. Absent, none.
+    sectionNumbers: z.enum(["letters", "numbers"]).optional(),
+    /**
+     * Words in the top and bottom margins, left, centre and right, such as a
+     * form's number and revision. {page}, {pages} and {title} are filled in
+     * on each page. The header's show on the pages the header policy says,
+     * the footer's on the pages the footer policy says.
+     */
+    headerText: marginTextSchema.optional(),
+    footerText: marginTextSchema.optional(),
     printedTitle: z
       .discriminatedUnion("mode", [
         z.object({ mode: z.literal("linked") }).strict(),
@@ -433,30 +546,67 @@ export const templateSectionSchema = z
   })
   .strict()
 
-/** One contiguous field range rendered in one or two columns. */
+/** The most blocks one row sets side by side. */
+export const MAX_ROW_COLUMNS = 4
+
+/**
+ * One contiguous range of blocks set side by side: a row of up to four
+ * columns, sized in twelfths of the page's width (equal when `widths` is
+ * absent). A range with more blocks than columns wraps onto further rows.
+ */
 export const templateFieldGroupSchema = z
   .object({
     id: blockIdSchema,
     label: z.string().trim().min(1).max(160).nullable().default(null),
     startBlockId: blockIdSchema,
     endBlockId: blockIdSchema,
-    columns: z.union([z.literal(1), z.literal(2)]),
+    columns: z.number().int().min(1).max(MAX_ROW_COLUMNS),
+    widths: z.array(z.number().int().min(2).max(10)).min(2).max(MAX_ROW_COLUMNS).optional(),
     keepTogether: z.boolean()
   })
   .strict()
 
-/** Pagination hints attached to one canonical block reference. */
+/**
+ * Where a block on a line of its own sits across the page: its left edge and
+ * width, in percentages of the space between the margins.
+ */
+export const blockFrameSchema = z
+  .object({
+    left: z.number().min(0).max(95),
+    width: z.number().min(5).max(100),
+  })
+  .strict()
+  .refine((frame) => frame.left + frame.width <= 100.001, "A block must fit between the margins.")
+
+/** Where a block sits across the page. */
+export type BlockFrame = z.infer<typeof blockFrameSchema>
+
+/**
+ * How one canonical block is laid out: whether it starts a page or stays with
+ * the next, the space above it in points, and where it sits across the page.
+ */
 export const templateBlockRuleSchema = z
   .object({
     blockId: blockIdSchema,
     pageBreakBefore: z.boolean(),
-    keepWithNext: z.boolean()
+    keepWithNext: z.boolean(),
+    spaceAbove: z.number().min(0).max(600).optional(),
+    frame: blockFrameSchema.optional()
   })
   .strict()
-  .refine(
-    (rule): boolean => rule.pageBreakBefore || rule.keepWithNext,
-    "A block rule must enable at least one pagination behavior."
-  )
+  .refine(ruleHasEffect, "A block rule must change how its block is laid out.")
+
+/**
+ * Tells a block rule that changes anything, as one left at its defaults does not.
+ *
+ * @param rule - A block's rule.
+ * @returns Whether it breaks a page, keeps with the next, adds space or moves the block across.
+ */
+export function ruleHasEffect(
+  rule: Readonly<{ pageBreakBefore: boolean; keepWithNext: boolean; spaceAbove?: number; frame?: BlockFrame }>
+): boolean {
+  return rule.pageBreakBefore || rule.keepWithNext || (rule.spaceAbove ?? 0) > 0 || rule.frame !== undefined
+}
 
 /** Read-compatible version-two template content retained for immutable snapshots. */
 export const templateContentV2Schema = z
@@ -517,6 +667,9 @@ export type HeadingBlock = z.infer<typeof headingBlockSchema>
 export type ParagraphBlock = z.infer<typeof paragraphBlockSchema>
 export type CheckboxFieldBlock = z.infer<typeof checkboxFieldBlockSchema>
 export type DropdownFieldBlock = z.infer<typeof dropdownFieldBlockSchema>
+export type ChoiceGridFieldBlock = z.infer<typeof choiceGridFieldBlockSchema>
+export type TableFieldBlock = z.infer<typeof tableFieldBlockSchema>
+export type TextFieldBlock = z.infer<typeof textFieldBlockSchema>
 export type TemplateBlock = z.infer<typeof templateBlockSchema>
 export type TemplateBranding = z.infer<typeof templateBrandingSchema>
 export type TemplateImageAsset = z.infer<typeof templateImageAssetSchema>
@@ -616,21 +769,10 @@ function validateSections(
     return []
   }
 
-  // Sections are optional structure metadata: content authored before the
-  // version-three editor maintains them stays readable, and a document with no
-  // declared boundaries is simply treated as one implicit section.
+  // Sections are optional structure metadata, and the first may start partway
+  // down: what comes before it belongs to no section and prints no title.
   if (content.sections.length === 0) {
     return []
-  }
-
-  const firstBlockId = content.blocks[0]?.id
-
-  if (content.sections[0]?.startBlockId !== firstBlockId) {
-    context.addIssue({
-      code: "custom",
-      message: "The first section must start at the first document block.",
-      path: ["sections", 0, "startBlockId"]
-    })
   }
 
   const sectionStartIndices: number[] = []
@@ -728,14 +870,9 @@ function validateFieldGroups(
     )
     const endSectionIndex = findSectionIndex(sectionStartIndices, endIndex)
 
-    // With no declared sections the document is one implicit section, so no
-    // group can cross a boundary that does not exist.
-    if (
-      sectionStartIndices.length > 0 &&
-      (startSectionIndex === -1 ||
-        endSectionIndex === -1 ||
-        startSectionIndex !== endSectionIndex)
-    ) {
+    // Before the first section is -1, so a group may sit there, but no group
+    // crosses into a section.
+    if (startSectionIndex !== endSectionIndex) {
       context.addIssue({
         code: "custom",
         message: "A field group cannot cross a section boundary.",
@@ -745,11 +882,23 @@ function validateFieldGroups(
 
     const groupedBlocks = content.blocks.slice(startIndex, endIndex + 1)
 
-    if (groupedBlocks.some((block: TemplateBlock): boolean => !isFieldBlock(block))) {
+    if (groupedBlocks.some(isPinnedBlock)) {
       context.addIssue({
         code: "custom",
-        message: "A field group range can contain only fillable fields.",
+        message: "A block pinned to its page cannot share a row.",
         path: ["fieldGroups", groupIndex]
+      })
+    }
+
+    if (
+      group.widths !== undefined &&
+      (group.widths.length !== group.columns ||
+        group.widths.reduce((total: number, width: number): number => total + width, 0) !== 12)
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "A row's column widths must fill its twelve twelfths, one width per column.",
+        path: ["fieldGroups", groupIndex, "widths"]
       })
     }
   }
@@ -903,6 +1052,16 @@ function findSectionIndex(
   return result
 }
 
+/**
+ * Tells a block pinned to a spot on its page, outside the flow of the rest.
+ *
+ * @param block - Canonical template block.
+ * @returns Whether the block has a place of its own on a page.
+ */
+export function isPinnedBlock(block: TemplateBlock): boolean {
+  return "placement" in block && block.placement !== undefined
+}
+
 function isFieldBlock(
   block: TemplateBlock
 ): block is Extract<TemplateBlock, { fieldKey: string }> {
@@ -935,6 +1094,26 @@ export type DocumentTemplateRow = Record<string, unknown> & {
   updated_at: string
   published_at: string | null
   archived_at: string | null
+  /** The working copy's revision it was last published at; null until published. */
+  published_revision: number | null
+}
+
+/** One immutable published version of a template. */
+export type DocumentTemplateVersionRow = {
+  content: TemplateContent
+  description: string | null
+  org_id: string
+  published_at: string
+  published_by: string | null
+  revision: number
+  template_id: string
+  title: string
+}
+
+/** A published version as the editor's history lists it. */
+export type DocumentTemplateVersion = {
+  publishedAt: string
+  revision: number
 }
 
 /** Application-facing reusable document template. */
@@ -956,6 +1135,11 @@ export type DocumentTemplate = {
   updatedAt: string
   publishedAt: string | null
   archivedAt: string | null
+  /**
+   * The revision last published. Members who use the template get that
+   * version; a working copy past it has changes not yet published.
+   */
+  publishedRevision: number | null
 }
 
 /** Database columns the templates list reads. */
@@ -972,6 +1156,8 @@ export type DocumentTemplateSummary = Pick<
 
 /** A template in the library, with the content its card draws its first page from. */
 export type DocumentTemplateCard = DocumentTemplateSummary & {
+  /** Whether the viewer may edit this template, by their role or because it was shared with them. */
+  canEdit: boolean
   /** Large images are left behind; null when the content could not be read. */
   content: TemplateContent | null
 }
@@ -1023,18 +1209,6 @@ export type DocumentRecentAccessRow = Record<string, unknown> & {
   user_id: string
   document_id: string
   last_opened_at: string
-}
-
-/** Recent document data returned to the Documents workspace. */
-export type RecentDocument = {
-  organizationId: string
-  userId: string
-  documentId: string
-  lastOpenedAt: string
-  title: string
-  description: string | null
-  folderId: string | null
-  sourceKind: DocumentSourceKind
 }
 
 /** Generated document metadata with its immutable guided-content snapshot. */
@@ -1146,4 +1320,24 @@ export function createBlankTemplateContent(): TemplateContentV3 {
     fieldGroups: [],
     blockRules: []
   })
+}
+
+/**
+ * The least height of a field's answer box, in points, so a blank form leaves
+ * room to write by hand: as its author made it, or else two lines for a short
+ * answer, four for a long one, and room to sign.
+ *
+ * @param block - The field.
+ * @returns The box's least height.
+ */
+export function answerBoxHeight(block: TemplateBlock): number {
+  if ("boxHeight" in block && block.boxHeight !== undefined) {
+    return block.boxHeight
+  }
+
+  if (block.type === "signature_field" || block.type === "initials_field") {
+    return ANSWER_BOX_SIGNATURE
+  }
+
+  return block.type === "text_field" && block.multiline ? ANSWER_BOX_LINE * 4 : ANSWER_BOX_LINE * 2
 }

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto"
+import { isDeepStrictEqual } from "node:util"
 
 import type { OrganizationPermissionAction } from "@/lib/permissions"
 import {
@@ -221,7 +222,7 @@ export async function saveGeneratedDocumentAnswers(
       )
 
       for (const [fieldKey, value] of Object.entries(visiblePatch)) {
-        if (!Object.is(persistedValues[fieldKey], value)) {
+        if (!isDeepStrictEqual(persistedValues[fieldKey], value)) {
           throw new DocumentSigningServiceError(
             "Saved document answers could not be verified.",
             500
@@ -375,7 +376,7 @@ function assertSignedAnswersUnchanged(
         signedValue !== undefined &&
         signedValue !== null &&
         signedValue !== "" &&
-        !Object.is(signedValue, value)
+        !isDeepStrictEqual(signedValue, value)
       )
     }
   )

@@ -11,6 +11,8 @@ const DEFAULT_FIELD_LABEL_BY_TYPE: Record<TemplateFieldBlockType, string> = {
   date_field: "Date field",
   checkbox_field: "Checkbox",
   dropdown_field: "Dropdown",
+  choice_grid_field: "Question grid",
+  table_field: "Fill-in table",
   initials_field: "Initials field",
   signature_field: "Signature field",
   file_field: "File upload"
@@ -97,6 +99,20 @@ export function createTemplateBlock(
         type: blockType,
         placeholder: "Select an option",
         options: []
+      }
+    case "choice_grid_field":
+      return {
+        ...createFieldDefaults(id, blockType, existingBlocks),
+        type: blockType,
+        rows: ["First statement", "Second statement"],
+        options: ["Yes", "No", "N/A"]
+      }
+    case "table_field":
+      return {
+        ...createFieldDefaults(id, blockType, existingBlocks),
+        type: blockType,
+        columns: [{ label: "Date", format: "date" }, { label: "Details" }],
+        rows: 5
       }
     case "initials_field":
       return {

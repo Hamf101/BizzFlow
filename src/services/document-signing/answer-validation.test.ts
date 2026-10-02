@@ -3,12 +3,17 @@ import { describe, expect, it } from "vitest"
 import {
   assertRequiredAnswersComplete,
   collectFields,
+  deriveChangedAnswerPatch,
   normalizeAnswerPatch,
   pruneHiddenAnswerPatch,
   pruneHiddenAnswerValues,
   templateRequiresRecipientInitials
 } from "@/services/document-signing/answer-validation"
 import { parseTemplateContent, type TemplateContent } from "@/types/template"
+import {
+  createStructuredAnswerContent,
+  STRUCTURED_ANSWERS
+} from "@/types/template-answer.test-support"
 
 const CONTENT = createConditionalContent()
 
@@ -84,6 +89,46 @@ describe("document signing answer visibility", () => {
     expect(
       templateRequiresRecipientInitials(CONTENT, { include_details: true })
     ).toBe(true)
+  })
+})
+
+describe("structured document answers", () => {
+  const STRUCTURED = createStructuredAnswerContent()
+  const fields = collectFields(STRUCTURED)
+
+  it("checks them with the same rules as a submission", async () => {
+    await expect(
+      normalizeAnswerPatch(fields, { tools: ["Drill", "Ladder"], hours: [["", "", ""]] })
+    ).resolves.toEqual({ tools: ["Ladder", "Drill"], hours: [] })
+    await expect(
+      normalizeAnswerPatch(fields, { checks: { "Roof sound": "Yes" } })
+    ).rejects.toMatchObject({ statusCode: 400 })
+  })
+
+  it("treats a grid read back in another key order as unchanged", () => {
+    expect(
+      deriveChangedAnswerPatch(
+        { checks: { "Exits clear": "Yes", "Lights work": "No" }, tools: ["Saw"] },
+        { checks: { "Lights work": "No", "Exits clear": "Yes" }, tools: ["Ladder"] }
+      )
+    ).toEqual({ tools: ["Saw"] })
+  })
+
+  it("requires every grid row and one table row before the final signature", () => {
+    expect(() =>
+      assertRequiredAnswersComplete(STRUCTURED, fields, { ...STRUCTURED_ANSWERS }, true)
+    ).not.toThrow()
+    expect(() =>
+      assertRequiredAnswersComplete(
+        STRUCTURED,
+        fields,
+        { ...STRUCTURED_ANSWERS, checks: { "Exits clear": "Yes" } },
+        true
+      )
+    ).toThrow("Checks must be completed")
+    expect(() =>
+      assertRequiredAnswersComplete(STRUCTURED, fields, { ...STRUCTURED_ANSWERS, hours: [] }, true)
+    ).toThrow("Hours must be completed")
   })
 })
 

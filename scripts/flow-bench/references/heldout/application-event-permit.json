@@ -1,0 +1,922 @@
+{
+  "request": "We're a city parks and recreation department in the US. I need a special event permit application for events in our parks: anything with 50 or more people, amplified sound, tents or stages, vendors, alcohol or a street closure. Ask for the organizer, a day-of contact, event details with setup and cleanup times, expected attendance, a site plan, sound, food and alcohol, restrooms and trash, security and first aid, and a certificate of insurance naming the city as additional insured. Applications are due at least 30 days before the event.",
+  "title": "Special event permit application",
+  "description": "Use when someone applies to hold a special event in a city park: the organizer, the event and its times, the site and equipment, food and alcohol, safety and services, insurance and the organizer's agreement.",
+  "maxPages": 4,
+  "content": {
+    "schemaVersion": 3,
+    "branding": {
+      "organizationName": "",
+      "logoAsset": null,
+      "logoDataUrl": null,
+      "logoAlignment": "left",
+      "logoWidthPercent": 24,
+      "primaryColor": "#14532d",
+      "accentColor": "#15803d"
+    },
+    "blocks": [
+      {
+        "id": "0a160000-0000-4000-8000-000000000001",
+        "type": "heading",
+        "text": "Special event permit application",
+        "level": 1,
+        "alignment": "left"
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000002",
+        "type": "paragraph",
+        "text": "Apply for a special event permit if your event in a city park will have any of the following:",
+        "alignment": "left"
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000003",
+        "type": "bullet_list",
+        "items": [
+          "50 or more people at any one time",
+          "amplified sound",
+          "tents, canopies, stages or other temporary structures",
+          "food, drink or merchandise sold or given away by vendors",
+          "alcohol",
+          "a street or parking area closed for the event"
+        ]
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000004",
+        "type": "paragraph",
+        "text": "When to apply: send your completed application at least 30 days before the event. We cannot review an application until every section is complete and the site plan is attached. Permit and park fees are listed in the department's current fee schedule, and are due when the permit is issued.",
+        "runs": [
+          {
+            "text": "When to apply:",
+            "bold": true
+          },
+          {
+            "text": " send your completed application at least 30 days before the event. We cannot review an application until every section is complete and the site plan is attached. Permit and park fees are listed in the department's current fee schedule, and are due when the permit is issued."
+          }
+        ],
+        "alignment": "left"
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000005",
+        "type": "paragraph",
+        "text": "How we use your information: the department uses this information to review your application, to coordinate with police, fire and other city departments, and to contact you about your event. Permit applications may be public records, but we do not publish personal phone numbers or email addresses.",
+        "runs": [
+          {
+            "text": "How we use your information:",
+            "bold": true
+          },
+          {
+            "text": " the department uses this information to review your application, to coordinate with police, fire and other city departments, and to contact you about your event. Permit applications may be public records, but we do not publish personal phone numbers or email addresses."
+          }
+        ],
+        "alignment": "left"
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000007",
+        "type": "text_field",
+        "fieldKey": "organization_or_group_name",
+        "label": "Organization or group name",
+        "required": true,
+        "helpText": "If you are applying as an individual, enter your own name.",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000008",
+        "type": "dropdown_field",
+        "fieldKey": "type_of_organizer",
+        "label": "Type of organizer",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Individual",
+          "Nonprofit",
+          "Business",
+          "Government agency"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000009",
+        "type": "text_field",
+        "fieldKey": "applicant_s_full_name",
+        "label": "Applicant's full name",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000010",
+        "type": "text_field",
+        "fieldKey": "position_in_the_organization",
+        "label": "Position in the organization",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000012",
+        "type": "text_field",
+        "fieldKey": "phone_number",
+        "label": "Phone number",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "format": "phone"
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000013",
+        "type": "text_field",
+        "fieldKey": "email_address",
+        "label": "Email address",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "format": "email"
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000015",
+        "type": "text_field",
+        "fieldKey": "mailing_address",
+        "label": "Mailing address",
+        "required": true,
+        "helpText": null,
+        "boxHeight": 45,
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000016",
+        "type": "text_field",
+        "fieldKey": "on_site_contact_name",
+        "label": "Full name",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000017",
+        "type": "text_field",
+        "fieldKey": "on_site_contact_cell_phone",
+        "label": "Cell phone",
+        "required": true,
+        "helpText": "Must be reachable throughout the event.",
+        "placeholder": null,
+        "multiline": false,
+        "format": "phone"
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000020",
+        "type": "text_field",
+        "fieldKey": "name_of_the_event",
+        "label": "Name of the event",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000021",
+        "type": "dropdown_field",
+        "fieldKey": "type_of_event",
+        "label": "Type of event",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Festival or fair",
+          "Run, walk or ride",
+          "Concert or performance",
+          "Rally or demonstration",
+          "Sports tournament",
+          "Wedding, picnic or private gathering",
+          "Other"
+        ]
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000022",
+        "type": "text_field",
+        "fieldKey": "describe_the_type_of_event",
+        "label": "Describe the type of event",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0a160000-0000-4000-8000-000000000021",
+          "operator": "equals",
+          "value": "Other"
+        },
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000023",
+        "type": "text_field",
+        "fieldKey": "describe_the_event_and_its_activities",
+        "label": "Describe the event and its activities",
+        "required": true,
+        "helpText": null,
+        "boxHeight": 75,
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000024",
+        "type": "text_field",
+        "fieldKey": "park_and_area_you_want_to_use",
+        "label": "Park and area you want to use",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000025",
+        "type": "date_field",
+        "fieldKey": "event_date",
+        "label": "Event date",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "mdy",
+          "separator": "/",
+          "month": "number"
+        }
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000026",
+        "type": "text_field",
+        "fieldKey": "setup_starts",
+        "label": "Setup starts",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "format": "time"
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000027",
+        "type": "text_field",
+        "fieldKey": "event_starts",
+        "label": "Event starts",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "format": "time"
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000028",
+        "type": "text_field",
+        "fieldKey": "event_ends",
+        "label": "Event ends",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "format": "time"
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000029",
+        "type": "text_field",
+        "fieldKey": "cleanup_ends",
+        "label": "Cleanup ends",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "format": "time"
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000031",
+        "type": "dropdown_field",
+        "fieldKey": "will_setup_or_cleanup_happen_on_another_day",
+        "label": "Will setup or cleanup happen on another day?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000032",
+        "type": "text_field",
+        "fieldKey": "other_setup_days",
+        "label": "Which days and times?",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0a160000-0000-4000-8000-000000000031",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000033",
+        "type": "text_field",
+        "fieldKey": "most_people_expected_at_one_time",
+        "label": "Most people expected at one time",
+        "required": true,
+        "helpText": "Include staff, volunteers and performers.",
+        "placeholder": null,
+        "multiline": false,
+        "format": "number"
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000034",
+        "type": "dropdown_field",
+        "fieldKey": "is_the_event_open_to_the_public",
+        "label": "Is the event open to the public?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000035",
+        "type": "dropdown_field",
+        "fieldKey": "will_you_charge_admission_or_sell_tickets",
+        "label": "Will you charge admission or sell tickets?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000037",
+        "type": "file_field",
+        "fieldKey": "site_plan",
+        "label": "Site plan",
+        "required": true,
+        "helpText": "Show the stage, tents, vendors, restrooms, trash containers, first aid, entrances and any vehicles."
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000038",
+        "type": "dropdown_field",
+        "fieldKey": "will_you_put_up_tents_canopies_stages_or_other_structures",
+        "label": "Will you put up tents, canopies, stages or other structures?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000039",
+        "type": "text_field",
+        "fieldKey": "list_each_structure_and_its_size",
+        "label": "List each structure and its size",
+        "required": true,
+        "helpText": "Tents over a certain size may also need a fire department permit.",
+        "visibleWhen": {
+          "sourceBlockId": "0a160000-0000-4000-8000-000000000038",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000040",
+        "type": "dropdown_field",
+        "fieldKey": "will_you_use_amplified_sound",
+        "label": "Will you use amplified sound?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000041",
+        "type": "text_field",
+        "fieldKey": "sound_starts",
+        "label": "Sound starts",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0a160000-0000-4000-8000-000000000040",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "placeholder": null,
+        "multiline": false,
+        "format": "time"
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000042",
+        "type": "text_field",
+        "fieldKey": "sound_ends",
+        "label": "Sound ends",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0a160000-0000-4000-8000-000000000040",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "placeholder": null,
+        "multiline": false,
+        "format": "time"
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000044",
+        "type": "text_field",
+        "fieldKey": "what_sound_equipment_will_you_use",
+        "label": "What sound equipment will you use?",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0a160000-0000-4000-8000-000000000040",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000045",
+        "type": "dropdown_field",
+        "fieldKey": "will_you_use_generators",
+        "label": "Will you use generators?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000046",
+        "type": "text_field",
+        "fieldKey": "how_many_generators_and_what_fuel",
+        "label": "How many generators, and what fuel?",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0a160000-0000-4000-8000-000000000045",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000047",
+        "type": "dropdown_field",
+        "fieldKey": "will_any_vehicles_need_to_drive_into_the_park",
+        "label": "Will any vehicles need to drive into the park?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000048",
+        "type": "text_field",
+        "fieldKey": "what_vehicles_and_why_do_they_need_to_come_in",
+        "label": "What vehicles, and why do they need to come in?",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0a160000-0000-4000-8000-000000000047",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000050",
+        "type": "dropdown_field",
+        "fieldKey": "will_food_or_drink_be_sold_or_served",
+        "label": "Will food or drink be sold or served?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000051",
+        "type": "text_field",
+        "fieldKey": "number_of_food_vendors",
+        "label": "Number of food vendors",
+        "required": true,
+        "helpText": "Each food vendor needs its own permit from the health department.",
+        "visibleWhen": {
+          "sourceBlockId": "0a160000-0000-4000-8000-000000000050",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "placeholder": null,
+        "multiline": false,
+        "format": "number"
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000052",
+        "type": "dropdown_field",
+        "fieldKey": "will_alcohol_be_served_or_sold",
+        "label": "Will alcohol be served or sold?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000053",
+        "type": "text_field",
+        "fieldKey": "who_will_hold_the_liquor_license_or_permit",
+        "label": "Who will hold the liquor license or permit?",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0a160000-0000-4000-8000-000000000052",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000054",
+        "type": "dropdown_field",
+        "fieldKey": "will_other_vendors_sell_or_give_away_goods",
+        "label": "Will other vendors sell or give away goods?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000055",
+        "type": "text_field",
+        "fieldKey": "number_of_other_vendors",
+        "label": "Number of other vendors",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0a160000-0000-4000-8000-000000000054",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "placeholder": null,
+        "multiline": false,
+        "format": "number"
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000057",
+        "type": "dropdown_field",
+        "fieldKey": "how_will_you_provide_restrooms",
+        "label": "How will you provide restrooms?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "The park's restrooms are enough",
+          "We will rent portable restrooms",
+          "Not sure"
+        ],
+        "display": "radios"
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000058",
+        "type": "text_field",
+        "fieldKey": "how_will_you_collect_trash_and_recycling_and_leave_the_site",
+        "label": "How will you collect trash and recycling, and leave the site clean?",
+        "required": true,
+        "helpText": null,
+        "boxHeight": 60,
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000059",
+        "type": "text_field",
+        "fieldKey": "security_and_crowd_management",
+        "label": "Security and crowd management",
+        "required": true,
+        "helpText": "Who will manage entrances and crowds, and how many people.",
+        "boxHeight": 60,
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000060",
+        "type": "text_field",
+        "fieldKey": "first_aid",
+        "label": "First aid",
+        "required": true,
+        "helpText": "Who will provide it, and where it will be.",
+        "boxHeight": 45,
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000061",
+        "type": "dropdown_field",
+        "fieldKey": "will_you_need_a_street_or_parking_area_closed",
+        "label": "Will you need a street or parking area closed?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000062",
+        "type": "text_field",
+        "fieldKey": "which_streets_or_areas_and_at_what_times",
+        "label": "Which streets or areas, and at what times?",
+        "required": true,
+        "helpText": "A street closure may also need a separate permit from the transportation department.",
+        "visibleWhen": {
+          "sourceBlockId": "0a160000-0000-4000-8000-000000000061",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000064",
+        "type": "paragraph",
+        "text": "Before we issue the permit, you must send a certificate of general liability insurance that names the city as an additional insured for the event dates, with the coverage limits the department sets for your event. We will tell you those limits when we review your application.",
+        "alignment": "left"
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000065",
+        "type": "text_field",
+        "fieldKey": "insurance_company",
+        "label": "Insurance company",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000066",
+        "type": "text_field",
+        "fieldKey": "policy_number",
+        "label": "Policy number",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000068",
+        "type": "file_field",
+        "fieldKey": "certificate_of_insurance",
+        "label": "Certificate of insurance",
+        "required": false,
+        "helpText": "You can send this later, but we cannot issue the permit without it."
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000070",
+        "type": "paragraph",
+        "text": "I confirm that the information in this application is true. If the permit is issued, I agree to follow its conditions and the park rules, to have the permit with me at the event, and to leave the site as I found it. I understand that the organizer is responsible for any damage to park property during the event, and that the city may change or cancel the permit for public safety.",
+        "alignment": "left"
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000071",
+        "type": "signature_field",
+        "fieldKey": "applicant_s_signature",
+        "label": "Applicant's signature",
+        "required": true,
+        "helpText": null
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000072",
+        "type": "date_field",
+        "fieldKey": "signed_date",
+        "label": "Date",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "mdy",
+          "separator": "/",
+          "month": "number"
+        }
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000074",
+        "type": "text_field",
+        "fieldKey": "printed_name",
+        "label": "Printed name",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000075",
+        "type": "text_field",
+        "fieldKey": "signer_position",
+        "label": "Position",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      }
+    ],
+    "layout": {
+      "pageSize": "Letter",
+      "orientation": "portrait",
+      "marginPreset": "standard",
+      "density": "balanced",
+      "fieldStyle": "box",
+      "sectionStyle": "band",
+      "printedTitle": {
+        "mode": "none"
+      },
+      "headerPolicy": "none",
+      "footerPolicy": "all_pages",
+      "pageNumbering": "none",
+      "footerText": {
+        "left": "{title}",
+        "right": "Page {page} of {pages}"
+      },
+      "sectionNumbers": "letters"
+    },
+    "sections": [
+      {
+        "id": "0a160000-0000-4000-8000-000000000006",
+        "label": "Organizer",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0a160000-0000-4000-8000-000000000007"
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000019",
+        "label": "The event",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0a160000-0000-4000-8000-000000000020"
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000036",
+        "label": "Site and equipment",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0a160000-0000-4000-8000-000000000037"
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000049",
+        "label": "Food, drink and vendors",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0a160000-0000-4000-8000-000000000050"
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000056",
+        "label": "Safety and services",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0a160000-0000-4000-8000-000000000057"
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000063",
+        "label": "Insurance",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0a160000-0000-4000-8000-000000000064"
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000069",
+        "label": "Agreement",
+        "pageBreakBefore": false,
+        "keepTogether": true,
+        "startBlockId": "0a160000-0000-4000-8000-000000000070"
+      }
+    ],
+    "fieldGroups": [
+      {
+        "id": "0a160000-0000-4000-8000-000000000011",
+        "label": null,
+        "startBlockId": "0a160000-0000-4000-8000-000000000009",
+        "endBlockId": "0a160000-0000-4000-8000-000000000010",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000014",
+        "label": null,
+        "startBlockId": "0a160000-0000-4000-8000-000000000012",
+        "endBlockId": "0a160000-0000-4000-8000-000000000013",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000018",
+        "label": "On-site contact on the day of the event",
+        "startBlockId": "0a160000-0000-4000-8000-000000000016",
+        "endBlockId": "0a160000-0000-4000-8000-000000000017",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000030",
+        "label": "Times on the event day",
+        "startBlockId": "0a160000-0000-4000-8000-000000000026",
+        "endBlockId": "0a160000-0000-4000-8000-000000000029",
+        "columns": 4,
+        "keepTogether": false
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000043",
+        "label": "Amplified sound",
+        "startBlockId": "0a160000-0000-4000-8000-000000000041",
+        "endBlockId": "0a160000-0000-4000-8000-000000000042",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000067",
+        "label": null,
+        "startBlockId": "0a160000-0000-4000-8000-000000000065",
+        "endBlockId": "0a160000-0000-4000-8000-000000000066",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000073",
+        "label": null,
+        "startBlockId": "0a160000-0000-4000-8000-000000000071",
+        "endBlockId": "0a160000-0000-4000-8000-000000000072",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0a160000-0000-4000-8000-000000000076",
+        "label": null,
+        "startBlockId": "0a160000-0000-4000-8000-000000000074",
+        "endBlockId": "0a160000-0000-4000-8000-000000000075",
+        "columns": 2,
+        "keepTogether": false
+      }
+    ],
+    "blockRules": [
+      {
+        "blockId": "0a160000-0000-4000-8000-000000000070",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      }
+    ]
+  }
+}

@@ -10,10 +10,9 @@ import { buildFeedbackRedirect } from "@/lib/action-result"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
 import { getPageErrorMessage } from "@/lib/page-errors"
 import { loadPageOrganizationContext } from "@/lib/page-organization-context"
-import { canPerformOrganizationAction } from "@/lib/permissions"
 import { cn } from "@/lib/utils"
 import { listPublicFormLinks } from "@/services/public-form-service"
-import { getDocumentTemplate } from "@/services/template-service"
+import { canEditDocumentTemplate, getDocumentTemplate } from "@/services/template-service"
 import type { PublicFormLink } from "@/types/public-link"
 import type { DocumentTemplate } from "@/types/template"
 
@@ -21,6 +20,7 @@ import {
   createPublicFormLinkAction,
   disablePublicFormLinkAction,
 } from "../public-link-actions"
+import type { Metadata } from "next"
 
 type TemplateLinksParams = Promise<{
   templateId: string
@@ -32,6 +32,8 @@ type TemplateLinksParams = Promise<{
  * @param props - Route template identifier.
  * @returns The template's public links, or a user-safe load failure.
  */
+export const metadata: Metadata = { title: "Public links" }
+
 export default async function TemplateLinksPage({
   params,
 }: {
@@ -59,7 +61,7 @@ export default async function TemplateLinksPage({
 
   const context = contextResult.context
 
-  if (!canPerformOrganizationAction(context.membership, "templates:manage")) {
+  if (!(await canEditDocumentTemplate({ actorUserId: user.id, organizationId: context.organization.id, templateId }))) {
     redirect(buildFeedbackRedirect("/templates", "permission_denied"))
   }
 

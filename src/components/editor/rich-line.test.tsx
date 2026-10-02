@@ -118,3 +118,18 @@ it("keeps a chosen font through editing and a reload, and loads its stylesheet",
   expect(line().querySelector("[data-font]")?.getAttribute("data-font")).toBe("roboto")
   expect(document.querySelector('link[href="/fonts/roboto/font.css"]')).not.toBeNull()
 })
+
+it("takes in words someone else typed in the same line, keeping this person's caret in its place", async () => {
+  const rerender = await render({ value: "Hello world" })
+  await act(async () => {
+    line().editor.commands.focus()
+    line().editor.commands.setTextSelection(5)
+  })
+
+  // Another editor adds words before the caret, then after it.
+  await rerender({ value: "Oh, Hello world" })
+  expect(line().editor.state.selection.head).toBe(9)
+  await rerender({ value: "Oh, Hello big world" })
+  expect(line().editor.state.selection.head).toBe(9)
+  expect(line().editor.getText()).toBe("Oh, Hello big world")
+})

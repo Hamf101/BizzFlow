@@ -17,6 +17,7 @@ import {
   filterVisibleSubmissions,
   normalizeSubmissionSort,
 } from "@/services/submissions/list-filters"
+import { withReviewedIds } from "@/services/submissions/reviewer-service"
 import {
   createSubmissionDatabaseError,
   getSubmissionClient,
@@ -98,9 +99,9 @@ export async function exportInternalSubmissionsCsv(
         "You cannot view internal submissions."
       )
       const sort = normalizeSubmissionSort(input.sort)
-      const filters = createSubmissionListFilters(
-        input,
-        getOrganizationRoleFromSubject(permissionSubject)
+      const filters = await withReviewedIds(
+        client,
+        createSubmissionListFilters(input, getOrganizationRoleFromSubject(permissionSubject))
       )
       const maxRows = deps.maxExportRows ?? SUBMISSION_EXPORT_MAX_ROWS
       const rows = await readAllInBatches(

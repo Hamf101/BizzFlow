@@ -25,7 +25,9 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ prefetch: vi.fn() }),
 }))
 
+import type { DashboardAccount } from "./dashboard-account-menu"
 import { DashboardNavigation } from "./dashboard-navigation"
+import { DashboardSidebar } from "./dashboard-sidebar"
 
 afterEach(() => {
   linkStatus.pending = false
@@ -70,5 +72,21 @@ describe("DashboardNavigation", () => {
       documentsLink?.querySelector('[role="status"][aria-label="Opening Files"]')
     ).toBeNull()
     expect(documentsLink?.textContent).toBe("Files")
+  })
+})
+
+describe("DashboardSidebar", () => {
+  it("names the workspace above its tabs and the member's role on their card", () => {
+    const sidebar = (organizationName: string | null, role: Partial<DashboardAccount> = {}): { card?: string; label?: string } => {
+      render(<DashboardSidebar account={{ displayName: "Faisal", email: "faisal@example.com", organizationName, permissionSubject: null, role: null, ...role }} signOutAction={async () => undefined} />)
+      return {
+        card: document.querySelector('[aria-label="Open account menu for Faisal"]')?.textContent ?? undefined,
+        label: document.querySelector(".editorial-kicker")?.textContent ?? undefined,
+      }
+    }
+
+    expect(sidebar("Hawn", { role: "owner_admin", roleName: "Owner" })).toEqual({ card: "FFaisalOwner", label: "Hawn's workspace" })
+    expect(sidebar("Acme Tools", { role: "staff" })).toEqual({ card: "FFaisalStaff", label: "Acme Tools' workspace" })
+    expect(sidebar(null)).toEqual({ card: "FFaisalfaisal@example.com", label: "Workspace" })
   })
 })

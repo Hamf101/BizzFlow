@@ -6,6 +6,7 @@ import {
   createPublicFormLink,
   disablePublicFormLink,
 } from "@/services/public-form-service"
+import { canEditDocumentTemplate } from "@/services/template-service"
 
 import {
   createPublicFormLinkAction,
@@ -30,6 +31,8 @@ vi.mock("@/lib/auth", async (importOriginal) => {
 vi.mock("@/services/organization-service", () => ({
   getCurrentOrganizationContext: vi.fn(),
 }))
+
+vi.mock("@/services/template-service", () => ({ canEditDocumentTemplate: vi.fn() }))
 
 vi.mock("@/services/public-form-service", async (importOriginal) => {
   const actual =
@@ -82,6 +85,7 @@ beforeEach(() => {
       updatedAt: "2026-08-31T12:00:00.000Z",
     },
   })
+  vi.mocked(canEditDocumentTemplate).mockResolvedValue(true)
   vi.mocked(createPublicFormLink).mockResolvedValue(undefined as never)
   vi.mocked(disablePublicFormLink).mockResolvedValue(undefined as never)
 })
@@ -121,11 +125,8 @@ describe("public form link actions", () => {
     expect(revalidatePathMock).toHaveBeenCalledExactlyOnceWith(LINKS_PATH)
   })
 
-  it("rejects a member without management permission before the service", async () => {
-    vi.mocked(getCurrentOrganizationContext).mockResolvedValue({
-      organization: { id: ORGANIZATION_ID },
-      membership: { role: "staff" },
-    } as never)
+  it("rejects a member who cannot edit the template before the service", async () => {
+    vi.mocked(canEditDocumentTemplate).mockResolvedValue(false)
 
     await expect(
       createPublicFormLinkAction(createFormData({ templateId: TEMPLATE_ID }))

@@ -1,10 +1,6 @@
 export {
   listNotificationDeliveries,
   recordNotificationDelivery,
-  type ListNotificationDeliveriesInput,
-  type NotificationAuditLogInput,
-  type NotificationServiceClient,
-  type NotificationServiceDeps,
   type RecordNotificationDeliveryInput,
 } from "@/services/notifications/delivery-service"
 export {
@@ -12,5 +8,4 @@ export {
   loadOrganizationNotificationSettingsMap,
   updateOrganizationNotificationSettings,
   type OrganizationNotificationSettings,
-  type UpdateOrganizationNotificationSettingsInput,
 } from "@/services/notifications/settings-service"

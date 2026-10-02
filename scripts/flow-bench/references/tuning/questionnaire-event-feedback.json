@@ -1,0 +1,292 @@
+{
+  "request": "feedback form for visitors and exhibitors at our one-day trade show for local food producers",
+  "title": "Trade show feedback",
+  "description": "Give to visitors and exhibitors at the end of a one-day local food trade show, to learn how they rated the day and what would bring them back.",
+  "maxPages": 2,
+  "content": {
+    "schemaVersion": 3,
+    "branding": {
+      "organizationName": "",
+      "logoAsset": null,
+      "logoDataUrl": null,
+      "logoAlignment": "left",
+      "logoWidthPercent": 24,
+      "primaryColor": "#252329",
+      "accentColor": "#635273"
+    },
+    "blocks": [
+      {
+        "id": "d5040000-0000-4000-8000-000000000001",
+        "type": "heading",
+        "text": "Trade show feedback",
+        "level": 1,
+        "alignment": "left"
+      },
+      {
+        "id": "d5040000-0000-4000-8000-000000000002",
+        "type": "paragraph",
+        "text": "Thank you for coming to the show. Please take two minutes to tell us how the day went, so we can make next year's even better. Your answers are anonymous unless you choose to give us your email address at the end.",
+        "alignment": "left"
+      },
+      {
+        "id": "d5040000-0000-4000-8000-000000000003",
+        "type": "dropdown_field",
+        "fieldKey": "did_you_come_as_a_visitor_or_an_exhibitor",
+        "label": "Did you come as a visitor or an exhibitor?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Visitor",
+          "Exhibitor"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "d5040000-0000-4000-8000-000000000005",
+        "type": "dropdown_field",
+        "fieldKey": "how_did_you_hear_about_the_show",
+        "label": "How did you hear about the show?",
+        "required": false,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "d5040000-0000-4000-8000-000000000003",
+          "operator": "equals",
+          "value": "Visitor"
+        },
+        "placeholder": null,
+        "options": [
+          "Social media",
+          "Our email newsletter",
+          "A poster or leaflet",
+          "Local press or radio",
+          "Word of mouth",
+          "An exhibitor told me",
+          "Other"
+        ]
+      },
+      {
+        "id": "d5040000-0000-4000-8000-000000000006",
+        "type": "text_field",
+        "fieldKey": "where_else_did_you_hear_about_it",
+        "label": "Where else did you hear about it?",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "d5040000-0000-4000-8000-000000000005",
+          "operator": "equals",
+          "value": "Other"
+        },
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d5040000-0000-4000-8000-000000000007",
+        "type": "dropdown_field",
+        "fieldKey": "overall_how_would_you_rate_the_show",
+        "label": "Overall, how would you rate the show?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Excellent",
+          "Good",
+          "Fair",
+          "Poor"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "d5040000-0000-4000-8000-000000000022",
+        "type": "choice_grid_field",
+        "fieldKey": "show_ratings",
+        "label": "How would you rate each of these?",
+        "required": true,
+        "helpText": null,
+        "rows": [
+          "The range of producers exhibiting",
+          "The venue, including parking and facilities",
+          "The organisation on the day"
+        ],
+        "options": [
+          "Excellent",
+          "Good",
+          "Fair",
+          "Poor"
+        ]
+      },
+      {
+        "id": "d5040000-0000-4000-8000-000000000010",
+        "type": "dropdown_field",
+        "fieldKey": "how_would_you_rate_the_talks_and_tastings",
+        "label": "How would you rate the talks and tastings?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Excellent",
+          "Good",
+          "Fair",
+          "Poor",
+          "Did not attend"
+        ],
+        "display": "radios"
+      },
+      {
+        "id": "d5040000-0000-4000-8000-000000000013",
+        "type": "dropdown_field",
+        "fieldKey": "how_useful_were_the_contacts_you_made",
+        "label": "How useful were the contacts you made?",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "d5040000-0000-4000-8000-000000000003",
+          "operator": "equals",
+          "value": "Exhibitor"
+        },
+        "placeholder": null,
+        "options": [
+          "Very useful",
+          "Quite useful",
+          "Not useful"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "d5040000-0000-4000-8000-000000000014",
+        "type": "dropdown_field",
+        "fieldKey": "was_your_stand_in_a_good_position",
+        "label": "Was your stand in a good position?",
+        "required": false,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "d5040000-0000-4000-8000-000000000003",
+          "operator": "equals",
+          "value": "Exhibitor"
+        },
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "d5040000-0000-4000-8000-000000000015",
+        "type": "dropdown_field",
+        "fieldKey": "how_likely_are_you_to_come_back_next_year",
+        "label": "How likely are you to come back next year?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Very likely",
+          "Likely",
+          "Unsure",
+          "Unlikely"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "d5040000-0000-4000-8000-000000000017",
+        "type": "text_field",
+        "fieldKey": "what_was_the_best_part_of_the_day",
+        "label": "What was the best part of the day?",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "d5040000-0000-4000-8000-000000000018",
+        "type": "text_field",
+        "fieldKey": "what_should_we_change_for_next_year",
+        "label": "What should we change for next year?",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "d5040000-0000-4000-8000-000000000019",
+        "type": "checkbox_field",
+        "fieldKey": "please_tell_me_about_next_year_s_show_by_email",
+        "label": "Please tell me about next year's show by email",
+        "required": false,
+        "helpText": null,
+        "checkedByDefault": false
+      },
+      {
+        "id": "d5040000-0000-4000-8000-000000000021",
+        "type": "text_field",
+        "fieldKey": "email_address",
+        "label": "Email address",
+        "required": true,
+        "helpText": "We use it only to tell you about the show, and you can unsubscribe at any time.",
+        "visibleWhen": {
+          "sourceBlockId": "d5040000-0000-4000-8000-000000000019",
+          "operator": "equals",
+          "value": true
+        },
+        "placeholder": null,
+        "multiline": false,
+        "format": "email"
+      }
+    ],
+    "layout": {
+      "pageSize": "A4",
+      "orientation": "portrait",
+      "density": "balanced",
+      "fieldStyle": "box",
+      "marginPreset": "standard",
+      "sectionStyle": "band",
+      "printedTitle": {
+        "mode": "none"
+      },
+      "headerPolicy": "none",
+      "footerPolicy": "all_pages",
+      "pageNumbering": "none",
+      "footerText": {
+        "left": "{title}",
+        "right": "Page {page} of {pages}"
+      }
+    },
+    "sections": [
+      {
+        "id": "d5040000-0000-4000-8000-000000000004",
+        "label": "About you",
+        "startBlockId": "d5040000-0000-4000-8000-000000000003",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d5040000-0000-4000-8000-000000000008",
+        "label": "Your day",
+        "startBlockId": "d5040000-0000-4000-8000-000000000007",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d5040000-0000-4000-8000-000000000016",
+        "label": "Next year",
+        "startBlockId": "d5040000-0000-4000-8000-000000000015",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d5040000-0000-4000-8000-000000000020",
+        "label": "Keeping in touch",
+        "startBlockId": "d5040000-0000-4000-8000-000000000019",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      }
+    ],
+    "fieldGroups": [],
+    "blockRules": []
+  }
+}

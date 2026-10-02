@@ -10,31 +10,45 @@ import {
 
 import { Button } from "@/components/ui/button"
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
+import { Input } from "@/components/ui/input"
 
 type DrawnSignatureFieldProps = {
+  /** Only the drawing area, filling the box it is put in, as a page shows it. */
+  bare?: boolean
   description?: string
   label: string
   name: string
   required?: boolean
+  /** A drawing already saved, shown in a bare area until one is drawn over it. */
+  saved?: string
 }
 
+// System handwriting faces first; any cursive face reads as a signature.
+const TYPED_FONT = '64px "Snell Roundhand", "Segoe Script", "Brush Script MT", cursive'
+
 /**
- * Captures a basic pointer-drawn signature or initials as a PNG data URL.
+ * Captures a basic pointer-drawn signature or initials as a PNG data URL, or a
+ * typed name written onto the same canvas, so a keyboard alone can sign and the
+ * server receives the same kind of picture either way.
  *
  * @param props - Form field name, label, helper text, and required state.
  * @returns Responsive canvas with a hidden form value and clear control.
  */
 export function DrawnSignatureField({
+  bare = false,
   description = "Draw with a mouse, finger, or stylus.",
   label,
   name,
   required = false,
+  saved = "",
 }: DrawnSignatureFieldProps): ReactElement {
   const fieldId = useId()
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const isDrawingRef = useRef<boolean>(false)
   const strokeChangedRef = useRef<boolean>(false)
   const [dataUrl, setDataUrl] = useState<string>("")
+  const [redrawing, setRedrawing] = useState<boolean>(false)
+  const [typed, setTyped] = useState<string>("")
 
   function handlePointerDown(
     event: ReactPointerEvent<HTMLCanvasElement>
@@ -49,6 +63,21 @@ export function DrawnSignatureField({
 
     if (!context) {
       return
+    }
+
+    // Drawing replaces a typed name, so the picture always matches what was last done.
+    if (typed) {
+      context.clearRect(0, 0, canvas.width, canvas.height)
+      setTyped("")
+      setDataUrl("")
+    }
+
+    // A bare area takes its box's size, so a stroke is not stretched.
+    if (bare && !dataUrl) {
+      const ratio = window.devicePixelRatio || 1
+      canvas.width = Math.round(canvas.clientWidth * ratio)
+      canvas.height = Math.round(canvas.clientHeight * ratio)
+      setRedrawing(true)
     }
 
     const point = getCanvasPoint(canvas, event.clientX, event.clientY)
@@ -77,7 +106,7 @@ export function DrawnSignatureField({
     const point = getCanvasPoint(canvas, event.clientX, event.clientY)
     context.lineCap = "round"
     context.lineJoin = "round"
-    context.lineWidth = 3
+    context.lineWidth = bare ? 2 * (window.devicePixelRatio || 1) : 3
     context.strokeStyle = "#252329"
     context.lineTo(point.x, point.y)
     context.stroke()
@@ -112,6 +141,68 @@ export function DrawnSignatureField({
     isDrawingRef.current = false
     strokeChangedRef.current = false
     setDataUrl("")
+    setRedrawing(false)
+    setTyped("")
+  }
+
+  function writeTypedName(value: string): void {
+    const canvas = canvasRef.current
+    const context = canvas?.getContext("2d")
+
+    setTyped(value)
+
+    if (!canvas || !context) {
+      return
+    }
+
+    context.clearRect(0, 0, canvas.width, canvas.height)
+
+    if (value.trim() === "") {
+      setDataUrl("")
+      return
+    }
+
+    context.font = TYPED_FONT
+    context.fillStyle = "#252329"
+    context.textBaseline = "middle"
+    // maxWidth squeezes a long name to fit rather than running off the picture.
+    context.fillText(value.trim(), 24, canvas.height / 2, canvas.width - 48)
+    setDataUrl(canvas.toDataURL("image/png"))
+  }
+
+  const handlers = {
+    onPointerCancel: handlePointerEnd,
+    onPointerDown: handlePointerDown,
+    onPointerMove: handlePointerMove,
+    onPointerUp: handlePointerEnd,
+  }
+
+  if (bare) {
+    return (
+      <>
+        {saved && !redrawing ? (
+          // eslint-disable-next-line @next/next/no-img-element -- a drawn data URL, already sized
+          <img alt={`Saved ${label}`} className="doc-drawing max-h-[4.5em] max-w-[15em] object-contain object-left" src={saved} />
+        ) : null}
+        <canvas
+          aria-label={`${label} drawing area`}
+          className="doc-drawing absolute inset-0 size-full cursor-crosshair touch-none"
+          {...handlers}
+          ref={canvasRef}
+          role="img"
+        />
+        <input name={name} type="hidden" value={dataUrl} />
+        {dataUrl ? (
+          <button
+            className="absolute top-[0.3em] right-[0.5em] text-[0.8em] text-muted-foreground hover:text-foreground"
+            onClick={clearDrawing}
+            type="button"
+          >
+            Clear
+          </button>
+        ) : null}
+      </>
+    )
   }
 
   return (
@@ -122,7 +213,10 @@ export function DrawnSignatureField({
           {required ? " *" : ""}
         </FieldLabel>
         <Button
-          disabled={!dataUrl}
+          // Overhangs its row, so the label sits where every field's label
+          // sits and lines up with the fields beside it in a row.
+          className="-my-2"
+          disabled={!dataUrl && !typed}
           onClick={clearDrawing}
           size="sm"
           type="button"
@@ -136,16 +230,21 @@ export function DrawnSignatureField({
         className="h-36 w-full touch-none rounded-lg border bg-white"
         height={180}
         id={fieldId}
-        onPointerCancel={handlePointerEnd}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerEnd}
+        {...handlers}
         ref={canvasRef}
         role="img"
         width={640}
       />
       <input name={name} type="hidden" value={dataUrl} />
       <FieldDescription>{description}</FieldDescription>
+      <FieldLabel htmlFor={`${fieldId}-typed`}>Or type your {label.toLowerCase()}</FieldLabel>
+      <Input
+        autoComplete="off"
+        id={`${fieldId}-typed`}
+        maxLength={60}
+        onChange={(event) => writeTypedName(event.target.value)}
+        value={typed}
+      />
     </Field>
   )
 }

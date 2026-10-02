@@ -1,7 +1,9 @@
 import type {
+  BlockFrame,
   TemplateBlock,
   TemplateBranding,
   TemplateContent,
+  TemplateContentV3,
   TemplateFieldGroup,
   TemplateLayout,
   TemplateSection
@@ -32,12 +34,21 @@ export type TemplateRenderBlock = Readonly<{
   canonicalIndex: number
   sectionId: string | null
   sectionLabel: string | null
+  /** The number its section's title prints before it, such as "A." or "1.", or null. */
+  sectionNumber: string | null
   fieldGroupId: string | null
   fieldGroupLabel: string | null
-  fieldGroupColumns: 1 | 2
+  /** How many blocks its row sets side by side (1 when it is in no row). */
+  fieldGroupColumns: number
+  /** The row's column widths in twelfths, or null for equal columns. */
+  fieldGroupWidths: readonly number[] | null
   pageBreakBefore: boolean
   keepTogether: boolean
   keepWithNext: boolean
+  /** Extra space above it, in points. */
+  spaceAbove: number
+  /** Where it sits across the page on a line of its own, or null for the whole width. */
+  frame: BlockFrame | null
 }>
 
 /** One visible section in canonical root-block order. */
@@ -124,9 +135,10 @@ export function createTemplateRenderPlan(
     )
   )
   const structure = createStructureIndex(input.content, canonicalIndexById)
+  const opened = new Map<IndexedSection, string | null>()
   const blocks = visibleBlocks.map(
     (block: TemplateBlock): TemplateRenderBlock =>
-      decorateRenderBlock(block, canonicalIndexById, structure)
+      decorateRenderBlock(block, canonicalIndexById, structure, opened, layout.sectionNumbers)
   )
 
   return {
@@ -167,14 +179,56 @@ export function shouldRenderTemplateFooter(
   return shouldRenderRepeatedRegion(layout.footerPolicy, pageNumber)
 }
 
+/** Words for the left, centre and right of one margin, filled in for a page. */
+export type TemplateMarginWords = Partial<Record<"left" | "center" | "right", string>>
+
+/**
+ * The words one page prints in its top and bottom margins: the layout's margin
+ * text with {page}, {pages} and {title} filled in, on the pages the header and
+ * footer policies say, and "Page X of Y" when page numbering is on and nothing
+ * is written at the footer's right.
+ *
+ * @param layout - Resolved template layout.
+ * @param page - One-based page number.
+ * @param pages - How many pages the document has.
+ * @param title - The document's printed title, or its title.
+ * @returns The header and footer words, and the default page label or null.
+ */
+export function resolveTemplateMarginWords(
+  layout: TemplateLayout,
+  page: number,
+  pages: number,
+  title: string
+): { footer: TemplateMarginWords; header: TemplateMarginWords; pageLabel: string | null } {
+  const values: Record<string, string> = { page: String(page), pages: String(pages), title }
+  // One pass, so a title that reads "{page}" stays as written.
+  const fill = (text: TemplateLayout["headerText"], on: boolean): TemplateMarginWords =>
+    Object.fromEntries(
+      on && text
+        ? Object.entries(text).flatMap(([slot, words]) => {
+            const filled = (words ?? "").replace(/\{(pages|page|title)\}/g, (_, key: string) => values[key]).trim()
+
+            return filled ? [[slot, filled]] : []
+          })
+        : []
+    )
+  const footerOn = shouldRenderTemplateFooter(layout, page)
+  const footer = fill(layout.footerText, footerOn)
+
+  return {
+    footer,
+    header: fill(layout.headerText, shouldRenderTemplateHeader(layout, page)),
+    pageLabel: footerOn && layout.pageNumbering === "page_x_of_y" && !footer.right ? `Page ${page} of ${pages}` : null,
+  }
+}
+
 type StructureIndex = Readonly<{
   sections: readonly IndexedSection[]
   groups: readonly IndexedFieldGroup[]
-  rulesByBlockId: ReadonlyMap<
-    string,
-    Readonly<{ pageBreakBefore: boolean; keepWithNext: boolean }>
-  >
+  rulesByBlockId: ReadonlyMap<string, TemplateBlockRule>
 }>
+
+type TemplateBlockRule = TemplateContentV3["blockRules"][number]
 
 type IndexedSection = Readonly<{
   section: TemplateSection | null
@@ -239,13 +293,35 @@ export function resolvePageGeometry(layout: TemplateLayout): TemplatePageGeometr
 
 /**
  * The space between paragraphs, in points: the layout's own figure, or its
- * density's.
+ * density's, as the PDF prints it.
  *
  * @param layout - The layout.
  * @returns The space, in points.
  */
 export function paragraphGap(layout: TemplateLayout): number {
-  return layout.paragraphSpacing ?? { balanced: 11, comfortable: 16, compact: 7 }[layout.density]
+  return layout.paragraphSpacing ?? { balanced: 8, comfortable: 12, compact: 5 }[layout.density]
+}
+
+/**
+ * What the layout's spacing adds under every block, in points, beyond the
+ * space each kind of block leaves of its own (8 points under a paragraph).
+ *
+ * @param layout - The layout.
+ * @returns The points added, or taken away when negative.
+ */
+export function blockSpacingAdjustment(layout: TemplateLayout): number {
+  return paragraphGap(layout) - 8
+}
+
+/**
+ * The gap between a row's columns, in points: a fortieth of the text's width,
+ * kept between 10 and 16.
+ *
+ * @param contentWidthPoints - The width between the side margins.
+ * @returns The gap, in points.
+ */
+export function columnGap(contentWidthPoints: number): number {
+  return Math.min(16, Math.max(10, contentWidthPoints * 0.025))
 }
 
 /** A side of the page, for its margin. */
@@ -331,7 +407,12 @@ function createStructureIndex(
             }
           ]
   } else {
-    sections = content.sections.map(
+    // What comes before the first section belongs to none and prints no title.
+    const firstStartIndex = canonicalIndexById.get(content.sections[0]?.startBlockId ?? "") ?? 0
+    const opening: IndexedSection[] =
+      firstStartIndex > 0 ? [{ section: null, startIndex: 0, endIndex: firstStartIndex - 1 }] : []
+
+    sections = [...opening, ...content.sections.map(
       (section: TemplateSection, index: number): IndexedSection => {
         const startIndex = canonicalIndexById.get(section.startBlockId) ?? 0
         const nextSection = content.sections[index + 1]
@@ -346,7 +427,7 @@ function createStructureIndex(
           endIndex: Math.max(startIndex, nextStartIndex - 1)
         }
       }
-    )
+    )]
   }
   const groups = content.fieldGroups.map(
     (group: TemplateFieldGroup): IndexedFieldGroup => ({
@@ -356,18 +437,7 @@ function createStructureIndex(
     })
   )
   const rulesByBlockId = new Map(
-    content.blockRules.map(
-      (rule): readonly [
-        string,
-        Readonly<{ pageBreakBefore: boolean; keepWithNext: boolean }>
-      ] => [
-        rule.blockId,
-        {
-          pageBreakBefore: rule.pageBreakBefore,
-          keepWithNext: rule.keepWithNext
-        }
-      ]
-    )
+    content.blockRules.map((rule): readonly [string, TemplateBlockRule] => [rule.blockId, rule])
   )
 
   return { sections, groups, rulesByBlockId }
@@ -376,7 +446,9 @@ function createStructureIndex(
 function decorateRenderBlock(
   block: TemplateBlock,
   canonicalIndexById: ReadonlyMap<string, number>,
-  structure: StructureIndex
+  structure: StructureIndex,
+  opened: Map<IndexedSection, string | null>,
+  numbering: TemplateLayout["sectionNumbers"]
 ): TemplateRenderBlock {
   const canonicalIndex = canonicalIndexById.get(block.id) ?? -1
   const indexedSection = structure.sections.find(
@@ -384,6 +456,17 @@ function decorateRenderBlock(
       canonicalIndex >= candidate.startIndex &&
       canonicalIndex <= candidate.endIndex
   )
+  // A section starts its page at its first block that shows, even when a
+  // hidden field opens it.
+  const opensSection = indexedSection !== undefined && !opened.has(indexedSection)
+
+  // Sections are numbered as they show, so a hidden one leaves no gap; what
+  // comes before the first has no title and takes no number.
+  if (opensSection) {
+    const numbered = [...opened.values()].filter(Boolean).length
+
+    opened.set(indexedSection, indexedSection.section ? formatSectionNumber(numbering, numbered) : null)
+  }
   const indexedGroup = structure.groups.find(
     (candidate: IndexedFieldGroup): boolean =>
       canonicalIndex >= candidate.startIndex &&
@@ -396,17 +479,21 @@ function decorateRenderBlock(
     canonicalIndex,
     sectionId: indexedSection?.section?.id ?? null,
     sectionLabel: indexedSection?.section?.label ?? null,
+    sectionNumber: (indexedSection && opened.get(indexedSection)) ?? null,
     fieldGroupId: indexedGroup?.group.id ?? null,
     fieldGroupLabel: indexedGroup?.group.label ?? null,
     fieldGroupColumns: indexedGroup?.group.columns ?? 1,
+    fieldGroupWidths: indexedGroup?.group.widths ?? null,
     pageBreakBefore:
-      (indexedSection?.startIndex === canonicalIndex &&
-        indexedSection.section?.pageBreakBefore === true) ||
+      (opensSection && indexedSection.section?.pageBreakBefore === true) ||
       rule?.pageBreakBefore === true,
     keepTogether:
       indexedSection?.section?.keepTogether === true ||
       indexedGroup?.group.keepTogether === true,
-    keepWithNext: rule?.keepWithNext === true
+    keepWithNext: rule?.keepWithNext === true,
+    spaceAbove: rule?.spaceAbove ?? 0,
+    // A block in a row takes its column instead.
+    frame: indexedGroup && indexedGroup.group.columns > 1 ? null : (rule?.frame ?? null)
   }
 }
 
@@ -452,4 +539,37 @@ function shouldRenderRepeatedRegion(
   }
 
   return policy === "all_pages" || (policy === "first_page" && pageNumber === 1)
+}
+
+/**
+ * The lightness, in OKLab, above which a section's bar is too light for white
+ * words and takes the page's ink instead: about where the two read equally well.
+ */
+export const SECTION_BAR_LIGHT = 0.6
+
+/** A boxed section's edge, in points. */
+export const SECTION_BOX_EDGE = 0.7
+/** From a boxed section's outside to what it holds: its edge and 8 points of padding. */
+export const SECTION_BOX_INSET = SECTION_BOX_EDGE + 8
+/** The space under a boxed section, in points. */
+export const SECTION_BOX_GAP = 10
+
+// The number a titled section prints before its title, counting from 0:
+// "A." to "Z.", then "AA.", "AB." as a spreadsheet's columns; or "1.", "2.".
+function formatSectionNumber(numbering: TemplateLayout["sectionNumbers"], index: number): string | null {
+  if (!numbering) {
+    return null
+  }
+
+  if (numbering === "numbers") {
+    return `${index + 1}.`
+  }
+
+  let letters = ""
+
+  for (let rest = index + 1; rest > 0; rest = Math.floor((rest - 1) / 26)) {
+    letters = String.fromCharCode(65 + ((rest - 1) % 26)) + letters
+  }
+
+  return `${letters}.`
 }

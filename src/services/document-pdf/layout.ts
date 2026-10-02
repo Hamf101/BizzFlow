@@ -1,14 +1,15 @@
-import type { TemplatePageGeometry } from "@/services/templates/template-render-plan"
-import type { TemplateLayout } from "@/types/template"
-
 import {
-  A4_HEIGHT,
-  A4_WIDTH,
-  PAGE_FLOW_HEIGHT,
-  PAGE_HORIZONTAL_MARGIN,
-  PAGE_TOP_MARGIN,
-  PDF_CONTENT_WIDTH
-} from "./constants"
+  blockSpacingAdjustment,
+  columnGap,
+  SECTION_BOX_EDGE,
+  SECTION_BOX_GAP,
+  SECTION_BOX_INSET,
+  type TemplatePageGeometry
+} from "@/services/templates/template-render-plan"
+import type { TemplateBlock, TemplateLayout } from "@/types/template"
+
+import { PDF_CONTENT_WIDTH } from "./constants"
+import { FIELD_RULE_WIDTH, isCellRow } from "./shared"
 
 /** Resolved physical measurements shared by PDF planning and drawing. */
 export type PdfLayoutMetrics = Readonly<{
@@ -24,7 +25,31 @@ export type PdfLayoutMetrics = Readonly<{
   pageCapacity: number
   columnGap: number
   densityItemGapAdjustment: number
+  /** How answers print: in a box, on a line, or in a cell. */
+  fieldStyle: NonNullable<TemplateLayout["fieldStyle"]>
+  /** How a section's title prints: as a heading, in a bar, or atop a box around the section. */
+  sectionStyle: NonNullable<TemplateLayout["sectionStyle"]>
 }>
+
+// The box's measurements, which the editor draws too.
+export { SECTION_BOX_EDGE, SECTION_BOX_GAP, SECTION_BOX_INSET }
+
+/**
+ * The measurements a boxed section's blocks are laid out in: the box's inside,
+ * an inset narrower each side, on a page that holds less by the box's top,
+ * foot and the space under it.
+ *
+ * @param metrics - The page's measurements.
+ * @returns The measurements inside the box.
+ */
+export function boxedPdfMetrics(metrics: PdfLayoutMetrics): PdfLayoutMetrics {
+  return {
+    ...metrics,
+    contentWidth: metrics.contentWidth - SECTION_BOX_INSET * 2,
+    margin: metrics.margin + SECTION_BOX_INSET,
+    pageCapacity: metrics.pageCapacity - SECTION_BOX_INSET * 2 - SECTION_BOX_GAP
+  }
+}
 
 type RenderPlanGeometry = Pick<
   TemplatePageGeometry,
@@ -46,12 +71,6 @@ export function createPdfLayoutMetrics(
   geometry: RenderPlanGeometry,
   layout: TemplateLayout
 ): PdfLayoutMetrics {
-  const isLegacyDefaultGeometry =
-    !layout.margins &&
-    approximatelyEqual(geometry.widthPoints, A4_WIDTH) &&
-    approximatelyEqual(geometry.heightPoints, A4_HEIGHT) &&
-    approximatelyEqual(geometry.marginPoints, PAGE_HORIZONTAL_MARGIN)
-
   return {
     pageWidth: geometry.widthPoints,
     pageHeight: geometry.heightPoints,
@@ -59,22 +78,13 @@ export function createPdfLayoutMetrics(
     marginBottom: geometry.margins.bottom,
     lineSpacing: layout.lineSpacing,
     contentWidth: geometry.contentWidthPoints,
-    flowTopY: isLegacyDefaultGeometry
-      ? geometry.heightPoints - PAGE_TOP_MARGIN
-      : geometry.heightPoints - geometry.margins.top,
-    pageCapacity: isLegacyDefaultGeometry
-      ? PAGE_FLOW_HEIGHT
-      : geometry.contentHeightPoints,
-    columnGap: Math.min(16, Math.max(10, geometry.contentWidthPoints * 0.025)),
-    // A paragraph already leaves 8pt below itself.
-    densityItemGapAdjustment:
-      layout.paragraphSpacing !== undefined
-        ? layout.paragraphSpacing - 8
-        : layout.density === "compact"
-          ? -3
-          : layout.density === "comfortable"
-            ? 4
-            : 0
+    // The page's own margins, as the editor draws them.
+    flowTopY: geometry.heightPoints - geometry.margins.top,
+    pageCapacity: geometry.contentHeightPoints,
+    columnGap: columnGap(geometry.contentWidthPoints),
+    densityItemGapAdjustment: blockSpacingAdjustment(layout),
+    fieldStyle: layout.fieldStyle ?? "box",
+    sectionStyle: layout.sectionStyle ?? "plain"
   }
 }
 
@@ -96,17 +106,42 @@ export function scalePdfCharacterEstimate(
 }
 
 /**
- * Returns the printable width of one column in a two-column field group.
+ * Places the columns of a row: each gets its share of the content width, in
+ * twelfths, after the gaps between them.
  *
  * @param metrics - Active PDF layout measurements.
- * @returns Width available to each column.
+ * @param widths - Each column's width in twelfths.
+ * @param gap - The space between columns; negative to overlap them.
+ * @returns Each column's left edge and width, left to right.
  */
-export function getPdfColumnWidth(metrics: PdfLayoutMetrics): number {
-  return (metrics.contentWidth - metrics.columnGap) / 2
+export function getPdfColumnFrames(
+  metrics: PdfLayoutMetrics,
+  widths: readonly number[],
+  gap: number = metrics.columnGap
+): Array<Readonly<{ x: number; width: number }>> {
+  const shared = metrics.contentWidth - gap * (widths.length - 1)
+  let x = metrics.margin
+
+  return widths.map((twelfths: number) => {
+    const frame = { width: (shared * twelfths) / 12, x }
+
+    x += frame.width + gap
+
+    return frame
+  })
 }
 
-// Paper sizes are rounded to the point, so A4 scaled to A3 and back lands a
-// tenth of a point off; a quarter point still means the same page.
-function approximatelyEqual(left: number, right: number): boolean {
-  return Math.abs(left - right) < 0.25
+/**
+ * Places a printed row's columns: cells that touch overlap by their edge, so
+ * neighbours share one; anything else keeps the usual gap.
+ *
+ * @param metrics - Active PDF layout measurements.
+ * @param row - The row's column widths and blocks.
+ * @returns Each column's left edge and width, left to right.
+ */
+export function getPdfRowFrames(
+  metrics: PdfLayoutMetrics,
+  row: Readonly<{ cells: readonly ({ block: TemplateBlock } | null)[]; widths: readonly number[] }>
+): Array<Readonly<{ x: number; width: number }>> {
+  return getPdfColumnFrames(metrics, row.widths, isCellRow(row.cells, metrics.fieldStyle) ? -FIELD_RULE_WIDTH : metrics.columnGap)
 }

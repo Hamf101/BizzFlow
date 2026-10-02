@@ -120,7 +120,7 @@ describe("SubmissionsWorkspace", () => {
     // Search is the workspace's own now; the list keeps no box of its own.
     expect(document.querySelector('[role="search"], input[type="search"]')).toBeNull()
     expect(
-      [...(document.querySelector("h1")?.nextElementSibling?.querySelectorAll("a, button") ?? [])].map(
+      [...(document.querySelector("h1")?.parentElement?.nextElementSibling?.querySelectorAll("a, button") ?? [])].map(
         (control: Element) => control.getAttribute("aria-label") ?? control.textContent
       )
     ).toEqual(["View options", "New submission"])

@@ -37,11 +37,8 @@ test("saves the exact brand colors picked, and prints the page with them", async
   }, { timeout: 15_000 }).toMatchObject({ primaryColor: "#ffffff", accentColor: "#eeeeee" })
 
   await page.reload()
-  const preview = page.getByRole("radio", { name: "Preview", exact: true })
-  await waitForHydration(preview)
-  await preview.click()
   const pages = page.locator('[data-slot="editor-pages"]')
-  await expect(pages).toHaveAttribute("data-document-surface", "paper")
+  await waitForHydration(pages)
   expect(await pages.evaluate((element) => ({
     primary: (element as HTMLElement).style.getPropertyValue("--doc-primary"),
     accent: (element as HTMLElement).style.getPropertyValue("--doc-accent"),

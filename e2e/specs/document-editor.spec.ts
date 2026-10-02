@@ -79,11 +79,9 @@ test("Flow is within reach wherever a document or a template is open", async ({
   await flow.click()
   await expect(page.getByLabel("Ask Flow")).toBeVisible()
 
-  // Preview puts the dock away; Flow's own button stays.
+  // A template's editor has Flow's button too.
   await page.goto(`/templates/${template.id}/edit`)
-  const preview = page.getByRole("radio", { name: "Preview" })
-  await waitForHydration(preview)
-  await preview.click()
+  await waitForHydration(flow)
   await flow.click()
   await expect(page.getByLabel("Ask Flow")).toBeVisible()
 })

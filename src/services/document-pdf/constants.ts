@@ -10,9 +10,7 @@ export const LIST_ENTRY_CHUNK_CHARACTERS = 900
 export const LIST_CHUNK_HEIGHT = 250
 export const TABLE_CHUNK_HEIGHT = 270
 export const A4_WIDTH = 595.28
-export const A4_HEIGHT = 841.89
 export const PAGE_HORIZONTAL_MARGIN = 40
-export const PAGE_TOP_MARGIN = 36
 export const PDF_CONTENT_WIDTH = A4_WIDTH - PAGE_HORIZONTAL_MARGIN * 2
 
 const PDF_FONT_PACKAGE_DIRECTORY = resolve(

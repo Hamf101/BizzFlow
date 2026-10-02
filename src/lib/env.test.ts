@@ -5,7 +5,7 @@ import {
   getAiEnv,
   getAppUrlEnv,
   getFileUploadPolicyEnv,
-  getGeminiEnv,
+  getAiProviderKey,
   getEmailEnv,
   getR2Env,
   getSentryEnv,
@@ -343,14 +343,14 @@ describe("file upload policy environment validation", () => {
 })
 
 describe("AI environment validation", () => {
-  it("uses the current provider, stable model, and timeout by default", () => {
+  it("follows Gemini's newest Flash model by default, not one fixed version", () => {
     setIsolatedEnv({
       GEMINI_API_KEY: "gemini-test-key",
     })
 
     expect(getAiEnv()).toEqual({
       AI_PROVIDER: "gemini",
-      AI_MODEL: "gemini-3.6-flash",
+      AI_MODEL: "gemini-flash-latest",
       AI_TIMEOUT_MS: 90000,
     })
   })
@@ -407,20 +407,13 @@ describe("AI environment validation", () => {
     expect(() => getAiEnv()).toThrow("AI_MODEL")
   })
 
-  it("validates Gemini credentials separately from generic AI settings", () => {
+  it("reads only the configured provider's key, and names a missing one", () => {
     setIsolatedEnv({
-      GEMINI_API_KEY: "gemini-test-key",
+      GEMINI_API_KEY: " gemini-test-key ",
     })
 
-    expect(getGeminiEnv()).toEqual({
-      GEMINI_API_KEY: "gemini-test-key",
-    })
-  })
-
-  it("rejects a missing Gemini adapter credential", () => {
-    setIsolatedEnv({})
-
-    expect(() => getGeminiEnv()).toThrow("GEMINI_API_KEY")
+    expect(getAiProviderKey("gemini")).toBe("gemini-test-key")
+    expect(() => getAiProviderKey("openrouter")).toThrow("OPENROUTER_API_KEY")
   })
 
   it.each(["999", "120001", "1.5", "not-a-number"])(

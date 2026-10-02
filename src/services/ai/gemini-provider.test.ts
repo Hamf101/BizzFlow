@@ -79,6 +79,24 @@ describe("Gemini AI provider", () => {
     })
   })
 
+  it("asks the beta API for a latest alias, the only place Google serves one", async () => {
+    const executeInteraction = vi.fn<GeminiInteractionExecutor>(async () => ({
+      id: "interaction-trace-2",
+      model: "gemini-flash-latest",
+      output_text: '{"result":"ok"}',
+      status: "completed",
+      usage: undefined,
+    }))
+    const provider = new GeminiAiProvider({ apiKey: "test-key", timeoutMs: 12_000, executeInteraction })
+
+    await provider.generateStructured(createRequest("gemini-flash-latest"))
+
+    expect(executeInteraction.mock.calls[0]?.[0]).toMatchObject({
+      api_version: "v1beta",
+      model: "gemini-flash-latest",
+    })
+  })
+
   it("uses only the exact requested model when it is unavailable", async () => {
     const executeInteraction = vi.fn<GeminiInteractionExecutor>(
       async () => {

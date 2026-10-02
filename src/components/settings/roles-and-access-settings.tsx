@@ -52,7 +52,8 @@ const permissionLabels: Record<OrganizationPermissionAction, string> = {
   "audit_logs:view": "View audit log",
   "audit_logs:verify": "Verify audit chain",
   "templates:view": "View templates",
-  "templates:manage": "Manage templates",
+  "templates:create": "Create templates",
+  "templates:manage": "Edit any template",
   "documents:view": "View documents",
   "documents:send": "Send documents",
   "documents:fill": "Fill documents",
@@ -84,6 +85,7 @@ const permissionGroups: readonly PermissionGroupDefinition[] = [
     label: "Documents & templates",
     permissions: [
       "templates:view",
+      "templates:create",
       "templates:manage",
       "documents:view",
       "documents:send",

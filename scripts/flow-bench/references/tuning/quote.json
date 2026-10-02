@@ -1,0 +1,556 @@
+{
+  "request": "quote for repainting the inside of a house",
+  "title": "Interior painting quote",
+  "description": "Use to quote a fixed price for repainting the inside of a home, with the work, costs, exclusions and the customer's acceptance.",
+  "content": {
+    "schemaVersion": 3,
+    "branding": {
+      "organizationName": "",
+      "logoAsset": null,
+      "logoDataUrl": null,
+      "logoAlignment": "left",
+      "logoWidthPercent": 24,
+      "primaryColor": "#252329",
+      "accentColor": "#635273"
+    },
+    "blocks": [
+      {
+        "id": "a2000000-0000-4000-8000-000000000001",
+        "type": "heading",
+        "text": "Interior painting quote",
+        "level": 1,
+        "alignment": "left"
+      },
+      {
+        "id": "a2000000-0000-4000-8000-000000000002",
+        "fieldKey": "business_name",
+        "label": "Business name",
+        "required": true,
+        "helpText": null,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a2000000-0000-4000-8000-000000000004",
+        "fieldKey": "business_number",
+        "label": "Business number",
+        "required": false,
+        "helpText": "Your company or tax number, if any.",
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a2000000-0000-4000-8000-000000000007",
+        "fieldKey": "business_phone",
+        "label": "Business phone",
+        "required": false,
+        "helpText": null,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false,
+        "format": "phone"
+      },
+      {
+        "id": "a2000000-0000-4000-8000-000000000008",
+        "fieldKey": "business_email",
+        "label": "Business email",
+        "required": false,
+        "helpText": null,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false,
+        "format": "email"
+      },
+      {
+        "id": "a2000000-0000-4000-8000-000000000101",
+        "type": "text_field",
+        "fieldKey": "business_address",
+        "label": "Business address",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "a2000000-0000-4000-8000-000000000011",
+        "fieldKey": "customer_name",
+        "label": "Customer name",
+        "required": true,
+        "helpText": null,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a2000000-0000-4000-8000-000000000013",
+        "fieldKey": "customer_phone",
+        "label": "Customer phone",
+        "required": false,
+        "helpText": null,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false,
+        "format": "phone"
+      },
+      {
+        "id": "a2000000-0000-4000-8000-000000000014",
+        "fieldKey": "customer_email",
+        "label": "Customer email",
+        "required": false,
+        "helpText": null,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false,
+        "format": "email"
+      },
+      {
+        "id": "a2000000-0000-4000-8000-000000000017",
+        "fieldKey": "property_address",
+        "label": "Property address",
+        "required": true,
+        "helpText": "The address of the home to be painted.",
+        "boxHeight": 56,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "a2000000-0000-4000-8000-000000000018",
+        "fieldKey": "quote_number",
+        "label": "Quote number",
+        "required": false,
+        "helpText": null,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a2000000-0000-4000-8000-000000000020",
+        "fieldKey": "quote_date",
+        "label": "Quote date",
+        "required": true,
+        "helpText": null,
+        "type": "date_field"
+      },
+      {
+        "id": "a2000000-0000-4000-8000-000000000021",
+        "fieldKey": "valid_until",
+        "label": "Valid until",
+        "required": true,
+        "helpText": "The last day to accept this price.",
+        "type": "date_field"
+      },
+      {
+        "id": "a2000000-0000-4000-8000-000000000025",
+        "fieldKey": "rooms_and_surfaces_to_be_painted",
+        "label": "Rooms and surfaces to be painted",
+        "required": true,
+        "helpText": "List each room and say whether walls, ceilings, woodwork and doors are included.",
+        "boxHeight": 90,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "a2000000-0000-4000-8000-000000000027",
+        "fieldKey": "preparation",
+        "label": "Preparation",
+        "required": false,
+        "helpText": "For example filling, sanding, stain blocking or removing wallpaper.",
+        "boxHeight": 56,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "a2000000-0000-4000-8000-000000000028",
+        "fieldKey": "paint_colours_and_number_of_coats",
+        "label": "Paint, colours and number of coats",
+        "required": false,
+        "helpText": null,
+        "boxHeight": 56,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "a2000000-0000-4000-8000-000000000106",
+        "type": "table_field",
+        "fieldKey": "cost_items",
+        "label": "Items",
+        "required": false,
+        "helpText": "For example preparation and repairs, walls and ceilings, woodwork and doors, and paint and materials.",
+        "columns": [
+          {
+            "label": "Item"
+          },
+          {
+            "label": "Quantity",
+            "format": "number"
+          },
+          {
+            "label": "Unit price",
+            "format": "money"
+          },
+          {
+            "label": "Amount",
+            "format": "money"
+          }
+        ],
+        "rows": 4,
+        "addRows": true
+      },
+      {
+        "id": "a2000000-0000-4000-8000-000000000107",
+        "type": "text_field",
+        "fieldKey": "subtotal",
+        "label": "Subtotal",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "format": "money"
+      },
+      {
+        "id": "a2000000-0000-4000-8000-000000000108",
+        "type": "text_field",
+        "fieldKey": "tax",
+        "label": "Tax",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "format": "money"
+      },
+      {
+        "id": "a2000000-0000-4000-8000-000000000109",
+        "type": "text_field",
+        "fieldKey": "total",
+        "label": "Total",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "format": "money"
+      },
+      {
+        "id": "a2000000-0000-4000-8000-000000000031",
+        "fieldKey": "not_included_in_this_quote",
+        "label": "Not included in this quote",
+        "required": false,
+        "helpText": "For example moving heavy furniture, plaster repairs or outside work.",
+        "boxHeight": 56,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "a2000000-0000-4000-8000-000000000033",
+        "type": "paragraph",
+        "text": "If you ask for extra work or a change after accepting, we will agree its price with you in writing before we start it.",
+        "alignment": "left"
+      },
+      {
+        "id": "a2000000-0000-4000-8000-000000000034",
+        "fieldKey": "optional_extras_and_their_prices",
+        "label": "Optional extras and their prices",
+        "required": false,
+        "helpText": "Work the customer can add, each with its own price.",
+        "boxHeight": 56,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "a2000000-0000-4000-8000-000000000036",
+        "fieldKey": "deposit",
+        "label": "Deposit",
+        "required": false,
+        "helpText": "The amount to pay before work starts, if any.",
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false,
+        "format": "money"
+      },
+      {
+        "id": "a2000000-0000-4000-8000-000000000038",
+        "fieldKey": "balance_due",
+        "label": "Balance due",
+        "required": false,
+        "helpText": "When the rest must be paid.",
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a2000000-0000-4000-8000-000000000041",
+        "fieldKey": "how_to_pay",
+        "label": "How to pay",
+        "required": false,
+        "helpText": "For example bank transfer details or card.",
+        "boxHeight": 45,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "a2000000-0000-4000-8000-000000000102",
+        "type": "text_field",
+        "fieldKey": "if_payment_is_late",
+        "label": "If payment is late",
+        "required": false,
+        "helpText": "What you charge or do when a payment is overdue.",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a2000000-0000-4000-8000-000000000042",
+        "fieldKey": "estimated_start_date",
+        "label": "Estimated start date",
+        "required": false,
+        "helpText": null,
+        "type": "date_field"
+      },
+      {
+        "id": "a2000000-0000-4000-8000-000000000044",
+        "fieldKey": "estimated_finish_date",
+        "label": "Estimated finish date",
+        "required": false,
+        "helpText": null,
+        "type": "date_field"
+      },
+      {
+        "id": "a2000000-0000-4000-8000-000000000103",
+        "type": "paragraph",
+        "text": "You can cancel within 14 days of accepting this quote, by telling us in writing or by email, without giving a reason. If you ask us to start work within those 14 days and then cancel, you pay for the work done up to then.",
+        "alignment": "left"
+      },
+      {
+        "id": "a2000000-0000-4000-8000-000000000104",
+        "type": "checkbox_field",
+        "fieldKey": "please_start_the_work_within_the_14_days",
+        "label": "Please start the work within the 14 days",
+        "required": false,
+        "helpText": null,
+        "checkedByDefault": false
+      },
+      {
+        "id": "a2000000-0000-4000-8000-000000000047",
+        "type": "paragraph",
+        "text": "By signing below, you accept this quote and ask us to carry out the work described in it.",
+        "alignment": "left"
+      },
+      {
+        "id": "a2000000-0000-4000-8000-000000000049",
+        "fieldKey": "customer_signature",
+        "label": "Customer signature",
+        "required": true,
+        "helpText": null,
+        "type": "signature_field"
+      },
+      {
+        "id": "a2000000-0000-4000-8000-000000000050",
+        "fieldKey": "date_accepted",
+        "label": "Date accepted",
+        "required": true,
+        "helpText": null,
+        "type": "date_field"
+      },
+      {
+        "id": "a2000000-0000-4000-8000-000000000053",
+        "fieldKey": "customer_printed_name",
+        "label": "Customer printed name",
+        "required": true,
+        "helpText": null,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      }
+    ],
+    "layout": {
+      "pageSize": "A4",
+      "orientation": "portrait",
+      "marginPreset": "standard",
+      "density": "balanced",
+      "printedTitle": {
+        "mode": "none"
+      },
+      "headerPolicy": "none",
+      "footerPolicy": "none",
+      "pageNumbering": "none"
+    },
+    "sections": [
+      {
+        "id": "a2000000-0000-4000-8000-000000000003",
+        "label": "Our details",
+        "startBlockId": "a2000000-0000-4000-8000-000000000002",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "a2000000-0000-4000-8000-000000000012",
+        "label": "Customer details",
+        "startBlockId": "a2000000-0000-4000-8000-000000000011",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "a2000000-0000-4000-8000-000000000019",
+        "label": "Quote details",
+        "startBlockId": "a2000000-0000-4000-8000-000000000018",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "a2000000-0000-4000-8000-000000000026",
+        "label": "The work",
+        "startBlockId": "a2000000-0000-4000-8000-000000000025",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "a2000000-0000-4000-8000-000000000030",
+        "label": "Costs",
+        "startBlockId": "a2000000-0000-4000-8000-000000000106",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "a2000000-0000-4000-8000-000000000032",
+        "label": "What is not included",
+        "startBlockId": "a2000000-0000-4000-8000-000000000031",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "a2000000-0000-4000-8000-000000000035",
+        "label": "Optional extras",
+        "startBlockId": "a2000000-0000-4000-8000-000000000034",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "a2000000-0000-4000-8000-000000000037",
+        "label": "Payment terms",
+        "startBlockId": "a2000000-0000-4000-8000-000000000036",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "a2000000-0000-4000-8000-000000000043",
+        "label": "Dates",
+        "startBlockId": "a2000000-0000-4000-8000-000000000042",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "a2000000-0000-4000-8000-000000000105",
+        "label": "Your right to cancel",
+        "startBlockId": "a2000000-0000-4000-8000-000000000103",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "a2000000-0000-4000-8000-000000000048",
+        "label": "Acceptance",
+        "startBlockId": "a2000000-0000-4000-8000-000000000047",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      }
+    ],
+    "fieldGroups": [
+      {
+        "id": "a2000000-0000-4000-8000-000000000006",
+        "label": null,
+        "startBlockId": "a2000000-0000-4000-8000-000000000002",
+        "endBlockId": "a2000000-0000-4000-8000-000000000004",
+        "columns": 2,
+        "widths": [
+          8,
+          4
+        ],
+        "keepTogether": false
+      },
+      {
+        "id": "a2000000-0000-4000-8000-000000000010",
+        "label": null,
+        "startBlockId": "a2000000-0000-4000-8000-000000000007",
+        "endBlockId": "a2000000-0000-4000-8000-000000000008",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "a2000000-0000-4000-8000-000000000016",
+        "label": null,
+        "startBlockId": "a2000000-0000-4000-8000-000000000013",
+        "endBlockId": "a2000000-0000-4000-8000-000000000014",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "a2000000-0000-4000-8000-000000000023",
+        "label": null,
+        "startBlockId": "a2000000-0000-4000-8000-000000000018",
+        "endBlockId": "a2000000-0000-4000-8000-000000000021",
+        "columns": 3,
+        "keepTogether": false
+      },
+      {
+        "id": "a2000000-0000-4000-8000-000000000110",
+        "label": null,
+        "startBlockId": "a2000000-0000-4000-8000-000000000107",
+        "endBlockId": "a2000000-0000-4000-8000-000000000109",
+        "columns": 3,
+        "keepTogether": false
+      },
+      {
+        "id": "a2000000-0000-4000-8000-000000000040",
+        "label": null,
+        "startBlockId": "a2000000-0000-4000-8000-000000000036",
+        "endBlockId": "a2000000-0000-4000-8000-000000000038",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "a2000000-0000-4000-8000-000000000046",
+        "label": null,
+        "startBlockId": "a2000000-0000-4000-8000-000000000042",
+        "endBlockId": "a2000000-0000-4000-8000-000000000044",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "a2000000-0000-4000-8000-000000000052",
+        "label": null,
+        "startBlockId": "a2000000-0000-4000-8000-000000000049",
+        "endBlockId": "a2000000-0000-4000-8000-000000000050",
+        "columns": 2,
+        "widths": [
+          8,
+          4
+        ],
+        "keepTogether": false
+      }
+    ],
+    "blockRules": [
+      {
+        "blockId": "a2000000-0000-4000-8000-000000000047",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "a2000000-0000-4000-8000-000000000049",
+        "pageBreakBefore": false,
+        "keepWithNext": false,
+        "spaceAbove": 12
+      },
+      {
+        "blockId": "a2000000-0000-4000-8000-000000000050",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      }
+    ]
+  }
+}

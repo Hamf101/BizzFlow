@@ -1,10 +1,11 @@
-import { canPerformOrganizationAction } from "@/lib/permissions"
 import {
   createBlankTemplateContent,
   parseTemplateContent,
   upgradeV2TemplateContentToV3,
   type DocumentTemplate,
   type DocumentTemplateRow,
+  type DocumentTemplateVersion,
+  type DocumentTemplateVersionRow,
   type TemplateContent,
 } from "@/types/template"
 
@@ -18,7 +19,9 @@ import type {
   TemplateServiceDeps,
   UpdateDocumentTemplateInput,
   DuplicateDocumentTemplateInput,
+  SetDocumentTemplateCategoryInput,
 } from "./contracts"
+import { getTemplateAccess, onlyVisibleTemplates, requireCanCreateTemplates, requireTemplateAccess, templateVisibility } from "./access"
 import { TemplateServiceError } from "./errors"
 import { evaluateTemplateQuality } from "./template-quality-service"
 import {
@@ -27,6 +30,7 @@ import {
   createDatabaseError,
   createId,
   getClient,
+  getPublishedTemplateById,
   getTemplateById,
   mapDocumentTemplate,
   normalizeCategory,
@@ -39,11 +43,12 @@ import {
 } from "./shared"
 import { requireStoredImages, TemplateImageServiceError } from "@/services/template-image-service"
 import { withoutImageUrls } from "@/types/template-images"
+import { canPerformOrganizationAction } from "@/lib/permissions"
 
 /**
- * Lists templates visible to an active organization member.
+ * Lists the templates a member can start from: each published template as it
+ * was last published, whatever its working copy holds now.
  *
- * Managers and owners receive every status; staff receive published templates only.
  * An `input.category` of `null` selects the uncategorised templates; omitting the
  * key entirely returns every category.
  *
@@ -65,21 +70,22 @@ export async function listDocumentTemplates(
     },
     async (): Promise<DocumentTemplate[]> => {
       const client = getClient(deps)
-      const role = await requirePermission(
+      await requirePermission(
         client,
         input.organizationId,
         input.actorUserId,
         "templates:view",
         "You cannot view document templates."
       )
-      let query = client
-        .from("document_templates")
-        .select(TEMPLATE_COLUMNS)
-        .eq("org_id", input.organizationId)
-
-      if (!canPerformOrganizationAction(role, "templates:manage")) {
-        query = query.eq("status", "published")
-      }
+      // The published view holds no drafts, so only restricted templates need leaving out.
+      let query = onlyVisibleTemplates(
+        client
+          .from("published_document_templates")
+          .select(TEMPLATE_COLUMNS)
+          .eq("org_id", input.organizationId),
+        await templateVisibility(client, input.organizationId, input.actorUserId),
+        true
+      )
 
       // hasOwnProperty, not a truthiness test: `null` is the meaningful
       // "uncategorised only" filter and would otherwise read as "no filter".
@@ -124,23 +130,22 @@ export async function listDocumentTemplateCategories(
     input,
     async (): Promise<string[]> => {
       const client = getClient(deps)
-      const role = await requirePermission(
+      const subject = await requirePermission(
         client,
         input.organizationId,
         input.actorUserId,
         "templates:view",
         "You cannot view document templates."
       )
-      let query = client
-        .from("document_templates")
-        .select("category")
-        .eq("org_id", input.organizationId)
-
-      if (!canPerformOrganizationAction(role, "templates:manage")) {
-        query = query.eq("status", "published")
-      }
-
-      const { data, error } = await query
+      // Restricted templates they cannot open, and drafts only editors see, are left out.
+      const { data, error } = await onlyVisibleTemplates(
+        client
+          .from("document_templates")
+          .select("category")
+          .eq("org_id", input.organizationId),
+        await templateVisibility(client, input.organizationId, input.actorUserId),
+        canPerformOrganizationAction(subject, "templates:manage")
+      )
 
       if (error || !data) {
         throw createDatabaseError(
@@ -165,7 +170,8 @@ export async function listDocumentTemplateCategories(
 }
 
 /**
- * Loads one tenant-scoped template visible to the actor.
+ * Loads one tenant-scoped template visible to the actor: an author gets its
+ * working copy, anyone else the version last published.
  *
  * @param input - Actor, organization, and template identifiers.
  * @param deps - Optional injected dependencies for tests.
@@ -181,29 +187,30 @@ export async function getDocumentTemplate(
     input,
     async (): Promise<DocumentTemplate> => {
       const client = getClient(deps)
-      const role = await requirePermission(
-        client,
-        input.organizationId,
-        input.actorUserId,
-        "templates:view",
-        "You cannot view document templates."
-      )
-      const template = await getTemplateById(
-        client,
-        input.organizationId,
-        input.templateId
-      )
+      const level = await requireTemplateAccess(client, input, "viewer", "You cannot view document templates.")
 
-      if (
-        template.status !== "published" &&
-        !canPerformOrganizationAction(role, "templates:manage")
-      ) {
-        throw new TemplateServiceError("Document template was not found.", 404)
-      }
-
-      return template
+      // Editors get the working copy; everyone else the version last published.
+      return level === "editor"
+        ? getTemplateById(client, input.organizationId, input.templateId)
+        : getPublishedTemplateById(client, input.organizationId, input.templateId)
     }
   )
+}
+
+/**
+ * Whether a member may edit one template: the person who made it, an editor it
+ * was shared with, a manager of templates, or an owner admin.
+ *
+ * @param input - Actor, organization, and template identifiers.
+ * @param deps - Optional injected dependencies for tests.
+ * @returns True only for an editor; false for everyone else, including someone who cannot open it.
+ * @throws TemplateServiceError when the lookup itself fails.
+ */
+export async function canEditDocumentTemplate(
+  input: GetDocumentTemplateInput,
+  deps: TemplateServiceDeps = {}
+): Promise<boolean> {
+  return (await getTemplateAccess(getClient(deps), input)) === "editor"
 }
 
 /**
@@ -227,13 +234,7 @@ export async function createDocumentTemplate(
     async (): Promise<DocumentTemplate> => {
       const client = getClient(deps)
 
-      await requirePermission(
-        client,
-        input.organizationId,
-        input.actorUserId,
-        "templates:manage",
-        "You cannot manage document templates."
-      )
+      await requireCanCreateTemplates(client, input.organizationId, input.actorUserId)
 
       // Signed picture addresses expire; only the pictures themselves are kept.
       const content = withoutImageUrls(
@@ -296,13 +297,7 @@ export async function updateDocumentTemplate(
     async (): Promise<DocumentTemplate> => {
       const client = getClient(deps)
 
-      await requirePermission(
-        client,
-        input.organizationId,
-        input.actorUserId,
-        "templates:manage",
-        "You cannot manage document templates."
-      )
+      await requireTemplateAccess(client, input, "editor", "You cannot manage document templates.")
       assertRevision(input.expectedRevision)
 
       const existing = await getTemplateById(
@@ -360,11 +355,9 @@ export async function updateDocumentTemplate(
         throw new TemplateServiceError("No template changes were provided.", 400)
       }
 
+      // A published template's edits wait in its working copy until the next
+      // publish, which is where the checks apply.
       const nextContent = withoutImageUrls(upgradeV2TemplateContentToV3(proposedContent))
-
-      if (existing.status === "published") {
-        assertTemplatePublishReady(nextTitle, nextDescription, nextContent)
-      }
 
       if (hasContent) {
         assertTemplateImagesRenderable(nextContent)
@@ -405,11 +398,13 @@ export async function updateDocumentTemplate(
 }
 
 /**
- * Publishes a schema-valid template for use by organization staff.
+ * Publishes a template's working copy for use by organization staff. The
+ * database keeps each version published and never changes one, so Update on a
+ * published template adds a version rather than rewriting the last.
  *
  * @param input - Actor, organization, template, and exact saved revision.
  * @param deps - Optional injected dependencies for tests.
- * @returns Published template; an already-published template is returned unchanged.
+ * @returns Published template; one already published at this revision is returned unchanged.
  * @throws TemplateServiceError when permission, validation, revision matching, or persistence fails.
  */
 export async function publishDocumentTemplate(
@@ -422,13 +417,7 @@ export async function publishDocumentTemplate(
     async (): Promise<DocumentTemplate> => {
       const client = getClient(deps)
 
-      await requirePermission(
-        client,
-        input.organizationId,
-        input.actorUserId,
-        "templates:manage",
-        "You cannot manage document templates."
-      )
+      await requireTemplateAccess(client, input, "editor", "You cannot manage document templates.")
       assertRevision(input.expectedRevision)
 
       const existing = await getTemplateById(
@@ -458,7 +447,7 @@ export async function publishDocumentTemplate(
         content
       )
 
-      if (existing.status === "published") {
+      if (existing.status === "published" && existing.publishedRevision === existing.revision) {
         return existing
       }
 
@@ -513,6 +502,99 @@ function assertTemplatePublishReady(
 }
 
 /**
+ * Lists the versions a template was published at, newest first.
+ *
+ * @param input - Actor, organization, and template identifiers.
+ * @param deps - Optional injected dependencies for tests.
+ * @returns Each published version's revision and time; none for another organization's template.
+ * @throws TemplateServiceError when permission or database access fails.
+ */
+export async function listDocumentTemplateVersions(
+  input: GetDocumentTemplateInput,
+  deps: TemplateServiceDeps = {}
+): Promise<DocumentTemplateVersion[]> {
+  return runTemplateOperation(
+    "list_document_template_versions",
+    input,
+    async (): Promise<DocumentTemplateVersion[]> => {
+      const client = getClient(deps)
+
+      // A template that is not here has no versions, as for another workspace's.
+      const held = await requireTemplateAccess(client, input, "editor", "You cannot manage document templates.").catch(
+        (error: unknown) => {
+          if (error instanceof TemplateServiceError && error.statusCode === 404) return null
+
+          throw error
+        }
+      )
+
+      if (!held) return []
+
+      const { data, error } = await client
+        .from("document_template_versions")
+        .select("revision,published_at")
+        .eq("org_id", input.organizationId)
+        .eq("template_id", input.templateId)
+        .order("revision", { ascending: false })
+
+      if (error || !data) {
+        throw createDatabaseError(error, "Unable to load template versions.")
+      }
+
+      return (data as Pick<DocumentTemplateVersionRow, "published_at" | "revision">[]).map((row) => ({
+        publishedAt: row.published_at,
+        revision: row.revision,
+      }))
+    }
+  )
+}
+
+/**
+ * Loads what one published version held, for an author to bring back into the
+ * working copy. The version itself stays as it was.
+ *
+ * @param input - Actor, organization, template, and the version's revision.
+ * @param deps - Optional injected dependencies for tests.
+ * @returns The version's title, description, and content.
+ * @throws TemplateServiceError 404 when the template has no such version in this organization.
+ */
+export async function getDocumentTemplateVersion(
+  input: GetDocumentTemplateInput & { revision: number },
+  deps: TemplateServiceDeps = {}
+): Promise<Pick<DocumentTemplate, "content" | "description" | "title">> {
+  return runTemplateOperation(
+    "get_document_template_version",
+    input,
+    async (): Promise<Pick<DocumentTemplate, "content" | "description" | "title">> => {
+      const client = getClient(deps)
+
+      await requireTemplateAccess(client, input, "editor", "You cannot manage document templates.")
+      assertRevision(input.revision)
+
+      const { data, error } = await client
+        .from("document_template_versions")
+        .select("title,description,content")
+        .eq("org_id", input.organizationId)
+        .eq("template_id", input.templateId)
+        .eq("revision", input.revision)
+        .maybeSingle()
+
+      if (error) {
+        throw createDatabaseError(error, "Unable to load the template version.")
+      }
+
+      if (!data) {
+        throw new TemplateServiceError("That version was not found.", 404)
+      }
+
+      const version = data as Pick<DocumentTemplateVersionRow, "content" | "description" | "title">
+
+      return { content: parseTemplateContent(version.content), description: version.description, title: version.title }
+    }
+  )
+}
+
+/**
  * Archives a template so it is no longer selectable for new documents.
  *
  * @param input - Actor, organization, and template identifiers.
@@ -530,13 +612,7 @@ export async function archiveDocumentTemplate(
     async (): Promise<DocumentTemplate> => {
       const client = getClient(deps)
 
-      await requirePermission(
-        client,
-        input.organizationId,
-        input.actorUserId,
-        "templates:manage",
-        "You cannot manage document templates."
-      )
+      await requireTemplateAccess(client, input, "editor", "You cannot manage document templates.")
       const existing = await getTemplateById(
         client,
         input.organizationId,
@@ -579,6 +655,111 @@ export async function archiveDocumentTemplate(
 }
 
 /**
+ * Brings an archived template back: published if it was ever published, else a
+ * draft. Nothing else about it changes, so Undo of an archive is exact.
+ *
+ * @param input - Actor, organization, and template identifiers.
+ * @param deps - Optional injected dependencies for tests.
+ * @returns The restored template; one that is not archived is returned unchanged.
+ * @throws TemplateServiceError when permission or persistence fails.
+ */
+export async function restoreDocumentTemplate(
+  input: ChangeDocumentTemplateStatusInput,
+  deps: TemplateServiceDeps = {}
+): Promise<DocumentTemplate> {
+  return runTemplateOperation(
+    "restore_document_template",
+    input,
+    async (): Promise<DocumentTemplate> => {
+      const client = getClient(deps)
+
+      await requireTemplateAccess(client, input, "editor", "You cannot manage document templates.")
+      const existing = await getTemplateById(client, input.organizationId, input.templateId)
+
+      if (existing.status !== "archived") {
+        return existing
+      }
+
+      const { data, error } = await client
+        .from("document_templates")
+        .update({
+          status: existing.publishedAt ? "published" : "draft",
+          archived_by: null,
+          archived_at: null,
+          updated_by: input.actorUserId,
+        })
+        .eq("id", input.templateId)
+        .eq("org_id", input.organizationId)
+        .eq("revision", existing.revision)
+        .eq("status", "archived")
+        .select(TEMPLATE_COLUMNS)
+        .maybeSingle()
+
+      if (error) {
+        throw createDatabaseError(error, "Unable to restore document template.")
+      }
+
+      if (!data) {
+        throw new TemplateServiceError("Document template changed before it could be restored.", 409)
+      }
+
+      return mapDocumentTemplate(data as DocumentTemplateRow)
+    }
+  )
+}
+
+/**
+ * Files a template under a category, or under none. Unlike an edit in the
+ * editor this leaves the revision alone: the category is not part of what a
+ * version publishes, so nothing needs publishing again.
+ *
+ * @param input - Actor, organization, template, and the new category (null clears it).
+ * @param deps - Optional injected dependencies for tests.
+ * @returns The template and the category it had, so the change can be put back.
+ * @throws TemplateServiceError when permission or persistence fails, or the template is archived.
+ */
+export async function setDocumentTemplateCategory(
+  input: SetDocumentTemplateCategoryInput,
+  deps: TemplateServiceDeps = {}
+): Promise<{ previousCategory: string | null; templateId: string }> {
+  return runTemplateOperation(
+    "set_document_template_category",
+    { actorUserId: input.actorUserId, organizationId: input.organizationId, templateId: input.templateId },
+    async () => {
+      const client = getClient(deps)
+
+      await requireTemplateAccess(client, input, "editor", "You cannot manage document templates.")
+      const category = normalizeCategory(input.category)
+      const existing = await getTemplateById(client, input.organizationId, input.templateId)
+
+      if (existing.status === "archived") {
+        throw new TemplateServiceError("Archived templates cannot be edited.", 409)
+      }
+
+      const { data, error } = await client
+        .from("document_templates")
+        .update({ category, updated_by: input.actorUserId })
+        .eq("id", input.templateId)
+        .eq("org_id", input.organizationId)
+        .eq("revision", existing.revision)
+        .eq("status", existing.status)
+        .select("id")
+        .maybeSingle()
+
+      if (error) {
+        throw createDatabaseError(error, "Unable to change the template's category.")
+      }
+
+      if (!data) {
+        throw new TemplateServiceError("Document template changed before its category could be set.", 409)
+      }
+
+      return { previousCategory: existing.category, templateId: input.templateId }
+    }
+  )
+}
+
+/**
  * Duplicates an existing template into a new draft.
  *
  * @param input - Actor, organization, and template identifiers.
@@ -596,13 +777,8 @@ export async function duplicateDocumentTemplate(
     async (): Promise<DocumentTemplate> => {
       const client = getClient(deps)
 
-      await requirePermission(
-        client,
-        input.organizationId,
-        input.actorUserId,
-        "templates:manage",
-        "You cannot manage document templates."
-      )
+      await requireCanCreateTemplates(client, input.organizationId, input.actorUserId)
+      await requireTemplateAccess(client, input, "user", "You cannot copy this template.")
 
       const existing = await getTemplateById(
         client,

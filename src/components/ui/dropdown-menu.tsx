@@ -1,7 +1,7 @@
 "use client"
 
 import { Menu as MenuPrimitive } from "@base-ui/react/menu"
-import { ChevronRight } from "lucide-react"
+import { Check, ChevronRight } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
@@ -91,6 +91,18 @@ function DropdownMenuItem({
   )
 }
 
+/** An item that is on or off, with a tick at its end while it is on. */
+function DropdownMenuCheckboxItem({ children, className, ...props }: MenuPrimitive.CheckboxItem.Props) {
+  return (
+    <MenuPrimitive.CheckboxItem className={cn(ITEM_CLASS, className)} data-slot="dropdown-menu-checkbox-item" {...props}>
+      {children}
+      <MenuPrimitive.CheckboxItemIndicator className="ml-auto">
+        <Check aria-hidden="true" />
+      </MenuPrimitive.CheckboxItemIndicator>
+    </MenuPrimitive.CheckboxItem>
+  )
+}
+
 function DropdownMenuSeparator({
   className,
   ...props
@@ -124,6 +136,7 @@ function DropdownMenuSubTrigger({ children, className, ...props }: MenuPrimitive
 
 export {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,

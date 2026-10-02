@@ -9,26 +9,30 @@ import { buttonVariants } from "@/components/ui/button"
 import { buildFeedbackRedirect } from "@/lib/action-result"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
 import { getPageErrorMessage } from "@/lib/page-errors"
+import { loadMemberName } from "@/lib/page-member-name"
 import { loadPageOrganizationContext } from "@/lib/page-organization-context"
-import { canPerformOrganizationAction } from "@/lib/permissions"
 import { cn } from "@/lib/utils"
 import { getEditorLayout } from "@/services/editor-layout-service"
 import { listTemplateFlowMessages } from "@/services/template-flow-service"
 import {
+  canEditDocumentTemplate,
   getDocumentTemplate,
   listDocumentTemplateCategories,
+  listDocumentTemplateVersions,
 } from "@/services/template-service"
 import { withTemplateImageUrls } from "@/services/template-image-service"
 import type { EditorLayout } from "@/types/editor-layout"
-import type { DocumentTemplate } from "@/types/template"
+import type { DocumentTemplate, DocumentTemplateVersion } from "@/types/template"
 import type { TemplateFlowMessage } from "@/types/template-flow"
 
 import {
   archiveTemplateAction,
+  loadTemplateVersionAction,
   publishTemplateAction,
   saveTemplateDraftAction,
 } from "@/app/(dashboard)/templates/actions"
 import { saveEditorLayoutAction } from "@/app/(editor)/editor-layout-actions"
+import type { Metadata } from "next"
 
 type EditTemplateParams = Promise<{
   templateId: string
@@ -40,6 +44,8 @@ type EditTemplateParams = Promise<{
  * @param props - Route template identifier.
  * @returns The authenticated editor or a user-safe load error.
  */
+export const metadata: Metadata = { title: "Template editor" }
+
 export default async function EditTemplatePage({
   params,
 }: {
@@ -73,8 +79,13 @@ export default async function EditTemplatePage({
 
   const context = contextResult.context
 
+  // Its maker, an editor it was shared with, or a manager of templates may edit it.
   if (
-    !canPerformOrganizationAction(context.membership, "templates:manage")
+    !(await canEditDocumentTemplate({
+      actorUserId: user.id,
+      organizationId: context.organization.id,
+      templateId,
+    }))
   ) {
     redirect(
       buildFeedbackRedirect("/templates", "permission_denied")
@@ -141,6 +152,14 @@ export default async function EditTemplatePage({
   }).catch((): string[] => [])
   // Where the tools were left; without it they start at home.
   const editorLayout = await getEditorLayout({ actorUserId: user.id }).catch((): EditorLayout => ({}))
+  // How the others in the room see this person.
+  const name = await loadMemberName(user, context.organization.id)
+  // History is for going back; the template still edits without it.
+  const versions = await listDocumentTemplateVersions({
+    actorUserId: user.id,
+    organizationId: context.organization.id,
+    templateId,
+  }).catch((): DocumentTemplateVersion[] => [])
 
   return (
     <TemplateEditor
@@ -148,9 +167,12 @@ export default async function EditTemplatePage({
       categorySuggestions={categorySuggestions}
       editorLayout={{ initial: editorLayout, save: saveEditorLayoutAction }}
       initialFlowMessages={initialFlowMessages}
+      loadVersionAction={loadTemplateVersionAction}
+      me={{ id: user.id, name }}
       publishAction={publishTemplateAction}
       saveDraftAction={saveTemplateDraftAction}
       template={templateResult.template}
+      versions={versions}
     />
   )
 }

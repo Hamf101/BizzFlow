@@ -24,6 +24,7 @@ import { listOrganizationPeople } from "@/services/organization-service"
 import { listSavedViews } from "@/services/saved-view-service"
 import type { AuditChainVerification } from "@/types/audit"
 import type { OrganizationMember } from "@/types/organization"
+import type { Metadata } from "next"
 
 // Chain verification hashes what was recorded since the last check, and every
 // entry once a day, so it streams in its own boundaries rather than delaying
@@ -54,6 +55,8 @@ const getCachedChainVerification = cache(
  * @param props - View state in search parameters.
  * @returns The audit log workspace, or a user-safe access or load failure.
  */
+export const metadata: Metadata = { title: "Audit log" }
+
 export default async function AuditLogPage({
   searchParams,
 }: {

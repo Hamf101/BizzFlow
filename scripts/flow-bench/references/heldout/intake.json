@@ -1,0 +1,456 @@
+{
+  "request": "customer intake form for my cleaning business",
+  "title": "Customer intake form",
+  "description": "Use when a new customer asks for cleaning, to collect their contact details, the property and how they would like it cleaned.",
+  "content": {
+    "schemaVersion": 3,
+    "branding": {
+      "organizationName": "",
+      "logoAsset": null,
+      "logoDataUrl": null,
+      "logoAlignment": "left",
+      "logoWidthPercent": 24,
+      "primaryColor": "#252329",
+      "accentColor": "#635273"
+    },
+    "blocks": [
+      {
+        "id": "a4000000-0000-4000-8000-000000000001",
+        "type": "heading",
+        "text": "Customer intake form",
+        "level": 1,
+        "alignment": "left"
+      },
+      {
+        "id": "a4000000-0000-4000-8000-000000000002",
+        "type": "paragraph",
+        "text": "Please tell us about your property and the cleaning you need so we can plan your visit.",
+        "alignment": "left"
+      },
+      {
+        "id": "a4000000-0000-4000-8000-000000000101",
+        "type": "paragraph",
+        "text": "We use your details only to arrange and carry out your cleaning and to contact you about it. We keep them for as long as we need them for that and for our records, and we do not share them with anyone else unless the law requires it.",
+        "alignment": "left"
+      },
+      {
+        "id": "a4000000-0000-4000-8000-000000000003",
+        "fieldKey": "first_name",
+        "label": "First name",
+        "required": true,
+        "helpText": null,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a4000000-0000-4000-8000-000000000005",
+        "fieldKey": "last_name",
+        "label": "Last name",
+        "required": true,
+        "helpText": null,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a4000000-0000-4000-8000-000000000008",
+        "fieldKey": "phone_number",
+        "label": "Phone number",
+        "required": true,
+        "helpText": "We call to arrange your first visit, and if we cannot get in.",
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false,
+        "format": "phone"
+      },
+      {
+        "id": "a4000000-0000-4000-8000-000000000009",
+        "fieldKey": "email_address",
+        "label": "Email address",
+        "required": false,
+        "helpText": null,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false,
+        "format": "email"
+      },
+      {
+        "id": "a4000000-0000-4000-8000-000000000012",
+        "fieldKey": "address_line_1",
+        "label": "Address line 1",
+        "required": true,
+        "helpText": "The address of the property you would like us to clean.",
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a4000000-0000-4000-8000-000000000014",
+        "fieldKey": "address_line_2",
+        "label": "Address line 2",
+        "required": false,
+        "helpText": null,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a4000000-0000-4000-8000-000000000015",
+        "fieldKey": "town_or_city",
+        "label": "Town or city",
+        "required": true,
+        "helpText": null,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a4000000-0000-4000-8000-000000000016",
+        "fieldKey": "postcode",
+        "label": "Postcode",
+        "required": true,
+        "helpText": null,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a4000000-0000-4000-8000-000000000102",
+        "type": "dropdown_field",
+        "fieldKey": "is_the_property_a_home_or_a_business",
+        "label": "Is the property a home or a business?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Home",
+          "Business"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "a4000000-0000-4000-8000-000000000103",
+        "type": "text_field",
+        "fieldKey": "business_name",
+        "label": "Business name",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "visibleWhen": {
+          "sourceBlockId": "a4000000-0000-4000-8000-000000000102",
+          "operator": "equals",
+          "value": "Business"
+        }
+      },
+      {
+        "id": "a4000000-0000-4000-8000-000000000019",
+        "fieldKey": "type_of_property",
+        "label": "Type of property",
+        "required": true,
+        "helpText": null,
+        "type": "dropdown_field",
+        "placeholder": null,
+        "options": [
+          "House",
+          "Flat or apartment",
+          "Bungalow",
+          "Office",
+          "Shop",
+          "Other"
+        ]
+      },
+      {
+        "id": "a4000000-0000-4000-8000-000000000021",
+        "fieldKey": "what_type_of_property_is_it",
+        "label": "What type of property is it?",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "a4000000-0000-4000-8000-000000000019",
+          "operator": "equals",
+          "value": "Other"
+        },
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "a4000000-0000-4000-8000-000000000022",
+        "fieldKey": "number_of_bedrooms",
+        "label": "Number of bedrooms",
+        "required": false,
+        "helpText": null,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false,
+        "visibleWhen": {
+          "sourceBlockId": "a4000000-0000-4000-8000-000000000102",
+          "operator": "equals",
+          "value": "Home"
+        },
+        "format": "number"
+      },
+      {
+        "id": "a4000000-0000-4000-8000-000000000023",
+        "fieldKey": "number_of_bathrooms",
+        "label": "Number of bathrooms",
+        "required": false,
+        "helpText": null,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": false,
+        "visibleWhen": {
+          "sourceBlockId": "a4000000-0000-4000-8000-000000000102",
+          "operator": "equals",
+          "value": "Home"
+        },
+        "format": "number"
+      },
+      {
+        "id": "a4000000-0000-4000-8000-000000000026",
+        "fieldKey": "type_of_clean",
+        "label": "Type of clean",
+        "required": true,
+        "helpText": null,
+        "type": "dropdown_field",
+        "placeholder": null,
+        "options": [
+          "Regular clean",
+          "One-off deep clean",
+          "End of tenancy clean",
+          "After building work"
+        ],
+        "display": "radios"
+      },
+      {
+        "id": "a4000000-0000-4000-8000-000000000028",
+        "fieldKey": "how_often_would_you_like_us_to_come",
+        "label": "How often would you like us to come?",
+        "required": false,
+        "helpText": null,
+        "type": "dropdown_field",
+        "placeholder": null,
+        "options": [
+          "Weekly",
+          "Every two weeks",
+          "Every four weeks"
+        ],
+        "display": "radios",
+        "visibleWhen": {
+          "sourceBlockId": "a4000000-0000-4000-8000-000000000026",
+          "operator": "equals",
+          "value": "Regular clean"
+        }
+      },
+      {
+        "id": "a4000000-0000-4000-8000-000000000029",
+        "fieldKey": "preferred_start_date",
+        "label": "Preferred start date",
+        "required": false,
+        "helpText": null,
+        "type": "date_field"
+      },
+      {
+        "id": "a4000000-0000-4000-8000-000000000030",
+        "fieldKey": "preferred_time_of_day",
+        "label": "Preferred time of day",
+        "required": false,
+        "helpText": null,
+        "type": "dropdown_field",
+        "placeholder": null,
+        "options": [
+          "Morning",
+          "Afternoon",
+          "No preference"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "a4000000-0000-4000-8000-000000000033",
+        "fieldKey": "areas_or_tasks_to_focus_on",
+        "label": "Areas or tasks to focus on",
+        "required": false,
+        "helpText": "For example the oven, inside windows or carpets.",
+        "boxHeight": 72,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "a4000000-0000-4000-8000-000000000034",
+        "fieldKey": "how_will_we_get_in",
+        "label": "How will we get in?",
+        "required": true,
+        "helpText": null,
+        "type": "dropdown_field",
+        "placeholder": null,
+        "options": [
+          "Someone will be there",
+          "Key safe",
+          "We will hold a key",
+          "Reception or concierge"
+        ],
+        "display": "radios"
+      },
+      {
+        "id": "a4000000-0000-4000-8000-000000000036",
+        "fieldKey": "whose_cleaning_products_should_we_use",
+        "label": "Whose cleaning products should we use?",
+        "required": false,
+        "helpText": null,
+        "type": "dropdown_field",
+        "placeholder": null,
+        "options": [
+          "Bring your own products",
+          "Use my products"
+        ],
+        "display": "radios"
+      },
+      {
+        "id": "a4000000-0000-4000-8000-000000000037",
+        "type": "dropdown_field",
+        "fieldKey": "are_there_pets_at_the_property",
+        "label": "Are there pets at the property?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "a4000000-0000-4000-8000-000000000038",
+        "fieldKey": "tell_us_about_your_pets",
+        "label": "Tell us about your pets",
+        "required": true,
+        "helpText": "What they are, and where they will be while we clean.",
+        "visibleWhen": {
+          "sourceBlockId": "a4000000-0000-4000-8000-000000000037",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "boxHeight": 45,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "a4000000-0000-4000-8000-000000000039",
+        "fieldKey": "products_or_scents_you_would_like_us_to_avoid",
+        "label": "Products or scents you would like us to avoid",
+        "required": false,
+        "helpText": "Just the product or scent; there is no need to say why.",
+        "boxHeight": 45,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "a4000000-0000-4000-8000-000000000040",
+        "fieldKey": "anything_else_we_should_know",
+        "label": "Anything else we should know",
+        "required": false,
+        "helpText": "For example parking, an alarm or rooms we should not enter.",
+        "boxHeight": 72,
+        "type": "text_field",
+        "placeholder": null,
+        "multiline": true
+      }
+    ],
+    "layout": {
+      "pageSize": "A4",
+      "orientation": "portrait",
+      "marginPreset": "standard",
+      "density": "balanced",
+      "printedTitle": {
+        "mode": "none"
+      },
+      "headerPolicy": "none",
+      "footerPolicy": "none",
+      "pageNumbering": "none"
+    },
+    "sections": [
+      {
+        "id": "a4000000-0000-4000-8000-000000000004",
+        "label": "Your details",
+        "startBlockId": "a4000000-0000-4000-8000-000000000003",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "a4000000-0000-4000-8000-000000000013",
+        "label": "Property address",
+        "startBlockId": "a4000000-0000-4000-8000-000000000012",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "a4000000-0000-4000-8000-000000000020",
+        "label": "About the property",
+        "startBlockId": "a4000000-0000-4000-8000-000000000102",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "a4000000-0000-4000-8000-000000000027",
+        "label": "The cleaning you need",
+        "startBlockId": "a4000000-0000-4000-8000-000000000026",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "a4000000-0000-4000-8000-000000000035",
+        "label": "Access and things we should know",
+        "startBlockId": "a4000000-0000-4000-8000-000000000034",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      }
+    ],
+    "fieldGroups": [
+      {
+        "id": "a4000000-0000-4000-8000-000000000007",
+        "label": null,
+        "startBlockId": "a4000000-0000-4000-8000-000000000003",
+        "endBlockId": "a4000000-0000-4000-8000-000000000005",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "a4000000-0000-4000-8000-000000000011",
+        "label": null,
+        "startBlockId": "a4000000-0000-4000-8000-000000000008",
+        "endBlockId": "a4000000-0000-4000-8000-000000000009",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "a4000000-0000-4000-8000-000000000018",
+        "label": null,
+        "startBlockId": "a4000000-0000-4000-8000-000000000015",
+        "endBlockId": "a4000000-0000-4000-8000-000000000016",
+        "columns": 2,
+        "widths": [
+          8,
+          4
+        ],
+        "keepTogether": false
+      },
+      {
+        "id": "a4000000-0000-4000-8000-000000000025",
+        "label": null,
+        "startBlockId": "a4000000-0000-4000-8000-000000000022",
+        "endBlockId": "a4000000-0000-4000-8000-000000000023",
+        "columns": 2,
+        "keepTogether": false
+      }
+    ],
+    "blockRules": []
+  }
+}

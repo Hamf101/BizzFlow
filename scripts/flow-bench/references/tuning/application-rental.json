@@ -1,0 +1,730 @@
+{
+  "request": "rental application form",
+  "title": "Rental application",
+  "description": "Use when someone applies to rent a home, to collect who will live there, where they live now, their income and references, before you offer a tenancy.",
+  "maxPages": 3,
+  "content": {
+    "schemaVersion": 3,
+    "branding": {
+      "organizationName": "",
+      "logoAsset": null,
+      "logoDataUrl": null,
+      "logoAlignment": "left",
+      "logoWidthPercent": 24,
+      "primaryColor": "#2f3a33",
+      "accentColor": "#5b7a63"
+    },
+    "blocks": [
+      {
+        "id": "0a110000-0000-4000-8000-000000000001",
+        "type": "heading",
+        "text": "Rental application",
+        "level": 1,
+        "alignment": "left"
+      },
+      {
+        "id": "0a110000-0000-4000-8000-000000000002",
+        "type": "paragraph",
+        "text": "Please complete one form for each adult who will be named on the tenancy. We use your answers to decide whether to offer you the tenancy and to set it up.",
+        "alignment": "left"
+      },
+      {
+        "id": "0a110000-0000-4000-8000-000000000003",
+        "type": "paragraph",
+        "text": "How we use your information: we use your details to assess this application, to check your right to rent and, with your agreement, to contact your referees and employer. If you become our tenant we keep them for as long as the tenancy lasts and for as long afterwards as the law requires; if not, we delete them once the property is let. We share them only with referencing agencies working for us, and with others when the law requires it.",
+        "runs": [
+          {
+            "text": "How we use your information:",
+            "bold": true
+          },
+          {
+            "text": " we use your details to assess this application, to check your right to rent and, with your agreement, to contact your referees and employer. If you become our tenant we keep them for as long as the tenancy lasts and for as long afterwards as the law requires; if not, we delete them once the property is let. We share them only with referencing agencies working for us, and with others when the law requires it."
+          }
+        ],
+        "alignment": "left"
+      },
+      {
+        "id": "0a110000-0000-4000-8000-000000000005",
+        "type": "text_field",
+        "fieldKey": "address_of_the_property_you_are_applying_for",
+        "label": "Address of the property you are applying for",
+        "required": true,
+        "helpText": null,
+        "boxHeight": 45,
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "0a110000-0000-4000-8000-000000000006",
+        "type": "date_field",
+        "fieldKey": "when_would_you_like_to_move_in",
+        "label": "When would you like to move in?",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": " ",
+          "month": "long"
+        }
+      },
+      {
+        "id": "0a110000-0000-4000-8000-000000000007",
+        "type": "dropdown_field",
+        "fieldKey": "how_long_would_you_like_the_tenancy_to_last",
+        "label": "How long would you like the tenancy to last?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "6 months",
+          "12 months",
+          "24 months",
+          "Other"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0a110000-0000-4000-8000-000000000008",
+        "type": "text_field",
+        "fieldKey": "how_long_would_you_like_it_to_last",
+        "label": "How long would you like it to last?",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0a110000-0000-4000-8000-000000000007",
+          "operator": "equals",
+          "value": "Other"
+        },
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0a110000-0000-4000-8000-000000000010",
+        "type": "text_field",
+        "fieldKey": "first_name",
+        "label": "First name",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0a110000-0000-4000-8000-000000000011",
+        "type": "text_field",
+        "fieldKey": "last_name",
+        "label": "Last name",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0a110000-0000-4000-8000-000000000013",
+        "type": "date_field",
+        "fieldKey": "date_of_birth",
+        "label": "Date of birth",
+        "required": true,
+        "helpText": "Tenants must be 18 or over.",
+        "dateFormat": {
+          "order": "dmy",
+          "separator": " ",
+          "month": "long"
+        }
+      },
+      {
+        "id": "0a110000-0000-4000-8000-000000000014",
+        "type": "text_field",
+        "fieldKey": "phone_number",
+        "label": "Phone number",
+        "required": true,
+        "helpText": "We call to arrange viewings and to give you our decision.",
+        "placeholder": null,
+        "multiline": false,
+        "format": "phone"
+      },
+      {
+        "id": "0a110000-0000-4000-8000-000000000015",
+        "type": "text_field",
+        "fieldKey": "email_address",
+        "label": "Email address",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "format": "email"
+      },
+      {
+        "id": "0a110000-0000-4000-8000-000000000017",
+        "type": "paragraph",
+        "text": "Right to rent: before the tenancy starts we must check that every adult who will live in the property has the right to rent in the UK. We will ask to see original documents, or a share code if you have one, and keep a copy.",
+        "runs": [
+          {
+            "text": "Right to rent:",
+            "bold": true
+          },
+          {
+            "text": " before the tenancy starts we must check that every adult who will live in the property has the right to rent in the UK. We will ask to see original documents, or a share code if you have one, and keep a copy."
+          }
+        ],
+        "alignment": "left"
+      },
+      {
+        "id": "0a110000-0000-4000-8000-000000000018",
+        "type": "dropdown_field",
+        "fieldKey": "how_will_you_show_your_right_to_rent",
+        "label": "How will you show your right to rent?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "British or Irish passport",
+          "Share code from the Home Office",
+          "Other documents from the government's list",
+          "Not sure"
+        ],
+        "display": "radios"
+      },
+      {
+        "id": "0a110000-0000-4000-8000-000000000020",
+        "type": "text_field",
+        "fieldKey": "number_of_adults_18_or_over",
+        "label": "Number of adults (18 or over)",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "format": "number"
+      },
+      {
+        "id": "0a110000-0000-4000-8000-000000000021",
+        "type": "text_field",
+        "fieldKey": "number_of_children_under_18",
+        "label": "Number of children (under 18)",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "format": "number"
+      },
+      {
+        "id": "0a110000-0000-4000-8000-000000000023",
+        "type": "text_field",
+        "fieldKey": "names_of_the_other_adults_who_will_live_there",
+        "label": "Names of the other adults who will live there",
+        "required": false,
+        "helpText": "We need to check each adult's right to rent, so each one also completes this form.",
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "0a110000-0000-4000-8000-000000000024",
+        "type": "dropdown_field",
+        "fieldKey": "will_you_keep_any_pets_at_the_property",
+        "label": "Will you keep any pets at the property?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0a110000-0000-4000-8000-000000000025",
+        "type": "text_field",
+        "fieldKey": "what_pets_and_how_many",
+        "label": "What pets, and how many?",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0a110000-0000-4000-8000-000000000024",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0a110000-0000-4000-8000-000000000026",
+        "type": "dropdown_field",
+        "fieldKey": "does_anyone_who_will_live_there_smoke",
+        "label": "Does anyone who will live there smoke?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0a110000-0000-4000-8000-000000000028",
+        "type": "text_field",
+        "fieldKey": "current_address",
+        "label": "Current address",
+        "required": true,
+        "helpText": null,
+        "boxHeight": 60,
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "0a110000-0000-4000-8000-000000000029",
+        "type": "dropdown_field",
+        "fieldKey": "how_long_have_you_lived_there",
+        "label": "How long have you lived there?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Less than 3 years",
+          "3 years or more"
+        ],
+        "display": "radios"
+      },
+      {
+        "id": "0a110000-0000-4000-8000-000000000030",
+        "type": "text_field",
+        "fieldKey": "previous_addresses_in_the_last_3_years",
+        "label": "Previous addresses in the last 3 years",
+        "required": true,
+        "helpText": "With the dates you lived at each one.",
+        "visibleWhen": {
+          "sourceBlockId": "0a110000-0000-4000-8000-000000000029",
+          "operator": "equals",
+          "value": "Less than 3 years"
+        },
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "0a110000-0000-4000-8000-000000000031",
+        "type": "dropdown_field",
+        "fieldKey": "do_you_rent_your_current_home",
+        "label": "Do you rent your current home?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes, from a private landlord or letting agent",
+          "Yes, from a council or housing association",
+          "No, I own it",
+          "No, I live with family or friends",
+          "Other"
+        ],
+        "display": "radios"
+      },
+      {
+        "id": "0a110000-0000-4000-8000-000000000032",
+        "type": "text_field",
+        "fieldKey": "how_do_you_live_there",
+        "label": "How do you live there?",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0a110000-0000-4000-8000-000000000031",
+          "operator": "equals",
+          "value": "Other"
+        },
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0a110000-0000-4000-8000-000000000033",
+        "type": "text_field",
+        "fieldKey": "current_landlord_name",
+        "label": "Name",
+        "required": false,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0a110000-0000-4000-8000-000000000031",
+          "operator": "equals",
+          "value": "Yes, from a private landlord or letting agent"
+        },
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0a110000-0000-4000-8000-000000000034",
+        "type": "text_field",
+        "fieldKey": "current_landlord_contact",
+        "label": "Phone or email",
+        "required": false,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0a110000-0000-4000-8000-000000000031",
+          "operator": "equals",
+          "value": "Yes, from a private landlord or letting agent"
+        },
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0a110000-0000-4000-8000-000000000036",
+        "type": "text_field",
+        "fieldKey": "reason_for_moving",
+        "label": "Reason for moving",
+        "required": false,
+        "helpText": null,
+        "boxHeight": 45,
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "0a110000-0000-4000-8000-000000000038",
+        "type": "dropdown_field",
+        "fieldKey": "what_is_your_work_situation",
+        "label": "What is your work situation?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Employed",
+          "Self-employed",
+          "Student",
+          "Retired",
+          "Not working at the moment",
+          "Other"
+        ],
+        "display": "radios"
+      },
+      {
+        "id": "0a110000-0000-4000-8000-000000000039",
+        "type": "text_field",
+        "fieldKey": "other_work_situation",
+        "label": "Tell us about your work situation",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0a110000-0000-4000-8000-000000000038",
+          "operator": "equals",
+          "value": "Other"
+        },
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0a110000-0000-4000-8000-000000000040",
+        "type": "text_field",
+        "fieldKey": "employer_name",
+        "label": "Employer name",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0a110000-0000-4000-8000-000000000038",
+          "operator": "equals",
+          "value": "Employed"
+        },
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0a110000-0000-4000-8000-000000000041",
+        "type": "text_field",
+        "fieldKey": "your_position",
+        "label": "Your position",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0a110000-0000-4000-8000-000000000038",
+          "operator": "equals",
+          "value": "Employed"
+        },
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0a110000-0000-4000-8000-000000000043",
+        "type": "text_field",
+        "fieldKey": "employment_contact_name",
+        "label": "Name",
+        "required": false,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0a110000-0000-4000-8000-000000000038",
+          "operator": "equals",
+          "value": "Employed"
+        },
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0a110000-0000-4000-8000-000000000044",
+        "type": "text_field",
+        "fieldKey": "employment_contact_details",
+        "label": "Phone or email",
+        "required": false,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0a110000-0000-4000-8000-000000000038",
+          "operator": "equals",
+          "value": "Employed"
+        },
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0a110000-0000-4000-8000-000000000046",
+        "type": "text_field",
+        "fieldKey": "what_does_your_business_do_and_how_long_has_it_traded",
+        "label": "What does your business do, and how long has it traded?",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0a110000-0000-4000-8000-000000000038",
+          "operator": "equals",
+          "value": "Self-employed"
+        },
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0a110000-0000-4000-8000-000000000047",
+        "type": "text_field",
+        "fieldKey": "your_yearly_income_before_tax",
+        "label": "Your income before tax",
+        "required": true,
+        "helpText": "Include all regular income, such as wages, pensions and benefits.",
+        "placeholder": null,
+        "multiline": false,
+        "format": "money",
+        "prefix": "£",
+        "suffix": "a year"
+      },
+      {
+        "id": "0a110000-0000-4000-8000-000000000048",
+        "type": "dropdown_field",
+        "fieldKey": "will_someone_act_as_your_guarantor",
+        "label": "Will someone act as your guarantor?",
+        "required": false,
+        "helpText": "A guarantor agrees to pay the rent if you cannot.",
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No",
+          "Not sure"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0a110000-0000-4000-8000-000000000049",
+        "type": "text_field",
+        "fieldKey": "guarantor_full_name",
+        "label": "Full name",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0a110000-0000-4000-8000-000000000048",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0a110000-0000-4000-8000-000000000050",
+        "type": "text_field",
+        "fieldKey": "guarantor_phone_number",
+        "label": "Phone number",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0a110000-0000-4000-8000-000000000048",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "placeholder": null,
+        "multiline": false,
+        "format": "phone"
+      },
+      {
+        "id": "0a110000-0000-4000-8000-000000000053",
+        "type": "paragraph",
+        "text": "By signing, you confirm that the information on this form is true and complete. Giving false information may mean we withdraw an offer or end a tenancy. Before you pay any holding deposit we will tell you in writing how much it is, and when it would be kept rather than returned.",
+        "alignment": "left"
+      },
+      {
+        "id": "0a110000-0000-4000-8000-000000000054",
+        "type": "checkbox_field",
+        "fieldKey": "i_agree_that_you_may_contact_my_current_landlord_my_employer",
+        "label": "I agree that you may contact my current landlord, my employer and a referencing agency to check the information I have given.",
+        "required": true,
+        "helpText": null,
+        "checkedByDefault": false
+      },
+      {
+        "id": "0a110000-0000-4000-8000-000000000055",
+        "type": "text_field",
+        "fieldKey": "signer_full_name",
+        "label": "Full name",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0a110000-0000-4000-8000-000000000056",
+        "type": "signature_field",
+        "fieldKey": "signature",
+        "label": "Signature",
+        "required": true,
+        "helpText": null
+      },
+      {
+        "id": "0a110000-0000-4000-8000-000000000057",
+        "type": "date_field",
+        "fieldKey": "signed_date",
+        "label": "Date",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": " ",
+          "month": "long"
+        }
+      }
+    ],
+    "layout": {
+      "pageSize": "A4",
+      "orientation": "portrait",
+      "marginPreset": "generous",
+      "density": "balanced",
+      "fieldStyle": "line",
+      "sectionNumbers": "numbers",
+      "sectionStyle": "plain",
+      "printedTitle": {
+        "mode": "none"
+      },
+      "headerPolicy": "none",
+      "footerPolicy": "all_pages",
+      "pageNumbering": "none",
+      "footerText": {
+        "left": "{title}",
+        "right": "Page {page} of {pages}"
+      }
+    },
+    "sections": [
+      {
+        "id": "0a110000-0000-4000-8000-000000000004",
+        "label": "The property",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0a110000-0000-4000-8000-000000000005"
+      },
+      {
+        "id": "0a110000-0000-4000-8000-000000000009",
+        "label": "About you",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0a110000-0000-4000-8000-000000000010"
+      },
+      {
+        "id": "0a110000-0000-4000-8000-000000000019",
+        "label": "Who will live there",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0a110000-0000-4000-8000-000000000020"
+      },
+      {
+        "id": "0a110000-0000-4000-8000-000000000027",
+        "label": "Where you live now",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0a110000-0000-4000-8000-000000000028"
+      },
+      {
+        "id": "0a110000-0000-4000-8000-000000000037",
+        "label": "Work and income",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0a110000-0000-4000-8000-000000000038"
+      },
+      {
+        "id": "0a110000-0000-4000-8000-000000000052",
+        "label": "Declaration",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0a110000-0000-4000-8000-000000000053"
+      }
+    ],
+    "fieldGroups": [
+      {
+        "id": "0a110000-0000-4000-8000-000000000012",
+        "label": null,
+        "startBlockId": "0a110000-0000-4000-8000-000000000010",
+        "endBlockId": "0a110000-0000-4000-8000-000000000011",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0a110000-0000-4000-8000-000000000016",
+        "label": null,
+        "startBlockId": "0a110000-0000-4000-8000-000000000014",
+        "endBlockId": "0a110000-0000-4000-8000-000000000015",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0a110000-0000-4000-8000-000000000022",
+        "label": null,
+        "startBlockId": "0a110000-0000-4000-8000-000000000020",
+        "endBlockId": "0a110000-0000-4000-8000-000000000021",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0a110000-0000-4000-8000-000000000035",
+        "label": "Current landlord or letting agent",
+        "startBlockId": "0a110000-0000-4000-8000-000000000033",
+        "endBlockId": "0a110000-0000-4000-8000-000000000034",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0a110000-0000-4000-8000-000000000042",
+        "label": "Your employer",
+        "startBlockId": "0a110000-0000-4000-8000-000000000040",
+        "endBlockId": "0a110000-0000-4000-8000-000000000041",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0a110000-0000-4000-8000-000000000045",
+        "label": "Person who can confirm your employment",
+        "startBlockId": "0a110000-0000-4000-8000-000000000043",
+        "endBlockId": "0a110000-0000-4000-8000-000000000044",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0a110000-0000-4000-8000-000000000051",
+        "label": "Guarantor",
+        "startBlockId": "0a110000-0000-4000-8000-000000000049",
+        "endBlockId": "0a110000-0000-4000-8000-000000000050",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0a110000-0000-4000-8000-000000000058",
+        "label": null,
+        "startBlockId": "0a110000-0000-4000-8000-000000000056",
+        "endBlockId": "0a110000-0000-4000-8000-000000000057",
+        "columns": 2,
+        "keepTogether": false
+      }
+    ],
+    "blockRules": [
+      {
+        "blockId": "0a110000-0000-4000-8000-000000000053",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      }
+    ]
+  }
+}

@@ -22,6 +22,13 @@ export const ACTION_FEEDBACK = {
     title: "Changes saved",
     tone: "success",
   },
+  changes_suggested: {
+    analyticsEvent: "action_outcome",
+    durationMs: 5_000,
+    persistent: false,
+    title: "Changes suggested",
+    tone: "success",
+  },
   comment_added: {
     analyticsEvent: "action_outcome",
     durationMs: 5_000,
@@ -284,6 +291,13 @@ export const ACTION_FEEDBACK = {
     title: "Submission review updated",
     tone: "success",
   },
+  submission_shared: {
+    analyticsEvent: "action_outcome",
+    durationMs: 5_000,
+    persistent: false,
+    title: "Sharing updated",
+    tone: "success",
+  },
   submission_submitted: {
     analyticsEvent: "submission_submitted",
     durationMs: 5_000,
@@ -331,6 +345,13 @@ export const ACTION_FEEDBACK = {
     durationMs: 5_000,
     persistent: false,
     title: "Template published",
+    tone: "success",
+  },
+  template_updated: {
+    analyticsEvent: "template_published",
+    durationMs: 5_000,
+    persistent: false,
+    title: "Template updated",
     tone: "success",
   },
   view_deleted: {

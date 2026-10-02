@@ -41,6 +41,7 @@ function createTemplate(
   overrides: Partial<DocumentTemplateCard> = {}
 ): DocumentTemplateCard {
   return {
+    canEdit: true,
     category: null,
     content: null,
     createdAt: "2026-09-01T09:00:00.000Z",
@@ -78,6 +79,7 @@ function render(ui: ReactElement): void {
 
 function renderWorkspace(
   overrides: Partial<{
+    canCreate: boolean
     canManage: boolean
     templates: DocumentTemplateCard[]
     total: number
@@ -88,6 +90,7 @@ function renderWorkspace(
 
   render(
     <TemplatesWorkspace
+      canCreate={overrides.canCreate ?? overrides.canManage ?? true}
       canManage={overrides.canManage ?? true}
       categories={["Leasing"]}
       duplicateAction={duplicateAction}
@@ -117,7 +120,7 @@ describe("TemplatesWorkspace", () => {
     // Search is the workspace's own now; the list keeps no box of its own.
     expect(document.querySelector('[role="search"], input[type="search"]')).toBeNull()
     expect(
-      [...(document.querySelector("h1")?.nextElementSibling?.querySelectorAll("a, button") ?? [])].map(
+      [...(document.querySelector("h1")?.parentElement?.nextElementSibling?.querySelectorAll("a, button") ?? [])].map(
         (control: Element) => control.getAttribute("aria-label") ?? control.textContent
       )
     ).toEqual(["View options", "Create template"])
@@ -151,7 +154,7 @@ describe("TemplatesWorkspace", () => {
     ])
   })
 
-  it("opens drafts and published templates in the editor and leaves archived ones read-only", () => {
+  it("opens drafts and published templates in the editor and leaves archived ones read-only, with a way to restore them", () => {
     renderWorkspace()
 
     expect(
@@ -166,7 +169,7 @@ describe("TemplatesWorkspace", () => {
       [...document.querySelectorAll('button[aria-label^="Actions for"]')].map(
         (button: Element) => button.getAttribute("aria-label")
       )
-    ).toEqual(["Actions for Vendor intake", "Actions for Lease renewal"])
+    ).toEqual(["Actions for Vendor intake", "Actions for Lease renewal", "Actions for Old checklist"])
   })
 
   it("starts a new template from the front of the library, and nowhere else", () => {
@@ -189,8 +192,25 @@ describe("TemplatesWorkspace", () => {
     expect(document.querySelector('[data-slot="template-new"]')).toBeNull()
   })
 
+  it("gives staff who make templates their own to edit, and only copies of the rest", () => {
+    renderWorkspace({
+      canCreate: true,
+      canManage: false,
+      templates: [createTemplate({ id: DRAFT_ID, title: "Mine" }), createTemplate({ canEdit: false, id: PUBLISHED_ID, status: "published", title: "Theirs" })],
+    })
+
+    expect(document.querySelector('a[href="/templates/new"]')).not.toBeNull()
+    expect(
+      [...document.querySelectorAll('a[data-slot="template-title"]')].map((link: Element) => link.getAttribute("href"))
+    ).toEqual([`/templates/${DRAFT_ID}/edit`])
+    expect(
+      [...document.querySelectorAll('button[aria-label^="Actions for"]')].map((button: Element) => button.getAttribute("aria-label"))
+    ).toEqual(["Actions for Mine", "Actions for Theirs"])
+    expect(readCards("template-status")).toEqual(["Draft", undefined])
+  })
+
   it("keeps editing, menus, pills, statuses, and new templates to people who manage templates", () => {
-    renderWorkspace({ canManage: false, templates: [library[1]] })
+    renderWorkspace({ canCreate: false, canManage: false, templates: [createTemplate({ ...library[1], canEdit: false })] })
 
     expect(
       document.querySelector('nav[aria-label="Filter templates by status"]')

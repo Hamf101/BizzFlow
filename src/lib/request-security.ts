@@ -19,6 +19,9 @@ export class RequestSecurityError extends Error {
   }
 }
 
+/** Largest JSON body a route reads; matches the server-action body limit. */
+const MAX_JSON_BODY_BYTES = 10 * 1024 * 1024
+
 /**
  * Parses a same-origin JSON object request after enforcing content-type and origin rules.
  *
@@ -36,7 +39,7 @@ export async function readTrustedJsonObject(
   assertJsonContentType(request)
 
   try {
-    const body: unknown = await request.json()
+    const body: unknown = JSON.parse(await readBoundedText(request))
 
     if (!body || typeof body !== "object" || Array.isArray(body)) {
       throw new RequestSecurityError("Request body must be a JSON object.", 400)
@@ -50,6 +53,40 @@ export async function readTrustedJsonObject(
 
     throw new RequestSecurityError("Request body must be valid JSON.", 400)
   }
+}
+
+// Route handlers have no body limit of their own off a platform that adds one,
+// so an unbounded caller could make each request buffer as much as they send.
+async function readBoundedText(request: Request): Promise<string> {
+  const tooLarge = new RequestSecurityError("Request body is too large.", 413)
+
+  if (Number(request.headers.get("content-length")) > MAX_JSON_BODY_BYTES) {
+    throw tooLarge
+  }
+
+  const reader = request.body?.getReader()
+  const decoder = new TextDecoder()
+  let text = ""
+  let bytes = 0
+
+  while (reader) {
+    const { done, value } = await reader.read()
+
+    if (done) {
+      break
+    }
+
+    bytes += value.byteLength
+
+    if (bytes > MAX_JSON_BODY_BYTES) {
+      await reader.cancel()
+      throw tooLarge
+    }
+
+    text += decoder.decode(value, { stream: true })
+  }
+
+  return text + decoder.decode()
 }
 
 function assertTrustedRequestOrigin(request: Request): void {

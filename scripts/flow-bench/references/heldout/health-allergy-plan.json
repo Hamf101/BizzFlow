@@ -1,0 +1,621 @@
+{
+  "request": "Allergy and anaphylaxis care plan for a primary school pupil. Parents fill it in: what the child is allergic to, past reactions, their adrenaline pens and where they're kept, what a reaction looks like and what staff should do, emergency contacts, consent to use the school's spare pen, and the doctor's signed allergy action plan attached.",
+  "title": "Allergy and anaphylaxis care plan",
+  "description": "Use when a pupil has an allergy that could cause anaphylaxis: what they react to, their adrenaline auto-injectors, what staff do in a reaction, contacts, the parent's consent and the clinician's action plan attached.",
+  "maxPages": 3,
+  "content": {
+    "schemaVersion": 3,
+    "branding": {
+      "organizationName": "",
+      "logoAsset": null,
+      "logoDataUrl": null,
+      "logoAlignment": "left",
+      "logoWidthPercent": 24,
+      "primaryColor": "#9b1c1c",
+      "accentColor": "#c53030"
+    },
+    "blocks": [
+      {
+        "id": "0b140000-0000-4000-8000-000000000001",
+        "type": "heading",
+        "text": "Allergy and anaphylaxis care plan",
+        "level": 1,
+        "alignment": "left"
+      },
+      {
+        "id": "0b140000-0000-4000-8000-000000000002",
+        "type": "paragraph",
+        "text": "This plan tells staff how to keep your child safe at school and what to do if they have an allergic reaction. Please answer every question, read what staff will do, and attach the allergy action plan signed by your child's doctor or nurse. We will review the plan with you each year, or sooner if anything changes.",
+        "alignment": "left"
+      },
+      {
+        "id": "0b140000-0000-4000-8000-000000000003",
+        "type": "paragraph",
+        "text": "How we use your information: we use this plan to care for your child and to act quickly in an emergency. With your agreement we display a copy, with your child's photo, where staff who look after your child can see it. We share it with emergency services if your child needs urgent help, and keep it on your child's school record.",
+        "runs": [
+          {
+            "text": "How we use your information:",
+            "bold": true
+          },
+          {
+            "text": " we use this plan to care for your child and to act quickly in an emergency. With your agreement we display a copy, with your child's photo, where staff who look after your child can see it. We share it with emergency services if your child needs urgent help, and keep it on your child's school record."
+          }
+        ],
+        "alignment": "left"
+      },
+      {
+        "id": "0b140000-0000-4000-8000-000000000005",
+        "type": "text_field",
+        "fieldKey": "child_s_full_name",
+        "label": "Child's full name",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0b140000-0000-4000-8000-000000000006",
+        "type": "text_field",
+        "fieldKey": "class",
+        "label": "Class",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0b140000-0000-4000-8000-000000000008",
+        "type": "date_field",
+        "fieldKey": "child_s_date_of_birth",
+        "label": "Child's date of birth",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": " ",
+          "month": "long"
+        }
+      },
+      {
+        "id": "0b140000-0000-4000-8000-000000000009",
+        "type": "file_field",
+        "fieldKey": "a_recent_photo_of_your_child",
+        "label": "A recent photo of your child",
+        "required": true,
+        "helpText": "So that every member of staff can recognise them."
+      },
+      {
+        "id": "0b140000-0000-4000-8000-000000000011",
+        "type": "text_field",
+        "fieldKey": "what_is_your_child_allergic_to",
+        "label": "What is your child allergic to?",
+        "required": true,
+        "helpText": "Name each food or other trigger, such as peanuts, sesame, milk or wasp stings.",
+        "boxHeight": 45,
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "0b140000-0000-4000-8000-000000000012",
+        "type": "dropdown_field",
+        "fieldKey": "has_your_child_ever_had_a_severe_reaction_anaphylaxis",
+        "label": "Has your child ever had a severe reaction (anaphylaxis)?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0b140000-0000-4000-8000-000000000013",
+        "type": "text_field",
+        "fieldKey": "what_happened_and_when",
+        "label": "What happened, and when?",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0b140000-0000-4000-8000-000000000012",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "boxHeight": 45,
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "0b140000-0000-4000-8000-000000000014",
+        "type": "dropdown_field",
+        "fieldKey": "does_your_child_also_have_asthma",
+        "label": "Does your child also have asthma?",
+        "required": true,
+        "helpText": "Asthma can make a reaction more serious, so staff need to know.",
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0b140000-0000-4000-8000-000000000015",
+        "type": "text_field",
+        "fieldKey": "other_things_staff_should_know_such_as_how_your_child_tells",
+        "label": "Other things staff should know, such as how your child tells you they feel unwell",
+        "required": false,
+        "helpText": null,
+        "boxHeight": 45,
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "0b140000-0000-4000-8000-000000000017",
+        "type": "dropdown_field",
+        "fieldKey": "has_your_child_been_prescribed_adrenaline_auto_injectors",
+        "label": "Has your child been prescribed adrenaline auto-injectors?",
+        "required": true,
+        "helpText": "Children who carry them should have two at school.",
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0b140000-0000-4000-8000-000000000018",
+        "type": "dropdown_field",
+        "fieldKey": "which_brand",
+        "label": "Which brand?",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0b140000-0000-4000-8000-000000000017",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "placeholder": null,
+        "options": [
+          "EpiPen",
+          "Jext",
+          "Emerade",
+          "Other"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0b140000-0000-4000-8000-000000000019",
+        "type": "text_field",
+        "fieldKey": "dose_as_written_on_the_pen",
+        "label": "Dose, as written on the pen",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0b140000-0000-4000-8000-000000000017",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0b140000-0000-4000-8000-000000000020",
+        "type": "date_field",
+        "fieldKey": "first_pen_expiry",
+        "label": "First pen",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0b140000-0000-4000-8000-000000000017",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "dateFormat": {
+          "order": "dmy",
+          "separator": " ",
+          "month": "long"
+        }
+      },
+      {
+        "id": "0b140000-0000-4000-8000-000000000021",
+        "type": "date_field",
+        "fieldKey": "second_pen_expiry",
+        "label": "Second pen",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0b140000-0000-4000-8000-000000000017",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "dateFormat": {
+          "order": "dmy",
+          "separator": " ",
+          "month": "long"
+        }
+      },
+      {
+        "id": "0b140000-0000-4000-8000-000000000023",
+        "type": "dropdown_field",
+        "fieldKey": "where_will_the_pens_be_kept",
+        "label": "Where will the pens be kept?",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0b140000-0000-4000-8000-000000000017",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "placeholder": null,
+        "options": [
+          "My child carries them",
+          "In the classroom",
+          "In the school office",
+          "Other"
+        ],
+        "display": "radios"
+      },
+      {
+        "id": "0b140000-0000-4000-8000-000000000025",
+        "type": "paragraph",
+        "text": "Staff follow the allergy action plan signed by your child's doctor or nurse. In outline:",
+        "alignment": "left"
+      },
+      {
+        "id": "0b140000-0000-4000-8000-000000000026",
+        "type": "paragraph",
+        "text": "A mild or moderate reaction may show as swollen lips, face or eyes, an itchy or tingling mouth, hives or an itchy rash, tummy pain or vomiting, or a sudden change in behaviour. Staff stay with your child, call for help, give the antihistamine named in the plan, and call you.",
+        "runs": [
+          {
+            "text": "A mild or moderate reaction",
+            "bold": true
+          },
+          {
+            "text": " may show as swollen lips, face or eyes, an itchy or tingling mouth, hives or an itchy rash, tummy pain or vomiting, or a sudden change in behaviour. Staff stay with your child, call for help, give the antihistamine named in the plan, and call you."
+          }
+        ],
+        "alignment": "left"
+      },
+      {
+        "id": "0b140000-0000-4000-8000-000000000027",
+        "type": "paragraph",
+        "text": "Anaphylaxis is a reaction that affects the airway, breathing or consciousness: a persistent cough, a hoarse voice, difficulty swallowing or a swollen tongue; difficult or noisy breathing or wheezing; or feeling faint, going pale or floppy, becoming suddenly sleepy or collapsing.",
+        "runs": [
+          {
+            "text": "Anaphylaxis",
+            "bold": true
+          },
+          {
+            "text": " is a reaction that affects the airway, breathing or consciousness: a persistent cough, a hoarse voice, difficulty swallowing or a swollen tongue; difficult or noisy breathing or wheezing; or feeling faint, going pale or floppy, becoming suddenly sleepy or collapsing."
+          }
+        ],
+        "alignment": "left"
+      },
+      {
+        "id": "0b140000-0000-4000-8000-000000000028",
+        "type": "paragraph",
+        "text": "If any of these signs appear, staff will:",
+        "runs": [
+          {
+            "text": "If any of these signs appear,",
+            "bold": true
+          },
+          {
+            "text": " staff will:"
+          }
+        ],
+        "alignment": "left"
+      },
+      {
+        "id": "0b140000-0000-4000-8000-000000000029",
+        "type": "numbered_list",
+        "items": [
+          "Lie your child down with their legs raised, or let them sit up if breathing is difficult. They will not stand or walk.",
+          "Use the adrenaline auto-injector without delay.",
+          "Dial 999, ask for an ambulance and say \"anaphylaxis\".",
+          "Call you.",
+          "Give a second auto-injector after 5 minutes if your child is no better."
+        ]
+      },
+      {
+        "id": "0b140000-0000-4000-8000-000000000030",
+        "type": "paragraph",
+        "text": "If in doubt, staff give adrenaline. A child with asthma who suddenly has difficulty breathing is treated as having anaphylaxis.",
+        "runs": [
+          {
+            "text": "If in doubt, staff give adrenaline.",
+            "bold": true
+          },
+          {
+            "text": " A child with asthma who suddenly has difficulty breathing is treated as having anaphylaxis."
+          }
+        ],
+        "alignment": "left"
+      },
+      {
+        "id": "0b140000-0000-4000-8000-000000000032",
+        "type": "text_field",
+        "fieldKey": "first_contact_name",
+        "label": "Name",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0b140000-0000-4000-8000-000000000033",
+        "type": "text_field",
+        "fieldKey": "first_contact_phone",
+        "label": "Phone number",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "format": "phone"
+      },
+      {
+        "id": "0b140000-0000-4000-8000-000000000035",
+        "type": "text_field",
+        "fieldKey": "second_contact_name",
+        "label": "Name",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0b140000-0000-4000-8000-000000000036",
+        "type": "text_field",
+        "fieldKey": "second_contact_phone",
+        "label": "Phone number",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "format": "phone"
+      },
+      {
+        "id": "0b140000-0000-4000-8000-000000000038",
+        "type": "text_field",
+        "fieldKey": "practice_name",
+        "label": "Practice name",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0b140000-0000-4000-8000-000000000039",
+        "type": "text_field",
+        "fieldKey": "gp_practice_phone",
+        "label": "Phone number",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "format": "phone"
+      },
+      {
+        "id": "0b140000-0000-4000-8000-000000000042",
+        "type": "file_field",
+        "fieldKey": "signed_action_plan",
+        "label": "Action plan signed by your child's doctor or nurse",
+        "required": true,
+        "helpText": null
+      },
+      {
+        "id": "0b140000-0000-4000-8000-000000000043",
+        "type": "paragraph",
+        "text": "Tick each statement you agree to. You can withdraw any of them at any time by telling the school in writing.",
+        "alignment": "left"
+      },
+      {
+        "id": "0b140000-0000-4000-8000-000000000044",
+        "type": "checkbox_field",
+        "fieldKey": "i_agree_that_staff_may_give_my_child_their_own_adrenaline_au",
+        "label": "I agree that staff may give my child their own adrenaline auto-injector and antihistamine as set out in the signed action plan.",
+        "required": true,
+        "helpText": null,
+        "checkedByDefault": false
+      },
+      {
+        "id": "0b140000-0000-4000-8000-000000000045",
+        "type": "checkbox_field",
+        "fieldKey": "i_agree_that_staff_may_use_the_school_s_spare_adrenaline_aut",
+        "label": "I agree that staff may use the school's spare adrenaline auto-injector if my child's own cannot be used or does not work.",
+        "required": false,
+        "helpText": null,
+        "checkedByDefault": false
+      },
+      {
+        "id": "0b140000-0000-4000-8000-000000000046",
+        "type": "checkbox_field",
+        "fieldKey": "i_agree_that_the_school_may_display_this_plan_with_my_child",
+        "label": "I agree that the school may display this plan, with my child's photo, where staff who look after my child can see it.",
+        "required": false,
+        "helpText": null,
+        "checkedByDefault": false
+      },
+      {
+        "id": "0b140000-0000-4000-8000-000000000047",
+        "type": "paragraph",
+        "text": "I will tell the school straight away if anything in this plan changes, and replace the auto-injectors before they expire.",
+        "alignment": "left"
+      },
+      {
+        "id": "0b140000-0000-4000-8000-000000000048",
+        "type": "signature_field",
+        "fieldKey": "signature_of_parent_or_carer",
+        "label": "Signature of parent or carer",
+        "required": true,
+        "helpText": null
+      },
+      {
+        "id": "0b140000-0000-4000-8000-000000000049",
+        "type": "date_field",
+        "fieldKey": "signed_date",
+        "label": "Date",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": " ",
+          "month": "long"
+        }
+      },
+      {
+        "id": "0b140000-0000-4000-8000-000000000051",
+        "type": "date_field",
+        "fieldKey": "date_of_next_review",
+        "label": "Date of next review",
+        "required": false,
+        "helpText": "Filled in by the school.",
+        "dateFormat": {
+          "order": "dmy",
+          "separator": " ",
+          "month": "long"
+        }
+      }
+    ],
+    "layout": {
+      "pageSize": "A4",
+      "orientation": "portrait",
+      "marginPreset": "standard",
+      "density": "balanced",
+      "fieldStyle": "box",
+      "sectionStyle": "box",
+      "printedTitle": {
+        "mode": "none"
+      },
+      "headerPolicy": "none",
+      "footerPolicy": "all_pages",
+      "pageNumbering": "none",
+      "footerText": {
+        "left": "{title}",
+        "right": "Page {page} of {pages}"
+      }
+    },
+    "sections": [
+      {
+        "id": "0b140000-0000-4000-8000-000000000004",
+        "label": "Your child",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0b140000-0000-4000-8000-000000000005"
+      },
+      {
+        "id": "0b140000-0000-4000-8000-000000000010",
+        "label": "What your child reacts to",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0b140000-0000-4000-8000-000000000011"
+      },
+      {
+        "id": "0b140000-0000-4000-8000-000000000016",
+        "label": "Adrenaline auto-injectors",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0b140000-0000-4000-8000-000000000017"
+      },
+      {
+        "id": "0b140000-0000-4000-8000-000000000024",
+        "label": "What staff will do",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0b140000-0000-4000-8000-000000000025"
+      },
+      {
+        "id": "0b140000-0000-4000-8000-000000000031",
+        "label": "Contacts",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0b140000-0000-4000-8000-000000000032"
+      },
+      {
+        "id": "0b140000-0000-4000-8000-000000000041",
+        "label": "Consent and signature",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0b140000-0000-4000-8000-000000000042"
+      }
+    ],
+    "fieldGroups": [
+      {
+        "id": "0b140000-0000-4000-8000-000000000007",
+        "label": null,
+        "startBlockId": "0b140000-0000-4000-8000-000000000005",
+        "endBlockId": "0b140000-0000-4000-8000-000000000006",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0b140000-0000-4000-8000-000000000022",
+        "label": "Expiry dates",
+        "startBlockId": "0b140000-0000-4000-8000-000000000020",
+        "endBlockId": "0b140000-0000-4000-8000-000000000021",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0b140000-0000-4000-8000-000000000034",
+        "label": "First contact",
+        "startBlockId": "0b140000-0000-4000-8000-000000000032",
+        "endBlockId": "0b140000-0000-4000-8000-000000000033",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0b140000-0000-4000-8000-000000000037",
+        "label": "Second contact",
+        "startBlockId": "0b140000-0000-4000-8000-000000000035",
+        "endBlockId": "0b140000-0000-4000-8000-000000000036",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0b140000-0000-4000-8000-000000000040",
+        "label": "Your child's GP practice",
+        "startBlockId": "0b140000-0000-4000-8000-000000000038",
+        "endBlockId": "0b140000-0000-4000-8000-000000000039",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0b140000-0000-4000-8000-000000000050",
+        "label": null,
+        "startBlockId": "0b140000-0000-4000-8000-000000000048",
+        "endBlockId": "0b140000-0000-4000-8000-000000000049",
+        "columns": 2,
+        "keepTogether": false
+      }
+    ],
+    "blockRules": [
+      {
+        "blockId": "0b140000-0000-4000-8000-000000000025",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "0b140000-0000-4000-8000-000000000028",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "0b140000-0000-4000-8000-000000000043",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "0b140000-0000-4000-8000-000000000047",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      }
+    ]
+  }
+}

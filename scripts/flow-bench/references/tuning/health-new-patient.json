@@ -1,0 +1,1404 @@
+{
+  "request": "New patient registration and health questionnaire for our GP practice. Ask what the national GP registration form asks (previous GP, armed forces, arrival from abroad), then a health questionnaire: long-term conditions, current medicines, reactions to medicines, family history, smoking, alcohol, activity, carers, next of kin and how they want us to contact them. Include guidance on filling it in and consent for text and email messages.",
+  "title": "New patient registration",
+  "description": "Use when someone registers with the practice: their details, their previous practice, how to contact them, a health questionnaire, carers and next of kin, their choices about messages, and a declaration.",
+  "maxPages": 5,
+  "content": {
+    "schemaVersion": 3,
+    "branding": {
+      "organizationName": "",
+      "logoAsset": null,
+      "logoDataUrl": null,
+      "logoAlignment": "left",
+      "logoWidthPercent": 24,
+      "primaryColor": "#005eb8",
+      "accentColor": "#41b6e6"
+    },
+    "blocks": [
+      {
+        "id": "0b110000-0000-4000-8000-000000000001",
+        "type": "heading",
+        "text": "New patient registration",
+        "level": 1,
+        "alignment": "left"
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000002",
+        "type": "paragraph",
+        "text": "Welcome to the practice. This form registers you as a patient, and its health questionnaire tells your new clinicians about your health, so that your first appointment can be about you rather than your paperwork.",
+        "alignment": "left"
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000003",
+        "type": "heading",
+        "text": "Filling in this form",
+        "level": 2,
+        "alignment": "left"
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000004",
+        "type": "bullet_list",
+        "items": [
+          "Fill in one form for each person registering, including each child. A parent or guardian can fill it in for a child under 16.",
+          "You do not need proof of address, immigration status or an NHS number to register. If you have an NHS number, it helps us find your records faster.",
+          "Answer the health questions as fully as you can. If you are not sure of an answer, leave it and we will ask you at your first appointment.",
+          "Bring the form to reception or send it to us using the practice's online registration page."
+        ]
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000005",
+        "type": "paragraph",
+        "text": "How we use your information: we use the information on this form to register you with the NHS, to ask your previous practice to send us your records, and to care for you. We share it with other people and services involved in your care, such as hospitals and community teams, and with NHS bodies where the law requires it. Your records stay with the NHS for as long as NHS records retention rules require. Ask reception for our full privacy notice, which also explains how to opt out of your information being used for research and planning.",
+        "runs": [
+          {
+            "text": "How we use your information:",
+            "bold": true
+          },
+          {
+            "text": " we use the information on this form to register you with the NHS, to ask your previous practice to send us your records, and to care for you. We share it with other people and services involved in your care, such as hospitals and community teams, and with NHS bodies where the law requires it. Your records stay with the NHS for as long as NHS records retention rules require. Ask reception for our full privacy notice, which also explains how to opt out of your information being used for research and planning."
+          }
+        ],
+        "alignment": "left"
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000007",
+        "type": "text_field",
+        "fieldKey": "surname",
+        "label": "Surname",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000008",
+        "type": "text_field",
+        "fieldKey": "first_names",
+        "label": "First names",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000010",
+        "type": "text_field",
+        "fieldKey": "previous_surnames",
+        "label": "Previous surnames",
+        "required": false,
+        "helpText": "Any other surname you have been registered under, so we can find your records.",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000011",
+        "type": "date_field",
+        "fieldKey": "date_of_birth",
+        "label": "Date of birth",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": "/",
+          "month": "number"
+        }
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000012",
+        "type": "text_field",
+        "fieldKey": "nhs_number_if_you_know_it",
+        "label": "NHS number, if you know it",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "comb": 10
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000014",
+        "type": "dropdown_field",
+        "fieldKey": "sex",
+        "label": "Sex",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Female",
+          "Male",
+          "I would rather describe it"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000015",
+        "type": "text_field",
+        "fieldKey": "town_of_birth",
+        "label": "Town of birth",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000016",
+        "type": "text_field",
+        "fieldKey": "country_of_birth",
+        "label": "Country of birth",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000018",
+        "type": "text_field",
+        "fieldKey": "home_address",
+        "label": "Home address",
+        "required": true,
+        "helpText": null,
+        "boxHeight": 45,
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000019",
+        "type": "text_field",
+        "fieldKey": "postcode",
+        "label": "Postcode",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000020",
+        "type": "text_field",
+        "fieldKey": "mobile_phone_number",
+        "label": "Mobile phone number",
+        "required": false,
+        "helpText": "We use this to contact you about appointments and results.",
+        "placeholder": null,
+        "multiline": false,
+        "format": "phone"
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000021",
+        "type": "text_field",
+        "fieldKey": "email_address",
+        "label": "Email address",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "format": "email"
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000024",
+        "type": "dropdown_field",
+        "fieldKey": "have_you_been_registered_with_a_gp_practice_in_the_uk_before",
+        "label": "Have you been registered with a GP practice in the UK before?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000025",
+        "type": "text_field",
+        "fieldKey": "name_of_your_previous_practice",
+        "label": "Name of your previous practice",
+        "required": false,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0b110000-0000-4000-8000-000000000024",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000026",
+        "type": "text_field",
+        "fieldKey": "town_of_your_previous_practice",
+        "label": "Town of your previous practice",
+        "required": false,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0b110000-0000-4000-8000-000000000024",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000028",
+        "type": "text_field",
+        "fieldKey": "your_address_when_you_were_registered_there",
+        "label": "Your address when you were registered there",
+        "required": false,
+        "helpText": "Only if it was different from your address now.",
+        "visibleWhen": {
+          "sourceBlockId": "0b110000-0000-4000-8000-000000000024",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "boxHeight": 45,
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000029",
+        "type": "dropdown_field",
+        "fieldKey": "have_you_come_to_live_in_the_uk_from_abroad",
+        "label": "Have you come to live in the UK from abroad?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000030",
+        "type": "date_field",
+        "fieldKey": "date_you_first_came_to_live_in_the_uk",
+        "label": "Date you first came to live in the UK",
+        "required": false,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0b110000-0000-4000-8000-000000000029",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "dateFormat": {
+          "order": "dmy",
+          "separator": "/",
+          "month": "number"
+        }
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000031",
+        "type": "date_field",
+        "fieldKey": "date_you_most_recently_arrived",
+        "label": "Date you most recently arrived",
+        "required": false,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0b110000-0000-4000-8000-000000000029",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "dateFormat": {
+          "order": "dmy",
+          "separator": "/",
+          "month": "number"
+        }
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000033",
+        "type": "dropdown_field",
+        "fieldKey": "are_you_leaving_or_have_you_served_in_the_uk_armed_forces",
+        "label": "Are you leaving, or have you served in, the UK armed forces?",
+        "required": true,
+        "helpText": "Telling us means we can request your service records and refer you to veterans' services.",
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000034",
+        "type": "text_field",
+        "fieldKey": "service_number",
+        "label": "Service number",
+        "required": false,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0b110000-0000-4000-8000-000000000033",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000035",
+        "type": "date_field",
+        "fieldKey": "date_you_enlisted",
+        "label": "Date you enlisted",
+        "required": false,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0b110000-0000-4000-8000-000000000033",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "dateFormat": {
+          "order": "dmy",
+          "separator": "/",
+          "month": "number"
+        }
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000038",
+        "type": "dropdown_field",
+        "fieldKey": "how_would_you_like_us_to_contact_you",
+        "label": "How would you like us to contact you?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Phone call",
+          "Text message",
+          "Email",
+          "Letter"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000039",
+        "type": "dropdown_field",
+        "fieldKey": "may_we_leave_a_voicemail_message",
+        "label": "May we leave a voicemail message?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000040",
+        "type": "dropdown_field",
+        "fieldKey": "do_you_need_an_interpreter",
+        "label": "Do you need an interpreter?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000041",
+        "type": "text_field",
+        "fieldKey": "which_language",
+        "label": "Which language?",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0b110000-0000-4000-8000-000000000040",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000042",
+        "type": "text_field",
+        "fieldKey": "do_you_have_any_communication_or_access_needs",
+        "label": "Do you have any communication or access needs?",
+        "required": false,
+        "helpText": "For example, large print, easy read, a British Sign Language interpreter or step-free access.",
+        "boxHeight": 45,
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000044",
+        "type": "paragraph",
+        "text": "These questions help your clinicians understand your health before they meet you. Everything you tell us is kept in your confidential record.",
+        "alignment": "left"
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000045",
+        "type": "dropdown_field",
+        "fieldKey": "do_you_have_any_long_term_conditions_such_as_asthma_diabetes",
+        "label": "Do you have any long-term conditions, such as asthma, diabetes, epilepsy, high blood pressure or a heart or kidney problem?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000046",
+        "type": "text_field",
+        "fieldKey": "which_conditions_and_when_did_they_start",
+        "label": "Which conditions, and when did they start?",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0b110000-0000-4000-8000-000000000045",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "boxHeight": 60,
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000047",
+        "type": "dropdown_field",
+        "fieldKey": "do_you_have_a_mental_health_problem_that_you_are_being_treat",
+        "label": "Do you have a mental health problem that you are being treated for?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000048",
+        "type": "dropdown_field",
+        "fieldKey": "have_you_had_an_operation_or_a_stay_in_hospital_in_the_last",
+        "label": "Have you had an operation or a stay in hospital in the last five years?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000049",
+        "type": "text_field",
+        "fieldKey": "hospital_stays",
+        "label": "What for, and when?",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0b110000-0000-4000-8000-000000000048",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "boxHeight": 45,
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000050",
+        "type": "heading",
+        "text": "What you take",
+        "level": 3,
+        "alignment": "left"
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000051",
+        "type": "paragraph",
+        "text": "List everything you take regularly, including inhalers, creams, injections and anything you buy from a pharmacy or shop. If you have a repeat slip from your last practice, you can attach a photo of it instead.",
+        "alignment": "left"
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000112",
+        "type": "table_field",
+        "fieldKey": "things_you_take_regularly",
+        "label": "Each thing you take",
+        "required": false,
+        "helpText": null,
+        "columns": [
+          {
+            "label": "Name"
+          },
+          {
+            "label": "Strength"
+          },
+          {
+            "label": "How much, and how often"
+          }
+        ],
+        "rows": 6,
+        "addRows": true
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000053",
+        "type": "file_field",
+        "fieldKey": "photo_of_your_repeat_slip",
+        "label": "Photo of your repeat slip",
+        "required": false,
+        "helpText": null
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000054",
+        "type": "dropdown_field",
+        "fieldKey": "have_you_ever_had_a_bad_reaction_to_a_drug_food_insect_sting",
+        "label": "Have you ever had a bad reaction to a drug, food, insect sting or latex?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000055",
+        "type": "text_field",
+        "fieldKey": "what_caused_it_and_what_happened",
+        "label": "What caused it, and what happened?",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0b110000-0000-4000-8000-000000000054",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "boxHeight": 45,
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000056",
+        "type": "text_field",
+        "fieldKey": "height_in_cm_or_feet_and_inches",
+        "label": "Height, in cm or feet and inches",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000057",
+        "type": "text_field",
+        "fieldKey": "weight_in_kg_or_stones_and_pounds",
+        "label": "Weight, in kg or stones and pounds",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000059",
+        "type": "text_field",
+        "fieldKey": "illnesses_in_your_close_family",
+        "label": "Illnesses in your close family",
+        "required": false,
+        "helpText": "Parents, brothers, sisters and children: for example heart disease or stroke before the age of 60, diabetes, or cancer, and who had it.",
+        "boxHeight": 60,
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000061",
+        "type": "dropdown_field",
+        "fieldKey": "do_you_smoke",
+        "label": "Do you smoke?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "I have never smoked",
+          "I used to smoke",
+          "I smoke now"
+        ],
+        "display": "radios"
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000062",
+        "type": "text_field",
+        "fieldKey": "how_much_do_you_smoke_in_a_day",
+        "label": "How much do you smoke in a day?",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0b110000-0000-4000-8000-000000000061",
+          "operator": "equals",
+          "value": "I smoke now"
+        },
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000063",
+        "type": "dropdown_field",
+        "fieldKey": "would_you_like_help_to_stop_smoking",
+        "label": "Would you like help to stop smoking?",
+        "required": false,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0b110000-0000-4000-8000-000000000061",
+          "operator": "equals",
+          "value": "I smoke now"
+        },
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000064",
+        "type": "dropdown_field",
+        "fieldKey": "do_you_vape",
+        "label": "Do you vape?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000065",
+        "type": "dropdown_field",
+        "fieldKey": "how_often_do_you_have_a_drink_containing_alcohol",
+        "label": "How often do you have a drink containing alcohol?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Never",
+          "Monthly or less",
+          "2 to 4 times a month",
+          "2 to 3 times a week",
+          "4 or more times a week"
+        ],
+        "display": "radios"
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000066",
+        "type": "dropdown_field",
+        "fieldKey": "how_many_units_do_you_have_on_a_typical_day_when_you_are_dri",
+        "label": "How many units do you have on a typical day when you are drinking?",
+        "required": false,
+        "helpText": "Leave this blank if you never drink. A pint of ordinary-strength beer or a standard glass of wine is about 2 units.",
+        "placeholder": null,
+        "options": [
+          "1 or 2",
+          "3 or 4",
+          "5 or 6",
+          "7 to 9",
+          "10 or more"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000067",
+        "type": "dropdown_field",
+        "fieldKey": "on_how_many_days_a_week_are_you_active_for_30_minutes_or_mor",
+        "label": "On how many days a week are you active for 30 minutes or more?",
+        "required": false,
+        "helpText": "Anything that makes you breathe faster, such as brisk walking, cycling or gardening.",
+        "placeholder": null,
+        "options": [
+          "None",
+          "1 or 2",
+          "3 or 4",
+          "5 or more"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000069",
+        "type": "paragraph",
+        "text": "The NHS invites people for screening tests and vaccines at set ages. Knowing what you have had means we can invite you at the right time and avoid repeating anything.",
+        "alignment": "left"
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000070",
+        "type": "dropdown_field",
+        "fieldKey": "are_your_routine_vaccinations_up_to_date",
+        "label": "Are your routine vaccinations up to date?",
+        "required": false,
+        "helpText": "For example, MMR, and the vaccines offered at your age, such as shingles or pneumococcal.",
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No",
+          "Not sure"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000071",
+        "type": "date_field",
+        "fieldKey": "date_of_your_last_cervical_screening_test_if_you_have_had_on",
+        "label": "Date of your last cervical screening test, if you have had one",
+        "required": false,
+        "helpText": "Women and people with a cervix aged 25 to 64 are invited for cervical screening.",
+        "dateFormat": {
+          "order": "dmy",
+          "separator": "/",
+          "month": "number"
+        }
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000072",
+        "type": "date_field",
+        "fieldKey": "date_of_your_last_bowel_screening_kit_if_you_have_done_one",
+        "label": "Date of your last bowel screening kit, if you have done one",
+        "required": false,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": "/",
+          "month": "number"
+        }
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000074",
+        "type": "paragraph",
+        "text": "Answer these questions only for a child under 16. A parent or guardian fills them in.",
+        "alignment": "left"
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000075",
+        "type": "text_field",
+        "fieldKey": "school_or_nursery",
+        "label": "School or nursery",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000076",
+        "type": "text_field",
+        "fieldKey": "health_visitor_or_school_nurse_if_you_know_them",
+        "label": "Health visitor or school nurse, if you know them",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000078",
+        "type": "text_field",
+        "fieldKey": "who_has_parental_responsibility_for_the_child",
+        "label": "Who has parental responsibility for the child?",
+        "required": false,
+        "helpText": "For example, both parents, one parent, or a local authority.",
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000079",
+        "type": "dropdown_field",
+        "fieldKey": "has_your_child_had_all_the_vaccinations_offered_for_their_ag",
+        "label": "Has your child had all the vaccinations offered for their age?",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No",
+          "Not sure"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000080",
+        "type": "file_field",
+        "fieldKey": "photo_of_the_vaccination_pages_in_your_child_s_red_book",
+        "label": "Photo of the vaccination pages in your child's red book",
+        "required": false,
+        "helpText": null
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000081",
+        "type": "dropdown_field",
+        "fieldKey": "is_there_a_social_worker_or_a_child_protection_plan_involved",
+        "label": "Is there a social worker or a child protection plan involved with your child?",
+        "required": false,
+        "helpText": "This helps us work with the other people supporting your child.",
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000083",
+        "type": "dropdown_field",
+        "fieldKey": "do_you_look_after_someone_who_could_not_manage_without_your",
+        "label": "Do you look after someone who could not manage without your help?",
+        "required": true,
+        "helpText": "Carers can get extra support, such as flu vaccines and flexible appointments.",
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000084",
+        "type": "text_field",
+        "fieldKey": "who_do_you_look_after",
+        "label": "Who do you look after?",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0b110000-0000-4000-8000-000000000083",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000085",
+        "type": "dropdown_field",
+        "fieldKey": "does_someone_look_after_you",
+        "label": "Does someone look after you?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000086",
+        "type": "text_field",
+        "fieldKey": "carer_name",
+        "label": "Name",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0b110000-0000-4000-8000-000000000085",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000087",
+        "type": "text_field",
+        "fieldKey": "carer_phone",
+        "label": "Phone number",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0b110000-0000-4000-8000-000000000085",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "placeholder": null,
+        "multiline": false,
+        "format": "phone"
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000089",
+        "type": "text_field",
+        "fieldKey": "next_of_kin_name",
+        "label": "Name",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000090",
+        "type": "text_field",
+        "fieldKey": "next_of_kin_relationship",
+        "label": "Relationship to you",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000091",
+        "type": "text_field",
+        "fieldKey": "next_of_kin_phone",
+        "label": "Phone number",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": false,
+        "format": "phone"
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000094",
+        "type": "paragraph",
+        "text": "Tick each box only if you agree. You can change any of these choices at any time by telling reception.",
+        "alignment": "left"
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000095",
+        "type": "checkbox_field",
+        "fieldKey": "i_agree_to_receive_appointment_reminders_test_results_and_he",
+        "label": "I agree to receive appointment reminders, test results and health messages by text message.",
+        "required": false,
+        "helpText": null,
+        "checkedByDefault": false
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000096",
+        "type": "checkbox_field",
+        "fieldKey": "i_agree_to_receive_appointment_reminders_test_results_and_he_2",
+        "label": "I agree to receive appointment reminders, test results and health messages by email.",
+        "required": false,
+        "helpText": null,
+        "checkedByDefault": false
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000097",
+        "type": "checkbox_field",
+        "fieldKey": "i_agree_that_the_practice_may_tell_my_next_of_kin_that_i_am",
+        "label": "I agree that the practice may tell my next of kin that I am a patient here, if they ask.",
+        "required": false,
+        "helpText": null,
+        "checkedByDefault": false
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000098",
+        "type": "checkbox_field",
+        "fieldKey": "i_would_like_to_use_online_services_through_the_nhs_app_such",
+        "label": "I would like to use online services through the NHS App, such as booking appointments, ordering repeats and seeing my record.",
+        "required": false,
+        "helpText": null,
+        "checkedByDefault": false
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000099",
+        "type": "paragraph",
+        "text": "Your record: you can ask to see your record or for a copy of it, and ask us to correct anything that is wrong. You can also choose whether your confidential information is used for research and planning by registering a national data opt-out online or at reception. This does not affect the care you receive.",
+        "runs": [
+          {
+            "text": "Your record:",
+            "bold": true
+          },
+          {
+            "text": " you can ask to see your record or for a copy of it, and ask us to correct anything that is wrong. You can also choose whether your confidential information is used for research and planning by registering a national data opt-out online or at reception. This does not affect the care you receive."
+          }
+        ],
+        "alignment": "left"
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000100",
+        "type": "paragraph",
+        "text": "Organ donation: you can record your decision about donating your organs on the NHS Organ Donor Register, online or through the NHS App. We do not record it for you.",
+        "runs": [
+          {
+            "text": "Organ donation:",
+            "bold": true
+          },
+          {
+            "text": " you can record your decision about donating your organs on the NHS Organ Donor Register, online or through the NHS App. We do not record it for you."
+          }
+        ],
+        "alignment": "left"
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000102",
+        "type": "bullet_list",
+        "items": [
+          "Appointments: book through the NHS App, on our website or by phone. Tell us if you need a longer appointment, an interpreter, or to see a particular clinician.",
+          "When we are closed: call NHS 111 or use 111 online for urgent help that is not an emergency.",
+          "In an emergency: call 999 for a life-threatening illness or injury, such as chest pain, severe bleeding or difficulty breathing.",
+          "Repeats: order through the NHS App or our website, or hand in your repeat slip, and allow us the time shown on our website before you collect.",
+          "Changes: tell us when you change your name, address or phone number, so that results and letters reach you."
+        ],
+        "itemRuns": [
+          [
+            {
+              "text": "Appointments:",
+              "bold": true
+            },
+            {
+              "text": " book through the NHS App, on our website or by phone. Tell us if you need a longer appointment, an interpreter, or to see a particular clinician."
+            }
+          ],
+          [
+            {
+              "text": "When we are closed:",
+              "bold": true
+            },
+            {
+              "text": " call NHS 111 or use 111 online for urgent help that is not an emergency."
+            }
+          ],
+          [
+            {
+              "text": "In an emergency:",
+              "bold": true
+            },
+            {
+              "text": " call 999 for a life-threatening illness or injury, such as chest pain, severe bleeding or difficulty breathing."
+            }
+          ],
+          [
+            {
+              "text": "Repeats:",
+              "bold": true
+            },
+            {
+              "text": " order through the NHS App or our website, or hand in your repeat slip, and allow us the time shown on our website before you collect."
+            }
+          ],
+          [
+            {
+              "text": "Changes:",
+              "bold": true
+            },
+            {
+              "text": " tell us when you change your name, address or phone number, so that results and letters reach you."
+            }
+          ]
+        ]
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000104",
+        "type": "paragraph",
+        "text": "I confirm that the information on this form is correct to the best of my knowledge, and I ask to be registered as a patient at this practice.",
+        "alignment": "left"
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000105",
+        "type": "checkbox_field",
+        "fieldKey": "i_am_filling_in_this_form_for_someone_else_such_as_a_child",
+        "label": "I am filling in this form for someone else, such as a child.",
+        "required": false,
+        "helpText": null,
+        "checkedByDefault": false
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000106",
+        "type": "text_field",
+        "fieldKey": "representative_name",
+        "label": "Full name",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0b110000-0000-4000-8000-000000000105",
+          "operator": "equals",
+          "value": true
+        },
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000107",
+        "type": "text_field",
+        "fieldKey": "representative_relationship",
+        "label": "Relationship to the patient",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "0b110000-0000-4000-8000-000000000105",
+          "operator": "equals",
+          "value": true
+        },
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000109",
+        "type": "signature_field",
+        "fieldKey": "signature",
+        "label": "Signature",
+        "required": true,
+        "helpText": null
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000110",
+        "type": "date_field",
+        "fieldKey": "signed_date",
+        "label": "Date",
+        "required": true,
+        "helpText": null,
+        "dateFormat": {
+          "order": "dmy",
+          "separator": "/",
+          "month": "number"
+        }
+      }
+    ],
+    "layout": {
+      "pageSize": "A4",
+      "orientation": "portrait",
+      "marginPreset": "compact",
+      "density": "compact",
+      "fieldStyle": "cell",
+      "lineSpacing": 1.3,
+      "paragraphSpacing": 6,
+      "sectionNumbers": "letters",
+      "sectionStyle": "band",
+      "printedTitle": {
+        "mode": "none"
+      },
+      "headerPolicy": "none",
+      "footerPolicy": "all_pages",
+      "pageNumbering": "none",
+      "footerText": {
+        "left": "{title}",
+        "right": "Page {page} of {pages}"
+      }
+    },
+    "sections": [
+      {
+        "id": "0b110000-0000-4000-8000-000000000006",
+        "label": "Your details",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0b110000-0000-4000-8000-000000000007"
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000023",
+        "label": "Your previous practice",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0b110000-0000-4000-8000-000000000024"
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000037",
+        "label": "Contacting you",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0b110000-0000-4000-8000-000000000038"
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000043",
+        "label": "Your health",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0b110000-0000-4000-8000-000000000044"
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000060",
+        "label": "Smoking, alcohol and activity",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0b110000-0000-4000-8000-000000000061"
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000068",
+        "label": "Screening and vaccinations",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0b110000-0000-4000-8000-000000000069"
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000073",
+        "label": "If you are registering a child",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0b110000-0000-4000-8000-000000000074"
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000082",
+        "label": "Carers and next of kin",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0b110000-0000-4000-8000-000000000083"
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000093",
+        "label": "Your choices",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0b110000-0000-4000-8000-000000000094"
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000101",
+        "label": "Using the practice",
+        "pageBreakBefore": false,
+        "keepTogether": false,
+        "startBlockId": "0b110000-0000-4000-8000-000000000102"
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000103",
+        "label": "Declaration",
+        "pageBreakBefore": false,
+        "keepTogether": true,
+        "startBlockId": "0b110000-0000-4000-8000-000000000104"
+      }
+    ],
+    "fieldGroups": [
+      {
+        "id": "0b110000-0000-4000-8000-000000000009",
+        "label": null,
+        "startBlockId": "0b110000-0000-4000-8000-000000000007",
+        "endBlockId": "0b110000-0000-4000-8000-000000000008",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000013",
+        "label": null,
+        "startBlockId": "0b110000-0000-4000-8000-000000000011",
+        "endBlockId": "0b110000-0000-4000-8000-000000000012",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000017",
+        "label": null,
+        "startBlockId": "0b110000-0000-4000-8000-000000000015",
+        "endBlockId": "0b110000-0000-4000-8000-000000000016",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000022",
+        "label": null,
+        "startBlockId": "0b110000-0000-4000-8000-000000000020",
+        "endBlockId": "0b110000-0000-4000-8000-000000000021",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000027",
+        "label": null,
+        "startBlockId": "0b110000-0000-4000-8000-000000000025",
+        "endBlockId": "0b110000-0000-4000-8000-000000000026",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000032",
+        "label": null,
+        "startBlockId": "0b110000-0000-4000-8000-000000000030",
+        "endBlockId": "0b110000-0000-4000-8000-000000000031",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000036",
+        "label": null,
+        "startBlockId": "0b110000-0000-4000-8000-000000000034",
+        "endBlockId": "0b110000-0000-4000-8000-000000000035",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000058",
+        "label": "Your height and weight, if you know them",
+        "startBlockId": "0b110000-0000-4000-8000-000000000056",
+        "endBlockId": "0b110000-0000-4000-8000-000000000057",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000077",
+        "label": null,
+        "startBlockId": "0b110000-0000-4000-8000-000000000075",
+        "endBlockId": "0b110000-0000-4000-8000-000000000076",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000088",
+        "label": "Your carer",
+        "startBlockId": "0b110000-0000-4000-8000-000000000086",
+        "endBlockId": "0b110000-0000-4000-8000-000000000087",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000092",
+        "label": "Next of kin",
+        "startBlockId": "0b110000-0000-4000-8000-000000000089",
+        "endBlockId": "0b110000-0000-4000-8000-000000000091",
+        "columns": 3,
+        "keepTogether": false
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000108",
+        "label": "Person filling in the form",
+        "startBlockId": "0b110000-0000-4000-8000-000000000106",
+        "endBlockId": "0b110000-0000-4000-8000-000000000107",
+        "columns": 2,
+        "keepTogether": false
+      },
+      {
+        "id": "0b110000-0000-4000-8000-000000000111",
+        "label": null,
+        "startBlockId": "0b110000-0000-4000-8000-000000000109",
+        "endBlockId": "0b110000-0000-4000-8000-000000000110",
+        "columns": 2,
+        "keepTogether": false
+      }
+    ],
+    "blockRules": [
+      {
+        "blockId": "0b110000-0000-4000-8000-000000000003",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "0b110000-0000-4000-8000-000000000050",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "0b110000-0000-4000-8000-000000000051",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "0b110000-0000-4000-8000-000000000069",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "0b110000-0000-4000-8000-000000000074",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "0b110000-0000-4000-8000-000000000094",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      },
+      {
+        "blockId": "0b110000-0000-4000-8000-000000000104",
+        "pageBreakBefore": false,
+        "keepWithNext": true
+      }
+    ]
+  }
+}

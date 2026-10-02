@@ -1,7 +1,10 @@
 import { formatDateAnswer } from "@/lib/date-format"
 import { createTemplateRenderPlan } from "@/services/templates/template-render-plan"
 import {
+  answerBoxHeight,
+  MAX_TABLE_FIELD_ROWS,
   parseTemplateContent,
+  type TemplateBlock,
   type TemplateContent,
 } from "@/types/template"
 
@@ -136,18 +139,259 @@ export function formatFieldValue(
     return "Uploads are only in submissions."
   }
 
-  if (block.type === "checkbox_field") {
-    const checked = value === undefined ? block.checkedByDefault : value === true
-    return checked ? "Checked" : "Not checked"
-  }
-
   if (typeof value === "string" && value.trim().length > 0) {
     const text = value.trim().slice(0, 20_000)
 
     return block.type === "date_field" ? formatDateAnswer(text, block.dateFormat) : text
   }
 
-  return "Not completed"
+  // Left empty, so the printed box is there to write in.
+  return ""
+}
+
+/**
+ * Whether a checkbox prints ticked: its answer, or its default when unanswered.
+ *
+ * @param block - The checkbox.
+ * @param value - Its stored answer.
+ * @returns Whether to draw a tick.
+ */
+export function isFieldChecked(block: Extract<PdfFieldBlock, { type: "checkbox_field" }>, value: unknown): boolean {
+  return value === undefined ? block.checkedByDefault : value === true
+}
+
+// The page shows answer boxes at these heights too, so they live with the blocks.
+export { answerBoxHeight } from "@/types/template"
+/** The gap between an answer box's edge and its text, in points. */
+export const ANSWER_BOX_PADDING = 6
+/** How far a checkbox's label sits from the box's left edge, in points. */
+export const CHECKBOX_LABEL_INSET = 16
+
+/** What a signature or initials field prints in its room when signers sign in the signing record. */
+export const SIGNER_NOTE = "Captured per signer in signing record below"
+
+/**
+ * The room a signature or initials field leaves to sign in: its box, taller
+ * when a drawing already made goes in it.
+ *
+ * @param block - The signature or initials field.
+ * @param hasDrawing - Whether a drawing is printed in it.
+ * @returns The room's height, in points.
+ */
+export function drawingRoom(block: TemplateBlock, hasDrawing: boolean): number {
+  return hasDrawing ? Math.max(answerBoxHeight(block), 45 + ANSWER_BOX_PADDING * 2) : answerBoxHeight(block)
+}
+
+// The field styles' measurements, in points; the editor draws them alike.
+/** The space under a field: 3 above its help, 7 after. */
+export const FIELD_GAP_BELOW = 10
+/** The weight of an answer's line and a cell's edge; touching cells overlap by it, so they share one edge. */
+export const FIELD_RULE_WIDTH = 0.7
+/** Line style: the most of a field's width its label takes beside the line. */
+export const LINE_LABEL_SHARE = 0.45
+/** Line style: the space between a label and its line. */
+export const LINE_LABEL_GAP = 6
+/** Line style: how far the line sits under the band of text it is written on. */
+export const LINE_RULE_DROP = 2
+/** Line style: the space between the ruled lines of a long answer. */
+export const RULED_LINE_PITCH = 20
+/** Line style: how far a long answer's text sits above its ruled line. */
+export const RULED_TEXT_RISE = 5
+/** Line style: the gap between a signature's line and its caption. */
+export const CAPTION_GAP = 2
+/** Line style: a signature caption's text size and line height. */
+export const CAPTION_SIZE = 8
+export const CAPTION_LEADING = 11
+/** Cell style: the space inside a cell's outer edge. */
+export const CELL_PADDING = 4
+/** Cell style: a cell's label's text size and line height. */
+export const CELL_LABEL_SIZE = 7
+export const CELL_LABEL_LEADING = 10
+/** Cell style: the gap between a cell's label and its answer. */
+export const CELL_LABEL_GAP = 2
+
+/** A choice printed as its options, one mark apiece: radio buttons, or a checkbox each when several may be chosen. */
+export function isChoiceList(block: TemplateBlock): block is Extract<TemplateBlock, { type: "dropdown_field" }> {
+  return block.type === "dropdown_field" && (block.display === "radios" || block.multiple === true)
+}
+
+/**
+ * The options a choice prints: its own, then any answer given before they
+ * changed, which prints as one more, chosen.
+ *
+ * @param block - The choice.
+ * @param value - Its stored answer: one option, or a list when several may be chosen.
+ * @returns The options to print, in order.
+ */
+export function printedOptions(block: Extract<TemplateBlock, { type: "dropdown_field" }>, value: unknown): string[] {
+  const chosen = block.multiple ? tickedOptions(value) : [formatFieldValue(block as PdfFieldBlock, value)].filter(Boolean)
+
+  return [...block.options, ...chosen.filter((option: string): boolean => !block.options.includes(option))]
+}
+
+/**
+ * The options a choose-several answer has ticked: the words in its list, at
+ * most a hundred; any other shape ticks none.
+ *
+ * @param value - Its stored answer.
+ * @returns The ticked options, each once.
+ */
+export function tickedOptions(value: unknown): string[] {
+  return Array.isArray(value)
+    ? [...new Set(value.flatMap((option: unknown): string[] => (typeof option === "string" && option.trim() ? [option.trim().slice(0, 240)] : [])))].slice(0, 100)
+    : []
+}
+
+/**
+ * The choice a grid's answer makes on one statement: its own entry, when that
+ * is words; an inherited one, or one of another shape, makes none.
+ *
+ * @param value - The grid's stored answer.
+ * @param row - The statement.
+ * @returns The choice, if any.
+ */
+export function gridChoice(value: unknown, row: string): string | undefined {
+  const choice = value && typeof value === "object" && !Array.isArray(value) && Object.hasOwn(value, row) ? (value as Record<string, unknown>)[row] : undefined
+
+  return typeof choice === "string" ? choice : undefined
+}
+
+/**
+ * The rows a fill-in table prints: its answered rows, each as wide as the
+ * table, then blank ones up to its length. A row that is not a list, or a cell
+ * that is not words, prints blank.
+ *
+ * @param block - The table.
+ * @param value - Its stored answer, rows of cells.
+ * @returns At most the most rows a table holds.
+ */
+export function tableRows(block: Extract<TemplateBlock, { type: "table_field" }>, value: unknown): string[][] {
+  const answered = (Array.isArray(value) ? value : []).filter((row: unknown): row is unknown[] => Array.isArray(row)).slice(0, MAX_TABLE_FIELD_ROWS)
+  const rows = answered.map((row: unknown[]): string[] =>
+    block.columns.map((_column, index: number): string => (typeof row[index] === "string" ? row[index].trim().slice(0, 2_000) : ""))
+  )
+
+  return [...rows, ...Array.from({ length: Math.max(0, block.rows - rows.length) }, (): string[] => block.columns.map((): string => ""))]
+}
+
+// The new kinds' measurements, in points; the editor draws them alike.
+/** A comb box's width at most and at least, and its height. */
+export const COMB_WIDTH = 16
+export const COMB_LEAST_WIDTH = 10
+export const COMB_HEIGHT = 22
+/** The space between a typed answer and its prefix or suffix. */
+export const AFFIX_GAP = 3
+/** A choice grid's choices over their columns: text size, line height, padding above and below. */
+export const GRID_HEADER = { leading: 10, padding: 4, size: 8 } as const
+/** A choice grid's statements: padding above and below, and the space after one. */
+export const GRID_ROW_PADDING = 4
+export const GRID_STATEMENT_GAP = 6
+/** A fill-in table's least row height, and its cells' padding above and below, and at the sides. */
+export const TABLE_ROW_LEAST = 20
+export const TABLE_CELL_PADDING = { across: 4, down: 2.5 } as const
+
+/**
+ * How many boxes a typed answer is written in, one character apiece: its
+ * comb, when the answer fits it; otherwise none, and it prints as any answer does.
+ *
+ * @param block - Any field.
+ * @param answer - The answer as printed.
+ * @returns The number of boxes, or 0.
+ */
+export function combBoxes(block: TemplateBlock, answer: string): number {
+  return block.type === "text_field" && block.comb && answer.length <= block.comb ? block.comb : 0
+}
+
+/** A comb box's width: 16 points, narrowed to fit the room, but never under 10. */
+export function combWidth(boxes: number, width: number): number {
+  return Math.min(COMB_WIDTH, Math.max(COMB_LEAST_WIDTH, width / boxes))
+}
+
+/**
+ * The width of each option column of a choice grid: room for its longest
+ * option at 8 points, at least 36, and together no more than 60% of the grid.
+ *
+ * @param block - The grid.
+ * @param width - The grid's width.
+ * @returns One option column's width.
+ */
+export function gridOptionWidth(block: Extract<TemplateBlock, { type: "choice_grid_field" }>, width: number): number {
+  const longest = Math.max(...block.options.map((option: string): number => option.length))
+
+  return Math.min(Math.max(36, longest * 4.8 + 8), (width * 0.6) / block.options.length)
+}
+
+/** A field the layout's field style draws; a checkbox, radio buttons and an upload print as they always do. */
+export type StyledFieldBlock = Extract<TemplateBlock, { type: "date_field" | "dropdown_field" | "initials_field" | "signature_field" | "text_field" }>
+
+/**
+ * Whether a field takes the layout's field style.
+ *
+ * @param block - Any block.
+ * @returns True for a text, date, dropdown, signature or initials field; not radio buttons or checkboxes.
+ */
+export function isStyledField(block: TemplateBlock): block is StyledFieldBlock {
+  return (
+    block.type === "text_field" ||
+    block.type === "date_field" ||
+    block.type === "signature_field" ||
+    block.type === "initials_field" ||
+    (block.type === "dropdown_field" && !isChoiceList(block))
+  )
+}
+
+/**
+ * Whether a row prints as cells that touch: the cell style, and every block in
+ * it a styled field.
+ *
+ * @param cells - The row's blocks, left to right; null where a column is empty.
+ * @param style - The layout's field style.
+ * @returns True when the row's cells share their edges.
+ */
+export function isCellRow(cells: readonly ({ block: TemplateBlock } | null | undefined)[], style: string): boolean {
+  return style === "cell" && isStyledRow(cells)
+}
+
+/**
+ * Whether every block in a row is a styled field, so its fields line up as one:
+ * cells that touch, or lines on one level.
+ *
+ * @param cells - The row's blocks, left to right; null where a column is empty.
+ * @returns True for a row with at least one block, all of them styled fields.
+ */
+export function isStyledRow(cells: readonly ({ block: TemplateBlock } | null | undefined)[]): boolean {
+  return cells.some(Boolean) && cells.every((cell) => !cell || isStyledField(cell.block))
+}
+
+/** The space between radio buttons set side by side. */
+export const RADIO_ACROSS_GAP = 18
+
+/**
+ * Sets radio options side by side in lines no wider than the room, in order.
+ * An option too wide to share a line takes one of its own.
+ *
+ * @param options - The options, in order.
+ * @param width - The width of a line.
+ * @param measure - An option's width, its circle included.
+ * @returns The options on each line.
+ */
+export function packRadioOptions(options: readonly string[], width: number, measure: (option: string) => number): string[][] {
+  const lines: string[][] = []
+  let used = width
+
+  for (const option of options) {
+    const size = measure(option)
+
+    if (used + RADIO_ACROSS_GAP + size > width) {
+      lines.push([option])
+      used = size
+    } else {
+      lines[lines.length - 1].push(option)
+      used += RADIO_ACROSS_GAP + size
+    }
+  }
+
+  return lines
 }
 
 /**

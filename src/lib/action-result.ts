@@ -1,6 +1,7 @@
 /** Stable feedback codes that may cross the server-action redirect boundary. */
 export const ACTION_FEEDBACK_CODES = [
   "changes_saved",
+  "changes_suggested",
   "comment_added",
   "deletion_queued",
   "document_created",
@@ -37,6 +38,7 @@ export const ACTION_FEEDBACK_CODES = [
   "submission_assigned",
   "submission_created",
   "submission_review_updated",
+  "submission_shared",
   "submission_submitted",
   "task_completed",
   "task_created",
@@ -44,6 +46,7 @@ export const ACTION_FEEDBACK_CODES = [
   "template_created",
   "template_duplicated",
   "template_published",
+  "template_updated",
   "view_deleted",
   "view_not_renamed",
   "view_not_saved",

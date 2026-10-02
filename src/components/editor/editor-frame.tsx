@@ -18,7 +18,6 @@ import { FloatingTool, type Spot } from "@/components/editor/floating-tool"
 import type { AutosaveStatus } from "@/components/editor/use-autosave"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu"
-import { Segmented } from "@/components/ui/segmented"
 import { Sheet, SheetClose, SheetContent, SheetTitle } from "@/components/ui/sheet"
 import { bizflowToast } from "@/components/ui/toaster"
 import { cn } from "@/lib/utils"
@@ -40,10 +39,8 @@ export type EditorLayoutStore = Readonly<{
   save: (layout: EditorLayout) => Promise<{ error?: string }>
 }>
 
-/** One of the editor's modes, such as Edit, Preview and Test. */
-export type EditorMode<Value extends string> = Readonly<{ label: string; value: Value }>
 
-type EditorFrameProps<Mode extends string> = {
+type EditorFrameProps = {
   backHref: string
   backLabel: string
   banner?: ReactNode
@@ -55,19 +52,20 @@ type EditorFrameProps<Mode extends string> = {
   /** Where the tools were left last time; without it they start at home each visit. */
   layout?: EditorLayoutStore
   menu?: ReactNode
-  mode?: Mode
-  modes?: readonly EditorMode<Mode>[]
-  onModeChange?: (mode: Mode) => void
   onRedo: () => void
   onRetrySave?: () => void
+  /** What ⌘S or Ctrl+S keeps, rather than the browser saving the page. */
+  onSave?: () => void
   onTitleChange: (title: string) => void
   onUndo: () => void
   /** The page's width in printed points, which Fit zooms to. */
   pageWidthPoints: number
   panel?: (narrow: boolean) => ReactNode
+  /** Who else is here. */
+  people?: (narrow: boolean) => ReactNode
   primary?: ReactNode
-  /** How saving stands; "blocked" waits on a fix, "unsaved-local" on Update. */
-  saveStatus: AutosaveStatus | "blocked" | "unsaved-local" | null
+  /** How saving stands; "blocked" waits on a fix, "unsaved-local" on Save, "stopped" once editing here ended. */
+  saveStatus: AutosaveStatus | "blocked" | "stopped" | "unsaved-local" | null
   title: string
   titleEditable: boolean
   /** The formatting toolbar, floating at the top of the canvas on a laptop. */
@@ -81,7 +79,7 @@ type EditorFrameProps<Mode extends string> = {
  * @param props - What the top bar shows and does, and the canvas to frame.
  * @returns The full-screen editor.
  */
-export function EditorFrame<Mode extends string>({
+export function EditorFrame({
   backHref,
   backLabel,
   banner,
@@ -92,21 +90,20 @@ export function EditorFrame<Mode extends string>({
   extra,
   layout: layoutStore,
   menu,
-  mode,
-  modes,
-  onModeChange,
   onRedo,
   onRetrySave,
+  onSave,
   onTitleChange,
   onUndo,
   pageWidthPoints,
   panel,
+  people,
   primary,
   saveStatus,
   title,
   titleEditable,
   toolbar,
-}: EditorFrameProps<Mode>): ReactElement {
+}: EditorFrameProps): ReactElement {
   const narrow = useSyncExternalStore(
     subscribeToWidth,
     () => window.matchMedia(NARROW).matches,
@@ -162,7 +159,12 @@ export function EditorFrame<Mode extends string>({
         return
       }
 
-      if (key === "z" || key === "y") {
+      if (key === "s") {
+        if (onSave) {
+          event.preventDefault()
+          onSave()
+        }
+      } else if (key === "z" || key === "y") {
         const inField = (event.target as HTMLElement | null)?.closest("input, textarea, select")
 
         if (inField) {
@@ -187,7 +189,7 @@ export function EditorFrame<Mode extends string>({
 
     document.addEventListener("keydown", handleKey)
     return () => document.removeEventListener("keydown", handleKey)
-  }, [onRedo, onUndo, zoom])
+  }, [onRedo, onSave, onUndo, zoom])
 
   return (
     <div className="flex h-dvh flex-col bg-canvas text-foreground" data-slot="editor">
@@ -216,42 +218,40 @@ export function EditorFrame<Mode extends string>({
         />
         <SaveStatus onRetry={onRetrySave} status={saveStatus} />
         <span className="grow" />
-        {!narrow && modes && mode && onModeChange ? (
-          <Segmented className="absolute left-1/2 -translate-x-1/2" label="Mode" onChange={onModeChange} options={modes} value={mode} />
-        ) : null}
+        {people?.(narrow)}
         {extra}
-        <Button
-          aria-label="Undo"
-          className="size-9 md:size-10"
-          disabled={!canUndo}
-          onClick={onUndo}
-          size="icon"
-          title="Undo"
-          type="button"
-          variant="ghost"
-        >
-          <Undo2 />
-        </Button>
-        <Button
-          aria-label="Redo"
-          className="size-9 md:size-10"
-          disabled={!canRedo}
-          onClick={onRedo}
-          size="icon"
-          title="Redo"
-          type="button"
-          variant="ghost"
-        >
-          <Redo2 />
-        </Button>
+        {/* Nothing to undo where nothing can be written, as in a preview. */}
+        {titleEditable || canUndo || canRedo ? (
+          <>
+            <Button
+              aria-label="Undo"
+              className="size-9 md:size-10"
+              disabled={!canUndo}
+              onClick={onUndo}
+              size="icon"
+              title="Undo"
+              type="button"
+              variant="ghost"
+            >
+              <Undo2 />
+            </Button>
+            <Button
+              aria-label="Redo"
+              className="size-9 md:size-10"
+              disabled={!canRedo}
+              onClick={onRedo}
+              size="icon"
+              title="Redo"
+              type="button"
+              variant="ghost"
+            >
+              <Redo2 />
+            </Button>
+          </>
+        ) : null}
         {menu}
         {primary}
       </header>
-      {narrow && modes && mode && onModeChange ? (
-        <div className="flex justify-center pb-2">
-          <Segmented label="Mode" onChange={onModeChange} options={modes} value={mode} />
-        </div>
-      ) : null}
       {/* An open panel takes its own column on a laptop, so it never covers the
           page; Fit follows because the scroll area's width changes. */}
       <div className="group/stage relative min-h-0 flex-1">
@@ -472,7 +472,7 @@ function SaveStatus({
   status,
 }: {
   onRetry?: () => void
-  status: AutosaveStatus | "blocked" | "unsaved-local" | null
+  status: AutosaveStatus | "blocked" | "stopped" | "unsaved-local" | null
 }): ReactElement | null {
   if (!status) {
     return null
@@ -486,6 +486,7 @@ function SaveStatus({
     offline: "Offline",
     saved: "Saved",
     saving: "Saving…",
+    stopped: "Editing stopped",
     unsaved: "Saving…",
   }[status]
 
@@ -500,11 +501,11 @@ function SaveStatus({
         aria-hidden="true"
         className={cn(
           "size-1.5 rounded-full",
-          status === "saved" ? "bg-primary/60" : status === "conflict" || status === "error" ? "bg-destructive" : "bg-muted-foreground/50"
+          status === "saved" ? "bg-primary/60" : status === "conflict" || status === "error" || status === "stopped" ? "bg-destructive" : "bg-muted-foreground/50"
         )}
       />
       {text}
-      {status === "conflict" ? (
+      {status === "conflict" || status === "stopped" ? (
         <button className="underline underline-offset-2 hover:text-foreground" onClick={() => window.location.reload()} type="button">
           Reload
         </button>

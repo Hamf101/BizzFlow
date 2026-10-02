@@ -10,8 +10,8 @@ import {
   getActionErrorFeedbackCode,
 } from "@/lib/action-result"
 import { buildRedirect, getFormString } from "@/lib/form-utils"
-import { canPerformOrganizationAction } from "@/lib/permissions"
 import { getCurrentOrganizationContext } from "@/services/organization-service"
+import { canEditDocumentTemplate } from "@/services/template-service"
 import {
   createPublicFormLink,
   disablePublicFormLink,
@@ -35,12 +35,10 @@ export async function createPublicFormLinkAction(
     const user = await getAuthenticatedUser()
     const context = await getCurrentOrganizationContext(user.id)
 
+    // Whoever may edit the template may open it to the public.
     if (
       !context ||
-      !canPerformOrganizationAction(
-        context.membership,
-        "templates:manage"
-      )
+      !(await canEditDocumentTemplate({ actorUserId: user.id, organizationId: context.organization.id, templateId }))
     ) {
       throw new PublicLinkActionError(
         "You do not have permission to manage public form links."
@@ -77,7 +75,8 @@ export async function disablePublicFormLinkAction(
   formData: FormData
 ): Promise<void> {
   const linkId = getFormString(formData, "linkId")
-  const linksPath = getPublicLinksPath(getFormString(formData, "templateId"))
+  const templateId = getFormString(formData, "templateId")
+  const linksPath = getPublicLinksPath(templateId)
 
   try {
     const user = await getAuthenticatedUser()
@@ -85,10 +84,7 @@ export async function disablePublicFormLinkAction(
 
     if (
       !context ||
-      !canPerformOrganizationAction(
-        context.membership,
-        "templates:manage"
-      )
+      !(await canEditDocumentTemplate({ actorUserId: user.id, organizationId: context.organization.id, templateId }))
     ) {
       throw new PublicLinkActionError(
         "You do not have permission to manage public form links."

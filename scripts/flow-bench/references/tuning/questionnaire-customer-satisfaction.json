@@ -1,0 +1,322 @@
+{
+  "request": "customer satisfaction survey for my hair salon",
+  "title": "How was your visit?",
+  "description": "Give to clients after an appointment, to learn how satisfied they were with the booking, the welcome, the result and the value, and what the salon could do better.",
+  "maxPages": 2,
+  "content": {
+    "schemaVersion": 3,
+    "branding": {
+      "organizationName": "",
+      "logoAsset": null,
+      "logoDataUrl": null,
+      "logoAlignment": "left",
+      "logoWidthPercent": 24,
+      "primaryColor": "#252329",
+      "accentColor": "#635273"
+    },
+    "blocks": [
+      {
+        "id": "d5010000-0000-4000-8000-000000000001",
+        "type": "heading",
+        "text": "How was your visit?",
+        "level": 1,
+        "alignment": "left"
+      },
+      {
+        "id": "d5010000-0000-4000-8000-000000000002",
+        "type": "paragraph",
+        "text": "Thank you for visiting us. This survey takes about two minutes, and every answer helps us look after you better next time.",
+        "alignment": "left"
+      },
+      {
+        "id": "d5010000-0000-4000-8000-000000000003",
+        "type": "paragraph",
+        "text": "You do not need to give your name. If you choose to leave your contact details at the end, we use them only to reply to you about your answers, and we do not share them with anyone else.",
+        "alignment": "left"
+      },
+      {
+        "id": "d5010000-0000-4000-8000-000000000004",
+        "type": "dropdown_field",
+        "fieldKey": "which_service_did_you_have",
+        "label": "Which service did you have?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Cut and finish",
+          "Colour",
+          "Cut and colour",
+          "Highlights or balayage",
+          "Blow-dry or styling",
+          "Treatment",
+          "Other"
+        ],
+        "display": "radios"
+      },
+      {
+        "id": "d5010000-0000-4000-8000-000000000006",
+        "type": "text_field",
+        "fieldKey": "which_other_service_did_you_have",
+        "label": "Which other service did you have?",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "d5010000-0000-4000-8000-000000000004",
+          "operator": "equals",
+          "value": "Other"
+        },
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d5010000-0000-4000-8000-000000000007",
+        "type": "dropdown_field",
+        "fieldKey": "was_this_your_first_visit_to_us",
+        "label": "Was this your first visit to us?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes, my first visit",
+          "No, I have been before"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "d5010000-0000-4000-8000-000000000008",
+        "type": "dropdown_field",
+        "fieldKey": "overall_how_satisfied_are_you_with_your_visit",
+        "label": "Overall, how satisfied are you with your visit?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Very satisfied",
+          "Satisfied",
+          "Neither satisfied nor dissatisfied",
+          "Dissatisfied",
+          "Very dissatisfied"
+        ],
+        "display": "radios"
+      },
+      {
+        "id": "d5010000-0000-4000-8000-000000000010",
+        "type": "dropdown_field",
+        "fieldKey": "how_easy_was_it_to_book_your_appointment",
+        "label": "How easy was it to book your appointment?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Very easy",
+          "Easy",
+          "Difficult",
+          "Very difficult"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "d5010000-0000-4000-8000-000000000025",
+        "type": "choice_grid_field",
+        "fieldKey": "salon_ratings",
+        "label": "How would you rate each of these?",
+        "required": true,
+        "helpText": null,
+        "rows": [
+          "The welcome you received",
+          "The cleanliness of the salon",
+          "The value for money"
+        ],
+        "options": [
+          "Excellent",
+          "Good",
+          "Fair",
+          "Poor"
+        ]
+      },
+      {
+        "id": "d5010000-0000-4000-8000-000000000012",
+        "type": "dropdown_field",
+        "fieldKey": "did_your_stylist_understand_what_you_wanted",
+        "label": "Did your stylist understand what you wanted?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes, completely",
+          "Mostly",
+          "Not really",
+          "Not at all"
+        ],
+        "display": "radios"
+      },
+      {
+        "id": "d5010000-0000-4000-8000-000000000013",
+        "type": "dropdown_field",
+        "fieldKey": "how_happy_are_you_with_the_result",
+        "label": "How happy are you with the result?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Very happy",
+          "Happy",
+          "Unhappy",
+          "Very unhappy"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "d5010000-0000-4000-8000-000000000016",
+        "type": "dropdown_field",
+        "fieldKey": "how_likely_are_you_to_recommend_us_to_a_friend",
+        "label": "How likely are you to recommend us to a friend?",
+        "required": true,
+        "helpText": "0 means not at all likely and 10 means extremely likely.",
+        "placeholder": null,
+        "options": [
+          "0",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "d5010000-0000-4000-8000-000000000017",
+        "type": "text_field",
+        "fieldKey": "what_did_we_do_well",
+        "label": "What did we do well?",
+        "required": false,
+        "helpText": null,
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "d5010000-0000-4000-8000-000000000019",
+        "type": "text_field",
+        "fieldKey": "what_could_we_do_better",
+        "label": "What could we do better?",
+        "required": false,
+        "helpText": "Tell us anything that would have made your visit better.",
+        "placeholder": null,
+        "multiline": true
+      },
+      {
+        "id": "d5010000-0000-4000-8000-000000000020",
+        "type": "dropdown_field",
+        "fieldKey": "would_you_like_us_to_contact_you_about_your_answers",
+        "label": "Would you like us to contact you about your answers?",
+        "required": true,
+        "helpText": null,
+        "placeholder": null,
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "display": "radios",
+        "across": true
+      },
+      {
+        "id": "d5010000-0000-4000-8000-000000000022",
+        "type": "text_field",
+        "fieldKey": "your_name",
+        "label": "Your name",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "d5010000-0000-4000-8000-000000000020",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "placeholder": null,
+        "multiline": false
+      },
+      {
+        "id": "d5010000-0000-4000-8000-000000000023",
+        "type": "text_field",
+        "fieldKey": "phone_number_or_email_address",
+        "label": "Phone number or email address",
+        "required": true,
+        "helpText": null,
+        "visibleWhen": {
+          "sourceBlockId": "d5010000-0000-4000-8000-000000000020",
+          "operator": "equals",
+          "value": "Yes"
+        },
+        "placeholder": null,
+        "multiline": false
+      }
+    ],
+    "layout": {
+      "pageSize": "A4",
+      "orientation": "portrait",
+      "density": "balanced",
+      "fieldStyle": "box",
+      "marginPreset": "standard",
+      "sectionStyle": "plain",
+      "printedTitle": {
+        "mode": "none"
+      },
+      "headerPolicy": "none",
+      "footerPolicy": "all_pages",
+      "pageNumbering": "none",
+      "footerText": {
+        "left": "{title}",
+        "right": "Page {page} of {pages}"
+      }
+    },
+    "sections": [
+      {
+        "id": "d5010000-0000-4000-8000-000000000005",
+        "label": "Your visit",
+        "startBlockId": "d5010000-0000-4000-8000-000000000004",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d5010000-0000-4000-8000-000000000009",
+        "label": "How we did",
+        "startBlockId": "d5010000-0000-4000-8000-000000000008",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d5010000-0000-4000-8000-000000000018",
+        "label": "Your comments",
+        "startBlockId": "d5010000-0000-4000-8000-000000000017",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      },
+      {
+        "id": "d5010000-0000-4000-8000-000000000021",
+        "label": "Hearing back from us",
+        "startBlockId": "d5010000-0000-4000-8000-000000000020",
+        "pageBreakBefore": false,
+        "keepTogether": false
+      }
+    ],
+    "fieldGroups": [
+      {
+        "id": "d5010000-0000-4000-8000-000000000024",
+        "label": null,
+        "startBlockId": "d5010000-0000-4000-8000-000000000022",
+        "endBlockId": "d5010000-0000-4000-8000-000000000023",
+        "columns": 2,
+        "keepTogether": false
+      }
+    ],
+    "blockRules": []
+  }
+}

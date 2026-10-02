@@ -373,7 +373,7 @@ export function normalizeNullableId(
   return normalizedValue ? normalizedValue : null
 }
 
-async function getActiveMembership(
+export async function getActiveMembership(
   client: DocumentServiceClient,
   organizationId: string,
   userId: string

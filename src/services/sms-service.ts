@@ -4,7 +4,6 @@ import { getSmsProvider, type SmsFactoryDeps } from "@/services/sms/provider-fac
 export type {
   SendSmsInput,
   SendSmsResult,
-  SmsProvider,
 } from "@/services/sms/contracts"
 export type { SmsFactoryDeps } from "@/services/sms/provider-factory"
 

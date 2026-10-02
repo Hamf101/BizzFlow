@@ -5,8 +5,8 @@ import type { TemplateBranding } from "@/types/template"
  *
  * `screen` follows the interface theme. It is what an author edits against, so
  * it must stay legible in light and dark alike. `paper` reproduces the printed
- * page and applies the author's brand colours, which were chosen against paper
- * and are only trustworthy there.
+ * page. Both show the author's brand colours: paper exactly, the screen
+ * exactly on a light page and turned over on a dark one.
  */
 export type DocumentSurface = "screen" | "paper"
 
@@ -19,10 +19,11 @@ export type DocumentSurfaceInk = Readonly<{
 /**
  * Resolves the ink a document should be drawn with on one surface.
  *
- * Brand colours are absolute and were picked against a light page. Applying
- * them to a themed surface is what makes a document title vanish in dark mode,
- * so the screen surface uses theme tokens and leaves brand colour to paper and
- * to the finalized PDF.
+ * Brand colours were picked against a light page. Paper takes them as they
+ * are. The screen takes them through the theme's `--doc-ink-from` and
+ * `--doc-ink-by`: a light page leaves a colour exact, and a dark page turns
+ * its lightness over, so near-black ink reads as near-white and an ink too
+ * pale to print well is just as faint on screen.
  *
  * @param surface - Surface the document is drawn on.
  * @param branding - Author-chosen brand colours from the render plan.
@@ -32,9 +33,8 @@ export function resolveDocumentSurfaceInk(
   surface: DocumentSurface,
   branding: TemplateBranding
 ): DocumentSurfaceInk {
-  if (surface === "paper") {
-    return { accent: branding.accentColor, primary: branding.primaryColor }
-  }
+  const ink = (colour: string): string =>
+    surface === "paper" ? colour : `oklch(from ${colour} calc(var(--doc-ink-from) + var(--doc-ink-by) * l) c h)`
 
-  return { accent: "var(--primary)", primary: "var(--foreground)" }
+  return { accent: ink(branding.accentColor), primary: ink(branding.primaryColor) }
 }
