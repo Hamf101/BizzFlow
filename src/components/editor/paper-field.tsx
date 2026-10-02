@@ -75,6 +75,7 @@ export function PaperField({
   fieldStyle = "box",
   mode,
   onAnswerChange,
+  renderFile,
 }: {
   answers: Readonly<Record<string, unknown>>
   block: FieldBlock
@@ -84,6 +85,8 @@ export function PaperField({
   fieldStyle?: FieldStyle
   mode: "design" | "fill" | "read"
   onAnswerChange: (fieldKey: string, value: unknown) => void
+  /** What a page that takes uploads puts in a file field while it is filled in. */
+  renderFile?: (block: Extract<FieldBlock, { type: "file_field" }>) => ReactNode
 }): ReactElement {
   const fill = mode === "fill"
   const value = answers[block.fieldKey]
@@ -246,7 +249,7 @@ export function PaperField({
       ) : null
       break
     case "file_field":
-      answer = placeholder(mode === "design" ? "Choose a file" : "Uploads are only in submissions.")
+      answer = fill && renderFile ? renderFile(block) : placeholder(mode === "design" ? "Choose a file" : "Uploads are only in submissions.")
       break
   }
 

@@ -22,7 +22,6 @@ import {
 } from "@/components/editor/block-catalog"
 import type { TextCaret } from "@/components/editor/editable-text"
 import {
-  BlockContextMenu,
   CanvasBlock,
   type CanvasActions,
   isBoxed,
@@ -48,14 +47,12 @@ import {
   splitTextBlock,
   withEntries,
 } from "@/components/editor/editor-content"
+import { designTools } from "@/components/editor/design-tools"
 import { type CanvasUnit, createUnits, paginate, type PageFrame, type PaginationRow } from "@/components/editor/editor-pagination"
 import { usePageSelection } from "@/components/editor/page-selection"
 import { bizflowToast } from "@/components/ui/toaster"
-import { SectionPieces } from "./section-pieces"
-import { EditorSection, PrintedSectionTitle, sectionBoxStyle } from "./editor-section"
-import { MarginGuides } from "@/components/editor/margin-guides"
+import { PrintedSectionTitle, sectionBoxStyle } from "./printed-section"
 import { PRINTED_HEADING, printedSpace } from "@/components/editor/paper-field"
-import { SlashMenu } from "@/components/editor/slash-menu"
 import { SNAP_PX, snapBox } from "@/components/editor/image-placement"
 import { type DragBox, type DragLine, type DropTarget, useBlockDrag } from "@/components/editor/use-block-drag"
 import { rowGridColumns } from "@/components/templates/template-render-groups"
@@ -85,6 +82,7 @@ import {
   updateTemplateBlock,
 } from "@/types/template-structure"
 import { imageSource } from "@/types/template-images"
+
 
 /** CSS pixels in a printed point: a page at 100% is its paper's real size. */
 export const POINT_PX = 4 / 3
@@ -123,6 +121,8 @@ export type EditorCanvasProps = Readonly<{
   onAnswerChange?: (fieldKey: string, value: unknown) => void
   /** Drawn over the pages at their shown size, such as where others are. */
   overlay?: ReactNode
+  /** What a page that takes uploads puts in a file field while it is filled in. */
+  renderFileField?: CanvasActions["renderFileField"]
   textEditable: boolean
   zoom: number
 }>
@@ -145,9 +145,11 @@ export function EditorCanvas({
   narrow,
   onAnswerChange = () => undefined,
   overlay,
+  renderFileField,
   textEditable,
   zoom,
 }: EditorCanvasProps): ReactElement {
+  const { MarginGuides, SectionPieces, SlashMenu } = designTools() ?? {}
   const content = controller.content
   const plan = useMemo(
     (): TemplateRenderPlan =>
@@ -642,6 +644,7 @@ export function EditorCanvas({
         : null
     },
     onAnswerChange,
+    renderFileField,
     onPasteLines(caretKey, lines, from, to) {
       const [blockId = "", item] = caretKey.split(":")
       const point = (offset: number) => (item === undefined ? { blockId, offset } : { blockId, item: Number(item), offset })
@@ -991,15 +994,15 @@ export function EditorCanvas({
         {PRINTED_FACE}
         {CELL_JOINS}
         <MarginWords className="mb-4 flex justify-between gap-3 text-[11px]" words={columnWords.header} />
-        <BlockContextMenu actions={actions}>{flow}</BlockContextMenu>
-        {textEditable ? <SectionPieces root={rootRef} sectionId={controller.currentSectionId} narrow zoom={1} revision={content} /> : null}
+        <Selectable actions={actions}>{flow}</Selectable>
+        {textEditable && SectionPieces ? <SectionPieces root={rootRef} sectionId={controller.currentSectionId} narrow zoom={1} revision={content} /> : null}
         {units.length === 0 ? <EmptyPageLine actions={actions} onStart={() => focusPageEnd(0)} /> : null}
         <MarginWords className="mt-6 flex justify-between gap-3 text-[11px]" words={columnWords.footer} />
         {textEditable ? (
           <AddPageButton className="mt-6" onClick={() => controller.addPage(content.blocks.at(-1)?.id ?? null)} />
         ) : null}
         {overlay}
-        {slash ? (
+        {slash && SlashMenu ? (
           <SlashMenu
             activeIndex={slash.active}
             anchor={slash.anchor}
@@ -1049,7 +1052,7 @@ export function EditorCanvas({
             role="region"
             style={{ height: pageHeight, top: page * (pageHeight + PAGE_GAP_PX) }}
           >
-            {designable ? (
+            {designable && MarginGuides ? (
               <MarginGuides first={page === 0} layout={plan.layout} onChange={controller.setLayout} point={point} zoom={zoom} />
             ) : null}
             {headerOn(page) ? (
@@ -1127,14 +1130,14 @@ export function EditorCanvas({
             ) : null}
           </div>
         ))}
-        {textEditable ? <SectionPieces root={rootRef} sectionId={controller.currentSectionId} narrow={false} zoom={zoom} revision={layout} /> : null}
+        {textEditable && SectionPieces ? <SectionPieces root={rootRef} sectionId={controller.currentSectionId} narrow={false} zoom={zoom} revision={layout} /> : null}
         <div
           className="pointer-events-none absolute inset-x-0 top-0"
           data-slot="page-flow"
           style={{ paddingLeft: margins.left, paddingRight: margins.right, paddingTop: frame.marginTop(0) }}
         >
           <PageBreaks.Provider value={layout.inside}>
-            <BlockContextMenu actions={actions}>{flow}</BlockContextMenu>
+            <Selectable actions={actions}>{flow}</Selectable>
           </PageBreaks.Provider>
           {units.length === 0 ? (
             <div className="pointer-events-auto">
@@ -1144,7 +1147,7 @@ export function EditorCanvas({
         </div>
       </div>
       {overlay}
-      {slash ? (
+      {slash && SlashMenu ? (
         <SlashMenu
           activeIndex={slash.active}
           anchor={slash.anchor}
@@ -1159,13 +1162,18 @@ export function EditorCanvas({
 }
 
 function UnitBlocks({ actions, unit }: { actions: CanvasActions; unit: CanvasUnit }): ReactElement {
+  const EditorSection = designTools()?.EditorSection
+  const printedTitle = unit.sectionLabel ? (
+    <PrintedSectionTitle label={unit.sectionLabel} number={unit.sectionNumber} sectionStyle={actions.controller.content.layout.sectionStyle} />
+  ) : null
+
   return (
     <>
-      {unit.sectionId && actions.textEditable ? (
+      {unit.sectionId && actions.textEditable && EditorSection ? (
         <EditorSection controller={actions.controller} number={unit.sectionNumber} section={actions.controller.content.sections.find((section) => section.id === unit.sectionId)!} />
-      ) : unit.sectionLabel ? (
-        <PrintedSectionTitle label={unit.sectionLabel} number={unit.sectionNumber} sectionStyle={actions.controller.content.layout.sectionStyle} />
-      ) : null}
+      ) : (
+        printedTitle
+      )}
       {unit.groupLabel ? (
         <p className="font-bold text-muted-foreground uppercase" style={{ fontSize: "0.9em", lineHeight: 13 / 9, marginBottom: printedSpace(8) }}>
           {unit.groupLabel}
@@ -1510,3 +1518,14 @@ function readCaretRect(): DOMRect {
   return element?.getBoundingClientRect() ?? new DOMRect()
 }
 
+// Blocks get their right-click menu only while they can be chosen; a page
+// that is only read or filled in has none.
+function Selectable({ actions, children }: { actions: CanvasActions; children: ReactNode }): ReactNode {
+  const BlockContextMenu = designTools()?.BlockContextMenu
+
+  return (actions.textEditable || actions.designable) && BlockContextMenu ? (
+    <BlockContextMenu actions={actions}>{children}</BlockContextMenu>
+  ) : (
+    children
+  )
+}

@@ -6,7 +6,7 @@ import { type ReactElement, useMemo, useState } from "react"
 
 import { EditorCanvas } from "@/components/editor/editor-canvas"
 import { EditorFrame, EditorNotice } from "@/components/editor/editor-frame"
-import { useEditorController } from "@/components/editor/use-editor-controller"
+import { useReadOnlyController } from "@/components/editor/use-editor-controller"
 import { ShareButton } from "@/components/sharing/share-button"
 import { buttonVariants } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -39,7 +39,7 @@ export function DocumentPreview({
 }): ReactElement {
   const document = view.document
   const content = useMemo(() => upgradeV2TemplateContentToV3(document.templateSnapshot), [document.templateSnapshot])
-  const controller = useEditorController({ change: ignore, content, undo: ignore })
+  const controller = useReadOnlyController(content)
   const [answers, setAnswers] = useState<Record<string, unknown>>(view.answers)
   const geometry = resolvePageGeometry(content.layout)
   const editHref = `/documents/${encodeURIComponent(document.id)}/edit`

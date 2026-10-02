@@ -1,4 +1,5 @@
-import { MAX_TABLE_ROWS, type TemplateBlock } from "@/types/template"
+import { type TemplateBlock } from "@/types/template"
+import { MAX_TABLE_ROWS } from "@/types/template-limits"
 
 type TableBlock = Extract<TemplateBlock, { type: "table" }>
 

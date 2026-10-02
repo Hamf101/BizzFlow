@@ -1,13 +1,5 @@
-import {
-  isPinnedBlock,
-  MAX_ROW_COLUMNS,
-  MAX_TEMPLATE_BLOCK_COUNT,
-  ruleHasEffect,
-  type TemplateBlock,
-  type TemplateContentV3,
-  type TemplateFieldGroup,
-  type TemplateSection
-} from "@/types/template"
+import { type TemplateBlock, type TemplateContentV3, type TemplateFieldGroup, type TemplateSection } from "@/types/template"
+import { isPinnedBlock, MAX_ROW_COLUMNS, MAX_TEMPLATE_BLOCK_COUNT, ruleHasEffect } from "@/types/template-limits"
 
 type TemplateFieldBlock = Extract<TemplateBlock, { fieldKey: string }>
 type TemplateBlockRule = TemplateContentV3["blockRules"][number]
