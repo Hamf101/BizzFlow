@@ -14,14 +14,15 @@ export const ROUTE_BUDGETS = [
   {
     label: "Public form",
     route: "/forms/[token]/page",
-    // Set by who answers, not by what the page weighs today (2026-10-02):
-    // people on a weak 3G signal, about 400 kbit/s, on a cheap phone. 75 KiB
-    // arrives in about a second and a half there, the framework's 40 of it
-    // included. It is drawn on the editor's own paper, which designing's code
-    // never reaches; grids, tables and signature pads load only on forms that
-    // have them. The page is drawn on the server, so it can be read and typed
-    // into before any of this arrives.
-    ceilingKiB: 75,
+    // Set by who answers (2026-10-02): people on 4G, often a weak signal, on
+    // a cheap phone. Published guidance gives a page that must work in three
+    // seconds there about 300 KiB of JavaScript; 200 KiB keeps well inside it,
+    // where comparable form pages ship 240 KiB to several MiB. It is drawn on
+    // the editor's own paper, which designing's code never reaches; grids,
+    // tables and signature pads load only on forms that have them. The page
+    // is drawn on the server, so it can be read and typed into before any of
+    // this arrives.
+    ceilingKiB: 200,
   },
   {
     label: "Public signing",

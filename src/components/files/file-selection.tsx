@@ -21,6 +21,8 @@ export type SelectableFile = {
   labels: readonly FileLifecycleAction["label"][]
   /** Whether the member may choose who else can open it. */
   shareable: boolean
+  /** Whether the member may send it to people to answer: a document made from a template. */
+  sendable?: boolean
 }
 
 type FileExtras = {

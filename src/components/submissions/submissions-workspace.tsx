@@ -247,6 +247,11 @@ function SubmissionRow({
             submissionId={submission.id}
             title={submission.title}
           />
+          {submission.sentTo ? (
+            <span className="truncate text-xs text-muted-foreground" data-slot="submission-sent-to">
+              Sent to {submission.sentTo}
+            </span>
+          ) : null}
           <span
             className="text-xs text-muted-foreground tabular-nums lg:hidden"
             data-slot="submission-updated-compact"

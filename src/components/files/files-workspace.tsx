@@ -52,6 +52,7 @@ import { formatMediumDate } from "@/lib/date-format"
 import { buildDocumentFolderPath } from "@/lib/page-document-folders"
 import {
   canPerformOrganizationAction,
+  canSendDocument,
   canShareResource,
   type OrganizationPermissionSubject,
 } from "@/lib/permissions"
@@ -389,6 +390,7 @@ export function FilesWorkspace({
             ? LIFECYCLE_LABELS[document.lifecycleState]
             : [],
         shareable: canShare(document),
+        sendable: Boolean(document.templateId) && canSendDocument(membership, document),
       })
     ),
   ]

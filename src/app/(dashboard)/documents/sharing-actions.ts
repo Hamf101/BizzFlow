@@ -6,7 +6,7 @@ import { z } from "zod"
 
 import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
 import { buildRedirect } from "@/lib/form-utils"
-import { checkRateLimit, RateLimitError } from "@/lib/rate-limit"
+import { checkRateLimit, hashRateLimitKeyPart, RateLimitError } from "@/lib/rate-limit"
 import {
   DocumentServiceError,
   getSharingMany,
@@ -59,7 +59,7 @@ export async function setSharingAccessAction(input: z.infer<typeof accessSchema>
     if ("email" in parsed.principal && parsed.level !== null) {
       await checkRateLimit("outbound_email", who.actorUserId)
       await checkRateLimit("outbound_email_daily", who.actorUserId)
-      await checkRateLimit("email_recipient", parsed.principal.email.trim().toLowerCase())
+      await checkRateLimit("email_recipient", hashRateLimitKeyPart(parsed.principal.email))
     }
 
     return setSharingAccessMany({ ...who, ...parsed })

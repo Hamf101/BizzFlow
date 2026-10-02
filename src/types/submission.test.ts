@@ -94,7 +94,14 @@ describe("submission persistence types", () => {
       submittedAt: null,
       assignedAt: null,
       requiredApprovals: null,
+      sentTo: null,
     })
+  })
+
+  it("reads whom a submission was sent to answer, from the link it came through", () => {
+    expect(parseSubmissionRow({ ...DRAFT_ROW, public_form_link: { recipient_email: "ana@example.com" } }).sentTo).toBe("ana@example.com")
+    // A link open to anyone has no recipient.
+    expect(parseSubmissionRow({ ...DRAFT_ROW, public_form_link: { recipient_email: null } }).sentTo).toBeNull()
   })
 
   it("reads how many approvals a submission needs, and reads nothing as everyone", () => {

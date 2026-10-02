@@ -1,14 +1,15 @@
 "use client"
 
-import { Download, Pencil } from "lucide-react"
+import { Download, Pencil, Send } from "lucide-react"
 import Link from "next/link"
 import { type ReactElement, useMemo, useState } from "react"
 
 import { EditorCanvas } from "@/components/editor/editor-canvas"
 import { EditorFrame, EditorNotice } from "@/components/editor/editor-frame"
 import { useReadOnlyController } from "@/components/editor/read-only-controller"
+import { SendToAnswerDialog } from "@/components/editor/lazy-panels"
 import { ShareButton } from "@/components/sharing/share-button"
-import { buttonVariants } from "@/components/ui/button"
+import { Button, buttonVariants } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { resolvePageGeometry } from "@/services/templates/template-render-plan"
 import type { GeneratedDocumentSigningView } from "@/types/signing"
@@ -21,19 +22,21 @@ const ignore = (): void => undefined
  * A document as the people filling it see it. Its fields can be tried, but
  * nothing typed here is kept; Edit opens it in the editor.
  *
- * @param props - The document, where Back goes and its name, and whether this person may edit or share it.
+ * @param props - The document, where Back goes and its name, and whether this person may edit, send or share it.
  * @returns The full-screen preview.
  */
 export function DocumentPreview({
   backHref,
   backLabel = "Back to Files",
   canEdit,
+  canSendToAnswer,
   canShare,
   view,
 }: {
   backHref: string
   backLabel?: string
   canEdit: boolean
+  canSendToAnswer: boolean
   canShare: boolean
   view: GeneratedDocumentSigningView
 }): ReactElement {
@@ -41,6 +44,7 @@ export function DocumentPreview({
   const content = useMemo(() => upgradeV2TemplateContentToV3(document.templateSnapshot), [document.templateSnapshot])
   const controller = useReadOnlyController(content)
   const [answers, setAnswers] = useState<Record<string, unknown>>(view.answers)
+  const [sending, setSending] = useState(false)
   const geometry = resolvePageGeometry(content.layout)
   const editHref = `/documents/${encodeURIComponent(document.id)}/edit`
 
@@ -54,6 +58,14 @@ export function DocumentPreview({
       dock={() => null}
       menu={
         <>
+          {canSendToAnswer ? (
+            <Button aria-label="Send to answer" className="size-10" onClick={() => setSending(true)} size="icon" title="Send to answer" type="button" variant="ghost">
+              <Send />
+            </Button>
+          ) : null}
+          {sending ? (
+            <SendToAnswerDialog name={document.title} onOpenChange={setSending} open source={{ documentId: document.id, kind: "document" }} />
+          ) : null}
           {canShare ? <ShareButton iconOnly name={document.title} resource={{ id: document.id, kind: "document" }} /> : null}
           <a
             aria-label="Download PDF"

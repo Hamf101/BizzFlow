@@ -119,11 +119,6 @@ export function PaperField({
     </span>
   )
 
-  // An upload brings its own label, help and messages.
-  if (block.type === "file_field" && fill && renderFile) {
-    return <>{renderFile(block)}</>
-  }
-
   // A grid and a table print with their own rules, under the field's title.
   if (block.type === "choice_grid_field" || block.type === "table_field") {
     return (
@@ -438,7 +433,7 @@ export function PaperField({
       <div
         className={cn(
           "relative flex flex-col border-border transition-colors focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/40",
-          fill && "cursor-text",
+          fill && block.type !== "file_field" && "cursor-text",
           // Faint until a pointer comes over it, drawn in full while it takes an answer.
           mode !== "read" && "hover:border-muted-foreground/60"
         )}
@@ -455,6 +450,11 @@ export function PaperField({
         {answer}
         {edge}
       </div>
+      {block.type === "file_field" && fill && renderFile ? (
+        <span className="block text-muted-foreground" style={{ fontSize: "0.7em", lineHeight: 10 / 7, marginTop: "calc(3 * var(--doc-pt))" }}>
+          PDF, PNG, JPG, DOCX, XLSX or CSV, up to 20 MB.
+        </span>
+      ) : null}
       <Help block={block} />
     </div>
   )

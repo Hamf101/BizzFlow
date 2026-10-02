@@ -12,7 +12,7 @@ import {
   ORG_ID,
 } from "@/services/document-signing-service.test-support"
 import { getPublicFormLinkByToken, listPublicFormLinks } from "@/services/public-form-service"
-import { resendAnswerRequest, sendToAnswer, type SendToAnswerDeps } from "@/services/send-to-answer-service"
+import { listAnswerRequests, resendAnswerRequest, revokeAnswerRequest, sendToAnswer, type SendToAnswerDeps } from "@/services/send-to-answer-service"
 
 const TEMPLATE_ID = "50000000-0000-4000-8000-000000000001"
 const OTHER_ORG_ID = "10000000-0000-4000-8000-000000000009"
@@ -163,5 +163,54 @@ describe("resendAnswerRequest", () => {
     link.submission_count = 1
     await expect(resend()).rejects.toMatchObject({ statusCode: 409 })
     expect(sendRequest).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe("listAnswerRequests and revokeAnswerRequest", () => {
+  const LATER = new Date(NOW.getTime() + 8 * 24 * 60 * 60 * 1000)
+  const who = { actorUserId: MANAGER_ID, organizationId: ORG_ID }
+  const source = { documentId: DOCUMENT_ID, kind: "document" as const }
+
+  it("lists what one document was sent as, each with where it stands, to someone who may send it", async () => {
+    const { client, tables } = sendable()
+    await send(client, ["ana@example.com", "ben@example.com", "cara@example.com"])
+    await send(client, ["dan@example.com"], {}, { kind: "template", templateId: TEMPLATE_ID })
+    const [ana, ben, cara] = tables.public_form_links as FakeRow[]
+    ben!.submission_count = 1
+    cara!.status = "disabled"
+    const list = (now: Date) => listAnswerRequests({ ...who, source }, { client: client as never, now: () => now })
+
+    // The template's own send is listed with the template, not here.
+    expect(await list(NOW)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ email: "ana@example.com", id: ana!.id, state: "sent" }),
+        expect.objectContaining({ email: "ben@example.com", state: "answered" }),
+        expect.objectContaining({ email: "cara@example.com", state: "revoked" }),
+      ])
+    )
+    expect(await list(NOW)).toHaveLength(3)
+    expect((await list(LATER)).map((request) => request.state).sort()).toEqual(["answered", "expired", "revoked"])
+    expect(await listAnswerRequests({ ...who, source: { kind: "template", templateId: TEMPLATE_ID } }, { client: client as never, now: () => NOW })).toEqual([
+      expect.objectContaining({ email: "dan@example.com", state: "sent" }),
+    ])
+
+    ;(tables.document_effective_access[0] as FakeRow).access_level = "viewer"
+    await expect(list(NOW)).rejects.toMatchObject({ statusCode: 403 })
+  })
+
+  it("revokes a request so its link stops working, but not one already answered or another workspace's", async () => {
+    const { client, tables } = sendable()
+    await send(client, ["ana@example.com", "ben@example.com"])
+    const [ana, ben] = tables.public_form_links as FakeRow[]
+    const revoke = (linkId: string, organizationId = ORG_ID) =>
+      revokeAnswerRequest({ actorUserId: MANAGER_ID, linkId, organizationId }, deps(client))
+
+    await revoke(ana!.id as string)
+    expect(await getPublicFormLinkByToken(TOKENS[0]!, { client: client as never, now: () => NOW })).toMatchObject({ valid: false })
+
+    ben!.submission_count = 1
+    await expect(revoke(ben!.id as string)).rejects.toMatchObject({ statusCode: 409 })
+    await expect(revoke(ana!.id as string, OTHER_ORG_ID)).rejects.toMatchObject({ statusCode: 404 })
+    expect(ben!.status).toBe("active")
   })
 })

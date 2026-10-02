@@ -153,20 +153,7 @@ export async function resendAnswerRequest(
   deps: SendToAnswerDeps = {}
 ): Promise<SentAnswerRequest> {
   const client = deps.client ?? createAdminClient()
-  const { data } = await client
-    .from("public_form_links")
-    .select("id,org_id,template_id,document_id,recipient_email,status,submission_count,title_snapshot")
-    .eq("id", input.linkId)
-    .eq("org_id", input.organizationId)
-    .maybeSingle()
-  const link = data as { document_id: string | null; recipient_email: string | null; status: string; submission_count: number; template_id: string; title_snapshot: string | null } | null
-
-  if (!link?.recipient_email || !link.title_snapshot) {
-    throw new PublicFormServiceError("That request was not found.", 404)
-  }
-
-  // Only someone who may send it now may send it again.
-  await requireSender(client, input, link.document_id ? { documentId: link.document_id, kind: "document" } : { kind: "template", templateId: link.template_id })
+  const link = await loadRequest(client, input)
 
   if (link.submission_count > 0 || link.status === "disabled") {
     throw new PublicFormServiceError(link.submission_count > 0 ? "They have already answered it." : "That request was revoked.", 409)
@@ -201,6 +188,130 @@ export async function resendAnswerRequest(
   })
 
   return sent
+}
+
+/** Where one request stands, from the sender's side. */
+export type AnswerRequestState = "answered" | "expired" | "revoked" | "sent"
+
+export type AnswerRequestSummary = Readonly<{
+  email: string
+  expiresAt: string | null
+  id: string
+  sentAt: string
+  state: AnswerRequestState
+}>
+
+/**
+ * Lists whom a document or template was sent to answer, newest first, with
+ * where each request stands. Only someone who may send it may see this.
+ *
+ * @param input - Who asks, and what was sent.
+ * @param deps - Injected client and clock.
+ * @returns Each person's request.
+ * @throws PublicFormServiceError 403/404 for access.
+ */
+export async function listAnswerRequests(
+  input: Readonly<{ actorUserId: string; organizationId: string; source: AnswerSource }>,
+  deps: Pick<SendToAnswerDeps, "client" | "now"> = {}
+): Promise<AnswerRequestSummary[]> {
+  const client = deps.client ?? createAdminClient()
+  await requireSender(client, input, input.source)
+  const query = client
+    .from("public_form_links")
+    .select("id,recipient_email,status,submission_count,expires_at,created_at")
+    .eq("org_id", input.organizationId)
+  const { data, error } = await (input.source.kind === "document"
+    ? query.eq("document_id", input.source.documentId)
+    : query.eq("template_id", input.source.templateId).is("document_id", null)
+  ).order("created_at", { ascending: false })
+
+  if (error) {
+    throw new PublicFormServiceError("Unable to load what was sent.", 500)
+  }
+
+  const now = (deps.now ?? (() => new Date()))().getTime()
+  const rows = (data ?? []) as { created_at: string; expires_at: string | null; id: string; recipient_email: string | null; status: string; submission_count: number }[]
+
+  // Links open to anyone have no recipient; they are listed with the template's public links.
+  return rows.flatMap((row) =>
+    row.recipient_email
+      ? [
+          {
+            email: row.recipient_email,
+            expiresAt: row.expires_at,
+            id: row.id,
+            sentAt: row.created_at,
+            state:
+              row.submission_count > 0
+                ? "answered"
+                : row.status === "disabled"
+                  ? "revoked"
+                  : row.expires_at && Date.parse(row.expires_at) <= now
+                    ? "expired"
+                    : "sent",
+          },
+        ]
+      : []
+  )
+}
+
+/**
+ * Stops a request's link from taking answers. An answered request is already
+ * closed, so it is refused rather than rewritten.
+ *
+ * @param input - Who revokes, and which request.
+ * @param deps - Injected client, clock and audit.
+ * @throws PublicFormServiceError 404 when it is not this workspace's; 409 once answered.
+ */
+export async function revokeAnswerRequest(
+  input: Readonly<{ actorUserId: string; linkId: string; organizationId: string }>,
+  deps: SendToAnswerDeps = {}
+): Promise<void> {
+  const client = deps.client ?? createAdminClient()
+  await loadRequest(client, input)
+  const { data } = await client
+    .from("public_form_links")
+    .update({ status: "disabled", updated_at: (deps.now ?? (() => new Date()))().toISOString() })
+    .eq("id", input.linkId)
+    .eq("org_id", input.organizationId)
+    .eq("submission_count", 0)
+    .select("id")
+    .maybeSingle()
+
+  if (!data) {
+    throw new PublicFormServiceError("They have already answered it.", 409)
+  }
+
+  await audit(deps, {
+    action: "public_form_link.revoked",
+    actorUserId: input.actorUserId,
+    metadata: {},
+    organizationId: input.organizationId,
+    targetId: input.linkId,
+    targetType: "public_form_link",
+  })
+}
+
+// One person's request, once whoever asks has shown they may send it now.
+async function loadRequest(
+  client: ReturnType<typeof createAdminClient>,
+  input: Readonly<{ actorUserId: string; linkId: string; organizationId: string }>
+): Promise<{ document_id: string | null; recipient_email: string; status: string; submission_count: number; template_id: string; title_snapshot: string }> {
+  const { data } = await client
+    .from("public_form_links")
+    .select("id,org_id,template_id,document_id,recipient_email,status,submission_count,title_snapshot")
+    .eq("id", input.linkId)
+    .eq("org_id", input.organizationId)
+    .maybeSingle()
+  const link = data as { document_id: string | null; recipient_email: string | null; status: string; submission_count: number; template_id: string; title_snapshot: string | null } | null
+
+  if (!link?.recipient_email || !link.title_snapshot) {
+    throw new PublicFormServiceError("That request was not found.", 404)
+  }
+
+  await requireSender(client, input, link.document_id ? { documentId: link.document_id, kind: "document" } : { kind: "template", templateId: link.template_id })
+
+  return { ...link, recipient_email: link.recipient_email, title_snapshot: link.title_snapshot }
 }
 
 async function loadSnapshot(client: ReturnType<typeof createAdminClient>, input: SendToAnswerInput): Promise<Snapshot> {

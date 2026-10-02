@@ -214,6 +214,9 @@ export default async function SubmissionDetailPage({
             </h1>
             <SubmissionStatusBadge status={submission.status} />
           </div>
+          {submission.sentTo ? (
+            <p className="text-sm text-muted-foreground">Sent to {submission.sentTo}</p>
+          ) : null}
           {submission.assignedAt && (
             <p className="text-sm text-muted-foreground">
               Assigned to{" "}

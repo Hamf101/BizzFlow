@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
-import { checkRateLimit, RateLimitError } from "@/lib/rate-limit"
+import { checkRateLimit, hashRateLimitKeyPart, RateLimitError } from "@/lib/rate-limit"
 import {
   DocumentServiceError,
   getSharingMany,
@@ -73,7 +73,7 @@ describe("the Share dialog's actions", () => {
     expect(vi.mocked(checkRateLimit).mock.calls).toEqual([
       ["outbound_email", ACTOR],
       ["outbound_email_daily", ACTOR],
-      ["email_recipient", "gita@example.test"],
+      ["email_recipient", hashRateLimitKeyPart(" Gita@Example.test ")],
     ])
 
     vi.mocked(checkRateLimit).mockRejectedValueOnce(new RateLimitError(60))

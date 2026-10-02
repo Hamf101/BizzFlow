@@ -1,6 +1,6 @@
 "use client"
 
-import { Archive, FilePenLine, Files, History, Link2, ListChecks, MessageSquare, MoreHorizontal, Palette, UserPlus } from "lucide-react"
+import { Archive, FilePenLine, Files, History, Link2, ListChecks, MessageSquare, MoreHorizontal, Palette, Send, UserPlus } from "lucide-react"
 import Link from "next/link"
 import { type ReactElement, useEffect, useMemo, useRef, useState, useTransition } from "react"
 
@@ -26,6 +26,7 @@ import {
   PageSetupPanel,
   TemplateBrandingPanel,
   TemplateChecksPanel,
+  SendToAnswerDialog,
   ShareDialog,
 } from "@/components/editor/lazy-panels"
 import { useLiveRoom } from "@/components/editor/use-live-room"
@@ -158,6 +159,7 @@ export function TemplateEditor({
   })
   const [detailsOpen, setDetailsOpen] = useState(false)
   const [sharing, setSharing] = useState(false)
+  const [asking, setAsking] = useState(false)
   const [savedState, setSavedState] = useState(initial)
   const [, startTransition] = useTransition()
   const revisionRef = useRef(template.revision)
@@ -499,10 +501,16 @@ export function TemplateEditor({
                 Details
               </DropdownMenuItem>
               {template.status === "published" ? (
-                <DropdownMenuItem render={<Link href={`/templates/${template.id}/links`} />}>
-                  <Link2 />
-                  Public links
-                </DropdownMenuItem>
+                <>
+                  <DropdownMenuItem onClick={() => setAsking(true)}>
+                    <Send />
+                    Send to answer…
+                  </DropdownMenuItem>
+                  <DropdownMenuItem render={<Link href={`/templates/${template.id}/links`} />}>
+                    <Link2 />
+                    Public links
+                  </DropdownMenuItem>
+                </>
               ) : null}
               {/* Whoever can open the editor can edit the template, which is what sharing it takes. */}
               <DropdownMenuItem onClick={() => setSharing(true)}>
@@ -625,6 +633,7 @@ export function TemplateEditor({
           />
         )}
       </EditorFrame>
+      {asking ? <SendToAnswerDialog name={template.title} onOpenChange={setAsking} open source={{ kind: "template", templateId: template.id }} /> : null}
       {sharing ? <ShareDialog name={template.title} onOpenChange={setSharing} open resources={[{ id: template.id, kind: "template" }]} /> : null}
       <Dialog onOpenChange={setDetailsOpen} open={detailsOpen}>
         <DialogContent>

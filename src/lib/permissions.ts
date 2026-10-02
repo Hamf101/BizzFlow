@@ -229,6 +229,21 @@ export function canShareResource(
 }
 
 /**
+ * Whether a member may send a document out, for signing or to answer: they
+ * may send documents and edit this one, and it is not archived or in Trash.
+ *
+ * @param subject - The member's role and permissions.
+ * @param item - The document's access level for them and its lifecycle.
+ * @returns True when Send is offered.
+ */
+export function canSendDocument(
+  subject: OrganizationPermissionSubject,
+  item: { accessLevel?: string | null; lifecycleState: string }
+): boolean {
+  return canPerformOrganizationAction(subject, "documents:send") && item.accessLevel === "contributor" && item.lifecycleState === "active"
+}
+
+/**
  * Returns the legacy base role used for row-scope and workflow rules.
  *
  * @param subject - Static or editable organization permission subject.

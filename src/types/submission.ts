@@ -49,6 +49,8 @@ const submissionRowShape = {
   created_at: timestampSchema,
   updated_at: timestampSchema,
   required_approvals: z.number().int().positive().nullish(),
+  // The link it came through, when it was sent to one person to answer.
+  public_form_link: z.object({ recipient_email: z.string().nullable() }).nullish(),
 } as const
 
 const draftSubmissionRowSchema = z.object({
@@ -216,6 +218,8 @@ export type SubmissionBase = {
   assignedAt: string | null
   /** How many reviewers must approve; null means all of them. */
   requiredApprovals: number | null
+  /** Whom it was sent to answer, when it came through a link sent to one person. */
+  sentTo?: string | null
   createdAt: string
   updatedAt: string
 }
@@ -315,6 +319,7 @@ export function parseSubmissionRow(value: unknown): Submission {
     "assignedTo" | "assignedBy" | "assignedAt"
   > = {
     requiredApprovals: row.required_approvals ?? null,
+    sentTo: row.public_form_link?.recipient_email ?? null,
     id: row.id,
     organizationId: row.org_id,
     title: row.title,

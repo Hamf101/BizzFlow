@@ -3,7 +3,7 @@ import type { ReactElement } from "react"
 
 import { DocumentOpenTracker } from "@/components/documents/document-open-tracker"
 import { DocumentPreview } from "@/components/documents/document-preview"
-import { canPerformOrganizationAction, canShareResource } from "@/lib/permissions"
+import { canPerformOrganizationAction, canSendDocument, canShareResource } from "@/lib/permissions"
 
 import { loadDocumentPage } from "../load-document-page"
 
@@ -37,6 +37,7 @@ export default async function DocumentPreviewPage({
         backHref={backHref}
         backLabel="Shared with you"
         canEdit={view.accessLevel === "contributor" && view.document.lifecycleState === "active"}
+        canSendToAnswer={false}
         canShare={false}
         view={view}
       />
@@ -54,6 +55,7 @@ export default async function DocumentPreviewPage({
       <DocumentPreview
         backHref={backHref}
         canEdit={canEdit}
+        canSendToAnswer={view.document.templateId !== null && canSendDocument(context.membership, { accessLevel: view.accessLevel, lifecycleState: view.document.lifecycleState })}
         canShare={canShareResource(context.membership, { accessLevel: view.accessLevel, lifecycleState: view.document.lifecycleState })}
         view={view}
       />

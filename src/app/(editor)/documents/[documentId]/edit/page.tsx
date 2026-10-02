@@ -5,7 +5,7 @@ import { DocumentEditor } from "@/components/documents/document-editor"
 import { DocumentOpenTracker } from "@/components/documents/document-open-tracker"
 import { getFallbackDisplayName } from "@/lib/display-name"
 import { loadMemberName } from "@/lib/page-member-name"
-import { canPerformOrganizationAction, canShareResource } from "@/lib/permissions"
+import { canPerformOrganizationAction, canSendDocument, canShareResource } from "@/lib/permissions"
 import { readPersonName } from "@/services/document-service"
 import { getEditorLayout } from "@/services/editor-layout-service"
 import type { EditorLayout } from "@/types/editor-layout"
@@ -76,10 +76,7 @@ export default async function GeneratedDocumentEditorPage({
     canPerformOrganizationAction(context.membership, "documents:fill") &&
     view.accessLevel === "contributor" &&
     view.document.lifecycleState === "active"
-  const canSend =
-    canPerformOrganizationAction(context.membership, "documents:send") &&
-    view.accessLevel === "contributor" &&
-    view.document.lifecycleState === "active"
+  const canSend = canSendDocument(context.membership, { accessLevel: view.accessLevel, lifecycleState: view.document.lifecycleState })
   const canShare = canShareResource(context.membership, { accessLevel: view.accessLevel, lifecycleState: view.document.lifecycleState })
   // Where the tools were left; without it they start at home.
   const editorLayout = await loadEditorLayout(user.id)

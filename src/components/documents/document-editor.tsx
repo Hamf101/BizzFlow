@@ -25,6 +25,7 @@ import {
   TemplateFlowPanel,
   PageSetupPanel,
   TemplateBrandingPanel,
+  SendToAnswerDialog,
   ShareDialog,
 } from "@/components/editor/lazy-panels"
 import { useLiveRoom } from "@/components/editor/use-live-room"
@@ -145,6 +146,7 @@ export function DocumentEditor({
   const [drawings, setDrawings] = useState(0)
   const [sending, setSending] = useState(false)
   const [sharing, setSharing] = useState(false)
+  const [asking, setAsking] = useState(false)
   const [savedPage, setSavedPage] = useState(initial)
   const [savedAnswers, setSavedAnswers] = useState<Record<string, unknown>>(view.answers)
   const [proposal, setProposal] = useState<TemplateFlowProposal | null>(null)
@@ -438,6 +440,13 @@ export function DocumentEditor({
                   Share…
                 </DropdownMenuItem>
               ) : null}
+              {/* Answers are kept as a template's submissions, so it needs one. */}
+              {canSend && document.templateId ? (
+                <DropdownMenuItem onClick={() => setAsking(true)}>
+                  <Send />
+                  Send to answer…
+                </DropdownMenuItem>
+              ) : null}
             </DropdownMenuContent>
           </DropdownMenu>
         }
@@ -556,6 +565,9 @@ export function DocumentEditor({
           <DocumentRecipientCollection action={sendAction} documentId={document.id} />
         </DialogContent>
       </Dialog>
+      {asking ? (
+        <SendToAnswerDialog name={document.title} onOpenChange={setAsking} open source={{ documentId: document.id, kind: "document" }} />
+      ) : null}
       {canShare && sharing ? (
         <ShareDialog name={document.title} onOpenChange={setSharing} open resources={[{ id: document.id, kind: "document" }]} />
       ) : null}
