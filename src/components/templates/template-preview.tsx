@@ -938,9 +938,9 @@ function PreviewBlock({ block }: { block: TemplateBlock }): ReactElement {
       return (
         <PreviewField helpText={block.helpText} label={block.label} required={block.required}>
           {block.type === "choice_grid_field" ? (
-            <PaperGrid block={block} mode="design" onChange={() => undefined} value={undefined} />
+            <PaperGrid block={block} mode="design" value={undefined} />
           ) : (
-            <PaperTable block={block} mode="design" onChange={() => undefined} value={undefined} />
+            <PaperTable block={block} mode="design" value={undefined} />
           )}
         </PreviewField>
       )

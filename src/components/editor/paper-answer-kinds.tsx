@@ -107,7 +107,8 @@ export function PaperGrid({
   name?: string
   block: ChoiceGridFieldBlock
   mode: Mode
-  onChange: (value: Record<string, string>) => void
+  // Only filling in changes it; a page drawn on the server passes none.
+  onChange?: (value: Record<string, string>) => void
   value: unknown
 }): ReactElement {
   const answer = readGridAnswer(value)
@@ -130,7 +131,7 @@ export function PaperGrid({
             checked={chosen}
             className="peer absolute inset-0 m-auto size-[1em] cursor-pointer opacity-0"
             name={`${block.id}-row-${rowIndex}`}
-            onChange={() => onChange({ ...answer, [row]: option })}
+            onChange={() => onChange?.({ ...answer, [row]: option })}
             type="radio"
             value={option}
           />
@@ -215,7 +216,8 @@ export function PaperTable({
   name?: string
   block: TableFieldBlock
   mode: Mode
-  onChange: (value: string[][]) => void
+  // Only filling in changes it; a page drawn on the server passes none.
+  onChange?: (value: string[][]) => void
   value: unknown
 }): ReactElement {
   const fill = mode === "fill"
@@ -225,7 +227,7 @@ export function PaperTable({
   // Every row shown is kept as it is, blank ones too, so a row stays where it
   // was typed; saving leaves the wholly blank ones off.
   const write = (rowIndex: number, column: number, text: string): void =>
-    onChange(rows.map((row, at) => (at === rowIndex ? row.map((cell, index) => (index === column ? text : cell)) : row)))
+    onChange?.(rows.map((row, at) => (at === rowIndex ? row.map((cell, index) => (index === column ? text : cell)) : row)))
   const cell = (rowIndex: number, column: number, text: string): ReactNode =>
     fill ? (
       <input
@@ -287,7 +289,7 @@ export function PaperTable({
       {canAdd ? (
         <button
           className="mt-[0.4em] inline-flex items-center gap-[0.3em] text-[0.9em] text-muted-foreground hover:text-foreground"
-          onClick={() => onChange([...rows, blank()])}
+          onClick={() => onChange?.([...rows, blank()])}
           type="button"
         >
           <Plus className="size-[1em]" />
