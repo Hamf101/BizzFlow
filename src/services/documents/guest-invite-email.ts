@@ -1,3 +1,4 @@
+import { buildSharedDocumentPath } from "@/lib/auth-redirects"
 import { getAppUrlEnv, getEmailEnv } from "@/lib/env"
 import type { GuestInvite } from "@/services/documents/sharing-contracts"
 import { createActionEmailHtml, wrapEmailDocument } from "@/services/email/html"
@@ -13,7 +14,7 @@ import { sendEmail } from "@/services/email/transport"
  */
 export async function sendGuestInviteEmail(invite: GuestInvite): Promise<void> {
   const emailEnv = getEmailEnv()
-  const url = new URL(`/shared/${encodeURIComponent(invite.token)}`, getAppUrlEnv().NEXT_PUBLIC_APP_URL).toString()
+  const url = new URL(buildSharedDocumentPath(invite.token), getAppUrlEnv().NEXT_PUBLIC_APP_URL).toString()
   const subject = `${invite.inviterName} shared “${invite.documentTitle}” with you`
   const body = `${invite.inviterName} at ${invite.organizationName} shared a document with you on BizFlow Docs. Sign in, or choose a password, to open it.`
 

@@ -255,6 +255,22 @@ describe("document archive and download lifecycle", () => {
     })
   })
 
+  it("lets a guest from outside the workspace download the document as it stands, never an older version", async () => {
+    const client = new FakeSupabaseClient({
+      documents: [createDocumentRow({ current_version_id: "version-2" })],
+      document_guest_grants: [{ access_level: "viewer", document_id: "document-1", org_id: "org-1", user_id: "guest-1" }],
+      document_versions: [createVersionRow(), createVersionRow({ id: "version-2", version_number: 2 })],
+    })
+    const asGuest = (versionId?: string) =>
+      createDocumentDownloadUrl({ actorUserId: "guest-1", documentId: "document-1", organizationId: "org-1", versionId }, createDeps(client))
+
+    await expect(asGuest()).resolves.toMatchObject({ versionId: "version-2" })
+    await expect(asGuest("version-1")).rejects.toMatchObject({ statusCode: 404 })
+
+    client.tables.document_guest_grants.length = 0
+    await expect(asGuest()).rejects.toMatchObject({ statusCode: 404 })
+  })
+
   it("opens a PDF or picture in the browser, and only ever downloads anything else", async () => {
     const open = async (contentType: string) => {
       const deps = createDeps(

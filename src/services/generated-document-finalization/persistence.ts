@@ -1,5 +1,5 @@
 import type { AdminSupabaseClient } from "@/lib/supabase/admin"
-import { requireDocumentAccess } from "@/services/documents/access-service"
+import { requireDocumentReader } from "@/services/documents/access-service"
 import type { DocumentServiceClient } from "@/services/documents/contracts"
 import { DocumentServiceError } from "@/services/documents/errors"
 
@@ -98,15 +98,8 @@ async function requireViewPermission(
   input: FinalizeGeneratedDocumentPdfInput
 ): Promise<void> {
   try {
-    await requireDocumentAccess(
-      {
-        organizationId: input.organizationId,
-        documentId: input.documentId,
-        actorUserId: input.actorUserId,
-        requiredAccess: "viewer",
-        operation: "read",
-        requiredOrganizationPermissionAction: "documents:view",
-      },
+    await requireDocumentReader(
+      { organizationId: input.organizationId, documentId: input.documentId, actorUserId: input.actorUserId },
       client as unknown as DocumentServiceClient
     )
   } catch (error: unknown) {

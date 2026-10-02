@@ -3,6 +3,7 @@ import Link from "next/link"
 import { redirect } from "next/navigation"
 import type { ReactElement, ReactNode } from "react"
 
+import { GuestFile } from "@/components/documents/guest-file"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { buttonVariants } from "@/components/ui/button"
 import { buildFeedbackRedirect } from "@/lib/action-result"
@@ -10,24 +11,28 @@ import { loadAuthenticatedPageUser } from "@/lib/page-auth"
 import { getPageErrorMessage } from "@/lib/page-errors"
 import { loadPageOrganizationContext } from "@/lib/page-organization-context"
 import { cn } from "@/lib/utils"
+import { findGuestDocument } from "@/services/document-service"
 import { getGeneratedDocumentSigningView } from "@/services/document-signing-service"
 import { withTemplateImageUrls } from "@/services/template-image-service"
 import type { GeneratedDocumentSigningView } from "@/types/signing"
 
 type PageContext = NonNullable<Awaited<ReturnType<typeof loadPageOrganizationContext>>["context"]>
 
+type PageUser = Awaited<ReturnType<typeof loadAuthenticatedPageUser>>
+
 export type LoadedDocumentPage =
   | { failure: ReactElement }
   | {
       backHref: string
-      context: PageContext
-      user: Awaited<ReturnType<typeof loadAuthenticatedPageUser>>
+      /** Null for someone outside the workspace who was given this one document. */
+      context: PageContext | null
+      user: PageUser
       view: GeneratedDocumentSigningView
     }
 
 /**
  * Loads a generated document for the editor or its preview, once the member
- * may see it, with picture addresses they can load.
+ * or guest may see it, with picture addresses they can load.
  *
  * @param documentId - The document to open.
  * @param path - Where sign-in returns to.
@@ -35,6 +40,27 @@ export type LoadedDocumentPage =
  */
 export async function loadDocumentPage(documentId: string, path: string): Promise<LoadedDocumentPage> {
   const user = await loadAuthenticatedPageUser(path)
+  // A link to this one document opens it in its own workspace, whichever one
+  // the person usually works in.
+  const guestResult = await findGuestDocument({ documentId, userId: user.id }).then(
+    (guest) => ({ guest }),
+    (error: unknown) => ({ errorMessage: getPageErrorMessage(error, "Unable to load generated document.") })
+  )
+
+  if ("errorMessage" in guestResult) {
+    return { failure: <Unavailable message={guestResult.errorMessage} title="Generated document unavailable" /> }
+  }
+
+  const { guest } = guestResult
+
+  if (guest?.sourceKind === "upload") {
+    return { failure: <GuestFile documentId={documentId} guest={guest} /> }
+  }
+
+  if (guest) {
+    return loadView({ context: null, documentId, organizationId: guest.organizationId, user })
+  }
+
   const contextResult = await loadPageOrganizationContext({
     userId: user.id,
     failureEvent: "generated_document_editor_context_load_failed",
@@ -49,10 +75,23 @@ export async function loadDocumentPage(documentId: string, path: string): Promis
     redirect(buildFeedbackRedirect("/dashboard", "organization_required"))
   }
 
-  const context = contextResult.context
+  return loadView({ context: contextResult.context, documentId, organizationId: contextResult.context.organization.id, user })
+}
+
+async function loadView({
+  context,
+  documentId,
+  organizationId,
+  user,
+}: {
+  context: PageContext | null
+  documentId: string
+  organizationId: string
+  user: PageUser
+}): Promise<LoadedDocumentPage> {
   const viewResult = await getGeneratedDocumentSigningView({
     actorUserId: user.id,
-    organizationId: context.organization.id,
+    organizationId,
     documentId,
   })
     .then(async (view: GeneratedDocumentSigningView) => ({
@@ -71,7 +110,7 @@ export async function loadDocumentPage(documentId: string, path: string): Promis
 
       console.warn("generated_document_editor_load_failed", {
         documentId,
-        organizationId: context.organization.id,
+        organizationId,
         reason: errorMessage,
         userId: user.id,
       })
@@ -85,7 +124,7 @@ export async function loadDocumentPage(documentId: string, path: string): Promis
   const folderId = viewResult.view.document.folderId
 
   return {
-    backHref: folderId ? `/documents?folderId=${encodeURIComponent(folderId)}` : "/documents",
+    backHref: !context ? "/dashboard" : folderId ? `/documents?folderId=${encodeURIComponent(folderId)}` : "/documents",
     context,
     user,
     view: viewResult.view,

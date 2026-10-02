@@ -29,6 +29,12 @@ export default async function DocumentPreviewPage({
   }
 
   const { backHref, context, view } = loaded
+
+  // Someone outside the workspace reads it, and may save a copy; nothing more.
+  if (!context) {
+    return <DocumentPreview backHref={backHref} backLabel="Home" canEdit={false} canShare={false} view={view} />
+  }
+
   const canEdit =
     canPerformOrganizationAction(context.membership, "documents:fill") &&
     view.accessLevel === "contributor" &&

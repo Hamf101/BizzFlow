@@ -49,7 +49,7 @@ import {
   resolveSigningClient,
   startSigningWorkflow,
 } from "@/services/document-signing/persistence"
-import { requireDocumentAccess } from "@/services/documents/access-service"
+import { requireDocumentAccess, requireDocumentReader } from "@/services/documents/access-service"
 import { DocumentServiceError } from "@/services/documents/errors"
 import type { DocumentAccessLevel } from "@/types/document"
 import {
@@ -113,14 +113,8 @@ export async function getGeneratedDocumentSigningView(
     async (): Promise<GeneratedDocumentSigningView> => {
       const client = resolveSigningClient(deps.client)
 
-      const accessLevel = await requireMemberDocumentAccess(
-        client,
-        input.organizationId,
-        input.documentId,
-        input.actorUserId,
-        "viewer",
-        "read",
-        "documents:view",
+      const { accessLevel, guest } = await asSigningError(
+        requireDocumentReader(input, client),
         "You cannot view this document."
       )
       await requireMemberSigningDocumentLifecycle(
@@ -136,9 +130,20 @@ export async function getGeneratedDocumentSigningView(
         input.documentId
       )
 
-      return { ...view, accessLevel }
+      return guest ? toGuestView({ ...view, accessLevel }) : { ...view, accessLevel }
     }
   )
+}
+
+// Someone outside the workspace sees the document as its paper shows it: not
+// where it is filed, who made it, or who has opened their signing link.
+function toGuestView(view: GeneratedDocumentSigningView): GeneratedDocumentSigningView {
+  return {
+    ...view,
+    document: { ...view.document, createdBy: null, folderId: null, templateId: null, templateRevision: null, updatedBy: null },
+    guest: true,
+    recipients: view.recipients.map((recipient) => ({ ...recipient, userId: null, viewedAt: null })),
+  }
 }
 
 /**
@@ -850,8 +855,8 @@ async function requireMemberDocumentAccess(
   organizationAction: OrganizationPermissionAction,
   rejectionMessage: string
 ): Promise<DocumentAccessLevel> {
-  try {
-    return await requireDocumentAccess(
+  return asSigningError(
+    requireDocumentAccess(
       {
         organizationId,
         documentId,
@@ -861,7 +866,14 @@ async function requireMemberDocumentAccess(
         requiredOrganizationPermissionAction: organizationAction,
       },
       client
-    )
+    ),
+    rejectionMessage
+  )
+}
+
+async function asSigningError<T>(access: Promise<T>, rejectionMessage: string): Promise<T> {
+  try {
+    return await access
   } catch (error: unknown) {
     if (error instanceof DocumentServiceError) {
       throw new DocumentSigningServiceError(

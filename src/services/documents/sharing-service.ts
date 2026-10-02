@@ -7,6 +7,7 @@ import { recordRequiredDocumentAuditLog } from "@/services/documents/audit"
 import type { DocumentServiceClient } from "@/services/documents/contracts"
 import { DocumentServiceError } from "@/services/documents/errors"
 import { sendGuestInviteEmail } from "@/services/documents/guest-invite-email"
+import { readOrganizationName } from "@/services/documents/guest-service"
 import { broadcastSharingNotice } from "@/services/documents/sharing-notice"
 import { everyoneWho } from "@/services/documents/sharing-words"
 import type {
@@ -577,7 +578,7 @@ async function shareWithGuest(
         documentTitle: target.name,
         grantId: id,
         inviterName: nameOf(people.find((person) => person.userId === input.actorUserId)) ?? "Someone",
-        organizationName: await organizationName(client, input.organizationId),
+        organizationName: await readOrganizationName(client, input.organizationId),
         recipientEmail: email,
         token,
       })
@@ -601,14 +602,6 @@ async function shareWithGuest(
 }
 
 type DocumentLevel = (typeof KINDS.document.levels)[number]
-
-async function organizationName(client: DocumentServiceClient, organizationId: string): Promise<string> {
-  const { data, error } = await client.from("organizations").select("name").eq("id", organizationId).maybeSingle()
-
-  if (error) throw createSupabaseServiceError(error, "Unable to read the workspace.")
-
-  return data?.name ?? "A BizFlow workspace"
-}
 
 type FolderRow = { createdBy: string | null; id: string; inherit: boolean; name: string; parentId: string | null }
 

@@ -1,7 +1,7 @@
 import {
   createSignedDocumentDownloadUrl as defaultCreateSignedDocumentDownloadUrl,
 } from "@/services/document-storage-service"
-import { requireDocumentAccess } from "@/services/documents/access-service"
+import { requireDocumentReader } from "@/services/documents/access-service"
 import { recordRequiredDocumentAuditLog } from "@/services/documents/audit"
 import type {
   CreateDocumentDownloadUrlInput,
@@ -40,17 +40,7 @@ export async function createDocumentDownloadUrl(
     async (): Promise<CreateDocumentDownloadUrlResponse> => {
       const client = getClient(deps)
 
-      await requireDocumentAccess(
-        {
-          actorUserId: input.actorUserId,
-          organizationId: input.organizationId,
-          documentId: input.documentId,
-          requiredAccess: "viewer",
-          operation: "read",
-          requiredOrganizationPermissionAction: "documents:view",
-        },
-        client
-      )
+      const { guest } = await requireDocumentReader(input, client)
 
       const document = await getDocumentById(
         client,
@@ -66,6 +56,11 @@ export async function createDocumentDownloadUrl(
       }
       const versionId =
         normalizeNullableId(input.versionId) ?? document.currentVersionId
+
+      // A guest was given the document as it stands, not its history.
+      if (guest && versionId !== document.currentVersionId) {
+        throw new DocumentServiceError("Document version was not found.", 404)
+      }
 
       if (!versionId) {
         throw new DocumentServiceError(

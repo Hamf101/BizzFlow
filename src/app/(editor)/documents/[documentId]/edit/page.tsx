@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation"
 import type { ReactElement } from "react"
 
 import { DocumentEditor } from "@/components/documents/document-editor"
@@ -43,6 +44,12 @@ export default async function GeneratedDocumentEditorPage({
   }
 
   const { backHref, context, user, view } = loaded
+
+  // Someone outside the workspace only reads, for now.
+  if (!context) {
+    redirect(`/documents/${encodeURIComponent(documentId)}/preview`)
+  }
+
   const canFill =
     canPerformOrganizationAction(context.membership, "documents:fill") &&
     view.accessLevel === "contributor" &&

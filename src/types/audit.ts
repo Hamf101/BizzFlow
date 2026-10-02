@@ -26,6 +26,7 @@ export const AUDIT_LOG_ACTIONS = [
   "document.purged",
   "document.access_granted",
   "document.access_revoked",
+  "document.guest_joined",
   "document.sharing_inheritance_changed",
   "document.finalized",
   "document_version.created",

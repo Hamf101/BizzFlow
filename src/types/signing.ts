@@ -28,6 +28,8 @@ export type GeneratedDocumentSigningView = {
   organizationName: string
   document: GeneratedDocument
   accessLevel?: DocumentAccessLevel
+  /** Read by someone outside the workspace, through a link to this document alone. */
+  guest?: true
   answers: Record<string, unknown>
   workflowStatus: GeneratedDocumentWorkflowStatus
   recipients: DocumentSigningRecipient[]

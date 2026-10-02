@@ -1,6 +1,7 @@
 import type { OrganizationPermissionAction } from "@/lib/permissions"
 import type { DocumentServiceClient } from "@/services/documents/contracts"
 import { DocumentServiceError } from "@/services/documents/errors"
+import { findGuestGrant } from "@/services/documents/guest-service"
 import {
   createSupabaseServiceError,
   requirePermission,
@@ -187,6 +188,38 @@ async function collectAccessLevels(
   }
 
   return levels
+}
+
+/**
+ * Requires that the actor may read a document: as a member with at least
+ * Viewer access, or as a guest from outside the workspace who accepted a link
+ * to this one document. Only reads admit guests; every change stays members'.
+ *
+ * @param input - Organization, document, and actor identifiers.
+ * @param client - Injected Supabase service client.
+ * @returns Their level, and whether they read it as a guest.
+ * @throws DocumentServiceError with the member check's refusal when neither applies.
+ */
+export async function requireDocumentReader(
+  input: DocumentAccessLookupInput,
+  client: DocumentServiceClient
+): Promise<{ accessLevel: DocumentAccessLevel; guest: boolean }> {
+  try {
+    const accessLevel = await requireDocumentAccess(
+      { ...input, operation: "read", requiredAccess: "viewer", requiredOrganizationPermissionAction: "documents:view" },
+      client
+    )
+
+    return { accessLevel, guest: false }
+  } catch (error: unknown) {
+    if (!(error instanceof DocumentServiceError)) throw error
+
+    const grant = await findGuestGrant(client, { ...input, userId: input.actorUserId })
+
+    if (!grant) throw error
+
+    return { accessLevel: grant.accessLevel, guest: true }
+  }
 }
 
 /**

@@ -21,16 +21,18 @@ const ignore = (): void => undefined
  * A document as the people filling it see it. Its fields can be tried, but
  * nothing typed here is kept; Edit opens it in the editor.
  *
- * @param props - The document, where Back goes, and whether this person may edit or share it.
+ * @param props - The document, where Back goes and its name, and whether this person may edit or share it.
  * @returns The full-screen preview.
  */
 export function DocumentPreview({
   backHref,
+  backLabel = "Back to Files",
   canEdit,
   canShare,
   view,
 }: {
   backHref: string
+  backLabel?: string
   canEdit: boolean
   canShare: boolean
   view: GeneratedDocumentSigningView
@@ -45,7 +47,7 @@ export function DocumentPreview({
   return (
     <EditorFrame
       backHref={backHref}
-      backLabel="Back to Files"
+      backLabel={backLabel}
       banner={<EditorNotice actions={[]}>Preview · what you fill in here isn&apos;t saved</EditorNotice>}
       canRedo={false}
       canUndo={false}

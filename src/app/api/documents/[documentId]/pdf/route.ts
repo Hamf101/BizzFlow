@@ -7,6 +7,7 @@ import { createRateLimitResponse } from "@/lib/rate-limit-response"
 import {
   createDocumentDownloadUrl,
   DocumentServiceError,
+  findGuestDocument,
 } from "@/services/document-service"
 import {
   renderGeneratedDocumentPdf,
@@ -48,40 +49,44 @@ export async function GET(
 
   try {
     const user = await getAuthenticatedUser()
-    const organizationContext = await getCurrentOrganizationContext(user.id)
+    const { documentId } = await context.params
+    requestedDocumentId = documentId
+    // Someone given this one document reads it in its own workspace.
+    const guest = await findGuestDocument({ documentId, userId: user.id })
+    const organizationId =
+      guest?.organizationId ??
+      (await getCurrentOrganizationContext(user.id))?.organization.id
 
-    if (!organizationContext) {
+    if (!organizationId) {
       throw new DocumentSigningServiceError(
         "Create or join an organization before downloading documents.",
         403
       )
     }
 
-    const { documentId } = await context.params
-    requestedDocumentId = documentId
     // Keyed on the document because the preview path below re-renders the whole
     // PDF on every request (no-store), so a hot loop on one large document is
     // the expensive case rather than a member opening many documents.
     await checkRateLimit(
       "pdf_render",
-      `${organizationContext.organization.id}:${documentId}`
+      `${organizationId}:${documentId}`
     )
 
     const view = await getGeneratedDocumentSigningView({
       actorUserId: user.id,
-      organizationId: organizationContext.organization.id,
+      organizationId,
       documentId,
     })
 
     if (view.workflowStatus === "completed") {
       const finalization = await finalizeGeneratedDocumentPdf({
         actorUserId: user.id,
-        organizationId: organizationContext.organization.id,
+        organizationId,
         documentId,
       })
       const download = await createDocumentDownloadUrl({
         actorUserId: user.id,
-        organizationId: organizationContext.organization.id,
+        organizationId,
         documentId,
         versionId: finalization.versionId,
       })
@@ -116,7 +121,7 @@ export async function GET(
       })),
     }, {
       fillable,
-      readImage: (asset) => readTemplateImage(organizationContext.organization.id, asset),
+      readImage: (asset) => readTemplateImage(organizationId, asset),
     })
 
     return new Response(new Uint8Array(pdf), {
