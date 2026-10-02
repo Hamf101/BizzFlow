@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
+import { checkRateLimit, RateLimitError } from "@/lib/rate-limit"
 import {
   DocumentServiceError,
   getSharingMany,
@@ -28,6 +29,7 @@ vi.mock("next/cache", () => ({ revalidatePath: revalidatePathMock }))
 vi.mock("next/navigation", () => ({ redirect: redirectMock }))
 vi.mock("@/lib/auth", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/auth")>()), getAuthenticatedUser: vi.fn() }))
 vi.mock("@/services/organization-service", () => ({ getCurrentOrganizationContext: vi.fn() }))
+vi.mock("@/lib/rate-limit", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/rate-limit")>()), checkRateLimit: vi.fn() }))
 vi.mock("@/services/document-service", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/services/document-service")>()),
   getSharingMany: vi.fn(),
@@ -35,7 +37,7 @@ vi.mock("@/services/document-service", async (importOriginal) => ({
   setSharingInheritanceMany: vi.fn(),
 }))
 
-const VIEW = { grants: [], inherit: true, inherited: [], members: [], name: "Lease", owner: null, parent: null } as SharingView
+const VIEW = { grants: [], guests: [], inherit: true, inherited: [], members: [], name: "Lease", outsideLevels: [], owner: null, parent: null } as SharingView
 const RESOURCE = { id: DOC, kind: "document" as const }
 
 beforeEach(() => {
@@ -62,6 +64,28 @@ describe("the Share dialog's actions", () => {
     expect(setSharingAccessMany).toHaveBeenCalledWith({ actorUserId: ACTOR, level: "viewer", organizationId: ORG, principal: { userId: PERSON }, resources: [RESOURCE] })
     expect(revalidatePathMock).toHaveBeenCalledWith("/documents")
     expect(revalidatePathMock).toHaveBeenCalledWith("/templates")
+  })
+
+  it("invite someone outside the workspace within the email budgets, and not past them", async () => {
+    const invite = { level: "viewer" as const, principal: { email: "gita@example.test" }, resources: [RESOURCE] }
+
+    await expect(setSharingAccessAction(invite)).resolves.toEqual({ ok: true, view: VIEW })
+    expect(vi.mocked(checkRateLimit).mock.calls).toEqual([
+      ["outbound_email", ACTOR],
+      ["outbound_email_daily", ACTOR],
+      ["email_recipient", "gita@example.test"],
+    ])
+
+    vi.mocked(checkRateLimit).mockRejectedValueOnce(new RateLimitError(60))
+    vi.mocked(setSharingAccessMany).mockClear()
+    await expect(setSharingAccessAction(invite)).resolves.toEqual({ message: expect.stringContaining("Too many"), ok: false })
+    expect(setSharingAccessMany).not.toHaveBeenCalled()
+
+    // Changing a member, or removing anyone, sends no email and spends nothing.
+    vi.mocked(checkRateLimit).mockClear()
+    await setSharingAccessAction({ ...invite, level: null })
+    await setSharingAccessAction({ level: "viewer", principal: { userId: PERSON }, resources: [RESOURCE] })
+    expect(checkRateLimit).not.toHaveBeenCalled()
   })
 
   it("share a template at one of its three levels", async () => {

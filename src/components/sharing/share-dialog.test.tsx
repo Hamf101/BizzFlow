@@ -34,10 +34,12 @@ const admin = person("u-admin", "Ada", "owner_admin")
 
 const view = (changes: Partial<SharingView> = {}): SharingView => ({
   grants: [],
+  guests: [],
   inherit: true,
   inherited: [],
   members: [maya, sam, erin, admin],
   name: "Lease",
+  outsideLevels: [],
   owner: maya,
   parent: null,
   ...changes,
@@ -77,6 +79,14 @@ const button = (label: string): HTMLButtonElement =>
 async function click(element: Element): Promise<void> {
   await act(async () => {
     element.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+  })
+}
+
+async function type(words: string): Promise<void> {
+  const box = document.querySelector<HTMLInputElement>('[aria-label="Add people"] input') as HTMLInputElement
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(box, words)
+    box.dispatchEvent(new Event("input", { bubbles: true }))
   })
 }
 
@@ -197,6 +207,57 @@ describe("ShareDialog", () => {
     const select = document.querySelector<HTMLSelectElement>('select[aria-label="Access for Sam"]') as HTMLSelectElement
     expect(select.value).toBe("mixed")
     expect(select.selectedOptions[0]?.textContent).toBe("Different on each")
+  })
+
+  it("invites someone outside the workspace by email, but not a member", async () => {
+    await open(view({ outsideLevels: ["viewer", "contributor"] }))
+    vi.mocked(setSharingAccessAction).mockResolvedValue({
+      ok: true,
+      view: view({ guests: [{ email: "pat@outside.com", joined: false, level: "viewer" }], outsideLevels: ["viewer", "contributor"] }),
+    })
+
+    await type("sam@example.com")
+    expect(button("Invite")).toBeUndefined()
+    expect(button("Sam")).toBeDefined()
+
+    await type("pat@outside.com")
+    expect(button("Invite pat@outside.com")?.textContent).toContain("Outside this workspace")
+    await click(button("Invite pat@outside.com"))
+
+    expect(setSharingAccessAction).toHaveBeenCalledWith({ level: "viewer", principal: { email: "pat@outside.com" }, resources: [resource] })
+    expect(document.querySelector<HTMLInputElement>('[aria-label="Add people"] input')?.value).toBe("")
+    expect(document.querySelector('select[aria-label="Access for pat@outside.com"]')).not.toBeNull()
+  })
+
+  it("never offers an outsider where they cannot be invited", async () => {
+    await open(view())
+
+    await type("pat@outside.com")
+
+    expect(button("Invite")).toBeUndefined()
+  })
+
+  it("lists people outside the workspace with only the levels they may have, and removes them", async () => {
+    await open(
+      view({
+        guests: [
+          { email: "pat@outside.com", joined: false, level: "viewer" },
+          { email: "lee@outside.com", joined: true, level: "viewer" },
+        ],
+        outsideLevels: ["viewer"],
+      })
+    )
+    const select = (email: string) => document.querySelector<HTMLSelectElement>(`select[aria-label="Access for ${email}"]`) as HTMLSelectElement
+    const row = (email: string) => select(email).closest("li")?.textContent
+
+    expect(row("pat@outside.com")).toContain("Outside")
+    expect(row("pat@outside.com")).toContain("Invited")
+    expect(row("lee@outside.com")).toContain("Joined")
+    expect([...select("pat@outside.com").options].map((option) => option.textContent)).toEqual(["Viewer", "Remove access"])
+
+    await choose(select("pat@outside.com"), "remove")
+
+    expect(setSharingAccessAction).toHaveBeenCalledWith({ level: null, principal: { email: "pat@outside.com" }, resources: [resource] })
   })
 
   it("says so when it cannot be opened", async () => {

@@ -6,6 +6,7 @@ import { z } from "zod"
 
 import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
 import { buildRedirect } from "@/lib/form-utils"
+import { checkRateLimit, RateLimitError } from "@/lib/rate-limit"
 import {
   DocumentServiceError,
   getSharingMany,
@@ -21,6 +22,8 @@ const resourcesSchema = z.array(resourceSchema).min(1).max(50)
 const principalSchema = z.union([
   z.object({ userId: z.string().uuid() }).strict(),
   z.object({ role: z.enum(["manager", "staff", "external_reviewer"]) }).strict(),
+  // Someone outside the workspace; the service lowers and checks it.
+  z.object({ email: z.string().trim().min(3).max(320) }).strict(),
 ])
 const accessSchema = z.object({
   level: z.enum(["viewer", "contributor", "user", "editor"]).nullable(),
@@ -51,7 +54,16 @@ export async function loadSharingAction(resources: z.infer<typeof resourcesSchem
  * @returns The sharing afterwards, or a plain-words reason it was refused.
  */
 export async function setSharingAccessAction(input: z.infer<typeof accessSchema>): Promise<SharingResult> {
-  return run(accessSchema.safeParse(input), true, (who, parsed) => setSharingAccessMany({ ...who, ...parsed }))
+  return run(accessSchema.safeParse(input), true, async (who, parsed) => {
+    // An invite outside the workspace sends an email, so it spends the email budgets.
+    if ("email" in parsed.principal && parsed.level !== null) {
+      await checkRateLimit("outbound_email", who.actorUserId)
+      await checkRateLimit("outbound_email_daily", who.actorUserId)
+      await checkRateLimit("email_recipient", parsed.principal.email.trim().toLowerCase())
+    }
+
+    return setSharingAccessMany({ ...who, ...parsed })
+  })
 }
 
 /**
@@ -96,6 +108,10 @@ async function run<T>(
 
     if (error instanceof DocumentServiceError) {
       return { message: error.message, ok: false }
+    }
+
+    if (error instanceof RateLimitError) {
+      return { message: "Too many invites for now. Try again later.", ok: false }
     }
 
     console.error("sharing_action_failed", { reason: error instanceof Error ? error.message : "Unknown error" })

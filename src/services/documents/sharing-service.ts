@@ -1,14 +1,19 @@
+import { z } from "zod"
+
 import { canPerformOrganizationAction, isOrganizationRole, type OrganizationRole } from "@/lib/permissions"
+import { createSecureToken, hashToken, TOKEN_LIFETIME_MS } from "@/services/document-signing/token-security"
 import { getEffectiveDocumentAccess, getEffectiveFolderAccess } from "@/services/documents/access-service"
 import { recordRequiredDocumentAuditLog } from "@/services/documents/audit"
 import type { DocumentServiceClient } from "@/services/documents/contracts"
 import { DocumentServiceError } from "@/services/documents/errors"
+import { sendGuestInviteEmail } from "@/services/documents/guest-invite-email"
 import { broadcastSharingNotice } from "@/services/documents/sharing-notice"
 import { everyoneWho } from "@/services/documents/sharing-words"
 import type {
   SetSharingAccessInput,
   SetSharingInheritanceInput,
   SharingGrant,
+  SharingGuest,
   SharingInherited,
   SharingInput,
   SharingLevel,
@@ -86,9 +91,12 @@ type Target = {
   inherit: boolean
   name: string
   parentId: string | null
+  /** A document's: made here ("generated") or uploaded. */
+  sourceKind: string | null
 }
 
 type Row = Record<string, unknown>
+type MemberPrincipal = Exclude<SharingPrincipal, { email: string }>
 
 // The database is typed per table; these two names are chosen at run time.
 type AnyTable = "documents"
@@ -132,9 +140,21 @@ export async function setSharingAccess(input: SetSharingAccessInput, deps: Shari
     const target = await authorize(client, input)
     const kind = KINDS[input.resource.kind]
     const people = await listMembers(deps, input)
+
+    if ("email" in input.principal) {
+      const email = guestEmail(input.principal.email)
+      const member = people.find((person) => person.status === "active" && person.email.toLowerCase() === email)
+
+      // Someone already in the workspace is shared with as a member.
+      if (!member) return shareWithGuest(client, { ...input, principal: { email } }, target, people, deps)
+
+      input = { ...input, principal: { userId: member.userId } }
+    }
+
     const who = await checkPrincipal(input, target, people)
     const where = { [kind.grantColumn]: input.resource.id, org_id: input.organizationId }
-    const existing = await findGrant(client, kind.grants, where, input.principal)
+    // An email was turned into a member above, or went to the guest path.
+    const existing = await findGrant(client, kind.grants, where, input.principal as MemberPrincipal)
     const grants = client.from(kind.grants as AnyGrants)
 
     if (input.level === null) {
@@ -254,7 +274,14 @@ async function authorize(client: DocumentServiceClient, input: SharingInput): Pr
   const { data, error } = await client
     .from(kind.table as AnyTable)
     .select(
-      ["id", "created_by", restrictsInsteadOfInherits(input.resource) ? "access_restricted" : "share_inherit", kind.nameColumn, kind.parentColumn]
+      [
+        "id",
+        "created_by",
+        restrictsInsteadOfInherits(input.resource) ? "access_restricted" : "share_inherit",
+        kind.nameColumn,
+        kind.parentColumn,
+        input.resource.kind === "document" ? "source_kind" : null,
+      ]
         .filter(Boolean)
         .join(",") as "id" // the columns differ by kind, so the database's typing cannot follow them
     )
@@ -272,6 +299,7 @@ async function authorize(client: DocumentServiceClient, input: SharingInput): Pr
     inherit: restrictsInsteadOfInherits(input.resource) ? row.access_restricted !== true : row.share_inherit !== false,
     name: String(row[kind.nameColumn]),
     parentId: kind.parentColumn ? ((row[kind.parentColumn] as string | null) ?? null) : null,
+    sourceKind: (row.source_kind as string | undefined) ?? null,
   }
   const made = target.createdBy === input.actorUserId
   // Templates go by their own level: editing one is what allows sharing it.
@@ -363,6 +391,8 @@ async function checkPrincipal(
     return { label: role }
   }
 
+  if (!("userId" in input.principal)) throw new DocumentServiceError("Choose someone to share with.", 400)
+
   const { userId } = input.principal
   const member = people.find((person) => person.userId === userId && person.status === "active")
 
@@ -383,7 +413,7 @@ async function findGrant(
   client: DocumentServiceClient,
   table: (typeof KINDS)[SharingResource["kind"]]["grants"],
   where: Record<string, string>,
-  principal: SharingPrincipal
+  principal: MemberPrincipal
 ): Promise<Row | null> {
   let query = client.from(table as AnyGrants).select("id,access_level")
 
@@ -441,13 +471,143 @@ async function buildView(
 
   return {
     grants,
+    guests: input.resource.kind === "document" ? await listGuests(client, input) : [],
     inherit: target.inherit,
     inherited: target.inherit ? await inheritedFrom(client, input.organizationId, parent, byId) : [],
     members: members.filter((member) => member.status === "active").map(personOf),
     name: target.name,
+    outsideLevels: outsideLevels(input.resource, target),
     owner: owner ? personOf(owner) : null,
     parent: parent ? { id: parent.id, name: parent.name } : null,
   }
+}
+
+// What someone outside the workspace may be given: one document, and only a
+// look at an uploaded file, which cannot be edited here.
+function outsideLevels(resource: SharingResource, target: Target): SharingLevel[] {
+  if (resource.kind !== "document") return []
+
+  return target.sourceKind === "generated" ? ["viewer", "contributor"] : ["viewer"]
+}
+
+const emailSchema = z.email().max(320)
+
+function guestEmail(value: string): string {
+  const parsed = emailSchema.safeParse(value.trim().toLowerCase())
+
+  if (!parsed.success) throw new DocumentServiceError("Enter an email address.", 400)
+
+  return parsed.data
+}
+
+async function listGuests(client: DocumentServiceClient, input: SharingInput): Promise<SharingGuest[]> {
+  const { data, error } = await client
+    .from("document_guest_grants")
+    .select("email,access_level,accepted_at")
+    .eq("document_id", input.resource.id)
+    .eq("org_id", input.organizationId)
+    .order("email")
+
+  if (error) throw createSupabaseServiceError(error, "Unable to read the sharing.")
+
+  return (data ?? []).map((row) => ({ email: row.email, joined: Boolean(row.accepted_at), level: row.access_level }))
+}
+
+// Invites someone outside the workspace to one document, changes their level,
+// or takes it away. The invite holds only a hash of its link; if the email
+// cannot go out the invite is taken back, since nobody else could deliver it.
+async function shareWithGuest(
+  client: DocumentServiceClient,
+  input: SetSharingAccessInput & { principal: { email: string } },
+  target: Target,
+  people: readonly OrganizationMember[],
+  deps: SharingServiceDeps
+): Promise<SharingView> {
+  const levels = outsideLevels(input.resource, target)
+  const { email } = input.principal
+
+  if (levels.length === 0) throw new DocumentServiceError("Only a document can be shared outside the workspace.", 400)
+
+  if (input.level !== null && !levels.includes(input.level)) {
+    throw new DocumentServiceError("Someone outside the workspace can only view an uploaded file.", 400)
+  }
+
+  const where = { document_id: input.resource.id, email, org_id: input.organizationId }
+  const { data: existing, error: findError } = await client
+    .from("document_guest_grants")
+    .select("id")
+    .eq("org_id", where.org_id)
+    .eq("document_id", where.document_id)
+    .eq("email", email)
+    .maybeSingle()
+
+  if (findError) throw createSupabaseServiceError(findError, "Unable to read the sharing.")
+
+  if (input.level === null) {
+    if (existing) {
+      const { error } = await client.from("document_guest_grants").delete().eq("id", existing.id).eq("org_id", input.organizationId)
+
+      if (error) throw createSupabaseServiceError(error, "Unable to take that access away.")
+    }
+  } else if (existing) {
+    const { error } = await client
+      .from("document_guest_grants")
+      .update({ access_level: input.level as DocumentLevel })
+      .eq("id", existing.id)
+      .eq("org_id", input.organizationId)
+
+    if (error) throw createSupabaseServiceError(error, "Unable to change that access.")
+  } else {
+    const id = createId(deps)
+    const token = deps.createToken?.() ?? createSecureToken()
+    const now = deps.now?.() ?? new Date()
+    const { error } = await client.from("document_guest_grants").insert({
+      ...where,
+      access_level: input.level as DocumentLevel,
+      id,
+      invite_expires_at: new Date(now.getTime() + TOKEN_LIFETIME_MS).toISOString(),
+      invite_token_hash: hashToken(token),
+      invited_by: input.actorUserId,
+    })
+
+    if (error) throw createSupabaseServiceError(error, "Unable to share that.", error.code === "23505" ? 409 : 500)
+
+    try {
+      await (deps.inviteGuest ?? sendGuestInviteEmail)({
+        documentTitle: target.name,
+        grantId: id,
+        inviterName: nameOf(people.find((person) => person.userId === input.actorUserId)) ?? "Someone",
+        organizationName: await organizationName(client, input.organizationId),
+        recipientEmail: email,
+        token,
+      })
+    } catch (error: unknown) {
+      console.warn("guest_invite_not_sent", { grantId: id, reason: error instanceof Error ? error.message : "Unknown error" })
+      await client.from("document_guest_grants").delete().eq("id", id).eq("org_id", input.organizationId)
+      throw new DocumentServiceError("The invite email could not be sent. Try again.", 502)
+    }
+  }
+
+  await recordRequiredDocumentAuditLog(deps, {
+    action: input.level === null ? KINDS.document.audit.revoked : KINDS.document.audit.granted,
+    actorUserId: input.actorUserId,
+    metadata: { level: input.level, principal: email, principalKind: "guest" },
+    organizationId: input.organizationId,
+    targetId: input.resource.id,
+    targetType: "document",
+  })
+
+  return buildView(client, input, target, deps)
+}
+
+type DocumentLevel = (typeof KINDS.document.levels)[number]
+
+async function organizationName(client: DocumentServiceClient, organizationId: string): Promise<string> {
+  const { data, error } = await client.from("organizations").select("name").eq("id", organizationId).maybeSingle()
+
+  if (error) throw createSupabaseServiceError(error, "Unable to read the workspace.")
+
+  return data?.name ?? "A BizFlow workspace"
 }
 
 type FolderRow = { createdBy: string | null; id: string; inherit: boolean; name: string; parentId: string | null }
