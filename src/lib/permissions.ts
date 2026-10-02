@@ -211,6 +211,24 @@ export function canPerformOrganizationAction(
 }
 
 /**
+ * Whether someone may choose who else can open a document or folder: anyone
+ * who can edit it, and anyone who manages folders, while it is in use.
+ *
+ * @param subject - Current member role and optional custom permissions.
+ * @param item - Their access to the item, and where it is in its life.
+ * @returns True when they may share it.
+ */
+export function canShareResource(
+  subject: OrganizationPermissionSubject,
+  item: { accessLevel?: string | null; lifecycleState: string }
+): boolean {
+  return (
+    item.lifecycleState === "active" &&
+    (item.accessLevel === "contributor" || canPerformOrganizationAction(subject, "folders:manage"))
+  )
+}
+
+/**
  * Returns the legacy base role used for row-scope and workflow rules.
  *
  * @param subject - Static or editable organization permission subject.

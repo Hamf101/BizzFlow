@@ -54,7 +54,7 @@ test("staff keep their own template to chosen people, then let a manager use it 
   await dialog.getByLabel("Find a person or group").fill(manager.email)
   await dialog.getByRole("list", { name: "People you can add" }).getByRole("button", { name: new RegExp(manager.email) }).click()
   const access = dialog.getByLabel("Access for E2E manager")
-  await expect(access.locator("option")).toHaveText(["Can view", "Can use", "Can edit", "Remove access"])
+  await expect(access.locator("option")).toHaveText(["Viewer", "User", "Editor", "Remove access"])
   await access.selectOption("user")
   await expect(access).toHaveValue("user")
 

@@ -153,7 +153,7 @@ function WhoHasAccess({ busy, onChange, templates, view }: { busy: boolean; onCh
         {view.owner ? (
           <li className={ROW}>
             <Who person={view.owner} />
-            <span className="text-sm text-muted-foreground">Owner, can always edit</span>
+            <span className="text-sm text-muted-foreground">Owner</span>
           </li>
         ) : null}
         {view.grants.map((grant) => {
@@ -225,12 +225,12 @@ function AccessChoice({
         </option>
       ) : null}
       {viewOnly ? (
-        <option value="viewer">Can view only</option>
+        <option value="viewer">Viewer</option>
       ) : (
         <>
-          <option value="viewer">Can view</option>
-          {templates ? <option value="user">Can use</option> : null}
-          <option value={templates ? "editor" : "contributor"}>Can edit</option>
+          <option value="viewer">Viewer</option>
+          {templates ? <option value="user">User</option> : null}
+          <option value={templates ? "editor" : "contributor"}>Editor</option>
         </>
       )}
       <option value="remove">Remove access</option>
@@ -325,7 +325,7 @@ function FromFolder({ busy, onChange, view }: { busy: boolean; onChange: (inheri
           {view.inherited.map((entry) => (
             <li className={ROW} key={`${entry.from}:${entry.label}`}>
               <span className="text-sm">{entry.label}</span>
-              <span className="text-sm text-muted-foreground">{entry.level === "contributor" ? "Can edit" : "Can view"}</span>
+              <span className="text-sm text-muted-foreground">{entry.level === "contributor" ? "Editor" : "Viewer"}</span>
             </li>
           ))}
           {view.inherited.length === 0 ? <li className="py-2 text-sm text-muted-foreground">Nobody else yet.</li> : null}

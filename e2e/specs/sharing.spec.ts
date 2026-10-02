@@ -63,7 +63,7 @@ test("the person who made a document shares it with a manager, who hears about i
   const staffPage = await pageAs("staff")
   await staffPage.goto("/documents")
   const dialog = await openShare(staffPage, title)
-  await expect(dialog).toContainText("Owner, can always edit")
+  await expect(dialog).toContainText("Owner")
   await expect(dialog).toContainText("Owner admins always have access.")
 
   await dialog.getByLabel("Find a person or group").fill(manager.email)

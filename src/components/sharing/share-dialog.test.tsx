@@ -93,7 +93,7 @@ describe("ShareDialog", () => {
 
     expect(text()).toContain("Share “Lease”")
     expect(text()).toContain("Maya")
-    expect(text()).toContain("Owner, can always edit")
+    expect(text()).toContain("Owner")
     expect(text()).toContain("Owner admins always have access")
     expect(document.body.textContent).not.toMatch(/\bgrant|ACL|principal/i)
   })
@@ -128,6 +128,7 @@ describe("ShareDialog", () => {
     })
     const select = document.querySelector<HTMLSelectElement>('select[aria-label="Access for Sam"]') as HTMLSelectElement
 
+    expect([...select.options].map((option) => option.textContent)).toEqual(["Viewer", "Editor", "Remove access"])
     await choose(select, "contributor")
     expect(setSharingAccessAction).toHaveBeenLastCalledWith({ level: "contributor", principal: { userId: "u-sam" }, resources: [resource] })
 
@@ -139,7 +140,7 @@ describe("ShareDialog", () => {
     await open(view({ grants: [{ kind: "person", level: "viewer", person: erin }] }))
     const select = document.querySelector<HTMLSelectElement>('select[aria-label="Access for Erin"]') as HTMLSelectElement
 
-    expect([...select.options].map((option) => option.textContent)).toEqual(["Can view only", "Remove access"])
+    expect([...select.options].map((option) => option.textContent)).toEqual(["Viewer", "Remove access"])
   })
 
   it("shares with everyone who holds a role", async () => {
@@ -220,9 +221,9 @@ describe("ShareDialog for a template", () => {
     )
     const select = (name: string) => document.querySelector<HTMLSelectElement>(`select[aria-label="Access for ${name}"]`) as HTMLSelectElement
 
-    expect([...select("Sam").options].map((option) => option.textContent)).toEqual(["Can view", "Can use", "Can edit", "Remove access"])
+    expect([...select("Sam").options].map((option) => option.textContent)).toEqual(["Viewer", "User", "Editor", "Remove access"])
     expect(select("Sam").value).toBe("user")
-    expect([...select("Erin").options].map((option) => option.textContent)).toEqual(["Can view only", "Remove access"])
+    expect([...select("Erin").options].map((option) => option.textContent)).toEqual(["Viewer", "Remove access"])
   })
 
   it("changes a person to the level chosen", async () => {

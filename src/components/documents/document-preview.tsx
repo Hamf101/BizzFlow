@@ -7,6 +7,7 @@ import { type ReactElement, useMemo, useState } from "react"
 import { EditorCanvas } from "@/components/editor/editor-canvas"
 import { EditorFrame, EditorNotice } from "@/components/editor/editor-frame"
 import { useEditorController } from "@/components/editor/use-editor-controller"
+import { ShareButton } from "@/components/sharing/share-button"
 import { buttonVariants } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { resolvePageGeometry } from "@/services/templates/template-render-plan"
@@ -20,16 +21,18 @@ const ignore = (): void => undefined
  * A document as the people filling it see it. Its fields can be tried, but
  * nothing typed here is kept; Edit opens it in the editor.
  *
- * @param props - The document, where Back goes, and whether this person may edit it.
+ * @param props - The document, where Back goes, and whether this person may edit or share it.
  * @returns The full-screen preview.
  */
 export function DocumentPreview({
   backHref,
   canEdit,
+  canShare,
   view,
 }: {
   backHref: string
   canEdit: boolean
+  canShare: boolean
   view: GeneratedDocumentSigningView
 }): ReactElement {
   const document = view.document
@@ -48,16 +51,19 @@ export function DocumentPreview({
       canUndo={false}
       dock={() => null}
       menu={
-        <a
-          aria-label="Download PDF"
-          className={cn(buttonVariants({ size: "icon", variant: "ghost" }), "size-10")}
-          href={`/api/documents/${encodeURIComponent(document.id)}/pdf`}
-          rel="noreferrer"
-          target="_blank"
-          title="Download PDF"
-        >
-          <Download />
-        </a>
+        <>
+          {canShare ? <ShareButton iconOnly name={document.title} resource={{ id: document.id, kind: "document" }} /> : null}
+          <a
+            aria-label="Download PDF"
+            className={cn(buttonVariants({ size: "icon", variant: "ghost" }), "size-10")}
+            href={`/api/documents/${encodeURIComponent(document.id)}/pdf`}
+            rel="noreferrer"
+            target="_blank"
+            title="Download PDF"
+          >
+            <Download />
+          </a>
+        </>
       }
       onRedo={ignore}
       onTitleChange={ignore}

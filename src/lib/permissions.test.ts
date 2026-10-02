@@ -4,6 +4,7 @@ import {
   canAssignOrganizationRole,
   canPerformOrganizationAction,
   canInviteMembers,
+  canShareResource,
   createOrganizationPermissionSubject,
   getAssignableOrganizationRoles,
   getOrganizationRolePermissions,
@@ -284,5 +285,18 @@ describe("organization permissions", () => {
         "templates:manage"
       )
     ).toBe(false)
+  })
+})
+
+describe("who may share an item", () => {
+  it("is anyone who can edit it, or a folder manager, and only while it is in use", () => {
+    const active = { accessLevel: "contributor", lifecycleState: "active" } as const
+
+    expect(canShareResource("staff", active)).toBe(true)
+    expect(canShareResource("staff", { ...active, accessLevel: "viewer" })).toBe(false)
+    expect(canShareResource("manager", { ...active, accessLevel: "viewer" })).toBe(true)
+    // Not from Trash or the archive, whoever asks.
+    expect(canShareResource("owner_admin", { ...active, lifecycleState: "trashed" })).toBe(false)
+    expect(canShareResource("manager", { ...active, lifecycleState: "archived" })).toBe(false)
   })
 })

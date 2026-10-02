@@ -3,7 +3,7 @@ import type { ReactElement } from "react"
 import { DocumentEditor } from "@/components/documents/document-editor"
 import { DocumentOpenTracker } from "@/components/documents/document-open-tracker"
 import { loadMemberName } from "@/lib/page-member-name"
-import { canPerformOrganizationAction } from "@/lib/permissions"
+import { canPerformOrganizationAction, canShareResource } from "@/lib/permissions"
 import { getEditorLayout } from "@/services/editor-layout-service"
 import type { EditorLayout } from "@/types/editor-layout"
 import { saveEditorLayoutAction } from "@/app/(editor)/editor-layout-actions"
@@ -51,10 +51,7 @@ export default async function GeneratedDocumentEditorPage({
     canPerformOrganizationAction(context.membership, "documents:send") &&
     view.accessLevel === "contributor" &&
     view.document.lifecycleState === "active"
-  // Anyone who can edit it, and anyone who manages folders, may choose who else can open it.
-  const canShare =
-    view.document.lifecycleState === "active" &&
-    (view.accessLevel === "contributor" || canPerformOrganizationAction(context.membership, "folders:manage"))
+  const canShare = canShareResource(context.membership, { accessLevel: view.accessLevel, lifecycleState: view.document.lifecycleState })
   // Where the tools were left; without it they start at home.
   const editorLayout = await getEditorLayout({ actorUserId: user.id }).catch((): EditorLayout => ({}))
   // How the others in the room see this person.
