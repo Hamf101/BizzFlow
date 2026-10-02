@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest"
 
 import { hashToken } from "@/services/document-signing/token-security"
-import { acceptDocumentGuestInvite, findGuestDocument } from "@/services/documents/guest-service"
+import { acceptDocumentGuestInvite, findGuestDocument, listGuestDocuments, readPersonName } from "@/services/documents/guest-service"
 import { type FakeRow, SharingFakeClient } from "@/services/documents/sharing-service.test-support"
 
 const ORG = "10000000-0000-4000-8000-000000000001"
@@ -100,5 +100,36 @@ describe("accepting a document invite", () => {
     const revoked = setup({ grant: joined })
     revoked.client.tables.document_guest_grants.length = 0
     await expect(findGuestDocument({ documentId: DOC, userId: GUEST }, revoked.deps)).resolves.toBeNull()
+  })
+})
+
+describe("what a guest has", () => {
+  it("lists the documents shared with them that still open, newest first, and nothing still waiting on a link", async () => {
+    const joined = { accepted_at: "2026-10-01T09:00:00.000Z", invite_expires_at: null, invite_token_hash: null, user_id: GUEST }
+    const { client, deps } = setup({ grant: joined })
+    client.tables.documents.push(
+      { id: "40000000-0000-4000-8000-000000000002", org_id: ORG, title: "Quote", source_kind: "upload", lifecycle_state: "archived" },
+      { id: "40000000-0000-4000-8000-000000000003", org_id: ORG, title: "Old", source_kind: "generated", lifecycle_state: "trashed" },
+      { id: "40000000-0000-4000-8000-000000000004", org_id: ORG, title: "Pending", source_kind: "generated", lifecycle_state: "active" }
+    )
+    client.tables.document_guest_grants.push(
+      { ...client.tables.document_guest_grants[0], access_level: "viewer", accepted_at: "2026-10-02T09:00:00.000Z", document_id: "40000000-0000-4000-8000-000000000002", id: "g2" },
+      { ...client.tables.document_guest_grants[0], document_id: "40000000-0000-4000-8000-000000000003", id: "g3" },
+      { ...client.tables.document_guest_grants[0], accepted_at: null, document_id: "40000000-0000-4000-8000-000000000004", id: "g4", user_id: null }
+    )
+
+    await expect(listGuestDocuments(GUEST, deps)).resolves.toEqual([
+      { accessLevel: "viewer", documentId: "40000000-0000-4000-8000-000000000002", organizationName: "Harbor Realty", sourceKind: "upload", title: "Quote" },
+      { accessLevel: "viewer", documentId: DOC, organizationName: "Harbor Realty", sourceKind: "generated", title: "Lease" },
+    ])
+    await expect(listGuestDocuments(INVITER, deps)).resolves.toEqual([])
+  })
+
+  it("names them as they named themselves, or not at all", async () => {
+    const { client, deps } = setup()
+    client.tables.profiles = [{ email: "ana@outside.example", full_name: " Ana Silva ", id: GUEST }]
+
+    await expect(readPersonName(GUEST, deps)).resolves.toBe("Ana Silva")
+    await expect(readPersonName(INVITER, deps)).resolves.toBeNull()
   })
 })

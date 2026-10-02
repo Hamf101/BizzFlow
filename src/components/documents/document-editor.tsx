@@ -76,7 +76,7 @@ type DocumentEditorProps = {
   canShare: boolean
   /** Where this person keeps the dock and zoom. */
   editorLayout?: EditorLayoutStore
-  /** Someone outside the workspace given this one document: no Flow, and Back goes home. */
+  /** Someone outside the workspace given this one document: no Flow, and Back goes to what is shared with them. */
   guest?: boolean
   /** Who is writing, as the others in the room see them. */
   me: Readonly<{ id: string; name: string }>
@@ -314,7 +314,7 @@ export function DocumentEditor({
     <>
       <EditorFrame
         backHref={backHref}
-        backLabel={guest ? "Home" : "Back to Files"}
+        backLabel={guest ? "Shared with you" : "Back to Files"}
         banner={
           recovery.recovery && (writable || fillable) ? (
             <EditorNotice

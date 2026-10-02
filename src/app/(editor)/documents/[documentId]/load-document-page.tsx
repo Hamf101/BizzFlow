@@ -124,7 +124,7 @@ async function loadView({
   const folderId = viewResult.view.document.folderId
 
   return {
-    backHref: !context ? "/dashboard" : folderId ? `/documents?folderId=${encodeURIComponent(folderId)}` : "/documents",
+    backHref: !context ? "/shared" : folderId ? `/documents?folderId=${encodeURIComponent(folderId)}` : "/documents",
     context,
     user,
     view: viewResult.view,

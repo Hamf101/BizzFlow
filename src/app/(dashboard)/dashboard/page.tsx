@@ -20,7 +20,7 @@ import {
   type OrganizationPermissionAction,
 } from "@/lib/permissions"
 import { listAuditLogPage } from "@/services/audit-service"
-import { listDocumentCards, listRecentDocuments } from "@/services/document-service"
+import { listDocumentCards, listGuestDocuments, listRecentDocuments } from "@/services/document-service"
 import {
   getOnboardingProgress,
   listOrganizationPeople,
@@ -57,7 +57,9 @@ export default async function DashboardPage(): Promise<ReactElement> {
 
   if (!context) {
     if (!contextErrorMessage) {
-      redirect("/welcome")
+      // Someone given documents from outside a workspace starts at those.
+      const shared = await listGuestDocuments(user.id).catch(() => [])
+      redirect(shared.length ? "/shared" : "/welcome")
     }
 
     return (

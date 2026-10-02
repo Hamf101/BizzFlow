@@ -35,7 +35,7 @@ export default async function DocumentPreviewPage({
     return (
       <DocumentPreview
         backHref={backHref}
-        backLabel="Home"
+        backLabel="Shared with you"
         canEdit={view.accessLevel === "contributor" && view.document.lifecycleState === "active"}
         canShare={false}
         view={view}

@@ -97,6 +97,78 @@ export async function findGuestDocument(
   })
 }
 
+/** One document shared with someone from outside its workspace, for their list. */
+export type GuestDocumentSummary = Omit<GuestDocument, "organizationId"> & { documentId: string }
+
+/**
+ * Every document shared with this person from outside its workspace that
+ * still opens, the most recently joined first.
+ *
+ * @param userId - The signed-in person.
+ * @param deps - Optional database client for tests.
+ * @returns Their shared documents; empty when they have none.
+ */
+export async function listGuestDocuments(userId: string, deps: GuestDeps = {}): Promise<GuestDocumentSummary[]> {
+  return runDocumentOperation("list_guest_documents", { userId }, async () => {
+    const client = getClient(deps)
+    // ponytail: unpaged; a guest holds a handful of documents. Page it if that changes.
+    const { data: grants, error } = await client
+      .from("document_guest_grants")
+      .select("org_id,document_id,access_level,accepted_at")
+      .eq("user_id", userId)
+
+    if (error) throw createSupabaseServiceError(error, "Unable to load your shared documents.")
+    if (!grants?.length) return []
+
+    const { data: documents, error: documentsError } = await client
+      .from("documents")
+      .select("id,org_id,title,source_kind,lifecycle_state")
+      .in("id", grants.map((grant) => grant.document_id))
+
+    if (documentsError) throw createSupabaseServiceError(documentsError, "Unable to load your shared documents.")
+
+    const names = new Map<string, string>()
+
+    for (const organizationId of new Set(grants.map((grant) => grant.org_id))) {
+      names.set(organizationId, await readOrganizationName(client, organizationId))
+    }
+
+    return [...grants]
+      .sort((left, right) => String(right.accepted_at).localeCompare(String(left.accepted_at)))
+      .flatMap((grant) => {
+        const document = documents?.find((row) => row.id === grant.document_id && row.org_id === grant.org_id)
+
+        return document && READABLE_STATES.has(document.lifecycle_state)
+          ? [
+              {
+                accessLevel: grant.access_level as GuestLevel,
+                documentId: document.id,
+                organizationName: names.get(grant.org_id) ?? "A BizFlow workspace",
+                sourceKind: document.source_kind,
+                title: document.title,
+              },
+            ]
+          : []
+      })
+  })
+}
+
+/**
+ * The name someone gave themselves, which a guest has without belonging to
+ * any workspace.
+ *
+ * @param userId - The person.
+ * @param deps - Optional database client for tests.
+ * @returns Their name, or null when they gave none.
+ */
+export async function readPersonName(userId: string, deps: GuestDeps = {}): Promise<string | null> {
+  const { data, error } = await getClient(deps).from("profiles").select("full_name").eq("id", userId).maybeSingle()
+
+  if (error) throw createSupabaseServiceError(error, "Unable to load your name.")
+
+  return data?.full_name?.trim() || null
+}
+
 /**
  * What an emailed link is for, before anyone signs in.
  *

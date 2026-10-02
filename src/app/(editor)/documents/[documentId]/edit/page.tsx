@@ -6,6 +6,7 @@ import { DocumentOpenTracker } from "@/components/documents/document-open-tracke
 import { getFallbackDisplayName } from "@/lib/display-name"
 import { loadMemberName } from "@/lib/page-member-name"
 import { canPerformOrganizationAction, canShareResource } from "@/lib/permissions"
+import { readPersonName } from "@/services/document-service"
 import { getEditorLayout } from "@/services/editor-layout-service"
 import type { EditorLayout } from "@/types/editor-layout"
 import { saveEditorLayoutAction } from "@/app/(editor)/editor-layout-actions"
@@ -61,7 +62,7 @@ export default async function GeneratedDocumentEditorPage({
         canShare={false}
         editorLayout={{ initial: await loadEditorLayout(user.id), save: saveEditorLayoutAction }}
         guest
-        me={{ id: user.id, name: getFallbackDisplayName(user.email) }}
+        me={{ id: user.id, name: (await readPersonName(user.id).catch(() => null)) ?? getFallbackDisplayName(user.email) }}
         resendAction={resendGeneratedDocumentInvitationAction}
         saveAnswersAction={saveDocumentAnswersAction}
         saveContentAction={saveDocumentContentAction}

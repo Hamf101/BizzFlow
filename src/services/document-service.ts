@@ -33,6 +33,8 @@ export {
   findGuestDocument,
   findGuestOrganizationId,
   getGuestInvite,
+  listGuestDocuments,
+  readPersonName,
   type GuestDocument,
 } from "@/services/documents/guest-service"
 export { moveDocument, moveFolder } from "@/services/documents/move-service"

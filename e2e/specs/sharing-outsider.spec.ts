@@ -56,6 +56,11 @@ test("an outsider opens a shared document from the link, only reads it, and lose
     // Nothing else in that workspace opens for them.
     expect((await page.request.get(`/api/documents/${other.documentId}/pdf`)).status()).toBeGreaterThanOrEqual(400)
 
+    // Their home is what was shared with them, even from the dashboard.
+    await page.goto("/dashboard")
+    await page.waitForURL("**/shared")
+    await expect(page.getByRole("link", { name: new RegExp(sharedDocument?.title as string) })).toBeVisible()
+
     // The link worked once.
     await page.goto(`/shared/${token}`)
     await expect(page.getByRole("heading", { name: "This link no longer works" })).toBeVisible()
@@ -63,6 +68,8 @@ test("an outsider opens a shared document from the link, only reads it, and lose
     // Removing them takes it away.
     await admin.from("document_guest_grants").delete().eq("document_id", shared.documentId)
     expect((await page.request.get(`/api/documents/${shared.documentId}/pdf`)).status()).toBeGreaterThanOrEqual(400)
+    await page.goto("/shared")
+    await expect(page.getByText("Nothing is shared with you right now.")).toBeVisible()
   } finally {
     await context.close()
   }
