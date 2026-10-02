@@ -28,3 +28,27 @@ export function loadE2eEnvFile(): boolean {
 
   return true
 }
+
+/** The keys `getEmailEnv` needs before it will hand out EmailJS credentials. */
+const EMAIL_KEYS = ["EMAILJS_SERVICE_ID", "EMAILJS_TEMPLATE_ID", "EMAILJS_PUBLIC_KEY"]
+
+/**
+ * Refuses a run whose server could reach the real email provider.
+ *
+ * `next start` fills every key absent from `process.env` from `.env.local` and
+ * `.env.production*`, so a missing key means the maintainer's real EmailJS
+ * credentials. Only a key that is present and empty keeps them out.
+ *
+ * @param env - The environment the web server will inherit.
+ * @throws Error naming each email key that is missing or set.
+ */
+export function assertNoOutboundEmail(env: NodeJS.ProcessEnv = process.env): void {
+  const open = EMAIL_KEYS.filter((key) => env[key]?.trim() !== "")
+
+  if (open.length > 0) {
+    throw new Error(
+      `E2E runs must not send real email: ${open.join(", ")} must be set and empty. ` +
+        "Regenerate .env.e2e with `pnpm e2e:env`."
+    )
+  }
+}
