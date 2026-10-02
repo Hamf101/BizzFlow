@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto"
 import { z } from "zod"
 
 import { createAdminClient } from "@/lib/supabase/admin"
+import { hashToken } from "@/services/document-signing/token-security"
 import {
   createSafeSubmissionFilename,
   createSignedSubmissionUploadUrl as defaultCreateSignedSubmissionUploadUrl,
@@ -80,6 +81,8 @@ export type PublicFormLinkPreview = {
   link: PublicFormLink | null
   template: DocumentTemplate | null
   organizationName: string | null
+  /** The answers already in a document sent to answer, shown filled in. */
+  answers: Record<string, unknown>
 }
 
 export type SubmitPublicFormInput = {
@@ -324,6 +327,8 @@ export async function listPublicFormLinks(
     .select("*")
     .eq("org_id", organizationId)
     .eq("template_id", templateId)
+    // Links sent to one person each are listed where they were sent from.
+    .is("token_hash", null)
     .order("created_at", { ascending: false })
 
   if (error || !data) {
@@ -351,13 +356,24 @@ export async function getPublicFormLinkByToken(
     link,
     template: null,
     organizationName: null,
+    answers: {},
   })
 
-  const { data: linkRow, error: linkError } = await client
+  let { data: linkRow, error: linkError } = await client
     .from("public_form_links")
     .select("*")
     .eq("token", token)
     .maybeSingle()
+
+  // A link sent to one person is kept only as its token's hash, and only a
+  // token shaped as ours can be one.
+  if (!linkError && !linkRow && /^[A-Za-z0-9_-]{32,512}$/.test(token)) {
+    ;({ data: linkRow, error: linkError } = await client
+      .from("public_form_links")
+      .select("*")
+      .eq("token_hash", hashToken(token))
+      .maybeSingle())
+  }
 
   if (linkError || !linkRow) {
     return invalid("not_found")
@@ -381,6 +397,17 @@ export async function getPublicFormLinkByToken(
     link.submissionCount >= link.maxSubmissions
   ) {
     return invalid("max_submissions_reached", link)
+  }
+
+  const sent = linkRow as {
+    answers_snapshot: Record<string, unknown> | null
+    content_snapshot: unknown
+    template_revision_snapshot: number | null
+    title_snapshot: string | null
+  }
+
+  if (sent.content_snapshot) {
+    return previewSentLink(client, link, sent, invalid)
   }
 
   // A public form serves what was published, not the working copy.
@@ -410,6 +437,65 @@ export async function getPublicFormLinkByToken(
     link,
     template,
     organizationName: (orgRes.data as { name?: string } | null)?.name ?? null,
+    answers: {},
+  }
+}
+
+/**
+ * Serves a link sent to one person: what was sent, frozen as it stood, with
+ * the answers already in it. It closes while its document is in the trash and
+ * opens again if the document comes back.
+ */
+async function previewSentLink(
+  client: ReturnType<typeof createAdminClient>,
+  link: PublicFormLink,
+  sent: {
+    answers_snapshot: Record<string, unknown> | null
+    content_snapshot: unknown
+    template_revision_snapshot: number | null
+    title_snapshot: string | null
+  },
+  invalid: (reason: PublicFormLinkPreview["invalidReason"], link?: PublicFormLink | null) => PublicFormLinkPreview
+): Promise<PublicFormLinkPreview> {
+  const [templateRes, orgRes, documentRes] = await Promise.all([
+    client
+      .from("document_templates")
+      .select("*")
+      .eq("id", link.templateId)
+      .eq("org_id", link.organizationId)
+      .maybeSingle(),
+    client
+      .from("organizations")
+      .select("name")
+      .eq("id", link.organizationId)
+      .maybeSingle(),
+    link.documentId
+      ? client
+          .from("documents")
+          .select("lifecycle_state")
+          .eq("id", link.documentId)
+          .eq("org_id", link.organizationId)
+          .maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
+  ])
+  const lifecycle = (documentRes.data as { lifecycle_state?: string } | null)?.lifecycle_state
+
+  if (templateRes.error || !templateRes.data || documentRes.error || (link.documentId && lifecycle !== "active")) {
+    return invalid("not_found", link)
+  }
+
+  return {
+    valid: true,
+    invalidReason: null,
+    link,
+    template: {
+      ...mapDocumentTemplate(templateRes.data as DocumentTemplateRow),
+      content: parseTemplateContent(sent.content_snapshot),
+      revision: sent.template_revision_snapshot ?? 1,
+      title: sent.title_snapshot ?? "",
+    },
+    organizationName: (orgRes.data as { name?: string } | null)?.name ?? null,
+    answers: sent.answers_snapshot ?? {},
   }
 }
 

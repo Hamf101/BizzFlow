@@ -420,7 +420,16 @@ export type AdminPublicFormLinkRow = Record<string, unknown> & {
   id: string
   org_id: string
   template_id: string
-  token: string
+  /** Null on a link sent to one person, which keeps only token_hash. */
+  token: string | null
+  token_hash: string | null
+  recipient_email: string | null
+  document_id: string | null
+  content_snapshot: Record<string, unknown> | null
+  answers_snapshot: Record<string, unknown> | null
+  title_snapshot: string | null
+  template_revision_snapshot: number | null
+  sent_by: string | null
   status: "active" | "expired" | "disabled"
   expires_at: string | null
   max_submissions: number | null

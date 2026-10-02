@@ -142,7 +142,7 @@ export default async function PublicFormPage({
           {content ? (
             <PublicAnswerPaper
               content={content}
-              initialAnswers={draftState?.values ?? {}}
+              initialAnswers={{ ...preview.answers, ...draftState?.values }}
               initialFiles={draftState?.files ?? []}
               phone={userAgent({ headers: await headers() }).device.type === "mobile"}
               title={preview.template.title}

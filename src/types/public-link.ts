@@ -6,7 +6,12 @@ export type PublicFormLink = {
   id: string
   organizationId: string
   templateId: string
+  /** Empty on a link sent to one person, whose token is kept only as a hash. */
   token: string
+  /** Who a link was sent to; null on a link for anyone. */
+  recipientEmail: string | null
+  /** The document a link was sent from, while it exists. */
+  documentId: string | null
   status: PublicFormLinkStatus
   expiresAt: string | null
   maxSubmissions: number | null
@@ -33,6 +38,8 @@ export function parsePublicFormLinkRow(row: unknown): PublicFormLink {
   const organizationId = typeof record.org_id === "string" ? record.org_id : ""
   const templateId = typeof record.template_id === "string" ? record.template_id : ""
   const token = typeof record.token === "string" ? record.token : ""
+  const recipientEmail = typeof record.recipient_email === "string" ? record.recipient_email : null
+  const documentId = typeof record.document_id === "string" ? record.document_id : null
   const status = PUBLIC_FORM_LINK_STATUSES.includes(record.status as PublicFormLinkStatus)
     ? (record.status as PublicFormLinkStatus)
     : "active"
@@ -48,6 +55,8 @@ export function parsePublicFormLinkRow(row: unknown): PublicFormLink {
     organizationId,
     templateId,
     token,
+    recipientEmail,
+    documentId,
     status,
     expiresAt,
     maxSubmissions,
