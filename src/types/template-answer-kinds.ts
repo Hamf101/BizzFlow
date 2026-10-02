@@ -20,3 +20,13 @@ export function isStructuredAnswerBlock(block: TemplateBlock): boolean {
     block.type === "table_field"
   )
 }
+
+/**
+ * Ticked choices of a choose-several question.
+ *
+ * @param value - Whatever the answers hold for it.
+ * @returns The ticked choices.
+ */
+export function readChoiceList(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []
+}

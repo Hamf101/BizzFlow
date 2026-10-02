@@ -1,4 +1,5 @@
 import { expect, test, uniqueName } from "../support/fixtures"
+import { waitForHydration } from "../support/hydration"
 import { seedPublicFormLink, seedTemplate } from "../support/seed"
 
 /**
@@ -32,10 +33,10 @@ test.describe("public form", () => {
 
     await page.goto(`/forms/${token}`)
 
-    await expect(page.getByText(template.title)).toBeVisible()
+    await expect(page.getByRole("heading", { level: 1, name: template.title })).toBeVisible()
 
     await page.getByLabel("Client reference").fill("EXT-9001")
-    await page.getByRole("button", { name: "Submit form" }).click()
+    await page.getByRole("button", { name: "Submit" }).click()
 
     await page.waitForURL(/\/forms\/.+\/success/)
     await expect(page.getByText("Submission received")).toBeVisible()
@@ -69,6 +70,36 @@ test.describe("public form", () => {
       .toBe(1)
   })
 
+  test("can be read and typed into before its code arrives on a slow connection, and keeps what was typed", async ({
+    admin,
+    browser,
+    tenant,
+  }) => {
+    const template = await seedTemplate(admin, tenant.organizationId, uniqueName("Slow"), "published")
+    const token = await seedPublicFormLink(admin, tenant.organizationId, template.id)
+    const context = await browser.newContext()
+    const page = await context.newPage()
+    let arrive = (): void => undefined
+    const code = new Promise<void>((resolve) => (arrive = resolve))
+
+    // The page's code is held back until the visitor has typed.
+    await page.route("**/_next/static/chunks/**/*.js", async (route) => {
+      await code
+      await route.continue()
+    })
+    await page.goto(`/forms/${token}`, { waitUntil: "commit" })
+
+    const field = page.getByLabel("Client reference")
+    await field.fill("EXT-9002")
+    arrive()
+    await waitForHydration(field)
+    await expect(field).toHaveValue("EXT-9002")
+
+    await page.getByRole("button", { name: "Submit" }).click()
+    await page.waitForURL(/\/forms\/.+\/success/)
+    await context.close()
+  })
+
   test("refuses a disabled link", async ({ admin, browser, tenant }) => {
     const template = await seedTemplate(
       admin,
@@ -95,7 +126,7 @@ test.describe("public form", () => {
     // Revoking a link has to take effect immediately — it is the only control a
     // tenant has once a URL is loose.
     await expect(
-      page.getByRole("button", { name: "Submit form" })
+      page.getByRole("button", { name: "Submit" })
     ).toBeHidden()
 
     await context.close()

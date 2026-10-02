@@ -89,7 +89,9 @@ export const bizflowToast = {
 export function describeInvalidField(
   field: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
 ): string {
-  const label = field.labels?.[0]?.textContent?.replace(/\s*\*$/, "").trim()
+  // A radio is named by its group; a field drawn on paper, by its own aria-label.
+  const group = field.type === "radio" ? field.closest("[role=radiogroup]")?.getAttribute("aria-label") : null
+  const label = (group ?? field.labels?.[0]?.textContent ?? field.getAttribute("aria-label"))?.replace(/\s*\*$/, "").trim()
 
   return field.validity.valueMissing && label
     ? `${label} is required.`
@@ -104,8 +106,8 @@ export function describeInvalidField(
  * @returns The configured Sonner toaster using Editorial Ledger tokens.
  */
 export function BizFlowToaster(): ReactElement<ToasterProps> {
-  // An editor's top bar holds its title and actions; notices drop below it.
-  const inEditor = /\/(documents|templates)\/[^/]+\/edit$/.test(usePathname() ?? "")
+  // An editor's top bar, and an answering page's, hold its title and actions; notices drop below it.
+  const inEditor = /\/(documents|templates)\/[^/]+\/edit$|^\/forms\/[^/]+$/.test(usePathname() ?? "")
 
   useEffect(() => {
     // One submission fires `invalid` at every bad field; the first one speaks.

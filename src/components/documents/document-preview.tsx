@@ -6,7 +6,7 @@ import { type ReactElement, useMemo, useState } from "react"
 
 import { EditorCanvas } from "@/components/editor/editor-canvas"
 import { EditorFrame, EditorNotice } from "@/components/editor/editor-frame"
-import { useReadOnlyController } from "@/components/editor/use-editor-controller"
+import { useReadOnlyController } from "@/components/editor/read-only-controller"
 import { ShareButton } from "@/components/sharing/share-button"
 import { buttonVariants } from "@/components/ui/button"
 import { cn } from "@/lib/utils"

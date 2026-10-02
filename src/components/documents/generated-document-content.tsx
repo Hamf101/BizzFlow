@@ -24,7 +24,7 @@ import {
   type TemplateWebRenderGroup
 } from "@/components/templates/template-render-groups"
 import { DatePicker } from "@/components/ui/date-picker"
-import { PaperGrid, PaperTable, readChoiceList } from "@/components/editor/paper-answer-kinds"
+import { PaperGrid, PaperTable } from "@/components/editor/paper-answer-kinds"
 import { CheckboxChoices, RadioChoices } from "@/components/ui/radio-choices"
 import { TypedInput } from "@/components/ui/typed-input"
 import { Select } from "@/components/ui/select"
@@ -45,6 +45,7 @@ import type {
   TemplateContent,
   TemplateLayout
 } from "@/types/template"
+import { readChoiceList } from "@/types/template-answer-kinds"
 import { IMAGE_DATA_URL_PATTERN, MAX_IMAGE_DATA_URL_LENGTH } from "@/types/template-limits"
 import {
   applyVisibleTemplateFieldValue,

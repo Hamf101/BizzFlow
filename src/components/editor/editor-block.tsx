@@ -24,7 +24,6 @@ import { readOnlyCell, TableCells } from "@/components/editor/table-cells"
 import { PaperField, PRINTED_HEADING, printedSpace } from "@/components/editor/paper-field"
 import { placeImage, SNAP_PX } from "@/components/editor/image-placement"
 import type { EditorController, FocusRequest } from "@/components/editor/use-editor-controller"
-import { frameOf, rowOf, setBlockRule } from "@/types/template-structure"
 import { RichText } from "@/components/templates/rich-text"
 import { TemplateStaticBlock } from "@/components/templates/template-static-block"
 import { cn } from "@/lib/utils"
@@ -151,31 +150,6 @@ export function CanvasBlock({
     controller.select(block.id)
   }
 
-  // Alt and an arrow move a block alone on its line across the page, or
-  // down; with Shift, across makes it narrower or wider.
-  function nudgeFrame(event: KeyboardEvent<HTMLDivElement>): boolean {
-    const content = controller.content
-    const inRow = (rowOf(content, block.id)?.columns ?? 1) > 1
-
-    if (actions.narrow || inRow || !(actions.textEditable || actions.designable)) {
-      return false
-    }
-
-    const rule = content.blockRules.find((candidate) => candidate.blockId === block.id)
-    const { left, width } = rule?.frame ?? { left: 0, width: 100 }
-    const step = event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 1
-
-    if (event.key === "ArrowUp" || event.key === "ArrowDown") {
-      controller.change((current) => setBlockRule(current, block.id, { spaceAbove: Math.max(0, (rule?.spaceAbove ?? 0) + step * 2) }), `space:${block.id}`)
-    } else if (event.shiftKey) {
-      controller.change((current) => setBlockRule(current, block.id, { frame: frameOf(left, Math.max(5, width + step)) }), `frame:${block.id}`)
-    } else {
-      controller.change((current) => setBlockRule(current, block.id, { frame: frameOf(Math.min(Math.max(0, left + step), 100 - width), width) }), `frame:${block.id}`)
-    }
-
-    return true
-  }
-
   function handleKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
     if (event.target !== event.currentTarget) {
       return
@@ -199,7 +173,11 @@ export function CanvasBlock({
       // With Shift, up and down make an answer box shorter or taller.
       event.preventDefault()
       controller.updateBlock(sizedBox(block, answerBoxHeight(block) + (event.key === "ArrowUp" ? -2 : 2)), `box:${block.id}`)
-    } else if (event.altKey && event.key.startsWith("Arrow") && nudgeFrame(event)) {
+    } else if (event.altKey &&
+      event.key.startsWith("Arrow") &&
+      !actions.narrow &&
+      (actions.textEditable || actions.designable) &&
+      (designTools()?.nudgeFrame(controller, block.id, event) ?? false)) {
       event.preventDefault()
     } else if (event.key === "Backspace" || event.key === "Delete") {
       event.preventDefault()

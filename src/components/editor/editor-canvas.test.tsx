@@ -8,7 +8,8 @@ import { parseGeneratedDocumentAnswers } from "@/components/documents/generated-
 import "./design-tools-provided"
 import { INSERT_CHOICES } from "./block-catalog"
 import { EditorCanvas } from "./editor-canvas"
-import { useEditorController, useReadOnlyController, type EditorController } from "./use-editor-controller"
+import { useReadOnlyController } from "./read-only-controller"
+import { useEditorController, type EditorController } from "./use-editor-controller"
 import { useEditorHistory } from "./use-editor-history"
 import { createEmptyDocumentContent, templateContentV3Schema, type TemplateContentV3 } from "@/types/template"
 
@@ -99,6 +100,8 @@ it("lets a signature be drawn with a mouse without carrying its block away", asy
   const signature = { fieldKey: "signature", helpText: null, id: B, label: "Signature", required: false, type: "signature_field" as const }
   root = createRoot(document.body.appendChild(document.createElement("div")))
   await act(async () => root.render(<Canvas fields="fill" initial={{ ...createEmptyDocumentContent(), blocks: [signature] }} narrow={false} />))
+  // A signature pad loads the first time a page has one.
+  await act(async () => { await import("@/components/documents/drawn-signature-field"); await new Promise((resolve) => setTimeout(resolve, 0)) })
   const pad = document.querySelector("canvas")!
   const block = pad.closest<HTMLElement>("[data-block-id]")!
   const at = (type: string, x: number) => new MouseEvent(type, { bubbles: true, button: 0, clientX: x, clientY: 10 })
@@ -311,6 +314,8 @@ it("fills in a page with nothing to design: answers go back, and a file field ho
     input.dispatchEvent(new Event("input", { bubbles: true }))
   })
   expect(answered).toContainEqual(["name", "Ana"])
+  // Only a page that is submitted, such as a link someone answers, holds back a required field.
+  expect(input.required).toBe(false)
   expect(document.querySelector("button")?.textContent).toBe("Upload Proof of address")
   expect(document.body.textContent).not.toContain("Uploads are only in submissions.")
   // Nothing to type into but its fields, and nothing to choose.

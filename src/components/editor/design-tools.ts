@@ -1,6 +1,6 @@
 // The pieces of the canvas only designing uses: typing into lines, the block
 // toolbar and menu, section titles, tables' rows and columns, the slash menu,
-// margin guides and section pieces. The editors hand them over when they load;
+// margin guides, section pieces, and dragging and selecting blocks. The editors hand them over when they load;
 // a page that only shows or fills a document never does, so never loads them.
 
 import type { ComponentType } from "react"
@@ -13,10 +13,14 @@ export type DesignTools = Readonly<{
   BlockToolbar: Tool<typeof import("./editor-block-toolbar").BlockToolbar>
   EditorSection: Tool<typeof import("./editor-section").EditorSection>
   EditorTable: Tool<typeof import("./editor-table").EditorTable>
+  FrameEdges: Tool<typeof import("./editor-canvas-editing").FrameEdges>
+  nudgeFrame: typeof import("./editor-canvas-editing").nudgeFrame
   MarginGuides: Tool<typeof import("./margin-guides").MarginGuides>
   RichLine: Tool<typeof import("./rich-line").RichLine>
   SectionPieces: Tool<typeof import("./section-pieces").SectionPieces>
   SlashMenu: Tool<typeof import("./slash-menu").SlashMenu>
+  /** Typing, the slash menu, dragging and selecting: a hook, so the canvas calls it on every draw. */
+  useCanvasEditing: typeof import("./editor-canvas-editing").useCanvasEditing
 }>
 
 let tools: DesignTools | null = null

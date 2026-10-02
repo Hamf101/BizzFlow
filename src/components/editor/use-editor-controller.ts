@@ -52,19 +52,6 @@ export type EditorController = ReturnType<typeof useEditorController>
 // Blocks that cannot be used until they are set up open their settings at once.
 const NEEDS_SETUP: ReadonlySet<TemplateBlock["type"]> = new Set(["choice_grid_field", "dropdown_field", "image", "table_field"])
 
-const keep = (): void => undefined
-
-/**
- * A controller for a page that is only read or filled in: its content never
- * changes, and there is nothing to undo.
- *
- * @param content - The document as it stands.
- * @returns The controller the canvas draws from.
- */
-export function useReadOnlyController(content: TemplateContentV3): EditorController {
-  return useEditorController({ change: keep, content, undo: keep })
-}
-
 /**
  * Turns choices into content changes and keeps what is selected, where the
  * caret is, and which block's settings are open. Structural edits go through

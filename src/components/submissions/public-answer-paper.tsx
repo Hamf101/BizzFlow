@@ -1,0 +1,166 @@
+"use client"
+
+import { type FormEvent, type ReactElement, useEffect, useRef, useState, useSyncExternalStore } from "react"
+
+import { parseGeneratedDocumentAnswers } from "@/components/documents/generated-document-form-data"
+import { EditorCanvas, POINT_PX } from "@/components/editor/editor-canvas"
+import { PaperAnswering } from "@/components/editor/paper-field"
+import { useReadOnlyController } from "@/components/editor/read-only-controller"
+import { describeInvalidField } from "@/components/ui/toaster"
+import { resolvePageGeometry } from "@/services/templates/template-render-plan"
+import type { TemplateBlock, TemplateContentV3 } from "@/types/template"
+import { applyVisibleTemplateFieldValue } from "@/types/template-visibility"
+
+import { PublicSubmissionFileField } from "./public-submission-file-field"
+
+export type PublicFormInitialFile = Readonly<{
+  fieldKey: string
+  fileId: string
+  originalFilename: string
+}>
+
+// The editor's own phone test: a narrow window, or a touch screen short of a laptop's.
+const NARROW = "(width < 48rem), (pointer: coarse) and (width < 64rem)"
+
+function subscribeToWidth(onChange: () => void): () => void {
+  const query = window.matchMedia(NARROW)
+  query.addEventListener("change", onChange)
+  return () => query.removeEventListener("change", onChange)
+}
+
+// What was typed before the page's code arrived, read from the boxes
+// themselves, so the code takes over from it rather than from blank boxes.
+function typedSoFar(token: string): Record<string, unknown> {
+  if (typeof document === "undefined") {
+    return {}
+  }
+
+  const form = [...document.querySelectorAll<HTMLInputElement>('input[name="token"]')].find((input) => input.value === token)?.form
+
+  try {
+    return form ? parseGeneratedDocumentAnswers(new FormData(form)) : {}
+  } catch {
+    return {}
+  }
+}
+
+type Control = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+
+// The control an event came from, and the block it answers.
+function answering(event: FormEvent<HTMLElement>): { blockId: string; control: Control } | null {
+  const control = event.target
+
+  if (!(control instanceof HTMLInputElement || control instanceof HTMLSelectElement || control instanceof HTMLTextAreaElement)) {
+    return null
+  }
+
+  const blockId = control.closest<HTMLElement>("[data-block-id]")?.dataset.blockId
+  return blockId ? { blockId, control } : null
+}
+
+/**
+ * The document someone was sent, drawn as the editor draws it, for them to
+ * answer: they type into its boxes, upload into its file fields, and Submit.
+ * Nothing they do changes the document.
+ *
+ * @param props - The frozen content, any answers and files from an earlier try, whether a phone asked, and the link's token.
+ * @returns The page of paper, inside the answering form.
+ */
+export function PublicAnswerPaper({
+  content,
+  initialAnswers,
+  initialFiles,
+  phone,
+  title,
+  token,
+}: {
+  content: TemplateContentV3
+  initialAnswers: Readonly<Record<string, unknown>>
+  initialFiles: readonly PublicFormInitialFile[]
+  /** Whether the request came from a phone, so the first paint is already the phone's column. */
+  phone: boolean
+  title: string
+  token: string
+}): ReactElement {
+  const controller = useReadOnlyController(content)
+  const [answers, setAnswers] = useState<Record<string, unknown>>(() => ({
+    // A checkbox's default answers it until it is changed, so what it shows is what is sent.
+    ...Object.fromEntries(
+      content.blocks.flatMap((block: TemplateBlock) => (block.type === "checkbox_field" ? [[block.fieldKey, block.checkedByDefault]] : []))
+    ),
+    ...initialAnswers,
+    ...typedSoFar(token),
+  }))
+  const [files, setFiles] = useState(initialFiles)
+  const [errors, setErrors] = useState<Readonly<Record<string, string>>>({})
+  const narrow = useSyncExternalStore(subscribeToWidth, () => window.matchMedia(NARROW).matches, () => phone)
+  const frameRef = useRef<HTMLDivElement>(null)
+  const [available, setAvailable] = useState(0)
+  const geometry = resolvePageGeometry(content.layout)
+  const zoom = narrow || available === 0 ? 1 : Math.min(1, Math.max(0.3, available / (geometry.widthPoints * geometry.scale * POINT_PX)))
+
+  useEffect(() => {
+    const element = frameRef.current
+
+    if (!element) {
+      return
+    }
+
+    const observer = new ResizeObserver(() => setAvailable(element.clientWidth))
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [])
+
+  // The browser refused a field: say why under it, tied to it, until it changes.
+  function refuse(event: FormEvent<HTMLElement>): void {
+    const found = answering(event)
+
+    if (found) {
+      found.control.setAttribute("aria-invalid", "true")
+      found.control.setAttribute("aria-describedby", `${found.blockId}-error`)
+      const message = describeInvalidField(found.control)
+      setErrors((current) => ({ ...current, [found.blockId]: message }))
+    }
+  }
+
+  function clear(event: FormEvent<HTMLElement>): void {
+    const found = answering(event)
+
+    if (found && found.blockId in errors) {
+      found.control.removeAttribute("aria-invalid")
+      found.control.removeAttribute("aria-describedby")
+      setErrors((current) => Object.fromEntries(Object.entries(current).filter(([blockId]) => blockId !== found.blockId)))
+    }
+  }
+
+  return (
+    <div className="flex justify-center" onChangeCapture={clear} onInputCapture={clear} onInvalidCapture={refuse} ref={frameRef}>
+      <PaperAnswering.Provider value={errors}>
+        <EditorCanvas
+          allowFiles={false}
+          answers={answers}
+          controller={controller}
+          designable={false}
+          documentTitle={title}
+          fields="fill"
+          narrow={narrow}
+          onAnswerChange={(fieldKey, value) => setAnswers((current) => applyVisibleTemplateFieldValue(content, current, fieldKey, value))}
+          renderFileField={(block) => (
+            <PublicSubmissionFileField
+              answers={answers}
+              block={block}
+              initialFile={files.find((file) => file.fieldKey === block.fieldKey)}
+              onFileChange={(file) =>
+                setFiles((current) => [...current.filter((other) => other.fieldKey !== block.fieldKey), ...(file ? [{ fieldKey: block.fieldKey, ...file }] : [])])
+              }
+              onFilesCheckpointed={(active) => setFiles((current) => current.filter((file) => active.includes(file.fieldKey)))}
+              token={token}
+            />
+          )}
+          textEditable={false}
+          zoom={zoom}
+        />
+      </PaperAnswering.Provider>
+    </div>
+  )
+}

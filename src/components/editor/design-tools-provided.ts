@@ -5,6 +5,7 @@ import dynamic from "next/dynamic"
 
 import { provideDesignTools } from "./design-tools"
 import { BlockContextMenu } from "./editor-block-tools"
+import { FrameEdges, nudgeFrame, useCanvasEditing } from "./editor-canvas-editing"
 import { EditorSection } from "./editor-section"
 import { EditorTable } from "./editor-table"
 import { RichLine } from "./rich-line"
@@ -17,8 +18,11 @@ provideDesignTools({
   BlockToolbar: dynamic(() => import("./editor-block-toolbar").then((module) => module.BlockToolbar)),
   EditorSection,
   EditorTable,
+  FrameEdges,
+  nudgeFrame,
   MarginGuides: dynamic(() => import("./margin-guides").then((module) => module.MarginGuides)),
   RichLine,
   SectionPieces,
   SlashMenu: dynamic(() => import("./slash-menu").then((module) => module.SlashMenu)),
+  useCanvasEditing,
 })

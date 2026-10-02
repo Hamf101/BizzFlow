@@ -14,11 +14,14 @@ export const ROUTE_BUDGETS = [
   {
     label: "Public form",
     route: "/forms/[token]/page",
-    // 56 from 55 (2026-10-01): side-by-side rows, radios and section numbers
-    // joined in-place field errors; what remains is drawn, not dead code.
-    // 57 from 56 (2026-10-01): typed answers, checkboxes and their visibility;
-    // grids and tables load only on forms that have them.
-    ceilingKiB: 57,
+    // Set by who answers, not by what the page weighs today (2026-10-02):
+    // people on a weak 3G signal, about 400 kbit/s, on a cheap phone. 75 KiB
+    // arrives in about a second and a half there, the framework's 40 of it
+    // included. It is drawn on the editor's own paper, which designing's code
+    // never reaches; grids, tables and signature pads load only on forms that
+    // have them. The page is drawn on the server, so it can be read and typed
+    // into before any of this arrives.
+    ceilingKiB: 75,
   },
   {
     label: "Public signing",
