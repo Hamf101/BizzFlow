@@ -29,8 +29,17 @@ export function loadE2eEnvFile(): boolean {
   return true
 }
 
-/** The keys `getEmailEnv` needs before it will hand out EmailJS credentials. */
-const EMAIL_KEYS = ["EMAILJS_SERVICE_ID", "EMAILJS_TEMPLATE_ID", "EMAILJS_PUBLIC_KEY"]
+/**
+ * The EmailJS keys `getEmailEnv` reads. The first three must all be set before
+ * it hands out credentials; the private key is checked too so a real one from
+ * `.env.local` never reaches the e2e server at all.
+ */
+const EMAIL_KEYS = [
+  "EMAILJS_SERVICE_ID",
+  "EMAILJS_TEMPLATE_ID",
+  "EMAILJS_PUBLIC_KEY",
+  "EMAILJS_PRIVATE_KEY",
+]
 
 /**
  * Refuses a run whose server could reach the real email provider.
