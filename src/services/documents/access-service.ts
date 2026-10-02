@@ -193,7 +193,7 @@ async function collectAccessLevels(
 /**
  * Requires that the actor may read a document: as a member with at least
  * Viewer access, or as a guest from outside the workspace who accepted a link
- * to this one document. Only reads admit guests; every change stays members'.
+ * to this one document.
  *
  * @param input - Organization, document, and actor identifiers.
  * @param client - Injected Supabase service client.
@@ -204,19 +204,53 @@ export async function requireDocumentReader(
   input: DocumentAccessLookupInput,
   client: DocumentServiceClient
 ): Promise<{ accessLevel: DocumentAccessLevel; guest: boolean }> {
-  try {
-    const accessLevel = await requireDocumentAccess(
+  return withGuests(input, client, "viewer", () =>
+    requireDocumentAccess(
       { ...input, operation: "read", requiredAccess: "viewer", requiredOrganizationPermissionAction: "documents:view" },
       client
     )
+  )
+}
 
-    return { accessLevel, guest: false }
+/**
+ * Requires that the actor may fill and edit a document: as a member
+ * contributor who can fill documents, or as a guest given it as an Editor.
+ * Sending and sharing stay with members.
+ *
+ * @param input - Organization, document, and actor identifiers.
+ * @param client - Injected Supabase service client.
+ * @returns Whether they edit it as a guest.
+ * @throws DocumentServiceError 403 for a guest Viewer, else the member check's refusal.
+ */
+export async function requireDocumentWriter(
+  input: DocumentAccessLookupInput,
+  client: DocumentServiceClient
+): Promise<{ accessLevel: DocumentAccessLevel; guest: boolean }> {
+  return withGuests(input, client, "contributor", () =>
+    requireDocumentAccess(
+      { ...input, operation: "mutation", requiredAccess: "contributor", requiredOrganizationPermissionAction: "documents:fill" },
+      client
+    )
+  )
+}
+
+async function withGuests(
+  input: DocumentAccessLookupInput,
+  client: DocumentServiceClient,
+  required: DocumentAccessLevel,
+  memberCheck: () => Promise<DocumentAccessLevel>
+): Promise<{ accessLevel: DocumentAccessLevel; guest: boolean }> {
+  try {
+    return { accessLevel: await memberCheck(), guest: false }
   } catch (error: unknown) {
     if (!(error instanceof DocumentServiceError)) throw error
 
     const grant = await findGuestGrant(client, { ...input, userId: input.actorUserId })
 
     if (!grant) throw error
+    if (required === "contributor" && grant.accessLevel !== "contributor") {
+      throw new DocumentServiceError("You can view this document but not change it.", 403)
+    }
 
     return { accessLevel: grant.accessLevel, guest: true }
   }

@@ -76,6 +76,8 @@ type DocumentEditorProps = {
   canShare: boolean
   /** Where this person keeps the dock and zoom. */
   editorLayout?: EditorLayoutStore
+  /** Someone outside the workspace given this one document: no Flow, and Back goes home. */
+  guest?: boolean
   /** Who is writing, as the others in the room see them. */
   me: Readonly<{ id: string; name: string }>
   resendAction: (formData: FormData) => Promise<void>
@@ -99,6 +101,7 @@ export function DocumentEditor({
   canSend,
   canShare,
   editorLayout,
+  guest = false,
   me,
   resendAction,
   saveAnswersAction,
@@ -311,7 +314,7 @@ export function DocumentEditor({
     <>
       <EditorFrame
         backHref={backHref}
-        backLabel="Back to Files"
+        backLabel={guest ? "Home" : "Back to Files"}
         banner={
           recovery.recovery && (writable || fillable) ? (
             <EditorNotice
@@ -362,7 +365,7 @@ export function DocumentEditor({
               narrow={narrow}
               orientation={orientation}
               tools={tools}
-              trail={narrow ? <FlowDockSlot /> : undefined}
+              trail={narrow && !guest ? <FlowDockSlot /> : undefined}
             />
           ) : null
         }
@@ -471,31 +474,33 @@ export function DocumentEditor({
               ) : null}
             </EditorSidePanel>
             {/* On a phone Flow's button rests in the tools' row, or above the page without it. */}
-            <FlowWindow onOpenChange={setFlowOpen} open={flowOpen} phoneBottom={writable && !proposal ? 84 : 16}>
-              <TemplateFlowPanel
-                canUndo={flowUndo !== null}
-                draft={flowDraft}
-                endpoint={`/api/documents/${encodeURIComponent(document.id)}/flow`}
-                initialMessages={[]}
-                lastAppliedMessageId={flowUndo?.messageId ?? null}
-                onApplyProposal={applyProposal}
-                onProposalReceived={(next) => {
-                  setProposal(next)
-                  controller.select(null)
-                }}
-                onProposalStale={setProposal}
-                onRejectProposal={() => setProposal(null)}
-                onUndo={() => {
-                  if (flowUndo) {
-                    history.set(() => flowUndo.page)
-                    setFlowUndo(null)
-                  }
-                }}
-                autoSend={carried}
-                pendingProposal={proposal}
-                starter={writable ? DRAFT_STARTER : SENT_STARTER}
-              />
-            </FlowWindow>
+            {guest ? null : (
+              <FlowWindow onOpenChange={setFlowOpen} open={flowOpen} phoneBottom={writable && !proposal ? 84 : 16}>
+                <TemplateFlowPanel
+                  canUndo={flowUndo !== null}
+                  draft={flowDraft}
+                  endpoint={`/api/documents/${encodeURIComponent(document.id)}/flow`}
+                  initialMessages={[]}
+                  lastAppliedMessageId={flowUndo?.messageId ?? null}
+                  onApplyProposal={applyProposal}
+                  onProposalReceived={(next) => {
+                    setProposal(next)
+                    controller.select(null)
+                  }}
+                  onProposalStale={setProposal}
+                  onRejectProposal={() => setProposal(null)}
+                  onUndo={() => {
+                    if (flowUndo) {
+                      history.set(() => flowUndo.page)
+                      setFlowUndo(null)
+                    }
+                  }}
+                  autoSend={carried}
+                  pendingProposal={proposal}
+                  starter={writable ? DRAFT_STARTER : SENT_STARTER}
+                />
+              </FlowWindow>
+            )}
           </>
         )}
         primary={

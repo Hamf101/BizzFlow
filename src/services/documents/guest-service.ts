@@ -51,6 +51,21 @@ export async function findGuestGrant(
 }
 
 /**
+ * The workspace a guest's document lives in, so their requests act there
+ * rather than in a workspace of their own.
+ *
+ * @param input - The document and the signed-in person.
+ * @param deps - Optional database client for tests.
+ * @returns The document's workspace, or null when they are not its guest.
+ */
+export async function findGuestOrganizationId(
+  input: { documentId: string; userId: string },
+  deps: GuestDeps = {}
+): Promise<string | null> {
+  return (await findGuestGrant(getClient(deps), input))?.organizationId ?? null
+}
+
+/**
  * The document a person outside its workspace was given, while they still
  * have it and it is not in the trash.
  *

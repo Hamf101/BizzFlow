@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server"
 
 import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
+import { resolveDocumentOrganizationId } from "@/lib/document-organization"
 import { captureUnexpectedError } from "@/lib/observability"
 import { checkRateLimit, RateLimitError } from "@/lib/rate-limit"
 import { createRateLimitResponse } from "@/lib/rate-limit-response"
 import {
   createDocumentDownloadUrl,
   DocumentServiceError,
-  findGuestDocument,
 } from "@/services/document-service"
 import {
   renderGeneratedDocumentPdf,
@@ -21,10 +21,7 @@ import {
   getGeneratedDocumentSigningView,
   DocumentSigningServiceError,
 } from "@/services/document-signing-service"
-import {
-  getCurrentOrganizationContext,
-  OrganizationServiceError,
-} from "@/services/organization-service"
+import { OrganizationServiceError } from "@/services/organization-service"
 import { readTemplateImage } from "@/services/template-image-service"
 
 // A long document renders in a few seconds; this leaves room for pictures and a busy moment.
@@ -51,11 +48,7 @@ export async function GET(
     const user = await getAuthenticatedUser()
     const { documentId } = await context.params
     requestedDocumentId = documentId
-    // Someone given this one document reads it in its own workspace.
-    const guest = await findGuestDocument({ documentId, userId: user.id })
-    const organizationId =
-      guest?.organizationId ??
-      (await getCurrentOrganizationContext(user.id))?.organization.id
+    const organizationId = await resolveDocumentOrganizationId(user.id, documentId)
 
     if (!organizationId) {
       throw new DocumentSigningServiceError(

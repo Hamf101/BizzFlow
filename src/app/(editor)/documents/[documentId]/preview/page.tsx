@@ -30,9 +30,17 @@ export default async function DocumentPreviewPage({
 
   const { backHref, context, view } = loaded
 
-  // Someone outside the workspace reads it, and may save a copy; nothing more.
+  // Someone outside the workspace reads it and saves a copy, and an Editor may edit it.
   if (!context) {
-    return <DocumentPreview backHref={backHref} backLabel="Home" canEdit={false} canShare={false} view={view} />
+    return (
+      <DocumentPreview
+        backHref={backHref}
+        backLabel="Home"
+        canEdit={view.accessLevel === "contributor" && view.document.lifecycleState === "active"}
+        canShare={false}
+        view={view}
+      />
+    )
   }
 
   const canEdit =

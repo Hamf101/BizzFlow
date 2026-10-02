@@ -17,7 +17,7 @@ import {
   type WorkingCopyRoomRow,
   type WorkingCopyUpdateRow,
 } from "@/lib/supabase/admin"
-import { requireDocumentAccess } from "@/services/documents/access-service"
+import { requireDocumentWriter } from "@/services/documents/access-service"
 import { DocumentServiceError } from "@/services/documents/errors"
 import { loadGeneratedDocumentView } from "@/services/document-signing/persistence"
 import { DocumentSigningServiceError } from "@/services/document-signing/errors"
@@ -389,18 +389,12 @@ export function subjectOf(client: WorkingCopyServiceClient, input: RoomInput, de
   }
 }
 
-// A draft document as saved, once the member may still write in it: a
-// contributor who can fill documents, before anyone was asked to sign.
+// A draft document as saved, once the person may still write in it: a
+// contributor who can fill documents, or a guest Editor, before anyone was asked to sign.
 async function loadEditableDocument(client: WorkingCopyServiceClient, input: DocumentRoomInput): Promise<WorkingCopy> {
-  await requireDocumentAccess(
-    {
-      actorUserId: input.actorUserId,
-      documentId: input.documentId,
-      operation: "mutation",
-      organizationId: input.organizationId,
-      requiredAccess: "contributor",
-      requiredOrganizationPermissionAction: "documents:fill",
-    },
+  // A guest given it as an Editor works in the same room as its members.
+  await requireDocumentWriter(
+    { actorUserId: input.actorUserId, documentId: input.documentId, organizationId: input.organizationId },
     client
   )
   const view = await loadGeneratedDocumentView(client, input.organizationId, input.documentId)

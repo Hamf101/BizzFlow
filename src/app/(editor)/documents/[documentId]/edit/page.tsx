@@ -3,6 +3,7 @@ import type { ReactElement } from "react"
 
 import { DocumentEditor } from "@/components/documents/document-editor"
 import { DocumentOpenTracker } from "@/components/documents/document-open-tracker"
+import { getFallbackDisplayName } from "@/lib/display-name"
 import { loadMemberName } from "@/lib/page-member-name"
 import { canPerformOrganizationAction, canShareResource } from "@/lib/permissions"
 import { getEditorLayout } from "@/services/editor-layout-service"
@@ -45,9 +46,29 @@ export default async function GeneratedDocumentEditorPage({
 
   const { backHref, context, user, view } = loaded
 
-  // Someone outside the workspace only reads, for now.
+  // Someone outside the workspace edits only what they were given as an Editor,
+  // and never sends or shares it.
   if (!context) {
-    redirect(`/documents/${encodeURIComponent(documentId)}/preview`)
+    if (view.accessLevel !== "contributor") {
+      redirect(`/documents/${encodeURIComponent(documentId)}/preview`)
+    }
+
+    return (
+      <DocumentEditor
+        backHref={backHref}
+        canFill={view.document.lifecycleState === "active"}
+        canSend={false}
+        canShare={false}
+        editorLayout={{ initial: await loadEditorLayout(user.id), save: saveEditorLayoutAction }}
+        guest
+        me={{ id: user.id, name: getFallbackDisplayName(user.email) }}
+        resendAction={resendGeneratedDocumentInvitationAction}
+        saveAnswersAction={saveDocumentAnswersAction}
+        saveContentAction={saveDocumentContentAction}
+        sendAction={sendGeneratedDocumentAction}
+        view={view}
+      />
+    )
   }
 
   const canFill =
@@ -60,7 +81,7 @@ export default async function GeneratedDocumentEditorPage({
     view.document.lifecycleState === "active"
   const canShare = canShareResource(context.membership, { accessLevel: view.accessLevel, lifecycleState: view.document.lifecycleState })
   // Where the tools were left; without it they start at home.
-  const editorLayout = await getEditorLayout({ actorUserId: user.id }).catch((): EditorLayout => ({}))
+  const editorLayout = await loadEditorLayout(user.id)
   // How the others in the room see this person.
   const name = await loadMemberName(user, context.organization.id)
 
@@ -82,4 +103,8 @@ export default async function GeneratedDocumentEditorPage({
       />
     </>
   )
+}
+
+function loadEditorLayout(actorUserId: string): Promise<EditorLayout> {
+  return getEditorLayout({ actorUserId }).catch((): EditorLayout => ({}))
 }

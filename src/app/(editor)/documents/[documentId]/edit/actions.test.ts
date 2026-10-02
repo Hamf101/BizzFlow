@@ -6,6 +6,8 @@ import {
 } from "@/lib/action-rate-limit"
 import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
+import { findGuestOrganizationId } from "@/services/document-service"
+import { getCurrentOrganizationContext } from "@/services/organization-service"
 import {
   DocumentSigningServiceError,
   resendDocumentSigningInvitation,
@@ -53,6 +55,10 @@ vi.mock("@/services/organization-service", () => ({
     organization: { id: ORG_ID },
     membership: { role: "owner_admin" },
   })),
+}))
+
+vi.mock("@/services/document-service", () => ({
+  findGuestOrganizationId: vi.fn(async () => null),
 }))
 
 vi.mock("@/services/document-signing-service", async (importOriginal) => {
@@ -215,6 +221,20 @@ describe("saveDocumentAnswersAction", () => {
       documentId: DOCUMENT_ID,
       values: { "client-name": "Acme" },
     })
+  })
+
+  it("saves a guest Editor's answers in the document's own workspace, not one of theirs", async () => {
+    const SHARING_ORG = "10000000-0000-4000-8000-000000000002"
+    vi.mocked(getCurrentOrganizationContext).mockResolvedValueOnce(null)
+    vi.mocked(findGuestOrganizationId).mockResolvedValueOnce(SHARING_ORG)
+    const formData = new FormData()
+    formData.set("documentId", DOCUMENT_ID)
+    formData.set("answer.text.client-name", "Acme")
+
+    await expect(saveDocumentAnswersAction(formData)).resolves.toEqual({ ok: true, version: "answers" })
+    expect(saveGeneratedDocumentAnswers).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ actorUserId: MEMBER_ID, documentId: DOCUMENT_ID, organizationId: SHARING_ORG })
+    )
   })
 
   it("asks a signed-out member to sign in again, saving nothing", async () => {

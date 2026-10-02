@@ -31,6 +31,7 @@ export {
   acceptDocumentGuestInvite,
   createGuestAccount,
   findGuestDocument,
+  findGuestOrganizationId,
   getGuestInvite,
   type GuestDocument,
 } from "@/services/documents/guest-service"

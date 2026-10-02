@@ -12,6 +12,8 @@ declare
   staff_id uuid := gen_random_uuid();
   reviewer_id uuid := gen_random_uuid();
   outsider_id uuid := gen_random_uuid();
+  guest_editor_id uuid := gen_random_uuid();
+  guest_viewer_id uuid := gen_random_uuid();
   organization_id uuid := gen_random_uuid();
   other_organization_id uuid := gen_random_uuid();
   template_id uuid := gen_random_uuid();
@@ -32,11 +34,11 @@ declare
 begin
   insert into auth.users (id, email, created_at, updated_at)
   select member.id, 'rpc-' || replace(member.id::text, '-', '') || '@example.invalid', now(), now()
-  from unnest(array[owner_id, manager_id, staff_id, reviewer_id, outsider_id]) as member(id);
+  from unnest(array[owner_id, manager_id, staff_id, reviewer_id, outsider_id, guest_editor_id, guest_viewer_id]) as member(id);
 
   insert into public.profiles (id, email, full_name)
   select member.id, 'rpc-' || replace(member.id::text, '-', '') || '@example.invalid', 'Working copy verification'
-  from unnest(array[owner_id, manager_id, staff_id, reviewer_id, outsider_id]) as member(id);
+  from unnest(array[owner_id, manager_id, staff_id, reviewer_id, outsider_id, guest_editor_id, guest_viewer_id]) as member(id);
 
   insert into public.organizations (id, name, slug, created_by)
   values
@@ -88,6 +90,12 @@ begin
     (document_room_id, organization_id, null, document_id, '\x00'::bytea, hash_a),
     (sent_room_id, organization_id, null, sent_document_id, '\x00'::bytea, hash_a);
 
+  -- Two people outside the workspace were given the draft: one to edit, one to read.
+  insert into public.document_guest_grants (org_id, document_id, email, user_id, access_level, accepted_at)
+  values
+    (organization_id, document_id, 'editor@outside.invalid', guest_editor_id, 'contributor', now()),
+    (organization_id, document_id, 'viewer@outside.invalid', guest_viewer_id, 'viewer', now());
+
   -- Who may join which channel.
   for expectation in
     select * from (values
@@ -99,7 +107,11 @@ begin
       (owner_id, document_room_id, true),
       (staff_id, document_room_id, true),
       (reviewer_id, document_room_id, false),
-      (outsider_id, document_room_id, false)
+      (outsider_id, document_room_id, false),
+      (guest_editor_id, document_room_id, true),
+      (guest_viewer_id, document_room_id, false),
+      (guest_editor_id, sent_room_id, false),
+      (guest_editor_id, template_room_id, false)
     ) as cases(actor, room, allowed)
   loop
     perform set_config('request.jwt.claims', json_build_object('sub', expectation.actor, 'role', 'authenticated')::text, true);
@@ -109,6 +121,21 @@ begin
       raise exception 'Joining room % as % should be %, was %.', expectation.room, expectation.actor, expectation.allowed, joined;
     end if;
   end loop;
+
+  -- A guest Editor's way in closes with the document's archiving or their grant.
+  perform set_config('request.jwt.claims', json_build_object('sub', guest_editor_id, 'role', 'authenticated')::text, true);
+  update public.documents set lifecycle_state = 'archived', archived_at = now(), archived_by = owner_id where id = document_id;
+
+  if private.can_join_working_copy('working-copy:' || document_room_id) then
+    raise exception 'A guest joined the room of an archived document.';
+  end if;
+
+  update public.documents set lifecycle_state = 'active', archived_at = null, archived_by = null where id = document_id;
+  delete from public.document_guest_grants where user_id = guest_editor_id;
+
+  if private.can_join_working_copy('working-copy:' || document_room_id) then
+    raise exception 'A guest whose access was removed still joined the room.';
+  end if;
 
   perform set_config('request.jwt.claims', json_build_object('sub', owner_id, 'role', 'authenticated')::text, true);
 
@@ -241,6 +268,6 @@ begin
   where id in (organization_id, other_organization_id);
 
   delete from auth.users
-  where id in (owner_id, manager_id, staff_id, reviewer_id, outsider_id);
+  where id in (owner_id, manager_id, staff_id, reviewer_id, outsider_id, guest_editor_id, guest_viewer_id);
 end;
 $$;

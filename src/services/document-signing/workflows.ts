@@ -49,7 +49,7 @@ import {
   resolveSigningClient,
   startSigningWorkflow,
 } from "@/services/document-signing/persistence"
-import { requireDocumentAccess, requireDocumentReader } from "@/services/documents/access-service"
+import { requireDocumentAccess, requireDocumentReader, requireDocumentWriter } from "@/services/documents/access-service"
 import { DocumentServiceError } from "@/services/documents/errors"
 import type { DocumentAccessLevel } from "@/types/document"
 import {
@@ -168,16 +168,7 @@ export async function saveGeneratedDocumentAnswers(
     async (): Promise<GeneratedDocumentSigningView> => {
       const client = resolveSigningClient(deps.client)
 
-      await requireMemberDocumentAccess(
-        client,
-        input.organizationId,
-        input.documentId,
-        input.actorUserId,
-        "contributor",
-        "mutation",
-        "documents:fill",
-        "You cannot fill this document."
-      )
+      await asSigningError(requireDocumentWriter(input, client), "You cannot fill this document.")
       await requireMemberSigningDocumentLifecycle(
         client,
         input.organizationId,
@@ -269,16 +260,7 @@ export async function updateGeneratedDocumentContent(
     async (): Promise<{ title: string; updatedAt: string }> => {
       const client = resolveSigningClient(deps.client)
 
-      await requireMemberDocumentAccess(
-        client,
-        input.organizationId,
-        input.documentId,
-        input.actorUserId,
-        "contributor",
-        "mutation",
-        "documents:fill",
-        "You cannot edit this document."
-      )
+      await asSigningError(requireDocumentWriter(input, client), "You cannot edit this document.")
       await requireMemberSigningDocumentLifecycle(
         client,
         input.organizationId,

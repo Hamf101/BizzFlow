@@ -4,6 +4,7 @@ import {
   getGeneratedDocumentSigningView,
   saveGeneratedDocumentAnswers,
   sendDocumentForSigning,
+  updateGeneratedDocumentContent,
 } from "@/services/document-signing-service"
 import {
   createBaseTables,
@@ -15,6 +16,7 @@ import {
   RECIPIENT_ONE_ID,
   TOKEN_ONE,
 } from "@/services/document-signing-service.test-support"
+import { createEmptyDocumentContent } from "@/types/template"
 
 const GUEST = "20000000-0000-4000-8000-000000000009"
 const OTHER_DOCUMENT = "30000000-0000-4000-8000-000000000002"
@@ -66,10 +68,20 @@ describe("a guest outside the workspace", () => {
     })
   })
 
-  it("cannot send, fill, or keep reading once the access is removed or the document is trashed", async () => {
+  it("as an Editor fills and edits the document, but never sends it", async () => {
     const tables = guestTables("contributor")
+    tables.document_signing_recipients.length = 0
     const client = new FakeClient(tables)
     const sendDocumentSigningEmail = vi.fn(async (): Promise<void> => {})
+
+    await saveGeneratedDocumentAnswers({ ...asGuest(), values: { client_name: "Guest answer" } }, { client: client as never })
+    expect(tables.document_answers[0].values).toEqual({ client_name: "Guest answer" })
+
+    await updateGeneratedDocumentContent(
+      { ...asGuest(), content: createEmptyDocumentContent(), expectedUpdatedAt: "2026-07-17T19:00:00.000Z", title: "Edited by a guest" },
+      { client: client as never }
+    )
+    expect(tables.documents[0]).toMatchObject({ title: "Edited by a guest", updated_by: GUEST })
 
     await expect(
       sendDocumentForSigning(
@@ -78,10 +90,23 @@ describe("a guest outside the workspace", () => {
       )
     ).rejects.toMatchObject({ statusCode: 404 })
     expect(sendDocumentSigningEmail).not.toHaveBeenCalled()
+  })
+
+  it("as a Viewer changes nothing, and loses even reading once removed or the document is trashed", async () => {
+    const tables = guestTables("viewer")
+    const client = new FakeClient(tables)
+
     await expect(
       saveGeneratedDocumentAnswers({ ...asGuest(), values: { client_name: "Guest" } }, { client: client as never })
-    ).rejects.toMatchObject({ statusCode: 404 })
+    ).rejects.toMatchObject({ statusCode: 403 })
+    await expect(
+      updateGeneratedDocumentContent(
+        { ...asGuest(), content: createEmptyDocumentContent(), expectedUpdatedAt: "2026-07-17T19:00:00.000Z", title: "No" },
+        { client: client as never }
+      )
+    ).rejects.toMatchObject({ statusCode: 403 })
     expect(tables.document_answers[0].values).toEqual({})
+    expect(tables.documents[0].title).toBe("Professional services agreement")
 
     tables.documents[0].lifecycle_state = "trashed"
     await expect(getGeneratedDocumentSigningView(asGuest(), { client: client as never })).rejects.toMatchObject({ statusCode: 404 })
