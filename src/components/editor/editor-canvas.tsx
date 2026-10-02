@@ -877,7 +877,9 @@ export function EditorCanvas({
         <div aria-label="Page break" className="my-[1.2em] border-t border-dashed border-border" role="separator" />
       ) : null}
       <div
-        className="pointer-events-auto"
+        // Holds its last block's space under it, the printed title's included,
+        // so the height pages are laid out by is the room it takes.
+        className="pointer-events-auto flow-root"
         // Cells touch the cells below them; a title or space above a unit parts them, as in print.
         data-cell-bottom={cellUnit(unit) ? "" : undefined}
         data-cell-top={cellUnit(unit) && !unit.space && !unit.sectionId && !unit.sectionLabel && !unit.groupLabel ? "" : undefined}
@@ -1485,10 +1487,12 @@ function measureRows(unit: HTMLElement, zoom: number): PaginationRow[] {
     const [first, ...rest] = [...range.getClientRects()].map((rect) => rect.top)
     const top = (paragraph.getBoundingClientRect().top - origin) / zoom
 
-    for (const line of new Set(rest.map((lineTop) => Math.round((lineTop - (first ?? lineTop)) / zoom)))) {
-      if (line > 0) {
-        rows.push({ key: `${paragraph.dataset.lineKey}@${line}`, top: top + line })
-      }
+    // Lines rarely sit on whole pixels, so a break rounds onto the line it
+    // starts, never back into the one above, which would follow it over.
+    const offsets = rest.map((lineTop) => (lineTop - (first ?? lineTop)) / zoom).filter((offset) => offset >= 1)
+
+    for (const line of new Set(offsets.map((offset) => Math.ceil(offset)))) {
+      rows.push({ key: `${paragraph.dataset.lineKey}@${line}`, top: top + line })
     }
   }
 
