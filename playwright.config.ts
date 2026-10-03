@@ -1,9 +1,9 @@
 import { defineConfig, devices } from "@playwright/test"
 
-import { assertNoOutboundEmail, loadE2eEnvFile } from "./e2e/support/env-file"
+import { assertNoOutboundServices, loadE2eEnvFile } from "./e2e/support/env-file"
 
 loadE2eEnvFile()
-assertNoOutboundEmail()
+assertNoOutboundServices()
 
 const baseURL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
 

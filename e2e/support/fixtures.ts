@@ -28,6 +28,14 @@ export type TenantFixtures = {
 }
 
 export const test = base.extend<TenantFixtures>({
+  // Each test is someone on a device of their own. The app's limits are per
+  // address, and one address for the whole suite would spend everyone's sign-in
+  // and answering budgets on whichever tests ran first. Contexts a spec opens
+  // itself take this too.
+  extraHTTPHeaders: async ({}, use) => {
+    await use({ "x-forwarded-for": `198.18.${Math.floor(Math.random() * 256)}.${1 + Math.floor(Math.random() * 254)}` })
+  },
+
   admin: async ({}, use) => {
     await use(createAdminClient())
   },

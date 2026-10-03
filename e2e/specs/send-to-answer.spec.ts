@@ -46,12 +46,8 @@ test("sends a template to people by links of their own, takes one set of answers
   await dialog.getByRole("button", { name: `Revoke ${ben}'s link` }).click()
   await expect(row(ben).getByText("Revoked", { exact: true })).toBeVisible()
 
-  // The person answering has no account and no session, and answers from a
-  // phone of their own: the answering page's limits are per address, and the
-  // other specs submit from this machine's.
-  const context = await browser.newContext({
-    extraHTTPHeaders: { "x-forwarded-for": `198.51.100.${1 + Math.floor(Math.random() * 254)}` },
-  })
+  // The person answering has no account and no session.
+  const context = await browser.newContext()
   const answering = await context.newPage()
 
   await answering.goto(benLink)

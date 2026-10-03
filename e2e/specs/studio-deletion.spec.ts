@@ -33,6 +33,8 @@ test("deletes a selected element with Undo, and the draft saves what is left by 
 
   // Clicking an element selects it; Delete takes it away and Undo brings it back.
   await textField.click({ position: { x: 4, y: 4 } })
+  // The selected element takes the keyboard a render after the click.
+  await expect(textField).toBeFocused()
   await page.keyboard.press("Delete")
   await expect(textField).toHaveCount(0)
   await page.locator("[data-sonner-toast]").getByRole("button", { name: "Undo", exact: true }).click()
