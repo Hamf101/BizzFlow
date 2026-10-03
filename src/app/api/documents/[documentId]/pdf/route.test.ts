@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { getAuthenticatedUser } from "@/lib/auth"
-import { createDocumentDownloadUrl } from "@/services/document-service"
+import { createDocumentDownloadUrl, findGuestOrganizationId } from "@/services/document-service"
 import { renderGeneratedDocumentPdf } from "@/services/document-pdf-service"
 import {
   finalizeGeneratedDocumentPdf,
@@ -63,6 +63,7 @@ vi.mock("@/services/document-service", () => ({
     readonly statusCode = 500
   },
   createDocumentDownloadUrl: vi.fn(),
+  findGuestOrganizationId: vi.fn(async () => null),
 }))
 
 describe("generated document PDF route", () => {
@@ -111,6 +112,21 @@ describe("generated document PDF route", () => {
     )
     expect(finalizeGeneratedDocumentPdf).not.toHaveBeenCalled()
     expect(createDocumentDownloadUrl).not.toHaveBeenCalled()
+  })
+
+  it("reads a guest's document in the workspace that shared it, even when they have no workspace of their own", async () => {
+    const SHARING_ORG = "10000000-0000-4000-8000-000000000002"
+    vi.mocked(getCurrentOrganizationContext).mockResolvedValue(null)
+    vi.mocked(findGuestOrganizationId).mockResolvedValueOnce(SHARING_ORG)
+    vi.mocked(getGeneratedDocumentSigningView).mockResolvedValue(createSigningView("draft"))
+    vi.mocked(renderGeneratedDocumentPdf).mockResolvedValue(Buffer.from("%PDF-preview"))
+
+    const response = await GET(createRequest(), createRouteContext())
+
+    expect(response.status).toBe(200)
+    expect(getGeneratedDocumentSigningView).toHaveBeenCalledWith(
+      expect.objectContaining({ actorUserId: ACTOR_ID, documentId: DOCUMENT_ID, organizationId: SHARING_ORG })
+    )
   })
 
   it("redirects completed documents to the exact audited final version", async () => {

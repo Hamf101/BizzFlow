@@ -91,11 +91,12 @@ describe("TemplateRowMenu", () => {
     expect(readItems()).toEqual([["Restore", null]])
   })
 
-  it("adds the public links once the template is published", async () => {
+  it("adds sending to answer and the public links once the template is published", async () => {
     await openMenu("published")
 
     expect(readItems()).toEqual([
       ["Edit", `/templates/${TEMPLATE_ID}/edit`],
+      ["Send to answer…", null],
       ["Public links", `/templates/${TEMPLATE_ID}/links`],
       ["Share…", null],
       ["Duplicate", null],

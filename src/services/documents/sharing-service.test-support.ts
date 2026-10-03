@@ -87,7 +87,8 @@ class FakeQuery implements PromiseLike<Result> {
             existing.org_id === row.org_id &&
             (existing.document_id ?? existing.folder_id ?? existing.template_id) === (row.document_id ?? row.folder_id ?? row.template_id) &&
             existing.user_id === row.user_id &&
-            existing.organization_role === row.organization_role
+            existing.organization_role === row.organization_role &&
+            existing.email === row.email
         )
       )
 

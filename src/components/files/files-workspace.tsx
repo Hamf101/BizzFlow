@@ -52,6 +52,8 @@ import { formatMediumDate } from "@/lib/date-format"
 import { buildDocumentFolderPath } from "@/lib/page-document-folders"
 import {
   canPerformOrganizationAction,
+  canSendDocument,
+  canShareResource,
   type OrganizationPermissionSubject,
 } from "@/lib/permissions"
 import { cn } from "@/lib/utils"
@@ -221,9 +223,7 @@ export function FilesWorkspace({
           }))
       : []
 
-  // Anyone who can edit an item, and anyone who manages folders, may share it while it is active.
-  const canShare = (item: { accessLevel: string; lifecycleState: DocumentLifecycleState }): boolean =>
-    item.lifecycleState === "active" && (item.accessLevel === "contributor" || canManageFolders)
+  const canShare = (item: { accessLevel: string; lifecycleState: DocumentLifecycleState }): boolean => canShareResource(membership, item)
 
   function folderMenu(folder: AccessibleDocumentFolder): ReactNode {
     const manageable = canManageFolders && isManageable(folder)
@@ -390,6 +390,7 @@ export function FilesWorkspace({
             ? LIFECYCLE_LABELS[document.lifecycleState]
             : [],
         shareable: canShare(document),
+        sendable: Boolean(document.templateId) && canSendDocument(membership, document),
       })
     ),
   ]

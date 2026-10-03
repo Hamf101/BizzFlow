@@ -133,6 +133,22 @@ type DocumentAccessGrantRow = Record<string, unknown> & {
   updated_at: string
 }
 
+/** Someone outside the workspace given one document: invited until they join. */
+type DocumentGuestGrantRow = Record<string, unknown> & {
+  id: string
+  org_id: string
+  document_id: string
+  email: string
+  user_id: string | null
+  access_level: DocumentAccessLevel
+  invite_token_hash: string | null
+  invite_expires_at: string | null
+  invited_by: string | null
+  accepted_at: string | null
+  created_at: string
+  updated_at: string
+}
+
 /** What a template is shared at: read it, make documents from it, or edit it. */
 export type TemplateAccessLevel = "viewer" | "user" | "editor"
 
@@ -404,7 +420,16 @@ export type AdminPublicFormLinkRow = Record<string, unknown> & {
   id: string
   org_id: string
   template_id: string
-  token: string
+  /** Null on a link sent to one person, which keeps only token_hash. */
+  token: string | null
+  token_hash: string | null
+  recipient_email: string | null
+  document_id: string | null
+  content_snapshot: Record<string, unknown> | null
+  answers_snapshot: Record<string, unknown> | null
+  title_snapshot: string | null
+  template_revision_snapshot: number | null
+  sent_by: string | null
   status: "active" | "expired" | "disabled"
   expires_at: string | null
   max_submissions: number | null
@@ -570,6 +595,12 @@ export type AdminDatabase = {
         DocumentAccessGrantRow,
         DocumentAccessGrantInsert,
         Partial<DocumentAccessGrantRow>
+      >
+      document_guest_grants: DatabaseTable<
+        DocumentGuestGrantRow,
+        Partial<DocumentGuestGrantRow> &
+          Pick<DocumentGuestGrantRow, "org_id" | "document_id" | "email" | "access_level">,
+        Partial<DocumentGuestGrantRow>
       >
       template_access_grants: DatabaseTable<
         TemplateAccessGrantRow,

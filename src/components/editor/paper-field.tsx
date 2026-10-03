@@ -1,17 +1,22 @@
 "use client"
 
 import { Check } from "lucide-react"
-import type { CSSProperties, ReactElement, ReactNode } from "react"
+import dynamic from "next/dynamic"
+import { createContext, type CSSProperties, type ReactElement, type ReactNode, useContext } from "react"
 
-import { DrawnSignatureField } from "@/components/documents/drawn-signature-field"
-import { Affixed, PaperComb, PaperGrid, PaperTable, readChoiceList } from "@/components/editor/paper-answer-kinds"
 import { typedInput } from "@/components/ui/typed-input"
 import { getGeneratedDocumentAnswerName } from "@/components/documents/generated-document-form-data"
 import { DatePicker } from "@/components/ui/date-picker"
 import { Select } from "@/components/ui/select"
 import { describeDateFormat, formatDateAnswer } from "@/lib/date-format"
 import { cn } from "@/lib/utils"
-import type { TemplateBlock, TemplateLayout } from "@/types/template"
+import type { TemplateBlock, TemplateLayout, TextFieldBlock } from "@/types/template"
+import { readChoiceList } from "@/types/template-answer-kinds"
+
+// Grids, tables and signature pads load only on pages that have them.
+const DrawnSignatureField = dynamic(() => import("@/components/documents/drawn-signature-field").then((field) => field.DrawnSignatureField))
+const PaperGrid = dynamic(() => import("@/components/editor/paper-answer-kinds").then((kinds) => kinds.PaperGrid))
+const PaperTable = dynamic(() => import("@/components/editor/paper-answer-kinds").then((kinds) => kinds.PaperTable))
 
 type FieldBlock = Extract<TemplateBlock, { fieldKey: string }>
 type FieldStyle = NonNullable<TemplateLayout["fieldStyle"]>
@@ -49,6 +54,9 @@ const BOX_HEIGHT = { line: 3, lines: 6, drawing: 5.6 } as const
 // edge is fainter, the page's own border colour, as it prints. A boxed
 // section's edge is this one too.
 export const EDGE = "rgb(156 163 176)"
+const RULE = `0.07em solid ${EDGE}`
+// A comb box prints 16 points wide and 22 tall.
+const COMB = { height: 2.2, width: 1.6 } as const
 // A long answer in the line style is written on rules 20 points apart, the
 // page's faint edge colour, as it prints.
 const RULED: CSSProperties = {
@@ -57,6 +65,13 @@ const RULED: CSSProperties = {
   lineHeight: 2,
 }
 // A control inside a box is bare: the box is the field.
+/**
+ * Set by a page whose form is submitted, such as a link someone answers: each
+ * required field is then required in the browser, and the message for a field
+ * it refused, by block id, shows under that field.
+ */
+export const PaperAnswering = createContext<Readonly<Record<string, string>> | null>(null)
+
 const BARE =
   "h-auto min-h-0 rounded-none border-0 bg-transparent p-0 text-[1em] leading-[1.5] shadow-none focus-visible:border-0 focus-visible:ring-0 data-popup-open:border-0 md:h-auto md:text-[1em]"
 
@@ -75,6 +90,7 @@ export function PaperField({
   fieldStyle = "box",
   mode,
   onAnswerChange,
+  renderFile,
 }: {
   answers: Readonly<Record<string, unknown>>
   block: FieldBlock
@@ -84,18 +100,22 @@ export function PaperField({
   fieldStyle?: FieldStyle
   mode: "design" | "fill" | "read"
   onAnswerChange: (fieldKey: string, value: unknown) => void
+  /** What a page that takes uploads puts in a file field while it is filled in. */
+  renderFile?: (block: Extract<FieldBlock, { type: "file_field" }>) => ReactNode
 }): ReactElement {
   const fill = mode === "fill"
+  const errors = useContext(PaperAnswering)
+  const required = fill && errors !== null && block.required
   const value = answers[block.fieldKey]
   const text = typeof value === "string" ? value : ""
   const set = (next: unknown): void => onAnswerChange(block.fieldKey, next)
   const textName = getGeneratedDocumentAnswerName("text", block.fieldKey)
-  const required = block.required ? <span className="text-destructive"> *</span> : null
+  const star = block.required ? <span className="text-destructive"> *</span> : null
   // Not a <label>: a press on it takes the field to arrange it, and the box takes answers.
   const title = (
     <span className="font-bold" style={{ fontSize: "0.9em", lineHeight: 13 / 9, marginBottom: "0.3em" }}>
       {block.label}
-      {required}
+      {star}
     </span>
   )
 
@@ -129,6 +149,7 @@ export function PaperField({
               className="peer absolute top-[0.2em] left-0 size-[1em] cursor-pointer opacity-0"
               id={block.id}
               name={booleanName}
+              required={required}
               onChange={(event) => set(event.target.checked)}
               type="checkbox"
               value="true"
@@ -143,7 +164,7 @@ export function PaperField({
           {checked && mode !== "design" ? <Check className="size-[0.85em]" strokeWidth={3} /> : null}
         </span>
         {block.label}
-        {required}
+        {star}
         <Help block={block} inset="-1.6em" />
       </div>
     )
@@ -171,6 +192,7 @@ export function PaperField({
             name={textName}
             onChange={(event) => set(event.target.value)}
             placeholder={block.placeholder ?? undefined}
+            required={required}
             // It grows with its answer, as the printed box does.
             style={ruled ? { ...RULED, fieldSizing: "content", minHeight: `${rules * 2}em` } : { fieldSizing: "content", minHeight: `${(sized ?? BOX_HEIGHT.lines) - 1.2}em` }}
             value={text}
@@ -188,6 +210,7 @@ export function PaperField({
             name={textName}
             onChange={(event) => set(event.target.value)}
             placeholder={block.comb ? undefined : (block.placeholder ?? undefined)}
+            required={required}
             value={text}
             {...typedInput(block.format)}
           />
@@ -205,7 +228,7 @@ export function PaperField({
       break
     case "date_field":
       answer = fill ? (
-        <DatePicker aria-label={block.label} className={BARE} format={block.dateFormat} id={block.id} name={textName} onChange={set} value={text} />
+        <DatePicker aria-label={block.label} className={BARE} format={block.dateFormat} id={block.id} name={textName} onChange={set} required={required} value={text} />
       ) : mode === "read" ? (
         formatDateAnswer(text, block.dateFormat)
       ) : (
@@ -214,7 +237,7 @@ export function PaperField({
       break
     case "dropdown_field":
       answer = fill ? (
-        <Select aria-label={block.label} className={BARE} id={block.id} name={textName} onChange={(event) => set(event.target.value)} value={text}>
+        <Select aria-label={block.label} className={BARE} id={block.id} name={textName} onChange={(event) => set(event.target.value)} required={required} value={text}>
           <option value="">{block.placeholder || "Select an option"}</option>
           {block.options.map((option: string) => (
             <option key={option} value={option}>
@@ -236,6 +259,7 @@ export function PaperField({
           bare
           label={block.label}
           name={getGeneratedDocumentAnswerName("drawing", block.fieldKey)}
+          required={required}
           saved={text}
         />
       ) : text ? (
@@ -246,7 +270,7 @@ export function PaperField({
       ) : null
       break
     case "file_field":
-      answer = placeholder(mode === "design" ? "Choose a file" : "Uploads are only in submissions.")
+      answer = fill && renderFile ? renderFile(block) : placeholder(mode === "design" ? "Choose a file" : "Uploads are only in submissions.")
       break
   }
 
@@ -288,6 +312,7 @@ export function PaperField({
                       // Ticks keep the options' order, whatever order they were ticked in.
                       set(several ? block.options.filter((other) => (other === option ? !chosen : ticked.includes(other))) : option)
                     }
+                    required={required && !several}
                     type={several ? "checkbox" : "radio"}
                     value={option}
                   />
@@ -327,7 +352,7 @@ export function PaperField({
       >
         <span className="text-muted-foreground" style={{ fontSize: "0.7em", lineHeight: 10 / 7, marginBottom: "calc(0.2em / 0.7)" }}>
           {block.label}
-          {required}
+          {star}
         </span>
         <div className="relative flex flex-col" style={{ minHeight: `${drawing ? (sized ?? height) : block.type === "text_field" && block.multiline ? (sized ?? BOX_HEIGHT.lines) - 1.2 : 1.5}em` }}>
           {answer}
@@ -338,6 +363,7 @@ export function PaperField({
             {block.helpText}
           </span>
         ) : null}
+        <Refused blockId={block.id} />
       </div>
     ) : drawing ? (
       // Signed on a line, named by a caption under it.
@@ -349,7 +375,7 @@ export function PaperField({
         <div className="flex flex-col">
           <span className="text-muted-foreground" style={{ fontSize: "0.8em", lineHeight: 11 / 8, marginTop: "calc(0.2em / 0.8)" }}>
             {block.label}
-            {required}
+            {star}
           </span>
           <Help block={block} />
         </div>
@@ -360,7 +386,7 @@ export function PaperField({
         <div className="flex flex-col">
           <span style={{ lineHeight: 1.5, marginBottom: "calc(3 * var(--doc-pt))" }}>
             {block.label}
-            {required}
+            {star}
           </span>
           <div className="relative flex flex-col transition-colors focus-within:ring-2 focus-within:ring-ring/40" style={fill ? undefined : { ...RULED, minHeight: `${rules * 2}em` }}>
             {fill ? answer : <span className="whitespace-pre-wrap">{answer}</span>}
@@ -376,7 +402,7 @@ export function PaperField({
         <div className="flex items-end" style={{ gap: "0.6em", lineHeight: 1.5 }}>
           <span className="max-w-[45%] shrink-0" style={{ paddingBottom: "0.27em" }}>
             {block.label}
-            {required}
+            {star}
           </span>
           <div
             className={cn("min-w-0 flex-1 transition-colors focus-within:border-ring focus-within:shadow-[0_0.07em_0_0_var(--color-ring)]", fill && "cursor-text")}
@@ -407,7 +433,7 @@ export function PaperField({
       <div
         className={cn(
           "relative flex flex-col border-border transition-colors focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/40",
-          fill && "cursor-text",
+          fill && block.type !== "file_field" && "cursor-text",
           // Faint until a pointer comes over it, drawn in full while it takes an answer.
           mode !== "read" && "hover:border-muted-foreground/60"
         )}
@@ -424,6 +450,11 @@ export function PaperField({
         {answer}
         {edge}
       </div>
+      {block.type === "file_field" && fill && renderFile ? (
+        <span className="block text-muted-foreground" style={{ fontSize: "0.7em", lineHeight: 10 / 7, marginTop: "calc(3 * var(--doc-pt))" }}>
+          PDF, PNG, JPG, DOCX, XLSX or CSV, up to 20 MB.
+        </span>
+      ) : null}
       <Help block={block} />
     </div>
   )
@@ -433,8 +464,79 @@ export function PaperField({
 // the gap is kept with no help too, as the PDF keeps it.
 function Help({ block, inset }: { block: FieldBlock; inset?: string }): ReactElement {
   return (
-    <span className="block text-muted-foreground" style={{ fontSize: "0.7em", lineHeight: 10 / 7, marginLeft: inset && `calc(${inset} / 0.7)`, marginTop: "calc(3 * var(--doc-pt))" }}>
-      {block.helpText}
+    <>
+      <span className="block text-muted-foreground" style={{ fontSize: "0.7em", lineHeight: 10 / 7, marginLeft: inset && `calc(${inset} / 0.7)`, marginTop: "calc(3 * var(--doc-pt))" }}>
+        {block.helpText}
+      </span>
+      <Refused blockId={block.id} inset={inset} />
+    </>
+  )
+}
+
+// Why the browser refused this field, under it, until it is answered.
+function Refused({ blockId, inset }: { blockId: string; inset?: string }): ReactElement | null {
+  const message = useContext(PaperAnswering)?.[blockId]
+
+  return message ? (
+    <span className="block text-destructive" id={`${blockId}-error`} role="alert" style={{ fontSize: "0.8em", marginLeft: inset && `calc(${inset} / 0.8)`, marginTop: "0.2em" }}>
+      {message}
+    </span>
+  ) : null
+}
+
+/**
+ * An answer written one character a box, as a reference or account number
+ * prints: boxes of 16 by 22 points, narrowed to fit a narrow column.
+ *
+ * @param props - The field, its answer, and its input when it is being filled in.
+ * @returns The row of boxes.
+ */
+export function PaperComb({ block, input, text }: { block: TextFieldBlock & { comb: number }; input?: ReactElement; text: string }): ReactElement {
+  // Measured against the column, not the font, so the typed letters and the boxes agree.
+  const width = `min(${COMB.width}em, max(1em, 100cqw / ${block.comb}))`
+
+  return (
+    <div className="@container w-full">
+      <div
+        className="relative flex"
+        style={{
+          ["--comb" as string]: width,
+          height: `${COMB.height}em`,
+          width: `calc(${width} * ${block.comb})`,
+        }}
+      >
+        {Array.from({ length: block.comb }, (_, at) => (
+          <span
+            className="flex flex-1 items-center justify-center"
+            key={at}
+            style={{ borderBottom: RULE, borderLeft: RULE, borderRight: at === block.comb - 1 ? RULE : undefined, borderTop: RULE }}
+          >
+            {input ? null : text[at]}
+          </span>
+        ))}
+        {input}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * An answer between the words printed before and after it, such as "£" and
+ * "per month", in the label's colour.
+ *
+ * @param props - The field and its answer.
+ * @returns The answer with its words around it.
+ */
+export function Affixed({ block, children }: { block: TextFieldBlock; children: ReactNode }): ReactElement {
+  if (!block.prefix && !block.suffix) {
+    return <>{children}</>
+  }
+
+  return (
+    <span className="flex min-w-0 items-baseline gap-[0.3em]">
+      {block.prefix ? <span className="shrink-0 text-muted-foreground">{block.prefix}</span> : null}
+      <span className={cn("min-w-0 flex-1")}>{children}</span>
+      {block.suffix ? <span className="shrink-0 text-muted-foreground">{block.suffix}</span> : null}
     </span>
   )
 }

@@ -5,14 +5,12 @@ import type { ReactElement, ReactNode } from "react"
 
 import { getGeneratedDocumentAnswerName } from "@/components/documents/generated-document-form-data"
 import { cn } from "@/lib/utils"
-import type { ChoiceGridFieldBlock, TableFieldBlock, TextFieldBlock } from "@/types/template"
+import type { ChoiceGridFieldBlock, TableFieldBlock } from "@/types/template"
 import { MAX_TABLE_FIELD_ROWS } from "@/types/template-answer-kinds"
 
 // The printed edge of a mark, a grid's rules and a table's cells (see paper-field).
 const EDGE = "rgb(156 163 176)"
 const RULE = `0.07em solid ${EDGE}`
-// A comb box prints 16 points wide and 22 tall.
-const COMB = { height: 2.2, width: 1.6 } as const
 
 type Mode = "design" | "fill" | "read"
 
@@ -71,16 +69,6 @@ export function readTableAnswer(value: unknown, columns: number): string[][] {
   return value
     .filter((row): row is unknown[] => Array.isArray(row))
     .map((row) => Array.from({ length: columns }, (_, at) => (typeof row[at] === "string" ? (row[at] as string) : "")))
-}
-
-/**
- * Ticked choices of a choose-several question.
- *
- * @param value - Whatever the answers hold for it.
- * @returns The ticked choices.
- */
-export function readChoiceList(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []
 }
 
 // What a form posts for an answer that is more than one word: the whole of it, as JSON.
@@ -297,62 +285,5 @@ export function PaperTable({
         </button>
       ) : null}
     </div>
-  )
-}
-
-/**
- * An answer written one character a box, as a reference or account number
- * prints: boxes of 16 by 22 points, narrowed to fit a narrow column.
- *
- * @param props - The field, its answer, and its input when it is being filled in.
- * @returns The row of boxes.
- */
-export function PaperComb({ block, input, text }: { block: TextFieldBlock & { comb: number }; input?: ReactElement; text: string }): ReactElement {
-  // Measured against the column, not the font, so the typed letters and the boxes agree.
-  const width = `min(${COMB.width}em, max(1em, 100cqw / ${block.comb}))`
-
-  return (
-    <div className="@container w-full">
-      <div
-        className="relative flex"
-        style={{
-          ["--comb" as string]: width,
-          height: `${COMB.height}em`,
-          width: `calc(${width} * ${block.comb})`,
-        }}
-      >
-        {Array.from({ length: block.comb }, (_, at) => (
-          <span
-            className="flex flex-1 items-center justify-center"
-            key={at}
-            style={{ borderBottom: RULE, borderLeft: RULE, borderRight: at === block.comb - 1 ? RULE : undefined, borderTop: RULE }}
-          >
-            {input ? null : text[at]}
-          </span>
-        ))}
-        {input}
-      </div>
-    </div>
-  )
-}
-
-/**
- * An answer between the words printed before and after it, such as "£" and
- * "per month", in the label's colour.
- *
- * @param props - The field and its answer.
- * @returns The answer with its words around it.
- */
-export function Affixed({ block, children }: { block: TextFieldBlock; children: ReactNode }): ReactElement {
-  if (!block.prefix && !block.suffix) {
-    return <>{children}</>
-  }
-
-  return (
-    <span className="flex min-w-0 items-baseline gap-[0.3em]">
-      {block.prefix ? <span className="shrink-0 text-muted-foreground">{block.prefix}</span> : null}
-      <span className={cn("min-w-0 flex-1")}>{children}</span>
-      {block.suffix ? <span className="shrink-0 text-muted-foreground">{block.suffix}</span> : null}
-    </span>
   )
 }

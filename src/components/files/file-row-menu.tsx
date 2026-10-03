@@ -1,6 +1,6 @@
 "use client"
 
-import { Archive, Ellipsis, FolderInput, RotateCcw, Trash2, UserPlus } from "lucide-react"
+import { Archive, Ellipsis, FolderInput, RotateCcw, Send, Trash2, UserPlus } from "lucide-react"
 import { type ReactElement, type ReactNode, useState, useTransition } from "react"
 
 import {
@@ -15,6 +15,7 @@ import {
   useOpensOnRightClick,
 } from "@/components/files/file-selection"
 import { MoveToDialog } from "@/components/files/move-to-dialog"
+import { SendToAnswerDialog } from "@/components/editor/lazy-panels"
 import { ShareDialog } from "@/components/sharing/share-dialog"
 import { Button } from "@/components/ui/button"
 import {
@@ -192,6 +193,7 @@ export function FileRowMenu({
 }): ReactElement {
   const [moving, setMoving] = useState(false)
   const [sharing, setSharing] = useState(false)
+  const [asking, setAsking] = useState(false)
   const [purging, setPurging] = useState(false)
   const selection = useFileSelection()
   const targets =
@@ -247,6 +249,12 @@ export function FileRowMenu({
   ) : (
     <>
       {shareItem}
+      {item?.sendable ? (
+        <DropdownMenuItem onClick={() => setAsking(true)}>
+          <Send aria-hidden="true" />
+          Send to answer…
+        </DropdownMenuItem>
+      ) : null}
       {moveTo}
       {actions.map((action: FileLifecycleAction) => {
         const Icon = ACTION_ICONS[action.label]
@@ -319,6 +327,7 @@ export function FileRowMenu({
         />
       ) : null}
       {share ? <ShareDialog name={name} onOpenChange={setSharing} open={sharing} resources={share} /> : null}
+      {asking ? <SendToAnswerDialog name={name} onOpenChange={setAsking} open source={{ documentId: itemId, kind: "document" }} /> : null}
       {purgeForm ? (
         <Dialog onOpenChange={setPurging} open={purging}>
           <DialogContent>

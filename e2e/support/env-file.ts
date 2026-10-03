@@ -30,33 +30,35 @@ export function loadE2eEnvFile(): boolean {
 }
 
 /**
- * The EmailJS keys `getEmailEnv` reads. The first three must all be set before
- * it hands out credentials; the private key is checked too so a real one from
- * `.env.local` never reaches the e2e server at all.
+ * The keys that would let the server reach a real provider: EmailJS's (the
+ * private key too, so a real one from `.env.local` never reaches the server),
+ * and each AI provider's.
  */
-const EMAIL_KEYS = [
+const OUTBOUND_KEYS = [
   "EMAILJS_SERVICE_ID",
   "EMAILJS_TEMPLATE_ID",
   "EMAILJS_PUBLIC_KEY",
   "EMAILJS_PRIVATE_KEY",
+  "GEMINI_API_KEY",
+  "OPENROUTER_API_KEY",
 ]
 
 /**
- * Refuses a run whose server could reach the real email provider.
+ * Refuses a run whose server could reach the real email or AI provider.
  *
  * `next start` fills every key absent from `process.env` from `.env.local` and
- * `.env.production*`, so a missing key means the maintainer's real EmailJS
+ * `.env.production*`, so a missing key means the maintainer's real
  * credentials. Only a key that is present and empty keeps them out.
  *
  * @param env - The environment the web server will inherit.
- * @throws Error naming each email key that is missing or set.
+ * @throws Error naming each key that is missing or set.
  */
-export function assertNoOutboundEmail(env: NodeJS.ProcessEnv = process.env): void {
-  const open = EMAIL_KEYS.filter((key) => env[key]?.trim() !== "")
+export function assertNoOutboundServices(env: NodeJS.ProcessEnv = process.env): void {
+  const open = OUTBOUND_KEYS.filter((key) => env[key]?.trim() !== "")
 
   if (open.length > 0) {
     throw new Error(
-      `E2E runs must not send real email: ${open.join(", ")} must be set and empty. ` +
+      `E2E runs must not reach real email or AI: ${open.join(", ")} must be set and empty. ` +
         "Regenerate .env.e2e with `pnpm e2e:env`."
     )
   }

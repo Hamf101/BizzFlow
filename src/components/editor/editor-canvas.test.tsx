@@ -5,8 +5,10 @@ import { afterEach, beforeAll, expect, it } from "vitest"
 
 import { parseGeneratedDocumentAnswers } from "@/components/documents/generated-document-form-data"
 
+import "./design-tools-provided"
 import { INSERT_CHOICES } from "./block-catalog"
 import { EditorCanvas } from "./editor-canvas"
+import { useReadOnlyController } from "./read-only-controller"
 import { useEditorController, type EditorController } from "./use-editor-controller"
 import { useEditorHistory } from "./use-editor-history"
 import { createEmptyDocumentContent, templateContentV3Schema, type TemplateContentV3 } from "@/types/template"
@@ -21,6 +23,14 @@ beforeAll(() => {
   Range.prototype.getClientRects = () => Object.assign([], { item: () => null }) as unknown as DOMRectList
 })
 afterEach(() => { act(() => root?.unmount()); document.body.replaceChildren() })
+
+// Choosing a block brings its toolbar, which loads the first time it is needed.
+async function choose(blockId: string): Promise<void> {
+  await act(async () => controller.select(blockId))
+  await act(async () => { await import("./editor-block-toolbar"); await new Promise((resolve) => setTimeout(resolve, 0)) })
+}
+
+
 
 const TERMS: TemplateContentV3 = {
   ...createEmptyDocumentContent(),
@@ -78,7 +88,7 @@ it("sets blocks side by side, resizes the row from its seam, and lets a block st
   const seam = document.querySelector<HTMLElement>('[data-slot="row-seam"]')!
   await act(async () => seam.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "ArrowLeft" })))
   expect(controller.content.fieldGroups[0]?.widths).toEqual([5, 7])
-  await act(async () => controller.select(first))
+  await choose(first)
   press("Keep with next")
   expect(controller.content.blockRules).toContainEqual({ blockId: first, keepWithNext: true, pageBreakBefore: false })
   press("Stand alone")
@@ -90,6 +100,8 @@ it("lets a signature be drawn with a mouse without carrying its block away", asy
   const signature = { fieldKey: "signature", helpText: null, id: B, label: "Signature", required: false, type: "signature_field" as const }
   root = createRoot(document.body.appendChild(document.createElement("div")))
   await act(async () => root.render(<Canvas fields="fill" initial={{ ...createEmptyDocumentContent(), blocks: [signature] }} narrow={false} />))
+  // A signature pad loads the first time a page has one.
+  await act(async () => { await import("@/components/documents/drawn-signature-field"); await new Promise((resolve) => setTimeout(resolve, 0)) })
   const pad = document.querySelector("canvas")!
   const block = pad.closest<HTMLElement>("[data-block-id]")!
   const at = (type: string, x: number) => new MouseEvent(type, { bubbles: true, button: 0, clientX: x, clientY: 10 })
@@ -116,7 +128,7 @@ it("offers placing a picture in front of the text only where there are pages to 
   for (const narrow of [false, true]) {
     root = createRoot(document.body.appendChild(document.createElement("div")))
     await act(async () => root.render(<Canvas initial={initial} narrow={narrow} />))
-    await act(async () => controller.select(B))
+    await choose(B)
 
     // A phone's column has no pages, so a picture there stays in the text.
     expect(Boolean([...document.querySelectorAll("button")].find((button) => button.textContent === "In line"))).toBe(!narrow)
@@ -135,7 +147,7 @@ it("moves a selected block a step at a time from the keyboard, across a section'
 
   root = createRoot(document.body.appendChild(document.createElement("div")))
   await act(async () => root.render(<Canvas initial={initial} narrow={false} />))
-  await act(async () => controller.select(note))
+  await choose(note)
   const block = document.querySelector(`[data-block-id="${note}"]`)!
 
   // Down one step: past the Terms title, as the section's first line.
@@ -214,14 +226,14 @@ it("opens a block's menu on a right-click, but leaves words being typed in the b
   expect(document.querySelector("[role=menu]")).toBeNull()
 
   // The menu key opens it on a block chosen from the keyboard.
-  await act(async () => controller.select(field))
+  await choose(field)
   await act(async () => box.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "F10", shiftKey: true })))
   expect(item("Keep with next")?.getAttribute("aria-checked")).toBe("false")
   await act(async () => item("Reset position")!.click())
   expect(controller.content.blockRules).toEqual([])
 
   // Typing again in a chosen block's words lets the block go, so Escape can choose it again.
-  await act(async () => controller.select(B))
+  await choose(B)
   await act(async () => words.querySelector("[contenteditable]")!.dispatchEvent(new FocusEvent("focusin", { bubbles: true })))
   expect(controller.selectedBlockId).toBeNull()
 })
@@ -234,7 +246,7 @@ it("makes an answer box taller or shorter from the keyboard, back to its usual h
   })
   root = createRoot(document.body.appendChild(document.createElement("div")))
   await act(async () => root.render(<Canvas initial={content} narrow={false} />))
-  await act(async () => controller.select(field))
+  await choose(field)
   const press = (key: string) => act(async () => void document.querySelector(`[data-block-id="${field}"]`)!.dispatchEvent(new KeyboardEvent("keydown", { altKey: true, bubbles: true, cancelable: true, key, shiftKey: true })))
   const height = () => (controller.content.blocks.find((block) => block.id === field) as { boxHeight?: number }).boxHeight
 
@@ -261,4 +273,52 @@ it("offers a choice as radio buttons that answer under the dropdown's own name, 
   await act(async () => radios[1]!.click())
 
   expect(parseGeneratedDocumentAnswers(new FormData(form))).toEqual({ renew: "No" })
+})
+
+it("fills in a page with nothing to design: answers go back, and a file field holds the page's own upload", async () => {
+  const name = "70000000-0000-4000-8000-000000000031"
+  const proof = "70000000-0000-4000-8000-000000000032"
+  const content = templateContentV3Schema.parse({
+    ...TERMS,
+    blocks: [
+      ...TERMS.blocks,
+      { fieldKey: "name", helpText: null, id: name, label: "Your name", multiline: false, placeholder: null, required: true, type: "text_field" },
+      { fieldKey: "proof", helpText: null, id: proof, label: "Proof of address", required: false, type: "file_field" },
+    ],
+  })
+  const answered: Array<[string, unknown]> = []
+  function Fill() {
+    const controller = useReadOnlyController(content)
+    return (
+      <EditorCanvas
+        allowFiles={false}
+        answers={{}}
+        controller={controller}
+        designable={false}
+        documentTitle="Agreement"
+        fields="fill"
+        narrow
+        onAnswerChange={(key, value) => answered.push([key, value])}
+        renderFileField={(block) => <button type="button">Upload {block.label}</button>}
+        textEditable={false}
+        zoom={1}
+      />
+    )
+  }
+  root = createRoot(document.body.appendChild(document.createElement("div")))
+  await act(async () => root.render(<Fill />))
+
+  const input = document.querySelector<HTMLInputElement>('input[aria-label="Your name"]')!
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "Ana")
+    input.dispatchEvent(new Event("input", { bubbles: true }))
+  })
+  expect(answered).toContainEqual(["name", "Ana"])
+  // Only a page that is submitted, such as a link someone answers, holds back a required field.
+  expect(input.required).toBe(false)
+  expect(document.querySelector("button")?.textContent).toBe("Upload Proof of address")
+  expect(document.body.textContent).not.toContain("Uploads are only in submissions.")
+  // Nothing to type into but its fields, and nothing to choose.
+  expect(document.querySelector("[contenteditable]")).toBeNull()
+  expect(document.querySelector('[aria-label="Section title"]')).toBeNull()
 })

@@ -3,7 +3,7 @@ import type { ReactElement } from "react"
 
 import { DocumentOpenTracker } from "@/components/documents/document-open-tracker"
 import { DocumentPreview } from "@/components/documents/document-preview"
-import { canPerformOrganizationAction } from "@/lib/permissions"
+import { canPerformOrganizationAction, canSendDocument, canShareResource } from "@/lib/permissions"
 
 import { loadDocumentPage } from "../load-document-page"
 
@@ -29,6 +29,21 @@ export default async function DocumentPreviewPage({
   }
 
   const { backHref, context, view } = loaded
+
+  // Someone outside the workspace reads it and saves a copy, and an Editor may edit it.
+  if (!context) {
+    return (
+      <DocumentPreview
+        backHref={backHref}
+        backLabel="Shared with you"
+        canEdit={view.accessLevel === "contributor" && view.document.lifecycleState === "active"}
+        canSendToAnswer={false}
+        canShare={false}
+        view={view}
+      />
+    )
+  }
+
   const canEdit =
     canPerformOrganizationAction(context.membership, "documents:fill") &&
     view.accessLevel === "contributor" &&
@@ -37,7 +52,13 @@ export default async function DocumentPreviewPage({
   return (
     <>
       <DocumentOpenTracker documentId={view.document.id} organizationId={context.organization.id} />
-      <DocumentPreview backHref={backHref} canEdit={canEdit} view={view} />
+      <DocumentPreview
+        backHref={backHref}
+        canEdit={canEdit}
+        canSendToAnswer={view.document.templateId !== null && canSendDocument(context.membership, { accessLevel: view.accessLevel, lifecycleState: view.document.lifecycleState })}
+        canShare={canShareResource(context.membership, { accessLevel: view.accessLevel, lifecycleState: view.document.lifecycleState })}
+        view={view}
+      />
     </>
   )
 }

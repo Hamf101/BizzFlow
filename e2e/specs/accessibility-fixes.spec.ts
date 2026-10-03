@@ -136,7 +136,7 @@ test("a required public form field shows its error on the page and ties it to th
 
   const field = page.getByLabel("Client reference")
   await waitForHydration(field)
-  await page.getByRole("button", { name: "Submit form" }).click()
+  await page.getByRole("button", { name: "Submit" }).click()
 
   await expect(field).toHaveAttribute("aria-invalid", "true")
   await expect(field).toHaveAccessibleDescription("Client reference is required.")

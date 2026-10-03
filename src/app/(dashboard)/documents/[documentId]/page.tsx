@@ -10,6 +10,7 @@ import { DocumentDownloadButton } from "@/components/documents/document-download
 import { DocumentOpenTracker } from "@/components/documents/document-open-tracker"
 import { DocumentReplaceForm } from "@/components/documents/document-replace-form"
 import { PurgeRequestForm } from "@/components/documents/purge-request-form"
+import { ShareButton } from "@/components/sharing/share-button"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -19,6 +20,7 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { buildFeedbackRedirect } from "@/lib/action-result"
+import { canShareResource } from "@/lib/permissions"
 import { formatMediumDateTime } from "@/lib/date-format"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
 import { getPageErrorMessage } from "@/lib/page-errors"
@@ -290,7 +292,7 @@ function DocumentMetadataCard({
           label="Your access"
           value={
             detail.document.accessLevel === "contributor"
-              ? "Contributor"
+              ? "Editor"
               : "Viewer"
           }
         />
@@ -571,6 +573,9 @@ function DocumentActionsCard({
             documentId={document.id}
             organizationId={context.organization.id}
           />
+        ) : null}
+        {canShareResource(context.membership, document) ? (
+          <ShareButton name={document.title} resource={{ id: document.id, kind: "document" }} />
         ) : null}
         {canContribute && document.lifecycleState === "active" ? (
           <RoleGuard

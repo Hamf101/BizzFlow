@@ -39,10 +39,11 @@ test("saves the exact brand colors picked, and prints the page with them", async
   await page.reload()
   const pages = page.locator('[data-slot="editor-pages"]')
   await waitForHydration(pages)
+  // The page draws each colour from exactly the one picked, flipped for dark mode as light and dark flip.
   expect(await pages.evaluate((element) => ({
     primary: (element as HTMLElement).style.getPropertyValue("--doc-primary"),
     accent: (element as HTMLElement).style.getPropertyValue("--doc-accent"),
-  }))).toEqual({ primary: "#ffffff", accent: "#eeeeee" })
+  }))).toEqual({ primary: expect.stringContaining("from #ffffff "), accent: expect.stringContaining("from #eeeeee ") })
 })
 
 test("duplicates fields and renames one in its settings on the page, with unique saved field keys", async ({

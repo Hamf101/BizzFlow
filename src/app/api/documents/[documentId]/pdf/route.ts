@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 
 import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
+import { resolveDocumentOrganizationId } from "@/lib/document-organization"
 import { captureUnexpectedError } from "@/lib/observability"
 import { checkRateLimit, RateLimitError } from "@/lib/rate-limit"
 import { createRateLimitResponse } from "@/lib/rate-limit-response"
@@ -20,10 +21,7 @@ import {
   getGeneratedDocumentSigningView,
   DocumentSigningServiceError,
 } from "@/services/document-signing-service"
-import {
-  getCurrentOrganizationContext,
-  OrganizationServiceError,
-} from "@/services/organization-service"
+import { OrganizationServiceError } from "@/services/organization-service"
 import { readTemplateImage } from "@/services/template-image-service"
 
 // A long document renders in a few seconds; this leaves room for pictures and a busy moment.
@@ -48,40 +46,40 @@ export async function GET(
 
   try {
     const user = await getAuthenticatedUser()
-    const organizationContext = await getCurrentOrganizationContext(user.id)
+    const { documentId } = await context.params
+    requestedDocumentId = documentId
+    const organizationId = await resolveDocumentOrganizationId(user.id, documentId)
 
-    if (!organizationContext) {
+    if (!organizationId) {
       throw new DocumentSigningServiceError(
         "Create or join an organization before downloading documents.",
         403
       )
     }
 
-    const { documentId } = await context.params
-    requestedDocumentId = documentId
     // Keyed on the document because the preview path below re-renders the whole
     // PDF on every request (no-store), so a hot loop on one large document is
     // the expensive case rather than a member opening many documents.
     await checkRateLimit(
       "pdf_render",
-      `${organizationContext.organization.id}:${documentId}`
+      `${organizationId}:${documentId}`
     )
 
     const view = await getGeneratedDocumentSigningView({
       actorUserId: user.id,
-      organizationId: organizationContext.organization.id,
+      organizationId,
       documentId,
     })
 
     if (view.workflowStatus === "completed") {
       const finalization = await finalizeGeneratedDocumentPdf({
         actorUserId: user.id,
-        organizationId: organizationContext.organization.id,
+        organizationId,
         documentId,
       })
       const download = await createDocumentDownloadUrl({
         actorUserId: user.id,
-        organizationId: organizationContext.organization.id,
+        organizationId,
         documentId,
         versionId: finalization.versionId,
       })
@@ -116,7 +114,7 @@ export async function GET(
       })),
     }, {
       fillable,
-      readImage: (asset) => readTemplateImage(organizationContext.organization.id, asset),
+      readImage: (asset) => readTemplateImage(organizationId, asset),
     })
 
     return new Response(new Uint8Array(pdf), {

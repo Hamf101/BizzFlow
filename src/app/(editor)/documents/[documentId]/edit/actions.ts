@@ -22,6 +22,7 @@ import {
   canPerformOrganizationAction,
   type OrganizationPermissionAction,
 } from "@/lib/permissions"
+import { findGuestOrganizationId } from "@/services/document-service"
 import { getCurrentOrganizationContext } from "@/services/organization-service"
 import type { SaveResult } from "@/components/editor/use-autosave"
 import {
@@ -65,11 +66,10 @@ export type DocumentContentInput = {
  */
 export async function saveDocumentContentAction(input: DocumentContentInput): Promise<SaveResult> {
   try {
-    const actionContext = await loadMemberActionContext("documents:fill")
+    const documentId = requireIdentifier(input.documentId, "Document id")
     const saved = await updateGeneratedDocumentContent({
-      actorUserId: actionContext.actorUserId,
-      organizationId: actionContext.context.organization.id,
-      documentId: requireIdentifier(input.documentId, "Document id"),
+      ...(await loadFillActionContext(documentId)),
+      documentId,
       expectedUpdatedAt: input.expectedUpdatedAt,
       title: input.title,
       content: input.content,
@@ -92,11 +92,10 @@ export async function saveDocumentAnswersAction(formData: FormData): Promise<Sav
   const documentId = getFormString(formData, "documentId")
 
   try {
-    const actionContext = await loadMemberActionContext("documents:fill")
+    const id = requireIdentifier(documentId, "Document id")
     await saveGeneratedDocumentAnswers({
-      actorUserId: actionContext.actorUserId,
-      organizationId: actionContext.context.organization.id,
-      documentId: requireIdentifier(documentId, "Document id"),
+      ...(await loadFillActionContext(id)),
+      documentId: id,
       values: parseGeneratedDocumentAnswers(formData),
     })
 
@@ -239,6 +238,20 @@ export async function resendGeneratedDocumentInvitationAction(
   }
 
   redirect(buildFeedbackRedirect(editorPath, "signing_invitation_resent"))
+}
+
+// Someone outside the workspace given the document as an Editor fills it in
+// its own workspace; the service then checks their grant like a member's access.
+async function loadFillActionContext(documentId: string): Promise<{ actorUserId: string; organizationId: string }> {
+  const user = await getAuthenticatedUser()
+  const guestOrganizationId = await findGuestOrganizationId({ documentId, userId: user.id })
+
+  if (guestOrganizationId) {
+    return { actorUserId: user.id, organizationId: guestOrganizationId }
+  }
+
+  const member = await loadMemberActionContext("documents:fill")
+  return { actorUserId: member.actorUserId, organizationId: member.context.organization.id }
 }
 
 async function loadMemberActionContext(

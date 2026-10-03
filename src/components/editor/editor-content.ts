@@ -1,12 +1,5 @@
-import {
-  fitRuns,
-  MAX_LIST_ITEMS,
-  MAX_TEMPLATE_BLOCK_COUNT,
-  ruleHasEffect,
-  type TemplateBlock,
-  type TemplateContentV3,
-  type TextRun,
-} from "@/types/template"
+import { type TemplateBlock, type TemplateContentV3, type TextRun } from "@/types/template"
+import { fitRuns, MAX_LIST_ITEMS, MAX_TEMPLATE_BLOCK_COUNT, ruleHasEffect } from "@/types/template-limits"
 import {
   deleteTemplateBlock,
   evaluateTemplateBlockDeletion,

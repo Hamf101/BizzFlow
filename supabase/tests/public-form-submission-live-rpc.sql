@@ -1,6 +1,7 @@
 -- Exercises submit_public_form_entry against a real database: a link's
 -- capacity is used only when a submission is saved, a draft is guarded by its
--- revision, and the ceiling holds. Creates isolated synthetic rows inside one
+-- revision, and the ceiling holds. A link sent to one person is found by its
+-- token's hash alone and takes one answer. Creates isolated synthetic rows inside one
 -- statement and removes them before returning; any failed check rolls
 -- everything back.
 do $$
@@ -25,6 +26,9 @@ declare
   );
   saved public.submissions%rowtype;
   claimed integer;
+  sent_link_id uuid := gen_random_uuid();
+  sent_token text := replace(replace(encode(gen_random_bytes(32), 'base64'), '+', '-'), '/', '_');
+  sent_hash text;
 begin
   insert into auth.users (id, email, created_at, updated_at)
   values (
@@ -296,6 +300,67 @@ begin
   if claimed <> 2 then
     raise exception 'Refused submissions used capacity (count %).', claimed;
   end if;
+
+  -- A link sent to one person keeps only its token's hash. The token finds
+  -- it, once; the hash, were it ever read, is not a token.
+  sent_token := rtrim(sent_token, '=');
+  sent_hash := encode(sha256(convert_to(sent_token, 'UTF8')), 'hex');
+
+  insert into public.public_form_links (
+    id, org_id, template_id, token, token_hash, recipient_email, content_snapshot, title_snapshot, template_revision_snapshot,
+    status, max_submissions, created_by
+  )
+  values (
+    sent_link_id, organization_id, template_id, null, sent_hash, 'ana@example.invalid', template_snapshot, 'Sent', 1,
+    'active', 1, owner_id
+  );
+
+  begin
+    perform public.submit_public_form_entry(
+      sent_hash, null, null, gen_random_uuid(), 'By the stored hash',
+      template_id, 1, template_snapshot, '{}'::jsonb, now()
+    );
+    raise exception 'A stored hash was accepted as a token.';
+  exception when sqlstate '55000' then
+    null;
+  end;
+
+  select * into saved
+  from public.submit_public_form_entry(
+    sent_token, null, null, gen_random_uuid(), 'Sent to Ana',
+    template_id, 1, template_snapshot, '{}'::jsonb, now()
+  );
+
+  if saved.public_form_link_id <> sent_link_id or saved.org_id <> organization_id then
+    raise exception 'A sent link''s answer was not saved to it.';
+  end if;
+
+  begin
+    perform public.submit_public_form_entry(
+      sent_token, null, null, gen_random_uuid(), 'Sent to Ana, again',
+      template_id, 1, template_snapshot, '{}'::jsonb, now()
+    );
+    raise exception 'A sent link took a second answer.';
+  exception when sqlstate '55000' then
+    null;
+  end;
+
+  -- A hashed link always names its one recipient, and has one kind of token.
+  begin
+    insert into public.public_form_links (id, org_id, template_id, token_hash, content_snapshot, title_snapshot, template_revision_snapshot, status, max_submissions)
+    values (gen_random_uuid(), organization_id, template_id, md5('a') || md5('b'), template_snapshot, 'Sent', 1, 'active', 1);
+    raise exception 'A hashed link without a recipient was stored.';
+  exception when check_violation then
+    null;
+  end;
+
+  begin
+    insert into public.public_form_links (id, org_id, template_id, token, token_hash, recipient_email, content_snapshot, title_snapshot, template_revision_snapshot, status, max_submissions)
+    values (gen_random_uuid(), organization_id, template_id, 'both-kinds-of-token', md5('c') || md5('d'), 'b@example.invalid', template_snapshot, 'Sent', 1, 'active', 1);
+    raise exception 'A link with both kinds of token was stored.';
+  exception when check_violation then
+    null;
+  end;
 
   delete from public.organizations
   where id = organization_id;

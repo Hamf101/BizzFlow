@@ -27,6 +27,16 @@ export {
   trashDocument,
   trashFolder,
 } from "@/services/documents/lifecycle-service"
+export {
+  acceptDocumentGuestInvite,
+  createGuestAccount,
+  findGuestDocument,
+  findGuestOrganizationId,
+  getGuestInvite,
+  listGuestDocuments,
+  readPersonName,
+  type GuestDocument,
+} from "@/services/documents/guest-service"
 export { moveDocument, moveFolder } from "@/services/documents/move-service"
 export {
   processDueResourcePurges,

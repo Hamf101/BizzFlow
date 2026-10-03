@@ -1,9 +1,12 @@
+import { redirect } from "next/navigation"
 import type { ReactElement } from "react"
 
 import { DocumentEditor } from "@/components/documents/document-editor"
 import { DocumentOpenTracker } from "@/components/documents/document-open-tracker"
+import { getFallbackDisplayName } from "@/lib/display-name"
 import { loadMemberName } from "@/lib/page-member-name"
-import { canPerformOrganizationAction } from "@/lib/permissions"
+import { canPerformOrganizationAction, canSendDocument, canShareResource } from "@/lib/permissions"
+import { readPersonName } from "@/services/document-service"
 import { getEditorLayout } from "@/services/editor-layout-service"
 import type { EditorLayout } from "@/types/editor-layout"
 import { saveEditorLayoutAction } from "@/app/(editor)/editor-layout-actions"
@@ -43,20 +46,40 @@ export default async function GeneratedDocumentEditorPage({
   }
 
   const { backHref, context, user, view } = loaded
+
+  // Someone outside the workspace edits only what they were given as an Editor,
+  // and never sends or shares it.
+  if (!context) {
+    if (view.accessLevel !== "contributor") {
+      redirect(`/documents/${encodeURIComponent(documentId)}/preview`)
+    }
+
+    return (
+      <DocumentEditor
+        backHref={backHref}
+        canFill={view.document.lifecycleState === "active"}
+        canSend={false}
+        canShare={false}
+        editorLayout={{ initial: await loadEditorLayout(user.id), save: saveEditorLayoutAction }}
+        guest
+        me={{ id: user.id, name: (await readPersonName(user.id).catch(() => null)) ?? getFallbackDisplayName(user.email) }}
+        resendAction={resendGeneratedDocumentInvitationAction}
+        saveAnswersAction={saveDocumentAnswersAction}
+        saveContentAction={saveDocumentContentAction}
+        sendAction={sendGeneratedDocumentAction}
+        view={view}
+      />
+    )
+  }
+
   const canFill =
     canPerformOrganizationAction(context.membership, "documents:fill") &&
     view.accessLevel === "contributor" &&
     view.document.lifecycleState === "active"
-  const canSend =
-    canPerformOrganizationAction(context.membership, "documents:send") &&
-    view.accessLevel === "contributor" &&
-    view.document.lifecycleState === "active"
-  // Anyone who can edit it, and anyone who manages folders, may choose who else can open it.
-  const canShare =
-    view.document.lifecycleState === "active" &&
-    (view.accessLevel === "contributor" || canPerformOrganizationAction(context.membership, "folders:manage"))
+  const canSend = canSendDocument(context.membership, { accessLevel: view.accessLevel, lifecycleState: view.document.lifecycleState })
+  const canShare = canShareResource(context.membership, { accessLevel: view.accessLevel, lifecycleState: view.document.lifecycleState })
   // Where the tools were left; without it they start at home.
-  const editorLayout = await getEditorLayout({ actorUserId: user.id }).catch((): EditorLayout => ({}))
+  const editorLayout = await loadEditorLayout(user.id)
   // How the others in the room see this person.
   const name = await loadMemberName(user, context.organization.id)
 
@@ -78,4 +101,8 @@ export default async function GeneratedDocumentEditorPage({
       />
     </>
   )
+}
+
+function loadEditorLayout(actorUserId: string): Promise<EditorLayout> {
+  return getEditorLayout({ actorUserId }).catch((): EditorLayout => ({}))
 }

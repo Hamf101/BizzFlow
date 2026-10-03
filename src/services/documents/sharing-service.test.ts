@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto"
+
 import { describe, expect, it, vi } from "vitest"
 
 import type { SharingServiceDeps } from "@/services/documents/sharing-contracts"
@@ -23,6 +25,7 @@ const ROOT = "30000000-0000-4000-8000-000000000001"
 const CLIENTS = "30000000-0000-4000-8000-000000000002"
 const PRIVATE_FOLDER = "30000000-0000-4000-8000-000000000003"
 const DOC = "40000000-0000-4000-8000-000000000001"
+const UPLOAD = "40000000-0000-4000-8000-000000000002"
 const TEMPLATE = "60000000-0000-4000-8000-000000000001"
 
 const PEOPLE: ReadonlyArray<readonly [string, OrganizationRole, string]> = [
@@ -52,8 +55,10 @@ function tables(): Record<string, FakeRow[]> {
     ],
     document_templates: [{ access_restricted: false, created_by: CREATOR, id: TEMPLATE, org_id: ORG, title: "Lease form" }],
     documents: [
-      { created_by: CREATOR, folder_id: CLIENTS, id: DOC, org_id: ORG, share_inherit: true, title: "Lease", lifecycle_state: "active" },
+      { created_by: CREATOR, folder_id: CLIENTS, id: DOC, org_id: ORG, share_inherit: true, source_kind: "generated", title: "Lease", lifecycle_state: "active" },
+      { created_by: CREATOR, folder_id: CLIENTS, id: UPLOAD, org_id: ORG, share_inherit: true, source_kind: "uploaded", title: "Scan", lifecycle_state: "active" },
     ],
+    organizations: [{ id: ORG, name: "Acme Lettings" }],
     template_access_grants: [],
     folder_access_grants: [
       { access_level: "contributor", folder_id: CLIENTS, id: "f1", org_id: ORG, organization_role: "manager", user_id: null },
@@ -73,8 +78,13 @@ function tables(): Record<string, FakeRow[]> {
 
 type Notify = NonNullable<SharingServiceDeps["notify"]>
 type Audit = NonNullable<SharingServiceDeps["recordAuditLog"]>
+type Invite = NonNullable<SharingServiceDeps["inviteGuest"]>
 
-function setup(options: { access?: Record<string, "contributor" | "editor" | "user" | "viewer">; notify?: Notify; audit?: Audit } = {}) {
+const TOKEN = "t".repeat(43)
+
+function setup(
+  options: { access?: Record<string, "contributor" | "editor" | "user" | "viewer">; audit?: Audit; invite?: Invite; notify?: Notify } = {}
+) {
   const client = new SharingFakeClient(tables(), {
     [`${MANAGER}:${DOC}`]: "contributor",
     [`${STAFF}:${DOC}`]: "viewer",
@@ -82,15 +92,19 @@ function setup(options: { access?: Record<string, "contributor" | "editor" | "us
   })
   const notify = options.notify ? vi.fn<Notify>(options.notify) : vi.fn<Notify>(async () => undefined)
   const audit = options.audit ? vi.fn<Audit>(options.audit) : vi.fn<Audit>(async () => undefined)
+  const invite = options.invite ? vi.fn<Invite>(options.invite) : vi.fn<Invite>(async () => undefined)
   const deps = {
     client: client as never,
     createId: () => "50000000-0000-4000-8000-000000000001",
+    createToken: () => TOKEN,
+    inviteGuest: invite,
     listMembers: async () => members(),
     notify,
+    now: () => new Date("2026-10-02T09:00:00.000Z"),
     recordAuditLog: audit,
   }
 
-  return { audit, client, deps, notify }
+  return { audit, client, deps, invite, notify }
 }
 
 const document = (actorUserId: string) => ({ actorUserId, organizationId: ORG, resource: { id: DOC, kind: "document" as const } })
@@ -387,5 +401,87 @@ describe("a template is shared with three levels", () => {
     await expect(getSharing(template(STAFF), deps)).rejects.toMatchObject({ statusCode: 403 })
     await expect(getSharing(template(REVIEWER), deps)).rejects.toMatchObject({ statusCode: 404 })
     await expect(getSharing({ ...template(OUTSIDER) }, deps)).rejects.toMatchObject({ statusCode: 404 })
+  })
+})
+
+describe("sharing a document with someone outside the workspace", () => {
+  const guest = (level: "contributor" | "viewer" | null, email = "  Gita@Example.TEST ") => ({
+    ...document(MANAGER),
+    level,
+    principal: { email },
+  })
+
+  it("invites them by email with a link only they can use, and lists them until they join", async () => {
+    const { audit, client, deps, invite } = setup()
+
+    const view = await setSharingAccess(guest("viewer"), deps)
+
+    const [row] = client.tables.document_guest_grants ?? []
+    expect(row).toMatchObject({
+      access_level: "viewer",
+      document_id: DOC,
+      email: "gita@example.test",
+      invite_expires_at: "2026-10-09T09:00:00.000Z",
+      invite_token_hash: createHash("sha256").update(TOKEN).digest("hex"),
+      invited_by: MANAGER,
+      org_id: ORG,
+    })
+    // Only the email carries the link itself.
+    expect(JSON.stringify(row)).not.toContain(TOKEN)
+    expect(invite).toHaveBeenCalledWith(
+      expect.objectContaining({ documentTitle: "Lease", organizationName: "Acme Lettings", recipientEmail: "gita@example.test", token: TOKEN })
+    )
+    expect(audit).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "document.access_granted", metadata: expect.objectContaining({ principal: "gita@example.test", principalKind: "guest" }) })
+    )
+    expect(view.guests).toEqual([{ email: "gita@example.test", joined: false, level: "viewer" }])
+    expect(view.outsideLevels).toEqual(["viewer", "contributor"])
+
+    // A new level is not a new invite; removing them deletes the invite and keeps a record.
+    await setSharingAccess(guest("contributor", "gita@example.test"), deps)
+    expect(invite).toHaveBeenCalledTimes(1)
+    expect(client.tables.document_guest_grants).toMatchObject([{ access_level: "contributor" }])
+
+    await expect(setSharingAccess(guest(null, "GITA@example.test"), deps)).resolves.toMatchObject({ guests: [] })
+    expect(audit).toHaveBeenLastCalledWith(expect.objectContaining({ action: "document.access_revoked" }))
+  })
+
+  it("shares with the member when the email is someone in the workspace", async () => {
+    const { client, deps, invite } = setup()
+
+    await setSharingAccess(guest("viewer", "RAE@example.test"), deps)
+
+    expect(client.tables.document_access_grants).toContainEqual(expect.objectContaining({ access_level: "viewer", user_id: REVIEWER }))
+    expect(client.tables.document_guest_grants ?? []).toEqual([])
+    expect(invite).not.toHaveBeenCalled()
+  })
+
+  it("takes the invite back when its email cannot be sent", async () => {
+    const { client, deps } = setup({
+      invite: async () => {
+        throw new Error("EmailJS is down")
+      },
+    })
+
+    await expect(setSharingAccess(guest("viewer"), deps)).rejects.toMatchObject({ statusCode: 502 })
+    expect(client.tables.document_guest_grants).toEqual([])
+  })
+
+  it("only reaches outside for one document, viewing only an uploaded file, from someone who may share it", async () => {
+    const { client, deps, invite } = setup({ access: { [`${MANAGER}:${UPLOAD}`]: "contributor" } })
+    const upload = { ...guest("contributor"), resource: { id: UPLOAD, kind: "document" as const } }
+
+    // Even an owner admin keeps folders and templates inside the workspace.
+    await expect(setSharingAccess({ ...guest("viewer"), actorUserId: OWNER, resource: { id: CLIENTS, kind: "folder" } }, deps)).rejects.toMatchObject({ statusCode: 400 })
+    await expect(setSharingAccess({ ...guest("viewer"), actorUserId: OWNER, resource: { id: TEMPLATE, kind: "template" } }, deps)).rejects.toMatchObject({ statusCode: 400 })
+    await expect(setSharingAccess(upload, deps)).rejects.toMatchObject({ statusCode: 400 })
+    await expect(getSharing({ ...document(MANAGER), resource: upload.resource }, deps)).resolves.toMatchObject({ outsideLevels: ["viewer"] })
+    await expect(setSharingAccess({ ...guest("viewer"), principal: { email: "not an email" } }, deps)).rejects.toMatchObject({ statusCode: 400 })
+    // A viewer may not pass it on; another workspace is told it is not there.
+    await expect(setSharingAccess({ ...guest("viewer"), actorUserId: STAFF }, deps)).rejects.toMatchObject({ statusCode: 403 })
+    await expect(setSharingAccess({ ...guest("viewer"), actorUserId: OUTSIDER }, deps)).rejects.toMatchObject({ statusCode: 404 })
+
+    expect(client.tables.document_guest_grants ?? []).toEqual([])
+    expect(invite).not.toHaveBeenCalled()
   })
 })

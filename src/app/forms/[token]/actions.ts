@@ -3,6 +3,10 @@
 import { cookies, headers } from "next/headers"
 import { redirect } from "next/navigation"
 
+import {
+  GeneratedDocumentFormDataError,
+  parseGeneratedDocumentAnswers,
+} from "@/components/documents/generated-document-form-data"
 import { getClientIp } from "@/lib/client-ip"
 import { getFormString } from "@/lib/form-utils"
 import {
@@ -14,8 +18,6 @@ import {
   PublicFormServiceError,
   submitPublicForm,
 } from "@/services/public-form-service"
-
-const FIELD_PREFIX = "field_"
 
 /**
  * Validates and finalizes one public form submission from browser FormData.
@@ -35,21 +37,13 @@ export async function submitPublicFormAction(
   const reqHeaders = await headers()
   const clientIp = getClientIp(reqHeaders)
 
-  // Only scalar answers are read from the form. File completion is proven by
-  // verified `submission_files` rows keyed to the draft, never by file metadata
-  // the browser claims here.
-  const values: Record<string, unknown> = {}
-
-  for (const [key, value] of formData.entries()) {
-    if (!key.startsWith(FIELD_PREFIX) || typeof value !== "string") {
-      continue
-    }
-
-    values[key.slice(FIELD_PREFIX.length)] = value
-  }
-
   try {
     await checkRateLimit("public_form_submission", clientIp)
+
+    // The page posts answers under the document's own names. File completion
+    // is proven by verified `submission_files` rows keyed to the draft, never
+    // by file metadata the browser claims here.
+    const values = parseGeneratedDocumentAnswers(formData)
 
     await submitPublicForm({
       token,
@@ -62,7 +56,7 @@ export async function submitPublicFormAction(
     })
   } catch (error: unknown) {
     const message =
-      error instanceof PublicFormServiceError
+      error instanceof PublicFormServiceError || error instanceof GeneratedDocumentFormDataError
         ? error.message
         : error instanceof RateLimitError
           ? "Too many requests. Try again shortly."

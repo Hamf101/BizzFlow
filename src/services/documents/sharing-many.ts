@@ -53,6 +53,11 @@ export async function setSharingAccessMany(
 ): Promise<SharingView> {
   const shared = once(deps)
   const { level, principal, ...rest } = input
+
+  if ("email" in principal && input.resources.length > 1) {
+    throw new DocumentServiceError("Share one document at a time with someone outside the workspace.", 400)
+  }
+
   await viewsOf(rest, shared)
   const told: SharingNotice[] = []
 
@@ -140,10 +145,13 @@ function combine(views: SharingView[]): SharingView {
 
   return {
     grants,
+    // People outside the workspace are given one document at a time.
+    guests: [],
     inherit: first.inherit,
     inherited: sameFolder ? first.inherited : [],
     members: first.members,
     name: `${views.length} items`,
+    outsideLevels: [],
     owner: null,
     parent: sameFolder ? first.parent : null,
   }

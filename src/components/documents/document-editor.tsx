@@ -6,6 +6,7 @@ import { type ReactElement, useEffect, useMemo, useRef, useState } from "react"
 import type { DocumentContentInput } from "@/app/(editor)/documents/[documentId]/edit/actions"
 import { DocumentRecipientCollection } from "@/components/documents/document-recipient-collection"
 import { useFlowHandoff } from "@/components/flow/flow-handoff"
+import "@/components/editor/design-tools-provided"
 import { EditorCanvas } from "@/components/editor/editor-canvas"
 import { normalizeContentForSave } from "@/components/editor/editor-content"
 import { type DockTool, EditorDock } from "@/components/editor/editor-dock"
@@ -24,6 +25,7 @@ import {
   TemplateFlowPanel,
   PageSetupPanel,
   TemplateBrandingPanel,
+  SendToAnswerDialog,
   ShareDialog,
 } from "@/components/editor/lazy-panels"
 import { useLiveRoom } from "@/components/editor/use-live-room"
@@ -76,6 +78,8 @@ type DocumentEditorProps = {
   canShare: boolean
   /** Where this person keeps the dock and zoom. */
   editorLayout?: EditorLayoutStore
+  /** Someone outside the workspace given this one document: no Flow, and Back goes to what is shared with them. */
+  guest?: boolean
   /** Who is writing, as the others in the room see them. */
   me: Readonly<{ id: string; name: string }>
   resendAction: (formData: FormData) => Promise<void>
@@ -99,6 +103,7 @@ export function DocumentEditor({
   canSend,
   canShare,
   editorLayout,
+  guest = false,
   me,
   resendAction,
   saveAnswersAction,
@@ -141,6 +146,7 @@ export function DocumentEditor({
   const [drawings, setDrawings] = useState(0)
   const [sending, setSending] = useState(false)
   const [sharing, setSharing] = useState(false)
+  const [asking, setAsking] = useState(false)
   const [savedPage, setSavedPage] = useState(initial)
   const [savedAnswers, setSavedAnswers] = useState<Record<string, unknown>>(view.answers)
   const [proposal, setProposal] = useState<TemplateFlowProposal | null>(null)
@@ -311,7 +317,7 @@ export function DocumentEditor({
     <>
       <EditorFrame
         backHref={backHref}
-        backLabel="Back to Files"
+        backLabel={guest ? "Shared with you" : "Back to Files"}
         banner={
           recovery.recovery && (writable || fillable) ? (
             <EditorNotice
@@ -362,7 +368,7 @@ export function DocumentEditor({
               narrow={narrow}
               orientation={orientation}
               tools={tools}
-              trail={narrow ? <FlowDockSlot /> : undefined}
+              trail={narrow && !guest ? <FlowDockSlot /> : undefined}
             />
           ) : null
         }
@@ -434,6 +440,13 @@ export function DocumentEditor({
                   Share…
                 </DropdownMenuItem>
               ) : null}
+              {/* Answers are kept as a template's submissions, so it needs one. */}
+              {canSend && document.templateId ? (
+                <DropdownMenuItem onClick={() => setAsking(true)}>
+                  <Send />
+                  Send to answer…
+                </DropdownMenuItem>
+              ) : null}
             </DropdownMenuContent>
           </DropdownMenu>
         }
@@ -471,31 +484,33 @@ export function DocumentEditor({
               ) : null}
             </EditorSidePanel>
             {/* On a phone Flow's button rests in the tools' row, or above the page without it. */}
-            <FlowWindow onOpenChange={setFlowOpen} open={flowOpen} phoneBottom={writable && !proposal ? 84 : 16}>
-              <TemplateFlowPanel
-                canUndo={flowUndo !== null}
-                draft={flowDraft}
-                endpoint={`/api/documents/${encodeURIComponent(document.id)}/flow`}
-                initialMessages={[]}
-                lastAppliedMessageId={flowUndo?.messageId ?? null}
-                onApplyProposal={applyProposal}
-                onProposalReceived={(next) => {
-                  setProposal(next)
-                  controller.select(null)
-                }}
-                onProposalStale={setProposal}
-                onRejectProposal={() => setProposal(null)}
-                onUndo={() => {
-                  if (flowUndo) {
-                    history.set(() => flowUndo.page)
-                    setFlowUndo(null)
-                  }
-                }}
-                autoSend={carried}
-                pendingProposal={proposal}
-                starter={writable ? DRAFT_STARTER : SENT_STARTER}
-              />
-            </FlowWindow>
+            {guest ? null : (
+              <FlowWindow onOpenChange={setFlowOpen} open={flowOpen} phoneBottom={writable && !proposal ? 84 : 16}>
+                <TemplateFlowPanel
+                  canUndo={flowUndo !== null}
+                  draft={flowDraft}
+                  endpoint={`/api/documents/${encodeURIComponent(document.id)}/flow`}
+                  initialMessages={[]}
+                  lastAppliedMessageId={flowUndo?.messageId ?? null}
+                  onApplyProposal={applyProposal}
+                  onProposalReceived={(next) => {
+                    setProposal(next)
+                    controller.select(null)
+                  }}
+                  onProposalStale={setProposal}
+                  onRejectProposal={() => setProposal(null)}
+                  onUndo={() => {
+                    if (flowUndo) {
+                      history.set(() => flowUndo.page)
+                      setFlowUndo(null)
+                    }
+                  }}
+                  autoSend={carried}
+                  pendingProposal={proposal}
+                  starter={writable ? DRAFT_STARTER : SENT_STARTER}
+                />
+              </FlowWindow>
+            )}
           </>
         )}
         primary={
@@ -550,6 +565,9 @@ export function DocumentEditor({
           <DocumentRecipientCollection action={sendAction} documentId={document.id} />
         </DialogContent>
       </Dialog>
+      {asking ? (
+        <SendToAnswerDialog name={document.title} onOpenChange={setAsking} open source={{ documentId: document.id, kind: "document" }} />
+      ) : null}
       {canShare && sharing ? (
         <ShareDialog name={document.title} onOpenChange={setSharing} open resources={[{ id: document.id, kind: "document" }]} />
       ) : null}

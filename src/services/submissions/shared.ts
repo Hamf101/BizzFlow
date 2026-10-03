@@ -34,7 +34,7 @@ import { runOperation } from "@/services/operation"
 
 /** Columns required by the canonical submission row parser. */
 export const SUBMISSION_COLUMNS =
-  "id,org_id,title,template_id,template_revision,template_snapshot,values,status,revision,created_by,updated_by,submitted_by,assigned_to,assigned_by,created_at,updated_at,submitted_at,assigned_at,required_approvals"
+  "id,org_id,title,template_id,template_revision,template_snapshot,values,status,revision,created_by,updated_by,submitted_by,assigned_to,assigned_by,created_at,updated_at,submitted_at,assigned_at,required_approvals,public_form_link:public_form_links!submissions_public_form_link_fkey(recipient_email)"
 
 /** Columns required by the canonical submission-file row parser. */
 export const SUBMISSION_FILE_COLUMNS =

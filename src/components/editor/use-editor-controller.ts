@@ -19,14 +19,8 @@ import {
 } from "@/components/editor/editor-content"
 import { createTemplateBlock } from "@/components/templates/template-editor-state"
 import { bizflowToast } from "@/components/ui/toaster"
-import {
-  type BlockFrame,
-  MAX_TEMPLATE_BLOCK_COUNT,
-  type TemplateBlock,
-  type TemplateContentV3,
-  type TemplateLayout,
-  type TemplateSection,
-} from "@/types/template"
+import { type BlockFrame, type TemplateBlock, type TemplateContentV3, type TemplateLayout, type TemplateSection } from "@/types/template"
+import { MAX_TEMPLATE_BLOCK_COUNT } from "@/types/template-limits"
 import {
   deleteTemplateBlock,
   duplicateTemplateBlock,

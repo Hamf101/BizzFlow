@@ -140,7 +140,8 @@ describe("generated document finalization Supabase persistence", () => {
       statusCode: 404,
     })
 
-    expect(database.queryCalls).toEqual([])
+    // Only whether they were given it from outside the workspace is asked; no finalization is read.
+    expect(database.queryCalls.map((call) => call.relation)).toEqual(["document_guest_grants"])
   })
 
   it("hides finalization state for a trashed document", async () => {
