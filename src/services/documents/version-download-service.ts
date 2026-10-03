@@ -88,8 +88,8 @@ export async function createDocumentDownloadUrl(
         defaultCreateSignedDocumentDownloadUrl
       const signedUrl = await createSignedDocumentDownloadUrl(
         input.view && isViewableDocumentType(version.contentType)
-          ? { storageKey: version.storageKey, viewAs: version.contentType }
-          : { storageKey: version.storageKey }
+          ? { downloadFilename: version.originalFilename, storageKey: version.storageKey, viewAs: version.contentType }
+          : { downloadFilename: version.originalFilename, storageKey: version.storageKey }
       )
 
       await recordRequiredDocumentAuditLog(deps, {

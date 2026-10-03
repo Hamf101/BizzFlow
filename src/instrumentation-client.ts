@@ -12,6 +12,7 @@ if (typeof dsn === "string" && dsn.length > 0) {
     tracesSampleRate: 0,
     sendDefaultPii: false,
     beforeSend: (event) => scrubMonitoringEvent(event),
+    beforeSendTransaction: (event) => scrubMonitoringEvent(event),
   })
 
   setErrorReporter((error, context) => {

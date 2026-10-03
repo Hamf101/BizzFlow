@@ -2,7 +2,8 @@
 -- check starts from the entry the last one vouched for, a history rewritten
 -- behind that entry is caught even when every hash in it is consistent, an
 -- old entry changed in place waits for the daily full pass, and a failed
--- check never moves the checkpoint. Tampering has to lift the immutability
+-- check never moves the checkpoint. The service role cannot rewrite or empty
+-- the evidence, and truncate is refused. Tampering has to lift the immutability
 -- trigger, as only someone able to bypass it could. Creates isolated
 -- synthetic rows inside one statement and removes them before returning; any
 -- failed check rolls everything back.
@@ -132,6 +133,22 @@ begin
   then
     raise exception 'An empty chain did not verify cleanly: %', verdict;
   end if;
+
+  -- Evidence is append-only for the service role, and no one can empty it.
+  if has_table_privilege('service_role', 'public.audit_logs', 'truncate, update, delete, references, trigger')
+      or has_table_privilege('service_role', 'public.document_comments', 'truncate, update, delete, references, trigger')
+      or has_table_privilege('service_role', 'public.document_activity_events', 'truncate, update, delete, references, trigger')
+      or not has_table_privilege('service_role', 'public.audit_logs', 'select')
+      or not has_table_privilege('service_role', 'public.audit_logs', 'insert') then
+    raise exception 'The service role can rewrite or empty audit evidence.';
+  end if;
+
+  -- An unrefused truncate meets the raise below, which rolls it back.
+  begin
+    truncate public.document_activity_events;
+    raise exception 'Audit evidence was truncated.' using errcode = 'XX001';
+  exception when sqlstate '42501' then null;
+  end;
 
   delete from public.organizations
   where id in (organization_id, empty_organization_id);

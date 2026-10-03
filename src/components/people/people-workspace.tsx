@@ -1,8 +1,6 @@
 "use client"
 
 import {
-  Copy,
-  ExternalLink,
   MoreHorizontal,
   Plus,
   Trash2,
@@ -798,25 +796,6 @@ function InviteItem({
         </p>
       </div>
       <div className="flex shrink-0 gap-1">
-        {state === "active" ? (
-          <>
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <Link
-                    aria-label={`Open invite for ${invite.email}`}
-                    className="inline-flex size-11 items-center justify-center rounded-[8px] text-muted-foreground outline-none hover:bg-secondary/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/35 md:size-8"
-                    href={`/accept-invite/${invite.token}`}
-                  >
-                    <ExternalLink aria-hidden="true" className="size-4" />
-                  </Link>
-                }
-              />
-              <TooltipContent>Open invite link</TooltipContent>
-            </Tooltip>
-            <CopyInviteButton invite={invite} />
-          </>
-        ) : null}
         <form action={revokeInviteAction}>
           <input name="organizationId" type="hidden" value={organizationId} />
           <input name="inviteId" type="hidden" value={invite.id} />
@@ -839,45 +818,6 @@ function InviteItem({
         </form>
       </div>
     </article>
-  )
-}
-
-function CopyInviteButton({ invite }: { invite: OrganizationInvite }): ReactElement {
-  const [copied, setCopied] = useState(false)
-
-  async function copyInvite(): Promise<void> {
-    const inviteUrl = new URL(
-      `/accept-invite/${invite.token}`,
-      window.location.origin
-    ).toString()
-
-    try {
-      await navigator.clipboard.writeText(inviteUrl)
-      setCopied(true)
-      window.setTimeout(() => setCopied(false), 2_000)
-    } catch {
-      window.prompt("Copy this invite link:", inviteUrl)
-    }
-  }
-
-  return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <Button
-            aria-label={`Copy invite for ${invite.email}`}
-            className="font-normal"
-            onClick={copyInvite}
-            size="icon-sm"
-            type="button"
-            variant="ghost"
-          >
-            <Copy aria-hidden="true" />
-          </Button>
-        }
-      />
-      <TooltipContent>{copied ? "Copied" : "Copy invite link"}</TooltipContent>
-    </Tooltip>
   )
 }
 

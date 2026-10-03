@@ -88,13 +88,13 @@ export const ACTION_FEEDBACK = {
     title: "That person is already a member or invited",
     tone: "error",
   },
-  invite_created_email_failed: {
+  invite_email_failed: {
     analyticsEvent: "action_outcome",
-    description: "The invite is ready. Copy its link and share it directly.",
+    description: "Nothing was sent, so no invite is waiting. Invite them again to resend it.",
     durationMs: 8_000,
     persistent: true,
-    title: "Invite created, but email was not sent",
-    tone: "info",
+    title: "Couldn't send the invite email",
+    tone: "error",
   },
   invite_email_sent: {
     analyticsEvent: "action_outcome",

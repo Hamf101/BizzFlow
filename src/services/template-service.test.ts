@@ -1395,6 +1395,38 @@ describe("template service", () => {
       ).rejects.toMatchObject({ message: "You cannot create templates.", statusCode: 403 })
     })
 
+    it("copies what was published for someone who only uses the template, never the working copy", async () => {
+      const tables = createBaseTables()
+      tables.document_templates[0].published_revision = 1
+      tables.document_template_versions = [
+        {
+          content: createUsableTemplateContent(),
+          description: null,
+          org_id: ORG_ID,
+          published_at: "2026-07-17T19:00:00.000Z",
+          published_by: MANAGER_ID,
+          revision: 1,
+          template_id: TEMPLATE_ID,
+          title: "Published handbook"
+        }
+      ]
+      Object.assign(tables.document_templates[0], { revision: 2, title: "Unannounced rewrite" })
+      // A draft staff were let use still has nothing published to copy.
+      tables.template_access_grants = [{ access_level: "user", org_id: ORG_ID, organization_role: "staff", template_id: DRAFT_TEMPLATE_ID, user_id: null }]
+      const deps = { client: new FakeClient(tables) as never, createId: (): string => "30000000-0000-4000-8000-000000000099" }
+
+      await expect(
+        duplicateDocumentTemplate({ actorUserId: STAFF_ID, organizationId: ORG_ID, templateId: TEMPLATE_ID }, deps)
+      ).resolves.toMatchObject({ title: "Published handbook (Copy)" })
+      await expect(
+        duplicateDocumentTemplate({ actorUserId: STAFF_ID, organizationId: ORG_ID, templateId: DRAFT_TEMPLATE_ID }, deps)
+      ).rejects.toMatchObject({ statusCode: 404 })
+      // The author still copies their working copy.
+      await expect(
+        duplicateDocumentTemplate({ actorUserId: MANAGER_ID, organizationId: ORG_ID, templateId: TEMPLATE_ID }, deps)
+      ).resolves.toMatchObject({ title: "Unannounced rewrite (Copy)" })
+    })
+
     it("rejects duplicating a non-existent template", async () => {
       const tables = createBaseTables()
       const client = new FakeClient(tables)

@@ -474,6 +474,7 @@ function getKnownMutationMessage(message: string | undefined): string | null {
     "Only the assigned reviewer",
     "Only an assigned reviewer",
     "Only the person who assigned the reviewers",
+    "The reviewers were chosen by someone more senior",
     "A reviewer who has already decided",
     "A note of up to 2000",
     "Change request identifiers",

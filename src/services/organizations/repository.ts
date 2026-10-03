@@ -30,13 +30,14 @@ import type {
   OrganizationRoleDefinition,
 } from "@/types/organization"
 import { loadActiveMembership } from "@/services/organizations/active-membership"
+import { hashToken } from "@/services/document-signing/token-security"
 
 type CreatePendingInviteRecordInput = {
   organizationId: string
   email: string
   role: OrganizationRole
   roleDefinitionId: string
-  token: string
+  tokenHash: string
   invitedBy: string
   expiresAt: string
 }
@@ -407,7 +408,7 @@ export async function revokePendingInvitesForEmail(
  * Inserts a pending organization invite.
  *
  * @param client - Trusted Supabase client.
- * @param input - Tenant, recipient, role, token, inviter, and expiry values.
+ * @param input - Tenant, recipient, role, token hash, inviter, and expiry values.
  * @returns Created invite DTO.
  */
 export async function createPendingInviteRecord(
@@ -421,11 +422,11 @@ export async function createPendingInviteRecord(
       email: input.email,
       role: input.role,
       role_definition_id: input.roleDefinitionId,
-      token: input.token,
+      token_hash: input.tokenHash,
       invited_by: input.invitedBy,
       expires_at: input.expiresAt,
     })
-    .select("id,org_id,email,role,role_definition_id,token,status,expires_at,created_at,role_definition:organization_roles!invites_role_definition_fk(id,name,system_key)")
+    .select("id,org_id,email,role,role_definition_id,status,expires_at,created_at,role_definition:organization_roles!invites_role_definition_fk(id,name,system_key)")
     .single()
 
   if (error || !data) {
@@ -448,7 +449,7 @@ export async function listManageableInvites(
 ): Promise<OrganizationInvite[]> {
   const { data, error } = await client
     .from("invites")
-    .select("id,org_id,email,role,role_definition_id,token,status,expires_at,created_at,role_definition:organization_roles!invites_role_definition_fk(id,name,system_key)")
+    .select("id,org_id,email,role,role_definition_id,status,expires_at,created_at,role_definition:organization_roles!invites_role_definition_fk(id,name,system_key)")
     .eq("org_id", organizationId)
     .in("status", ["pending", "expired"])
     .order("created_at", { ascending: false })
@@ -480,7 +481,7 @@ export async function revokeManageableInvite(
     .eq("org_id", organizationId)
     .eq("id", inviteId)
     .in("status", ["pending", "expired"])
-    .select("id,org_id,email,role,role_definition_id,token,status,expires_at,created_at,role_definition:organization_roles!invites_role_definition_fk(id,name,system_key)")
+    .select("id,org_id,email,role,role_definition_id,status,expires_at,created_at,role_definition:organization_roles!invites_role_definition_fk(id,name,system_key)")
     .maybeSingle()
 
   if (error) {
@@ -508,8 +509,8 @@ export async function getPendingInviteByToken(
 ): Promise<OrganizationInvite> {
   const { data, error } = await client
     .from("invites")
-    .select("id,org_id,email,role,role_definition_id,token,invited_by,status,expires_at,created_at,role_definition:organization_roles!invites_role_definition_fk(id,name,system_key)")
-    .eq("token", token)
+    .select("id,org_id,email,role,role_definition_id,invited_by,status,expires_at,created_at,role_definition:organization_roles!invites_role_definition_fk(id,name,system_key)")
+    .eq("token_hash", hashToken(token))
     .eq("status", "pending")
     .gt("expires_at", new Date().toISOString())
     .maybeSingle()

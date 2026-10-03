@@ -5,6 +5,7 @@ import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
 import {
   createInvite,
+  OrganizationServiceError,
   revokeInvite,
   updateMemberAccess,
   updateProfilePhone,
@@ -47,9 +48,7 @@ vi.mock("@/lib/action-rate-limit", () => ({
 
 vi.mock("@/services/organization-service", () => ({
   createInvite: vi.fn().mockResolvedValue({
-    invite: { id: "invite-1", token: "invite-token" },
-    emailDelivered: true,
-    emailFailureReason: null,
+    invite: { id: "invite-1" },
   }),
   OrganizationServiceError: class extends Error {
     readonly statusCode: number
@@ -90,9 +89,7 @@ describe("createInviteAction", () => {
     } as never)
     vi.mocked(enforceOutboundEmailRateLimit).mockResolvedValue(undefined)
     vi.mocked(createInvite).mockResolvedValue({
-      invite: { id: "invite-1", token: "invite-token" },
-      emailDelivered: true,
-      emailFailureReason: null,
+      invite: { id: "invite-1" },
     } as never)
   })
 
@@ -114,17 +111,14 @@ describe("createInviteAction", () => {
     })
   })
 
-  it("keeps the invite and says so when the email could not be sent", async () => {
-    // A misconfigured email provider must not look like a broken invite: the
-    // token is still valid, so the manager is told to share the link instead.
-    vi.mocked(createInvite).mockResolvedValue({
-      invite: { id: "invite-1", token: "invite-token" },
-      emailDelivered: false,
-      emailFailureReason: "The email provider refused the request.",
-    } as never)
+  it("says the invite was not sent when its email could not go", async () => {
+    // The email holds the only copy of the link, so the service withdrew it.
+    vi.mocked(createInvite).mockRejectedValue(
+      new OrganizationServiceError("The email provider refused the request.", 502)
+    )
 
     await expect(createInviteAction(createInviteForm())).rejects.toThrow(
-      "NEXT_REDIRECT:/people?feedback=invite_created_email_failed"
+      "NEXT_REDIRECT:/people?feedback=invite_email_failed"
     )
     expect(redirectMock).not.toHaveBeenCalledWith(
       expect.stringContaining("provider+refused")

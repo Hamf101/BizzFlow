@@ -203,6 +203,7 @@ describe("document archive and download lifecycle", () => {
       expiresInSeconds: 900,
     })
     expect(deps.createSignedDocumentDownloadUrl).toHaveBeenCalledWith({
+      downloadFilename: "contract.pdf",
       storageKey:
         "organizations/org-1/documents/document-1/versions/version-1/original.pdf",
     })
@@ -250,6 +251,7 @@ describe("document archive and download lifecycle", () => {
 
     expect(result.versionId).toBe("version-1")
     expect(deps.createSignedDocumentDownloadUrl).toHaveBeenCalledWith({
+      downloadFilename: "contract.pdf",
       storageKey:
         "organizations/org-1/documents/document-1/versions/version-1/original.pdf",
     })

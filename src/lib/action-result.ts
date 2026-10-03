@@ -10,7 +10,7 @@ export const ACTION_FEEDBACK_CODES = [
   "invalid_input",
   "invite_accepted",
   "invite_already_member",
-  "invite_created_email_failed",
+  "invite_email_failed",
   "invite_email_sent",
   "invite_deleted",
   "member_access_updated",

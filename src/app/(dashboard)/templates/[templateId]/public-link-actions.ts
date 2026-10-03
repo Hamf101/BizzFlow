@@ -11,7 +11,6 @@ import {
 } from "@/lib/action-result"
 import { buildRedirect, getFormString } from "@/lib/form-utils"
 import { getCurrentOrganizationContext } from "@/services/organization-service"
-import { canEditDocumentTemplate } from "@/services/template-service"
 import {
   createPublicFormLink,
   disablePublicFormLink,
@@ -19,6 +18,17 @@ import {
 
 class PublicLinkActionError extends Error {
   readonly statusCode = 403
+}
+
+// Who may manage a template's links is the service's to decide.
+async function requireOrganizationId(userId: string): Promise<string> {
+  const context = await getCurrentOrganizationContext(userId)
+
+  if (!context) {
+    throw new PublicLinkActionError("You do not have permission to manage public form links.")
+  }
+
+  return context.organization.id
 }
 
 const templateIdSchema = z.string().uuid()
@@ -33,28 +43,13 @@ export async function createPublicFormLinkAction(
 
   try {
     const user = await getAuthenticatedUser()
-    const context = await getCurrentOrganizationContext(user.id)
-
-    // Whoever may edit the template may open it to the public.
-    if (
-      !context ||
-      !(await canEditDocumentTemplate({ actorUserId: user.id, organizationId: context.organization.id, templateId }))
-    ) {
-      throw new PublicLinkActionError(
-        "You do not have permission to manage public form links."
-      )
-    }
-
-    const maxSubmissions = maxSubmissionsRaw
-      ? Number.parseInt(maxSubmissionsRaw, 10)
-      : null
 
     await createPublicFormLink({
       actorUserId: user.id,
-      organizationId: context.organization.id,
+      organizationId: await requireOrganizationId(user.id),
       templateId,
       expiresAt: expiresAt || null,
-      maxSubmissions: Number.isNaN(maxSubmissions) ? null : maxSubmissions,
+      maxSubmissions: maxSubmissionsRaw ? Number(maxSubmissionsRaw) : null,
     })
 
     revalidatePath(linksPath)
@@ -80,20 +75,11 @@ export async function disablePublicFormLinkAction(
 
   try {
     const user = await getAuthenticatedUser()
-    const context = await getCurrentOrganizationContext(user.id)
-
-    if (
-      !context ||
-      !(await canEditDocumentTemplate({ actorUserId: user.id, organizationId: context.organization.id, templateId }))
-    ) {
-      throw new PublicLinkActionError(
-        "You do not have permission to manage public form links."
-      )
-    }
 
     await disablePublicFormLink({
       actorUserId: user.id,
-      organizationId: context.organization.id,
+      organizationId: await requireOrganizationId(user.id),
+      templateId,
       linkId,
     })
 

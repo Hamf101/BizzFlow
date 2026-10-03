@@ -1,7 +1,10 @@
+import { createHash, randomBytes } from "node:crypto"
+
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 import { chooseOption } from "../support/choose"
 import { expect, signInAs, test } from "../support/fixtures"
+import type { SeededTenant } from "../support/tenant"
 
 /**
  * Journey 2 — invite a member, accept the invite, prove the role is enforced.
@@ -33,20 +36,21 @@ test.describe("invitations", () => {
     await chooseOption(inviteForm.getByLabel("Role"), "Staff")
     await inviteForm.getByRole("button", { name: "Send invite" }).click()
 
-    await owner.getByRole("button", { name: "Invite", exact: true }).click()
-    await owner.getByRole("tab", { name: /Manage invites/ }).click()
-    await expect(owner.getByText(inviteeEmail)).toBeVisible()
-
-    // The token is generated server-side and only ever emailed, so a test has to
-    // read it from the row rather than scrape it from the page.
-    const { data: invite } = await admin
+    // The e2e server reaches no email provider, and the email holds the only
+    // copy of the link, so the invite is withdrawn and the owner told so.
+    await expect(owner.getByText("Couldn't send the invite email")).toBeVisible()
+    const { count } = await admin
       .from("invites")
-      .select("token")
+      .select("id", { count: "exact", head: true })
       .eq("email", inviteeEmail)
       .eq("org_id", tenant.organizationId)
-      .single()
+      .eq("status", "pending")
+    expect(count).toBe(0)
 
-    expect(invite?.token).toBeTruthy()
+    // The invite the email would have carried, seeded with a token chosen here
+    // and stored only as its hash, as the app stores it.
+    const token = randomBytes(24).toString("hex")
+    await seedInvite(admin, tenant, inviteeEmail, token)
 
     // A new person answers in one step: the invite proved their address.
     const context = await browser.newContext()
@@ -54,7 +58,7 @@ test.describe("invitations", () => {
     const join = `Join ${tenant.organizationName}`
 
     try {
-      await page.goto(`/accept-invite/${invite?.token as string}`)
+      await page.goto(`/accept-invite/${token}`)
       await page.getByLabel("Your name").fill("Sam Okafor")
       await page.getByLabel("Choose a password").fill(password)
       await page.getByLabel("Confirm password").fill(password)
@@ -120,23 +124,7 @@ test.describe("invitations", () => {
       userIds.push(data.user?.id as string)
     }
 
-    const { data: staffRole } = await admin
-      .from("organization_roles")
-      .select("id")
-      .eq("org_id", tenant.organizationId)
-      .eq("system_key", "staff")
-      .single()
-    const { error: inviteError } = await admin.from("invites").insert({
-      email: inviteeEmail,
-      expires_at: new Date(Date.now() + 86_400_000).toISOString(),
-      invited_by: tenant.users.owner_admin.id,
-      org_id: tenant.organizationId,
-      role: "staff",
-      role_definition_id: staffRole?.id,
-      status: "pending",
-      token,
-    })
-    expect(inviteError).toBeNull()
+    await seedInvite(admin, tenant, inviteeEmail, token)
 
     const context = await browser.newContext()
     const page = await context.newPage()
@@ -188,6 +176,27 @@ test.describe("invitations", () => {
     ).toBeHidden()
   })
 })
+
+/** A pending staff invite from the owner, kept as the app keeps it: only the token's hash. */
+async function seedInvite(admin: SupabaseClient, tenant: SeededTenant, email: string, token: string): Promise<void> {
+  const { data: staffRole } = await admin
+    .from("organization_roles")
+    .select("id")
+    .eq("org_id", tenant.organizationId)
+    .eq("system_key", "staff")
+    .single()
+  const { error } = await admin.from("invites").insert({
+    email,
+    expires_at: new Date(Date.now() + 86_400_000).toISOString(),
+    invited_by: tenant.users.owner_admin.id,
+    org_id: tenant.organizationId,
+    role: "staff",
+    role_definition_id: staffRole?.id,
+    status: "pending",
+    token_hash: createHash("sha256").update(token, "utf8").digest("hex"),
+  })
+  expect(error).toBeNull()
+}
 
 /** Accepting an invite records the member's profile, which is how a spec finds an account the app opened. */
 async function joinedUserId(admin: SupabaseClient, email: string): Promise<string> {

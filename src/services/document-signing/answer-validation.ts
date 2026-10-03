@@ -1,6 +1,5 @@
 import { isDeepStrictEqual } from "node:util"
 
-import { normalizeRequiredDrawing } from "@/services/document-signing/drawing-validation"
 import { DocumentSigningServiceError } from "@/services/document-signing/errors"
 import type { TemplateBlock, TemplateContent } from "@/types/template"
 import {
@@ -229,21 +228,18 @@ async function normalizeFieldAnswer(
   block: FieldBlock,
   value: unknown
 ): Promise<unknown> {
-  if (block.type !== "signature_field" && block.type !== "initials_field") {
-    return normalizeTemplateAnswer(
-      block,
-      value,
-      (message: string) => new DocumentSigningServiceError(message, 400)
+  // A drawn box is a signer's own act, captured with their signature; an
+  // answer in it would let someone else sign there.
+  if (block.type === "signature_field" || block.type === "initials_field") {
+    throw new DocumentSigningServiceError(
+      `${block.label} is signed in the signing step, not answered.`,
+      400
     )
   }
 
-  if (typeof value !== "string") {
-    throw new DocumentSigningServiceError(`${block.label} must be text.`, 400)
-  }
-
-  const normalizedValue = value.trim()
-
-  return normalizedValue.length === 0
-    ? ""
-    : (await normalizeRequiredDrawing(normalizedValue, block.label)).dataUrl
+  return normalizeTemplateAnswer(
+    block,
+    value,
+    (message: string) => new DocumentSigningServiceError(message, 400)
+  )
 }

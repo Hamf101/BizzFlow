@@ -10,6 +10,7 @@ import {
   createBaseTables,
   createRecipientRow,
   DOCUMENT_ID,
+  DRAWING_DATA_URL,
   FakeClient,
   MANAGER_ID,
   ORG_ID,
@@ -32,6 +33,9 @@ function guestTables(level: "contributor" | "viewer" = "viewer") {
     ...createRecipientRow(RECIPIENT_ONE_ID, TOKEN_ONE, "Avery Morgan", "avery@example.com"),
     user_id: MANAGER_ID,
     viewed_at: "2026-07-17T19:30:00.000Z",
+    signed_at: "2026-07-17T19:40:00.000Z",
+    status: "signed",
+    signature_data: { dataUrl: DRAWING_DATA_URL },
   })
   tables.document_guest_grants = [
     {
@@ -57,8 +61,10 @@ describe("a guest outside the workspace", () => {
 
     expect(view).toMatchObject({ accessLevel: "viewer", guest: true, organizationName: "BizFlow Studio" })
     expect(view.document).toMatchObject({ createdBy: null, folderId: null, title: "Professional services agreement", updatedBy: null })
-    // Signers stay on the page as the paper shows them; who opened their link does not.
-    expect(view.recipients).toEqual([expect.objectContaining({ name: "Avery Morgan", userId: null, viewedAt: null })])
+    // Signers show as a signing link shows its co-signers: no address, drawing, or link expiry.
+    expect(view.recipients).toEqual([
+      { id: RECIPIENT_ONE_ID, name: "Avery Morgan", requiresSignature: true, signedAt: "2026-07-17T19:40:00.000Z", status: "signed" },
+    ])
 
     await expect(getGeneratedDocumentSigningView(asGuest(OTHER_DOCUMENT), { client: client as never })).rejects.toMatchObject({
       statusCode: 404,

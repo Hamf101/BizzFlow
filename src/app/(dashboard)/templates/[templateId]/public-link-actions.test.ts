@@ -5,8 +5,8 @@ import { getCurrentOrganizationContext } from "@/services/organization-service"
 import {
   createPublicFormLink,
   disablePublicFormLink,
+  PublicFormServiceError,
 } from "@/services/public-form-service"
-import { canEditDocumentTemplate } from "@/services/template-service"
 
 import {
   createPublicFormLinkAction,
@@ -31,8 +31,6 @@ vi.mock("@/lib/auth", async (importOriginal) => {
 vi.mock("@/services/organization-service", () => ({
   getCurrentOrganizationContext: vi.fn(),
 }))
-
-vi.mock("@/services/template-service", () => ({ canEditDocumentTemplate: vi.fn() }))
 
 vi.mock("@/services/public-form-service", async (importOriginal) => {
   const actual =
@@ -85,7 +83,6 @@ beforeEach(() => {
       updatedAt: "2026-08-31T12:00:00.000Z",
     },
   })
-  vi.mocked(canEditDocumentTemplate).mockResolvedValue(true)
   vi.mocked(createPublicFormLink).mockResolvedValue(undefined as never)
   vi.mocked(disablePublicFormLink).mockResolvedValue(undefined as never)
 })
@@ -120,18 +117,20 @@ describe("public form link actions", () => {
     expect(disablePublicFormLink).toHaveBeenCalledExactlyOnceWith({
       actorUserId: USER_ID,
       organizationId: ORGANIZATION_ID,
+      templateId: TEMPLATE_ID,
       linkId: LINK_ID,
     })
     expect(revalidatePathMock).toHaveBeenCalledExactlyOnceWith(LINKS_PATH)
   })
 
-  it("rejects a member who cannot edit the template before the service", async () => {
-    vi.mocked(canEditDocumentTemplate).mockResolvedValue(false)
+  it("tells a member the service refuses that they may not manage links", async () => {
+    vi.mocked(createPublicFormLink).mockRejectedValue(
+      new PublicFormServiceError("You do not have permission to manage public form links.", 403)
+    )
 
     await expect(
       createPublicFormLinkAction(createFormData({ templateId: TEMPLATE_ID }))
     ).rejects.toThrow(`NEXT_REDIRECT:${LINKS_PATH}?feedback=permission_denied`)
-    expect(createPublicFormLink).not.toHaveBeenCalled()
   })
 
   it("does not reflect service diagnostics into the destination", async () => {

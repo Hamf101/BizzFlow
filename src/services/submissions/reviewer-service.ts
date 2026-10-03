@@ -49,7 +49,7 @@ export async function setInternalSubmissionReviewers(
     async (): Promise<Submission> => {
       const client = getSubmissionClient(deps)
 
-      const subject = await requireSubmissionPermission(
+      await requireSubmissionPermission(
         client,
         input.organizationId,
         input.actorUserId,
@@ -57,17 +57,8 @@ export async function setInternalSubmissionReviewers(
         "You cannot assign internal submissions."
       )
 
-      // Reviewers someone more senior chose are not for a more junior person to change.
+      // The database keeps reviewers someone more senior chose out of a junior's hands.
       const current = await getSubmissionById(client, input.organizationId, input.submissionId)
-
-      if (
-        current.assignedBy &&
-        current.assignedBy !== input.actorUserId &&
-        RANK[getOrganizationRoleFromSubject(subject)] < RANK[await roleOf(client, current, current.assignedBy)]
-      ) {
-        throw new SubmissionServiceError("The reviewers were chosen by someone more senior, so only they or an owner can change them.", 403)
-      }
-
       const reviewerIds = input.reviewerIds.map((id) => id.trim().toLowerCase())
 
       if (
@@ -296,11 +287,18 @@ export function isReviewRequester(submission: Submission, viewer: { role: Organi
   return submission.assignedBy === viewer.userId && (viewer.role === "owner_admin" || viewer.role === "manager")
 }
 
-async function readReviewers(
+/**
+ * Every reviewer, and the ones this viewer may see: all of them for someone of
+ * the same rank as whoever assigned the reviewers or above, otherwise only
+ * themselves and the people they added.
+ *
+ * @throws SubmissionServiceError when a read fails.
+ */
+export async function readReviewers(
   client: SubmissionServiceClient,
   submission: Submission,
   viewer: { role: OrganizationRole; userId: string }
-): Promise<{ all: SubmissionReviewer[]; visible: SubmissionReviewer[] }> {
+): Promise<{ all: SubmissionReviewer[]; seesAll: boolean; visible: SubmissionReviewer[] }> {
   const { data, error } = await client
     .from("submission_reviewers")
     .select(REVIEWER_COLUMNS)
@@ -318,6 +316,7 @@ async function readReviewers(
 
   return {
     all,
+    seesAll,
     visible: seesAll ? all : all.filter((reviewer) => reviewer.userId === viewer.userId || reviewer.assignedBy === viewer.userId),
   }
 }
@@ -383,7 +382,13 @@ async function nameOf(client: SubmissionServiceClient, organizationId: string, u
 async function roleOf(client: SubmissionServiceClient, submission: Submission, userId: string | null): Promise<OrganizationRole> {
   if (!userId) return "external_reviewer"
 
-  const { data } = await loadActiveMembership(client, submission.organizationId, userId)
+  const { data, error } = await loadActiveMembership(client, submission.organizationId, userId)
+
+  // A failed lookup must not rank them lowest and open the panel to everyone.
+  if (error) {
+    throw createSubmissionDatabaseError(error, "Unable to load who assigned the reviewers.")
+  }
+
   const role = (data as { role?: string } | null)?.role
 
   return role && isOrganizationRole(role) ? role : "external_reviewer"

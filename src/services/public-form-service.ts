@@ -3,7 +3,9 @@ import { randomBytes } from "node:crypto"
 import { z } from "zod"
 
 import { createAdminClient } from "@/lib/supabase/admin"
+import { recordAuditLog as defaultRecordAuditLog } from "@/services/audit-service"
 import { hashToken } from "@/services/document-signing/token-security"
+import { type LogValue, runOperation } from "@/services/operation"
 import {
   createSafeSubmissionFilename,
   createSignedSubmissionUploadUrl as defaultCreateSignedSubmissionUploadUrl,
@@ -25,6 +27,8 @@ import type {
 import { parseTemplateContent } from "@/types/template"
 import { isStructuredAnswerBlock } from "@/types/template-answer"
 import { isTemplateBlockVisible } from "@/types/template-visibility"
+import { requireTemplateAccess, type TemplateAccessInput } from "@/services/templates/access"
+import { TemplateServiceError } from "@/services/templates/errors"
 import { mapDocumentTemplate } from "@/services/templates/shared"
 
 /**
@@ -56,17 +60,12 @@ export class PublicFormServiceError extends Error {
   }
 }
 
-export type CreatePublicFormLinkInput = {
-  actorUserId: string
-  organizationId: string
-  templateId: string
+export type CreatePublicFormLinkInput = TemplateAccessInput & {
   expiresAt?: string | null
   maxSubmissions?: number | null
 }
 
-export type DisablePublicFormLinkInput = {
-  actorUserId: string
-  organizationId: string
+export type DisablePublicFormLinkInput = TemplateAccessInput & {
   linkId: string
 }
 
@@ -163,6 +162,7 @@ export type PublicFormServiceDeps = {
   now?: () => Date
   createSignedSubmissionUploadUrl?: typeof defaultCreateSignedSubmissionUploadUrl
   verifySubmissionUpload?: typeof defaultVerifySubmissionUpload
+  recordAuditLog?: (input: Parameters<typeof defaultRecordAuditLog>[0]) => Promise<unknown>
 }
 
 /** A public draft submission resolved from an anonymous visitor's handle. */
@@ -226,116 +226,193 @@ function createId(deps: PublicFormServiceDeps): string {
   return deps.createId?.() ?? crypto.randomUUID()
 }
 
+const linkLimitsSchema = z.object({
+  expiresAt: z.iso.datetime({ local: true, offset: true, error: "Choose a valid expiry date." }).nullish(),
+  maxSubmissions: z.number().int().positive("The submission limit must be a whole number above zero.").nullish(),
+})
+
+function runPublicLinkOperation<T>(
+  operationName: string,
+  input: TemplateAccessInput,
+  operation: () => Promise<T>
+): Promise<T> {
+  const identifiers: Record<string, LogValue> = { actorUserId: input.actorUserId, organizationId: input.organizationId, templateId: input.templateId }
+  return runOperation("public_form", toPublicFormServiceError, operationName, identifiers, operation)
+}
+
+function toPublicFormServiceError(error: unknown): PublicFormServiceError {
+  if (error instanceof PublicFormServiceError) return error
+  if (error instanceof TemplateServiceError) return new PublicFormServiceError(error.message, error.statusCode)
+  return new PublicFormServiceError("Public form link service failed.", 500)
+}
+
+// Whoever may edit a template may open it to the public.
+async function requireLinkManager(client: ReturnType<typeof createAdminClient>, input: TemplateAccessInput): Promise<void> {
+  const access = { actorUserId: input.actorUserId, organizationId: input.organizationId, templateId: input.templateId }
+  await requireTemplateAccess(client as never, access, "editor", "You do not have permission to manage public form links.")
+}
+
+async function auditLink(
+  deps: PublicFormServiceDeps,
+  input: TemplateAccessInput,
+  action: "public_form_link.created" | "public_form_link.disabled",
+  linkId: string
+): Promise<void> {
+  try {
+    await (deps.recordAuditLog ?? defaultRecordAuditLog)({
+      action,
+      actorUserId: input.actorUserId,
+      metadata: { templateId: input.templateId },
+      organizationId: input.organizationId,
+      targetId: linkId,
+      targetType: "public_form_link",
+    })
+  } catch (error: unknown) {
+    // The link already changed; a lost audit row is reported, not undone.
+    console.warn("public_form_link_audit_failed", { action, linkId, reason: error instanceof Error ? error.message : "Unknown audit error" })
+  }
+}
+
 /**
  * Generates a shareable public form link for a published template.
+ *
+ * @throws PublicFormServiceError 400 for a past expiry or a bad limit, 403/404 without edit access, 400 when unpublished.
  */
 export async function createPublicFormLink(
   input: CreatePublicFormLinkInput,
   deps: PublicFormServiceDeps = {}
 ): Promise<PublicFormLink> {
-  const client = getClient(deps)
-  const token = (deps.generateTokenImpl ?? generateToken)()
-  const timestamp = nowIso(deps)
+  return runPublicLinkOperation("create_public_form_link", input, async () => {
+    const client = getClient(deps)
+    const timestamp = nowIso(deps)
+    const limits = linkLimitsSchema.safeParse(input)
 
-  const { data: templateData, error: templateError } = await client
-    .from("document_templates")
-    .select("*")
-    .eq("id", input.templateId)
-    .eq("org_id", input.organizationId)
-    .maybeSingle()
+    if (!limits.success) {
+      throw new PublicFormServiceError(limits.error.issues[0]?.message ?? "These link limits are not valid.", 400)
+    }
 
-  if (templateError || !templateData) {
-    throw new PublicFormServiceError("Template was not found.", 404)
-  }
+    // A time with no offset counts as UTC, as the database has always read it.
+    const expiry = limits.data.expiresAt
+    const expiresAt = expiry ? new Date(/(Z|[+-]\d{2}:?\d{2})$/i.test(expiry) ? expiry : `${expiry}Z`).toISOString() : null
 
-  const templateRow = templateData as DocumentTemplateRow
+    if (expiresAt && expiresAt <= timestamp) {
+      throw new PublicFormServiceError("Choose an expiry date in the future.", 400)
+    }
 
-  if (templateRow.status !== "published") {
-    throw new PublicFormServiceError(
-      "Public form links can only be created for published templates.",
-      400
-    )
-  }
+    await requireLinkManager(client, input)
 
-  const { data, error } = await client
-    .from("public_form_links")
-    .insert({
-      id: createId(deps),
-      org_id: input.organizationId,
-      template_id: input.templateId,
-      token,
-      status: "active",
-      expires_at: input.expiresAt ?? null,
-      max_submissions: input.maxSubmissions ?? null,
-      submission_count: 0,
-      created_by: input.actorUserId,
-      created_at: timestamp,
-      updated_at: timestamp,
-    })
-    .select()
-    .maybeSingle()
+    const { data: templateData, error: templateError } = await client
+      .from("document_templates")
+      .select("status")
+      .eq("id", input.templateId)
+      .eq("org_id", input.organizationId)
+      .maybeSingle()
 
-  if (error || !data) {
-    throw new PublicFormServiceError("Unable to create public form link.", 500)
-  }
+    if (templateError) {
+      throw new PublicFormServiceError("Unable to load the template.", 500)
+    }
 
-  return parsePublicFormLinkRow(data)
+    if ((templateData as { status?: string } | null)?.status !== "published") {
+      throw new PublicFormServiceError(
+        "Public form links can only be created for published templates.",
+        400
+      )
+    }
+
+    const { data, error } = await client
+      .from("public_form_links")
+      .insert({
+        id: createId(deps),
+        org_id: input.organizationId,
+        template_id: input.templateId,
+        token: (deps.generateTokenImpl ?? generateToken)(),
+        status: "active",
+        expires_at: expiresAt,
+        max_submissions: limits.data.maxSubmissions ?? null,
+        submission_count: 0,
+        created_by: input.actorUserId,
+        created_at: timestamp,
+        updated_at: timestamp,
+      })
+      .select()
+      .maybeSingle()
+
+    if (error || !data) {
+      throw new PublicFormServiceError("Unable to create public form link.", 500)
+    }
+
+    const link = parsePublicFormLinkRow(data)
+    await auditLink(deps, input, "public_form_link.created", link.id)
+    return link
+  })
 }
 
 /**
- * Disables an existing public form link.
+ * Disables one of a template's links for anyone. A link sent to one person is
+ * revoked where it was sent from (send-to-answer), never here.
+ *
+ * @throws PublicFormServiceError 403/404 without edit access, 404 when the template has no such link.
  */
 export async function disablePublicFormLink(
   input: DisablePublicFormLinkInput,
   deps: PublicFormServiceDeps = {}
 ): Promise<PublicFormLink> {
-  const client = getClient(deps)
+  return runPublicLinkOperation("disable_public_form_link", input, async () => {
+    const client = getClient(deps)
+    await requireLinkManager(client, input)
 
-  const { data, error } = await client
-    .from("public_form_links")
-    .update({
-      status: "disabled",
-      updated_at: nowIso(deps),
-    })
-    .eq("id", input.linkId)
-    .eq("org_id", input.organizationId)
-    .select()
-    .maybeSingle()
+    const { data, error } = await client
+      .from("public_form_links")
+      .update({
+        status: "disabled",
+        updated_at: nowIso(deps),
+      })
+      .eq("id", input.linkId)
+      .eq("org_id", input.organizationId)
+      .eq("template_id", input.templateId)
+      .is("token_hash", null)
+      .select()
+      .maybeSingle()
 
-  if (error || !data) {
-    throw new PublicFormServiceError(
-      "Public form link was not found or could not be disabled.",
-      404
-    )
-  }
+    if (error) {
+      throw new PublicFormServiceError("Unable to disable the public form link.", 500)
+    }
 
-  return parsePublicFormLinkRow(data)
+    if (!data) {
+      throw new PublicFormServiceError("Public form link was not found.", 404)
+    }
+
+    await auditLink(deps, input, "public_form_link.disabled", input.linkId)
+    return parsePublicFormLinkRow(data)
+  })
 }
 
 /**
- * Lists all public form links for a specific template.
+ * Lists a template's links for anyone, for someone who may edit it.
  */
 export async function listPublicFormLinks(
-  organizationId: string,
-  templateId: string,
+  input: TemplateAccessInput,
   deps: PublicFormServiceDeps = {}
 ): Promise<PublicFormLink[]> {
-  const client = getClient(deps)
+  return runPublicLinkOperation("list_public_form_links", input, async () => {
+    const client = getClient(deps)
+    await requireLinkManager(client, input)
 
-  const { data, error } = await client
-    .from("public_form_links")
-    .select("*")
-    .eq("org_id", organizationId)
-    .eq("template_id", templateId)
-    // Links sent to one person each are listed where they were sent from.
-    .is("token_hash", null)
-    .order("created_at", { ascending: false })
+    const { data, error } = await client
+      .from("public_form_links")
+      .select("*")
+      .eq("org_id", input.organizationId)
+      .eq("template_id", input.templateId)
+      // Links sent to one person each are listed where they were sent from.
+      .is("token_hash", null)
+      .order("created_at", { ascending: false })
 
-  if (error || !data) {
-    throw new PublicFormServiceError("Unable to load public form links.", 500)
-  }
+    if (error || !data) {
+      throw new PublicFormServiceError("Unable to load public form links.", 500)
+    }
 
-  return data.map((row) => parsePublicFormLinkRow(row))
+    return data.map((row) => parsePublicFormLinkRow(row))
+  })
 }
 
 /**

@@ -778,9 +778,10 @@ export async function duplicateDocumentTemplate(
       const client = getClient(deps)
 
       await requireCanCreateTemplates(client, input.organizationId, input.actorUserId)
-      await requireTemplateAccess(client, input, "user", "You cannot copy this template.")
+      const level = await requireTemplateAccess(client, input, "user", "You cannot copy this template.")
 
-      const existing = await getTemplateById(
+      // Only an editor may copy the working copy; everyone else gets what was published.
+      const existing = await (level === "editor" ? getTemplateById : getPublishedTemplateById)(
         client,
         input.organizationId,
         input.templateId

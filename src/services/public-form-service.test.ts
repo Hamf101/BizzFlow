@@ -4,8 +4,10 @@ import {
   completePublicFormFileUpload,
   createPublicFormFileUploadUrl,
   createPublicFormLink,
+  disablePublicFormLink,
   getPublicFormDraftState,
   getPublicFormLinkByToken,
+  listPublicFormLinks,
   savePublicFormDraft,
   submitPublicForm,
   supersedePublicFormFile,
@@ -52,59 +54,73 @@ function seedValidLink(
   })
 }
 
-describe("createPublicFormLink", () => {
-  it("reads the template from document_templates and stores the link", async () => {
-    const client = new FakePublicFormClient({
-      document_templates: [createTemplateRow()],
-    })
+const STAFF_ID = "60000000-0000-4000-8000-000000000002"
+const OTHER_TEMPLATE_ID = "20000000-0000-4000-8000-000000000002"
 
-    const link = await createPublicFormLink(
-      {
-        actorUserId: MANAGER_ID,
-        organizationId: ORG_ID,
-        templateId: TEMPLATE_ID,
-        maxSubmissions: 5,
-      },
-      createDeps(client, [LINK_ID])
+function member(userId: string, role: string): FakeRow {
+  return { id: `membership-${userId}`, org_id: ORG_ID, user_id: userId, role, status: "active" }
+}
+
+function seedLinkManagement(): FakePublicFormClient {
+  return new FakePublicFormClient({
+    organization_memberships: [member(MANAGER_ID, "manager"), member(STAFF_ID, "staff")],
+    document_templates: [createTemplateRow(), createTemplateRow({ id: OTHER_TEMPLATE_ID })],
+  })
+}
+
+const manage = { actorUserId: MANAGER_ID, organizationId: ORG_ID, templateId: TEMPLATE_ID }
+
+describe("public form link management", () => {
+  it("creates and disables a link for someone who edits the template, and audits both", async () => {
+    const client = seedLinkManagement()
+    const deps = createDeps(client, [LINK_ID])
+
+    const link = await createPublicFormLink({ ...manage, expiresAt: "2026-12-31T12:00", maxSubmissions: 5 }, deps)
+    expect(link).toMatchObject({ token: PUBLIC_TOKEN, maxSubmissions: 5, expiresAt: "2026-12-31T12:00:00.000Z" })
+    expect((await listPublicFormLinks(manage, deps)).map((row) => row.id)).toEqual([LINK_ID])
+
+    await disablePublicFormLink({ ...manage, linkId: LINK_ID }, deps)
+
+    expect(client.tables.public_form_links[0]).toMatchObject({ status: "disabled" })
+    expect(deps.recordAuditLog).toHaveBeenNthCalledWith(1, expect.objectContaining({ action: "public_form_link.created", targetId: LINK_ID }))
+    expect(deps.recordAuditLog).toHaveBeenNthCalledWith(2, expect.objectContaining({ action: "public_form_link.disabled", targetId: LINK_ID }))
+  })
+
+  it("refuses a member who only uses the template, another template's link, a link sent to one person, and bad limits", async () => {
+    const client = seedLinkManagement()
+    client.tables.public_form_links.push(
+      createLinkRow({ id: "other-template-link", template_id: OTHER_TEMPLATE_ID, token: "other-token-0123456789" }),
+      createLinkRow({ id: "sent-link", token: null, token_hash: "f".repeat(64), recipient_email: "ana@example.com" })
     )
+    const deps = createDeps(client, [LINK_ID])
+    const staff = { ...manage, actorUserId: STAFF_ID }
 
-    expect(link.token).toBe(PUBLIC_TOKEN)
-    expect(link.maxSubmissions).toBe(5)
-    expect(client.tables.public_form_links).toHaveLength(1)
+    await expect(createPublicFormLink(staff, deps)).rejects.toMatchObject({ statusCode: 403 })
+    await expect(listPublicFormLinks(staff, deps)).rejects.toMatchObject({ statusCode: 403 })
+    await expect(disablePublicFormLink({ ...staff, linkId: "sent-link" }, deps)).rejects.toMatchObject({ statusCode: 403 })
+    // An editor of this template reaches only its links for anyone.
+    await expect(disablePublicFormLink({ ...manage, linkId: "other-template-link" }, deps)).rejects.toMatchObject({ statusCode: 404 })
+    await expect(disablePublicFormLink({ ...manage, linkId: "sent-link" }, deps)).rejects.toMatchObject({ statusCode: 404 })
+    await expect(createPublicFormLink({ ...manage, expiresAt: "2026-07-30T12:00:00.000Z" }, deps)).rejects.toMatchObject({ statusCode: 400 })
+    await expect(createPublicFormLink({ ...manage, expiresAt: "next tuesday" }, deps)).rejects.toMatchObject({ statusCode: 400 })
+    await expect(createPublicFormLink({ ...manage, maxSubmissions: 0 }, deps)).rejects.toMatchObject({ statusCode: 400 })
+    await expect(createPublicFormLink({ ...manage, maxSubmissions: 1.5 }, deps)).rejects.toMatchObject({ statusCode: 400 })
+
+    expect(client.tables.public_form_links.map((row) => [row.id, row.status])).toEqual([
+      ["other-template-link", "active"],
+      ["sent-link", "active"],
+    ])
+    expect(deps.recordAuditLog).not.toHaveBeenCalled()
   })
 
-  it("rejects a template that belongs to another organization", async () => {
-    const client = new FakePublicFormClient({
-      document_templates: [createTemplateRow({ org_id: OTHER_ORG_ID })],
-    })
+  it("rejects another organization's template and an unpublished one", async () => {
+    const elsewhere = seedLinkManagement()
+    elsewhere.tables.document_templates[0]!.org_id = OTHER_ORG_ID
+    const draft = seedLinkManagement()
+    draft.tables.document_templates[0]!.status = "draft"
 
-    await expect(
-      createPublicFormLink(
-        {
-          actorUserId: MANAGER_ID,
-          organizationId: ORG_ID,
-          templateId: TEMPLATE_ID,
-        },
-        createDeps(client, [LINK_ID])
-      )
-    ).rejects.toMatchObject({ statusCode: 404 })
-  })
-
-  it("rejects an unpublished template", async () => {
-    const client = new FakePublicFormClient({
-      document_templates: [createTemplateRow({ status: "draft" })],
-    })
-
-    await expect(
-      createPublicFormLink(
-        {
-          actorUserId: MANAGER_ID,
-          organizationId: ORG_ID,
-          templateId: TEMPLATE_ID,
-        },
-        createDeps(client, [LINK_ID])
-      )
-    ).rejects.toMatchObject({ statusCode: 400 })
+    await expect(createPublicFormLink(manage, createDeps(elsewhere, [LINK_ID]))).rejects.toMatchObject({ statusCode: 404 })
+    await expect(createPublicFormLink(manage, createDeps(draft, [LINK_ID]))).rejects.toMatchObject({ statusCode: 400 })
   })
 })
 

@@ -16,7 +16,8 @@ import {
   requireSubmissionPermission,
   runSubmissionOperation,
 } from "@/services/submissions/shared"
-import { getOrganizationRoleFromSubject } from "@/lib/permissions"
+import { getOrganizationRoleFromSubject, type OrganizationRole } from "@/lib/permissions"
+import { readReviewers } from "@/services/submissions/reviewer-service"
 import {
   parseSubmissionRow,
   type Submission,
@@ -239,33 +240,47 @@ export async function createInternalSubmissionComment(
   )
 }
 
+// Events that name a reviewer or someone it was shared with.
+const NAMES_A_REVIEWER = new Set<string>([
+  "assigned",
+  "changes_dismissed",
+  "reviewer_removed",
+  "shared",
+  "unshared",
+  "suggestion_accepted",
+  "suggestion_declined",
+])
+
 /**
- * Loads immutable comments and activity for an already-authorized submission.
+ * Loads immutable comments and activity for an already-authorized submission,
+ * leaving out what names a reviewer the viewer may not see (the same rule as
+ * the reviewer panel) and the notes those events carry.
  *
  * @param client - Trusted Supabase client.
- * @param organizationId - Tenant identifier.
- * @param submissionId - Submission identifier.
+ * @param submission - The submission, already known to be visible to the viewer.
+ * @param viewer - Who is looking, and their role.
  * @returns Review comments and timeline events in chronological order.
  * @throws SubmissionServiceError when either query fails or rows are invalid.
  */
 export async function listSubmissionReviewData(
   client: SubmissionServiceClient,
-  organizationId: string,
-  submissionId: string
+  submission: Submission,
+  viewer: { role: OrganizationRole; userId: string }
 ): Promise<SubmissionReviewData> {
-  const [commentsResult, activityResult] = await Promise.all([
+  const [commentsResult, activityResult, reviewers] = await Promise.all([
     client
       .from("submission_comments")
       .select(SUBMISSION_COMMENT_COLUMNS)
-      .eq("org_id", organizationId)
-      .eq("submission_id", submissionId)
+      .eq("org_id", submission.organizationId)
+      .eq("submission_id", submission.id)
       .order("created_at", { ascending: true }),
     client
       .from("submission_activity_events")
       .select(SUBMISSION_ACTIVITY_COLUMNS)
-      .eq("org_id", organizationId)
-      .eq("submission_id", submissionId)
+      .eq("org_id", submission.organizationId)
+      .eq("submission_id", submission.id)
       .order("created_at", { ascending: true }),
+    readReviewers(client, submission, viewer),
   ])
 
   if (commentsResult.error || !commentsResult.data) {
@@ -282,9 +297,22 @@ export async function listSubmissionReviewData(
     )
   }
 
+  const seen = new Set([viewer.userId, ...reviewers.visible.map((reviewer) => reviewer.userId)])
+  const activity = parseSubmissionActivityEventRows(activityResult.data)
+  const hidden = reviewers.seesAll
+    ? []
+    : activity.filter(
+        (event) =>
+          NAMES_A_REVIEWER.has(event.eventType) &&
+          event.assigneeUserId !== null &&
+          !seen.has(event.assigneeUserId) &&
+          event.actorUserId !== viewer.userId
+      )
+  const hiddenNotes = new Set(hidden.map((event) => event.commentId))
+
   return {
-    comments: commentsResult.data.map(parseSubmissionCommentRow),
-    activity: parseSubmissionActivityEventRows(activityResult.data),
+    comments: commentsResult.data.map(parseSubmissionCommentRow).filter((comment) => !hiddenNotes.has(comment.id)),
+    activity: activity.filter((event) => !hidden.includes(event)),
   }
 }
 

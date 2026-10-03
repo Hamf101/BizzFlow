@@ -247,6 +247,14 @@ export async function completeDocumentUpload(
         )
       }
 
+      // A generated document's versions are its finalized paper alone.
+      if (document.sourceKind === "generated") {
+        throw new DocumentServiceError(
+          "A generated document cannot take an uploaded file.",
+          409
+        )
+      }
+
       const version = await getDocumentVersionById(
         client,
         input.organizationId,
@@ -268,11 +276,25 @@ export async function completeDocumentUpload(
       const verifyDocumentUpload =
         deps.verifyDocumentUpload ?? defaultVerifyDocumentUpload
 
-      await verifyDocumentUpload({
+      const checksumSha256 = await verifyDocumentUpload({
         storageKey: version.storageKey,
         contentType: version.contentType,
         byteSize: version.byteSize,
       })
+      // The object is create-only, so the bytes just hashed are the bytes kept.
+      const { error: checksumError } = await client
+        .from("document_versions")
+        .update({ checksum_sha256: checksumSha256 })
+        .eq("id", input.versionId)
+        .eq("org_id", input.organizationId)
+        .eq("status", "upload_pending")
+
+      if (checksumError) {
+        throw createVersionMutationError(
+          checksumError,
+          "Unable to complete document upload."
+        )
+      }
 
       const { data: completed, error: completionError } = await client.rpc(
         "complete_document_version",

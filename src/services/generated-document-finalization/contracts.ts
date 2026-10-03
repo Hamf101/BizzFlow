@@ -6,7 +6,7 @@ import type {
   RenderGeneratedDocumentPdfInput,
   RenderGeneratedDocumentPdfOptions,
 } from "@/services/document-pdf-service"
-import type { GeneratedDocumentSigningView } from "@/types/signing"
+import type { MemberDocumentSigningView } from "@/types/signing"
 
 /** Identifiers required to finalize one completed generated document. */
 export type FinalizeGeneratedDocumentPdfInput = {
@@ -89,7 +89,7 @@ export type GeneratedDocumentFinalizationStorage = {
 /** Focused loader for the tenant-scoped generated signing view. */
 export type GeneratedDocumentSigningViewLoader = (
   input: FinalizeGeneratedDocumentPdfInput
-) => Promise<GeneratedDocumentSigningView>
+) => Promise<MemberDocumentSigningView>
 
 /** Focused renderer for an immutable generated-document snapshot. */
 export type GeneratedDocumentFinalPdfRenderer = (

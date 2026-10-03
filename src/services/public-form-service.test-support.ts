@@ -1,6 +1,7 @@
 import { vi } from "vitest"
 
 import type { PublicFormServiceDeps } from "@/services/public-form-service"
+import { answerTemplateAccess } from "@/services/templates/access.test-support"
 import { templateContentV3Schema } from "@/types/template"
 
 export const ORG_ID = "10000000-0000-4000-8000-000000000001"
@@ -32,6 +33,7 @@ const KNOWN_TABLES = [
   "organizations",
   "submissions",
   "submission_files",
+  "organization_memberships",
 ] as const
 
 export type FakeTableName = (typeof KNOWN_TABLES)[number]
@@ -196,6 +198,11 @@ class FakeQueryBuilder implements PromiseLike<FakeResult> {
     return this
   }
 
+  is(column: string, value: null): this {
+    this.filters.push((row) => (row[column] ?? null) === value)
+    return this
+  }
+
   order(): this {
     return this
   }
@@ -309,6 +316,10 @@ export class FakePublicFormClient {
     args: Record<string, unknown>
   ): Promise<FakeRpcResult> {
     this.rpcCalls.push({ name, args })
+
+    if (name === "get_template_access_level") {
+      return answerTemplateAccess(this.tables, name, args)
+    }
 
     if (name === "supersede_public_submission_file") {
       const link = this.tables.public_form_links.find(
@@ -480,5 +491,6 @@ export function createDeps(
       expiresInSeconds: 900,
     })),
     verifySubmissionUpload: vi.fn(async () => {}),
+    recordAuditLog: vi.fn(async () => undefined),
   }
 }

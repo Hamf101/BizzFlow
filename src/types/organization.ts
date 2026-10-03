@@ -68,7 +68,6 @@ export type OrganizationInvite = {
   role: OrganizationRole
   roleDefinitionId?: string | null
   roleName?: string | null
-  token: string
   invitedBy?: string | null
   status: InviteStatus
   expiresAt: string

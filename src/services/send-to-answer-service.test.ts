@@ -133,7 +133,7 @@ describe("sendToAnswer", () => {
     expect(tables.public_form_links?.[0]).toMatchObject({ answers_snapshot: null, document_id: null, template_id: TEMPLATE_ID, title_snapshot: "Intake" })
     // The template's public links list only the ones for anyone; a person's own link has no address to show.
     tables.public_form_links?.push({ id: "anyone", org_id: ORG_ID, template_id: TEMPLATE_ID, token: "anyone-token-0123456789", token_hash: null, status: "active" })
-    expect((await listPublicFormLinks(ORG_ID, TEMPLATE_ID, { client: client as never })).map((link) => link.id)).toEqual(["anyone"])
+    expect((await listPublicFormLinks({ actorUserId: MANAGER_ID, organizationId: ORG_ID, templateId: TEMPLATE_ID }, { client: client as never })).map((link) => link.id)).toEqual(["anyone"])
   })
 
   it("closes a document's links while it is in the trash, and opens them again when it comes back", async () => {

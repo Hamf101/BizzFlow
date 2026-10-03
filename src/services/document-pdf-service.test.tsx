@@ -765,6 +765,30 @@ describe("document PDF service", () => {
     expect(drawnTexts(printed, 0).some((drawn) => drawn.size === 10 && Math.abs(drawn.x - long.x) < 0.5 && Math.abs(drawn.y - (long.y + 2 + 15 - 10)) < 0.5)).toBe(true)
   })
 
+  it("never prints a drawing stored as an answer in a signature or initials box, in any field style", { timeout: PDF_RENDER_TIMEOUT_MS }, async () => {
+    const input = createPdfInput({ repeatHeader: false, repeatFooter: false })
+    const content = requireVersionThreeContent(input)
+    const shared = { helpText: null, required: false }
+
+    content.blocks = [
+      { ...shared, fieldKey: "sign", id: "55000000-0000-4000-8000-000000000001", label: "Signature", type: "signature_field" },
+      { ...shared, fieldKey: "initial", id: "55000000-0000-4000-8000-000000000002", label: "Initials", type: "initials_field" }
+    ]
+    content.sections = []
+    content.fieldGroups = []
+    content.blockRules = []
+    // Only a signer's own drawing, in the signing record, is a signature.
+    input.answers = { initial: VALID_DRAWING_DATA_URL, sign: VALID_DRAWING_DATA_URL }
+    input.signers = []
+
+    for (const fieldStyle of ["box", "line", "cell"] as const) {
+      content.layout = { ...content.layout, fieldStyle }
+      const bytes = Buffer.from(await renderGeneratedDocumentPdf(input))
+
+      expect(bytes.toString("latin1")).not.toContain("/Subtype /Image")
+    }
+  })
+
   it("prints answers in cells that touch beside and below each other, and stay inside the room the planner left", { timeout: PDF_RENDER_TIMEOUT_MS }, async () => {
     const input = createPdfInput({ repeatHeader: false, repeatFooter: false })
     const content = requireVersionThreeContent(input)

@@ -19,6 +19,7 @@ if (sentryEnv) {
         (integration) => integration.name !== "Console"
       ),
     beforeSend: (event) => scrubMonitoringEvent(event),
+    beforeSendTransaction: (event) => scrubMonitoringEvent(event),
   })
 
   setErrorReporter((error, context) => {

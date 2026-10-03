@@ -4,6 +4,7 @@ import {
   getAssignableOrganizationRoles,
 } from "@/lib/permissions"
 import { createAdminClient } from "@/lib/supabase/admin"
+import { hashToken } from "@/services/document-signing/token-security"
 import {
   InviteEmailServiceError,
   sendInviteEmail,
@@ -180,48 +181,43 @@ export async function createInvite(
 
       await revokePendingInvitesForEmail(client, input.organizationId, email)
 
+      // The link goes only by email and only its hash is kept, so holding the
+      // link proves the inbox: nobody else ever sees it.
+      const token = deps.createInviteToken?.() ?? createInviteToken()
       const invite = await createPendingInviteRecord(client, {
         organizationId: input.organizationId,
         email,
         role,
         roleDefinitionId: roleDefinition.id,
-        token: deps.createInviteToken?.() ?? createInviteToken(),
+        tokenHash: hashToken(token),
         invitedBy: input.actorUserId,
         expiresAt: new Date(
           (deps.now?.() ?? new Date()).getTime() + INVITE_LIFETIME_MS
         ).toISOString(),
       })
 
-      // Email is how an invite is usually delivered, not what makes it valid.
-      // The token is already persisted, scoped, expiring, and single-use, so a
-      // provider outage or an unverified sending domain must not destroy the
-      // invite — the People page shows the link for the manager to share
-      // directly. Revoking here used to make a misconfigured email provider
-      // look like a broken invite feature.
-      let emailDelivered = true
-      let emailFailureReason: string | null = null
-
+      // The email holds the only copy of the link, so an invite whose email
+      // could not go is withdrawn; inviting again sends a fresh one.
       try {
         await (deps.sendInviteEmail ?? sendInviteEmail)({
           inviteId: invite.id,
           organizationName: organization.name,
           recipientEmail: invite.email,
-          token: invite.token,
+          token,
         })
       } catch (error: unknown) {
+        await revokeUndeliveredInvite(client, invite.id, input.organizationId)
+
         if (!(error instanceof InviteEmailServiceError)) {
-          await revokeUndeliveredInvite(client, invite.id, input.organizationId)
           throw error
         }
 
-        emailDelivered = false
-        emailFailureReason = error.message
-
-        console.warn("invite_created_without_email", {
+        console.warn("invite_email_not_sent", {
           inviteId: invite.id,
           organizationId: input.organizationId,
           reason: error.message,
         })
+        throw new OrganizationServiceError("The invite email couldn't be sent. Invite them again to resend it.", 502)
       }
 
       await recordOrganizationAuditLog(
@@ -235,13 +231,12 @@ export async function createInvite(
             email: invite.email,
             role: invite.role,
             roleDefinitionId: invite.roleDefinitionId ?? null,
-            emailDelivered,
           },
         },
         deps.recordAuditLog
       )
 
-      return { invite, emailDelivered, emailFailureReason }
+      return { invite }
     }
   )
 }
@@ -354,10 +349,11 @@ export async function acceptInvite(
 }
 
 /**
- * Opens an account for someone joining through an invite. The invite reached
- * their inbox, which proves the address just as a confirmation email would, so
- * the account starts confirmed and they can join straight away. The address is
- * always the invite's own, never one typed in.
+ * Opens an account for someone joining through an invite. The link goes only
+ * by email, is kept only as its hash and is never shown to the inviter, so
+ * holding it proves the inbox just as a confirmation email would: the account
+ * starts confirmed and they can join straight away. The address is always the
+ * invite's own, never one typed in.
  *
  * @param input - The invite token and the password they chose.
  * @param deps - Optional database client for tests.

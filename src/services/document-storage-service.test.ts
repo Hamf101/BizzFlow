@@ -1,9 +1,11 @@
+import { createHash } from "node:crypto"
+
 import {
   DeleteObjectCommand,
   GetObjectCommand,
-  HeadObjectCommand,
   PutObjectCommand,
   S3Client,
+  type GetObjectCommandOutput,
 } from "@aws-sdk/client-s3"
 import { describe, expect, it, vi } from "vitest"
 
@@ -16,7 +18,7 @@ import {
   deleteDocumentStorageObject,
   DocumentStorageServiceError,
   type DocumentStorageDeleteObject,
-  type DocumentStorageHeadObject,
+  type DocumentStorageGetObject,
   type DocumentStorageSigner,
   validateDocumentUploadRequest,
   verifyDocumentUpload,
@@ -44,10 +46,16 @@ const fileUploadPolicy: FileUploadPolicyEnv = {
   ],
 }
 
+const ORG_ID = "10000000-0000-4000-8000-000000000001"
+const DOCUMENT_ID = "30000000-0000-4000-8000-000000000001"
+const VERSION_ID = "50000000-0000-4000-8000-000000000001"
+const STORAGE_KEY = `organizations/${ORG_ID}/documents/${DOCUMENT_ID}/versions/${VERSION_ID}/original.pdf`
+const PDF_BYTES = new TextEncoder().encode("%PDF-1.7\n1 0 obj\n<<>>\nendobj\n%%EOF")
+
 const objectKeyInput = {
-  organizationId: "org-1",
-  documentId: "doc-1",
-  versionId: "ver-1",
+  organizationId: ORG_ID,
+  documentId: DOCUMENT_ID,
+  versionId: VERSION_ID,
 }
 
 describe("document object keys", () => {
@@ -71,8 +79,18 @@ describe("document object keys", () => {
         contentType,
       })
     ).toBe(
-      `organizations/org-1/documents/doc-1/versions/ver-1/original${extension}`
+      `organizations/${ORG_ID}/documents/${DOCUMENT_ID}/versions/${VERSION_ID}/original${extension}`
     )
+  })
+
+  it("refuses an id that is not a UUID, so a key cannot reach outside its document", () => {
+    expect(() =>
+      buildDocumentObjectKey({
+        ...objectKeyInput,
+        documentId: "../../other-org",
+        contentType: "application/pdf",
+      })
+    ).toThrow(expect.objectContaining({ statusCode: 400 }))
   })
 
   it("rejects unsupported content types", () => {
@@ -176,9 +194,7 @@ describe("document signed URL helpers", () => {
 
   it("signs an attachment-only response override for downloads", async () => {
     const result = await createSignedDocumentDownloadUrl(
-      {
-        storageKey: "organizations/org-1/documents/doc-1/versions/ver-1/original.pdf",
-      },
+      { downloadFilename: "contract.pdf", storageKey: STORAGE_KEY },
       {
         r2Client: createTestR2Client(),
         r2Env,
@@ -187,13 +203,13 @@ describe("document signed URL helpers", () => {
     const signedUrl = new URL(result.downloadUrl)
 
     expect(signedUrl.searchParams.get("response-content-disposition")).toBe(
-      "attachment"
+      'attachment; filename="contract.pdf"'
     )
   })
 
   it("signs an inline response of the stored type for viewing", async () => {
     const result = await createSignedDocumentDownloadUrl(
-      { storageKey: "organizations/org-1/documents/doc-1/versions/ver-1/original.pdf", viewAs: "application/pdf" },
+      { downloadFilename: "contract.pdf", storageKey: STORAGE_KEY, viewAs: "application/pdf" },
       { r2Client: createTestR2Client(), r2Env }
     )
     const signedUrl = new URL(result.downloadUrl)
@@ -227,7 +243,7 @@ describe("document signed URL helpers", () => {
     )
 
     const expectedStorageKey =
-      "organizations/org-1/documents/doc-1/versions/ver-1/original.pdf"
+      STORAGE_KEY
 
     expect(result).toEqual({
       uploadUrl: "https://signed.example/upload",
@@ -272,9 +288,7 @@ describe("document signed URL helpers", () => {
     )
 
     const result = await createSignedDocumentDownloadUrl(
-      {
-        storageKey: "organizations/org-1/documents/doc-1/versions/ver-1/original.pdf",
-      },
+      { downloadFilename: "contract.pdf", storageKey: STORAGE_KEY },
       {
         r2Client,
         r2Env,
@@ -303,9 +317,37 @@ describe("document signed URL helpers", () => {
     }
     expect(signedCommand.input).toEqual({
       Bucket: "documents",
-      Key: "organizations/org-1/documents/doc-1/versions/ver-1/original.pdf",
-      ResponseContentDisposition: "attachment",
+      Key: STORAGE_KEY,
+      ResponseContentDisposition: 'attachment; filename="contract.pdf"',
     })
+  })
+})
+
+describe("document signed URL limits", () => {
+  it("caps both links at fifteen minutes, names a download safely, and signs only a stored key", async () => {
+    const longLived = { ...r2Env, CLOUDFLARE_R2_SIGNED_URL_TTL_SECONDS: 604_800 }
+    const signer = vi.fn<DocumentStorageSigner>(async () => "https://signed.example/url")
+    const deps = { r2Client: {} as S3Client, r2Env: longLived, fileUploadPolicy, signer }
+
+    const upload = await createSignedDocumentUploadUrl({ ...objectKeyInput, contentType: "application/pdf", byteSize: 10 }, deps)
+    const download = await createSignedDocumentDownloadUrl(
+      { downloadFilename: 'Q3 "final"\r\nSet-Cookie: x.pdf', storageKey: STORAGE_KEY },
+      deps
+    )
+
+    expect([upload.expiresInSeconds, download.expiresInSeconds]).toEqual([900, 900])
+    expect(signer.mock.calls.map((call) => call[2].expiresIn)).toEqual([900, 900])
+    expect((signer.mock.calls[1]?.[1] as GetObjectCommand).input.ResponseContentDisposition).toBe(
+      'attachment; filename="Q3-final-Set-Cookie-x.pdf"'
+    )
+
+    await expect(
+      createSignedDocumentDownloadUrl(
+        { downloadFilename: "x.pdf", storageKey: `organizations/${ORG_ID}/submissions/${DOCUMENT_ID}/files/a/${VERSION_ID}/x.pdf` },
+        deps
+      )
+    ).rejects.toMatchObject({ statusCode: 400 })
+    expect(signer).toHaveBeenCalledTimes(2)
   })
 })
 
@@ -314,88 +356,45 @@ function createTestR2Client(): S3Client {
 }
 
 describe("document upload verification", () => {
-  it("HEADs the object and accepts matching normalized metadata", async () => {
-    const r2Client = {} as S3Client
-    const headObject = vi.fn<DocumentStorageHeadObject>(
-      async () => ({
-        ContentLength: 10,
-        ContentType: " Application/PDF; charset=binary ",
-        $metadata: {},
-      })
-    )
-    const storageKey =
-      "organizations/org-1/documents/doc-1/versions/ver-1/original.pdf"
+  it("reads the stored bytes back and returns their checksum when they are what was claimed", async () => {
+    const getObject = createGetObject(PDF_BYTES, " Application/PDF; charset=binary ")
 
     await expect(
       verifyDocumentUpload(
-        {
-          storageKey,
-          contentType: "application/pdf",
-          byteSize: 10,
-        },
-        {
-          r2Client,
-          r2Env,
-          headObject,
-        }
+        { storageKey: STORAGE_KEY, contentType: "application/pdf", byteSize: PDF_BYTES.byteLength },
+        { r2Client: {} as S3Client, r2Env, getObject }
       )
-    ).resolves.toBeUndefined()
+    ).resolves.toBe(createHash("sha256").update(PDF_BYTES).digest("hex"))
+    expect(getObject.mock.calls[0]?.[1].input).toEqual({ Bucket: "documents", Key: STORAGE_KEY })
+  })
 
-    expect(headObject).toHaveBeenCalledOnce()
-    const headCall = headObject.mock.calls[0]
+  it("refuses a program renamed as a PDF, though its size and type headers match", async () => {
+    const executable = new TextEncoder().encode("MZ fake executable payload")
 
-    if (!headCall) {
-      throw new Error("Expected object metadata executor to be called.")
-    }
-
-    const [headClient, headCommand] = headCall
-
-    expect(headClient).toBe(r2Client)
-    expect(headCommand).toBeInstanceOf(HeadObjectCommand)
-    expect(headCommand.input).toEqual({
-      Bucket: "documents",
-      Key: storageKey,
-    })
+    await expect(
+      verifyDocumentUpload(
+        { storageKey: STORAGE_KEY, contentType: "application/pdf", byteSize: executable.byteLength },
+        { r2Client: {} as S3Client, r2Env, getObject: createGetObject(executable, "application/pdf") }
+      )
+    ).rejects.toMatchObject({ statusCode: 409 })
   })
 
   it.each([
-    [
-      { ContentLength: 9, ContentType: "application/pdf", $metadata: {} },
-      "Uploaded document byte size does not match the pending version.",
-    ],
-    [
-      { ContentLength: 10, ContentType: "image/png", $metadata: {} },
-      "Uploaded document content type does not match the pending version.",
-    ],
-  ])(
-    "rejects uploaded object metadata mismatches",
-    async (objectMetadata, expectedMessage: string) => {
-      const headObject = vi.fn<DocumentStorageHeadObject>(
-        async () => objectMetadata
-      )
+    [{ ContentLength: 9 }, "Uploaded document byte size does not match the pending version."],
+    [{ ContentType: "image/png" }, "Uploaded document content type does not match the pending version."],
+  ])("rejects uploaded object metadata mismatches", async (metadata, expectedMessage: string) => {
+    const getObject = createGetObject(PDF_BYTES, "application/pdf", metadata)
 
-      await expect(
-        verifyDocumentUpload(
-          {
-            storageKey: "documents/version.pdf",
-            contentType: "application/pdf",
-            byteSize: 10,
-          },
-          {
-            r2Client: {} as S3Client,
-            r2Env,
-            headObject,
-          }
-        )
-      ).rejects.toMatchObject({
-        message: expectedMessage,
-        statusCode: 409,
-      } satisfies Partial<DocumentStorageServiceError>)
-    }
-  )
+    await expect(
+      verifyDocumentUpload(
+        { storageKey: STORAGE_KEY, contentType: "application/pdf", byteSize: PDF_BYTES.byteLength },
+        { r2Client: {} as S3Client, r2Env, getObject }
+      )
+    ).rejects.toMatchObject({ message: expectedMessage, statusCode: 409 })
+  })
 
   it("returns a conflict when the uploaded object is missing", async () => {
-    const headObject = vi.fn<DocumentStorageHeadObject>(async () => {
+    const getObject = vi.fn<DocumentStorageGetObject>(async () => {
       throw Object.assign(new Error("Object not found"), {
         name: "NotFound",
         $metadata: { httpStatusCode: 404 },
@@ -404,16 +403,8 @@ describe("document upload verification", () => {
 
     await expect(
       verifyDocumentUpload(
-        {
-          storageKey: "documents/missing.pdf",
-          contentType: "application/pdf",
-          byteSize: 10,
-        },
-        {
-          r2Client: {} as S3Client,
-          r2Env,
-          headObject,
-        }
+        { storageKey: STORAGE_KEY, contentType: "application/pdf", byteSize: 10 },
+        { r2Client: {} as S3Client, r2Env, getObject }
       )
     ).rejects.toMatchObject({
       message: "Uploaded document object was not found.",
@@ -421,71 +412,58 @@ describe("document upload verification", () => {
     } satisfies Partial<DocumentStorageServiceError>)
   })
 
-  it("returns a storage error when the HEAD request fails unexpectedly", async () => {
-    const consoleError = vi
-      .spyOn(console, "error")
-      .mockImplementation((): void => undefined)
-    const headObject = vi.fn<DocumentStorageHeadObject>(async () => {
+  it("returns a storage error when the read fails unexpectedly, without logging provider detail", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation((): void => undefined)
+    const getObject = vi.fn<DocumentStorageGetObject>(async () => {
       throw Object.assign(new Error("sensitive provider response"), {
         providerRequest: { authorization: "sensitive credential" },
       })
     })
-    const storageKey = "documents/version.pdf"
 
     try {
       await expect(
         verifyDocumentUpload(
-          {
-            storageKey,
-            contentType: "application/pdf",
-            byteSize: 10,
-          },
-          {
-            r2Client: {} as S3Client,
-            r2Env,
-            headObject,
-          }
+          { storageKey: STORAGE_KEY, contentType: "application/pdf", byteSize: 10 },
+          { r2Client: {} as S3Client, r2Env, getObject }
         )
       ).rejects.toMatchObject({
         message: "Unable to verify uploaded document object.",
         statusCode: 500,
       } satisfies Partial<DocumentStorageServiceError>)
-
-      expect(consoleError).toHaveBeenCalledWith(
-        "document_upload_verification_failed",
-        {
-          durationMs: expect.any(Number),
-        }
-      )
-      expect(consoleError).toHaveBeenCalledOnce()
+      expect(consoleError).toHaveBeenCalledWith("document_upload_verification_failed", { durationMs: expect.any(Number) })
     } finally {
       consoleError.mockRestore()
     }
   })
 
-  it("preserves structured validation errors", async () => {
-    const headObject = vi.fn<DocumentStorageHeadObject>()
+  it("refuses a key that is not a stored document key before reading anything", async () => {
+    const getObject = vi.fn<DocumentStorageGetObject>()
 
     await expect(
       verifyDocumentUpload(
-        {
-          storageKey: "  ",
-          contentType: "application/pdf",
-          byteSize: 10,
-        },
-        {
-          r2Client: {} as S3Client,
-          r2Env,
-          headObject,
-        }
+        { storageKey: "documents/version.pdf", contentType: "application/pdf", byteSize: 10 },
+        { r2Client: {} as S3Client, r2Env, getObject }
       )
-    ).rejects.toMatchObject({
-      message: "Document storage key is required.",
-      statusCode: 400,
-    } satisfies Partial<DocumentStorageServiceError>)
-    expect(headObject).not.toHaveBeenCalled()
+    ).rejects.toMatchObject({ statusCode: 400 })
+    expect(getObject).not.toHaveBeenCalled()
   })
 })
+
+function createGetObject(
+  bytes: Uint8Array,
+  contentType: string,
+  metadata: { ContentLength?: number; ContentType?: string } = {}
+) {
+  return vi.fn<DocumentStorageGetObject>(async () =>
+    ({
+      Body: { transformToByteArray: async (): Promise<Uint8Array> => bytes },
+      ContentLength: bytes.byteLength,
+      ContentType: contentType,
+      $metadata: {},
+      ...metadata,
+    }) as unknown as GetObjectCommandOutput
+  )
+}
 
 describe("document object deletion", () => {
   it("deletes the exact persisted object with an idempotent R2 command", async () => {
@@ -494,7 +472,7 @@ describe("document object deletion", () => {
       async (): Promise<void> => undefined
     )
     const storageKey =
-      "organizations/org-1/documents/doc-1/versions/ver-1/original.pdf"
+      STORAGE_KEY
 
     await expect(
       deleteDocumentStorageObject(

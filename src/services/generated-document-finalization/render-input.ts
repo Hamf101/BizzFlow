@@ -2,7 +2,7 @@ import { createHash } from "node:crypto"
 
 import type { RenderGeneratedDocumentPdfInput } from "@/services/document-pdf-service"
 import type { DocumentSigningRecipient } from "@/types/signing"
-import type { GeneratedDocumentSigningView } from "@/types/signing"
+import type { MemberDocumentSigningView } from "@/types/signing"
 
 import { GeneratedDocumentFinalizationServiceError } from "./errors"
 
@@ -23,7 +23,7 @@ export type CanonicalFinalizationRenderInput = {
  * @throws GeneratedDocumentFinalizationServiceError for unsupported JSON data.
  */
 export function buildCanonicalFinalizationRenderInput(
-  view: GeneratedDocumentSigningView
+  view: MemberDocumentSigningView
 ): CanonicalFinalizationRenderInput {
   const recipients = [...view.recipients].sort(compareRecipients)
   const renderInput: RenderGeneratedDocumentPdfInput = {

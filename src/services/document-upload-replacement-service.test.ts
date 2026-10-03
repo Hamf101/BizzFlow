@@ -467,6 +467,28 @@ describe("document upload lifecycle", () => {
     expect(client.tables.document_versions).toHaveLength(1)
   })
 
+  it("never puts an uploaded file in place of a generated or signed document", async () => {
+    const client = new FakeSupabaseClient({
+      organization_memberships: [createMembershipRow("staff")],
+      documents: [createDocumentRow({ source_kind: "generated" })],
+      document_versions: [createVersionRow(), createVersionRow({ id: "version-2", status: "upload_pending", version_number: 2 })],
+    })
+    const deps = createDeps(client, ["version-3"])
+    const actor = { actorUserId: "user-1", organizationId: "org-1", documentId: "document-1" }
+
+    await expect(
+      createDocumentReplacementUploadUrl(
+        { ...actor, originalFilename: "forged.pdf", contentType: "application/pdf", byteSize: 2048 },
+        deps
+      )
+    ).rejects.toMatchObject({ statusCode: 409 })
+    await expect(completeDocumentUpload({ ...actor, versionId: "version-2" }, deps)).rejects.toMatchObject({ statusCode: 409 })
+
+    expect(client.tables.document_versions).toHaveLength(2)
+    expect(client.tables.document_versions[1].status).toBe("upload_pending")
+    expect(client.tables.documents[0].current_version_id).toBe("version-1")
+  })
+
   it("does not allocate a replacement version when upload URL signing fails", async () => {
     const client = new FakeSupabaseClient({
       organization_memberships: [createMembershipRow("staff")],
@@ -508,6 +530,7 @@ describe("document upload lifecycle", () => {
       document_versions: [createVersionRow({ status: "upload_pending" })],
     })
     const deps = createDeps(client)
+    deps.verifyDocumentUpload = vi.fn().mockResolvedValue("a".repeat(64))
 
     const version = await completeDocumentUpload(
       {
@@ -520,6 +543,7 @@ describe("document upload lifecycle", () => {
     )
 
     expect(version.status).toBe("available")
+    expect(client.tables.document_versions[0].checksum_sha256).toBe("a".repeat(64))
     expect(client.tables.documents[0]).toMatchObject({
       current_version_id: "version-1",
       updated_by: "user-1",

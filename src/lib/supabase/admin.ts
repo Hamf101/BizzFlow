@@ -567,7 +567,7 @@ export type AdminDatabase = {
       >
       invites: DatabaseTable<
         InviteRow,
-        Partial<InviteRow> & Pick<InviteRow, "org_id" | "email" | "role" | "token">,
+        Partial<InviteRow> & Pick<InviteRow, "org_id" | "email" | "role" | "token_hash">,
         Partial<InviteRow>,
         [
           {
@@ -1215,15 +1215,6 @@ export type AdminDatabase = {
           target_actor_user_id: string
         }
         Returns: SubmissionCommentRow
-      }
-      update_organization_member_role: {
-        Args: {
-          target_org_id: string
-          target_membership_id: string
-          target_actor_user_id: string
-          target_role: DatabaseOrganizationRole
-        }
-        Returns: string
       }
       update_organization_member_access: {
         Args: {

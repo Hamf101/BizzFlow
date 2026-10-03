@@ -25,7 +25,8 @@ export type ScrubbableEvent = {
   breadcrumbs?: ScrubbableBreadcrumb[]
 }
 
-const SIGNING_TOKEN_PATH_PATTERN = /\/sign\/[^/?#\s]+/g
+// Each public link carries its bearer token as the path segment after one of these.
+const TOKEN_PATH_PATTERN = /\/(sign|forms|shared|accept-invite|api\/public-forms)\/[^/?#\s]+/g
 const BREADCRUMB_URL_KEYS = ["url", "to", "from"] as const
 
 let activeReporter: ErrorReporter | null = null
@@ -69,21 +70,22 @@ export function captureUnexpectedError(
 }
 
 /**
- * Replaces public signing tokens embedded in a URL path with a placeholder.
+ * Replaces the bearer tokens public links carry in their path with a
+ * placeholder: signing, answering, guest-sharing and invite links.
  *
- * @param value - Text that may contain `/sign/<token>` path segments.
- * @returns The text with every signing token redacted.
+ * @param value - Text that may contain such path segments.
+ * @returns The text with every link token redacted.
  */
-export function redactSigningTokens(value: string): string {
-  return value.replace(SIGNING_TOKEN_PATH_PATTERN, "/sign/[redacted]")
+export function redactUrlTokens(value: string): string {
+  return value.replace(TOKEN_PATH_PATTERN, "/$1/[redacted]")
 }
 
 /**
  * Scrubs secrets from an outgoing monitoring event before transport.
  *
- * Drops request bodies entirely and redacts `/sign/<token>` segments from
- * request and breadcrumb URLs — the signing URL path IS the secret, and it
- * must never reach the monitoring backend.
+ * Drops request bodies entirely and redacts link tokens from request and
+ * breadcrumb URLs — a public link's path IS the secret, and it must never
+ * reach the monitoring backend.
  *
  * @param event - Mutable monitoring event (Sentry `beforeSend` shape).
  * @returns The same event with secrets removed.
@@ -94,20 +96,20 @@ export function scrubMonitoringEvent<T extends ScrubbableEvent>(event: T): T {
     delete event.request.query_string
 
     if (typeof event.request.url === "string") {
-      event.request.url = redactSigningTokens(event.request.url)
+      event.request.url = redactUrlTokens(event.request.url)
     }
   }
 
   for (const breadcrumb of event.breadcrumbs ?? []) {
     if (typeof breadcrumb.message === "string") {
-      breadcrumb.message = redactSigningTokens(breadcrumb.message)
+      breadcrumb.message = redactUrlTokens(breadcrumb.message)
     }
 
     for (const key of BREADCRUMB_URL_KEYS) {
       const value = breadcrumb.data?.[key]
 
       if (breadcrumb.data && typeof value === "string") {
-        breadcrumb.data[key] = redactSigningTokens(value)
+        breadcrumb.data[key] = redactUrlTokens(value)
       }
     }
   }

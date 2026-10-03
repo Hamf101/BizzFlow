@@ -12,6 +12,7 @@ if (sentryEnv) {
     tracesSampleRate: sentryEnv.SENTRY_TRACES_SAMPLE_RATE,
     sendDefaultPii: false,
     beforeSend: (event) => scrubMonitoringEvent(event),
+    beforeSendTransaction: (event) => scrubMonitoringEvent(event),
   })
 
   setErrorReporter((error, context) => {

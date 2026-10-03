@@ -21,6 +21,7 @@ declare
   outside_submission uuid := gen_random_uuid();
   settle_submission uuid := gen_random_uuid();
   settle_again uuid := gen_random_uuid();
+  senior_submission uuid := gen_random_uuid();
   blank constant jsonb := '{"schemaVersion":3,"branding":{},"blocks":[],"layout":{},"sections":[],"fieldGroups":[],"blockRules":[]}';
   snapshot constant jsonb := '{"schemaVersion":3,"branding":{},"blocks":[],"layout":{},"sections":[],"fieldGroups":[],"blockRules":[]}';
   result public.submissions%rowtype;
@@ -60,7 +61,7 @@ begin
   )
   select submission_id, organization_id, 'Under review ' || position, template_id, 1, snapshot, '{}', 'submitted',
          staff_id, staff_id, staff_id, now()
-  from (values (all_submission, 1), (some_submission, 2), (again_submission, 3), (outside_submission, 4), (settle_submission, 5), (settle_again, 6)) as made(submission_id, position);
+  from (values (all_submission, 1), (some_submission, 2), (again_submission, 3), (outside_submission, 4), (settle_submission, 5), (settle_again, 6), (senior_submission, 7)) as made(submission_id, position);
 
   -- Everything from here runs as the app does: as the service role, not a superuser.
   set local role service_role;
@@ -298,6 +299,20 @@ begin
     organization_id, settle_again, result.revision, second_id, 'Checked it myself', false, first_id);
   if result.status <> 'approved' then
     raise exception 'Nothing was left to wait for, yet the submission stayed %.', result.status;
+  end if;
+
+  -- Reviewers an owner chose are not a manager's to change; the owner may.
+  select * into result from public.set_submission_reviewers(
+    organization_id, senior_submission, 1, array[first_id], null, owner_id);
+  begin
+    perform public.set_submission_reviewers(organization_id, senior_submission, result.revision, array[second_id], null, first_id);
+    raise exception 'A manager changed the reviewers an owner chose.' using errcode = 'XX001';
+  exception when sqlstate '42501' then null;
+  end;
+  select * into result from public.set_submission_reviewers(
+    organization_id, senior_submission, result.revision, array[first_id, second_id], null, owner_id);
+  if (select count(*) from public.submission_reviewers where submission_id = senior_submission) <> 2 then
+    raise exception 'The owner could not change the reviewers they chose.';
   end if;
 
   -- Signed-in users reach none of it directly.

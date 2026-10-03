@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto"
+
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { getOrganizationRolePermissions } from "@/lib/permissions"
@@ -15,6 +17,7 @@ import {
   updateMemberAccess,
   updateOrganizationRole,
 } from "@/services/organization-service"
+import { InviteEmailServiceError } from "@/services/invite-email-service"
 
 const originalEnv = { ...process.env }
 
@@ -158,6 +161,10 @@ class QueuedAdminClient {
     }
 
     return result
+  }
+
+  queueTableResult(tableName: string, result: FakeResult): void {
+    ;(this.tableResults[tableName] ??= []).push(result)
   }
 
   takeTableResult(tableName: string): FakeResult {
@@ -1013,6 +1020,32 @@ describe("organization role definitions and member access", () => {
       }
     )
 
+    it("keeps only the invite link's hash, emails the link, and never hands it back", async () => {
+      vi.spyOn(console, "info").mockImplementation(() => {})
+      const harness = createInviteHarness(manager, managerRole)
+
+      const result = await createInvite(harness.input, harness.deps)
+
+      expect(harness.client.queryCalls).toContainEqual({
+        kind: "insert",
+        tableName: "invites",
+        values: expect.objectContaining({ token_hash: createHash("sha256").update(INVITE_TOKEN).digest("hex") }),
+      })
+      expect(JSON.stringify(harness.client.queryCalls)).not.toContain(`"${INVITE_TOKEN}"`)
+      expect(harness.sendInviteEmail).toHaveBeenCalledWith(expect.objectContaining({ token: INVITE_TOKEN }))
+      expect(JSON.stringify(result)).not.toContain(INVITE_TOKEN)
+    })
+
+    it("withdraws an invite whose email could not go, and says it was not sent", async () => {
+      vi.spyOn(console, "warn").mockImplementation(() => {})
+      const harness = createInviteHarness(manager, managerRole)
+      harness.sendInviteEmail.mockRejectedValue(new InviteEmailServiceError("Unable to send the invite email. Try again shortly.", 502))
+      harness.client.queueTableResult("invites", { data: null, error: null })
+
+      await expect(createInvite(harness.input, harness.deps)).rejects.toMatchObject({ statusCode: 502 })
+      expect(harness.client.queryCalls).toContainEqual({ kind: "update", tableName: "invites", values: { status: "revoked" } })
+    })
+
     function createInviterRow(
       role: "manager" | "staff",
       roleDefinitionId: string,
@@ -1054,7 +1087,7 @@ describe("organization role definitions and member access", () => {
         ],
       })
       const recordAuditLog = vi.fn(async (): Promise<void> => {})
-      const sendInviteEmail = vi.fn(async (): Promise<void> => {})
+      const sendInviteEmail = vi.fn<(input: { token: string }) => Promise<void>>(async () => {})
 
       return {
         client,

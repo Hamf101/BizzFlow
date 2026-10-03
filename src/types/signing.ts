@@ -23,17 +23,28 @@ export type DocumentSigningRecipient = {
   initialsDataUrl: string | null
 }
 
-/** Complete generated-document state available to an authorized organization member. */
-export type GeneratedDocumentSigningView = {
+type SigningViewBase = {
   organizationName: string
   document: GeneratedDocument
   accessLevel?: DocumentAccessLevel
-  /** Read by someone outside the workspace, through a link to this document alone. */
-  guest?: true
   answers: Record<string, unknown>
   workflowStatus: GeneratedDocumentWorkflowStatus
+}
+
+/** Complete generated-document state available to an authorized organization member. */
+export type MemberDocumentSigningView = SigningViewBase & {
+  guest?: undefined
   recipients: DocumentSigningRecipient[]
 }
+
+/** A generated document as a member or a guest may read it. */
+export type GeneratedDocumentSigningView =
+  | MemberDocumentSigningView
+  | (SigningViewBase & {
+      /** Read by someone outside the workspace, through a link to this document alone. */
+      guest: true
+      recipients: PublicSignerStatus[]
+    })
 
 /** Minimal co-signer state safe to display through an external private link. */
 export type PublicSignerStatus = {

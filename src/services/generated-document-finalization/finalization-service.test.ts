@@ -12,7 +12,7 @@ import type {
 import { buildGeneratedDocumentFinalizationStorageKey } from "@/services/generated-document-finalization/domain"
 import { buildCanonicalFinalizationRenderInput } from "@/services/generated-document-finalization/render-input"
 import type { RenderGeneratedDocumentPdfInput } from "@/services/document-pdf-service"
-import type { GeneratedDocumentSigningView } from "@/types/signing"
+import type { MemberDocumentSigningView } from "@/types/signing"
 import { createBlankTemplateContent } from "@/types/template"
 
 const ACTOR_ID = "10000000-0000-4000-8000-000000000001"
@@ -350,7 +350,7 @@ function createFinalizationRecord(
 
 function createSigningView(
   workflowStatus: "draft" | "awaiting_signatures" | "completed"
-): GeneratedDocumentSigningView {
+): MemberDocumentSigningView {
   return {
     organizationName: "BizFlow Studio",
     document: {

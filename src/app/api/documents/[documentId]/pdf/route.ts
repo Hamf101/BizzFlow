@@ -23,6 +23,7 @@ import {
 } from "@/services/document-signing-service"
 import { OrganizationServiceError } from "@/services/organization-service"
 import { readTemplateImage } from "@/services/template-image-service"
+import type { DocumentSigningRecipient, PublicSignerStatus } from "@/types/signing"
 
 // A long document renders in a few seconds; this leaves room for pictures and a busy moment.
 export const maxDuration = 300
@@ -102,15 +103,16 @@ export async function GET(
       content: view.document.templateSnapshot,
       answers: view.answers,
       workflowStatus: view.workflowStatus,
-      signers: view.recipients.map((recipient) => ({
+      // A guest's copy shows its signers as a signing link shows co-signers.
+      signers: view.recipients.map((recipient: PublicSignerStatus & Partial<DocumentSigningRecipient>) => ({
         id: recipient.id,
         name: recipient.name,
-        email: recipient.email,
+        email: recipient.email ?? "",
         requiresSignature: recipient.requiresSignature,
         status: recipient.status,
         signedAt: recipient.signedAt,
-        signatureDataUrl: recipient.signatureDataUrl,
-        initialsDataUrl: recipient.initialsDataUrl,
+        signatureDataUrl: recipient.signatureDataUrl ?? null,
+        initialsDataUrl: recipient.initialsDataUrl ?? null,
       })),
     }, {
       fillable,

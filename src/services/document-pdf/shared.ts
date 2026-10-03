@@ -63,7 +63,8 @@ export function normalizePdfInput(
   )
 
   for (const signer of signers) {
-    if (!signer.id.trim() || !signer.name.trim() || !signer.email.trim()) {
+    // A guest's copy leaves out each signer's address.
+    if (!signer.id.trim() || !signer.name.trim()) {
       throw new DocumentPdfServiceError("A signer record is invalid.", 400)
     }
 
@@ -76,14 +77,26 @@ export function normalizePdfInput(
     }
   }
 
+  // A drawn box is printed empty: who signed shows in the signing record, from
+  // each signer's own drawing, never from a value anyone could store as an answer.
+  const drawnKeys = new Set(
+    content.blocks.flatMap((block: TemplateBlock): string[] =>
+      block.type === "signature_field" || block.type === "initials_field" ? [block.fieldKey] : []
+    )
+  )
+  const answers = Object.fromEntries(
+    Object.entries(input.answers).filter(([fieldKey]): boolean => !drawnKeys.has(fieldKey))
+  )
+
   return {
     ...input,
+    answers,
     title,
     content,
     renderPlan: createTemplateRenderPlan({
       title,
       content,
-      answers: input.answers,
+      answers,
       mode: "final",
     }),
     metadataTimestamp,

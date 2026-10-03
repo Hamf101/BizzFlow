@@ -158,7 +158,6 @@ export function mapInvite(row: InviteRow): OrganizationInvite {
     role: parseOrganizationRole(row.role),
     roleDefinitionId: row.role_definition_id ?? roleDefinition?.id ?? null,
     roleName: roleDefinition?.name ?? null,
-    token: row.token,
     invitedBy: row.invited_by ?? null,
     status: parseInviteStatus(row.status),
     expiresAt: row.expires_at,

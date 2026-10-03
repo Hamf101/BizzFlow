@@ -36,6 +36,8 @@ export const AUDIT_LOG_ACTIONS = [
   "template.access_revoked",
   "template.sharing_restriction_changed",
   "template.sent_to_answer",
+  "public_form_link.created",
+  "public_form_link.disabled",
   "public_form_link.resent",
   "public_form_link.revoked",
   "submission.created",

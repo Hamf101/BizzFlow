@@ -8,7 +8,6 @@ import { enforceOutboundEmailRateLimit } from "@/lib/action-rate-limit"
 import {
   buildFeedbackRedirect,
   getActionErrorFeedbackCode,
-  type ActionFeedbackCode,
 } from "@/lib/action-result"
 import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
 import { buildRedirect, getFormString } from "@/lib/form-utils"
@@ -57,19 +56,13 @@ export async function createInviteAction(formData: FormData): Promise<void> {
     redirectPath: "/people",
   })
 
-  let successCode: ActionFeedbackCode = "invite_email_sent"
-
   try {
-    const result = await createInvite({
+    await createInvite({
       actorUserId: user.id,
       organizationId: parsed.data.organizationId,
       email: getFormString(formData, "email"),
       roleId: parsed.data.roleDefinitionId,
     })
-
-    if (!result.emailDelivered) {
-      successCode = "invite_created_email_failed"
-    }
   } catch (error: unknown) {
     const logContext = {
       organizationId,
@@ -90,13 +83,15 @@ export async function createInviteAction(formData: FormData): Promise<void> {
         "/people",
         error instanceof OrganizationServiceError && error.statusCode === 409
           ? "invite_already_member"
-          : getActionErrorFeedbackCode(error)
+          : error instanceof OrganizationServiceError && error.statusCode === 502
+            ? "invite_email_failed"
+            : getActionErrorFeedbackCode(error)
       )
     )
   }
 
   revalidatePath("/people")
-  redirect(buildFeedbackRedirect("/people", successCode))
+  redirect(buildFeedbackRedirect("/people", "invite_email_sent"))
 }
 
 /**

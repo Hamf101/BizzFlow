@@ -217,11 +217,7 @@ export async function getInternalSubmission(
             ? ["available"]
             : ["upload_pending", "available"]
         ),
-        listSubmissionReviewData(
-          client,
-          input.organizationId,
-          input.submissionId
-        ),
+        listSubmissionReviewData(client, submission, viewer),
         listSubmissionReviewers(client, submission, viewer),
         listSubmissionSuggestions(client, submission),
       ])

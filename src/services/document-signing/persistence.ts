@@ -19,7 +19,7 @@ import {
 } from "@/services/generated-documents/generated-document-persistence"
 import type {
   DocumentSigningRecipient,
-  GeneratedDocumentSigningView,
+  MemberDocumentSigningView,
   PublicDocumentSigningView,
   PublicSignerStatus,
 } from "@/types/signing"
@@ -87,7 +87,7 @@ export async function loadGeneratedDocumentView(
   client: SigningServiceClient,
   organizationId: string,
   documentId: string
-): Promise<GeneratedDocumentSigningView> {
+): Promise<MemberDocumentSigningView> {
   const [documentResult, answerResult, recipientResult, organizationResult] =
     await Promise.all([
       client
@@ -218,15 +218,26 @@ export async function loadPublicSigningView(
       tokenExpiresAt: currentRecipient.tokenExpiresAt,
       signedAt: currentRecipient.signedAt,
     },
-    signers: view.recipients.map(
-      (signer: DocumentSigningRecipient): PublicSignerStatus => ({
-        id: signer.id,
-        name: signer.name,
-        requiresSignature: signer.requiresSignature,
-        status: signer.status,
-        signedAt: signer.signedAt,
-      })
-    ),
+    signers: view.recipients.map(toPublicSignerStatus),
+  }
+}
+
+/**
+ * Narrows a recipient to what anyone outside the workspace may see of a
+ * co-signer: no address, drawing, or link expiry.
+ *
+ * @param signer - Member-facing recipient.
+ * @returns Public signer status.
+ */
+export function toPublicSignerStatus(
+  signer: DocumentSigningRecipient
+): PublicSignerStatus {
+  return {
+    id: signer.id,
+    name: signer.name,
+    requiresSignature: signer.requiresSignature,
+    status: signer.status,
+    signedAt: signer.signedAt,
   }
 }
 

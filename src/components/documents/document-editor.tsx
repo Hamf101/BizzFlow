@@ -50,7 +50,7 @@ import { SigningRecipientStatusBadge } from "@/lib/page-status-badges"
 import { cn } from "@/lib/utils"
 import { createTemplateFlowDraftFingerprint } from "@/services/template-flow-proposal-state"
 import { resolvePageGeometry } from "@/services/templates/template-render-plan"
-import type { DocumentSigningRecipient, GeneratedDocumentSigningView } from "@/types/signing"
+import type { DocumentSigningRecipient, GeneratedDocumentSigningView, PublicSignerStatus } from "@/types/signing"
 import { type TemplateContentV3, upgradeV2TemplateContentToV3 } from "@/types/template"
 import type { TemplateFlowProposal } from "@/types/template-flow"
 import { applyVisibleTemplateFieldValue } from "@/types/template-visibility"
@@ -384,7 +384,7 @@ export function DocumentEditor({
               </PopoverTrigger>
               <PopoverContent align="end" className="w-[min(22rem,calc(100vw-2rem))]">
                 <ul className="grid gap-2">
-                  {view.recipients.map((recipient: DocumentSigningRecipient) => (
+                  {view.recipients.map((recipient: PublicSignerStatus & Partial<DocumentSigningRecipient>) => (
                     <li className="grid gap-1.5 rounded-[12px] bg-muted/50 p-2.5" key={recipient.id}>
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
@@ -396,7 +396,9 @@ export function DocumentEditor({
                       <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
                         {recipient.signedAt
                           ? `Signed ${formatMediumDateTime(recipient.signedAt)}`
-                          : `Link expires ${formatMediumDateTime(recipient.tokenExpiresAt)}`}
+                          : recipient.tokenExpiresAt
+                            ? `Link expires ${formatMediumDateTime(recipient.tokenExpiresAt)}`
+                            : null}
                         {canSend && recipient.status !== "signed" && !completed ? (
                           <form action={resendAction}>
                             <input name="documentId" type="hidden" value={document.id} />

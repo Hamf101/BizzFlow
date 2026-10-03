@@ -5,10 +5,8 @@ import {
   renderGeneratedDocumentPdf,
   DocumentPdfServiceError,
 } from "@/services/document-pdf-service"
-import {
-  getGeneratedDocumentSigningView,
-  DocumentSigningServiceError,
-} from "@/services/document-signing-service"
+import { DocumentSigningServiceError } from "@/services/document-signing-service"
+import { loadGeneratedDocumentView } from "@/services/document-signing/persistence"
 import { readTemplateImage } from "@/services/template-image-service"
 
 import type {
@@ -256,8 +254,10 @@ function createLazyAdminClient(
 function createDefaultSigningViewLoader(
   client: AdminSupabaseClient
 ): GeneratedDocumentSigningViewLoader {
+  // The paper is the same whoever opens it first, so it is rendered from the
+  // whole record once the caller's right to read it has been checked.
   return (input: FinalizeGeneratedDocumentPdfInput) =>
-    getGeneratedDocumentSigningView(input, { client })
+    loadGeneratedDocumentView(client, input.organizationId, input.documentId)
 }
 
 function createDefaultStorage(

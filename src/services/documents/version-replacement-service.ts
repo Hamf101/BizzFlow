@@ -81,6 +81,14 @@ export async function createDocumentReplacementUploadUrl(
         )
       }
 
+      // A generated document's versions are its finalized paper alone.
+      if (document.sourceKind === "generated") {
+        throw new DocumentServiceError(
+          "A generated document cannot take an uploaded file.",
+          409
+        )
+      }
+
       const validateDocumentUploadRequest =
         deps.validateDocumentUploadRequest ??
         defaultValidateDocumentUploadRequest

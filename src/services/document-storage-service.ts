@@ -1,9 +1,10 @@
+import { createHash } from "node:crypto"
+
 import {
   DeleteObjectCommand,
   GetObjectCommand,
-  HeadObjectCommand,
   PutObjectCommand,
-  type HeadObjectCommandOutput,
+  type GetObjectCommandOutput,
   type S3Client,
 } from "@aws-sdk/client-s3"
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
@@ -15,6 +16,11 @@ import {
   type R2Env,
 } from "@/lib/env"
 import { createR2Client } from "@/lib/r2/client"
+import {
+  hasAllowedFileSignature,
+  SIGNED_URL_MAX_TTL_SECONDS,
+  UUID_PATTERN,
+} from "@/lib/r2/stored-file"
 
 const DOCUMENT_CONTENT_TYPE_EXTENSIONS: Record<string, string> = {
   "application/pdf": ".pdf",
@@ -38,10 +44,10 @@ export type DocumentStorageSigner = (
   }
 ) => Promise<string>
 
-export type DocumentStorageHeadObject = (
+export type DocumentStorageGetObject = (
   client: S3Client,
-  command: HeadObjectCommand
-) => Promise<HeadObjectCommandOutput>
+  command: GetObjectCommand
+) => Promise<GetObjectCommandOutput>
 
 export type DocumentStorageDeleteObject = (
   client: S3Client,
@@ -65,6 +71,8 @@ export type CreateSignedDocumentUploadUrlInput = BuildDocumentObjectKeyInput &
 
 export type CreateSignedDocumentDownloadUrlInput = {
   storageKey: string
+  /** The name a saved copy takes, made safe before it is signed. */
+  downloadFilename: string
   /** Shown in the browser as this type, rather than saved. */
   viewAs?: string
 }
@@ -96,7 +104,7 @@ export type DocumentStorageServiceDeps = {
   r2Env?: R2Env
   fileUploadPolicy?: FileUploadPolicyEnv
   signer?: DocumentStorageSigner
-  headObject?: DocumentStorageHeadObject
+  getObject?: DocumentStorageGetObject
   deleteObject?: DocumentStorageDeleteObject
   now?: () => Date
 }
@@ -130,6 +138,17 @@ export class DocumentStorageServiceError extends Error {
 export function buildDocumentObjectKey(
   input: BuildDocumentObjectKeyInput
 ): string {
+  if (
+    ![input.organizationId, input.documentId, input.versionId].every(
+      (id: string): boolean => UUID_PATTERN.test(id)
+    )
+  ) {
+    throw new DocumentStorageServiceError(
+      "Document storage identifiers are invalid.",
+      400
+    )
+  }
+
   const extension = getSafeExtensionForContentType(input.contentType)
 
   return [
@@ -195,7 +214,10 @@ export async function createSignedDocumentUploadUrl(
     const r2Client = deps.r2Client ?? createR2Client(r2Env)
     const signer = deps.signer ?? signDocumentStorageCommand
     const signingDate = new Date((deps.now?.() ?? new Date()).getTime())
-    const expiresInSeconds = r2Env.CLOUDFLARE_R2_SIGNED_URL_TTL_SECONDS
+    const expiresInSeconds = Math.min(
+      r2Env.CLOUDFLARE_R2_SIGNED_URL_TTL_SECONDS,
+      SIGNED_URL_MAX_TTL_SECONDS
+    )
     const expiresAt = new Date(
       signingDate.getTime() + expiresInSeconds * 1_000
     ).toISOString()
@@ -243,9 +265,10 @@ export async function createSignedDocumentDownloadUrl(
   deps: DocumentStorageServiceDeps = {}
 ): Promise<SignedDocumentDownloadUrl> {
   try {
-    if (input.storageKey.trim().length === 0) {
+    // Only a key this service could have stored is ever signed.
+    if (!isSafeDocumentStorageKey(input.storageKey)) {
       throw new DocumentStorageServiceError(
-        "Document storage key is required.",
+        "Document storage key is invalid.",
         400
       )
     }
@@ -253,20 +276,21 @@ export async function createSignedDocumentDownloadUrl(
     const r2Env = deps.r2Env ?? getR2Env()
     const r2Client = deps.r2Client ?? createR2Client(r2Env)
     const signer = deps.signer ?? signDocumentStorageCommand
+    const expiresInSeconds = Math.min(
+      r2Env.CLOUDFLARE_R2_SIGNED_URL_TTL_SECONDS,
+      SIGNED_URL_MAX_TTL_SECONDS
+    )
     const command = new GetObjectCommand({
       Bucket: r2Env.CLOUDFLARE_R2_BUCKET_NAME,
       Key: input.storageKey,
-      ResponseContentDisposition: input.viewAs ? "inline" : "attachment",
+      ResponseContentDisposition: input.viewAs
+        ? "inline"
+        : `attachment; filename="${toSafeDownloadFilename(input.downloadFilename)}"`,
       ResponseContentType: input.viewAs,
     })
-    const downloadUrl = await signer(r2Client, command, {
-      expiresIn: r2Env.CLOUDFLARE_R2_SIGNED_URL_TTL_SECONDS,
-    })
+    const downloadUrl = await signer(r2Client, command, { expiresIn: expiresInSeconds })
 
-    return {
-      downloadUrl,
-      expiresInSeconds: r2Env.CLOUDFLARE_R2_SIGNED_URL_TTL_SECONDS,
-    }
+    return { downloadUrl, expiresInSeconds }
   } catch (error: unknown) {
     if (error instanceof DocumentStorageServiceError) {
       throw error
@@ -280,22 +304,24 @@ export async function createSignedDocumentDownloadUrl(
 }
 
 /**
- * Verifies that an uploaded R2 object exists and matches its pending version.
+ * Reads an uploaded R2 object back and checks it is the file its pending
+ * version claims: the exact size and type, and bytes with that type's
+ * signature (a macro workbook or a renamed program is refused).
  *
  * The content type comparison ignores casing, surrounding whitespace, and MIME
  * parameters such as a charset while retaining an exact byte-size comparison.
  *
  * @param input - Stored object key and the expected upload metadata.
- * @param deps - Optional R2 client, environment, and HEAD executor for tests.
- * @returns A promise that resolves after the object metadata is verified.
+ * @param deps - Optional R2 client, environment, and GET executor for tests.
+ * @returns The SHA-256 of the verified bytes, in hex.
  * @throws DocumentStorageServiceError with status 400 for invalid input, 409
- * when the object is missing or its metadata differs, and 500 when R2 cannot be
- * queried.
+ * when the object is missing or differs from its version, and 500 when R2
+ * cannot be read.
  */
 export async function verifyDocumentUpload(
   input: VerifyDocumentUploadInput,
   deps: DocumentStorageServiceDeps = {}
-): Promise<void> {
+): Promise<string> {
   const startedAt = Date.now()
   const storageKey = input.storageKey.trim()
 
@@ -307,14 +333,14 @@ export async function verifyDocumentUpload(
 
     const r2Env = deps.r2Env ?? getR2Env()
     const r2Client = deps.r2Client ?? createR2Client(r2Env)
-    const headObject = deps.headObject ?? headDocumentStorageObject
-    const command = new HeadObjectCommand({
+    const getObject = deps.getObject ?? getDocumentStorageObject
+    const command = new GetObjectCommand({
       Bucket: r2Env.CLOUDFLARE_R2_BUCKET_NAME,
       Key: storageKey,
     })
-    const objectMetadata = await headObject(r2Client, command)
+    const storedObject = await getObject(r2Client, command)
 
-    if (objectMetadata.ContentLength !== input.byteSize) {
+    if (storedObject.ContentLength !== input.byteSize) {
       throw new DocumentStorageServiceError(
         "Uploaded document byte size does not match the pending version.",
         409
@@ -322,7 +348,7 @@ export async function verifyDocumentUpload(
     }
 
     if (
-      normalizeContentType(objectMetadata.ContentType) !==
+      normalizeContentType(storedObject.ContentType) !==
       normalizeContentType(input.contentType)
     ) {
       throw new DocumentStorageServiceError(
@@ -331,9 +357,27 @@ export async function verifyDocumentUpload(
       )
     }
 
+    const bytes = await storedObject.Body?.transformToByteArray()
+
+    if (!bytes || bytes.byteLength !== input.byteSize) {
+      throw new DocumentStorageServiceError(
+        "Uploaded document bytes do not match the pending version.",
+        409
+      )
+    }
+
+    if (!hasAllowedFileSignature(bytes, normalizeContentType(input.contentType))) {
+      throw new DocumentStorageServiceError(
+        "Uploaded document bytes do not match an allowed file format.",
+        409
+      )
+    }
+
     console.info("document_upload_verification_completed", {
       durationMs: Date.now() - startedAt,
     })
+
+    return createHash("sha256").update(bytes).digest("hex")
   } catch (error: unknown) {
     if (error instanceof DocumentStorageServiceError) {
       console.warn("document_upload_verification_rejected", {
@@ -444,12 +488,43 @@ function getSafeExtensionForContentType(contentType: string): string {
   return extension
 }
 
+// An uploaded original's key, or a generated document's finalized PDF.
+function isSafeDocumentStorageKey(storageKey: string): boolean {
+  const [root, orgId, documents, documentId, kind, id, filename, ...rest] =
+    storageKey.split("/")
+
+  return (
+    rest.length === 0 &&
+    root === "organizations" &&
+    documents === "documents" &&
+    [orgId, documentId, id].every((segment?: string): boolean => UUID_PATTERN.test(segment ?? "")) &&
+    ((kind === "versions" &&
+      Object.values(DOCUMENT_CONTENT_TYPE_EXTENSIONS).some(
+        (extension: string): boolean => filename === `original${extension}`
+      )) ||
+      (kind === "finalizations" && filename === "final.pdf"))
+  )
+}
+
+// ASCII letters, digits, dots, dashes and underscores only, so nothing a
+// filename holds can end the header or add another.
+function toSafeDownloadFilename(filename: string): string {
+  const safe = filename
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Za-z0-9._-]+/g, "-")
+    .replace(/^[-.]+|-+$/g, "")
+    .slice(-180)
+
+  return safe || "document"
+}
+
 function validateDocumentUploadVerificationInput(
   input: VerifyDocumentUploadInput
 ): void {
-  if (input.storageKey.length === 0) {
+  if (!isSafeDocumentStorageKey(input.storageKey)) {
     throw new DocumentStorageServiceError(
-      "Document storage key is required.",
+      "Document storage key is invalid.",
       400
     )
   }
@@ -497,10 +572,10 @@ function isDocumentObjectNotFoundError(error: unknown): boolean {
   )
 }
 
-async function headDocumentStorageObject(
+async function getDocumentStorageObject(
   client: S3Client,
-  command: HeadObjectCommand
-): Promise<HeadObjectCommandOutput> {
+  command: GetObjectCommand
+): Promise<GetObjectCommandOutput> {
   return client.send(command)
 }
 
