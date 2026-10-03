@@ -82,6 +82,18 @@ describe("accepting a document invite", () => {
     expect(trashed.client.tables.document_guest_grants[0].user_id).toBeNull()
   })
 
+  it("joins even when the record cannot be stored, and never names the invited address in a refusal", async () => {
+    const { deps, recordAuditLog } = setup()
+    recordAuditLog.mockRejectedValue(new Error("audit store down"))
+    vi.spyOn(console, "warn").mockImplementation(() => {})
+
+    const refusal = await accept("someone@else.example", deps).catch((error: Error) => error)
+    expect(refusal).toMatchObject({ statusCode: 403 })
+    expect(String((refusal as Error).message)).not.toContain("ana@outside.example")
+
+    await expect(accept("ana@outside.example", deps)).resolves.toEqual({ documentId: DOC })
+  })
+
   it("rejects a malformed token before looking anything up", async () => {
     const { client, deps } = setup()
 

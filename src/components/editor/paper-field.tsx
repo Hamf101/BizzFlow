@@ -10,6 +10,7 @@ import { DatePicker } from "@/components/ui/date-picker"
 import { Select } from "@/components/ui/select"
 import { describeDateFormat, formatDateAnswer } from "@/lib/date-format"
 import { cn } from "@/lib/utils"
+import { boxNote, boxSigner } from "@/types/box-signers"
 import type { TemplateBlock, TemplateLayout, TextFieldBlock } from "@/types/template"
 import { readChoiceList } from "@/types/template-answer-kinds"
 
@@ -72,6 +73,13 @@ const RULED: CSSProperties = {
  */
 export const PaperAnswering = createContext<Readonly<Record<string, string>> | null>(null)
 
+/**
+ * Set by a document that is sent for signing: each drawn box is then its
+ * signer's, and only the sender's own box is drawn here, until it is sent.
+ * Its signers, in the order they were added, say whose boxes are signed.
+ */
+export const PaperSigning = createContext<Readonly<{ sent: boolean; signers: ReadonlyArray<{ status: string }> }> | null>(null)
+
 const BARE =
   "h-auto min-h-0 rounded-none border-0 bg-transparent p-0 text-[1em] leading-[1.5] shadow-none focus-visible:border-0 focus-visible:ring-0 data-popup-open:border-0 md:h-auto md:text-[1em]"
 
@@ -105,6 +113,7 @@ export function PaperField({
 }): ReactElement {
   const fill = mode === "fill"
   const errors = useContext(PaperAnswering)
+  const signing = useContext(PaperSigning)
   const required = fill && errors !== null && block.required
   const value = answers[block.fieldKey]
   const text = typeof value === "string" ? value : ""
@@ -252,9 +261,11 @@ export function PaperField({
       )
       break
     case "signature_field":
-    case "initials_field":
+    case "initials_field": {
       height = BOX_HEIGHT.drawing
-      answer = fill ? (
+      // On a document, a box is its signer's; only the sender draws here, until it is sent.
+      const signer = boxSigner(block)
+      answer = fill && (!signing || (signer === "sender" && !signing.sent)) ? (
         <DrawnSignatureField
           bare
           label={block.label}
@@ -265,10 +276,11 @@ export function PaperField({
       ) : text ? (
         // eslint-disable-next-line @next/next/no-img-element -- a drawn data URL, already sized
         <img alt={`Saved ${block.label}`} className="doc-drawing max-h-[4.5em] max-w-[15em] object-contain object-left" src={text} />
-      ) : mode === "design" ? (
-        placeholder(block.type === "signature_field" ? "Sign here" : "Initials")
+      ) : mode === "design" || (signing && signer !== "sender") ? (
+        placeholder(boxNote(block, signing?.signers ?? []))
       ) : null
       break
+    }
     case "file_field":
       answer = fill && renderFile ? renderFile(block) : placeholder(mode === "design" ? "Choose a file" : "Uploads are only in submissions.")
       break

@@ -7,7 +7,7 @@ import { type ChangeEvent, type ReactElement, useId, useState } from "react"
 import { uploadFileToSignedUrl } from "@/components/documents/document-upload-client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import type { SubmissionFile } from "@/types/submission"
+import type { ClientSubmissionFile } from "@/types/submission"
 
 import {
   calculateSubmissionFileChecksum,
@@ -24,7 +24,7 @@ type SubmissionFileFieldProps = {
   editable: boolean
   expectedRevision: number
   fieldKey: string
-  file: SubmissionFile | null
+  file: ClientSubmissionFile | null
   organizationId: string
   submissionId: string
 }

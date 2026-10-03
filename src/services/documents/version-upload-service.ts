@@ -35,6 +35,7 @@ import {
   normalizeOriginalFilename,
   requireMatchingStorageKey,
 } from "@/services/documents/version-shared"
+import { type ClientFile, toClientFile } from "@/lib/r2/stored-file"
 import { retrySerializationFailure } from "@/services/serialization-retry"
 import type {
   CreateDocumentUploadUrlResponse,
@@ -192,7 +193,6 @@ export async function createDocumentUploadUrl(
         documentId: document.id,
         versionId: version.id,
         uploadUrl: signedUrl.uploadUrl,
-        storageKey: signedUrl.storageKey,
         expiresInSeconds: signedUrl.expiresInSeconds,
       }
     }
@@ -210,7 +210,7 @@ export async function createDocumentUploadUrl(
 export async function completeDocumentUpload(
   input: CompleteDocumentUploadInput,
   deps: DocumentServiceDeps = {}
-): Promise<DocumentVersion> {
+): Promise<ClientFile<DocumentVersion>> {
   return runDocumentOperation(
     "complete_document_upload",
     {
@@ -327,7 +327,7 @@ export async function completeDocumentUpload(
         input.versionId
       )
     }
-  )
+  ).then(toClientFile)
 }
 
 async function insertDocument(

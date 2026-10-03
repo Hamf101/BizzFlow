@@ -12,10 +12,6 @@ import {
   type ActionFeedbackCode,
 } from "@/lib/action-result"
 import { buildRedirect, getFormString } from "@/lib/form-utils"
-import {
-  canPerformOrganizationAction,
-  type OrganizationPermissionAction,
-} from "@/lib/permissions"
 import { getCurrentOrganizationContext } from "@/services/organization-service"
 import {
   assignTask,
@@ -136,7 +132,6 @@ export async function createTaskAction(formData: FormData): Promise<void> {
   await runTaskAction({
     errorPath: getSubmissionPath(submissionId) ?? TASKS_PATH,
     eventName: "task_create_action",
-    permission: "tasks:create",
     successCode: "task_created",
     run: async (context: TaskActionContext): Promise<string> => {
       const input = parseTaskActionInput(createTaskSchema, {
@@ -176,7 +171,6 @@ export async function updateTaskAction(formData: FormData): Promise<void> {
   await runTaskAction({
     errorPath: taskPath,
     eventName: "task_update_action",
-    permission: "tasks:edit",
     successCode: "changes_saved",
     run: async (context: TaskActionContext): Promise<string> => {
       const input = parseTaskActionInput(updateTaskSchema, {
@@ -213,7 +207,6 @@ export async function assignTaskAction(formData: FormData): Promise<void> {
   await runTaskAction({
     errorPath: taskPath,
     eventName: "task_assign_action",
-    permission: "tasks:assign",
     successCode: "changes_saved",
     run: async (context: TaskActionContext): Promise<string> => {
       const input = parseTaskActionInput(assignTaskSchema, {
@@ -251,7 +244,6 @@ export async function transitionTaskStatusAction(
   await runTaskAction({
     errorPath: taskPath,
     eventName: "task_transition_action",
-    permission: "tasks:edit",
     successCode: "task_status_updated",
     run: async (context: TaskActionContext): Promise<string> => {
       const input = parseTaskActionInput(transitionTaskSchema, {
@@ -286,7 +278,6 @@ export async function scheduleTaskReminderAction(
   await runTaskAction({
     errorPath: taskPath,
     eventName: "task_reminder_schedule_action",
-    permission: "tasks:edit",
     successCode: "changes_saved",
     run: async (context: TaskActionContext): Promise<string> => {
       const input = parseTaskActionInput(scheduleReminderSchema, {
@@ -323,7 +314,6 @@ export async function cancelTaskReminderAction(
   await runTaskAction({
     errorPath: taskPath,
     eventName: "task_reminder_cancel_action",
-    permission: "tasks:edit",
     successCode: "changes_saved",
     run: async (context: TaskActionContext): Promise<string> => {
       const input = parseTaskActionInput(cancelReminderSchema, {
@@ -345,7 +335,6 @@ export async function cancelTaskReminderAction(
 async function runTaskAction(input: {
   errorPath: string
   eventName: string
-  permission: OrganizationPermissionAction
   run: TaskActionRun
   successCode: ActionFeedbackCode
 }): Promise<never> {
@@ -353,7 +342,7 @@ async function runTaskAction(input: {
   let successPath = input.errorPath
 
   try {
-    const context = await loadTaskActionContext(input.permission)
+    const context = await loadTaskActionContext()
     successPath = await input.run(context)
     // The origin page is refreshed too, so a task raised from a submission
     // appears on that submission without a manual reload.
@@ -382,9 +371,8 @@ async function runTaskAction(input: {
   redirect(buildFeedbackRedirect(successPath, input.successCode))
 }
 
-async function loadTaskActionContext(
-  permission: OrganizationPermissionAction
-): Promise<TaskActionContext> {
+// Each task service checks the actor's permission itself.
+async function loadTaskActionContext(): Promise<TaskActionContext> {
   const user = await getAuthenticatedUser()
   const context: OrganizationContext | null =
     await getCurrentOrganizationContext(user.id)
@@ -393,13 +381,6 @@ async function loadTaskActionContext(
     throw new TaskActionError(
       "Create an organization before managing tasks.",
       428
-    )
-  }
-
-  if (!canPerformOrganizationAction(context.membership, permission)) {
-    throw new TaskActionError(
-      "You do not have permission to perform this task action.",
-      403
     )
   }
 

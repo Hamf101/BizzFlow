@@ -789,6 +789,33 @@ describe("document PDF service", () => {
     }
   })
 
+  it("prints whose each empty drawn box is, or that its signer signed, in every field style", { timeout: PDF_RENDER_TIMEOUT_MS }, async () => {
+    const input = createPdfInput({ repeatHeader: false, repeatFooter: false })
+    const content = requireVersionThreeContent(input)
+    const shared = { helpText: null, required: false }
+
+    content.blocks = [
+      { ...shared, fieldKey: "first", id: "56000000-0000-4000-8000-000000000001", label: "First", type: "signature_field" },
+      { ...shared, fieldKey: "second", id: "56000000-0000-4000-8000-000000000002", label: "Second", signer: 2, type: "initials_field" }
+    ]
+    content.sections = []
+    content.fieldGroups = []
+    content.blockRules = []
+    // A guest's preview: who has signed, without anyone's drawing.
+    input.signers = [
+      { email: "", id: "signer-1", name: "Avery Morgan", requiresSignature: true, signedAt: "2026-07-17T18:30:00.000Z", status: "signed" },
+      { email: "", id: "signer-2", name: "Jordan Lee", requiresSignature: true, signedAt: null, status: "viewed" }
+    ]
+
+    for (const fieldStyle of ["box", "line", "cell"] as const) {
+      content.layout = { ...content.layout, fieldStyle }
+      const texts = drawnTexts(await PDFDocument.load(await renderGeneratedDocumentPdf(input)), 0).map((drawn) => drawn.text)
+
+      expect(texts).toContain("Signer 1 signed")
+      expect(texts).toContain("Signer 2 initials here")
+    }
+  })
+
   it("prints answers in cells that touch beside and below each other, and stay inside the room the planner left", { timeout: PDF_RENDER_TIMEOUT_MS }, async () => {
     const input = createPdfInput({ repeatHeader: false, repeatFooter: false })
     const content = requireVersionThreeContent(input)

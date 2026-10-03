@@ -114,8 +114,6 @@ describe("document upload lifecycle", () => {
       documentId: "document-1",
       versionId: "version-1",
       uploadUrl: "https://r2.example/upload",
-      storageKey:
-        "organizations/org-1/documents/document-1/versions/version-1/original.pdf",
       expiresInSeconds: 900,
     })
     expect(client.tables.documents).toMatchObject([

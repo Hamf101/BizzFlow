@@ -36,6 +36,7 @@ import {
   type TemplateRenderSection
 } from "@/services/templates/template-render-plan"
 import { describeDateFormat } from "@/lib/date-format"
+import { boxNote } from "@/types/box-signers"
 import type {
   TemplateBlock,
   TemplateBranding,
@@ -981,7 +982,7 @@ function PreviewBlock({ block }: { block: TemplateBlock }): ReactElement {
           required={block.required}
         >
           <div className="flex h-14 w-28 items-end rounded-sm border border-dashed border-muted-foreground/40 px-3 py-2 text-xs text-muted-foreground">
-            Initials
+            {boxNote(block, [])}
           </div>
         </PreviewField>
       )
@@ -993,7 +994,7 @@ function PreviewBlock({ block }: { block: TemplateBlock }): ReactElement {
           required={block.required}
         >
           <div className="flex h-24 items-end rounded-sm border border-dashed border-muted-foreground/40 px-3 py-2 text-xs text-muted-foreground">
-            Drawn signature
+            {boxNote(block, [])}
           </div>
         </PreviewField>
       )

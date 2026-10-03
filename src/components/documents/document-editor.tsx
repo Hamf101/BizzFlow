@@ -11,6 +11,7 @@ import { EditorCanvas } from "@/components/editor/editor-canvas"
 import { normalizeContentForSave } from "@/components/editor/editor-content"
 import { type DockTool, EditorDock } from "@/components/editor/editor-dock"
 import { FormatBar } from "@/components/editor/format-bar"
+import { PaperSigning } from "@/components/editor/paper-field"
 import { FlowDockSlot, FlowWindow } from "@/components/flow/flow-window"
 import { EditorFrame, type EditorLayoutStore, EditorNotice, EditorSidePanel } from "@/components/editor/editor-frame"
 import { type SaveResult, useAutosave } from "@/components/editor/use-autosave"
@@ -51,6 +52,7 @@ import { cn } from "@/lib/utils"
 import { createTemplateFlowDraftFingerprint } from "@/services/template-flow-proposal-state"
 import { resolvePageGeometry } from "@/services/templates/template-render-plan"
 import type { DocumentSigningRecipient, GeneratedDocumentSigningView, PublicSignerStatus } from "@/types/signing"
+import { withBoxMarks } from "@/types/box-signers"
 import { type TemplateContentV3, upgradeV2TemplateContentToV3 } from "@/types/template"
 import type { TemplateFlowProposal } from "@/types/template-flow"
 import { applyVisibleTemplateFieldValue } from "@/types/template-visibility"
@@ -143,6 +145,10 @@ export function DocumentEditor({
   const editable = writable && history.liveStatus !== "stopped"
   const page = history.state
   const [answers, setAnswers] = useState<Record<string, unknown>>(view.answers)
+  // Each drawn box shows only its own signer's mark; the sender's is drawn
+  // here until the document is sent.
+  const marked = useMemo(() => withBoxMarks(page.content.blocks, answers, view.recipients), [answers, page.content.blocks, view.recipients])
+  const signing = useMemo(() => ({ sent: view.workflowStatus !== "draft" || view.recipients.length > 0, signers: view.recipients }), [view.recipients, view.workflowStatus])
   const [drawings, setDrawings] = useState(0)
   const [sending, setSending] = useState(false)
   const [sharing, setSharing] = useState(false)
@@ -541,21 +547,23 @@ export function DocumentEditor({
             onSubmit={(event) => event.preventDefault()}
             ref={formRef}
           >
-            <EditorCanvas
-              allowFiles={false}
-              answers={answers}
-              controller={proposal ? preview : controller}
-              designable={editable && !proposal}
-              documentTitle={proposal ? proposal.candidateDraft.title : page.title}
-              fields={fillable && !proposal ? "fill" : "read"}
-              narrow={narrow}
-              onAnswerChange={(fieldKey, value) =>
-                setAnswers((current) => applyVisibleTemplateFieldValue(page.content, current, fieldKey, value))
-              }
-              overlay={room && !proposal ? <RoomLayer narrow={narrow} others={live.others} revision={page.content} room={room} /> : null}
-              textEditable={editable && !proposal}
-              zoom={zoom}
-            />
+            <PaperSigning.Provider value={signing}>
+              <EditorCanvas
+                allowFiles={false}
+                answers={marked}
+                controller={proposal ? preview : controller}
+                designable={editable && !proposal}
+                documentTitle={proposal ? proposal.candidateDraft.title : page.title}
+                fields={fillable && !proposal ? "fill" : "read"}
+                narrow={narrow}
+                onAnswerChange={(fieldKey, value) =>
+                  setAnswers((current) => applyVisibleTemplateFieldValue(page.content, current, fieldKey, value))
+                }
+                overlay={room && !proposal ? <RoomLayer narrow={narrow} others={live.others} revision={page.content} room={room} /> : null}
+                textEditable={editable && !proposal}
+                zoom={zoom}
+              />
+            </PaperSigning.Provider>
           </form>
         )}
       </EditorFrame>

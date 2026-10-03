@@ -137,7 +137,6 @@ export type CreatePublicFormFileUploadUrlResponse = {
   fileId: string
   draftToken: string
   uploadUrl: string
-  storageKey: string
   safeFilename: string
   expiresInSeconds: number
 }
@@ -982,7 +981,6 @@ export async function createPublicFormFileUploadUrl(
     fileId,
     draftToken,
     uploadUrl: signedUrl.uploadUrl,
-    storageKey: signedUrl.storageKey,
     safeFilename,
     expiresInSeconds: signedUrl.expiresInSeconds,
   }

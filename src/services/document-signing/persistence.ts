@@ -107,7 +107,8 @@ export async function loadGeneratedDocumentView(
         .select(RECIPIENT_COLUMNS)
         .eq("document_id", documentId)
         .eq("org_id", organizationId)
-        .order("invited_at", { ascending: true }),
+        // The order they were added in, which a signer's boxes are assigned by.
+        .order("signer_number", { ascending: true }),
       client
         .from("organizations")
         .select("name")
@@ -207,7 +208,8 @@ export async function loadPublicSigningView(
     workflowStatus: view.workflowStatus,
     requiresInitials: templateRequiresRecipientInitials(
       view.document.templateSnapshot,
-      view.answers
+      view.answers,
+      view.recipients.indexOf(currentRecipient) + 1
     ),
     recipient: {
       id: currentRecipient.id,
@@ -217,6 +219,8 @@ export async function loadPublicSigningView(
       status: currentRecipient.status,
       tokenExpiresAt: currentRecipient.tokenExpiresAt,
       signedAt: currentRecipient.signedAt,
+      signatureDataUrl: currentRecipient.signatureDataUrl,
+      initialsDataUrl: currentRecipient.initialsDataUrl,
     },
     signers: view.recipients.map(toPublicSignerStatus),
   }

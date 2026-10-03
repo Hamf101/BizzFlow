@@ -31,6 +31,7 @@ import {
   type DateFormat
 } from "@/lib/date-format"
 import type { DocumentLifecycleState } from "@/types/document"
+import { MAX_SIGNING_RECIPIENTS } from "@/types/box-signers"
 import { IMAGE_DATA_URL_PATTERN, MAX_IMAGE_DATA_URL_LENGTH } from "@/types/template-limits"
 
 /** Maximum serialized size accepted for one complete guided document layout. */
@@ -332,11 +333,18 @@ export const tableFieldBlockSchema = z
 
 export { MAX_TABLE_FIELD_ROWS } from "@/types/template-answer-kinds"
 
+// Who signs a drawn box: the sender, before sending, or the signer at that
+// place in the order they were added. Missing means Signer 1, never the sender.
+const boxSignerSchema = z
+  .union([z.literal("sender"), z.number().int().min(1).max(MAX_SIGNING_RECIPIENTS)])
+  .optional()
+
 /** Drawn initials input block. */
 export const initialsFieldBlockSchema = z
   .object({
     ...fieldBlockShape,
     boxHeight: boxHeightSchema,
+    signer: boxSignerSchema,
     type: z.literal("initials_field")
   })
   .strict()
@@ -346,6 +354,7 @@ export const signatureFieldBlockSchema = z
   .object({
     ...fieldBlockShape,
     boxHeight: boxHeightSchema,
+    signer: boxSignerSchema,
     type: z.literal("signature_field")
   })
   .strict()

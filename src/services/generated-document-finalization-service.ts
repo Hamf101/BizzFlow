@@ -8,8 +8,8 @@ import {
 import { DocumentSigningServiceError } from "@/services/document-signing-service"
 import { loadGeneratedDocumentView } from "@/services/document-signing/persistence"
 import { readTemplateImage } from "@/services/template-image-service"
-
 import type {
+  CompletedGeneratedDocument,
   FinalizeGeneratedDocumentPdfInput,
   FinalizeGeneratedDocumentPdfResult,
   GeneratedDocumentFinalizationServiceDeps,
@@ -118,13 +118,18 @@ export async function finalizeGeneratedDocumentPdf(
     }
 
     const canonicalRender = buildCanonicalFinalizationRenderInput(view)
-    const candidateId = existing?.id ?? (deps.createId ?? randomUUID)()
+    // A pending attempt from different render input (one prepared before
+    // signers were ordered by signer number) is never reused: prepare discards
+    // it, and its object, if stored, stays under its own key.
+    const resumable =
+      existing?.renderInputSha256 === canonicalRender.sha256 ? existing : null
+    const candidateId = resumable?.id ?? (deps.createId ?? randomUUID)()
 
     requireUuid(candidateId, "Generated document finalization id")
     finalizationId = candidateId
 
     const candidateStorageKey =
-      existing?.storageKey ??
+      resumable?.storageKey ??
       buildGeneratedDocumentFinalizationStorageKey(
         input.organizationId,
         input.documentId,
@@ -222,6 +227,93 @@ export async function finalizeGeneratedDocumentPdf(
     })
     throw normalizedError
   }
+}
+
+/**
+ * Reads which version holds a document's finalized PDF, without creating one,
+ * so reading a document never writes to storage or the database.
+ *
+ * @param input - Actor, organization, and generated-document identifiers.
+ * @param deps - Optional persistence and client ports.
+ * @returns The finalized version id, or null while there is none yet.
+ * @throws GeneratedDocumentFinalizationServiceError when the actor cannot read it.
+ */
+export async function findFinalizedGeneratedDocumentVersionId(
+  input: FinalizeGeneratedDocumentPdfInput,
+  deps: GeneratedDocumentFinalizationServiceDeps = {}
+): Promise<string | null> {
+  try {
+    validateFinalizationInput(input)
+    const persistence =
+      deps.persistence ??
+      createSupabaseFinalizationPersistence(createLazyAdminClient(deps.client)())
+
+    await persistence.requireViewPermission(input)
+    const existing = await persistence.findByDocument(input.organizationId, input.documentId)
+
+    return existing?.status === "finalized"
+      ? requireFinalizedResult(existing.id, existing.documentVersionId).versionId
+      : null
+  } catch (error: unknown) {
+    throw normalizeFinalizationError(error)
+  }
+}
+
+/**
+ * Finalizes a document whose last signature just landed, on behalf of the
+ * member who created it. Best effort: until it succeeds the PDF route serves a
+ * no-store preview, and finalizeGeneratedDocumentPdf already logs the failure.
+ *
+ * @param document - The completed document.
+ * @param deps - Optional finalization ports.
+ * @returns Whether the document now has its finalized PDF.
+ */
+export async function finalizeCompletedGeneratedDocument(
+  document: CompletedGeneratedDocument,
+  deps: GeneratedDocumentFinalizationServiceDeps = {}
+): Promise<boolean> {
+  // ponytail: a document whose creator is gone stays a preview; pick another reader if that matters.
+  if (!document.createdBy) {
+    return false
+  }
+
+  return finalizeGeneratedDocumentPdf(
+    { actorUserId: document.createdBy, organizationId: document.organizationId, documentId: document.id },
+    deps
+  ).then(
+    () => true,
+    () => false
+  )
+}
+
+/** Completed documents one sweep finalizes, each rendered in turn. */
+const FINALIZATION_SWEEP_BATCH = 10
+
+/**
+ * Finalizes one bounded batch of completed documents that have no finalized
+ * PDF: those completed before finalizing moved to the last signature, and any
+ * whose finalizing then failed. Each is finalized as on completion, so a
+ * document finalized meanwhile is returned as it is.
+ *
+ * @param deps - Optional finalization ports.
+ * @returns How many documents were found and how many are now finalized.
+ */
+export async function finalizeCompletedGeneratedDocuments(
+  deps: GeneratedDocumentFinalizationServiceDeps = {}
+): Promise<{ scannedCount: number; finalizedCount: number }> {
+  const persistence =
+    deps.persistence ?? createSupabaseFinalizationPersistence(createLazyAdminClient(deps.client)())
+  const documents = await persistence.listUnfinalized(FINALIZATION_SWEEP_BATCH)
+  let finalizedCount = 0
+
+  // One at a time: each renders a whole PDF.
+  for (const document of documents) {
+    if (await finalizeCompletedGeneratedDocument(document, { ...deps, persistence })) {
+      finalizedCount += 1
+    }
+  }
+
+  return { scannedCount: documents.length, finalizedCount }
 }
 
 function logFinalizationSuccess(

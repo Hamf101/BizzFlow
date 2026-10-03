@@ -358,47 +358,62 @@ describe("document signing answer persistence", () => {
     expect(completingTables.document_answers[0].values).toEqual({ client_name: "As signed" })
   })
 
-  it("never takes a drawing as an answer, so no one can pre-draw or fill a signer's box", async () => {
-    const tablesWithInitialsBox = () => {
+  it("takes a drawing only in the sender's own box, from a member, before the document is sent", async () => {
+    const tablesWithBoxes = (sent: boolean) => {
       const tables = createBaseTables()
-      tables.documents[0].template_snapshot = createTemplateContent({ requiredInitials: true })
-      tables.document_signing_recipients.push(
-        createRecipientRow(RECIPIENT_ONE_ID, TOKEN_ONE, "Avery Morgan", "avery@example.com")
-      )
-      tables.document_answers[0].workflow_status = "awaiting_signatures"
+      const content = createTemplateContent({ requiredInitials: true })
+      content.blocks.push({
+        id: "50000000-0000-4000-8000-000000000003",
+        type: "signature_field",
+        fieldKey: "sender_signature",
+        label: "Sender signature",
+        required: false,
+        helpText: null,
+        signer: "sender",
+      })
+      tables.documents[0].template_snapshot = content
+
+      if (sent) {
+        tables.document_signing_recipients.push(
+          createRecipientRow(RECIPIENT_ONE_ID, TOKEN_ONE, "Avery Morgan", "avery@example.com")
+        )
+        tables.document_answers[0].workflow_status = "awaiting_signatures"
+      }
       return tables
     }
-
-    const memberTables = tablesWithInitialsBox()
-    memberTables.document_signing_recipients.length = 0
-    memberTables.document_answers[0].workflow_status = "draft"
-    await expect(
+    const saveAsMember = (tables: ReturnType<typeof createBaseTables>, values: Record<string, unknown>) =>
       saveGeneratedDocumentAnswers(
-        {
-          actorUserId: MANAGER_ID,
-          documentId: DOCUMENT_ID,
-          organizationId: ORG_ID,
-          values: { client_initials: DRAWING_DATA_URL },
-        },
-        { client: new FakeClient(memberTables) as never }
+        { actorUserId: MANAGER_ID, documentId: DOCUMENT_ID, organizationId: ORG_ID, values },
+        { client: new FakeClient(tables) as never }
       )
-    ).rejects.toMatchObject({ statusCode: 400 })
-    expect(memberTables.document_answers[0].values).toEqual({})
 
-    const signerTables = tablesWithInitialsBox()
-    await expect(
-      completePublicDocumentSigning(
-        {
-          initialsDataUrl: DRAWING_DATA_URL,
-          signatureDataUrl: DRAWING_DATA_URL,
-          token: TOKEN_ONE,
-          values: { client_initials: DRAWING_DATA_URL, client_name: "Northstar" },
-        },
-        { client: new FakeClient(signerTables) as never, now: (): Date => NOW }
-      )
-    ).rejects.toMatchObject({ statusCode: 400 })
-    expect(signerTables.document_answers[0].values).toEqual({})
-    expect(signerTables.document_signing_recipients[0].status).toBe("pending")
+    const draftTables = tablesWithBoxes(false)
+    await saveAsMember(draftTables, { sender_signature: DRAWING_DATA_URL })
+    expect(draftTables.document_answers[0].values).toEqual({ sender_signature: DRAWING_DATA_URL })
+
+    // A box with no signer named is Signer 1's, never the sender's.
+    await expect(saveAsMember(tablesWithBoxes(false), { client_initials: DRAWING_DATA_URL })).rejects.toMatchObject({ statusCode: 400 })
+
+    const sentTables = tablesWithBoxes(true)
+    await expect(saveAsMember(sentTables, { sender_signature: DRAWING_DATA_URL })).rejects.toMatchObject({ statusCode: 409 })
+    expect(sentTables.document_answers[0].values).toEqual({})
+
+    for (const key of ["client_initials", "sender_signature"]) {
+      const signerTables = tablesWithBoxes(true)
+      await expect(
+        completePublicDocumentSigning(
+          {
+            initialsDataUrl: DRAWING_DATA_URL,
+            signatureDataUrl: DRAWING_DATA_URL,
+            token: TOKEN_ONE,
+            values: { [key]: DRAWING_DATA_URL, client_name: "Northstar" },
+          },
+          { client: new FakeClient(signerTables) as never, now: (): Date => NOW }
+        )
+      ).rejects.toMatchObject({ statusCode: 400 })
+      expect(signerTables.document_answers[0].values).toEqual({})
+      expect(signerTables.document_signing_recipients[0].status).toBe("pending")
+    }
   })
 
   it("prunes a stale hidden value at read and across controller patches", async () => {

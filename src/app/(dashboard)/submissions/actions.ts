@@ -14,10 +14,6 @@ import {
   type ActionFeedbackCode,
 } from "@/lib/action-result"
 import { buildRedirect, getFormString } from "@/lib/form-utils"
-import {
-  canPerformOrganizationAction,
-  type OrganizationPermissionAction,
-} from "@/lib/permissions"
 import { getCurrentOrganizationContext } from "@/services/organization-service"
 import {
   assignInternalSubmission,
@@ -61,9 +57,7 @@ export async function createSubmissionAction(formData: FormData): Promise<void> 
   let submissionId = ""
 
   try {
-    const actionContext = await loadSubmissionActionContext(
-      "submissions:create"
-    )
+    const actionContext = await loadSubmissionActionContext()
     const submission = await createInternalSubmissionDraft({
       actorUserId: actionContext.actorUserId,
       organizationId: actionContext.context.organization.id,
@@ -131,9 +125,7 @@ export async function assignSubmissionAction(formData: FormData): Promise<void> 
   const startedAt = Date.now()
 
   try {
-    const actionContext = await loadSubmissionActionContext(
-      "submissions:assign"
-    )
+    const actionContext = await loadSubmissionActionContext()
     const assignedTo = requireIdentifier(
       getFormString(formData, "assignedTo"),
       "Assignee"
@@ -181,7 +173,7 @@ export async function setSubmissionReviewersAction(formData: FormData): Promise<
   const startedAt = Date.now()
 
   try {
-    const actionContext = await loadSubmissionActionContext("submissions:assign")
+    const actionContext = await loadSubmissionActionContext()
     const needed = getFormString(formData, "requiredApprovals").trim()
 
     await setInternalSubmissionReviewers({
@@ -220,7 +212,7 @@ export async function dismissChangesRequestAction(formData: FormData): Promise<v
   const startedAt = Date.now()
 
   try {
-    const actionContext = await loadSubmissionActionContext("submissions:review")
+    const actionContext = await loadSubmissionActionContext()
     const comment = getFormString(formData, "comment").trim()
 
     if (!comment) {
@@ -259,7 +251,7 @@ export async function dismissChangesRequestAction(formData: FormData): Promise<v
  * @returns Never returns; redirects to the refreshed submission or an error.
  */
 export async function shareSubmissionAction(formData: FormData): Promise<void> {
-  await runSubmissionFormAction(formData, "submissions:view", "submission_shared", (actor, submissionId) =>
+  await runSubmissionFormAction(formData, "submission_shared", (actor, submissionId) =>
     shareInternalSubmission({ ...actor, submissionId, userIds: formData.getAll("sharedUserIds").map(String) })
   )
 }
@@ -271,7 +263,7 @@ export async function shareSubmissionAction(formData: FormData): Promise<void> {
  * @returns Never returns; redirects to the refreshed submission or an error.
  */
 export async function suggestSubmissionChangesAction(formData: FormData): Promise<void> {
-  await runSubmissionFormAction(formData, "submissions:review", "changes_suggested", (actor, submissionId) =>
+  await runSubmissionFormAction(formData, "changes_suggested", (actor, submissionId) =>
     suggestSubmissionAnswers({ ...actor, submissionId, values: parseGeneratedDocumentAnswers(formData) })
   )
 }
@@ -285,7 +277,7 @@ export async function suggestSubmissionChangesAction(formData: FormData): Promis
 export async function decideSuggestionAction(formData: FormData): Promise<void> {
   const accept = getFormString(formData, "decision") === "accept"
 
-  await runSubmissionFormAction(formData, "submissions:edit", accept ? "changes_saved" : "submission_review_updated", (actor, submissionId) =>
+  await runSubmissionFormAction(formData, accept ? "changes_saved" : "submission_review_updated", (actor, submissionId) =>
     decideSubmissionSuggestion({
       ...actor,
       accept,
@@ -322,11 +314,9 @@ export async function transitionSubmissionAction(
   let transition: SubmissionReviewTransition | null = null
 
   try {
-    // Whoever can see submissions gets this far; the service asks for review
-    // permission where the decision needs it, and the database checks the reviewer.
-    const actionContext = await loadSubmissionActionContext(
-      "submissions:view"
-    )
+    // The service asks for review permission where the decision needs it,
+    // and the database checks the reviewer.
+    const actionContext = await loadSubmissionActionContext()
     transition = parseReviewTransition(getFormString(formData, "targetStatus"))
     const comment = getFormString(formData, "comment").trim()
 
@@ -394,9 +384,7 @@ export async function createSubmissionCommentAction(
   const startedAt = Date.now()
 
   try {
-    const actionContext = await loadSubmissionActionContext(
-      "submission_comments:create"
-    )
+    const actionContext = await loadSubmissionActionContext()
     const body = getFormString(formData, "body").trim()
 
     if (!body) {
@@ -444,7 +432,7 @@ async function mutateSubmissionFromForm(
   const startedAt = Date.now()
 
   try {
-    const actionContext = await loadSubmissionActionContext("submissions:edit")
+    const actionContext = await loadSubmissionActionContext()
     const input = {
       actorUserId: actionContext.actorUserId,
       organizationId: actionContext.context.organization.id,
@@ -489,7 +477,6 @@ async function mutateSubmissionFromForm(
 // redirects back with how it went.
 async function runSubmissionFormAction(
   formData: FormData,
-  permission: OrganizationPermissionAction,
   feedback: ActionFeedbackCode,
   run: (actor: { actorUserId: string; organizationId: string }, submissionId: string) => Promise<unknown>
 ): Promise<never> {
@@ -498,7 +485,7 @@ async function runSubmissionFormAction(
   const startedAt = Date.now()
 
   try {
-    const { actorUserId, context } = await loadSubmissionActionContext(permission)
+    const { actorUserId, context } = await loadSubmissionActionContext()
 
     await run({ actorUserId, organizationId: context.organization.id }, requireIdentifier(submissionId, "Submission id"))
     revalidateSubmissionPaths(submissionId)
@@ -509,9 +496,8 @@ async function runSubmissionFormAction(
   redirect(buildFeedbackRedirect(submissionPath, feedback))
 }
 
-async function loadSubmissionActionContext(
-  permission: OrganizationPermissionAction
-): Promise<SubmissionActionContext> {
+// Each submission service checks the actor's permission itself.
+async function loadSubmissionActionContext(): Promise<SubmissionActionContext> {
   const user = await getAuthenticatedUser()
   const context = await getCurrentOrganizationContext(user.id)
 
@@ -519,13 +505,6 @@ async function loadSubmissionActionContext(
     throw new SubmissionActionError(
       "Create an organization before managing submissions.",
       428
-    )
-  }
-
-  if (!canPerformOrganizationAction(context.membership, permission)) {
-    throw new SubmissionActionError(
-      "You do not have permission to perform this submission action.",
-      403
     )
   }
 

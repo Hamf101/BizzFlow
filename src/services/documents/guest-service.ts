@@ -1,6 +1,6 @@
 import { createAdminClient, type AdminSupabaseClient } from "@/lib/supabase/admin"
 import { assertSecureToken, hashToken } from "@/services/document-signing/token-security"
-import { recordRequiredDocumentAuditLog } from "@/services/documents/audit"
+import { recordDocumentAuditLog } from "@/services/documents/audit"
 import type { DocumentServiceClient, DocumentServiceDeps } from "@/services/documents/contracts"
 import { DocumentServiceError } from "@/services/documents/errors"
 import { createSupabaseServiceError, getClient, runDocumentOperation } from "@/services/documents/shared"
@@ -208,7 +208,8 @@ export async function acceptDocumentGuestInvite(
     const { invite, tokenHash } = await loadPendingInvite(client, input.token, deps)
 
     if ((input.userEmail ?? "").trim().toLowerCase() !== invite.email) {
-      throw new DocumentServiceError(`This link was sent to ${invite.email}. Sign in with that address to open it.`, 403)
+      // The address stays out of the message: refusals are logged.
+      throw new DocumentServiceError("This link was sent to a different address. Sign in with that address to open it.", 403)
     }
 
     // Only joining a workspace makes a profile, and a guest never joins one.
@@ -235,7 +236,8 @@ export async function acceptDocumentGuestInvite(
     if (error) throw createSupabaseServiceError(error, "Unable to open the document.")
     if (!data) throw new DocumentServiceError(GONE, 404)
 
-    await recordRequiredDocumentAuditLog(deps, {
+    // Best effort: the link is already spent, so a lost record must not strand them.
+    await recordDocumentAuditLog(deps, {
       action: "document.guest_joined",
       actorUserId: input.userId,
       metadata: { accessLevel: invite.access_level, email: invite.email, grantId: invite.id },

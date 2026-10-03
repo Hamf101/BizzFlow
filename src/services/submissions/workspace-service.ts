@@ -1,3 +1,4 @@
+import { toClientFile } from "@/lib/r2/stored-file"
 import { getOrganizationRoleFromSubject } from "@/lib/permissions"
 import { readCountedPage } from "@/services/postgrest-paging"
 import type {
@@ -226,7 +227,7 @@ export async function getInternalSubmission(
 
       return {
         submission,
-        files,
+        files: files.map(toClientFile),
         ...reviewData,
         ...review,
         canShare:

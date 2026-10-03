@@ -4,6 +4,7 @@ import type { DocumentServiceClient } from "@/services/documents/contracts"
 import { DocumentServiceError } from "@/services/documents/errors"
 
 import type {
+  CompletedGeneratedDocument,
   FinalizeGeneratedDocumentPdfInput,
   GeneratedDocumentFinalizationPersistence,
   GeneratedDocumentFinalizationRecord,
@@ -90,6 +91,8 @@ export function createSupabaseFinalizationPersistence(
     promote: (
       input: PromoteGeneratedDocumentFinalizationInput
     ): Promise<string> => promoteFinalization(client, input),
+    listUnfinalized: (limit: number): Promise<CompletedGeneratedDocument[]> =>
+      listUnfinalizedDocuments(client, limit),
   }
 }
 
@@ -213,6 +216,23 @@ async function prepareFinalization(
   }
 
   return mapFinalizationRecord(unwrapRpcRow(data))
+}
+
+async function listUnfinalizedDocuments(
+  client: FinalizationDatabaseClient,
+  limit: number
+): Promise<CompletedGeneratedDocument[]> {
+  const { data, error } = await client.rpc("list_unfinalized_generated_documents", { target_limit: limit })
+
+  if (error || !Array.isArray(data)) {
+    throw createPersistenceError(error ?? {}, "Unable to list documents to finalize.")
+  }
+
+  return (data as Array<{ org_id: string; document_id: string; created_by: string | null }>).map((row) => ({
+    id: row.document_id,
+    organizationId: row.org_id,
+    createdBy: row.created_by,
+  }))
 }
 
 async function promoteFinalization(

@@ -25,7 +25,6 @@ describe("public form file client", () => {
         expiresInSeconds: 900,
         fileId: "50000000-0000-4000-8000-000000000001",
         safeFilename: "proof.pdf",
-        storageKey: "private/proof.pdf",
         uploadUrl: "https://storage.example/upload",
       }
       const fetchMock = vi

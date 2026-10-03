@@ -13,7 +13,6 @@ export type PublicFormFileUploadAllocation = {
   expiresInSeconds: number
   fileId: string
   safeFilename: string
-  storageKey: string
   uploadUrl: string
 }
 

@@ -2,6 +2,7 @@
 
 import { headers } from "next/headers"
 import { redirect } from "next/navigation"
+import { after } from "next/server"
 
 import {
   GeneratedDocumentFormDataError,
@@ -15,6 +16,7 @@ import {
   completePublicDocumentSigning,
   DocumentSigningServiceError,
 } from "@/services/document-signing-service"
+import { finalizeCompletedGeneratedDocument } from "@/services/generated-document-finalization-service"
 import type { GeneratedDocumentWorkflowStatus } from "@/types/template"
 
 /**
@@ -51,6 +53,11 @@ export async function completePublicSigningAction(
     })
 
     workflowStatus = view.workflowStatus
+
+    if (view.workflowStatus === "completed") {
+      // The signer does not wait for the paper to be rendered and stored.
+      after(() => finalizeCompletedGeneratedDocument(view.document))
+    }
     console.info("public_document_signing_action_completed", {
       documentId: view.document.id,
       durationMs: Date.now() - startedAt,

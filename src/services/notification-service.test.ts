@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest"
 
 import {
   getOrganizationNotificationSettings,
+  listNotificationDeliveries,
   recordNotificationDelivery,
   updateOrganizationNotificationSettings,
 } from "@/services/notification-service"
@@ -322,6 +323,8 @@ describe("recordNotificationDelivery", () => {
   })
 })
 
+const OWNER_MEMBERSHIP = { org_id: ORG_ID, user_id: OWNER_ID, role: "owner_admin", status: "active" }
+
 describe("organization notification settings", () => {
   it("reads the stored switches", async () => {
     const client = new FakeClient({
@@ -332,10 +335,11 @@ describe("organization notification settings", () => {
           sms_notifications_enabled: false,
         },
       ],
+      memberships: [OWNER_MEMBERSHIP],
     })
 
     await expect(
-      getOrganizationNotificationSettings(ORG_ID, createDeps(client))
+      getOrganizationNotificationSettings({ actorUserId: OWNER_ID, organizationId: ORG_ID }, createDeps(client))
     ).resolves.toEqual({
       emailNotificationsEnabled: true,
       smsNotificationsEnabled: false,
@@ -348,11 +352,26 @@ describe("organization notification settings", () => {
     vi.spyOn(console, "warn").mockImplementation(() => {})
 
     await expect(
-      getOrganizationNotificationSettings(ORG_ID, createDeps(new FakeClient()))
+      getOrganizationNotificationSettings(
+        { actorUserId: OWNER_ID, organizationId: ORG_ID },
+        createDeps(new FakeClient({ memberships: [OWNER_MEMBERSHIP] }))
+      )
     ).resolves.toEqual({
       emailNotificationsEnabled: true,
       smsNotificationsEnabled: true,
     })
+  })
+
+  it("refuses the switches and delivery history to a member without organization:manage", async () => {
+    const client = new FakeClient({
+      organizations: [{ id: ORG_ID, email_notifications_enabled: true, sms_notifications_enabled: true }],
+      notification_deliveries: [{ id: DELIVERY_ID, org_id: ORG_ID }],
+      memberships: [{ org_id: ORG_ID, user_id: MANAGER_ID, role: "manager", status: "active" }],
+    })
+    const actor = { actorUserId: MANAGER_ID, organizationId: ORG_ID }
+
+    await expect(getOrganizationNotificationSettings(actor, createDeps(client))).rejects.toMatchObject({ statusCode: 403 })
+    await expect(listNotificationDeliveries(actor, createDeps(client))).rejects.toMatchObject({ statusCode: 403 })
   })
 
   it("lets an owner change the switches", async () => {

@@ -1,8 +1,12 @@
 -- Exercises the signing and generated-document guards against a real
--- database: a signer cannot answer a drawn box, an unknown field, or a field
+-- database: a member may draw only in the sender's box and only before the
+-- document is sent, signers are numbered in the order they were added, a
+-- signer cannot answer a drawn box, an unknown field, or a field
 -- with the wrong shape, nor change an answer someone else has signed, nor sign
 -- an archived document; a generated document takes no uploaded version, and
--- once finalized keeps its finalized PDF as current. Creates isolated
+-- once finalized keeps its finalized PDF as current; a pending finalization
+-- from other input is discarded, a finalized one never, and the sweep lists
+-- only completed documents with no finalized PDF. Creates isolated
 -- synthetic rows inside one statement and removes them before returning; any
 -- failed check rolls everything back.
 do $$
@@ -14,6 +18,7 @@ declare
   first_id uuid := gen_random_uuid();
   second_id uuid := gen_random_uuid();
   finalization_id uuid := gen_random_uuid();
+  stale_id uuid := gen_random_uuid();
   first_token text := encode(sha256('first-token'::bytea), 'hex');
   second_token text := encode(sha256('second-token'::bytea), 'hex');
   drawing jsonb := '{"dataUrl": "data:image/png;base64,iVBORw0KGgo="}';
@@ -28,9 +33,11 @@ declare
       jsonb_build_object('id', 'name', 'type', 'text_field', 'fieldKey', 'client_name', 'label', 'Client', 'required', true),
       jsonb_build_object('id', 'note', 'type', 'text_field', 'fieldKey', 'note', 'label', 'Note', 'required', false),
       jsonb_build_object('id', 'agreed', 'type', 'checkbox_field', 'fieldKey', 'agreed', 'label', 'Agreed', 'required', false),
-      jsonb_build_object('id', 'initials', 'type', 'initials_field', 'fieldKey', 'client_initials', 'label', 'Initials', 'required', false)
+      jsonb_build_object('id', 'initials', 'type', 'initials_field', 'fieldKey', 'client_initials', 'label', 'Initials', 'required', false),
+      jsonb_build_object('id', 'sender', 'type', 'signature_field', 'fieldKey', 'sender_signature', 'label', 'Sender', 'required', false, 'signer', 'sender')
     )
   );
+  sender_drawing text := 'data:image/png;base64,U2VuZGVy';
   attack jsonb;
   version_id uuid;
 begin
@@ -47,16 +54,48 @@ begin
   values (document_id, organization_id, 'Signing guards', 'generated', snapshot, owner_id, owner_id);
 
   insert into public.document_answers (document_id, org_id, values, workflow_status)
-  values (document_id, organization_id, '{"client_name": "As agreed"}', 'awaiting_signatures');
+  values (document_id, organization_id, '{"client_name": "As agreed"}', 'draft');
+
+  -- Before sending, the sender draws in their own box and in no signer's.
+  perform public.merge_generated_document_answers(
+    organization_id, document_id, jsonb_build_object('sender_signature', sender_drawing)
+  );
+
+  begin
+    perform public.merge_generated_document_answers(
+      organization_id, document_id, '{"client_initials": "data:image/png;base64,iVBORw0KGgo="}'
+    );
+    raise exception 'A member drew in a signer''s box.' using errcode = 'XX001';
+  exception when sqlstate '22023' then null;
+  end;
+
+  update public.document_answers answer
+  set workflow_status = 'awaiting_signatures'
+  where answer.document_id = signing_guards_test.document_id;
 
   insert into public.document_signing_recipients (id, org_id, document_id, name, email, token_hash, token_expires_at)
   values
     (first_id, organization_id, document_id, 'First', 'first@example.invalid', first_token, now() + interval '1 day'),
     (second_id, organization_id, document_id, 'Second', 'second@example.invalid', second_token, now() + interval '1 day');
 
+  if (select array_agg(recipient.id order by recipient.signer_number) from public.document_signing_recipients recipient
+      where recipient.document_id = signing_guards_test.document_id) is distinct from array[first_id, second_id] then
+    raise exception 'Signers were not numbered in the order they were added.';
+  end if;
+
+  -- Once sent, the sender's box is frozen.
+  begin
+    perform public.merge_generated_document_answers(
+      organization_id, document_id, '{"sender_signature": "data:image/png;base64,iVBORw0KGgo="}'
+    );
+    raise exception 'The sender redrew after sending.' using errcode = 'XX001';
+  exception when sqlstate '23514' then null;
+  end;
+
   -- A drawn box, a field the document lacks, or an answer of the wrong shape.
   for attack in select value from jsonb_array_elements('[
     {"client_initials": "data:image/png;base64,iVBORw0KGgo="},
+    {"sender_signature": "data:image/png;base64,iVBORw0KGgo="},
     {"forged": "x"},
     {"agreed": "yes"}
   ]'::jsonb)
@@ -112,7 +151,7 @@ begin
   end if;
 
   if (select values from public.document_answers answer where answer.document_id = signing_guards_test.document_id)
-      is distinct from '{"client_name": "Corrected", "note": "Added"}'::jsonb then
+      is distinct from jsonb_build_object('client_name', 'Corrected', 'note', 'Added', 'sender_signature', sender_drawing) then
     raise exception 'Signed answers were not kept as signed.';
   end if;
 
@@ -134,6 +173,17 @@ begin
   exception when sqlstate 'P0001' then null;
   end;
 
+  -- A completed document with no finalized PDF is listed for the sweep, and a
+  -- pending attempt prepared from other input is discarded, not refused.
+  insert into public.generated_document_finalizations (id, org_id, document_id, storage_key, render_input_sha256, created_by)
+  values (stale_id, organization_id, document_id,
+    'organizations/' || organization_id || '/documents/' || document_id || '/finalizations/' || stale_id || '/final.pdf',
+    repeat('c', 64), owner_id);
+
+  if not exists (select 1 from public.list_unfinalized_generated_documents(100) listed where listed.document_id = signing_guards_test.document_id) then
+    raise exception 'A completed, unfinalized document was not listed.';
+  end if;
+
   -- Finalization still promotes its PDF, which then stays current.
   perform public.prepare_generated_document_finalization(
     organization_id, document_id, finalization_id,
@@ -146,6 +196,26 @@ begin
 
   if (select current_version_id from public.documents where id = document_id) is distinct from version_id then
     raise exception 'Finalization did not promote its PDF.';
+  end if;
+
+  if exists (select 1 from public.generated_document_finalizations where id = stale_id)
+      or exists (select 1 from public.list_unfinalized_generated_documents(100) listed where listed.document_id = signing_guards_test.document_id) then
+    raise exception 'A stale attempt survived, or a finalized document was listed.';
+  end if;
+
+  -- A finalized row is never discarded or changed, whatever input asks.
+  begin
+    perform public.prepare_generated_document_finalization(
+      organization_id, document_id, stale_id,
+      'organizations/' || organization_id || '/documents/' || document_id || '/finalizations/' || stale_id || '/final.pdf',
+      repeat('c', 64), owner_id
+    );
+    raise exception 'A finalized document was prepared again.' using errcode = 'XX001';
+  exception when sqlstate '23514' then null;
+  end;
+
+  if (select finalization.render_input_sha256 from public.generated_document_finalizations finalization where finalization.document_id = signing_guards_test.document_id and finalization.status = 'finalized') <> repeat('a', 64) then
+    raise exception 'A finalized document changed.';
   end if;
 
   begin

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import { FakeSupabaseClient, type FakeRow } from "@/services/document-service.test-support"
 import { updateNotificationPreferences } from "@/services/organizations/membership-service"
+import { getOnboardingProgress } from "@/services/organizations/onboarding-service"
 
 const input = {
   actorUserId: "user-1",
@@ -50,6 +51,15 @@ describe("member notification preferences", () => {
     const client = new FakeSupabaseClient()
 
     await expect(updateNotificationPreferences(input, { client: client as never }))
+      .rejects.toMatchObject({ statusCode: 403 })
+  })
+})
+
+describe("onboarding progress", () => {
+  it("is read only by an active member of the organization", async () => {
+    const client = new FakeSupabaseClient({ organization_memberships: [membership({ org_id: "org-2" })] })
+
+    await expect(getOnboardingProgress({ actorUserId: "user-1", organizationId: "org-1" }, { client: client as never }))
       .rejects.toMatchObject({ statusCode: 403 })
   })
 })

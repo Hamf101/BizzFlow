@@ -101,7 +101,7 @@ export default async function DashboardPage(): Promise<ReactElement> {
   }
 
   const answers = await Promise.all([
-    orEmpty("dashboard_onboarding_progress_failed", () => getOnboardingProgress(organizationId), {
+    orEmpty("dashboard_onboarding_progress_failed", () => getOnboardingProgress({ actorUserId: user.id, organizationId }), {
       hasInvitedMembers: false,
       hasPublishedTemplate: false,
       hasSubmission: false,

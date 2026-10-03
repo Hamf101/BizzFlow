@@ -1,3 +1,4 @@
+import { toClientFile } from "@/lib/r2/stored-file"
 import { recordDocumentAuditLog } from "@/services/documents/audit"
 import {
   getEffectiveDocumentAccessLevels,
@@ -482,7 +483,7 @@ export async function getDocumentDetail(
           ...document,
           accessLevel,
         },
-        versions,
+        versions: versions.map(toClientFile),
       }
     }
   )

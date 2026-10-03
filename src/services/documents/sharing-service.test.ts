@@ -456,6 +456,28 @@ describe("sharing a document with someone outside the workspace", () => {
     expect(invite).not.toHaveBeenCalled()
   })
 
+  it("sends nothing for a document that is not active", async () => {
+    const { client, deps, invite } = setup()
+    client.tables.documents[0].lifecycle_state = "trashed"
+
+    await expect(setSharingAccess(guest("viewer"), deps)).rejects.toMatchObject({ statusCode: 409 })
+    expect(client.tables.document_guest_grants ?? []).toEqual([])
+    expect(invite).not.toHaveBeenCalled()
+  })
+
+  it("keeps an invite that was emailed even when its record cannot be stored", async () => {
+    const { client, deps, invite } = setup({
+      audit: async () => {
+        throw new Error("audit store down")
+      },
+    })
+    vi.spyOn(console, "warn").mockImplementation(() => {})
+
+    await expect(setSharingAccess(guest("viewer"), deps)).resolves.toMatchObject({ guests: [{ email: "gita@example.test" }] })
+    expect(invite).toHaveBeenCalledOnce()
+    expect(client.tables.document_guest_grants).toHaveLength(1)
+  })
+
   it("takes the invite back when its email cannot be sent", async () => {
     const { client, deps } = setup({
       invite: async () => {

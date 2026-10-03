@@ -322,6 +322,18 @@ describe("document creation and collaboration actions", (): void => {
       expect.stringContaining("private+comment+persistence+detail")
     )
   })
+
+  it("keeps a crafted document id inside the documents path", async (): Promise<void> => {
+    vi.mocked(createDocumentComment).mockResolvedValue(undefined as never)
+    const formData = new FormData()
+    formData.set("organizationId", ORGANIZATION_ID)
+    formData.set("documentId", "..//evil.example")
+    formData.set("body", "Hi")
+
+    await expect(createDocumentCommentAction(formData)).rejects.toThrow(
+      "NEXT_REDIRECT:/documents/..%2F%2Fevil.example?"
+    )
+  })
 })
 
 describe("permanent deletion actions", (): void => {

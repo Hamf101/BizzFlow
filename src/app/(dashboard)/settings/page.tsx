@@ -78,7 +78,7 @@ export default async function SettingsPage(): Promise<ReactElement> {
   )
 
   let settings: MemberSettings
-  let organizationSettings: OrganizationNotificationSettings
+  let organizationSettings: OrganizationNotificationSettings | null
   const isOwner = context.membership.role === "owner_admin"
 
   try {
@@ -87,7 +87,12 @@ export default async function SettingsPage(): Promise<ReactElement> {
         actorUserId: user.id,
         organizationId: context.organization.id,
       }),
-      getOrganizationNotificationSettings(context.organization.id),
+      canManageOrganization
+        ? getOrganizationNotificationSettings({
+            actorUserId: user.id,
+            organizationId: context.organization.id,
+          })
+        : null,
     ])
   } catch (error: unknown) {
     return (
@@ -191,7 +196,7 @@ export default async function SettingsPage(): Promise<ReactElement> {
         </Card>
       </div>
 
-      {canManageOrganization && (
+      {organizationSettings && (
         <Card>
           <CardHeader>
             <CardTitle>Organization notifications</CardTitle>
@@ -253,7 +258,7 @@ export default async function SettingsPage(): Promise<ReactElement> {
 
       {canManageOrganization && (
         <NotificationActivityCard
-          deliveries={await loadRecentDeliveries(context.organization.id)}
+          deliveries={await loadRecentDeliveries(user.id, context.organization.id)}
         />
       )}
     </SettingsShell>
@@ -309,10 +314,11 @@ async function RolesAndAccessSection({
  * settings page down with it.
  */
 async function loadRecentDeliveries(
+  actorUserId: string,
   organizationId: string
 ): Promise<NotificationDelivery[]> {
   try {
-    return await listNotificationDeliveries({ organizationId, limit: 10 })
+    return await listNotificationDeliveries({ actorUserId, organizationId, limit: 10 })
   } catch (error: unknown) {
     console.warn("settings_notification_history_load_failed", {
       organizationId,

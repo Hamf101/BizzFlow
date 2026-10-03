@@ -5,8 +5,7 @@ import type {
   DocumentRecipientInput,
   DocumentSigningRecipient,
 } from "@/types/signing"
-
-const MAX_RECIPIENTS = 20
+import { MAX_SIGNING_RECIPIENTS } from "@/types/box-signers"
 
 const recipientInputSchema = z
   .object({
@@ -43,9 +42,9 @@ export function normalizeRecipientInputs(
     )
   }
 
-  if (recipients.length > MAX_RECIPIENTS) {
+  if (recipients.length > MAX_SIGNING_RECIPIENTS) {
     throw new DocumentSigningServiceError(
-      `A document can have at most ${MAX_RECIPIENTS} recipients.`,
+      `A document can have at most ${MAX_SIGNING_RECIPIENTS} recipients.`,
       400
     )
   }

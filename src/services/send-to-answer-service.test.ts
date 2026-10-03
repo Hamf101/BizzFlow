@@ -148,6 +148,59 @@ describe("sendToAnswer", () => {
   })
 })
 
+describe("send to answer, when something is wrong", () => {
+  it("sends nothing for a document that is not active, first or again", async () => {
+    const archived = sendable((tables) => ((tables.documents[0] as FakeRow).lifecycle_state = "archived"))
+    await expect(send(archived.client, ["ana@example.com"])).rejects.toMatchObject({ statusCode: 409 })
+    expect(archived.tables.public_form_links).toHaveLength(0)
+
+    const { client, tables } = sendable()
+    await send(client, ["ana@example.com"])
+    ;(tables.documents[0] as FakeRow).lifecycle_state = "trashed"
+    const sendRequest = vi.fn(async () => undefined)
+    const link = tables.public_form_links?.[0] as FakeRow
+
+    await expect(
+      resendAnswerRequest({ actorUserId: MANAGER_ID, linkId: link.id as string, organizationId: ORG_ID }, deps(client, { sendRequest }))
+    ).rejects.toMatchObject({ statusCode: 409 })
+    expect(sendRequest).not.toHaveBeenCalled()
+  })
+
+  it("stores every link before any email goes, and records which links it sent", async () => {
+    const { client, tables } = sendable()
+    const stored: number[] = []
+    const recordAuditLog = vi.fn(async () => undefined)
+
+    await send(client, ["ana@example.com", "ben@example.com"], {
+      recordAuditLog,
+      sendRequest: vi.fn(async () => void stored.push(tables.public_form_links?.length ?? 0)),
+    })
+
+    expect(stored).toEqual([2, 2])
+    expect(recordAuditLog).toHaveBeenCalledWith(
+      expect.objectContaining({ metadata: expect.objectContaining({ linkIds: (tables.public_form_links ?? []).map((link) => link.id).join(",") }) })
+    )
+  })
+
+  it("reports a database failure as a failure, not as a missing request or an unknown sender", async () => {
+    const { client, tables } = sendable()
+    await send(client, ["ana@example.com"])
+    const link = tables.public_form_links?.[0] as FakeRow
+    const broken = { data: null, error: { code: "XX000", message: "database down" } }
+    const failing: unknown = new Proxy(
+      {},
+      { get: (_target, key) => (key === "then" ? (done: (value: unknown) => unknown) => Promise.resolve(broken).then(done) : key === "maybeSingle" ? async () => broken : () => failing) }
+    )
+    const failOn = (table: string) => Object.assign(Object.create(client) as SendFake, { from: (name: string) => (name === table ? failing : client.from(name)) })
+    vi.spyOn(console, "error").mockImplementation(() => {})
+
+    await expect(
+      resendAnswerRequest({ actorUserId: MANAGER_ID, linkId: link.id as string, organizationId: ORG_ID }, deps(failOn("public_form_links")))
+    ).rejects.toMatchObject({ statusCode: 500 })
+    await expect(send(failOn("profiles"), ["ben@example.com"])).rejects.toMatchObject({ statusCode: 500 })
+  })
+})
+
 describe("resendAnswerRequest", () => {
   it("sends a new link and retires the old one, but not once it is answered", async () => {
     const { client, tables } = sendable()

@@ -1506,15 +1506,15 @@ function createFlowPayloadContract(): string {
     'text_field {"type":"text_field","fieldKey":"stable_key","label":"Label","required":true,"helpText":null,"placeholder":null,"multiline":false,"format":optional "number|money|email|phone|time|month","prefix":optional "£","suffix":optional "per month","comb":optional 2 to 40,"boxHeight":optional 27 to 600,"visibleWhen":{"sourceBlockId":"earlier-dropdown-or-checkbox-uuid","operator":"equals","value":"Other"}};',
     "format checks what is typed and gives a phone the right keys: number, money, email, phone, time (HH:MM) or month (a month and year). prefix and suffix are short words printed either side of the answer, such as a currency or a unit: '£', 'kg', '°C', 'hours'. comb prints one box a character for a code of known length, such as a reference, sort code or postcode; a comb or formatted field is one line.",
     'date_field {"type":"date_field","fieldKey":"stable_key","label":"Label","required":true,"helpText":null,"dateFormat":optional {"order":"dmy"|"mdy"|"ymd","separator":"/"|"."|"-"|" ","month":"number"|"short"|"long"},"visibleWhen":optional};',
-    'initials_field {"type":"initials_field","fieldKey":"stable_key","label":"Label","required":true,"helpText":null,"visibleWhen":optional};',
-    'signature_field {"type":"signature_field","fieldKey":"stable_key","label":"Label","required":true,"helpText":null,"visibleWhen":optional};',
+    'initials_field {"type":"initials_field","fieldKey":"stable_key","label":"Label","required":true,"helpText":null,"signer":optional "sender" or 1 to 20,"visibleWhen":optional};',
+    'signature_field {"type":"signature_field","fieldKey":"stable_key","label":"Label","required":true,"helpText":null,"signer":optional "sender" or 1 to 20,"visibleWhen":optional};',
     'file_field {"type":"file_field","fieldKey":"stable_key","label":"Label","required":true,"helpText":null,"visibleWhen":optional};',
     'checkbox_field {"type":"checkbox_field","fieldKey":"stable_key","label":"Label","required":true,"helpText":null,"checkedByDefault":false,"visibleWhen":optional};',
     'dropdown_field {"type":"dropdown_field","fieldKey":"stable_key","label":"Label","required":true,"helpText":null,"placeholder":null,"options":["Known choice A","Known choice B","Other"],"otherLabel":"Question for an Other answer, only with an Other choice","display":"radios" or omitted for a dropdown list,"across":true to set radios side by side or omitted for one a line,"multiple":true for checkboxes where any number may be ticked, or omitted for one answer,"visibleWhen":optional};',
     'choice_grid_field {"type":"choice_grid_field","fieldKey":"stable_key","label":"Label","required":true,"helpText":null,"rows":["Statement or item, 1 to 40, each once"],"options":["Shared choice, 2 to 10, each once, at most 60 characters"],"visibleWhen":optional};',
     'table_field {"type":"table_field","fieldKey":"stable_key","label":"Label","required":false,"helpText":null,"columns":[{"label":"Column, 1 to 8, each once, at most 60 characters","format":optional "number|money|date|time"}],"rows":blank rows to print, 1 to 50,"addRows":optional true so people on a screen can add rows,"visibleWhen":optional}.',
     "A label is at most 160 characters, a dropdown choice 240 and help text 500. A longer statement, such as a consent or a declaration, is a paragraph followed by a checkbox_field with a short label such as 'I agree'.",
-    "boxHeight is also optional on date_field, dropdown_field, initials_field and signature_field, never on checkbox_field or file_field. Omit visibleWhen when it is not needed. When present, encode it as an object with sourceBlockId, operator='equals', and a declared string choice or checkbox boolean. Its source must be a dropdown or checkbox placed before the field; a condition that cannot hold is refused, not dropped."
+    "signer names who signs an initials_field or signature_field: \"sender\" for the business sending it, or a number for the signer at that place in the order they are added; omitted means signer 1. Keep each box's signer when editing. boxHeight is also optional on date_field, dropdown_field, initials_field and signature_field, never on checkbox_field or file_field. Omit visibleWhen when it is not needed. When present, encode it as an object with sourceBlockId, operator='equals', and a declared string choice or checkbox boolean. Its source must be a dropdown or checkbox placed before the field; a condition that cannot hold is refused, not dropped."
   ].join(" ")
 }
 
@@ -2731,10 +2731,11 @@ function applyUpdateBlockOperation(
 
   const candidate: Record<string, unknown> = {
     // Flow writes words, not formatting: words it leaves alone keep theirs,
-    // and a box keeps the height its author gave it unless Flow sets one.
+    // and a box keeps the height and signer its author gave it unless Flow sets them.
     ..."runs" in existingBlock ? { runs: existingBlock.runs } : {},
     ..."itemRuns" in existingBlock ? { itemRuns: existingBlock.itemRuns } : {},
     ..."boxHeight" in existingBlock ? { boxHeight: existingBlock.boxHeight } : {},
+    ..."signer" in existingBlock ? { signer: existingBlock.signer } : {},
     ...payload.block,
     id: payload.blockId
   }

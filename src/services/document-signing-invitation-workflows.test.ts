@@ -9,6 +9,7 @@ import {
 import {
   createBaseTables,
   createRecipientRow,
+  createTemplateContent,
   DOCUMENT_ID,
   DRAWING_DATA_URL,
   FakeClient,
@@ -306,6 +307,58 @@ describe("document signing invitation, token, and public workflows", () => {
         }
       )
     ).rejects.toMatchObject({ statusCode: 400 })
+  })
+
+  it("refuses to send while a box waits for a signer who is not being added", async () => {
+    const tables = createBaseTables()
+    const content = createTemplateContent()
+    content.blocks.push({ id: "50000000-0000-4000-8000-000000000009", type: "signature_field", fieldKey: "witness", label: "Witness", required: false, helpText: null, signer: 2 })
+    tables.documents[0].template_snapshot = content
+    const sendDocumentSigningEmail = vi.fn(async (): Promise<void> => {})
+
+    await expect(
+      sendDocumentForSigning(
+        {
+          actorUserId: MANAGER_ID,
+          organizationId: ORG_ID,
+          documentId: DOCUMENT_ID,
+          recipients: [{ name: "Avery Morgan", email: "avery@example.com" }],
+        },
+        {
+          client: new FakeClient(tables) as never,
+          createId: (): string => RECIPIENT_ONE_ID,
+          createToken: (): string => TOKEN_ONE,
+          now: (): Date => NOW,
+          sendDocumentSigningEmail,
+        }
+      )
+    ).rejects.toMatchObject({ statusCode: 400 })
+    expect(tables.document_signing_recipients).toEqual([])
+    expect(sendDocumentSigningEmail).not.toHaveBeenCalled()
+  })
+
+  it("refuses to send until the sender has drawn in each required box of theirs", async () => {
+    const tables = createBaseTables()
+    const content = createTemplateContent()
+    content.blocks.push({ id: "50000000-0000-4000-8000-000000000009", type: "signature_field", fieldKey: "sender_signature", label: "Our signature", required: true, helpText: null, signer: "sender" })
+    tables.documents[0].template_snapshot = content
+    const send = () =>
+      sendDocumentForSigning(
+        { actorUserId: MANAGER_ID, organizationId: ORG_ID, documentId: DOCUMENT_ID, recipients: [{ name: "Avery Morgan", email: "avery@example.com" }] },
+        {
+          client: new FakeClient(tables) as never,
+          createId: (): string => RECIPIENT_ONE_ID,
+          createToken: (): string => TOKEN_ONE,
+          now: (): Date => NOW,
+          sendDocumentSigningEmail: async (): Promise<void> => {},
+        }
+      )
+
+    await expect(send()).rejects.toMatchObject({ statusCode: 400, message: "Sign \"Our signature\" before sending." })
+    expect(tables.document_signing_recipients).toEqual([])
+
+    tables.document_answers[0].values = { sender_signature: DRAWING_DATA_URL }
+    await expect(send()).resolves.toMatchObject({ workflowStatus: "awaiting_signatures" })
   })
 
   it("marks a private link viewed without exposing token hashes or co-signer emails", async () => {

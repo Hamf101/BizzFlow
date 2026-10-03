@@ -1,12 +1,12 @@
 "use client"
 
 import { readApiErrorMessage } from "@/components/documents/document-upload-client"
-import type { SubmissionFile } from "@/types/submission"
+import type { ClientSubmissionFile } from "@/types/submission"
 
 /** Response returned after allocating one submission file upload. */
 export type SubmissionFileUploadAllocation = {
   expiresInSeconds: number
-  file: SubmissionFile
+  file: ClientSubmissionFile
   uploadUrl: string
 }
 
@@ -135,7 +135,7 @@ export function resolveSubmissionFileContentType(file: File): string {
  */
 export async function completeSubmissionFileUpload(
   input: SubmissionFileRequestIdentity
-): Promise<SubmissionFile> {
+): Promise<ClientSubmissionFile> {
   const response = await fetch(
     `/api/submissions/${encodeURIComponent(input.submissionId)}/files/${encodeURIComponent(input.fileId)}/complete`,
     {
@@ -151,7 +151,7 @@ export async function completeSubmissionFileUpload(
     )
   }
 
-  const body = (await response.json()) as { file: SubmissionFile }
+  const body = (await response.json()) as { file: ClientSubmissionFile }
   return body.file
 }
 

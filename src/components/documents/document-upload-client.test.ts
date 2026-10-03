@@ -70,7 +70,6 @@ describe("document upload client", () => {
           documentId: "document-1",
           versionId: "version-1",
           uploadUrl: "https://storage.example.com/upload",
-          storageKey: "documents/document-1/version-1.pdf",
           expiresInSeconds: 900,
         },
         "org-1",

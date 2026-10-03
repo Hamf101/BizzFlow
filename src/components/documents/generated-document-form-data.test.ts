@@ -48,6 +48,14 @@ describe("generated document form data", () => {
     expect(parseGeneratedDocumentAnswers(formData)).toEqual({})
   })
 
+  it.each(["__proto__", "constructor", "prototype"])("refuses %s as a field key, so a posted answer cannot reach the prototype", (key) => {
+    const formData = new FormData()
+    formData.append(`answer.json.${key}`, JSON.stringify({ polluted: true }))
+
+    expect(() => parseGeneratedDocumentAnswers(formData)).toThrow(GeneratedDocumentFormDataError)
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined()
+  })
+
   it("rejects malformed checkbox values", () => {
     const formData = new FormData()
     formData.append(getGeneratedDocumentAnswerName("boolean", "approved"), "on")

@@ -8,6 +8,7 @@ import {
   shouldRenderTemplateHeader,
   type TemplateRenderBlock
 } from "@/services/templates/template-render-plan"
+import { boxNote } from "@/types/box-signers"
 import type { TemplateBlock, TemplateContent, TextRun } from "@/types/template"
 
 import {
@@ -62,7 +63,6 @@ import {
   normalizeDrawingDataUrl,
   printedOptions,
   RULED_LINE_PITCH,
-  SIGNER_NOTE,
   TABLE_CELL_PADDING,
   TABLE_ROW_LEAST,
   tableRows,
@@ -1452,7 +1452,8 @@ function estimateStyledFieldHeight(
   const label = `${block.label} (continued)`
   const signing = block.type === "signature_field" || block.type === "initials_field"
   const room = signing ? drawingRoom(block, Boolean(normalizeDrawingDataUrl(answers[block.fieldKey]))) : 0
-  const answer = signing ? SIGNER_NOTE : (answerOverride ?? formatFieldValue(block, answers[block.fieldKey]))
+  // Room for the longest note an empty box prints, whoever has signed.
+  const answer = signing ? boxNote(block, []) : (answerOverride ?? formatFieldValue(block, answers[block.fieldKey]))
   const multiline = block.type === "text_field" && block.multiline
   const help = (across: number): number =>
     block.helpText ? estimateWrappedTextHeight(block.helpText, scalePdfCharacterEstimate(110, across), 10) : 0
@@ -1486,7 +1487,7 @@ function estimateLineFieldDepth(block: StyledFieldBlock, answers: Record<string,
   const label = `${block.label} (continued)`
 
   if (block.type === "signature_field" || block.type === "initials_field") {
-    return Math.max(drawingRoom(block, Boolean(normalizeDrawingDataUrl(answers[block.fieldKey]))), estimateWordWrappedHeight(SIGNER_NOTE, width - ANSWER_BOX_PADDING * 2, 15) + ANSWER_BOX_PADDING * 2)
+    return Math.max(drawingRoom(block, Boolean(normalizeDrawingDataUrl(answers[block.fieldKey]))), estimateWordWrappedHeight(boxNote(block, []), width - ANSWER_BOX_PADDING * 2, 15) + ANSWER_BOX_PADDING * 2)
   }
 
   const answer = answerOverride ?? formatFieldValue(block, answers[block.fieldKey])

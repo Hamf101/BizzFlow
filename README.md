@@ -228,7 +228,7 @@ Implemented document routes:
 - `POST /api/documents/:id/complete-upload`
 - `POST /api/documents/:id/download-url` (JSON body with `organizationId` and optional `versionId`)
 - `POST /api/documents/:id/opened`
-- `GET /api/documents/:id/pdf` (no-store preview while editable; signed redirect to the exact finalized version after completion)
+- `GET /api/documents/:id/pdf` (no-store preview until finalized; signed redirect to the exact finalized version once the last signature, or the hourly Inngest sweep, has finalized it; reading never finalizes)
 - `POST /api/templates/flow`
 
 Implemented internal-submission file routes:

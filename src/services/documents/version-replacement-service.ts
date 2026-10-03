@@ -168,7 +168,6 @@ export async function createDocumentReplacementUploadUrl(
           documentId: document.id,
           versionId: pendingVersion.id,
           uploadUrl: refreshedUrl.uploadUrl,
-          storageKey: refreshedUrl.storageKey,
           expiresInSeconds: refreshedUrl.expiresInSeconds,
         }
       }
@@ -245,7 +244,6 @@ export async function createDocumentReplacementUploadUrl(
         documentId: document.id,
         versionId: version.id,
         uploadUrl: signedUrl.uploadUrl,
-        storageKey: signedUrl.storageKey,
         expiresInSeconds: signedUrl.expiresInSeconds,
       }
     }

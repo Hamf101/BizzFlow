@@ -32,6 +32,7 @@ import {
   toIsoDate,
 } from "@/lib/date-format"
 import { cn } from "@/lib/utils"
+import { boxSigner, MAX_SIGNING_RECIPIENTS } from "@/types/box-signers"
 import type { TemplateBlock } from "@/types/template"
 import { imageSource, type PictureSource } from "@/types/template-images"
 import { evaluateTemplateDropdownOptionEdit } from "@/types/template-structure"
@@ -513,11 +514,63 @@ export function BlockFields({
       )
     case "initials_field":
     case "signature_field":
+      return (
+        <FieldBlockFields block={block} blocks={blocks} onChange={onChange}>
+          <SignerField block={block} blocks={blocks} onChange={onChange} />
+        </FieldBlockFields>
+      )
     case "file_field":
       return (
         <FieldBlockFields block={block} blocks={blocks} onChange={onChange} />
       )
   }
+}
+
+/**
+ * Who signs a signature or initials box: the sender, or a signer by the order
+ * they are added when it is sent. Offers one signer past the highest in use.
+ */
+function SignerField({
+  block,
+  blocks,
+  onChange,
+}: {
+  block: Extract<TemplateBlock, { type: "initials_field" | "signature_field" }>
+  blocks: readonly TemplateBlock[]
+  onChange: (block: TemplateBlock) => void
+}): ReactElement {
+  const highest = Math.max(
+    0,
+    ...blocks.map((other: TemplateBlock): number => {
+      const signer = "signer" in other ? other.signer : undefined
+
+      return typeof signer === "number" ? signer : 0
+    })
+  )
+  const count = Math.min(MAX_SIGNING_RECIPIENTS, Math.max(5, highest + 1))
+
+  return (
+    <Field>
+      <FieldLabel htmlFor={`${block.id}-signer`}>Signed by</FieldLabel>
+      <Select
+        id={`${block.id}-signer`}
+        onChange={(event: ChangeEvent<HTMLSelectElement>): void =>
+          onChange({
+            ...block,
+            signer: event.target.value === "sender" ? "sender" : Number(event.target.value),
+          })
+        }
+        value={String(boxSigner(block))}
+      >
+        <option value="sender">Sender</option>
+        {Array.from({ length: count }, (_, index: number) => (
+          <option key={index} value={index + 1}>
+            Signer {index + 1}
+          </option>
+        ))}
+      </Select>
+    </Field>
+  )
 }
 
 function AffixField({

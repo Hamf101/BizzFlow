@@ -74,12 +74,14 @@ import type {
   PublicSignerStatus,
   SendDocumentForSigningResult,
 } from "@/types/signing"
+import { boxSigner } from "@/types/box-signers"
 import {
   MAX_TEMPLATE_CONTENT_JSON_LENGTH,
   parseTemplateContent,
   type DocumentSigningRecipientRow,
   type TemplateContent,
 } from "@/types/template"
+import { getVisibleTemplateBlocks } from "@/types/template-visibility"
 import { requireStoredImages, TemplateImageServiceError } from "@/services/template-image-service"
 import { withoutImageUrls } from "@/types/template-images"
 
@@ -206,7 +208,8 @@ export async function saveGeneratedDocumentAnswers(
       const content = view.document.templateSnapshot
       const normalizedPatch = await normalizeAnswerPatch(
         collectFields(content),
-        input.values
+        input.values,
+        { sent: view.workflowStatus !== "draft" || view.recipients.length > 0 }
       )
       const visiblePatch = pruneHiddenAnswerPatch(
         content,
@@ -331,6 +334,49 @@ export async function updateGeneratedDocumentContent(
   )
 }
 
+/**
+ * Refuses to send while a required box of the sender's has no drawing, or a
+ * signature or initials box is assigned to a signer beyond those the document
+ * will have, so no box waits for no one.
+ *
+ * @param content - The document's page.
+ * @param answers - Its answers, which hold the sender's drawings.
+ * @param signerCount - Signers the document has once these are added.
+ * @throws DocumentSigningServiceError naming the first box that is not ready.
+ */
+function assertBoxesReadyToSend(
+  content: TemplateContent,
+  answers: Record<string, unknown>,
+  signerCount: number
+): void {
+  for (const block of getVisibleTemplateBlocks(content, answers)) {
+    if (
+      (block.type === "signature_field" || block.type === "initials_field") &&
+      block.required &&
+      boxSigner(block) === "sender" &&
+      !answers[block.fieldKey]
+    ) {
+      throw new DocumentSigningServiceError(`Sign "${block.label}" before sending.`, 400)
+    }
+  }
+
+  const needed = Math.max(
+    0,
+    ...content.blocks.map((block): number => {
+      const signer = block.type === "signature_field" || block.type === "initials_field" ? boxSigner(block) : 0
+
+      return signer === "sender" ? 0 : signer
+    })
+  )
+
+  if (needed > signerCount) {
+    throw new DocumentSigningServiceError(
+      `This document has a box for Signer ${needed}. Add at least ${needed} signers to send it.`,
+      400
+    )
+  }
+}
+
 function parseDocumentContent(value: unknown): TemplateContent {
   if (JSON.stringify(value ?? null).length > MAX_TEMPLATE_CONTENT_JSON_LENGTH) {
     throw new DocumentSigningServiceError("The document is too large to save.", 400)
@@ -398,6 +444,11 @@ export async function sendDocumentForSigning(
 
       const recipients = normalizeRecipientInputs(input.recipients)
       assertNewRecipientEmails(view.recipients, recipients)
+      assertBoxesReadyToSend(
+        view.document.templateSnapshot,
+        view.answers,
+        view.recipients.length + recipients.length
+      )
       const now = getSigningNow(deps.now)
       const expiresAt = new Date(now.getTime() + TOKEN_LIFETIME_MS).toISOString()
       const createId = deps.createId ?? randomUUID
@@ -744,7 +795,8 @@ export async function completePublicDocumentSigning(
       )
       const requiresInitials = templateRequiresRecipientInitials(
         view.document.templateSnapshot,
-        effectiveValues
+        effectiveValues,
+        view.signers.findIndex((signer: PublicSignerStatus): boolean => signer.id === recipient.id) + 1
       )
       const [signatureData, initialsData] = await Promise.all([
         recipient.requires_signature

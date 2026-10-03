@@ -18,10 +18,6 @@ import {
 } from "@/lib/action-result"
 import { buildRedirect, getFormString } from "@/lib/form-utils"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
-import {
-  canPerformOrganizationAction,
-  type OrganizationPermissionAction,
-} from "@/lib/permissions"
 import { findGuestOrganizationId } from "@/services/document-service"
 import { getCurrentOrganizationContext } from "@/services/organization-service"
 import type { SaveResult } from "@/components/editor/use-autosave"
@@ -151,7 +147,7 @@ export async function sendGeneratedDocumentAction(
   })
 
   try {
-    const actionContext = await loadMemberActionContext("documents:send")
+    const actionContext = await loadMemberActionContext()
     const recipients = parseRecipientCollection(
       getFormString(formData, "recipients")
     )
@@ -213,7 +209,7 @@ export async function resendGeneratedDocumentInvitationAction(
   })
 
   try {
-    const actionContext = await loadMemberActionContext("documents:send")
+    const actionContext = await loadMemberActionContext()
     await resendDocumentSigningInvitation({
       actorUserId: actionContext.actorUserId,
       organizationId: actionContext.context.organization.id,
@@ -250,13 +246,12 @@ async function loadFillActionContext(documentId: string): Promise<{ actorUserId:
     return { actorUserId: user.id, organizationId: guestOrganizationId }
   }
 
-  const member = await loadMemberActionContext("documents:fill")
+  const member = await loadMemberActionContext()
   return { actorUserId: member.actorUserId, organizationId: member.context.organization.id }
 }
 
-async function loadMemberActionContext(
-  action: OrganizationPermissionAction
-): Promise<MemberDocumentActionContext> {
+// The signing services check the actor's document access and permission themselves.
+async function loadMemberActionContext(): Promise<MemberDocumentActionContext> {
   const user = await getAuthenticatedUser()
   const context = await getCurrentOrganizationContext(user.id)
 
@@ -264,13 +259,6 @@ async function loadMemberActionContext(
     throw new MemberDocumentActionError(
       "Create an organization before managing documents.",
       428
-    )
-  }
-
-  if (!canPerformOrganizationAction(context.membership, action)) {
-    throw new MemberDocumentActionError(
-      "You do not have permission to perform this document action.",
-      403
     )
   }
 

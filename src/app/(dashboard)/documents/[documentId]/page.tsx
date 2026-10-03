@@ -33,7 +33,6 @@ import type { DocumentComment } from "@/types/comment"
 import {
   type DocumentDetail,
   type DocumentLifecycleState,
-  type DocumentVersion,
   isViewableDocumentType,
 } from "@/types/document"
 import type { OrganizationContext } from "@/types/organization"
@@ -351,7 +350,7 @@ function VersionListCard({
   currentVersionId: string | null
   documentId: string
   organizationId: string
-  versions: DocumentVersion[]
+  versions: DocumentDetail["versions"]
 }): ReactElement {
   return (
     <Card>
@@ -363,7 +362,7 @@ function VersionListCard({
           <p className="text-sm text-muted-foreground">No versions yet.</p>
         ) : (
           <div className="flex flex-col gap-3">
-            {versions.map((version: DocumentVersion) => (
+            {versions.map((version) => (
               <div
                 className="grid gap-3 rounded-lg border bg-background p-3 md:grid-cols-[minmax(0,1fr)_140px]"
                 key={version.id}

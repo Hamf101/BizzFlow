@@ -1,14 +1,13 @@
-import {
-  canPerformOrganizationAction,
-  createOrganizationPermissionSubject,
-} from "@/lib/permissions"
 import { createAdminClient } from "@/lib/supabase/admin"
 import type {
+  NotificationActorInput,
   NotificationServiceClient,
   NotificationServiceDeps,
 } from "@/services/notifications/delivery-service"
-import { NotificationServiceError } from "@/services/notifications/delivery-service"
-import { loadActiveMembership } from "@/services/organizations/active-membership"
+import {
+  NotificationServiceError,
+  requireNotificationAdmin,
+} from "@/services/notifications/delivery-service"
 
 /** Organization-wide notification switches. */
 export type OrganizationNotificationSettings = {
@@ -74,28 +73,28 @@ export async function loadOrganizationNotificationSettingsMap(
 }
 
 /**
- * Loads one organization's notification switches.
+ * Loads one organization's notification switches for someone who may change them.
  *
- * @param organizationId - Tenant whose settings are needed.
+ * @param input - Actor and tenant whose settings are needed.
  * @param deps - Optional database dependency for tests.
  * @returns The organization's switches, defaulting to enabled.
+ * @throws NotificationServiceError without organization:manage.
  */
 export async function getOrganizationNotificationSettings(
-  organizationId: string,
+  input: NotificationActorInput,
   deps: NotificationServiceDeps = {}
 ): Promise<OrganizationNotificationSettings> {
   const client = deps.client ?? createAdminClient()
+  await requireNotificationAdmin(client, input)
   const settings = await loadOrganizationNotificationSettingsMap(client, [
-    organizationId,
+    input.organizationId,
   ])
 
-  return settings.get(organizationId) ?? DEFAULT_SETTINGS
+  return settings.get(input.organizationId) ?? DEFAULT_SETTINGS
 }
 
 /** Input for changing an organization's notification switches. */
-export type UpdateOrganizationNotificationSettingsInput = {
-  actorUserId: string
-  organizationId: string
+export type UpdateOrganizationNotificationSettingsInput = NotificationActorInput & {
   emailNotificationsEnabled: boolean
   smsNotificationsEnabled: boolean
 }
@@ -117,36 +116,7 @@ export async function updateOrganizationNotificationSettings(
   deps: NotificationServiceDeps = {}
 ): Promise<OrganizationNotificationSettings> {
   const client = deps.client ?? createAdminClient()
-
-  const { data: membership, error: membershipError } = await loadActiveMembership(client, input.organizationId, input.actorUserId)
-
-  if (membershipError) {
-    throw new NotificationServiceError(
-      "Unable to verify your organization access.",
-      500
-    )
-  }
-
-  const membershipRow = membership as {
-    role?: string
-    role_definition?: { permissions?: readonly string[] | null } | null
-  } | null
-  const subject = membershipRow?.role
-    ? createOrganizationPermissionSubject(
-        membershipRow.role,
-        membershipRow.role_definition?.permissions
-      )
-    : null
-
-  if (
-    !subject ||
-    !canPerformOrganizationAction(subject, "organization:manage")
-  ) {
-    throw new NotificationServiceError(
-      "You do not have permission to change organization notification settings.",
-      403
-    )
-  }
+  await requireNotificationAdmin(client, input)
 
   const timestamp = (deps.now?.() ?? new Date()).toISOString()
   const { data, error } = await client

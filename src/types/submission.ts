@@ -1,3 +1,4 @@
+import type { ClientFile } from "@/lib/r2/stored-file"
 import { z } from "zod"
 
 import {
@@ -294,6 +295,9 @@ export type AvailableSubmissionFile = SubmissionFileBase & {
 
 /** Single-file metadata associated with one template file field. */
 export type SubmissionFile = PendingSubmissionFile | AvailableSubmissionFile
+
+/** Submission file metadata as a browser receives it, without its object key. */
+export type ClientSubmissionFile = ClientFile<SubmissionFile>
 
 /**
  * Parses an unknown database or RPC row into a typed internal submission.

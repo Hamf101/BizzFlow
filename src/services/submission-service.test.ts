@@ -1573,6 +1573,8 @@ describe("internal submission file workflow", () => {
       uploadUrl: "https://r2.example/upload",
       expiresInSeconds: 300
     })
+    // The object key is internal: nothing that reaches a browser carries it.
+    expect(result.file).not.toHaveProperty("storageKey")
     expect(createSignedSubmissionUploadUrl).toHaveBeenCalledOnce()
     expect(client.rpc).toHaveBeenCalledTimes(2)
   })

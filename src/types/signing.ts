@@ -70,6 +70,9 @@ export type PublicDocumentSigningView = {
     status: DocumentSigningRecipientStatus
     tokenExpiresAt: string
     signedAt: string | null
+    /** Their own drawings, once they have signed, for their own boxes. */
+    signatureDataUrl: string | null
+    initialsDataUrl: string | null
   }
   signers: PublicSignerStatus[]
 }

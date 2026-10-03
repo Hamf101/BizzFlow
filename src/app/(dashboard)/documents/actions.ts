@@ -305,7 +305,7 @@ export async function createDocumentCommentAction(
 ): Promise<void> {
   const organizationId = getFormString(formData, "organizationId")
   const documentId = getFormString(formData, "documentId")
-  const detailPath = `/documents/${documentId}`
+  const detailPath = `/documents/${encodeURIComponent(documentId)}`
 
   try {
     const user = await getAuthenticatedUser()

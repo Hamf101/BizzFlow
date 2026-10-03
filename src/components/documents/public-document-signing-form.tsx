@@ -16,6 +16,7 @@ import {
   CardHeader,
   CardTitle
 } from "@/components/ui/card"
+import { withBoxMarks } from "@/types/box-signers"
 import type { PublicDocumentSigningView } from "@/types/signing"
 import {
   pruneHiddenTemplateFieldValues,
@@ -52,13 +53,29 @@ export function PublicDocumentSigningForm({
       view.answers
     )
   )
+  // Each drawn box shows only its signer's mark: the sender's, or the reader's
+  // own once they have signed. A co-signer's drawing is not theirs to see.
+  const signerNumber =
+    view.signers.findIndex((signer): boolean => signer.id === view.recipient.id) + 1
   const requiresInitials = useMemo(
     (): boolean =>
       templateRequiresVisibleInitials(
         view.document.templateSnapshot,
-        currentAnswers
+        currentAnswers,
+        signerNumber
       ),
-    [currentAnswers, view.document.templateSnapshot]
+    [currentAnswers, signerNumber, view.document.templateSnapshot]
+  )
+  const shownAnswers = useMemo(
+    (): Record<string, unknown> =>
+      withBoxMarks(
+        view.document.templateSnapshot.blocks,
+        view.answers,
+        view.signers.map((signer) =>
+          signer.id === view.recipient.id ? view.recipient : { id: signer.id }
+        )
+      ),
+    [view]
   )
   const answerBaselineFields = getGeneratedDocumentAnswerBaselineFields(
     view.document.templateSnapshot,
@@ -96,12 +113,14 @@ export function PublicDocumentSigningForm({
         </CardHeader>
         <CardContent className="overflow-auto bg-muted/30 p-4 sm:p-6">
           <GeneratedDocumentContent
-            answers={view.answers}
+            answers={shownAnswers}
             content={view.document.templateSnapshot}
             editable={editable}
             onAnswersChange={setCurrentAnswers}
             recipientSigned={view.recipient.status === "signed"}
             recipientSigning
+            signerNumber={signerNumber}
+            signers={view.signers}
             title={view.document.title}
           />
         </CardContent>

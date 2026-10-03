@@ -6,12 +6,14 @@ import { type ReactElement, useMemo, useState } from "react"
 
 import { EditorCanvas } from "@/components/editor/editor-canvas"
 import { EditorFrame, EditorNotice } from "@/components/editor/editor-frame"
+import { PaperSigning } from "@/components/editor/paper-field"
 import { useReadOnlyController } from "@/components/editor/read-only-controller"
 import { SendToAnswerDialog } from "@/components/editor/lazy-panels"
 import { ShareButton } from "@/components/sharing/share-button"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { resolvePageGeometry } from "@/services/templates/template-render-plan"
+import { withBoxMarks } from "@/types/box-signers"
 import type { GeneratedDocumentSigningView } from "@/types/signing"
 import { upgradeV2TemplateContentToV3 } from "@/types/template"
 import { applyVisibleTemplateFieldValue } from "@/types/template-visibility"
@@ -44,6 +46,9 @@ export function DocumentPreview({
   const content = useMemo(() => upgradeV2TemplateContentToV3(document.templateSnapshot), [document.templateSnapshot])
   const controller = useReadOnlyController(content)
   const [answers, setAnswers] = useState<Record<string, unknown>>(view.answers)
+  // As in the editor: each drawn box is its signer's, and shows only their mark.
+  const marked = useMemo(() => withBoxMarks(content.blocks, answers, view.recipients), [answers, content.blocks, view.recipients])
+  const signing = useMemo(() => ({ sent: view.workflowStatus !== "draft" || view.recipients.length > 0, signers: view.recipients }), [view.recipients, view.workflowStatus])
   const [sending, setSending] = useState(false)
   const geometry = resolvePageGeometry(content.layout)
   const editHref = `/documents/${encodeURIComponent(document.id)}/edit`
@@ -96,20 +101,22 @@ export function DocumentPreview({
       titleEditable={false}
     >
       {({ narrow, zoom }) => (
-        <EditorCanvas
-          allowFiles={false}
-          answers={answers}
-          controller={controller}
-          designable={false}
-          documentTitle={document.title}
-          fields="fill"
-          narrow={narrow}
-          onAnswerChange={(fieldKey, value) =>
-            setAnswers((current) => applyVisibleTemplateFieldValue(content, current, fieldKey, value))
-          }
-          textEditable={false}
-          zoom={zoom}
-        />
+        <PaperSigning.Provider value={signing}>
+          <EditorCanvas
+            allowFiles={false}
+            answers={marked}
+            controller={controller}
+            designable={false}
+            documentTitle={document.title}
+            fields="fill"
+            narrow={narrow}
+            onAnswerChange={(fieldKey, value) =>
+              setAnswers((current) => applyVisibleTemplateFieldValue(content, current, fieldKey, value))
+            }
+            textEditable={false}
+            zoom={zoom}
+          />
+        </PaperSigning.Provider>
       )}
     </EditorFrame>
   )

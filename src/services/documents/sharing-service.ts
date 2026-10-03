@@ -3,7 +3,7 @@ import { z } from "zod"
 import { canPerformOrganizationAction, isOrganizationRole, type OrganizationRole } from "@/lib/permissions"
 import { createSecureToken, hashToken, TOKEN_LIFETIME_MS } from "@/services/document-signing/token-security"
 import { getEffectiveDocumentAccess, getEffectiveFolderAccess } from "@/services/documents/access-service"
-import { recordRequiredDocumentAuditLog } from "@/services/documents/audit"
+import { recordDocumentAuditLog, recordRequiredDocumentAuditLog } from "@/services/documents/audit"
 import type { DocumentServiceClient } from "@/services/documents/contracts"
 import { DocumentServiceError } from "@/services/documents/errors"
 import { sendGuestInviteEmail } from "@/services/documents/guest-invite-email"
@@ -138,7 +138,7 @@ export async function getSharing(input: SharingInput, deps: SharingServiceDeps =
 export async function setSharingAccess(input: SetSharingAccessInput, deps: SharingServiceDeps = {}): Promise<SharingView> {
   return runDocumentOperation("set_sharing_access", identifiers(input), async () => {
     const client = getClient(deps)
-    const target = await authorize(client, input)
+    const target = await authorize(client, input, true)
     const kind = KINDS[input.resource.kind]
     const people = await listMembers(deps, input)
 
@@ -230,7 +230,7 @@ export async function setSharingInheritance(
 ): Promise<SharingView> {
   return runDocumentOperation("set_sharing_inheritance", identifiers(input), async () => {
     const client = getClient(deps)
-    const target = await authorize(client, input)
+    const target = await authorize(client, input, true)
     const kind = KINDS[input.resource.kind]
     const { error } = await client
       .from(kind.table as AnyTable)
@@ -264,8 +264,9 @@ function identifiers(input: SharingInput): Record<string, string> {
 
 // Who may change the sharing: the person who made it, and anyone who manages
 // folders (owner admins and managers), provided they can open it. Anyone who
-// cannot open it is told it does not exist.
-async function authorize(client: DocumentServiceClient, input: SharingInput): Promise<Target> {
+// cannot open it is told it does not exist. Only an active document's sharing
+// changes: one archived or in the trash is not passed on.
+async function authorize(client: DocumentServiceClient, input: SharingInput, change = false): Promise<Target> {
   const kind = KINDS[input.resource.kind]
   const notFound = new DocumentServiceError(`${kind.label} was not found.`, 404)
   const membership = await getActiveMembership(client, input.organizationId, input.actorUserId)
@@ -282,6 +283,7 @@ async function authorize(client: DocumentServiceClient, input: SharingInput): Pr
         kind.nameColumn,
         kind.parentColumn,
         input.resource.kind === "document" ? "source_kind" : null,
+        input.resource.kind === "document" ? "lifecycle_state" : null,
       ]
         .filter(Boolean)
         .join(",") as "id" // the columns differ by kind, so the database's typing cannot follow them
@@ -315,6 +317,10 @@ async function authorize(client: DocumentServiceClient, input: SharingInput): Pr
     if (access !== "contributor" && access !== "editor" && !canManage) {
       throw new DocumentServiceError("Only someone who can edit this, or a manager, can change who it is shared with.", 403)
     }
+  }
+
+  if (change && input.resource.kind === "document" && row.lifecycle_state !== "active") {
+    throw new DocumentServiceError("Only an active document's sharing can change.", 409)
   }
 
   return target
@@ -589,7 +595,8 @@ async function shareWithGuest(
     }
   }
 
-  await recordRequiredDocumentAuditLog(deps, {
+  // Best effort: the invite may already be in their inbox, so a lost record must not fail the share.
+  await recordDocumentAuditLog(deps, {
     action: input.level === null ? KINDS.document.audit.revoked : KINDS.document.audit.granted,
     actorUserId: input.actorUserId,
     metadata: { level: input.level, principal: email, principalKind: "guest" },

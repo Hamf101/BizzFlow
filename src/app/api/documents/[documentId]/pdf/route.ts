@@ -14,7 +14,7 @@ import {
   DocumentPdfServiceError,
 } from "@/services/document-pdf-service"
 import {
-  finalizeGeneratedDocumentPdf,
+  findFinalizedGeneratedDocumentVersionId,
   GeneratedDocumentFinalizationServiceError,
 } from "@/services/generated-document-finalization-service"
 import {
@@ -34,6 +34,7 @@ type GeneratedDocumentPdfRouteContext = {
 
 /**
  * Delivers a private preview or redirects to the immutable finalized PDF.
+ * Reading never finalizes: the last signature does (see the signing action).
  *
  * @param request - Authenticated GET request; `?fillable=1` asks for form fields.
  * @param context - Dynamic document route parameters.
@@ -72,17 +73,17 @@ export async function GET(
       documentId,
     })
 
-    if (view.workflowStatus === "completed") {
-      const finalization = await finalizeGeneratedDocumentPdf({
-        actorUserId: user.id,
-        organizationId,
-        documentId,
-      })
+    const finalizedVersionId =
+      view.workflowStatus === "completed"
+        ? await findFinalizedGeneratedDocumentVersionId({ actorUserId: user.id, organizationId, documentId })
+        : null
+
+    if (finalizedVersionId) {
       const download = await createDocumentDownloadUrl({
         actorUserId: user.id,
         organizationId,
         documentId,
-        versionId: finalization.versionId,
+        versionId: finalizedVersionId,
       })
 
       return NextResponse.redirect(download.downloadUrl, {

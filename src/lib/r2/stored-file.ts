@@ -6,6 +6,23 @@
 export const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
+/** A stored file's record as a browser may see it: its object key stays server-side. */
+export type ClientFile<T> = T extends unknown ? Omit<T, "storageKey"> : never
+
+/**
+ * Drops the internal object key before a file record is returned to a client.
+ *
+ * @param file - A stored file record.
+ * @returns The same record without its storage key.
+ */
+export function toClientFile<T extends { storageKey: string }>(
+  file: T
+): ClientFile<T> {
+  const clientFile: Partial<T> = { ...file }
+  delete clientFile.storageKey
+  return clientFile as ClientFile<T>
+}
+
 /** Longest life of any signed upload or download link. */
 export const SIGNED_URL_MAX_TTL_SECONDS = 15 * 60
 

@@ -35,7 +35,7 @@ import type { SubmissionDetail } from "@/services/submission-service"
 import { listTasks } from "@/services/task-service"
 import { withTemplateImageUrls } from "@/services/template-image-service"
 import type { OrganizationMember } from "@/types/organization"
-import type { SubmissionFile } from "@/types/submission"
+import type { ClientSubmissionFile } from "@/types/submission"
 import type { Task } from "@/types/task"
 
 import { createTaskAction } from "../../tasks/actions"
@@ -472,8 +472,8 @@ function buildFileFieldContent(input: {
   editable: boolean
   organizationId: string
 }): Readonly<Record<string, ReactNode>> {
-  const filesByFieldKey = new Map<string, SubmissionFile>(
-    input.detail.files.map((file: SubmissionFile): [string, SubmissionFile] => [
+  const filesByFieldKey = new Map<string, ClientSubmissionFile>(
+    input.detail.files.map((file: ClientSubmissionFile): [string, ClientSubmissionFile] => [
       file.fieldKey,
       file
     ])

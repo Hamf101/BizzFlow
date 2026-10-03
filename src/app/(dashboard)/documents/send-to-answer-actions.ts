@@ -12,6 +12,7 @@ import {
   type AnswerRequestSummary,
   listAnswerRequests,
   MAX_ANSWER_RECIPIENTS,
+  readAnswerRequestRecipient,
   resendAnswerRequest,
   revokeAnswerRequest,
   sendToAnswer,
@@ -91,10 +92,11 @@ export async function resendAnswerRequestAction(input: z.infer<typeof requestSch
   const { linkId, source } = parsed.data
 
   return run(source, async (who) => {
+    // The recipient's own budget, as a first send spends it, so resending cannot flood one inbox.
+    const email = await readAnswerRequestRecipient({ ...who, linkId })
     await checkRateLimit("outbound_email", who.actorUserId)
     await checkRateLimit("outbound_email_daily", who.actorUserId)
-    // The address is not known here; the link stands in for it.
-    await checkRateLimit("email_recipient", linkId)
+    await checkRateLimit("email_recipient", hashRateLimitKeyPart(email))
 
     return [await resendAnswerRequest({ ...who, linkId })]
   })

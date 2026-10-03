@@ -142,17 +142,13 @@ describe("submission review actions", () => {
     })
   })
 
-  it("asks for everyone to approve when no number is given, and turns staff away", async () => {
+  // Staff are turned away by the service itself (submission-service.test.ts).
+  it("asks for everyone to approve when no number is given", async () => {
     const formData = createSubmissionFormData()
     formData.append("reviewerIds", ASSIGNEE_USER_ID)
 
     await expect(setSubmissionReviewersAction(formData)).rejects.toThrow("submission_assigned")
     expect(setInternalSubmissionReviewers).toHaveBeenCalledWith(expect.objectContaining({ requiredApprovals: null }))
-
-    vi.mocked(setInternalSubmissionReviewers).mockClear()
-    mockOrganizationContext("staff")
-    await expect(setSubmissionReviewersAction(formData)).rejects.toThrow("permission_denied")
-    expect(setInternalSubmissionReviewers).not.toHaveBeenCalled()
   })
 
   it("sets a change request aside with a note, and approves too when asked", async () => {

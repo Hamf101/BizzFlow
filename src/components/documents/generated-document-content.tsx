@@ -3,9 +3,11 @@
 import Image from "next/image"
 import {
   type ChangeEvent,
+  createContext,
   type CSSProperties,
   type ReactElement,
   type ReactNode,
+  useContext,
   useEffect,
   useMemo,
   useState
@@ -39,6 +41,7 @@ import {
   type TemplateRenderPlan,
   type TemplateRenderSection
 } from "@/services/templates/template-render-plan"
+import { boxNote, boxSigner } from "@/types/box-signers"
 import type {
   TemplateBlock,
   TemplateBranding,
@@ -66,6 +69,10 @@ export type GeneratedDocumentAnswerControl = Readonly<{
   onChange: (answers: Record<string, unknown>) => void
 }>
 
+// The place of the signer reading a signing link, whose own boxes say so, and
+// who has signed, whose boxes say that instead.
+const ReadingSigner = createContext<{ reader: number; signers: ReadonlyArray<{ status: string }> }>({ reader: 0, signers: [] })
+
 type GeneratedDocumentContentProps = {
   /** Present when the caller owns answer state across mounts. */
   answerControl?: GeneratedDocumentAnswerControl
@@ -77,6 +84,10 @@ type GeneratedDocumentContentProps = {
   onAnswersChange?: (answers: Record<string, unknown>) => void
   recipientSigning?: boolean
   recipientSigned?: boolean
+  /** The signing link's signer, by the order they were added. */
+  signerNumber?: number
+  /** Every signer, in that order. */
+  signers?: ReadonlyArray<{ status: string }>
   title?: string
 }
 
@@ -95,6 +106,8 @@ export function GeneratedDocumentContent({
   onAnswersChange,
   recipientSigning = false,
   recipientSigned = false,
+  signerNumber = 0,
+  signers,
   title
 }: GeneratedDocumentContentProps): ReactElement {
   // Server-rendered call sites post answers through FormData and cannot own
@@ -125,6 +138,7 @@ export function GeneratedDocumentContent({
     onAnswersChange?.(currentAnswers)
   }, [currentAnswers, onAnswersChange])
 
+  const reading = useMemo(() => ({ reader: signerNumber, signers: signers ?? [] }), [signerNumber, signers])
   const renderPlan = useMemo(
     () =>
       createTemplateRenderPlan({
@@ -202,15 +216,17 @@ export function GeneratedDocumentContent({
           </h2>
         )}
 
-        <DocumentFlow
-          answers={currentAnswers}
-          editable={editable}
-          fileFieldContent={fileFieldContent}
-          renderPlan={renderPlan}
-          onAnswerChange={applyAnswer}
-          recipientSigned={recipientSigned}
-          recipientSigning={recipientSigning}
-        />
+        <ReadingSigner.Provider value={reading}>
+          <DocumentFlow
+            answers={currentAnswers}
+            editable={editable}
+            fileFieldContent={fileFieldContent}
+            renderPlan={renderPlan}
+            onAnswerChange={applyAnswer}
+            recipientSigned={recipientSigned}
+            recipientSigning={recipientSigning}
+          />
+        </ReadingSigner.Provider>
         {shouldRenderTemplateFooter(renderPlan.layout, 1) &&
           renderPlan.layout.pageNumbering === "page_x_of_y" && (
             <GeneratedPageFooter />
@@ -733,11 +749,11 @@ export function GeneratedBlock({
       if (recipientSigning) {
         return (
           <AnswerFieldFrame block={block}>
-            <div className="rounded-lg border border-dashed border-border px-4 py-5 text-sm text-muted-foreground">
-              {recipientSigned
-                ? `${drawingLabel === "signature" ? "Signature" : "Initials"} recorded.`
-                : `${drawingLabel === "signature" ? "Signature" : "Initials"} will be captured in the signing acknowledgement below.`}
-            </div>
+            <SignerBox
+              block={block}
+              mark={existingValue}
+              signed={recipientSigned}
+            />
           </AnswerFieldFrame>
         )
       }
@@ -763,6 +779,44 @@ export function GeneratedBlock({
       )
     }
   }
+}
+
+/**
+ * A drawn box on a signing link: its signer's mark once made, or whose it is.
+ * The reader's own boxes take the drawing they make in the Sign step.
+ */
+function SignerBox({
+  block,
+  mark,
+  signed
+}: {
+  block: Extract<TemplateBlock, { type: "initials_field" | "signature_field" }>
+  mark: string
+  signed: boolean
+}): ReactElement {
+  const { reader, signers } = useContext(ReadingSigner)
+  const signer = boxSigner(block)
+  const initials = block.type === "initials_field"
+
+  if (mark) {
+    return <DrawingPreview label={block.label} value={mark} />
+  }
+
+  if (signer === "sender") {
+    return <ReadOnlyAnswer value="" />
+  }
+
+  return (
+    <div className="rounded-lg border border-dashed border-border px-4 py-5 text-sm text-muted-foreground">
+      {signer !== reader
+        ? `${boxNote(block, signers)}.`
+        : signed
+          ? `Signed without ${initials ? "initials" : "a drawing"}.`
+          : initials
+            ? "Your initials go here, from the Sign step below."
+            : "You sign here, from the Sign step below."}
+    </div>
+  )
 }
 
 function AnswerFieldFrame({

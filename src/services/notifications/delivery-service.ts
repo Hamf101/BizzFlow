@@ -1,7 +1,12 @@
 import { randomUUID } from "node:crypto"
 
+import {
+  canPerformOrganizationAction,
+  createOrganizationPermissionSubject,
+} from "@/lib/permissions"
 import { createAdminClient, type AdminSupabaseClient } from "@/lib/supabase/admin"
 import { recordAuditLog as defaultRecordAuditLog } from "@/services/audit-service"
+import { loadActiveMembership } from "@/services/organizations/active-membership"
 import type { AuditLogAction, AuditMetadata } from "@/types/audit"
 import {
   parseNotificationDeliveryRow,
@@ -148,9 +153,45 @@ export async function recordNotificationDelivery(
   }
 }
 
-/** Input for reading a tenant's recent delivery history. */
-export type ListNotificationDeliveriesInput = {
+/** A member acting on one organization's notification setup. */
+export type NotificationActorInput = {
+  actorUserId: string
   organizationId: string
+}
+
+/**
+ * Refuses anyone without `organization:manage`: notification switches and
+ * delivery history are organization administration.
+ *
+ * @param client - Trusted database client.
+ * @param input - Actor and tenant.
+ * @throws NotificationServiceError 403 without the permission, 500 when the read fails.
+ */
+export async function requireNotificationAdmin(
+  client: NotificationServiceClient,
+  input: NotificationActorInput
+): Promise<void> {
+  const { data: membership, error } = await loadActiveMembership(client, input.organizationId, input.actorUserId)
+
+  if (error) {
+    throw new NotificationServiceError("Unable to verify your organization access.", 500)
+  }
+
+  const row = membership as {
+    role?: string
+    role_definition?: { permissions?: readonly string[] | null } | null
+  } | null
+  const subject = row?.role
+    ? createOrganizationPermissionSubject(row.role, row.role_definition?.permissions)
+    : null
+
+  if (!subject || !canPerformOrganizationAction(subject, "organization:manage")) {
+    throw new NotificationServiceError("You do not have permission to manage organization notifications.", 403)
+  }
+}
+
+/** Input for reading a tenant's recent delivery history. */
+export type ListNotificationDeliveriesInput = NotificationActorInput & {
   limit?: number
 }
 
@@ -160,16 +201,17 @@ const MAX_DELIVERY_PAGE = 200
 /**
  * Lists a tenant's most recent notification delivery attempts.
  *
- * @param input - Tenant identifier and optional page size.
+ * @param input - Actor, tenant, and optional page size.
  * @param deps - Optional database dependency for tests.
  * @returns Deliveries newest first.
- * @throws NotificationServiceError when the read fails.
+ * @throws NotificationServiceError without organization:manage or when the read fails.
  */
 export async function listNotificationDeliveries(
   input: ListNotificationDeliveriesInput,
   deps: NotificationServiceDeps = {}
 ): Promise<NotificationDelivery[]> {
   const client = deps.client ?? createAdminClient()
+  await requireNotificationAdmin(client, input)
   const limit = Math.min(Math.max(input.limit ?? 50, 1), MAX_DELIVERY_PAGE)
 
   const { data, error } = await client

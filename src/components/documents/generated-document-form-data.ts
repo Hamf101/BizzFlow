@@ -236,6 +236,9 @@ function parseJsonAnswer(entry: string): unknown {
   }
 }
 
+// A posted `answer.json.__proto__` would otherwise replace the answers object's prototype.
+const RESERVED_FIELD_KEYS = new Set(["__proto__", "constructor", "prototype"])
+
 function readFieldKey(name: string, prefix: string): string {
   const fieldKey = name.slice(prefix.length)
 
@@ -243,6 +246,10 @@ function readFieldKey(name: string, prefix: string): string {
     throw new GeneratedDocumentFormDataError(
       "A generated-document field key is missing."
     )
+  }
+
+  if (RESERVED_FIELD_KEYS.has(fieldKey)) {
+    throw new GeneratedDocumentFormDataError("A generated-document field key is invalid.")
   }
 
   return fieldKey

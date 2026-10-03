@@ -1,3 +1,5 @@
+import type { ClientFile } from "@/lib/r2/stored-file"
+
 export type DocumentVersionStatus = "upload_pending" | "available"
 export type DocumentAccessLevel = "viewer" | "contributor"
 export type DocumentLifecycleState =
@@ -133,14 +135,13 @@ export type DocumentVersion = {
 
 export type DocumentDetail = {
   document: AccessibleDocumentSummary
-  versions: DocumentVersion[]
+  versions: ClientFile<DocumentVersion>[]
 }
 
 export type CreateDocumentUploadUrlResponse = {
   documentId: string
   versionId: string
   uploadUrl: string
-  storageKey: string
   expiresInSeconds: number
 }
 

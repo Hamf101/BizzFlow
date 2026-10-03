@@ -17,7 +17,7 @@ import type {
 import type {
   Submission,
   SubmissionAnswers,
-  SubmissionFile,
+  ClientSubmissionFile,
   SubmissionSortKey,
   SubmissionStatus,
 } from "@/types/submission"
@@ -39,7 +39,7 @@ export type SubmissionServiceClient = Pick<
 /** Submission with its single-file field allocations. */
 export type SubmissionDetail = {
   submission: Submission
-  files: SubmissionFile[]
+  files: ClientSubmissionFile[]
   comments: SubmissionComment[]
   activity: SubmissionActivityEvent[]
   /** The reviewers this viewer may see, with what each decided. */
@@ -197,7 +197,7 @@ export type AllocateInternalSubmissionFileInput = GetInternalSubmissionInput & {
 
 /** Signed upload details for one persisted file allocation. */
 export type AllocateInternalSubmissionFileResponse = {
-  file: SubmissionFile
+  file: ClientSubmissionFile
   uploadUrl: string
   expiresInSeconds: number
 }
@@ -209,7 +209,7 @@ export type CompleteInternalSubmissionFileInput = GetInternalSubmissionInput & {
 
 /** Completed available file returned after provider verification. */
 export type CompleteInternalSubmissionFileResponse = {
-  file: SubmissionFile
+  file: ClientSubmissionFile
 }
 
 /** Input for superseding a pending or available file in an editable draft. */

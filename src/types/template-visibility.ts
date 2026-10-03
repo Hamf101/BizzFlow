@@ -1,3 +1,4 @@
+import { boxSigner } from "@/types/box-signers"
 import type {
   CheckboxFieldBlock,
   DropdownFieldBlock,
@@ -105,16 +106,18 @@ export function applyVisibleTemplateFieldValue(
 }
 
 /**
- * Determines whether the visible template state requires a recipient initials
- * drawing.
+ * Determines whether the visible template state requires one signer's initials
+ * drawing: only a required initials box of their own does.
  *
  * @param content - Canonical template containing initials fields.
  * @param values - Current answer state used to resolve visibility.
- * @returns `true` when a visible initials field is required.
+ * @param signer - The signer's place in the order they were added.
+ * @returns `true` when a visible initials field of theirs is required.
  */
 export function templateRequiresVisibleInitials(
   content: TemplateContent,
-  values: Readonly<Record<string, unknown>>
+  values: Readonly<Record<string, unknown>>,
+  signer: number
 ): boolean {
   const visibleBlockIds = new Set(
     getVisibleTemplateBlocks(content, values).map(
@@ -126,6 +129,7 @@ export function templateRequiresVisibleInitials(
     (block: TemplateBlock): boolean =>
       block.type === "initials_field" &&
       block.required &&
+      boxSigner(block) === signer &&
       visibleBlockIds.has(block.id)
   )
 }

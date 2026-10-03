@@ -5,7 +5,7 @@ import { createDocumentDownloadUrl, findGuestOrganizationId } from "@/services/d
 import { renderGeneratedDocumentPdf } from "@/services/document-pdf-service"
 import {
   finalizeGeneratedDocumentPdf,
-  GeneratedDocumentFinalizationServiceError,
+  findFinalizedGeneratedDocumentVersionId,
 } from "@/services/generated-document-finalization-service"
 import { getGeneratedDocumentSigningView } from "@/services/document-signing-service"
 import { getCurrentOrganizationContext } from "@/services/organization-service"
@@ -56,6 +56,7 @@ vi.mock("@/services/generated-document-finalization-service", () => ({
       }
     },
   finalizeGeneratedDocumentPdf: vi.fn(),
+  findFinalizedGeneratedDocumentVersionId: vi.fn(),
 }))
 
 vi.mock("@/services/document-service", () => ({
@@ -129,14 +130,11 @@ describe("generated document PDF route", () => {
     )
   })
 
-  it("redirects completed documents to the exact audited final version", async () => {
+  it("redirects a completed document to its finalized version without finalizing on GET", async () => {
     vi.mocked(getGeneratedDocumentSigningView).mockResolvedValue(
       createSigningView("completed")
     )
-    vi.mocked(finalizeGeneratedDocumentPdf).mockResolvedValue({
-      finalizationId: "50000000-0000-4000-8000-000000000001",
-      versionId: VERSION_ID,
-    })
+    vi.mocked(findFinalizedGeneratedDocumentVersionId).mockResolvedValue(VERSION_ID)
     vi.mocked(createDocumentDownloadUrl).mockResolvedValue({
       documentId: DOCUMENT_ID,
       versionId: VERSION_ID,
@@ -153,6 +151,7 @@ describe("generated document PDF route", () => {
     expect(response.headers.get("cache-control")).toBe("private, no-store")
     expect(response.headers.get("x-bizflow-pdf-state")).toBe("finalized")
     expect(renderGeneratedDocumentPdf).not.toHaveBeenCalled()
+    expect(finalizeGeneratedDocumentPdf).not.toHaveBeenCalled()
     expect(createDocumentDownloadUrl).toHaveBeenCalledWith({
       actorUserId: ACTOR_ID,
       organizationId: ORGANIZATION_ID,
@@ -161,25 +160,20 @@ describe("generated document PDF route", () => {
     })
   })
 
-  it("maps a finalization conflict to a safe response", async () => {
+  it("previews a completed document that is not finalized yet instead of finalizing it", async () => {
     vi.mocked(getGeneratedDocumentSigningView).mockResolvedValue(
       createSigningView("completed")
     )
-    vi.mocked(finalizeGeneratedDocumentPdf).mockRejectedValue(
-      new GeneratedDocumentFinalizationServiceError(
-        "Final document evidence does not match.",
-        409
-      )
-    )
+    vi.mocked(findFinalizedGeneratedDocumentVersionId).mockResolvedValue(null)
+    vi.mocked(renderGeneratedDocumentPdf).mockResolvedValue(Buffer.from("%PDF-preview"))
 
     const response = await GET(createRequest(), createRouteContext())
 
-    expect(response.status).toBe(409)
-    await expect(response.json()).resolves.toEqual({
-      error: "Final document evidence does not match.",
-    })
+    expect(response.status).toBe(200)
+    expect(response.headers.get("cache-control")).toBe("private, no-store")
+    expect(response.headers.get("x-bizflow-pdf-state")).toBe("preview")
+    expect(finalizeGeneratedDocumentPdf).not.toHaveBeenCalled()
     expect(createDocumentDownloadUrl).not.toHaveBeenCalled()
-    expect(renderGeneratedDocumentPdf).not.toHaveBeenCalled()
   })
 })
 
