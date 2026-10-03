@@ -24,8 +24,7 @@ type DocumentCommentServiceClient = Pick<AdminSupabaseClient, "from" | "rpc">
 
 type DocumentStateRow = {
   id: string
-  lifecycle_state?: unknown
-  archived_at: string | null
+  lifecycle_state: unknown
 }
 
 export type CreateDocumentCommentInput = {
@@ -262,7 +261,7 @@ async function requireTenantDocument(
 ): Promise<DocumentStateRow> {
   const { data, error } = await client
     .from("documents")
-    .select("id,lifecycle_state,archived_at")
+    .select("id,lifecycle_state")
     .eq("id", documentId)
     .eq("org_id", organizationId)
     .maybeSingle()
@@ -276,12 +275,10 @@ async function requireTenantDocument(
   }
 
   const document = data as DocumentStateRow
-  const lifecycleState = normalizeDocumentLifecycleState(document)
+  const lifecycleState = document.lifecycle_state
 
-  if (
-    lifecycleState === "trashed" ||
-    lifecycleState === "purge_pending"
-  ) {
+  // Trash, purge and any state newer than this build read as not found.
+  if (lifecycleState !== "active" && lifecycleState !== "archived") {
     throw new DocumentCommentServiceError("Document was not found.", 404)
   }
 
@@ -293,30 +290,6 @@ async function requireTenantDocument(
   }
 
   return document
-}
-
-function normalizeDocumentLifecycleState(
-  document: DocumentStateRow
-): "active" | "archived" | "trashed" | "purge_pending" {
-  const lifecycleState = document.lifecycle_state
-
-  if (
-    lifecycleState === "active" ||
-    lifecycleState === "archived" ||
-    lifecycleState === "trashed" ||
-    lifecycleState === "purge_pending"
-  ) {
-    return lifecycleState
-  }
-
-  if (lifecycleState === undefined || lifecycleState === null) {
-    return document.archived_at === null ? "active" : "archived"
-  }
-
-  throw new DocumentCommentServiceError(
-    "Database returned an unsupported document lifecycle state.",
-    500
-  )
 }
 
 function mapDocumentComment(

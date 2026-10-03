@@ -452,8 +452,8 @@ function mapAuditLog(row: AuditLogRow): AuditLogEntry {
     id: row.id,
     organizationId: row.org_id,
     actorUserId: row.actor_user_id,
-    action: parseAuditLogAction(row.action),
-    targetType: parseAuditLogTargetType(row.target_type),
+    action: readKnownOrRaw(row.action, AUDIT_LOG_ACTIONS, "action"),
+    targetType: readKnownOrRaw(row.target_type, AUDIT_LOG_TARGET_TYPES, "target"),
     targetId: row.target_id,
     metadata: parseAuditMetadata(row.metadata),
     seq: row.seq,
@@ -463,20 +463,17 @@ function mapAuditLog(row: AuditLogRow): AuditLogEntry {
   }
 }
 
-function parseAuditLogAction(value: string): AuditLogAction {
-  if (AUDIT_LOG_ACTIONS.includes(value as AuditLogAction)) {
-    return value as AuditLogAction
+/**
+ * Reads a stored action or target. A value newer than this build is kept as
+ * written, so one unfamiliar entry cannot take down the log, its export or its
+ * chain check.
+ */
+function readKnownOrRaw(value: string, known: readonly string[], kind: string): string {
+  if (!known.includes(value)) {
+    console.warn("audit_log_unknown_value", { kind, value })
   }
 
-  throw new AuditServiceError("Database returned an unsupported audit action.", 500)
-}
-
-function parseAuditLogTargetType(value: string): AuditLogTargetType {
-  if (AUDIT_LOG_TARGET_TYPES.includes(value as AuditLogTargetType)) {
-    return value as AuditLogTargetType
-  }
-
-  throw new AuditServiceError("Database returned an unsupported audit target.", 500)
+  return value
 }
 
 function parseAuditMetadata(value: Record<string, unknown>): AuditMetadata {

@@ -386,8 +386,8 @@ export async function getPublicFormLinkByToken(
   }
 
   if (
-    link.expiresAt !== null &&
-    new Date(link.expiresAt).getTime() <= now.getTime()
+    link.status === "expired" ||
+    (link.expiresAt !== null && new Date(link.expiresAt).getTime() <= now.getTime())
   ) {
     return invalid("expired", link)
   }

@@ -1,9 +1,8 @@
 import { randomUUID } from "node:crypto"
 
 import {
+  isOrganizationPermissionAction,
   isOrganizationRole,
-  ORGANIZATION_PERMISSION_ACTIONS,
-  type OrganizationPermissionAction,
   type OrganizationRole,
 } from "@/lib/permissions"
 import { recordAuditLog } from "@/services/audit-service"
@@ -99,12 +98,7 @@ export function mapOrganization(row: OrganizationRow): Organization {
  */
 export function mapMembership(row: MembershipRow): OrganizationMembership {
   const roleDefinition = row.role_definition ?? null
-  const rolePermissions = roleDefinition?.permissions?.filter(
-    (permission): permission is OrganizationPermissionAction =>
-      ORGANIZATION_PERMISSION_ACTIONS.includes(
-        permission as OrganizationPermissionAction
-      )
-  )
+  const rolePermissions = roleDefinition?.permissions?.filter(isOrganizationPermissionAction)
 
   return {
     id: row.id,
@@ -134,12 +128,7 @@ export function mapOrganizationRole(
     row.system_key !== null && isOrganizationRole(row.system_key)
       ? row.system_key
       : null
-  const permissions = row.permissions?.filter(
-    (permission): permission is OrganizationPermissionAction =>
-      ORGANIZATION_PERMISSION_ACTIONS.includes(
-        permission as OrganizationPermissionAction
-      )
-  ) ?? null
+  const permissions = row.permissions?.filter(isOrganizationPermissionAction) ?? null
 
   return {
     id: row.id,

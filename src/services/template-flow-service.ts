@@ -4,9 +4,6 @@ import { setTimeout as delay } from "node:timers/promises"
 import { z } from "zod"
 
 import {
-  isOrganizationRole
-} from "@/lib/permissions"
-import {
   createAdminClient,
   type AdminSupabaseClient
 } from "@/lib/supabase/admin"
@@ -37,6 +34,7 @@ import {
   evaluateTemplateQuality,
   type TemplateQualityIssue
 } from "@/services/templates/template-quality-service"
+import { getTemplateAccess } from "@/services/templates/access"
 import { resizeTemplateLayout } from "@/services/templates/template-render-plan"
 import {
   bulletListBlockObjectSchema,
@@ -2972,9 +2970,7 @@ async function requireTemplateManagement(
     await Promise.all([
       client
         .from("organization_memberships")
-        .select(
-          "role,status,role_definition:organization_roles!organization_memberships_role_definition_fk(permissions)"
-        )
+        .select("status")
         .eq("org_id", input.organizationId)
         .eq("user_id", input.actorUserId)
         .eq("status", "active")
@@ -2994,30 +2990,15 @@ async function requireTemplateManagement(
     )
   }
 
-  const membership = membershipData as {
-    role?: unknown
-    role_definition?: { permissions: string[] | null } | null
-    status?: unknown
-  } | null
   const template = templateResult.data as {
     id?: unknown
     status?: unknown
   } | null
 
-  if (membership?.status !== "active") {
+  if ((membershipData as { status?: unknown } | null)?.status !== "active") {
     throw new TemplateFlowServiceError(
       "You do not have permission to manage templates.",
       403
-    )
-  }
-
-  if (
-    typeof membership.role !== "string" ||
-    !isOrganizationRole(membership.role)
-  ) {
-    throw new TemplateFlowServiceError(
-      "Database returned an unsupported organization role.",
-      500
     )
   }
 
@@ -3026,15 +3007,9 @@ async function requireTemplateManagement(
   }
 
   // Editing is the template's own answer: its maker, an editor it was shared with, or a manager.
-  const { data: level, error: levelError } = await client.rpc("get_template_access_level", {
-    target_actor_user_id: input.actorUserId,
-    target_org_id: input.organizationId,
-    target_template_id: input.templateId,
-  })
-
-  if (levelError) {
+  const level = await getTemplateAccess(client, input).catch(() => {
     throw new TemplateFlowServiceError("Unable to verify template editing access.", 500)
-  }
+  })
 
   if (level !== "editor") {
     throw new TemplateFlowServiceError("You do not have permission to manage templates.", 403)

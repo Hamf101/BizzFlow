@@ -22,7 +22,7 @@ import {
   type Submission,
 } from "@/types/submission"
 import {
-  parseSubmissionActivityEventRow,
+  parseSubmissionActivityEventRows,
   parseSubmissionCommentRow,
   SUBMISSION_REVIEW_TRANSITIONS,
   type SubmissionComment,
@@ -284,7 +284,7 @@ export async function listSubmissionReviewData(
 
   return {
     comments: commentsResult.data.map(parseSubmissionCommentRow),
-    activity: activityResult.data.map(parseSubmissionActivityEventRow),
+    activity: parseSubmissionActivityEventRows(activityResult.data),
   }
 }
 

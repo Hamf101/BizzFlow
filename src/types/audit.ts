@@ -100,8 +100,10 @@ export type AuditLogEntry = {
   id: string
   organizationId: string
   actorUserId: string | null
-  action: AuditLogAction
-  targetType: AuditLogTargetType
+  /** Usually an AuditLogAction; a newer action this build does not know is kept as written. */
+  action: string
+  /** Usually an AuditLogTargetType; kept as written when this build does not know it. */
+  targetType: string
   targetId: string | null
   metadata: AuditMetadata
   seq: number

@@ -249,6 +249,32 @@ export function parseSubmissionActivityEventRow(
 }
 
 /**
+ * Parses a page of activity rows, leaving out any event this build does not
+ * know: a newer one must not take down the whole review page.
+ *
+ * @param rows - Untrusted persistence data.
+ * @returns The events this build can show, in order.
+ * @throws SubmissionReviewDomainError when a row is otherwise invalid.
+ */
+export function parseSubmissionActivityEventRows(
+  rows: readonly unknown[]
+): SubmissionActivityEvent[] {
+  return rows.flatMap((row) => {
+    const eventType = (row as { event_type?: unknown } | null)?.event_type
+
+    if (
+      typeof eventType === "string" &&
+      !SUBMISSION_ACTIVITY_EVENT_TYPES.includes(eventType as SubmissionActivityEventType)
+    ) {
+      console.warn("submission_activity_unknown_event", { eventType })
+      return []
+    }
+
+    return [parseSubmissionActivityEventRow(row)]
+  })
+}
+
+/**
  * Parses an unknown database row into a submission reviewer.
  *
  * @param value - Untrusted persistence data.

@@ -5,6 +5,7 @@ import { recordAuditLog as defaultRecordAuditLog } from "@/services/audit-servic
 import type { AuditLogAction, AuditMetadata } from "@/types/audit"
 import {
   parseNotificationDeliveryRow,
+  parseNotificationDeliveryRows,
   type NotificationChannel,
   type NotificationDelivery,
   type NotificationDeliveryStatus,
@@ -185,7 +186,7 @@ export async function listNotificationDeliveries(
     )
   }
 
-  return data.map(parseNotificationDeliveryRow)
+  return parseNotificationDeliveryRows(data)
 }
 
 /**

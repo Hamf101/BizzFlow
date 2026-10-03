@@ -40,7 +40,16 @@ export async function getTemplateAccess(
     throw createDatabaseError(error, "Unable to load template access.")
   }
 
-  return data ?? null
+  if (data === null || data === undefined) {
+    return null
+  }
+
+  // A level this build does not rank must not pass a check by comparing as undefined.
+  if (!Object.hasOwn(RANK, data)) {
+    throw new TemplateServiceError("Database returned an unsupported template access level.", 500)
+  }
+
+  return data
 }
 
 /**

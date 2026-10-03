@@ -11,7 +11,6 @@ import {
 } from "@/lib/list-state"
 import {
   AUDIT_LOG_SORT_KEYS,
-  type AuditLogAction,
   type AuditLogSortKey,
   type AuditLogTargetType,
 } from "@/types/audit"
@@ -172,7 +171,7 @@ export function isAuditViewAdjusted(view: AuditLogView): boolean {
  * @param action - Recorded audit action.
  * @returns Sentence-case label with common acronyms kept upper-case.
  */
-export function formatAuditAction(action: AuditLogAction): string {
+export function formatAuditAction(action: string): string {
   const sentence = action
     .split(/[._]/)
     .map((word: string): string => ACRONYMS[word] ?? word)

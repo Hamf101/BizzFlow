@@ -96,7 +96,7 @@ describe("organization role assignment authority", () => {
 })
 
 describe("organization permissions", () => {
-  it("parses persisted permissions and fails closed on unknown actions", () => {
+  it("parses persisted permissions, dropping actions this build does not know", () => {
     expect(
       createOrganizationPermissionSubject("staff", [
         "people:view",
@@ -106,9 +106,20 @@ describe("organization permissions", () => {
       role: "staff",
       customPermissions: ["people:view", "members:invite"],
     })
-    expect(
-      createOrganizationPermissionSubject("staff", ["unknown:action"])
-    ).toBeNull()
+
+    // A migration may add an action before the code that knows it ships; the
+    // member keeps what this build understands and gains nothing it does not.
+    const subject = createOrganizationPermissionSubject("staff", [
+      "people:view",
+      "templates:publish_everywhere",
+    ])
+    expect(subject).toEqual({ role: "staff", customPermissions: ["people:view"] })
+    expect(canPerformOrganizationAction(subject!, "people:view")).toBe(true)
+    expect(canPerformOrganizationAction(subject!, "templates:manage")).toBe(false)
+  })
+
+  it("fails closed on a role this build does not know", () => {
+    expect(createOrganizationPermissionSubject("auditor", ["people:view"])).toBeNull()
   })
 
   it("allows only owner admins and managers to invite members", () => {

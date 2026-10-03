@@ -122,9 +122,15 @@ export async function listDocumentActivity(
       )
       const profileById = indexDocumentCollaborationProfiles(profiles)
 
-      return rows.map((row: DocumentActivityEventRow) =>
-        mapDocumentActivityEvent(row, profileById)
-      )
+      // An event newer than this build is left out rather than failing the feed.
+      return rows.flatMap((row: DocumentActivityEventRow) => {
+        if (!isDocumentActivityEventType(row.event_type)) {
+          console.warn("document_activity_unknown_event", { eventType: row.event_type })
+          return []
+        }
+
+        return [mapDocumentActivityEvent(row, profileById, row.event_type)]
+      })
     }
   )
 }
@@ -183,29 +189,17 @@ async function requireReadableTenantDocument(
 
   const lifecycleState = (data as DocumentStateRow).lifecycle_state
 
-  if (
-    lifecycleState === "trashed" ||
-    lifecycleState === "purge_pending"
-  ) {
+  // Only active and archived documents are readable; trash, purge and any state
+  // newer than this build read as not found.
+  if (lifecycleState !== "active" && lifecycleState !== "archived") {
     throw new DocumentActivityServiceError("Document was not found.", 404)
-  }
-
-  if (
-    lifecycleState !== undefined &&
-    lifecycleState !== null &&
-    lifecycleState !== "active" &&
-    lifecycleState !== "archived"
-  ) {
-    throw new DocumentActivityServiceError(
-      "Database returned an unsupported document lifecycle state.",
-      500
-    )
   }
 }
 
 function mapDocumentActivityEvent(
   row: DocumentActivityEventRow,
-  profileById: ReadonlyMap<string, DocumentCollaborationProfileRow>
+  profileById: ReadonlyMap<string, DocumentCollaborationProfileRow>,
+  eventType: DocumentActivityEventType
 ): DocumentActivityEvent {
   return {
     id: row.id,
@@ -217,27 +211,14 @@ function mapDocumentActivityEvent(
       profileById,
       "System"
     ),
-    eventType: parseDocumentActivityEventType(row.event_type),
+    eventType,
     metadata: parseActivityMetadata(row.metadata),
     createdAt: row.created_at,
   }
 }
 
-function parseDocumentActivityEventType(
-  value: string
-): DocumentActivityEventType {
-  if (
-    DOCUMENT_ACTIVITY_EVENT_TYPES.includes(
-      value as DocumentActivityEventType
-    )
-  ) {
-    return value as DocumentActivityEventType
-  }
-
-  throw new DocumentActivityServiceError(
-    "Database returned an unsupported document activity event.",
-    500
-  )
+function isDocumentActivityEventType(value: string): value is DocumentActivityEventType {
+  return DOCUMENT_ACTIVITY_EVENT_TYPES.includes(value as DocumentActivityEventType)
 }
 
 function parseActivityMetadata(value: Record<string, unknown>): ActivityMetadata {

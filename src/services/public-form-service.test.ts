@@ -129,6 +129,8 @@ describe("getPublicFormLinkByToken", () => {
   it.each([
     ["disabled", { status: "disabled" }, "disabled"],
     ["expired", { expires_at: "2026-07-30T00:00:00.000Z" }, "expired"],
+    ["marked expired with no expiry time", { status: "expired", expires_at: null }, "expired"],
+    ["in a status this build does not know", { status: "paused" }, "disabled"],
     [
       "at its submission ceiling",
       { max_submissions: 2, submission_count: 2 },

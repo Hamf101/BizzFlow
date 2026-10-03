@@ -171,7 +171,7 @@ describe("list document activity", () => {
           status: "disabled",
         },
       ],
-      documents: [{ id: "document-1", org_id: "org-1" }],
+      documents: [{ id: "document-1", org_id: "org-1", lifecycle_state: "active" }],
     })
 
     await expect(
@@ -197,7 +197,7 @@ describe("list document activity", () => {
             status: "active",
           },
         ],
-        documents: [{ id: "document-1", org_id: "org-1" }],
+        documents: [{ id: "document-1", org_id: "org-1", lifecycle_state: "active" }],
       },
       { documentAccessLevel: null }
     )
@@ -266,6 +266,24 @@ describe("list document activity", () => {
     expect(client.fromCounts.document_activity_events).toBe(0)
   })
 
+  it("skips an event this build does not know and treats an unknown lifecycle as not found", async () => {
+    const tables = (lifecycleState: string) => new FakeSupabaseClient({
+      organization_memberships: [{ org_id: "org-1", user_id: "user-1", role: "owner_admin", status: "active" }],
+      documents: [{ id: "document-1", org_id: "org-1", lifecycle_state: lifecycleState }],
+      profiles: [],
+      document_activity_events: [
+        { id: "event-known", org_id: "org-1", document_id: "document-1", actor_user_id: null, event_type: "document.archived", metadata: {}, created_at: "2026-07-17T10:00:00.000Z" },
+        { id: "event-newer", org_id: "org-1", document_id: "document-1", actor_user_id: null, event_type: "document.guest_invited", metadata: {}, created_at: "2026-07-17T11:00:00.000Z" },
+      ],
+    })
+    const input = { actorUserId: "user-1", organizationId: "org-1", documentId: "document-1" }
+
+    const events = await listDocumentActivity(input, deps(tables("active")))
+    expect(events.map((event) => event.id)).toEqual(["event-known"])
+
+    await expect(listDocumentActivity(input, deps(tables("held_for_review")))).rejects.toMatchObject({ statusCode: 404 })
+  })
+
   it("returns scoped events newest first and resolves actors in one profile query", async () => {
     const client = new FakeSupabaseClient({
       organization_memberships: [
@@ -276,7 +294,7 @@ describe("list document activity", () => {
           status: "active",
         },
       ],
-      documents: [{ id: "document-1", org_id: "org-1" }],
+      documents: [{ id: "document-1", org_id: "org-1", lifecycle_state: "active" }],
       profiles: [
         { id: "actor-name", email: "name@example.com", full_name: "Named Actor" },
         { id: "actor-email", email: "email@example.com", full_name: null },

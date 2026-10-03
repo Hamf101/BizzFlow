@@ -353,15 +353,18 @@ describe("list audit log pages", () => {
     })
   })
 
-  it("rejects unknown audit actions returned by the database", async () => {
-    await expect(
-      listAuditLogPage(pageInput, {
-        client: createEventClient([createEventRow(1, { action: "unknown" })]) as never,
-      })
-    ).rejects.toMatchObject({
-      message: "Database returned an unsupported audit action.",
-      statusCode: 500,
+  it("keeps an action or target this build does not know instead of failing the whole log", async () => {
+    const page = await listAuditLogPage(pageInput, {
+      client: createEventClient([
+        createEventRow(1, { action: "guest.invited", target_type: "guest_grant" }),
+        createEventRow(2),
+      ]) as never,
     })
+
+    expect(page.entries.map((entry) => [entry.action, entry.targetType])).toEqual([
+      [createEventRow(2).action, createEventRow(2).target_type],
+      ["guest.invited", "guest_grant"],
+    ])
   })
 
   it("maps immutable document and folder purge receipts", async () => {

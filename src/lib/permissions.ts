@@ -134,14 +134,28 @@ export function isOrganizationRole(value: string): value is OrganizationRole {
 }
 
 /**
+ * Checks whether a stored permission string is an action this build knows.
+ *
+ * @param value - Permission string read from a role definition.
+ * @returns True when the value is a supported permission action.
+ */
+export function isOrganizationPermissionAction(
+  value: string
+): value is OrganizationPermissionAction {
+  return ORGANIZATION_PERMISSION_ACTIONS.includes(value as OrganizationPermissionAction)
+}
+
+/**
  * Parses a persisted base role and optional editable permission set.
  *
- * Unknown roles or permission actions fail closed instead of silently falling
- * back to broader starter-role access.
+ * An unknown role fails closed. An unknown permission action is dropped: a
+ * migration can add one before the code that knows it is deployed, and
+ * rejecting the whole role then locked every member on it out of the app.
+ * Dropping can only narrow access, never widen it.
  *
  * @param role - Legacy base role stored for row-scope compatibility.
  * @param permissions - Role-definition permissions, or null for protected Owner.
- * @returns A permission subject, or null when persisted data is unsupported.
+ * @returns A permission subject, or null when the role is unsupported.
  */
 export function createOrganizationPermissionSubject(
   role: string,
@@ -155,20 +169,9 @@ export function createOrganizationPermissionSubject(
     return role
   }
 
-  if (
-    permissions.some(
-      (permission) =>
-        !ORGANIZATION_PERMISSION_ACTIONS.includes(
-          permission as OrganizationPermissionAction
-        )
-    )
-  ) {
-    return null
-  }
-
   return {
     role,
-    customPermissions: [...permissions] as OrganizationPermissionAction[],
+    customPermissions: permissions.filter(isOrganizationPermissionAction),
   }
 }
 
