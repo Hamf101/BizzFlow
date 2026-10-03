@@ -109,6 +109,9 @@ export function EditorFrame({
     () => window.matchMedia(NARROW).matches,
     () => false
   )
+  // The server can't know the width, so the tools wait for the browser: a phone
+  // drawing the laptop dock first would swap it out and lose a tool opened meanwhile.
+  const sized = useSyncExternalStore(subscribeToWidth, () => true, () => false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const [layout, setLayout] = useState<EditorLayout>(layoutStore?.initial ?? {})
   const orientation = layout.dock?.orientation ?? "upright"
@@ -289,7 +292,7 @@ export function EditorFrame({
           )}
           data-slot="editor-tools"
         >
-          {narrow ? (
+          {!sized ? null : narrow ? (
             <div className="pointer-events-auto absolute right-0 bottom-[calc(1rem+env(safe-area-inset-bottom))] left-2 flex">
               {dock(true, "flat")}
             </div>
