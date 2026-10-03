@@ -38,3 +38,6 @@ overrides:
   # Custom generators can loop indefinitely; reached through the pinned postcss.
   # Bounded below 4 for the same reason.
   nanoid: '>=3.3.18 <4'
+  # GHSA-p98j-92pf-mc4p: DOM XSS through IN_PLACE sanitising in 3.4.13–3.4.15;
+  # reached through posthog-js. Bounded below 4 for the same reason.
+  dompurify: '>=3.4.16 <4'

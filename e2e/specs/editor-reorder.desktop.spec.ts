@@ -64,7 +64,8 @@ test("blocks drag to new places and stay there, but a field never goes above the
   await expect(page.locator('[data-slot="editor-announcement"]')).toHaveText("Has an account moved to 2 of 3.")
 
   // Above the paragraph, the account number would come before the checkbox that shows it.
-  await drag(page, block(number.id), block(terms.id), "top")
+  // Pulled by its label: a press in its answer box is typing, not a drag.
+  await drag(page, block(number.id).getByText("Account number", { exact: true }), block(terms.id), "top")
   await expect(page.getByText(/^This move would place 1 conditional field before the checkbox/)).toBeVisible()
   await saved().toEqual([terms.id, account.id, number.id])
 
