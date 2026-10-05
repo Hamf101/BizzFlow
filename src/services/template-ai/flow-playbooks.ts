@@ -48,7 +48,7 @@ export const FLOW_PLAYBOOKS = [
 
   "Quote or proposal.",
   "Order: the supplier's details (business name, business address, business number, contact); the customer's details, with a billing address when it may differ from where the work is done; quote number, date and 'Valid until'; a description of the work; the costs; what is not included and how changes are priced; optional extras; payment terms; start and finish dates; acceptance.",
-  "Costs are one table with a row per item and columns for item, quantity, unit price and amount, then tax on a row of its own and a total.",
+  "Costs are one table_field labelled 'Items' with blank rows and columns Item, Quantity (number), Unit price (money) and Amount (money, formula {Quantity} * {Unit price}, total true). Under it, money text_fields that work themselves out: 'Subtotal' is SUM({Items.Amount}); when tax applies, a required number field 'Tax rate' with suffix '%' that the business fills in, then 'Tax' is {Subtotal} * {Tax rate}%; and 'Total' is {Subtotal} + {Tax}, or {Subtotal} without tax. Never set the rate yourself.",
   "Always include a quote date and a 'Valid until' date field, both required. Set quote number, date and valid until in one row.",
   "Payment terms are fields: deposit, when the balance is due, how to pay, and what happens if payment is late. Never invent a late fee or interest rate.",
   "When the customer is a person rather than a business, add a paragraph before acceptance on their right to cancel: how long they have, how to cancel, and that work they ask to start sooner is paid for as far as it went, with a checkbox_field, not required, for asking the work to start within that time. Leave the period as 'Needs input: ...' when the user has not given it.",

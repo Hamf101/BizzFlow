@@ -1307,6 +1307,51 @@ describe("Flow building with the blocks it adds", () => {
     ])
   })
 
+  it("works out a quote: amounts by formula with a total, then the sums that follow; a formula naming a later answer is refused, and why", async () => {
+    const add = (summary: string, block: Record<string, unknown>): TestFlowOperation => ({ type: "add_block", summary, payload: { afterBlockId: null, block } })
+    const money = (fieldKey: string, label: string, formula: string): TestFlowOperation =>
+      add(`Worked out ${label}`, { type: "text_field", fieldKey, label, required: false, helpText: null, placeholder: null, multiline: false, format: "money", prefix: "£", formula })
+    const costs = add("Added the costs", {
+      type: "table_field",
+      fieldKey: "costs",
+      label: "Costs",
+      required: false,
+      helpText: null,
+      columns: [
+        { label: "Item" },
+        { label: "Quantity", format: "number" },
+        { label: "Unit price", format: "money" },
+        { label: "Amount", format: "money", formula: "{Quantity} * {Unit price}", total: true },
+      ],
+      rows: 5,
+    })
+    const { aiProvider, run } = runFlow(createContent(), [
+      costs,
+      money("subtotal", "Subtotal", "SUM({Costs.Amount})"),
+      add("Asked the tax rate", { type: "text_field", fieldKey: "tax_rate", label: "Tax rate", required: true, helpText: null, placeholder: null, multiline: false, format: "number", suffix: "%" }),
+      money("tax", "Tax", "{Subtotal} * {Tax rate}%"),
+      money("total", "Total", "{Subtotal} + {Tax}"),
+    ])
+    const blocks = (await run).proposal?.candidateDraft.content.blocks ?? []
+    const instruction = String(readProviderRequests(aiProvider)[0]?.systemInstruction)
+
+    expect(blocks.find((block) => block.type === "table_field")).toMatchObject({ columns: [{}, {}, {}, { formula: "{Quantity} * {Unit price}", total: true }] })
+    expect(blocks.filter((block) => block.type === "text_field" && block.formula).map((block) => block.type === "text_field" && block.formula)).toEqual([
+      "SUM({Costs.Amount})",
+      "{Subtotal} * {Tax rate}%",
+      "{Subtotal} + {Tax}",
+    ])
+    for (const word of ['"formula"', '"total"', "SUM("]) {
+      expect(instruction).toContain(word)
+    }
+
+    // The total before the subtotal it adds up: refused with the reason, for the one correction.
+    const early = runFlow(createContent(), [money("total", "Total", "{Subtotal} + {Tax}")])
+
+    await expect(early.run).rejects.toMatchObject({ statusCode: 502 })
+    expect(String(readProviderRequests(early.aiProvider)[1]?.input)).toMatch(/formula: Nothing above is called \{Subtotal\}/)
+  })
+
   it("tells the model which operation failed and why, so its one correction lands", async () => {
     const add = { type: "add_block", summary: "Added a note", payload: { ref: "new:1", afterBlockId: null, block: { type: "paragraph", text: "A note.", alignment: "left" } } }
     const { aiProvider, run } = runFlow(createContent(), [add, { type: "move_block", summary: "Moved it up", payload: { blockId: "new:2", afterBlockId: null } }], [add])
