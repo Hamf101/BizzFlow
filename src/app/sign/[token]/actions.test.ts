@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-import { completePublicDocumentSigning } from "@/services/document-signing-service"
+import { completePublicDocumentSigning, DocumentSigningServiceError } from "@/services/document-signing-service"
 import { finalizeCompletedGeneratedDocument } from "@/services/generated-document-finalization-service"
 
 import { completePublicSigningAction } from "./actions"
@@ -13,7 +13,7 @@ vi.mock("next/navigation", () => ({
 }))
 // Work deferred past the response runs at once, so the test sees it.
 vi.mock("next/server", () => ({ after: (task: () => unknown) => void task() }))
-vi.mock("@/lib/action-rate-limit", () => ({ enforceActionRateLimit: vi.fn() }))
+vi.mock("@/lib/rate-limit", () => ({ checkRateLimit: vi.fn(), RateLimitError: class RateLimitError extends Error {} }))
 vi.mock("@/services/document-signing-service", () => ({
   DocumentSigningServiceError: class DocumentSigningServiceError extends Error {},
   completePublicDocumentSigning: vi.fn(),
@@ -39,8 +39,17 @@ describe("public signing action", () => {
     const formData = new FormData()
     formData.set("token", "token-1")
 
-    await expect(completePublicSigningAction(formData)).rejects.toThrow("NEXT_REDIRECT:/sign/token-1")
+    await expect(completePublicSigningAction(null, formData)).rejects.toThrow("NEXT_REDIRECT:/sign/token-1")
     expect(finalizeCompletedGeneratedDocument).toHaveBeenCalledTimes(calls)
     if (calls) expect(finalizeCompletedGeneratedDocument).toHaveBeenCalledWith(DOCUMENT)
+  })
+
+  it("answers a refusal on the same page, so the signer's drawing and answers stay", async () => {
+    vi.mocked(completePublicDocumentSigning).mockRejectedValue(new DocumentSigningServiceError("This link has expired.", 410))
+    const formData = new FormData()
+    formData.set("token", "token-1")
+
+    await expect(completePublicSigningAction(null, formData)).resolves.toEqual({ error: "This link has expired." })
+    expect(finalizeCompletedGeneratedDocument).not.toHaveBeenCalled()
   })
 })

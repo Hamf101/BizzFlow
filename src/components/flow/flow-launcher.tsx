@@ -46,6 +46,8 @@ function FlowConversation({ onLeave }: { onLeave: () => void }): ReactElement {
   const [busy, setBusy] = useState(false)
   const [, startTransition] = useTransition()
   const nextId = useRef(0)
+  // Read at once, not from the last render, so a quick second Enter never sends twice.
+  const sending = useRef(false)
 
   function add(turn: Omit<Turn, "id">): void {
     const id = nextId.current++
@@ -55,9 +57,11 @@ function FlowConversation({ onLeave }: { onLeave: () => void }): ReactElement {
   async function send(message: string): Promise<void> {
     const trimmed = message.trim()
 
-    if (trimmed.length < 2 || busy) {
+    if (trimmed.length < 2 || sending.current) {
       return
     }
+
+    sending.current = true
 
     const history = turns.slice(-6).map((turn) => ({ role: turn.role, text: turn.text }))
     add({ role: "member", text: trimmed })
@@ -97,6 +101,7 @@ function FlowConversation({ onLeave }: { onLeave: () => void }): ReactElement {
       add({ failed: true, role: "flow", text: error instanceof Error ? error.message : "Flow couldn't answer that." })
       setText(trimmed)
     } finally {
+      sending.current = false
       setBusy(false)
     }
   }
@@ -185,7 +190,7 @@ function FlowConversation({ onLeave }: { onLeave: () => void }): ReactElement {
           />
           <button
             aria-label="Send to Flow"
-            className="absolute right-1.5 bottom-1 grid size-8 place-items-center rounded-full text-primary outline-none transition-opacity hover:opacity-75 disabled:opacity-35 focus-visible:ring-2 focus-visible:ring-ring/40"
+            className="absolute right-1.5 bottom-1 grid size-8 place-items-center max-md:size-11 rounded-full text-primary outline-none transition-opacity hover:opacity-75 disabled:opacity-35 focus-visible:ring-2 focus-visible:ring-ring/40"
             disabled={busy || text.trim().length < 2}
             type="submit"
           >

@@ -6,7 +6,8 @@ import { type ReactElement, useEffect, useMemo, useRef, useState, useTransition 
 
 import type { TemplateDraftInput, TemplateVersionResult } from "@/app/(dashboard)/templates/actions"
 import { useFlowHandoff } from "@/components/flow/flow-handoff"
-import "@/components/editor/design-tools-provided"
+import { DesignToolsContext } from "@/components/editor/design-tools"
+import { DESIGN_TOOLS } from "@/components/editor/design-tools-provided"
 import { EditorCanvas } from "@/components/editor/editor-canvas"
 import { normalizeContentForSave } from "@/components/editor/editor-content"
 import { type DockTool, EditorDock } from "@/components/editor/editor-dock"
@@ -431,7 +432,7 @@ export function TemplateEditor({
   ]
 
   return (
-    <>
+    <DesignToolsContext.Provider value={DESIGN_TOOLS}>
       <EditorFrame
         backHref="/templates"
         backLabel="Back to templates"
@@ -672,7 +673,7 @@ export function TemplateEditor({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </>
+    </DesignToolsContext.Provider>
   )
 }
 

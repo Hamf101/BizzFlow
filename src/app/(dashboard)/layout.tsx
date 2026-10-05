@@ -14,6 +14,7 @@ import { MobileTopBar } from "@/components/navigation/mobile-top-bar"
 import { DashboardSidebar } from "@/components/navigation/dashboard-sidebar"
 import { WorkspaceSearch } from "@/components/search/workspace-search"
 import { ActionFeedback } from "@/components/ui/action-feedback"
+import { TimeZoneCookie } from "@/components/ui/local-date"
 import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
 import { getFallbackDisplayName } from "@/lib/display-name"
 import { captureUnexpectedError } from "@/lib/observability"
@@ -145,6 +146,8 @@ export default async function DashboardLayout({
       <Suspense fallback={null}>
         <ActionFeedback />
       </Suspense>
+      {/* Tells the dashboard the viewer's time zone, for its "yesterday". */}
+      <TimeZoneCookie />
       <div className="flex min-h-dvh flex-col bg-canvas text-foreground" data-ground="canvas">
         {/* The sidebar has a dozen stops; this is the first, so a keyboard user can skip them. */}
         <a

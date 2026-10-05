@@ -10,6 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { useTimeZone } from "@/components/ui/local-date"
 import { formatMediumDateTime } from "@/lib/date-format"
 import type { OrganizationMember } from "@/types/organization"
 
@@ -28,6 +29,7 @@ export function SubmissionActivityTimeline({
   comments: SubmissionComment[]
   members: OrganizationMember[]
 }): ReactElement {
+  const timeZone = useTimeZone()
   const memberLabels = new Map<string, string>(
     members.map((member: OrganizationMember): [string, string] => [
       member.userId,
@@ -82,7 +84,7 @@ export function SubmissionActivityTimeline({
                       </p>
                     )}
                     <p className="mt-2 text-xs text-muted-foreground">
-                      {formatMediumDateTime(event.createdAt)} · revision{" "}
+                      {formatMediumDateTime(event.createdAt, timeZone)} · revision{" "}
                       {event.submissionRevision}
                     </p>
                   </div>

@@ -5,7 +5,8 @@ import { afterEach, beforeAll, expect, it } from "vitest"
 
 import { parseGeneratedDocumentAnswers } from "@/components/documents/generated-document-form-data"
 
-import "./design-tools-provided"
+import { DesignToolsContext } from "./design-tools"
+import { DESIGN_TOOLS } from "./design-tools-provided"
 import { INSERT_CHOICES } from "./block-catalog"
 import { EditorCanvas } from "./editor-canvas"
 import { useReadOnlyController } from "./read-only-controller"
@@ -43,7 +44,7 @@ function Canvas({ editable = true, fields = "design", initial = TERMS, narrow = 
   const current = useEditorController({ change: history.set, content: history.state, undo: history.undo })
   const [answers, setAnswers] = useState<Record<string, unknown>>({})
   useEffect(() => { controller = current })
-  return <EditorCanvas allowFiles answers={answers} controller={current} designable={editable} documentTitle="Agreement" fields={fields} narrow={narrow} onAnswerChange={(key, value) => setAnswers((all) => ({ ...all, [key]: value }))} textEditable={editable} zoom={1} />
+  return <DesignToolsContext.Provider value={DESIGN_TOOLS}><EditorCanvas allowFiles answers={answers} controller={current} designable={editable} documentTitle="Agreement" fields={fields} narrow={narrow} onAnswerChange={(key, value) => setAnswers((all) => ({ ...all, [key]: value }))} textEditable={editable} zoom={1} /></DesignToolsContext.Provider>
 }
 
 it("edits section titles, keeps an emptied title valid, switches rules and moves the caret into its text", async () => {

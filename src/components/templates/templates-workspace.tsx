@@ -21,6 +21,7 @@ import {
   TemplateSelection,
   TemplateSelectionBar,
 } from "@/components/templates/template-selection"
+import { useTimeZone } from "@/components/ui/local-date"
 import { buttonVariants } from "@/components/ui/button"
 import { formatMediumDate } from "@/lib/date-format"
 import { getLastPage } from "@/lib/list-state"
@@ -266,6 +267,7 @@ function TemplateCard({
   index: number
   template: DocumentTemplateCard
 }): ReactElement {
+  const timeZone = useTimeZone()
   // An archived template is read only, even for people who manage templates.
   const editable = template.canEdit && template.status !== "archived"
   const acts = actsOn(template, canCreate)
@@ -273,7 +275,7 @@ function TemplateCard({
   const showsStatus = canManage || template.canEdit
   const status = STATUS_LOOKS[template.status]
   const detail =
-    template.category ?? `Updated ${formatMediumDate(template.updatedAt)}`
+    template.category ?? `Updated ${formatMediumDate(template.updatedAt, timeZone)}`
   const riseDelay = {
     "--card-delay": `${Math.min(index, MAX_STAGGERED_CARDS) * CARD_STAGGER_MS}ms`,
   } as CSSProperties

@@ -8,6 +8,7 @@ import {
   parseGeneratedDocumentAnswers,
 } from "@/components/documents/generated-document-form-data"
 import { getClientIp } from "@/lib/client-ip"
+import type { PublicAnswerResult } from "@/components/submissions/public-answer-form"
 import { getFormString } from "@/lib/form-utils"
 import {
   getPublicFormDraftCookieOptions,
@@ -22,12 +23,14 @@ import {
 /**
  * Validates and finalizes one public form submission from browser FormData.
  *
+ * @param _previous - What the last try reported.
  * @param formData - Public token, optimistic draft identity, and visible fields.
- * @returns Never returns normally because both success and failure redirect.
+ * @returns Why it was not sent, so the page keeps every answer; success redirects.
  */
 export async function submitPublicFormAction(
+  _previous: PublicAnswerResult,
   formData: FormData
-): Promise<void> {
+): Promise<PublicAnswerResult> {
   const token = getFormString(formData, "token")
   const draftToken = getFormString(formData, "draftToken")
   const rawDraftRevision = getFormString(formData, "draftRevision")
@@ -71,7 +74,7 @@ export async function submitPublicFormAction(
       )
     }
 
-    redirect(`${formPath}?error=${encodeURIComponent(message)}`)
+    return { error: message }
   }
 
   const cookieStore = await cookies()

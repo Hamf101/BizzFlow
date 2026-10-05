@@ -15,6 +15,7 @@ import {
 import { ListQuery } from "@/components/data/list-query"
 import { DatedTitle } from "@/components/navigation/dated-title"
 import { getMemberDisplayName, getMemberRoleName } from "@/components/people/member-name"
+import { useTimeZone } from "@/components/ui/local-date"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -312,6 +313,7 @@ function MemberRow({
   roles: OrganizationRoleDefinition[]
   updateMemberAccessAction: ServerFormAction
 }): ReactElement {
+  const timeZone = useTimeZone()
   const memberLabel = getMemberDisplayName(member)
 
   return (
@@ -337,7 +339,7 @@ function MemberRow({
         className="hidden text-sm text-muted-foreground lg:block"
         role="cell"
       >
-        {formatMediumDate(member.createdAt)}
+        {formatMediumDate(member.createdAt, timeZone)}
       </span>
 
       <div className="justify-self-end" role="cell">
@@ -362,6 +364,7 @@ function MemberProfilePreview({
   member: OrganizationMember
   name: string
 }): ReactElement {
+  const timeZone = useTimeZone()
   const [previewHandle] = useState(createPreviewCardHandle)
   const triggerId = `member-profile-${member.id}`
 
@@ -415,7 +418,7 @@ function MemberProfilePreview({
           {member.phoneNumber ? (
             <ProfileDetail label="Phone" value={member.phoneNumber} />
           ) : null}
-          <ProfileDetail label="Joined" value={formatMediumDate(member.createdAt)} />
+          <ProfileDetail label="Joined" value={formatMediumDate(member.createdAt, timeZone)} />
         </dl>
       </PreviewCardContent>
     </PreviewCard>
@@ -780,6 +783,7 @@ function InviteItem({
   revokeInviteAction: ServerFormAction
   state: "active" | "expired"
 }): ReactElement {
+  const timeZone = useTimeZone()
   return (
     <article
       className={cn(
@@ -792,7 +796,7 @@ function InviteItem({
         <p className="truncate text-sm font-medium">{invite.email}</p>
         <p className="mt-1 text-xs text-muted-foreground">
           {invite.roleName ?? ORGANIZATION_ROLE_LABELS[invite.role]} · {state === "active" ? "expires" : "expired"}{" "}
-          {formatMediumDate(invite.expiresAt)}
+          {formatMediumDate(invite.expiresAt, timeZone)}
         </p>
       </div>
       <div className="flex shrink-0 gap-1">

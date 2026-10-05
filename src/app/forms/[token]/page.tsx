@@ -1,11 +1,10 @@
-import { AlertCircle, Send, ShieldCheck } from "lucide-react"
+import { AlertCircle, ShieldCheck } from "lucide-react"
 import { cookies, headers } from "next/headers"
 import { userAgent } from "next/server"
 import type { ReactElement } from "react"
 
+import { PublicAnswerError, PublicAnswerForm, PublicAnswerSubmit } from "@/components/submissions/public-answer-form"
 import { PublicAnswerPaper } from "@/components/submissions/public-answer-paper"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Button } from "@/components/ui/button"
 import {
   Card,
   CardDescription,
@@ -27,24 +26,18 @@ type PublicFormPageParams = Promise<{
   token: string
 }>
 
-type PublicFormPageSearchParams = Promise<{
-  error?: string
-}>
-
 /**
  * Renders one active public form and restores its path-scoped draft session.
  *
- * @param props - Async route params and optional redirected error message.
+ * @param props - Async route params.
  * @returns Public form, unavailable state, or restored draft controls.
  */
 export default async function PublicFormPage({
   params,
-  searchParams,
 }: {
   params: PublicFormPageParams
-  searchParams: PublicFormPageSearchParams
 }): Promise<ReactElement> {
-  const [{ token }, query] = await Promise.all([params, searchParams])
+  const { token } = await params
   const preview = await getPublicFormLinkByToken(token)
 
   if (!preview.valid || !preview.template) {
@@ -102,7 +95,7 @@ export default async function PublicFormPage({
 
   return (
     <main className="min-h-dvh bg-muted/20">
-      <form action={submitPublicFormAction}>
+      <PublicAnswerForm action={submitPublicFormAction}>
         <input name="token" type="hidden" value={token} />
         {/* Shared public draft handle. File fields write the server-issued
             value here so every upload is parented by one draft submission. */}
@@ -118,21 +111,12 @@ export default async function PublicFormPage({
               {/* The paper prints the title as the page's heading; this keeps it in view. */}
               <p className="truncate text-base font-semibold">{preview.template.title}</p>
             </div>
-            <Button className="h-10 px-4" type="submit">
-              <Send />
-              Submit
-            </Button>
+            <PublicAnswerSubmit />
           </div>
         </header>
 
         <div className="mx-auto flex max-w-5xl flex-col gap-4 px-4 pt-4 empty:hidden">
-          {query.error ? (
-            <Alert variant="destructive">
-              <AlertCircle />
-              <AlertTitle>Not sent</AlertTitle>
-              <AlertDescription>{query.error}</AlertDescription>
-            </Alert>
-          ) : null}
+          <PublicAnswerError />
           {preview.template.description ? (
             <p className="text-sm text-muted-foreground">{preview.template.description}</p>
           ) : null}
@@ -155,7 +139,7 @@ export default async function PublicFormPage({
           <ShieldCheck className="size-3.5" />
           Secured by BizFlow
         </p>
-      </form>
+      </PublicAnswerForm>
     </main>
   )
 }

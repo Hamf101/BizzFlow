@@ -238,8 +238,6 @@ export function DrawnSignatureField({
         width={640}
       />
       <input name={name} type="hidden" value={dataUrl} />
-      {/* An empty drawing never reaches the server as a signature. */}
-      {required ? <RequiredStandIn filled={dataUrl !== ""} label={label} /> : null}
       <FieldDescription>{description}</FieldDescription>
       <FieldLabel htmlFor={`${fieldId}-typed`}>Or type your {label.toLowerCase()}</FieldLabel>
       <Input
@@ -249,6 +247,8 @@ export function DrawnSignatureField({
         onChange={(event) => writeTypedName(event.target.value)}
         value={typed}
       />
+      {/* An empty drawing never reaches the server as a signature. */}
+      {required ? <RequiredStandIn filled={dataUrl !== ""} label={label} /> : null}
     </Field>
   )
 }

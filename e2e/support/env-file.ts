@@ -44,22 +44,23 @@ const OUTBOUND_KEYS = [
 ]
 
 /**
- * Refuses a run whose server could reach the real email or AI provider.
+ * Why a run's server could reach the real email or AI provider, or null.
  *
  * `next start` fills every key absent from `process.env` from `.env.local` and
  * `.env.production*`, so a missing key means the maintainer's real
  * credentials. Only a key that is present and empty keeps them out.
  *
+ * It returns rather than throws so loading the Playwright config stays free of
+ * side effects for tools such as knip; the config refuses to start the server.
+ *
  * @param env - The environment the web server will inherit.
- * @throws Error naming each key that is missing or set.
+ * @returns The refusal naming each key that is missing or set, or null.
  */
-export function assertNoOutboundServices(env: NodeJS.ProcessEnv = process.env): void {
+export function findOutboundServices(env: NodeJS.ProcessEnv = process.env): string | null {
   const open = OUTBOUND_KEYS.filter((key) => env[key]?.trim() !== "")
 
-  if (open.length > 0) {
-    throw new Error(
-      `E2E runs must not reach real email or AI: ${open.join(", ")} must be set and empty. ` +
-        "Regenerate .env.e2e with `pnpm e2e:env`."
-    )
-  }
+  return open.length > 0
+    ? `E2E runs must not reach real email or AI: ${open.join(", ")} must be set and empty. ` +
+        "Regenerate .env.e2e with: pnpm e2e:env"
+    : null
 }

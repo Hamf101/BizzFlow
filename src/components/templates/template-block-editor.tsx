@@ -358,25 +358,7 @@ export function BlockFields({
             }
             value={block.placeholder}
           />
-          <Field>
-            <FieldLabel htmlFor={`${block.id}-comb`}>Character boxes</FieldLabel>
-            <Input
-              id={`${block.id}-comb`}
-              inputMode="numeric"
-              max={40}
-              min={2}
-              onChange={(event: ChangeEvent<HTMLInputElement>): void => {
-                const count = Number(event.target.value)
-                const next: typeof block = { ...block, comb: undefined }
-
-                // One box a character, for a reference or account number; blank is none.
-                onChange(Number.isInteger(count) && count >= 2 && count <= 40 ? { ...next, comb: count, multiline: false } : next)
-              }}
-              placeholder="None"
-              type="number"
-              value={block.comb ?? ""}
-            />
-          </Field>
+          <CharacterBoxes block={block} onChange={onChange} />
           {block.format || block.comb ? null : (
             <CheckboxControl
               checked={block.multiline}
@@ -1353,5 +1335,51 @@ export function CheckboxControl({
       />
       {label}
     </label>
+  )
+}
+
+/**
+ * How many boxes a text field's answer is written in, one a character, for a
+ * reference or account number; blank is none. What is typed is kept while it
+ * is typed, so 12 can be reached through 1, and only a count from 2 to 40 is kept.
+ *
+ * @param props - The text field and where its change goes.
+ * @returns The count's field.
+ */
+function CharacterBoxes({
+  block,
+  onChange,
+}: {
+  block: Extract<TemplateBlock, { type: "text_field" }>
+  onChange: (block: TemplateBlock) => void
+}): ReactElement {
+  const [typed, setTyped] = useState<string | null>(null)
+
+  return (
+    <Field>
+      <FieldLabel htmlFor={`${block.id}-comb`}>Character boxes</FieldLabel>
+      <Input
+        id={`${block.id}-comb`}
+        inputMode="numeric"
+        max={40}
+        min={2}
+        onBlur={() => setTyped(null)}
+        onChange={(event: ChangeEvent<HTMLInputElement>): void => {
+          const count = Number(event.target.value)
+          const valid = Number.isInteger(count) && count >= 2 && count <= 40
+
+          setTyped(event.target.value)
+
+          if (valid) {
+            onChange({ ...block, comb: count, multiline: false })
+          } else if (event.target.value === "" && block.comb !== undefined) {
+            onChange({ ...block, comb: undefined })
+          }
+        }}
+        placeholder="None"
+        type="number"
+        value={typed ?? block.comb ?? ""}
+      />
+    </Field>
   )
 }

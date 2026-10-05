@@ -478,11 +478,13 @@ export function getFileExtension(name: string): string | null {
  *
  * @param lifecycleState - The item's lifecycle state.
  * @param purgeAfter - When it is scheduled for permanent deletion, if ever.
+ * @param timeZone - The viewer's time zone.
  * @returns A short note for the item's row.
  */
 export function describeTrashNote(
   lifecycleState: DocumentLifecycleState,
-  purgeAfter: string | null
+  purgeAfter: string | null,
+  timeZone?: string
 ): string {
   if (lifecycleState === "purge_pending") {
     return "Permanent deletion pending"
@@ -494,5 +496,5 @@ export function describeTrashNote(
 
   return Number.isNaN(new Date(purgeAfter).getTime())
     ? "Deletion date unavailable"
-    : `Deletes on ${formatMediumDate(purgeAfter)}`
+    : `Deletes on ${formatMediumDate(purgeAfter, timeZone)}`
 }

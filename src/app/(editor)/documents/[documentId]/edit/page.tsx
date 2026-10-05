@@ -54,15 +54,20 @@ export default async function GeneratedDocumentEditorPage({
       redirect(`/documents/${encodeURIComponent(documentId)}/preview`)
     }
 
+    const [guestLayout, guestName] = await Promise.all([
+      loadEditorLayout(user.id),
+      readPersonName(user.id).catch(() => null),
+    ])
+
     return (
       <DocumentEditor
         backHref={backHref}
         canFill={view.document.lifecycleState === "active"}
         canSend={false}
         canShare={false}
-        editorLayout={{ initial: await loadEditorLayout(user.id), save: saveEditorLayoutAction }}
+        editorLayout={{ initial: guestLayout, save: saveEditorLayoutAction }}
         guest
-        me={{ id: user.id, name: (await readPersonName(user.id).catch(() => null)) ?? getFallbackDisplayName(user.email) }}
+        me={{ id: user.id, name: guestName ?? getFallbackDisplayName(user.email) }}
         resendAction={resendGeneratedDocumentInvitationAction}
         saveAnswersAction={saveDocumentAnswersAction}
         saveContentAction={saveDocumentContentAction}
@@ -78,10 +83,12 @@ export default async function GeneratedDocumentEditorPage({
     view.document.lifecycleState === "active"
   const canSend = canSendDocument(context.membership, { accessLevel: view.accessLevel, lifecycleState: view.document.lifecycleState })
   const canShare = canShareResource(context.membership, { accessLevel: view.accessLevel, lifecycleState: view.document.lifecycleState })
-  // Where the tools were left; without it they start at home.
-  const editorLayout = await loadEditorLayout(user.id)
-  // How the others in the room see this person.
-  const name = await loadMemberName(user, context.organization.id)
+  // Where the tools were left (without it they start at home), and how the
+  // others in the room see this person: independent, so read together.
+  const [editorLayout, name] = await Promise.all([
+    loadEditorLayout(user.id),
+    loadMemberName(user, context.organization.id),
+  ])
 
   return (
     <>

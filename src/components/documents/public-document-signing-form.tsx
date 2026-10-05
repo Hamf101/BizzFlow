@@ -1,7 +1,7 @@
 "use client"
 
 import { Send } from "lucide-react"
-import { type ReactElement, useMemo, useState } from "react"
+import { type FormEvent, type ReactElement, startTransition, useActionState, useMemo, useState } from "react"
 
 import { completePublicSigningAction } from "@/app/sign/[token]/actions"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -77,6 +77,7 @@ export function PublicDocumentSigningForm({
       ),
     [view]
   )
+  const [result, sign, signing] = useActionState(completePublicSigningAction, null)
   const answerBaselineFields = getGeneratedDocumentAnswerBaselineFields(
     view.document.templateSnapshot,
     view.answers
@@ -84,8 +85,14 @@ export function PublicDocumentSigningForm({
 
   return (
     <form
-      action={completePublicSigningAction}
       className="flex min-w-0 flex-col gap-6"
+      // Sent by hand, as a form's own action would wipe the drawing once it ran;
+      // a refusal comes back here, with every answer and stroke kept.
+      onSubmit={(event: FormEvent<HTMLFormElement>): void => {
+        event.preventDefault()
+        const formData = new FormData(event.currentTarget)
+        startTransition(() => sign(formData))
+      }}
     >
       <input name="token" type="hidden" value={token} />
       {answerBaselineFields.map(
@@ -98,6 +105,13 @@ export function PublicDocumentSigningForm({
           />
         )
       )}
+
+      {result?.error ? (
+        <Alert variant="destructive">
+          <AlertTitle>Signing could not be completed</AlertTitle>
+          <AlertDescription>{result.error}</AlertDescription>
+        </Alert>
+      ) : null}
 
       <Card className="min-w-0">
         <CardHeader>
@@ -157,7 +171,7 @@ export function PublicDocumentSigningForm({
             <span className="text-xs text-muted-foreground">
               By submitting, you confirm the answers and drawing shown here.
             </span>
-            <Button type="submit">
+            <Button disabled={signing} type="submit">
               <Send />
               Submit signature
             </Button>

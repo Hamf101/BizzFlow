@@ -131,35 +131,37 @@ export default async function EditTemplatePage({
     )
   }
 
-  const initialFlowMessages = await listTemplateFlowMessages({
-    actorUserId: user.id,
-    organizationId: context.organization.id,
-    templateId,
-  }).catch((error: unknown): TemplateFlowMessage[] => {
-    console.warn("template_flow_history_page_load_failed", {
+  // Independent reads, so they wait on each other's round trips for nothing.
+  const [initialFlowMessages, categorySuggestions, editorLayout, name, versions] = await Promise.all([
+    listTemplateFlowMessages({
+      actorUserId: user.id,
       organizationId: context.organization.id,
       templateId,
-      userId: user.id,
-      reason: error instanceof Error ? error.message : "Unknown history error",
-    })
-    return []
-  })
-
-  // Hints only, so a read failure must not block editing the template.
-  const categorySuggestions = await listDocumentTemplateCategories({
-    actorUserId: user.id,
-    organizationId: context.organization.id,
-  }).catch((): string[] => [])
-  // Where the tools were left; without it they start at home.
-  const editorLayout = await getEditorLayout({ actorUserId: user.id }).catch((): EditorLayout => ({}))
-  // How the others in the room see this person.
-  const name = await loadMemberName(user, context.organization.id)
-  // History is for going back; the template still edits without it.
-  const versions = await listDocumentTemplateVersions({
-    actorUserId: user.id,
-    organizationId: context.organization.id,
-    templateId,
-  }).catch((): DocumentTemplateVersion[] => [])
+    }).catch((error: unknown): TemplateFlowMessage[] => {
+      console.warn("template_flow_history_page_load_failed", {
+        organizationId: context.organization.id,
+        templateId,
+        userId: user.id,
+        reason: error instanceof Error ? error.message : "Unknown history error",
+      })
+      return []
+    }),
+    // Hints only, so a read failure must not block editing the template.
+    listDocumentTemplateCategories({
+      actorUserId: user.id,
+      organizationId: context.organization.id,
+    }).catch((): string[] => []),
+    // Where the tools were left; without it they start at home.
+    getEditorLayout({ actorUserId: user.id }).catch((): EditorLayout => ({})),
+    // How the others in the room see this person.
+    loadMemberName(user, context.organization.id),
+    // History is for going back; the template still edits without it.
+    listDocumentTemplateVersions({
+      actorUserId: user.id,
+      organizationId: context.organization.id,
+      templateId,
+    }).catch((): DocumentTemplateVersion[] => []),
+  ])
 
   return (
     <TemplateEditor

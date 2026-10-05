@@ -1,9 +1,9 @@
 import { defineConfig, devices } from "@playwright/test"
 
-import { assertNoOutboundServices, loadE2eEnvFile } from "./e2e/support/env-file"
+import { findOutboundServices, loadE2eEnvFile } from "./e2e/support/env-file"
 
 loadE2eEnvFile()
-assertNoOutboundServices()
+const outboundRefusal = findOutboundServices()
 
 const baseURL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
 
@@ -71,9 +71,16 @@ export default defineConfig({
   webServer: {
     // `next start`, not `next dev`: dev compiles each route on first request,
     // which reads as a 20s hang and times specs out on a cold cache.
-    command: "corepack pnpm start",
+    // A server that could reach real email or AI never starts — nor is one
+    // already running reused — so the run stops with the reason. Refusing
+    // here rather than throwing at import keeps tools that load this config
+    // (knip) working without a .env.e2e.
+    command: outboundRefusal
+      ? 'node -e "console.error(process.env.E2E_OUTBOUND_REFUSAL); process.exit(1)"'
+      : "corepack pnpm start",
+    env: outboundRefusal ? { E2E_OUTBOUND_REFUSAL: outboundRefusal } : undefined,
     url: baseURL,
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: !process.env.CI && !outboundRefusal,
     timeout: 120_000,
     stdout: "pipe",
     stderr: "pipe",

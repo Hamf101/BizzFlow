@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/card"
 import { buildFeedbackRedirect } from "@/lib/action-result"
 import { canShareResource } from "@/lib/permissions"
-import { formatMediumDateTime } from "@/lib/date-format"
+import { LocalDate } from "@/components/ui/local-date"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
 import { getPageErrorMessage } from "@/lib/page-errors"
 import { loadPageOrganizationContext } from "@/lib/page-organization-context"
@@ -297,16 +297,16 @@ function DocumentMetadataCard({
         />
         <MetadataItem
           label="Created"
-          value={formatMediumDateTime(detail.document.createdAt)}
+          value={<LocalDate time value={detail.document.createdAt} />}
         />
         <MetadataItem
           label="Updated"
-          value={formatMediumDateTime(detail.document.updatedAt)}
+          value={<LocalDate time value={detail.document.updatedAt} />}
         />
         {detail.document.archivedAt ? (
           <MetadataItem
             label="Archived"
-            value={formatMediumDateTime(detail.document.archivedAt)}
+            value={<LocalDate time value={detail.document.archivedAt} />}
           />
         ) : null}
         {detail.document.lifecycleState === "trashed" ||
@@ -329,7 +329,7 @@ function MetadataItem({
   value,
 }: {
   label: string
-  value: string
+  value: ReactNode
 }): ReactElement {
   return (
     <div className="flex min-w-0 flex-col gap-1 rounded-lg border bg-background p-3">
@@ -377,7 +377,7 @@ function VersionListCard({
                       {version.contentType} · {formatBytes(version.byteSize)}
                     </span>
                     <span className="text-xs text-muted-foreground">
-                      Added {formatMediumDateTime(version.createdAt)}
+                      Added <LocalDate time value={version.createdAt} />
                     </span>
                   </div>
                 </div>
@@ -442,7 +442,7 @@ function DocumentActivityCard({
                   {formatActivityDescription(event)}
                 </p>
                 <span className="text-xs text-muted-foreground">
-                  {formatMediumDateTime(event.createdAt)}
+                  <LocalDate time value={event.createdAt} />
                 </span>
               </div>
             ))}
@@ -494,7 +494,7 @@ function DocumentCommentsCard({
                     {comment.authorDisplayName}
                   </span>
                   <span className="text-xs text-muted-foreground">
-                    {formatMediumDateTime(comment.createdAt)}
+                    <LocalDate time value={comment.createdAt} />
                   </span>
                 </div>
                 <p className="whitespace-pre-wrap break-words text-sm text-muted-foreground">
@@ -748,7 +748,7 @@ function getWorkspaceHref(
 function getRetentionDescription(
   lifecycleState: DocumentLifecycleState,
   purgeAfter: string | null
-): string {
+): ReactNode {
   if (lifecycleState === "purge_pending") {
     return "Permanent deletion is pending."
   }
@@ -763,7 +763,7 @@ function getRetentionDescription(
     return "Automatic purge timing is unavailable."
   }
 
-  return `Scheduled for permanent deletion ${formatMediumDateTime(purgeAfter)}.`
+  return <>Scheduled for permanent deletion <LocalDate time value={purgeAfter} />.</>
 }
 
 function formatActivityDescription(event: DocumentActivityEvent): string {

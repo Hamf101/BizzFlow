@@ -52,7 +52,7 @@ export function FilesLayoutSwitch({
               aria-label={`${label} view`}
               aria-pressed={layout === current}
               className={cn(
-                "grid h-[26px] w-[30px] place-items-center rounded-[7px] text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/35",
+                "grid h-[26px] w-[30px] place-items-center max-md:size-11 rounded-[7px] text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/35",
                 layout === current && "bg-secondary text-secondary-foreground",
                 needsWidth(layout) && "max-md:hidden",
                 // Where Columns or Gallery cannot fit, Icons stands in for them.

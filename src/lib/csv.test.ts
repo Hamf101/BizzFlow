@@ -1,11 +1,14 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 
+import { AuthenticationError } from "@/lib/auth"
 import {
   buildCsvExportFilename,
   createCsvDownloadResponse,
+  createCsvExportErrorResponse,
   escapeCsvField,
   formatCsv,
 } from "@/lib/csv"
+import { setErrorReporter } from "@/lib/observability"
 
 describe("escapeCsvField", () => {
   it("quotes every value and doubles embedded quotes", () => {
@@ -83,5 +86,33 @@ describe("createCsvDownloadResponse", () => {
     )
     expect(response.headers.get("Cache-Control")).toBe("no-store")
     await expect(response.text()).resolves.toBe('"a"')
+  })
+})
+
+describe("createCsvExportErrorResponse", () => {
+  it("answers a signed-out caller 401 and reports an unexpected failure without leaking it", async () => {
+    const reported: unknown[] = []
+    setErrorReporter((error) => reported.push(error))
+    vi.spyOn(console, "error").mockImplementation(() => {})
+
+    try {
+      const signedOut = createCsvExportErrorResponse(
+        new AuthenticationError("Sign in to continue."),
+        "Unable to export.",
+        "export_test"
+      )
+      const crashed = createCsvExportErrorResponse(
+        new Error("relation public.secret_table does not exist"),
+        "Unable to export.",
+        "export_test"
+      )
+
+      expect(signedOut.status).toBe(401)
+      expect(crashed.status).toBe(500)
+      expect(await crashed.text()).toBe("Unable to export.")
+      expect(reported).toHaveLength(1)
+    } finally {
+      setErrorReporter(null)
+    }
   })
 })

@@ -28,7 +28,7 @@ afterEach(() => {
 })
 
 function mount(): { hidden: HTMLInputElement; typed: HTMLInputElement } {
-  const container = document.createElement("div")
+  const container = document.createElement("form")
   document.body.append(container)
   const root = createRoot(container)
   mounted.push(root)
@@ -83,5 +83,14 @@ describe("a signature that can be typed instead of drawn", () => {
 
     expect(typed.value).toBe("")
     expect(hidden.value).toBe("")
+  })
+
+  it("holds the form back until something is drawn or typed", () => {
+    const { typed } = mount()
+    const form = typed.form!
+
+    expect(form.checkValidity()).toBe(false)
+    type(typed, "Ada Lovelace")
+    expect(form.checkValidity()).toBe(true)
   })
 })

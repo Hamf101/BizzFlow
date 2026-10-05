@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
+import { copyText } from "@/components/ui/toaster"
 import { Input } from "@/components/ui/input"
 import { formatMediumDate } from "@/lib/date-format"
 import type { AnswerRequestState, AnswerRequestSummary, AnswerSource, SentAnswerRequest } from "@/services/send-to-answer-service"
@@ -212,7 +213,7 @@ function Undelivered({ sent }: { sent: SentAnswerRequest }): ReactElement {
         <Input aria-label={`Link for ${sent.email}`} className="font-mono text-xs" readOnly value={url} />
         <Button
           onClick={() => {
-            void navigator.clipboard.writeText(url).then(() => setCopied(true))
+            void copyText(url).then(setCopied)
           }}
           variant="outline"
         >

@@ -26,7 +26,7 @@ import {
   TextCursorInput,
   Underline,
 } from "lucide-react"
-import { type FormEvent, type ReactElement, type ReactNode, useEffect, useState } from "react"
+import { type FormEvent, type ReactElement, type ReactNode, useEffect, useState, useSyncExternalStore } from "react"
 
 import { findInsertChoices, INSERT_CHOICES, type InsertChoice } from "@/components/editor/block-catalog"
 import { isLine, isList } from "@/components/editor/editor-block"
@@ -136,7 +136,8 @@ export function FormatBar({
   const base = block?.type === "heading" ? HEADING_POINTS[block.level] : 10
   const size = marks?.size ?? base
   const head = (): number => line?.state.selection.head ?? 0
-  const mod = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘" : "Ctrl+"
+  // Ctrl+ on the server and while its page is taken over, so the two agree.
+  const mod = useSyncExternalStore(subscribeNever, () => (/Mac|iPhone|iPad/.test(navigator.platform) ? "⌘" : "Ctrl+"), () => "Ctrl+")
 
   useEffect(() => {
     function openLink(event: KeyboardEvent): void {
@@ -721,4 +722,8 @@ export function toHref(value: string): string | null {
       : `https://${typed}`
 
   return typed && textRunSchema.shape.link.safeParse(href).success ? href : null
+}
+
+function subscribeNever(): () => void {
+  return () => undefined
 }

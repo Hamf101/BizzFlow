@@ -67,7 +67,7 @@ export function NewTaskDialog({
           </Field>
           <div className="flex flex-col gap-4 sm:flex-row">
             <Field className="sm:flex-1">
-              <FieldLabel htmlFor="new-task-due">Due (UTC)</FieldLabel>
+              <FieldLabel htmlFor="new-task-due">Due</FieldLabel>
               <DateTimePicker id="new-task-due" name="dueAt" />
             </Field>
             {canAssign ? (

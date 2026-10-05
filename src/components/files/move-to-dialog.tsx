@@ -82,7 +82,7 @@ export function MoveToDialog({
           {browsing === null ? null : (
             <button
               aria-label="Back"
-              className="grid size-7 place-items-center rounded-[8px] outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/40"
+              className="grid size-7 place-items-center rounded-[8px] max-md:size-11 outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/40"
               onClick={() => setBrowsing(parentOf(browsing, destinations))}
               type="button"
             >

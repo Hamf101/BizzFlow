@@ -48,7 +48,7 @@ const toastClassNames = {
   actionButton: `${TOAST_TEXT_BUTTON} text-primary hover:text-primary/75`,
   cancelButton: `${TOAST_TEXT_BUTTON} text-muted-foreground hover:text-foreground`,
   closeButton:
-    "order-last -my-1 -mr-1 grid size-7 shrink-0 place-items-center rounded-full text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/35",
+    "order-last -my-1 -mr-1 grid size-7 shrink-0 max-md:size-11 place-items-center rounded-full text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/35",
   content: "min-w-0 flex-1",
   description: "text-sm text-muted-foreground",
   error: "border-destructive/50 text-destructive",
@@ -159,4 +159,21 @@ export function BizFlowToaster(): ReactElement<ToasterProps> {
       }}
     />
   )
+}
+
+/**
+ * Copies text, and says so when the browser refuses, so nobody is told
+ * "Copied" with nothing on their clipboard.
+ *
+ * @param text - What to copy.
+ * @returns Whether it was copied.
+ */
+export async function copyText(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text)
+    return true
+  } catch {
+    bizflowToast.error("Couldn’t copy. Select it and copy it yourself.")
+    return false
+  }
 }

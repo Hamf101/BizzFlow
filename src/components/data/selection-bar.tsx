@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils"
 
 /** The look of a button on the selection bar, shared by every workspace. */
 export const BAR_BUTTON =
-  "grid h-9 shrink-0 grid-flow-col place-items-center gap-2 rounded-full px-2.5 outline-none transition-colors hover:bg-background/15 focus-visible:ring-2 focus-visible:ring-background/50 md:px-3.5"
+  "grid h-9 shrink-0 grid-flow-col max-md:h-11 place-items-center gap-2 rounded-full px-2.5 outline-none transition-colors hover:bg-background/15 focus-visible:ring-2 focus-visible:ring-background/50 md:px-3.5"
 
 /**
  * While anything is selected, floats its count, the changes every selected
@@ -72,7 +72,7 @@ export function SelectionBarShell({
       <span aria-hidden="true" className="mx-1 h-5 w-px bg-background/30" />
       <button
         aria-label="Clear selection"
-        className={cn(BAR_BUTTON, "px-0 md:px-0 size-9")}
+        className={cn(BAR_BUTTON, "px-0 md:px-0 size-9 max-md:size-11")}
         onClick={onClear}
         type="button"
       >

@@ -16,6 +16,8 @@ import {
 } from "@/components/ui/card"
 import { getClientIp } from "@/lib/client-ip"
 import { formatMediumDateTime } from "@/lib/date-format"
+import { readSignedFlash } from "@/lib/form-utils"
+import { getPageErrorMessage } from "@/lib/page-errors"
 import { checkRateLimit, RateLimitError } from "@/lib/rate-limit"
 import {
   SigningRecipientStatusBadge,
@@ -42,6 +44,7 @@ type PublicSigningParams = Promise<{
 type PublicSigningSearchParams = Promise<{
   error?: string
   message?: string
+  sig?: string
 }>
 
 /**
@@ -72,10 +75,10 @@ export default async function PublicSigningPage({
           errorMessage: null as string | null,
         }))
         .catch((error: unknown) => {
-          const errorMessage =
-            error instanceof Error
-              ? error.message
-              : "This signing link is invalid or no longer available."
+          const errorMessage = getPageErrorMessage(
+            error,
+            "This signing link is invalid or no longer available."
+          )
 
           // The private token and token-derived path must never enter logs.
           console.warn("public_document_signing_view_failed", {
@@ -236,23 +239,25 @@ function PublicSigningShell({
   children: ReactElement | ReactElement[]
   query: Awaited<PublicSigningSearchParams>
 }): ReactElement {
+  const flash = readSignedFlash(query)
+
   return (
     <main className="min-h-screen bg-background px-4 py-8 text-foreground sm:py-12">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
         <div className="border-b pb-4">
           <BizFlowWordmark />
         </div>
-        {query.error && (
+        {flash.error && (
           <Alert variant="destructive">
             <AlertTitle>Signing could not be completed</AlertTitle>
-            <AlertDescription>{query.error}</AlertDescription>
+            <AlertDescription>{flash.error}</AlertDescription>
           </Alert>
         )}
-        {query.message && (
+        {flash.message && (
           <Alert>
             <CheckCircle2 />
             <AlertTitle>Signing updated</AlertTitle>
-            <AlertDescription>{query.message}</AlertDescription>
+            <AlertDescription>{flash.message}</AlertDescription>
           </Alert>
         )}
         {children}

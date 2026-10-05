@@ -18,7 +18,7 @@ import { Switch } from "@/components/ui/switch"
 import { NoticeSoundSwitch } from "@/components/sharing/notice-sound-switch"
 import { RolesAndAccessSettings } from "@/components/settings/roles-and-access-settings"
 import { buildFeedbackRedirect } from "@/lib/action-result"
-import { formatMediumDateTime } from "@/lib/date-format"
+import { LocalDate } from "@/components/ui/local-date"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
 import { loadPageOrganizationContext } from "@/lib/page-organization-context"
 import { canPerformOrganizationAction } from "@/lib/permissions"
@@ -79,10 +79,11 @@ export default async function SettingsPage(): Promise<ReactElement> {
 
   let settings: MemberSettings
   let organizationSettings: OrganizationNotificationSettings | null
+  let deliveries: NotificationDelivery[]
   const isOwner = context.membership.role === "owner_admin"
 
   try {
-    ;[settings, organizationSettings] = await Promise.all([
+    ;[settings, organizationSettings, deliveries] = await Promise.all([
       getMemberSettings({
         actorUserId: user.id,
         organizationId: context.organization.id,
@@ -93,6 +94,9 @@ export default async function SettingsPage(): Promise<ReactElement> {
             organizationId: context.organization.id,
           })
         : null,
+      canManageOrganization
+        ? loadRecentDeliveries(user.id, context.organization.id)
+        : [],
     ])
   } catch (error: unknown) {
     return (
@@ -257,9 +261,7 @@ export default async function SettingsPage(): Promise<ReactElement> {
       )}
 
       {canManageOrganization && (
-        <NotificationActivityCard
-          deliveries={await loadRecentDeliveries(user.id, context.organization.id)}
-        />
+        <NotificationActivityCard deliveries={deliveries} />
       )}
     </SettingsShell>
   )
@@ -359,7 +361,7 @@ function NotificationActivityCard({
                     {delivery.channel.toUpperCase()}
                   </span>
                   <span className="text-xs text-muted-foreground">
-                    {formatMediumDateTime(delivery.createdAt)}
+                    <LocalDate time value={delivery.createdAt} />
                   </span>
                   {delivery.lastError && (
                     <span className="text-xs text-destructive">

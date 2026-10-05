@@ -80,3 +80,24 @@ it("holds a form whose required day and time are still empty, before the calenda
 
   expect(document.querySelector("form")!.checkValidity()).toBe(false)
 })
+
+it("posts a day and time as the moment it is where the viewer is, and shows a saved one in their own time", async () => {
+  const host = document.createElement("div")
+  document.body.append(host)
+  const saved = "2026-10-01T16:30:00.000Z"
+  await act(async () =>
+    createRoot(host).render(
+      <form>
+        <DateTimePicker defaultValue={saved} id="due" name="dueAt" />
+      </form>
+    )
+  )
+
+  const posted = new FormData(document.querySelector("form") as HTMLFormElement).get("dueAt") as string
+  const local = new Date(saved)
+  const shown = `${String(local.getHours()).padStart(2, "0")}:${String(local.getMinutes()).padStart(2, "0")}`
+
+  expect(new Date(posted).toISOString()).toBe(saved)
+  expect(posted).toMatch(/(Z|[+-]\d{2}:\d{2})$/)
+  expect((document.querySelector('input[type="time"]') as HTMLInputElement).value).toBe(shown)
+})

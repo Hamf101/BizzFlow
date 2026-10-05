@@ -20,7 +20,7 @@ import {
   PAGE_BREAKS_FOLDED,
   PageBreaks,
 } from "@/components/editor/editor-block"
-import { designTools } from "@/components/editor/design-tools"
+import { useDesignTools } from "@/components/editor/design-tools"
 import { type CanvasUnit, createUnits, paginate, type PageFrame, type PaginationRow } from "@/components/editor/editor-pagination"
 import type { CanvasEditing, CanvasEditingInput } from "@/components/editor/editor-canvas-editing"
 import { PrintedSectionTitle, sectionBoxStyle } from "./printed-section"
@@ -104,9 +104,9 @@ export function EditorCanvas({
   textEditable,
   zoom,
 }: EditorCanvasProps): ReactElement {
-  const { MarginGuides, SectionPieces } = designTools() ?? {}
+  const { MarginGuides, SectionPieces } = useDesignTools() ?? {}
   // Fixed for the page's life: an editor provides designing before its canvas first draws.
-  const useEditing = designTools()?.useCanvasEditing ?? useNoEditing
+  const useEditing = useDesignTools()?.useCanvasEditing ?? useNoEditing
   const content = controller.content
   const plan = useMemo(
     (): TemplateRenderPlan =>
@@ -527,7 +527,7 @@ export function EditorCanvas({
 }
 
 function UnitBlocks({ actions, unit }: { actions: CanvasActions; unit: CanvasUnit }): ReactElement {
-  const { EditorSection, FrameEdges } = designTools() ?? {}
+  const { EditorSection, FrameEdges } = useDesignTools() ?? {}
   const printedTitle = unit.sectionLabel ? (
     <PrintedSectionTitle label={unit.sectionLabel} number={unit.sectionNumber} sectionStyle={actions.controller.content.layout.sectionStyle} />
   ) : null
@@ -812,7 +812,7 @@ function measureRows(unit: HTMLElement, zoom: number): PaginationRow[] {
 // Blocks get their right-click menu only while they can be chosen; a page
 // that is only read or filled in has none.
 function Selectable({ actions, children }: { actions: CanvasActions; children: ReactNode }): ReactNode {
-  const BlockContextMenu = designTools()?.BlockContextMenu
+  const BlockContextMenu = useDesignTools()?.BlockContextMenu
 
   return (actions.textEditable || actions.designable) && BlockContextMenu ? (
     <BlockContextMenu actions={actions}>{children}</BlockContextMenu>

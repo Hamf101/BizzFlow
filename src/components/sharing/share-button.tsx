@@ -34,7 +34,7 @@ export function ShareButton({
     <>
       <Button
         aria-label={iconOnly ? "Share" : undefined}
-        className={cn(iconOnly && "size-10", className)}
+        className={cn(iconOnly && "size-10 max-md:size-11", className)}
         onClick={() => setOpen(true)}
         size={iconOnly ? "icon" : "default"}
         title={iconOnly ? "Share" : undefined}

@@ -137,7 +137,8 @@ export function getActionErrorFeedbackCode(
   return fallback
 }
 
-function getErrorStatusCode(error: unknown): number | null {
+/** The HTTP-style `statusCode` a service error carries, or null. */
+export function getErrorStatusCode(error: unknown): number | null {
   if (typeof error !== "object" || error === null || !("statusCode" in error)) {
     return null
   }

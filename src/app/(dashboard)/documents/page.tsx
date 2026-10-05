@@ -59,6 +59,10 @@ import type { Metadata } from "next"
  */
 export const metadata: Metadata = { title: "Files" }
 
+// Server actions run under the page that posts them: a bulk change or move
+// handles up to 1,000 items one by one, which the default limit cuts short.
+export const maxDuration = 300
+
 export default async function FilesPage({
   searchParams,
 }: {

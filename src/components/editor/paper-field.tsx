@@ -173,6 +173,8 @@ export function PaperField({
         >
           {checked && mode !== "design" ? <Check className="size-[0.85em]" strokeWidth={3} /> : null}
         </span>
+        {/* The box is drawn; read, it says whether it is ticked. */}
+        {mode === "read" ? <span className="sr-only">{checked ? "Checked: " : "Not checked: "}</span> : null}
         {block.label}
         {star}
         <Help block={block} inset="-1.6em" />

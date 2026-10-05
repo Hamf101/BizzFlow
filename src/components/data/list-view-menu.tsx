@@ -68,6 +68,8 @@ export function ListViewMenu({
   views?: ListSavedViews
 }): ReactElement {
   const [naming, setNaming] = useState<"rename" | "save" | null>(null)
+  // Deleting a view asks once more, until the menu closes.
+  const [deleting, setDeleting] = useState(false)
   const deleteForm = useRef<HTMLFormElement>(null)
   const nameId = useId()
   const current = views?.saved.find(
@@ -79,7 +81,7 @@ export function ListViewMenu({
 
   return (
     <>
-      <DropdownMenu>
+      <DropdownMenu onOpenChange={(open: boolean) => (open ? undefined : setDeleting(false))}>
         <DropdownMenuTrigger
           render={
             <Button
@@ -126,9 +128,13 @@ export function ListViewMenu({
                       <Check aria-hidden="true" className="invisible" />
                       Rename this view…
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => deleteForm.current?.requestSubmit()}>
+                    <DropdownMenuItem
+                      closeOnClick={deleting}
+                      onClick={() => (deleting ? deleteForm.current?.requestSubmit() : setDeleting(true))}
+                      variant={deleting ? "destructive" : "default"}
+                    >
                       <Check aria-hidden="true" className="invisible" />
-                      Delete this view
+                      {deleting ? "Yes, delete this view" : "Delete this view"}
                     </DropdownMenuItem>
                   </>
                 ) : null}

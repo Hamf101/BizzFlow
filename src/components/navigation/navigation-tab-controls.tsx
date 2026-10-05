@@ -8,6 +8,7 @@ import type {
 } from "react"
 
 import { ContextMenu, ContextMenuTrigger } from "@/components/ui/context-menu"
+import { bizflowToast, copyText } from "@/components/ui/toaster"
 import {
   DropdownMenuContent,
   DropdownMenuItem,
@@ -88,8 +89,8 @@ export function NavigationTabControls({
         </DropdownMenuItem>
         <DropdownMenuItem
           onClick={() =>
-            void navigator.clipboard?.writeText(
-              new URL(href, window.location.origin).toString()
+            void copyText(new URL(href, window.location.origin).toString()).then(
+              (copied) => copied && bizflowToast.success("Link copied")
             )
           }
         >

@@ -420,7 +420,7 @@ export function TemplateFlowPanel({
           />
           <button
             aria-label="Send message to Flow"
-            className="absolute right-1.5 bottom-1 grid size-8 place-items-center rounded-full text-primary outline-none transition-opacity hover:opacity-75 disabled:opacity-35 focus-visible:ring-2 focus-visible:ring-ring/40"
+            className="absolute right-1.5 bottom-1 grid size-8 place-items-center max-md:size-11 rounded-full text-primary outline-none transition-opacity hover:opacity-75 disabled:opacity-35 focus-visible:ring-2 focus-visible:ring-ring/40"
             disabled={
               isLoading ||
               pendingProposal !== null ||

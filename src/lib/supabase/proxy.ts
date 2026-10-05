@@ -9,7 +9,9 @@ const PROTECTED_PREFIXES: readonly string[] = [
   "/dashboard",
   "/documents",
   "/people",
+  "/settings",
   "/submissions",
+  "/tasks",
   "/templates",
 ]
 
@@ -98,6 +100,12 @@ export async function updateSession(request: NextRequest): Promise<Response> {
     const limited = await limitRequestByMember(request, memberId)
 
     if (limited) {
+      // A refreshed session rides on `response`; a reply that drops it leaves
+      // the browser holding a token the refresh already spent.
+      for (const cookie of response.headers.getSetCookie()) {
+        limited.headers.append("set-cookie", cookie)
+      }
+
       return limited
     }
   }

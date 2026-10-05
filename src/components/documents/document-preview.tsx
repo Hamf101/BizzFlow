@@ -64,7 +64,7 @@ export function DocumentPreview({
       menu={
         <>
           {canSendToAnswer ? (
-            <Button aria-label="Send to answer" className="size-10" onClick={() => setSending(true)} size="icon" title="Send to answer" type="button" variant="ghost">
+            <Button aria-label="Send to answer" className="size-10 max-md:size-11" onClick={() => setSending(true)} size="icon" title="Send to answer" type="button" variant="ghost">
               <Send />
             </Button>
           ) : null}

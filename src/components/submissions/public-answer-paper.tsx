@@ -31,10 +31,6 @@ function subscribeToWidth(onChange: () => void): () => void {
 // What was typed before the page's code arrived, read from the boxes
 // themselves, so the code takes over from it rather than from blank boxes.
 function typedSoFar(token: string): Record<string, unknown> {
-  if (typeof document === "undefined") {
-    return {}
-  }
-
   const form = [...document.querySelectorAll<HTMLInputElement>('input[name="token"]')].find((input) => input.value === token)?.form
 
   try {
@@ -89,7 +85,6 @@ export function PublicAnswerPaper({
       content.blocks.flatMap((block: TemplateBlock) => (block.type === "checkbox_field" ? [[block.fieldKey, block.checkedByDefault]] : []))
     ),
     ...initialAnswers,
-    ...typedSoFar(token),
   }))
   const [files, setFiles] = useState(initialFiles)
   const [errors, setErrors] = useState<Readonly<Record<string, string>>>({})
@@ -98,6 +93,14 @@ export function PublicAnswerPaper({
   const [available, setAvailable] = useState(0)
   const geometry = resolvePageGeometry(content.layout)
   const zoom = narrow || available === 0 ? 1 : Math.min(1, Math.max(0.3, available / (geometry.widthPoints * geometry.scale * POINT_PX)))
+
+  // Read once the page has taken over from the server's, so both drew the same first.
+  useEffect(() => {
+    const typed = typedSoFar(token)
+    const timer = window.setTimeout(() => setAnswers((current) => ({ ...current, ...typed })), 0)
+
+    return () => window.clearTimeout(timer)
+  }, [token])
 
   useEffect(() => {
     const element = frameRef.current

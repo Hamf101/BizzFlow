@@ -9,6 +9,12 @@ const dsn = process.env.NEXT_PUBLIC_SENTRY_DSN
 if (typeof dsn === "string" && dsn.length > 0) {
   Sentry.init({
     dsn,
+    // Literal accesses, inlined at build like the DSN; Vercel exposes its
+    // environment to the browser as NEXT_PUBLIC_VERCEL_ENV.
+    environment:
+      process.env.NEXT_PUBLIC_SENTRY_ENVIRONMENT ||
+      process.env.NEXT_PUBLIC_VERCEL_ENV ||
+      "development",
     tracesSampleRate: 0,
     sendDefaultPii: false,
     beforeSend: (event) => scrubMonitoringEvent(event),

@@ -1,31 +1,23 @@
 "use client"
 
 import { WifiOff } from "lucide-react"
-import { useEffect, useState, type ReactElement } from "react"
+import { type ReactElement, useSyncExternalStore } from "react"
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 
+function subscribeToConnection(onChange: () => void): () => void {
+  window.addEventListener("offline", onChange)
+  window.addEventListener("online", onChange)
+
+  return () => {
+    window.removeEventListener("offline", onChange)
+    window.removeEventListener("online", onChange)
+  }
+}
+
 export function OfflineDraftBanner(): ReactElement | null {
-  const [isOffline, setIsOffline] = useState(() =>
-    typeof window !== "undefined" ? !navigator.onLine : false
-  )
-
-  useEffect(() => {
-    const handleOffline = () => setIsOffline(true)
-    const handleOnline = () => setIsOffline(false)
-
-    if (typeof window !== "undefined") {
-      window.addEventListener("offline", handleOffline)
-      window.addEventListener("online", handleOnline)
-    }
-
-    return () => {
-      if (typeof window !== "undefined") {
-        window.removeEventListener("offline", handleOffline)
-        window.removeEventListener("online", handleOnline)
-      }
-    }
-  }, [])
+  // Online on the server and while its page is taken over, so the two agree.
+  const isOffline = useSyncExternalStore(subscribeToConnection, () => !navigator.onLine, () => false)
 
   if (!isOffline) return null
 

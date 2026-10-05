@@ -181,6 +181,9 @@ export function EditorFrame({
         } else {
           onUndo()
         }
+      } else if (narrow) {
+        // The page has no zoom of its own on a phone's column: the browser's zoom stays the browser's.
+        return
       } else if (key === "=" || key === "+" || key === "-") {
         event.preventDefault()
         setChosenZoom(stepZoom(zoom, key === "-" ? -1 : 1))
@@ -192,14 +195,14 @@ export function EditorFrame({
 
     document.addEventListener("keydown", handleKey)
     return () => document.removeEventListener("keydown", handleKey)
-  }, [onRedo, onSave, onUndo, zoom])
+  }, [narrow, onRedo, onSave, onUndo, zoom])
 
   return (
     <div className="flex h-dvh flex-col bg-canvas text-foreground" data-slot="editor">
       <header className="relative z-20 flex h-14 shrink-0 items-center gap-1 px-2 sm:px-3">
         <Link
           aria-label={backLabel}
-          className={cn(buttonVariants({ size: "icon", variant: "ghost" }), "size-10 shrink-0")}
+          className={cn(buttonVariants({ size: "icon", variant: "ghost" }), "size-10 shrink-0 max-md:size-11")}
           href={backHref}
           title={backLabel}
         >
@@ -228,7 +231,7 @@ export function EditorFrame({
           <>
             <Button
               aria-label="Undo"
-              className="size-9 md:size-10"
+              className="size-11 md:size-10"
               disabled={!canUndo}
               onClick={onUndo}
               size="icon"
@@ -240,7 +243,7 @@ export function EditorFrame({
             </Button>
             <Button
               aria-label="Redo"
-              className="size-9 md:size-10"
+              className="size-11 md:size-10"
               disabled={!canRedo}
               onClick={onRedo}
               size="icon"

@@ -4,6 +4,7 @@ import type { ReactElement } from "react"
 
 import { formatMemberName } from "@/components/people/member-name"
 import { TaskStatusBadge } from "@/components/tasks/task-presentation"
+import { useTimeZone } from "@/components/ui/local-date"
 import { Button, buttonVariants } from "@/components/ui/button"
 import {
   Card,
@@ -60,6 +61,7 @@ export function SubmissionTaskPanel({
   createAction,
   errorMessage = null,
 }: SubmissionTaskPanelProps): ReactElement {
+  const timeZone = useTimeZone()
   return (
     <Card>
       <CardHeader>
@@ -94,7 +96,7 @@ export function SubmissionTaskPanel({
                       currentUserId
                     )}
                     {task.dueAt
-                      ? ` · due ${formatMediumDateTime(task.dueAt)}`
+                      ? ` · due ${formatMediumDateTime(task.dueAt, timeZone)}`
                       : ""}
                   </span>
                 </Link>
@@ -136,7 +138,7 @@ export function SubmissionTaskPanel({
                 <div className="flex flex-col gap-4 sm:flex-row">
                   <Field className="sm:flex-1">
                     <FieldLabel htmlFor="submission-task-due">
-                      Due (UTC)
+                      Due
                     </FieldLabel>
                     <DateTimePicker id="submission-task-due" name="dueAt" />
                     <FieldDescription>

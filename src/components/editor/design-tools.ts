@@ -3,7 +3,7 @@
 // margin guides, section pieces, and dragging and selecting blocks. The editors hand them over when they load;
 // a page that only shows or fills a document never does, so never loads them.
 
-import type { ComponentType } from "react"
+import { type ComponentType, createContext, useContext } from "react"
 
 // Any component taking what the real piece takes, loaded now or later.
 type Tool<Piece> = ComponentType<Piece extends (props: infer Props) => unknown ? Props : never>
@@ -23,22 +23,18 @@ export type DesignTools = Readonly<{
   useCanvasEditing: typeof import("./editor-canvas-editing").useCanvasEditing
 }>
 
-let tools: DesignTools | null = null
-
 /**
- * Gives the canvas what designing needs; the editors call this as they load.
- *
- * @param next - The design pieces.
+ * What designing needs. An editor provides it around its canvas; a page that
+ * only shows or fills a document never does, so never loads it. Per tree, not
+ * per module, so nothing one page provides reaches another or another request.
  */
-export function provideDesignTools(next: DesignTools): void {
-  tools = next
-}
+export const DesignToolsContext = createContext<DesignTools | null>(null)
 
 /**
  * What designing needs, where an editor provided it.
  *
  * @returns The design pieces, or null on a page that only shows or fills a document.
  */
-export function designTools(): DesignTools | null {
-  return tools
+export function useDesignTools(): DesignTools | null {
+  return useContext(DesignToolsContext)
 }

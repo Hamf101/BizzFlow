@@ -6,7 +6,8 @@ import { type ReactElement, useEffect, useMemo, useRef, useState } from "react"
 import type { DocumentContentInput } from "@/app/(editor)/documents/[documentId]/edit/actions"
 import { DocumentRecipientCollection } from "@/components/documents/document-recipient-collection"
 import { useFlowHandoff } from "@/components/flow/flow-handoff"
-import "@/components/editor/design-tools-provided"
+import { DesignToolsContext } from "@/components/editor/design-tools"
+import { DESIGN_TOOLS } from "@/components/editor/design-tools-provided"
 import { EditorCanvas } from "@/components/editor/editor-canvas"
 import { normalizeContentForSave } from "@/components/editor/editor-content"
 import { type DockTool, EditorDock } from "@/components/editor/editor-dock"
@@ -35,6 +36,7 @@ import { useLocalRecovery } from "@/components/editor/use-local-recovery"
 import { useMissingPictureAddresses, usePictureAddresses } from "@/components/editor/use-picture-addresses"
 import { useWorkingCopyHistory } from "@/components/editor/use-working-copy-history"
 import type { FlowStarter } from "@/components/templates/template-flow-panel"
+import { useTimeZone } from "@/components/ui/local-date"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import {
@@ -113,6 +115,7 @@ export function DocumentEditor({
   sendAction,
   view,
 }: DocumentEditorProps): ReactElement {
+  const timeZone = useTimeZone()
   const document = view.document
   const completed = view.workflowStatus === "completed"
   const writable = canFill && view.workflowStatus === "draft" && view.recipients.length === 0
@@ -326,7 +329,7 @@ export function DocumentEditor({
   }
 
   return (
-    <>
+    <DesignToolsContext.Provider value={DESIGN_TOOLS}>
       <EditorFrame
         backHref={backHref}
         backLabel={guest ? "Shared with you" : "Back to Files"}
@@ -407,15 +410,15 @@ export function DocumentEditor({
                       </div>
                       <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
                         {recipient.signedAt
-                          ? `Signed ${formatMediumDateTime(recipient.signedAt)}`
+                          ? `Signed ${formatMediumDateTime(recipient.signedAt, timeZone)}`
                           : recipient.tokenExpiresAt
-                            ? `Link expires ${formatMediumDateTime(recipient.tokenExpiresAt)}`
+                            ? `Link expires ${formatMediumDateTime(recipient.tokenExpiresAt, timeZone)}`
                             : null}
                         {canSend && recipient.status !== "signed" && !completed ? (
                           <form action={resendAction}>
                             <input name="documentId" type="hidden" value={document.id} />
                             <input name="recipientId" type="hidden" value={recipient.id} />
-                            <Button className="h-8 px-2 text-xs md:h-8" size="sm" type="submit" variant="ghost">
+                            <Button className="h-11 px-2 text-xs md:h-8" size="sm" type="submit" variant="ghost">
                               Resend
                             </Button>
                           </form>
@@ -587,6 +590,6 @@ export function DocumentEditor({
       {canShare && sharing ? (
         <ShareDialog name={document.title} onOpenChange={setSharing} open resources={[{ id: document.id, kind: "document" }]} />
       ) : null}
-    </>
+    </DesignToolsContext.Provider>
   )
 }

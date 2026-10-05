@@ -5,11 +5,11 @@
 // blocks, and a lone block's edges. The editors hand it over (see
 // design-tools); a page that only shows or fills a document never loads it.
 
-import { type KeyboardEvent, type PointerEvent, type ReactElement, type ReactNode, type RefObject, useMemo, useState } from "react"
+import { type KeyboardEvent, type PointerEvent, type ReactElement, type ReactNode, type RefObject, useEffect, useMemo, useState } from "react"
 import { createPortal } from "react-dom"
 
 import { findInsertChoices, INSERT_CHOICES, type InsertChoice } from "@/components/editor/block-catalog"
-import { designTools } from "@/components/editor/design-tools"
+import { useDesignTools } from "@/components/editor/design-tools"
 import type { TextCaret } from "@/components/editor/editable-text"
 import { type CanvasActions, isLine, isList, type LineBlock, type ListBlock } from "@/components/editor/editor-block"
 import {
@@ -110,13 +110,47 @@ export function useCanvasEditing({
   units,
   zoom,
 }: CanvasEditingInput): CanvasEditing {
-  const SlashMenu = designTools()?.SlashMenu
+  const SlashMenu = useDesignTools()?.SlashMenu
   const [slash, setSlash] = useState<SlashState | null>(null)
   const { begin, dragging, guides, indicator } = useBlockDrag<CanvasDrop>({ lift: !narrow, locate, onDrop: drop, zoom: narrow ? 1 : zoom })
   const slashChoices = useMemo(
     () => (slash ? findInsertChoices({ allowFiles, query: slash.query }) : []),
     [allowFiles, slash]
   )
+
+  const slashLine = slash?.blockId ?? null
+  const slashActive = slash?.active ?? 0
+
+  // The menu closes once the caret leaves its line, as for a click elsewhere.
+  useEffect(() => {
+    if (!slashLine) {
+      return
+    }
+
+    const line = document.querySelector<HTMLElement>(`[data-caret-key="${CSS.escape(slashLine)}"]`)
+    const close = (): void => {
+      if (!line?.contains(document.getSelection()?.anchorNode ?? null)) setSlash(null)
+    }
+
+    document.addEventListener("selectionchange", close)
+    return () => document.removeEventListener("selectionchange", close)
+  }, [slashLine])
+
+  // The line being typed in says which choice is active, for a screen reader.
+  useEffect(() => {
+    const line = slashLine ? document.querySelector<HTMLElement>(`[data-caret-key="${CSS.escape(slashLine)}"]`) : null
+
+    if (!line) {
+      return
+    }
+
+    line.setAttribute("aria-autocomplete", "list")
+    line.setAttribute("aria-controls", "slash-menu")
+    // Ids the slash menu gives its list and options.
+    line.setAttribute("aria-activedescendant", `slash-menu-${slashActive}`)
+
+    return () => ["aria-autocomplete", "aria-controls", "aria-activedescendant"].forEach((name) => line.removeAttribute(name))
+  }, [slashActive, slashLine])
 
   function updateSlash(blockId: string, text: string, caret: number): void {
     if (text[caret - 1] === "/" && (caret === 1 || /\s/.test(text[caret - 2] ?? ""))) {

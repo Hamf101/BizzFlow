@@ -5,9 +5,13 @@ import {
   getAuditTargetTypes,
 } from "@/components/audit/audit-log-view"
 import { getAuthenticatedUser } from "@/lib/auth"
-import { buildCsvExportFilename, createCsvDownloadResponse } from "@/lib/csv"
+import {
+  buildCsvExportFilename,
+  createCsvDownloadResponse,
+  createCsvExportErrorResponse,
+} from "@/lib/csv"
 import { formatAuditLogsAsCsv } from "@/services/audit-export-service"
-import { AuditServiceError, exportAuditLogs } from "@/services/audit-service"
+import { exportAuditLogs } from "@/services/audit-service"
 import { getCurrentOrganizationContext } from "@/services/organization-service"
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
@@ -39,10 +43,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       buildCsvExportFilename("audit-log", context.organization.id)
     )
   } catch (error: unknown) {
-    if (error instanceof AuditServiceError) {
-      return new NextResponse(error.message, { status: error.statusCode })
-    }
-
-    return new NextResponse("Unable to export audit log.", { status: 500 })
+    return createCsvExportErrorResponse(error, "Unable to export audit log.", "export_audit_log")
   }
 }

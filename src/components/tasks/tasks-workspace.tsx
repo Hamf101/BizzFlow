@@ -16,6 +16,7 @@ import {
   type TaskListView,
 } from "@/components/tasks/task-list-view"
 import { TaskStatusBadge } from "@/components/tasks/task-presentation"
+import { useTimeZone } from "@/components/ui/local-date"
 import { formatMediumDate } from "@/lib/date-format"
 import { getLastPage } from "@/lib/list-state"
 import { cn } from "@/lib/utils"
@@ -246,6 +247,8 @@ function TaskDue({
   overdue: boolean
   slot: string
 }): ReactElement {
+  const timeZone = useTimeZone()
+
   if (!dueAt) {
     return (
       <span className={cn("text-muted-foreground", className)} data-slot={slot}>
@@ -264,8 +267,9 @@ function TaskDue({
       )}
       data-slot={slot}
     >
-      {overdue ? <span className="sr-only">Overdue </span> : null}
-      {formatMediumDate(dueAt)}
+      {/* Said in words, not only in red. */}
+      {overdue ? "Overdue · " : null}
+      {formatMediumDate(dueAt, timeZone)}
     </span>
   )
 }

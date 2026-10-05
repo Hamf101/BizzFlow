@@ -250,7 +250,7 @@ function ColorControl({
               <button
                 aria-label={color}
                 aria-pressed={color === value.toLowerCase()}
-                className="size-7 rounded-[7px] border outline-none ring-offset-2 ring-offset-popover focus-visible:ring-2 focus-visible:ring-ring/50 aria-pressed:ring-2 aria-pressed:ring-foreground/70"
+                className="size-7 rounded-[7px] border outline-none max-md:size-11 ring-offset-2 ring-offset-popover focus-visible:ring-2 focus-visible:ring-ring/50 aria-pressed:ring-2 aria-pressed:ring-foreground/70"
                 key={color}
                 onClick={(): void => choose(color)}
                 style={{ backgroundColor: color }}

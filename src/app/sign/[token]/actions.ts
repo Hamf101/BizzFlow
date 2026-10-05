@@ -9,9 +9,9 @@ import {
   parseGeneratedDocumentAnswerBaseline,
   parseGeneratedDocumentAnswers,
 } from "@/components/documents/generated-document-form-data"
-import { enforceActionRateLimit } from "@/lib/action-rate-limit"
 import { getClientIp } from "@/lib/client-ip"
 import { buildRedirect, getFormString } from "@/lib/form-utils"
+import { checkRateLimit, RateLimitError } from "@/lib/rate-limit"
 import {
   completePublicDocumentSigning,
   DocumentSigningServiceError,
@@ -25,25 +25,23 @@ import type { GeneratedDocumentWorkflowStatus } from "@/types/template"
  * The raw private token is used only for the service call and redirect target;
  * it is never logged or persisted by this action.
  *
+ * @param _previous - What the last try reported.
  * @param formData - Private token, answer fields, signature, and optional initials.
- * @returns Never returns; redirects to the safe signing view with status feedback.
+ * @returns Why it could not be signed, so the page keeps the drawing and
+ *   answers; signing redirects to the signing view with its feedback.
  */
 export async function completePublicSigningAction(
+  _previous: Readonly<{ error: string }> | null,
   formData: FormData
-): Promise<void> {
+): Promise<Readonly<{ error: string }>> {
   const token = getFormString(formData, "token")
   const signingPath = getSigningPath(token)
   const startedAt = Date.now()
   let workflowStatus: GeneratedDocumentWorkflowStatus = "awaiting_signatures"
 
-  await enforceActionRateLimit({
-    bucket: "public_signing",
-    key: getClientIp(await headers()),
-    redirectPath: signingPath,
-    message: "Too many requests. Wait a moment and try again.",
-  })
-
   try {
+    await checkRateLimit("public_signing", getClientIp(await headers()))
+
     const view = await completePublicDocumentSigning({
       token,
       values: parseGeneratedDocumentAnswers(formData),
@@ -75,7 +73,7 @@ export async function completePublicSigningAction(
       durationMs: Date.now() - startedAt,
       reason: errorMessage,
     })
-    redirect(buildRedirect(signingPath, { error: errorMessage }))
+    return { error: errorMessage }
   }
 
   redirect(
@@ -97,6 +95,10 @@ function getPublicSigningActionErrorMessage(
   error: unknown,
   fallback: string
 ): string {
+  if (error instanceof RateLimitError) {
+    return "Too many requests. Wait a moment and try again."
+  }
+
   if (
     error instanceof DocumentSigningServiceError ||
     error instanceof GeneratedDocumentFormDataError

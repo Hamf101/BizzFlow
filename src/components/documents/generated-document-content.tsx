@@ -662,6 +662,9 @@ export function GeneratedBlock({
                   ? "✓"
                   : ""}
               </span>
+              <span className="sr-only">
+                {readBooleanAnswer(answers, block.fieldKey, block.checkedByDefault) ? "Checked: " : "Not checked: "}
+              </span>
               {block.label}
             </div>
           )}

@@ -10,6 +10,7 @@ import {
 
 import { uploadFileToSignedUrl } from "@/components/documents/document-upload-client"
 import { Button, buttonVariants } from "@/components/ui/button"
+import { RequiredStandIn } from "@/components/ui/required-stand-in"
 import { cn } from "@/lib/utils"
 import type { TemplateBlock } from "@/types/template"
 
@@ -19,6 +20,7 @@ import {
   requestPublicFormFileUpload,
   supersedePublicFormFile,
 } from "./public-form-file-client"
+import { useHoldWhileUploading } from "./public-answer-form"
 import {
   calculateSubmissionFileChecksum,
   resolveSubmissionFileContentType,
@@ -61,6 +63,8 @@ export function PublicSubmissionFileField({
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isUploading, setIsUploading] = useState<boolean>(false)
   const uploadedFile = initialFile ?? null
+
+  useHoldWhileUploading(isUploading)
 
   /**
    * The form's hidden `draftToken` input is the shared session handle: every
@@ -260,7 +264,8 @@ export function PublicSubmissionFileField({
             Choose a file
             <input
               accept={SUBMISSION_FILE_ACCEPT}
-              aria-label={block.label}
+              // Named as it reads, so a spoken "Choose a file" finds it.
+              aria-label={`Choose a file for ${block.label}`}
               className="sr-only"
               disabled={isUploading}
               id={inputId}
@@ -270,6 +275,7 @@ export function PublicSubmissionFileField({
           </label>
         )}
       </div>
+      {block.required ? <RequiredStandIn filled={uploadedFile !== null} label={block.label} /> : null}
       {errorMessage ? (
         <p className="text-destructive" role="alert" style={{ fontSize: "0.8em" }}>
           {errorMessage}

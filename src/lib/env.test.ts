@@ -243,6 +243,15 @@ describe("Sentry environment validation", () => {
     })
   })
 
+  it("reports a Vercel production deploy as production when no environment is set", () => {
+    setIsolatedEnv({
+      SENTRY_DSN: "https://key@o0.ingest.sentry.io/1",
+      VERCEL_ENV: "production",
+    })
+
+    expect(getSentryEnv()?.SENTRY_ENVIRONMENT).toBe("production")
+  })
+
   it.each(["1.5", "-0.1", "not-a-number"])(
     "rejects invalid traces sample rate %s",
     (sampleRate: string) => {

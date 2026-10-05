@@ -370,11 +370,12 @@ function randomEdit(copy: WorkingCopy, random: () => number, round: number): Wor
 }
 
 it("keeps a draft document's older-style field keys, which its saved answers are under, and renames only a repeat", () => {
-  const { category: _template, ...document } = sample()
-  const blocks = document.content.blocks.map((block) =>
+  // A draft document's copy: no category, which only a template has.
+  const { answers, content, title } = sample()
+  const blocks = content.blocks.map((block) =>
     block.id === APPROVED ? { ...block, fieldKey: "Approved-By" } : block.id === DETAILS ? { ...block, fieldKey: "Approved-By" } : block
   )
-  const read = readWorkingCopyDoc(createWorkingCopyDoc({ ...document, content: { ...document.content, blocks } }))
+  const read = readWorkingCopyDoc(createWorkingCopyDoc({ answers, content: { ...content, blocks }, title }))
   const keys = read.content.blocks.flatMap((block) => ("fieldKey" in block ? [block.fieldKey] : []))
 
   expect(keys[0]).toBe("Approved-By")

@@ -66,7 +66,7 @@ export function DashboardSidebar({
       data-collapsed={collapsed}
       onClick={expandFromEmptyRail}
     >
-      <div className="flex items-center justify-between gap-2">
+      <div className="relative flex items-center justify-between gap-2">
         <Link
           aria-label="BizFlow dashboard"
           className="inline-flex shrink-0 items-center gap-2.5 rounded-[12px] outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
@@ -85,7 +85,8 @@ export function DashboardSidebar({
 
         {collapsed ? (
           <button
-            className="sr-only"
+            // Seen once the keyboard reaches it, so focus is never on something invisible.
+            className="sr-only rounded-[12px] bg-card text-center text-[11px] leading-tight outline-none focus-visible:not-sr-only focus-visible:absolute focus-visible:inset-0 focus-visible:grid focus-visible:place-items-center focus-visible:ring-2 focus-visible:ring-ring/40"
             onClick={() => setCollapsed(false)}
             type="button"
           >

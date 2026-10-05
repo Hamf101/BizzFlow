@@ -43,6 +43,8 @@ export function SlashMenu({
       aria-label="Add to the page"
       className="fixed z-50 w-60 overflow-hidden rounded-[14px] border border-border bg-popover p-1.5 text-popover-foreground shadow-xl"
       data-slot="slash-menu"
+      // The line being typed in points here, and at the active option.
+      id="slash-menu"
       role="listbox"
       style={{
         left: Math.min(anchor.left, window.innerWidth - 256),
@@ -70,6 +72,7 @@ export function SlashMenu({
                     index === activeIndex && "bg-secondary text-secondary-foreground"
                   )}
                   data-index={index}
+                  id={`slash-menu-${index}`}
                   onMouseDown={(event) => {
                     // Keep the caret in the line, so choosing edits it.
                     event.preventDefault()

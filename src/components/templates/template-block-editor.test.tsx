@@ -19,7 +19,7 @@ afterEach(() => {
   document.body.replaceChildren()
 })
 
-function Harness(): ReactElement {
+function Harness({ editing = 0 }: { editing?: number }): ReactElement {
   const [content, setContent] = useState<TemplateContentV3>(() => ({
     ...createBlankTemplateContent(),
     blocks: [
@@ -33,7 +33,7 @@ function Harness(): ReactElement {
 
   return (
     <TemplateBlockEditor
-      block={content.blocks[0] as TemplateBlock}
+      block={content.blocks[editing] as TemplateBlock}
       blocks={content.blocks}
       canMoveDown
       canMoveUp={false}
@@ -67,6 +67,16 @@ it("applies dropdown options as they are typed, and keeps one a rule needs until
   expect(saved("dropdown_field").options).toEqual(["Studio flat", "One bedroom"])
   expect(saved("text_field").visibleWhen?.value).toBe("Studio flat")
   expect(document.querySelector('[role="alert"]')).toBeNull()
+})
+
+it("lets a count of character boxes from 10 to 19 be typed through its first digit", async () => {
+  await act(async () => createRoot(document.body.appendChild(document.createElement("div"))).render(<Harness editing={1} />))
+  const boxes = document.getElementById(`${PETS_ID}-comb`) as HTMLInputElement
+
+  typeInto(boxes, "1")
+  expect(boxes.value).toBe("1")
+  typeInto(boxes, "12")
+  expect(saved("text_field").comb).toBe(12)
 })
 
 function saved<Type extends TemplateBlock["type"]>(type: Type): Extract<TemplateBlock, { type: Type }> {

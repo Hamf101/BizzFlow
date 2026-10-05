@@ -47,7 +47,9 @@ import { FilesLayoutSwitch } from "@/components/files/files-layout-switch"
 import type { MoveDestination } from "@/components/files/move-to-dialog"
 import { NewFileMenu, type NewFolderForm } from "@/components/files/new-file-menu"
 import { SelectionBar } from "@/components/files/selection-bar"
+import { PhoneSelectButton } from "@/components/data/selection"
 import { DatedTitle } from "@/components/navigation/dated-title"
+import { useTimeZone } from "@/components/ui/local-date"
 import { formatMediumDate } from "@/lib/date-format"
 import { buildDocumentFolderPath } from "@/lib/page-document-folders"
 import {
@@ -133,6 +135,7 @@ export function FilesWorkspace({
   savedViews: ListSavedViews["saved"]
   view: FileListView
 }): ReactElement {
+  const timeZone = useTimeZone()
   const lifecycle = getFileLifecycleView(view)
   const openFolder = view.filters.folderId ?? null
   const location = selectLocation(view, folders, documents)
@@ -324,11 +327,11 @@ export function FilesWorkspace({
           id: folder.id,
           kind: "folder",
           menu: folderMenu(folder),
-          modified: formatMediumDate(folder.updatedAt),
+          modified: formatMediumDate(folder.updatedAt, timeZone),
           name: folder.name,
           note:
             lifecycle === "trash"
-              ? describeTrashNote(folder.lifecycleState, folder.purgeAfter)
+              ? describeTrashNote(folder.lifecycleState, folder.purgeAfter, timeZone)
               : filedIn(folder.parentFolderId),
           selectHref:
             folderChoice === "open"
@@ -350,11 +353,11 @@ export function FilesWorkspace({
           id: document.id,
           kind: generated ? "document" : "upload",
           menu: documentMenu(document),
-          modified: formatMediumDate(document.updatedAt),
+          modified: formatMediumDate(document.updatedAt, timeZone),
           name: document.title,
           note:
             lifecycle === "trash"
-              ? describeTrashNote(document.lifecycleState, document.purgeAfter)
+              ? describeTrashNote(document.lifecycleState, document.purgeAfter, timeZone)
               : filedIn(document.folderId),
           selectHref: getItemHref(view, document.id, where),
           status: describeWorkflowStatus(card?.workflowStatus ?? null),
@@ -498,6 +501,7 @@ export function FilesWorkspace({
             </h1>
           </DatedTitle>
           <div className="flex shrink-0 gap-2">
+            <PhoneSelectButton />
             <ListViewMenu
               adjusted={isFileViewAdjusted(view)}
               label="View options"

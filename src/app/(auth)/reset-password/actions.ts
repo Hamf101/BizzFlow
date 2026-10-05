@@ -38,7 +38,10 @@ export async function resetPasswordAction(formData: FormData): Promise<void> {
     bucket: "auth",
     key: getClientIp(await headers()),
     message: "Too many attempts. Try again in a few minutes.",
-    redirectPath: "/reset-password",
+    // The link's one-time token must survive, or a throttled retry needs a new email.
+    redirectPath: tokenHash
+      ? buildRedirect("/reset-password", { token_hash: tokenHash })
+      : "/reset-password",
   })
 
   let supabase: Awaited<ReturnType<typeof createClient>>

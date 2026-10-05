@@ -118,7 +118,7 @@ describe("TasksWorkspace", () => {
     expect(readRows()).toEqual([
       {
         assignee: "Mara Bell",
-        due: "Overdue Sep 10, 2026",
+        due: "Overdue · Sep 10, 2026",
         href: `/tasks/${TASK_ID}`,
         status: "Open",
         title: "Chase references",

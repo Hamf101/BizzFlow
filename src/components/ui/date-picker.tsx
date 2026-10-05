@@ -4,6 +4,7 @@ import { CalendarDays } from "lucide-react"
 import { lazy, type ReactElement, Suspense, useState } from "react"
 
 import { Input } from "@/components/ui/input"
+import { useTimeZone } from "@/components/ui/local-date"
 import { FieldFace } from "@/components/ui/select"
 import { type DateFormat, describeDateFormat, formatDateAnswer } from "@/lib/date-format"
 
@@ -71,11 +72,11 @@ export function DatePicker(props: DatePickerProps): ReactElement {
 }
 
 /**
- * A day and a time for a form, posted together as YYYY-MM-DDTHH:mm like a
- * native datetime-local input: the day from the app's calendar, the time typed.
- * A day chosen without a time starts at 09:00.
+ * A day and a time for a form, in the viewer's own time, posted as the moment
+ * it is: an ISO string with its offset. The day comes from the app's
+ * calendar, the time is typed, and a day chosen without a time starts at 09:00.
  *
- * @param props - The starting value, and the form name, id and requirement.
+ * @param props - The saved moment, as ISO, and the form name, id and requirement.
  * @returns The date and time fields.
  */
 export function DateTimePicker({
@@ -89,8 +90,12 @@ export function DateTimePicker({
   name?: string
   required?: boolean
 }): ReactElement {
-  const [date, setDate] = useState(defaultValue.slice(0, 10))
-  const [time, setTime] = useState(defaultValue.slice(11, 16))
+  // UTC while the server's page is taken over, then the viewer's own.
+  const timeZone = useTimeZone()
+  const [edited, setEdited] = useState<Readonly<{ date: string; time: string }> | null>(null)
+  const { date, time } = edited ?? partsIn(defaultValue, timeZone)
+  const setDate = (next: string): void => setEdited({ date: next, time: next && !time ? "09:00" : time })
+  const setTime = (next: string): void => setEdited({ date, time: next })
 
   return (
     <div className="flex gap-2">
@@ -98,10 +103,7 @@ export function DateTimePicker({
         <DatePicker
           format={MEDIUM_DATE}
           id={id}
-          onChange={(next: string): void => {
-            setDate(next)
-            setTime((current: string) => (next && !current ? "09:00" : current))
-          }}
+          onChange={setDate}
           required={required}
           value={date}
         />
@@ -115,7 +117,30 @@ export function DateTimePicker({
         type="time"
         value={time}
       />
-      <input name={name} type="hidden" value={date && time ? `${date}T${time}` : ""} />
+      <input name={name} type="hidden" value={date && time ? momentOf(date, time, timeZone) : ""} />
     </div>
   )
+}
+
+// A saved moment's day and time in a time zone, as the fields take them.
+function partsIn(value: string, timeZone: string): { date: string; time: string } {
+  const moment = new Date(value)
+
+  if (!value || Number.isNaN(moment.getTime())) {
+    return { date: "", time: "" }
+  }
+
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-CA", { day: "2-digit", hour: "2-digit", hourCycle: "h23", minute: "2-digit", month: "2-digit", timeZone, year: "numeric" })
+      .formatToParts(moment)
+      .map((part) => [part.type, part.value])
+  )
+
+  return { date: `${parts.year}-${parts.month}-${parts.day}`, time: `${parts.hour}:${parts.minute}` }
+}
+
+// A day and time read in UTC, or in this browser's own zone, as the moment it is.
+function momentOf(date: string, time: string, timeZone: string): string {
+  const moment = new Date(timeZone === "UTC" ? `${date}T${time}Z` : `${date}T${time}`)
+  return Number.isNaN(moment.getTime()) ? "" : moment.toISOString()
 }

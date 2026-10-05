@@ -1,7 +1,7 @@
 "use client"
 
 import { ChevronRight, Plus, ShieldCheck, Trash2 } from "lucide-react"
-import type { ReactElement, ReactNode } from "react"
+import { type ReactElement, type ReactNode, useState } from "react"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -193,6 +193,8 @@ function RoleEditorDialog({
   organizationId: string
   role: OrganizationRoleDefinition
 }): ReactElement {
+  // Removing asks once more, so a stray press never takes a role away.
+  const [removing, setRemoving] = useState(false)
   const isOwner = role.systemKey === "owner_admin"
   const permissions = isOwner
     ? ORGANIZATION_PERMISSION_ACTIONS
@@ -264,13 +266,19 @@ function RoleEditorDialog({
               <input name="organizationId" type="hidden" value={organizationId} />
               <input name="roleId" type="hidden" value={role.id} />
               <Button
-                aria-label={`Remove ${role.name} role`}
+                aria-label={removing ? `Yes, remove the ${role.name} role` : `Remove ${role.name} role`}
                 className="font-normal text-destructive hover:bg-destructive/10 hover:text-destructive"
+                onClick={(event) => {
+                  if (!removing) {
+                    event.preventDefault()
+                    setRemoving(true)
+                  }
+                }}
                 type="submit"
                 variant="ghost"
               >
                 <Trash2 aria-hidden="true" data-icon="inline-start" />
-                Remove role
+                {removing ? "Yes, remove role" : "Remove role"}
               </Button>
             </form>
           ) : null}

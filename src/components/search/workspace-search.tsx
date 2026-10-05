@@ -11,6 +11,7 @@ import {
   type LucideIcon,
   Search,
   UserRound,
+  X,
 } from "lucide-react"
 import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
@@ -39,6 +40,7 @@ import {
 import { TaskStatusBadge } from "@/components/tasks/task-presentation"
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
+import { copyText } from "@/components/ui/toaster"
 import { formatMediumDate } from "@/lib/date-format"
 import type { OrganizationPermissionSubject } from "@/lib/permissions"
 import { cn } from "@/lib/utils"
@@ -352,6 +354,9 @@ function SearchPanel({ role, up }: { role: OrganizationPermissionSubject | null;
 
     const controller = new AbortController()
     const timer = setTimeout(async () => {
+      // A new search starts clean: the last one's failure is not this one's.
+      setFailure(null)
+
       try {
         const response = await fetch(`/api/search?${params}`, { signal: controller.signal })
         const payload = (await response.json().catch(() => ({}))) as Partial<WorkspaceSearchResult> & { error?: string }
@@ -431,9 +436,11 @@ function SearchPanel({ role, up }: { role: OrganizationPermissionSubject | null;
           />
           <DialogPrimitive.Close
             aria-label="Close search"
-            className="rounded-[6px] outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+            className="rounded-[6px] outline-none focus-visible:ring-2 focus-visible:ring-ring/40 max-md:-mr-2.5 max-md:grid max-md:size-11 max-md:place-items-center"
           >
-            <Key>esc</Key>
+            {/* A phone has no Escape key to hint at: a cross it can reach instead. */}
+            <Key className="max-md:hidden">esc</Key>
+            <X aria-hidden="true" className="size-5 text-muted-foreground md:hidden" />
           </DialogPrimitive.Close>
         </div>
         <div aria-label="Search in" className="-m-0.5 flex gap-1.5 overflow-x-auto p-0.5" role="group">
@@ -556,14 +563,7 @@ function Preview({ hit, onOpen }: { hit: WorkspaceSearchHit; onOpen: (href: stri
   const [copied, setCopied] = useState(false)
 
   async function copy(): Promise<void> {
-    try {
-      await navigator.clipboard.writeText(
-        shown.copy.label === "Copy link" ? new URL(shown.copy.text, location.href).href : shown.copy.text
-      )
-      setCopied(true)
-    } catch {
-      // A browser that won't allow it leaves the button as it was.
-    }
+    setCopied(await copyText(shown.copy.label === "Copy link" ? new URL(shown.copy.text, location.href).href : shown.copy.text))
   }
 
   return (

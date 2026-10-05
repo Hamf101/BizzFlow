@@ -16,7 +16,7 @@ import {
 
 import type { Editor } from "@tiptap/core"
 
-import { designTools } from "@/components/editor/design-tools"
+import { useDesignTools } from "@/components/editor/design-tools"
 import type { TextCaret } from "@/components/editor/editable-text"
 import { EditorImage } from "@/components/editor/editor-image"
 import { PageBreaks, readOnlyCell, TableCells } from "@/components/editor/table-cells"
@@ -123,7 +123,7 @@ export function CanvasBlock({
   const field = isField(block)
   const text = isLine(block) || isList(block)
   const canSelect = actions.textEditable || (actions.designable && field)
-  const tools = designTools()
+  const tools = useDesignTools()
 
   useEffect(() => {
     if (selected) {
@@ -171,7 +171,7 @@ export function CanvasBlock({
       event.key.startsWith("Arrow") &&
       !actions.narrow &&
       (actions.textEditable || actions.designable) &&
-      (designTools()?.nudgeFrame(controller, block.id, event) ?? false)) {
+      (tools?.nudgeFrame(controller, block.id, event) ?? false)) {
       event.preventDefault()
     } else if (event.key === "Backspace" || event.key === "Delete") {
       event.preventDefault()
@@ -271,7 +271,7 @@ export function CanvasBlock({
  */
 function BlockBody({ actions, block, placed }: { actions: CanvasActions; block: TemplateBlock; placed: boolean }): ReactElement {
   const breaks = useContext(PageBreaks)
-  const tools = designTools()
+  const tools = useDesignTools()
 
   switch (block.type) {
     case "heading":
@@ -417,7 +417,7 @@ function TextLine({
     </Element>
   )
 
-  const RichLine = designTools()?.RichLine
+  const RichLine = useDesignTools()?.RichLine
 
   if (!actions.textEditable || !RichLine) {
     return printed
@@ -560,7 +560,7 @@ function Grip({ actions, blockId }: { actions: CanvasActions; blockId: string })
     <button
       aria-keyshortcuts="ArrowUp ArrowDown"
       aria-label="Move"
-      className="absolute top-0 -right-5 hidden h-[1.5em] w-5 touch-none place-items-center rounded-md text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/40 pointer-coarse:grid"
+      className="absolute top-0 -right-5 hidden h-[1.5em] w-5 touch-none place-items-center rounded-md after:absolute after:-inset-x-3 after:-inset-y-3 after:content-[''] text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/40 pointer-coarse:grid"
       onClick={() => controller.select(blockId)}
       onKeyDown={(event) => {
         if (event.key === "ArrowUp" || event.key === "ArrowDown") {

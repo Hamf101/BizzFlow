@@ -15,6 +15,7 @@ import {
   useSyncExternalStore,
 } from "react"
 
+import { Button } from "@/components/ui/button"
 import { ContextMenu, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { cn } from "@/lib/utils"
 
@@ -34,6 +35,8 @@ export type SelectionState<T extends { id: string } = { id: string }> = {
   selected: ReadonlySet<string>
   /** The items drawn here, in order: what a run and ⌘A cover. */
   shown: readonly string[]
+  /** A phone's Select button: taps tick items until Done, before any is ticked. */
+  start: () => void
   toggle: (id: string) => void
 }
 
@@ -87,6 +90,8 @@ export function SelectionProvider<T extends { id: string }>({
   // A press and hold began this selection, which is what puts a phone into
   // selecting; a mouse selection on a narrow window stays as on a desktop.
   const [byHold, setByHold] = useState(() => remembered.get(here)?.byHold ?? false)
+  // Selecting begun with the Select button, which lasts until Done even with nothing ticked.
+  const [picking, setPicking] = useState(false)
   const narrow = useSyncExternalStore(
     subscribeToWidth,
     () => window.matchMedia(NARROW).matches,
@@ -137,6 +142,7 @@ export function SelectionProvider<T extends { id: string }>({
           setSelected(new Set())
           setAnchor(null)
           setByHold(false)
+          setPicking(false)
         },
         extend,
         hold: (id: string) => {
@@ -151,10 +157,14 @@ export function SelectionProvider<T extends { id: string }>({
           setAnchor(id)
           setByHold(false)
         },
-        phoneSelecting: narrow && byHold && current.size > 0,
+        phoneSelecting: narrow && (picking || (byHold && current.size > 0)),
         selectAll: () => setSelected(new Set(shown)),
         selected: current,
         shown,
+        start: () => {
+          setByHold(true)
+          setPicking(true)
+        },
         toggle,
       }}
     >
@@ -218,8 +228,13 @@ export function SelectableItem({
   const pointer = useRef("mouse")
   const held = useRef(false)
 
+  // A dialog opened from the row is drawn elsewhere, but its events still
+  // pass through here: only what happens in the row itself is the row's.
+  const own = (event: { currentTarget: HTMLElement; target: EventTarget }): boolean =>
+    event.currentTarget.contains(event.target as Node)
+
   function handleClick(event: MouseEvent<HTMLElement>): void {
-    if (!selection) {
+    if (!selection || !own(event)) {
       return
     }
 
@@ -249,19 +264,34 @@ export function SelectableItem({
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLElement>): void {
-    if (!selection) {
+    if (!selection || !own(event)) {
       return
     }
+
+    // Space is a control's own inside the row; on the row or its link it selects.
+    const control = (event.target as HTMLElement).closest("button, input, select, textarea, [contenteditable='true']")
 
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "a") {
       event.preventDefault()
       selection.selectAll()
     } else if (event.key === "Escape" && selection.selected.size > 0) {
       selection.clear()
+    } else if (event.key === " " && !control) {
+      event.preventDefault()
+
+      if (event.shiftKey) {
+        selection.extend(itemId)
+      } else {
+        selection.toggle(itemId)
+      }
     }
   }
 
-  function handleContextMenu(): void {
+  function handleContextMenu(event: MouseEvent<HTMLElement>): void {
+    if (!own(event)) {
+      return
+    }
+
     // A phone's press and hold is handled when the menu tries to open.
     if (pointer.current === "touch" && selection?.narrow) {
       return
@@ -327,5 +357,30 @@ export function SelectableItem({
         {Element === "li" && isSelected ? <span className="sr-only">Selected</span> : null}
       </ContextMenuTrigger>
     </ContextMenu>
+  )
+}
+
+/**
+ * On a phone, a button that starts selecting, as press and hold does, so
+ * selecting can be found and reached without knowing the gesture; then Done.
+ *
+ * @returns The button, on a phone, inside a selectable workspace.
+ */
+export function PhoneSelectButton(): ReactElement | null {
+  const selection = useContext(SelectionContext)
+
+  if (!selection) {
+    return null
+  }
+
+  return (
+    <Button
+      className="h-11 rounded-[12px] bg-card px-4 font-normal md:hidden"
+      onClick={selection.phoneSelecting ? selection.clear : selection.start}
+      type="button"
+      variant="outline"
+    >
+      {selection.phoneSelecting ? "Done" : "Select"}
+    </Button>
   )
 }

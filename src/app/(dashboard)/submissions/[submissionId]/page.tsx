@@ -23,7 +23,7 @@ import {
   CardTitle
 } from "@/components/ui/card"
 import { buildFeedbackRedirect } from "@/lib/action-result"
-import { formatMediumDateTime } from "@/lib/date-format"
+import { LocalDate } from "@/components/ui/local-date"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
 import { getPageErrorMessage } from "@/lib/page-errors"
 import { loadPageOrganizationContext } from "@/lib/page-organization-context"
@@ -233,7 +233,7 @@ export default async function SubmissionDetailPage({
         <Alert>
           <AlertTitle>Waiting for review</AlertTitle>
           <AlertDescription>
-            Submitted {formatMediumDateTime(submission.submittedAt)}.
+            Submitted <LocalDate time value={submission.submittedAt} />.
           </AlertDescription>
         </Alert>
       )}

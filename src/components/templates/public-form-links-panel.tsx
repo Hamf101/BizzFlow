@@ -4,6 +4,7 @@ import { Check, Copy, ExternalLink, Link2, Plus, PowerOff } from "lucide-react"
 import Link from "next/link"
 import { useState, type ReactElement } from "react"
 
+import { useTimeZone } from "@/components/ui/local-date"
 import { Badge } from "@/components/ui/badge"
 import { Button, buttonVariants } from "@/components/ui/button"
 import {
@@ -14,6 +15,7 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { DateTimePicker } from "@/components/ui/date-picker"
+import { copyText } from "@/components/ui/toaster"
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { formatMediumDate } from "@/lib/date-format"
@@ -31,14 +33,15 @@ export function PublicFormLinksPanel({
   links: PublicFormLink[]
   templateId: string
 }): ReactElement {
+  const timeZone = useTimeZone()
   const [copiedToken, setCopiedToken] = useState<string | null>(null)
   const [showCreateForm, setShowCreateForm] = useState(false)
 
-  const handleCopy = (token: string) => {
-    const url = `${window.location.origin}/forms/${token}`
-    navigator.clipboard.writeText(url)
-    setCopiedToken(token)
-    setTimeout(() => setCopiedToken(null), 2000)
+  const handleCopy = async (token: string): Promise<void> => {
+    if (await copyText(`${window.location.origin}/forms/${token}`)) {
+      setCopiedToken(token)
+      setTimeout(() => setCopiedToken(null), 2000)
+    }
   }
 
   return (
@@ -119,7 +122,7 @@ export function PublicFormLinksPanel({
                   <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                     <span>Submissions: {link.submissionCount}{link.maxSubmissions !== null && ` / ${link.maxSubmissions}`}</span>
                     {link.expiresAt && (
-                      <span>Expires: {formatMediumDate(link.expiresAt)}</span>
+                      <span>Expires: {formatMediumDate(link.expiresAt, timeZone)}</span>
                     )}
                   </div>
                 </div>

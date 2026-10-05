@@ -541,7 +541,14 @@ export function getSentryEnv(): SentryEnv | null {
     return null
   }
 
-  const result = sentryEnvSchema.safeParse(process.env)
+  const result = sentryEnvSchema.safeParse({
+    ...process.env,
+    // Unset, a deploy reports as its Vercel environment, not "development".
+    SENTRY_ENVIRONMENT:
+      process.env.SENTRY_ENVIRONMENT?.trim() ||
+      process.env.VERCEL_ENV?.trim() ||
+      undefined,
+  })
 
   if (!result.success) {
     throw new Error(`Invalid Sentry environment: ${formatEnvError(result.error)}`)
