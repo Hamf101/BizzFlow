@@ -872,7 +872,7 @@ function drawPdfLibRuledRow(
   topY: number,
   frame: PdfContentFrame,
   look: Readonly<{ fill?: RGB; font: PDFFont; inset: number; leading: number; least: number; padding: number; size: number; top: number }>,
-  fillCell?: (cell: PdfRuledCell, column: number) => void
+  fillCell?: (cell: PdfRuledCell, column: number) => boolean | void
 ): number {
   const width = frame.width / columns
   const wrapped = Array.from({ length: columns }, (_value: unknown, index: number): string[] =>
@@ -893,8 +893,8 @@ function drawPdfLibRuledRow(
       color: look.fill
     })
 
-    if (fillCell) {
-      fillCell({ height, width, x, y: topY - height }, column)
+    // A cell that takes no form field prints its words.
+    if (fillCell && fillCell({ height, width, x, y: topY - height }, column) !== false) {
       return
     }
 
@@ -1028,12 +1028,19 @@ function drawPdfLibTableRows(
       )
 
   for (const row of item.rows ?? []) {
-    const fillCell = (cell: PdfRuledCell, column: number): void => {
+    const fillCell = (cell: PdfRuledCell, column: number): boolean => {
+      // A viewer works nothing out: a worked-out cell, and the Total row, print as words.
+      if (row.index < 0 || block.columns[column]?.formula !== undefined) {
+        return false
+      }
+
       // The whole cell inside its edges, so a viewer that draws the words its own way has room for them.
       addPdfTextField(context, `${block.fieldKey}.${row.index + 1}.${column + 1}`, row.cells[column] ?? "", { height: cell.height - 2, width: cell.width - (across - 1) * 2, x: cell.x + across - 1, y: cell.y + 1 }, { multiline: true })
+
+      return true
     }
 
-    cursorY = drawPdfLibRuledRow(context, row.cells, columns, cursorY, frame, { font: context.regularFont, inset: across, leading: 15, least: TABLE_ROW_LEAST, padding: down * 2, size: 10, top: down + 1 }, context.formFont ? fillCell : undefined)
+    cursorY = drawPdfLibRuledRow(context, row.cells, columns, cursorY, frame, { font: row.index < 0 ? context.boldFont : context.regularFont, inset: across, leading: 15, least: TABLE_ROW_LEAST, padding: down * 2, size: 10, top: down + 1 }, context.formFont ? fillCell : undefined)
   }
 
   return cursorY
@@ -1148,7 +1155,7 @@ async function drawPdfLibField(
           : (item.answerOverride ??
             formatFieldValue(block, context.answers[block.fieldKey]))
 
-      if (context.formFont && FORM_FIELD_TYPES.has(block.type)) {
+      if (takesFormField(context, block)) {
         // The box keeps the height its answer takes, so both PDFs page alike.
         contentBottom = boxTop - ANSWER_BOX_PADDING - (answer ? wrapPdfText(answer, context.regularFont, 10, inner).length * 15 : 0)
       } else if (answer) {
@@ -1158,7 +1165,7 @@ async function drawPdfLibField(
 
     const boxHeight = Math.max(answerBoxHeight(block), boxTop - contentBottom + ANSWER_BOX_PADDING)
 
-    if (context.formFont && FORM_FIELD_TYPES.has(block.type)) {
+    if (takesFormField(context, block)) {
       // Between a prefix and suffix, the field holds the room the answer has.
       const across = inner < frame.width - ANSWER_BOX_PADDING * 2 ? { width: inner + 2, x: answerX - 1 } : { width: frame.width, x: frame.x }
 
@@ -1166,7 +1173,7 @@ async function drawPdfLibField(
     }
 
     // Beside the answer's first line; pdf-lib centres a one-line field's capitals (9.3 tall at 10 points) up and down.
-    const centred = context.formFont && block.type === "text_field" && !block.multiline
+    const centred = takesFormField(context, block) && block.type === "text_field" && !block.multiline
 
     drawPdfLibAffixes(context, block, frame.x + ANSWER_BOX_PADDING, frame.x + frame.width - ANSWER_BOX_PADDING, centred ? boxTop - boxHeight / 2 - 4.6 : boxTop - ANSWER_BOX_PADDING - 10)
 
@@ -1406,7 +1413,7 @@ async function drawPdfLibLineField(
   const right = frame.x + frame.width
   const label = fieldLabel(item)
   const { answer, drawing } = styledAnswer(item, block, context)
-  const fillable = Boolean(context.formFont) && FORM_FIELD_TYPES.has(block.type)
+  const fillable = takesFormField(context, block)
   const rule = (from: number, y: number, color = edge): void => {
     context.page.drawLine({ color, end: { x: right, y }, start: { x: from, y }, thickness: FIELD_RULE_WIDTH })
   }
@@ -1548,7 +1555,7 @@ async function drawPdfLibCell(
   } else if (block.type === "text_field" && combBoxes(block, answer)) {
     drawPdfLibCombRow(context, item, block, answer, x, inner, answerTop)
   } else {
-    if (context.formFont && FORM_FIELD_TYPES.has(block.type)) {
+    if (takesFormField(context, block)) {
       addPdfFormField(context, item, block, { height: area, width: room.width, x: x + room.before, y: answerTop - area })
     } else if (answer) {
       drawWrappedPdfText(context, answer, answerTop, x + room.before, room.width, 10, 15, font, rgb(0.07, 0.09, 0.13), "left")
@@ -1566,6 +1573,12 @@ async function drawPdfLibCell(
 
 // Answers someone can type or pick in a PDF viewer; a signature is drawn in the viewer's own way.
 const FORM_FIELD_TYPES = new Set<PdfFieldBlock["type"]>(["date_field", "dropdown_field", "text_field"])
+
+// A fillable PDF's typed answers take form fields; a worked-out one prints as
+// words, as a viewer works nothing out.
+function takesFormField(context: PdfLibRenderContext, block: PdfFieldBlock): boolean {
+  return Boolean(context.formFont) && FORM_FIELD_TYPES.has(block.type) && !(block.type === "text_field" && block.formula !== undefined)
+}
 
 /**
  * A field's name in the PDF's form: its key, or its key and a number for the

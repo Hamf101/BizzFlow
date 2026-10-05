@@ -618,9 +618,19 @@ describe("document PDF service", () => {
     input.signers = []
 
     const words = drawnTexts(await PDFDocument.load(await renderGeneratedDocumentPdf(input)), 0).map(({ text }) => text)
+    const fillable = await PDFDocument.load(await renderGeneratedDocumentPdf(input, { fillable: true }))
+    const fields = fillable.getForm().getFields().map((field) => field.getName())
 
-    expect(words).toEqual(expect.arrayContaining(["25.03", "30.04"]))
+    // The table's Total row adds up its Amount column, beside the line itself and the Subtotal.
+    expect(words.filter((text) => text === "25.03")).toHaveLength(3)
+    expect(words.filter((text) => text === "Total")).toHaveLength(2)
+    expect(words).toContain("30.04")
     expect(words).not.toContain("1.00")
+    // A viewer works nothing out, so a worked-out answer prints as words, not as a box to type in.
+    expect(fields).toContain("items.1.2")
+    expect(fields).not.toContain("items.1.4")
+    expect(fields).not.toContain("total")
+    expect(drawnTexts(fillable, 0).map(({ text }) => text)).toContain("30.04")
   })
 
   it("prints a choice shown as radio buttons one option a line, inside the room the planner left, as one radio group", { timeout: PDF_RENDER_TIMEOUT_MS }, async () => {

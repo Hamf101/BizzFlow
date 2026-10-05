@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { formulaReferences, parseFormula } from "@/types/template-formula"
+import { columnTotal, formulaReferences, parseFormula } from "@/types/template-formula"
 
 describe("template formulas", () => {
   it("reads a spreadsheet formula: references, + - * / and %, brackets, and functions in any case", () => {
@@ -72,5 +72,12 @@ describe("template formulas", () => {
       expect(result, formula.slice(0, 40)).toHaveProperty("error")
       expect("error" in result && result.error.length > 0).toBe(true)
     }
+  })
+
+  it("adds up a table's column exactly, as its Total row prints it", () => {
+    expect(columnTotal(["0.10", "0.20", "", "1,000.05"], true)).toBe("1000.35")
+    expect(columnTotal(["-2.5", "1.25", "x"], false)).toBe("-1.25")
+    expect(columnTotal(["3", "4"], false)).toBe("7")
+    expect(columnTotal(["", "words"], true)).toBe("")
   })
 })

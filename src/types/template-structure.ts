@@ -1177,7 +1177,8 @@ export function updateTemplateBlock(
 function renameFormulaReferences(candidate: TemplateBlock, prior: TemplateBlock, next: TemplateBlock): TemplateBlock {
   const renames: Array<{ from: string; to: string; table: boolean; ownColumns: boolean }> = []
 
-  if ("label" in prior && "label" in next && prior.label !== next.label && (prior.type === "text_field" || prior.type === "table_field")) {
+  // A label cleared to be retyped is no name to rename to.
+  if ("label" in prior && "label" in next && prior.label !== next.label && next.label.trim() && (prior.type === "text_field" || prior.type === "table_field")) {
     renames.push({ from: prior.label, to: next.label, table: prior.type === "table_field", ownColumns: false })
   }
 
@@ -1185,7 +1186,7 @@ function renameFormulaReferences(candidate: TemplateBlock, prior: TemplateBlock,
     for (const [at, column] of prior.columns.entries()) {
       const label = next.columns[at]?.label ?? column.label
 
-      if (label !== column.label) {
+      if (label !== column.label && label.trim()) {
         renames.push({ from: `${prior.label}.${column.label}`, to: `${next.label}.${label}`, table: false, ownColumns: false })
         renames.push({ from: column.label, to: label, table: false, ownColumns: true })
       }

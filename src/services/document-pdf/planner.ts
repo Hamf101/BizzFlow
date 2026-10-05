@@ -68,6 +68,7 @@ import {
   TABLE_CELL_PADDING,
   TABLE_ROW_LEAST,
   tableRows,
+  tableTotalRow,
   type StyledFieldBlock
 } from "./shared"
 import type {
@@ -771,6 +772,13 @@ type RowsFieldBlock = Extract<TemplateBlock, { type: "choice_grid_field" | "tabl
  * header again; in a row of columns, as many as a page holds. A table's row
  * too tall for a page is cut into rows that fit.
  */
+// A table's rows numbered from 0, and its Total row after them as -1, which takes no form field.
+function withTotalRow(block: Extract<TemplateBlock, { type: "table_field" }>, rows: string[][]): Array<{ cells: string[]; index: number }> {
+  const total = tableTotalRow(block, rows)
+
+  return [...rows.map((cells: string[], index: number) => ({ cells, index })), ...(total ? [{ cells: total, index: -1 }] : [])]
+}
+
 function splitRowsField(
   block: RowsFieldBlock,
   renderBlock: TemplateRenderBlock,
@@ -783,7 +791,7 @@ function splitRowsField(
   const rows =
     block.type === "choice_grid_field"
       ? block.rows.map((row: string, index: number) => ({ cells: [row], index }))
-      : tableRows(block, answers[block.fieldKey]).flatMap((cells: string[], index: number) =>
+      : withTotalRow(block, tableRows(block, answers[block.fieldKey])).flatMap(({ cells, index }) =>
           (estimateRowHeight(block, cells, width) > most ? splitTableRow(cells, block.columns.length, width) : [cells]).map((segment: string[]) => ({ cells: segment, index }))
         )
   const pieces: Array<typeof rows> = [[]]

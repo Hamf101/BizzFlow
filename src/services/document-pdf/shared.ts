@@ -368,6 +368,7 @@ export function combBoxes(block: TemplateBlock, answer: string): number {
   return block.type === "text_field" && block.comb && answer.length <= block.comb ? block.comb : 0
 }
 
+
 /** A comb box's width: 16 points, narrowed to fit the room, but never under 10. */
 export function combWidth(boxes: number, width: number): number {
   return Math.min(COMB_WIDTH, Math.max(COMB_LEAST_WIDTH, width / boxes))
@@ -521,3 +522,5 @@ export function formatSignedAt(value: string): string {
 
   return date.toISOString().replace("T", " ").replace(".000Z", " UTC")
 }
+
+export { tableTotalRow } from "@/types/template-formula"

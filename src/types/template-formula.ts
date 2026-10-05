@@ -358,3 +358,62 @@ export function renameInFormula(formula: string, from: string, to: string, table
 export function calculatedFieldKeys(blocks: readonly Block[]): string[] {
   return blocks.flatMap((block) => (hasFormulas([block]) && "fieldKey" in block ? [block.fieldKey] : []))
 }
+
+/**
+ * A table column's total, as its Total row prints it: exact, in millionths,
+ * an amount to the penny. Cells that hold no number are passed over.
+ *
+ * @param cells - The column's cells.
+ * @param money - Whether the column holds amounts.
+ * @returns The total, or blank when no cell holds a number.
+ */
+export function columnTotal(cells: readonly string[], money: boolean): string {
+  let sum = BigInt(0)
+  let any = false
+
+  for (const cell of cells) {
+    const found = /^(-?)(\d{1,30})(?:\.(\d+))?$/.exec(cell.replace(/,/g, "").trim())
+
+    if (found) {
+      const millionths = BigInt(`${found[2]}${(found[3] ?? "").slice(0, 6).padEnd(6, "0")}`)
+
+      sum += found[1] ? -millionths : millionths
+      any = true
+    }
+  }
+
+  if (!any) return ""
+
+  const sign = sum < BigInt(0) ? "-" : ""
+  const size = sum < BigInt(0) ? -sum : sum
+
+  if (money) {
+    const pennies = (size + BigInt(5_000)) / BigInt(10_000)
+
+    return `${pennies === BigInt(0) ? "" : sign}${pennies / BigInt(100)}.${String(pennies % BigInt(100)).padStart(2, "0")}`
+  }
+
+  const fraction = String(size % BigInt(1_000_000)).padStart(6, "0").replace(/0+$/, "")
+
+  return `${size === BigInt(0) ? "" : sign}${size / BigInt(1_000_000)}${fraction ? `.${fraction}` : ""}`
+}
+
+/**
+ * A table's Total row: each totalled column added up, and "Total" in the
+ * first column that is not, or null when no column is totalled.
+ *
+ * @param block - The table.
+ * @param rows - Its rows of cells.
+ * @returns The row's cells, or null.
+ */
+export function tableTotalRow(block: Extract<Block, { type: "table_field" }>, rows: readonly string[][]): string[] | null {
+  if (!block.columns.some((column) => column.total)) {
+    return null
+  }
+
+  const label = block.columns.findIndex((column) => !column.total)
+
+  return block.columns.map((column, at): string =>
+    column.total ? columnTotal(rows.map((row) => row[at] ?? ""), column.format === "money") : at === label ? "Total" : ""
+  )
+}

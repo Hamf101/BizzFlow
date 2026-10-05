@@ -1,5 +1,6 @@
 "use client"
 
+import { useCalculatedAnswers } from "@/components/editor/use-calculated-answers"
 import Image from "next/image"
 import {
   type ChangeEvent,
@@ -98,10 +99,11 @@ export function GeneratedDocumentContent({
 }: GeneratedDocumentContentProps): ReactElement {
   // Server-rendered call sites post answers through FormData and cannot own
   // React state, so the component keeps the answers.
-  const [currentAnswers, setCurrentAnswers] =
+  const [givenAnswers, setCurrentAnswers] =
     useState<Record<string, unknown>>(() =>
       pruneHiddenTemplateFieldValues(content, answers)
     )
+  const currentAnswers = useCalculatedAnswers(content, givenAnswers)
 
   useEffect((): void => {
     onAnswersChange?.(currentAnswers)

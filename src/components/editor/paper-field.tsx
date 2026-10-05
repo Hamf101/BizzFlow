@@ -190,7 +190,16 @@ export function PaperField({
   switch (block.type) {
     case "text_field":
       height = block.multiline ? BOX_HEIGHT.lines : BOX_HEIGHT.line
-      answer = fill ? (
+      // A worked-out answer is never typed: it shows what its formula gives, and while built, the formula.
+      answer = block.formula ? (
+        mode === "design" ? (
+          <span className="block truncate text-muted-foreground">= {block.formula}</span>
+        ) : (
+          <output aria-label={block.label} id={block.id}>
+            {text || placeholder("Calculated")}
+          </output>
+        )
+      ) : fill ? (
         block.multiline ? (
           <textarea
             aria-label={block.label}

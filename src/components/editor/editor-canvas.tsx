@@ -29,6 +29,7 @@ import { rowGridColumns } from "@/components/templates/template-render-groups"
 import type { EditorController, FocusRequest } from "@/components/editor/use-editor-controller"
 import { resolveDocumentSurfaceInk } from "@/lib/document-surface"
 import { getVisibleTemplateBlocks } from "@/types/template-visibility"
+import { useCalculatedAnswers } from "@/components/editor/use-calculated-answers"
 import { cn } from "@/lib/utils"
 import {
   createTemplateRenderPlan,
@@ -92,7 +93,7 @@ export type EditorCanvasProps = Readonly<{
  */
 export function EditorCanvas({
   allowFiles,
-  answers = EMPTY_ANSWERS,
+  answers: givenAnswers = EMPTY_ANSWERS,
   controller,
   designable,
   documentTitle,
@@ -108,6 +109,7 @@ export function EditorCanvas({
   // Fixed for the page's life: an editor provides designing before its canvas first draws.
   const useEditing = useDesignTools()?.useCanvasEditing ?? useNoEditing
   const content = controller.content
+  const answers = useCalculatedAnswers(content, givenAnswers)
   const plan = useMemo(
     (): TemplateRenderPlan =>
       createTemplateRenderPlan({
