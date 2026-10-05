@@ -10,13 +10,9 @@ describe("buildContentSecurityPolicy", () => {
       r2Endpoint: "http://127.0.0.1:9000",
     })
 
-    expect(policy).toContain(
-      "connect-src 'self' https://*.supabase.co wss://*.supabase.co " +
-        "https://*.r2.cloudflarestorage.com http://127.0.0.1:9000"
-    )
-    expect(policy).toContain(
-      "img-src 'self' data: blob: https://*.r2.cloudflarestorage.com http://127.0.0.1:9000"
-    )
+    expect(policy).toContain("connect-src 'self' http://127.0.0.1:9000")
+    expect(policy).toContain("img-src 'self' data: blob: http://127.0.0.1:9000")
+    expect(policy).not.toContain("*")
     expect(policy).not.toContain("upgrade-insecure-requests")
   })
 
@@ -25,7 +21,22 @@ describe("buildContentSecurityPolicy", () => {
     const hosted = buildContentSecurityPolicy({ isProduction: true, supabaseUrl: "https://project.example.com" })
 
     expect(local).toMatch(/connect-src [^;]* ws:\/\/127\.0\.0\.1:54321(;| )/)
-    expect(hosted).toMatch(/connect-src [^;]* wss:\/\/project\.example\.com(;| )/)
+    expect(hosted).toMatch(/connect-src [^;]* https:\/\/project\.example\.com wss:\/\/project\.example\.com(;| )/)
+  })
+
+  it("fails a deployment build loudly when an origin the policy or HSTS needs is missing", () => {
+    const complete = {
+      appUrl: "https://app.bizflow.example",
+      isProduction: true,
+      r2Endpoint: "https://account.r2.cloudflarestorage.com",
+      requireOrigins: true,
+      supabaseUrl: "https://project.supabase.co",
+    }
+
+    expect(() => buildContentSecurityPolicy(complete)).not.toThrow()
+    expect(() => buildContentSecurityPolicy({ ...complete, r2Endpoint: undefined })).toThrow("CLOUDFLARE_R2_ENDPOINT")
+    expect(() => buildContentSecurityPolicy({ ...complete, supabaseUrl: "not a url" })).toThrow("SUPABASE_URL")
+    expect(() => buildContentSecurityPolicy({ ...complete, appUrl: "http://app.bizflow.example" })).toThrow("NEXT_PUBLIC_APP_URL")
   })
 
   it("adds production transport hardening only for an HTTPS app", () => {

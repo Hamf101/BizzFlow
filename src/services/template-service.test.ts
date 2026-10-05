@@ -1099,6 +1099,23 @@ describe("template service", () => {
     expect(tables.document_answers).toEqual([])
   })
 
+  it("checks a blank document's own pictures as a template's are checked", async () => {
+    const tables = createBaseTables()
+    const documentCount = tables.documents.length
+
+    await expect(
+      createGeneratedDocument(
+        {
+          actorUserId: STAFF_ID,
+          organizationId: ORG_ID,
+          content: createContentWithBlocks([createImageBlock(1, "data:image/png;base64,aGVsbG8=")])
+        },
+        { client: new FakeClient(tables) as never, createId: (): string => CREATED_DOCUMENT_ID }
+      )
+    ).rejects.toMatchObject({ statusCode: 400 })
+    expect(tables.documents).toHaveLength(documentCount)
+  })
+
   it("keeps one recent per document, stamped with the latest opening", async () => {
     const tables = createBaseTables()
     tables.document_recent_accesses.push({

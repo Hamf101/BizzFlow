@@ -354,6 +354,25 @@ export function getEmailEnv(): EmailEnv {
 }
 
 /**
+ * Fails a Vercel production deployment at boot when a value every request
+ * path depends on is missing, instead of on the first user who reaches it.
+ * Optional services (Sentry, PostHog, Upstash, AI, SMS) keep their fallbacks.
+ *
+ * @throws Error naming the first missing or invalid value.
+ */
+export function assertProductionEnv(): void {
+  if (process.env.VERCEL_ENV !== "production") {
+    return
+  }
+
+  getAdminSupabaseEnv()
+  getAppUrlEnv()
+  getEmailEnv()
+  getR2Env()
+  getFileUploadPolicyEnv()
+}
+
+/**
  * Whether this is a production build or a Vercel production deployment,
  * where a development fallback must fail closed rather than pretend to work.
  *

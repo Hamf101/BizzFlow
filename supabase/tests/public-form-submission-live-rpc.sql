@@ -184,19 +184,33 @@ begin
     raise exception 'One submitted draft should use one slot (count %).', claimed;
   end if;
 
-  -- A new submission is saved to the link's organization and counted.
+  -- A new submission is saved to the link's organization and counted, with
+  -- the published snapshot whatever the caller sends, and the same activity
+  -- event and audit row a signed-in submit writes.
   select * into saved
   from public.submit_public_form_entry(
     link_token, null, null, gen_random_uuid(), '  Walk-in visitor  ',
-    template_id, 1, template_snapshot, '{}'::jsonb, now()
+    template_id, 1, template_snapshot || '{"branding": {"forged": true}}'::jsonb, '{}'::jsonb, now()
   );
 
   if saved.title <> 'Walk-in visitor'
       or saved.org_id <> organization_id
       or saved.public_form_link_id <> link_id
       or saved.status <> 'submitted'
-      or saved.revision <> 1 then
+      or saved.revision <> 1
+      or saved.template_snapshot <> template_snapshot then
     raise exception 'The new submission was not saved as expected.';
+  end if;
+
+  if not exists (
+      select 1 from public.submission_activity_events activity
+      where activity.submission_id = saved.id and activity.event_type = 'submitted' and activity.actor_user_id is null
+    )
+      or not exists (
+        select 1 from public.audit_logs audit
+        where audit.target_id = saved.id and audit.action = 'submission.submitted' and audit.org_id = organization_id
+      ) then
+    raise exception 'A public submission left no activity event or audit row.';
   end if;
 
   -- The ceiling holds: a third submission is refused and nothing is saved.

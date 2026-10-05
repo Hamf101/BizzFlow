@@ -52,11 +52,16 @@ class TemplateFlowQuery implements PromiseLike<{ data: unknown; error: null }> {
     return this
   }
 
+  order(): TemplateFlowQuery {
+    return this
+  }
+
+  limit(): TemplateFlowQuery {
+    return this
+  }
+
   async maybeSingle(): Promise<{ data: unknown; error: null }> {
-    const matches = this.rows.filter((row) =>
-      this.filters.every(([column, value]) => row[column] === value)
-    )
-    return { data: matches[0] ?? null, error: null }
+    return { data: this.matches()[0] ?? null, error: null }
   }
 
   then<TResult1 = { data: unknown; error: null }, TResult2 = never>(
@@ -65,7 +70,11 @@ class TemplateFlowQuery implements PromiseLike<{ data: unknown; error: null }> {
       | null,
     onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
   ): PromiseLike<TResult1 | TResult2> {
-    return this.maybeSingle().then(onfulfilled, onrejected)
+    return Promise.resolve({ data: this.matches(), error: null as null }).then(onfulfilled, onrejected)
+  }
+
+  private matches(): TemplateFlowRow[] {
+    return this.rows.filter((row) => this.filters.every(([column, value]) => row[column] === value))
   }
 }
 
@@ -130,6 +139,30 @@ describe("template Flow service", () => {
         }
       )
     ).resolves.toEqual([])
+  })
+
+  it("reads Flow history through the client it is given", async () => {
+    const client = createAuthorizationClient(["templates:manage"])
+    client.tables.template_flow_messages = [
+      {
+        author_name: "Maya",
+        author_user_id: "user-1",
+        change_set: null,
+        content: "Tighten the intro",
+        created_at: "2026-10-01T09:00:00.000Z",
+        id: "00000000-0000-4000-8000-000000000020",
+        org_id: "org-1",
+        role: "user",
+        template_id: TEMPLATE_ID,
+      },
+    ]
+
+    const history = await listTemplateFlowMessages(
+      { actorUserId: "user-1", organizationId: "org-1", templateId: TEMPLATE_ID },
+      { client: client as never }
+    )
+
+    expect(history.map((message) => message.content)).toEqual(["Tighten the intro"])
   })
 
   it("rechecks edited Flow permissions and denies a revoked custom grant", async () => {

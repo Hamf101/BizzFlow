@@ -1462,6 +1462,46 @@ describe("document PDF service", () => {
     expect(lowest - (loneMetrics.flowTopY - loneMetrics.pageCapacity)).toBeLessThan(20 + 10)
   })
 
+  it("keeps long titles, headings, section and group labels, and a long signer's name above the footer and inside the page", { timeout: PDF_RENDER_TIMEOUT_MS }, async () => {
+    const input = createPdfInput({ repeatHeader: false, repeatFooter: true })
+    const content = requireVersionThreeContent(input)
+    const long = (word: string): string => `${word} ${"Wide words Whom MMWW ".repeat(7).trim()}`
+    const headings = Array.from({ length: 24 }, (_value: unknown, index: number) => ({
+      id: `58000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
+      type: "heading" as const,
+      text: long(`Heading${index}`),
+      level: 1 as const,
+      alignment: "left" as const
+    }))
+
+    content.blocks = headings
+    content.sections = headings.filter((_block, index: number) => index % 4 === 0).map((block, index: number) => ({
+      id: `59000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
+      label: long(`Section${index}`),
+      startBlockId: block.id,
+      pageBreakBefore: false,
+      keepTogether: false
+    }))
+    content.fieldGroups = []
+    content.blockRules = []
+    input.title = long("Title")
+    input.signers = [{ ...(input.signers ?? [])[0], name: `Signer ${"Maximiliana Wolfeschlegelsteinhausen ".repeat(4).trim()}` }]
+
+    const metrics = pdfMetrics(input)
+    const flowBottom = metrics.flowTopY - metrics.pageCapacity
+    const pdf = await PDFDocument.load(await renderGeneratedDocumentPdf(input))
+    const bold = await probeFont(PDF_BOLD_FONT_PATH)
+    const nameLines = pdf.getPages().flatMap((_page, index: number) => drawnTexts(pdf, index).filter((piece) => piece.size === 10 && /Maximiliana|Signer/.test(piece.text)))
+
+    pdf.getPages().forEach((_page, index: number) => {
+      // Everything above the footer's 7-point words stays inside the flow.
+      expect(Math.min(...drawnTexts(pdf, index).filter((piece) => piece.size >= 8).map((piece) => piece.y))).toBeGreaterThanOrEqual(flowBottom - 0.5)
+    })
+    // The name wraps onto lines that each fit left of the signature and initials.
+    expect(nameLines.length).toBeGreaterThan(1)
+    nameLines.forEach((piece) => expect(piece.x + bold.widthOfTextAtSize(piece.text, 10)).toBeLessThanOrEqual(metrics.margin + metrics.contentWidth - 7 - 88 - 10 - 48 - 10 + 0.5))
+  })
+
   it("prints an answer of the wrong shape as unanswered, and never fails on one", { timeout: PDF_RENDER_TIMEOUT_MS }, async () => {
     const input = createPdfInput({ repeatHeader: false, repeatFooter: false })
     const content = requireVersionThreeContent(input)

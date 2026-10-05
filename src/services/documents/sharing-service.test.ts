@@ -11,6 +11,7 @@ import {
   setSharingAccess,
   setSharingInheritance,
 } from "@/services/documents/sharing-service"
+import { OrganizationServiceError } from "@/services/organizations/errors"
 import type { OrganizationMember } from "@/types/organization"
 
 const ORG = "10000000-0000-4000-8000-000000000001"
@@ -229,12 +230,45 @@ describe("sharing with a person", () => {
     expect(client.tables.document_access_grants.some((grant) => grant.user_id === MANAGER)).toBe(true)
   })
 
-  it("fails when the record cannot be kept", async () => {
-    const { deps } = setup({ audit: async () => { throw new Error("audit down") } })
+  // The share is already made when the record is written, so failing then
+  // would report a share that happened as one that did not.
+  it("keeps the share when its record cannot be kept", async () => {
+    const { client, deps } = setup({ audit: async () => { throw new Error("audit down") } })
 
     await expect(
       setSharingAccess({ ...document(CREATOR), level: "viewer", principal: { userId: MANAGER } }, deps)
-    ).rejects.toMatchObject({ statusCode: 500 })
+    ).resolves.toBeDefined()
+    expect(client.tables.document_access_grants.some((grant) => grant.user_id === MANAGER)).toBe(true)
+  })
+
+  it("takes access away from someone who has since left", async () => {
+    const { client, deps } = setup()
+    client.tables.document_access_grants.push({ access_level: "viewer", document_id: DOC, id: "g-left", org_id: ORG, organization_role: null, user_id: OUTSIDER })
+
+    await expect(setSharingAccess({ ...document(CREATOR), level: null, principal: { userId: OUTSIDER } }, deps)).resolves.toBeDefined()
+    expect(client.tables.document_access_grants.some((grant) => grant.user_id === OUTSIDER)).toBe(false)
+  })
+
+  it("never lets someone who manages folders give themselves more than they have", async () => {
+    const { client, deps } = setup({ access: { [`${MANAGER}:${DOC}`]: "viewer" } })
+
+    for (const principal of [{ userId: MANAGER }, { role: "manager" as const }]) {
+      await expect(
+        setSharingAccess({ ...document(MANAGER), level: "contributor", principal }, deps),
+        JSON.stringify(principal)
+      ).rejects.toMatchObject({ statusCode: 403 })
+    }
+    expect(client.writes).toEqual([])
+  })
+
+  it("refuses, rather than fails, someone whose role may not see the people list", async () => {
+    const { deps } = setup()
+    const hidden = { ...deps, listMembers: async () => { throw new OrganizationServiceError("You do not have access to this organization.", 403) } }
+
+    await expect(getSharing(document(CREATOR), hidden)).rejects.toMatchObject({ statusCode: 403 })
+    await expect(
+      setSharingAccess({ ...document(CREATOR), level: "viewer", principal: { userId: MANAGER } }, hidden)
+    ).rejects.toMatchObject({ statusCode: 403 })
   })
 
   it("refuses people who are not in the workspace, and people who always have access", async () => {

@@ -57,6 +57,32 @@ describe("document upload lifecycle", () => {
     expect(client.tables.document_versions).toHaveLength(0)
   })
 
+  it("checks the title before it signs anything, and leaves no document behind when its version cannot be stored", async () => {
+    const client = new FakeSupabaseClient({
+      organization_memberships: [createMembershipRow("staff")],
+    })
+    const deps = createDeps(client, ["document-1", "version-1", "document-2", "version-2"])
+    const upload = {
+      actorUserId: "user-1",
+      organizationId: "org-1",
+      folderId: null,
+      title: "   ",
+      description: null,
+      originalFilename: "contract.pdf",
+      contentType: "application/pdf",
+      byteSize: 1024,
+    }
+
+    await expect(createDocumentUploadUrl(upload, deps)).rejects.toMatchObject({ statusCode: 400 })
+    expect(deps.createSignedDocumentUploadUrl).not.toHaveBeenCalled()
+
+    client.failNextWrites("document_versions", "23514")
+
+    await expect(createDocumentUploadUrl({ ...upload, title: "Signed contract" }, deps)).rejects.toMatchObject({ statusCode: 500 })
+    expect(client.tables.documents).toHaveLength(0)
+    expect(client.tables.document_versions).toHaveLength(0)
+  })
+
   it("does not persist document rows when upload URL signing fails", async () => {
     const client = new FakeSupabaseClient({
       organization_memberships: [createMembershipRow("staff")],

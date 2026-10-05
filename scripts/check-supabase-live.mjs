@@ -280,12 +280,6 @@ export const SERVICE_ROLE_RPC_CHECKS = [
     },
   },
   {
-    name: "reconcile_document_upload_authorization_barriers",
-    args: {
-      target_conservative_until: null,
-    },
-  },
-  {
     name: "verify_audit_log_chain",
     args: {
       target_org_id: null,
@@ -346,12 +340,6 @@ export const SERVICE_ROLE_READ_ONLY_RPC_CHECKS = [
         ],
       },
       target_values: { signature: DRAWING_PROBE_DATA_URL },
-    },
-  },
-  {
-    name: "increment_public_form_link_submission_count",
-    args: {
-      p_token: null,
     },
   },
   // Empty id lists reach the execute grant without reading any tenant's rows.

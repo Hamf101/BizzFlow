@@ -227,6 +227,25 @@ describe("submission signed storage requests", () => {
 
     expect(deleteObject.mock.calls[0]?.[1]).toBeInstanceOf(DeleteObjectCommand)
   })
+
+  it("logs a file's ids, never the name a person gave it", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined)
+    const storageKey = STORAGE_KEY.replace("evidence.pdf", "Jane-Doe-passport.pdf")
+    const failingStore = { r2Client: {} as S3Client, r2Env, deleteObject: vi.fn<SubmissionStorageDeleteObject>(), getObject: vi.fn<SubmissionStorageGetObject>() }
+
+    await expect(
+      verifySubmissionUpload({ ...createVerifyInput(PDF_BYTES, "application/pdf"), byteSize: 0, storageKey }, failingStore)
+    ).rejects.toMatchObject({ statusCode: 400 })
+    await expect(deleteSubmissionStorageObject({ storageKey: `${storageKey}/..` }, failingStore)).rejects.toMatchObject({ statusCode: 400 })
+    await expect(
+      createSignedSubmissionDownloadUrl({ downloadFilename: "x.pdf", storageKey: `${storageKey}/..` }, failingStore)
+    ).rejects.toMatchObject({ statusCode: 400 })
+
+    const logged = JSON.stringify(warn.mock.calls)
+    warn.mockRestore()
+    expect(logged).toContain(FILE_ID)
+    expect(logged).not.toContain("Jane-Doe")
+  })
 })
 
 describe("submission upload byte verification", () => {

@@ -3,7 +3,7 @@ import { z } from "zod"
 import { canPerformOrganizationAction, isOrganizationRole, type OrganizationRole } from "@/lib/permissions"
 import { createSecureToken, hashToken, TOKEN_LIFETIME_MS } from "@/services/document-signing/token-security"
 import { getEffectiveDocumentAccess, getEffectiveFolderAccess } from "@/services/documents/access-service"
-import { recordDocumentAuditLog, recordRequiredDocumentAuditLog } from "@/services/documents/audit"
+import { recordDocumentAuditLog } from "@/services/documents/audit"
 import type { DocumentServiceClient } from "@/services/documents/contracts"
 import { DocumentServiceError } from "@/services/documents/errors"
 import { sendGuestInviteEmail } from "@/services/documents/guest-invite-email"
@@ -88,6 +88,8 @@ const MAX_FOLDER_DEPTH = 50
 const SHAREABLE_ROLES: readonly OrganizationRole[] = ["manager", "staff", "external_reviewer"]
 
 type Target = {
+  /** The actor's own role, and their level here; null when nothing limits them (its maker, an owner admin). */
+  actor: { level: SharingLevel | null; role: OrganizationRole }
   createdBy: string | null
   inherit: boolean
   name: string
@@ -137,41 +139,82 @@ export async function getSharing(input: SharingInput, deps: SharingServiceDeps =
  */
 export async function setSharingAccess(input: SetSharingAccessInput, deps: SharingServiceDeps = {}): Promise<SharingView> {
   return runDocumentOperation("set_sharing_access", identifiers(input), async () => {
-    const client = getClient(deps)
-    const target = await authorize(client, input, true)
-    const kind = KINDS[input.resource.kind]
-    const people = await listMembers(deps, input)
+    const change = await prepareSharingAccess(input, deps)
 
-    if ("email" in input.principal) {
-      const email = guestEmail(input.principal.email)
-      const member = people.find((person) => person.status === "active" && person.email.toLowerCase() === email)
+    await change.apply()
 
-      // Someone already in the workspace is shared with as a member.
-      if (!member) return shareWithGuest(client, { ...input, principal: { email } }, target, people, deps)
+    return change.view()
+  })
+}
 
-      input = { ...input, principal: { userId: member.userId } }
+/** A sharing change that has been checked and not yet made. */
+export type PreparedSharingChange = {
+  apply: () => Promise<void>
+  view: () => Promise<SharingView>
+}
+
+/**
+ * Checks a share, a level change or a removal without making it, so a whole
+ * selection can be checked before any of it changes.
+ *
+ * @param input - Actor, organization, item, who, and what level.
+ * @param deps - Injected client, ids, people lookup, notice and audit.
+ * @returns The change, ready to make, and the item's sharing to read afterwards.
+ * @throws DocumentServiceError when the actor may not share it or the choice is not allowed.
+ */
+export async function prepareSharingAccess(
+  input: SetSharingAccessInput,
+  deps: SharingServiceDeps = {}
+): Promise<PreparedSharingChange> {
+  const client = getClient(deps)
+  const target = await authorize(client, input, true)
+  const kind = KINDS[input.resource.kind]
+  const people = await listMembers(deps, input)
+  const view = (): Promise<SharingView> => buildView(client, input, target, deps)
+
+  if ("email" in input.principal) {
+    const email = guestEmail(input.principal.email)
+    const member = people.find((person) => person.status === "active" && person.email.toLowerCase() === email)
+
+    // Someone already in the workspace is shared with as a member.
+    if (!member) {
+      const guest = { ...input, principal: { email } }
+
+      checkGuest(guest, target)
+
+      return { apply: () => shareWithGuest(client, guest, target, people, deps), view }
     }
 
-    const who = await checkPrincipal(input, target, people)
+    input = { ...input, principal: { userId: member.userId } }
+  }
+
+  const who = checkPrincipal(input, target, people)
+  // An email was turned into a member above, or went to the guest path.
+  const principal = input.principal as MemberPrincipal
+  const { level } = input
+
+  // Managing folders lets someone change who an item is shared with, not give themselves more than they have.
+  const self = "userId" in principal ? principal.userId === input.actorUserId : principal.role === target.actor.role
+  const levels: readonly SharingLevel[] = kind.levels
+
+  if (self && level !== null && target.actor.level !== null && levels.indexOf(level) > levels.indexOf(target.actor.level)) {
+    throw new DocumentServiceError("You cannot give yourself more access than you have.", 403)
+  }
+
+  const apply = async (): Promise<void> => {
     const where = { [kind.grantColumn]: input.resource.id, org_id: input.organizationId }
-    // An email was turned into a member above, or went to the guest path.
-    const existing = await findGrant(client, kind.grants, where, input.principal as MemberPrincipal)
+    const existing = await findGrant(client, kind.grants, where, principal)
     const grants = client.from(kind.grants as AnyGrants)
 
-    if (input.level === null) {
+    if (level === null) {
       if (existing) {
-        const { error } = await client
-          .from(kind.grants as AnyGrants)
-          .delete()
-          .eq("id", existing.id as string)
-          .eq("org_id", input.organizationId)
+        const { error } = await grants.delete().eq("id", existing.id as string).eq("org_id", input.organizationId)
 
         if (error) throw createSupabaseServiceError(error, "Unable to take that access away.")
       }
     } else if (existing) {
-      const { error } = await client
-        .from(kind.grants as AnyGrants)
-        .update({ access_level: input.level, granted_by: input.actorUserId } as Row)
+      const { error } = await grants
+        .update({ access_level: level, granted_by: input.actorUserId } as Row)
         .eq("id", existing.id as string)
         .eq("org_id", input.organizationId)
 
@@ -179,41 +222,38 @@ export async function setSharingAccess(input: SetSharingAccessInput, deps: Shari
     } else {
       const { error } = await grants.insert({
         ...where,
-        access_level: input.level,
+        access_level: level,
         granted_by: input.actorUserId,
         id: createId(deps),
-        organization_role: "role" in input.principal ? input.principal.role : null,
-        user_id: "userId" in input.principal ? input.principal.userId : null,
+        organization_role: "role" in principal ? principal.role : null,
+        user_id: "userId" in principal ? principal.userId : null,
       } as never)
 
       if (error) throw createSupabaseServiceError(error, "Unable to share that.", error.code === "23505" ? 409 : 500)
     }
 
-    await recordRequiredDocumentAuditLog(deps, {
-      action: input.level === null ? kind.audit.revoked : kind.audit.granted,
+    // Best effort: the share is already made, so a lost record must not report it as failed.
+    await recordDocumentAuditLog(deps, {
+      action: level === null ? kind.audit.revoked : kind.audit.granted,
       actorUserId: input.actorUserId,
-      metadata: {
-        level: input.level,
-        principal: who.label,
-        principalKind: "role" in input.principal ? "role" : "person",
-      },
+      metadata: { level, principal: who.label, principalKind: "role" in principal ? "role" : "person" },
       organizationId: input.organizationId,
       targetId: input.resource.id,
       targetType: input.resource.kind,
     })
 
-    if (input.level !== null && !existing && "userId" in input.principal && input.principal.userId !== input.actorUserId) {
+    if (level !== null && !existing && "userId" in principal && principal.userId !== input.actorUserId) {
       await tell(deps, {
         actorName: nameOf(people.find((person) => person.userId === input.actorUserId)) ?? "Someone",
-        level: input.level,
-        recipientUserId: input.principal.userId,
+        level,
+        recipientUserId: principal.userId,
         resource: input.resource,
         resourceName: target.name,
       })
     }
+  }
 
-    return buildView(client, input, target, deps)
-  })
+  return { apply, view }
 }
 
 /**
@@ -229,28 +269,52 @@ export async function setSharingInheritance(
   deps: SharingServiceDeps = {}
 ): Promise<SharingView> {
   return runDocumentOperation("set_sharing_inheritance", identifiers(input), async () => {
-    const client = getClient(deps)
-    const target = await authorize(client, input, true)
-    const kind = KINDS[input.resource.kind]
-    const { error } = await client
-      .from(kind.table as AnyTable)
-      .update((restrictsInsteadOfInherits(input.resource) ? { access_restricted: !input.inherit } : { share_inherit: input.inherit }) as Row)
-      .eq("id", input.resource.id)
-      .eq("org_id", input.organizationId)
+    const change = await prepareSharingInheritance(input, deps)
 
-    if (error) throw createSupabaseServiceError(error, "Unable to change that.")
+    await change.apply()
 
-    await recordRequiredDocumentAuditLog(deps, {
-      action: kind.audit.inheritance,
-      actorUserId: input.actorUserId,
-      metadata: restrictsInsteadOfInherits(input.resource) ? { restricted: !input.inherit } : { inherit: input.inherit },
-      organizationId: input.organizationId,
-      targetId: input.resource.id,
-      targetType: input.resource.kind,
-    })
-
-    return buildView(client, input, { ...target, inherit: input.inherit }, deps)
+    return change.view()
   })
+}
+
+/**
+ * Checks a change to whether an item takes in its folders' sharing without making it.
+ *
+ * @param input - Actor, organization, item, and the choice.
+ * @param deps - Injected client, people lookup and audit.
+ * @returns The change, ready to make, and the item's sharing to read afterwards.
+ * @throws DocumentServiceError when the actor may not change its sharing.
+ */
+export async function prepareSharingInheritance(
+  input: SetSharingInheritanceInput,
+  deps: SharingServiceDeps = {}
+): Promise<PreparedSharingChange> {
+  const client = getClient(deps)
+  const target = await authorize(client, input, true)
+  const kind = KINDS[input.resource.kind]
+
+  return {
+    apply: async () => {
+      const { error } = await client
+        .from(kind.table as AnyTable)
+        .update((restrictsInsteadOfInherits(input.resource) ? { access_restricted: !input.inherit } : { share_inherit: input.inherit }) as Row)
+        .eq("id", input.resource.id)
+        .eq("org_id", input.organizationId)
+
+      if (error) throw createSupabaseServiceError(error, "Unable to change that.")
+
+      // Best effort, as for a share: the change is already made.
+      await recordDocumentAuditLog(deps, {
+        action: kind.audit.inheritance,
+        actorUserId: input.actorUserId,
+        metadata: restrictsInsteadOfInherits(input.resource) ? { restricted: !input.inherit } : { inherit: input.inherit },
+        organizationId: input.organizationId,
+        targetId: input.resource.id,
+        targetType: input.resource.kind,
+      })
+    },
+    view: () => buildView(client, input, { ...target, inherit: input.inherit }, deps),
+  }
 }
 
 function identifiers(input: SharingInput): Record<string, string> {
@@ -298,6 +362,7 @@ async function authorize(client: DocumentServiceClient, input: SharingInput, cha
 
   const row = data as unknown as Row
   const target: Target = {
+    actor: { level: null, role: membership.role },
     createdBy: (row.created_by as string | null) ?? null,
     inherit: restrictsInsteadOfInherits(input.resource) ? row.access_restricted !== true : row.share_inherit !== false,
     name: String(row[kind.nameColumn]),
@@ -312,6 +377,8 @@ async function authorize(client: DocumentServiceClient, input: SharingInput, cha
     const access = await accessTo(client, input)
 
     if (access === null) throw notFound
+
+    target.actor.level = access
 
     // Whoever can edit it may pass it on; someone who can only view it may not, unless they manage folders.
     if (access !== "contributor" && access !== "editor" && !canManage) {
@@ -370,11 +437,11 @@ const personOf = (member: OrganizationMember): SharingPerson => ({
 })
 
 // Rejects choices that cannot mean anything, and names who is being changed.
-async function checkPrincipal(
+function checkPrincipal(
   input: SetSharingAccessInput,
   target: Target,
   people: readonly OrganizationMember[]
-): Promise<{ label: string }> {
+): { label: string } {
   const kind = KINDS[input.resource.kind]
 
   if (input.level !== null && !(kind.levels as readonly SharingLevel[]).includes(input.level)) {
@@ -402,6 +469,9 @@ async function checkPrincipal(
 
   const { userId } = input.principal
   const member = people.find((person) => person.userId === userId && person.status === "active")
+
+  // Access can always be taken away, even from someone who has since left.
+  if (input.level === null) return { label: nameOf(member) ?? userId }
 
   if (!member) throw new DocumentServiceError("That person is not in this workspace.", 400)
 
@@ -520,25 +590,29 @@ async function listGuests(client: DocumentServiceClient, input: SharingInput): P
   return (data ?? []).map((row) => ({ email: row.email, joined: Boolean(row.accepted_at), level: row.access_level }))
 }
 
-// Invites someone outside the workspace to one document, changes their level,
-// or takes it away. The invite holds only a hash of its link; if the email
-// cannot go out the invite is taken back, since nobody else could deliver it.
-async function shareWithGuest(
-  client: DocumentServiceClient,
-  input: SetSharingAccessInput & { principal: { email: string } },
-  target: Target,
-  people: readonly OrganizationMember[],
-  deps: SharingServiceDeps
-): Promise<SharingView> {
+type GuestInput = SetSharingAccessInput & { principal: { email: string } }
+
+function checkGuest(input: GuestInput, target: Target): void {
   const levels = outsideLevels(input.resource, target)
-  const { email } = input.principal
 
   if (levels.length === 0) throw new DocumentServiceError("Only a document can be shared outside the workspace.", 400)
 
   if (input.level !== null && !levels.includes(input.level)) {
     throw new DocumentServiceError("Someone outside the workspace can only view an uploaded file.", 400)
   }
+}
 
+// Invites someone outside the workspace to one document, changes their level,
+// or takes it away. The invite holds only a hash of its link; if the email
+// cannot go out the invite is taken back, since nobody else could deliver it.
+async function shareWithGuest(
+  client: DocumentServiceClient,
+  input: GuestInput,
+  target: Target,
+  people: readonly OrganizationMember[],
+  deps: SharingServiceDeps
+): Promise<void> {
+  const { email } = input.principal
   const where = { document_id: input.resource.id, email, org_id: input.organizationId }
   const { data: existing, error: findError } = await client
     .from("document_guest_grants")
@@ -604,8 +678,6 @@ async function shareWithGuest(
     targetId: input.resource.id,
     targetType: "document",
   })
-
-  return buildView(client, input, target, deps)
 }
 
 type DocumentLevel = (typeof KINDS.document.levels)[number]

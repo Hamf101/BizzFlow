@@ -187,6 +187,9 @@ export async function resendAnswerRequest(input: RequestInput, deps: SendToAnswe
 
     if (link.document_id) {
       await requireActiveDocument(client, input.organizationId, link.document_id)
+    } else if (link.answers_snapshot !== null) {
+      // Only a document's send keeps answers; its document has since been purged.
+      throw new PublicFormServiceError(INACTIVE, 409)
     }
 
     const now = (deps.now ?? (() => new Date()))()
@@ -336,10 +339,10 @@ export async function revokeAnswerRequest(input: RequestInput, deps: SendToAnswe
 async function loadRequest(
   client: Client,
   input: RequestInput
-): Promise<{ document_id: string | null; recipient_email: string; status: string; submission_count: number; template_id: string; title_snapshot: string }> {
+): Promise<{ answers_snapshot: unknown; document_id: string | null; recipient_email: string; status: string; submission_count: number; template_id: string; title_snapshot: string }> {
   const { data, error } = await client
     .from("public_form_links")
-    .select("id,org_id,template_id,document_id,recipient_email,status,submission_count,title_snapshot")
+    .select("id,org_id,template_id,document_id,answers_snapshot,recipient_email,status,submission_count,title_snapshot")
     .eq("id", input.linkId)
     .eq("org_id", input.organizationId)
     .maybeSingle()
@@ -348,7 +351,7 @@ async function loadRequest(
     throw new PublicFormServiceError(FAILED, 500)
   }
 
-  const link = data as { document_id: string | null; recipient_email: string | null; status: string; submission_count: number; template_id: string; title_snapshot: string | null } | null
+  const link = data as { answers_snapshot: unknown; document_id: string | null; recipient_email: string | null; status: string; submission_count: number; template_id: string; title_snapshot: string | null } | null
 
   if (!link?.recipient_email || !link.title_snapshot) {
     throw new PublicFormServiceError("That request was not found.", 404)

@@ -4,7 +4,8 @@ allowBuilds:
   # artifacts; their package build scripts are not required by this application.
   '@google/genai': false
   '@sentry/cli': true
-  core-js: true
+  # Its postinstall only prints a funding banner.
+  core-js: false
   protobufjs: false
   sharp: true
   unrs-resolver: true
@@ -13,9 +14,12 @@ allowBuilds:
 minimumReleaseAge: 10080
 minimumReleaseAgeStrict: true
 minimumReleaseAgeIgnoreMissingTime: false
-# Security exceptions must name an exact reviewed version and be removed after
-# it ages. pnpm 11.10 predates minimumReleaseAgeExcludePrune, so pruning remains
-# a manual review step until the pinned package manager is deliberately updated.
+# Security exceptions name an exact reviewed version, the way pnpm documents
+# them. Renovate writes the entry itself into this list when it opens a security
+# PR for a version still inside the age gate (renovatebot/renovate#40020), so
+# the list must stay present, even empty. Remove an entry once it ages. pnpm
+# 11.10 predates minimumReleaseAgeExcludePrune, so pruning stays a manual step
+# until the pinned package manager is deliberately updated.
 minimumReleaseAgeExclude: []
 
 overrides:

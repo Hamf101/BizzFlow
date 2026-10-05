@@ -613,6 +613,7 @@ class FakeQueryBuilder {
   private readonly filters: Array<(row: FakeRow) => boolean> = []
   private insertRows: FakeRow[] | null = null
   private updateValues: FakeRow | null = null
+  private deleting = false
   private orderColumn: string | null = null
   private orderAscending = true
   private limitCount: number | null = null
@@ -633,6 +634,11 @@ class FakeQueryBuilder {
 
   update(value: FakeRow): FakeQueryBuilder {
     this.updateValues = value
+    return this
+  }
+
+  delete(): FakeQueryBuilder {
+    this.deleting = true
     return this
   }
 
@@ -690,6 +696,12 @@ class FakeQueryBuilder {
   }
 
   async maybeSingle(): Promise<{ data: FakeRow | null; error: Error | null }> {
+    const failure = this.insertRows || this.updateValues ? this.client.takeWriteFailure(this.tableName) : null
+
+    if (failure) {
+      return { data: null, error: failure }
+    }
+
     const rows = this.execute()
 
     if (rows.length > 1) {
@@ -723,6 +735,12 @@ class FakeQueryBuilder {
     }
 
     const matchingRows = this.applyFilters()
+
+    if (this.deleting) {
+      const table = this.client.tables[this.tableName]
+      this.client.tables[this.tableName] = table.filter((row: FakeRow) => !matchingRows.includes(row))
+      return matchingRows
+    }
 
     if (this.updateValues) {
       matchingRows.forEach((row: FakeRow) => {

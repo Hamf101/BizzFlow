@@ -117,6 +117,10 @@ export async function createDocumentUploadUrl(
         contentType: input.contentType,
         byteSize: input.byteSize,
       })
+      // Everything is checked before a URL is signed or a row is written.
+      const title = normalizeDocumentTitle(input.title)
+      const description = normalizeOptionalText(input.description)
+      const originalFilename = normalizeOriginalFilename(input.originalFilename)
 
       const storageKey = buildDocumentObjectKey({
         organizationId: input.organizationId,
@@ -141,14 +145,16 @@ export async function createDocumentUploadUrl(
         id: documentId,
         org_id: input.organizationId,
         folder_id: folderId,
-        title: normalizeDocumentTitle(input.title),
-        description: normalizeOptionalText(input.description),
+        title,
+        description,
         current_version_id: null,
         created_by: input.actorUserId,
         updated_by: input.actorUserId,
         archived_by: null,
         archived_at: null,
       })
+      // The two inserts are not one transaction, so a document whose first
+      // version could not be stored is taken back rather than left empty.
       const version = await insertDocumentVersion(client, {
         id: versionId,
         org_id: input.organizationId,
@@ -156,12 +162,15 @@ export async function createDocumentUploadUrl(
         version_number: 1,
         status: "upload_pending",
         storage_key: storageKey,
-        original_filename: normalizeOriginalFilename(input.originalFilename),
+        original_filename: originalFilename,
         content_type: input.contentType,
         byte_size: input.byteSize,
         checksum_sha256: null,
         uploaded_by: input.actorUserId,
         upload_authorization_expires_at: signedUrl.expiresAt,
+      }).catch(async (error: unknown) => {
+        await client.from("documents").delete().eq("id", document.id).eq("org_id", input.organizationId)
+        throw error
       })
 
       await recordDocumentAuditLog(deps, {

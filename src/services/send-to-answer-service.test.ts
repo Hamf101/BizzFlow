@@ -163,6 +163,14 @@ describe("send to answer, when something is wrong", () => {
     await expect(
       resendAnswerRequest({ actorUserId: MANAGER_ID, linkId: link.id as string, organizationId: ORG_ID }, deps(client, { sendRequest }))
     ).rejects.toMatchObject({ statusCode: 409 })
+
+    // Purged, the document is gone and the link forgets it, but still holds what it was sent as.
+    tables.documents.length = 0
+    link.document_id = null
+
+    await expect(
+      resendAnswerRequest({ actorUserId: MANAGER_ID, linkId: link.id as string, organizationId: ORG_ID }, deps(client, { sendRequest }))
+    ).rejects.toMatchObject({ statusCode: 409 })
     expect(sendRequest).not.toHaveBeenCalled()
   })
 

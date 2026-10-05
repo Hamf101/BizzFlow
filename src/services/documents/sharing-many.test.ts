@@ -136,6 +136,18 @@ describe("changing several at once", () => {
     expect(client.writes).toEqual([])
   })
 
+  it("changes nothing when one item cannot change, wherever it sits in the selection", async () => {
+    const { client, deps, many } = setup()
+    const archived = client.tables.documents.find((row) => row.id === B) as FakeRow
+    archived.lifecycle_state = "archived"
+
+    await expect(
+      setSharingAccessMany({ ...many(CREATOR, A, B), level: "viewer", principal: { userId: MANAGER } }, deps)
+    ).rejects.toMatchObject({ statusCode: 409 })
+    await expect(setSharingInheritanceMany({ ...many(CREATOR, A, B), inherit: false }, deps)).rejects.toMatchObject({ statusCode: 409 })
+    expect(client.writes).toEqual([])
+  })
+
   it("takes the access away from all of them", async () => {
     const { client, deps, many } = setup()
 

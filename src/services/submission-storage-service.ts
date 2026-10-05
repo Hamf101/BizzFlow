@@ -393,7 +393,7 @@ export async function verifySubmissionUpload(
   return runSubmissionStorageOperation(
     "verify_submission_upload",
     {
-      storageKey: input.storageKey,
+      ...storageKeyIds(input.storageKey),
       contentType: input.contentType,
       byteSize: input.byteSize,
     },
@@ -477,7 +477,7 @@ export async function deleteSubmissionStorageObject(
 ): Promise<void> {
   return runSubmissionStorageOperation(
     "delete_superseded_submission_object",
-    { storageKey: input.storageKey },
+    storageKeyIds(input.storageKey),
     async (): Promise<void> => {
       if (!isSafePersistedStorageKey(input.storageKey)) {
         throw new SubmissionStorageServiceError(
@@ -516,7 +516,7 @@ export async function createSignedSubmissionDownloadUrl(
 ): Promise<SignedSubmissionDownloadUrl> {
   return runSubmissionStorageOperation(
     "create_submission_download_url",
-    { storageKey: input.storageKey },
+    storageKeyIds(input.storageKey),
     async (): Promise<SignedSubmissionDownloadUrl> => {
       if (!isSafePersistedStorageKey(input.storageKey)) {
         throw new SubmissionStorageServiceError(
@@ -552,6 +552,14 @@ function runSubmissionStorageOperation<T>(
   operation: () => Promise<T>
 ): Promise<T> {
   return runOperation("submission_storage", toSubmissionStorageError, operationName, identifiers, operation)
+}
+
+// A key ends in the name a person gave their file, so only its ids are logged.
+function storageKeyIds(storageKey: string): Record<string, LogValue> {
+  const [, organizationId, , submissionId, , , fileId] = storageKey.split("/")
+  const id = (value: string | undefined): string | null => (value && UUID_PATTERN.test(value) ? value : null)
+
+  return { fileId: id(fileId), organizationId: id(organizationId), submissionId: id(submissionId) }
 }
 
 function assertStoredObjectInput(input: VerifySubmissionUploadInput): void {

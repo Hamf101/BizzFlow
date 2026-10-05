@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest"
 
 import {
+  assertProductionEnv,
   getAdminSupabaseEnv,
   getAiEnv,
   getAppUrlEnv,
@@ -66,6 +67,35 @@ describe("Supabase environment validation", () => {
     })
 
     expect(() => getAdminSupabaseEnv()).toThrow("SUPABASE_URL")
+  })
+})
+
+describe("boot-time production validation", () => {
+  const productionEnv = {
+    ...validR2Env,
+    VERCEL_ENV: "production",
+    SUPABASE_URL: "https://example.supabase.co",
+    SUPABASE_PUBLISHABLE_KEY: "sb_publishable_test",
+    SUPABASE_SECRET_KEY: "sb_secret_test",
+    NEXT_PUBLIC_APP_URL: "https://app.example.com",
+    EMAILJS_SERVICE_ID: "service",
+    EMAILJS_TEMPLATE_ID: "template",
+    EMAILJS_PUBLIC_KEY: "public",
+    EMAILJS_PRIVATE_KEY: "private",
+    FILE_UPLOAD_MAX_BYTES: "1048576",
+    FILE_UPLOAD_ALLOWED_MIME_TYPES: "application/pdf",
+  }
+
+  it("fails a production deployment at boot that is missing a required value, and passes a complete one", () => {
+    setIsolatedEnv({ ...productionEnv, CLOUDFLARE_R2_ENDPOINT: undefined })
+    expect(() => assertProductionEnv()).toThrow("CLOUDFLARE_R2_ENDPOINT")
+
+    setIsolatedEnv(productionEnv)
+    expect(() => assertProductionEnv()).not.toThrow()
+
+    // Development, tests and the local production build used by e2e start without it.
+    setIsolatedEnv({})
+    expect(() => assertProductionEnv()).not.toThrow()
   })
 })
 

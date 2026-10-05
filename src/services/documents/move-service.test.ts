@@ -101,6 +101,32 @@ describe("moving files", (): void => {
     ).rejects.toMatchObject({ statusCode: 409 })
   })
 
+  it("says it changed, not that it failed, when the file is trashed while it moves", async (): Promise<void> => {
+    const client = new FakeSupabaseClient({
+      organization_memberships: [createMembershipRow("owner_admin")],
+      folders: [createFolderRow({ id: "folder-2" })],
+      documents: [createDocumentRow()],
+    })
+    const from = client.from.bind(client)
+    // Someone trashes it between the check and the write.
+    client.from = (table) => {
+      const query = from(table)
+      const update = query.update.bind(query)
+
+      query.update = (values) => {
+        if (table === "documents") client.tables.documents[0]!.lifecycle_state = "trashed"
+        return update(values)
+      }
+
+      return query
+    }
+
+    await expect(
+      moveDocument({ ...ACTOR, documentId: "document-1", folderId: "folder-2" }, createDeps(client))
+    ).rejects.toMatchObject({ statusCode: 409 })
+    expect(client.tables.documents[0]?.folder_id).toBeNull()
+  })
+
   it("moves a folder under another one", async (): Promise<void> => {
     const client = new FakeSupabaseClient({
       organization_memberships: [createMembershipRow("owner_admin")],

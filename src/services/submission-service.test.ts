@@ -352,6 +352,23 @@ describe("internal submission csv export", () => {
       getNumberedSubmissionId(1)
     ])
   })
+
+  it("keeps an export to the submissions one member started", async () => {
+    const client = createClient({
+      submissions: [
+        createNumberedSubmissionRow(1),
+        createNumberedSubmissionRow(2, { created_by: OTHER_STAFF_ID, updated_by: OTHER_STAFF_ID })
+      ]
+    })
+
+    const csv = await exportInternalSubmissionsCsv(
+      { actorUserId: MANAGER_ID, createdBy: STAFF_ID, organizationId: ORGANIZATION_ID },
+      { client: client as never }
+    )
+
+    expect(csv).toContain(getNumberedSubmissionId(1))
+    expect(csv).not.toContain(getNumberedSubmissionId(2))
+  })
 })
 
 describe("submission list pages", () => {

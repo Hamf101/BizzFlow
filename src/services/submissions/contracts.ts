@@ -102,7 +102,7 @@ export type SubmissionPage = {
 /** Input for exporting every visible submission that matches a view. */
 export type ExportSubmissionsInput = SubmissionActorInput &
   Partial<
-    Pick<ListSubmissionPageInput, "assignedTo" | "query" | "sort" | "statuses">
+    Pick<ListSubmissionPageInput, "assignedTo" | "createdBy" | "query" | "sort" | "statuses">
   >
 
 /** Input for loading one visible submission. */

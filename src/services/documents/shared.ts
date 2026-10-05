@@ -15,6 +15,7 @@ import type {
   LogValue,
 } from "@/services/documents/contracts"
 import { DocumentServiceError } from "@/services/documents/errors"
+import { OrganizationServiceError } from "@/services/organizations/errors"
 import {
   CONCURRENT_CHANGE_MESSAGE,
   isSerializationFailure,
@@ -73,7 +74,7 @@ function toDocumentServiceError(error: unknown): DocumentServiceError {
     return error
   }
 
-  if (error instanceof DocumentStorageServiceError) {
+  if (error instanceof DocumentStorageServiceError || error instanceof OrganizationServiceError) {
     return new DocumentServiceError(error.message, error.statusCode)
   }
 

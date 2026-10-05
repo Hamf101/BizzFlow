@@ -97,7 +97,8 @@ export async function sendEmailJsEmail(
             : {}),
           template_params: {
             to_email: input.payload.toEmail,
-            subject: input.payload.subject,
+            // A subject is a header line: a CR or LF from a typed name or title must not start another.
+            subject: input.payload.subject.replace(/[\r\n]+/g, " "),
             message_html: input.payload.html,
             message_text: input.payload.text,
             delivery_reference: input.deliveryReference,

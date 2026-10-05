@@ -76,6 +76,9 @@ export async function embedPdfLibImage(
       image.format === "png"
         ? await context.document.embedPng(bytes)
         : await context.document.embedJpg(bytes)
+    if (image.format === "png") {
+      decodedPngs.add(embedded)
+    }
     context.imageCache.set(cacheKey, embedded)
     return embedded
   } catch {
@@ -108,6 +111,9 @@ export function fitPdfImage(
   }
 }
 
+// Every PNG pdf-lib has decoded, embedded or stored, whatever its cache key.
+const decodedPngs = new WeakSet<PDFImage>()
+
 // The render's cache holds every image decoded so far, once each, so its PNG
 // entries are exactly the pixels this render has allocated.
 function countDecodedPngPixels(
@@ -115,8 +121,8 @@ function countDecodedPngPixels(
 ): number {
   let pixels = 0
 
-  for (const [dataUrl, image] of imageCache) {
-    if (dataUrl.startsWith("data:image/png;")) {
+  for (const image of imageCache.values()) {
+    if (decodedPngs.has(image)) {
       pixels += image.width * image.height
     }
   }

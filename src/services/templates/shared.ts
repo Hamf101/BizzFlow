@@ -47,6 +47,7 @@ import type {
 } from "./contracts"
 import { TemplateServiceError } from "./errors"
 import { loadActiveMembership } from "@/services/organizations/active-membership"
+import { requireStoredImages, TemplateImageServiceError } from "@/services/template-image-service"
 import { mapImageAssets, PRINT_MAX_WIDTH } from "@/types/template-images"
 import { runOperation, type LogValue } from "@/services/operation"
 
@@ -341,6 +342,27 @@ export function normalizeCategory(
   }
 
   return category
+}
+
+/**
+ * Refuses pictures a PDF could not render, or that never finished uploading.
+ * Only pictures new since `previous` are looked for in storage.
+ *
+ * @param content - The content about to be kept.
+ * @param previous - What was kept before, or null.
+ * @param organizationId - Whose storage the pictures are in.
+ * @throws TemplateServiceError when a picture cannot be used.
+ */
+export async function requireUsableImages(
+  content: TemplateContent,
+  previous: TemplateContent | null,
+  organizationId: string
+): Promise<void> {
+  assertTemplateImagesRenderable(content)
+  // A picture that didn't finish uploading is the author's to fix, not a fault here.
+  await requireStoredImages(content, previous, organizationId).catch((error: unknown) => {
+    throw error instanceof TemplateImageServiceError ? new TemplateServiceError(error.message, error.statusCode) : error
+  })
 }
 
 /**

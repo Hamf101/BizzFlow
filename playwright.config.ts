@@ -20,6 +20,9 @@ export default defineConfig({
   // Never let a `test.only` slip into main.
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 2 : 0,
+  // A retry still runs to collect a trace, but a test that passes only on
+  // retry fails CI instead of hiding a flake.
+  failOnFlakyTests: Boolean(process.env.CI),
   // Axe scans and the role/route matrix are intentionally read-heavy. Keeping
   // local and CI runs at two workers prevents the shared Supabase fixture from
   // becoming the bottleneck and turning healthy journeys into timeout flakes.

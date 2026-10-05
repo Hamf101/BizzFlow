@@ -24,20 +24,20 @@ const R2_ENV = {
 
 type Signed = { command: PutObjectCommand | GetObjectCommand; options: { expiresIn?: number; signingDate?: Date } }
 
-function membershipClient(role: string | null) {
+function membershipClient(role: string | null, permissions: string[] | null = null) {
   const query = {
     eq: () => query,
-    maybeSingle: async () => ({ data: role ? { role, role_definition: null } : null, error: null }),
+    maybeSingle: async () => ({ data: role ? { role, role_definition: permissions && { permissions } } : null, error: null }),
     select: () => query,
   }
 
   return { from: () => query } as never
 }
 
-function harness(role: string | null = "manager", now = new Date("2026-09-24T10:05:00Z")) {
+function harness(role: string | null = "manager", now = new Date("2026-09-24T10:05:00Z"), permissions: string[] | null = null) {
   const signed: Signed[] = []
   const deps = {
-    client: membershipClient(role),
+    client: membershipClient(role, permissions),
     createId: () => ASSET_ID,
     now: () => now,
     r2Client: {} as never,
@@ -79,6 +79,17 @@ describe("storing a picture", () => {
         expect.objectContaining({ ContentLength: 50_000, ContentType: "image/jpeg", IfNoneMatch: "*", Key: `organizations/${ORG_ID}/images/${ASSET_ID}/print` }),
       ])
     )
+  })
+
+  it("lets a role that may only create templates add pictures to them", async () => {
+    const { deps } = harness("staff", undefined, ["templates:create", "templates:view"])
+
+    await expect(
+      createTemplateImageUpload(
+        { actorUserId: ACTOR_ID, copies: { display: COPY, original: COPY, print: COPY }, height: 300, organizationId: ORG_ID, type: "jpeg", width: 400 },
+        deps
+      )
+    ).resolves.toMatchObject({ asset: { id: ASSET_ID } })
   })
 
   it.each([["external_reviewer"], [null]])("refuses someone who can't author (%s)", async (role) => {

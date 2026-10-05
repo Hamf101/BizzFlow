@@ -95,11 +95,16 @@ export async function moveDocument(
           .eq("org_id", input.organizationId)
           .eq("lifecycle_state", "active")
           .select(DOCUMENT_COLUMNS)
-          .single()
+          .maybeSingle()
       )
 
-      if (error || !data) {
+      if (error) {
         throw createMoveError(error, "Unable to move the file.")
+      }
+
+      // It was archived or trashed after the check above.
+      if (!data) {
+        throw new DocumentServiceError("Only an active file can move.", 409)
       }
 
       const moved = mapDocument(data as DocumentRow)
@@ -201,11 +206,16 @@ export async function moveFolder(
           .eq("org_id", input.organizationId)
           .eq("lifecycle_state", "active")
           .select(FOLDER_COLUMNS)
-          .single()
+          .maybeSingle()
       )
 
-      if (error || !data) {
+      if (error) {
         throw createMoveError(error, "Unable to move the folder.")
+      }
+
+      // It was archived or trashed after the check above.
+      if (!data) {
+        throw new DocumentServiceError("Only an active folder can move.", 409)
       }
 
       const moved = mapFolder(data as FolderRow)

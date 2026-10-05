@@ -52,7 +52,7 @@ export async function sendResendEmail(
       body: JSON.stringify({
         from: environment.RESEND_FROM_EMAIL,
         to: [input.payload.toEmail],
-        subject: input.payload.subject,
+        subject: input.payload.subject.replace(/[\r\n]+/g, " "),
         html: input.payload.html,
         text: input.payload.text,
         ...(input.payload.replyTo ? { reply_to: input.payload.replyTo } : {}),

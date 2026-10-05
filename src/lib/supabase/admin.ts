@@ -326,8 +326,8 @@ type AdminTaskRow = Record<string, unknown> & {
   assigned_by: string | null
   assigned_at: string | null
   submission_id: string | null
-  created_by: string
-  updated_by: string
+  created_by: string | null
+  updated_by: string | null
   completed_at: string | null
   revision: number
   created_at: string
@@ -346,7 +346,7 @@ type AdminTaskReminderRow = Record<string, unknown> & {
   attempt_count: number
   last_error: string | null
   sent_at: string | null
-  created_by: string
+  created_by: string | null
   created_at: string
   updated_at: string
 }
@@ -929,12 +929,6 @@ export type AdminDatabase = {
         Args: {
           target_object_id: string
           target_lease_token: string
-        }
-        Returns: boolean
-      }
-      increment_public_form_link_submission_count: {
-        Args: {
-          p_token: string
         }
         Returns: boolean
       }

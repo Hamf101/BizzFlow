@@ -145,6 +145,13 @@ describe("task persistence types", () => {
     expect(task.submissionId).toBeNull()
   })
 
+  it("keeps a task and its reminder whose creator's account was deleted", () => {
+    const task = parseTaskRow({ ...OPEN_TASK_ROW, created_by: null, updated_by: null })
+    const reminder = parseTaskReminderRow({ ...PENDING_REMINDER_ROW, created_by: null })
+
+    expect([task.createdBy, task.updatedBy, reminder.createdBy]).toEqual([null, null, null])
+  })
+
   it.each(["open", "in_progress", "cancelled"] as const)(
     "preserves assignment metadata for a %s task",
     (status) => {
@@ -220,7 +227,7 @@ describe("task persistence types", () => {
       reason: "description over the column limit",
     },
     { row: { ...OPEN_TASK_ROW, revision: 0 }, reason: "non-positive revision" },
-    { row: { ...OPEN_TASK_ROW, created_by: null }, reason: "missing author" },
+    { row: { ...OPEN_TASK_ROW, created_by: "someone" }, reason: "non-uuid author" },
     { row: { ...OPEN_TASK_ROW, org_id: "org-1" }, reason: "non-uuid tenant" },
     {
       row: { ...OPEN_TASK_ROW, due_at: "2026-08-05" },

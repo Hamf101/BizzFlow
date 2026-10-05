@@ -563,11 +563,11 @@ export async function executeTemplateFlow(
 
   const [aiRuntime, history, authorName] = await Promise.all([
     loadAiRuntime(deps, request, startedAt),
-    (deps.loadHistory ?? loadFlowHistory)({
+    (deps.loadHistory ?? ((history) => loadFlowHistory(history, deps.client)))({
       organizationId: request.organizationId,
       templateId: request.templateId
     }),
-    (deps.resolveAuthorName ?? resolveFlowAuthorName)(request.actorUserId)
+    (deps.resolveAuthorName ?? ((actorUserId) => resolveFlowAuthorName(actorUserId, deps.client)))(request.actorUserId)
   ])
   const createId = deps.createId ?? randomUUID
   const providerResult = await requestFlowProvider({
@@ -609,7 +609,7 @@ export async function executeTemplateFlow(
   let persistenceWarning: string | null = null
 
   try {
-    await (deps.persistMessages ?? persistFlowMessages)({
+    await (deps.persistMessages ?? ((turn) => persistFlowMessages(turn, deps.client)))({
       actorUserId: request.actorUserId,
       messages,
       proposalReceipt:
@@ -747,7 +747,7 @@ export async function listTemplateFlowMessages(
     templateId: input.templateId
   })
 
-  return (deps.loadHistory ?? loadFlowHistory)({
+  return (deps.loadHistory ?? ((history) => loadFlowHistory(history, deps.client)))({
     organizationId: input.organizationId,
     templateId: input.templateId
   })
@@ -3024,11 +3024,13 @@ async function requireTemplateManagement(
   }
 }
 
-async function loadFlowHistory(input: {
-  organizationId: string
-  templateId: string
-}): Promise<TemplateFlowMessage[]> {
-  const client = createAdminClient()
+async function loadFlowHistory(
+  input: {
+    organizationId: string
+    templateId: string
+  },
+  client: TemplateFlowClient = createAdminClient()
+): Promise<TemplateFlowMessage[]> {
   const { data, error } = await client
     .from("template_flow_messages")
     .select("*")
@@ -3051,14 +3053,16 @@ async function loadFlowHistory(input: {
     .map(mapFlowMessageRow)
 }
 
-async function persistFlowMessages(input: {
-  messages: [TemplateFlowMessage, TemplateFlowMessage]
-  proposalReceipt: TemplateFlowProposalReceipt | null
-  organizationId: string
-  templateId: string
-  actorUserId: string
-}): Promise<void> {
-  const client = createAdminClient()
+async function persistFlowMessages(
+  input: {
+    messages: [TemplateFlowMessage, TemplateFlowMessage]
+    proposalReceipt: TemplateFlowProposalReceipt | null
+    organizationId: string
+    templateId: string
+    actorUserId: string
+  },
+  client: TemplateFlowClient = createAdminClient()
+): Promise<void> {
   const rows = input.messages.map(
     (message: TemplateFlowMessage): TemplateFlowMessageRow => ({
       id: message.id,
@@ -3089,8 +3093,10 @@ async function persistFlowMessages(input: {
   }
 }
 
-async function resolveFlowAuthorName(actorUserId: string): Promise<string> {
-  const client = createAdminClient()
+async function resolveFlowAuthorName(
+  actorUserId: string,
+  client: TemplateFlowClient = createAdminClient()
+): Promise<string> {
   const { data, error } = await client
     .from("profiles")
     .select("full_name,email")

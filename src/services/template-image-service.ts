@@ -88,7 +88,7 @@ export async function createTemplateImageUpload(
 ): Promise<TemplateImageUpload> {
   const subject = await requireMember(input.organizationId, input.actorUserId, deps)
 
-  if (!canPerformOrganizationAction(subject, "templates:manage") && !canPerformOrganizationAction(subject, "documents:create")) {
+  if (!(["templates:create", "templates:manage", "documents:create"] as const).some((action) => canPerformOrganizationAction(subject, action))) {
     throw new TemplateImageServiceError("You cannot add pictures.", 403)
   }
 

@@ -14,8 +14,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { LocalDate } from "@/components/ui/local-date"
 import { getClientIp } from "@/lib/client-ip"
-import { formatMediumDateTime } from "@/lib/date-format"
 import { readSignedFlash } from "@/lib/form-utils"
 import { getPageErrorMessage } from "@/lib/page-errors"
 import { checkRateLimit, RateLimitError } from "@/lib/rate-limit"
@@ -213,9 +213,13 @@ function PublicSigningStatusCard({
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium">{signer.name}</p>
                 <p className="text-xs text-muted-foreground">
-                  {signer.signedAt
-                    ? `Signed ${formatMediumDateTime(signer.signedAt)}`
-                    : "Signature required"}
+                  {signer.signedAt ? (
+                    <>
+                      Signed <LocalDate time value={signer.signedAt} />
+                    </>
+                  ) : (
+                    "Signature required"
+                  )}
                 </p>
               </div>
               <SigningRecipientStatusBadge status={signer.status} />

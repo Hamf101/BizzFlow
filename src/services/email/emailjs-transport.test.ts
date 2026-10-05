@@ -72,6 +72,20 @@ describe("sendEmailJsEmail", () => {
     })
   })
 
+  // A name or title a member typed ends up in the subject, a header line.
+  it("keeps a subject to one line", async () => {
+    const fetcher = vi.fn().mockResolvedValue(new Response("OK", { status: 200 }))
+
+    await sendEmailJsEmail(
+      createInput({ payload: { ...createInput().payload, subject: "Ana sent you “Lease\r\nBcc: all@example.com”" } }),
+      environment,
+      { fetcher, scheduleRequest: runImmediately }
+    )
+
+    const [, request] = fetcher.mock.calls[0] as [string, RequestInit]
+    expect(JSON.parse(String(request.body)).template_params.subject).toBe("Ana sent you “Lease Bcc: all@example.com”")
+  })
+
   it("includes reply-to only when one is configured", async () => {
     const fetcher = vi.fn().mockResolvedValue(new Response("OK", { status: 200 }))
 
