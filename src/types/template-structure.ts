@@ -1,3 +1,4 @@
+import { renameInFormula } from "@/types/template-formula"
 import {
   type TemplateBlock,
   type TemplateContentV3,
@@ -1159,6 +1160,9 @@ export function updateTemplateBlock(
         dropdownValueRemaps
       )
     )
+    .map((candidate: TemplateBlock): TemplateBlock =>
+      priorBlock ? renameFormulaReferences(candidate, priorBlock, normalizedBlock) : candidate
+    )
 
   return reconcileTemplateStructure(
     content,
@@ -1166,6 +1170,45 @@ export function updateTemplateBlock(
     getIndexedSections(content),
     getIndexedFieldGroups(content)
   )
+}
+
+// A formula names answers by their labels, so renaming a number, a table or
+// one of its columns renames it in every formula that names it.
+function renameFormulaReferences(candidate: TemplateBlock, prior: TemplateBlock, next: TemplateBlock): TemplateBlock {
+  const renames: Array<{ from: string; to: string; table: boolean; ownColumns: boolean }> = []
+
+  if ("label" in prior && "label" in next && prior.label !== next.label && (prior.type === "text_field" || prior.type === "table_field")) {
+    renames.push({ from: prior.label, to: next.label, table: prior.type === "table_field", ownColumns: false })
+  }
+
+  if (prior.type === "table_field" && next.type === "table_field" && prior.columns.length === next.columns.length) {
+    for (const [at, column] of prior.columns.entries()) {
+      const label = next.columns[at]?.label ?? column.label
+
+      if (label !== column.label) {
+        renames.push({ from: `${prior.label}.${column.label}`, to: `${next.label}.${label}`, table: false, ownColumns: false })
+        renames.push({ from: column.label, to: label, table: false, ownColumns: true })
+      }
+    }
+  }
+
+  const rename = (formula: string | undefined, own: boolean): string | undefined =>
+    formula === undefined
+      ? undefined
+      : renames.filter((change) => !change.ownColumns || own).reduce((written, change) => renameInFormula(written, change.from, change.to, change.table), formula)
+
+  if (renames.length === 0) return candidate
+  if (candidate.type === "text_field" && candidate.formula !== undefined) return { ...candidate, formula: rename(candidate.formula, false) }
+  if (candidate.type === "table_field" && candidate.columns.some((column) => column.formula !== undefined)) {
+    return {
+      ...candidate,
+      columns: candidate.columns.map((column) =>
+        column.formula === undefined ? column : { ...column, formula: rename(column.formula, candidate.id === next.id) }
+      ),
+    }
+  }
+
+  return candidate
 }
 
 /**

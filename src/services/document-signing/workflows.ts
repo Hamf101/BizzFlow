@@ -12,6 +12,7 @@ import {
   deriveChangedAnswerPatch,
   normalizeAnswerPatch,
   pruneHiddenAnswerPatch,
+  withCalculatedAnswers,
   pruneHiddenAnswerValues,
   templateRequiresRecipientInitials,
 } from "@/services/document-signing/answer-validation"
@@ -211,10 +212,10 @@ export async function saveGeneratedDocumentAnswers(
         input.values,
         { sent: view.workflowStatus !== "draft" || view.recipients.length > 0 }
       )
-      const visiblePatch = pruneHiddenAnswerPatch(
+      const visiblePatch = withCalculatedAnswers(
         content,
         view.answers,
-        normalizedPatch
+        pruneHiddenAnswerPatch(content, view.answers, normalizedPatch)
       )
       const persistedValues = await mergeGeneratedDocumentAnswers(
         client,
@@ -776,10 +777,10 @@ export async function completePublicDocumentSigning(
         submittedValues,
         baselineValues
       )
-      const answerPatch = pruneHiddenAnswerPatch(
+      const answerPatch = withCalculatedAnswers(
         view.document.templateSnapshot,
         view.answers,
-        changedAnswerPatch
+        pruneHiddenAnswerPatch(view.document.templateSnapshot, view.answers, changedAnswerPatch)
       )
       // An answer someone else has signed is kept as signed by
       // complete_document_recipient_signature, under its row lock.

@@ -1,3 +1,4 @@
+import { parseSubmissionRow } from "@/services/submissions/shared"
 import type {
   CreateInternalSubmissionDraftInput,
   SaveInternalSubmissionDraftInput,
@@ -21,7 +22,6 @@ import {
   validateSubmissionForSubmit as defaultValidateSubmissionForSubmit,
 } from "@/services/submissions/validation"
 import {
-  parseSubmissionRow,
   type Submission,
 } from "@/types/submission"
 import { parseTemplateContent } from "@/types/template"

@@ -33,6 +33,7 @@ import {
 import type { DocumentLifecycleState } from "@/types/document"
 import { MAX_SIGNING_RECIPIENTS } from "@/types/box-signers"
 import { IMAGE_DATA_URL_PATTERN, MAX_IMAGE_DATA_URL_LENGTH } from "@/types/template-limits"
+import { formulaProblem, MAX_FORMULA_LENGTH } from "@/types/template-formula"
 import { visibilityConditions } from "@/types/template-visibility"
 
 /** Maximum serialized size accepted for one complete guided document layout. */
@@ -280,6 +281,9 @@ export const dividerBlockSchema = z
   })
   .strict()
 
+const formulaSchema = z.string().trim().min(1).max(MAX_FORMULA_LENGTH)
+const isNumeric = ({ format }: { format?: string }): boolean => format === "number" || format === "money"
+
 /** What a typed answer holds; absent, any text. Each checks what is written and suits a phone's keyboard. */
 export const TEXT_FORMATS = ["number", "money", "email", "phone", "time", "month"] as const
 
@@ -296,12 +300,20 @@ export const textFieldBlockObjectSchema = z
     prefix: z.string().trim().min(1).max(12).optional(),
     suffix: z.string().trim().min(1).max(24).optional(),
     // One box a character, as a reference or account number is printed.
-    comb: z.number().int().min(2).max(40).optional()
+    comb: z.number().int().min(2).max(40).optional(),
+    // A number or amount worked out from earlier answers, as a spreadsheet's
+    // cell is: "{Qty} * {Unit price}". It is never typed in.
+    formula: formulaSchema.optional()
   })
   .strict()
 
 /** Single-line or multiline text input block. */
-export const textFieldBlockSchema = textFieldBlockObjectSchema.refine((block) => !(block.comb && block.multiline), { message: "Comb boxes hold one line.", path: ["comb"] })
+export const textFieldBlockSchema = textFieldBlockObjectSchema
+  .refine((block) => !(block.comb && block.multiline), { message: "Comb boxes hold one line.", path: ["comb"] })
+  .refine((block) => !block.formula || (isNumeric(block) && !block.multiline && !block.comb), {
+    message: "Only a number or amount on one line is worked out by a formula.",
+    path: ["formula"]
+  })
 
 /** How a date is written, built from three choices the author makes. */
 export const dateFormatSchema = z
@@ -377,7 +389,19 @@ export const tableFieldBlockSchema = z
     ...fieldBlockShape,
     type: z.literal("table_field"),
     columns: z
-      .array(z.object({ label: z.string().trim().min(1).max(60), format: z.enum(TABLE_COLUMN_FORMATS).optional() }).strict())
+      .array(
+        z
+          .object({
+            label: z.string().trim().min(1).max(60),
+            format: z.enum(TABLE_COLUMN_FORMATS).optional(),
+            // Worked out on each row from the columns to its left.
+            formula: formulaSchema.optional(),
+            // Added up on a Total row under the table.
+            total: z.literal(true).optional()
+          })
+          .strict()
+          .refine((column) => (!column.formula && !column.total) || isNumeric(column), "Only a number or amount column is worked out or totalled.")
+      )
       .min(1)
       .max(8)
       .refine((columns) => distinctWords(columns.map((column) => column.label)), "Each column is named once."),
@@ -755,6 +779,26 @@ function validateVersionThreeStructure(
   validateFieldGroups(content, blockIndexById, sectionStartIndices, context)
   validateBlockRules(content, blockIndexById, context)
   validateFieldVisibility(content, blockIndexById, context)
+  validateFormulas(content, context)
+}
+
+function validateFormulas(content: TemplateContentV3, context: z.RefinementCtx): void {
+  for (const [index, block] of content.blocks.entries()) {
+    const formulas: Array<[string | undefined, (string | number)[], number | undefined]> =
+      block.type === "text_field"
+        ? [[block.formula, ["formula"], undefined]]
+        : block.type === "table_field"
+          ? block.columns.map((column, at) => [column.formula, ["columns", at, "formula"], at])
+          : []
+
+    for (const [formula, path, column] of formulas) {
+      const problem = formula === undefined ? null : formulaProblem(content.blocks, index, formula, column)
+
+      if (problem !== null) {
+        context.addIssue({ code: "custom", message: problem, path: ["blocks", index, ...path] })
+      }
+    }
+  }
 }
 
 function validateSections(

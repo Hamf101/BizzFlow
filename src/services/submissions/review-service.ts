@@ -1,3 +1,4 @@
+import { parseSubmissionRow } from "@/services/submissions/shared"
 import type {
   CreateInternalSubmissionCommentInput,
   SubmissionServiceClient,
@@ -18,7 +19,6 @@ import {
 import { getOrganizationRoleFromSubject, type OrganizationRole } from "@/lib/permissions"
 import { readReviewers } from "@/services/submissions/reviewer-service"
 import {
-  parseSubmissionRow,
   type Submission,
 } from "@/types/submission"
 import {

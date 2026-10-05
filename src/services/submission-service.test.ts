@@ -27,6 +27,7 @@ import {
 import { PostgrestReadQuery } from "@/services/postgrest-fake.test-support"
 import { parseTemplateContent, type TemplateContent } from "@/types/template"
 import { createStructuredAnswerContent } from "@/types/template-answer.test-support"
+import { createQuoteContent } from "@/types/template-calculation.test-support"
 
 type FakeRow = Record<string, unknown>
 type FakeTables = Record<string, FakeRow[]>
@@ -1386,6 +1387,32 @@ describe("suggested changes", () => {
       "suggest_submission_answers",
       expect.objectContaining({ target_values: { tools: ["Ladder", "Saw"] } })
     )
+  })
+
+  it("suggests the answers a person gives, never a worked-out one, and reads every worked-out answer afresh once one is accepted", async () => {
+    const quote = createQuoteContent()
+    const stored = { items: [["Desk", "2", "10.00", "20.00"]], subtotal: "20.00", vat: "4.00", total: "24.00" }
+    const client = createClient({
+      submissions: [createAssignedSubmissionRow({ assigned_to: MANAGER_ID, template_snapshot: quote, values: stored })],
+      submission_reviewers: [createReviewerRow(MANAGER_ID)]
+    })
+    client.rpc.mockResolvedValue({ data: 1, error: null })
+
+    await suggest(MANAGER_ID, { items: [["Desk", "3", "10.00", ""]], total: "1" }, client)
+    expect(client.rpc).toHaveBeenCalledWith(
+      "suggest_submission_answers",
+      expect.objectContaining({ target_values: { items: [["Desk", "3", "10.00", "30.00"]] } })
+    )
+
+    // The database changes only the accepted answer; the totals follow it as it is read.
+    client.rpc.mockResolvedValue({ data: createAssignedSubmissionRow({ template_snapshot: quote, values: { ...stored, items: [["Desk", "3", "10.00", "30.00"]] } }), error: null })
+
+    const accepted = await decideSubmissionSuggestion(
+      { accept: true, actorUserId: STAFF_ID, organizationId: ORGANIZATION_ID, submissionId: SUBMISSION_ID, suggestionId: "90000000-0000-4000-8000-000000000001" },
+      { client: client as never }
+    )
+
+    expect(accepted.values).toMatchObject({ subtotal: "30.00", vat: "6.00", total: "36.00" })
   })
 
   it("turns away staff, outside reviewers, and a form with nothing changed before the database is asked", async () => {

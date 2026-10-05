@@ -21,6 +21,7 @@ import {
   TOKEN_ONE,
 } from "@/services/document-signing-service.test-support"
 import { parseTemplateContent, type TemplateContent } from "@/types/template"
+import { createQuoteContent } from "@/types/template-calculation.test-support"
 
 describe("document signing answer persistence", () => {
   it("keeps the facade error class identical for instanceof checks", () => {
@@ -414,6 +415,31 @@ describe("document signing answer persistence", () => {
       expect(signerTables.document_answers[0].values).toEqual({})
       expect(signerTables.document_signing_recipients[0].status).toBe("pending")
     }
+  })
+
+  it("stores the answers a formula works out as the server works them out, whatever a page or a signer sends", async () => {
+    const tables = createBaseTables()
+    tables.documents[0].template_snapshot = createQuoteContent()
+    tables.document_answers[0].values = {}
+    const client = new FakeClient(tables)
+    const saved = await saveGeneratedDocumentAnswers(
+      { actorUserId: MANAGER_ID, organizationId: ORG_ID, documentId: DOCUMENT_ID, values: { items: [["Desk", "2", "10.00", "1"]], total: "1" } },
+      { client: client as never }
+    )
+
+    expect(saved.answers).toMatchObject({ items: [["Desk", "2", "10.00", "20.00"]], subtotal: "20.00", vat: "4.00", total: "24.00" })
+
+    tables.document_signing_recipients.push(createRecipientRow(RECIPIENT_ONE_ID, TOKEN_ONE, "Avery Morgan", "avery@example.com"))
+    tables.document_answers[0].workflow_status = "awaiting_signatures"
+
+    // A signer who changes the quantity changes the total with it; the page's total counts for nothing.
+    const signed = await completePublicDocumentSigning(
+      { token: TOKEN_ONE, values: { items: [["Desk", "3", "10.00", ""]], total: "0.01" }, baselineValues: saved.answers, signatureDataUrl: DRAWING_DATA_URL },
+      { client: client as never, now: (): Date => NOW }
+    )
+
+    expect(tables.document_answers[0].values).toMatchObject({ items: [["Desk", "3", "10.00", "30.00"]], subtotal: "30.00", total: "36.00" })
+    expect(signed.answers).toMatchObject({ total: "36.00" })
   })
 
   it("prunes a stale hidden value at read and across controller patches", async () => {

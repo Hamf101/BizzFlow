@@ -1,4 +1,5 @@
 import { formatDateAnswer } from "@/lib/date-format"
+import { calculateTemplateAnswers } from "@/types/template-calculation"
 import { createTemplateRenderPlan } from "@/services/templates/template-render-plan"
 import { boxNote, boxSigner, withBoxMarks } from "@/types/box-signers"
 import {
@@ -84,9 +85,10 @@ export function normalizePdfInput(
     }
   }
 
-  // A drawn box prints only its own signer's mark, never a drawing anyone
+  // A document prints what its formulas work out, not what it was handed, and
+  // a drawn box prints only its own signer's mark, never a drawing anyone
   // else stored as its answer.
-  const answers = withBoxMarks(content.blocks, input.answers, signers)
+  const answers = withBoxMarks(content.blocks, calculateTemplateAnswers(content, input.answers), signers)
 
   return {
     ...input,

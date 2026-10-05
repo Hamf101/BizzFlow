@@ -19,6 +19,7 @@ import { normalizePdfInput } from "@/services/document-pdf/shared"
 import type { PdfFlowItem, PdfPagePlan } from "@/services/document-pdf/types"
 import { createPdfLayoutMetrics, getPdfColumnFrames, type PdfLayoutMetrics } from "@/services/document-pdf/layout"
 import { resizeTemplateLayout } from "@/services/templates/template-render-plan"
+import { createQuoteContent } from "@/types/template-calculation.test-support"
 import {
   createBlankTemplateContent,
   type TemplateContent
@@ -607,6 +608,19 @@ describe("document PDF service", () => {
     expect(fillable.fields).toEqual(["pets", "pet_name"])
     expect(answered.words).not.toContain("If Pets")
     expect(answered.words).not.toContain("Pet name")
+  })
+
+  it("prints what each formula works out, never a total it was handed", { timeout: PDF_RENDER_TIMEOUT_MS }, async () => {
+    const input = createPdfInput({ repeatHeader: false, repeatFooter: false })
+
+    input.content = createQuoteContent()
+    input.answers = { items: [["Desk", "2.5", "10.01", "1"]], total: "1.00" }
+    input.signers = []
+
+    const words = drawnTexts(await PDFDocument.load(await renderGeneratedDocumentPdf(input)), 0).map(({ text }) => text)
+
+    expect(words).toEqual(expect.arrayContaining(["25.03", "30.04"]))
+    expect(words).not.toContain("1.00")
   })
 
   it("prints a choice shown as radio buttons one option a line, inside the room the planner left, as one radio group", { timeout: PDF_RENDER_TIMEOUT_MS }, async () => {

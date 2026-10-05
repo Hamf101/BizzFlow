@@ -1,4 +1,5 @@
 import { toClientFile } from "@/lib/r2/stored-file"
+import { parseSubmissionRow } from "@/services/submissions/shared"
 import { getOrganizationRoleFromSubject } from "@/lib/permissions"
 import { readCountedPage } from "@/services/postgrest-paging"
 import type {
@@ -32,7 +33,6 @@ import {
   SUBMISSION_COLUMNS,
 } from "@/services/submissions/shared"
 import {
-  parseSubmissionRow,
   type Submission,
   type SubmissionSortKey,
   type SubmissionStatus,

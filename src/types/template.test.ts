@@ -1,3 +1,4 @@
+import { createQuoteContent } from "@/types/template-calculation.test-support"
 import { describe, expect, it } from "vitest"
 
 import { formatDateAnswer } from "@/lib/date-format"
@@ -155,6 +156,38 @@ describe("template content schema", () => {
     // Combined rules are two to four.
     expect(parses({ match: "all", conditions: [rule(2, "answered")] })).toBe(false)
     expect(parses({ match: "all", conditions: Array.from({ length: 5 }, () => rule(2, "answered")) })).toBe(false)
+  })
+
+  it("works out answers only by a formula it can run: earlier numbers and amounts, a column to the left, a whole column only inside SUM", () => {
+    const quote = createQuoteContent()
+    const table = quote.blocks[0] as object
+    const parses = (overrides: Record<number, object>): boolean => {
+      try {
+        createQuoteContent(overrides)
+        return true
+      } catch {
+        return false
+      }
+    }
+    const field = (index: number, extra: object) => ({ ...(quote.blocks[index] as object), ...extra })
+    const column = (extra: object) => ({ ...table, columns: [...(table as { columns: object[] }).columns.slice(0, 3), { label: "Amount", format: "money", ...extra }] })
+
+    expect(quote.blocks).toHaveLength(4)
+    expect(parses({ 3: field(3, { formula: "ROUND(MAX({Subtotal}, {VAT}) / 3, 2)" }) })).toBe(true)
+    // Only a number or amount is worked out, on one line.
+    expect(parses({ 1: field(1, { format: undefined }) })).toBe(false)
+    expect(parses({ 1: field(1, { multiline: true }) })).toBe(false)
+    // A formula names what comes before it, and so never itself.
+    expect(parses({ 2: field(2, { formula: "{Total} * 20%" }) })).toBe(false)
+    expect(parses({ 2: field(2, { formula: "{VAT} + 1" }) })).toBe(false)
+    expect(parses({ 2: field(2, { formula: "{Postage}" }) })).toBe(false)
+    expect(parses({ 2: field(2, { formula: "{Items.Amount} * 2" }) })).toBe(false)
+    expect(parses({ 2: field(2, { formula: "{Subtotal} *" }) })).toBe(false)
+    // A column works from the columns to its left; words are no number.
+    expect(parses({ 0: column({ formula: "{Amount} * 2" }) })).toBe(false)
+    expect(parses({ 0: column({ formula: "{Item} * 2" }) })).toBe(false)
+    expect(parses({ 0: column({ format: "date", formula: "{Qty}" }) })).toBe(false)
+    expect(parses({ 0: column({ format: undefined, total: true, formula: undefined }) })).toBe(false)
   })
 
   it("rejects later, self, or incompatible visibility sources", () => {

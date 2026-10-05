@@ -19,7 +19,8 @@ import {
   requireSubmissionPermission,
   runSubmissionOperation,
 } from "@/services/submissions/shared"
-import { parseSubmissionRow, type Submission } from "@/types/submission"
+import { parseSubmissionRow } from "@/services/submissions/shared"
+import type { Submission } from "@/types/submission"
 import { parseSubmissionReviewerRow, type SubmissionReviewer, type SubmissionReviewTally } from "@/types/submission-review"
 import { LOWERCASE_UUID_PATTERN } from "@/services/input"
 
