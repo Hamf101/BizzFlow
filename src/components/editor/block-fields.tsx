@@ -25,6 +25,8 @@ import { boxSigner, MAX_SIGNING_RECIPIENTS } from "@/types/box-signers"
 import { MAX_FIELD_LABEL_LENGTH, type TemplateBlock } from "@/types/template"
 import { evaluateTemplateDropdownOptionEdit } from "@/types/template-structure"
 
+import { VisibilityRuleFields } from "./visibility-rule-fields"
+
 // A choice shows as a dropdown, or with every option on show as radio
 // buttons, or as checkboxes when any number may be ticked.
 const CHOICE_DISPLAYS = [
@@ -793,116 +795,9 @@ function FieldBlockFields({
         label="Required field"
         onChange={(required: boolean): void => onChange({ ...block, required })}
       />
-      <VisibilityFields block={block} blocks={blocks} onChange={onChange} />
       {children}
+      <VisibilityRuleFields block={block} blocks={blocks} onChange={onChange} />
     </div>
-  )
-}
-
-function VisibilityFields({
-  block,
-  blocks,
-  onChange,
-}: {
-  block: TemplateFieldBlock
-  blocks: readonly TemplateBlock[]
-  onChange: (block: TemplateBlock) => void
-}): ReactElement {
-  const blockIndex = blocks.findIndex(
-    (candidate: TemplateBlock): boolean => candidate.id === block.id
-  )
-  const sources = blocks.slice(0, Math.max(0, blockIndex)).filter(
-    (
-      candidate: TemplateBlock
-    ): candidate is Extract<
-      TemplateBlock,
-      { type: "checkbox_field" | "dropdown_field" }
-    > =>
-      candidate.type === "checkbox_field" ||
-      (candidate.type === "dropdown_field" && candidate.options.length > 0)
-  )
-  const condition = block.visibleWhen
-  const source = sources.find(
-    (candidate): boolean => candidate.id === condition?.sourceBlockId
-  )
-
-  function selectSource(sourceBlockId: string): void {
-    const next = sources.find((candidate): boolean => candidate.id === sourceBlockId)
-
-    onChange({
-      ...block,
-      visibleWhen: next
-        ? {
-            sourceBlockId: next.id,
-            operator: "equals",
-            value: next.type === "checkbox_field" ? true : (next.options[0] ?? ""),
-          }
-        : undefined,
-    })
-  }
-
-  return (
-    <fieldset className="grid gap-3 border-t border-border pt-4">
-      <legend className="text-sm font-semibold">Conditional visibility</legend>
-      <Field>
-        <FieldLabel htmlFor={`${block.id}-visibility-source`}>
-          Show this field when
-        </FieldLabel>
-        <Select
-          id={`${block.id}-visibility-source`}
-          onChange={(event: ChangeEvent<HTMLSelectElement>): void =>
-            selectSource(event.target.value)
-          }
-          value={condition?.sourceBlockId ?? ""}
-        >
-          <option value="">Always visible</option>
-          {sources.map((candidate) => (
-            <option key={candidate.id} value={candidate.id}>
-              {candidate.label}
-            </option>
-          ))}
-        </Select>
-        {sources.length === 0 && (
-          <p className="text-xs text-muted-foreground">
-            Add a checkbox or dropdown above first.
-          </p>
-        )}
-      </Field>
-      {source && condition ? (
-        <Field>
-          <FieldLabel htmlFor={`${block.id}-visibility-value`}>Equals</FieldLabel>
-          <Select
-            id={`${block.id}-visibility-value`}
-            onChange={(event: ChangeEvent<HTMLSelectElement>): void =>
-              onChange({
-                ...block,
-                visibleWhen: {
-                  ...condition,
-                  value:
-                    source.type === "checkbox_field"
-                      ? event.target.value === "true"
-                      : event.target.value,
-                },
-              })
-            }
-            value={String(condition.value)}
-          >
-            {source.type === "checkbox_field" ? (
-              <>
-                <option value="true">Checked</option>
-                <option value="false">Unchecked</option>
-              </>
-            ) : (
-              source.options.map((option: string) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))
-            )}
-          </Select>
-        </Field>
-      ) : null}
-    </fieldset>
   )
 }
 

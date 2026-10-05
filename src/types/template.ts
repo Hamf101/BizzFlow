@@ -33,6 +33,7 @@ import {
 import type { DocumentLifecycleState } from "@/types/document"
 import { MAX_SIGNING_RECIPIENTS } from "@/types/box-signers"
 import { IMAGE_DATA_URL_PATTERN, MAX_IMAGE_DATA_URL_LENGTH } from "@/types/template-limits"
+import { visibilityConditions } from "@/types/template-visibility"
 
 /** Maximum serialized size accepted for one complete guided document layout. */
 export const MAX_TEMPLATE_CONTENT_JSON_LENGTH = 8_000_000
@@ -66,14 +67,60 @@ export const templateImageAssetSchema = z
   })
   .strict()
 
-/** Conditional display rule supported by version-three fillable fields. */
-export const templateFieldVisibilitySchema = z
+/**
+ * How a rule tests an earlier answer. "Equals" on several choices means the
+ * choice is among those ticked; more and less than read a number field.
+ */
+export const VISIBILITY_OPERATORS = ["equals", "not_equals", "answered", "not_answered", "greater_than", "less_than"] as const
+export type VisibilityOperator = (typeof VISIBILITY_OPERATORS)[number]
+
+/** One test of an earlier answer; answered and not answered take no value. */
+export const templateVisibilityConditionSchema = z
   .object({
     sourceBlockId: blockIdSchema,
-    operator: z.literal("equals"),
-    value: z.union([z.boolean(), z.string().trim().max(240)])
+    operator: z.enum(VISIBILITY_OPERATORS),
+    value: z.union([z.boolean(), z.string().trim().max(240)]).optional()
   })
   .strict()
+
+export type TemplateVisibilityCondition = z.infer<typeof templateVisibilityConditionSchema>
+
+/** Most tests one block's rule combines, as form builders allow a handful. */
+export const MAX_VISIBILITY_CONDITIONS = 4
+
+/**
+ * When a version-three block shows: one test, or two to four combined, all
+ * holding or any of them, as form builders store their rules.
+ */
+export const templateFieldVisibilitySchema = z.union([
+  templateVisibilityConditionSchema,
+  z
+    .object({
+      match: z.enum(["all", "any"]),
+      conditions: z.array(templateVisibilityConditionSchema).min(2).max(MAX_VISIBILITY_CONDITIONS)
+    })
+    .strict()
+])
+
+export type TemplateVisibility = z.infer<typeof templateFieldVisibilitySchema>
+
+/** A rule's one test, when it has only one. */
+export function singleVisibilityCondition(rule: TemplateVisibility | undefined): TemplateVisibilityCondition | undefined {
+  return rule !== undefined && "operator" in rule ? rule : undefined
+}
+
+/** A rule from its tests: none is no rule, one stands alone. */
+export function visibilityRule(
+  match: "all" | "any",
+  conditions: readonly TemplateVisibilityCondition[]
+): TemplateVisibility | undefined {
+  return conditions.length === 0 ? undefined : conditions.length === 1 ? conditions[0] : { match, conditions: [...conditions] }
+}
+
+// Lives with the evaluator, so a page that only runs rules never loads these schemas.
+export { visibilityConditions }
+
+const visibleWhenShape = { visibleWhen: templateFieldVisibilitySchema.optional() } as const
 
 /** Long enough for a declaration read out in full beside its tick box. */
 export const MAX_FIELD_LABEL_LENGTH = 300
@@ -84,7 +131,7 @@ const fieldBlockShape = {
   label: z.string().trim().min(1).max(MAX_FIELD_LABEL_LENGTH),
   required: z.boolean().default(false),
   helpText: z.string().trim().max(500).nullable().default(null),
-  visibleWhen: templateFieldVisibilitySchema.optional()
+  ...visibleWhenShape
 } as const
 
 const boxHeightSchema = z.number().min(BOX_HEIGHT_POINTS.min).max(BOX_HEIGHT_POINTS.max).optional()
@@ -142,7 +189,8 @@ export const headingBlockObjectSchema = z
     text: z.string().trim().min(1).max(500),
     runs: textRunsSchema.optional(),
     level: z.union([z.literal(1), z.literal(2), z.literal(3)]).default(2),
-    alignment: z.enum(["left", "center", "right"]).default("left")
+    alignment: z.enum(["left", "center", "right"]).default("left"),
+    ...visibleWhenShape
   })
   .strict()
 
@@ -152,7 +200,8 @@ export const paragraphBlockObjectSchema = z
     type: z.literal("paragraph"),
     text: richTextSchema,
     runs: textRunsSchema.optional(),
-    alignment: z.enum(["left", "center", "right"]).default("left")
+    alignment: z.enum(["left", "center", "right"]).default("left"),
+    ...visibleWhenShape
   })
   .strict()
 
@@ -160,7 +209,8 @@ const listItemsShape = {
   id: blockIdSchema,
   items: z.array(z.string().trim().min(1).max(2_000)).min(1).max(MAX_LIST_ITEMS),
   // Each item's formatting, beside it; null for a plain item.
-  itemRuns: z.array(textRunsSchema.nullable()).max(MAX_LIST_ITEMS).optional()
+  itemRuns: z.array(textRunsSchema.nullable()).max(MAX_LIST_ITEMS).optional(),
+  ...visibleWhenShape
 } as const
 
 export const bulletListBlockObjectSchema = z
@@ -206,7 +256,8 @@ export const imageBlockSchema = z
       .strict()
       .refine((box) => box.x + box.width <= 100.001 && box.y + box.height <= 100.001, "Image must fit inside its page.")
       .optional(),
-    widthPercent: z.number().int().min(10).max(100).default(100)
+    widthPercent: z.number().int().min(10).max(100).default(100),
+    ...visibleWhenShape
   })
   .strict()
 
@@ -216,7 +267,8 @@ export const tableBlockSchema = z
     id: blockIdSchema,
     type: z.literal("table"),
     headers: z.array(z.string().trim().min(1).max(240)).min(1).max(12),
-    rows: z.array(z.array(z.string().trim().max(2_000)).min(1).max(12)).max(MAX_TABLE_ROWS)
+    rows: z.array(z.array(z.string().trim().max(2_000)).min(1).max(12)).max(MAX_TABLE_ROWS),
+    ...visibleWhenShape
   })
   .strict()
 
@@ -619,7 +671,6 @@ export const templateContentSchema = z.union([
 
 export type HeadingBlock = z.infer<typeof headingBlockSchema>
 export type ParagraphBlock = z.infer<typeof paragraphBlockSchema>
-export type CheckboxFieldBlock = z.infer<typeof checkboxFieldBlockSchema>
 export type DropdownFieldBlock = z.infer<typeof dropdownFieldBlockSchema>
 export type ChoiceGridFieldBlock = z.infer<typeof choiceGridFieldBlockSchema>
 export type TableFieldBlock = z.infer<typeof tableFieldBlockSchema>
@@ -885,107 +936,119 @@ function validateBlockRules(
   }
 }
 
+// Answers a rule may test; a drawing, an upload, a grid or a table has no single value to compare.
+const VISIBILITY_SOURCE_TYPES: ReadonlySet<string> = new Set(["checkbox_field", "dropdown_field", "text_field", "date_field"])
+const VISIBILITY_NUMBER = /^-?\d+(?:\.\d+)?$/
+
+/**
+ * Why one test could never be run against its source, or null when it can:
+ * the source must be an answer with a value, the comparison must suit it, and
+ * the value must be one it can hold.
+ */
+export function visibilityConditionProblem(source: TemplateBlock | undefined, condition: TemplateVisibilityCondition): string | null {
+  const { operator, value } = condition
+  const needsValue = operator !== "answered" && operator !== "not_answered"
+
+  if (source === undefined || !VISIBILITY_SOURCE_TYPES.has(source.type)) {
+    return "A rule can test only an earlier tick box, choice, typed answer or date."
+  }
+
+  if (needsValue !== (value !== undefined)) {
+    return needsValue ? "This test needs a value to compare with." : "Answered and not answered compare with no value."
+  }
+
+  if (source.type === "checkbox_field") {
+    return (operator === "equals" || operator === "not_equals") && typeof value === "boolean"
+      ? null
+      : "A checkbox visibility condition must compare a boolean."
+  }
+
+  if (operator === "greater_than" || operator === "less_than") {
+    return source.type === "text_field" && (source.format === "number" || source.format === "money") && typeof value === "string" && VISIBILITY_NUMBER.test(value)
+      ? null
+      : "More or less than compares a number or money answer with a number."
+  }
+
+  if (!needsValue) {
+    return null
+  }
+
+  if (typeof value !== "string" || value.length === 0) {
+    return "Compare with words; a blank answer is tested as not answered."
+  }
+
+  return source.type === "dropdown_field" && !source.options.includes(value)
+    ? "A dropdown visibility condition must compare a declared option."
+    : null
+}
+
 function validateFieldVisibility(
   content: TemplateContentV3,
   blockIndexById: ReadonlyMap<string, number>,
   context: z.RefinementCtx
 ): void {
-  const conditionSources = new Map<string, string>()
+  const conditionSources = new Map<string, string[]>()
 
   for (const [targetIndex, targetBlock] of content.blocks.entries()) {
-    if (!isFieldBlock(targetBlock) || targetBlock.visibleWhen === undefined) {
+    if (!("visibleWhen" in targetBlock) || targetBlock.visibleWhen === undefined) {
       continue
     }
 
-    const condition = targetBlock.visibleWhen
-    const conditionPath = ["blocks", targetIndex, "visibleWhen"]
-    const sourceIndex = blockIndexById.get(condition.sourceBlockId)
-    const sourceBlock =
-      sourceIndex === undefined ? undefined : content.blocks[sourceIndex]
+    const rule = targetBlock.visibleWhen
+    const conditions = visibilityConditions(rule)
 
-    conditionSources.set(targetBlock.id, condition.sourceBlockId)
+    conditionSources.set(targetBlock.id, conditions.map((condition) => condition.sourceBlockId))
 
-    if (condition.sourceBlockId === targetBlock.id) {
-      context.addIssue({
-        code: "custom",
-        message: "A field cannot control its own visibility.",
-        path: [...conditionPath, "sourceBlockId"]
-      })
-      continue
-    }
+    for (const [conditionIndex, condition] of conditions.entries()) {
+      const conditionPath = ["blocks", targetIndex, "visibleWhen", ...("conditions" in rule ? ["conditions", conditionIndex] : [])]
+      const sourceIndex = blockIndexById.get(condition.sourceBlockId)
+      const sourceBlock = sourceIndex === undefined ? undefined : content.blocks[sourceIndex]
 
-    if (sourceIndex === undefined || sourceBlock === undefined) {
-      context.addIssue({
-        code: "custom",
-        message: "A visibility condition must reference an existing field.",
-        path: [...conditionPath, "sourceBlockId"]
-      })
-      continue
-    }
-
-    if (sourceIndex >= targetIndex) {
-      context.addIssue({
-        code: "custom",
-        message: "A visibility source must appear before the conditional field.",
-        path: [...conditionPath, "sourceBlockId"]
-      })
-    }
-
-    if (sourceBlock.type === "checkbox_field") {
-      if (typeof condition.value !== "boolean") {
-        context.addIssue({
-          code: "custom",
-          message: "A checkbox visibility condition must compare a boolean.",
-          path: [...conditionPath, "value"]
-        })
+      if (condition.sourceBlockId === targetBlock.id) {
+        context.addIssue({ code: "custom", message: "A field cannot control its own visibility.", path: [...conditionPath, "sourceBlockId"] })
+        continue
       }
-      continue
-    }
 
-    if (sourceBlock.type === "dropdown_field") {
-      if (
-        typeof condition.value !== "string" ||
-        !sourceBlock.options.includes(condition.value)
-      ) {
-        context.addIssue({
-          code: "custom",
-          message:
-            "A dropdown visibility condition must compare a declared option.",
-          path: [...conditionPath, "value"]
-        })
+      if (sourceIndex === undefined || sourceBlock === undefined) {
+        context.addIssue({ code: "custom", message: "A visibility condition must reference an existing field.", path: [...conditionPath, "sourceBlockId"] })
+        continue
       }
-      continue
-    }
 
-    context.addIssue({
-      code: "custom",
-      message:
-        "Only an earlier checkbox or dropdown can control field visibility.",
-      path: [...conditionPath, "sourceBlockId"]
-    })
+      if (sourceIndex >= targetIndex) {
+        context.addIssue({ code: "custom", message: "A visibility source must appear before the conditional field.", path: [...conditionPath, "sourceBlockId"] })
+      }
+
+      const problem = visibilityConditionProblem(sourceBlock, condition)
+
+      if (problem !== null) {
+        context.addIssue({ code: "custom", message: problem, path: conditionPath })
+      }
+    }
   }
 
-  for (const [targetBlockId, sourceBlockId] of conditionSources.entries()) {
-    const visited = new Set<string>([targetBlockId])
-    let cursor: string | undefined = sourceBlockId
+  // Sources come first, so a cycle also breaks order; this names it plainly.
+  for (const [targetBlockId] of conditionSources) {
+    const seen = new Set<string>()
+    const stack = [...(conditionSources.get(targetBlockId) ?? [])]
 
-    while (cursor !== undefined) {
-      if (visited.has(cursor)) {
+    while (stack.length > 0) {
+      const cursor = stack.pop() as string
+
+      if (cursor === targetBlockId) {
         const targetIndex = blockIndexById.get(targetBlockId)
 
         context.addIssue({
           code: "custom",
           message: "Field visibility conditions cannot form cycles.",
-          path:
-            targetIndex === undefined
-              ? ["blocks"]
-              : ["blocks", targetIndex, "visibleWhen", "sourceBlockId"]
+          path: targetIndex === undefined ? ["blocks"] : ["blocks", targetIndex, "visibleWhen"]
         })
         break
       }
 
-      visited.add(cursor)
-      cursor = conditionSources.get(cursor)
+      if (!seen.has(cursor)) {
+        seen.add(cursor)
+        stack.push(...(conditionSources.get(cursor) ?? []))
+      }
     }
   }
 }
@@ -1004,12 +1067,6 @@ function findSectionIndex(
   }
 
   return result
-}
-
-function isFieldBlock(
-  block: TemplateBlock
-): block is Extract<TemplateBlock, { fieldKey: string }> {
-  return "fieldKey" in block
 }
 
 /** Every template lifecycle status. */

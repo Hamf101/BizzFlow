@@ -35,6 +35,7 @@ import {
   runSubmissionOperation
 } from "@/services/submissions/shared"
 import { getOrganizationRoleFromSubject } from "@/lib/permissions"
+import { isTemplateBlockVisible } from "@/types/template-visibility"
 import {
   parseSubmissionFileRow,
   type Submission,
@@ -475,16 +476,21 @@ function requireSnapshotFileField(
   submission: Submission,
   fieldKey: string
 ): void {
-  const fileFieldExists = submission.templateSnapshot.blocks.some(
+  const fileField = submission.templateSnapshot.blocks.find(
     (block): boolean =>
       block.type === "file_field" && block.fieldKey === fieldKey
   )
 
-  if (!fileFieldExists) {
+  if (fileField === undefined) {
     throw new SubmissionServiceError(
       "Submission file field was not found.",
       400
     )
+  }
+
+  // A file kept for a hidden field would be pruned from the answers but stay stored.
+  if (!isTemplateBlockVisible(submission.templateSnapshot, fileField, submission.values)) {
+    throw new SubmissionServiceError("This file field is currently hidden.", 400)
   }
 }
 

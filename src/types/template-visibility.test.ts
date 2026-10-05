@@ -30,6 +30,34 @@ describe("template visibility", () => {
     expect(isTemplateBlockVisible(content, note, { tools: "Drill" })).toBe(false)
   })
 
+  it("tests any earlier answer: not, answered, more or less than a number, all or any of several, and shows text by them too", () => {
+    const id = (n: number): string => `71000000-0000-4000-8000-00000000000${n}`
+    const rule = (sourceBlockId: string, operator: string, value?: string | boolean) => ({ sourceBlockId, operator, ...(value === undefined ? {} : { value }) })
+    const content = parseTemplateContent({
+      ...createV3Root(),
+      blocks: [
+        { ...textBlock(id(1), "income"), format: "money" },
+        { ...textBlock(id(2), "employer") },
+        { id: id(3), type: "dropdown_field", fieldKey: "status", label: "Status", required: false, helpText: null, placeholder: null, options: ["Employed", "Retired"] },
+        // A paragraph and a heading shown by a rule, as fields are.
+        { id: id(4), type: "paragraph", text: "Higher-rate taxpayers read on.", alignment: "left", visibleWhen: rule(id(1), "greater_than", "50000") },
+        { id: id(5), type: "heading", text: "Employer details", level: 2, alignment: "left", visibleWhen: rule(id(2), "answered") },
+        { ...textBlock(id(6), "why_not"), visibleWhen: { match: "all", conditions: [rule(id(3), "not_equals", "Retired"), rule(id(2), "not_answered")] } },
+        { ...textBlock(id(7), "relief"), visibleWhen: { match: "any", conditions: [rule(id(1), "less_than", "12570.50"), rule(id(3), "equals", "Retired")] } },
+      ],
+    })
+    const shown = (answers: Record<string, unknown>): string[] => getVisibleTemplateBlocks(content, answers).slice(3).map((block) => block.id.slice(-1))
+
+    // 60,000 with its comma is more than 50,000; a blank employer is not answered.
+    expect(shown({ income: "60,000", employer: "  ", status: "Employed" })).toEqual(["4", "6"])
+    expect(shown({ income: "12570.49", employer: "Acme", status: "Employed" })).toEqual(["5", "7"])
+    expect(shown({ income: "", status: "Retired" })).toEqual(["7"])
+    // Words where a number belongs are neither more nor less.
+    expect(shown({ income: "lots", employer: "Acme" })).toEqual(["5"])
+    // Removing a paragraph's answers keeps nothing: paragraphs hold none.
+    expect(pruneHiddenTemplateFieldValues(content, { income: "1", why_not: "x", relief: "y", employer: "Acme" })).toEqual({ income: "1", employer: "Acme", relief: "y" })
+  })
+
   it("keeps every version-two block visible", () => {
     const content = createV2Content()
     const block = content.blocks[0] as TemplateBlock

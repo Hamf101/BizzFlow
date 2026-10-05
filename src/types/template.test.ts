@@ -123,6 +123,40 @@ describe("template content schema", () => {
     expect(templateContentV3Schema.safeParse(content).error?.issues).toBeUndefined()
   })
 
+  it("refuses a condition that could never be tested: the wrong comparison for its source, a value where none belongs, or too many rules", () => {
+    const id = (n: number): string => `72000000-0000-4000-8000-00000000000${n}`
+    const text = (n: number, extra: object = {}) => ({ id: id(n), type: "text_field", fieldKey: `t${n}`, label: `T${n}`, required: false, helpText: null, placeholder: null, multiline: false, ...extra })
+    const base = [
+      text(1, { format: "number" }),
+      text(2),
+      { id: id(3), type: "signature_field", fieldKey: "sign", label: "Sign", required: false, helpText: null },
+      { id: id(4), type: "checkbox_field", fieldKey: "ok", label: "OK", required: false, helpText: null, checkedByDefault: false },
+    ]
+    const parses = (visibleWhen: object): boolean => {
+      const content = createBlankTemplateContent()
+
+      content.blocks = [...base, { id: id(9), type: "paragraph", text: "Shown by a rule", alignment: "left", visibleWhen }] as never
+      content.sections = []
+      return templateContentV3Schema.safeParse(content).success
+    }
+    const rule = (n: number, operator: string, value?: string | boolean) => ({ sourceBlockId: id(n), operator, ...(value === undefined ? {} : { value }) })
+
+    expect(parses(rule(1, "greater_than", "10.5"))).toBe(true)
+    expect(parses({ match: "any", conditions: [rule(2, "answered"), rule(4, "not_equals", true)] })).toBe(true)
+    // More or less than needs a number field and a number.
+    expect(parses(rule(2, "greater_than", "10"))).toBe(false)
+    expect(parses(rule(1, "less_than", "ten"))).toBe(false)
+    // Answered takes no value; equals needs one; a tick box is ticked or not.
+    expect(parses(rule(2, "answered", "x"))).toBe(false)
+    expect(parses(rule(2, "equals"))).toBe(false)
+    expect(parses(rule(4, "answered"))).toBe(false)
+    // A signature is never compared.
+    expect(parses(rule(3, "answered"))).toBe(false)
+    // Combined rules are two to four.
+    expect(parses({ match: "all", conditions: [rule(2, "answered")] })).toBe(false)
+    expect(parses({ match: "all", conditions: Array.from({ length: 5 }, () => rule(2, "answered")) })).toBe(false)
+  })
+
   it("rejects later, self, or incompatible visibility sources", () => {
     const content = createConditionalContent()
     const source = content.blocks[0]

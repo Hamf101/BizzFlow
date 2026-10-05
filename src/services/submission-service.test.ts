@@ -1511,6 +1511,26 @@ describe("internal submission file workflow", () => {
     expect(client.rpc).toHaveBeenCalledTimes(2)
   })
 
+  it("takes no file for a field its rule hides, as a public form does not", async () => {
+    const [, notes, evidence] = createSnapshot().blocks
+    const snapshot = parseTemplateContent({
+      schemaVersion: 3, branding: {}, layout: {}, sections: [], fieldGroups: [], blockRules: [],
+      blocks: [notes, { ...evidence, visibleWhen: { sourceBlockId: notes?.id, operator: "answered" } }],
+    })
+    const upload = (values: Record<string, unknown>) => {
+      const client = createClient({ submissions: [createSubmissionRow({ template_snapshot: snapshot, values })] })
+
+      client.rpc.mockResolvedValue({ data: createFileRow({ original_filename: "Evidence.pdf", safe_filename: "Evidence.pdf", storage_key: buildExpectedStorageKey(FILE_ID, "Evidence.pdf") }), error: null })
+      return allocateInternalSubmissionFile(
+        { actorUserId: STAFF_ID, organizationId: ORGANIZATION_ID, submissionId: SUBMISSION_ID, expectedRevision: 1, fieldKey: "evidence", originalFilename: "Evidence.pdf", contentType: "application/pdf", byteSize: 1_024, checksumSha256: CHECKSUM },
+        { client: client as never, createId: () => FILE_ID, validateSubmissionUploadRequest: vi.fn(), now: () => new Date("2026-07-18T18:00:00.000Z"), createSignedSubmissionUploadUrl: vi.fn(async () => ({ uploadUrl: "https://r2.example/upload", storageKey: buildExpectedStorageKey(FILE_ID, "Evidence.pdf"), expiresInSeconds: 300 })) as never }
+      )
+    }
+
+    await expect(upload({})).rejects.toMatchObject({ statusCode: 400 })
+    await expect(upload({ notes: "See attached" })).resolves.toMatchObject({ uploadUrl: "https://r2.example/upload" })
+  })
+
   it("reuses exact pending metadata without allocating a second row", async () => {
     const client = createClient({
       submission_files: [

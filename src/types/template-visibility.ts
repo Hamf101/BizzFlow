@@ -1,21 +1,24 @@
 import { boxSigner } from "@/types/box-signers"
 import type {
-  CheckboxFieldBlock,
-  DropdownFieldBlock,
   TemplateBlock,
-  TemplateContent
+  TemplateContent,
+  TemplateVisibility,
+  TemplateVisibilityCondition
 } from "@/types/template"
 
-type VisibilitySourceBlock = CheckboxFieldBlock | DropdownFieldBlock
+/** The tests in a rule, whichever way it is written. */
+export function visibilityConditions(rule: TemplateVisibility | undefined): TemplateVisibilityCondition[] {
+  return rule === undefined ? [] : "conditions" in rule ? rule.conditions : [rule]
+}
 
 /**
  * Determines whether one canonical template block is visible for the supplied
  * answer state.
  *
- * Version-two snapshots remain fully visible. Version-three conditional fields
- * are visible only when their earlier checkbox or dropdown controller is itself
- * visible and its effective value equals the declared condition. An unanswered
- * checkbox uses `checkedByDefault`; an unanswered dropdown uses an empty string.
+ * Version-two snapshots remain fully visible. A version-three block with a
+ * rule shows when all, or any, of its tests hold. A test holds only while its
+ * earlier source is itself visible. An unanswered checkbox uses
+ * `checkedByDefault`; any other unanswered source reads as blank.
  *
  * @param content - Parsed immutable template content.
  * @param block - Block from the same canonical template.
@@ -140,11 +143,7 @@ function isTemplateBlockVisibleInternal(
   values: Readonly<Record<string, unknown>>,
   visitedBlockIds: ReadonlySet<string>
 ): boolean {
-  if (
-    content.schemaVersion !== 3 ||
-    !("fieldKey" in block) ||
-    block.visibleWhen === undefined
-  ) {
+  if (content.schemaVersion !== 3 || !("visibleWhen" in block) || block.visibleWhen === undefined) {
     return true
   }
 
@@ -152,62 +151,72 @@ function isTemplateBlockVisibleInternal(
     return false
   }
 
-  const sourceBlock = content.blocks.find(
-    (candidate: TemplateBlock): boolean =>
-      candidate.id === block.visibleWhen?.sourceBlockId
-  )
+  const nextVisitedBlockIds = new Set(visitedBlockIds).add(block.id)
+  const holds = (condition: TemplateVisibilityCondition): boolean => {
+    const source = content.blocks.find((candidate: TemplateBlock): boolean => candidate.id === condition.sourceBlockId)
 
-  if (!isVisibilitySourceBlock(sourceBlock)) {
-    return false
-  }
-
-  const nextVisitedBlockIds = new Set(visitedBlockIds)
-  nextVisitedBlockIds.add(block.id)
-
-  if (
-    !isTemplateBlockVisibleInternal(
-      content,
-      sourceBlock,
-      values,
-      nextVisitedBlockIds
+    return (
+      source !== undefined &&
+      "fieldKey" in source &&
+      isTemplateBlockVisibleInternal(content, source, values, nextVisitedBlockIds) &&
+      testCondition(condition, readEffectiveSourceValue(source, values))
     )
-  ) {
-    return false
   }
+  const rule = block.visibleWhen
 
-  const effectiveSourceValue = readEffectiveSourceValue(sourceBlock, values)
-
-  // "Equals" on several choices means the value is among those ticked.
-  return Array.isArray(effectiveSourceValue)
-    ? effectiveSourceValue.includes(block.visibleWhen.value)
-    : Object.is(effectiveSourceValue, block.visibleWhen.value)
+  return "conditions" in rule && rule.match === "any"
+    ? rule.conditions.some(holds)
+    : visibilityConditions(rule).every(holds)
 }
 
-function isVisibilitySourceBlock(
-  block: TemplateBlock | undefined
-): block is VisibilitySourceBlock {
-  return (
-    block?.type === "checkbox_field" || block?.type === "dropdown_field"
-  )
+function testCondition(condition: TemplateVisibilityCondition, answer: boolean | string | unknown[]): boolean {
+  const { operator, value } = condition
+  const answered = Array.isArray(answer) ? answer.length > 0 : typeof answer === "string" ? answer.trim() !== "" : answer
+
+  switch (operator) {
+    case "answered":
+      return answered
+    case "not_answered":
+      return !answered
+    case "greater_than":
+    case "less_than": {
+      const number = readNumber(answer)
+      const limit = Number(value)
+
+      return number !== null && (operator === "greater_than" ? number > limit : number < limit)
+    }
+    default: {
+      // "Equals" on several choices means the value is among those ticked;
+      // typed words match whatever their case and spacing.
+      const equal = Array.isArray(answer)
+        ? answer.includes(value)
+        : typeof answer === "string" && typeof value === "string"
+          ? answer.trim().toLowerCase() === value.trim().toLowerCase()
+          : Object.is(answer, value)
+
+      return operator === "equals" ? equal : !equal
+    }
+  }
+}
+
+// A typed number or amount, its thousands commas allowed; anything else is not one.
+function readNumber(answer: unknown): number | null {
+  const text = typeof answer === "string" ? answer.replace(/,/g, "").trim() : ""
+
+  return /^-?\d+(?:\.\d+)?$/.test(text) ? Number(text) : null
 }
 
 function readEffectiveSourceValue(
-  sourceBlock: VisibilitySourceBlock,
+  sourceBlock: Extract<TemplateBlock, { fieldKey: string }>,
   values: Readonly<Record<string, unknown>>
 ): boolean | string | unknown[] {
-  if (!Object.prototype.hasOwnProperty.call(values, sourceBlock.fieldKey)) {
-    return sourceBlock.type === "checkbox_field"
-      ? sourceBlock.checkedByDefault
-      : ""
-  }
-
-  const value = values[sourceBlock.fieldKey]
+  const value = Object.prototype.hasOwnProperty.call(values, sourceBlock.fieldKey) ? values[sourceBlock.fieldKey] : undefined
 
   if (sourceBlock.type === "checkbox_field") {
-    return typeof value === "boolean" ? value : false
+    return value === undefined ? sourceBlock.checkedByDefault : value === true
   }
 
-  if (sourceBlock.multiple) {
+  if (sourceBlock.type === "dropdown_field" && sourceBlock.multiple) {
     return Array.isArray(value) ? value : []
   }
 

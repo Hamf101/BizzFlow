@@ -325,6 +325,32 @@ describe("template Flow service", () => {
     }
   })
 
+  it("shows a paragraph by several answers, keeps a rule a restated block leaves out, and takes one off when told", async () => {
+    const content = createContent()
+    content.blocks.push(
+      { id: FIELD_ID, type: "text_field", fieldKey: "income", label: "Income", required: false, helpText: null, placeholder: null, multiline: false, format: "money" },
+      { id: COMPANION_ID, type: "text_field", fieldKey: "employer", label: "Employer", required: false, helpText: null, placeholder: null, multiline: false, visibleWhen: { sourceBlockId: FIELD_ID, operator: "answered" } }
+    )
+    const rule = { match: "any", conditions: [{ sourceBlockId: FIELD_ID, operator: "greater_than", value: "50000" }, { sourceBlockId: COMPANION_ID, operator: "not_answered" }] }
+    const restate = (visibleWhen?: null): TestFlowOperation => ({
+      type: "update_block",
+      summary: "Reworded the employer question",
+      payload: { blockId: COMPANION_ID, block: { type: "text_field", fieldKey: "employer", label: "Who employs you?", required: false, helpText: null, placeholder: null, multiline: false, ...(visibleWhen === null ? { visibleWhen } : {}) } },
+    })
+    const { run } = runFlow(content, [
+      { type: "add_block", summary: "Added a note for higher earners", payload: { afterBlockId: COMPANION_ID, block: { type: "paragraph", text: "Read the higher-rate guide.", alignment: "left", visibleWhen: rule } } },
+      restate(),
+    ])
+    const blocks = (await run).proposal?.candidateDraft.content.blocks ?? []
+
+    expect(blocks.at(-1)).toMatchObject({ type: "paragraph", visibleWhen: rule })
+    expect(blocks.find((block) => block.id === COMPANION_ID)).toMatchObject({ label: "Who employs you?", visibleWhen: { operator: "answered" } })
+
+    const removed = await runFlow(content, [restate(null)]).run
+
+    expect(removed.proposal?.candidateDraft.content.blocks.find((block) => block.id === COMPANION_ID)).not.toHaveProperty("visibleWhen")
+  })
+
   it("keeps appended free-form blocks in provider operation order", async () => {
     const aiProvider = createTestAiProvider([
       flowProviderResult({
@@ -1738,9 +1764,7 @@ function readOtherCompanions(
     ): block is Extract<TemplateBlock, { type: "text_field" }> =>
       block.type === "text_field" &&
       block.required &&
-      block.visibleWhen?.sourceBlockId === dropdownId &&
-      block.visibleWhen.operator === "equals" &&
-      block.visibleWhen.value === "Other"
+      JSON.stringify(block.visibleWhen) === JSON.stringify({ sourceBlockId: dropdownId, operator: "equals", value: "Other" })
   )
 }
 

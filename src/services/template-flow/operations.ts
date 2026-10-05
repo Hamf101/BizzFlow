@@ -1,7 +1,7 @@
 import { z } from "zod"
 
 import { resizeTemplateLayout } from "@/services/templates/template-render-plan"
-import { templateBlockSchema, type TemplateBlock, type TemplateContentV3 } from "@/types/template"
+import { singleVisibilityCondition, templateBlockSchema, visibilityConditions, type TemplateBlock, type TemplateContentV3 } from "@/types/template"
 import { applyDocumentStyle } from "@/types/template-styles"
 import {
   createUniqueTemplateFieldKey,
@@ -31,7 +31,7 @@ import {
   TemplateFlowServiceError,
   editableFlowDraftSchema,
 } from "@/services/template-flow/contracts"
-import { describeOperationTarget } from "@/services/template-flow/prompt"
+import { describeBlockTarget, describeOperationTarget } from "@/services/template-flow/prompt"
 
 // The first few things a schema refused, each with where it is.
 export function describeZodIssues(error: z.ZodError): string {
@@ -187,11 +187,9 @@ function isOtherCompanionBlock<TBlock extends TemplateBlock | GeneratedBlock>(
     value: "Other"
   }
 } {
-  return (
-    block.type === "text_field" &&
-    block.visibleWhen?.operator === "equals" &&
-    block.visibleWhen.value === "Other"
-  )
+  const rule = block.type === "text_field" ? singleVisibilityCondition(block.visibleWhen ?? undefined) : undefined
+
+  return rule?.operator === "equals" && rule.value === "Other"
 }
 
 function enforceOtherDropdownCompanions(
@@ -317,10 +315,10 @@ export function applyFlowOperations(
   )
   // The fields with a condition, and what it rests on: those the document
   // came with, then each an operation gives one, under that operation's name.
-  const conditioned = new Map<string, { source: string | null; where: string }>(
+  const conditioned = new Map<string, { sources: string[]; where: string }>(
     currentDraft.content.blocks.flatMap((block: TemplateBlock) =>
-      isTemplateFieldBlock(block) && block.visibleWhen !== undefined
-        ? [[block.id, { source: block.visibleWhen.sourceBlockId, where: "operations" }] as const]
+      "visibleWhen" in block && block.visibleWhen !== undefined
+        ? [[block.id, { sources: visibilityConditions(block.visibleWhen).map((condition) => condition.sourceBlockId), where: "operations" }] as const]
         : []
     )
   )
@@ -356,7 +354,12 @@ export function applyFlowOperations(
       operation.payload.block.visibleWhen !== undefined &&
       affectedBlockIds[0] !== undefined
     ) {
-      conditioned.set(affectedBlockIds[0], { source: null, where: `operations[${index}] ${operation.type}` })
+      // Taking a rule off on purpose (null) leaves nothing to keep.
+      if (operation.payload.block.visibleWhen === null) {
+        conditioned.delete(affectedBlockIds[0])
+      } else {
+        conditioned.set(affectedBlockIds[0], { sources: [], where: `operations[${index}] ${operation.type}` })
+      }
     }
 
     affectedBlockIds.forEach((blockId: string): void => {
@@ -401,17 +404,18 @@ export function applyFlowOperations(
   // every operation has had its say, one still missing is told to Flow, so a
   // field never ends up shown to everyone by mistake. A field whose source
   // was removed on request has nothing left to depend on.
-  for (const [blockId, { source, where }] of conditioned) {
+  for (const [blockId, { sources, where }] of conditioned) {
     const kept = nextDraft.content.blocks.find(
       (block: TemplateBlock): boolean => block.id === blockId
     )
     const sourceGone =
-      source !== null &&
-      !nextDraft.content.blocks.some((block: TemplateBlock): boolean => block.id === source)
+      sources.length > 0 &&
+      sources.every((source: string): boolean => !nextDraft.content.blocks.some((block: TemplateBlock): boolean => block.id === source))
 
-    if (kept !== undefined && isTemplateFieldBlock(kept) && kept.visibleWhen === undefined && !sourceGone) {
+    // A rule dropped as the block went in leaves no key behind.
+    if (kept !== undefined && (kept as { visibleWhen?: unknown }).visibleWhen === undefined && !sourceGone) {
       throw new FlowOperationError(
-        `${where}: the field ${JSON.stringify(kept.label)} would lose its visibleWhen, which must name a dropdown or checkbox that comes before the field, and one of its values`
+        `${where}: ${describeBlockTarget(kept)} would lose its visibleWhen, each of whose tests must name an earlier answer it suits`
       )
     }
   }
@@ -440,13 +444,13 @@ function readOperationDependencies(
   addedBy: ReadonlyMap<string, number>,
   touchedBy: ReadonlyMap<string, number[]>
 ): number[] {
-  const condition =
+  const rule =
     (operation.type === "add_block" || operation.type === "update_block") && "visibleWhen" in operation.payload.block
-      ? operation.payload.block.visibleWhen?.sourceBlockId
+      ? operation.payload.block.visibleWhen
       : undefined
   const needed = [
     ...readOperationBlockReferences(operation).map((blockId: string) => addedBy.get(blockId)),
-    ...(condition === undefined ? [] : (touchedBy.get(condition) ?? []))
+    ...(rule ? visibilityConditions(rule).flatMap((condition) => touchedBy.get(condition.sourceBlockId) ?? []) : [])
   ].filter((index: number | undefined): index is number => index !== undefined)
 
   return [...new Set(needed)].sort((left: number, right: number) => left - right)
@@ -736,8 +740,9 @@ function applyAddBlockOperation(
   }
 
   const blockId = payload.id ?? createId()
+  const { visibleWhen, ...unruled } = payload.block as typeof payload.block & { visibleWhen?: unknown }
   const block = createGeneratedTemplateBlock(
-    payload.block,
+    (visibleWhen === null ? unruled : payload.block) as typeof payload.block,
     blockId,
     draft.content
   )
@@ -753,11 +758,7 @@ function applyAddBlockOperation(
   )
   const affectedBlockIds = [block.id]
 
-  if (
-    block.type === "text_field" &&
-    block.visibleWhen?.operator === "equals" &&
-    block.visibleWhen.value === "Other"
-  ) {
+  if (isOtherCompanionBlock(block)) {
     rememberOtherCompanion(
       otherInvariantContext,
       block.visibleWhen.sourceBlockId,
@@ -840,13 +841,6 @@ function applyUpdateBlockOperation(
   ) {
     candidate.fieldKey = existingBlock.fieldKey
 
-    if (
-      existingBlock.visibleWhen !== undefined &&
-      payload.block.visibleWhen === undefined
-    ) {
-      candidate.visibleWhen = existingBlock.visibleWhen
-    }
-
     // A date's format is the author's regional choice; Flow keeps it unless asked.
     if (
       existingBlock.type === "date_field" &&
@@ -855,6 +849,14 @@ function applyUpdateBlockOperation(
     ) {
       candidate.dateFormat = existingBlock.dateFormat
     }
+  }
+
+  // A rule left out is kept, so restating a block never drops one by
+  // accident; null takes it off.
+  if (candidate.visibleWhen === null) {
+    delete candidate.visibleWhen
+  } else if (candidate.visibleWhen === undefined && "visibleWhen" in existingBlock && existingBlock.visibleWhen !== undefined) {
+    candidate.visibleWhen = existingBlock.visibleWhen
   }
 
   const block = parseCanonicalBlock(candidate)

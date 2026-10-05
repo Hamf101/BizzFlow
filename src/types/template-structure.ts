@@ -1,4 +1,12 @@
-import { type TemplateBlock, type TemplateContentV3, type TemplateFieldGroup, type TemplateSection } from "@/types/template"
+import {
+  type TemplateBlock,
+  type TemplateContentV3,
+  type TemplateFieldGroup,
+  type TemplateSection,
+  visibilityConditionProblem,
+  visibilityConditions,
+  visibilityRule
+} from "@/types/template"
 import { isPinnedBlock, MAX_ROW_COLUMNS, MAX_TEMPLATE_BLOCK_COUNT, ruleHasEffect } from "@/types/template-limits"
 
 type TemplateFieldBlock = Extract<TemplateBlock, { fieldKey: string }>
@@ -235,7 +243,7 @@ export function evaluateTemplateBlockDeletion(
     code: "visibility_source_in_use",
     message: `${sourceLabel} cannot be deleted because ${dependents.length} conditional ${fieldWord} on it. Change the affected ${conditionWord} to Always visible or choose another condition first.`,
     dependentBlockIds: dependents.map(
-      (dependent: TemplateFieldBlock): string => dependent.id
+      (dependent: TemplateBlock): string => dependent.id
     )
   }
 }
@@ -330,7 +338,7 @@ export function evaluateTemplateDropdownOptionEdit(
       ...new Set<string>(
         removedReferencedOptions.flatMap((option: string): string[] =>
           findDropdownVisibilityDependents(blocks, dropdownBlockId, option).map(
-            (block: TemplateFieldBlock): string => block.id
+            (block: TemplateBlock): string => block.id
           )
         )
       )
@@ -1468,49 +1476,36 @@ function withoutWidths(group: TemplateFieldGroup): TemplateFieldGroup {
   return widths === undefined ? group : rest
 }
 
+// A test whose source has gone, moved below it, or no longer suits it is
+// dropped; the rest of the rule stays, and a rule left with none goes.
 function removeInvalidVisibilityConditions(
   inputBlocks: readonly TemplateBlock[]
 ): TemplateBlock[] {
   const blockIndexById = new Map(
-    inputBlocks.map(
-      (block: TemplateBlock, index: number): readonly [string, number] => [
-        block.id,
-        index
-      ]
-    )
+    inputBlocks.map((block: TemplateBlock, index: number): readonly [string, number] => [block.id, index])
   )
 
-  return inputBlocks.map(
-    (block: TemplateBlock, targetIndex: number): TemplateBlock => {
-      if (!isTemplateFieldBlock(block) || block.visibleWhen === undefined) {
-        return block
-      }
-
-      const condition = block.visibleWhen
-      const sourceIndex = blockIndexById.get(condition.sourceBlockId)
-      const source =
-        sourceIndex === undefined ? undefined : inputBlocks[sourceIndex]
-      const isValidCheckboxCondition =
-        source?.type === "checkbox_field" &&
-        typeof condition.value === "boolean"
-      const isValidDropdownCondition =
-        source?.type === "dropdown_field" &&
-        typeof condition.value === "string" &&
-        source.options.includes(condition.value)
-
-      if (
-        sourceIndex !== undefined &&
-        sourceIndex < targetIndex &&
-        (isValidCheckboxCondition || isValidDropdownCondition)
-      ) {
-        return block
-      }
-
-      const repairedBlock: TemplateFieldBlock = { ...block }
-      delete repairedBlock.visibleWhen
-      return repairedBlock
+  return inputBlocks.map((block: TemplateBlock, targetIndex: number): TemplateBlock => {
+    if (!("visibleWhen" in block) || block.visibleWhen === undefined) {
+      return block
     }
-  )
+
+    const conditions = visibilityConditions(block.visibleWhen)
+    const kept = conditions.filter((condition) => {
+      const sourceIndex = blockIndexById.get(condition.sourceBlockId)
+
+      return sourceIndex !== undefined && sourceIndex < targetIndex && visibilityConditionProblem(inputBlocks[sourceIndex], condition) === null
+    })
+
+    if (kept.length === conditions.length) {
+      return block
+    }
+
+    const { visibleWhen, ...rest } = block
+    const rule = visibilityRule("conditions" in visibleWhen ? visibleWhen.match : "all", kept)
+
+    return (rule === undefined ? rest : { ...rest, visibleWhen: rule }) as TemplateBlock
+  })
 }
 
 function getIndexedSections(content: TemplateContentV3): IndexedSection[] {
@@ -1650,22 +1645,23 @@ function findDropdownVisibilityDependents(
   blocks: readonly TemplateBlock[],
   dropdownBlockId: string,
   option: string
-): TemplateFieldBlock[] {
-  return findTemplateVisibilityDependents(blocks, dropdownBlockId).filter(
-    (block: TemplateFieldBlock): boolean =>
-      block.visibleWhen?.value === option
+): TemplateBlock[] {
+  return findTemplateVisibilityDependents(blocks, dropdownBlockId).filter((block: TemplateBlock): boolean =>
+    readRuleConditions(block).some((condition) => condition.sourceBlockId === dropdownBlockId && condition.value === option)
   )
 }
 
 function findTemplateVisibilityDependents(
   blocks: readonly TemplateBlock[],
   sourceBlockId: string
-): TemplateFieldBlock[] {
-  return blocks.filter(
-    (block: TemplateBlock): block is TemplateFieldBlock =>
-      isTemplateFieldBlock(block) &&
-      block.visibleWhen?.sourceBlockId === sourceBlockId
+): TemplateBlock[] {
+  return blocks.filter((block: TemplateBlock): boolean =>
+    readRuleConditions(block).some((condition) => condition.sourceBlockId === sourceBlockId)
   )
+}
+
+function readRuleConditions(block: TemplateBlock): ReturnType<typeof visibilityConditions> {
+  return "visibleWhen" in block ? visibilityConditions(block.visibleWhen) : []
 }
 
 function findVisibilityOrderConflicts(
@@ -1673,18 +1669,10 @@ function findVisibilityOrderConflicts(
 ): string[] {
   const blockIndexById = createBlockIndex(blocks)
 
-  return blocks.flatMap(
-    (block: TemplateBlock, targetIndex: number): string[] => {
-      if (!isTemplateFieldBlock(block) || block.visibleWhen === undefined) {
-        return []
-      }
-
-      const sourceIndex = blockIndexById.get(block.visibleWhen.sourceBlockId)
-
-      return sourceIndex !== undefined && sourceIndex < targetIndex
-        ? []
-        : [block.id]
-    }
+  return blocks.flatMap((block: TemplateBlock, targetIndex: number): string[] =>
+    readRuleConditions(block).every((condition) => (blockIndexById.get(condition.sourceBlockId) ?? Infinity) < targetIndex)
+      ? []
+      : [block.id]
   )
 }
 
@@ -1693,30 +1681,23 @@ function remapDropdownVisibilityValue(
   dropdownBlockId: string,
   valueRemaps: readonly TemplateDropdownOptionValueRemap[]
 ): TemplateBlock {
-  if (
-    !isTemplateFieldBlock(block) ||
-    block.visibleWhen?.sourceBlockId !== dropdownBlockId ||
-    typeof block.visibleWhen.value !== "string"
-  ) {
+  if (!("visibleWhen" in block) || block.visibleWhen === undefined) {
     return block
   }
 
-  const valueRemap = valueRemaps.find(
-    (candidate: TemplateDropdownOptionValueRemap): boolean =>
-      candidate.from === block.visibleWhen?.value
-  )
+  const rule = block.visibleWhen
+  let changed = false
+  const conditions = visibilityConditions(rule).map((condition) => {
+    const valueRemap =
+      condition.sourceBlockId === dropdownBlockId
+        ? valueRemaps.find((candidate: TemplateDropdownOptionValueRemap): boolean => candidate.from === condition.value)
+        : undefined
 
-  if (valueRemap === undefined) {
-    return block
-  }
+    changed ||= valueRemap !== undefined
+    return valueRemap === undefined ? condition : { ...condition, value: valueRemap.to }
+  })
 
-  return {
-    ...block,
-    visibleWhen: {
-      ...block.visibleWhen,
-      value: valueRemap.to
-    }
-  }
+  return changed ? ({ ...block, visibleWhen: visibilityRule("conditions" in rule ? rule.match : "all", conditions) } as TemplateBlock) : block
 }
 
 function areStringArraysEqual(

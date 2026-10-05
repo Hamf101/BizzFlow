@@ -130,14 +130,14 @@ function createFlowPayloadContract(): string {
     'stand_alone => {"blockId":"a block in a row"}.',
     'set_block_rule => {"blockId":"existing-uuid","pageBreakBefore":optional true,"keepWithNext":optional true,"spaceAbove":optional 24,"frame":optional {"left":50,"width":50} or null for the full width}. Include only what changes.',
     "Block contracts:",
-    'heading {"type":"heading","text":"Text","level":1|2|3,"alignment":"left|center|right"};',
-    'paragraph {"type":"paragraph","text":"Text","alignment":"left|center|right","runs":optional [{"text":"Please read:","bold":true},{"text":" the rest of the text"}]};',
+    'heading {"type":"heading","text":"Text","level":1|2|3,"alignment":"left|center|right","visibleWhen":optional};',
+    'paragraph {"type":"paragraph","text":"Text","alignment":"left|center|right","runs":optional [{"text":"Please read:","bold":true},{"text":" the rest of the text"}],"visibleWhen":optional};',
     "runs, on a heading or paragraph, split its text into pieces that join to exactly the text, each optionally bold, italic or underline. Use them sparingly: a lead-in such as 'Note:' or 'Important:', a defined term where it is defined, or a word the reader must not miss. Omit runs for plain text.",
-    'bullet_list {"type":"bullet_list","items":["Plain text"]};',
-    'numbered_list {"type":"numbered_list","items":["Plain text"]};',
-    'table {"type":"table","headers":["Header"],"rows":[["Cell"]]};',
+    'bullet_list {"type":"bullet_list","items":["Plain text"],"visibleWhen":optional};',
+    'numbered_list {"type":"numbered_list","items":["Plain text"],"visibleWhen":optional};',
+    'table {"type":"table","headers":["Header"],"rows":[["Cell"]],"visibleWhen":optional};',
     'divider {"type":"divider"};',
-    'text_field {"type":"text_field","fieldKey":"stable_key","label":"Label","required":true,"helpText":null,"placeholder":null,"multiline":false,"format":optional "number|money|email|phone|time|month","prefix":optional "£","suffix":optional "per month","comb":optional 2 to 40,"boxHeight":optional 27 to 600,"visibleWhen":{"sourceBlockId":"earlier-dropdown-or-checkbox-uuid","operator":"equals","value":"Other"}};',
+    'text_field {"type":"text_field","fieldKey":"stable_key","label":"Label","required":true,"helpText":null,"placeholder":null,"multiline":false,"format":optional "number|money|email|phone|time|month","prefix":optional "£","suffix":optional "per month","comb":optional 2 to 40,"boxHeight":optional 27 to 600,"visibleWhen":optional, such as {"sourceBlockId":"earlier-block-uuid","operator":"equals","value":"Other"}};',
     "format checks what is typed and gives a phone the right keys: number, money, email, phone, time (HH:MM) or month (a month and year). prefix and suffix are short words printed either side of the answer, such as a currency or a unit: '£', 'kg', '°C', 'hours'. comb prints one box a character for a code of known length, such as a reference, sort code or postcode; a comb or formatted field is one line.",
     'date_field {"type":"date_field","fieldKey":"stable_key","label":"Label","required":true,"helpText":null,"dateFormat":optional {"order":"dmy"|"mdy"|"ymd","separator":"/"|"."|"-"|" ","month":"number"|"short"|"long"},"visibleWhen":optional};',
     'initials_field {"type":"initials_field","fieldKey":"stable_key","label":"Label","required":true,"helpText":null,"signer":optional "sender" or 1 to 20,"visibleWhen":optional};',
@@ -148,7 +148,7 @@ function createFlowPayloadContract(): string {
     'choice_grid_field {"type":"choice_grid_field","fieldKey":"stable_key","label":"Label","required":true,"helpText":null,"rows":["Statement or item, 1 to 40, each once"],"options":["Shared choice, 2 to 10, each once, at most 60 characters"],"visibleWhen":optional};',
     'table_field {"type":"table_field","fieldKey":"stable_key","label":"Label","required":false,"helpText":null,"columns":[{"label":"Column, 1 to 8, each once, at most 60 characters","format":optional "number|money|date|time"}],"rows":blank rows to print, 1 to 50,"addRows":optional true so people on a screen can add rows,"visibleWhen":optional}.',
     "A label is at most 300 characters, a dropdown choice 240 and help text 500. A longer statement, such as a consent or a declaration, is a paragraph followed by a checkbox_field with a short label such as 'I agree'.",
-    "signer names who signs an initials_field or signature_field: \"sender\" for the business sending it, or a number for the signer at that place in the order they are added; omitted means signer 1. Keep each box's signer when editing. boxHeight is also optional on date_field, dropdown_field, initials_field and signature_field, never on checkbox_field or file_field. Omit visibleWhen when it is not needed. When present, encode it as an object with sourceBlockId, operator='equals', and a declared string choice or checkbox boolean. Its source must be a dropdown or checkbox placed before the field; a condition that cannot hold is refused, not dropped."
+    "signer names who signs an initials_field or signature_field: \"sender\" for the business sending it, or a number for the signer at that place in the order they are added; omitted means signer 1. Keep each box's signer when editing. boxHeight is also optional on date_field, dropdown_field, initials_field and signature_field, never on checkbox_field or file_field. Omit visibleWhen when it is not needed. A heading, paragraph, list or table may have one too, to show words that matter only after an answer. visibleWhen tests an earlier answer: {\"sourceBlockId\":\"earlier-block-uuid\",\"operator\":\"equals\"|\"not_equals\"|\"answered\"|\"not_answered\"|\"greater_than\"|\"less_than\",\"value\":...}. The source is a checkbox_field (equals or not_equals true or false), a dropdown_field (a declared choice; on a choose-several dropdown, equals means ticked), a text_field (words, compared ignoring case) or a date_field; greater_than and less_than need a text_field with format number or money and a number such as \"50000\"; answered and not_answered take no value. Never a signature, initials, file, grid or table. Two to four tests combine as {\"match\":\"all\"|\"any\",\"conditions\":[test, test]}. Every source comes before the block. In update_block, leaving visibleWhen out keeps the block's rule and visibleWhen null takes it off; a rule that cannot hold is refused, not dropped."
   ].join(" ")
 }
 
@@ -302,7 +302,7 @@ function describeDraftBlock(draft: TemplateFlowDraft, blockId: string): string {
   return block ? describeBlockTarget(block) : "Document element"
 }
 
-function describeBlockTarget(block: GeneratedBlock | TemplateBlock): string {
+export function describeBlockTarget(block: GeneratedBlock | TemplateBlock): string {
   switch (block.type) {
     case "heading":
       return boundLedgerTarget(`Heading · ${block.text}`)
