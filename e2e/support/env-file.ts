@@ -29,8 +29,19 @@ export function loadE2eEnvFile(): boolean {
   return true
 }
 
-/** The keys that would let the server reach a real provider: EmailJS's, and each AI provider's. */
-const OUTBOUND_KEYS = ["EMAILJS_SERVICE_ID", "EMAILJS_TEMPLATE_ID", "EMAILJS_PUBLIC_KEY", "GEMINI_API_KEY", "OPENROUTER_API_KEY"]
+/**
+ * The keys that would let the server reach a real provider: EmailJS's, and each
+ * AI provider's. The EmailJS private key can't send on its own, but a real one
+ * from `.env.local` still never reaches the e2e server.
+ */
+const OUTBOUND_KEYS = [
+  "EMAILJS_SERVICE_ID",
+  "EMAILJS_TEMPLATE_ID",
+  "EMAILJS_PUBLIC_KEY",
+  "EMAILJS_PRIVATE_KEY",
+  "GEMINI_API_KEY",
+  "OPENROUTER_API_KEY",
+]
 
 /**
  * Refuses a run whose server could reach the real email or AI provider.
