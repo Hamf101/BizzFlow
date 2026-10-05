@@ -738,10 +738,10 @@ describe("document PDF service", () => {
     expect(name.x).toBeGreaterThan(metrics.margin + 20)
     expect(name.x).toBeLessThan(metrics.margin + metrics.contentWidth * 0.45)
     expect(name.y - (phone.y + phone.height)).toBeCloseTo(12, 5)
-    // A long label wraps at 45% of the width, and its line starts after it.
-    expect(long.x).toBeCloseTo(metrics.margin + metrics.contentWidth * 0.45 + 6, 5)
-    expect(long.x + long.width).toBeCloseTo(metrics.margin + metrics.contentWidth, 5)
-    expect(long.height).toBeGreaterThanOrEqual(30)
+    // A label past 45% of the width stands on its own line over a line the
+    // width of the column.
+    expect(long).toMatchObject({ height: 15, width: metrics.contentWidth, x: metrics.margin })
+    expect(phone.y - (long.y + long.height)).toBeCloseTo(12 + 15, 5)
     // A long answer is one multiline field over three ruled lines.
     expect(form.getTextField("line_3").isMultiline()).toBe(true)
     expect(form.getTextField("line_3").acroField.getWidgets()).toHaveLength(1)
@@ -753,13 +753,14 @@ describe("document PDF service", () => {
     expect(captions[0]?.y).toBe(notes.y - 10 - 56 - 2 - 8)
     // Side by side, the date's line is level with the signature's, over its caption.
     expect(box("signed_on").y).toBeCloseTo((captions[1]?.y ?? 0) + 2 + 8, 1)
-    // A wrapped label drops nothing: the three lines in its row sit level.
+    // A label too long for a narrow column stands over its line, and the
+    // three lines in its row still sit level.
     const [initial, first, last] = ["line_4", "line_5", "line_6"].map(box)
 
-    expect(initial.height).toBe(30)
+    expect(initial.height).toBe(15)
     expect(first.y).toBeCloseTo(initial.y, 1)
     expect(last.y).toBeCloseTo(initial.y, 1)
-    // Printed, an answer beside a wrapped label sits on its last line, just above the rule.
+    // Printed, the answer under a long label sits just above its rule.
     const printed = await PDFDocument.load(await renderGeneratedDocumentPdf(input))
 
     expect(drawnTexts(printed, 0).some((drawn) => drawn.size === 10 && Math.abs(drawn.x - long.x) < 0.5 && Math.abs(drawn.y - (long.y + 2 + 15 - 10)) < 0.5)).toBe(true)

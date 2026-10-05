@@ -376,11 +376,11 @@ export function EditorCanvas({
       >
         {PRINTED_FACE}
         {CELL_JOINS}
-        <MarginWords className="mb-4 flex justify-between gap-3 text-[11px]" words={columnWords.header} />
+        <MarginWords className="mb-4 text-[11px]" words={columnWords.header} />
         <Selectable actions={actions}>{flow}</Selectable>
         {textEditable && SectionPieces ? <SectionPieces root={rootRef} sectionId={controller.currentSectionId} narrow zoom={1} revision={content} /> : null}
         {units.length === 0 ? <EmptyPageLine actions={actions} onStart={() => focusPageEnd(0)} /> : null}
-        <MarginWords className="mt-6 flex justify-between gap-3 text-[11px]" words={columnWords.footer} />
+        <MarginWords className="mt-6 text-[11px]" words={columnWords.footer} />
         {textEditable ? (
           <AddPageButton className="mt-6" onClick={() => controller.addPage(content.blocks.at(-1)?.id ?? null)} />
         ) : null}
@@ -469,16 +469,9 @@ export function EditorCanvas({
             <MarginWords
               className="absolute"
               style={{ ...wordsInset, bottom: margins.bottom / 2 - (WORDS_LINE_EM - WORDS_ASCENT_EM) * wordsSize }}
-              words={pageWords[page].footer}
+              words={pageWords[page].pageLabel ? { ...pageWords[page].footer, right: pageWords[page].pageLabel } : pageWords[page].footer}
             />
-            {pageWords[page].pageLabel ? (
-              <p
-                className="absolute text-muted-foreground tabular-nums"
-                style={{ bottom: margins.bottom * 0.55, fontSize: 8 * point, right: margins.right }}
-              >
-                {pageWords[page].pageLabel}
-              </p>
-            ) : textEditable && !footerOn(page) && Object.keys(pageWords[page].footer).length === 0 ? (
+            {pageWords[page].pageLabel ? null : textEditable && !footerOn(page) && Object.keys(pageWords[page].footer).length === 0 ? (
               <MarginPill
                 label="Page numbers"
                 onClick={() =>
@@ -715,6 +708,10 @@ const WORDS_ASCENT_EM = 1
 
 // Words in a margin, each in its third of the line and cut short where they
 // would run into the next, as the PDF prints them.
+// Each slot runs as far as its neighbours let it, as the PDF fits them
+// (fitMarginWords): a centred word keeps to a third and the sides share the
+// rest; otherwise the shorter side keeps its words and the longer takes what
+// is left, so a long title runs up to the page count.
 function MarginWords({
   className,
   style,
@@ -728,15 +725,24 @@ function MarginWords({
     return null
   }
 
+  const centred = Boolean(words.center)
+  const keeps = (words.left ?? "").length <= (words.right ?? "").length ? "left" : "right"
+  const side = (slot: "left" | "right") =>
+    cn("min-w-0 truncate", slot === "right" && "text-right", !centred && keeps === slot && "max-w-[calc(50%-0.375rem)] shrink-0")
+
   return (
     <div
-      className={cn("pointer-events-none grid grid-cols-3 text-muted-foreground tabular-nums", className)}
+      className={cn(
+        "pointer-events-none gap-3 text-muted-foreground tabular-nums",
+        centred ? "grid grid-cols-[1fr_fit-content(33.333%)_1fr]" : "flex justify-between",
+        className
+      )}
       data-slot="margin-words"
       style={{ lineHeight: WORDS_LINE_EM, ...style }}
     >
-      <span className="min-w-0 truncate">{words.left}</span>
-      <span className="min-w-0 truncate text-center">{words.center}</span>
-      <span className="min-w-0 truncate text-right">{words.right}</span>
+      <span className={side("left")}>{words.left}</span>
+      {centred ? <span className="min-w-0 truncate text-center">{words.center}</span> : null}
+      <span className={side("right")}>{words.right}</span>
     </div>
   )
 }

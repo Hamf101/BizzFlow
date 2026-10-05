@@ -1462,15 +1462,24 @@ function estimateLineFieldDepth(block: StyledFieldBlock, answers: Record<string,
 
   const answer = answerOverride ?? formatFieldValue(block, answers[block.fieldKey])
 
-  // A comb's row of boxes sits on the line beside its label.
-  if (combBoxes(block, answer)) {
-    return Math.max(estimateWordWrappedHeight(label, width * LINE_LABEL_SHARE, 15) + LINE_RULE_DROP, COMB_HEIGHT)
-  }
-
   if (block.type === "text_field" && block.multiline) {
     const needed = answer ? estimateWordWrappedHeight(answer, estimateAnswerWidth(block, width), RULED_LINE_PITCH) : 0
 
     return estimateWordWrappedHeight(label, width, 15) + 3 + RULED_LINE_PITCH * Math.max(1, Math.round(Math.max(answerBoxHeight(block), needed) / RULED_LINE_PITCH))
+  }
+
+  // A label past its share stands over a line the width of the column.
+  if (estimateWordWrappedHeight(label, width * LINE_LABEL_SHARE, 15) > 15) {
+    const above = estimateWordWrappedHeight(label, width, 15)
+
+    return combBoxes(block, answer)
+      ? above + COMB_HEIGHT
+      : above + Math.max(15, estimateWordWrappedHeight(answer, estimateAnswerWidth(block, width), 15)) + LINE_RULE_DROP
+  }
+
+  // A comb's row of boxes sits on the line beside its label.
+  if (combBoxes(block, answer)) {
+    return Math.max(15 + LINE_RULE_DROP, COMB_HEIGHT)
   }
 
   // The label takes at most its share of the width; the answer at least the rest.

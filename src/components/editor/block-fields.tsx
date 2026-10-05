@@ -22,7 +22,7 @@ import {
   toIsoDate,
 } from "@/lib/date-format"
 import { boxSigner, MAX_SIGNING_RECIPIENTS } from "@/types/box-signers"
-import type { TemplateBlock } from "@/types/template"
+import { MAX_FIELD_LABEL_LENGTH, type TemplateBlock } from "@/types/template"
 import { evaluateTemplateDropdownOptionEdit } from "@/types/template-structure"
 
 // A choice shows as a dropdown, or with every option on show as radio
@@ -763,7 +763,7 @@ function FieldBlockFields({
           aria-describedby={labelMissing ? `${block.id}-field-label-error` : undefined}
           aria-invalid={labelMissing}
           id={`${block.id}-field-label`}
-          maxLength={160}
+          maxLength={MAX_FIELD_LABEL_LENGTH}
           onChange={(event: ChangeEvent<HTMLInputElement>): void =>
             onChange({ ...block, label: event.target.value })
           }

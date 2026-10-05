@@ -170,6 +170,45 @@ export function isFieldChecked(block: Extract<PdfFieldBlock, { type: "checkbox_f
 // The page shows answer boxes at these heights too, so they live with the blocks.
 export { answerBoxHeight } from "@/types/template"
 /** The gap between an answer box's edge and its text, in points. */
+type MarginSlot = "left" | "center" | "right"
+
+// Points kept clear between header or footer words.
+export const MARGIN_WORDS_GAP = 12
+
+/**
+ * The most room each header or footer slot may print in, from the width its
+ * words would take. A centred word keeps to a third so it stays centred, and
+ * the sides share the rest; with nothing centred, the shorter side keeps its
+ * words, up to half, and the longer takes what is left, so a long title runs
+ * up to the page count instead of stopping at a third.
+ */
+export function fitMarginWords(
+  natural: Partial<Record<MarginSlot, number>>,
+  width: number,
+  gap: number
+): Partial<Record<MarginSlot, number>> {
+  const fitted: Partial<Record<MarginSlot, number>> = {}
+
+  if (natural.center !== undefined) {
+    fitted.center = Math.min(natural.center, width / 3)
+    const side = (width - fitted.center) / 2 - gap
+
+    for (const slot of ["left", "right"] as const) {
+      if (natural[slot] !== undefined) fitted[slot] = Math.min(natural[slot], side)
+    }
+
+    return fitted
+  }
+
+  const [shorter, longer] = (natural.left ?? 0) <= (natural.right ?? 0) ? (["left", "right"] as const) : (["right", "left"] as const)
+  const kept = Math.min(natural[shorter] ?? 0, (width - gap) / 2)
+
+  if (natural[shorter] !== undefined) fitted[shorter] = kept
+  if (natural[longer] !== undefined) fitted[longer] = Math.min(natural[longer], width - (natural[shorter] === undefined ? 0 : kept + gap))
+
+  return fitted
+}
+
 export const ANSWER_BOX_PADDING = 6
 /** How far a checkbox's label sits from the box's left edge, in points. */
 export const CHECKBOX_LABEL_INSET = 16

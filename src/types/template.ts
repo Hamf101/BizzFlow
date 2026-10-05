@@ -75,10 +75,13 @@ export const templateFieldVisibilitySchema = z
   })
   .strict()
 
+/** Long enough for a declaration read out in full beside its tick box. */
+export const MAX_FIELD_LABEL_LENGTH = 300
+
 const fieldBlockShape = {
   id: blockIdSchema,
   fieldKey: fieldKeySchema,
-  label: z.string().trim().min(1).max(160),
+  label: z.string().trim().min(1).max(MAX_FIELD_LABEL_LENGTH),
   required: z.boolean().default(false),
   helpText: z.string().trim().max(500).nullable().default(null),
   visibleWhen: templateFieldVisibilitySchema.optional()

@@ -386,6 +386,8 @@ describe("answer kinds", () => {
 
   it("takes typed text with units, comb boxes, choose-several choices, question grids and fillable tables", () => {
     expect(parses({ ...field, type: "text_field", format: "money", prefix: "£", suffix: "per month" })).toBe(true)
+    // A question long enough for a declaration read out in full.
+    expect(parses({ ...field, type: "checkbox_field", label: "x".repeat(300) })).toBe(true)
     expect(parses({ ...field, type: "text_field", comb: 9 })).toBe(true)
     expect(parses({ ...field, type: "dropdown_field", options: ["Email", "Phone"], multiple: true, across: true })).toBe(true)
     expect(parses({ ...field, type: "choice_grid_field", rows: ["Staff were helpful", "The room was clean"], options: ["Yes", "No", "N/A"] })).toBe(true)
@@ -395,6 +397,7 @@ describe("answer kinds", () => {
   })
 
   it("refuses shapes that cannot be filled in or printed", () => {
+    expect(parses({ ...field, type: "checkbox_field", label: "x".repeat(301) })).toBe(false)
     // Comb boxes hold one line of characters.
     expect(parses({ ...field, type: "text_field", comb: 9, multiline: true })).toBe(false)
     expect(parses({ ...field, type: "text_field", comb: 1 })).toBe(false)

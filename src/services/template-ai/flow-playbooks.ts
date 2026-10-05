@@ -72,7 +72,7 @@ export const FLOW_PLAYBOOKS = [
 
   "Forms that ask about health.",
   "These parts are added to the document's own playbook, never instead of it: a consent and service agreement is still a service agreement, with its deal details, clauses and both signatures.",
-  "Ask only the health questions the service needs. An emergency contact is a name, their relationship to the person, and a phone number, under a label that says whose contact it is.",
+  "Ask only the health questions the service needs, in the plain words a clinician uses: 'Are you pregnant?', 'Current medications', never a softened phrase. An emergency contact is a name, their relationship to the person, and a phone number, under a label that says whose contact it is.",
   "Consent is one checkbox_field for each purpose, never checked by default, in plain words: what the person agrees to, and that they can withdraw it. Consent to treatment is separate from consent to keep or share their information.",
   "Never state or imply that the form, the business or BizFlow complies with HIPAA, GDPR or any other regulation.",
 ].join(" ")

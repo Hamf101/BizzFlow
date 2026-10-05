@@ -63,7 +63,9 @@ import {
   drawingRoom,
   FIELD_GAP_BELOW,
   FIELD_RULE_WIDTH,
+  fitMarginWords,
   formatFieldValue,
+  MARGIN_WORDS_GAP,
   GRID_HEADER,
   GRID_ROW_PADDING,
   GRID_STATEMENT_GAP,
@@ -333,14 +335,14 @@ function drawPdfLibFooter(
     thickness: 0.8
   })
 
-  drawPdfLibMarginWords(context, words, context.layout.marginBottom / 2)
+  const safeLabel = pageLabel ? normalizeStandardFontText(pageLabel, context.regularFont) : ""
+  const labelWidth = context.regularFont.widthOfTextAtSize(safeLabel, 7)
+
+  drawPdfLibMarginWords(context, words, context.layout.marginBottom / 2, pageLabel ? labelWidth : undefined)
 
   if (!pageLabel) {
     return
   }
-
-  const safeLabel = normalizeStandardFontText(pageLabel, context.regularFont)
-  const labelWidth = context.regularFont.widthOfTextAtSize(safeLabel, 7)
 
   context.page.drawText(safeLabel, {
     x: margin + contentWidth - labelWidth,
@@ -351,18 +353,29 @@ function drawPdfLibFooter(
   })
 }
 
-// Words in a margin, each in its third of the line: cut short with an ellipsis
-// where they would run into the next, so they never meet.
-function drawPdfLibMarginWords(context: PdfLibRenderContext, words: TemplateMarginWords, y: number): void {
+// Words in a margin, each fitted to the room its neighbours leave (see
+// fitMarginWords) and cut short with an ellipsis past it, so they never meet.
+// A page count printed beside them holds the right-hand slot.
+function drawPdfLibMarginWords(context: PdfLibRenderContext, words: TemplateMarginWords, y: number, pageCountWidth?: number): void {
   const { contentWidth, margin } = context.layout
   const font = context.regularFont
   const size = 7.5
+  const texts = Object.entries(words).map(([slot, text]) => [slot, normalizeStandardFontText(text, font)] as const)
+  const room = fitMarginWords(
+    {
+      ...Object.fromEntries(texts.map(([slot, text]) => [slot, font.widthOfTextAtSize(text, size)])),
+      ...(pageCountWidth === undefined ? {} : { right: pageCountWidth }),
+    },
+    contentWidth,
+    MARGIN_WORDS_GAP
+  )
 
-  for (const [slot, text] of Object.entries(words)) {
-    let letters = Array.from(normalizeStandardFontText(text, font))
-    let line = letters.join("")
+  for (const [slot, text] of texts) {
+    const most = room[slot as keyof typeof room] ?? 0
+    let letters = Array.from(text)
+    let line = text
 
-    while (font.widthOfTextAtSize(line, size) > contentWidth / 3 && letters.length > 0) {
+    while (font.widthOfTextAtSize(line, size) > most && letters.length > 0) {
       letters = letters.slice(0, -1)
       line = `${letters.join("").trimEnd()}…`
     }
@@ -1310,7 +1323,7 @@ function measurePdfLibLineField(
   item: PdfBlockFlowItem,
   context: PdfLibRenderContext,
   width: number
-): { answerLines: number; count: number; depth: number; labelLines: number; labelWidth: number } {
+): { above: number; answerLines: number; count: number; depth: number; labelLines: number; labelWidth: number } {
   const block = item.block as StyledFieldBlock
   const font = context.regularFont
   const label = fieldLabel(item)
@@ -1319,27 +1332,43 @@ function measurePdfLibLineField(
   if (block.type === "signature_field" || block.type === "initials_field") {
     const noteHeight = answer ? wrapPdfText(answer, font, 10, width - ANSWER_BOX_PADDING * 2).length * 15 + ANSWER_BOX_PADDING * 2 : 0
 
-    return { answerLines: 0, count: 0, depth: Math.max(drawingRoom(block, Boolean(drawing)), noteHeight), labelLines: 0, labelWidth: 0 }
+    return { above: 0, answerLines: 0, count: 0, depth: Math.max(drawingRoom(block, Boolean(drawing)), noteHeight), labelLines: 0, labelWidth: 0 }
   }
 
   if (block.type === "text_field" && block.multiline) {
     const needed = answer ? wrapPdfText(answer, font, 10, answerRoom(context, block, width).width).length * RULED_LINE_PITCH : 0
     const count = Math.max(1, Math.round(Math.max(answerBoxHeight(block), needed) / RULED_LINE_PITCH))
 
-    return { answerLines: 0, count, depth: wrapPdfText(label, font, 10, width).length * 15 + 3 + count * RULED_LINE_PITCH, labelLines: 0, labelWidth: 0 }
+    return { above: 0, answerLines: 0, count, depth: wrapPdfText(label, font, 10, width).length * 15 + 3 + count * RULED_LINE_PITCH, labelLines: 0, labelWidth: 0 }
   }
 
-  const labelWidth = Math.min(font.widthOfTextAtSize(normalizeStandardFontText(label, font), 10), width * LINE_LABEL_SHARE)
+  const natural = font.widthOfTextAtSize(normalizeStandardFontText(label, font), 10)
+
+  // A label longer than its share stands over a line the width of the
+  // column, so a narrow column keeps room to write.
+  if (natural > width * LINE_LABEL_SHARE) {
+    const above = wrapPdfText(label, font, 10, width).length * 15
+
+    if (combBoxes(block, answer)) {
+      return { above, answerLines: 0, count: 0, depth: above + COMB_HEIGHT, labelLines: 0, labelWidth: 0 }
+    }
+
+    const answerLines = Math.max(1, wrapPdfText(answer, font, 10, answerRoom(context, block, width).width).length)
+
+    return { above, answerLines, count: 0, depth: above + answerLines * 15 + LINE_RULE_DROP, labelLines: 0, labelWidth: 0 }
+  }
+
+  const labelWidth = natural
   const labelLines = wrapPdfText(label, font, 10, labelWidth).length
 
   // A comb's row of boxes sits on the line beside its label.
   if (combBoxes(block, answer)) {
-    return { answerLines: 0, count: 0, depth: Math.max(labelLines * 15 + LINE_RULE_DROP, COMB_HEIGHT), labelLines, labelWidth }
+    return { above: 0, answerLines: 0, count: 0, depth: Math.max(labelLines * 15 + LINE_RULE_DROP, COMB_HEIGHT), labelLines, labelWidth }
   }
 
   const answerLines = wrapPdfText(answer, font, 10, answerRoom(context, block, width - labelWidth - LINE_LABEL_GAP).width).length
 
-  return { answerLines, count: 0, depth: Math.max(labelLines, answerLines) * 15 + LINE_RULE_DROP, labelLines, labelWidth }
+  return { above: 0, answerLines, count: 0, depth: Math.max(labelLines, answerLines) * 15 + LINE_RULE_DROP, labelLines, labelWidth }
 }
 
 /**
@@ -1366,7 +1395,7 @@ async function drawPdfLibLineField(
   const rule = (from: number, y: number, color = edge): void => {
     context.page.drawLine({ color, end: { x: right, y }, start: { x: from, y }, thickness: FIELD_RULE_WIDTH })
   }
-  const { answerLines, count, depth, labelLines, labelWidth } = measurePdfLibLineField(item, context, frame.width)
+  const { above, answerLines, count, depth, labelLines, labelWidth } = measurePdfLibLineField(item, context, frame.width)
   const lineY = topY - depth
 
   if (block.type === "signature_field" || block.type === "initials_field") {
@@ -1409,11 +1438,15 @@ async function drawPdfLibLineField(
     return lineY
   }
 
-  const answerX = frame.x + labelWidth + LINE_LABEL_GAP
+  const answerX = above > 0 ? frame.x : frame.x + labelWidth + LINE_LABEL_GAP
   // Label and answer end on the band's last line, just above the rule.
-  const band = depth - LINE_RULE_DROP
+  const band = depth - above - LINE_RULE_DROP
 
-  drawWrappedPdfText(context, label, lineY + LINE_RULE_DROP + labelLines * 15, frame.x, labelWidth, 10, 15, font, ink, "left")
+  if (above > 0) {
+    drawWrappedPdfText(context, label, topY, frame.x, frame.width, 10, 15, font, ink, "left")
+  } else {
+    drawWrappedPdfText(context, label, lineY + LINE_RULE_DROP + labelLines * 15, frame.x, labelWidth, 10, 15, font, ink, "left")
+  }
 
   // A comb's row of boxes stands on the line, in place of the rule.
   if (block.type === "text_field" && combBoxes(block, answer)) {
