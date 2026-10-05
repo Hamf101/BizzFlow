@@ -1,9 +1,10 @@
 "use client"
 
 import { Plus } from "lucide-react"
-import type { ReactElement, ReactNode } from "react"
+import { Fragment, type ReactElement, type ReactNode, useContext } from "react"
 
 import { getGeneratedDocumentAnswerName } from "@/components/documents/generated-document-form-data"
+import { PageBreaks } from "@/components/editor/table-cells"
 import { cn } from "@/lib/utils"
 import type { ChoiceGridFieldBlock, TableFieldBlock } from "@/types/template"
 import { MAX_TABLE_FIELD_ROWS } from "@/types/template-answer-kinds"
@@ -209,6 +210,7 @@ export function PaperTable({
   value: unknown
 }): ReactElement {
   const fill = mode === "fill"
+  const breaks = useContext(PageBreaks)
   const answered = mode === "design" ? [] : readTableAnswer(value, block.columns.length)
   const blank = (): string[] => block.columns.map(() => "")
   const rows = [...answered, ...Array.from({ length: Math.max(0, block.rows - answered.length) }, blank)]
@@ -249,13 +251,22 @@ export function PaperTable({
         </thead>
         <tbody>
           {rows.map((row, rowIndex) => (
-            <tr data-row-key={`${block.id}-${rowIndex}`} key={rowIndex}>
-              {row.map((text, column) => (
-                <td className="align-top focus-within:ring-2 focus-within:ring-ring/40 focus-within:ring-inset" key={column} style={{ border: RULE, height: "2em", padding: "0.25em 0.4em" }}>
-                  {cell(rowIndex, column, text)}
-                </td>
-              ))}
-            </tr>
+            <Fragment key={rowIndex}>
+              {/* A page ends before this row: the space to the next page's margin. */}
+              {breaks[`${block.id}:row${rowIndex}`] ? (
+                <tr aria-hidden="true" style={{ display: "var(--page-space-display, table-row)" }}>
+                  <td colSpan={block.columns.length} style={{ border: 0, height: breaks[`${block.id}:row${rowIndex}`], padding: 0 }} />
+                </tr>
+              ) : null}
+              {/* The first row stays with the heading row, so a page never ends between them. */}
+              <tr data-row-key={rowIndex > 0 ? `${block.id}:row${rowIndex}` : undefined}>
+                {row.map((text, column) => (
+                  <td className="align-top focus-within:ring-2 focus-within:ring-ring/40 focus-within:ring-inset" key={column} style={{ border: RULE, height: "2em", padding: "0.25em 0.4em" }}>
+                    {cell(rowIndex, column, text)}
+                  </td>
+                ))}
+              </tr>
+            </Fragment>
           ))}
         </tbody>
       </table>

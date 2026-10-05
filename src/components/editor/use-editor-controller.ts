@@ -259,14 +259,7 @@ export function useEditorController({
    * @returns Whether it moved.
    */
   function moveTo(blockId: string, slot: TemplateBlockSlot): boolean {
-    const result = moveTemplateBlockTo(content, blockId, slot, crypto.randomUUID())
-
-    if (!applyMove(result) || !result.success) {
-      return false
-    }
-
-    setAnnouncement(describeMove(result.content, blockId))
-    return true
+    return announceMove(blockId, (from, newId) => moveTemplateBlockTo(from, blockId, slot, newId()))
   }
 
   /**
@@ -279,16 +272,11 @@ export function useEditorController({
    * @returns Whether it moved.
    */
   function placeBeside(blockId: string, targetId: string, side: "left" | "right"): boolean {
-    const result = placeBlockBeside(content, blockId, targetId, side, () => crypto.randomUUID())
-    // In a row the block takes its column, with none of the space or spot it had alone.
-    const placed = result.success ? { ...result, content: setBlockRule(result.content, blockId, { frame: undefined, spaceAbove: undefined }) } : result
-
-    if (!applyMove(placed) || !placed.success) {
-      return false
-    }
-
-    setAnnouncement(describeMove(placed.content, blockId))
-    return true
+    return announceMove(blockId, (from, newId) => {
+      const result = placeBlockBeside(from, blockId, targetId, side, newId)
+      // In a row the block takes its column, with none of the space or spot it had alone.
+      return result.success ? { ...result, content: setBlockRule(result.content, blockId, { frame: undefined, spaceAbove: undefined }) } : result
+    })
   }
 
   /**
@@ -301,26 +289,17 @@ export function useEditorController({
    * @returns Whether anything changed.
    */
   function placeAt(blockId: string, slot: TemplateBlockSlot | null, layout: Readonly<{ frame: BlockFrame | null; spaceAbove: number }>): boolean {
-    const moved = slot ? moveTemplateBlockTo(content, blockId, slot, crypto.randomUUID()) : ({ content, success: true } as const)
-    const placed = moved.success
-      ? { ...moved, content: setBlockRule(moved.content, blockId, { frame: layout.frame ?? undefined, spaceAbove: layout.spaceAbove || undefined }) }
-      : moved
-
-    if (!applyMove(placed) || !placed.success) {
-      return false
-    }
-
-    setAnnouncement(describeMove(placed.content, blockId))
-    return true
+    return announceMove(blockId, (from, newId) => {
+      const moved = slot ? moveTemplateBlockTo(from, blockId, slot, newId()) : ({ content: from, success: true } as const)
+      return moved.success
+        ? { ...moved, content: setBlockRule(moved.content, blockId, { frame: layout.frame ?? undefined, spaceAbove: layout.spaceAbove || undefined }) }
+        : moved
+    })
   }
 
   // Takes a block out of its row onto a line of its own below it.
   function standAlone(blockId: string): void {
-    const result = standBlockAlone(content, blockId, () => crypto.randomUUID())
-
-    if (applyMove(result) && result.success) {
-      setAnnouncement(describeMove(result.content, blockId))
-    }
+    announceMove(blockId, (from, newId) => standBlockAlone(from, blockId, newId))
   }
 
   // One step up or down: past a row as one piece, and past a section's title.
@@ -341,24 +320,64 @@ export function useEditorController({
   function moveSection(sectionId: string, direction: "up" | "down"): void {
     const label = content.sections.find((section) => section.id === sectionId)?.label ?? "Section"
 
-    if (applyMove(moveTemplateSection(content, sectionId, direction))) {
+    if (applyMove((from) => moveTemplateSection(from, sectionId, direction))) {
       setAnnouncement(`${label} moved ${direction}.`)
     }
   }
 
-  function applyMove(result: TemplateMoveResult): boolean {
+  /**
+   * Makes an edit worked out from the page: on the page as drawn, for where
+   * the caret goes, and again on the page as it is when the change lands, so
+   * what someone else changed meanwhile is kept.
+   *
+   * @param work - The edit, from a page, with the ids it may need.
+   * @returns The edit as made on the page as drawn.
+   */
+  function edit<Result extends { content: TemplateContentV3 }>(work: (from: TemplateContentV3, newId: () => string) => Result): Result {
+    const ids = sameIds()
+    const result = work(content, ids())
+
+    change((current) => (current === content ? result : work(current, ids())).content)
+    return result
+  }
+
+  function announceMove(blockId: string, work: MoveWork): boolean {
+    const moved = applyMove(work)
+
+    if (moved) {
+      setAnnouncement(describeMove(moved, blockId))
+    }
+
+    return moved !== null
+  }
+
+  /**
+   * Works a move out on the page as drawn, to refuse it with the reason or
+   * say where it went, then makes it again on the page as it is when the
+   * change lands, so what someone else changed meanwhile is kept.
+   *
+   * @param work - The move, from a page, with the ids it may need.
+   * @returns The page as drawn with the move made, or null when refused.
+   */
+  function applyMove(work: MoveWork): TemplateContentV3 | null {
+    const ids = sameIds()
+    const result = work(content, ids())
+
     if (!result.success) {
       bizflowToast.error(result.message)
-      return false
+      return null
     }
 
     // A section a move empties keeps a line, which a full page has no room for.
     if (result.content === content || (result.content.blocks.length > content.blocks.length && !hasRoom())) {
-      return false
+      return null
     }
 
-    change(() => result.content)
-    return true
+    change((current) => {
+      const again = current === content ? result : work(current, ids())
+      return again.success ? again.content : current
+    })
+    return result.content
   }
 
   function remove(blockId: string): void {
@@ -382,8 +401,21 @@ export function useEditorController({
     }
   }
 
+  /**
+   * Changes a block. Only what differs from the block as this page drew it is
+   * written, onto the block as it is when the change lands, so a field someone
+   * else changed meanwhile keeps their change.
+   *
+   * @param block - The block as it should be.
+   * @param coalesceKey - Joins a run of keystrokes into one undo step.
+   */
   function updateBlock(block: TemplateBlock, coalesceKey?: string): void {
-    change((current) => updateTemplateBlock(current, block), coalesceKey)
+    const drawn = content.blocks.find((candidate) => candidate.id === block.id)
+
+    change((current) => {
+      const now = current.blocks.find((candidate) => candidate.id === block.id)
+      return now ? updateTemplateBlock(current, drawn ? rebase(drawn, block, now) : block) : current
+    }, coalesceKey)
   }
 
   /**
@@ -425,7 +457,7 @@ export function useEditorController({
   function turnIntoSection(blockId: string): void {
     const sectionId = crypto.randomUUID()
     const result = turnLineIntoSection(content, blockId, sectionId)
-    change(() => result.content)
+    change((current) => turnLineIntoSection(current, blockId, sectionId).content)
     requestFocus(result.focus)
   }
 
@@ -445,7 +477,9 @@ export function useEditorController({
 
   // A drag or a run of keystrokes on one setting makes one undo step.
   function setLayout(layout: TemplateLayout, coalesceKey?: string): void {
-    change((current) => ({ ...current, layout }), coalesceKey)
+    const drawn = content.layout
+
+    change((current) => ({ ...current, layout: rebase(drawn, layout, current.layout) }), coalesceKey)
   }
 
   return {
@@ -460,6 +494,7 @@ export function useEditorController({
     closeSettings: () => setSettingsBlockId(null),
     content,
     duplicate,
+    edit,
     focus,
     insert,
     line,
@@ -491,6 +526,46 @@ export function useEditorController({
       change((current) => updateTemplateFieldGroup(current, groupId, patch), coalesceKey),
     updateSection,
   }
+}
+
+type MoveWork = (from: TemplateContentV3, newId: () => string) => TemplateMoveResult
+
+/**
+ * Gives the same new ids each time an edit is worked out, so working it out
+ * again on a newer page makes what the caret and announcements expect.
+ *
+ * @returns A way to start handing out the ids from the first again.
+ */
+function sameIds(): () => () => string {
+  const made: string[] = []
+
+  return () => {
+    let index = 0
+    return () => (made[index++] ??= crypto.randomUUID())
+  }
+}
+
+/**
+ * Puts what an edit changed in a block or the page setup, compared with what
+ * it was made from, onto what is there now.
+ *
+ * @param drawn - What the edit was made from.
+ * @param edited - What it became.
+ * @param now - What is there now.
+ * @returns What is there now with the edit's changes.
+ */
+function rebase<Value extends object>(drawn: Value, edited: Value, now: Value): Value {
+  const from: Record<string, unknown> = Object.fromEntries(Object.entries(drawn))
+  const to: Record<string, unknown> = Object.fromEntries(Object.entries(edited))
+  const next: Record<string, unknown> = Object.fromEntries(Object.entries(now))
+
+  for (const key of new Set([...Object.keys(from), ...Object.keys(to)])) {
+    if (from[key] === to[key]) continue
+    if (key in to) next[key] = to[key]
+    else delete next[key]
+  }
+
+  return next as unknown as Value
 }
 
 /**

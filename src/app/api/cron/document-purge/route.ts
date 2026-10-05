@@ -2,8 +2,11 @@ import { timingSafeEqual } from "node:crypto"
 
 import { NextResponse } from "next/server"
 
-import { captureUnexpectedError } from "@/lib/observability"
+import { captureUnexpectedError, describeErrorForLog } from "@/lib/observability"
 import { processDueResourcePurges } from "@/services/document-service"
+
+/** Leaves the batch room to finish rather than be killed mid-delete. */
+export const maxDuration = 300
 
 /**
  * Processes a bounded batch of due document and folder purge work.
@@ -38,7 +41,7 @@ export async function GET(request: Request): Promise<Response> {
   } catch (error: unknown) {
     console.error("document_purge_cron_failed", {
       durationMs: Date.now() - startedAt,
-      reason: error instanceof Error ? error.name : "Unknown purge error",
+      ...describeErrorForLog(error),
     })
     captureUnexpectedError(error, { routeName: "cron_document_purge" })
     return createNoStoreResponse({ error: "Document purge failed." }, 500)

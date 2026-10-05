@@ -2,7 +2,12 @@ import * as Y from "yjs"
 
 import { fitRuns, type TemplateBlock, type TemplateContentV3, type TextRun } from "@/types/template"
 import { withoutImageUrls } from "@/types/template-images"
-import { repairTemplateStructure, withGeneratedFieldKeys } from "@/types/template-structure"
+import {
+  createUniqueTemplateFieldKey,
+  isTemplateFieldBlock,
+  repairTemplateStructure,
+  withGeneratedFieldKeys,
+} from "@/types/template-structure"
 
 /**
  * A working copy as people edit it together: a template's title, description,
@@ -108,10 +113,31 @@ export function readWorkingCopyDoc(doc: Y.Doc): WorkingCopy {
   return {
     ...(answers === undefined ? {} : { answers: sortedObject(asType(answers, Y.Map<unknown>).toJSON()) }),
     ...(typeof category === "string" ? { category } : {}),
-    content: withGeneratedFieldKeys(repairTemplateStructure(content)),
+    // Only a template has a category. A draft document's answers are saved
+    // under its field keys, so there only a repeated key is renamed.
+    content: typeof category === "string" ? withGeneratedFieldKeys(repairTemplateStructure(content)) : withUniqueFieldKeys(repairTemplateStructure(content)),
     ...(description === undefined ? {} : { description: asType(description, Y.Text).toString() }),
     title: asType(root.get("title"), Y.Text).toString(),
   }
+}
+
+// Renames each field whose key an earlier field already uses, and nothing else.
+function withUniqueFieldKeys(content: TemplateContentV3): TemplateContentV3 {
+  const seen = new Set<string>()
+  let blocks = content.blocks
+
+  for (const block of content.blocks) {
+    if (!isTemplateFieldBlock(block)) continue
+
+    const fieldKey = seen.has(block.fieldKey) ? createUniqueTemplateFieldKey(block.fieldKey, blocks, block.id) : block.fieldKey
+    seen.add(fieldKey)
+
+    if (fieldKey !== block.fieldKey) {
+      blocks = blocks.map((candidate) => (candidate.id === block.id ? { ...block, fieldKey } : candidate))
+    }
+  }
+
+  return blocks === content.blocks ? content : { ...content, blocks }
 }
 
 /**

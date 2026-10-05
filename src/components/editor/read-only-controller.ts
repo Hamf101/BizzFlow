@@ -28,6 +28,8 @@ export function useReadOnlyController(content: TemplateContentV3): EditorControl
       content,
       currentSectionId: null,
       duplicate: ignore,
+      // Worked out, never made.
+      edit: (work) => work(content, () => crypto.randomUUID()),
       focus: null,
       insert: ignore,
       line: null,

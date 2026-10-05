@@ -20,6 +20,7 @@ export type RateLimitBucket =
   | "document_open"
   | "public_form_submission"
   | "public_form_file_upload"
+  | "public_form_draft"
   | "working_copy_write"
   | "working_copy_read"
   | "request_ip"
@@ -45,6 +46,12 @@ type BucketConfig = {
 /** Retry hint used when a fail-closed bucket denies on limiter unavailability. */
 const LIMITER_UNAVAILABLE_RETRY_SECONDS = 30
 
+/** Consecutive limiter failures that open the circuit. */
+const CIRCUIT_FAILURE_THRESHOLD = 3
+
+/** How long an open circuit skips the limiter before trying it again. */
+const CIRCUIT_OPEN_MS = 30_000
+
 const BUCKET_CONFIGS: Readonly<Record<RateLimitBucket, BucketConfig>> = {
   auth: { limit: 10, windowSeconds: 600, failMode: "open" },
   public_signing: { limit: 30, windowSeconds: 60, failMode: "open" },
@@ -66,6 +73,8 @@ const BUCKET_CONFIGS: Readonly<Record<RateLimitBucket, BucketConfig>> = {
   document_open: { limit: 120, windowSeconds: 60, failMode: "open" },
   public_form_submission: { limit: 5, windowSeconds: 60, failMode: "open" },
   public_form_file_upload: { limit: 10, windowSeconds: 60, failMode: "open" },
+  // Autosave checkpoints; separate so typing never spends the upload budget.
+  public_form_draft: { limit: 60, windowSeconds: 60, failMode: "open" },
   // An editor sends a change every few hundred milliseconds while someone types,
   // and reads each change the others make.
   working_copy_write: { limit: 300, windowSeconds: 60, failMode: "open" },
@@ -132,7 +141,8 @@ export class RateLimitError extends Error {
  *   so a missing env var degrades to a weaker ceiling, never to none.
  * - **Configured but unreachable** (Redis outage): fail-open buckets log and
  *   allow; fail-closed buckets deny, so a third-party spend ceiling is never
- *   silently removed.
+ *   silently removed. After three failures in a row the limiter is skipped for
+ *   30 seconds (same fail modes), so an outage costs no per-request timeout.
  *
  * @param deps - Optional limiter factory and clock for deterministic tests.
  * @returns An async check that throws {@link RateLimitError} when denied.
@@ -141,6 +151,10 @@ export function createRateLimitCheck(deps: RateLimitDeps = {}): CheckRateLimit {
   const createLimiter = deps.createLimiter ?? createDefaultLimiter
   const now = deps.now ?? Date.now
   const limiters = new Map<RateLimitBucket, LimiterLike | null>()
+  // One Redis behind every bucket, so one breaker: during an outage each check
+  // would otherwise wait out the timeout and log, on every request.
+  let consecutiveFailures = 0
+  let circuitOpenUntil = 0
 
   return async (bucket: RateLimitBucket, key: string): Promise<void> => {
     if (!limiters.has(bucket)) {
@@ -154,6 +168,18 @@ export function createRateLimitCheck(deps: RateLimitDeps = {}): CheckRateLimit {
     }
 
     const config = BUCKET_CONFIGS[bucket]
+    const applyFailMode = (): void => {
+      if (config.failMode === "closed") {
+        // Reuses the generic over-limit message so an outage never tells a
+        // caller which part of the infrastructure is unavailable.
+        throw new RateLimitError(LIMITER_UNAVAILABLE_RETRY_SECONDS)
+      }
+    }
+
+    if (now() < circuitOpenUntil) {
+      return applyFailMode()
+    }
+
     let decision: LimiterDecision
 
     try {
@@ -164,22 +190,29 @@ export function createRateLimitCheck(deps: RateLimitDeps = {}): CheckRateLimit {
       if (decision.reason === "timeout") {
         throw new Error("Rate limiter timed out.")
       }
-    } catch (error: unknown) {
-      console.error("rate_limit_check_failed", {
-        bucket,
-        failMode: config.failMode,
-        reason:
-          error instanceof Error ? error.message : "Unknown rate limit error",
-      })
-      captureUnexpectedError(error, { bucket, source: "rate_limit" })
 
-      if (config.failMode === "closed") {
-        // Reuses the generic over-limit message so an outage never tells a
-        // caller which part of the infrastructure is unavailable.
-        throw new RateLimitError(LIMITER_UNAVAILABLE_RETRY_SECONDS)
+      consecutiveFailures = 0
+    } catch (error: unknown) {
+      consecutiveFailures += 1
+
+      if (consecutiveFailures >= CIRCUIT_FAILURE_THRESHOLD) {
+        consecutiveFailures = 0
+        circuitOpenUntil = now() + CIRCUIT_OPEN_MS
+        console.error("rate_limit_circuit_opened", {
+          bucket,
+          openSeconds: CIRCUIT_OPEN_MS / 1000,
+        })
+      } else {
+        console.error("rate_limit_check_failed", {
+          bucket,
+          failMode: config.failMode,
+          reason:
+            error instanceof Error ? error.message : "Unknown rate limit error",
+        })
+        captureUnexpectedError(error, { bucket, source: "rate_limit" })
       }
 
-      return
+      return applyFailMode()
     }
 
     if (!decision.success) {

@@ -32,6 +32,38 @@ const BREADCRUMB_URL_KEYS = ["url", "to", "from"] as const
 let activeReporter: ErrorReporter | null = null
 
 /**
+ * Log fields that say why an operation failed: the error's name and message,
+ * and the database code and message of the error it wraps (`cause`).
+ *
+ * For server logs only — the messages can name tables or constraints, so
+ * they must never reach a response.
+ *
+ * @param error - Caught error, possibly wrapping a database error.
+ * @returns Name, message, code, and the wrapped error's message.
+ */
+export function describeErrorForLog(
+  error: unknown
+): Record<string, string | null> {
+  const cause = error instanceof Error ? error.cause : undefined
+
+  return {
+    errorName: error instanceof Error ? error.name : null,
+    reason: readStringField(error, "message"),
+    code: readStringField(cause, "code") ?? readStringField(error, "code"),
+    causeMessage: readStringField(cause, "message"),
+  }
+}
+
+function readStringField(value: unknown, key: "code" | "message"): string | null {
+  const field =
+    value && typeof value === "object"
+      ? (value as Record<string, unknown>)[key]
+      : undefined
+
+  return typeof field === "string" ? field : null
+}
+
+/**
  * Registers the process-wide error reporter, or clears it with `null`.
  *
  * Called once from Sentry instrumentation at boot; tests inject fakes. While

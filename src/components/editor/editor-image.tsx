@@ -58,7 +58,6 @@ export function EditorImage({ actions, block, placed = false }: { actions: Canva
     const bounds = page.element.getBoundingClientRect()
 
     update({
-      ...from.block,
       placement: placeImage({
         ...placement,
         page: page.number,
@@ -85,7 +84,6 @@ export function EditorImage({ actions, block, placed = false }: { actions: Canva
         const width = Math.max(8, from.width + grown)
 
         update({
-          ...from.block,
           placement: placeImage({
             ...from.block.placement,
             height: ((width * from.height) / from.width / page.height) * 100,
@@ -98,12 +96,13 @@ export function EditorImage({ actions, block, placed = false }: { actions: Canva
       const column = from.width / (from.block.widthPercent / 100)
       const widthPercent = from.block.widthPercent + ((grown * (from.block.alignment === "center" ? 2 : 1)) / column) * 100
 
-      update({ ...from.block, widthPercent: Math.round(Math.min(100, Math.max(10, widthPercent))) })
+      update({ widthPercent: Math.round(Math.min(100, Math.max(10, widthPercent))) })
     }
   }
 
-  function update(next: ImageBlock): void {
-    controller.updateBlock(next, `image:${block.id}`)
+  // Only what the drag sets, so a caption or picture someone else changed meanwhile stays.
+  function update(patch: Partial<ImageBlock>): void {
+    controller.updateBlock({ ...block, ...patch }, `image:${block.id}`)
   }
 
   function end(): void {

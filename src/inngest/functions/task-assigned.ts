@@ -62,8 +62,11 @@ export async function handleTaskAssigned(
 /**
  * Event-driven function that notifies a member when a task lands on them.
  *
- * The transport already keys delivery on the assignment instant, so an
- * at-least-once retry cannot produce a duplicate email.
+ * Runs are at-least-once and EmailJS has no idempotency key. Duplicates are
+ * stopped by the event id (a repeated publish of one assignment is dropped)
+ * and by the delivery ledger: the service skips a channel already recorded as
+ * sent for this assignment. A run killed between the provider accepting a send
+ * and the ledger write can still repeat that one message.
  */
 export const taskAssignedFunction = inngest.createFunction(
   {

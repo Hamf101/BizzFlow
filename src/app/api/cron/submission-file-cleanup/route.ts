@@ -2,12 +2,15 @@ import { timingSafeEqual } from "node:crypto"
 
 import { NextResponse } from "next/server"
 
-import { captureUnexpectedError } from "@/lib/observability"
+import { captureUnexpectedError, describeErrorForLog } from "@/lib/observability"
 import {
   cleanupExpiredSubmissionFileObjects,
   expireAbandonedSubmissionFiles,
   type SubmissionFileExpiryResult,
 } from "@/services/submission-service"
+
+/** Leaves the batch room to finish rather than be killed mid-delete. */
+export const maxDuration = 300
 
 /**
  * Expires abandoned public drafts and dead uploads, then removes the expired
@@ -52,7 +55,7 @@ export async function GET(request: Request): Promise<Response> {
   } catch (error: unknown) {
     console.error("submission_file_cleanup_cron_failed", {
       durationMs: Date.now() - startedAt,
-      reason: error instanceof Error ? error.name : "Unknown cleanup error",
+      ...describeErrorForLog(error),
     })
     captureUnexpectedError(error, { routeName: "cron_submission_file_cleanup" })
     return createNoStoreResponse(
@@ -72,7 +75,7 @@ async function expireAbandonedFilesOrReport(
   } catch (error: unknown) {
     console.error("submission_file_expiry_cron_failed", {
       durationMs: Date.now() - startedAt,
-      reason: error instanceof Error ? error.name : "Unknown expiry error",
+      ...describeErrorForLog(error),
     })
     captureUnexpectedError(error, { routeName: "cron_submission_file_expiry" })
     return null

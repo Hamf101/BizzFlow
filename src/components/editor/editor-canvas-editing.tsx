@@ -462,11 +462,16 @@ export function useCanvasEditing({
         return
       }
 
-      const typed = text && cut.focus ? insertLines(cut.content, cut.focus, [text], () => crypto.randomUUID()) : null
+      const done = controller.edit((page, newId) => {
+        const again = deleteAcross(page, from, to)
 
-      controller.change(() => typed?.content ?? cut.content)
+        if (!again.ok) return { content: page, focus: null }
 
-      if (typed?.focus ?? cut.focus) controller.requestFocus(typed?.focus ?? cut.focus!)
+        const typed = text && again.focus ? insertLines(again.content, again.focus, [text], newId) : null
+        return { content: typed?.content ?? again.content, focus: typed?.focus ?? again.focus }
+      })
+
+      if (done.focus) controller.requestFocus(done.focus)
     },
     root: rootRef,
   })
@@ -474,15 +479,11 @@ export function useCanvasEditing({
   // Enter on an empty item, or Backspace at the start of the first, lifts the
   // item out of the list as a line of text.
   function liftItem(block: ListBlock, entries: readonly ListEntry[], item: number): void {
-    const lifted = liftListItem(
-      updateTemplateBlock(content, withEntries(block, entries)),
-      block.id,
-      item,
-      { type: "paragraph" },
-      [crypto.randomUUID(), crypto.randomUUID()]
+    const ids: [string, string] = [crypto.randomUUID(), crypto.randomUUID()]
+    const lifted = controller.edit((page) =>
+      liftListItem(updateTemplateBlock(page, withEntries(block, entries)), block.id, item, { type: "paragraph" }, ids)
     )
 
-    controller.change(() => lifted.content)
     controller.requestFocus(lifted.focus)
   }
 
@@ -516,14 +517,15 @@ export function useCanvasEditing({
       const cut = deleteAcross(content, point(from), point(to))
 
       if (cut.ok) {
-        const pasted = insertLines(cut.content, point(from), lines, () => crypto.randomUUID())
-
-        if (pasted.tooLong) {
+        if (insertLines(cut.content, point(from), lines, () => "").tooLong) {
           bizflowToast.info("That is more than one document can hold. Paste it in parts, or into a new document.")
           return
         }
 
-        controller.change(() => pasted.content)
+        const pasted = controller.edit((page, newId) => {
+          const again = deleteAcross(page, point(from), point(to))
+          return again.ok ? insertLines(again.content, point(from), lines, newId) : { content: page, focus: point(from) }
+        })
         controller.requestFocus(pasted.focus)
       }
     },
@@ -568,10 +570,8 @@ export function useCanvasEditing({
           focusNeighbour(block.id, -1)
           return
         }
-        const result = mergeIntoPrevious(updateTemplateBlock(content, synced), block.id)
-
         event.preventDefault()
-        controller.change(() => result.content)
+        const result = controller.edit((page) => mergeIntoPrevious(updateTemplateBlock(page, synced), block.id))
 
         if (result.focus) {
           controller.requestFocus(result.focus)
@@ -584,7 +584,7 @@ export function useCanvasEditing({
 
         if (isLine(next)) {
           event.preventDefault()
-          controller.change(() => mergeIntoPrevious(updateTemplateBlock(content, synced), next.id).content)
+          controller.change((current) => mergeIntoPrevious(updateTemplateBlock(current, synced), next.id).content)
           controller.requestFocus({ blockId: block.id, offset: caret.text.length })
         }
       } else if (
@@ -809,17 +809,23 @@ export function nudgeFrame(controller: EditorController, blockId: string, event:
     return false
   }
 
-  const rule = content.blockRules.find((candidate) => candidate.blockId === blockId)
-  const { left, width } = rule?.frame ?? { left: 0, width: 100 }
   const step = event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 1
+  const down = event.key === "ArrowUp" || event.key === "ArrowDown"
+  const wider = event.shiftKey
 
-  if (event.key === "ArrowUp" || event.key === "ArrowDown") {
-    controller.change((current) => setBlockRule(current, blockId, { spaceAbove: Math.max(0, (rule?.spaceAbove ?? 0) + step * 2) }), `space:${blockId}`)
-  } else if (event.shiftKey) {
-    controller.change((current) => setBlockRule(current, blockId, { frame: frameOf(left, Math.max(5, width + step)) }), `frame:${blockId}`)
-  } else {
-    controller.change((current) => setBlockRule(current, blockId, { frame: frameOf(Math.min(Math.max(0, left + step), 100 - width), width) }), `frame:${blockId}`)
-  }
+  // From the block's place as it is when the change lands, so a step is never lost.
+  controller.change((current) => {
+    const rule = current.blockRules.find((candidate) => candidate.blockId === blockId)
+    const { left, width } = rule?.frame ?? { left: 0, width: 100 }
+
+    return setBlockRule(
+      current,
+      blockId,
+      down
+        ? { spaceAbove: Math.max(0, (rule?.spaceAbove ?? 0) + step * 2) }
+        : { frame: wider ? frameOf(left, Math.max(5, width + step)) : frameOf(Math.min(Math.max(0, left + step), 100 - width), width) }
+    )
+  }, down ? `space:${blockId}` : `frame:${blockId}`)
 
   return true
 }

@@ -10,9 +10,12 @@ export type {
 export { TaskServiceError } from "@/services/tasks/errors"
 export {
   cancelTaskReminder,
+  deliverDueTaskReminders,
+  findDueTaskReminders,
   notifyTaskAssignee,
   processDueTaskReminders,
   scheduleTaskReminder,
+  taskAssignmentReference,
   TASK_REMINDER_BATCH_LIMIT,
   TASK_REMINDER_MAX_ATTEMPTS,
 } from "@/services/tasks/reminder-service"

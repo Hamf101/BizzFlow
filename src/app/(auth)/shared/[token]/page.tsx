@@ -17,6 +17,7 @@ type SharedDocumentParams = Promise<{
 type SharedDocumentSearchParams = Promise<{
   account?: string
   error?: string
+  sig?: string
 }>
 
 /**

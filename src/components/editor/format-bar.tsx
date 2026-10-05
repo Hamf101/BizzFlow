@@ -173,9 +173,9 @@ export function FormatBar({
     const offset = head()
 
     if (isList(textBlock)) {
-      const lifted = liftListItem(content, textBlock.id, item, kind, [crypto.randomUUID(), crypto.randomUUID()])
+      const ids: [string, string] = [crypto.randomUUID(), crypto.randomUUID()]
+      const lifted = controller.edit((page) => liftListItem(page, textBlock.id, item, kind, ids))
 
-      controller.change(() => lifted.content)
       controller.requestFocus({ ...lifted.focus, offset })
       return
     }

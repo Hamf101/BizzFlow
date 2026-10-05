@@ -7,6 +7,7 @@ import { CheckboxChoices } from "@/components/ui/radio-choices"
 import type { ChoiceGridFieldBlock, DropdownFieldBlock, TableFieldBlock } from "@/types/template"
 
 import { PaperGrid, PaperTable } from "./paper-answer-kinds"
+import { PageBreaks } from "./table-cells"
 
 const field = { helpText: null, id: "71000000-0000-4000-8000-000000000001", required: false } as const
 const grid: ChoiceGridFieldBlock = { ...field, fieldKey: "checks", label: "Checks", options: ["OK", "Defect"], rows: ["Tyres", "Lights"], type: "choice_grid_field" }
@@ -54,7 +55,7 @@ describe("answers that are more than one word", () => {
 
     expect(posted(fill, "answer.json.log")).toEqual([["", "Unloading"], ["2026-10-01", ""]])
     // Three rows wide and narrow: the wide table and each row's own list.
-    expect(fill.match(/<tr data-row-key/g)).toHaveLength(3)
+    expect(fill.match(/<tr/g)).toHaveLength(4)
     expect(fill).toContain('value="Unloading"')
     // No way to add a row unless the table allows it.
     expect(fill).not.toContain("Add a row")
@@ -74,4 +75,12 @@ describe("answers that are more than one word", () => {
     // Columns share the width equally, as in print, so a date's picker sets every column's need.
     expect(renderToStaticMarkup(createElement(PaperTable, { block: table, mode: "fill", onChange: noop, value: [] }))).toContain("@max-[22em]:hidden")
   })
+})
+
+it("leaves a page's remaining space before a fill-in row that starts the next page", () => {
+  const markup = renderToStaticMarkup(
+    createElement(PageBreaks.Provider, { value: { [`${table.id}:row2`]: 40 } }, createElement(PaperTable, { block: table, mode: "fill", value: [] }))
+  )
+
+  expect(markup.match(/height:\s*40px/g)).toHaveLength(1)
 })

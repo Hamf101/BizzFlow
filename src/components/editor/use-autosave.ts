@@ -34,9 +34,10 @@ export function useAutosave<Value>({
   initialVersion: string
   save: (value: Value, version: string) => Promise<SaveResult>
   value: Value
-}): { flush: () => Promise<boolean>; status: AutosaveStatus } {
+}): { flush: () => Promise<boolean>; status: AutosaveStatus; version: string } {
   const serialized = JSON.stringify(value)
   const [status, setStatus] = useState<AutosaveStatus>("saved")
+  const [version, setVersion] = useState(initialVersion)
   const savedRef = useRef(serialized)
   const versionRef = useRef(initialVersion)
   const latestRef = useRef({ serialized, value })
@@ -44,10 +45,12 @@ export function useAutosave<Value>({
   const timerRef = useRef<number | undefined>(undefined)
   const stoppedRef = useRef(false)
   const saveRef = useRef(save)
+  const enabledRef = useRef(enabled)
 
   useEffect(() => {
     latestRef.current = { serialized, value }
     saveRef.current = save
+    enabledRef.current = enabled
   })
 
   const run = useCallback(async (): Promise<boolean> => {
@@ -74,6 +77,7 @@ export function useAutosave<Value>({
 
         if (result.ok) {
           versionRef.current = result.version
+          setVersion(result.version)
           savedRef.current = attempt
           setStatus(latestRef.current.serialized === attempt ? "saved" : "unsaved")
           return true
@@ -113,6 +117,13 @@ export function useAutosave<Value>({
     return () => window.clearTimeout(timerRef.current)
   }, [delay, enabled, run, serialized])
 
+  // Leaving the editor in the app saves what is waiting rather than dropping it.
+  useEffect(() => () => {
+    if (enabledRef.current) {
+      void run()
+    }
+  }, [run])
+
   // A lost connection retries on its own.
   useEffect(() => {
     if (status !== "offline") {
@@ -134,5 +145,5 @@ export function useAutosave<Value>({
     return () => window.removeEventListener("beforeunload", warn)
   }, [])
 
-  return { flush: run, status }
+  return { flush: run, status, version }
 }

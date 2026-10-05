@@ -342,7 +342,28 @@ export function getEmailEnv(): EmailEnv {
     )
   }
 
+  // EmailJS's public key ships to browsers by design; without the private key
+  // anyone holding it could send through this account.
+  if (isProductionRuntime() && !result.data.EMAILJS_PRIVATE_KEY) {
+    throw new Error(
+      "Invalid email environment: EMAILJS_PRIVATE_KEY is required in production."
+    )
+  }
+
   return result.data
+}
+
+/**
+ * Whether this is a production build or a Vercel production deployment,
+ * where a development fallback must fail closed rather than pretend to work.
+ *
+ * @returns True when NODE_ENV or VERCEL_ENV is `production`.
+ */
+export function isProductionRuntime(): boolean {
+  return (
+    process.env.NODE_ENV === "production" ||
+    process.env.VERCEL_ENV === "production"
+  )
 }
 
 /**

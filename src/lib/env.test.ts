@@ -138,6 +138,17 @@ describe("email environment validation", () => {
     })
   })
 
+  it("requires the private EmailJS key in production, where the public key alone would relay mail for anyone", () => {
+    setIsolatedEnv({
+      VERCEL_ENV: "production",
+      EMAILJS_SERVICE_ID: "service_buy2dql",
+      EMAILJS_TEMPLATE_ID: "template_d6o6c8p",
+      EMAILJS_PUBLIC_KEY: "public-test-key",
+    })
+
+    expect(() => getEmailEnv()).toThrow("EMAILJS_PRIVATE_KEY")
+  })
+
   it("requires the public EmailJS account key", () => {
     setIsolatedEnv({
       EMAIL_PROVIDER: "emailjs",

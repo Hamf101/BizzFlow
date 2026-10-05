@@ -148,6 +148,7 @@ describe("createTask", () => {
       taskId: NEW_TASK_ID,
       assignedToUserId: STAFF_ID,
       assignedByUserId: MANAGER_ID,
+      assignedAt: NOW,
     })
   })
 

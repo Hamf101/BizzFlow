@@ -208,6 +208,7 @@ export function TemplateEditor({
     // Live, what the room has kept is saved; anything waiting stays on this device too.
     saved: !liveMode ? savedState : history.liveStatus === "saved" ? state : initial,
     value: state,
+    version: autosave.version,
   })
   const settingsBlock = content.blocks.find((block) => block.id === controller.settingsBlockId) ?? null
   const settingsIndex = settingsBlock ? content.blocks.indexOf(settingsBlock) : -1

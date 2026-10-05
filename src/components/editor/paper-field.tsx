@@ -1,23 +1,23 @@
 "use client"
 
 import { Check } from "lucide-react"
-import dynamic from "next/dynamic"
 import { createContext, type CSSProperties, type ReactElement, type ReactNode, useContext } from "react"
 
 import { typedInput } from "@/components/ui/typed-input"
+import { DrawnSignatureField } from "@/components/documents/drawn-signature-field"
 import { getGeneratedDocumentAnswerName } from "@/components/documents/generated-document-form-data"
+// Imported with the page, not after it, so the canvas measures their real height.
+import { PaperGrid, PaperTable } from "@/components/editor/paper-answer-kinds"
 import { DatePicker } from "@/components/ui/date-picker"
+import { RequiredStandIn } from "@/components/ui/required-stand-in"
 import { Select } from "@/components/ui/select"
 import { describeDateFormat, formatDateAnswer } from "@/lib/date-format"
 import { cn } from "@/lib/utils"
 import { boxNote, boxSigner } from "@/types/box-signers"
 import type { TemplateBlock, TemplateLayout, TextFieldBlock } from "@/types/template"
+import { isTemplateAnswerComplete } from "@/types/template-answer"
 import { readChoiceList } from "@/types/template-answer-kinds"
 
-// Grids, tables and signature pads load only on pages that have them.
-const DrawnSignatureField = dynamic(() => import("@/components/documents/drawn-signature-field").then((field) => field.DrawnSignatureField))
-const PaperGrid = dynamic(() => import("@/components/editor/paper-answer-kinds").then((kinds) => kinds.PaperGrid))
-const PaperTable = dynamic(() => import("@/components/editor/paper-answer-kinds").then((kinds) => kinds.PaperTable))
 
 type FieldBlock = Extract<TemplateBlock, { fieldKey: string }>
 type FieldStyle = NonNullable<TemplateLayout["fieldStyle"]>
@@ -138,6 +138,7 @@ export function PaperField({
         ) : (
           <PaperTable block={block} mode={mode} onChange={set} value={value} />
         )}
+        {required ? <RequiredStandIn filled={isTemplateAnswerComplete(block, value)} label={block.label} /> : null}
         <Help block={block} />
       </div>
     )
@@ -303,6 +304,7 @@ export function PaperField({
           style={{ lineHeight: 1.5 }}
         >
           {/* Nothing chosen still answers, as an empty dropdown does. */}
+          {required && several ? <RequiredStandIn filled={isTemplateAnswerComplete(block, ticked)} label={block.label} /> : null}
           {fill ? (
             several ? (
               <input name={getGeneratedDocumentAnswerName("json", block.fieldKey)} type="hidden" value={JSON.stringify(ticked)} />

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 
 import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
 import { resolveDocumentOrganizationId } from "@/lib/document-organization"
-import { captureUnexpectedError } from "@/lib/observability"
+import { captureUnexpectedError, describeErrorForLog } from "@/lib/observability"
 import { checkRateLimit, RateLimitError } from "@/lib/rate-limit"
 import { createRateLimitResponse } from "@/lib/rate-limit-response"
 import {
@@ -153,6 +153,13 @@ export async function GET(
       error instanceof DocumentServiceError ||
       error instanceof OrganizationServiceError
     ) {
+      if (error.statusCode >= 500) {
+        console.error("generated_document_pdf_route_failed", {
+          documentId: requestedDocumentId,
+          ...describeErrorForLog(error),
+        })
+      }
+
       return NextResponse.json(
         { error: error.message },
         { status: error.statusCode }
@@ -161,7 +168,7 @@ export async function GET(
 
     console.error("generated_document_pdf_route_failed", {
       documentId: requestedDocumentId,
-      errorName: error instanceof Error ? error.name : "UnknownError",
+      ...describeErrorForLog(error),
     })
     captureUnexpectedError(error, {
       routeName: "documents_pdf",

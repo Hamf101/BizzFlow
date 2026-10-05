@@ -7,12 +7,14 @@ import { Button } from "@/components/ui/button"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { buildAcceptInvitePath } from "@/lib/auth-redirects"
+import { readSignedFlash } from "@/lib/form-utils"
 import { AuthPageCard } from "@/lib/page-auth-card"
 
 import { signupAction } from "./actions"
 
 type SignupSearchParams = Promise<{
   error?: string
+  sig?: string
   invite?: string
   sent?: string
 }>
@@ -23,6 +25,7 @@ export default async function SignupPage({
   searchParams: SignupSearchParams
 }) {
   const params = await searchParams
+  const flashError = readSignedFlash(params).error
 
   // Invites are answered on their own page now; older links still land there.
   if (params.invite) {
@@ -69,10 +72,10 @@ export default async function SignupPage({
       title="Sign up for BizFlow"
     >
       <form action={signupAction} className="flex flex-col gap-5">
-        {params.error && (
+        {flashError && (
           <Alert variant="destructive">
             <AlertTitle>Unable to sign up</AlertTitle>
-            <AlertDescription>{params.error}</AlertDescription>
+            <AlertDescription>{flashError}</AlertDescription>
           </Alert>
         )}
         <FieldGroup>

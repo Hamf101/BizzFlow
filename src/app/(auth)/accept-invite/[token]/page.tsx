@@ -18,6 +18,7 @@ type AcceptInviteParams = Promise<{
 type AcceptInviteSearchParams = Promise<{
   account?: string
   error?: string
+  sig?: string
 }>
 
 const roleLabels: Record<OrganizationRole, string> = {

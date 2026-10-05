@@ -473,8 +473,14 @@ export function normalizeTaskDescription(value: unknown): string | null {
   return description
 }
 
+/** An explicit `Z` or `±hh:mm` offset ends the timestamp. */
+const TIMESTAMP_OFFSET_PATTERN = /(?:Z|[+-]\d{2}:?\d{2})$/i
+
 /**
  * Normalizes an untrusted timestamp into a canonical ISO instant.
+ *
+ * A value without an offset is refused: the server would read the sender's
+ * wall-clock time as its own (UTC) and shift the instant by hours.
  *
  * @param value - Untrusted timestamp.
  * @param message - User-safe rejection description.
@@ -497,6 +503,13 @@ export function normalizeTaskTimestamp(
 
   if (Number.isNaN(timestamp.getTime())) {
     throw new TaskServiceError(message, 400)
+  }
+
+  if (!TIMESTAMP_OFFSET_PATTERN.test(value.trim())) {
+    throw new TaskServiceError(
+      `${message} Include a time zone offset, such as 2026-10-03T09:00:00Z or 2026-10-03T09:00:00+01:00.`,
+      400
+    )
   }
 
   return timestamp.toISOString()

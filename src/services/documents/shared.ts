@@ -347,16 +347,20 @@ export function createSupabaseServiceError(
 ): DocumentServiceError {
   const setupMessage = getSupabaseSetupFailureMessage(error)
 
+  // The original database error rides along as `cause` so logs can name its
+  // code; the message a caller sees stays the safe fallback.
+  const options = { cause: error }
+
   if (setupMessage) {
-    return new DocumentServiceError(setupMessage, 500)
+    return new DocumentServiceError(setupMessage, 500, options)
   }
 
   // A write that kept meeting a colleague's is worth trying again.
   if (isSerializationFailure(error)) {
-    return new DocumentServiceError(CONCURRENT_CHANGE_MESSAGE, 409)
+    return new DocumentServiceError(CONCURRENT_CHANGE_MESSAGE, 409, options)
   }
 
-  return new DocumentServiceError(fallbackMessage, fallbackStatusCode)
+  return new DocumentServiceError(fallbackMessage, fallbackStatusCode, options)
 }
 
 /**

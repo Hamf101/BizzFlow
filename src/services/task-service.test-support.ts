@@ -5,6 +5,7 @@ import {
   PostgrestReadQuery,
   type PostgrestFakeResult,
 } from "@/services/postgrest-fake.test-support"
+import type { RecordNotificationDeliveryInput } from "@/services/notification-service"
 import type { TaskServiceDeps } from "@/services/task-service"
 
 /** Tenant identifier shared by every task fixture. */
@@ -359,6 +360,20 @@ export function createDeps(
     // every success path read `.success` off undefined.
     sendSms: vi.fn().mockResolvedValue({ success: true, messageId: "sms-1" }),
     publishTaskAssigned: vi.fn().mockResolvedValue(undefined),
-    recordNotificationDelivery: vi.fn().mockResolvedValue(null),
+    // Writes the ledger row the real recorder would, so a replayed send can
+    // be proven to find it.
+    recordNotificationDelivery: vi.fn(
+      async (input: RecordNotificationDeliveryInput): Promise<null> => {
+        client.tables.notification_deliveries.push({
+          org_id: input.organizationId,
+          recipient_user_id: input.recipientUserId,
+          channel: input.channel,
+          purpose: input.purpose,
+          reference: input.reference,
+          status: input.status,
+        })
+        return null
+      }
+    ),
   }
 }

@@ -1,4 +1,4 @@
-import { Fragment, type MouseEvent, type ReactElement, type Ref } from "react"
+import { createContext, Fragment, type MouseEvent, type ReactElement, type Ref } from "react"
 
 import { EditableText } from "@/components/editor/editable-text"
 import type { TemplateBlock } from "@/types/template"
@@ -6,6 +6,13 @@ import type { TemplateBlock } from "@/types/template"
 export type TableBlock = Extract<TemplateBlock, { type: "table" }>
 /** A cell; the heading row is row -1. */
 export type Cell = Readonly<{ column: number; row: number }>
+
+/**
+ * The space left before each part of a block that starts a new page — a line
+ * of a paragraph, a list item, a table row — keyed as the canvas measured it.
+ * Empty on a phone, where the writing reflows instead of filling pages.
+ */
+export const PageBreaks = createContext<Readonly<Record<string, number>>>({})
 
 type CellProps = Omit<Parameters<typeof EditableText>[0], "as" | "className">
 

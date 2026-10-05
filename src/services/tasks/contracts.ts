@@ -43,6 +43,8 @@ export type TaskAssignedNotification = {
   taskId: string
   assignedToUserId: string
   assignedByUserId: string
+  /** Assignment instant; with the task and assignee it is the event's dedupe id. */
+  assignedAt: string | null
 }
 
 /** Actor and tenant identifiers shared by every task call. */

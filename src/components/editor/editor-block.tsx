@@ -2,7 +2,6 @@
 
 import { GripVertical } from "lucide-react"
 import {
-  createContext,
   type CSSProperties,
   Fragment,
   type KeyboardEvent,
@@ -20,7 +19,7 @@ import type { Editor } from "@tiptap/core"
 import { designTools } from "@/components/editor/design-tools"
 import type { TextCaret } from "@/components/editor/editable-text"
 import { EditorImage } from "@/components/editor/editor-image"
-import { readOnlyCell, TableCells } from "@/components/editor/table-cells"
+import { PageBreaks, readOnlyCell, TableCells } from "@/components/editor/table-cells"
 import { PaperField, PRINTED_HEADING, printedSpace } from "@/components/editor/paper-field"
 import { placeImage, SNAP_PX } from "@/components/editor/image-placement"
 import type { EditorController, FocusRequest } from "@/components/editor/use-editor-controller"
@@ -100,12 +99,7 @@ function printedMargins(block: TemplateBlock): CSSProperties {
  * @param props - The block and what the canvas lends it.
  * @returns The block, with its toolbar while selected.
  */
-/**
- * The space left before each part of a block that starts a new page — a line
- * of a paragraph, a list item, a table row — keyed as the canvas measured it.
- * Empty on a phone, where the writing reflows instead of filling pages.
- */
-export const PageBreaks = createContext<Readonly<Record<string, number>>>({})
+export { PageBreaks }
 
 /**
  * Folds every one of those spaces away while the canvas measures, so each

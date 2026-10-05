@@ -7,6 +7,7 @@ import {
   TaskServiceError,
   type TaskReminderRunSummary,
 } from "@/services/task-service"
+import type { TaskReminder } from "@/types/task"
 
 const SUMMARY: TaskReminderRunSummary = {
   scannedCount: 4,
@@ -16,43 +17,55 @@ const SUMMARY: TaskReminderRunSummary = {
   skippedCount: 0,
 }
 
+const REMINDERS = [{ id: "reminder-a" }, { id: "reminder-b" }] as TaskReminder[]
+
+function oneSent(): Promise<TaskReminderRunSummary> {
+  return Promise.resolve({ ...SUMMARY, scannedCount: 1, sentCount: 1, failedCount: 0 })
+}
+
 describe("handleDueTaskReminders", () => {
-  it("returns the service summary from one named durable step", async () => {
-    const processDueTaskReminders = vi.fn(
-      async (): Promise<TaskReminderRunSummary> => SUMMARY
-    )
+  it("delivers each due reminder in its own durable step and sums the outcomes", async () => {
+    // One step per reminder: a run killed mid-batch replays only the reminder
+    // in flight, never sends already memoized.
+    const deliverDueTaskReminders = vi.fn(oneSent)
     const step = createRecordingStep()
 
     await expect(
-      handleDueTaskReminders({ step }, { processDueTaskReminders })
-    ).resolves.toEqual(SUMMARY)
-    expect(processDueTaskReminders).toHaveBeenCalledOnce()
-    expect(processDueTaskReminders).toHaveBeenCalledWith()
-    expect(step.stepIds).toEqual(["process-due-task-reminders"])
+      handleDueTaskReminders(
+        { step },
+        { findDueTaskReminders: async () => REMINDERS, deliverDueTaskReminders }
+      )
+    ).resolves.toEqual({ ...SUMMARY, scannedCount: 2, sentCount: 2, failedCount: 0 })
+    expect(step.stepIds).toEqual([
+      "find-due-task-reminders",
+      "deliver-task-reminder-reminder-a",
+      "deliver-task-reminder-reminder-b",
+    ])
+    expect(deliverDueTaskReminders).toHaveBeenNthCalledWith(2, [REMINDERS[1]])
   })
 
   it("stops retrying when the service rejects the scan", async () => {
-    const processDueTaskReminders = vi.fn(async (): Promise<never> => {
+    const findDueTaskReminders = vi.fn(async (): Promise<never> => {
       throw new TaskServiceError("Task reminders are not available.", 409)
     })
 
     await expect(
       handleDueTaskReminders(
         { step: createRecordingStep() },
-        { processDueTaskReminders }
+        { findDueTaskReminders }
       )
     ).rejects.toBeInstanceOf(NonRetriableError)
   })
 
   it("lets an unexpected service failure retry", async () => {
-    const processDueTaskReminders = vi.fn(async (): Promise<never> => {
+    const findDueTaskReminders = vi.fn(async (): Promise<never> => {
       throw new TaskServiceError("Unable to load due task reminders.", 500)
     })
 
     await expect(
       handleDueTaskReminders(
         { step: createRecordingStep() },
-        { processDueTaskReminders }
+        { findDueTaskReminders }
       )
     ).rejects.not.toBeInstanceOf(NonRetriableError)
   })

@@ -12,6 +12,7 @@ import {
   FieldLabel,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { readSignedFlash } from "@/lib/form-utils"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
 import { AuthPageCard } from "@/lib/page-auth-card"
 import { loadPageOrganizationContext } from "@/lib/page-organization-context"
@@ -20,6 +21,7 @@ import { createOrganizationAction } from "@/app/(dashboard)/dashboard/actions"
 
 type WelcomeSearchParams = Promise<{
   error?: string
+  sig?: string
 }>
 
 /**
@@ -58,6 +60,7 @@ export default async function WelcomePage({
   }
 
   const params = await searchParams
+  const flashError = readSignedFlash(params).error
 
   return (
     <AuthPageCard
@@ -69,10 +72,10 @@ export default async function WelcomePage({
       title="Welcome to BizFlow"
     >
       <form action={createOrganizationAction} className="flex flex-col gap-5">
-        {params.error && (
+        {flashError && (
           <Alert variant="destructive">
             <AlertTitle>Workspace not created</AlertTitle>
-            <AlertDescription>{params.error}</AlertDescription>
+            <AlertDescription>{flashError}</AlertDescription>
           </Alert>
         )}
         <FieldGroup>

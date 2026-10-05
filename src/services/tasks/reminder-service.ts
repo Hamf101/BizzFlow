@@ -35,7 +35,12 @@ import {
   sendTaskEmail as defaultSendTaskEmail,
   type SendTaskEmailInput,
 } from "@/services/tasks/task-email"
-import { isNotificationChannelEnabled } from "@/types/notification"
+import {
+  isNotificationChannelEnabled,
+  type NotificationChannel,
+  type NotificationDeliveryStatus,
+  type NotificationPurpose,
+} from "@/types/notification"
 import {
   isTerminalTaskStatus,
   parseTaskReminderRow,
@@ -555,36 +560,73 @@ async function insertAutomaticReminderRow(
 export async function processDueTaskReminders(
   deps: TaskServiceDeps = {}
 ): Promise<TaskReminderRunSummary> {
+  return deliverDueTaskReminders(await findDueTaskReminders(deps), deps)
+}
+
+/**
+ * Lists one bounded batch of reminders that are due and not leased by a pass.
+ *
+ * @param deps - Optional database and clock dependencies.
+ * @returns Due pending reminders, oldest first.
+ * @throws TaskServiceError when the scan fails.
+ */
+export async function findDueTaskReminders(
+  deps: TaskServiceDeps = {}
+): Promise<TaskReminder[]> {
   return runTaskOperation(
-    "process_due_task_reminders",
+    "find_due_task_reminders",
     { batchLimit: TASK_REMINDER_BATCH_LIMIT },
-    async (): Promise<TaskReminderRunSummary> => {
-      const client = getTaskClient(deps)
+    async (): Promise<TaskReminder[]> => {
       const now = taskNow(deps)
-      const nowIso = now.toISOString()
       const leaseCutoffIso = new Date(
         now.getTime() - TASK_REMINDER_LEASE_SECONDS * 1000
       ).toISOString()
-      const dueReminders = await listDueTaskReminders(
-        client,
-        nowIso,
+
+      return listDueTaskReminders(
+        getTaskClient(deps),
+        now.toISOString(),
         leaseCutoffIso
       )
+    }
+  )
+}
+
+/**
+ * Claims and delivers reminders returned by `findDueTaskReminders`.
+ *
+ * A background job calls this once per reminder, so a killed or retried run
+ * repeats at most one send — and the delivery ledger stops even that one.
+ *
+ * @param reminders - Due reminders as they were listed.
+ * @param deps - Optional database, clock, email, and SMS dependencies.
+ * @returns Counters for the scanned, sent, failed, retrying, and skipped rows.
+ * @throws TaskServiceError when the recipients cannot be loaded.
+ */
+export async function deliverDueTaskReminders(
+  reminders: readonly TaskReminder[],
+  deps: TaskServiceDeps = {}
+): Promise<TaskReminderRunSummary> {
+  return runTaskOperation(
+    "deliver_due_task_reminders",
+    { reminderCount: reminders.length },
+    async (): Promise<TaskReminderRunSummary> => {
       const summary: TaskReminderRunSummary = {
-        scannedCount: dueReminders.length,
+        scannedCount: reminders.length,
         sentCount: 0,
         failedCount: 0,
         retryingCount: 0,
         skippedCount: 0,
       }
 
-      if (dueReminders.length === 0) {
+      if (reminders.length === 0) {
         return summary
       }
 
-      const context = await loadDueReminderContext(client, dueReminders)
+      const client = getTaskClient(deps)
+      const nowIso = taskNow(deps).toISOString()
+      const context = await loadDueReminderContext(client, reminders)
 
-      for (const dueReminder of dueReminders) {
+      for (const dueReminder of reminders) {
         const outcome = await processOneDueReminder(
           client,
           dueReminder,
@@ -605,7 +647,8 @@ export async function processDueTaskReminders(
  * Emails the current assignee of a task after an assignment event.
  *
  * The task is re-read from the tenant, so a replayed or delayed event can never
- * notify someone who is no longer the assignee.
+ * notify someone who is no longer the assignee. A channel already recorded as
+ * sent for this assignment is not sent again, so a retried run is safe.
  *
  * @param input - Tenant, task, and the assignee named by the event.
  * @param deps - Optional database and email dependencies.
@@ -644,117 +687,152 @@ export async function notifyTaskAssignee(
         return { delivered: false, skippedReason: "recipient_unavailable" }
       }
 
-      const record = deps.recordNotificationDelivery ?? defaultRecordNotificationDelivery
       const recipientUserId = task.assignedTo
-      const emailReference = `task-assigned/${task.id}/${recipientUserId}/${task.assignedAt}`
-      const sendEmail = deps.sendTaskEmail ?? defaultSendTaskEmail
-      let emailDelivered = false
+      const log = createDeliveryLog(deps, {
+        organizationId: task.organizationId,
+        recipientUserId,
+        purpose: "task_assigned",
+      })
+      const emailReference = taskAssignmentReference(task)
 
-      if (recipient.emailNotificationsEnabled) {
+      if (!recipient.emailNotificationsEnabled) {
+        await log("email", emailReference, "suppressed")
+      } else if (
+        !(await hasSentDelivery(client, task.organizationId, "email", emailReference))
+      ) {
         try {
-          await sendEmail(
+          await (deps.sendTaskEmail ?? defaultSendTaskEmail)(
             createTaskEmailRequest("assigned", emailReference, task, recipient)
           )
-          emailDelivered = true
-          await record({
-            organizationId: task.organizationId,
-            recipientUserId,
-            channel: "email",
-            purpose: "task_assigned",
-            reference: emailReference,
-            status: "sent",
-          })
         } catch (error: unknown) {
-          await record({
-            organizationId: task.organizationId,
-            recipientUserId,
-            channel: "email",
-            purpose: "task_assigned",
-            reference: emailReference,
-            status: "failed",
-            lastError: toSafeReminderFailureReason(error),
-          })
+          await log("email", emailReference, "failed", toSafeReminderFailureReason(error))
           // Rethrown so the Inngest handler retries the assignment
           // notification instead of reporting a delivery that never happened.
           throw error
         }
-      } else {
-        await record({
-          organizationId: task.organizationId,
-          recipientUserId,
-          channel: "email",
-          purpose: "task_assigned",
-          reference: emailReference,
-          status: "suppressed",
-        })
+        await log("email", emailReference, "sent")
       }
 
-      if (recipient.phoneNumber) {
-        const smsReference = `task-assigned-sms/${task.id}/${recipientUserId}`
+      if (!recipient.phoneNumber) {
+        return { delivered: true, skippedReason: null }
+      }
 
-        if (recipient.smsNotificationsEnabled) {
-          // Providers report failure by RETURNING {success:false}, so the
-          // result must be inspected: a bare await would treat every provider
-          // rejection as a success.
-          const sendSmsImpl = deps.sendSms ?? defaultSendSms
-          let smsFailure: string | null = null
+      const smsReference = `task-assigned-sms/${task.id}/${recipientUserId}/${task.assignedAt}`
 
-          try {
-            const smsResult = await sendSmsImpl({
-              recipientPhone: recipient.phoneNumber,
-              message: `Task Assigned: "${task.title}" has been assigned to you.`,
-              reference: smsReference,
-            })
-
-            if (!smsResult.success) {
-              smsFailure = smsResult.error ?? "SMS delivery failed."
-            }
-          } catch (error: unknown) {
-            smsFailure = toSafeReminderFailureReason(error)
-          }
-
-          await record({
-            organizationId: task.organizationId,
-            recipientUserId,
-            channel: "sms",
-            purpose: "task_assigned",
+      if (!recipient.smsNotificationsEnabled) {
+        await log("sms", smsReference, "suppressed")
+      } else if (
+        !(await hasSentDelivery(client, task.organizationId, "sms", smsReference))
+      ) {
+        try {
+          await sendSmsOrThrow(deps, {
+            recipientPhone: recipient.phoneNumber,
+            message: `Task Assigned: "${task.title}" has been assigned to you.`,
             reference: smsReference,
-            status: smsFailure === null ? "sent" : "failed",
-            lastError: smsFailure,
+          })
+        } catch (error: unknown) {
+          await log("sms", smsReference, "failed", toSafeReminderFailureReason(error))
+          console.warn("task_assignment_sms_failed", {
+            taskId: task.id,
+            organizationId: task.organizationId,
           })
 
-          if (smsFailure !== null) {
-            console.warn("task_assignment_sms_failed", {
-              taskId: task.id,
-              organizationId: task.organizationId,
-            })
-
-            // Email is the primary channel. Failing the whole job when only SMS
-            // broke would re-send an email the assignee already has, so the SMS
-            // failure is recorded for retry rather than thrown — unless email
-            // never went out either, in which case nothing reached them.
-            if (!emailDelivered && !recipient.emailNotificationsEnabled) {
-              throw new TaskServiceError(
-                "Task assignment notification could not be delivered.",
-                502
-              )
-            }
+          // Email is the primary channel. Failing the whole job when only SMS
+          // broke would retry for nothing once email is out, so the SMS failure
+          // is recorded rather than thrown — unless email is switched off, in
+          // which case nothing reached them.
+          if (!recipient.emailNotificationsEnabled) {
+            throw new TaskServiceError(
+              "Task assignment notification could not be delivered.",
+              502
+            )
           }
-        } else {
-          await record({
-            organizationId: task.organizationId,
-            recipientUserId,
-            channel: "sms",
-            purpose: "task_assigned",
-            reference: smsReference,
-            status: "suppressed",
-          })
+          return { delivered: true, skippedReason: null }
         }
+        await log("sms", smsReference, "sent")
       }
 
       return { delivered: true, skippedReason: null }
     }
   )
+}
+
+/**
+ * The delivery reference — and background event id — of one assignment.
+ *
+ * @param task - Task with its current assignee and assignment instant.
+ * @returns A reference unique to this assignee and assignment instant.
+ */
+export function taskAssignmentReference(task: {
+  id: string
+  assignedTo: string | null
+  assignedAt: string | null
+}): string {
+  return `task-assigned/${task.id}/${task.assignedTo}/${task.assignedAt}`
+}
+
+type DeliveryLog = (
+  channel: NotificationChannel,
+  reference: string,
+  status: NotificationDeliveryStatus,
+  lastError?: string | null
+) => Promise<unknown>
+
+/** One recorder per notification, so every outcome lands on the ledger the same way. */
+function createDeliveryLog(
+  deps: TaskServiceDeps,
+  base: {
+    organizationId: string
+    recipientUserId: string
+    purpose: NotificationPurpose
+    attemptCount?: number
+  }
+): DeliveryLog {
+  const record = deps.recordNotificationDelivery ?? defaultRecordNotificationDelivery
+
+  return (channel, reference, status, lastError = null) =>
+    record({ ...base, channel, reference, status, lastError })
+}
+
+/**
+ * Whether this exact delivery already went out.
+ *
+ * The ledger row is written before the reminder is marked sent, so a send whose
+ * outcome write was lost — or a retried background run — is not repeated. A
+ * failed read throws: not sending is safer than sending twice.
+ */
+async function hasSentDelivery(
+  client: TaskServiceClient,
+  organizationId: string,
+  channel: NotificationChannel,
+  reference: string
+): Promise<boolean> {
+  const { data, error } = await client
+    .from("notification_deliveries")
+    .select("id")
+    .eq("org_id", organizationId)
+    .eq("channel", channel)
+    .eq("reference", reference)
+    .eq("status", "sent")
+    .limit(1)
+
+  if (error || !data) {
+    throw createTaskDatabaseError(error, "Unable to check earlier notification deliveries.")
+  }
+
+  return data.length > 0
+}
+
+/** Providers report refusal by returning `success: false`; this makes it a throw. */
+async function sendSmsOrThrow(
+  deps: TaskServiceDeps,
+  input: { recipientPhone: string; message: string; reference: string }
+): Promise<void> {
+  const result = await (deps.sendSms ?? defaultSendSms)(input)
+
+  if (!result.success) {
+    throw new TaskServiceError(result.error ?? "SMS delivery failed.", 502)
+  }
 }
 
 async function processOneDueReminder(
@@ -809,107 +887,68 @@ async function deliverClaimedReminder(
     return "failed"
   }
 
-  const record = deps.recordNotificationDelivery ?? defaultRecordNotificationDelivery
-  const deliveryReference = `task-reminder/${reminder.id}`
+  const channel = reminder.channel
+  const reference = `task-reminder/${reminder.id}`
+  const log = createDeliveryLog(deps, {
+    organizationId: reminder.organizationId,
+    recipientUserId: reminder.recipientUserId,
+    purpose: "task_reminder",
+    attemptCount: reminder.attemptCount,
+  })
+  const enabled =
+    channel === "sms"
+      ? recipient.smsNotificationsEnabled
+      : recipient.emailNotificationsEnabled
 
-  if (reminder.channel === "sms") {
-    if (!recipient.smsNotificationsEnabled) {
-      // Cancelled, not sent: nothing was handed to a provider, and recording
-      // it as sent would make the reminder history claim a delivery that
-      // never happened. Cancelling also stops it being rescanned forever.
-      await markReminderOutcome(client, reminder, nowIso, {
-        status: "cancelled",
-        last_error: null,
-      })
-      await record({
-        organizationId: reminder.organizationId,
-        recipientUserId: reminder.recipientUserId,
-        channel: "sms",
-        purpose: "task_reminder",
-        reference: deliveryReference,
-        status: "suppressed",
-      })
-      return "skipped"
-    }
+  if (!enabled) {
+    // Cancelled, not sent: nothing was handed to a provider, and recording
+    // it as sent would make the reminder history claim a delivery that
+    // never happened. Cancelling also stops it being rescanned forever.
+    await markReminderOutcome(client, reminder, nowIso, {
+      status: "cancelled",
+      last_error: null,
+    })
+    await log(channel, reference, "suppressed")
+    return "skipped"
+  }
 
-    if (!recipient.phoneNumber) {
-      await markReminderOutcome(client, reminder, nowIso, {
-        status: "failed",
-        last_error: "Reminder recipient has no phone number for SMS.",
-      })
-      return "failed"
-    }
+  if (channel === "sms" && !recipient.phoneNumber) {
+    const reason = "Reminder recipient has no phone number for SMS."
+    await markReminderOutcome(client, reminder, nowIso, {
+      status: "failed",
+      last_error: reason,
+    })
+    await log(channel, reference, "failed", reason)
+    return "failed"
+  }
 
+  if (!(await hasSentDelivery(client, reminder.organizationId, channel, reference))) {
     try {
-      const sendSmsImpl = deps.sendSms ?? defaultSendSms
-      const smsResult = await sendSmsImpl({
-        recipientPhone: recipient.phoneNumber,
-        message: `Task Reminder: "${task.title}" is due. Check your task dashboard for details.`,
-        reference: `task-reminder/${reminder.id}`,
-      })
-
-      if (!smsResult.success) {
-        const errorMsg = smsResult.error ?? "SMS delivery failed."
-        const retrying = reminder.attemptCount < TASK_REMINDER_MAX_ATTEMPTS
-        await markReminderOutcome(client, reminder, nowIso, {
-          status: retrying ? "pending" : "failed",
-          last_error: errorMsg.slice(0, 500),
+      if (channel === "sms") {
+        await sendSmsOrThrow(deps, {
+          recipientPhone: recipient.phoneNumber ?? "",
+          message: `Task Reminder: "${task.title}" is due. Check your task dashboard for details.`,
+          reference,
         })
-        await record({
-          organizationId: reminder.organizationId,
-          recipientUserId: reminder.recipientUserId,
-          channel: "sms",
-          purpose: "task_reminder",
-          reference: deliveryReference,
-          status: "failed",
-          attemptCount: reminder.attemptCount + 1,
-          lastError: errorMsg,
-        })
-        return retrying ? "retrying" : "failed"
+      } else {
+        await (deps.sendTaskEmail ?? defaultSendTaskEmail)(
+          createTaskEmailRequest("reminder", reference, task, recipient)
+        )
       }
     } catch (error: unknown) {
       const retrying = shouldRetryReminderDelivery(reminder, error)
+      const reason = toSafeReminderFailureReason(error)
       await markReminderOutcome(client, reminder, nowIso, {
         status: retrying ? "pending" : "failed",
-        last_error: toSafeReminderFailureReason(error),
+        last_error: reason,
       })
+      await log(channel, reference, "failed", reason)
       return retrying ? "retrying" : "failed"
-    }
-  } else {
-    if (!recipient.emailNotificationsEnabled) {
-      await markReminderOutcome(client, reminder, nowIso, {
-        status: "cancelled",
-        last_error: null,
-      })
-      await record({
-        organizationId: reminder.organizationId,
-        recipientUserId: reminder.recipientUserId,
-        channel: "email",
-        purpose: "task_reminder",
-        reference: deliveryReference,
-        status: "suppressed",
-      })
-      return "skipped"
     }
 
-    try {
-      const sendEmail = deps.sendTaskEmail ?? defaultSendTaskEmail
-      await sendEmail(
-        createTaskEmailRequest(
-          "reminder",
-          `task-reminder/${reminder.id}`,
-          task,
-          recipient
-        )
-      )
-    } catch (error: unknown) {
-      const retrying = shouldRetryReminderDelivery(reminder, error)
-      await markReminderOutcome(client, reminder, nowIso, {
-        status: retrying ? "pending" : "failed",
-        last_error: toSafeReminderFailureReason(error),
-      })
-      return retrying ? "retrying" : "failed"
-    }
+    // The ledger row goes first: if marking the reminder sent is lost, the
+    // next pass finds this row and does not send again.
+    await log(channel, reference, "sent")
   }
 
   await markReminderOutcome(client, reminder, nowIso, {

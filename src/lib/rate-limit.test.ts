@@ -130,6 +130,33 @@ describe("createRateLimitCheck", () => {
     )
   })
 
+  it("stops calling a failing limiter for 30 seconds, keeping each bucket's fail mode and logging once", async () => {
+    // Without the breaker every request waits out the limiter's timeout twice
+    // and floods the logs for the whole outage.
+    let clock = 0
+    const limit = vi.fn().mockRejectedValue(new Error("upstash down"))
+    const errorLog = vi.spyOn(console, "error").mockImplementation(() => {})
+    const check = createRateLimitCheck({
+      createLimiter: () => ({ limit }),
+      now: () => clock,
+    })
+
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      await check("auth", `ip-${attempt}`)
+    }
+    const callsWhileOpen = limit.mock.calls.length
+
+    await expect(check("auth", "1.2.3.4")).resolves.toBeUndefined()
+    await expect(check("ai_flow", "member-1")).rejects.toMatchObject({ statusCode: 429 })
+    expect(callsWhileOpen).toBe(3)
+    expect(limit).toHaveBeenCalledTimes(3)
+    expect(errorLog.mock.calls.length).toBeLessThanOrEqual(4)
+
+    clock = 30_000
+    await check("auth", "1.2.3.4")
+    expect(limit).toHaveBeenCalledTimes(4)
+  })
+
   it("constructs one limiter per bucket and reuses it", async () => {
     const limiter: LimiterLike = {
       limit: vi.fn().mockResolvedValue({ success: true, reset: 0 }),

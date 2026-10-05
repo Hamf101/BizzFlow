@@ -729,6 +729,7 @@ async function publishTaskAssignment(
     taskId: task.id,
     assignedToUserId: task.assignedTo,
     assignedByUserId: actorUserId,
+    assignedAt: task.assignedAt,
   }
 
   try {

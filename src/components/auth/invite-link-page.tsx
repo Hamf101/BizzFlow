@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
+import { readSignedFlash } from "@/lib/form-utils"
 import { AuthPageCard } from "@/lib/page-auth-card"
 
 type FormAction = (formData: FormData) => Promise<void>
@@ -27,7 +28,7 @@ export type InviteLinkPageProps = {
   problemTitle: string
   /** Shown to someone signed in as another address. */
   wrongAccount: string
-  query: { account?: string; error?: string }
+  query: { account?: string; error?: string; sig?: string }
   actions: { accept: FormAction; join: FormAction; switchAccount: FormAction }
 }
 
@@ -73,10 +74,11 @@ export async function InviteLinkPage({
   wrongAccount,
 }: InviteLinkPageProps): Promise<ReactElement> {
   const user = await loadInviteUser()
-  const problem = query.error ? (
+  const flashError = readSignedFlash(query).error
+  const problem = flashError ? (
     <Alert variant="destructive">
       <AlertTitle>{problemTitle}</AlertTitle>
-      <AlertDescription>{query.error}</AlertDescription>
+      <AlertDescription>{flashError}</AlertDescription>
     </Alert>
   ) : null
   const tokenField = <input type="hidden" name="token" value={token} />
