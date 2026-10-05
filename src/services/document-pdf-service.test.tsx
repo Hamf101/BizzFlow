@@ -576,6 +576,39 @@ describe("document PDF service", () => {
     }
   })
 
+  it("prints every branch of a blank or fillable form under its rule in words, and only the chosen one once answered", { timeout: PDF_RENDER_TIMEOUT_MS }, async () => {
+    const input = createPdfInput({ repeatHeader: false, repeatFooter: false })
+    const content = requireVersionThreeContent(input)
+    const petsId = "53000000-0000-4000-8000-000000000001"
+
+    content.blocks = [
+      { id: petsId, type: "checkbox_field", fieldKey: "pets", label: "Pets", required: false, helpText: null, checkedByDefault: false },
+      { id: "53000000-0000-4000-8000-000000000002", type: "text_field", fieldKey: "pet_name", label: "Pet name", required: false, helpText: null, placeholder: null, multiline: false, visibleWhen: { sourceBlockId: petsId, operator: "equals", value: true } }
+    ]
+    content.sections = []
+    content.fieldGroups = []
+    content.blockRules = []
+    input.signers = []
+    input.workflowStatus = "draft"
+
+    const printed = async (answers: Record<string, unknown>, fillable = false): Promise<{ fields: string[]; words: string }> => {
+      const pdf = await PDFDocument.load(await renderGeneratedDocumentPdf({ ...input, answers }, { fillable }))
+
+      return { fields: pdf.getForm().getFields().map((field) => field.getName()), words: drawnTexts(pdf, 0).map(({ text }) => text).join(" ") }
+    }
+    const blank = await printed({})
+    const fillable = await printed({ pets: false }, true)
+    const answered = await printed({ pets: false })
+
+    expect(blank.words).toContain("If Pets is ticked:")
+    expect(blank.words).toContain("Pet name")
+    // Filled in a viewer, which runs no rules, so every branch has its field.
+    expect(fillable.words).toContain("If Pets is ticked:")
+    expect(fillable.fields).toEqual(["pets", "pet_name"])
+    expect(answered.words).not.toContain("If Pets")
+    expect(answered.words).not.toContain("Pet name")
+  })
+
   it("prints a choice shown as radio buttons one option a line, inside the room the planner left, as one radio group", { timeout: PDF_RENDER_TIMEOUT_MS }, async () => {
     const input = createPdfInput({ repeatHeader: false, repeatFooter: false })
     const content = requireVersionThreeContent(input)

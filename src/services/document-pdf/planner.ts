@@ -394,13 +394,15 @@ function createBlockPaginationUnits(
       continue
     }
 
+    const cue = createCueUnit([renderBlock], input)
     const blockUnits = createSingleBlockPaginationUnits(
       renderBlock,
       input,
       inner
     )
     units.push(
-      ...inBox(clearLeadingPageBreak(blockUnits, structureLabelUnits.length > 0 || space.length > 0))
+      ...inBox(clearLeadingPageBreak(cue, structureLabelUnits.length > 0 || space.length > 0)),
+      ...inBox(clearLeadingPageBreak(blockUnits, structureLabelUnits.length > 0 || space.length > 0 || cue.length > 0))
     )
     blockIndex += 1
   }
@@ -423,6 +425,17 @@ function createBlockPaginationUnits(
         }
       : unit
   })
+}
+
+// A blank form's rule in words, kept on the page with what it shows: a row's
+// cells may each start a branch, and their rules print as one line above it.
+function createCueUnit(renderBlocks: readonly TemplateRenderBlock[], input: NormalizedPdfInput): PdfPaginationUnit[] {
+  const label = [...new Set(renderBlocks.flatMap(({ cue }) => (cue ? [cue] : [])))].join("  ·  ")
+  const first = renderBlocks[0]
+
+  return label && first
+    ? [{ item: { kind: "cue", label }, keepTogetherKeys: getKeepTogetherKeys(first, input), keepWithNext: true, pageBreakBefore: first.pageBreakBefore }]
+    : []
 }
 
 // Space left above a block, moving with it to the next page.
@@ -554,6 +567,10 @@ function createRowPaginationUnits(
       units.push(...spaceAbove(row[0]))
     }
 
+    const cue = createCueUnit(row, input)
+
+    units.push(...cue)
+
     // A long block is split into pieces; each piece of the row prints as one line of cells.
     for (let piece = 0; piece < pieceCount; piece += 1) {
       units.push({
@@ -562,7 +579,7 @@ function createRowPaginationUnits(
           kind: "columns",
           widths
         },
-        pageBreakBefore: piece === 0 && row[0]?.pageBreakBefore === true,
+        pageBreakBefore: piece === 0 && cue.length === 0 && row[0]?.pageBreakBefore === true,
         keepTogetherKeys,
         keepWithNext: piece === pieceCount - 1 && lastBlock?.keepWithNext === true
       })
@@ -1191,6 +1208,9 @@ function estimateFlowItemHeight(
       break
     case "field_group_label":
       baseHeight = boldLines(item.label.toUpperCase(), 9, metrics.contentWidth) * 13 + 8
+      break
+    case "cue":
+      baseHeight = estimateWrappedTextHeight(item.label, scalePdfCharacterEstimate(100, metrics.contentWidth), 12) + 4
       break
     case "space":
       return item.height

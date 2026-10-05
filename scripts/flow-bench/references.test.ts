@@ -80,8 +80,9 @@ describe.runIf(process.env.FLOW_BENCH === "1")("Flow references", () => {
     for (const { set, name, title, description, content, maxPages = 5 } of references) {
       const where = `${set}/${name}`
       const parsed = templateContentV3Schema.parse(content)
+      // The length a filled-in copy prints; a blank one also prints every branch.
       const pages = createPdfPagePlans(
-        normalizePdfInput({ answers: {}, content: parsed, documentId: DOCUMENT_ID, title, workflowStatus: "draft" })
+        normalizePdfInput({ answers: {}, content: parsed, documentId: DOCUMENT_ID, title, workflowStatus: "completed" })
       )
 
       expect(evaluateTemplateQuality({ title, description, content: parsed }).issues, where).toEqual([])

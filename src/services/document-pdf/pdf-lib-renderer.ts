@@ -458,6 +458,21 @@ async function drawPdfLibFlowItem(
           "left"
         ) - 8
       break
+    case "cue":
+      bottomY =
+        drawWrappedPdfText(
+          context,
+          item.label,
+          topY,
+          fullFrame.x,
+          fullFrame.width,
+          9,
+          12,
+          context.regularFont,
+          rgb(0.42, 0.45, 0.5),
+          "left"
+        ) - 4
+      break
     case "space":
       return topY - item.height
     case "block":

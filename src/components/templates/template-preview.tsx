@@ -320,6 +320,7 @@ function PreviewFieldGroup({
               })}
             >
               <div className={group.columns > 1 ? "min-w-0" : CONTENT_PADDING}>
+                {renderBlock.cue ? <p className="mb-1 text-xs text-muted-foreground">{renderBlock.cue}</p> : null}
                 <div className="relative rounded-[4px] border border-transparent transition-colors">
                   <div className="relative z-10 px-2 py-1.5">
                     <PreviewBlock block={renderBlock.block} />

@@ -11,6 +11,57 @@ export function visibilityConditions(rule: TemplateVisibility | undefined): Temp
   return rule === undefined ? [] : "conditions" in rule ? rule.conditions : [rule]
 }
 
+const TEST_WORDS: Record<TemplateVisibilityCondition["operator"], string> = {
+  answered: "is answered",
+  equals: "is",
+  greater_than: "is more than",
+  less_than: "is less than",
+  not_answered: "is not answered",
+  not_equals: "is not",
+}
+
+/**
+ * A block's rule in words, as a blank form prints it above what it shows:
+ * "Pets is ticked", "Income is more than 50000 and Status is not Retired".
+ *
+ * @param content - Canonical content holding the rule's sources.
+ * @param block - A block from the same content.
+ * @returns The rule's tests joined by "and" or "or", or null without a rule.
+ */
+export function describeVisibilityRule(content: TemplateContent, block: TemplateBlock): string | null {
+  const rule = "visibleWhen" in block ? block.visibleWhen : undefined
+
+  if (rule === undefined) {
+    return null
+  }
+
+  const tests = visibilityConditions(rule).map(({ operator, sourceBlockId, value }): string => {
+    const source = content.blocks.find((candidate: TemplateBlock): boolean => candidate.id === sourceBlockId)
+    // A long question is cut, so the cue stays one line on most pages.
+    const label = source && "label" in source ? clip(source.label.trim(), 60) : "an earlier answer"
+
+    if (typeof value === "boolean") {
+      return `${label} is ${value === (operator === "equals") ? "" : "not "}ticked`
+    }
+
+    const words = source?.type === "dropdown_field" && source.multiple && operator === "equals" ? "includes" : TEST_WORDS[operator]
+
+    // An amount reads as written on the form: "£50,270".
+    const amount =
+      source?.type === "text_field" && (source.format === "number" || source.format === "money") && /^-?\d+(?:\.\d+)?$/.test(value ?? "")
+        ? `${source.prefix ?? ""}${(value ?? "").replace(/^(-?\d+)/, (whole) => whole.replace(/\B(?=(\d{3})+$)/g, ","))}`
+        : value
+
+    return amount === undefined ? `${label} ${words}` : `${label} ${words} ${clip(amount, 60)}`
+  })
+
+  return tests.join("conditions" in rule && rule.match === "any" ? " or " : " and ")
+}
+
+function clip(words: string, length: number): string {
+  return words.length > length ? `${words.slice(0, length - 1).trimEnd()}…` : words
+}
+
 /**
  * Determines whether one canonical template block is visible for the supplied
  * answer state.

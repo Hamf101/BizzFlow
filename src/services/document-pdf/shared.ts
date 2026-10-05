@@ -23,12 +23,18 @@ import type {
 /**
  * Validates and normalizes untrusted generated-document PDF input.
  *
+ * A fillable copy, or a draft not yet answered, is a blank form: it prints
+ * every branch under its rule in words, since paper and PDF viewers run no
+ * rules. Anything answered prints only the branches its answers chose.
+ *
  * @param input - Document metadata, snapshot, answers, workflow, and signer state.
+ * @param options - `fillable` when the PDF gets form fields.
  * @returns Canonical PDF input with parsed template content and a signer array.
  * @throws DocumentPdfServiceError when any required value is invalid.
  */
 export function normalizePdfInput(
-  input: RenderGeneratedDocumentPdfInput
+  input: RenderGeneratedDocumentPdfInput,
+  { fillable = false }: { fillable?: boolean } = {}
 ): NormalizedPdfInput {
   if (!input.documentId.trim()) {
     throw new DocumentPdfServiceError("Document id is required.", 400)
@@ -91,11 +97,15 @@ export function normalizePdfInput(
       title,
       content,
       answers,
-      mode: "final",
+      mode: fillable || (input.workflowStatus === "draft" && !Object.values(answers).some(isAnswered)) ? "blank" : "final",
     }),
     metadataTimestamp,
     signers,
   }
+}
+
+function isAnswered(value: unknown): boolean {
+  return !(value === null || value === undefined || value === "" || (Array.isArray(value) && value.length === 0))
 }
 
 /**

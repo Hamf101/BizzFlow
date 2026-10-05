@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import {
   applyVisibleTemplateFieldValue,
+  describeVisibilityRule,
   getVisibleTemplateBlocks,
   isTemplateBlockVisible,
   pruneHiddenTemplateFieldValues,
@@ -28,6 +29,7 @@ describe("template visibility", () => {
     expect(isTemplateBlockVisible(content, note, {})).toBe(false)
     // A single answer where a list belongs reveals nothing.
     expect(isTemplateBlockVisible(content, note, { tools: "Drill" })).toBe(false)
+    expect(describeVisibilityRule(content, note)).toBe("Tools includes Drill")
   })
 
   it("tests any earlier answer: not, answered, more or less than a number, all or any of several, and shows text by them too", () => {
@@ -56,6 +58,16 @@ describe("template visibility", () => {
     expect(shown({ income: "lots", employer: "Acme" })).toEqual(["5"])
     // Removing a paragraph's answers keeps nothing: paragraphs hold none.
     expect(pruneHiddenTemplateFieldValues(content, { income: "1", why_not: "x", relief: "y", employer: "Acme" })).toEqual({ income: "1", employer: "Acme", relief: "y" })
+    // Each rule in words, as a blank form prints it above what it shows.
+    expect(content.blocks.map((block) => describeVisibilityRule(content, block))).toEqual([
+      null,
+      null,
+      null,
+      "income is more than 50,000",
+      "employer is answered",
+      "Status is not Retired and employer is not answered",
+      "income is less than 12,570.50 or Status is Retired",
+    ])
   })
 
   it("keeps every version-two block visible", () => {

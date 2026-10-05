@@ -521,6 +521,7 @@ export function EditorCanvas({
 
 function UnitBlocks({ actions, unit }: { actions: CanvasActions; unit: CanvasUnit }): ReactElement {
   const { EditorSection, FrameEdges } = useDesignTools() ?? {}
+  const cue = [...new Set(unit.blocks.flatMap((renderBlock) => (renderBlock.cue ? [renderBlock.cue] : [])))].join("  ·  ")
   const printedTitle = unit.sectionLabel ? (
     <PrintedSectionTitle label={unit.sectionLabel} number={unit.sectionNumber} sectionStyle={actions.controller.content.layout.sectionStyle} />
   ) : null
@@ -535,6 +536,12 @@ function UnitBlocks({ actions, unit }: { actions: CanvasActions; unit: CanvasUni
       {unit.groupLabel ? (
         <p className="font-bold text-muted-foreground uppercase" style={{ fontSize: "0.9em", lineHeight: 13 / 9, marginBottom: printedSpace(8) }}>
           {unit.groupLabel}
+        </p>
+      ) : null}
+      {cue ? (
+        // While the page is built, each branch starts with its rule, as a blank form prints it.
+        <p className="text-muted-foreground" data-slot="branch-cue" style={{ fontSize: "0.9em", lineHeight: 12 / 9, marginBottom: printedSpace(4) }}>
+          {cue}
         </p>
       ) : null}
       <div

@@ -63,6 +63,8 @@ export type PdfFlowItem = (
   | { kind: "title"; title: string }
   | { kind: "section_label"; label: string }
   | { kind: "field_group_label"; label: string }
+  /** On a blank form, the rule in words above the branch it shows. */
+  | { kind: "cue"; label: string }
   | PdfBlockFlowItem
   | {
       kind: "columns"

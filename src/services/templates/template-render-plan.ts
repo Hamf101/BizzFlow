@@ -8,10 +8,13 @@ import type {
   TemplateLayout,
   TemplateSection
 } from "@/types/template"
-import { getVisibleTemplateBlocks } from "@/types/template-visibility"
+import { describeVisibilityRule, getVisibleTemplateBlocks } from "@/types/template-visibility"
 
-/** Rendering contexts supported by the shared template projection. */
-export type TemplateRenderMode = "build" | "preview" | "test" | "final"
+/**
+ * Rendering contexts supported by the shared template projection. A blank
+ * form keeps every branch, as Build does, each under its rule in words.
+ */
+export type TemplateRenderMode = "blank" | "build" | "preview" | "test" | "final"
 
 /**
  * Page geometry resolved from version-three layout controls, in design points:
@@ -49,6 +52,11 @@ export type TemplateRenderBlock = Readonly<{
   spaceAbove: number
   /** Where it sits across the page on a line of its own, or null for the whole width. */
   frame: BlockFrame | null
+  /**
+   * On a blank form or in Build, the words that start a branch, such as
+   * "If Pets is ticked:", on its first block; null on the rest and elsewhere.
+   */
+  cue: string | null
 }>
 
 /** One visible section in canonical root-block order. */
@@ -122,10 +130,10 @@ export function createTemplateRenderPlan(
   input: CreateTemplateRenderPlanInput
 ): TemplateRenderPlan {
   const layout = resolveTemplateLayout(input.content)
-  const visibleBlocks =
-    input.mode === "build"
-      ? input.content.blocks
-      : getVisibleTemplateBlocks(input.content, input.answers ?? {})
+  const everyBranch = input.mode === "build" || input.mode === "blank"
+  const visibleBlocks = everyBranch
+    ? input.content.blocks
+    : getVisibleTemplateBlocks(input.content, input.answers ?? {})
   const canonicalIndexById = new Map<string, number>(
     input.content.blocks.map(
       (block: TemplateBlock, index: number): readonly [string, number] => [
@@ -137,8 +145,10 @@ export function createTemplateRenderPlan(
   const structure = createStructureIndex(input.content, canonicalIndexById)
   const opened = new Map<IndexedSection, string | null>()
   const blocks = visibleBlocks.map(
-    (block: TemplateBlock): TemplateRenderBlock =>
-      decorateRenderBlock(block, canonicalIndexById, structure, opened, layout.sectionNumbers)
+    (block: TemplateBlock, index: number): TemplateRenderBlock => ({
+      ...decorateRenderBlock(block, canonicalIndexById, structure, opened, layout.sectionNumbers),
+      cue: everyBranch ? branchCue(input.content, block, visibleBlocks[index - 1]) : null
+    })
   )
 
   return {
@@ -241,6 +251,15 @@ type IndexedFieldGroup = Readonly<{
   startIndex: number
   endIndex: number
 }>
+
+// A run of blocks under one rule is one branch, cued once at its start.
+function branchCue(content: TemplateContent, block: TemplateBlock, prior: TemplateBlock | undefined): string | null {
+  const rule = (candidate: TemplateBlock | undefined): string | undefined =>
+    candidate && "visibleWhen" in candidate && candidate.visibleWhen ? JSON.stringify(candidate.visibleWhen) : undefined
+  const words = describeVisibilityRule(content, block)
+
+  return words === null || rule(block) === rule(prior) ? null : `If ${words}:`
+}
 
 function resolveTemplateLayout(content: TemplateContent): TemplateLayout {
   return content.schemaVersion === 3 ? content.layout : DEFAULT_LAYOUT
@@ -449,7 +468,7 @@ function decorateRenderBlock(
   structure: StructureIndex,
   opened: Map<IndexedSection, string | null>,
   numbering: TemplateLayout["sectionNumbers"]
-): TemplateRenderBlock {
+): Omit<TemplateRenderBlock, "cue"> {
   const canonicalIndex = canonicalIndexById.get(block.id) ?? -1
   const indexedSection = structure.sections.find(
     (candidate: IndexedSection): boolean =>

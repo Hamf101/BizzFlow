@@ -20,6 +20,7 @@ import { insertTemplateBlock } from "@/types/template-structure"
 
 const SOURCE_ID = "10000000-0000-4000-8000-000000000001"
 const CONDITIONAL_ID = "10000000-0000-4000-8000-000000000002"
+const SECOND_CONDITIONAL_ID = "10000000-0000-4000-8000-000000000009"
 const FINAL_ID = "10000000-0000-4000-8000-000000000003"
 const SECTION_ID = "10000000-0000-4000-8000-000000000011"
 const GROUP_ID = "10000000-0000-4000-8000-000000000021"
@@ -92,6 +93,39 @@ describe("template render plan", () => {
       CONDITIONAL_ID,
       FINAL_ID
     ])
+  })
+
+  it("keeps every branch on a blank form, cueing each branch once by its rule", () => {
+    const structured = createStructuredContent()
+    const content = insertTemplateBlock(structured, CONDITIONAL_ID, {
+      id: SECOND_CONDITIONAL_ID,
+      type: "paragraph",
+      text: "More details.",
+      alignment: "left",
+      visibleWhen: { sourceBlockId: SOURCE_ID, operator: "equals", value: true }
+    })
+    const cues = (mode: "blank" | "final") =>
+      createTemplateRenderPlan({ title: "Approval", content, answers: { include_details: false }, mode }).blocks.map(
+        ({ block, cue }) => [block.id, cue]
+      )
+
+    expect(cues("blank")).toEqual([
+      [SOURCE_ID, null],
+      [CONDITIONAL_ID, "If Include details is ticked:"],
+      [SECOND_CONDITIONAL_ID, null],
+      [FINAL_ID, null]
+    ])
+    expect(cues("final")).toEqual([
+      [SOURCE_ID, null],
+      [FINAL_ID, null]
+    ])
+    expect(
+      renderToStaticMarkup(
+        createElement(TemplatePreview, {
+          renderPlan: createTemplateRenderPlan({ title: "Approval", content, mode: "blank" })
+        })
+      )
+    ).toContain("If Include details is ticked:")
   })
 
   it("decorates blocks from one canonical order without duplicating structure", () => {

@@ -100,7 +100,7 @@ function readFirstPage(
   title: string
 ): TemplateRenderPlan | null {
   try {
-    const plan = createTemplateRenderPlan({ content, mode: "preview", title })
+    const plan = createTemplateRenderPlan({ content, mode: "blank", title })
 
     if (plan.blocks.length === 0) {
       return null
