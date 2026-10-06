@@ -72,7 +72,7 @@ it("drops a change with what needs it, applies only the kept ones, and keeps the
   ])
   const rebuilt = proposal("Rebuilt", [item(0, "remove_block", "Removed the introduction")])
   const message = (role: "user" | "assistant", id: string) => ({
-    id, role, content: "Done.", authorName: null, operations: [], changedBlockIds: [], receiptStatus: null, createdAt: "2026-10-06T09:00:00.000Z",
+    id, role, content: "Done.", authorName: null, operations: role === "assistant" ? proposed.operations : [], changedBlockIds: [], receiptStatus: null, createdAt: "2026-10-06T09:00:00.000Z",
   })
   const fetchFlow = vi.fn(async (url: string) => ({
     ok: true,
@@ -103,6 +103,8 @@ it("drops a change with what needs it, applies only the kept ones, and keeps the
   )
   await settle()
   expect(buttonNamed("Apply 3 changes").disabled).toBe(false)
+  // While the card is open it is the one list of changes.
+  expect(document.body.textContent).not.toContain("Proposed change set")
 
   // Dropping the vehicle drops the van's size, which needs it.
   act(() => buttonNamed("Drop this change", 0).click())
@@ -126,4 +128,6 @@ it("drops a change with what needs it, applies only the kept ones, and keeps the
   await settle()
   act(() => buttonNamed("Apply 1 change").click())
   expect(onApply).toHaveBeenCalledWith(rebuilt.candidateDraft, rebuilt.changedBlockIds, "m-2")
+  await settle()
+  expect(document.body.textContent).toContain("Proposed change set")
 })

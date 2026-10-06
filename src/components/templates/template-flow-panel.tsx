@@ -436,6 +436,8 @@ export function TemplateFlowPanel({
                 key={message.id}
                 message={message}
                 onUndo={onUndo}
+                // The open card lists these changes and tracks drops; one list, not two.
+                showChanges={displayedPendingProposal === null || message.id !== pendingMessageId}
               />
             ))}
           </ol>
@@ -703,11 +705,13 @@ function FlowEmptyState({
 function FlowMessageEntry({
   canUndo,
   message,
-  onUndo
+  onUndo,
+  showChanges
 }: {
   canUndo: boolean
   message: TemplateFlowMessage
   onUndo: () => void
+  showChanges: boolean
 }): ReactElement {
   const isUser = message.role === "user"
 
@@ -733,7 +737,7 @@ function FlowMessageEntry({
         {message.content}
       </p>
 
-      {message.operations.length > 0 && (
+      {showChanges && message.operations.length > 0 && (
         <div className="mt-3 overflow-hidden rounded-[8px] border border-primary/12 bg-card/70">
           <div className="border-b border-primary/10 px-3 py-2">
             <span className="editorial-kicker text-primary">
