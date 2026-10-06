@@ -462,7 +462,7 @@ export function TemplateEditor({
                 proposal.status === "stale"
                   ? [{ label: "Dismiss", onClick: () => setProposal(null) }]
                   : [
-                      { label: "Apply", onClick: () => applyProposal(proposal, proposal.id) },
+                      ...(proposal.operations.length > 0 ? [{ label: "Apply", onClick: () => applyProposal(proposal, proposal.id) }] : []),
                       { label: "Reject", onClick: () => setProposal(null) },
                     ]
               }

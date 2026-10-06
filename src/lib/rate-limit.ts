@@ -13,6 +13,7 @@ export type RateLimitBucket =
   | "upload_initiation"
   | "ai_flow"
   | "ai_flow_daily"
+  | "ai_flow_rebuild"
   | "outbound_email"
   | "outbound_email_daily"
   | "email_recipient"
@@ -60,6 +61,8 @@ const BUCKET_CONFIGS: Readonly<Record<RateLimitBucket, BucketConfig>> = {
   // Burst control per member; the daily bucket is the actual org spend ceiling.
   ai_flow: { limit: 20, windowSeconds: 60, failMode: "closed" },
   ai_flow_daily: { limit: 400, windowSeconds: 86_400, failMode: "closed" },
+  // No AI call: re-applies kept changes on the server, so it fails open.
+  ai_flow_rebuild: { limit: 60, windowSeconds: 60, failMode: "open" },
   // Keyed per authenticated member, never on a form-supplied organization id:
   // that value is unverified at the point an action can enforce a budget.
   outbound_email: { limit: 10, windowSeconds: 3_600, failMode: "closed" },

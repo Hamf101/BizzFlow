@@ -14,12 +14,14 @@ import { WorkingCopyServiceError } from "@/services/working-copy-service"
 
 /**
  * Signs the member in and spends one Flow turn from both of their buckets,
- * the same for every surface Flow answers on.
+ * the same for every surface Flow answers on. A rebuild makes no AI call, so
+ * it spends from its own per-member bucket instead of the AI budget.
  *
+ * @param kind - "turn" for a Flow request, "rebuild" for re-applying kept changes.
  * @returns The member and the organization the turn belongs to.
  * @throws TemplateFlowServiceError without an organization; RateLimitError past a limit.
  */
-export async function startFlowTurn(): Promise<{ organizationId: string; userId: string }> {
+export async function startFlowTurn(kind: "turn" | "rebuild" = "turn"): Promise<{ organizationId: string; userId: string }> {
   const user = await getAuthenticatedUser()
   const context = await getCurrentOrganizationContext(user.id)
 
@@ -33,8 +35,12 @@ export async function startFlowTurn(): Promise<{ organizationId: string; userId:
   // Gated before the body is parsed so an abusive caller never gets the parse
   // done on their behalf. Both buckets fail closed: an Upstash outage must not
   // silently remove the only ceiling on metered AI-provider spend.
-  await checkRateLimit("ai_flow", `${context.organization.id}:${user.id}`)
-  await checkRateLimit("ai_flow_daily", context.organization.id)
+  if (kind === "rebuild") {
+    await checkRateLimit("ai_flow_rebuild", `${context.organization.id}:${user.id}`)
+  } else {
+    await checkRateLimit("ai_flow", `${context.organization.id}:${user.id}`)
+    await checkRateLimit("ai_flow_daily", context.organization.id)
+  }
 
   return { organizationId: context.organization.id, userId: user.id }
 }

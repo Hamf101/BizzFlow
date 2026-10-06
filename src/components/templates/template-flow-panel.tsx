@@ -65,6 +65,9 @@ const TEMPLATE_STARTER: FlowStarter = {
 /** What an empty conversation offers: a line, a few first messages, and the box's hint. */
 export type FlowStarter = Readonly<{ heading: string; placeholder: string; prompts: readonly string[] }>
 
+/** A proposal as Flow made it, and the changes its reviewer dropped by hand. */
+type FlowReview = Readonly<{ original: TemplateFlowProposal; dropped: ReadonlySet<number> }>
+
 type TemplateFlowPanelProps = {
   canUndo: boolean
   draft: TemplateFlowDraft
@@ -129,6 +132,8 @@ export function TemplateFlowPanel({
   const [localPendingProposal, setLocalPendingProposal] =
     useState<TemplateFlowProposal | null>(null)
   const [pendingMessageId, setPendingMessageId] = useState<string | null>(null)
+  const [review, setReview] = useState<FlowReview | null>(null)
+  const [isRebuilding, setIsRebuilding] = useState<boolean>(false)
   const timelineRef = useRef<HTMLDivElement>(null)
   const draftRef = useRef<TemplateFlowDraft>(draft)
   const isProposalControlled = controlledPendingProposal !== undefined
@@ -224,10 +229,8 @@ export function TemplateFlowPanel({
           : { ...result.proposal, status: "stale" }
 
         setPendingMessageId(assistantMessage.id)
-        if (!isProposalControlled) {
-          setLocalPendingProposal(stagedProposal)
-        }
-        onProposalReceived?.(stagedProposal, assistantMessage.id)
+        setReview({ original: stagedProposal, dropped: new Set() })
+        stageProposal(stagedProposal, assistantMessage.id)
 
         if (!isCurrentBase) {
           setErrorMessage(
@@ -265,6 +268,78 @@ export function TemplateFlowPanel({
     } finally {
       window.clearTimeout(timeoutId)
       setIsLoading(false)
+    }
+  }
+
+  function stageProposal(next: TemplateFlowProposal, messageId: string): void {
+    if (!isProposalControlled) {
+      setLocalPendingProposal(next)
+    }
+    onProposalReceived?.(next, messageId)
+  }
+
+  // Dropping or keeping a change rebuilds the batch on the server from the
+  // changes still kept, so the page shows, and Apply takes, exactly those.
+  async function reviewChange(index: number, drop: boolean): Promise<void> {
+    if (review === null || isRebuilding) {
+      return
+    }
+
+    const dropped = new Set(review.dropped)
+    const messageId = pendingMessageId ?? review.original.id
+
+    if (drop) {
+      dropped.add(index)
+    } else {
+      dropped.delete(index)
+    }
+
+    setReview({ ...review, dropped })
+    setErrorMessage(null)
+
+    if (dropped.size === 0) {
+      stageProposal(review.original, messageId)
+      return
+    }
+
+    const droppedBy = readDroppedBy(review.original.operations, dropped)
+    const kept = review.original.wireOperations.filter((_, at: number): boolean => droppedBy[at] === null)
+
+    // Nothing left to apply: show the page as it is, with no server call.
+    if (kept.length === 0) {
+      stageProposal(
+        { ...review.original, candidateDraft: toTemplateFlowDraft(draftRef.current), changedBlockIds: [], operations: [], qualityIssues: [], wireOperations: [] },
+        messageId
+      )
+      return
+    }
+
+    setIsRebuilding(true)
+
+    try {
+      const response = await fetch(`${endpoint}/rebuild`, {
+        body: JSON.stringify({
+          templateId,
+          draft: toTemplateFlowDraft(draftRef.current),
+          baseDraftFingerprint: review.original.baseDraftFingerprint,
+          operations: kept
+        }),
+        headers: { "Content-Type": "application/json" },
+        method: "POST"
+      })
+      const payload = await readJsonResponse(response)
+      const rebuilt = response.ok && isRecord(payload) ? parseFlowProposal(payload.proposal) : null
+
+      if (rebuilt === null) {
+        throw new Error(response.ok ? "Flow returned an invalid response." : readApiError(payload))
+      }
+
+      stageProposal(rebuilt, messageId)
+    } catch (error: unknown) {
+      setReview(review)
+      setErrorMessage(error instanceof Error ? error.message : "Unable to reach Flow.")
+    } finally {
+      setIsRebuilding(false)
     }
   }
 
@@ -370,11 +445,17 @@ export function TemplateFlowPanel({
           <FlowPendingProposalReceipt
             canApply={
               displayedPendingProposal.status === "pending" &&
+              !isRebuilding &&
               (onApplyProposal !== undefined || onApply !== undefined)
             }
+            isRebuilding={isRebuilding}
             onApply={applyPendingProposal}
             onReject={rejectPendingProposal}
+            onReview={(index: number, drop: boolean): void => {
+              void reviewChange(index, drop)
+            }}
             proposal={displayedPendingProposal}
+            review={review ?? { original: displayedPendingProposal, dropped: new Set() }}
           />
         )}
 
@@ -446,16 +527,25 @@ export function TemplateFlowPanel({
 
 function FlowPendingProposalReceipt({
   canApply,
+  isRebuilding,
   onApply,
   onReject,
-  proposal
+  onReview,
+  proposal,
+  review
 }: {
   canApply: boolean
+  isRebuilding: boolean
   onApply: () => void
   onReject: () => void
+  onReview: (index: number, drop: boolean) => void
   proposal: TemplateFlowProposal
+  review: FlowReview
 }): ReactElement {
   const isStale = proposal.status === "stale"
+  const items = review.original.operations
+  const droppedBy = readDroppedBy(items, review.dropped)
+  const keptCount = droppedBy.filter((by: number | null): boolean => by === null).length
 
   return (
     <section
@@ -470,15 +560,74 @@ function FlowPendingProposalReceipt({
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
             {isStale
               ? "The base draft changed. This batch can no longer be applied."
-              : `${proposal.operations.length} ${
-                  proposal.operations.length === 1 ? "change" : "changes"
-                } proposed as one reviewable batch.`}
+              : keptCount < items.length
+                ? `${keptCount} of ${items.length} changes will apply.`
+                : `${items.length} ${
+                    items.length === 1 ? "change" : "changes"
+                  } proposed as one reviewable batch.`}
           </p>
         </div>
         {isStale && (
           <AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive" />
         )}
       </div>
+
+      <ul className="border-b border-primary/10">
+        {items.map((item: TemplateFlowLedgerItem, index: number) => {
+          const by = droppedBy[index] ?? null
+          const removes =
+            item.type === "remove_block" ||
+            review.original.wireOperations[index]?.payload.removeLogo === true
+
+          return (
+            <li
+              className={cn(
+                "flex items-center gap-2 border-b border-primary/8 py-1 pr-1.5 pl-3 last:border-b-0",
+                by !== null && by !== index && "pl-7"
+              )}
+              key={item.id}
+            >
+              {renderOperationIcon(removes ? "remove_block" : item.type, removes ? "text-destructive" : undefined)}
+              <div className="min-w-0 flex-1 py-1">
+                <p
+                  className={cn(
+                    "text-xs",
+                    removes && "text-destructive",
+                    by !== null && "text-muted-foreground line-through"
+                  )}
+                >
+                  {item.summary}
+                </p>
+                {by !== null && by !== index && (
+                  <p className="mt-0.5 text-[10px] text-muted-foreground">
+                    {`Dropped with "${items[by]?.summary ?? ""}", since it needs that change.`}
+                  </p>
+                )}
+              </div>
+              {isStale || (by !== null && by !== index) ? null : by === index ? (
+                <button
+                  className="h-7 shrink-0 rounded-full px-2.5 text-xs font-medium text-primary outline-none transition-opacity hover:opacity-75 focus-visible:ring-2 focus-visible:ring-ring/40 disabled:opacity-35 max-md:h-11"
+                  disabled={isRebuilding}
+                  onClick={(): void => onReview(index, false)}
+                  type="button"
+                >
+                  Keep
+                </button>
+              ) : (
+                <button
+                  aria-label="Drop this change"
+                  className="grid size-7 shrink-0 place-items-center rounded-full text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40 disabled:opacity-35 max-md:size-11"
+                  disabled={isRebuilding}
+                  onClick={(): void => onReview(index, true)}
+                  type="button"
+                >
+                  <X aria-hidden="true" className="size-3.5" />
+                </button>
+              )}
+            </li>
+          )
+        })}
+      </ul>
 
       {proposal.qualityIssues.length > 0 && (
         <div className="border-b border-primary/10 px-3 py-2.5">
@@ -511,9 +660,9 @@ function FlowPendingProposalReceipt({
           <X />
           Reject all
         </Button>
-        <Button disabled={!canApply} onClick={onApply} size="sm" type="button">
+        <Button disabled={!canApply || keptCount === 0} onClick={onApply} size="sm" type="button">
           <Check />
-          Apply all
+          Apply {keptCount} {keptCount === 1 ? "change" : "changes"}
         </Button>
       </div>
     </section>
@@ -655,10 +804,27 @@ const OPERATION_ICONS: Record<TemplateFlowOperationType, LucideIcon> = {
   set_layout: LayoutTemplate
 }
 
-function renderOperationIcon(type: TemplateFlowOperationType): ReactElement {
+function renderOperationIcon(type: TemplateFlowOperationType, className = "text-primary"): ReactElement {
   const Icon = OPERATION_ICONS[type]
 
-  return <Icon aria-hidden="true" className="mt-0.5 size-3.5 text-primary" />
+  return <Icon aria-hidden="true" className={cn("mt-0.5 size-3.5 shrink-0", className)} />
+}
+
+/**
+ * Which hand-dropped change each change goes with: itself when dropped by
+ * hand, the dropped change it needs, or null when it is kept. Changes only
+ * need earlier ones, so one pass in order settles it.
+ */
+function readDroppedBy(items: readonly TemplateFlowLedgerItem[], dropped: ReadonlySet<number>): Array<number | null> {
+  const droppedBy: Array<number | null> = []
+
+  items.forEach((item: TemplateFlowLedgerItem, index: number): void => {
+    const need = item.dependsOn.find((at: number): boolean => at < index && droppedBy[at] !== null)
+
+    droppedBy.push(dropped.has(index) ? index : need === undefined ? null : (droppedBy[need] ?? null))
+  })
+
+  return droppedBy
 }
 
 function formatOperationType(type: TemplateFlowOperationType): string {
@@ -759,7 +925,9 @@ function parseFlowProposal(value: unknown): TemplateFlowProposal | null {
     typeof value.candidateDraft.title !== "string" ||
     typeof value.candidateDraft.description !== "string" ||
     !Array.isArray(value.operations) ||
-    value.operations.length === 0 ||
+    !Array.isArray(value.wireOperations) ||
+    value.wireOperations.length !== value.operations.length ||
+    !value.wireOperations.every(isRecord) ||
     !Array.isArray(value.changedBlockIds) ||
     !Array.isArray(value.qualityIssues)
   ) {
@@ -799,6 +967,8 @@ function parseFlowProposal(value: unknown): TemplateFlowProposal | null {
       content: contentResult.data
     },
     operations: operations as TemplateFlowLedgerItem[],
+    // Read only by the server, which checks them again before using them.
+    wireOperations: value.wireOperations as TemplateFlowProposal["wireOperations"],
     changedBlockIds,
     qualityIssues: qualityIssues as TemplateFlowQualityIssue[]
   }
@@ -899,7 +1069,8 @@ function parseLedgerItem(value: unknown): TemplateFlowLedgerItem | null {
     target: value.target,
     affectedBlockIds: value.affectedBlockIds.filter(
       (blockId: unknown): blockId is string => typeof blockId === "string"
-    )
+    ),
+    dependsOn: Array.isArray(value.dependsOn) ? value.dependsOn.filter(Number.isInteger) : []
   }
 }
 

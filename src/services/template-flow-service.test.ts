@@ -15,6 +15,8 @@ import {
   executeDocumentFlow,
   executeTemplateFlow,
   listTemplateFlowMessages,
+  rebuildDocumentFlowProposal,
+  rebuildTemplateFlowProposal,
   type ExecuteTemplateFlowInput,
   type TemplateFlowServiceDeps
 } from "@/services/template-flow-service"
@@ -334,17 +336,6 @@ describe("template Flow service", () => {
     expect(responseSchema).not.toContain('"target"')
   })
 
-  it("hands back a removal nobody asked for, and keeps the rest of the turn when the rewrite leaves the block alone", async () => {
-    const removal: TestFlowOperation = { type: "remove_block", summary: "Removed introduction", payload: { blockId: PARAGRAPH_ID } }
-    const rename: TestFlowOperation = { type: "set_title", summary: "Renamed it", payload: { value: "Short agreement" } }
-    const { aiProvider, run } = runFlow(createContent(), [removal, rename], [rename])
-    const result = await run
-
-    expect(String(readProviderRequests(aiProvider)[1]?.input)).toMatch(/unrequested_removal.*A long introduction/)
-    expect(result.needsConfirmation).toBe(false)
-    expect(result.proposal?.candidateDraft).toMatchObject({ title: "Short agreement", content: { blocks: [{ id: PARAGRAPH_ID }] } })
-  })
-
   it("drafts typed answers with units, choose-several ticks, question grids and fill-in tables", async () => {
     const add = (summary: string, block: Record<string, unknown>): TestFlowOperation => ({ type: "add_block", summary, payload: { afterBlockId: null, block } })
     const { aiProvider, run } = runFlow(createContent(), [
@@ -369,71 +360,25 @@ describe("template Flow service", () => {
     }
   })
 
-  it("lets a field go when the same turn puts one in its place, and hands back removals that outnumber their replacements", async () => {
-    const nameField = (id: string, fieldKey: string, label: string) =>
-      ({ id, type: "text_field", fieldKey, label, required: false, helpText: null, placeholder: null, multiline: false }) as const
-    const content = createContent()
-    content.blocks.push(nameField(FIELD_ID, "first_name", "First name"), nameField(COMPANION_ID, "last_name", "Last name"))
-    const merge: TestFlowOperation = {
-      type: "update_block",
-      summary: "Asked for the full name in one field",
-      payload: { blockId: FIELD_ID, block: { ...nameField(FIELD_ID, "first_name", "Full name"), id: undefined } },
+  it("proposes a removal for review instead of asking, whatever words the request used", async () => {
+    for (const instruction of ["Don't delete the introduction.", "Get rid of the introduction and the logo."]) {
+      const aiProvider = createTestAiProvider([
+        flowProviderResult({
+          assistantMessage: "Done.",
+          needsConfirmation: false,
+          confirmationQuestion: "",
+          operations: [
+            { type: "remove_block", summary: "Removed introduction", payload: { blockId: PARAGRAPH_ID } },
+            { type: "set_branding", summary: "Removed logo", payload: { removeLogo: true } },
+          ],
+        }),
+      ])
+      const result = await executeTemplateFlow(createInput(createContent(), instruction), createDependencies({ aiProvider }))
+
+      expect(result.needsConfirmation).toBe(false)
+      expect(result.proposal?.operations.map((operation) => operation.type)).toEqual(["remove_block", "set_branding"])
+      expect(result.proposal?.candidateDraft.content).toMatchObject({ blocks: [], branding: { logoDataUrl: null } })
     }
-    const dropLast: TestFlowOperation = { type: "remove_block", summary: "Removed last name, now part of full name", payload: { blockId: COMPANION_ID } }
-    const merged = runFlow(content, [merge, dropLast])
-    const result = await merged.run
-
-    expect(readProviderRequests(merged.aiProvider)).toHaveLength(1)
-    expect(result.needsConfirmation).toBe(false)
-    expect(result.proposal?.candidateDraft.content.blocks.map((block) => block.id)).toEqual([PARAGRAPH_ID, FIELD_ID])
-
-    // Two fields and the introduction go for one field changed: not a replacement.
-    const sweep = runFlow(content, [merge, dropLast, { type: "remove_block", summary: "Removed introduction", payload: { blockId: PARAGRAPH_ID } }], [merge])
-
-    await sweep.run
-    expect(String(readProviderRequests(sweep.aiProvider)[1]?.input)).toMatch(/unrequested_removal.*A long introduction/)
-
-    // Clearer help on the same question replaces nothing.
-    const reworded: TestFlowOperation = {
-      type: "update_block",
-      summary: "Clearer help",
-      payload: { blockId: FIELD_ID, block: { ...nameField(FIELD_ID, "first_name", "First name"), helpText: "As on your passport.", id: undefined } },
-    }
-    const masked = runFlow(content, [reworded, dropLast], [reworded])
-
-    await masked.run
-    expect(String(readProviderRequests(masked.aiProvider)[1]?.input)).toMatch(/unrequested_removal.*Last name/)
-  })
-
-  it("asks before a removal the model insists on, naming what would go, and leaves the draft unchanged", async () => {
-    const content = createContent()
-    const aiProvider = createTestAiProvider([
-      flowProviderResult({
-        assistantMessage: "I can shorten the document.",
-        needsConfirmation: false,
-        confirmationQuestion: "",
-        operations: [
-          {
-            type: "remove_block",
-            summary: "Removed introduction",
-            payload: {
-              blockId: PARAGRAPH_ID
-            }
-          }
-        ]
-      })
-    ])
-
-    const result = await executeTemplateFlow(
-      createInput(content, "Make this document shorter."),
-      createDependencies({ aiProvider })
-    )
-
-    expect(result.needsConfirmation).toBe(true)
-    expect(result.proposal).toBeNull()
-    expect(result.messages[1].content).toContain("A long introduction")
-    expect(result.messages[1].operations).toEqual([])
-    expect(readProviderRequests(aiProvider)).toHaveLength(2)
   })
 
   it("keeps appended free-form blocks in provider operation order", async () => {
@@ -550,34 +495,6 @@ describe("template Flow service", () => {
     expect(result.needsConfirmation).toBe(false)
     expect(result.proposal?.candidateDraft.content.blocks).toEqual([])
     expect(result.proposal?.changedBlockIds).toEqual([PARAGRAPH_ID])
-  })
-
-  it("requires an explicit logo-removal request even when other deletion is requested", async () => {
-    const content = createContent()
-    const aiProvider = createTestAiProvider([
-      flowProviderResult({
-        assistantMessage: "I removed the requested content.",
-        needsConfirmation: false,
-        confirmationQuestion: "",
-        operations: [
-          {
-            type: "set_branding",
-            summary: "Removed logo",
-            payload: { removeLogo: true }
-          }
-        ]
-      })
-    ])
-
-    const result = await executeTemplateFlow(
-      createInput(content, "Delete the introduction."),
-      createDependencies({ aiProvider })
-    )
-
-    expect(result.needsConfirmation).toBe(true)
-    expect(result.proposal).toBeNull()
-    expect(result.messages[1].content).toContain("existing logo")
-    expect(content.branding.logoDataUrl).toBe("data:image/png;base64,aGVsbG8=")
   })
 
   it("knows a stored logo is there without seeing its address, and removes it when asked", async () => {
@@ -1693,6 +1610,79 @@ describe("document Flow", () => {
       )
     ).rejects.toMatchObject({ statusCode: 404 })
     expect(readProviderRequests(aiProvider)).toHaveLength(0)
+  })
+})
+
+describe("reviewing a Flow proposal change by change", () => {
+  const field = { required: false, helpText: null, placeholder: null }
+  const operations: TestFlowOperation[] = [
+    { type: "add_block", summary: "Asked the vehicle", payload: { ref: "new:vehicle", afterBlockId: null, block: { ...field, type: "dropdown_field", fieldKey: "vehicle", label: "Vehicle", options: ["Car", "Van"] } } },
+    // Rests on the new dropdown only through its condition.
+    { type: "add_block", summary: "Asked the van's size", payload: { afterBlockId: null, block: { ...field, type: "text_field", fieldKey: "van_size", label: "Van size", multiline: false, visibleWhen: { sourceBlockId: "new:vehicle", operator: "equals", value: "Van" } } } },
+    { type: "move_block", summary: "Moved the vehicle first", payload: { blockId: "new:vehicle", afterBlockId: null } },
+    { type: "set_title", summary: "Renamed it", payload: { value: "Vehicle form" } },
+  ]
+
+  async function propose() {
+    const { aiProvider, run } = runFlow(createContent(), operations)
+    const input = createInput(createContent(), "Ask about the vehicle.")
+    const proposal = (await run).proposal!
+    const rebuild = (kept: unknown[], overrides: Record<string, unknown> = {}) =>
+      rebuildTemplateFlowProposal(
+        { actorUserId: "user-1", organizationId: "org-1", templateId: TEMPLATE_ID, draft: input.draft, baseDraftFingerprint: proposal.baseDraftFingerprint, operations: kept, ...overrides },
+        createDependencies({ aiProvider })
+      )
+
+    return { aiProvider, input, proposal, rebuild }
+  }
+
+  it("says which changes need which, and rebuilds the draft from the kept ones without asking the model", async () => {
+    const { aiProvider, proposal, rebuild } = await propose()
+
+    expect(proposal.operations.map((item) => item.dependsOn)).toEqual([[], [0], [0], []])
+
+    // The vehicle dropped takes the van's size and the move with it.
+    const rebuilt = await rebuild([proposal.wireOperations[3]])
+
+    expect(rebuilt).toMatchObject({ status: "pending", baseDraftFingerprint: proposal.baseDraftFingerprint })
+    expect(rebuilt.candidateDraft.title).toBe("Vehicle form")
+    expect(rebuilt.candidateDraft.content.blocks.map((block) => block.id)).toEqual([PARAGRAPH_ID])
+    expect(rebuilt.operations.map((item) => item.summary)).toEqual(["Renamed it"])
+    // A change left without the one it needs cannot be built.
+    await expect(rebuild(proposal.wireOperations.slice(1))).rejects.toMatchObject({ statusCode: 422 })
+    expect(readProviderRequests(aiProvider)).toHaveLength(1)
+  })
+
+  it("refuses forged or unknown changes, and a draft that moved on since the proposal", async () => {
+    const { aiProvider, input, proposal, rebuild } = await propose()
+    const rename = proposal.wireOperations[3] as Record<string, unknown>
+
+    for (const forged of [
+      [{ type: "drop_database", summary: "Gone", payload: {} }],
+      [{ ...rename, injected: true }],
+      Array.from({ length: 81 }, () => rename),
+    ]) {
+      await expect(rebuild(forged)).rejects.toMatchObject({ statusCode: 400 })
+    }
+    // An id the model could never have given a new block.
+    await expect(
+      rebuild([{ type: "add_block", summary: "Copied", payload: { afterBlockId: null, id: PARAGRAPH_ID, block: { type: "divider" } } }])
+    ).rejects.toMatchObject({ statusCode: 422 })
+    await expect(
+      rebuild([rename], { draft: { ...input.draft as object, title: "Changed meanwhile" } })
+    ).rejects.toMatchObject({ statusCode: 409 })
+    await expect(
+      rebuildDocumentFlowProposal(
+        { actorUserId: "user-1", organizationId: "org-1", documentId: TEMPLATE_ID, draft: input.draft, baseDraftFingerprint: proposal.baseDraftFingerprint, operations: [rename] },
+        {
+          ...createDependencies({ aiProvider }),
+          authorizeDocument: async (): Promise<void> => {
+            throw new DocumentSigningServiceError("Generated document was not found.", 404)
+          },
+        }
+      )
+    ).rejects.toMatchObject({ statusCode: 404 })
+    expect(readProviderRequests(aiProvider)).toHaveLength(1)
   })
 })
 

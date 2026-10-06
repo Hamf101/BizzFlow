@@ -61,7 +61,6 @@ import {
   tableFieldBlockSchema,
   upgradeV2TemplateContentToV3,
   type TemplateBlock,
-  type TemplateContent,
   type TemplateContentV3
 } from "@/types/template"
 import { applyDocumentStyle, DOCUMENT_STYLES, type DocumentStyle } from "@/types/template-styles"
@@ -387,6 +386,15 @@ const flowStructuredResponseSchema = z
   })
   .strict()
 
+// A rebuild takes back only what a Flow response could have held.
+const flowRebuildRequestSchema = flowRequestSchema
+  .omit({ instruction: true })
+  .extend({
+    baseDraftFingerprint: z.string().min(1).max(200),
+    operations: flowProviderResponseSchema.shape.operations
+  })
+  .strict()
+
 type FlowProviderResponse = z.infer<typeof flowProviderResponseSchema>
 type FlowProviderResult = {
   model: AiModelReference
@@ -417,6 +425,8 @@ type EditableFlowDraft = z.infer<typeof editableFlowDraftSchema>
 type EditableFlowRequest = Omit<ParsedFlowRequest, "draft"> & {
   draft: EditableFlowDraft
 }
+/** What a Flow change is made to, and for whom. */
+type FlowSubject = Omit<EditableFlowRequest, "instruction">
 type FlowOperationPayload<T extends TemplateFlowOperationType> = Extract<
   FlowWireOperation,
   { type: T }
@@ -460,6 +470,15 @@ export type ExecuteDocumentFlowInput = {
   documentId: string
   draft: unknown
   instruction: unknown
+}
+
+export type RebuildTemplateFlowProposalInput = Omit<ExecuteTemplateFlowInput, "instruction"> & {
+  baseDraftFingerprint: unknown
+  operations: unknown
+}
+
+export type RebuildDocumentFlowProposalInput = Omit<RebuildTemplateFlowProposalInput, "templateId"> & {
+  documentId: string
 }
 
 export type DocumentFlowServiceDeps = TemplateFlowServiceDeps & {
@@ -583,15 +602,13 @@ export async function executeTemplateFlow(
   const proposal: TemplateFlowProposal | null =
     application === null
       ? null
-      : {
-          id: createId(),
-          status: "pending",
+      : createFlowProposal({
+          application,
           baseDraftFingerprint,
-          candidateDraft: application.draft,
-          operations: application.ledgerItems,
-          changedBlockIds: application.changedBlockIds,
-          qualityIssues: providerResult.qualityIssues
-        }
+          createId,
+          qualityIssues: providerResult.qualityIssues,
+          wireOperations: providerResponse.operations
+        })
   const now = deps.now?.() ?? new Date()
   const assistantContent =
     providerResult.confirmationQuestion ??
@@ -682,6 +699,120 @@ export async function executeDocumentFlow(
 ): Promise<TemplateFlowResult> {
   const { actorUserId, documentId, organizationId } = input
 
+  await authorizeDocumentFlow(input, deps)
+
+  // Flow keys a turn by what it edits, so the document's id rides in
+  // `templateId`. ponytail: the conversation lives in the editor's tab; keep
+  // it per document once someone needs it back after a reload.
+  return executeTemplateFlow(
+    { actorUserId, draft: input.draft, instruction: input.instruction, organizationId, templateId: documentId },
+    {
+      ...deps,
+      authorizeTemplateManagement: async (): Promise<void> => {},
+      loadHistory: async (): Promise<TemplateFlowMessage[]> => [],
+      persistMessages: async (): Promise<void> => {}
+    }
+  )
+}
+
+/**
+ * Rebuilds a pending proposal from the changes its reviewer kept, without
+ * asking the model again: the same applier and checks a Flow turn runs, on
+ * the draft the proposal was made from. The changes are checked as strictly
+ * as a fresh Flow response's.
+ *
+ * @param input - Actor, tenant, template, the base draft, its fingerprint, and the kept changes.
+ * @param deps - Optional authorization and id adapters.
+ * @returns A fresh pending proposal holding only the kept changes.
+ * @throws TemplateFlowServiceError: 400 for changes Flow could not have made,
+ *   409 when the draft moved on, 422 when a kept change needs a dropped one.
+ */
+export async function rebuildTemplateFlowProposal(
+  input: RebuildTemplateFlowProposalInput,
+  deps: TemplateFlowServiceDeps = {}
+): Promise<TemplateFlowProposal> {
+  const startedAt = performance.now()
+  const parsedInput = flowRebuildRequestSchema.safeParse(input)
+
+  if (!parsedInput.success) {
+    throw new TemplateFlowServiceError("Flow could not read these changes.", 400)
+  }
+
+  const { baseDraftFingerprint, operations, ...subject } = parsedInput.data
+  const request: FlowSubject = {
+    ...subject,
+    draft: { ...subject.draft, content: upgradeV2TemplateContentToV3(subject.draft.content) }
+  }
+
+  await authorizeFlowRequest(request, deps, startedAt)
+
+  // The same raw fingerprint a turn takes, so an unchanged draft matches.
+  if (createTemplateFlowDraftFingerprint(input.draft as TemplateFlowDraft) !== baseDraftFingerprint) {
+    throw new TemplateFlowServiceError(
+      "The draft changed since Flow proposed this. Reject it and ask Flow again.",
+      409
+    )
+  }
+
+  const createId = deps.createId ?? randomUUID
+  const validation = validateFlowCandidate({
+    createId,
+    request,
+    response: { confirmationQuestion: "", needsConfirmation: false, operations }
+  })
+
+  if (!validation.success) {
+    throw new TemplateFlowServiceError(
+      "A change you kept needs one you dropped. Keep that one too, or drop this one.",
+      422
+    )
+  }
+
+  console.info("template_flow_proposal_rebuilt", {
+    actorUserId: request.actorUserId,
+    organizationId: request.organizationId,
+    templateId: request.templateId,
+    operationCount: operations.length,
+    durationMs: Math.round(performance.now() - startedAt)
+  })
+
+  return createFlowProposal({
+    application: validation.application ?? { draft: request.draft, ledgerItems: [], changedBlockIds: [] },
+    baseDraftFingerprint,
+    createId,
+    qualityIssues: validation.qualityIssues,
+    wireOperations: operations
+  })
+}
+
+/**
+ * Rebuilds a document Flow proposal from the kept changes, for anyone who may
+ * open the document, as {@link rebuildTemplateFlowProposal} does for a template.
+ *
+ * @param input - Actor, tenant, document, the base draft, its fingerprint, and the kept changes.
+ * @param deps - Optional document authorization and id adapters.
+ * @returns A fresh pending proposal holding only the kept changes.
+ */
+export async function rebuildDocumentFlowProposal(
+  input: RebuildDocumentFlowProposalInput,
+  deps: DocumentFlowServiceDeps = {}
+): Promise<TemplateFlowProposal> {
+  const { documentId, ...rest } = input
+
+  await authorizeDocumentFlow(input, deps)
+
+  return rebuildTemplateFlowProposal(
+    { ...rest, templateId: documentId },
+    { ...deps, authorizeTemplateManagement: async (): Promise<void> => {} }
+  )
+}
+
+async function authorizeDocumentFlow(
+  input: { actorUserId: string; documentId: string; organizationId: string },
+  deps: DocumentFlowServiceDeps
+): Promise<void> {
+  const { actorUserId, documentId, organizationId } = input
+
   // The id comes from the URL; a malformed one is simply not a document.
   if (!z.string().uuid().safeParse(documentId).success) {
     throw new TemplateFlowServiceError("Generated document was not found.", 404)
@@ -701,19 +832,25 @@ export async function executeDocumentFlow(
 
     throw error
   }
+}
 
-  // Flow keys a turn by what it edits, so the document's id rides in
-  // `templateId`. ponytail: the conversation lives in the editor's tab; keep
-  // it per document once someone needs it back after a reload.
-  return executeTemplateFlow(
-    { actorUserId, draft: input.draft, instruction: input.instruction, organizationId, templateId: documentId },
-    {
-      ...deps,
-      authorizeTemplateManagement: async (): Promise<void> => {},
-      loadHistory: async (): Promise<TemplateFlowMessage[]> => [],
-      persistMessages: async (): Promise<void> => {}
-    }
-  )
+function createFlowProposal(input: {
+  application: FlowApplicationResult
+  baseDraftFingerprint: string
+  createId: () => string
+  qualityIssues: TemplateFlowQualityIssue[]
+  wireOperations: FlowWireOperation[]
+}): TemplateFlowProposal {
+  return {
+    id: input.createId(),
+    status: "pending",
+    baseDraftFingerprint: input.baseDraftFingerprint,
+    candidateDraft: input.application.draft,
+    operations: input.application.ledgerItems,
+    wireOperations: input.wireOperations,
+    changedBlockIds: input.application.changedBlockIds,
+    qualityIssues: input.qualityIssues
+  }
 }
 
 /**
@@ -754,7 +891,7 @@ export async function listTemplateFlowMessages(
 }
 
 async function authorizeFlowRequest(
-  request: EditableFlowRequest,
+  request: FlowSubject,
   deps: TemplateFlowServiceDeps,
   startedAt: number
 ): Promise<void> {
@@ -1005,7 +1142,6 @@ async function requestFlowProvider(input: {
 
     if (parsedOutput.success) {
       const candidateValidation = validateFlowCandidate({
-        canRetry: providerCall < FLOW_MAX_UPSTREAM_CALLS,
         createId: input.createId,
         request: input.request,
         response: parsedOutput.data
@@ -1095,34 +1231,15 @@ function assertFlowProviderResultModel(
 }
 
 function validateFlowCandidate(input: {
-  /** Whether a refused response can still be rewritten. */
-  canRetry?: boolean
   createId: () => string
-  request: EditableFlowRequest
-  response: FlowProviderResponse
+  request: FlowSubject
+  response: Pick<FlowProviderResponse, "confirmationQuestion" | "needsConfirmation" | "operations">
 }): FlowCandidateValidationResult {
-  const confirmationQuestion = readRequiredConfirmation(
-    input.response,
-    input.request.instruction,
-    input.request.draft.content
-  )
-
-  // A removal nobody asked for is handed back once: the rest of the turn is
-  // usually sound, and asking the user would throw all of it away. If the
-  // rewrite removes again, Flow asks.
-  if (
-    input.canRetry &&
-    confirmationQuestion !== null &&
-    !input.response.needsConfirmation &&
-    input.response.operations.some((operation: FlowWireOperation): boolean => operation.type === "remove_block")
-  ) {
-    return {
-      success: false,
-      issueCode: "unrequested_removal",
-      issuePath: "operations",
-      detail: `the user did not ask to remove anything. Keep ${nameRemovedBlocks(input.response, input.request.draft.content)} and make the other changes. To set more beside each other, a row holds three short fields. A field may go when this turn adds or rewrites one in its place; otherwise return needsConfirmation=true with one question and no operations`
-    }
-  }
+  // Only the model asks before a change. A removal it makes is shown on the
+  // proposal as its own change, for the user to keep or drop.
+  const confirmationQuestion = input.response.needsConfirmation
+    ? input.response.confirmationQuestion || "Before I make that change, which content should be removed?"
+    : null
 
   if (confirmationQuestion !== null || input.response.operations.length === 0) {
     return {
@@ -1755,136 +1872,6 @@ function appendBoundedFlowContextItems(
   return omittedCount
 }
 
-function readRequiredConfirmation(
-  response: FlowProviderResponse,
-  instruction: string,
-  content: TemplateContent
-): string | null {
-  if (response.needsConfirmation) {
-    return (
-      response.confirmationQuestion ||
-      "Before I make that change, which content should be removed?"
-    )
-  }
-
-  const logoRemovalOperations = response.operations.filter(
-    (operation: FlowWireOperation): boolean =>
-      operationRequestsLogoRemoval(operation)
-  )
-
-  if (
-    logoRemovalOperations.length > 0 &&
-    !hasExplicitLogoRemovalIntent(instruction)
-  ) {
-    return "That change would remove the existing logo. Should I remove it?"
-  }
-
-  const removeOperations = response.operations.filter(
-    (operation: FlowWireOperation): boolean => operation.type === "remove_block"
-  )
-
-  if (removeOperations.length === 0 || hasExplicitRemovalIntent(instruction)) {
-    return null
-  }
-
-  const removesImage = removeOperations.some(
-    (operation: FlowWireOperation): boolean =>
-      operationRemovesExistingImage(operation, content)
-  )
-
-  if (removesImage) {
-    return "That change may remove an existing image or logo. Should I remove it?"
-  }
-
-  return removalsReplaced(response, content)
-    ? null
-    : `That change would remove ${nameRemovedBlocks(response, content)}. Should I go ahead?`
-}
-
-// Two name fields merged into one, or a question rebuilt in a new section, is
-// a change rather than a loss: removals pass when the same turn adds or
-// rewrites at least as many blocks of each kind. Each shows in the receipt.
-function removalsReplaced(response: FlowProviderResponse, content: TemplateContent): boolean {
-  const kind = (type: string): string => (type.endsWith("_field") ? "field" : type)
-  const balance = new Map<string, number>()
-
-  for (const operation of response.operations) {
-    if (operation.type === "remove_block") {
-      const block = content.blocks.find((candidate: TemplateBlock): boolean => candidate.id === operation.payload.blockId)
-      const removed = kind(block?.type ?? "unknown")
-
-      balance.set(removed, (balance.get(removed) ?? 0) - 1)
-    } else if (operation.type === "add_block" || (operation.type === "update_block" && asksSomethingNew(operation.payload, content))) {
-      const added = kind(operation.payload.block.type)
-
-      balance.set(added, (balance.get(added) ?? 0) + 1)
-    }
-  }
-
-  return [...balance.values()].every((count: number): boolean => count >= 0)
-}
-
-// A rewrite replaces something only when it now says something else; clearer
-// help text on the same question does not make up for a question gone.
-function asksSomethingNew(payload: FlowOperationPayload<"update_block">, content: TemplateContent): boolean {
-  const before = content.blocks.find((candidate: TemplateBlock): boolean => candidate.id === payload.blockId)
-  const words = (block: object | undefined): unknown =>
-    block && "label" in block ? block.label : block && "text" in block ? block.text : undefined
-
-  return words(before) !== words(payload.block)
-}
-
-// What a response would remove, in the user's words: up to three, then a count.
-function nameRemovedBlocks(response: FlowProviderResponse, content: TemplateContent): string {
-  const names = response.operations.flatMap((operation: FlowWireOperation): string[] => {
-    const block =
-      operation.type === "remove_block"
-        ? content.blocks.find((candidate: TemplateBlock): boolean => candidate.id === operation.payload.blockId)
-        : undefined
-
-    return block ? [`"${describeBlockTarget(block)}"`] : []
-  })
-
-  return names.length === 0
-    ? "existing content"
-    : `${names.slice(0, 3).join(", ")}${names.length > 3 ? ` and ${names.length - 3} more` : ""}`
-}
-
-function hasExplicitRemovalIntent(instruction: string): boolean {
-  return /\b(remove|delete|drop|clear|eliminate|discard)\b/i.test(instruction)
-}
-
-function hasExplicitLogoRemovalIntent(instruction: string): boolean {
-  return (
-    /\b(remove|delete|clear|discard)\b.{0,40}\blogo\b/i.test(instruction) ||
-    /\blogo\b.{0,40}\b(remove|delete|clear|discard)\b/i.test(instruction)
-  )
-}
-
-function operationRequestsLogoRemoval(operation: FlowWireOperation): boolean {
-  return (
-    operation.type === "set_branding" && operation.payload.removeLogo === true
-  )
-}
-
-function operationRemovesExistingImage(
-  operation: FlowWireOperation,
-  content: TemplateContent
-): boolean {
-  if (operation.type === "set_branding") {
-    return operationRequestsLogoRemoval(operation)
-  }
-
-  if (operation.type !== "remove_block") {
-    return false
-  }
-
-  return content.blocks.some(
-    (block: TemplateBlock): boolean =>
-      block.id === operation.payload.blockId && block.type === "image"
-  )
-}
-
 function describeOperationTarget(
   draft: TemplateFlowDraft,
   operation: FlowWireOperation
@@ -2265,9 +2252,15 @@ function applyFlowOperations(
     )
   )
 
+  // Which change added each block, and every change that touched it, so a
+  // change can name the earlier ones it cannot stand without.
+  const addedBy = new Map<string, number>()
+  const touchedBy = new Map<string, number[]>()
+
   for (const [index, operation] of operations.entries()) {
     recordAffectedOtherDropdowns(nextDraft, operation, otherInvariantContext)
     const target = describeOperationTarget(nextDraft, operation)
+    const dependsOn = readOperationDependencies(operation, addedBy, touchedBy)
     let affectedBlockIds: string[]
 
     try {
@@ -2295,13 +2288,19 @@ function applyFlowOperations(
 
     affectedBlockIds.forEach((blockId: string): void => {
       changedBlockIds.add(blockId)
+      touchedBy.set(blockId, [...(touchedBy.get(blockId) ?? []), index])
+
+      if (operation.type === "add_block") {
+        addedBy.set(blockId, index)
+      }
     })
     ledgerItems.push({
       id: createId(),
       type: operation.type,
       summary: operation.summary,
       target,
-      affectedBlockIds
+      affectedBlockIds,
+      dependsOn
     })
   }
 
@@ -2357,6 +2356,27 @@ function applyFlowOperations(
     ledgerItems,
     changedBlockIds: [...changedBlockIds]
   }
+}
+
+// A change needs the change that added any block it names, and a condition
+// needs every change that shaped its source, such as the choice it compares to.
+// ponytail: blocks only. A change that needs another only for its meaning,
+// such as a field added to stand in for one removed, is not linked.
+function readOperationDependencies(
+  operation: FlowWireOperation,
+  addedBy: ReadonlyMap<string, number>,
+  touchedBy: ReadonlyMap<string, number[]>
+): number[] {
+  const condition =
+    (operation.type === "add_block" || operation.type === "update_block") && "visibleWhen" in operation.payload.block
+      ? operation.payload.block.visibleWhen?.sourceBlockId
+      : undefined
+  const needed = [
+    ...readOperationBlockReferences(operation).map((blockId: string) => addedBy.get(blockId)),
+    ...(condition === undefined ? [] : (touchedBy.get(condition) ?? []))
+  ].filter((index: number | undefined): index is number => index !== undefined)
+
+  return [...new Set(needed)].sort((left: number, right: number) => left - right)
 }
 
 function applyFlowOperation(
@@ -3178,7 +3198,8 @@ function parseLedgerItem(value: unknown): TemplateFlowLedgerItem | null {
     target: value.target,
     affectedBlockIds: value.affectedBlockIds.filter(
       (blockId: unknown): blockId is string => typeof blockId === "string"
-    )
+    ),
+    dependsOn: Array.isArray(value.dependsOn) ? value.dependsOn.filter(Number.isInteger) : []
   }
 }
 
