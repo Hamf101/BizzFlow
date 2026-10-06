@@ -170,8 +170,6 @@ describe("organization permissions", () => {
     expect(canPerformOrganizationAction("manager", "members:invite")).toBe(true)
     expect(canPerformOrganizationAction("manager", "members:update_role")).toBe(false)
     expect(canPerformOrganizationAction("manager", "audit_logs:view")).toBe(true)
-    expect(canPerformOrganizationAction("manager", "audit_logs:verify")).toBe(false)
-    expect(canPerformOrganizationAction("owner_admin", "audit_logs:verify")).toBe(true)
     expect(canPerformOrganizationAction("manager", "documents:view")).toBe(true)
     expect(canPerformOrganizationAction("manager", "document_comments:create")).toBe(true)
     expect(canPerformOrganizationAction("manager", "documents:create")).toBe(true)

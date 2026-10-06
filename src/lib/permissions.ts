@@ -23,10 +23,6 @@ export const ORGANIZATION_PERMISSION_ACTIONS = [
   "members:invite",
   "members:update_role",
   "audit_logs:view",
-  // Gates nothing since the audit hash chain was dropped (20261005120000).
-  // Kept because stored roles and the roles table's check still name it;
-  // removing it needs a data migration of organization_roles.permissions.
-  "audit_logs:verify",
   "templates:view",
   "templates:create",
   "templates:manage",
