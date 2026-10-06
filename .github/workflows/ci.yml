@@ -109,6 +109,11 @@ jobs:
       - name: Start Supabase
         run: pnpm exec supabase start
 
+      # The database's own authorization: every supabase/tests/*.sql, each in a
+      # transaction that is rolled back, against the migrations just applied.
+      - name: Run database tests
+        run: pnpm test:sql
+
       # Object storage. The app targets the S3 API with path-style addressing,
       # so MinIO is a drop-in stand-in for R2.
       - name: Start object storage

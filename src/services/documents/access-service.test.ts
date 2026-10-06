@@ -2,11 +2,6 @@ import { describe, expect, it, vi } from "vitest"
 
 import type { OrganizationRole } from "@/lib/permissions"
 import {
-  createDocumentRow,
-  createMembershipRow,
-  FakeSupabaseClient,
-} from "@/services/document-service.test-support"
-import {
   getEffectiveDocumentAccess,
   getEffectiveFolderAccess,
   requireDocumentAccess,
@@ -282,83 +277,6 @@ describe("document access requirements", () => {
       message: "Unable to load organization membership.",
       statusCode: 500,
     })
-  })
-})
-
-describe("document access test adapter", () => {
-  it("resolves a direct user grant for a non-creator", async () => {
-    const client = new FakeSupabaseClient({
-      organization_memberships: [createMembershipRow("staff")],
-      documents: [createDocumentRow({ created_by: "user-2" })],
-      document_access_grants: [
-        {
-          id: "grant-1",
-          org_id: "org-1",
-          document_id: "document-1",
-          user_id: "user-1",
-          organization_role: null,
-          access_level: "viewer",
-        },
-      ],
-    })
-
-    await expect(
-      getEffectiveDocumentAccess(
-        {
-          organizationId: "org-1",
-          documentId: "document-1",
-          actorUserId: "user-1",
-        },
-        client as never
-      )
-    ).resolves.toBe("viewer")
-  })
-
-  it("inherits a role grant through the document folder ancestry", async () => {
-    const client = new FakeSupabaseClient({
-      organization_memberships: [createMembershipRow("staff")],
-      folders: [
-        {
-          id: "folder-root",
-          org_id: "org-1",
-          parent_folder_id: null,
-          created_by: "user-2",
-        },
-        {
-          id: "folder-child",
-          org_id: "org-1",
-          parent_folder_id: "folder-root",
-          created_by: "user-2",
-        },
-      ],
-      documents: [
-        createDocumentRow({
-          folder_id: "folder-child",
-          created_by: "user-2",
-        }),
-      ],
-      folder_access_grants: [
-        {
-          id: "grant-1",
-          org_id: "org-1",
-          folder_id: "folder-root",
-          user_id: null,
-          organization_role: "staff",
-          access_level: "contributor",
-        },
-      ],
-    })
-
-    await expect(
-      getEffectiveDocumentAccess(
-        {
-          organizationId: "org-1",
-          documentId: "document-1",
-          actorUserId: "user-1",
-        },
-        client as never
-      )
-    ).resolves.toBe("contributor")
   })
 })
 

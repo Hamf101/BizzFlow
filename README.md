@@ -343,33 +343,13 @@ pnpm check
 
 The aggregate gate runs lint, strict TypeScript, unit/integration tests, production-code duplication detection, a production build, and a production dependency audit. When configured with local secrets, also run `pnpm supabase:check`.
 
-The valid-RPC smoke test creates isolated synthetic rows inside one database statement, exercises the submission/file lifecycle plus assignment, review, comments, and resubmission, and removes the fixtures before returning:
+The database's own rules are proven against a real database by the scripts in `supabase/tests/`: access levels, sharing, submissions, signing, invites and public forms, each exercising the SQL functions directly, plus `catalog-security.sql`, which reads the migrated catalog and fails if a table in `public` or `private` lacks enabled and forced row-level security, if a non-trigger function is executable by `public`, `anon` or `authenticated` outside its justified allow-list, if a security definer function leaves `search_path` unset, if signed-in or anonymous callers hold any privilege on a relation (or by default on new ones), or if `realtime.messages` carries an unintended policy. Signed-in users have no direct Data API access to tenant tables: tenant data reaches them only through the service layer, which checks current role-definition permissions.
+
+`pnpm test:sql` runs every script against the local stack (`pnpm e2e:up` or `supabase start`), each inside a transaction that is rolled back, and names each file that fails. CI runs it in the end-to-end job once Supabase is up. To aim it at another local stack, name its database container:
 
 ```bash
-set -a
-source .env.local
-npx supabase db query --db-url "$SUPABASE_DB_URL" --file supabase/tests/internal-submissions-live-rpc.sql
+SUPABASE_DB_CONTAINER=supabase_db_<project_id> pnpm test:sql
 ```
-
-The public-form smoke test does the same for anonymous submissions: a link's capacity is used only when a submission is saved, a draft is guarded by its revision, and the link's ceiling holds:
-
-```bash
-npx supabase db query --db-url "$SUPABASE_DB_URL" --file supabase/tests/public-form-submission-live-rpc.sql
-```
-
-The bulk access smoke test checks that Files' batched access lookups answer exactly as the single lookups do for owners, managers, staff, reviewers, and outsiders, and that an oversized call is refused:
-
-```bash
-npx supabase db query --db-url "$SUPABASE_DB_URL" --file supabase/tests/resource-access-levels-live-rpc.sql
-```
-
-The structured-answers check confirms the database keeps several ticked choices, choice grids and tables, refuses malformed ones, and requires them as the application does. It writes nothing:
-
-```bash
-npx supabase db query --local --file supabase/tests/structured-answers-live-rpc.sql
-```
-
-Signed-in users have no direct Data API access to tenant tables: tenant data reaches them only through the service layer, which checks current role-definition permissions. `supabase/tests/migration-security.test.ts`, part of `pnpm test`, reads every migration and fails if a table lacks forced row-level security, if signed-in users regain a table privilege, or if a function stays executable by them.
 
 ### Customize workspace navigation
 

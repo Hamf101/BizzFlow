@@ -4,7 +4,6 @@
     "e2e/**/*.{ts,tsx}",
     "src/**/*.test.{ts,tsx}",
     "scripts/**/*.{mjs,ts,tsx}",
-    "supabase/tests/**/*.test.ts",
     "src/sentry.server.config.ts",
     "src/sentry.edge.config.ts"
   ],

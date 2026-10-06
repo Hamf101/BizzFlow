@@ -19,40 +19,32 @@ declare
   comment_record public.submission_comments%rowtype;
 begin
   template_snapshot := jsonb_build_object(
-    'schemaVersion', 1,
-    'branding', jsonb_build_object(
-      'organizationName', 'RPC verification',
-      'logoDataUrl', null,
-      'primaryColor', '#111827',
-      'accentColor', '#2563EB'
-    ),
-    'repeat', jsonb_build_object('header', false, 'footer', false),
-    'sections', jsonb_build_object(
-      'header', jsonb_build_object('blocks', '[]'::jsonb),
-      'body', jsonb_build_object(
-        'blocks', jsonb_build_array(
-          jsonb_build_object(
-            'id', gen_random_uuid(),
-            'type', 'text_field',
-            'fieldKey', 'vendor_name',
-            'label', 'Vendor name',
-            'required', true,
-            'helpText', null,
-            'placeholder', null,
-            'multiline', false
-          ),
-          jsonb_build_object(
-            'id', gen_random_uuid(),
-            'type', 'file_field',
-            'fieldKey', 'evidence',
-            'label', 'Evidence',
-            'required', true,
-            'helpText', null
-          )
-        )
+    'schemaVersion', 3,
+    'branding', '{}'::jsonb,
+    'blocks', jsonb_build_array(
+      jsonb_build_object(
+        'id', gen_random_uuid(),
+        'type', 'text_field',
+        'fieldKey', 'vendor_name',
+        'label', 'Vendor name',
+        'required', true,
+        'helpText', null,
+        'placeholder', null,
+        'multiline', false
       ),
-      'footer', jsonb_build_object('blocks', '[]'::jsonb)
-    )
+      jsonb_build_object(
+        'id', gen_random_uuid(),
+        'type', 'file_field',
+        'fieldKey', 'evidence',
+        'label', 'Evidence',
+        'required', true,
+        'helpText', null
+      )
+    ),
+    'layout', '{}'::jsonb,
+    'sections', '[]'::jsonb,
+    'fieldGroups', '[]'::jsonb,
+    'blockRules', '[]'::jsonb
   );
 
   insert into auth.users (id, email, created_at, updated_at)
@@ -137,6 +129,9 @@ begin
     actor_id,
     now()
   );
+
+  -- Everything from here runs as the app does: as the service role, not a superuser.
+  set local role service_role;
 
   select *
   into submission_record
@@ -716,13 +711,15 @@ begin
     raise exception 'Comment retry did not remain idempotent.';
   end if;
 
+  -- A named reviewer of any role may approve or ask for changes (20260930120000);
+  -- rejecting and completing stay binding decisions for owners and managers.
   begin
     perform public.transition_internal_submission(
       organization_id,
       submission_id,
       9,
-      'approved',
-      null,
+      'rejected',
+      'Not acceptable.',
       reviewer_id
     );
     raise exception 'External reviewer unexpectedly made a binding decision.';
@@ -866,6 +863,8 @@ begin
   ) <> 4 then
     raise exception 'Review assignment activity did not match the expected revisions.';
   end if;
+
+  reset role;
 
   delete from public.organizations
   where id = organization_id;

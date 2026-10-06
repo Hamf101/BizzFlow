@@ -20,10 +20,15 @@ minimumReleaseAgeIgnoreMissingTime: false
 # the list must stay present, even empty. Remove an entry once it ages. pnpm
 # 11.10 predates minimumReleaseAgeExcludePrune, so pruning stays a manual step
 # until the pinned package manager is deliberately updated.
-minimumReleaseAgeExclude: []
+minimumReleaseAgeExclude:
+  # GHSA-68fv-2mgg-jv7q (high): reviewed 2026-10-06; same publisher, no deps, signed.
+  # Remove after 2026-10-07, when it clears the age gate.
+  - source-map-js@1.2.2
 
 overrides:
   postcss: 8.5.23
+  # Event-loop DoS in indexed source-map offsets below 1.2.2 (via postcss, css-tree).
+  source-map-js: 1.2.2
   # Memory-growth and stats-normalization advisories in browserslist <=4.28.6.
   # Pinned to the reviewed 4.x release already beyond the seven-day age gate.
   browserslist: 4.28.8
