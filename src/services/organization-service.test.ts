@@ -397,7 +397,8 @@ describe("organization service atomic mutations", () => {
         },
       },
     ])
-    expect(recordAuditLog).toHaveBeenCalledOnce()
+    // The RPC writes the audit row with the membership; nothing is written after it.
+    expect(recordAuditLog).not.toHaveBeenCalled()
   })
 
   function createRoleHolderRow(

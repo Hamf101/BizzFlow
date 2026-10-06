@@ -325,18 +325,7 @@ export async function acceptInvite(
         )
       }
 
-      await recordOrganizationAuditLog(
-        {
-          organizationId: invite.organizationId,
-          actorUserId: input.userId,
-          action: "invite.accepted",
-          targetType: "invite",
-          targetId: invite.id,
-          metadata: { email: invite.email, role: invite.role },
-        },
-        deps.recordAuditLog
-      )
-
+      // accept_organization_invite writes its audit row with the membership.
       return {
         organization: await getOrganizationById(
           client,

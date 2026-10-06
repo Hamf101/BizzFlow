@@ -17,6 +17,7 @@ export type RateLimitBucket =
   | "outbound_email_daily"
   | "email_recipient"
   | "pdf_render"
+  | "pdf_render_user"
   | "document_open"
   | "public_form_submission"
   | "public_form_file_upload"
@@ -70,6 +71,8 @@ const BUCKET_CONFIGS: Readonly<Record<RateLimitBucket, BucketConfig>> = {
   // Guards one recipient's inbox against a resend loop aimed at a third party.
   email_recipient: { limit: 3, windowSeconds: 3_600, failMode: "closed" },
   pdf_render: { limit: 30, windowSeconds: 60, failMode: "open" },
+  // One member across every document they can open: a few previews a second at most.
+  pdf_render_user: { limit: 60, windowSeconds: 60, failMode: "open" },
   document_open: { limit: 120, windowSeconds: 60, failMode: "open" },
   public_form_submission: { limit: 5, windowSeconds: 60, failMode: "open" },
   public_form_file_upload: { limit: 10, windowSeconds: 60, failMode: "open" },

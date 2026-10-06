@@ -2,7 +2,8 @@
 -- as its token's hash and accepted with the token itself, never with the hash;
 -- accepting never lowers an owner; and an owner's membership cannot be demoted,
 -- disabled or removed while the workspace exists, though deleting the workspace
--- still takes it. Creates isolated synthetic rows inside one statement; any
+-- still takes it. Accepting an invite, changing a member's access and
+-- archiving a role each write their audit row in the same call. Creates isolated synthetic rows inside one statement; any
 -- failed check rolls everything back.
 do $$
 declare
@@ -16,6 +17,8 @@ declare
   owner_email text := 'inv-' || replace(owner_id::text, '-', '') || '@example.invalid';
   invitee_email text := 'inv-' || replace(invitee_id::text, '-', '') || '@example.invalid';
   membership_id uuid;
+  custom_role_id uuid := gen_random_uuid();
+  staff_role_id uuid;
 begin
   insert into auth.users (id, email, created_at, updated_at)
   values (owner_id, owner_email, now(), now()), (invitee_id, invitee_email, now(), now());
@@ -47,6 +50,13 @@ begin
     (invite_id, organization_id, invitee_email, 'staff', encode(sha256(convert_to(token, 'UTF8')), 'hex'), owner_id),
     (owner_invite_id, organization_id, owner_email, 'staff', encode(sha256(convert_to(owner_token, 'UTF8')), 'hex'), owner_id);
 
+  insert into public.organization_roles (id, org_id, name, permissions)
+  values (custom_role_id, organization_id, 'Live RPC role', array['people:view']);
+
+  select role.id into staff_role_id
+  from public.organization_roles role
+  where role.org_id = organization_id and role.system_key = 'staff';
+
   set local role service_role;
 
   -- The stored hash is not a way in; the token is.
@@ -62,6 +72,24 @@ begin
     where membership.id = membership_id and membership.role = 'staff' and membership.status = 'active'
   ) then
     raise exception 'Accepting with the token did not make a staff member.';
+  end if;
+
+  perform public.update_organization_member_access(organization_id, membership_id, owner_id, custom_role_id, '  Ana  ');
+  perform public.update_organization_member_access(organization_id, membership_id, owner_id, staff_role_id, null);
+  perform public.archive_organization_role(organization_id, owner_id, custom_role_id);
+
+  if (
+    select count(*) from public.audit_logs audit
+    where audit.org_id = organization_id
+      and (
+        (audit.action = 'invite.accepted' and audit.target_id = invite_id and audit.actor_user_id = invitee_id
+          and audit.metadata = jsonb_build_object('email', invitee_email, 'role', 'staff'))
+        or (audit.action = 'membership.access_updated' and audit.target_id = membership_id and audit.actor_user_id = owner_id
+          and audit.metadata ->> 'roleDefinitionId' in (custom_role_id::text, staff_role_id::text))
+        or (audit.action = 'organization_role.archived' and audit.target_id = custom_role_id and audit.actor_user_id = owner_id)
+      )
+  ) <> 4 then
+    raise exception 'An access change did not write its audit row in the same call.';
   end if;
 
   -- An owner accepting an invite to their own workspace stays an owner.

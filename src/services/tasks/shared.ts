@@ -11,7 +11,7 @@ import {
   type OrganizationRole,
 } from "@/lib/permissions"
 import { createAdminClient } from "@/lib/supabase/admin"
-import { recordAuditLog as defaultRecordAuditLog } from "@/services/audit-service"
+import { recordAuditLogBestEffort } from "@/services/audit-service"
 import { createListInputValidators } from "@/services/list-input"
 import type {
   TaskAuditLogInput,
@@ -624,19 +624,7 @@ export async function recordTaskAuditLog(
   deps: TaskServiceDeps,
   input: TaskAuditLogInput
 ): Promise<void> {
-  const recordAuditLog = deps.recordAuditLog ?? defaultRecordAuditLog
-
-  try {
-    await recordAuditLog(input)
-  } catch (error: unknown) {
-    console.warn("task_audit_log_failed", {
-      organizationId: input.organizationId,
-      actorUserId: input.actorUserId,
-      action: input.action,
-      targetId: input.targetId,
-      reason: error instanceof Error ? error.message : "Unknown audit error",
-    })
-  }
+  await recordAuditLogBestEffort(input, deps.recordAuditLog)
 }
 
 /**

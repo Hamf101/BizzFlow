@@ -109,14 +109,5 @@ export type AuditLogEntry = {
   targetId: string | null
   metadata: AuditMetadata
   seq: number
-  prevHash: string | null
-  entryHash: string
   createdAt: string
-}
-
-export type AuditChainVerification = {
-  valid: boolean
-  checkedCount: number
-  firstInvalidSeq: number | null
-  failureReason: string | null
 }

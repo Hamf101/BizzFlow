@@ -25,6 +25,8 @@ export type LiveStatus = "offline" | "saved" | "saving" | "stopped"
 
 /** An editor's live copy of a room: what it shows, how to change it, and how its changes are kept. */
 export type LiveSession<State> = Readonly<{
+  /** Says whether this editor is the only one in the room, which lets it gather changes for longer. */
+  alone: (value: boolean) => void
   canRedo: () => boolean
   canUndo: () => boolean
   change: (update: (state: State) => State, coalesceKey?: string) => void
@@ -48,9 +50,9 @@ export type LiveSession<State> = Readonly<{
 
 const REMOTE = "remote"
 const LOCAL = "local"
-// Keystrokes are gathered for this long before they are sent, and never longer than the most.
-const GATHER_MS = 300
-const MOST_MS = 1_500
+// Keystrokes are gathered for this long before they are sent, and never longer than the most;
+// with no one else in the room to see them sooner, for longer.
+const GATHER = { alone: [3_000, 5_000], together: [300, 1_500] } as const
 const RETRY_MS = [1_000, 3_000, 8_000, 15_000]
 
 /**
@@ -91,6 +93,7 @@ export function startLiveSession<State>(options: Readonly<{
   let retryTimer: ReturnType<typeof setTimeout> | undefined
   let lastKey: string | undefined
   let stopped = false
+  let gather: readonly [number, number] = GATHER.together
 
   const notify = (): void => listeners.forEach((listener) => listener())
   const setStatus = (next: LiveStatus): void => {
@@ -139,7 +142,8 @@ export function startLiveSession<State>(options: Readonly<{
     clearTimeout(gatherTimer)
     const now = Date.now()
     firstPendingAt ||= now
-    gatherTimer = setTimeout(() => void flush(), Math.max(0, Math.min(GATHER_MS, firstPendingAt + MOST_MS - now)))
+    const [gatherMs, mostMs] = gather
+    gatherTimer = setTimeout(() => void flush(), Math.max(0, Math.min(gatherMs, firstPendingAt + mostMs - now)))
   }
 
   async function flush(): Promise<boolean> {
@@ -256,6 +260,14 @@ export function startLiveSession<State>(options: Readonly<{
   begin(options.opened)
 
   return {
+    alone: (value) => {
+      gather = value ? GATHER.alone : GATHER.together
+
+      // Someone joined: what is waiting goes out within the shorter gathering.
+      if (pending.length > 0 && !sending && !stopped) {
+        schedule()
+      }
+    },
     canRedo: () => undoManager.redoStack.length > 0,
     canUndo: () => undoManager.undoStack.length > 0,
     catchUp,

@@ -20,8 +20,7 @@ test("narrows the audit log by kind, unfolds an event, and downloads exactly tha
     org_id: tenant.organizationId,
     target_type: targetType,
   })
-  // The table's trigger assigns the sequence and chain hashes, so seeded
-  // events are as tamper-evident as recorded ones.
+  // The table's sequence numbers seeded events as it does recorded ones.
   const { error } = await admin
     .from("audit_logs")
     .insert([

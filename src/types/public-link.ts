@@ -6,7 +6,11 @@ export type PublicFormLink = {
   id: string
   organizationId: string
   templateId: string
-  /** Empty on a link sent to one person, whose token is kept only as a hash. */
+  /**
+   * Empty unless the app can derive it: every link keeps only its token's
+   * hash, so a link sent to one person, and a link for anyone made before
+   * tokens were derived, cannot be shown again.
+   */
   token: string
   /** Who a link was sent to; null on a link for anyone. */
   recipientEmail: string | null

@@ -239,8 +239,9 @@ export async function seedSigningDocument(
 /**
  * Inserts an active public form link with a known token.
  *
- * Unlike signing tokens, these are stored in plaintext, so the value is chosen
- * here and used directly in the URL.
+ * Like signing tokens, a link keeps only its token's SHA-256, so the token is
+ * chosen here and its hash written. The app cannot derive it, so the link's
+ * page lists it as an older link with no address to copy.
  *
  * @param client - Service-role client.
  * @param organizationId - Owning organization.
@@ -258,7 +259,7 @@ export async function seedPublicFormLink(
     org_id: organizationId,
     status: "active",
     template_id: templateId,
-    token,
+    token_hash: createHash("sha256").update(token, "utf8").digest("hex"),
   })
 
   if (error) {

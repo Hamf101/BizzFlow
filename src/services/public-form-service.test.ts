@@ -1,9 +1,11 @@
-import { describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 
+import { hashToken } from "@/services/document-signing/token-security"
 import {
   completePublicFormFileUpload,
   createPublicFormFileUploadUrl,
   createPublicFormLink,
+  derivePublicLinkToken,
   disablePublicFormLink,
   getPublicFormDraftState,
   getPublicFormLinkByToken,
@@ -77,7 +79,10 @@ describe("public form link management", () => {
 
     const link = await createPublicFormLink({ ...manage, expiresAt: "2026-12-31T12:00", maxSubmissions: 5 }, deps)
     expect(link).toMatchObject({ token: PUBLIC_TOKEN, maxSubmissions: 5, expiresAt: "2026-12-31T12:00:00.000Z" })
-    expect((await listPublicFormLinks(manage, deps)).map((row) => row.id)).toEqual([LINK_ID])
+    // Only the token's hash is kept; its editor sees the token again, derived.
+    expect(client.tables.public_form_links[0]).toMatchObject({ token_hash: hashToken(PUBLIC_TOKEN) })
+    expect(JSON.stringify(client.tables.public_form_links[0])).not.toContain(PUBLIC_TOKEN)
+    expect((await listPublicFormLinks(manage, deps)).map((row) => [row.id, row.token])).toEqual([[LINK_ID, PUBLIC_TOKEN]])
 
     await disablePublicFormLink({ ...manage, linkId: LINK_ID }, deps)
 
@@ -89,8 +94,8 @@ describe("public form link management", () => {
   it("refuses a member who only uses the template, another template's link, a link sent to one person, and bad limits", async () => {
     const client = seedLinkManagement()
     client.tables.public_form_links.push(
-      createLinkRow({ id: "other-template-link", template_id: OTHER_TEMPLATE_ID, token: "other-token-0123456789" }),
-      createLinkRow({ id: "sent-link", token: null, token_hash: "f".repeat(64), recipient_email: "ana@example.com" })
+      createLinkRow({ id: "other-template-link", template_id: OTHER_TEMPLATE_ID, token_hash: "e".repeat(64) }),
+      createLinkRow({ id: "sent-link", token_hash: "f".repeat(64), recipient_email: "ana@example.com" })
     )
     const deps = createDeps(client, [LINK_ID])
     const staff = { ...manage, actorUserId: STAFF_ID }
@@ -113,6 +118,18 @@ describe("public form link management", () => {
     expect(deps.recordAuditLog).not.toHaveBeenCalled()
   })
 
+  it("keeps a link made before tokens were derived working, without showing its token", async () => {
+    const older = "older-anyone-link-token-0123456789abcdef"
+    const client = seedLinkManagement()
+    client.tables.public_form_links.push(createLinkRow({ token_hash: hashToken(older) }))
+    client.tables.organizations.push({ id: ORG_ID, name: "Acme" })
+    const deps = createDeps(client)
+
+    expect((await listPublicFormLinks(manage, deps)).map((row) => [row.id, row.token])).toEqual([[LINK_ID, ""]])
+    await expect(getPublicFormLinkByToken(older, deps)).resolves.toMatchObject({ valid: true })
+    await expect(getPublicFormLinkByToken(PUBLIC_TOKEN, deps)).resolves.toMatchObject({ invalidReason: "not_found" })
+  })
+
   it("rejects another organization's template and an unpublished one", async () => {
     const elsewhere = seedLinkManagement()
     elsewhere.tables.document_templates[0]!.org_id = OTHER_ORG_ID
@@ -121,6 +138,25 @@ describe("public form link management", () => {
 
     await expect(createPublicFormLink(manage, createDeps(elsewhere, [LINK_ID]))).rejects.toMatchObject({ statusCode: 404 })
     await expect(createPublicFormLink(manage, createDeps(draft, [LINK_ID]))).rejects.toMatchObject({ statusCode: 400 })
+  })
+})
+
+describe("derivePublicLinkToken", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  it("signs the link's id with the server's secret, and refuses without one", () => {
+    vi.stubEnv("SUPABASE_SECRET_KEY", "sb_secret_one")
+    const token = derivePublicLinkToken(LINK_ID)
+
+    expect(token).toMatch(/^[A-Za-z0-9_-]{43}$/)
+    expect(derivePublicLinkToken(LINK_ID)).toBe(token)
+    expect(derivePublicLinkToken(TEMPLATE_ID)).not.toBe(token)
+    vi.stubEnv("SUPABASE_SECRET_KEY", "sb_secret_two")
+    expect(derivePublicLinkToken(LINK_ID)).not.toBe(token)
+    vi.stubEnv("SUPABASE_SECRET_KEY", "")
+    expect(() => derivePublicLinkToken(LINK_ID)).toThrow()
   })
 })
 
@@ -200,8 +236,7 @@ describe("createPublicFormFileUploadUrl", () => {
       id: SUBMISSION_ID,
       status: "draft",
       public_form_link_id: LINK_ID,
-      public_draft_token: DRAFT_TOKEN,
-      submitted_at: null,
+      public_draft_token: hashToken(DRAFT_TOKEN),
     })
 
     // The object key must embed the real submission id, or the database's
@@ -428,6 +463,48 @@ describe("public form draft checkpoints", () => {
         },
       ],
     })
+  })
+
+  it("keeps a visitor's draft handle only as its hash, with the form as its link serves it", async () => {
+    const client = seedValidLink()
+    const checkpoint = await savePublicFormDraft({ token: PUBLIC_TOKEN, values: { full_name: "Ada" } }, createDeps(client))
+
+    expect(client.tables.submissions[0]).toMatchObject({
+      public_draft_token: hashToken(checkpoint.draftToken),
+      template_revision: 3,
+      template_snapshot: client.tables.published_document_templates[0]!.content,
+    })
+    await expect(getPublicFormDraftState(PUBLIC_TOKEN, checkpoint.draftToken, createDeps(client))).resolves.toMatchObject({ values: { full_name: "Ada" } })
+    // The stored hash is not a handle.
+    await expect(
+      getPublicFormDraftState(PUBLIC_TOKEN, client.tables.submissions[0]!.public_draft_token as string, createDeps(client))
+    ).rejects.toMatchObject({ statusCode: 400 })
+  })
+
+  it("says the form changed when it was published again after the visitor opened it, and keeps the draft wording for a draft", async () => {
+    const republished = (client: FakePublicFormClient): void => {
+      const rpc = client.rpc.bind(client)
+      client.rpc = async (name, args) => {
+        client.tables.published_document_templates[0]!.revision = 4
+        return rpc(name, args)
+      }
+    }
+    const changed = { message: "This form changed after you opened it. Reload and try again.", statusCode: 409 }
+    const starting = seedValidLink()
+    republished(starting)
+    const submitting = seedValidLink()
+    republished(submitting)
+
+    await expect(savePublicFormDraft({ token: PUBLIC_TOKEN, values: {} }, createDeps(starting))).rejects.toMatchObject(changed)
+    await expect(
+      submitPublicForm({ token: PUBLIC_TOKEN, values: { full_name: "Ada", agreed: "true" } }, createDeps(submitting))
+    ).rejects.toMatchObject(changed)
+    expect([...starting.tables.submissions, ...submitting.tables.submissions]).toHaveLength(0)
+
+    const drafted = seedValidLink({ submissions: [createDraftRow({ revision: 2 })] })
+    await expect(
+      savePublicFormDraft({ token: PUBLIC_TOKEN, draftToken: DRAFT_TOKEN, expectedRevision: 1, values: {} }, createDeps(drafted))
+    ).rejects.toMatchObject({ message: "This form draft changed in another tab. Reload and try again.", statusCode: 409 })
   })
 
   it("supersedes an exact token-scoped public file through the RPC", async () => {

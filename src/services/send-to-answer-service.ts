@@ -1,7 +1,7 @@
 import { z } from "zod"
 
 import { createAdminClient } from "@/lib/supabase/admin"
-import { recordAuditLog as defaultRecordAuditLog } from "@/services/audit-service"
+import { recordAuditLogBestEffort, type RecordAuditLogInput } from "@/services/audit-service"
 import { sendAnswerRequestEmail } from "@/services/answer-request-email"
 import { DocumentSigningServiceError } from "@/services/document-signing/errors"
 import { loadGeneratedDocumentView } from "@/services/document-signing/persistence"
@@ -13,7 +13,6 @@ import { PublicFormServiceError } from "@/services/public-form-service"
 import { requireTemplateAccess } from "@/services/templates/access"
 import { TemplateServiceError } from "@/services/templates/errors"
 
-type RecordAuditLogInput = Parameters<typeof defaultRecordAuditLog>[0]
 type Client = ReturnType<typeof createAdminClient>
 type Who = Readonly<{ actorUserId: string; organizationId: string }>
 type RequestInput = Who & Readonly<{ linkId: string }>
@@ -447,11 +446,7 @@ async function deliver(deps: SendToAnswerDeps, request: AnswerRequest): Promise<
 }
 
 async function audit(deps: SendToAnswerDeps, input: RecordAuditLogInput): Promise<void> {
-  try {
-    await (deps.recordAuditLog ?? defaultRecordAuditLog)(input)
-  } catch (error: unknown) {
-    console.warn("answer_request_audit_failed", { action: input.action, reason: error instanceof Error ? error.message : "Unknown audit error" })
-  }
+  await recordAuditLogBestEffort(input, deps.recordAuditLog)
 }
 
 const INACTIVE = "Only an active document can be sent to answer."

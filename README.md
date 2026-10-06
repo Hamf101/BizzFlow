@@ -6,7 +6,7 @@ BizFlow Docs is a mobile-first, multi-tenant workflow portal for reusable forms,
 
 - Project phase: implementation — nearing MVP completion.
 - Sprint: Sprints 0–11, 13, and 14 are implemented and migrated. Sprint 12 (offline/PWA) is deferred.
-- Application scaffold: Next.js App Router foundation with versioned documents, organization templates, guided signing/PDF workflows, creator-owned submission drafts, private verified files, a tenant-scoped review inbox, tasks with Inngest reminders, SMS notifications via Termii, public form links, template duplication, notification preferences, PostHog analytics, and tamper-evident audit log with CSV export.
+- Application scaffold: Next.js App Router foundation with versioned documents, organization templates, guided signing/PDF workflows, creator-owned submission drafts, private verified files, a tenant-scoped review inbox, tasks with Inngest reminders, SMS notifications via Termii, public form links, template duplication, notification preferences, PostHog analytics, and an append-only audit log with CSV export.
 - Delivery direction: cloud-first. Offline/PWA work and related packages are deferred until explicitly reprioritized.
 
 ## MVP Scope

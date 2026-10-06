@@ -26,7 +26,7 @@ import { readTemplateImage } from "@/services/template-image-service"
 import type { DocumentSigningRecipient, PublicSignerStatus } from "@/types/signing"
 
 // A long document renders in a few seconds; this leaves room for pictures and a busy moment.
-export const maxDuration = 300
+export const maxDuration = 60
 
 type GeneratedDocumentPdfRouteContext = {
   params: Promise<{ documentId: string }>
@@ -66,6 +66,8 @@ export async function GET(
       "pdf_render",
       `${organizationId}:${documentId}`
     )
+    // And on the member, so cycling through many documents is not free either.
+    await checkRateLimit("pdf_render_user", user.id)
 
     const view = await getGeneratedDocumentSigningView({
       actorUserId: user.id,

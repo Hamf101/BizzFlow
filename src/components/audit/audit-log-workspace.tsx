@@ -1,4 +1,4 @@
-import type { ReactElement, ReactNode } from "react"
+import type { ReactElement } from "react"
 
 import {
   auditLogListState,
@@ -26,20 +26,17 @@ const EVENT_GRID =
  * time, with each event's details folded away and the order and export kept
  * behind the view menu.
  *
- * @param props - The current view, its page of events, members, and the integrity mark.
+ * @param props - The current view, its page of events, and members.
  * @returns The audit log workspace.
  */
 export function AuditLogWorkspace({
   entries,
-  integrity,
   members,
   savedViews,
   total,
   view,
 }: {
   entries: AuditLogEntry[]
-  /** Tamper-check mark shown beside the title, when the viewer may verify. */
-  integrity: ReactNode
   members: OrganizationMember[]
   savedViews: ListSavedViews["saved"]
   total: number
@@ -68,15 +65,12 @@ export function AuditLogWorkspace({
             </span>
           </h1>
         </DatedTitle>
-        <div className="flex items-center gap-2">
-          {integrity}
-          <ListViewMenu
-            adjusted={isAuditViewAdjusted(view)}
-            label="View options"
-            sections={getAuditViewMenuSections(view)}
-            views={listViews}
-          />
-        </div>
+        <ListViewMenu
+          adjusted={isAuditViewAdjusted(view)}
+          label="View options"
+          sections={getAuditViewMenuSections(view)}
+          views={listViews}
+        />
       </div>
 
       <ListFilterChips

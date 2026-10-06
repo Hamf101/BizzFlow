@@ -1,25 +1,17 @@
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { afterEach, describe, expect, it } from "vitest"
 
-import { createAdminClient } from "@/lib/supabase/admin"
+import { type ErrorReportContext, setErrorReporter } from "@/lib/observability"
+
 import {
   exportAuditLogs,
   listAuditLogPage,
-  verifyAuditLogChain,
+  recordAuditLogBestEffort,
 } from "@/services/audit-service"
 import {
   POSTGREST_MAX_ROWS,
   PostgrestReadQuery,
 } from "@/services/postgrest-fake.test-support"
 import type { AuditLogAction } from "@/types/audit"
-
-vi.mock("@/lib/supabase/admin", () => ({
-  createAdminClient: vi.fn(),
-}))
-
-type FakeResult = {
-  data: unknown
-  error: Error | null
-}
 
 const SUBMISSION_AUDIT_ACTIONS: readonly AuditLogAction[] = [
   "submission.created",
@@ -38,162 +30,35 @@ const PURGE_AUDIT_ACTIONS: readonly AuditLogAction[] = [
   "folder.purged",
 ]
 
-class QueuedQuery implements PromiseLike<FakeResult> {
-  constructor(
-    private readonly client: QueuedAdminClient,
-    private readonly tableName: string
-  ) {}
-
-  select(): QueuedQuery {
-    return this
-  }
-
-  eq(): QueuedQuery {
-    return this
-  }
-
-  order(): QueuedQuery {
-    return this
-  }
-
-  limit(): QueuedQuery {
-    return this
-  }
-
-  async maybeSingle(): Promise<FakeResult> {
-    return this.client.takeResult(this.tableName)
-  }
-
-  then<TResult1 = FakeResult, TResult2 = never>(
-    onfulfilled?: ((value: FakeResult) => TResult1 | PromiseLike<TResult1>) | null,
-    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
-  ): PromiseLike<TResult1 | TResult2> {
-    return Promise.resolve(this.client.takeResult(this.tableName)).then(
-      onfulfilled,
-      onrejected
-    )
-  }
-}
-
-class QueuedAdminClient {
-  readonly rpcCalls: Array<{
-    functionName: string
-    args: Record<string, unknown>
-  }> = []
-
-  constructor(
-    private readonly results: Record<string, FakeResult[]>,
-    private readonly rpcResults: Record<string, FakeResult[]> = {}
-  ) {}
-
-  from(tableName: string): QueuedQuery {
-    return new QueuedQuery(this, tableName)
-  }
-
-  async rpc(
-    functionName: string,
-    args: Record<string, unknown>
-  ): Promise<FakeResult> {
-    this.rpcCalls.push({ functionName, args })
-    const result = this.rpcResults[functionName]?.shift()
-
-    if (!result) {
-      throw new Error(`Missing queued RPC result for ${functionName}.`)
-    }
-
-    return result
-  }
-
-  takeResult(tableName: string): FakeResult {
-    const result = this.results[tableName]?.shift()
-
-    if (!result) {
-      throw new Error(`Missing queued result for ${tableName}.`)
-    }
-
-    return result
-  }
-}
-
-describe("verify audit log chain", () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
+describe("recordAuditLogBestEffort", () => {
+  afterEach(() => {
+    setErrorReporter(null)
   })
 
-  it("returns the mapped verdict for an owner", async () => {
-    const client = new QueuedAdminClient(
-      {
-        organization_memberships: [
-          { data: { role: "owner_admin" }, error: null },
-        ],
-      },
-      {
-        verify_audit_log_chain: [
-          {
-            data: [
-              {
-                valid: false,
-                checked_count: 41,
-                first_invalid_seq: 42,
-                failure_reason: "entry_hash_mismatch",
-              },
-            ],
-            error: null,
-          },
-        ],
-      }
-    )
-    vi.mocked(createAdminClient).mockReturnValue(client as never)
+  it("reports a lost audit row to monitoring by its ids alone, and never fails the change it records", async () => {
+    const reported: Array<[unknown, ErrorReportContext]> = []
+    setErrorReporter((error, context) => reported.push([error, context]))
+    const lost = new Error("insert failed")
 
-    const verification = await verifyAuditLogChain({
-      actorUserId: "owner-1",
-      organizationId: "org-1",
-    })
+    await expect(
+      recordAuditLogBestEffort(
+        {
+          action: "invite.created",
+          actorUserId: "user-1",
+          metadata: { email: "ana@example.com" },
+          organizationId: "org-1",
+          targetId: "invite-1",
+          targetType: "invite",
+        },
+        async () => {
+          throw lost
+        }
+      )
+    ).resolves.toBeUndefined()
 
-    expect(verification).toEqual({
-      valid: false,
-      checkedCount: 41,
-      firstInvalidSeq: 42,
-      failureReason: "entry_hash_mismatch",
-    })
-    expect(client.rpcCalls).toEqual([
-      {
-        functionName: "verify_audit_log_chain",
-        args: { target_org_id: "org-1" },
-      },
+    expect(reported).toEqual([
+      [lost, { action: "invite.created", actorUserId: "user-1", operation: "audit_log", organizationId: "org-1", targetId: "invite-1" }],
     ])
-  })
-
-  it("rejects managers, who hold view but not verify", async () => {
-    const client = new QueuedAdminClient({
-      organization_memberships: [{ data: { role: "manager" }, error: null }],
-    })
-    vi.mocked(createAdminClient).mockReturnValue(client as never)
-
-    await expect(
-      verifyAuditLogChain({ actorUserId: "manager-1", organizationId: "org-1" })
-    ).rejects.toMatchObject({ statusCode: 403 })
-    expect(client.rpcCalls).toEqual([])
-  })
-
-  it("surfaces a 500 when the database check errors", async () => {
-    const client = new QueuedAdminClient(
-      {
-        organization_memberships: [
-          { data: { role: "owner_admin" }, error: null },
-        ],
-      },
-      {
-        verify_audit_log_chain: [
-          { data: null, error: new Error("verification unavailable") },
-        ],
-      }
-    )
-    vi.mocked(createAdminClient).mockReturnValue(client as never)
-
-    await expect(
-      verifyAuditLogChain({ actorUserId: "owner-1", organizationId: "org-1" })
-    ).rejects.toMatchObject({ statusCode: 500 })
   })
 })
 
@@ -229,11 +94,9 @@ function createEventRow(seq: number, overrides: AuditFakeRow = {}): AuditFakeRow
     action: "task.created",
     actor_user_id: "manager-1",
     created_at: new Date(Date.UTC(2026, 6, 18, 12) + seq * 60_000).toISOString(),
-    entry_hash: "d".repeat(64),
     id: `audit-${seq}`,
     metadata: {},
     org_id: "org-1",
-    prev_hash: seq === 1 ? null : "c".repeat(64),
     seq,
     target_id: null,
     target_type: "task",
@@ -346,11 +209,7 @@ describe("list audit log pages", () => {
 
     expect(page.entries.map((entry) => entry.action)).toEqual(SUBMISSION_AUDIT_ACTIONS)
     expect(page.entries.every((entry) => entry.targetType === "submission")).toBe(true)
-    expect(page.entries[0]).toMatchObject({
-      entryHash: "d".repeat(64),
-      prevHash: null,
-      seq: 1,
-    })
+    expect(page.entries[0]).toMatchObject({ seq: 1 })
   })
 
   it("keeps an action or target this build does not know instead of failing the whole log", async () => {

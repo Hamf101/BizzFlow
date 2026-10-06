@@ -165,18 +165,7 @@ export async function archiveOrganizationRole(
         input.actorUserId,
         input.roleId
       )
-
-      await recordOrganizationAuditLog(
-        {
-          organizationId: input.organizationId,
-          actorUserId: input.actorUserId,
-          action: "organization_role.archived",
-          targetType: "organization_role",
-          targetId: input.roleId,
-          metadata: {},
-        },
-        deps.recordAuditLog
-      )
+      // archive_organization_role writes its audit row with the change.
     }
   )
 }

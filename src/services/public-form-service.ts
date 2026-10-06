@@ -1,9 +1,9 @@
-import { randomBytes } from "node:crypto"
+import { createHmac, randomBytes } from "node:crypto"
 
 import { z } from "zod"
 
 import { createAdminClient } from "@/lib/supabase/admin"
-import { recordAuditLog as defaultRecordAuditLog } from "@/services/audit-service"
+import { recordAuditLogBestEffort, type RecordAuditLogInput } from "@/services/audit-service"
 import { hashToken } from "@/services/document-signing/token-security"
 import { type LogValue, runOperation } from "@/services/operation"
 import {
@@ -42,10 +42,6 @@ import { mapDocumentTemplate } from "@/services/templates/shared"
  */
 const PUBLIC_UPLOAD_CLEANUP_MS = 24 * 60 * 60 * 1000
 
-function generateToken(): string {
-  return randomBytes(24).toString("hex")
-}
-
 function generateDraftToken(): string {
   return randomBytes(32).toString("hex")
 }
@@ -58,6 +54,27 @@ export class PublicFormServiceError extends Error {
     this.name = "PublicFormServiceError"
     this.statusCode = statusCode
   }
+}
+
+const FORM_CHANGED = "This form changed after you opened it. Reload and try again."
+const DRAFT_CHANGED = "This form draft changed in another tab. Reload and try again."
+
+/**
+ * The token of a link for anyone: its id signed with the server's secret, so
+ * the link keeps only the token's hash and its editor can still copy it.
+ *
+ * @param linkId - The link's id.
+ * @returns A 256-bit base64url token.
+ * @throws PublicFormServiceError when the server has no secret.
+ */
+export function derivePublicLinkToken(linkId: string): string {
+  const secret = process.env.SUPABASE_SECRET_KEY?.trim()
+
+  if (!secret) {
+    throw new PublicFormServiceError("Public form links are not configured.", 500)
+  }
+
+  return createHmac("sha256", secret).update(JSON.stringify(["bizflow-public-link", linkId])).digest("base64url")
 }
 
 export type CreatePublicFormLinkInput = TemplateAccessInput & {
@@ -155,13 +172,13 @@ export type SupersedePublicFormFileInput = {
 
 export type PublicFormServiceDeps = {
   client?: ReturnType<typeof createAdminClient>
-  generateTokenImpl?: () => string
+  linkToken?: (linkId: string) => string
   generateDraftTokenImpl?: () => string
   createId?: () => string
   now?: () => Date
   createSignedSubmissionUploadUrl?: typeof defaultCreateSignedSubmissionUploadUrl
   verifySubmissionUpload?: typeof defaultVerifySubmissionUpload
-  recordAuditLog?: (input: Parameters<typeof defaultRecordAuditLog>[0]) => Promise<unknown>
+  recordAuditLog?: (input: RecordAuditLogInput) => Promise<unknown>
 }
 
 /** A public draft submission resolved from an anonymous visitor's handle. */
@@ -230,6 +247,18 @@ const linkLimitsSchema = z.object({
   maxSubmissions: z.number().int().positive("The submission limit must be a whole number above zero.").nullish(),
 })
 
+/**
+ * A link for anyone, with its token when the app can derive it. A link made
+ * before tokens were derived keeps working for whoever holds it, but its
+ * token is kept only as a hash, so it cannot be shown again.
+ */
+function withToken(row: unknown, deps: PublicFormServiceDeps): PublicFormLink {
+  const link = parsePublicFormLinkRow(row)
+  const token = (deps.linkToken ?? derivePublicLinkToken)(link.id)
+
+  return { ...link, token: hashToken(token) === (row as { token_hash?: unknown }).token_hash ? token : "" }
+}
+
 function runPublicLinkOperation<T>(
   operationName: string,
   input: TemplateAccessInput,
@@ -257,19 +286,17 @@ async function auditLink(
   action: "public_form_link.created" | "public_form_link.disabled",
   linkId: string
 ): Promise<void> {
-  try {
-    await (deps.recordAuditLog ?? defaultRecordAuditLog)({
+  await recordAuditLogBestEffort(
+    {
       action,
       actorUserId: input.actorUserId,
       metadata: { templateId: input.templateId },
       organizationId: input.organizationId,
       targetId: linkId,
       targetType: "public_form_link",
-    })
-  } catch (error: unknown) {
-    // The link already changed; a lost audit row is reported, not undone.
-    console.warn("public_form_link_audit_failed", { action, linkId, reason: error instanceof Error ? error.message : "Unknown audit error" })
-  }
+    },
+    deps.recordAuditLog
+  )
 }
 
 /**
@@ -318,13 +345,14 @@ export async function createPublicFormLink(
       )
     }
 
+    const id = createId(deps)
     const { data, error } = await client
       .from("public_form_links")
       .insert({
-        id: createId(deps),
+        id,
         org_id: input.organizationId,
         template_id: input.templateId,
-        token: (deps.generateTokenImpl ?? generateToken)(),
+        token_hash: hashToken((deps.linkToken ?? derivePublicLinkToken)(id)),
         status: "active",
         expires_at: expiresAt,
         max_submissions: limits.data.maxSubmissions ?? null,
@@ -340,7 +368,7 @@ export async function createPublicFormLink(
       throw new PublicFormServiceError("Unable to create public form link.", 500)
     }
 
-    const link = parsePublicFormLinkRow(data)
+    const link = withToken(data, deps)
     await auditLink(deps, input, "public_form_link.created", link.id)
     return link
   })
@@ -369,7 +397,7 @@ export async function disablePublicFormLink(
       .eq("id", input.linkId)
       .eq("org_id", input.organizationId)
       .eq("template_id", input.templateId)
-      .is("token_hash", null)
+      .is("recipient_email", null)
       .select()
       .maybeSingle()
 
@@ -382,7 +410,7 @@ export async function disablePublicFormLink(
     }
 
     await auditLink(deps, input, "public_form_link.disabled", input.linkId)
-    return parsePublicFormLinkRow(data)
+    return withToken(data, deps)
   })
 }
 
@@ -403,14 +431,14 @@ export async function listPublicFormLinks(
       .eq("org_id", input.organizationId)
       .eq("template_id", input.templateId)
       // Links sent to one person each are listed where they were sent from.
-      .is("token_hash", null)
+      .is("recipient_email", null)
       .order("created_at", { ascending: false })
 
     if (error || !data) {
       throw new PublicFormServiceError("Unable to load public form links.", 500)
     }
 
-    return data.map((row) => parsePublicFormLinkRow(row))
+    return data.map((row) => withToken(row, deps))
   })
 }
 
@@ -435,21 +463,17 @@ export async function getPublicFormLinkByToken(
     answers: {},
   })
 
-  let { data: linkRow, error: linkError } = await client
+  // Every link is kept only as its token's hash, and only a token shaped as
+  // one of ours can be one.
+  if (!/^[A-Za-z0-9_-]{10,512}$/.test(token)) {
+    return invalid("not_found")
+  }
+
+  const { data: linkRow, error: linkError } = await client
     .from("public_form_links")
     .select("*")
-    .eq("token", token)
+    .eq("token_hash", hashToken(token))
     .maybeSingle()
-
-  // A link sent to one person is kept only as its token's hash, and only a
-  // token shaped as ours can be one.
-  if (!linkError && !linkRow && /^[A-Za-z0-9_-]{32,512}$/.test(token)) {
-    ;({ data: linkRow, error: linkError } = await client
-      .from("public_form_links")
-      .select("*")
-      .eq("token_hash", hashToken(token))
-      .maybeSingle())
-  }
 
   if (linkError || !linkRow) {
     return invalid("not_found")
@@ -619,7 +643,7 @@ async function resolvePublicDraft(
     .select(
       "id,org_id,template_snapshot,values,revision,public_form_link_id,status"
     )
-    .eq("public_draft_token", draftToken)
+    .eq("public_draft_token", hashToken(draftToken))
     .eq("public_form_link_id", linkId)
     .eq("status", "draft")
     .maybeSingle()
@@ -635,6 +659,10 @@ async function resolvePublicDraft(
     )
   }
 
+  return mapPublicDraft(data)
+}
+
+function mapPublicDraft(data: unknown): PublicDraft {
   const row = data as {
     id: string
     org_id: string
@@ -656,57 +684,32 @@ async function resolvePublicDraft(
 
 /**
  * Allocates the draft submission that a public visitor's uploads hang off.
+ * The database stores the form the link serves, as a submission does, and
+ * refuses when it is not the revision these answers were checked against.
  */
 async function createPublicDraft(
+  token: string,
   preview: PublicFormLinkPreview,
   values: Record<string, unknown>,
   deps: PublicFormServiceDeps
 ): Promise<{ draft: PublicDraft; draftToken: string }> {
-  const client = getClient(deps)
-  const link = preview.link as PublicFormLink
   const template = preview.template as DocumentTemplate
-  const submissionId = createId(deps)
   const draftToken = (deps.generateDraftTokenImpl ?? generateDraftToken)()
-  const timestamp = nowIso(deps)
+  const { data, error } = await getClient(deps).rpc("start_public_form_draft", {
+    target_public_form_token: token,
+    target_public_draft_token: draftToken,
+    target_submission_id: createId(deps),
+    target_title: `${template.title} (Public)`,
+    target_template_revision: template.revision,
+    target_values: values,
+    target_created_at: nowIso(deps),
+  })
 
-  const { error } = await client.from("submissions").insert({
-    id: submissionId,
-    org_id: link.organizationId,
-    title: `${template.title} (Public)`,
-    template_id: template.id,
-    template_revision: template.revision,
-    template_snapshot: template.content as never,
-    values: values as never,
-    status: "draft",
-    revision: 1,
-    created_by: null,
-    updated_by: null,
-    submitted_by: null,
-    assigned_to: null,
-    assigned_by: null,
-    public_form_link_id: link.id,
-    public_draft_token: draftToken,
-    created_at: timestamp,
-    updated_at: timestamp,
-    submitted_at: null,
-    assigned_at: null,
-  } as never)
-
-  if (error) {
-    throw new PublicFormServiceError("Unable to start your submission.", 500)
+  if (error || !data) {
+    throw createPublicSubmissionError(error, false)
   }
 
-  return {
-    draft: {
-      id: submissionId,
-      organizationId: link.organizationId,
-      linkId: link.id,
-      snapshot: template.content,
-      values,
-      revision: 1,
-    },
-    draftToken,
-  }
+  return { draft: mapPublicDraft(data), draftToken }
 }
 
 async function normalizePublicDraftValues(
@@ -761,7 +764,7 @@ export async function savePublicFormDraft(
       (preview.template as DocumentTemplate).content,
       parsed.data.values
     )
-    const created = await createPublicDraft(preview, values, deps)
+    const created = await createPublicDraft(input.token, preview, values, deps)
 
     return {
       activeFileFieldKeys: [],
@@ -773,10 +776,7 @@ export async function savePublicFormDraft(
   const draft = await resolvePublicDraft(parsed.data.draftToken, link.id, deps)
 
   if (draft.revision !== parsed.data.expectedRevision) {
-    throw new PublicFormServiceError(
-      "This form draft changed in another tab. Reload and try again.",
-      409
-    )
+    throw new PublicFormServiceError(DRAFT_CHANGED, 409)
   }
 
   const values = await normalizePublicDraftValues(
@@ -795,7 +795,7 @@ export async function savePublicFormDraft(
     .eq("id", draft.id)
     .eq("org_id", draft.organizationId)
     .eq("public_form_link_id", link.id)
-    .eq("public_draft_token", parsed.data.draftToken)
+    .eq("public_draft_token", hashToken(parsed.data.draftToken))
     .eq("status", "draft")
     .eq("revision", draft.revision)
     .select("revision")
@@ -806,10 +806,7 @@ export async function savePublicFormDraft(
   }
 
   if (!data) {
-    throw new PublicFormServiceError(
-      "This form draft changed in another tab. Reload and try again.",
-      409
-    )
+    throw new PublicFormServiceError(DRAFT_CHANGED, 409)
   }
 
   const activeFileFieldKeys = Array.from(
@@ -921,7 +918,7 @@ export async function createPublicFormFileUploadUrl(
         draft: await resolvePublicDraft(input.draftToken, link.id, deps),
         draftToken: input.draftToken,
       }
-    : await createPublicDraft(preview, {}, deps)
+    : await createPublicDraft(input.token, preview, {}, deps)
 
   const fileField = requireFileField(draft.snapshot, parsed.data.fieldKey)
 
@@ -1191,10 +1188,13 @@ async function loadAvailableFileFieldKeys(
  * Maps a refused atomic public submission to a visitor-safe error.
  *
  * The database refuses the whole submission, so a refusal never uses any of
- * the link's capacity.
+ * the link's capacity. A conflict is the visitor's own draft moving on in
+ * another tab, or, without a draft, the form published again since it was
+ * opened.
  */
 function createPublicSubmissionError(
-  error: { code?: string } | null
+  error: { code?: string } | null,
+  submitsDraft: boolean
 ): PublicFormServiceError {
   switch (error?.code) {
     case "55000":
@@ -1203,10 +1203,7 @@ function createPublicSubmissionError(
         409
       )
     case "40001":
-      return new PublicFormServiceError(
-        "This form draft changed in another tab. Reload and try again.",
-        409
-      )
+      return new PublicFormServiceError(submitsDraft ? DRAFT_CHANGED : FORM_CHANGED, 409)
     case "22023":
     case "23514":
       return new PublicFormServiceError("Your submission is not valid.", 400)
@@ -1243,10 +1240,7 @@ export async function submitPublicForm(
     (!Number.isInteger(input.expectedRevision) ||
       input.expectedRevision !== draft.revision)
   ) {
-    throw new PublicFormServiceError(
-      "This form draft changed in another tab. Reload and try again.",
-      409
-    )
+    throw new PublicFormServiceError(DRAFT_CHANGED, 409)
   }
 
   const snapshot = draft?.snapshot ?? template.content
@@ -1291,7 +1285,7 @@ export async function submitPublicForm(
   })
 
   if (error || !data) {
-    throw createPublicSubmissionError(error)
+    throw createPublicSubmissionError(error, draft !== null)
   }
 
   return {

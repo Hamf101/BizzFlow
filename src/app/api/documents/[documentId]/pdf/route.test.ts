@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { getAuthenticatedUser } from "@/lib/auth"
+import { checkRateLimit, RateLimitError } from "@/lib/rate-limit"
 import { createDocumentDownloadUrl, findGuestOrganizationId } from "@/services/document-service"
 import { renderGeneratedDocumentPdf } from "@/services/document-pdf-service"
 import {
@@ -21,6 +22,11 @@ const VERSION_ID = "40000000-0000-4000-8000-000000000001"
 vi.mock("@/lib/auth", () => ({
   AuthenticationError: class AuthenticationError extends Error {},
   getAuthenticatedUser: vi.fn(),
+}))
+
+vi.mock("@/lib/rate-limit", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/rate-limit")>()),
+  checkRateLimit: vi.fn(),
 }))
 
 vi.mock("@/services/organization-service", () => ({
@@ -70,6 +76,7 @@ vi.mock("@/services/document-service", () => ({
 describe("generated document PDF route", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.mocked(checkRateLimit).mockResolvedValue(undefined)
     vi.mocked(getAuthenticatedUser).mockResolvedValue({
       id: ACTOR_ID,
       email: "member@example.com",
@@ -128,6 +135,19 @@ describe("generated document PDF route", () => {
     expect(getGeneratedDocumentSigningView).toHaveBeenCalledWith(
       expect.objectContaining({ actorUserId: ACTOR_ID, documentId: DOCUMENT_ID, organizationId: SHARING_ORG })
     )
+  })
+
+  it("refuses a member rendering too many documents in a minute, whichever documents they are, before rendering", async () => {
+    vi.mocked(getGeneratedDocumentSigningView).mockResolvedValue(createSigningView("draft"))
+    vi.mocked(checkRateLimit).mockImplementation(async (bucket, key) => {
+      if (bucket === "pdf_render_user" && key === ACTOR_ID) throw new RateLimitError(20)
+    })
+
+    const response = await GET(createRequest(), createRouteContext())
+
+    expect(response.status).toBe(429)
+    expect(response.headers.get("retry-after")).toBe("20")
+    expect(renderGeneratedDocumentPdf).not.toHaveBeenCalled()
   })
 
   it("redirects a completed document to its finalized version without finalizing on GET", async () => {

@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto"
+
 import { expect, test, uniqueName } from "../support/fixtures"
 import { waitForHydration } from "../support/hydration"
 import { seedPublicFormLink, seedTemplate } from "../support/seed"
@@ -62,7 +64,7 @@ test.describe("public form", () => {
         const { data } = await admin
           .from("public_form_links")
           .select("submission_count")
-          .eq("token", token)
+          .eq("token_hash", createHash("sha256").update(token, "utf8").digest("hex"))
           .single()
 
         return data?.submission_count as number | undefined
@@ -116,7 +118,7 @@ test.describe("public form", () => {
     await admin
       .from("public_form_links")
       .update({ status: "disabled" })
-      .eq("token", token)
+      .eq("token_hash", createHash("sha256").update(token, "utf8").digest("hex"))
 
     const context = await browser.newContext()
     const page = await context.newPage()

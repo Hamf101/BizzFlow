@@ -106,15 +106,22 @@ export function PublicFormLinksPanel({
               >
                 <div className="flex min-w-0 flex-col gap-1">
                   <div className="flex items-center gap-2">
-                    {/* The token is 55 characters with nothing to break on,
-                        which is the one real horizontal overflow at 375px.
-                        Truncate for display; Copy still yields the full URL. */}
-                    <span
-                      className="min-w-0 truncate font-mono text-xs font-medium text-foreground"
-                      title={`/forms/${link.token}`}
-                    >
-                      /forms/{link.token}
-                    </span>
+                    {/* The token has nothing to break on, which is the one real
+                        horizontal overflow at 375px. Truncate for display;
+                        Copy still yields the full URL. A link made before
+                        tokens were derived is kept only as a hash. */}
+                    {link.token ? (
+                      <span
+                        className="min-w-0 truncate font-mono text-xs font-medium text-foreground"
+                        title={`/forms/${link.token}`}
+                      >
+                        /forms/{link.token}
+                      </span>
+                    ) : (
+                      <span className="min-w-0 text-xs text-muted-foreground">
+                        This older link still works, but its address can&apos;t be shown again.
+                      </span>
+                    )}
                     <Badge variant={link.status === "active" ? "default" : "secondary"}>
                       {link.status}
                     </Badge>
@@ -128,32 +135,36 @@ export function PublicFormLinksPanel({
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <Button
-                    onClick={() => handleCopy(link.token)}
-                    size="sm"
-                    variant="outline"
-                  >
-                    {copiedToken === link.token ? (
-                      <>
-                        <Check className="mr-1 size-3.5 text-emerald-600" />
-                        Copied
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="mr-1 size-3.5" />
-                        Copy
-                      </>
-                    )}
-                  </Button>
-                  <Link
-                    aria-label="Open public form in a new tab"
-                    className={cn(buttonVariants({ size: "sm", variant: "ghost" }))}
-                    href={`/forms/${link.token}`}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    <ExternalLink className="size-3.5" />
-                  </Link>
+                  {link.token && (
+                    <>
+                      <Button
+                        onClick={() => handleCopy(link.token)}
+                        size="sm"
+                        variant="outline"
+                      >
+                        {copiedToken === link.token ? (
+                          <>
+                            <Check className="mr-1 size-3.5 text-emerald-600" />
+                            Copied
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="mr-1 size-3.5" />
+                            Copy
+                          </>
+                        )}
+                      </Button>
+                      <Link
+                        aria-label="Open public form in a new tab"
+                        className={cn(buttonVariants({ size: "sm", variant: "ghost" }))}
+                        href={`/forms/${link.token}`}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        <ExternalLink className="size-3.5" />
+                      </Link>
+                    </>
+                  )}
                   {link.status === "active" && (
                     <form action={disableAction}>
                       <input name="templateId" type="hidden" value={templateId} />

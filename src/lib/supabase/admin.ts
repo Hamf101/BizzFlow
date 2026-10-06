@@ -204,19 +204,9 @@ type AuditLogRow = Record<string, unknown> & {
   target_type: string
   target_id: string | null
   metadata: Record<string, unknown>
-  // Chain columns are computed by the audit_logs_chain_link trigger;
-  // client-supplied values are always overwritten.
+  /** The order the log is read in, from a sequence. */
   seq: number
-  prev_hash: string | null
-  entry_hash: string
   created_at: string
-}
-
-export type AuditChainVerificationRow = {
-  valid: boolean
-  checked_count: number
-  first_invalid_seq: number | null
-  failure_reason: string | null
 }
 
 export type LeasedResourcePurgeObjectRow = {
@@ -420,9 +410,8 @@ export type AdminPublicFormLinkRow = Record<string, unknown> & {
   id: string
   org_id: string
   template_id: string
-  /** Null on a link sent to one person, which keeps only token_hash. */
-  token: string | null
-  token_hash: string | null
+  /** Every link keeps only its token's SHA-256; a link for anyone's token is derived again by the app. */
+  token_hash: string
   recipient_email: string | null
   document_id: string | null
   content_snapshot: Record<string, unknown> | null
@@ -447,7 +436,7 @@ type TaskReminderInsert = Partial<AdminTaskReminderRow> &
     "id" | "org_id" | "task_id" | "recipient_user_id" | "remind_at" | "created_by"
   >
 type PublicFormLinkInsert = Partial<AdminPublicFormLinkRow> &
-  Pick<AdminPublicFormLinkRow, "id" | "org_id" | "template_id" | "token">
+  Pick<AdminPublicFormLinkRow, "id" | "org_id" | "template_id" | "token_hash">
 
 type FolderInsert = Partial<FolderRow> & Pick<FolderRow, "id" | "org_id" | "name">
 type DocumentInsert = Partial<AdminDocumentRow> &
@@ -821,12 +810,6 @@ export type AdminDatabase = {
           document: DocumentRow
         }[]
       }
-      verify_audit_log_chain: {
-        Args: {
-          target_org_id: string
-        }
-        Returns: AuditChainVerificationRow[]
-      }
       document_card_contents: {
         Args: {
           document_ids: string[]
@@ -944,6 +927,18 @@ export type AdminDatabase = {
           target_template_snapshot: Record<string, unknown> | null
           target_values: Record<string, unknown>
           target_submitted_at: string
+        }
+        Returns: AdminSubmissionRow
+      }
+      start_public_form_draft: {
+        Args: {
+          target_public_form_token: string
+          target_public_draft_token: string
+          target_submission_id: string
+          target_title: string
+          target_template_revision: number
+          target_values: Record<string, unknown>
+          target_created_at: string
         }
         Returns: AdminSubmissionRow
       }

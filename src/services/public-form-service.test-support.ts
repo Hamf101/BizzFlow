@@ -1,5 +1,6 @@
 import { vi } from "vitest"
 
+import { hashToken } from "@/services/document-signing/token-security"
 import type { PublicFormServiceDeps } from "@/services/public-form-service"
 import { answerTemplateAccess } from "@/services/templates/access.test-support"
 import { templateContentV3Schema } from "@/types/template"
@@ -12,7 +13,8 @@ export const SUBMISSION_ID = "40000000-0000-4000-8000-000000000001"
 export const FILE_ID = "50000000-0000-4000-8000-000000000001"
 export const MANAGER_ID = "60000000-0000-4000-8000-000000000001"
 
-export const PUBLIC_TOKEN = "public-token-0123456789abcdef"
+/** The token the app derives for LINK_ID; links keep only its hash. */
+export const PUBLIC_TOKEN = "public-token-0123456789abcdef-0123456789"
 export const DRAFT_TOKEN = "a".repeat(64)
 export const OTHER_DRAFT_TOKEN = "b".repeat(64)
 export const CHECKSUM = "c".repeat(64)
@@ -116,7 +118,8 @@ export function createLinkRow(overrides: FakeRow = {}): FakeRow {
     id: LINK_ID,
     org_id: ORG_ID,
     template_id: TEMPLATE_ID,
-    token: PUBLIC_TOKEN,
+    token_hash: hashToken(PUBLIC_TOKEN),
+    recipient_email: null,
     status: "active",
     expires_at: null,
     max_submissions: null,
@@ -140,7 +143,7 @@ export function createDraftRow(overrides: FakeRow = {}): FakeRow {
     status: "draft",
     revision: 1,
     public_form_link_id: LINK_ID,
-    public_draft_token: DRAFT_TOKEN,
+    public_draft_token: hashToken(DRAFT_TOKEN),
     created_at: FROZEN_NOW,
     updated_at: FROZEN_NOW,
     submitted_at: null,
@@ -321,14 +324,17 @@ export class FakePublicFormClient {
       return answerTemplateAccess(this.tables, name, args)
     }
 
+    if (name === "start_public_form_draft") {
+      return this.startPublicFormDraft(args)
+    }
+
     if (name === "supersede_public_submission_file") {
-      const link = this.tables.public_form_links.find(
-        (row) =>
-          row.token === args.target_public_form_token && row.status === "active"
-      )
+      const link = this.findLink(args)
       const draft = this.tables.submissions.find(
         (row) =>
-          row.public_draft_token === args.target_public_draft_token &&
+          row.status === "draft" &&
+          link?.status === "active" &&
+          row.public_draft_token === hashToken(String(args.target_public_draft_token)) &&
           row.public_form_link_id === link?.id &&
           row.org_id === link?.org_id &&
           row.status === "draft"
@@ -359,12 +365,58 @@ export class FakePublicFormClient {
     return this.submitPublicFormEntry(args)
   }
 
+  /** Finds a link as the database does: by its token's hash alone. */
+  private findLink(args: Record<string, unknown>): FakeRow | undefined {
+    const hash = hashToken(String(args.target_public_form_token))
+    return this.tables.public_form_links.find((row) => row.token_hash === hash)
+  }
+
+  /** The form a link serves: a sent link's frozen content, or the template as published. */
+  private served(link: FakeRow): { revision: unknown; content: unknown } | undefined {
+    if (link.content_snapshot) {
+      return { revision: link.template_revision_snapshot ?? 1, content: link.content_snapshot }
+    }
+
+    const template = this.tables.published_document_templates.find((row) => row.id === link.template_id && row.org_id === link.org_id)
+    return template && { revision: template.revision, content: template.content }
+  }
+
+  // Mirrors start_public_form_draft: the draft keeps the form its link serves.
+  private startPublicFormDraft(args: Record<string, unknown>): FakeRpcResult {
+    const link = this.findLink(args)
+    const served = link?.status === "active" ? this.served(link) : undefined
+
+    if (!link || !served) {
+      return { data: null, error: { code: "55000", message: "Link is not accepting submissions." } }
+    }
+
+    if (served.revision !== args.target_template_revision) {
+      return { data: null, error: { code: "40001", message: "The form changed." } }
+    }
+
+    const row: FakeRow = {
+      id: args.target_submission_id,
+      org_id: link.org_id,
+      title: String(args.target_title).trim(),
+      template_id: link.template_id,
+      template_revision: served.revision,
+      template_snapshot: served.content,
+      values: args.target_values,
+      status: "draft",
+      revision: 1,
+      public_form_link_id: link.id,
+      public_draft_token: hashToken(String(args.target_public_draft_token)),
+      created_at: args.target_created_at,
+      updated_at: args.target_created_at,
+    }
+    this.tables.submissions.push(row)
+    return { data: { ...row }, error: null }
+  }
+
   // Mirrors submit_public_form_entry: the link is re-checked, the submission
   // saved, and capacity claimed in one step that happens whole or not at all.
   private submitPublicFormEntry(args: Record<string, unknown>): FakeRpcResult {
-    const link = this.tables.public_form_links.find(
-      (row) => row.token === args.target_public_form_token
-    )
+    const link = this.findLink(args)
     const max = link?.max_submissions as number | null | undefined
     const count = link?.submission_count as number
     const expired =
@@ -408,7 +460,7 @@ export class FakePublicFormClient {
   ): { row: FakeRow } | Pick<FakeRpcResult, "error"> {
     const draft = this.tables.submissions.find(
       (row) =>
-        row.public_draft_token === args.target_public_draft_token &&
+        row.public_draft_token === hashToken(String(args.target_public_draft_token)) &&
         row.public_form_link_id === link.id &&
         row.org_id === link.org_id &&
         row.status === "draft" &&
@@ -442,13 +494,19 @@ export class FakePublicFormClient {
       }
     }
 
+    const served = this.served(link)
+
+    if (!served || served.revision !== args.target_template_revision) {
+      return { error: { code: "40001", message: "The form changed." } }
+    }
+
     const row: FakeRow = {
       id: args.target_submission_id,
       org_id: link.org_id,
       title: String(args.target_title).trim(),
       template_id: args.target_template_id,
-      template_revision: args.target_template_revision,
-      template_snapshot: args.target_template_snapshot,
+      template_revision: served.revision,
+      template_snapshot: served.content,
       values: args.target_values,
       status: "submitted",
       revision: 1,
@@ -483,7 +541,7 @@ export function createDeps(
     client: client as never,
     now: () => new Date(FROZEN_NOW),
     createId: () => queue.shift() ?? SUBMISSION_ID,
-    generateTokenImpl: () => PUBLIC_TOKEN,
+    linkToken: (linkId) => (linkId === LINK_ID ? PUBLIC_TOKEN : `derived-token-for-${linkId}`),
     generateDraftTokenImpl: () => DRAFT_TOKEN,
     createSignedSubmissionUploadUrl: vi.fn(async (input) => ({
       uploadUrl: "https://r2.example/upload",

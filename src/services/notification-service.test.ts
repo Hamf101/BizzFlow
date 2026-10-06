@@ -12,7 +12,8 @@ import { isNotificationChannelEnabled } from "@/types/notification"
 // actually fires is to watch the module the service falls back to.
 const recordAuditLogSpy = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
 
-vi.mock("@/services/audit-service", () => ({
+vi.mock("@/services/audit-service", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/services/audit-service")>()),
   recordAuditLog: recordAuditLogSpy,
 }))
 

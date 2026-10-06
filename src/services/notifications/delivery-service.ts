@@ -5,7 +5,7 @@ import {
   createOrganizationPermissionSubject,
 } from "@/lib/permissions"
 import { createAdminClient, type AdminSupabaseClient } from "@/lib/supabase/admin"
-import { recordAuditLog as defaultRecordAuditLog } from "@/services/audit-service"
+import { recordAuditLog, recordAuditLogBestEffort } from "@/services/audit-service"
 import { loadActiveMembership } from "@/services/organizations/active-membership"
 import type { AuditLogAction, AuditMetadata } from "@/types/audit"
 import {
@@ -250,10 +250,8 @@ async function recordDeliveryAuditLog(
   deps: NotificationServiceDeps,
   delivery: NotificationDelivery
 ): Promise<void> {
-  const recordAuditLog = deps.recordAuditLog ?? defaultRecordAuditLog
-
-  try {
-    await recordAuditLog({
+  await recordAuditLogBestEffort(
+    {
       organizationId: delivery.organizationId,
       // A notification is emitted by a background job, not a member.
       actorUserId: null,
@@ -266,13 +264,7 @@ async function recordDeliveryAuditLog(
         recipientUserId: delivery.recipientUserId,
         attemptCount: delivery.attemptCount,
       },
-    })
-  } catch (error: unknown) {
-    console.warn("notification_audit_log_failed", {
-      organizationId: delivery.organizationId,
-      action: AUDIT_ACTION_BY_STATUS[delivery.status],
-      deliveryId: delivery.id,
-      reason: error instanceof Error ? error.message : "Unknown audit error",
-    })
-  }
+    },
+    deps.recordAuditLog ?? recordAuditLog
+  )
 }

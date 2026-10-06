@@ -183,6 +183,8 @@ export function useLiveRoom<State>(options: Readonly<{
         .on("presence", { event: "sync" }, () => {
           const people = readPeople(channel.presenceState(), key, me.id)
           setOthers(people)
+          // Alone, even without another tab of one's own: changes can wait a few seconds to be sent.
+          live?.alone(Object.keys(channel.presenceState()).length <= 1)
 
           // No two people here wear the same colour: of two who do, the one whose key sorts later changes.
           if (people.some((person) => person.color === color && person.key < key)) {

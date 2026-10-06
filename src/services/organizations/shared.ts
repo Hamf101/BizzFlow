@@ -5,7 +5,7 @@ import {
   isOrganizationRole,
   type OrganizationRole,
 } from "@/lib/permissions"
-import { recordAuditLog } from "@/services/audit-service"
+import { recordAuditLog, recordAuditLogBestEffort } from "@/services/audit-service"
 import type {
   InviteRow,
   LogValue,
@@ -61,16 +61,7 @@ export async function recordOrganizationAuditLog(
   input: OrganizationAuditLogInput,
   recorder: (input: OrganizationAuditLogInput) => Promise<unknown> = recordAuditLog
 ): Promise<void> {
-  try {
-    await recorder(input)
-  } catch (error: unknown) {
-    console.warn("organization_audit_log_failed", {
-      organizationId: input.organizationId,
-      actorUserId: input.actorUserId,
-      action: input.action,
-      reason: error instanceof Error ? error.message : "Unknown audit error",
-    })
-  }
+  await recordAuditLogBestEffort(input, recorder)
 }
 
 /**

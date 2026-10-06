@@ -1,7 +1,8 @@
--- Exercises submit_public_form_entry against a real database: a link's
--- capacity is used only when a submission is saved, a draft is guarded by its
--- revision, and the ceiling holds. A link sent to one person is found by its
--- token's hash alone and takes one answer. Creates isolated synthetic rows inside one
+-- Exercises start_public_form_draft and submit_public_form_entry against a
+-- real database: a link and a draft are found by their tokens' hashes alone,
+-- a draft keeps the form its link serves, a link's capacity is used only when
+-- a submission is saved, a draft is guarded by its revision, and the ceiling
+-- holds. A link sent to one person takes one answer. Creates isolated synthetic rows inside one
 -- statement and removes them before returning; any failed check rolls
 -- everything back.
 do $$
@@ -95,43 +96,59 @@ begin
     id,
     org_id,
     template_id,
-    token,
+    token_hash,
     status,
     max_submissions,
     created_by
   )
-  values (link_id, organization_id, template_id, link_token, 'active', 2, owner_id);
-
-  insert into public.submissions (
-    id,
-    org_id,
-    title,
-    template_id,
-    template_revision,
-    template_snapshot,
-    "values",
-    status,
-    revision,
-    public_form_link_id,
-    public_draft_token,
-    created_at,
-    updated_at
-  )
   values (
-    draft_id,
-    organization_id,
-    'Public submission RPC verification draft',
-    template_id,
-    1,
-    template_snapshot,
-    '{}'::jsonb,
-    'draft',
-    1,
-    link_id,
-    draft_token,
-    now(),
-    now()
+    link_id, organization_id, template_id,
+    encode(sha256(convert_to(link_token, 'UTF8')), 'hex'), 'active', 2, owner_id
   );
+
+  -- A draft for another revision of the form is refused; the stored hash is no token.
+  begin
+    perform public.start_public_form_draft(
+      link_token, draft_token, draft_id, 'Stale', 2, '{}'::jsonb, now()
+    );
+    raise exception 'A draft for another revision was started.';
+  exception when sqlstate '40001' then
+    null;
+  end;
+
+  begin
+    perform public.start_public_form_draft(
+      encode(sha256(convert_to(link_token, 'UTF8')), 'hex'), draft_token, draft_id, 'By the hash', 1, '{}'::jsonb, now()
+    );
+    raise exception 'A stored link hash started a draft.';
+  exception when sqlstate '55000' then
+    null;
+  end;
+
+  -- The draft keeps the published form and only its handle's hash.
+  select * into saved
+  from public.start_public_form_draft(
+    link_token, draft_token, draft_id, '  Public submission RPC verification draft ', 1, '{}'::jsonb, now()
+  );
+
+  if saved.id <> draft_id
+      or saved.status <> 'draft'
+      or saved.title <> 'Public submission RPC verification draft'
+      or saved.template_snapshot <> template_snapshot
+      or saved.template_revision <> 1
+      or saved.public_draft_token <> encode(sha256(convert_to(draft_token, 'UTF8')), 'hex') then
+    raise exception 'The draft was not started as expected.';
+  end if;
+
+  -- The stored hash does not reach the draft.
+  begin
+    perform public.submit_public_form_entry(
+      link_token, saved.public_draft_token, 1, null, null, null, null, null, '{}'::jsonb, now()
+    );
+    raise exception 'A stored draft hash was accepted as a handle.';
+  exception when sqlstate '40001' then
+    null;
+  end;
 
   -- A stale draft revision is refused and uses no capacity.
   begin
@@ -321,11 +338,11 @@ begin
   sent_hash := encode(sha256(convert_to(sent_token, 'UTF8')), 'hex');
 
   insert into public.public_form_links (
-    id, org_id, template_id, token, token_hash, recipient_email, content_snapshot, title_snapshot, template_revision_snapshot,
+    id, org_id, template_id, token_hash, recipient_email, content_snapshot, title_snapshot, template_revision_snapshot,
     status, max_submissions, created_by
   )
   values (
-    sent_link_id, organization_id, template_id, null, sent_hash, 'ana@example.invalid', template_snapshot, 'Sent', 1,
+    sent_link_id, organization_id, template_id, sent_hash, 'ana@example.invalid', template_snapshot, 'Sent', 1,
     'active', 1, owner_id
   );
 
@@ -359,20 +376,20 @@ begin
     null;
   end;
 
-  -- A hashed link always names its one recipient, and has one kind of token.
+  -- A link sent to one person takes one answer, and every link has a token hash.
   begin
-    insert into public.public_form_links (id, org_id, template_id, token_hash, content_snapshot, title_snapshot, template_revision_snapshot, status, max_submissions)
-    values (gen_random_uuid(), organization_id, template_id, md5('a') || md5('b'), template_snapshot, 'Sent', 1, 'active', 1);
-    raise exception 'A hashed link without a recipient was stored.';
+    insert into public.public_form_links (id, org_id, template_id, token_hash, recipient_email, content_snapshot, title_snapshot, template_revision_snapshot, status, max_submissions)
+    values (gen_random_uuid(), organization_id, template_id, md5('a') || md5('b'), 'b@example.invalid', template_snapshot, 'Sent', 1, 'active', 5);
+    raise exception 'A sent link taking five answers was stored.';
   exception when check_violation then
     null;
   end;
 
   begin
-    insert into public.public_form_links (id, org_id, template_id, token, token_hash, recipient_email, content_snapshot, title_snapshot, template_revision_snapshot, status, max_submissions)
-    values (gen_random_uuid(), organization_id, template_id, 'both-kinds-of-token', md5('c') || md5('d'), 'b@example.invalid', template_snapshot, 'Sent', 1, 'active', 1);
-    raise exception 'A link with both kinds of token was stored.';
-  exception when check_violation then
+    insert into public.public_form_links (id, org_id, template_id, status)
+    values (gen_random_uuid(), organization_id, template_id, 'active');
+    raise exception 'A link without a token hash was stored.';
+  exception when not_null_violation then
     null;
   end;
 

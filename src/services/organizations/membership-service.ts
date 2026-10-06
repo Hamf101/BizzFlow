@@ -19,10 +19,7 @@ import {
   listProfilesByUserIds,
   updateOrganizationMemberAccessRecord,
 } from "@/services/organizations/repository"
-import {
-  recordOrganizationAuditLog,
-  runOrganizationOperation,
-} from "@/services/organizations/shared"
+import { runOrganizationOperation } from "@/services/organizations/shared"
 import type {
   OrganizationMember,
   OrganizationMembership,
@@ -108,7 +105,7 @@ export async function listOrganizationPeople(
  * Updates a member's workspace-specific name and access role atomically.
  *
  * @param input - Owner, tenant, membership, role, and display-name values.
- * @param deps - Optional database and audit dependencies for tests.
+ * @param deps - Optional database dependency for tests.
  * @returns Verified updated membership.
  * @throws OrganizationServiceError when authorization or validation fails.
  */
@@ -163,20 +160,7 @@ export async function updateMemberAccess(
         )
       }
 
-      await recordOrganizationAuditLog(
-        {
-          organizationId: input.organizationId,
-          actorUserId: input.actorUserId,
-          action: "membership.access_updated",
-          targetType: "membership",
-          targetId: input.membershipId,
-          metadata: {
-            roleDefinitionId: input.roleId,
-            workspaceDisplayName,
-          },
-        },
-        deps.recordAuditLog
-      )
+      // update_organization_member_access writes its audit row with the change.
 
       return membership
     }

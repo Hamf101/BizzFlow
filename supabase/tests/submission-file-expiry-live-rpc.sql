@@ -80,10 +80,10 @@ begin
     'published', 1, template_snapshot, owner_id, owner_id, owner_id, now()
   );
 
-  insert into public.public_form_links (id, org_id, template_id, token, status, created_by)
+  insert into public.public_form_links (id, org_id, template_id, token_hash, status, created_by)
   values (
     link_id, organization_id, template_id,
-    'expiry-rpc-' || replace(gen_random_uuid()::text, '-', ''), 'active', owner_id
+    md5(random()::text) || md5(random()::text), 'active', owner_id
   );
 
   insert into public.submissions (

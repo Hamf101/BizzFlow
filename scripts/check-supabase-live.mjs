@@ -30,7 +30,7 @@ export const TABLE_CHECKS = [
   },
   {
     name: "audit_logs",
-    select: "id,org_id,actor_user_id,action,target_type,target_id,metadata,seq,prev_hash,entry_hash,created_at",
+    select: "id,org_id,actor_user_id,action,target_type,target_id,metadata,seq,created_at",
   },
   {
     name: "folders",
@@ -85,7 +85,7 @@ export const TABLE_CHECKS = [
   {
     name: "public_form_links",
     select:
-      "id,org_id,template_id,token,status,expires_at,max_submissions,submission_count,created_by,created_at,updated_at",
+      "id,org_id,template_id,token_hash,status,expires_at,max_submissions,submission_count,created_by,created_at,updated_at",
   },
   {
     name: "submissions",
@@ -280,12 +280,6 @@ export const SERVICE_ROLE_RPC_CHECKS = [
     },
   },
   {
-    name: "verify_audit_log_chain",
-    args: {
-      target_org_id: null,
-    },
-  },
-  {
     name: "submit_public_form_entry",
     args: {
       target_public_form_token: null,
@@ -298,6 +292,18 @@ export const SERVICE_ROLE_RPC_CHECKS = [
       target_template_snapshot: null,
       target_values: null,
       target_submitted_at: null,
+    },
+  },
+  {
+    name: "start_public_form_draft",
+    args: {
+      target_public_form_token: null,
+      target_public_draft_token: null,
+      target_submission_id: null,
+      target_title: null,
+      target_template_revision: null,
+      target_values: null,
+      target_created_at: null,
     },
   },
   {

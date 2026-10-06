@@ -6,6 +6,7 @@ import {
   isOrganizationRole,
   type OrganizationPermissionSubject,
 } from "@/lib/permissions"
+import { captureUnexpectedError } from "@/lib/observability"
 import { createListInputValidators } from "@/services/list-input"
 import {
   POSTGREST_BATCH_SIZE,
@@ -16,7 +17,6 @@ import {
   AUDIT_LOG_ACTIONS,
   AUDIT_LOG_SORT_KEYS,
   AUDIT_LOG_TARGET_TYPES,
-  type AuditChainVerification,
   type AuditLogAction,
   type AuditLogEntry,
   type AuditLogSortKey,
@@ -28,7 +28,7 @@ import { loadActiveMembership } from "@/services/organizations/active-membership
 type AdminClient = ReturnType<typeof createAdminClient>
 
 const AUDIT_LOG_COLUMNS =
-  "id,org_id,actor_user_id,action,target_type,target_id,metadata,seq,prev_hash,entry_hash,created_at"
+  "id,org_id,actor_user_id,action,target_type,target_id,metadata,seq,created_at"
 
 type AuditLogRow = {
   id: string
@@ -39,8 +39,6 @@ type AuditLogRow = {
   target_id: string | null
   metadata: Record<string, unknown>
   seq: number
-  prev_hash: string | null
-  entry_hash: string
   created_at: string
 }
 
@@ -49,7 +47,7 @@ type MembershipRow = {
   role_definition?: { permissions: string[] | null } | null
 }
 
-type RecordAuditLogInput = {
+export type RecordAuditLogInput = {
   organizationId: string
   actorUserId: string | null
   action: AuditLogAction
@@ -186,7 +184,34 @@ export async function recordAuditLog(
 }
 
 /**
- * Lists one page of an organization's audit events, in chain order, with the
+ * Records an audit event that must not undo the change it records, which is
+ * already made. A lost event is logged and reported to monitoring by its ids
+ * alone: its metadata can name people.
+ *
+ * @param input - Organization, actor, target, and metadata for the event.
+ * @param record - The writer; tests pass their own.
+ */
+export async function recordAuditLogBestEffort<TInput extends RecordAuditLogInput>(
+  input: TInput,
+  record: (input: TInput) => Promise<unknown> = recordAuditLog
+): Promise<void> {
+  try {
+    await record(input)
+  } catch (error: unknown) {
+    const ids = {
+      action: input.action,
+      actorUserId: input.actorUserId,
+      organizationId: input.organizationId,
+      targetId: input.targetId ?? null,
+    }
+
+    console.warn("audit_log_lost", { ...ids, reason: error instanceof Error ? error.message : "Unknown audit error" })
+    captureUnexpectedError(error, { operation: "audit_log", ...ids })
+  }
+}
+
+/**
+ * Lists one page of an organization's audit events, in sequence order, with the
  * number of events that match the filters.
  *
  * @param input - Actor, organization, page, order, and kinds of record.
@@ -212,7 +237,7 @@ export async function listAuditLogPage(
       input.organizationId,
       targetTypes
     )
-      // seq is the chain's total order per organization.
+      // seq is the total order the log is read in.
       .order("seq", { ascending })
       .range(from, from + pageSize - 1),
     () => countAuditLogs(client, input.organizationId, targetTypes),
@@ -230,7 +255,7 @@ export async function listAuditLogPage(
 /**
  * Reads every audit event that matches a view, for a complete export.
  *
- * Batches follow the chain's sequence rather than offsets, so an event
+ * Batches follow the log's sequence rather than offsets, so an event
  * recorded during the export can neither shift a batch boundary nor appear
  * twice. An export larger than the limit is refused, never truncated.
  *
@@ -359,58 +384,6 @@ function normalizeAuditTargetTypes(
   return targetTypes
 }
 
-type VerifyAuditLogChainInput = {
-  actorUserId: string
-  organizationId: string
-}
-
-/**
- * Verifies the organization's audit hash chain server-side, from the entry
- * the last check vouched for, or from the first entry once a day.
- *
- * Recomputation happens inside the database function, so no cross-language
- * jsonb canonicalization is ever relied on. Reads bypass RLS via the admin
- * client, so permission is enforced here like every other audit read.
- *
- * @param input - Actor and organization identifiers.
- * @returns Chain verification verdict with the first invalid sequence, if any.
- * @throws AuditServiceError when the actor lacks permission or the check fails.
- */
-export async function verifyAuditLogChain(
-  input: VerifyAuditLogChainInput
-): Promise<AuditChainVerification> {
-  const client = createAdminClient()
-  const actorRole = await getOrganizationRole(
-    client,
-    input.organizationId,
-    input.actorUserId
-  )
-
-  if (
-    !actorRole ||
-    !canPerformOrganizationAction(actorRole, "audit_logs:verify")
-  ) {
-    throw new AuditServiceError("You cannot verify audit logs.", 403)
-  }
-
-  const { data, error } = await client.rpc("verify_audit_log_chain", {
-    target_org_id: input.organizationId,
-  })
-
-  const verdict = data?.[0]
-
-  if (error || !verdict) {
-    throw new AuditServiceError("Unable to verify the audit log chain.", 500)
-  }
-
-  return {
-    valid: verdict.valid,
-    checkedCount: verdict.checked_count,
-    firstInvalidSeq: verdict.first_invalid_seq,
-    failureReason: verdict.failure_reason,
-  }
-}
-
 async function getOrganizationRole(
   client: AuditServiceClient,
   organizationId: string,
@@ -457,16 +430,13 @@ function mapAuditLog(row: AuditLogRow): AuditLogEntry {
     targetId: row.target_id,
     metadata: parseAuditMetadata(row.metadata),
     seq: row.seq,
-    prevHash: row.prev_hash,
-    entryHash: row.entry_hash,
     createdAt: row.created_at,
   }
 }
 
 /**
  * Reads a stored action or target. A value newer than this build is kept as
- * written, so one unfamiliar entry cannot take down the log, its export or its
- * chain check.
+ * written, so one unfamiliar entry cannot take down the log or its export.
  */
 function readKnownOrRaw(value: string, known: readonly string[], kind: string): string {
   if (!known.includes(value)) {

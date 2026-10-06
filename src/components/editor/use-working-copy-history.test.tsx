@@ -19,6 +19,7 @@ function fakeSession(start: Words): LiveSession<Words> & { made: Words[] } {
   const made: Words[] = []
 
   return {
+    alone: () => undefined,
     canRedo: () => false,
     canUndo: () => made.length > 0,
     catchUp: async () => undefined,

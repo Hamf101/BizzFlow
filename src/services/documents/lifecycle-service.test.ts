@@ -200,7 +200,7 @@ describe("document lifecycle transitions", (): void => {
       lifecycleState: "active",
     })
     expect(warning).toHaveBeenCalledWith(
-      "document_audit_log_failed",
+      "audit_log_lost",
       expect.objectContaining({
         organizationId: "org-1",
         actorUserId: "user-1",
