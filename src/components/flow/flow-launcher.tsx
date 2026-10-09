@@ -7,7 +7,7 @@ import { type FormEvent, type KeyboardEvent, type ReactElement, useRef, useState
 import { createGeneratedDocumentAction } from "@/app/(dashboard)/documents/actions"
 import { createTemplateAction } from "@/app/(dashboard)/templates/actions"
 import { handOffToFlow } from "@/components/flow/flow-handoff"
-import { FlowWindow } from "@/components/flow/flow-window"
+import { FLOW_COMPOSER, FLOW_SEND, FlowWindow } from "@/components/flow/flow-window"
 import { cn } from "@/lib/utils"
 import type { WorkspaceFlowAnswer, WorkspaceFlowItem } from "@/services/workspace-flow-service"
 
@@ -179,7 +179,7 @@ function FlowConversation({ onLeave }: { onLeave: () => void }): ReactElement {
         <div className="relative">
           {/* One line tall, growing with the message to about six. */}
           <textarea
-            className="field-sizing-content max-h-36 min-h-10 w-full resize-none rounded-[12px] border border-border bg-card px-3 py-2.5 pr-12 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
+            className={FLOW_COMPOSER}
             disabled={busy}
             id="workspace-flow-composer"
             maxLength={2_000}
@@ -190,7 +190,7 @@ function FlowConversation({ onLeave }: { onLeave: () => void }): ReactElement {
           />
           <button
             aria-label="Send to Flow"
-            className="absolute right-1.5 bottom-1 grid size-8 place-items-center max-md:size-11 rounded-full text-primary outline-none transition-opacity hover:opacity-75 disabled:opacity-35 focus-visible:ring-2 focus-visible:ring-ring/40"
+            className={FLOW_SEND}
             disabled={busy || text.trim().length < 2}
             type="submit"
           >

@@ -1,19 +1,20 @@
 import { randomUUID } from "node:crypto"
 
-import { GetObjectCommand, HeadObjectCommand, PutObjectCommand, type S3Client } from "@aws-sdk/client-s3"
+import { GetObjectCommand, HeadObjectCommand, type S3Client } from "@aws-sdk/client-s3"
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
 
 import { getR2Env, type R2Env } from "@/lib/env"
 import {
   canPerformOrganizationAction,
-  createOrganizationPermissionSubject,
   type OrganizationPermissionSubject,
 } from "@/lib/permissions"
 import { createR2Client } from "@/lib/r2/client"
 import { type AdminSupabaseClient, createAdminClient } from "@/lib/supabase/admin"
-import { loadActiveMembership } from "@/services/organizations/active-membership"
+import { requireOrgPermission } from "@/services/organizations/active-membership"
 import type { TemplateContent, TemplateImageAsset } from "@/types/template"
 import { IMAGE_COPY_MAX_BYTES, type ImageCopy, mapImageAssets } from "@/types/template-images"
+import { ServiceError } from "@/services/service-error"
+import { signCreateOnlyPut } from "@/services/r2-objects"
 
 // Display addresses are signed from the start of the hour, so every page in
 // that hour gets the same one and browsers keep the copy they already have.
@@ -27,18 +28,8 @@ const SHOWN_COPY_TYPES: Record<"display" | "print", readonly string[]> = {
 }
 
 /** Error raised when a picture cannot be stored or shown. */
-export class TemplateImageServiceError extends Error {
-  readonly statusCode: number
-
-  /**
-   * @param message - User-safe explanation.
-   * @param statusCode - HTTP-style status for the caller to translate.
-   */
-  constructor(message: string, statusCode: number) {
-    super(message)
-    this.name = "TemplateImageServiceError"
-    this.statusCode = statusCode
-  }
+export class TemplateImageServiceError extends ServiceError {
+  override readonly name = "TemplateImageServiceError"
 }
 
 export type TemplateImageDeps = {
@@ -109,17 +100,13 @@ export async function createTemplateImageUpload(
     Object.entries(input.copies).map(async ([copy, spec]) => ({
       contentType: spec.contentType,
       copy: copy as ImageCopy,
-      url: await sign(
-        client as S3Client,
-        new PutObjectCommand({
-          Bucket: bucket,
-          ContentLength: spec.bytes,
-          ContentType: spec.contentType,
-          IfNoneMatch: "*",
-          Key: imageKey(input.organizationId, asset.id, copy as ImageCopy),
-        }),
-        { expiresIn: UPLOAD_URL_SECONDS, signableHeaders: new Set(["content-type"]) }
-      ),
+      url: await signCreateOnlyPut(sign, client as S3Client, {
+        bucket,
+        key: imageKey(input.organizationId, asset.id, copy as ImageCopy),
+        byteSize: spec.bytes,
+        contentType: spec.contentType,
+        expiresIn: UPLOAD_URL_SECONDS,
+      }),
     }))
   )
 
@@ -309,18 +296,8 @@ async function requireMember(
   actorUserId: string,
   deps: TemplateImageDeps
 ): Promise<OrganizationPermissionSubject> {
-  const { data, error } = await loadActiveMembership(deps.client ?? createAdminClient(), organizationId, actorUserId)
-
-  if (error) {
-    throw new TemplateImageServiceError("Unable to check your access.", 500)
-  }
-
-  const row = data as { role: string; role_definition: { permissions: string[] | null } | null } | null
-  const subject = row ? createOrganizationPermissionSubject(row.role, row.role_definition?.permissions) : null
-
-  if (!subject) {
-    throw new TemplateImageServiceError("You cannot use this workspace's pictures.", 403)
-  }
-
-  return subject
+  return requireOrgPermission(deps.client ?? createAdminClient(), organizationId, actorUserId, null, {
+    loadFailed: () => new TemplateImageServiceError("Unable to check your access.", 500),
+    denied: () => new TemplateImageServiceError("You cannot use this workspace's pictures.", 403),
+  })
 }

@@ -1,14 +1,34 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
+  // A `!` marks what `knip --production` reads: the app's own code, without
+  // tests or the helpers only tests import.
   "entry": [
     "e2e/**/*.{ts,tsx}",
     "src/**/*.test.{ts,tsx}",
     "scripts/**/*.{mjs,ts,tsx}",
-    "src/sentry.server.config.ts",
-    "src/sentry.edge.config.ts"
+    "src/sentry.server.config.ts!",
+    "src/sentry.edge.config.ts!"
   ],
-  "project": ["e2e/**/*.{ts,tsx}", "src/**/*.{ts,tsx}"],
-  "ignore": ["src/components/ui/field.tsx"],
+  "project": [
+    "e2e/**/*.{ts,tsx}",
+    "src/**/*.{ts,tsx}!",
+    "!src/**/*.test-support.{ts,tsx}!",
+    "!src/**/test-support.ts!",
+    "!src/test/**!"
+  ],
   "ignoreDependencies": ["dejavu-fonts-ttf", "tailwindcss", "tw-animate-css"],
+  "ignoreIssues": {
+    // Termii is the SMS provider the owner keeps for when SMS goes live; its
+    // error class and the factory's test reset are used only by tests today.
+    "src/services/sms/termii-provider.ts": ["exports"],
+    "src/services/sms/provider-factory.ts": ["exports"],
+    // Server actions used only by their tests. They live in src/app, which the
+    // services pass does not touch; the app pass decides whether they go.
+    "src/app/(dashboard)/people/actions.ts": ["exports"],
+    "src/app/(dashboard)/submissions/actions.ts": ["exports"],
+    // next.config.ts imports it, but production mode reads that file as
+    // configuration and does not follow its imports.
+    "src/lib/content-security-policy.ts": ["files"]
+  },
   "ignoreExportsUsedInFile": true
 }

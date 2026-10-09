@@ -1,12 +1,11 @@
 // @vitest-environment jsdom
 import { act, type ReactElement, useEffect } from "react"
 import { createPortal } from "react-dom"
-import { createRoot } from "react-dom/client"
 import { expect, it } from "vitest"
 
 import { SelectableItem, SelectionProvider, useSelection } from "./selection"
+import { mount } from "@/test/render"
 
-;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 window.matchMedia ??= ((query: string) => ({ addEventListener: () => undefined, matches: false, media: query, removeEventListener: () => undefined })) as never
 
 const ITEMS = [{ id: "a" }, { id: "b" }, { id: "c" }]
@@ -41,7 +40,7 @@ function press(target: Element, key: string, options: KeyboardEventInit = {}): v
 }
 
 it("selects a row from the keyboard, and leaves what is typed in a dialog it opened alone", () => {
-  const root = createRoot(document.body.appendChild(document.createElement("div")))
+  const root = mount()
   act(() => root.render(<Files />))
   const link = (id: string) => document.querySelector(`a[href="#${id}"]`)!
 

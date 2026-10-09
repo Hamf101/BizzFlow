@@ -10,7 +10,7 @@ import {
   listSavedViews,
   renameSavedView,
   saveListView,
-} from "@/services/saved-view-service"
+} from "@/services/organizations/saved-view-service"
 
 const UNIQUE_VIOLATION = {
   code: "23505",

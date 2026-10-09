@@ -13,7 +13,6 @@ import type {
   OrganizationAuditLogInput,
   OrganizationRoleRow,
   OrganizationRow,
-  SupabaseErrorLike,
 } from "@/services/organizations/contracts"
 import { OrganizationServiceError } from "@/services/organizations/errors"
 import type {
@@ -25,6 +24,8 @@ import type {
   OrganizationRoleDefinition,
 } from "@/types/organization"
 import { runOperation } from "@/services/operation"
+import { asSupabaseError } from "@/services/supabase-error"
+import { normalizeName } from "@/services/input"
 
 /**
  * Runs an organization operation with consistent observability and error translation.
@@ -187,7 +188,7 @@ export function createSupabaseServiceError(
 export function createAcceptInviteMutationError(
   error: unknown
 ): OrganizationServiceError {
-  const errorLike = getSupabaseErrorLike(error)
+  const errorLike = asSupabaseError(error)
 
   if (errorLike?.code === "P0002") {
     return new OrganizationServiceError("Invite is invalid or expired.", 404)
@@ -209,7 +210,7 @@ export function createAcceptInviteMutationError(
 export function createMemberRoleMutationError(
   error: unknown
 ): OrganizationServiceError {
-  const errorLike = getSupabaseErrorLike(error)
+  const errorLike = asSupabaseError(error)
 
   if (errorLike?.code === "23514") {
     return new OrganizationServiceError(
@@ -242,7 +243,7 @@ export function createMemberRoleMutationError(
 export function createRoleArchiveMutationError(
   error: unknown
 ): OrganizationServiceError {
-  const errorLike = getSupabaseErrorLike(error)
+  const errorLike = asSupabaseError(error)
 
   if (errorLike?.code === "23503") {
     return new OrganizationServiceError(
@@ -280,16 +281,7 @@ export function createRoleArchiveMutationError(
  * @throws OrganizationServiceError when the name length is invalid.
  */
 export function normalizeOrganizationName(name: string): string {
-  const normalizedName = name.trim().replace(/\s+/g, " ")
-
-  if (normalizedName.length < 2 || normalizedName.length > 120) {
-    throw new OrganizationServiceError(
-      "Workspace name must be between 2 and 120 characters.",
-      400
-    )
-  }
-
-  return normalizedName
+  return normalizeName(name, "Workspace name", 2, 120, (message) => new OrganizationServiceError(message, 400))
 }
 
 /**
@@ -398,7 +390,7 @@ function createOrganizationSetupError(
 }
 
 function getSupabaseSetupFailureMessage(error: unknown): string | null {
-  const errorLike = getSupabaseErrorLike(error)
+  const errorLike = asSupabaseError(error)
   const searchableMessage = [
     errorLike?.code,
     errorLike?.message,
@@ -440,10 +432,3 @@ function getSupabaseSetupFailureMessage(error: unknown): string | null {
   return null
 }
 
-function getSupabaseErrorLike(error: unknown): SupabaseErrorLike | null {
-  if (!error || typeof error !== "object") {
-    return null
-  }
-
-  return error as SupabaseErrorLike
-}

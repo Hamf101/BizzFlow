@@ -1,6 +1,7 @@
 import type { CSSProperties, ReactElement } from "react"
 
-import { EDGE, PRINTED_HEADING, printedSpace, SECTION_TITLE } from "@/components/editor/paper-field"
+import { EDGE } from "@/components/editor/paper-answer-kinds"
+import { PRINTED_HEADING, printedSpace, SECTION_TITLE } from "@/components/editor/paper-field"
 import {
   SECTION_BAR_LIGHT,
   SECTION_BOX_EDGE,

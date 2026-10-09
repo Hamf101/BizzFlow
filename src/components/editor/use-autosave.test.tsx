@@ -1,25 +1,13 @@
 // @vitest-environment jsdom
 
 import { act } from "react"
-import { createRoot, type Root } from "react-dom/client"
-import { afterEach, beforeAll, expect, it } from "vitest"
+import type { Root } from "react-dom/client"
+import { expect, it } from "vitest"
 
 import { type SaveResult, useAutosave } from "@/components/editor/use-autosave"
 import { useLocalRecovery } from "@/components/editor/use-local-recovery"
 import { clearLocalDraft, loadLocalDraft } from "@/lib/draft-autosave"
-
-const roots: Root[] = []
-
-beforeAll(() => {
-  ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
-})
-
-afterEach(() => {
-  for (const root of roots.splice(0)) {
-    act(() => root.unmount())
-  }
-  document.body.replaceChildren()
-})
+import { mount } from "@/test/render"
 
 it("never sends one version twice, however many saves are asked for at once", async () => {
   const attempts: Array<{ value: string; version: string }> = []
@@ -39,9 +27,7 @@ it("never sends one version twice, however many saves are asked for at once", as
     return null
   }
 
-  const container = document.body.appendChild(document.createElement("div"))
-  const root = createRoot(container)
-  roots.push(root)
+  const root = mount()
   await act(async () => root.render(<Editor value="first" />))
 
   // One save is in flight, the page changes again, and two savers ask at
@@ -78,7 +64,7 @@ it("saves the last edit to the server and to this device when the editor closes"
     return null
   }
 
-  const root = createRoot(document.body.appendChild(document.createElement("div")))
+  const root = mount()
   await act(async () => root.render(<Editor value="first" />))
   await act(async () => new Promise((resolve) => setTimeout(resolve, 5)))
   await act(async () => root.render(<Editor value="second" />))
@@ -98,7 +84,7 @@ it("never offers a copy kept on this device over newer work on the server", asyn
   }
 
   async function open(value: string, version: string): Promise<Root> {
-    const root = createRoot(document.body.appendChild(document.createElement("div")))
+    const root = mount()
     await act(async () => root.render(<Editor value={value} version={version} />))
     await act(async () => new Promise((resolve) => setTimeout(resolve, 5)))
     return root
@@ -112,11 +98,11 @@ it("never offers a copy kept on this device over newer work on the server", asyn
 
   // Kept on top of version 1, then someone saved version 2.
   await keepMineOnVersionOne()
-  roots.push(await open("server", "2"))
+  await open("server", "2")
   expect(offered).toBeNull()
 
   // The same copy over the version it was made on is offered.
   await keepMineOnVersionOne()
-  roots.push(await open("server", "1"))
+  await open("server", "1")
   expect(offered).not.toBeNull()
 })

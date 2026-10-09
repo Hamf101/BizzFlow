@@ -6,6 +6,7 @@ import { useTimeZone } from "@/components/ui/local-date"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { memberLabel } from "@/components/people/member-name"
 import { formatMediumDateTime } from "@/lib/date-format"
 import type { OrganizationMember } from "@/types/organization"
 import type { Submission } from "@/types/submission"
@@ -61,7 +62,7 @@ export function SubmissionSuggestions({
   const labels = new Map(
     submission.templateSnapshot.blocks.flatMap((block) => ("fieldKey" in block && "label" in block ? [[block.fieldKey, block.label] as const] : []))
   )
-  const names = new Map(members.map((member) => [member.userId, member.fullName?.trim() || member.email]))
+  const names = new Map(members.map((member) => [member.userId, memberLabel(member)]))
   const decides = submission.createdBy === currentUserId && OPEN_STATUSES.includes(submission.status)
 
   return (

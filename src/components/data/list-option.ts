@@ -58,3 +58,43 @@ export function createSortSection<TSortKey extends string>(
     ),
   }
 }
+
+/**
+ * Lists a filter's pills: "All", then one per value, each a link that keeps
+ * the rest of the view.
+ *
+ * @param values - The values the filter offers, in order.
+ * @param current - The view's value, or undefined for all.
+ * @param labelFor - Names a value.
+ * @param hrefFor - Builds the link to the view with a value, or with none.
+ * @returns The pills.
+ */
+export function createFilterOptions<TValue extends string>(
+  values: readonly TValue[],
+  current: TValue | undefined,
+  labelFor: (value: TValue) => string,
+  hrefFor: (value: TValue | undefined) => string
+): ListOption[] {
+  return [
+    { href: hrefFor(undefined), label: "All", selected: current === undefined },
+    ...values.map(
+      (value: TValue): ListOption => ({ href: hrefFor(value), label: labelFor(value), selected: current === value })
+    ),
+  ]
+}
+
+/**
+ * Whether a view's order or page size differs from its list's default, for
+ * the view menu to say so.
+ *
+ * @param view - The view.
+ * @param defaults - The list's default view.
+ * @returns True when either differs.
+ */
+export function isOrderOrSizeAdjusted<TSortKey extends string>(
+  view: { pageSize: number; sort: ListSort<TSortKey> },
+  defaults: { pageSize: number; sort: ListSort<TSortKey> }
+): boolean {
+  return formatListSort(view.sort) !== formatListSort(defaults.sort) || view.pageSize !== defaults.pageSize
+}
+

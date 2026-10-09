@@ -4,7 +4,7 @@ import { Download, RefreshCw, Trash2, Upload } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { type ChangeEvent, type ReactElement, useId, useState } from "react"
 
-import { uploadFileToSignedUrl } from "@/components/documents/document-upload-client"
+import { openDownloadTab, UPLOAD_ACCEPT, uploadFileToSignedUrl } from "@/components/documents/document-upload-client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import type { ClientSubmissionFile } from "@/types/submission"
@@ -18,7 +18,6 @@ import {
   supersedeSubmissionFile,
 } from "./submission-file-client"
 
-const SUBMISSION_FILE_ACCEPT = ".pdf,.png,.jpg,.jpeg,.docx,.xlsx,.csv"
 
 type SubmissionFileFieldProps = {
   editable: boolean
@@ -132,27 +131,18 @@ export function SubmissionFileField({
 
     setErrorMessage(null)
     setIsDownloading(true)
-    let downloadWindow: Window | null = null
 
     try {
-      downloadWindow = window.open("about:blank", "_blank")
+      await openDownloadTab("Allow pop-ups to download this file.", async () => {
+        const result = await requestSubmissionFileDownload({
+          fileId: file.id,
+          organizationId,
+          submissionId,
+        })
 
-      if (!downloadWindow) {
-        throw new Error("Allow pop-ups to download this file.")
-      }
-
-      downloadWindow.opener = null
-      const result = await requestSubmissionFileDownload({
-        fileId: file.id,
-        organizationId,
-        submissionId,
+        return result.downloadUrl
       })
-      downloadWindow.location.replace(result.downloadUrl)
     } catch (error: unknown) {
-      if (downloadWindow && !downloadWindow.closed) {
-        downloadWindow.close()
-      }
-
       setErrorMessage(
         error instanceof Error
           ? error.message
@@ -245,7 +235,7 @@ export function SubmissionFileField({
           Choose file
         </label>
         <Input
-          accept={SUBMISSION_FILE_ACCEPT}
+          accept={UPLOAD_ACCEPT}
           disabled={isUploading}
           id={inputId}
           onChange={handleFileChange}

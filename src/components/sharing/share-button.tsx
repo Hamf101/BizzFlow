@@ -1,15 +1,12 @@
 "use client"
 
 import { UserPlus } from "lucide-react"
-import dynamic from "next/dynamic"
 import { type ReactElement, useState } from "react"
 
+import { ShareDialog } from "@/components/editor/lazy-panels"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import type { SharingResource } from "@/services/document-service"
-
-// Opened from a button, so it loads when asked for.
-const ShareDialog = dynamic(() => import("@/components/sharing/share-dialog").then((dialog) => dialog.ShareDialog))
 
 /**
  * Share, on a page that shows one document: the dialog opens over it.

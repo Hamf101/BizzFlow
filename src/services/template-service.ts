@@ -21,8 +21,6 @@ export {
   listDocumentTemplates,
   listDocumentTemplateVersions,
   publishDocumentTemplate,
-  restoreDocumentTemplate,
-  setDocumentTemplateCategory,
   updateDocumentTemplate,
 } from "./templates/template-lifecycle-service"
 export { listTemplatePage } from "./templates/template-list-service"

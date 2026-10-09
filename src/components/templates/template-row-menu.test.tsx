@@ -1,29 +1,12 @@
 // @vitest-environment jsdom
 
 import { act } from "react"
-import { createRoot, type Root } from "react-dom/client"
-import { afterEach, beforeAll, describe, expect, it } from "vitest"
+import { describe, expect, it } from "vitest"
 
 import { TemplateRowMenu } from "@/components/templates/template-row-menu"
+import { mount } from "@/test/render"
 
 const TEMPLATE_ID = "30000000-0000-4000-8000-000000000001"
-
-const mountedRoots: Root[] = []
-
-beforeAll(() => {
-  ;(
-    globalThis as typeof globalThis & {
-      IS_REACT_ACT_ENVIRONMENT: boolean
-    }
-  ).IS_REACT_ACT_ENVIRONMENT = true
-})
-
-afterEach(() => {
-  for (const root of mountedRoots.splice(0)) {
-    act(() => root.unmount())
-  }
-  document.body.replaceChildren()
-})
 
 async function duplicateAction(): Promise<void> {}
 
@@ -31,11 +14,7 @@ async function openMenu(
   status: "archived" | "draft" | "published",
   rights: { canDuplicate?: boolean; canEdit?: boolean } = {}
 ): Promise<void> {
-  const container = document.createElement("div")
-  document.body.append(container)
-
-  const root = createRoot(container)
-  mountedRoots.push(root)
+  const root = mount()
   act(() =>
     root.render(
       <TemplateRowMenu

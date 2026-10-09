@@ -21,6 +21,8 @@ import {
   SIGNED_URL_MAX_TTL_SECONDS,
   UUID_PATTERN,
 } from "@/lib/r2/stored-file"
+import { ServiceError } from "@/services/service-error"
+import { isR2NotFound, signCreateOnlyPut } from "@/services/r2-objects"
 
 const DOCUMENT_CONTENT_TYPE_EXTENSIONS: Record<string, string> = {
   "application/pdf": ".pdf",
@@ -112,20 +114,8 @@ export type DocumentStorageServiceDeps = {
 /**
  * Error type raised by document storage service operations.
  */
-export class DocumentStorageServiceError extends Error {
-  readonly statusCode: number
-
-  /**
-   * Creates a document storage service error with an HTTP-style status code.
-   *
-   * @param message - User-safe error message.
-   * @param statusCode - HTTP-style status code for route/action translation.
-   */
-  constructor(message: string, statusCode: number) {
-    super(message)
-    this.name = "DocumentStorageServiceError"
-    this.statusCode = statusCode
-  }
+export class DocumentStorageServiceError extends ServiceError {
+  override readonly name = "DocumentStorageServiceError"
 }
 
 /**
@@ -221,16 +211,12 @@ export async function createSignedDocumentUploadUrl(
     const expiresAt = new Date(
       signingDate.getTime() + expiresInSeconds * 1_000
     ).toISOString()
-    const command = new PutObjectCommand({
-      Bucket: r2Env.CLOUDFLARE_R2_BUCKET_NAME,
-      Key: storageKey,
-      ContentLength: input.byteSize,
-      ContentType: input.contentType,
-      IfNoneMatch: "*",
-    })
-    const uploadUrl = await signer(r2Client, command, {
+    const uploadUrl = await signCreateOnlyPut(signer, r2Client, {
+      bucket: r2Env.CLOUDFLARE_R2_BUCKET_NAME,
+      key: storageKey,
+      byteSize: input.byteSize,
+      contentType: input.contentType,
       expiresIn: expiresInSeconds,
-      signableHeaders: new Set(["content-type"]),
       signingDate,
     })
 
@@ -387,7 +373,7 @@ export async function verifyDocumentUpload(
       throw error
     }
 
-    if (isDocumentObjectNotFoundError(error)) {
+    if (isR2NotFound(error)) {
       console.warn("document_upload_verification_rejected", {
         statusCode: 409,
         durationMs: Date.now() - startedAt,
@@ -450,7 +436,7 @@ export async function deleteDocumentStorageObject(
       durationMs: Date.now() - startedAt,
     })
   } catch (error: unknown) {
-    if (isDocumentObjectNotFoundError(error)) {
+    if (isR2NotFound(error)) {
       console.info("document_storage_object_already_absent", {
         durationMs: Date.now() - startedAt,
       })
@@ -546,30 +532,6 @@ function validateDocumentUploadVerificationInput(
 
 function normalizeContentType(contentType: string | undefined): string {
   return contentType?.split(";", 1)[0]?.trim().toLowerCase() ?? ""
-}
-
-function isDocumentObjectNotFoundError(error: unknown): boolean {
-  if (typeof error !== "object" || error === null) {
-    return false
-  }
-
-  const candidate = error as {
-    name?: unknown
-    code?: unknown
-    Code?: unknown
-    $metadata?: { httpStatusCode?: unknown }
-  }
-  const errorCodes = [candidate.name, candidate.code, candidate.Code]
-
-  return (
-    candidate.$metadata?.httpStatusCode === 404 ||
-    errorCodes.some(
-      (errorCode: unknown): boolean =>
-        errorCode === "NotFound" ||
-        errorCode === "NoSuchKey" ||
-        errorCode === "NoSuchObject"
-    )
-  )
 }
 
 async function getDocumentStorageObject(

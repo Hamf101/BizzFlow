@@ -10,9 +10,6 @@ import {
   readImageDimensions,
 } from "@/lib/image-header"
 import {
-  canPerformOrganizationAction,
-  createOrganizationPermissionSubject,
-  isOrganizationRole,
   type OrganizationPermissionAction,
   type OrganizationPermissionSubject,
 } from "@/lib/permissions"
@@ -46,10 +43,12 @@ import type {
   TemplateServiceDeps,
 } from "./contracts"
 import { TemplateServiceError } from "./errors"
-import { loadActiveMembership } from "@/services/organizations/active-membership"
+import { requireOrgPermission } from "@/services/organizations/active-membership"
 import { requireStoredImages, TemplateImageServiceError } from "@/services/template-image-service"
 import { mapImageAssets, PRINT_MAX_WIDTH } from "@/types/template-images"
 import { runOperation, type LogValue } from "@/services/operation"
+import { asSupabaseError } from "@/services/supabase-error"
+import { normalizeName } from "@/services/input"
 
 export const TEMPLATE_COLUMNS =
   "id,org_id,title,description,category,status,revision,content,created_by,updated_by,published_by,archived_by,created_at,updated_at,published_at,archived_at,published_revision"
@@ -58,21 +57,10 @@ export const TEMPLATE_COLUMNS =
 export const TEMPLATE_SUMMARY_COLUMNS =
   "id,org_id,title,category,status,revision,created_at,updated_at"
 
-type MembershipRow = {
-  role: string
-  role_definition?: { permissions: string[] | null } | null
-}
-
 type FolderStateRow = {
   id: string
 }
 
-type SupabaseErrorLike = {
-  code?: string
-  details?: string
-  hint?: string
-  message?: string
-}
 
 export async function requirePermission(
   client: TemplateServiceClient,
@@ -81,43 +69,11 @@ export async function requirePermission(
   action: OrganizationPermissionAction,
   rejectionMessage: string
 ): Promise<OrganizationPermissionSubject> {
-  const { data, error } = await loadActiveMembership(client, organizationId, actorUserId)
-
-  if (error) {
-    throw createDatabaseError(error, "Unable to load document permissions.")
-  }
-
-  if (!data) {
-    throw new TemplateServiceError(rejectionMessage, 403)
-  }
-
-  const row = data as MembershipRow
-  const role = row.role
-
-  if (!isOrganizationRole(role)) {
-    throw new TemplateServiceError(
-      "Database returned an unsupported organization role.",
-      500
-    )
-  }
-
-  const subject = createOrganizationPermissionSubject(
-    role,
-    row.role_definition?.permissions
-  )
-
-  if (!subject) {
-    throw new TemplateServiceError(
-      "Database returned unsupported role permissions.",
-      500
-    )
-  }
-
-  if (!canPerformOrganizationAction(subject, action)) {
-    throw new TemplateServiceError(rejectionMessage, 403)
-  }
-
-  return subject
+  return requireOrgPermission(client, organizationId, actorUserId, action, {
+    loadFailed: (error) => createDatabaseError(error, "Unable to load document permissions."),
+    denied: () => new TemplateServiceError(rejectionMessage, 403),
+    unknownRole: () => new TemplateServiceError("Database returned an unsupported organization role.", 500),
+  })
 }
 
 export async function getTemplateById(
@@ -275,16 +231,7 @@ export function mapGeneratedDocument(
 }
 
 export function normalizeTitle(value: string): string {
-  const title = value.trim().replace(/\s+/g, " ")
-
-  if (title.length < 1 || title.length > 180) {
-    throw new TemplateServiceError(
-      "Title must be between 1 and 180 characters.",
-      400
-    )
-  }
-
-  return title
+  return normalizeName(value, "Title", 1, 180, (message) => new TemplateServiceError(message, 400))
 }
 
 export function normalizeDescription(
@@ -464,7 +411,7 @@ export function createDatabaseError(
   error: unknown,
   fallbackMessage: string
 ): TemplateServiceError {
-  const errorLike = getSupabaseErrorLike(error)
+  const errorLike = asSupabaseError(error)
 
   // A write that kept meeting a colleague's is worth trying again.
   if (isSerializationFailure(errorLike)) {
@@ -515,10 +462,3 @@ function parseDocumentTemplateStatus(
   )
 }
 
-function getSupabaseErrorLike(error: unknown): SupabaseErrorLike | null {
-  if (!error || typeof error !== "object") {
-    return null
-  }
-
-  return error as SupabaseErrorLike
-}

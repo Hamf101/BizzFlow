@@ -1,12 +1,10 @@
 // @vitest-environment jsdom
 
 import { act } from "react"
-import { createRoot } from "react-dom/client"
 import { expect, it, vi } from "vitest"
 
 import { BizFlowMark } from "./bizflow-mark"
-
-;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+import { mount } from "@/test/render"
 
 it("parts under the pointer, settles on leave, and respects reduced motion", () => {
   let reduced = false
@@ -15,7 +13,7 @@ it("parts under the pointer, settles on leave, and respects reduced motion", () 
   Object.defineProperty(SVGElement.prototype, "getBBox", { configurable: true, value: () => ({ x: 50, y: 20, width: 80, height: 100 }) })
   const host = document.createElement("a")
   document.body.append(host)
-  const root = createRoot(host)
+  const root = mount(host)
   try {
     act(() => root.render(<BizFlowMark />))
     const svg = host.querySelector("svg")!
@@ -36,7 +34,7 @@ it("parts under the pointer, settles on leave, and respects reduced motion", () 
     expect(pieces.every((piece) => !piece.getAttribute("transform"))).toBe(true)
     act(() => root.unmount())
     reduced = true
-    const stillRoot = createRoot(host)
+    const stillRoot = mount(host)
     act(() => stillRoot.render(<BizFlowMark />))
     expect(host.querySelector("animate, animateTransform")).toBeNull()
     host.dispatchEvent(new MouseEvent("pointermove", { clientX: 22, clientY: 22 }))

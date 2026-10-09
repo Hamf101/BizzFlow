@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 import { act } from "react"
-import { createRoot, type Root } from "react-dom/client"
-import { afterEach, beforeAll, expect, it } from "vitest"
+import type { Root } from "react-dom/client"
+import { beforeAll, expect, it } from "vitest"
 
 import { parseGeneratedDocumentAnswers } from "@/components/documents/generated-document-form-data"
 import { createEmptyDocumentContent, templateContentV3Schema } from "@/types/template"
 
 import { PublicAnswerPaper } from "./public-answer-paper"
+import { mount } from "@/test/render"
 
 const NAME = "70000000-0000-4000-8000-000000000041"
 const ACCOUNT = "70000000-0000-4000-8000-000000000042"
@@ -30,17 +31,15 @@ let root: Root
 let form: HTMLFormElement
 
 beforeAll(() => {
-  ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
   window.matchMedia = () => ({ addEventListener() {}, matches: true, removeEventListener() {} }) as unknown as MediaQueryList
   globalThis.ResizeObserver = class { disconnect() {} observe() {} unobserve() {} } as unknown as typeof ResizeObserver
   Range.prototype.getBoundingClientRect = () => new DOMRect()
   Range.prototype.getClientRects = () => Object.assign([], { item: () => null }) as unknown as DOMRectList
 })
-afterEach(() => { act(() => root.unmount()); document.body.replaceChildren() })
 
 async function open(): Promise<void> {
   form = document.body.appendChild(document.createElement("form"))
-  root = createRoot(form)
+  root = mount(form)
   await act(async () => root.render(<PublicAnswerPaper content={CONTENT} initialAnswers={{}} initialFiles={[]} phone title="Sign-up" token="t" />))
 }
 

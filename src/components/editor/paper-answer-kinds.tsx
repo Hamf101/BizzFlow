@@ -9,9 +9,11 @@ import { cn } from "@/lib/utils"
 import type { ChoiceGridFieldBlock, TableFieldBlock } from "@/types/template"
 import { MAX_TABLE_FIELD_ROWS } from "@/types/template-answer-kinds"
 
-// The printed edge of a mark, a grid's rules and a table's cells (see paper-field).
-const EDGE = "rgb(156 163 176)"
-const RULE = `0.07em solid ${EDGE}`
+// The printed edge of a checkbox, a signature's line, a boxed section, a
+// grid's rules and a table's cells. An answer box's edge is fainter, the
+// page's own border colour, as it prints.
+export const EDGE = "rgb(156 163 176)"
+export const RULE = `0.07em solid ${EDGE}`
 
 type Mode = "design" | "fill" | "read"
 

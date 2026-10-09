@@ -13,6 +13,7 @@ import {
 } from "react"
 
 import { ListQuery } from "@/components/data/list-query"
+import { ListEmpty } from "@/components/data/list-heading"
 import { DatedTitle } from "@/components/navigation/dated-title"
 import { getMemberDisplayName, getMemberRoleName } from "@/components/people/member-name"
 import { useTimeZone } from "@/components/ui/local-date"
@@ -281,9 +282,7 @@ function MemberDirectory({
       </div>
 
       {members.length === 0 ? (
-        <p className="py-16 text-center text-sm text-muted-foreground" role="status">
-          No people match this search.
-        </p>
+        <ListEmpty>No people match this search.</ListEmpty>
       ) : (
         members.map((member: OrganizationMember) => (
           <MemberRow

@@ -4,7 +4,8 @@ import type { ReactElement, ReactNode } from "react"
 
 import { ListFilterChips } from "@/components/data/list-filter-chips"
 import { ListQuery } from "@/components/data/list-query"
-import { type ListSavedViews, ListViewMenu, ListViewTitle } from "@/components/data/list-view-menu"
+import { ListEmpty, ListHeading } from "@/components/data/list-heading"
+import { type ListSavedViews, ListViewMenu } from "@/components/data/list-view-menu"
 import { PurgeRequestForm } from "@/components/documents/purge-request-form"
 import type { FileEntry } from "@/components/files/file-entry"
 import {
@@ -48,7 +49,6 @@ import type { MoveDestination } from "@/components/files/move-to-dialog"
 import { NewFileMenu, type NewFolderForm } from "@/components/files/new-file-menu"
 import { SelectionBar } from "@/components/files/selection-bar"
 import { PhoneSelectButton } from "@/components/data/selection"
-import { DatedTitle } from "@/components/navigation/dated-title"
 import { useTimeZone } from "@/components/ui/local-date"
 import { formatMediumDate } from "@/lib/date-format"
 import { buildDocumentFolderPath } from "@/lib/page-document-folders"
@@ -399,12 +399,7 @@ export function FilesWorkspace({
   ]
   const chosenId = getChosenItemId(view, location, layout)
   const chosen = entries.find((entry: FileEntry): boolean => entry.id === chosenId) ?? null
-  const empty = (
-    // Outside any table: an empty folder is a message, not a row.
-    <p className="py-16 text-center text-sm text-muted-foreground" role="status">
-      {describeEmptyLocation(view, lifecycle, activeFolder)}
-    </p>
-  )
+  const empty = <ListEmpty>{describeEmptyLocation(view, lifecycle, activeFolder)}</ListEmpty>
   // Columns and Gallery need width; phones show Icons instead.
   const icons = (
     <FileIconsLayout className="md:hidden" entries={entries} selected={chosenId} />
@@ -486,20 +481,8 @@ export function FilesWorkspace({
       shown={entries.map((entry: FileEntry): string => entry.id)}
     >
       <section className="flex flex-col gap-5" data-slot="files-workspace">
-        {/* The real space keeps the accessible name "Files 12 items" rather
-            than "Files12 items". */}
         <div className="flex items-center justify-between gap-3">
-          <DatedTitle>
-            <h1 className="min-w-0 text-2xl leading-none font-medium tracking-[-0.02em]">
-              <ListViewTitle title="Files" views={listViews} />{" "}
-              <span
-                aria-label={`${total} ${total === 1 ? "item" : "items"}`}
-                className="ml-0.5 text-xl font-normal text-muted-foreground"
-              >
-                {total}
-              </span>
-            </h1>
-          </DatedTitle>
+          <ListHeading noun={["item", "items"]} title="Files" total={total} views={listViews} />
           <div className="flex shrink-0 gap-2">
             <PhoneSelectButton />
             <ListViewMenu

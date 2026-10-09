@@ -7,7 +7,7 @@ import { typedInput } from "@/components/ui/typed-input"
 import { DrawnSignatureField } from "@/components/documents/drawn-signature-field"
 import { getGeneratedDocumentAnswerName } from "@/components/documents/generated-document-form-data"
 // Imported with the page, not after it, so the canvas measures their real height.
-import { PaperGrid, PaperTable } from "@/components/editor/paper-answer-kinds"
+import { EDGE, PaperGrid, PaperTable, RULE } from "@/components/editor/paper-answer-kinds"
 import { DatePicker } from "@/components/ui/date-picker"
 import { RequiredStandIn } from "@/components/ui/required-stand-in"
 import { Select } from "@/components/ui/select"
@@ -51,11 +51,6 @@ export const SECTION_TITLE: CSSProperties = {
 // label, a box two lines tall (four when multi-line, 56 points for a
 // signature) padded by 6 points, and 7-point help beneath.
 const BOX_HEIGHT = { line: 3, lines: 6, drawing: 5.6 } as const
-// The printed edge of a checkbox and of a signature's line. An answer box's
-// edge is fainter, the page's own border colour, as it prints. A boxed
-// section's edge is this one too.
-export const EDGE = "rgb(156 163 176)"
-const RULE = `0.07em solid ${EDGE}`
 // A comb box prints 16 points wide and 22 tall.
 const COMB = { height: 2.2, width: 1.6 } as const
 // A long answer in the line style is written on rules 20 points apart, the
@@ -169,7 +164,7 @@ export function PaperField({
         <span
           aria-hidden="true"
           className="pointer-events-none absolute top-[0.2em] left-0 flex size-[1em] items-center justify-center peer-focus-visible:ring-2 peer-focus-visible:ring-ring/40"
-          style={{ border: `0.07em solid ${EDGE}` }}
+          style={{ border: RULE }}
         >
           {checked && mode !== "design" ? <Check className="size-[0.85em]" strokeWidth={3} /> : null}
         </span>
@@ -339,7 +334,7 @@ export function PaperField({
                     "pointer-events-none absolute top-[0.2em] left-0 flex size-[1em] items-center justify-center peer-focus-visible:ring-2 peer-focus-visible:ring-ring/40",
                     !several && "rounded-full"
                   )}
-                  style={{ border: `0.07em solid ${EDGE}` }}
+                  style={{ border: RULE }}
                 >
                   {chosen ? several ? <Check className="size-[0.85em]" strokeWidth={3} /> : <span className="size-[0.5em] rounded-full bg-current" /> : null}
                 </span>
@@ -364,7 +359,7 @@ export function PaperField({
         // A row's cells are as tall as its tallest, so the next row sits on all of them.
         className={cn("relative flex h-full flex-col transition-colors focus-within:ring-2 focus-within:ring-ring/40", fill && "cursor-text")}
         data-paper-cell=""
-        style={{ border: `0.07em solid ${EDGE}`, lineHeight: 1.5, marginBottom: "calc(3 * var(--doc-pt))", padding: "0.4em" }}
+        style={{ border: RULE, lineHeight: 1.5, marginBottom: "calc(3 * var(--doc-pt))", padding: "0.4em" }}
       >
         <span className="text-muted-foreground" style={{ fontSize: "0.7em", lineHeight: 10 / 7, marginBottom: "calc(0.2em / 0.7)" }}>
           {block.label}
@@ -384,7 +379,7 @@ export function PaperField({
     ) : drawing ? (
       // Signed on a line, named by a caption under it.
       <div className="flex flex-col" data-paper-line="">
-        <div className="relative flex flex-col" style={{ borderBottom: `0.07em solid ${EDGE}`, lineHeight: 1.5, minHeight: `${sized ?? height}em` }}>
+        <div className="relative flex flex-col" style={{ borderBottom: RULE, lineHeight: 1.5, minHeight: `${sized ?? height}em` }}>
           {answer}
           {edge}
         </div>
@@ -422,7 +417,7 @@ export function PaperField({
           </span>
           <div
             className={cn("min-w-0 flex-1 transition-colors focus-within:border-ring focus-within:shadow-[0_0.07em_0_0_var(--color-ring)]", fill && "cursor-text")}
-            style={{ borderBottom: `0.07em solid ${EDGE}`, paddingBottom: "0.2em" }}
+            style={{ borderBottom: RULE, paddingBottom: "0.2em" }}
           >
             {answer}
           </div>

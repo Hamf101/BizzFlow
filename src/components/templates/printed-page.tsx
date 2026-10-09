@@ -47,6 +47,34 @@ export function printableMargin(plan: TemplateRenderPlan): string {
 }
 
 /**
+ * How a section, row or block breaks across printed pages.
+ *
+ * @param options - Whether it starts a page, stays whole, or stays with the next.
+ * @returns The CSS break properties.
+ */
+export function paginationStyle({
+  keepTogether = false,
+  keepWithNext = false,
+  pageBreakBefore = false
+}: {
+  keepTogether?: boolean
+  keepWithNext?: boolean
+  pageBreakBefore?: boolean
+}): CSSProperties {
+  return {
+    ...(pageBreakBefore
+      ? { breakBefore: "page", pageBreakBefore: "always" }
+      : {}),
+    ...(keepTogether
+      ? { breakInside: "avoid-page", pageBreakInside: "avoid" }
+      : {}),
+    ...(keepWithNext
+      ? { breakAfter: "avoid-page", pageBreakAfter: "avoid" }
+      : {})
+  }
+}
+
+/**
  * Pictures placed on the pages, drawn over a read-only surface in their
  * saved boxes. Offsets in percentages of the width stay in step with the
  * paper at any size.

@@ -15,7 +15,7 @@ import { loadPageOrganizationContext } from "@/lib/page-organization-context"
 import { canPerformOrganizationAction } from "@/lib/permissions"
 import { listAuditLogPage, type AuditLogPage } from "@/services/audit-service"
 import { listOrganizationPeople } from "@/services/organization-service"
-import { listSavedViews } from "@/services/saved-view-service"
+import { listSavedViews } from "@/services/organizations/saved-view-service"
 import type { OrganizationMember } from "@/types/organization"
 import type { Metadata } from "next"
 

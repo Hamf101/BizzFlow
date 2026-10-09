@@ -23,6 +23,7 @@ import {
   createSupabaseServiceError,
   runDocumentOperation,
 } from "@/services/documents/shared"
+import { asSupabaseError } from "@/services/supabase-error"
 
 const DEFAULT_JOB_LIMIT = 10
 const DEFAULT_OBJECT_LIMIT = 25
@@ -32,12 +33,6 @@ const MAX_OBJECT_LIMIT = 100
 const MIN_LEASE_SECONDS = 15
 const MAX_LEASE_SECONDS = 600
 
-type SupabaseErrorLike = {
-  code?: string
-  details?: string
-  hint?: string
-  message?: string
-}
 
 /**
  * Atomically queues permanent deletion of one trashed document.
@@ -426,10 +421,7 @@ function createManualPurgeError(
   error: unknown,
   resourceKind: "document" | "folder"
 ): DocumentServiceError {
-  const errorLike =
-    error && typeof error === "object"
-      ? (error as SupabaseErrorLike)
-      : null
+  const errorLike = asSupabaseError(error)
 
   if (errorLike?.code === "P0002") {
     return new DocumentServiceError(

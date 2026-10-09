@@ -2,8 +2,7 @@
 
 import { act } from "react"
 import type { ReactElement } from "react"
-import { createRoot, type Root } from "react-dom/client"
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 const captureUnexpectedError = vi.hoisted(() => vi.fn())
 
@@ -14,35 +13,20 @@ import PublicFormError from "@/app/forms/[token]/error"
 import PublicFormLoading from "@/app/forms/[token]/loading"
 import PublicSigningError from "@/app/sign/[token]/error"
 import PublicSigningLoading from "@/app/sign/[token]/loading"
+import { mount } from "@/test/render"
 
-const mountedRoots: Root[] = []
 const PRIVATE_MARKER = "private-token-tenant-stack"
-
-beforeAll(() => {
-  ;(
-    globalThis as typeof globalThis & {
-      IS_REACT_ACT_ENVIRONMENT: boolean
-    }
-  ).IS_REACT_ACT_ENVIRONMENT = true
-})
 
 beforeEach(() => {
   captureUnexpectedError.mockReset()
 })
 
 afterEach(() => {
-  for (const root of mountedRoots.splice(0)) {
-    act(() => root.unmount())
-  }
-  document.body.replaceChildren()
   window.history.replaceState(null, "", "/")
 })
 
 async function render(ui: ReactElement): Promise<void> {
-  const container = document.createElement("div")
-  document.body.append(container)
-  const root = createRoot(container)
-  mountedRoots.push(root)
+  const root = mount()
 
   await act(async () => root.render(ui))
 }

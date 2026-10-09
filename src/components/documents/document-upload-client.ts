@@ -2,6 +2,9 @@
 
 import type { CreateDocumentUploadUrlResponse } from "@/types/document"
 
+/** The kinds of file a document or an answer's upload takes, for a file input's `accept`. */
+export const UPLOAD_ACCEPT = ".pdf,.png,.jpg,.jpeg,.docx,.xlsx,.csv"
+
 /**
  * Uploads a browser File through a create-only signed object-storage URL.
  *
@@ -92,4 +95,34 @@ export async function readApiErrorMessage(
   }
 
   return fallbackMessage
+}
+
+/**
+ * Opens a tab while the click still counts as the person's, then sends it to
+ * the file's signed address once that arrives, closing it again on a failure.
+ *
+ * @param blockedMessage - What to say when the browser blocks the tab.
+ * @param readUrl - Fetches the signed address.
+ * @returns A promise that resolves once the tab is on its way.
+ * @throws Error when the tab is blocked or the address cannot be had.
+ */
+export async function openDownloadTab(blockedMessage: string, readUrl: () => Promise<string>): Promise<void> {
+  // Open synchronously while the click still has browser user activation.
+  const downloadWindow = window.open("about:blank", "_blank")
+
+  if (!downloadWindow) {
+    throw new Error(blockedMessage)
+  }
+
+  downloadWindow.opener = null
+
+  try {
+    downloadWindow.location.replace(await readUrl())
+  } catch (error: unknown) {
+    if (!downloadWindow.closed) {
+      downloadWindow.close()
+    }
+
+    throw error
+  }
 }

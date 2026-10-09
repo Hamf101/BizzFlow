@@ -21,11 +21,11 @@ import {
 } from "@/services/submissions/shared"
 import { parseSubmissionRow, type Submission } from "@/types/submission"
 import { parseSubmissionReviewerRow, type SubmissionReviewer, type SubmissionReviewTally } from "@/types/submission-review"
+import { LOWERCASE_UUID_PATTERN } from "@/services/input"
 
 const REVIEWER_COLUMNS = "user_id,assigned_by,assigned_at,can_approve,decision,note,decided_at"
 const MAX_REVIEWERS = 20
 const MAX_SHARED = 50
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
 
 // Who outranks whom when it comes to seeing the other reviewers.
 const RANK: Record<OrganizationRole, number> = { external_reviewer: 0, manager: 2, owner_admin: 3, staff: 1 }
@@ -65,7 +65,7 @@ export async function setInternalSubmissionReviewers(
         reviewerIds.length < 1 ||
         reviewerIds.length > MAX_REVIEWERS ||
         new Set(reviewerIds).size !== reviewerIds.length ||
-        !reviewerIds.every((id) => UUID.test(id))
+        !reviewerIds.every((id) => LOWERCASE_UUID_PATTERN.test(id))
       ) {
         throw new SubmissionServiceError(`Choose between 1 and ${MAX_REVIEWERS} different reviewers.`, 400)
       }
@@ -182,7 +182,7 @@ export async function shareInternalSubmission(
 
       const ticked = [...new Set(input.userIds.map((id) => id.trim().toLowerCase()))]
 
-      if (ticked.length > MAX_SHARED || !ticked.every((id) => UUID.test(id))) {
+      if (ticked.length > MAX_SHARED || !ticked.every((id) => LOWERCASE_UUID_PATTERN.test(id))) {
         throw new SubmissionServiceError(`Share with at most ${MAX_SHARED} people.`, 400)
       }
 

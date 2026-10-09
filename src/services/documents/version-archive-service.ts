@@ -10,15 +10,11 @@ import {
   getClient,
   getDocumentById,
   runDocumentOperation,
+  isLifecycleAccessRefusal,
 } from "@/services/documents/shared"
 import type { DocumentSummary } from "@/types/document"
+import { asSupabaseError, searchableErrorText } from "@/services/supabase-error"
 
-type SupabaseErrorLike = {
-  code?: string
-  message?: string
-  details?: string
-  hint?: string
-}
 
 /**
  * Archives a document by setting archive metadata.
@@ -108,29 +104,13 @@ export async function archiveDocument(
 }
 
 function createArchiveMutationError(error: unknown): DocumentServiceError {
-  const errorLike = getSupabaseErrorLike(error)
+  const errorLike = asSupabaseError(error)
 
   if (errorLike?.code === "P0002") {
     return new DocumentServiceError("Document was not found.", 404)
   }
 
-  const searchableMessage = [
-    errorLike?.message,
-    errorLike?.details,
-    errorLike?.hint,
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase()
-
-  if (
-    errorLike?.code === "42501" &&
-    (searchableMessage.includes("active organization membership") ||
-      searchableMessage.includes(
-        "contributor access and a manager role"
-      ) ||
-      searchableMessage.includes("sufficient access"))
-  ) {
+  if (isLifecycleAccessRefusal(errorLike, searchableErrorText(errorLike))) {
     return new DocumentServiceError(
       "You do not have sufficient access to archive this document.",
       403
@@ -152,10 +132,3 @@ function createArchiveMutationError(error: unknown): DocumentServiceError {
   return createSupabaseServiceError(error, "Unable to archive document.")
 }
 
-function getSupabaseErrorLike(error: unknown): SupabaseErrorLike | null {
-  if (!error || typeof error !== "object") {
-    return null
-  }
-
-  return error as SupabaseErrorLike
-}

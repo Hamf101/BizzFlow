@@ -18,7 +18,7 @@ import {
   isStaticTemplateBlock,
   TemplateStaticBlock
 } from "@/components/templates/template-static-block"
-import { BLOCK_GAP, pageStyle, PlacedImages, printableMargin } from "@/components/templates/printed-page"
+import { BLOCK_GAP, pageStyle, paginationStyle, PlacedImages, printableMargin } from "@/components/templates/printed-page"
 import {
   groupTemplateRenderBlocks,
   ROW_GRID,
@@ -58,25 +58,12 @@ import {
 import { getGeneratedDocumentAnswerName } from "./generated-document-form-data"
 import { imageSource } from "@/types/template-images"
 
-/**
- * Hands answer ownership to the caller so it survives this component's mount.
- *
- * Supplying a control makes the component fully controlled: it renders exactly
- * the answers it is given and reports every edit instead of storing one.
- */
-export type GeneratedDocumentAnswerControl = Readonly<{
-  answers: Record<string, unknown>
-  onChange: (answers: Record<string, unknown>) => void
-}>
-
 // The place of the signer reading a signing link, whose own boxes say so, and
 // who has signed, whose boxes say that instead.
 const ReadingSigner = createContext<{ reader: number; signers: ReadonlyArray<{ status: string }> }>({ reader: 0, signers: [] })
 
 type GeneratedDocumentContentProps = {
-  /** Present when the caller owns answer state across mounts. */
-  answerControl?: GeneratedDocumentAnswerControl
-  /** Seed answers for the uncontrolled component. Ignored beside `answerControl`. */
+  /** Seed answers; the component owns them from then on. */
   answers?: Record<string, unknown>
   content: TemplateContent
   editable: boolean
@@ -98,7 +85,6 @@ type GeneratedDocumentContentProps = {
  * @returns A paper-like generated document suitable for member and public forms.
  */
 export function GeneratedDocumentContent({
-  answerControl,
   answers = {},
   content,
   editable,
@@ -111,28 +97,11 @@ export function GeneratedDocumentContent({
   title
 }: GeneratedDocumentContentProps): ReactElement {
   // Server-rendered call sites post answers through FormData and cannot own
-  // React state, so the uncontrolled path stays the default.
-  const [uncontrolledAnswers, setUncontrolledAnswers] =
+  // React state, so the component keeps the answers.
+  const [currentAnswers, setCurrentAnswers] =
     useState<Record<string, unknown>>(() =>
       pruneHiddenTemplateFieldValues(content, answers)
     )
-  const ownedAnswers = answerControl?.answers
-  const currentAnswers = useMemo((): Record<string, unknown> => {
-    if (!ownedAnswers) {
-      return uncontrolledAnswers
-    }
-
-    const visibleAnswers = pruneHiddenTemplateFieldValues(content, ownedAnswers)
-
-    // Pruning only ever drops keys, so an equal key count means an equal map.
-    // Returning the caller's own object then keeps identity stable, which stops
-    // an owner that also observes `onAnswersChange` from looping on two equal
-    // objects.
-    return Object.keys(visibleAnswers).length ===
-      Object.keys(ownedAnswers).length
-      ? ownedAnswers
-      : visibleAnswers
-  }, [content, ownedAnswers, uncontrolledAnswers])
 
   useEffect((): void => {
     onAnswersChange?.(currentAnswers)
@@ -151,19 +120,7 @@ export function GeneratedDocumentContent({
   )
 
   function applyAnswer(fieldKey: string, value: unknown): void {
-    if (answerControl) {
-      answerControl.onChange(
-        applyVisibleTemplateFieldValue(
-          content,
-          answerControl.answers,
-          fieldKey,
-          value
-        )
-      )
-      return
-    }
-
-    setUncontrolledAnswers(
+    setCurrentAnswers(
       (priorAnswers: Record<string, unknown>): Record<string, unknown> =>
         applyVisibleTemplateFieldValue(content, priorAnswers, fieldKey, value)
     )
@@ -380,7 +337,7 @@ function GeneratedSection({
       data-keep-together={section.keepTogether ? "true" : undefined}
       data-page-break-before={section.pageBreakBefore ? "true" : undefined}
       data-template-section-id={section.id ?? "implicit"}
-      style={getGeneratedPaginationStyle({
+      style={paginationStyle({
         keepTogether: section.keepTogether,
         pageBreakBefore: section.pageBreakBefore
       })}
@@ -442,7 +399,7 @@ function GeneratedFieldGroup({
       data-keep-together={group.keepTogether ? "true" : undefined}
       data-template-field-group-columns={group.columns}
       data-template-field-group-id={group.id ?? "ungrouped"}
-      style={getGeneratedPaginationStyle({
+      style={paginationStyle({
         keepTogether: group.keepTogether
       })}
     >
@@ -473,7 +430,7 @@ function GeneratedFieldGroup({
               }
               data-template-block-id={renderBlock.block.id}
               key={renderBlock.block.id}
-              style={getGeneratedPaginationStyle({
+              style={paginationStyle({
                 keepWithNext: renderBlock.keepWithNext,
                 pageBreakBefore:
                   renderBlock.pageBreakBefore &&
@@ -499,28 +456,6 @@ function GeneratedFieldGroup({
       </div>
     </section>
   )
-}
-
-function getGeneratedPaginationStyle({
-  keepTogether = false,
-  keepWithNext = false,
-  pageBreakBefore = false
-}: {
-  keepTogether?: boolean
-  keepWithNext?: boolean
-  pageBreakBefore?: boolean
-}): CSSProperties {
-  return {
-    ...(pageBreakBefore
-      ? { breakBefore: "page", pageBreakBefore: "always" }
-      : {}),
-    ...(keepTogether
-      ? { breakInside: "avoid-page", pageBreakInside: "avoid" }
-      : {}),
-    ...(keepWithNext
-      ? { breakAfter: "avoid-page", pageBreakAfter: "avoid" }
-      : {})
-  }
 }
 
 /**

@@ -411,28 +411,12 @@ describe("AI environment validation", () => {
       AI_MODEL: "gemini-exact-test-model",
       AI_TIMEOUT_MS: "12000",
       GEMINI_API_KEY: "gemini-test-key",
-      GEMINI_MODEL: "deprecated-model",
-      GEMINI_TIMEOUT_MS: "45000",
     })
 
     expect(getAiEnv()).toEqual({
       AI_PROVIDER: "gemini",
       AI_MODEL: "gemini-exact-test-model",
       AI_TIMEOUT_MS: 12000,
-    })
-  })
-
-  it("reads deprecated model and timeout aliases for one release", () => {
-    setIsolatedEnv({
-      GEMINI_API_KEY: "gemini-test-key",
-      GEMINI_MODEL: "gemini-deployed-model",
-      GEMINI_TIMEOUT_MS: "18000",
-    })
-
-    expect(getAiEnv()).toEqual({
-      AI_PROVIDER: "gemini",
-      AI_MODEL: "gemini-deployed-model",
-      AI_TIMEOUT_MS: 18000,
     })
   })
 

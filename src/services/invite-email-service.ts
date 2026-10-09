@@ -1,15 +1,8 @@
-import { getAppUrlEnv, getEmailEnv } from "@/lib/env"
 import { buildAcceptInvitePath } from "@/lib/auth-redirects"
-import {
-  EmailTransportError,
-  type EmailPayload,
-  type EmailTransport,
-} from "@/services/email/contracts"
-import { escapeHtml, wrapEmailDocument } from "@/services/email/html"
-import {
-  describeEmailRejection,
-  sendEmail,
-} from "@/services/email/transport"
+import type { EmailTransport } from "@/services/email/contracts"
+import { escapeHtml } from "@/services/email/html"
+import { deliverTransactionalEmail } from "@/services/email/transport"
+import { ServiceError } from "@/services/service-error"
 
 export type SendInviteEmailInput = {
   inviteId: string
@@ -25,20 +18,8 @@ export type InviteEmailServiceDeps = {
 /**
  * Error raised when a pending invite cannot be delivered by email.
  */
-export class InviteEmailServiceError extends Error {
-  readonly statusCode: number
-
-  /**
-   * Creates an invite-email delivery error.
-   *
-   * @param message - User-safe delivery failure message.
-   * @param statusCode - HTTP-style status code for the calling action.
-   */
-  constructor(message: string, statusCode: number) {
-    super(message)
-    this.name = "InviteEmailServiceError"
-    this.statusCode = statusCode
-  }
+export class InviteEmailServiceError extends ServiceError {
+  override readonly name = "InviteEmailServiceError"
 }
 
 /**
@@ -53,78 +34,22 @@ export async function sendInviteEmail(
   input: SendInviteEmailInput,
   deps: InviteEmailServiceDeps = {}
 ): Promise<void> {
-  const startedAt = performance.now()
-  let emailEnv: ReturnType<typeof getEmailEnv>
-  let invitationUrl: string
-
-  try {
-    emailEnv = getEmailEnv()
-    const appUrl = getAppUrlEnv().NEXT_PUBLIC_APP_URL
-    invitationUrl = new URL(buildAcceptInvitePath(input.token), appUrl).toString()
-  } catch {
-    console.error("invite_email_configuration_failed", {
-      inviteId: input.inviteId,
-      durationMs: Math.round(performance.now() - startedAt),
-      failureKind: "invalid_configuration",
-    })
-    throw new InviteEmailServiceError(
-      "Invite email is not configured. Add the required email provider environment variables.",
-      500
-    )
-  }
-
-  const subject = `You're invited to ${input.organizationName} on BizFlow Docs`
-  const payload: EmailPayload = {
+  await deliverTransactionalEmail({
+    name: "invite",
+    logPrefix: "invite_email",
+    ids: { inviteId: input.inviteId },
+    path: () => buildAcceptInvitePath(input.token),
+    deliveryReference: `organization-invite/${input.inviteId}`,
     toEmail: input.recipientEmail,
-    subject,
-    html: wrapEmailDocument({
-      subject,
+    compose: (invitationUrl) => ({
+      subject: `You're invited to ${input.organizationName} on BizFlow Docs`,
       contentHtml: createInviteEmailHtml(input.organizationName, invitationUrl),
+      text: createInviteEmailText(input.organizationName, invitationUrl),
     }),
-    text: createInviteEmailText(input.organizationName, invitationUrl),
-    ...(emailEnv.EMAIL_REPLY_TO_EMAIL
-      ? { replyTo: emailEnv.EMAIL_REPLY_TO_EMAIL }
-      : {}),
-  }
-
-  try {
-    const transport = deps.transport ?? sendEmail
-    const result = await transport(
-      {
-        deliveryReference: `organization-invite/${input.inviteId}`,
-        payload,
-      },
-      emailEnv
-    )
-
-    console.info("invite_email_delivered", {
-      inviteId: input.inviteId,
-      providerStatus: result.providerStatus,
-      providerMessageId: result.providerMessageId,
-      durationMs: Math.round(performance.now() - startedAt),
-    })
-  } catch (error: unknown) {
-    const transportError = error instanceof EmailTransportError ? error : null
-
-    console.error("invite_email_delivery_failed", {
-      inviteId: input.inviteId,
-      durationMs: Math.round(performance.now() - startedAt),
-      failureKind: transportError?.kind ?? "unexpected_transport_error",
-      providerStatus: transportError?.providerStatus ?? null,
-    })
-
-    if (transportError?.kind === "provider_rejected") {
-      throw new InviteEmailServiceError(
-        `Unable to send the invite email. ${describeEmailRejection(transportError.providerStatus)}`,
-        502
-      )
-    }
-
-    throw new InviteEmailServiceError(
-      "Unable to send the invite email. Try again shortly.",
-      502
-    )
-  }
+    fail: (message, statusCode) => new InviteEmailServiceError(message, statusCode),
+    explainRejection: true,
+    transport: deps.transport,
+  })
 }
 
 function createInviteEmailHtml(

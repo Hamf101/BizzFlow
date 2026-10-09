@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { getEditorLayout, saveEditorLayout } from "@/services/editor-layout-service"
+import { getEditorLayout, saveEditorLayout } from "@/services/organizations/editor-layout-service"
 import { PostgrestReadQuery, type FakeRow, type PostgrestFakeResult } from "@/services/postgrest-fake.test-support"
 
 class ProfileQuery extends PostgrestReadQuery {

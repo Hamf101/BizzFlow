@@ -2,8 +2,8 @@
 
 import dynamic from "next/dynamic"
 
-const loadBlockSettings = () => import("@/components/templates/template-block-editor")
-const loadFlowPanel = () => import("@/components/templates/template-flow-panel")
+const loadBlockSettings = () => import("@/components/editor/template-block-editor")
+const loadFlowPanel = () => import("@/components/editor/template-flow-panel")
 const loadRoom = () => import("@/components/editor/room-ui")
 const loadPageSetup = () => import("@/components/editor/page-setup-panel")
 const loadBranding = () => import("@/components/templates/template-branding-panel")

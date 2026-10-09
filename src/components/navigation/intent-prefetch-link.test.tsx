@@ -1,8 +1,7 @@
 // @vitest-environment jsdom
 
 import { act } from "react"
-import { createRoot } from "react-dom/client"
-import { afterEach, expect, it, vi } from "vitest"
+import { expect, it, vi } from "vitest"
 
 vi.mock("next/link", async () => {
   const { createElement } = await import("react")
@@ -15,18 +14,13 @@ vi.mock("next/link", async () => {
 })
 
 import { IntentPrefetchLink } from "./intent-prefetch-link"
-
-;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
-
-afterEach(() => {
-  document.body.replaceChildren()
-})
+import { mount } from "@/test/render"
 
 async function renderLink(onMouseEnter = vi.fn()): Promise<HTMLAnchorElement> {
   const container = document.body.appendChild(document.createElement("div"))
 
   await act(async () =>
-    createRoot(container).render(
+    mount(container).render(
       <IntentPrefetchLink href="/people" onMouseEnter={onMouseEnter}>
         People
       </IntentPrefetchLink>

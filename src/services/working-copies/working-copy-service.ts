@@ -18,6 +18,7 @@ import {
   type WorkingCopyUpdateRow,
 } from "@/lib/supabase/admin"
 import { requireDocumentWriter } from "@/services/documents/access-service"
+import { sendWithRealtime } from "@/services/documents/sharing-notice"
 import { DocumentServiceError } from "@/services/documents/errors"
 import { loadGeneratedDocumentView } from "@/services/document-signing/persistence"
 import { DocumentSigningServiceError } from "@/services/document-signing/errors"
@@ -37,6 +38,7 @@ import {
 import { type DocumentTemplate, type TemplateContent, upgradeV2TemplateContentToV3 } from "@/types/template"
 import { mapImageAssets, withoutImageUrls } from "@/types/template-images"
 import { withGeneratedFieldKeys } from "@/types/template-structure"
+import { ServiceError } from "@/services/service-error"
 
 /**
  * Word to a room that a change was kept: its revision and who made it. The
@@ -75,14 +77,8 @@ export type RoomInput = DocumentRoomInput | TemplateRoomInput
 export type OpenedWorkingCopyRoom = Readonly<{ revision: number; roomId: string; state: Uint8Array; topic: string }>
 
 /** A refusal fit to show, with the status it means. */
-export class WorkingCopyServiceError extends Error {
-  readonly statusCode: number
-
-  constructor(message: string, statusCode: number) {
-    super(message)
-    this.name = "WorkingCopyServiceError"
-    this.statusCode = statusCode
-  }
+export class WorkingCopyServiceError extends ServiceError {
+  override readonly name = "WorkingCopyServiceError"
 }
 
 // The working copy as its template or document keeps it.
@@ -618,28 +614,13 @@ export async function broadcastChange(
   message: WorkingCopyMessage | WorkingCopyNotesMessage
 ): Promise<void> {
   try {
-    await (deps.broadcast ?? broadcastWithRealtime)(topicOf(roomId), event, message)
+    await (deps.broadcast ?? sendWithRealtime)(topicOf(roomId), event, message)
   } catch (error: unknown) {
     console.warn("working_copy_broadcast_failed", {
       event,
       reason: error instanceof Error ? error.message : "Unknown broadcast error",
       roomId,
     })
-  }
-}
-
-async function broadcastWithRealtime(topic: string, event: string, message: object): Promise<void> {
-  const client = createAdminClient()
-  const channel = client.channel(topic, { config: { private: true } })
-
-  try {
-    const result = await channel.httpSend(event, message)
-
-    if (!result.success) {
-      throw new Error(result.error)
-    }
-  } finally {
-    await client.removeChannel(channel)
   }
 }
 

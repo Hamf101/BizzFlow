@@ -14,6 +14,7 @@ import { useFormStatus } from "react-dom"
 import {
   completeDocumentUploadRequest,
   readApiErrorMessage,
+  UPLOAD_ACCEPT,
   uploadFileToSignedUrl,
 } from "@/components/documents/document-upload-client"
 import { Button } from "@/components/ui/button"
@@ -126,7 +127,7 @@ export function AddDocument({
       <div className="flex justify-center gap-4 sm:gap-8">
         <label className={TILE}>
           <input
-            accept=".pdf,.png,.jpg,.jpeg,.docx,.xlsx,.csv"
+            accept={UPLOAD_ACCEPT}
             className="sr-only"
             onChange={chooseFile}
             type="file"

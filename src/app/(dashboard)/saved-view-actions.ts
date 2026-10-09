@@ -17,7 +17,7 @@ import {
   deleteSavedView,
   renameSavedView,
   saveListView,
-} from "@/services/saved-view-service"
+} from "@/services/organizations/saved-view-service"
 import { savedViewListSchema } from "@/types/saved-view"
 
 type Actor = { actorUserId: string; organizationId: string }

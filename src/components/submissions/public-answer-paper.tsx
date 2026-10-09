@@ -1,6 +1,6 @@
 "use client"
 
-import { type FormEvent, type ReactElement, useEffect, useRef, useState, useSyncExternalStore } from "react"
+import { type FormEvent, type ReactElement, useEffect, useRef, useState } from "react"
 
 import { parseGeneratedDocumentAnswers } from "@/components/documents/generated-document-form-data"
 import { EditorCanvas, POINT_PX } from "@/components/editor/editor-canvas"
@@ -12,6 +12,7 @@ import type { TemplateBlock, TemplateContentV3 } from "@/types/template"
 import { applyVisibleTemplateFieldValue } from "@/types/template-visibility"
 
 import { PublicSubmissionFileField } from "./public-submission-file-field"
+import { useMediaQuery } from "@/lib/use-media-query"
 
 export type PublicFormInitialFile = Readonly<{
   fieldKey: string
@@ -21,12 +22,6 @@ export type PublicFormInitialFile = Readonly<{
 
 // The editor's own phone test: a narrow window, or a touch screen short of a laptop's.
 const NARROW = "(width < 48rem), (pointer: coarse) and (width < 64rem)"
-
-function subscribeToWidth(onChange: () => void): () => void {
-  const query = window.matchMedia(NARROW)
-  query.addEventListener("change", onChange)
-  return () => query.removeEventListener("change", onChange)
-}
 
 // What was typed before the page's code arrived, read from the boxes
 // themselves, so the code takes over from it rather than from blank boxes.
@@ -88,7 +83,7 @@ export function PublicAnswerPaper({
   }))
   const [files, setFiles] = useState(initialFiles)
   const [errors, setErrors] = useState<Readonly<Record<string, string>>>({})
-  const narrow = useSyncExternalStore(subscribeToWidth, () => window.matchMedia(NARROW).matches, () => phone)
+  const narrow = useMediaQuery(NARROW, phone)
   const frameRef = useRef<HTMLDivElement>(null)
   const [available, setAvailable] = useState(0)
   const geometry = resolvePageGeometry(content.layout)

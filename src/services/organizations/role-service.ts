@@ -22,6 +22,7 @@ import {
   runOrganizationOperation,
 } from "@/services/organizations/shared"
 import type { OrganizationRoleDefinition } from "@/types/organization"
+import { normalizeName } from "@/services/input"
 
 /**
  * Creates an editable custom access role.
@@ -186,16 +187,7 @@ async function requireOwner(
 }
 
 function normalizeRoleName(name: string): string {
-  const normalized = name.trim().replace(/\s+/g, " ")
-
-  if (normalized.length < 2 || normalized.length > 60) {
-    throw new OrganizationServiceError(
-      "Role name must be between 2 and 60 characters.",
-      400
-    )
-  }
-
-  return normalized
+  return normalizeName(name, "Role name", 2, 60, (message) => new OrganizationServiceError(message, 400))
 }
 
 function normalizePermissions(

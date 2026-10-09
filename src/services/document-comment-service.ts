@@ -12,20 +12,24 @@ import {
   uniqueDocumentCollaborationProfileIds,
   type DocumentCollaborationProfileRow,
 } from "@/services/document-collaboration/profiles"
-import { requireDocumentAccess } from "@/services/documents/access-service"
-import { DocumentServiceError } from "@/services/documents/errors"
+import {
+  requireDocumentAccess,
+  requireDocumentAccessAs,
+  requireReadableDocument,
+} from "@/services/documents/access-service"
 import type {
   DocumentComment,
   DocumentCommentRow,
 } from "@/types/comment"
 import { runOperation, type LogValue } from "@/services/operation"
+import { ServiceError } from "@/services/service-error"
+import { normalizeLimit } from "@/services/input"
+
+// Every column a comment read maps.
+const COMMENT_COLUMNS =
+  "id,org_id,document_id,body,created_by,created_at"
 
 type DocumentCommentServiceClient = Pick<AdminSupabaseClient, "from" | "rpc">
-
-type DocumentStateRow = {
-  id: string
-  lifecycle_state: unknown
-}
 
 export type CreateDocumentCommentInput = {
   actorUserId: string
@@ -49,20 +53,8 @@ export type DocumentCommentServiceDeps = {
 /**
  * Error raised by document comment operations.
  */
-export class DocumentCommentServiceError extends Error {
-  readonly statusCode: number
-
-  /**
-   * Creates a document comment service error.
-   *
-   * @param message - User-safe error message.
-   * @param statusCode - HTTP-style status code for route/action translation.
-   */
-  constructor(message: string, statusCode: number) {
-    super(message)
-    this.name = "DocumentCommentServiceError"
-    this.statusCode = statusCode
-  }
+export class DocumentCommentServiceError extends ServiceError {
+  override readonly name = "DocumentCommentServiceError"
 }
 
 /**
@@ -123,7 +115,7 @@ export async function createDocumentComment(
 
       const { data, error } = await client
         .from("document_comments")
-        .select("id,org_id,document_id,body,created_by,created_at")
+        .select(COMMENT_COLUMNS)
         .eq("id", commentId)
         .eq("org_id", input.organizationId)
         .eq("document_id", input.documentId)
@@ -189,11 +181,11 @@ export async function listDocumentComments(
 
       const { data, error } = await client
         .from("document_comments")
-        .select("id,org_id,document_id,body,created_by,created_at")
+        .select(COMMENT_COLUMNS)
         .eq("org_id", input.organizationId)
         .eq("document_id", input.documentId)
         .order("created_at", { ascending: false })
-        .limit(normalizeLimit(input.limit))
+        .limit(normalizeLimit(input.limit, "Document comment", 100, 100, (message) => new DocumentCommentServiceError(message, 400)))
 
       if (error || !data) {
         throw new DocumentCommentServiceError(
@@ -229,8 +221,8 @@ async function requireCommentDocumentAccess(
   action: OrganizationPermissionAction,
   rejectionMessage: string
 ): Promise<void> {
-  try {
-    await requireDocumentAccess(
+  await requireDocumentAccessAs(
+    requireDocumentAccess(
       {
         organizationId,
         documentId,
@@ -240,56 +232,34 @@ async function requireCommentDocumentAccess(
         requiredOrganizationPermissionAction: action,
       },
       client
-    )
-  } catch (error: unknown) {
-    if (error instanceof DocumentServiceError) {
-      throw new DocumentCommentServiceError(
-        error.statusCode === 403 ? rejectionMessage : error.message,
-        error.statusCode
-      )
-    }
-
-    throw error
-  }
+    ),
+    (message, statusCode) => new DocumentCommentServiceError(message, statusCode),
+    rejectionMessage
+  )
 }
 
+// Trash, purge and any state newer than this build read as not found.
 async function requireTenantDocument(
   client: DocumentCommentServiceClient,
   organizationId: string,
   documentId: string,
   operation: "read" | "mutation"
-): Promise<DocumentStateRow> {
-  const { data, error } = await client
-    .from("documents")
-    .select("id,lifecycle_state")
-    .eq("id", documentId)
-    .eq("org_id", organizationId)
-    .maybeSingle()
-
-  if (error) {
-    throw new DocumentCommentServiceError("Unable to load document.", 500)
-  }
-
-  if (!data) {
-    throw new DocumentCommentServiceError("Document was not found.", 404)
-  }
-
-  const document = data as DocumentStateRow
-  const lifecycleState = document.lifecycle_state
-
-  // Trash, purge and any state newer than this build read as not found.
-  if (lifecycleState !== "active" && lifecycleState !== "archived") {
-    throw new DocumentCommentServiceError("Document was not found.", 404)
-  }
-
-  if (operation === "mutation" && lifecycleState !== "active") {
-    throw new DocumentCommentServiceError(
-      "Archived documents cannot be commented on.",
-      409
-    )
-  }
-
-  return document
+): Promise<void> {
+  requireReadableDocument(
+    await client
+      .from("documents")
+      .select("id,lifecycle_state")
+      .eq("id", documentId)
+      .eq("org_id", organizationId)
+      .maybeSingle(),
+    {
+      loadFailed: () => new DocumentCommentServiceError("Unable to load document.", 500),
+      notFound: () => new DocumentCommentServiceError("Document was not found.", 404),
+      ...(operation === "mutation"
+        ? { archived: () => new DocumentCommentServiceError("Archived documents cannot be commented on.", 409) }
+        : {}),
+    }
+  )
 }
 
 function mapDocumentComment(
@@ -388,20 +358,6 @@ function getSupabaseErrorLike(error: unknown): {
   }
 }
 
-function normalizeLimit(value: number | undefined): number {
-  if (value === undefined) {
-    return 100
-  }
-
-  if (!Number.isInteger(value) || value < 1 || value > 100) {
-    throw new DocumentCommentServiceError(
-      "Document comment limit must be between 1 and 100.",
-      400
-    )
-  }
-
-  return value
-}
 
 function runDocumentCommentOperation<T>(
   operationName: string,

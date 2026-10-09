@@ -1,14 +1,12 @@
 // @vitest-environment jsdom
 import { act, useEffect } from "react"
-import { createRoot } from "react-dom/client"
 import { expect, it } from "vitest"
 
 import { createTemplateBlock } from "@/components/templates/template-editor-state"
 import { createEmptyDocumentContent, type TemplateBlock, type TemplateContentV3 } from "@/types/template"
 
 import { type EditorController, useEditorController } from "./use-editor-controller"
-
-;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+import { mount } from "@/test/render"
 
 it("keeps what a collaborator changed after this page drew, whatever is edited from what it drew", async () => {
   const field = { ...(createTemplateBlock("text_field") as Extract<TemplateBlock, { type: "text_field" }>), label: "Name" }
@@ -26,7 +24,7 @@ it("keeps what a collaborator changed after this page drew, whatever is edited f
     return null
   }
 
-  const root = createRoot(document.body.appendChild(document.createElement("div")))
+  const root = mount()
   await act(async () => root.render(<Editor />))
 
   // The toolbar's Required switch, then the line moved above the field.

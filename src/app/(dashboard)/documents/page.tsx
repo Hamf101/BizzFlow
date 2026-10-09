@@ -28,7 +28,7 @@ import {
   listWorkspaceFolders,
   type DocumentCard,
 } from "@/services/document-service"
-import { listSavedViews } from "@/services/saved-view-service"
+import { listSavedViews } from "@/services/organizations/saved-view-service"
 import type {
   AccessibleDocumentFolder,
   AccessibleDocumentSummary,

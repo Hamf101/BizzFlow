@@ -11,13 +11,17 @@ import { createPortal } from "react-dom"
 import { findInsertChoices, INSERT_CHOICES, type InsertChoice } from "@/components/editor/block-catalog"
 import { useDesignTools } from "@/components/editor/design-tools"
 import type { TextCaret } from "@/components/editor/editable-text"
-import { type CanvasActions, isLine, isList, type LineBlock, type ListBlock } from "@/components/editor/editor-block"
+import type { CanvasActions } from "@/components/editor/editor-block"
 import {
   convertTextBlock,
   deleteAcross,
   insertLines,
+  isLine,
+  isList,
   joinRuns,
   liftListItem,
+  type LineBlock,
+  type ListBlock,
   type ListEntry,
   listEntries,
   mergeIntoPrevious,

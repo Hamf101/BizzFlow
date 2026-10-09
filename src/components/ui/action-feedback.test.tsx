@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 
 import { act } from "react"
-import { createRoot, type Root } from "react-dom/client"
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
+import type { Root } from "react-dom/client"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const navigation = vi.hoisted(() => ({
   pathname: "/documents",
@@ -25,16 +25,7 @@ vi.mock("@/components/ui/toaster", () => ({ bizflowToast: toast }))
 vi.mock("@/lib/analytics", () => ({ trackEvent }))
 
 import { ActionFeedback } from "./action-feedback"
-
-const mountedRoots: Root[] = []
-
-beforeAll(() => {
-  ;(
-    globalThis as typeof globalThis & {
-      IS_REACT_ACT_ENVIRONMENT: boolean
-    }
-  ).IS_REACT_ACT_ENVIRONMENT = true
-})
+import { mount } from "@/test/render"
 
 beforeEach(() => {
   navigation.pathname = "/documents"
@@ -47,18 +38,8 @@ beforeEach(() => {
   window.history.replaceState(null, "", "/documents")
 })
 
-afterEach(() => {
-  for (const root of mountedRoots.splice(0)) {
-    act(() => root.unmount())
-  }
-  document.body.replaceChildren()
-})
-
 async function renderFeedback(): Promise<Root> {
-  const container = document.createElement("div")
-  document.body.append(container)
-  const root = createRoot(container)
-  mountedRoots.push(root)
+  const root = mount()
 
   await act(async () => root.render(<ActionFeedback />))
   return root

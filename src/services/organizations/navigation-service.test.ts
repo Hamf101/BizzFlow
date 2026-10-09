@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest"
 import { PostgrestReadQuery, type FakeRow, type PostgrestFakeResult } from "@/services/postgrest-fake.test-support"
-import { getNavigationPreferences, renameNavigationTab, saveNavigationOrder } from "@/services/navigation-service"
+import { getNavigationPreferences, renameNavigationTab, saveNavigationOrder } from "@/services/organizations/navigation-service"
 
 class NavigationQuery extends PostgrestReadQuery {
   private values: FakeRow | null = null

@@ -1,14 +1,12 @@
 // @vitest-environment jsdom
 
 import { act } from "react"
-import { createRoot } from "react-dom/client"
 import { expect, it, vi } from "vitest"
 
 import type { LiveSession } from "@/lib/collaboration/live-session"
 
 import { useWorkingCopyHistory } from "./use-working-copy-history"
-
-;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+import { mount } from "@/test/render"
 
 type Words = { words: string }
 
@@ -53,7 +51,7 @@ it("makes changes asked for before the room opened on the room's copy, even from
     return <p>{history.state.words}</p>
   }
   const host = document.body.appendChild(document.createElement("div"))
-  const root = createRoot(host)
+  const root = mount(host)
 
   act(() => root.render(<Editor session={null} />))
   // Typed before the room opened, and a picture still uploading then.
@@ -83,7 +81,7 @@ it("never shows the room's copy without what was typed before it opened, so the 
     return <p>{history.state.words}</p>
   }
   const host = document.body.appendChild(document.createElement("div"))
-  const root = createRoot(host)
+  const root = mount(host)
 
   act(() => root.render(<Editor session={null} />))
   act(() => history!.set(() => ({ words: "Dea" })))
@@ -118,7 +116,7 @@ it("shows the room's save status as it changes, when nothing else on the page do
     return <p>{useWorkingCopyHistory({ words: "Hello" }, live).liveStatus}</p>
   }
   const host = document.body.appendChild(document.createElement("div"))
-  const root = createRoot(host)
+  const root = mount(host)
 
   await act(async () => root.render(<Editor />))
   expect(host.textContent).toBe("saving")

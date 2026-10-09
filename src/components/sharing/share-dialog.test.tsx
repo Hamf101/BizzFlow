@@ -1,8 +1,7 @@
 // @vitest-environment jsdom
 
 import { act, createElement } from "react"
-import { createRoot, type Root } from "react-dom/client"
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import {
   loadSharingAction,
@@ -12,6 +11,7 @@ import {
 import type { SharingPerson, SharingView } from "@/services/document-service"
 
 import { ShareDialog } from "./share-dialog"
+import { mount } from "@/test/render"
 
 vi.mock("@/app/(dashboard)/documents/sharing-actions", () => ({
   loadSharingAction: vi.fn(),
@@ -45,28 +45,16 @@ const view = (changes: Partial<SharingView> = {}): SharingView => ({
   ...changes,
 })
 
-const mounted: Root[] = []
-
-beforeAll(() => {
-  ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
-})
-
 beforeEach(() => {
   vi.mocked(setSharingAccessAction).mockReset()
   vi.mocked(setSharingInheritanceAction).mockReset()
-})
-
-afterEach(() => {
-  for (const root of mounted.splice(0)) act(() => root.unmount())
-  document.body.replaceChildren()
 })
 
 async function open(shown: SharingView, shared: typeof resource | typeof templateResource = resource): Promise<void> {
   vi.mocked(loadSharingAction).mockResolvedValue({ ok: true, view: shown })
   const container = document.createElement("div")
   document.body.append(container)
-  const root = createRoot(container)
-  mounted.push(root)
+  const root = mount(container)
   await act(async () => {
     root.render(createElement(ShareDialog, { name: "Lease", onOpenChange: vi.fn(), open: true, resources: [shared] }))
   })
@@ -264,8 +252,7 @@ describe("ShareDialog", () => {
     vi.mocked(loadSharingAction).mockResolvedValue({ message: "You cannot share this.", ok: false })
     const container = document.createElement("div")
     document.body.append(container)
-    const root = createRoot(container)
-    mounted.push(root)
+    const root = mount(container)
     await act(async () => {
       root.render(createElement(ShareDialog, { name: "Lease", onOpenChange: vi.fn(), open: true, resources: [resource] }))
     })

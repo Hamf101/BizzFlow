@@ -29,6 +29,9 @@ import {
   requireActiveFolder,
   requirePermission,
   runDocumentOperation,
+  DOCUMENT_COLUMNS,
+  FOLDER_COLUMNS,
+  DOCUMENT_VERSION_COLUMNS,
 } from "@/services/documents/shared"
 import {
   type BatchResponse,
@@ -48,6 +51,7 @@ import type {
   DocumentVersionRow,
   FolderRow,
 } from "@/types/document"
+import { normalizeName } from "@/services/input"
 
 /**
  * Most folders one lifecycle view lists, or documents one Files view draws.
@@ -56,8 +60,6 @@ import type {
  */
 const MAX_WORKSPACE_ROWS = 10_000
 
-const DOCUMENT_COLUMNS =
-  "id,org_id,folder_id,title,description,current_version_id,source_kind,template_id,template_revision,lifecycle_state,created_by,updated_by,archived_by,archived_at,trashed_by,trashed_at,purge_after,pre_trash_lifecycle_state,trash_operation_id,created_at,updated_at"
 
 /**
  * Creates a tenant-scoped folder.
@@ -119,7 +121,7 @@ export async function createFolder(
             archived_by: null,
             archived_at: null,
           })
-          .select("id,org_id,parent_folder_id,name,lifecycle_state,created_by,updated_by,archived_by,archived_at,trashed_by,trashed_at,purge_after,pre_trash_lifecycle_state,trash_operation_id,created_at,updated_at")
+          .select(FOLDER_COLUMNS)
           .single()
       )
 
@@ -180,8 +182,7 @@ export async function listWorkspaceFolders(
       )
 
       const folderRows = await readWorkspaceRows<FolderRow>(client, {
-        columns:
-          "id,org_id,parent_folder_id,name,lifecycle_state,created_by,updated_by,archived_by,archived_at,trashed_by,trashed_at,purge_after,pre_trash_lifecycle_state,trash_operation_id,created_at,updated_at",
+        columns: FOLDER_COLUMNS,
         lifecycleStates: getLifecycleStates(input.lifecycleState),
         organizationId: input.organizationId,
         table: "folders",
@@ -496,7 +497,7 @@ async function listDocumentVersions(
 ): Promise<DocumentVersion[]> {
   const { data, error } = await client
     .from("document_versions")
-    .select("id,org_id,document_id,version_number,status,storage_key,original_filename,content_type,byte_size,checksum_sha256,uploaded_by,created_at,updated_at")
+    .select(DOCUMENT_VERSION_COLUMNS)
     .eq("org_id", organizationId)
     .eq("document_id", documentId)
     .order("version_number", { ascending: false })
@@ -558,14 +559,5 @@ async function readWorkspaceRows<TRow extends { id: string }>(
 }
 
 function normalizeFolderName(name: string): string {
-  const normalizedName = name.trim().replace(/\s+/g, " ")
-
-  if (normalizedName.length < 1 || normalizedName.length > 120) {
-    throw new DocumentServiceError(
-      "Folder name must be between 1 and 120 characters.",
-      400
-    )
-  }
-
-  return normalizedName
+  return normalizeName(name, "Folder name", 1, 120, (message) => new DocumentServiceError(message, 400))
 }

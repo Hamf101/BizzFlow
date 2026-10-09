@@ -1,12 +1,8 @@
 import { randomUUID } from "node:crypto"
 
-import {
-  canPerformOrganizationAction,
-  createOrganizationPermissionSubject,
-} from "@/lib/permissions"
 import { createAdminClient, type AdminSupabaseClient } from "@/lib/supabase/admin"
 import { recordAuditLog, recordAuditLogBestEffort } from "@/services/audit-service"
-import { loadActiveMembership } from "@/services/organizations/active-membership"
+import { requireOrgPermission } from "@/services/organizations/active-membership"
 import type { AuditLogAction, AuditMetadata } from "@/types/audit"
 import {
   parseNotificationDeliveryRow,
@@ -16,6 +12,7 @@ import {
   type NotificationDeliveryStatus,
   type NotificationPurpose,
 } from "@/types/notification"
+import { ServiceError } from "@/services/service-error"
 
 /** Narrow trusted client used by notification persistence. */
 export type NotificationServiceClient = Pick<AdminSupabaseClient, "from">
@@ -50,14 +47,8 @@ export type RecordNotificationDeliveryInput = {
 }
 
 /** Error raised by notification delivery persistence. */
-export class NotificationServiceError extends Error {
-  readonly statusCode: number
-
-  constructor(message: string, statusCode: number) {
-    super(message)
-    this.name = "NotificationServiceError"
-    this.statusCode = statusCode
-  }
+export class NotificationServiceError extends ServiceError {
+  override readonly name = "NotificationServiceError"
 }
 
 const DELIVERY_COLUMNS =
@@ -171,23 +162,10 @@ export async function requireNotificationAdmin(
   client: NotificationServiceClient,
   input: NotificationActorInput
 ): Promise<void> {
-  const { data: membership, error } = await loadActiveMembership(client, input.organizationId, input.actorUserId)
-
-  if (error) {
-    throw new NotificationServiceError("Unable to verify your organization access.", 500)
-  }
-
-  const row = membership as {
-    role?: string
-    role_definition?: { permissions?: readonly string[] | null } | null
-  } | null
-  const subject = row?.role
-    ? createOrganizationPermissionSubject(row.role, row.role_definition?.permissions)
-    : null
-
-  if (!subject || !canPerformOrganizationAction(subject, "organization:manage")) {
-    throw new NotificationServiceError("You do not have permission to manage organization notifications.", 403)
-  }
+  await requireOrgPermission(client, input.organizationId, input.actorUserId, "organization:manage", {
+    loadFailed: () => new NotificationServiceError("Unable to verify your organization access.", 500),
+    denied: () => new NotificationServiceError("You do not have permission to manage organization notifications.", 403),
+  })
 }
 
 /** Input for reading a tenant's recent delivery history. */

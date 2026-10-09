@@ -28,6 +28,8 @@ import {
   requireActiveFolder,
   requirePermission,
   runDocumentOperation,
+  DOCUMENT_COLUMNS,
+  DOCUMENT_VERSION_COLUMNS,
 } from "@/services/documents/shared"
 import {
   createVersionMutationError,
@@ -45,6 +47,7 @@ import type {
   DocumentVersionRow,
   DocumentVersionStatus,
 } from "@/types/document"
+import { normalizeName } from "@/services/input"
 
 /**
  * Creates document metadata, an upload-pending version, and a signed PUT URL.
@@ -360,7 +363,7 @@ async function insertDocument(
     client
       .from("documents")
       .insert(row)
-      .select("id,org_id,folder_id,title,description,current_version_id,source_kind,template_id,template_revision,lifecycle_state,created_by,updated_by,archived_by,archived_at,trashed_by,trashed_at,purge_after,pre_trash_lifecycle_state,trash_operation_id,created_at,updated_at")
+      .select(DOCUMENT_COLUMNS)
       .single()
   )
 
@@ -391,7 +394,7 @@ async function insertDocumentVersion(
   const { data, error } = await client
     .from("document_versions")
     .insert(row)
-    .select("id,org_id,document_id,version_number,status,storage_key,original_filename,content_type,byte_size,checksum_sha256,uploaded_by,created_at,updated_at")
+    .select(DOCUMENT_VERSION_COLUMNS)
     .single()
 
   if (error || !data) {
@@ -405,16 +408,7 @@ async function insertDocumentVersion(
 }
 
 function normalizeDocumentTitle(title: string): string {
-  const normalizedTitle = title.trim().replace(/\s+/g, " ")
-
-  if (normalizedTitle.length < 1 || normalizedTitle.length > 180) {
-    throw new DocumentServiceError(
-      "Document title must be between 1 and 180 characters.",
-      400
-    )
-  }
-
-  return normalizedTitle
+  return normalizeName(title, "Document title", 1, 180, (message) => new DocumentServiceError(message, 400))
 }
 
 function normalizeOptionalText(value: string | null | undefined): string | null {

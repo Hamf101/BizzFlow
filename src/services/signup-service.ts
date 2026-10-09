@@ -3,20 +3,11 @@ import { type AdminSupabaseClient, createAdminClient } from "@/lib/supabase/admi
 import type { EmailTransport } from "@/services/email/contracts"
 import { createActionEmailHtml, wrapEmailDocument } from "@/services/email/html"
 import { sendEmail } from "@/services/email/transport"
+import { ServiceError } from "@/services/service-error"
 
 /** Error raised when a sign-up can't go ahead, with copy fit to show. */
-export class SignupServiceError extends Error {
-  readonly statusCode: number
-
-  /**
-   * @param message - User-safe explanation.
-   * @param statusCode - HTTP-style status for the caller to translate.
-   */
-  constructor(message: string, statusCode: number) {
-    super(message)
-    this.name = "SignupServiceError"
-    this.statusCode = statusCode
-  }
+export class SignupServiceError extends ServiceError {
+  override readonly name = "SignupServiceError"
 }
 
 export type SignupDeps = {

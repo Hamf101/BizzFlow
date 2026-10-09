@@ -4,7 +4,7 @@ import { Download, ExternalLink } from "lucide-react"
 import { type ReactElement, useState } from "react"
 
 import { Button } from "@/components/ui/button"
-import { readApiErrorMessage } from "@/components/documents/document-upload-client"
+import { openDownloadTab, readApiErrorMessage } from "@/components/documents/document-upload-client"
 import type { CreateDocumentDownloadUrlResponse } from "@/types/document"
 
 type DocumentDownloadButtonProps = {
@@ -38,39 +38,27 @@ export function DocumentDownloadButton({
   async function handleDownload(): Promise<void> {
     setErrorMessage(null)
     setIsLoading(true)
-    let downloadWindow: Window | null = null
 
     try {
-      // Open synchronously while the click still has browser user activation.
-      downloadWindow = window.open("about:blank", "_blank")
-
-      if (!downloadWindow) {
-        throw new Error("Allow pop-ups to download this document.")
-      }
-
-      downloadWindow.opener = null
-      const response = await fetch(
-        `/api/documents/${documentId}/download-url`,
-        {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ organizationId, versionId, view }),
-        }
-      )
-
-      if (!response.ok) {
-        throw new Error(
-          await readApiErrorMessage(response, "Unable to prepare download.")
+      await openDownloadTab("Allow pop-ups to download this document.", async () => {
+        const response = await fetch(
+          `/api/documents/${documentId}/download-url`,
+          {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ organizationId, versionId, view }),
+          }
         )
-      }
 
-      const body = (await response.json()) as CreateDocumentDownloadUrlResponse
-      downloadWindow.location.replace(body.downloadUrl)
+        if (!response.ok) {
+          throw new Error(
+            await readApiErrorMessage(response, "Unable to prepare download.")
+          )
+        }
+
+        return ((await response.json()) as CreateDocumentDownloadUrlResponse).downloadUrl
+      })
     } catch (error: unknown) {
-      if (downloadWindow && !downloadWindow.closed) {
-        downloadWindow.close()
-      }
-
       setErrorMessage(
         error instanceof Error ? error.message : "Unable to download document."
       )

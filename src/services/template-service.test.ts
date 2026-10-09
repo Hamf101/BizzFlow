@@ -17,11 +17,13 @@ import {
   listDocumentTemplateVersions,
   publishDocumentTemplate,
   recordDocumentRecentAccess,
-  restoreDocumentTemplate,
-  setDocumentTemplateCategory,
   updateDocumentTemplate,
   duplicateDocumentTemplate
 } from "@/services/template-service"
+import {
+  restoreDocumentTemplate,
+  setDocumentTemplateCategory,
+} from "@/services/templates/template-lifecycle-service"
 import {
   createBlankTemplateContent,
   parseTemplateContent,

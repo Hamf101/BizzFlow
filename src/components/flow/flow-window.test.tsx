@@ -1,17 +1,17 @@
 // @vitest-environment jsdom
 
 import { act, useState } from "react"
-import { createRoot, type Root } from "react-dom/client"
+import type { Root } from "react-dom/client"
 import { afterEach, beforeAll, expect, it, vi } from "vitest"
 
 import { FlowWindow } from "@/components/flow/flow-window"
+import { mount } from "@/test/render"
 
 const roots: Root[] = []
 let phone = false
 let moving = false
 
 beforeAll(() => {
-  ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
   // Motion is off unless a test turns it on, so every fold and unfold lands on the next frame.
   vi.stubGlobal("matchMedia", (query: string) => ({
     addEventListener() {},
@@ -50,7 +50,7 @@ function Flow(): React.ReactElement {
 }
 
 async function render(): Promise<void> {
-  const root = createRoot(document.body.appendChild(document.createElement("div")))
+  const root = mount()
   roots.push(root)
   await act(async () => root.render(<Flow />))
   await frames()

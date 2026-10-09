@@ -30,6 +30,7 @@ import {
   type SubmissionReviewData,
   type SubmissionReviewTransition,
 } from "@/types/submission-review"
+import { normalizeUuid as normalizeSharedUuid } from "@/services/input"
 
 /** Columns required by the canonical submission-comment parser. */
 export const SUBMISSION_COMMENT_COLUMNS =
@@ -328,21 +329,7 @@ function normalizeExpectedRevision(value: number): number {
 }
 
 function normalizeUuid(value: unknown, message: string): string {
-  if (typeof value !== "string") {
-    throw new SubmissionServiceError(message, 400)
-  }
-
-  const normalizedValue = value.trim().toLowerCase()
-
-  if (
-    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(
-      normalizedValue
-    )
-  ) {
-    throw new SubmissionServiceError(message, 400)
-  }
-
-  return normalizedValue
+  return normalizeSharedUuid(value, () => new SubmissionServiceError(message, 400))
 }
 
 function normalizeReviewTransition(

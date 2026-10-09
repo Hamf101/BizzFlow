@@ -1,16 +1,6 @@
 "use client"
 
-import {
-  ArrowDown,
-  ArrowUp,
-  Copy,
-  Download,
-  ImageUp,
-  Plus,
-  Trash2,
-  X,
-} from "lucide-react"
-import Image from "next/image"
+import { Plus, X } from "lucide-react"
 import {
   type ChangeEvent,
   type KeyboardEvent,
@@ -20,7 +10,7 @@ import {
   useState,
 } from "react"
 
-import { Button, buttonVariants } from "@/components/ui/button"
+import { Button } from "@/components/ui/button"
 import { Field, FieldLabel, FieldLegend } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Segmented } from "@/components/ui/segmented"
@@ -31,17 +21,9 @@ import {
   MONTH_NAMES,
   toIsoDate,
 } from "@/lib/date-format"
-import { cn } from "@/lib/utils"
 import { boxSigner, MAX_SIGNING_RECIPIENTS } from "@/types/box-signers"
 import type { TemplateBlock } from "@/types/template"
-import { imageSource, type PictureSource } from "@/types/template-images"
 import { evaluateTemplateDropdownOptionEdit } from "@/types/template-structure"
-import { downloadImageOriginalAction, requestImageUploadAction } from "@/app/(editor)/image-actions"
-
-import { storeTemplateImage } from "./template-image"
-
-const CONTROL_CLASS_NAME =
-  "w-full rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
 
 // A choice shows as a dropdown, or with every option on show as radio
 // buttons, or as checkboxes when any number may be ticked.
@@ -76,25 +58,6 @@ const RADIO_LAYOUTS = [
   { label: "Side by side", value: "across" },
 ] as const
 
-const BLOCK_LABELS: Record<TemplateBlock["type"], string> = {
-  heading: "Heading",
-  paragraph: "Paragraph",
-  bullet_list: "Bullet list",
-  numbered_list: "Numbered list",
-  image: "Image or logo",
-  table: "Table",
-  divider: "Divider",
-  text_field: "Text field",
-  date_field: "Date field",
-  checkbox_field: "Checkbox",
-  dropdown_field: "Dropdown",
-  choice_grid_field: "Question grid",
-  table_field: "Fill-in table",
-  initials_field: "Initials field",
-  signature_field: "Signature field",
-  file_field: "File upload",
-}
-
 // How answers are stored, and how a field without a format has always printed them.
 const STORED_DATE_FORMAT: DateFormat = { month: "number", order: "ymd", separator: "-" }
 
@@ -127,99 +90,8 @@ type TemplateFieldBlock = Extract<
   }
 >
 
-type TemplateBlockEditorProps = {
-  block: TemplateBlock
-  blocks?: readonly TemplateBlock[]
-  canMoveDown: boolean
-  canMoveUp: boolean
-  onChange: (block: TemplateBlock) => void
-  onDelete: () => void
-  onDuplicate?: () => void
-  onMoveDown: () => void
-  onMoveUp: () => void
-  // The template or document being edited, so a picture's original can be downloaded from it.
-  pictureSource?: PictureSource
-}
-
 /**
- * Renders accessible controls for one canonical template block.
- *
- * @param props - Block value and explicit update, delete, and ordering callbacks.
- * @returns A bordered editor panel for the selected block type.
- */
-export function TemplateBlockEditor({
-  block,
-  blocks = [],
-  canMoveDown,
-  canMoveUp,
-  onChange,
-  onDelete,
-  onDuplicate,
-  onMoveDown,
-  onMoveUp,
-  pictureSource,
-}: TemplateBlockEditorProps): ReactElement {
-  return (
-    <div className="flex flex-col gap-4 rounded-lg border bg-card p-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <span className="text-sm font-semibold">{BLOCK_LABELS[block.type]}</span>
-        <div className="flex items-center gap-1">
-          {onDuplicate && (
-            <Button
-              aria-label={`Duplicate ${BLOCK_LABELS[block.type]}`}
-              onClick={onDuplicate}
-              size="icon-sm"
-              title="Duplicate block"
-              type="button"
-              variant="ghost"
-            >
-              <Copy />
-            </Button>
-          )}
-          <Button
-            aria-label={`Move ${BLOCK_LABELS[block.type]} up`}
-            disabled={!canMoveUp}
-            onClick={onMoveUp}
-            size="icon-sm"
-            title="Move up"
-            type="button"
-            variant="ghost"
-          >
-            <ArrowUp />
-          </Button>
-          <Button
-            aria-label={`Move ${BLOCK_LABELS[block.type]} down`}
-            disabled={!canMoveDown}
-            onClick={onMoveDown}
-            size="icon-sm"
-            title="Move down"
-            type="button"
-            variant="ghost"
-          >
-            <ArrowDown />
-          </Button>
-          <Button
-            aria-label={`Delete ${BLOCK_LABELS[block.type]}`}
-            onClick={onDelete}
-            size="icon-sm"
-            title="Delete block"
-            type="button"
-            variant="destructive"
-          >
-            <Trash2 />
-          </Button>
-        </div>
-      </div>
-
-      {/* Keyed, so options still being written never carry over to another block. */}
-      <BlockFields block={block} blocks={blocks} key={block.id} onChange={onChange} pictureSource={pictureSource} />
-    </div>
-  )
-}
-
-/**
- * A block's own settings: a field's label, key and choices in its popover on
- * the page, or a picture's in the settings panel.
+ * A field's own settings: its label, key and choices, in its popover on the page.
  *
  * @param props - The block, the page's blocks, and how to change the block.
  * @returns The settings.
@@ -228,102 +100,12 @@ export function BlockFields({
   block,
   blocks,
   onChange,
-  pictureSource,
 }: {
   block: TemplateBlock
   blocks: readonly TemplateBlock[]
   onChange: (block: TemplateBlock) => void
-  pictureSource?: PictureSource
 }): ReactElement | null {
   switch (block.type) {
-    case "heading":
-      return (
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field className="sm:col-span-2">
-            <FieldLabel htmlFor={`${block.id}-heading-text`}>Text</FieldLabel>
-            <Input
-              id={`${block.id}-heading-text`}
-              maxLength={500}
-              onChange={(event: ChangeEvent<HTMLInputElement>): void =>
-                onChange({ ...block, text: event.target.value })
-              }
-              required
-              value={block.text}
-            />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor={`${block.id}-heading-level`}>Level</FieldLabel>
-            <Select
-              id={`${block.id}-heading-level`}
-              onChange={(event: ChangeEvent<HTMLSelectElement>): void =>
-                onChange({
-                  ...block,
-                  level: Number(event.target.value) as 1 | 2 | 3,
-                })
-              }
-              value={block.level}
-            >
-              <option value={1}>Heading 1</option>
-              <option value={2}>Heading 2</option>
-              <option value={3}>Heading 3</option>
-            </Select>
-          </Field>
-          <AlignmentField
-            id={`${block.id}-heading-alignment`}
-            onChange={(alignment: "left" | "center" | "right"): void =>
-              onChange({ ...block, alignment })
-            }
-            value={block.alignment}
-          />
-        </div>
-      )
-    case "paragraph":
-      return (
-        <div className="grid gap-4">
-          <Field>
-            <FieldLabel htmlFor={`${block.id}-paragraph-text`}>Text</FieldLabel>
-            <textarea
-              className={cn(CONTROL_CLASS_NAME, "min-h-28 resize-y")}
-              id={`${block.id}-paragraph-text`}
-              maxLength={20_000}
-              onChange={(event: ChangeEvent<HTMLTextAreaElement>): void =>
-                onChange({ ...block, text: event.target.value })
-              }
-              value={block.text}
-            />
-          </Field>
-          <AlignmentField
-            id={`${block.id}-paragraph-alignment`}
-            onChange={(alignment: "left" | "center" | "right"): void =>
-              onChange({ ...block, alignment })
-            }
-            value={block.alignment}
-          />
-        </div>
-      )
-    case "bullet_list":
-    case "numbered_list":
-      return (
-        <Field>
-          <FieldLabel htmlFor={`${block.id}-list-items`}>
-            Items, one per line
-          </FieldLabel>
-          <textarea
-            className={cn(CONTROL_CLASS_NAME, "min-h-28 resize-y")}
-            id={`${block.id}-list-items`}
-            onChange={(event: ChangeEvent<HTMLTextAreaElement>): void =>
-              onChange({ ...block, items: event.target.value.split("\n") })
-            }
-            value={block.items.join("\n")}
-          />
-        </Field>
-      )
-    case "image":
-      return <ImageFields block={block} onChange={onChange} pictureSource={pictureSource} />
-    // A table is typed into on the page, and changed from its cells' menu.
-    case "table":
-    case "divider":
-      return null
     case "text_field":
       return (
         <FieldBlockFields block={block} blocks={blocks} onChange={onChange}>
@@ -505,6 +287,9 @@ export function BlockFields({
       return (
         <FieldBlockFields block={block} blocks={blocks} onChange={onChange} />
       )
+    // Every other block is set on the page, or in its own panel.
+    default:
+      return null
   }
 }
 
@@ -953,196 +738,6 @@ function PlaceholderField({
         }
         value={value ?? ""}
       />
-    </Field>
-  )
-}
-
-function ImageFields({
-  block,
-  onChange,
-  pictureSource,
-}: {
-  block: Extract<TemplateBlock, { type: "image" }>
-  onChange: (block: TemplateBlock) => void
-  pictureSource?: PictureSource
-}): ReactElement {
-  const [errorMessage, setErrorMessage] = useState<string | null>(null)
-  const [uploading, setUploading] = useState(false)
-  const altTextMissing = block.altText.trim().length === 0
-  const source = imageSource(block.asset, block.dataUrl)
-
-  // Asked for when pressed, so it checks the person can still see the picture.
-  async function downloadOriginal(assetId: string, source: PictureSource): Promise<void> {
-    const result = await downloadImageOriginalAction({ assetId, source })
-
-    if ("url" in result) {
-      window.location.assign(result.url)
-    } else {
-      setErrorMessage(result.error)
-    }
-  }
-
-  async function handleFileChange(
-    event: ChangeEvent<HTMLInputElement>
-  ): Promise<void> {
-    const file = event.target.files?.[0]
-
-    if (!file) {
-      return
-    }
-
-    setErrorMessage(null)
-    setUploading(true)
-
-    try {
-      const asset = await storeTemplateImage(file, requestImageUploadAction)
-      onChange({ ...block, asset, dataUrl: undefined })
-    } catch (error: unknown) {
-      const reason = error instanceof Error ? error.message : "Unable to read image."
-
-      console.warn("template_block_image_read_failed", {
-        blockId: block.id,
-        fileName: file.name,
-        reason,
-      })
-      setErrorMessage(reason)
-    } finally {
-      setUploading(false)
-      event.target.value = ""
-    }
-  }
-
-  return (
-    <div className="grid gap-4">
-      <div className="grid justify-items-center gap-2 rounded-lg border bg-muted/30 p-3">
-        {source ? (
-          <Image
-            alt={block.altText}
-            className="h-auto max-h-44 w-auto max-w-full rounded object-contain"
-            height={block.asset?.height ?? 320}
-            src={source}
-            unoptimized
-            width={block.asset?.width ?? 480}
-          />
-        ) : null}
-        <div className="flex flex-wrap justify-center gap-1">
-          <label
-            className={cn(
-              buttonVariants({ size: "sm", variant: "ghost" }),
-              "cursor-pointer has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring/35",
-              uploading && "pointer-events-none opacity-60"
-            )}
-          >
-            <ImageUp />
-            {uploading ? "Uploading…" : "Replace"}
-            <input
-              accept="image/png,image/jpeg"
-              disabled={uploading}
-              aria-describedby={errorMessage ? `${block.id}-image-error` : undefined}
-              className="sr-only"
-              onChange={handleFileChange}
-              type="file"
-            />
-          </label>
-          {block.asset && pictureSource ? (
-            <Button
-              onClick={(): void => void downloadOriginal((block.asset as NonNullable<typeof block.asset>).id, pictureSource)}
-              size="sm"
-              type="button"
-              variant="ghost"
-            >
-              <Download />
-              Download original
-            </Button>
-          ) : null}
-        </div>
-        {errorMessage && (
-          <p className="text-sm text-destructive" id={`${block.id}-image-error`} role="alert">
-            {errorMessage}
-          </p>
-        )}
-      </div>
-      <Field>
-        <FieldLabel htmlFor={`${block.id}-alt-text`}>Alternative text</FieldLabel>
-        <Input
-          aria-describedby={altTextMissing ? `${block.id}-alt-text-error` : undefined}
-          aria-invalid={altTextMissing}
-          id={`${block.id}-alt-text`}
-          maxLength={500}
-          onChange={(event: ChangeEvent<HTMLInputElement>): void =>
-            onChange({ ...block, altText: event.target.value })
-          }
-          required
-          value={block.altText}
-        />
-        {altTextMissing ? (
-          <p className="text-xs text-destructive" id={`${block.id}-alt-text-error`}>
-            Describe the picture for people who cannot see it.
-          </p>
-        ) : null}
-      </Field>
-      <Field>
-        <FieldLabel htmlFor={`${block.id}-caption`}>Caption</FieldLabel>
-        <Input
-          id={`${block.id}-caption`}
-          maxLength={500}
-          onChange={(event: ChangeEvent<HTMLInputElement>): void =>
-            onChange({ ...block, caption: event.target.value || null })
-          }
-          value={block.caption ?? ""}
-        />
-      </Field>
-      <AlignmentField
-        id={`${block.id}-image-alignment`}
-        onChange={(alignment: "left" | "center" | "right"): void =>
-          onChange({ ...block, alignment })
-        }
-        value={block.alignment}
-      />
-      <Field>
-        <FieldLabel htmlFor={`${block.id}-image-width`}>
-          Width ({block.widthPercent}%)
-        </FieldLabel>
-        <input
-          className="accent-primary"
-          id={`${block.id}-image-width`}
-          max={100}
-          min={10}
-          onChange={(event: ChangeEvent<HTMLInputElement>): void =>
-            onChange({ ...block, widthPercent: Number(event.target.value) })
-          }
-          step={5}
-          type="range"
-          value={block.widthPercent}
-        />
-      </Field>
-    </div>
-  )
-}
-
-function AlignmentField({
-  id,
-  onChange,
-  value,
-}: {
-  id: string
-  onChange: (alignment: "left" | "center" | "right") => void
-  value: "left" | "center" | "right"
-}): ReactElement {
-  return (
-    <Field>
-      <FieldLabel htmlFor={id}>Alignment</FieldLabel>
-      <Select
-        id={id}
-        onChange={(event: ChangeEvent<HTMLSelectElement>): void =>
-          onChange(event.target.value as "left" | "center" | "right")
-        }
-        value={value}
-      >
-        <option value="left">Left</option>
-        <option value="center">Center</option>
-        <option value="right">Right</option>
-      </Select>
     </Field>
   )
 }

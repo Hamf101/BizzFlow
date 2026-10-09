@@ -16,12 +16,6 @@ export type OrganizationServiceClient = AdminSupabaseClient
 
 export type LogValue = string | number | boolean | null | undefined
 
-export type SupabaseErrorLike = {
-  code?: string
-  details?: string
-  hint?: string
-  message?: string
-}
 
 export type OrganizationRow = {
   id: string

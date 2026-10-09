@@ -12,6 +12,7 @@ import { ROLE_LABELS, SubmissionReviewersPanel } from "@/components/submissions/
 import { Button } from "@/components/ui/button"
 import { Select } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
+import { memberLabel } from "@/components/people/member-name"
 import {
   Card,
   CardContent,
@@ -119,7 +120,7 @@ export function SubmissionReviewControls({
                     value={member.userId}
                   />
                   <span className="min-w-0 truncate">
-                    {formatMemberLabel(member)} · {ROLE_LABELS[member.role]}
+                    {memberLabel(member)} · {ROLE_LABELS[member.role]}
                   </span>
                 </label>
               ))}
@@ -172,7 +173,7 @@ export function SubmissionReviewControls({
                     value={member.userId}
                   />
                   <span className="min-w-0 truncate">
-                    {formatMemberLabel(member)} · {ROLE_LABELS[member.role]}
+                    {memberLabel(member)} · {ROLE_LABELS[member.role]}
                   </span>
                 </label>
               ))}
@@ -315,12 +316,8 @@ export function SubmissionReviewControls({
   )
 }
 
-function formatMemberLabel(member: OrganizationMember): string {
-  return member.fullName?.trim() || member.email
-}
-
 function formatReviewerName(members: readonly OrganizationMember[], userId: string): string {
   const member = members.find((candidate) => candidate.userId === userId)
 
-  return member ? formatMemberLabel(member) : "a former member"
+  return member ? memberLabel(member) : "a former member"
 }

@@ -20,7 +20,8 @@ import { Button, buttonVariants } from "@/components/ui/button"
 import { DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu"
 import { Sheet, SheetClose, SheetContent, SheetTitle } from "@/components/ui/sheet"
 import { bizflowToast } from "@/components/ui/toaster"
-import { cn } from "@/lib/utils"
+import { clamp, cn, subscribeNever } from "@/lib/utils"
+import { useMediaQuery } from "@/lib/use-media-query"
 import type { EditorLayout } from "@/types/editor-layout"
 
 const ZOOM_STEPS = [0.5, 0.67, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2] as const
@@ -104,14 +105,10 @@ export function EditorFrame({
   titleEditable,
   toolbar,
 }: EditorFrameProps): ReactElement {
-  const narrow = useSyncExternalStore(
-    subscribeToWidth,
-    () => window.matchMedia(NARROW).matches,
-    () => false
-  )
+  const narrow = useMediaQuery(NARROW)
   // The server can't know the width, so the tools wait for the browser: a phone
   // drawing the laptop dock first would swap it out and lose a tool opened meanwhile.
-  const sized = useSyncExternalStore(subscribeToWidth, () => true, () => false)
+  const sized = useSyncExternalStore(subscribeNever, () => true, () => false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const [layout, setLayout] = useState<EditorLayout>(layoutStore?.initial ?? {})
   const orientation = layout.dock?.orientation ?? "upright"
@@ -420,21 +417,18 @@ export function EditorNotice({
  */
 export function EditorSidePanel({
   children,
-  keepMounted = false,
   narrow,
   onClose,
   open,
   title,
 }: {
   children: ReactNode
-  /** Keeps what is inside alive while closed, such as a conversation. */
-  keepMounted?: boolean
   narrow: boolean
   onClose: () => void
   open: boolean
   title: string
 }): ReactElement | null {
-  if (narrow && !keepMounted) {
+  if (narrow) {
     return (
       <Sheet onOpenChange={(next: boolean) => (next ? undefined : onClose())} open={open}>
         <SheetContent>
@@ -448,7 +442,7 @@ export function EditorSidePanel({
     )
   }
 
-  if (!open && !keepMounted) {
+  if (!open) {
     return null
   }
 
@@ -533,12 +527,4 @@ function stepZoom(current: number, direction: -1 | 1): number {
   return next ?? (direction > 0 ? 2 : 0.5)
 }
 
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value))
-}
 
-function subscribeToWidth(onChange: () => void): () => void {
-  const query = window.matchMedia(NARROW)
-  query.addEventListener("change", onChange)
-  return () => query.removeEventListener("change", onChange)
-}

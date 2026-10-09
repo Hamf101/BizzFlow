@@ -6,13 +6,13 @@ export type {
 export type { DocumentCard } from "@/services/documents/card-service"
 export { listDocumentCards } from "@/services/documents/card-service"
 export { DocumentServiceError } from "@/services/documents/errors"
+export { archiveDocument } from "@/services/documents/version-archive-service"
+export { createDocumentDownloadUrl } from "@/services/documents/version-download-service"
+export { createDocumentReplacementUploadUrl } from "@/services/documents/version-replacement-service"
 export {
-  archiveDocument,
   completeDocumentUpload,
-  createDocumentDownloadUrl,
-  createDocumentReplacementUploadUrl,
   createDocumentUploadUrl,
-} from "@/services/documents/version-service"
+} from "@/services/documents/version-upload-service"
 export {
   createFolder,
   getDocumentDetail,

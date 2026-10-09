@@ -3,12 +3,13 @@ import { describe, expect, it, vi } from "vitest"
 import {
   cancelTaskReminder,
   notifyTaskAssignee,
-  processDueTaskReminders,
   scheduleTaskReminder,
-  TASK_REMINDER_BATCH_LIMIT,
-  TASK_REMINDER_MAX_ATTEMPTS,
   TaskServiceError,
 } from "@/services/task-service"
+import {
+  TASK_REMINDER_BATCH_LIMIT,
+  TASK_REMINDER_MAX_ATTEMPTS,
+} from "@/services/tasks/reminder-delivery-service"
 import {
   createDeps,
   createMembershipRow,
@@ -24,6 +25,7 @@ import {
   NOW,
   ORG_ID,
   PAST_AT,
+  processDueTaskReminders,
   REMINDER_ID,
   REVIEWER_ID,
   STAFF_ID,

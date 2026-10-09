@@ -5,12 +5,13 @@ import { describe, expect, it, vi } from "vitest"
 import type { SharingServiceDeps } from "@/services/documents/sharing-contracts"
 
 import type { OrganizationRole } from "@/lib/permissions"
-import { SharingFakeClient, type FakeRow } from "@/services/documents/sharing-service.test-support"
 import {
-  getSharing,
   setSharingAccess,
   setSharingInheritance,
-} from "@/services/documents/sharing-service"
+  SharingFakeClient,
+  type FakeRow,
+} from "@/services/documents/sharing-service.test-support"
+import { getSharing } from "@/services/documents/sharing-service"
 import { OrganizationServiceError } from "@/services/organizations/errors"
 import type { OrganizationMember } from "@/types/organization"
 

@@ -127,26 +127,6 @@ export async function getSharing(input: SharingInput, deps: SharingServiceDeps =
   })
 }
 
-/**
- * Shares an item with a person or a role, changes the level, or takes the
- * access away (level null). A person newly added is told; a failed notice never
- * undoes the share.
- *
- * @param input - Actor, organization, item, who, and what level.
- * @param deps - Injected client, ids, people lookup, notice and audit for tests.
- * @returns The sharing of the item afterwards.
- * @throws DocumentServiceError when the actor may not share it or the choice is not allowed.
- */
-export async function setSharingAccess(input: SetSharingAccessInput, deps: SharingServiceDeps = {}): Promise<SharingView> {
-  return runDocumentOperation("set_sharing_access", identifiers(input), async () => {
-    const change = await prepareSharingAccess(input, deps)
-
-    await change.apply()
-
-    return change.view()
-  })
-}
-
 /** A sharing change that has been checked and not yet made. */
 export type PreparedSharingChange = {
   apply: () => Promise<void>
@@ -254,27 +234,6 @@ export async function prepareSharingAccess(
   }
 
   return { apply, view }
-}
-
-/**
- * Chooses whether an item also takes in what the folders above it are shared with.
- *
- * @param input - Actor, organization, item, and the choice.
- * @param deps - Injected client, people lookup and audit for tests.
- * @returns The sharing of the item afterwards.
- * @throws DocumentServiceError when the actor may not change its sharing.
- */
-export async function setSharingInheritance(
-  input: SetSharingInheritanceInput,
-  deps: SharingServiceDeps = {}
-): Promise<SharingView> {
-  return runDocumentOperation("set_sharing_inheritance", identifiers(input), async () => {
-    const change = await prepareSharingInheritance(input, deps)
-
-    await change.apply()
-
-    return change.view()
-  })
 }
 
 /**

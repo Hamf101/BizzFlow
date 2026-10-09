@@ -29,7 +29,9 @@ import {
   useRef,
   useState
 } from "react"
+import { z } from "zod"
 
+import { FLOW_COMPOSER, FLOW_SEND } from "@/components/flow/flow-window"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -46,7 +48,8 @@ import type {
   TemplateFlowOperationType,
   TemplateFlowProposal,
   TemplateFlowQualityIssue,
-  TemplateFlowResult
+  TemplateFlowResult,
+  TemplateFlowWireOperation
 } from "@/types/template-flow"
 
 // The server bounds every AI call itself (two at most per turn), so this only
@@ -73,12 +76,7 @@ type TemplateFlowPanelProps = {
   draft: TemplateFlowDraft
   initialMessages: TemplateFlowMessage[]
   lastAppliedMessageId: string | null
-  onApply?: (
-    draft: TemplateFlowDraft,
-    changedBlockIds: string[],
-    messageId: string
-  ) => void
-  onApplyProposal?: (
+  onApplyProposal: (
     proposal: TemplateFlowProposal,
     messageId: string
   ) => void
@@ -89,7 +87,8 @@ type TemplateFlowPanelProps = {
   onProposalStale?: (proposal: TemplateFlowProposal) => void
   onRejectProposal?: (proposal: TemplateFlowProposal) => void
   onUndo: () => void
-  pendingProposal?: TemplateFlowProposal | null
+  /** The proposal on show, which the editor owns so the page can preview it. */
+  pendingProposal: TemplateFlowProposal | null
   /** A request carried in from elsewhere, sent once when it arrives. */
   autoSend?: string | null
   /** Where turns go; a document's Flow answers at its own route. */
@@ -111,13 +110,12 @@ export function TemplateFlowPanel({
   draft,
   initialMessages,
   lastAppliedMessageId,
-  onApply,
   onApplyProposal,
   onProposalReceived,
   onProposalStale,
   onRejectProposal,
   onUndo,
-  pendingProposal: controlledPendingProposal,
+  pendingProposal,
   autoSend = null,
   endpoint = "/api/templates/flow",
   starter = TEMPLATE_STARTER,
@@ -129,17 +127,11 @@ export function TemplateFlowPanel({
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [warningMessage, setWarningMessage] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState<boolean>(false)
-  const [localPendingProposal, setLocalPendingProposal] =
-    useState<TemplateFlowProposal | null>(null)
   const [pendingMessageId, setPendingMessageId] = useState<string | null>(null)
   const [review, setReview] = useState<FlowReview | null>(null)
   const [isRebuilding, setIsRebuilding] = useState<boolean>(false)
   const timelineRef = useRef<HTMLDivElement>(null)
   const draftRef = useRef<TemplateFlowDraft>(draft)
-  const isProposalControlled = controlledPendingProposal !== undefined
-  const pendingProposal = isProposalControlled
-    ? controlledPendingProposal
-    : localPendingProposal
   const displayedPendingProposal = useMemo((): TemplateFlowProposal | null => {
     if (
       pendingProposal?.status !== "pending" ||
@@ -272,9 +264,6 @@ export function TemplateFlowPanel({
   }
 
   function stageProposal(next: TemplateFlowProposal, messageId: string): void {
-    if (!isProposalControlled) {
-      setLocalPendingProposal(next)
-    }
     onProposalReceived?.(next, messageId)
   }
 
@@ -360,9 +349,6 @@ export function TemplateFlowPanel({
         status: "stale"
       }
 
-      if (!isProposalControlled) {
-        setLocalPendingProposal(staleProposal)
-      }
       setErrorMessage(
         "This proposal is stale because the draft changed. Reject it and ask Flow again."
       )
@@ -370,19 +356,7 @@ export function TemplateFlowPanel({
       return
     }
 
-    if (onApplyProposal) {
-      onApplyProposal(pendingProposal, messageId)
-    } else {
-      onApply?.(
-        pendingProposal.candidateDraft,
-        pendingProposal.changedBlockIds,
-        messageId
-      )
-    }
-
-    if (!isProposalControlled) {
-      setLocalPendingProposal(null)
-    }
+    onApplyProposal(pendingProposal, messageId)
     setPendingMessageId(null)
     setErrorMessage(null)
   }
@@ -393,9 +367,6 @@ export function TemplateFlowPanel({
     }
 
     onRejectProposal?.(displayedPendingProposal ?? pendingProposal)
-    if (!isProposalControlled) {
-      setLocalPendingProposal(null)
-    }
     setPendingMessageId(null)
     setErrorMessage(null)
   }
@@ -445,11 +416,7 @@ export function TemplateFlowPanel({
 
         {displayedPendingProposal !== null && (
           <FlowPendingProposalReceipt
-            canApply={
-              displayedPendingProposal.status === "pending" &&
-              !isRebuilding &&
-              (onApplyProposal !== undefined || onApply !== undefined)
-            }
+            canApply={displayedPendingProposal.status === "pending" && !isRebuilding}
             isRebuilding={isRebuilding}
             onApply={applyPendingProposal}
             onReject={rejectPendingProposal}
@@ -490,7 +457,7 @@ export function TemplateFlowPanel({
           {/* One line tall, growing with the message to about six. */}
           <textarea
             aria-describedby={pendingProposal ? "flow-composer-hint" : undefined}
-            className="field-sizing-content max-h-36 min-h-10 w-full resize-none rounded-[12px] border border-border bg-card px-3 py-2.5 pr-12 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 disabled:opacity-60"
+            className={`${FLOW_COMPOSER} disabled:opacity-60`}
             disabled={isLoading || pendingProposal !== null}
             id="flow-composer"
             maxLength={2_000}
@@ -503,7 +470,7 @@ export function TemplateFlowPanel({
           />
           <button
             aria-label="Send message to Flow"
-            className="absolute right-1.5 bottom-1 grid size-8 place-items-center max-md:size-11 rounded-full text-primary outline-none transition-opacity hover:opacity-75 disabled:opacity-35 focus-visible:ring-2 focus-visible:ring-ring/40"
+            className={FLOW_SEND}
             disabled={
               isLoading ||
               pendingProposal !== null ||
@@ -884,198 +851,65 @@ function readApiError(payload: unknown): string {
   return "Unable to complete the Flow request."
 }
 
-function parseFlowResult(payload: unknown): TemplateFlowResult {
-  if (
-    !isRecord(payload) ||
-    (payload.proposal !== null && !isRecord(payload.proposal)) ||
-    !Array.isArray(payload.messages) ||
-    payload.messages.length !== 2 ||
-    typeof payload.needsConfirmation !== "boolean"
-  ) {
-    throw new Error("Flow returned an invalid response.")
-  }
+const strings = z.array(z.unknown()).transform((values) => values.filter((value): value is string => typeof value === "string"))
 
-  const messages = payload.messages.map(parseFlowMessage)
-  const proposal =
-    payload.proposal === null ? null : parseFlowProposal(payload.proposal)
-
-  if (
-    (payload.proposal !== null && proposal === null) ||
-    messages.some(
-      (message: TemplateFlowMessage | null): boolean => message === null
-    )
-  ) {
-    throw new Error("Flow returned an invalid response.")
-  }
-
-  return {
-    proposal,
-    messages: messages as [TemplateFlowMessage, TemplateFlowMessage],
-    needsConfirmation: payload.needsConfirmation,
-    persistenceWarning:
-      typeof payload.persistenceWarning === "string"
-        ? payload.persistenceWarning
-        : null
-  }
-}
-
-function parseFlowProposal(value: unknown): TemplateFlowProposal | null {
-  if (
-    !isRecord(value) ||
-    typeof value.id !== "string" ||
-    (value.status !== "pending" && value.status !== "stale") ||
-    typeof value.baseDraftFingerprint !== "string" ||
-    !isRecord(value.candidateDraft) ||
-    typeof value.candidateDraft.title !== "string" ||
-    typeof value.candidateDraft.description !== "string" ||
-    !Array.isArray(value.operations) ||
-    !Array.isArray(value.wireOperations) ||
-    value.wireOperations.length !== value.operations.length ||
-    !value.wireOperations.every(isRecord) ||
-    !Array.isArray(value.changedBlockIds) ||
-    !Array.isArray(value.qualityIssues)
-  ) {
-    return null
-  }
-
-  const contentResult = templateContentSchema.safeParse(
-    value.candidateDraft.content
-  )
-  const operations = value.operations.map(parseLedgerItem)
-  const changedBlockIds = value.changedBlockIds.filter(
-    (blockId: unknown): blockId is string => typeof blockId === "string"
-  )
-  const qualityIssues = value.qualityIssues.map(parseFlowQualityIssue)
-
-  if (
-    !contentResult.success ||
-    operations.some(
-      (operation: TemplateFlowLedgerItem | null): boolean => operation === null
-    ) ||
-    operations.length !== value.operations.length ||
-    changedBlockIds.length !== value.changedBlockIds.length ||
-    qualityIssues.some(
-      (issue: TemplateFlowQualityIssue | null): boolean => issue === null
-    )
-  ) {
-    return null
-  }
-
-  return {
-    id: value.id,
-    status: value.status,
-    baseDraftFingerprint: value.baseDraftFingerprint,
-    candidateDraft: {
-      title: value.candidateDraft.title,
-      description: value.candidateDraft.description,
-      content: contentResult.data
-    },
-    operations: operations as TemplateFlowLedgerItem[],
-    // Read only by the server, which checks them again before using them.
-    wireOperations: value.wireOperations as TemplateFlowProposal["wireOperations"],
-    changedBlockIds,
-    qualityIssues: qualityIssues as TemplateFlowQualityIssue[]
-  }
-}
-
-function parseFlowQualityIssue(
-  value: unknown
-): TemplateFlowQualityIssue | null {
-  if (
-    !isRecord(value) ||
-    typeof value.code !== "string" ||
-    (value.severity !== "critical" && value.severity !== "warning") ||
-    typeof value.message !== "string" ||
-    !Array.isArray(value.affectedBlockIds)
-  ) {
-    return null
-  }
-
-  const affectedBlockIds = value.affectedBlockIds.filter(
-    (blockId: unknown): blockId is string => typeof blockId === "string"
-  )
-
-  if (affectedBlockIds.length !== value.affectedBlockIds.length) {
-    return null
-  }
-
-  return {
-    code: value.code,
-    severity: value.severity,
-    message: value.message,
-    affectedBlockIds
-  }
-}
-
-function parseFlowMessage(value: unknown): TemplateFlowMessage | null {
-  if (
-    !isRecord(value) ||
-    typeof value.id !== "string" ||
-    (value.role !== "user" && value.role !== "assistant") ||
-    typeof value.content !== "string" ||
-    (typeof value.authorName !== "string" && value.authorName !== null) ||
-    !Array.isArray(value.operations) ||
-    !Array.isArray(value.changedBlockIds) ||
-    (value.receiptStatus !== "proposed" && value.receiptStatus !== null) ||
-    typeof value.createdAt !== "string"
-  ) {
-    return null
-  }
-
-  const operations = value.operations
-    .map(parseLedgerItem)
-    .filter(
-      (
-        operation: TemplateFlowLedgerItem | null
-      ): operation is TemplateFlowLedgerItem => operation !== null
-    )
-
-  if (operations.length !== value.operations.length) {
-    return null
-  }
-
-  return {
-    id: value.id,
-    role: value.role,
-    content: value.content,
-    authorName: value.authorName,
-    operations,
-    changedBlockIds: value.changedBlockIds.filter(
-      (blockId: unknown): blockId is string => typeof blockId === "string"
-    ),
-    receiptStatus: value.receiptStatus,
-    createdAt: value.createdAt
-  }
-}
-
-function parseLedgerItem(value: unknown): TemplateFlowLedgerItem | null {
-  if (
-    !isRecord(value) ||
-    typeof value.id !== "string" ||
-    typeof value.type !== "string" ||
-    typeof value.summary !== "string" ||
-    typeof value.target !== "string" ||
-    !Array.isArray(value.affectedBlockIds)
-  ) {
-    return null
-  }
-
+const ledgerItemSchema = z.object({
+  id: z.string(),
   // The one list of what Flow can do: a type left off a second list here
   // would drop the whole proposal it arrived in.
-  if (!(TEMPLATE_FLOW_OPERATION_TYPES as readonly string[]).includes(value.type)) {
-    return null
+  type: z.enum(TEMPLATE_FLOW_OPERATION_TYPES),
+  summary: z.string(),
+  target: z.string(),
+  affectedBlockIds: strings,
+  dependsOn: z.array(z.unknown()).catch([]).transform((values) => values.filter((value): value is number => Number.isInteger(value)))
+})
+
+const flowProposalSchema = z
+  .object({
+    id: z.string(),
+    status: z.enum(["pending", "stale"]),
+    baseDraftFingerprint: z.string(),
+    candidateDraft: z.object({ title: z.string(), description: z.string(), content: templateContentSchema }),
+    operations: z.array(ledgerItemSchema),
+    // Read only by the server, which checks them again before using them.
+    wireOperations: z.array(z.custom<TemplateFlowWireOperation>(isRecord)),
+    changedBlockIds: z.array(z.string()),
+    qualityIssues: z.array(
+      z.object({ code: z.string(), severity: z.enum(["critical", "warning"]), message: z.string(), affectedBlockIds: z.array(z.string()) })
+    )
+  })
+  .refine((proposal) => proposal.wireOperations.length === proposal.operations.length)
+
+const flowMessageSchema = z.object({
+  id: z.string(),
+  role: z.enum(["user", "assistant"]),
+  content: z.string(),
+  authorName: z.string().nullable(),
+  operations: z.array(ledgerItemSchema),
+  changedBlockIds: strings,
+  receiptStatus: z.literal("proposed").nullable(),
+  createdAt: z.string()
+})
+
+const flowResultSchema = z.object({
+  proposal: flowProposalSchema.nullable(),
+  messages: z.tuple([flowMessageSchema, flowMessageSchema]),
+  needsConfirmation: z.boolean(),
+  persistenceWarning: z.string().nullable().catch(null)
+})
+
+export function parseFlowResult(payload: unknown): TemplateFlowResult {
+  const result = flowResultSchema.safeParse(payload)
+
+  if (!result.success) {
+    throw new Error("Flow returned an invalid response.")
   }
 
-  return {
-    id: value.id,
-    type: value.type as TemplateFlowOperationType,
-    summary: value.summary,
-    target: value.target,
-    affectedBlockIds: value.affectedBlockIds.filter(
-      (blockId: unknown): blockId is string => typeof blockId === "string"
-    ),
-    dependsOn: Array.isArray(value.dependsOn) ? value.dependsOn.filter(Number.isInteger) : []
-  }
+  return result.data
+}
+
+export function parseFlowProposal(value: unknown): TemplateFlowProposal | null {
+  return flowProposalSchema.safeParse(value).data ?? null
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

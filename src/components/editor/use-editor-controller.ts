@@ -11,6 +11,7 @@ import {
   insertPageAfter,
   insertSectionAfter,
   removePageBreak,
+  setPageBreak,
   sectionOfTitle,
   sectionTitleKey,
   type TextBlockKind,
@@ -576,21 +577,7 @@ function rebase<Value extends object>(drawn: Value, edited: Value, now: Value): 
  * @returns The content with the break.
  */
 export function addPageBreak(content: TemplateContentV3, blockId: string): TemplateContentV3 {
-  if (hasPageBreak(content, blockId)) {
-    return content
-  }
-
-  const cleared = removePageBreak(content, blockId)
-  const rule = cleared.blockRules.find((candidate) => candidate.blockId === blockId)
-
-  return {
-    ...cleared,
-    blockRules: rule
-      ? cleared.blockRules.map((candidate) =>
-          candidate.blockId === blockId ? { ...candidate, pageBreakBefore: true } : candidate
-        )
-      : [...cleared.blockRules, { blockId, keepWithNext: false, pageBreakBefore: true }],
-  }
+  return hasPageBreak(content, blockId) ? content : setPageBreak(removePageBreak(content, blockId), blockId)
 }
 
 function createTextBlock(id: string, kind: TextBlockKind): TemplateBlock {

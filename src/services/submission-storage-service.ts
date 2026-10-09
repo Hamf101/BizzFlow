@@ -22,6 +22,8 @@ import {
   UUID_PATTERN,
 } from "@/lib/r2/stored-file"
 import { runOperation, type LogValue } from "@/services/operation"
+import { ServiceError } from "@/services/service-error"
+import { isR2NotFound, signCreateOnlyPut } from "@/services/r2-objects"
 
 /** Hard upper bound for one internal-submission file. */
 export const SUBMISSION_FILE_MAX_BYTES = 20 * 1024 * 1024
@@ -145,20 +147,8 @@ export type SignedSubmissionDownloadUrl = {
 }
 
 /** Error raised by submission-specific R2 operations. */
-export class SubmissionStorageServiceError extends Error {
-  readonly statusCode: number
-
-  /**
-   * Creates a storage error safe to translate at a route boundary.
-   *
-   * @param message - User-safe rejection description.
-   * @param statusCode - HTTP-style response status.
-   */
-  constructor(message: string, statusCode: number) {
-    super(message)
-    this.name = "SubmissionStorageServiceError"
-    this.statusCode = statusCode
-  }
+export class SubmissionStorageServiceError extends ServiceError {
+  override readonly name = "SubmissionStorageServiceError"
 }
 
 /**
@@ -357,16 +347,12 @@ export async function createSignedSubmissionUploadUrl(
         r2Env.CLOUDFLARE_R2_SIGNED_URL_TTL_SECONDS,
         SUBMISSION_UPLOAD_URL_MAX_TTL_SECONDS
       )
-      const command = new PutObjectCommand({
-        Bucket: r2Env.CLOUDFLARE_R2_BUCKET_NAME,
-        Key: storageKey,
-        ContentLength: input.byteSize,
-        ContentType: input.contentType,
-        IfNoneMatch: "*",
-      })
-      const uploadUrl = await signer(r2Client, command, {
+      const uploadUrl = await signCreateOnlyPut(signer, r2Client, {
+        bucket: r2Env.CLOUDFLARE_R2_BUCKET_NAME,
+        key: storageKey,
+        byteSize: input.byteSize,
+        contentType: input.contentType,
         expiresIn: expiresInSeconds,
-        signableHeaders: new Set(["content-type"]),
       })
 
       return {
@@ -414,7 +400,7 @@ export async function verifySubmissionUpload(
           })
         )
       } catch (error: unknown) {
-        if (isObjectNotFoundError(error)) {
+        if (isR2NotFound(error)) {
           throw new SubmissionStorageServiceError(
             "Uploaded submission file was not found.",
             409
@@ -618,29 +604,6 @@ function toSubmissionStorageError(error: unknown): SubmissionStorageServiceError
   return new SubmissionStorageServiceError(
     "Submission file storage operation failed.",
     500
-  )
-}
-
-function isObjectNotFoundError(error: unknown): boolean {
-  if (!error || typeof error !== "object") {
-    return false
-  }
-
-  const candidate = error as {
-    name?: unknown
-    code?: unknown
-    Code?: unknown
-    $metadata?: { httpStatusCode?: unknown }
-  }
-
-  return (
-    candidate.$metadata?.httpStatusCode === 404 ||
-    [candidate.name, candidate.code, candidate.Code].some(
-      (code: unknown): boolean =>
-        code === "NotFound" ||
-        code === "NoSuchKey" ||
-        code === "NoSuchObject"
-    )
   )
 }
 

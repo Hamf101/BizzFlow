@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 
 import { act } from "react"
-import { createRoot, type Root } from "react-dom/client"
+import type { Root } from "react-dom/client"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 
 import { WorkspaceSearch } from "./workspace-search"
+import { mount } from "@/test/render"
 
 const push = vi.fn()
 
@@ -14,8 +15,6 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push }),
   useSearchParams: () => new URLSearchParams("size=25&page=3"),
 }))
-
-;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 const WHEN = "2026-09-20T10:00:00.000Z"
 const LEASE_FILE = { createdAt: WHEN, description: null, id: "file-1", lifecycleState: "active", sourceKind: "upload", title: "Lease — 14 Harbour St", updatedAt: WHEN }
@@ -71,13 +70,12 @@ beforeEach(() => {
   localStorage.clear()
   const host = document.createElement("div")
   document.body.append(host)
-  root = createRoot(host)
+  root = mount(host)
   act(() => root.render(<WorkspaceSearch role="owner_admin" />))
 })
 
 afterEach(() => {
   act(() => root.unmount())
-  document.body.replaceChildren()
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
   fetchMock.mockClear()

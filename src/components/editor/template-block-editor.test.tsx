@@ -1,23 +1,17 @@
 // @vitest-environment jsdom
 
 import { act, type ReactElement, useEffect, useState } from "react"
-import { createRoot } from "react-dom/client"
-import { afterEach, expect, it } from "vitest"
+import { expect, it } from "vitest"
 
-import { TemplateBlockEditor } from "@/components/templates/template-block-editor"
+import { TemplateBlockEditor } from "@/components/editor/template-block-editor"
 import { createBlankTemplateContent, type TemplateBlock, type TemplateContentV3 } from "@/types/template"
 import { updateTemplateBlock } from "@/types/template-structure"
-
-;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+import { mount } from "@/test/render"
 
 const UNIT_ID = "30000000-0000-4000-8000-000000000001"
 const PETS_ID = "30000000-0000-4000-8000-000000000002"
 
 let blocks: readonly TemplateBlock[] = []
-
-afterEach(() => {
-  document.body.replaceChildren()
-})
 
 function Harness({ editing = 0 }: { editing?: number }): ReactElement {
   const [content, setContent] = useState<TemplateContentV3>(() => ({
@@ -46,7 +40,7 @@ function Harness({ editing = 0 }: { editing?: number }): ReactElement {
 }
 
 it("applies dropdown options as they are typed, and keeps one a rule needs until it is renamed", async () => {
-  await act(async () => createRoot(document.body.appendChild(document.createElement("div"))).render(<Harness />))
+  await act(async () => mount().render(<Harness />))
 
   typeInto(option(2), "1 bedroom")
   expect(saved("dropdown_field").options).toEqual(["Studio", "1 bedroom"])
@@ -70,7 +64,7 @@ it("applies dropdown options as they are typed, and keeps one a rule needs until
 })
 
 it("lets a count of character boxes from 10 to 19 be typed through its first digit", async () => {
-  await act(async () => createRoot(document.body.appendChild(document.createElement("div"))).render(<Harness editing={1} />))
+  await act(async () => mount().render(<Harness editing={1} />))
   const boxes = document.getElementById(`${PETS_ID}-comb`) as HTMLInputElement
 
   typeInto(boxes, "1")

@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/card"
 import { buildFeedbackRedirect } from "@/lib/action-result"
 import { LocalDate } from "@/components/ui/local-date"
+import { memberLabel } from "@/components/people/member-name"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
 import { getPageErrorMessage } from "@/lib/page-errors"
 import { loadPageOrganizationContext } from "@/lib/page-organization-context"
@@ -512,5 +513,5 @@ function getMemberDisplayName(
   const member = members.find(
     (candidate: OrganizationMember): boolean => candidate.userId === userId
   )
-  return member?.fullName?.trim() || member?.email || "a team member"
+  return (member && memberLabel(member)) || "a team member"
 }

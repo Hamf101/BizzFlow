@@ -20,9 +20,9 @@ export type TextBlockKind =
   | Readonly<{ type: "bullet_list" }>
   | Readonly<{ type: "numbered_list" }>
 
-type LineBlock = Extract<TemplateBlock, { type: "heading" | "paragraph" }>
+export type LineBlock = Extract<TemplateBlock, { type: "heading" | "paragraph" }>
 type TemplateBlockRule = TemplateContentV3["blockRules"][number]
-type ListBlock = Extract<TemplateBlock, { type: "bullet_list" | "numbered_list" }>
+export type ListBlock = Extract<TemplateBlock, { type: "bullet_list" | "numbered_list" }>
 
 /**
  * Presses Enter in a line of text. The text after the caret moves to a new
@@ -384,7 +384,7 @@ export function turnLineIntoSection(
   const index = content.blocks.findIndex((block) => block.id === blockId)
   const line = content.blocks[index]
 
-  if (!isLine(line) || line.text.trim().length > 160 || opensSection(content, blockId)) {
+  if (!isLine(line) || !canStartSection(content, line)) {
     return { content, focus: { blockId, offset: isLine(line) ? line.text.length : 0 } }
   }
 
@@ -710,7 +710,8 @@ function compareOrder(left: readonly number[], right: readonly number[]): number
   return index < 0 ? 0 : (left[index] ?? 0) - (right[index] ?? 0)
 }
 
-function setPageBreak(content: TemplateContentV3, blockId: string): TemplateContentV3 {
+/** Gives a block a rule that starts a page, keeping the rest of a rule it has. */
+export function setPageBreak(content: TemplateContentV3, blockId: string): TemplateContentV3 {
   const existing = content.blockRules.find((rule) => rule.blockId === blockId)
 
   return {
@@ -723,6 +724,18 @@ function setPageBreak(content: TemplateContentV3, blockId: string): TemplateCont
   }
 }
 
+/**
+ * Says whether a line can become a section's title: one short enough for a
+ * title, that does not open a section already.
+ *
+ * @param content - The page.
+ * @param line - The line.
+ * @returns True when it can.
+ */
+export function canStartSection(content: TemplateContentV3, line: LineBlock): boolean {
+  return line.text.trim().length <= 160 && !opensSection(content, line.id)
+}
+
 function opensSection(content: TemplateContentV3, blockId: string): boolean {
   return content.sections.some((section) => section.startBlockId === blockId)
 }
@@ -731,10 +744,12 @@ function emptyParagraph(id: string): TemplateBlock {
   return { alignment: "left", id, text: "", type: "paragraph" }
 }
 
-function isLine(block: TemplateBlock | undefined): block is LineBlock {
+/** Says whether a block is a line of text: a paragraph or a heading. */
+export function isLine(block: TemplateBlock | undefined): block is LineBlock {
   return block?.type === "paragraph" || block?.type === "heading"
 }
 
-function isList(block: TemplateBlock | undefined): block is ListBlock {
+/** Says whether a block is a bulleted or numbered list. */
+export function isList(block: TemplateBlock | undefined): block is ListBlock {
   return block?.type === "bullet_list" || block?.type === "numbered_list"
 }

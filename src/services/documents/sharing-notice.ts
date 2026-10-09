@@ -50,7 +50,15 @@ export async function sendNotice(recipientUserId: string, message: SharedMessage
   await send(noticeTopic(recipientUserId), "shared", message)
 }
 
-async function sendWithRealtime(topic: string, event: string, message: object): Promise<void> {
+/**
+ * Sends one message on a private Supabase Realtime channel over HTTP.
+ *
+ * @param topic - The channel's topic.
+ * @param event - The event name.
+ * @param message - The payload.
+ * @throws Error when the channel takes no message.
+ */
+export async function sendWithRealtime(topic: string, event: string, message: object): Promise<void> {
   const client = createAdminClient()
   const channel = client.channel(topic, { config: { private: true } })
 

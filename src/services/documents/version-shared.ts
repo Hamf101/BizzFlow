@@ -3,18 +3,15 @@ import { DocumentServiceError } from "@/services/documents/errors"
 import {
   createSupabaseServiceError,
   mapDocumentVersion,
+  DOCUMENT_VERSION_COLUMNS,
 } from "@/services/documents/shared"
 import type {
   DocumentVersion,
   DocumentVersionRow,
 } from "@/types/document"
+import { asSupabaseError, searchableErrorText } from "@/services/supabase-error"
+import { normalizeName } from "@/services/input"
 
-type SupabaseErrorLike = {
-  code?: string
-  details?: string
-  hint?: string
-  message?: string
-}
 
 /**
  * Verifies that storage signing returned the deterministic expected object key.
@@ -53,7 +50,7 @@ export async function getDocumentVersionById(
 ): Promise<DocumentVersion> {
   const { data, error } = await client
     .from("document_versions")
-    .select("id,org_id,document_id,version_number,status,storage_key,original_filename,content_type,byte_size,checksum_sha256,uploaded_by,created_at,updated_at")
+    .select(DOCUMENT_VERSION_COLUMNS)
     .eq("id", versionId)
     .eq("org_id", organizationId)
     .eq("document_id", documentId)
@@ -81,11 +78,8 @@ export function createVersionMutationError(
   error: unknown,
   fallbackMessage: string
 ): DocumentServiceError {
-  const errorLike = getSupabaseErrorLike(error)
-  const message = [errorLike?.message, errorLike?.details, errorLike?.hint]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase()
+  const errorLike = asSupabaseError(error)
+  const message = searchableErrorText(errorLike)
   const isConflict =
     errorLike?.code === "23505" ||
     (errorLike?.code === "P0001" &&
@@ -106,22 +100,6 @@ export function createVersionMutationError(
  * @throws DocumentServiceError when the filename is empty or too long.
  */
 export function normalizeOriginalFilename(filename: string): string {
-  const normalizedFilename = filename.trim().replace(/\s+/g, " ")
-
-  if (normalizedFilename.length < 1 || normalizedFilename.length > 255) {
-    throw new DocumentServiceError(
-      "Original filename must be between 1 and 255 characters.",
-      400
-    )
-  }
-
-  return normalizedFilename
+  return normalizeName(filename, "Original filename", 1, 255, (message) => new DocumentServiceError(message, 400))
 }
 
-function getSupabaseErrorLike(error: unknown): SupabaseErrorLike | null {
-  if (!error || typeof error !== "object") {
-    return null
-  }
-
-  return error as SupabaseErrorLike
-}

@@ -21,6 +21,8 @@ import {
   requireActiveFolder,
   requirePermission,
   runDocumentOperation,
+  DOCUMENT_COLUMNS,
+  FOLDER_COLUMNS,
 } from "@/services/documents/shared"
 import { retrySerializationFailure } from "@/services/serialization-retry"
 import type {
@@ -31,10 +33,6 @@ import type {
 } from "@/types/document"
 
 const CYCLE_MESSAGE = "A folder cannot move inside itself."
-const DOCUMENT_COLUMNS =
-  "id,org_id,folder_id,title,description,current_version_id,source_kind,template_id,template_revision,lifecycle_state,created_by,updated_by,archived_by,archived_at,trashed_by,trashed_at,purge_after,pre_trash_lifecycle_state,trash_operation_id,created_at,updated_at"
-const FOLDER_COLUMNS =
-  "id,org_id,parent_folder_id,name,lifecycle_state,created_by,updated_by,archived_by,archived_at,trashed_by,trashed_at,purge_after,pre_trash_lifecycle_state,trash_operation_id,created_at,updated_at"
 
 /**
  * Moves an active file into a folder, or out to the top level.

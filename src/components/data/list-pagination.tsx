@@ -3,6 +3,7 @@ import Link from "next/link"
 import type { ReactElement } from "react"
 
 import { buttonVariants } from "@/components/ui/button"
+import { getLastPage } from "@/lib/list-state"
 import { cn } from "@/lib/utils"
 
 const PAGE_LINK_CLASS = cn(
@@ -17,25 +18,26 @@ const PAGE_LINK_CLASS = cn(
  * navigations to canonical list URLs, so paging works before hydration and any
  * page can be shared.
  *
- * @param props - Current page, page size, total, and neighbouring page links.
+ * @param props - Current page, page size, total, and the link to any page.
  * @returns Pagination navigation, or null for a single page.
  */
 export function ListPagination({
-  nextHref,
+  href,
   page,
   pageSize,
-  previousHref,
   total,
 }: {
-  nextHref: string | null
+  href: (page: number) => string
   page: number
   pageSize: number
-  previousHref: string | null
   total: number
 }): ReactElement | null {
   if (page === 1 && total <= pageSize) {
     return null
   }
+
+  const previousHref = page > 1 ? href(page - 1) : null
+  const nextHref = page < getLastPage(total, pageSize) ? href(page + 1) : null
 
   const first = Math.min((page - 1) * pageSize + 1, total)
   const last = Math.min(page * pageSize, total)

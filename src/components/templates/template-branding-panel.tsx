@@ -5,7 +5,7 @@ import Image from "next/image"
 import { type ChangeEvent, type ReactElement, useState } from "react"
 
 import { requestImageUploadAction } from "@/app/(editor)/image-actions"
-import { storeTemplateImage } from "@/components/templates/template-image"
+import { IMAGE_ACCEPT, storeTemplateImage } from "@/components/templates/template-image"
 import { Select } from "@/components/ui/select"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { ColorWheel } from "@/components/ui/color-wheel"
@@ -183,7 +183,7 @@ export function TemplateBrandingPanel({
           <ImageUp />
           {uploading ? "Uploading…" : logo ? "Replace logo" : "Upload logo"}
           <input
-            accept="image/png,image/jpeg"
+            accept={IMAGE_ACCEPT}
             disabled={uploading}
             aria-describedby={errorMessage ? "branding-logo-error" : "branding-logo-hint"}
             className="sr-only"

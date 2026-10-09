@@ -1,13 +1,11 @@
 // @vitest-environment jsdom
 import { act } from "react"
-import { createRoot } from "react-dom/client"
 import { expect, it, vi } from "vitest"
 
 import { createEmptyDocumentContent, type TemplateContentV3 } from "@/types/template"
 
 import { useMissingPictureAddresses, usePictureAddresses } from "./use-picture-addresses"
-
-;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+import { mount } from "@/test/render"
 
 it("asks once for a picture the server has no address for, however often the page draws", async () => {
   const fetch = vi.fn(async () => new Response(JSON.stringify({ urls: {} })))
@@ -24,7 +22,7 @@ it("asks once for a picture the server has no address for, however often the pag
     return null
   }
 
-  const root = createRoot(document.body.appendChild(document.createElement("div")))
+  const root = mount()
   for (let draw = 0; draw < 3; draw += 1) {
     await act(async () => root.render(<Editor />))
     await act(async () => new Promise((resolve) => setTimeout(resolve, 5)))

@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 import { act, type ComponentProps } from "react"
-import { createRoot, type Root } from "react-dom/client"
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest"
+import type { Root } from "react-dom/client"
+import { afterEach, describe, expect, it, vi } from "vitest"
 import { DashboardNavigation } from "./dashboard-navigation"
 import { NavigationPreferencesProvider } from "./navigation-preferences-provider"
+import { mount as mountRoot } from "@/test/render"
 
 const actions = vi.hoisted(() => ({ save: vi.fn() }))
 vi.mock("@/app/(dashboard)/navigation-actions", () => ({ updateNavigationAction: actions.save }))
@@ -13,12 +14,9 @@ vi.mock("next/link", async () => {
   return { default: ({ prefetch, ...props }: ComponentProps<"a"> & { prefetch?: boolean }) => { void prefetch; return createElement("a", props) } }
 })
 let root: Root | undefined
-beforeAll(() => { (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true })
-afterEach(() => { act(() => root?.unmount()); root = undefined; document.body.replaceChildren(); vi.resetAllMocks() })
+afterEach(() => { root = undefined; vi.resetAllMocks() })
 function mount(canRename = true, order: string[] = [], labels = {}) {
-  const container = document.createElement("div")
-  document.body.append(container)
-  root = createRoot(container)
+  root = mountRoot()
   act(() => root?.render(<NavigationPreferencesProvider organizationId="org-1" initialPreferences={{ labels, order, revision: 0, canRename }}><DashboardNavigation role={canRename ? "owner_admin" : "staff"} /></NavigationPreferencesProvider>))
 }
 function links(): HTMLAnchorElement[] { return [...document.querySelectorAll<HTMLAnchorElement>('nav[aria-label="Primary navigation"] a')] }

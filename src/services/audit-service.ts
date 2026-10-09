@@ -1,11 +1,5 @@
 import type { ListSort } from "@/lib/list-state"
 import { createAdminClient } from "@/lib/supabase/admin"
-import {
-  canPerformOrganizationAction,
-  createOrganizationPermissionSubject,
-  isOrganizationRole,
-  type OrganizationPermissionSubject,
-} from "@/lib/permissions"
 import { captureUnexpectedError } from "@/lib/observability"
 import { createListInputValidators } from "@/services/list-input"
 import {
@@ -23,7 +17,8 @@ import {
   type AuditLogTargetType,
   type AuditMetadata,
 } from "@/types/audit"
-import { loadActiveMembership } from "@/services/organizations/active-membership"
+import { requireOrgPermission } from "@/services/organizations/active-membership"
+import { ServiceError } from "@/services/service-error"
 
 type AdminClient = ReturnType<typeof createAdminClient>
 
@@ -40,11 +35,6 @@ type AuditLogRow = {
   metadata: Record<string, unknown>
   seq: number
   created_at: string
-}
-
-type MembershipRow = {
-  role: string
-  role_definition?: { permissions: string[] | null } | null
 }
 
 export type RecordAuditLogInput = {
@@ -96,20 +86,8 @@ const MAX_AUDIT_PAGE_SIZE = 200
 /**
  * Error type raised by audit log service operations.
  */
-export class AuditServiceError extends Error {
-  readonly statusCode: number
-
-  /**
-   * Creates an audit service error with an HTTP-style status code.
-   *
-   * @param message - User-safe error message.
-   * @param statusCode - HTTP-style status code for route/action translation.
-   */
-  constructor(message: string, statusCode: number) {
-    super(message)
-    this.name = "AuditServiceError"
-    this.statusCode = statusCode
-  }
+export class AuditServiceError extends ServiceError {
+  override readonly name = "AuditServiceError"
 }
 
 // The audit log has no search, so its checks leave the search limit out.
@@ -124,16 +102,18 @@ const AUDIT_LIST_INPUT = createListInputValidators({
  * Records an audit event through the trusted admin client.
  *
  * @param input - Organization, actor, target, and metadata for the event.
+ * @param deps - Optional trusted database client.
  * @returns Created audit log entry.
  * @throws AuditServiceError when the audit event cannot be written.
  */
 export async function recordAuditLog(
-  input: RecordAuditLogInput
+  input: RecordAuditLogInput,
+  deps: AuditServiceDeps = {}
 ): Promise<AuditLogEntry> {
   const startedAt = Date.now()
 
   try {
-    const client = createAdminClient()
+    const client = deps.client ?? createAdminClient()
     const { data, error } = await client
       .from("audit_logs")
       .insert({
@@ -313,11 +293,11 @@ async function requireAuditView(
   organizationId: string,
   actorUserId: string
 ): Promise<void> {
-  const actor = await getOrganizationRole(client, organizationId, actorUserId)
-
-  if (!actor || !canPerformOrganizationAction(actor, "audit_logs:view")) {
-    throw new AuditServiceError("You cannot view audit logs.", 403)
-  }
+  await requireOrgPermission(client, organizationId, actorUserId, "audit_logs:view", {
+    loadFailed: () => new AuditServiceError("Unable to load audit permissions.", 500),
+    denied: () => new AuditServiceError("You cannot view audit logs.", 403),
+    unknownRole: () => new AuditServiceError("Database returned an unsupported role.", 500),
+  })
 }
 
 // Filters go through a minimal view of the query builder: relating
@@ -382,42 +362,6 @@ function normalizeAuditTargetTypes(
   }
 
   return targetTypes
-}
-
-async function getOrganizationRole(
-  client: AuditServiceClient,
-  organizationId: string,
-  userId: string
-): Promise<OrganizationPermissionSubject | null> {
-  const { data, error } = await loadActiveMembership(client, organizationId, userId)
-
-  if (error) {
-    throw new AuditServiceError("Unable to load audit permissions.", 500)
-  }
-
-  if (!data) {
-    return null
-  }
-
-  const row = data as MembershipRow
-
-  if (!isOrganizationRole(row.role)) {
-    throw new AuditServiceError("Database returned an unsupported role.", 500)
-  }
-
-  const subject = createOrganizationPermissionSubject(
-    row.role,
-    row.role_definition?.permissions
-  )
-
-  if (!subject) {
-    throw new AuditServiceError(
-      "Database returned unsupported role permissions.",
-      500
-    )
-  }
-
-  return subject
 }
 
 function mapAuditLog(row: AuditLogRow): AuditLogEntry {

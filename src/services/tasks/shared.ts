@@ -7,7 +7,6 @@ import {
   createOrganizationPermissionSubject,
   getOrganizationRoleFromSubject,
   type OrganizationPermissionAction,
-  type OrganizationPermissionSubject,
   type OrganizationRole,
 } from "@/lib/permissions"
 import { createAdminClient } from "@/lib/supabase/admin"
@@ -32,8 +31,13 @@ import {
   type TaskReminder,
   type TaskStatus,
 } from "@/types/task"
-import { loadActiveMembership } from "@/services/organizations/active-membership"
+import {
+  loadActiveMembership,
+  requireOrgPermission,
+} from "@/services/organizations/active-membership"
 import { runOperation } from "@/services/operation"
+import { asSupabaseError } from "@/services/supabase-error"
+import { normalizeName, normalizeUuid, normalizeLimit } from "@/services/input"
 
 /** Columns required by the canonical task row parser. */
 export const TASK_COLUMNS =
@@ -52,8 +56,6 @@ const INTERNAL_TASK_MEMBER_ROLES: readonly OrganizationRole[] = [
 
 const MAX_TASK_LIST_LIMIT = 200
 const DEFAULT_TASK_LIST_LIMIT = 100
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
 
 /** Column values a task mutation may write. */
 export type TaskMutationValues = {
@@ -74,12 +76,6 @@ type MembershipRoleRow = {
   role_definition?: { permissions: string[] | null } | null
 }
 
-type SupabaseErrorLike = {
-  code?: string
-  details?: string
-  hint?: string
-  message?: string
-}
 
 /**
  * Runs a task operation with contextual timing and safe error translation.
@@ -156,43 +152,13 @@ export async function requireTaskPermission(
   action: OrganizationPermissionAction,
   rejectionMessage: string
 ): Promise<OrganizationRole> {
-  const subject = await loadActiveMembershipPermissionSubject(
-    client,
-    organizationId,
-    actorUserId
-  )
-
-  if (!subject || !canPerformOrganizationAction(subject, action)) {
-    throw new TaskServiceError(rejectionMessage, 403)
-  }
+  const subject = await requireOrgPermission(client, organizationId, actorUserId, action, {
+    loadFailed: (error) => createTaskDatabaseError(error, "Unable to load task permissions."),
+    denied: () => new TaskServiceError(rejectionMessage, 403),
+    unknownRole: () => new TaskServiceError("Database returned unsupported organization permissions.", 500),
+  })
 
   return getOrganizationRoleFromSubject(subject)
-}
-
-async function loadActiveMembershipPermissionSubject(
-  client: TaskServiceClient,
-  organizationId: string,
-  userId: string
-): Promise<OrganizationPermissionSubject | null> {
-  const row = await loadActiveMembershipRow(client, organizationId, userId)
-
-  if (!row) {
-    return null
-  }
-
-  const subject = createOrganizationPermissionSubject(
-    row.role,
-    row.role_definition?.permissions
-  )
-
-  if (!subject) {
-    throw new TaskServiceError(
-      "Database returned unsupported organization permissions.",
-      500
-    )
-  }
-
-  return subject
 }
 
 async function loadActiveMembershipRow(
@@ -429,16 +395,7 @@ export function normalizeTaskTitle(value: unknown): string {
     throw new TaskServiceError("Task title must be text.", 400)
   }
 
-  const title = value.trim().replace(/\s+/g, " ")
-
-  if (title.length < 1 || title.length > 200) {
-    throw new TaskServiceError(
-      "Task title must be between 1 and 200 characters.",
-      400
-    )
-  }
-
-  return title
+  return normalizeName(value, "Task title", 1, 200, (message) => new TaskServiceError(message, 400))
 }
 
 /**
@@ -524,17 +481,7 @@ export function normalizeTaskTimestamp(
  * @throws TaskServiceError when the value is not a UUID.
  */
 export function normalizeTaskUuid(value: unknown, message: string): string {
-  if (typeof value !== "string") {
-    throw new TaskServiceError(message, 400)
-  }
-
-  const normalizedValue = value.trim().toLowerCase()
-
-  if (!UUID_PATTERN.test(normalizedValue)) {
-    throw new TaskServiceError(message, 400)
-  }
-
-  return normalizedValue
+  return normalizeUuid(value, () => new TaskServiceError(message, 400))
 }
 
 /**
@@ -591,18 +538,7 @@ export function normalizeTaskStatusFilter(
  * @throws TaskServiceError when the limit is outside the supported range.
  */
 export function normalizeTaskListLimit(value: number | undefined): number {
-  if (value === undefined) {
-    return DEFAULT_TASK_LIST_LIMIT
-  }
-
-  if (!Number.isInteger(value) || value < 1 || value > MAX_TASK_LIST_LIMIT) {
-    throw new TaskServiceError(
-      `Task list limit must be between 1 and ${MAX_TASK_LIST_LIMIT}.`,
-      400
-    )
-  }
-
-  return value
+  return normalizeLimit(value, "Task list", DEFAULT_TASK_LIST_LIMIT, MAX_TASK_LIST_LIMIT, (message) => new TaskServiceError(message, 400))
 }
 
 /** Checks a task page's untrusted page, page size, order, and search. */
@@ -697,8 +633,3 @@ function toTaskServiceError(error: unknown): TaskServiceError {
   return new TaskServiceError("Task service failed.", 500)
 }
 
-function asSupabaseError(error: unknown): SupabaseErrorLike | null {
-  return error && typeof error === "object"
-    ? (error as SupabaseErrorLike)
-    : null
-}

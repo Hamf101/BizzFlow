@@ -1,27 +1,11 @@
 import { runOperation, type LogValue } from "@/services/operation"
+import { ServiceError } from "@/services/service-error"
+import type { SupabaseErrorLike } from "@/services/supabase-error"
 
-type SupabaseErrorLike = {
-  code?: string
-  details?: string
-  hint?: string
-  message?: string
-}
 
 /** Error raised by generated-document fill and signing workflows. */
-export class DocumentSigningServiceError extends Error {
-  readonly statusCode: number
-
-  /**
-   * Creates a user-safe signing workflow error.
-   *
-   * @param message - Safe message for an action or API response.
-   * @param statusCode - HTTP-style status code for translation.
-   */
-  constructor(message: string, statusCode: number) {
-    super(message)
-    this.name = "DocumentSigningServiceError"
-    this.statusCode = statusCode
-  }
+export class DocumentSigningServiceError extends ServiceError {
+  override readonly name = "DocumentSigningServiceError"
 }
 
 /**

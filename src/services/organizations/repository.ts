@@ -57,6 +57,18 @@ type UpdateOrganizationMemberAccessRecordInput = {
   workspaceDisplayName: string | null
 }
 
+// Every column an organization read maps.
+const ORGANIZATION_COLUMNS =
+  "id,name,slug,created_by,created_at,updated_at"
+
+// Every column an invite read maps.
+const INVITE_COLUMNS =
+  "id,org_id,email,role,role_definition_id,status,expires_at,created_at,role_definition:organization_roles!invites_role_definition_fk(id,name,system_key)"
+
+// Every column a role-definition read maps.
+const ROLE_DEFINITION_COLUMNS =
+  "id,org_id,system_key,name,permissions,archived_at,created_at,updated_at"
+
 const MEMBERSHIP_SELECT =
   "id,org_id,user_id,role,role_definition_id,workspace_display_name,status,created_at,updated_at,role_definition:organization_roles!organization_memberships_role_definition_fk(id,name,system_key,permissions)"
 
@@ -108,7 +120,7 @@ export async function createOrganizationRecord(
   const { data, error } = await client
     .from("organizations")
     .insert({ name, slug, created_by: createdBy })
-    .select("id,name,slug,created_by,created_at,updated_at")
+    .select(ORGANIZATION_COLUMNS)
     .single()
 
   if (error || !data) {
@@ -318,7 +330,7 @@ export async function getOrganizationById(
 ): Promise<Organization> {
   const { data, error } = await client
     .from("organizations")
-    .select("id,name,slug,created_by,created_at,updated_at")
+    .select(ORGANIZATION_COLUMNS)
     .eq("id", organizationId)
     .single()
 
@@ -426,7 +438,7 @@ export async function createPendingInviteRecord(
       invited_by: input.invitedBy,
       expires_at: input.expiresAt,
     })
-    .select("id,org_id,email,role,role_definition_id,status,expires_at,created_at,role_definition:organization_roles!invites_role_definition_fk(id,name,system_key)")
+    .select(INVITE_COLUMNS)
     .single()
 
   if (error || !data) {
@@ -449,7 +461,7 @@ export async function listManageableInvites(
 ): Promise<OrganizationInvite[]> {
   const { data, error } = await client
     .from("invites")
-    .select("id,org_id,email,role,role_definition_id,status,expires_at,created_at,role_definition:organization_roles!invites_role_definition_fk(id,name,system_key)")
+    .select(INVITE_COLUMNS)
     .eq("org_id", organizationId)
     .in("status", ["pending", "expired"])
     .order("created_at", { ascending: false })
@@ -481,7 +493,7 @@ export async function revokeManageableInvite(
     .eq("org_id", organizationId)
     .eq("id", inviteId)
     .in("status", ["pending", "expired"])
-    .select("id,org_id,email,role,role_definition_id,status,expires_at,created_at,role_definition:organization_roles!invites_role_definition_fk(id,name,system_key)")
+    .select(INVITE_COLUMNS)
     .maybeSingle()
 
   if (error) {
@@ -565,7 +577,7 @@ export async function listOrganizationRoleRecords(
   const { data, error } = await client
     .from("organization_roles")
     .select(
-      "id,org_id,system_key,name,permissions,archived_at,created_at,updated_at"
+      ROLE_DEFINITION_COLUMNS
     )
     .eq("org_id", organizationId)
     .is("archived_at", null)
@@ -595,7 +607,7 @@ export async function getOrganizationRoleRecord(
   const { data, error } = await client
     .from("organization_roles")
     .select(
-      "id,org_id,system_key,name,permissions,archived_at,created_at,updated_at"
+      ROLE_DEFINITION_COLUMNS
     )
     .eq("org_id", organizationId)
     .eq("id", roleId)
@@ -637,7 +649,7 @@ export async function createOrganizationRoleRecord(
       permissions,
     })
     .select(
-      "id,org_id,system_key,name,permissions,archived_at,created_at,updated_at"
+      ROLE_DEFINITION_COLUMNS
     )
     .single()
 
@@ -673,7 +685,7 @@ export async function updateOrganizationRoleRecord(
     .eq("id", roleId)
     .is("archived_at", null)
     .select(
-      "id,org_id,system_key,name,permissions,archived_at,created_at,updated_at"
+      ROLE_DEFINITION_COLUMNS
     )
     .maybeSingle()
 

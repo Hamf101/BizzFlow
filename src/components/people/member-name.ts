@@ -26,7 +26,18 @@ export function formatMemberName(
     (candidate: OrganizationMember): boolean => candidate.userId === userId
   )
 
-  return member?.fullName?.trim() || member?.email || "a former member"
+  return (member && memberLabel(member)) || "a former member"
+}
+
+/**
+ * Names a member by their full name, or their email without one. The name they
+ * go by in the workspace is the People page's; these labels never used it.
+ *
+ * @param member - The member.
+ * @returns The name or email.
+ */
+export function memberLabel(member: Pick<OrganizationMember, "email" | "fullName">): string {
+  return member.fullName?.trim() || member.email
 }
 
 /**

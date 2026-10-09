@@ -1,5 +1,12 @@
+import type { PostgrestError } from "@supabase/supabase-js"
 import { cache } from "react"
 
+import {
+  canPerformOrganizationAction,
+  createOrganizationPermissionSubject,
+  type OrganizationPermissionAction,
+  type OrganizationPermissionSubject,
+} from "@/lib/permissions"
 import type { AdminSupabaseClient } from "@/lib/supabase/admin"
 
 // Every column a membership check reads, so all of them can share one read.
@@ -27,3 +34,44 @@ export const loadActiveMembership = cache(
       .eq("status", "active")
       .maybeSingle()
 )
+
+/** How a domain reports each way a permission check can fail, in its own words. */
+export type OrgPermissionFailures = {
+  /** The membership read failed. */
+  loadFailed: (error: PostgrestError) => Error
+  /** No active membership, or one without the permission. */
+  denied: () => Error
+  /** The stored role is one this build does not know. Denied when absent. */
+  unknownRole?: () => Error
+}
+
+/**
+ * Requires an active membership whose current role-definition permissions
+ * include the action.
+ *
+ * @param client - The admin client.
+ * @param organizationId - The organization.
+ * @param userId - The member.
+ * @param action - The permission needed, or null for membership alone.
+ * @param fail - The domain's errors for each failure.
+ * @returns The member's permission subject.
+ */
+export async function requireOrgPermission(
+  client: Pick<AdminSupabaseClient, "from">,
+  organizationId: string,
+  userId: string,
+  action: OrganizationPermissionAction | null,
+  fail: OrgPermissionFailures
+): Promise<OrganizationPermissionSubject> {
+  const { data, error } = await loadActiveMembership(client, organizationId, userId)
+
+  if (error) throw fail.loadFailed(error)
+  if (!data) throw fail.denied()
+
+  const subject = createOrganizationPermissionSubject(data.role, data.role_definition?.permissions)
+
+  if (!subject) throw (fail.unknownRole ?? fail.denied)()
+  if (action && !canPerformOrganizationAction(subject, action)) throw fail.denied()
+
+  return subject
+}

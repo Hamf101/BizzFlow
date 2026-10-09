@@ -158,14 +158,6 @@ export type AdminSupabaseEnv = PublicSupabaseEnv & {
 export type AppUrlEnv = z.infer<typeof appUrlSchema>
 export type EmailJsEmailEnv = z.infer<typeof emailJsEmailEnvSchema>
 export type EmailEnv = EmailJsEmailEnv
-/** Dormant Resend adapter configuration retained for later reactivation. */
-export type ResendEmailEnv = {
-  EMAIL_PROVIDER: "resend"
-  EMAIL_REPLY_TO_EMAIL?: string
-  EMAIL_TIMEOUT_MS: number
-  RESEND_API_KEY: string
-  RESEND_FROM_EMAIL: string
-}
 export type AiEnv = z.infer<typeof aiEnvSchema>
 export type AiKeyedProvider = keyof typeof AI_PROVIDER_KEY_NAMES
 export type R2Env = z.infer<typeof r2EnvSchema>
@@ -323,9 +315,8 @@ export function getAppUrlEnv(): AppUrlEnv {
 /**
  * Reads and validates the active server-side EmailJS configuration.
  *
- * Transactional delivery is temporarily pinned to EmailJS while the Resend
- * sender is unavailable. A stale EMAIL_PROVIDER value cannot reactivate the
- * dormant Resend adapter.
+ * Transactional delivery is pinned to EmailJS, the only email provider; a
+ * stale EMAIL_PROVIDER value cannot select another one.
  *
  * @returns The validated EmailJS delivery configuration.
  * @throws Error when required email-delivery values are missing or invalid.
@@ -388,9 +379,6 @@ export function isProductionRuntime(): boolean {
 /**
  * Reads and validates the server-only AI provider configuration.
  *
- * The deprecated Gemini model and timeout names remain read-only compatibility
- * aliases for one release. Canonical AI-prefixed values always take precedence.
- *
  * @returns Provider, exact model identifier, provider credential, and timeout.
  * @throws Error when required AI configuration is missing or invalid.
  */
@@ -398,14 +386,10 @@ export function getAiEnv(): AiEnv {
   const provider = process.env.AI_PROVIDER?.trim() || "gemini"
   const result = aiEnvSchema.safeParse({
     AI_PROVIDER: provider,
-    AI_MODEL: readCanonicalOrDeprecatedEnvValue(
-      process.env.AI_MODEL,
-      provider === "gemini" ? process.env.GEMINI_MODEL : undefined
-    ) ?? (provider === "gemini" ? "gemini-flash-latest" : undefined),
-    AI_TIMEOUT_MS: readCanonicalOrDeprecatedEnvValue(
-      process.env.AI_TIMEOUT_MS,
-      provider === "gemini" ? process.env.GEMINI_TIMEOUT_MS : undefined
-    ),
+    AI_MODEL:
+      process.env.AI_MODEL?.trim() ||
+      (provider === "gemini" ? "gemini-flash-latest" : undefined),
+    AI_TIMEOUT_MS: process.env.AI_TIMEOUT_MS,
     AI_EFFORT: process.env.AI_EFFORT?.trim() || undefined,
   })
 
@@ -434,27 +418,6 @@ export function getAiProviderKey(provider: AiKeyedProvider): string {
   }
 
   return value
-}
-
-function readCanonicalOrDeprecatedEnvValue(
-  canonicalValue: string | undefined,
-  deprecatedValue: string | undefined
-): string | undefined {
-  if (
-    typeof canonicalValue === "string" &&
-    canonicalValue.trim().length > 0
-  ) {
-    return canonicalValue
-  }
-
-  if (
-    typeof deprecatedValue === "string" &&
-    deprecatedValue.trim().length > 0
-  ) {
-    return deprecatedValue
-  }
-
-  return undefined
 }
 
 /**

@@ -14,6 +14,10 @@ function render(ui: ReactElement): void {
   document.body.innerHTML = renderToStaticMarkup(ui)
 }
 
+function tasksPage(page: number): string {
+  return page === 1 ? "/tasks" : `/tasks?page=${page}`
+}
+
 function readLinks(): Array<{
   href: string | null
   label: string | null
@@ -29,13 +33,7 @@ function readLinks(): Array<{
 describe("ListPagination", () => {
   it("states the visible range and links to the neighbouring pages", () => {
     render(
-      <ListPagination
-        nextHref="/tasks?page=3"
-        page={2}
-        pageSize={50}
-        previousHref="/tasks"
-        total={132}
-      />
+      <ListPagination href={tasksPage} page={2} pageSize={50} total={132} />
     )
 
     expect(
@@ -49,13 +47,7 @@ describe("ListPagination", () => {
 
   it("omits a link with nowhere to go and ends the range at the total", () => {
     render(
-      <ListPagination
-        nextHref={null}
-        page={3}
-        pageSize={50}
-        previousHref="/tasks?page=2"
-        total={132}
-      />
+      <ListPagination href={tasksPage} page={3} pageSize={50} total={132} />
     )
 
     expect(document.querySelector("nav")?.textContent).toBe("101–132 of 132")
@@ -66,13 +58,7 @@ describe("ListPagination", () => {
 
   it("renders nothing when every item fits on one page", () => {
     render(
-      <ListPagination
-        nextHref={null}
-        page={1}
-        pageSize={50}
-        previousHref={null}
-        total={12}
-      />
+      <ListPagination href={tasksPage} page={1} pageSize={50} total={12} />
     )
 
     expect(document.body.innerHTML).toBe("")

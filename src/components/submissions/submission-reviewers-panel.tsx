@@ -2,6 +2,7 @@ import type { ReactElement } from "react"
 
 import { useTimeZone } from "@/components/ui/local-date"
 import { Badge } from "@/components/ui/badge"
+import { memberLabel } from "@/components/people/member-name"
 import { formatMediumDateTime } from "@/lib/date-format"
 import type { OrganizationRole } from "@/lib/permissions"
 import type { OrganizationMember } from "@/types/organization"
@@ -90,7 +91,7 @@ export function SubmissionReviewersPanel({
       <li className="flex flex-col gap-1.5 py-2.5" key={reviewer.userId}>
         <div className="flex items-start justify-between gap-3">
           <span className="min-w-0 text-sm">
-            <span className="block truncate">{member ? member.fullName?.trim() || member.email : "A former member"}</span>
+            <span className="block truncate">{member ? memberLabel(member) : "A former member"}</span>
             {member ? <span className="block text-xs text-muted-foreground">{ROLE_LABELS[member.role]}</span> : null}
           </span>
           {reviewer.canApprove || reviewer.decision !== "pending" ? <Badge variant={decision.variant}>{decision.label}</Badge> : null}

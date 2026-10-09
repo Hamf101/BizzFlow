@@ -12,7 +12,7 @@ import { getPageErrorMessage } from "@/lib/page-errors"
 import { loadMemberName } from "@/lib/page-member-name"
 import { loadPageOrganizationContext } from "@/lib/page-organization-context"
 import { cn } from "@/lib/utils"
-import { getEditorLayout } from "@/services/editor-layout-service"
+import { getEditorLayout } from "@/services/organizations/editor-layout-service"
 import { listTemplateFlowMessages } from "@/services/template-flow-service"
 import {
   canEditDocumentTemplate,

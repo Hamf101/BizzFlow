@@ -1,27 +1,22 @@
 // @vitest-environment jsdom
 
-import { act } from "react"
-import { createRoot, type Root } from "react-dom/client"
-import { afterEach, beforeAll, expect, it, vi } from "vitest"
+import { act, type ReactElement, useState } from "react"
+import type { Root } from "react-dom/client"
+import { afterEach, expect, it, vi } from "vitest"
 
-import { TemplateFlowPanel } from "@/components/templates/template-flow-panel"
+import { TemplateFlowPanel } from "@/components/editor/template-flow-panel"
 import { createTemplateFlowDraftFingerprint } from "@/services/template-flow-proposal-state"
 import { createBlankTemplateContent } from "@/types/template"
 import type { TemplateFlowDraft, TemplateFlowLedgerItem, TemplateFlowOperationType, TemplateFlowProposal } from "@/types/template-flow"
+import { mount } from "@/test/render"
 
 const TEMPLATE_ID = "30000000-0000-4000-8000-000000000001"
 const draft: TemplateFlowDraft = { title: "Vehicle form", description: "", content: createBlankTemplateContent() }
 
 let root: Root | null = null
 
-beforeAll(() => {
-  ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
-})
-
 afterEach(() => {
-  act(() => root?.unmount())
   root = null
-  document.body.replaceChildren()
   vi.unstubAllGlobals()
 })
 
@@ -81,26 +76,38 @@ it("drops a change with what needs it, applies only the kept ones, and keeps the
         ? { proposal: rebuilt }
         : { proposal: proposed, messages: [message("user", "m-1"), message("assistant", "m-2")], needsConfirmation: false, persistenceWarning: null },
   }))
-  const onApply = vi.fn()
+  const onApplyProposal = vi.fn()
   vi.stubGlobal("fetch", fetchFlow)
 
-  const container = document.createElement("div")
-  document.body.append(container)
-  root = createRoot(container)
-  act(() =>
-    root?.render(
+  // The editor owns the proposal on show, as both editors do.
+  function Editor(): ReactElement {
+    const [pending, setPending] = useState<TemplateFlowProposal | null>(null)
+
+    return (
       <TemplateFlowPanel
         autoSend="Ask about the vehicle."
         canUndo={false}
         draft={draft}
         initialMessages={[]}
         lastAppliedMessageId={null}
-        onApply={onApply}
+        onApplyProposal={(applied, messageId) => {
+          onApplyProposal(applied, messageId)
+          setPending(null)
+        }}
+        onProposalReceived={setPending}
+        onProposalStale={setPending}
+        onRejectProposal={() => setPending(null)}
         onUndo={() => undefined}
+        pendingProposal={pending}
         templateId={TEMPLATE_ID}
       />
     )
-  )
+  }
+
+  const container = document.createElement("div")
+  document.body.append(container)
+  root = mount(container)
+  act(() => root?.render(<Editor />))
   await settle()
   expect(buttonNamed("Apply 3 changes").disabled).toBe(false)
   // While the card is open it is the one list of changes.
@@ -127,7 +134,7 @@ it("drops a change with what needs it, applies only the kept ones, and keeps the
   act(() => buttonNamed("Drop this change", 0).click())
   await settle()
   act(() => buttonNamed("Apply 1 change").click())
-  expect(onApply).toHaveBeenCalledWith(rebuilt.candidateDraft, rebuilt.changedBlockIds, "m-2")
+  expect(onApplyProposal).toHaveBeenCalledWith(rebuilt, "m-2")
   await settle()
   expect(document.body.textContent).toContain("Proposed change set")
 })

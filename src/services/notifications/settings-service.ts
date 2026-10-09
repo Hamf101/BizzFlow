@@ -9,6 +9,10 @@ import {
   requireNotificationAdmin,
 } from "@/services/notifications/delivery-service"
 
+// The organization columns that hold its notification settings.
+const NOTIFICATION_SETTINGS_COLUMNS =
+  "id,email_notifications_enabled,sms_notifications_enabled"
+
 /** Organization-wide notification switches. */
 export type OrganizationNotificationSettings = {
   emailNotificationsEnabled: boolean
@@ -52,7 +56,7 @@ export async function loadOrganizationNotificationSettingsMap(
 
   const { data, error } = await client
     .from("organizations")
-    .select("id,email_notifications_enabled,sms_notifications_enabled")
+    .select(NOTIFICATION_SETTINGS_COLUMNS)
     .in("id", Array.from(new Set(organizationIds)))
 
   if (error || !data) {
@@ -127,7 +131,7 @@ export async function updateOrganizationNotificationSettings(
       updated_at: timestamp,
     })
     .eq("id", input.organizationId)
-    .select("id,email_notifications_enabled,sms_notifications_enabled")
+    .select(NOTIFICATION_SETTINGS_COLUMNS)
     .maybeSingle()
 
   if (error || !data) {

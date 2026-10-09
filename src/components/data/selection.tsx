@@ -12,12 +12,12 @@ import {
   useEffect,
   useRef,
   useState,
-  useSyncExternalStore,
 } from "react"
 
 import { Button } from "@/components/ui/button"
 import { ContextMenu, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { cn } from "@/lib/utils"
+import { useMediaQuery } from "@/lib/use-media-query"
 
 /** What a selection offers, whatever the workspace it sits in. */
 export type SelectionState<T extends { id: string } = { id: string }> = {
@@ -46,12 +46,6 @@ const OpensOnRightClickContext = createContext(false)
 
 // The widths that show the phone's tab bar, as Tailwind's `max-md` does.
 const NARROW = "(width < 48rem)"
-
-function subscribeToWidth(onChange: () => void): () => void {
-  const query = window.matchMedia(NARROW)
-  query.addEventListener("change", onChange)
-  return () => query.removeEventListener("change", onChange)
-}
 
 // A navigation unmounts the workspace, so each list's selection waits here
 // until the member comes back to it. Only the effect below writes, so nothing
@@ -92,11 +86,7 @@ export function SelectionProvider<T extends { id: string }>({
   const [byHold, setByHold] = useState(() => remembered.get(here)?.byHold ?? false)
   // Selecting begun with the Select button, which lasts until Done even with nothing ticked.
   const [picking, setPicking] = useState(false)
-  const narrow = useSyncExternalStore(
-    subscribeToWidth,
-    () => window.matchMedia(NARROW).matches,
-    () => false
-  )
+  const narrow = useMediaQuery(NARROW)
 
   useEffect(() => {
     if (selected.size === 0) {

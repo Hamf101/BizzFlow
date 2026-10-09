@@ -1,5 +1,5 @@
 import { NavigationPreferencesProvider } from "@/components/navigation/navigation-preferences-provider"
-import { getNavigationPreferences } from "@/services/navigation-service"
+import { getNavigationPreferences } from "@/services/organizations/navigation-service"
 import * as Sentry from "@sentry/nextjs"
 import { redirect } from "next/navigation"
 import { Suspense, type ReactElement, type ReactNode } from "react"

@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input"
 import {
   completeDocumentUploadRequest,
   readApiErrorMessage,
+  UPLOAD_ACCEPT,
   uploadFileToSignedUrl,
 } from "@/components/documents/document-upload-client"
 import type { CreateDocumentUploadUrlResponse } from "@/types/document"
@@ -120,7 +121,7 @@ export function DocumentReplaceForm({
       <Field>
         <FieldLabel htmlFor="replacement-file">Replacement file</FieldLabel>
         <Input
-          accept=".pdf,.png,.jpg,.jpeg,.docx,.xlsx,.csv"
+          accept={UPLOAD_ACCEPT}
           disabled={isUploading || Boolean(pendingReplacement)}
           id="replacement-file"
           name="replacementFile"

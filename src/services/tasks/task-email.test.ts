@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-import { sendTaskEmail, type SendTaskEmailInput } from "@/services/task-service"
+import { sendTaskEmail, type SendTaskEmailInput } from "@/services/tasks/task-email"
 
 const originalEnv = { ...process.env }
 

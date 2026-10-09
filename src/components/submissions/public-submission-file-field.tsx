@@ -8,7 +8,7 @@ import {
   useState,
 } from "react"
 
-import { uploadFileToSignedUrl } from "@/components/documents/document-upload-client"
+import { UPLOAD_ACCEPT, uploadFileToSignedUrl } from "@/components/documents/document-upload-client"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { RequiredStandIn } from "@/components/ui/required-stand-in"
 import { cn } from "@/lib/utils"
@@ -26,7 +26,6 @@ import {
   resolveSubmissionFileContentType,
 } from "./submission-file-client"
 
-const SUBMISSION_FILE_ACCEPT = ".pdf,.png,.jpg,.jpeg,.docx,.xlsx,.csv"
 
 type PublicSubmissionFileFieldProps = {
   answers: Readonly<Record<string, unknown>>
@@ -263,7 +262,7 @@ export function PublicSubmissionFileField({
           >
             Choose a file
             <input
-              accept={SUBMISSION_FILE_ACCEPT}
+              accept={UPLOAD_ACCEPT}
               // Named as it reads, so a spoken "Choose a file" finds it.
               aria-label={`Choose a file for ${block.label}`}
               className="sr-only"

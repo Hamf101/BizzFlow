@@ -5,7 +5,6 @@ import {
   completePublicFormFileUpload,
   createPublicFormFileUploadUrl,
   createPublicFormLink,
-  derivePublicLinkToken,
   disablePublicFormLink,
   getPublicFormDraftState,
   getPublicFormLinkByToken,
@@ -14,6 +13,7 @@ import {
   submitPublicForm,
   supersedePublicFormFile,
 } from "@/services/public-form-service"
+import { derivePublicLinkToken } from "@/services/public-forms/shared"
 import {
   CHECKSUM,
   createDeps,

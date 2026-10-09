@@ -16,6 +16,7 @@ import type { OrganizationMember } from "@/types/organization"
 import type { Submission } from "@/types/submission"
 import type { Task } from "@/types/task"
 import type { DocumentTemplateSummary } from "@/types/template"
+import { ServiceError } from "@/services/service-error"
 
 /** The sections one search looks through, in the sidebar's own order. */
 export const WORKSPACE_SEARCH_KINDS = ["people", "files", "templates", "submissions", "tasks"] as const
@@ -74,14 +75,8 @@ export type WorkspaceSearchDeps = {
 }
 
 /** A search that could not run, with a message safe to show. */
-export class WorkspaceSearchError extends Error {
-  readonly statusCode: number
-
-  constructor(message: string, statusCode: number) {
-    super(message)
-    this.name = "WorkspaceSearchError"
-    this.statusCode = statusCode
-  }
+export class WorkspaceSearchError extends ServiceError {
+  override readonly name = "WorkspaceSearchError"
 }
 
 // The permission each section's own tab needs.

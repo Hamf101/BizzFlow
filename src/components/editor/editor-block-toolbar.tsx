@@ -20,11 +20,11 @@ import {
 import { type ReactElement, type ReactNode } from "react"
 
 import { INSERT_CHOICES } from "@/components/editor/block-catalog"
-import { type CanvasActions, type ImageBlock, isField, isLine, isList, type LineBlock, type ListBlock } from "@/components/editor/editor-block"
-import { convertTextBlock, type TextBlockKind } from "@/components/editor/editor-content"
+import { type CanvasActions, type ImageBlock, isField } from "@/components/editor/editor-block"
+import { canStartSection, convertTextBlock, isLine, isList, type LineBlock, type ListBlock, type TextBlockKind } from "@/components/editor/editor-content"
 import { FieldGroupSettings } from "@/components/editor/field-group-settings"
 import { placeImage, placementOf } from "@/components/editor/image-placement"
-import { BlockFields } from "@/components/templates/template-block-editor"
+import { BlockFields } from "@/components/editor/block-fields"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -91,7 +91,7 @@ export function BlockToolbar({ actions, block }: { actions: CanvasActions; block
             }
           />
           <DropdownMenuContent align="start" className="w-44">
-            {isLine(block) ? <DropdownMenuItem disabled={block.text.trim().length > 160 || controller.content.sections.some((section) => section.startBlockId === block.id)} onClick={() => controller.turnIntoSection(block.id)}><Section />Section</DropdownMenuItem> : null}
+            {isLine(block) ? <DropdownMenuItem disabled={!canStartSection(controller.content, block)} onClick={() => controller.turnIntoSection(block.id)}><Section />Section</DropdownMenuItem> : null}
             {INSERT_CHOICES.filter((choice) => choice.action.kind === "text").map((choice) => {
               const Icon = choice.icon
 

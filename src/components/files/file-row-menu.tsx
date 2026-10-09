@@ -31,7 +31,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { bizflowToast } from "@/components/ui/toaster"
+import { announceChange, bizflowToast } from "@/components/ui/toaster"
 import { cn } from "@/lib/utils"
 
 /** One lifecycle change a row offers, posted to its server action. */
@@ -103,24 +103,13 @@ function announce(
       : `${count} ${noun} ${DONE[change]}`
   const undo = count > 0 ? undoOf(change, lifecycle) : null
 
-  bizflowToast.success(title, {
-    action: undo
-      ? {
-          label: "Undo",
-          onClick: () => {
-            changeFilesLifecycleAction({
-              change: undo,
-              documentIds: result.documentIds,
-              folderIds: result.folderIds,
-            })
-              .then(() => bizflowToast.success("Undone"))
-              .catch(() => bizflowToast.error("That could not be undone."))
-          },
-        }
-      : undefined,
-    description:
-      result.failed > 0 ? "The rest changed since you looked, or aren't yours to change." : undefined,
-  })
+  announceChange(
+    title,
+    result.failed,
+    undo
+      ? () => changeFilesLifecycleAction({ change: undo, documentIds: result.documentIds, folderIds: result.folderIds })
+      : null
+  )
 }
 
 /**

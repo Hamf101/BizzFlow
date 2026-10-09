@@ -17,6 +17,7 @@ import { Field, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
+import { memberLabel } from "@/components/people/member-name"
 import type { OrganizationMember } from "@/types/organization"
 
 /**
@@ -77,7 +78,7 @@ export function NewTaskDialog({
                   <option value="">Unassigned</option>
                   {members.map((member: OrganizationMember) => (
                     <option key={member.id} value={member.userId}>
-                      {member.fullName?.trim() || member.email}
+                      {memberLabel(member)}
                     </option>
                   ))}
                 </Select>

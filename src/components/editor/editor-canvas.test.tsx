@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, useEffect, useState } from "react"
-import { createRoot, type Root } from "react-dom/client"
-import { afterEach, beforeAll, expect, it } from "vitest"
+import type { Root } from "react-dom/client"
+import { beforeAll, expect, it } from "vitest"
 
 import { parseGeneratedDocumentAnswers } from "@/components/documents/generated-document-form-data"
 
@@ -13,25 +13,22 @@ import { useReadOnlyController } from "./read-only-controller"
 import { useEditorController, type EditorController } from "./use-editor-controller"
 import { useEditorHistory } from "./use-editor-history"
 import { createEmptyDocumentContent, templateContentV3Schema, type TemplateContentV3 } from "@/types/template"
+import { mount } from "@/test/render"
 
 let root: Root
 let controller: EditorController
 const S = "70000000-0000-4000-8000-000000000011"
 const B = "70000000-0000-4000-8000-000000000002"
 beforeAll(() => {
-  ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
   Range.prototype.getBoundingClientRect = () => new DOMRect()
   Range.prototype.getClientRects = () => Object.assign([], { item: () => null }) as unknown as DOMRectList
 })
-afterEach(() => { act(() => root?.unmount()); document.body.replaceChildren() })
 
 // Choosing a block brings its toolbar, which loads the first time it is needed.
 async function choose(blockId: string): Promise<void> {
   await act(async () => controller.select(blockId))
   await act(async () => { await import("./editor-block-toolbar"); await new Promise((resolve) => setTimeout(resolve, 0)) })
 }
-
-
 
 const TERMS: TemplateContentV3 = {
   ...createEmptyDocumentContent(),
@@ -48,7 +45,7 @@ function Canvas({ editable = true, fields = "design", initial = TERMS, narrow = 
 }
 
 it("edits section titles, keeps an emptied title valid, switches rules and moves the caret into its text", async () => {
-  root = createRoot(document.body.appendChild(document.createElement("div")))
+  root = mount()
   await act(async () => root.render(<Canvas />))
   const title = document.querySelector<HTMLElement>('[aria-label="Section title"]')
   expect(title).not.toBeNull()
@@ -67,7 +64,7 @@ it("edits section titles, keeps an emptied title valid, switches rules and moves
 })
 
 it("shows section titles without editing controls or decorative pieces in preview", async () => {
-  root = createRoot(document.body.appendChild(document.createElement("div")))
+  root = mount()
   await act(async () => root.render(<Canvas editable={false} />))
   expect(document.body.textContent).toContain("Terms")
   expect(document.querySelector('[aria-label="Section title"]')).toBeNull()
@@ -75,7 +72,7 @@ it("shows section titles without editing controls or decorative pieces in previe
 })
 
 it("sets blocks side by side, resizes the row from its seam, and lets a block stand alone", async () => {
-  root = createRoot(document.body.appendChild(document.createElement("div")))
+  root = mount()
   // Rows stack on a phone, so their seams appear only where there is room.
   await act(async () => root.render(<Canvas narrow={false} />))
   const choice = INSERT_CHOICES.find((choice) => choice.id === "text-field")!
@@ -99,7 +96,7 @@ it("sets blocks side by side, resizes the row from its seam, and lets a block st
 
 it("lets a signature be drawn with a mouse without carrying its block away", async () => {
   const signature = { fieldKey: "signature", helpText: null, id: B, label: "Signature", required: false, type: "signature_field" as const }
-  root = createRoot(document.body.appendChild(document.createElement("div")))
+  root = mount()
   await act(async () => root.render(<Canvas fields="fill" initial={{ ...createEmptyDocumentContent(), blocks: [signature] }} narrow={false} />))
   // A signature pad loads the first time a page has one.
   await act(async () => { await import("@/components/documents/drawn-signature-field"); await new Promise((resolve) => setTimeout(resolve, 0)) })
@@ -114,7 +111,7 @@ it("lets a signature be drawn with a mouse without carrying its block away", asy
 })
 
 it("keeps the active section pieces when the canvas switches from desktop to phone", async () => {
-  root = createRoot(document.body.appendChild(document.createElement("div")))
+  root = mount()
   await act(async () => root.render(<Canvas narrow={false} />))
   await act(async () => controller.setActiveBlockId(B))
   expect(document.querySelector('[data-slot="section-pieces"]')).not.toBeNull()
@@ -127,7 +124,7 @@ it("offers placing a picture in front of the text only where there are pages to 
   const initial = { ...createEmptyDocumentContent(), blocks: [picture] }
 
   for (const narrow of [false, true]) {
-    root = createRoot(document.body.appendChild(document.createElement("div")))
+    root = mount()
     await act(async () => root.render(<Canvas initial={initial} narrow={narrow} />))
     await choose(B)
 
@@ -146,7 +143,7 @@ it("moves a selected block a step at a time from the keyboard, across a section'
   const key = (target: Element, name: string) =>
     act(() => void target.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, cancelable: true, ctrlKey: true, key: name, shiftKey: true })))
 
-  root = createRoot(document.body.appendChild(document.createElement("div")))
+  root = mount()
   await act(async () => root.render(<Canvas initial={initial} narrow={false} />))
   await choose(note)
   const block = document.querySelector(`[data-block-id="${note}"]`)!
@@ -164,7 +161,7 @@ it("moves a selected block a step at a time from the keyboard, across a section'
 })
 
 it("moves a page's margins in pairs, so the text stays centred", async () => {
-  root = createRoot(document.body.appendChild(document.createElement("div")))
+  root = mount()
   await act(async () => root.render(<Canvas narrow={false} />))
   const left = document.querySelector<HTMLElement>('[aria-label="Left margin"]')!
   const top = document.querySelector<HTMLElement>('[aria-label="Top margin"]')!
@@ -188,7 +185,7 @@ it("keeps a field its rule hides on the page while it is built, faded until the 
       { fieldKey: "pet_kind", helpText: null, id: kind, label: "What kind?", multiline: false, placeholder: null, required: false, type: "text_field", visibleWhen: { operator: "equals", sourceBlockId: pets, value: true } },
     ],
   })
-  root = createRoot(document.body.appendChild(document.createElement("div")))
+  root = mount()
   await act(async () => root.render(<Canvas fields="fill" initial={content} />))
   const conditional = () => document.querySelector<HTMLElement>(`[data-block-id="${kind}"]`)
 
@@ -206,7 +203,7 @@ it("opens a block's menu on a right-click, but leaves words being typed in the b
     blockRules: [{ blockId: field, frame: { left: 50, width: 50 }, keepWithNext: false, pageBreakBefore: false, spaceAbove: 24 }],
     blocks: [...TERMS.blocks, { fieldKey: "name", helpText: null, id: field, label: "Name", multiline: false, placeholder: null, required: false, type: "text_field" }],
   })
-  root = createRoot(document.body.appendChild(document.createElement("div")))
+  root = mount()
   await act(async () => root.render(<Canvas initial={content} narrow={false} />))
   const rightClick = async (target: Element, pointerType = "mouse") => {
     const menu = new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 5, clientY: 5 })
@@ -245,7 +242,7 @@ it("makes an answer box taller or shorter from the keyboard, back to its usual h
     ...TERMS,
     blocks: [...TERMS.blocks, { fieldKey: "name", helpText: null, id: field, label: "Name", multiline: false, placeholder: null, required: false, type: "text_field" }],
   })
-  root = createRoot(document.body.appendChild(document.createElement("div")))
+  root = mount()
   await act(async () => root.render(<Canvas initial={content} narrow={false} />))
   await choose(field)
   const press = (key: string) => act(async () => void document.querySelector(`[data-block-id="${field}"]`)!.dispatchEvent(new KeyboardEvent("keydown", { altKey: true, bubbles: true, cancelable: true, key, shiftKey: true })))
@@ -263,7 +260,7 @@ it("makes an answer box taller or shorter from the keyboard, back to its usual h
 it("offers a choice as radio buttons that answer under the dropdown's own name, empty until one is chosen", async () => {
   const choice = { fieldKey: "renew", helpText: null, id: B, label: "Renew automatically?", options: ["Yes", "No"], placeholder: null, required: true, type: "dropdown_field" as const, display: "radios" as const }
   const form = document.body.appendChild(document.createElement("form"))
-  root = createRoot(form.appendChild(document.createElement("div")))
+  root = mount(form.appendChild(document.createElement("div")))
   await act(async () => root.render(<Canvas fields="fill" initial={templateContentV3Schema.parse({ ...createEmptyDocumentContent(), blocks: [choice] })} />))
   const group = document.querySelector('[role="radiogroup"][aria-label="Renew automatically?"]')
   const radios = [...(group?.querySelectorAll<HTMLInputElement>('input[type="radio"]') ?? [])]
@@ -306,7 +303,7 @@ it("fills in a page with nothing to design: answers go back, and a file field ho
       />
     )
   }
-  root = createRoot(document.body.appendChild(document.createElement("div")))
+  root = mount()
   await act(async () => root.render(<Fill />))
 
   const input = document.querySelector<HTMLInputElement>('input[aria-label="Your name"]')!

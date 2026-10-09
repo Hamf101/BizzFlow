@@ -1,7 +1,7 @@
 "use server"
 
 import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
-import { saveEditorLayout } from "@/services/editor-layout-service"
+import { saveEditorLayout } from "@/services/organizations/editor-layout-service"
 import { OrganizationServiceError } from "@/services/organizations/errors"
 
 /**

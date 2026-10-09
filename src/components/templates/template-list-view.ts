@@ -1,12 +1,14 @@
 import { z } from "zod"
 
 import {
+  createFilterOptions,
   createSortSection,
+  isOrderOrSizeAdjusted,
   RECORD_SORT_OPTIONS,
   type ListOption,
   type ListOptionSection,
 } from "@/components/data/list-option"
-import { defineListState, formatListSort } from "@/lib/list-state"
+import { defineListState } from "@/lib/list-state"
 import {
   DOCUMENT_TEMPLATE_STATUSES,
   TEMPLATE_CATEGORY_MAX_LENGTH,
@@ -77,24 +79,9 @@ export function getTemplateViewCategory(
  * @returns "All" followed by one option per template status.
  */
 export function getTemplateStatusOptions(view: TemplateListView): ListOption[] {
-  return [
-    {
-      href: templateListState.href(TEMPLATES_PATH, view, {
-        filters: { status: undefined },
-      }),
-      label: "All",
-      selected: view.filters.status === undefined,
-    },
-    ...DOCUMENT_TEMPLATE_STATUSES.map(
-      (status: DocumentTemplateStatus): ListOption => ({
-        href: templateListState.href(TEMPLATES_PATH, view, {
-          filters: { status },
-        }),
-        label: TEMPLATE_STATUS_LABELS[status],
-        selected: view.filters.status === status,
-      })
-    ),
-  ]
+  return createFilterOptions(DOCUMENT_TEMPLATE_STATUSES, view.filters.status, (status) => TEMPLATE_STATUS_LABELS[status], (status) =>
+    templateListState.href(TEMPLATES_PATH, view, { filters: { status } })
+  )
 }
 
 /**
@@ -161,9 +148,7 @@ export function getTemplateViewMenuSections(
  */
 export function isTemplateViewAdjusted(view: TemplateListView): boolean {
   return (
-    view.filters.category !== undefined ||
-    formatListSort(view.sort) !== formatListSort(DEFAULT_TEMPLATE_VIEW.sort) ||
-    view.pageSize !== DEFAULT_TEMPLATE_VIEW.pageSize
+    view.filters.category !== undefined || isOrderOrSizeAdjusted(view, DEFAULT_TEMPLATE_VIEW)
   )
 }
 

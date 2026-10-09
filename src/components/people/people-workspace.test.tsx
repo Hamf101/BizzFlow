@@ -1,8 +1,7 @@
 // @vitest-environment jsdom
 
 import { act } from "react"
-import { createRoot, type Root } from "react-dom/client"
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 
 import type {
   OrganizationInvite,
@@ -11,6 +10,7 @@ import type {
 } from "@/types/organization"
 
 import { PeopleWorkspace } from "./people-workspace"
+import { mount } from "@/test/render"
 
 const NOW_ISO = "2026-09-02T12:00:00.000Z"
 const ORGANIZATION_ID = "10000000-0000-4000-8000-000000000001"
@@ -18,8 +18,6 @@ const OWNER_ROLE_ID = "50000000-0000-4000-8000-000000000001"
 const MANAGER_ROLE_ID = "50000000-0000-4000-8000-000000000002"
 const STAFF_ROLE_ID = "50000000-0000-4000-8000-000000000003"
 const REVIEWER_ROLE_ID = "50000000-0000-4000-8000-000000000004"
-const mountedRoots: Root[] = []
-
 const roles: OrganizationRoleDefinition[] = [
   {
     id: OWNER_ROLE_ID,
@@ -124,28 +122,10 @@ const invites: OrganizationInvite[] = [
   },
 ]
 
-beforeAll(() => {
-  ;(
-    globalThis as typeof globalThis & {
-      IS_REACT_ACT_ENVIRONMENT: boolean
-    }
-  ).IS_REACT_ACT_ENVIRONMENT = true
-})
-
-afterEach(() => {
-  for (const root of mountedRoots.splice(0)) {
-    act(() => root.unmount())
-  }
-  document.body.replaceChildren()
-})
-
 function renderWorkspace(
   overrides: Partial<Parameters<typeof PeopleWorkspace>[0]> = {}
 ): void {
-  const container = document.createElement("div")
-  document.body.append(container)
-  const root = createRoot(container)
-  mountedRoots.push(root)
+  const root = mount()
 
   act(() =>
     root.render(

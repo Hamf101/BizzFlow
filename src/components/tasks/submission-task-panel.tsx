@@ -2,7 +2,7 @@ import { ListChecks, Plus } from "lucide-react"
 import Link from "next/link"
 import type { ReactElement } from "react"
 
-import { formatMemberName } from "@/components/people/member-name"
+import { formatMemberName, memberLabel } from "@/components/people/member-name"
 import { TaskStatusBadge } from "@/components/tasks/task-presentation"
 import { useTimeZone } from "@/components/ui/local-date"
 import { Button, buttonVariants } from "@/components/ui/button"
@@ -158,7 +158,7 @@ export function SubmissionTaskPanel({
                         <option value="">Leave unassigned</option>
                         {members.map((member: OrganizationMember) => (
                           <option key={member.id} value={member.userId}>
-                            {member.fullName?.trim() || member.email}
+                            {memberLabel(member)}
                           </option>
                         ))}
                       </Select>

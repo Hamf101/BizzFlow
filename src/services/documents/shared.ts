@@ -33,13 +33,9 @@ import type {
 import type { OrganizationMembership } from "@/types/organization"
 import { loadActiveMembership } from "@/services/organizations/active-membership"
 import { runOperation } from "@/services/operation"
+import { asSupabaseError } from "@/services/supabase-error"
+import type { SupabaseErrorLike } from "@/services/supabase-error"
 
-type SupabaseErrorLike = {
-  code?: string
-  details?: string
-  hint?: string
-  message?: string
-}
 
 type MembershipRow = {
   id: string
@@ -80,6 +76,18 @@ function toDocumentServiceError(error: unknown): DocumentServiceError {
 
   return createDocumentSetupError(error) ?? new DocumentServiceError("Document service failed.", 500)
 }
+
+/** Every column a document read maps. */
+export const DOCUMENT_COLUMNS =
+  "id,org_id,folder_id,title,description,current_version_id,source_kind,template_id,template_revision,lifecycle_state,created_by,updated_by,archived_by,archived_at,trashed_by,trashed_at,purge_after,pre_trash_lifecycle_state,trash_operation_id,created_at,updated_at"
+
+/** Every column a folder read maps. */
+export const FOLDER_COLUMNS =
+  "id,org_id,parent_folder_id,name,lifecycle_state,created_by,updated_by,archived_by,archived_at,trashed_by,trashed_at,purge_after,pre_trash_lifecycle_state,trash_operation_id,created_at,updated_at"
+
+/** Every column a document-version read maps. */
+export const DOCUMENT_VERSION_COLUMNS =
+  "id,org_id,document_id,version_number,status,storage_key,original_filename,content_type,byte_size,checksum_sha256,uploaded_by,created_at,updated_at"
 
 /**
  * Requires an active organization membership with the requested permission.
@@ -128,7 +136,7 @@ export async function requireActiveFolder(
 ): Promise<DocumentFolder> {
   const { data, error } = await client
     .from("folders")
-    .select("id,org_id,parent_folder_id,name,lifecycle_state,created_by,updated_by,archived_by,archived_at,trashed_by,trashed_at,purge_after,pre_trash_lifecycle_state,trash_operation_id,created_at,updated_at")
+    .select(FOLDER_COLUMNS)
     .eq("id", folderId)
     .eq("org_id", organizationId)
     .eq("lifecycle_state", "active")
@@ -164,7 +172,7 @@ export async function getFolderById(
 ): Promise<DocumentFolder> {
   const { data, error } = await client
     .from("folders")
-    .select("id,org_id,parent_folder_id,name,lifecycle_state,created_by,updated_by,archived_by,archived_at,trashed_by,trashed_at,purge_after,pre_trash_lifecycle_state,trash_operation_id,created_at,updated_at")
+    .select(FOLDER_COLUMNS)
     .eq("id", folderId)
     .eq("org_id", organizationId)
     .maybeSingle()
@@ -196,7 +204,7 @@ export async function getDocumentById(
 ): Promise<DocumentSummary> {
   const { data, error } = await client
     .from("documents")
-    .select("id,org_id,folder_id,title,description,current_version_id,source_kind,template_id,template_revision,lifecycle_state,created_by,updated_by,archived_by,archived_at,trashed_by,trashed_at,purge_after,pre_trash_lifecycle_state,trash_operation_id,created_at,updated_at")
+    .select(DOCUMENT_COLUMNS)
     .eq("id", documentId)
     .eq("org_id", organizationId)
     .maybeSingle()
@@ -244,10 +252,7 @@ export function mapFolder(row: FolderRow): DocumentFolder {
     organizationId: row.org_id,
     parentFolderId: row.parent_folder_id,
     name: row.name,
-    lifecycleState: parseDocumentLifecycleState(
-      row.lifecycle_state,
-      row.archived_at
-    ),
+    lifecycleState: parseDocumentLifecycleState(row.lifecycle_state),
     createdBy: row.created_by,
     updatedBy: row.updated_by,
     archivedBy: row.archived_by,
@@ -288,10 +293,7 @@ export function mapDocument(row: DocumentRow): DocumentSummary {
           templateRevision: row.template_revision ?? null,
         }
       : {}),
-    lifecycleState: parseDocumentLifecycleState(
-      row.lifecycle_state,
-      row.archived_at
-    ),
+    lifecycleState: parseDocumentLifecycleState(row.lifecycle_state),
     createdBy: row.created_by,
     updatedBy: row.updated_by,
     archivedBy: row.archived_by,
@@ -450,10 +452,7 @@ function parseDocumentVersionStatus(value: string): DocumentVersionStatus {
   )
 }
 
-function parseDocumentLifecycleState(
-  value: unknown,
-  archivedAt: string | null
-): DocumentLifecycleState {
+function parseDocumentLifecycleState(value: unknown): DocumentLifecycleState {
   if (
     value === "active" ||
     value === "archived" ||
@@ -461,11 +460,6 @@ function parseDocumentLifecycleState(
     value === "purge_pending"
   ) {
     return value
-  }
-
-  if (value === undefined) {
-    // Keep legacy projections safe during the additive lifecycle rollout.
-    return archivedAt ? "archived" : "active"
   }
 
   throw new DocumentServiceError(
@@ -481,7 +475,7 @@ function parseNullableDocumentLifecycleState(
     return null
   }
 
-  return parseDocumentLifecycleState(value, null)
+  return parseDocumentLifecycleState(value)
 }
 
 function createDocumentSetupError(error: unknown): DocumentServiceError | null {
@@ -508,7 +502,7 @@ function createDocumentSetupError(error: unknown): DocumentServiceError | null {
 }
 
 function getSupabaseSetupFailureMessage(error: unknown): string | null {
-  const errorLike = getSupabaseErrorLike(error)
+  const errorLike = asSupabaseError(error)
   const searchableMessage = [
     errorLike?.code,
     errorLike?.message,
@@ -550,10 +544,22 @@ function getSupabaseSetupFailureMessage(error: unknown): string | null {
   return null
 }
 
-function getSupabaseErrorLike(error: unknown): SupabaseErrorLike | null {
-  if (!error || typeof error !== "object") {
-    return null
-  }
-
-  return error as SupabaseErrorLike
+/**
+ * Whether a lifecycle function refused the caller's access (42501) rather
+ * than failing for another reason.
+ *
+ * @param error - The Supabase error, or null.
+ * @param searchableMessage - Its searchable text.
+ * @returns True when the refusal names the caller's membership or access.
+ */
+export function isLifecycleAccessRefusal(
+  error: SupabaseErrorLike | null,
+  searchableMessage: string
+): boolean {
+  return (
+    error?.code === "42501" &&
+    (searchableMessage.includes("active organization membership") ||
+      searchableMessage.includes("contributor access and a manager role") ||
+      searchableMessage.includes("sufficient access"))
+  )
 }

@@ -1,13 +1,12 @@
 // @vitest-environment jsdom
 
 import { act } from "react"
-import { createRoot } from "react-dom/client"
 import { expect, it, vi } from "vitest"
 
 import ThemedFavicon from "./themed-favicon"
+import { mount } from "@/test/render"
 
 vi.mock("./bizflow-mark", () => ({ BizFlowMark: () => <svg><polygon points="0,0 10,0 0,10" /></svg> }))
-;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 const LIGHT = "rgb(255, 253, 252)"
 const DARK = "rgb(34, 30, 43)"
@@ -52,7 +51,7 @@ it("plays the logo's turns from frames drawn once, finishes a turn before the br
   const frame = (seconds: number, fill = LIGHT): string => `data:image/png,${seconds}|${fill}`
   const host = document.createElement("div")
   document.body.append(host)
-  const root = createRoot(host)
+  const root = mount(host)
   try {
     act(() => root.render(<ThemedFavicon />))
     act(() => vi.advanceTimersByTime(0))
@@ -92,7 +91,7 @@ it("plays the logo's turns from frames drawn once, finishes a turn before the br
     expect(vi.getTimerCount()).toBe(0)
     // With reduced motion the page rests for good.
     reduced = true
-    const stillRoot = createRoot(host)
+    const stillRoot = mount(host)
     act(() => stillRoot.render(<ThemedFavicon />))
     act(() => vi.advanceTimersByTime(60_000))
     expect(document.head.querySelector('link[rel="icon"]')?.getAttribute("href")).toBe(frame(4, DARK))

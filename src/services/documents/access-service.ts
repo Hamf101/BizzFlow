@@ -409,3 +409,65 @@ function createAccessDeniedError(
     403
   )
 }
+
+/**
+ * Runs a document access check for another service and reports its refusal
+ * as that service's error: a 403 in its own words, anything else as it was.
+ *
+ * @param check - The pending document access check.
+ * @param fail - Builds the calling service's error.
+ * @param rejectionMessage - What a 403 says.
+ * @returns What the check returned.
+ */
+export async function requireDocumentAccessAs<T>(
+  check: Promise<T>,
+  fail: (message: string, statusCode: number) => Error,
+  rejectionMessage: string
+): Promise<T> {
+  try {
+    return await check
+  } catch (error: unknown) {
+    if (error instanceof DocumentServiceError) {
+      throw fail(error.statusCode === 403 ? rejectionMessage : error.message, error.statusCode)
+    }
+
+    throw error
+  }
+}
+
+/** How a service reports each way a document can be unreadable. */
+export type ReadableDocumentFailures<TError> = {
+  loadFailed: (error: TError) => Error
+  /** No such document, or one in trash or awaiting purge. */
+  notFound: () => Error
+  /** A lifecycle state this build does not know. Not found when absent. */
+  unsupported?: () => Error
+  /** Refuses an archived document, for a change. Readable when absent. */
+  archived?: () => Error
+}
+
+/**
+ * Requires that a document read found a tenant document that can still be
+ * read: active or archived. Trash and a pending purge revoke every read.
+ *
+ * @param result - The document's lifecycle read.
+ * @param fail - The service's errors for each failure.
+ */
+export function requireReadableDocument<TError>(
+  result: { data: unknown; error: TError | null },
+  fail: ReadableDocumentFailures<TError>
+): void {
+  if (result.error) throw fail.loadFailed(result.error)
+  if (!result.data) throw fail.notFound()
+
+  const state = (result.data as { lifecycle_state?: unknown }).lifecycle_state
+
+  if (state === "active") return
+  if (state === "archived") {
+    if (fail.archived) throw fail.archived()
+    return
+  }
+  if (state === "trashed" || state === "purge_pending" || !fail.unsupported) throw fail.notFound()
+
+  throw fail.unsupported()
+}

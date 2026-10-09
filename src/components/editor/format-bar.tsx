@@ -29,8 +29,7 @@ import {
 import { type FormEvent, type ReactElement, type ReactNode, useEffect, useState, useSyncExternalStore } from "react"
 
 import { findInsertChoices, INSERT_CHOICES, type InsertChoice } from "@/components/editor/block-catalog"
-import { isLine, isList } from "@/components/editor/editor-block"
-import { convertTextBlock, liftListItem, sectionOfTitle, type TextBlockKind } from "@/components/editor/editor-content"
+import { canStartSection, convertTextBlock, isLine, isList, liftListItem, sectionOfTitle, type TextBlockKind } from "@/components/editor/editor-content"
 import { FontPicker } from "@/components/editor/font-picker"
 import type { EditorController } from "@/components/editor/use-editor-controller"
 import { Button } from "@/components/ui/button"
@@ -44,7 +43,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { cn } from "@/lib/utils"
+import { cn, subscribeNever } from "@/lib/utils"
 import { type TemplateBlock, textRunSchema } from "@/types/template"
 
 type LineKind = Extract<TextBlockKind, { type: "heading" | "paragraph" }>
@@ -318,7 +317,7 @@ export function FormatBar({
           }
         />
         <DropdownMenuContent className="w-44" side={narrow ? "top" : "bottom"}>
-          <DropdownMenuItem disabled={!isLine(block) || block.text.trim().length > 160 || content.sections.some((section) => section.startBlockId === block?.id)} onClick={() => block && controller.turnIntoSection(block.id)}><Section />Section</DropdownMenuItem>
+          <DropdownMenuItem disabled={!isLine(block) || !canStartSection(content, block)} onClick={() => block && controller.turnIntoSection(block.id)}><Section />Section</DropdownMenuItem>
           {STYLES.map(([label, kind]) => (
             <DropdownMenuItem key={label} onClick={() => setStyle(kind)}>
               <span style={kind.type === "heading" ? { fontSize: `${[1.35, 1.2, 1.05][kind.level - 1]}em`, fontWeight: 600 } : undefined}>
@@ -722,8 +721,4 @@ export function toHref(value: string): string | null {
       : `https://${typed}`
 
   return typed && textRunSchema.shape.link.safeParse(href).success ? href : null
-}
-
-function subscribeNever(): () => void {
-  return () => undefined
 }

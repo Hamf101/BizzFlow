@@ -60,6 +60,29 @@ const toastClassNames = {
     "flex w-full items-center gap-3 rounded-[12px] border border-border bg-card py-3 pr-3 pl-4 text-card-foreground shadow-lg",
 } as const
 
+/**
+ * Says what a change to several items did, offering Undo while it reached any.
+ *
+ * @param title - What changed, such as "3 items archived".
+ * @param failed - How many it could not reach.
+ * @param undo - Puts them back, or null when nothing can.
+ */
+export function announceChange(title: string, failed: number, undo: (() => Promise<unknown>) | null): void {
+  bizflowToast.success(title, {
+    action: undo
+      ? {
+          label: "Undo",
+          onClick: () => {
+            undo()
+              .then(() => bizflowToast.success("Undone"))
+              .catch(() => bizflowToast.error("That could not be undone."))
+          },
+        }
+      : undefined,
+    description: failed > 0 ? "The rest changed since you looked, or aren't yours to change." : undefined,
+  })
+}
+
 /** Semantic toast entry points used by the fixed-copy feedback registry. */
 export const bizflowToast = {
   /** Shows a successful authoritative result. */

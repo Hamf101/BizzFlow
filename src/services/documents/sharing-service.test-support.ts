@@ -3,6 +3,20 @@
  * answers the filters and writes the service uses, and access questions the
  * service asks the database (rpc) from a table the test fills in.
  */
+import type {
+  SetSharingAccessInput,
+  SetSharingInheritanceInput,
+  SharingInput,
+  SharingServiceDeps,
+  SharingView,
+} from "@/services/documents/sharing-contracts"
+import {
+  prepareSharingAccess,
+  prepareSharingInheritance,
+  type PreparedSharingChange,
+} from "@/services/documents/sharing-service"
+import { runDocumentOperation } from "@/services/documents/shared"
+
 export type FakeRow = Record<string, unknown>
 type Filter = (row: FakeRow) => boolean
 type Result = { data: unknown; error: null | { code?: string; message: string } }
@@ -141,3 +155,30 @@ export class SharingFakeClient {
     return { data: this.access[`${String(args.target_actor_user_id)}:${String(item)}`] ?? null, error: null }
   }
 }
+
+/**
+ * Makes one item's sharing change at once. The app shares through the Many
+ * variants; the tests drive the single-item checks through this.
+ */
+async function runSharingChange(
+  name: string,
+  input: SharingInput,
+  prepare: () => Promise<PreparedSharingChange>
+): Promise<SharingView> {
+  return runDocumentOperation(name, { actorUserId: input.actorUserId, organizationId: input.organizationId }, async () => {
+    const change = await prepare()
+
+    await change.apply()
+
+    return change.view()
+  })
+}
+
+export const setSharingAccess = (input: SetSharingAccessInput, deps: SharingServiceDeps = {}): Promise<SharingView> =>
+  runSharingChange("set_sharing_access", input, () => prepareSharingAccess(input, deps))
+
+export const setSharingInheritance = (
+  input: SetSharingInheritanceInput,
+  deps: SharingServiceDeps = {}
+): Promise<SharingView> =>
+  runSharingChange("set_sharing_inheritance", input, () => prepareSharingInheritance(input, deps))

@@ -50,8 +50,13 @@ import {
   startSigningWorkflow,
   toPublicSignerStatus,
 } from "@/services/document-signing/persistence"
-import { requireDocumentAccess, requireDocumentReader, requireDocumentWriter } from "@/services/documents/access-service"
-import { DocumentServiceError } from "@/services/documents/errors"
+import {
+  requireDocumentAccess,
+  requireDocumentReader,
+  requireDocumentWriter,
+  requireReadableDocument,
+  requireDocumentAccessAs,
+} from "@/services/documents/access-service"
 import type { DocumentAccessLevel } from "@/types/document"
 import {
   assertNewRecipientEmails,
@@ -92,11 +97,6 @@ type PendingInvitation = {
   id: string
   token: string
   row: DocumentSigningRecipientRow
-}
-
-type SigningDocumentStateRow = {
-  lifecycle_state?: unknown
-  archived_at?: unknown
 }
 
 /**
@@ -864,19 +864,12 @@ async function requireMemberDocumentAccess(
   )
 }
 
-async function asSigningError<T>(access: Promise<T>, rejectionMessage: string): Promise<T> {
-  try {
-    return await access
-  } catch (error: unknown) {
-    if (error instanceof DocumentServiceError) {
-      throw new DocumentSigningServiceError(
-        error.statusCode === 403 ? rejectionMessage : error.message,
-        error.statusCode
-      )
-    }
-
-    throw error
-  }
+function asSigningError<T>(access: Promise<T>, rejectionMessage: string): Promise<T> {
+  return requireDocumentAccessAs(
+    access,
+    (message, statusCode) => new DocumentSigningServiceError(message, statusCode),
+    rejectionMessage
+  )
 }
 
 async function requireMemberSigningDocumentLifecycle(
@@ -923,54 +916,21 @@ async function requireSigningDocumentLifecycle(
   operation: "read" | "mutation",
   messages: { inactive: string; unavailable: string }
 ): Promise<void> {
-  const { data, error } = await client
-    .from("documents")
-    .select("lifecycle_state,archived_at")
-    .eq("id", documentId)
-    .eq("org_id", organizationId)
-    .maybeSingle()
-
-  if (error) {
-    throw createDatabaseError(error, "Unable to load generated document.")
-  }
-
-  const lifecycleState = data
-    ? normalizeSigningDocumentLifecycle(data as SigningDocumentStateRow)
-    : null
-
-  if (
-    lifecycleState === null ||
-    lifecycleState === "trashed" ||
-    lifecycleState === "purge_pending"
-  ) {
-    throw new DocumentSigningServiceError(messages.unavailable, 404)
-  }
-
-  if (operation === "mutation" && lifecycleState !== "active") {
-    throw new DocumentSigningServiceError(messages.inactive, 409)
-  }
-}
-
-function normalizeSigningDocumentLifecycle(
-  document: SigningDocumentStateRow
-): "active" | "archived" | "trashed" | "purge_pending" {
-  const lifecycleState = document.lifecycle_state
-
-  if (
-    lifecycleState === "active" ||
-    lifecycleState === "archived" ||
-    lifecycleState === "trashed" ||
-    lifecycleState === "purge_pending"
-  ) {
-    return lifecycleState
-  }
-
-  if (lifecycleState === undefined || lifecycleState === null) {
-    return document.archived_at == null ? "active" : "archived"
-  }
-
-  throw new DocumentSigningServiceError(
-    "Database returned an unsupported document lifecycle state.",
-    500
+  requireReadableDocument(
+    await client
+      .from("documents")
+      .select("lifecycle_state,archived_at")
+      .eq("id", documentId)
+      .eq("org_id", organizationId)
+      .maybeSingle(),
+    {
+      loadFailed: (error) => createDatabaseError(error, "Unable to load generated document."),
+      notFound: () => new DocumentSigningServiceError(messages.unavailable, 404),
+      unsupported: () =>
+        new DocumentSigningServiceError("Database returned an unsupported document lifecycle state.", 500),
+      ...(operation === "mutation"
+        ? { archived: () => new DocumentSigningServiceError(messages.inactive, 409) }
+        : {}),
+    }
   )
 }

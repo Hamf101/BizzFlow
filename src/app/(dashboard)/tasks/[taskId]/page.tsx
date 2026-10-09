@@ -54,7 +54,7 @@ import {
   transitionTaskStatusAction,
   updateTaskAction,
 } from "../actions"
-import { formatMemberName } from "@/components/people/member-name"
+import { formatMemberName, memberLabel } from "@/components/people/member-name"
 import {
   getTaskStatusLabel,
   listInternalTaskMembers,
@@ -355,7 +355,7 @@ function TaskAssignmentPanel({
                   <option value="">Unassigned</option>
                   {members.map((member: OrganizationMember) => (
                     <option key={member.id} value={member.userId}>
-                      {member.fullName?.trim() || member.email}
+                      {memberLabel(member)}
                     </option>
                   ))}
                 </Select>
@@ -519,7 +519,7 @@ function TaskRemindersPanel({
                 </option>
                 {members.map((member: OrganizationMember) => (
                   <option key={member.id} value={member.userId}>
-                    {member.fullName?.trim() || member.email}
+                    {memberLabel(member)}
                   </option>
                 ))}
               </Select>

@@ -3,10 +3,7 @@
 import { type ReactElement, useEffect, useSyncExternalStore } from "react"
 
 import { formatMediumDate, formatMediumDateTime, TIME_ZONE_COOKIE } from "@/lib/date-format"
-
-function subscribeNever(): () => void {
-  return () => undefined
-}
+import { subscribeNever } from "@/lib/utils"
 
 function viewerTimeZone(): string {
   return Intl.DateTimeFormat().resolvedOptions().timeZone

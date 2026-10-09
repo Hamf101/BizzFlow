@@ -359,31 +359,6 @@ describe("template render plan", () => {
     expect(markup).not.toContain("Standard")
   })
 
-  it("keeps selection and toolbar buttons as sibling controls", () => {
-    const plan = createTemplateRenderPlan({
-      title: "Approval",
-      content: createStructuredContent(),
-      mode: "build"
-    })
-    const markup = renderToStaticMarkup(
-      createElement(TemplatePreview, {
-        renderPlan: plan,
-        onBlockSelect: (): void => undefined,
-        onDeleteBlock: (): void => undefined,
-        onMoveBlock: (): void => undefined,
-        selectedBlockId: SOURCE_ID
-      })
-    )
-    const selectionStart = markup.indexOf('aria-label="Edit checkbox field"')
-    const selectionEnd = markup.indexOf("</button>", selectionStart)
-    const toolbarStart = markup.indexOf('aria-label="Edit block settings"')
-
-    expect(selectionStart).toBeGreaterThanOrEqual(0)
-    expect(selectionEnd).toBeGreaterThan(selectionStart)
-    expect(toolbarStart).toBeGreaterThan(selectionEnd)
-    expect(markup).not.toContain('role="button"')
-  })
-
   it("keeps content in proportion on new paper, and at its size when the page only turns", () => {
     const content = createStructuredContent()
     const plan = (layout: TemplateContentV3["layout"]) =>

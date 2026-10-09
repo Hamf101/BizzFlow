@@ -10,11 +10,11 @@ import {
 } from "@/components/audit/audit-log-view"
 import { ListFilterChips } from "@/components/data/list-filter-chips"
 import { ListPagination } from "@/components/data/list-pagination"
-import { type ListSavedViews, ListViewMenu, ListViewTitle } from "@/components/data/list-view-menu"
-import { DatedTitle } from "@/components/navigation/dated-title"
+import { ListEmpty, ListHeading } from "@/components/data/list-heading"
+import { type ListSavedViews, ListViewMenu } from "@/components/data/list-view-menu"
 import { useTimeZone } from "@/components/ui/local-date"
+import { memberLabel } from "@/components/people/member-name"
 import { formatMediumDateTime } from "@/lib/date-format"
-import { getLastPage } from "@/lib/list-state"
 import type { AuditLogEntry } from "@/types/audit"
 import type { OrganizationMember } from "@/types/organization"
 
@@ -42,7 +42,6 @@ export function AuditLogWorkspace({
   total: number
   view: AuditLogView
 }): ReactElement {
-  const lastPage = getLastPage(total, view.pageSize)
 
   const listViews: ListSavedViews = {
     list: "audit-log",
@@ -53,18 +52,7 @@ export function AuditLogWorkspace({
   return (
     <section className="flex flex-col gap-5" data-slot="audit-log-workspace">
       <div className="flex items-center justify-between gap-3">
-        {/* The real space keeps the accessible name "Audit log 2 events". */}
-        <DatedTitle>
-          <h1 className="text-2xl leading-none font-medium tracking-[-0.02em]">
-            <ListViewTitle title="Audit log" views={listViews} />{" "}
-            <span
-              aria-label={`${total} ${total === 1 ? "event" : "events"}`}
-              className="ml-0.5 text-xl font-normal text-muted-foreground"
-            >
-              {total}
-            </span>
-          </h1>
-        </DatedTitle>
+        <ListHeading noun={["event", "events"]} shrink={false} title="Audit log" total={total} views={listViews} />
         <ListViewMenu
           adjusted={isAuditViewAdjusted(view)}
           label="View options"
@@ -79,12 +67,7 @@ export function AuditLogWorkspace({
       />
 
       {entries.length === 0 ? (
-        <p
-          className="py-16 text-center text-sm text-muted-foreground"
-          role="status"
-        >
-          {view.filters.kind ? "No events of this kind." : "No events yet."}
-        </p>
+        <ListEmpty>{view.filters.kind ? "No events of this kind." : "No events yet."}</ListEmpty>
       ) : (
         <ul aria-label="Audit events" className="flex flex-col gap-1">
           {entries.map((entry: AuditLogEntry) => (
@@ -94,18 +77,9 @@ export function AuditLogWorkspace({
       )}
 
       <ListPagination
-        nextHref={
-          view.page < lastPage
-            ? auditLogListState.href("/audit-log", view, { page: view.page + 1 })
-            : null
-        }
+        href={(page) => auditLogListState.href("/audit-log", view, { page })}
         page={view.page}
         pageSize={view.pageSize}
-        previousHref={
-          view.page > 1
-            ? auditLogListState.href("/audit-log", view, { page: view.page - 1 })
-            : null
-        }
         total={total}
       />
     </section>
@@ -178,5 +152,5 @@ function formatAuditActor(
     (candidate: OrganizationMember): boolean => candidate.userId === actorUserId
   )
 
-  return member?.fullName?.trim() || member?.email || "Member"
+  return (member && memberLabel(member)) || "Member"
 }

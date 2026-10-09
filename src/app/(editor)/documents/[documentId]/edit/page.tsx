@@ -7,7 +7,7 @@ import { getFallbackDisplayName } from "@/lib/display-name"
 import { loadMemberName } from "@/lib/page-member-name"
 import { canPerformOrganizationAction, canSendDocument, canShareResource } from "@/lib/permissions"
 import { readPersonName } from "@/services/document-service"
-import { getEditorLayout } from "@/services/editor-layout-service"
+import { getEditorLayout } from "@/services/organizations/editor-layout-service"
 import type { EditorLayout } from "@/types/editor-layout"
 import { saveEditorLayoutAction } from "@/app/(editor)/editor-layout-actions"
 
