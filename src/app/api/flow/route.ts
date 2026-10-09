@@ -23,6 +23,7 @@ export async function POST(request: Request): Promise<Response> {
         actorUserId: userId,
         history: body.history,
         message: body.message,
+        model: body.model,
         organizationId,
       })
     )

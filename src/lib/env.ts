@@ -388,7 +388,8 @@ export function getAiEnv(): AiEnv {
     AI_PROVIDER: provider,
     AI_MODEL:
       process.env.AI_MODEL?.trim() ||
-      (provider === "gemini" ? "gemini-flash-latest" : undefined),
+      // The newest approved model (services/ai/approved-models.ts).
+      (provider === "gemini" ? "gemini-3.8-flash" : undefined),
     AI_TIMEOUT_MS: process.env.AI_TIMEOUT_MS,
     AI_EFFORT: process.env.AI_EFFORT?.trim() || undefined,
   })

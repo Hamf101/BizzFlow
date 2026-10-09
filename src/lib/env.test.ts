@@ -393,14 +393,14 @@ describe("file upload policy environment validation", () => {
 })
 
 describe("AI environment validation", () => {
-  it("follows Gemini's newest Flash model by default, not one fixed version", () => {
+  it("runs Gemini's newest approved Flash model by default", () => {
     setIsolatedEnv({
       GEMINI_API_KEY: "gemini-test-key",
     })
 
     expect(getAiEnv()).toEqual({
       AI_PROVIDER: "gemini",
-      AI_MODEL: "gemini-flash-latest",
+      AI_MODEL: "gemini-3.8-flash",
       AI_TIMEOUT_MS: 90000,
     })
   })

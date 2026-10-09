@@ -20,31 +20,31 @@ const AI_PROVIDER_FACTORIES: Readonly<Record<string, AiProviderFactory>> = {
  * providers are rejected instead of selecting an implicit one, and so is any
  * model the benchmark has not approved.
  *
- * @param options - `requireApproved: false` lets the benchmark try unapproved models.
+ * @param options - `model`: the approved model a member picked, which wins over
+ *   AI_PROVIDER/AI_MODEL. `requireApproved: false` lets the benchmark try others.
  * @returns Configured provider adapter and exact provider/model reference.
  * @throws Error when the provider is not registered or the model not approved.
  */
-export function createAiRuntime(options: { requireApproved?: boolean } = {}): AiRuntime {
+export function createAiRuntime(options: { model?: string; requireApproved?: boolean } = {}): AiRuntime {
   const config = getAiEnv()
-  const createProvider = AI_PROVIDER_FACTORIES[config.AI_PROVIDER]
+  const model = options.model ?? config.AI_MODEL
+  const approved = APPROVED_AI_MODELS.find(
+    (candidate) =>
+      candidate.model === model && (options.model !== undefined || candidate.provider === config.AI_PROVIDER)
+  )
+  const provider = approved?.provider ?? config.AI_PROVIDER
+  const createProvider = AI_PROVIDER_FACTORIES[provider]
 
   if (!createProvider) {
-    throw new Error(`Unsupported AI provider: ${config.AI_PROVIDER}`)
+    throw new Error(`Unsupported AI provider: ${provider}`)
   }
 
-  const approved = APPROVED_AI_MODELS.find(
-    (candidate) => candidate.provider === config.AI_PROVIDER && candidate.model === config.AI_MODEL
-  )
-
-  if (!approved && options.requireApproved !== false) {
-    throw new Error(`AI model ${config.AI_PROVIDER}/${config.AI_MODEL} is not approved for Flow.`)
+  if (!approved && (options.model !== undefined || options.requireApproved !== false)) {
+    throw new Error(`AI model ${provider}/${model} is not approved for Flow.`)
   }
 
   return {
     provider: createProvider(config, config.AI_EFFORT ?? approved?.effort ?? "low"),
-    model: {
-      provider: config.AI_PROVIDER,
-      model: config.AI_MODEL,
-    },
+    model: { provider, model },
   }
 }

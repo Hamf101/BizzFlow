@@ -18,6 +18,7 @@ let root: Root | null = null
 afterEach(() => {
   root = null
   vi.unstubAllGlobals()
+  localStorage.clear()
 })
 
 function item(index: number, type: TemplateFlowOperationType, summary: string, dependsOn: number[] = []): TemplateFlowLedgerItem {
@@ -137,4 +138,37 @@ it("drops a change with what needs it, applies only the kept ones, and keeps the
   expect(onApplyProposal).toHaveBeenCalledWith(rebuilt, "m-2")
   await settle()
   expect(document.body.textContent).toContain("Proposed change set")
+})
+
+it("sends a message, even one carried in on open, to the model this person picked last", async () => {
+  localStorage.setItem("bizflow.flow-model", "gemini-3.5-flash")
+  const fetchFlow = vi.fn(async () => ({ ok: false, json: async () => ({ error: "Stop here." }) }))
+  vi.stubGlobal("fetch", fetchFlow)
+
+  const container = document.createElement("div")
+  document.body.append(container)
+  root = mount(container)
+  act(() =>
+    root?.render(
+      <TemplateFlowPanel
+        autoSend="Ask about the vehicle."
+        canUndo={false}
+        draft={draft}
+        initialMessages={[]}
+        lastAppliedMessageId={null}
+        onApplyProposal={() => undefined}
+        onProposalReceived={() => undefined}
+        onProposalStale={() => undefined}
+        onRejectProposal={() => undefined}
+        onUndo={() => undefined}
+        pendingProposal={null}
+        templateId={TEMPLATE_ID}
+      />
+    )
+  )
+  await settle()
+
+  const [, init] = fetchFlow.mock.calls[0] as unknown as [string, { body: string }]
+  expect(JSON.parse(init.body).model).toBe("gemini-3.5-flash")
+  expect(buttonNamed("Flow model: Gemini 3.5 Flash")).toBeTruthy()
 })

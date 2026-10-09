@@ -8,6 +8,7 @@ import {
 } from "@/lib/permissions"
 import type { AiRuntime } from "@/services/ai/contracts"
 import { AI_PROVIDER_ERROR_CODES, AiProviderError } from "@/services/ai/errors"
+import { flowModelSchema } from "@/services/ai/approved-models"
 import { createAiRuntime } from "@/services/ai/provider-factory"
 import { listFolderDocuments, listRecentDocuments } from "@/services/document-service"
 import { getCurrentOrganizationContext } from "@/services/organization-service"
@@ -37,6 +38,8 @@ export type WorkspaceFlowInput = {
   /** Earlier turns, as the browser kept them; context for the plan only. */
   history: unknown
   message: unknown
+  /** The model the member picked; the default when absent. */
+  model?: unknown
   organizationId: string
 }
 
@@ -44,7 +47,7 @@ type Actor = { actorUserId: string; organizationId: string }
 
 export type WorkspaceFlowDeps = {
   createTraceId?: () => string
-  getAiRuntime?: () => AiRuntime
+  getAiRuntime?: (options?: { model?: string }) => AiRuntime
   listTasks?: (input: Actor & { assignedTo?: string; query?: string }) => Promise<Task[]>
   listSubmissions?: (
     input: Actor & { createdBy?: string; query?: string; statuses: readonly SubmissionStatus[] }
@@ -150,6 +153,12 @@ export async function executeWorkspaceFlow(
     throw new TemplateFlowServiceError("Write a message of 2 to 2,000 characters.", 400)
   }
 
+  const model = flowModelSchema.optional().safeParse(input.model)
+
+  if (!model.success) {
+    throw new TemplateFlowServiceError("Pick one of the models Flow offers.", 400)
+  }
+
   const actor = { actorUserId: input.actorUserId, organizationId: input.organizationId }
   const membership = await (deps.loadMembership ?? loadMembership)(actor)
   const creatable = (["template", "document"] as const).filter((target) =>
@@ -157,7 +166,7 @@ export async function executeWorkspaceFlow(
       ? canPerformOrganizationAction(membership, "templates:create") || canPerformOrganizationAction(membership, "templates:manage")
       : canPerformOrganizationAction(membership, "documents:create")
   )
-  const plan = await requestPlan(message.data, historySchema.parse(input.history), creatable, deps)
+  const plan = await requestPlan(message.data, historySchema.parse(input.history), creatable, model.data, deps)
 
   if (plan.action === "create") {
     const target = creatable.includes(plan.target as "template") ? plan.target : creatable[0]
@@ -256,12 +265,13 @@ async function requestPlan(
   message: string,
   history: z.infer<typeof historySchema>,
   creatable: readonly ("document" | "template")[],
+  model: string | undefined,
   deps: WorkspaceFlowDeps
 ): Promise<Plan> {
   let runtime: AiRuntime
 
   try {
-    runtime = (deps.getAiRuntime ?? createAiRuntime)()
+    runtime = (deps.getAiRuntime ?? createAiRuntime)({ model })
   } catch {
     throw new TemplateFlowServiceError("Flow is not configured. Add the AI environment variables.", 503)
   }

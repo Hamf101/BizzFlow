@@ -29,6 +29,7 @@ import {
   useRef,
   useState
 } from "react"
+import { FlowModelPicker, useFlowModel } from "@/components/flow/flow-model-picker"
 import { z } from "zod"
 
 import { FLOW_COMPOSER, FLOW_SEND } from "@/components/flow/flow-window"
@@ -121,6 +122,8 @@ export function TemplateFlowPanel({
   starter = TEMPLATE_STARTER,
   templateId
 }: TemplateFlowPanelProps): ReactElement {
+  // First, so the kept model is read before a carried message is sent.
+  const flowModel = useFlowModel()
   const [messages, setMessages] =
     useState<TemplateFlowMessage[]>(initialMessages)
   const [instruction, setInstruction] = useState<string>("")
@@ -192,7 +195,8 @@ export function TemplateFlowPanel({
         body: JSON.stringify({
           templateId,
           draft: toTemplateFlowDraft(draft),
-          instruction: trimmedInstruction
+          instruction: trimmedInstruction,
+          model: flowModel.chosen()
         }),
         headers: { "Content-Type": "application/json" },
         method: "POST",
@@ -481,14 +485,14 @@ export function TemplateFlowPanel({
             <ArrowUp aria-hidden="true" className="size-5" />
           </button>
         </div>
-        {pendingProposal ? (
-          <p
-            className="mt-1.5 text-[10px] text-muted-foreground"
-            id="flow-composer-hint"
-          >
-            Apply or reject the proposal first
-          </p>
-        ) : null}
+        <div className="flex items-center gap-2">
+          <FlowModelPicker disabled={isLoading} model={flowModel.model} onChange={flowModel.pick} />
+          {pendingProposal ? (
+            <p className="text-[10px] text-muted-foreground" id="flow-composer-hint">
+              Apply or reject the proposal first
+            </p>
+          ) : null}
+        </div>
       </form>
     </aside>
   )

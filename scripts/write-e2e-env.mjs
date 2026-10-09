@@ -119,7 +119,7 @@ const lines = [
   "AI_PROVIDER=gemini",
   "GEMINI_API_KEY=",
   "OPENROUTER_API_KEY=",
-  "AI_MODEL=gemini-flash-latest",
+  "AI_MODEL=gemini-3.8-flash",
   "AI_TIMEOUT_MS=30000",
   "",
   "# Rate limiting is disabled when Upstash is unset, which is what a suite",

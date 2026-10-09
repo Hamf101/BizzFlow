@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest"
 
+import { APPROVED_AI_MODELS } from "@/services/ai/approved-models"
 import { createAiRuntime } from "@/services/ai/provider-factory"
 
 const originalEnv = { ...process.env }
@@ -9,7 +10,7 @@ afterEach(() => {
 })
 
 describe("AI provider factory", () => {
-  it("runs with no model configured, on the approved model that follows Gemini's newest", () => {
+  it("runs with no model configured, on the newest approved model", () => {
     process.env = {
       NODE_ENV: "test",
       AI_TIMEOUT_MS: "14000",
@@ -19,7 +20,17 @@ describe("AI provider factory", () => {
     const runtime = createAiRuntime()
 
     expect(runtime.provider.id).toBe("gemini")
-    expect(runtime.model).toEqual({ provider: "gemini", model: "gemini-flash-latest" })
+    expect(runtime.model).toEqual({ provider: "gemini", model: APPROVED_AI_MODELS[0].model })
+  })
+
+  it("runs the model a member picked, and refuses one that isn't approved", () => {
+    process.env = { NODE_ENV: "test", GEMINI_API_KEY: "test-provider-key" }
+
+    expect(createAiRuntime({ model: "gemini-3.5-flash" }).model).toEqual({
+      provider: "gemini",
+      model: "gemini-3.5-flash",
+    })
+    expect(() => createAiRuntime({ model: "gemini-flash-latest" })).toThrow("not approved")
   })
 
   it("refuses a model the benchmark has not approved, unless a benchmark asks for it", () => {

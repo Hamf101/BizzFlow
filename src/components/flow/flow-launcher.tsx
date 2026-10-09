@@ -7,6 +7,7 @@ import { type FormEvent, type KeyboardEvent, type ReactElement, useRef, useState
 import { createGeneratedDocumentAction } from "@/app/(dashboard)/documents/actions"
 import { createTemplateAction } from "@/app/(dashboard)/templates/actions"
 import { handOffToFlow } from "@/components/flow/flow-handoff"
+import { FlowModelPicker, useFlowModel } from "@/components/flow/flow-model-picker"
 import { FLOW_COMPOSER, FLOW_SEND, FlowWindow } from "@/components/flow/flow-window"
 import { cn } from "@/lib/utils"
 import type { WorkspaceFlowAnswer, WorkspaceFlowItem } from "@/services/workspace-flow-service"
@@ -48,6 +49,7 @@ function FlowConversation({ onLeave }: { onLeave: () => void }): ReactElement {
   const nextId = useRef(0)
   // Read at once, not from the last render, so a quick second Enter never sends twice.
   const sending = useRef(false)
+  const flowModel = useFlowModel()
 
   function add(turn: Omit<Turn, "id">): void {
     const id = nextId.current++
@@ -70,7 +72,7 @@ function FlowConversation({ onLeave }: { onLeave: () => void }): ReactElement {
 
     try {
       const response = await fetch("/api/flow", {
-        body: JSON.stringify({ history, message: trimmed }),
+        body: JSON.stringify({ history, message: trimmed, model: flowModel.chosen() }),
         headers: { "Content-Type": "application/json" },
         method: "POST",
       })
@@ -197,6 +199,7 @@ function FlowConversation({ onLeave }: { onLeave: () => void }): ReactElement {
             <ArrowUp aria-hidden="true" className="size-5" />
           </button>
         </div>
+        <FlowModelPicker disabled={busy} model={flowModel.model} onChange={flowModel.pick} />
       </form>
     </>
   )

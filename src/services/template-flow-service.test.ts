@@ -550,6 +550,29 @@ describe("template Flow service", () => {
     })
   })
 
+  it("runs the model the member picked, and refuses one Flow doesn't offer", async () => {
+    const picked: unknown[] = []
+    const deps = createDependencies({})
+    const getAiRuntime = deps.getAiRuntime!
+    deps.getAiRuntime = (options) => {
+      picked.push(options?.model)
+      return getAiRuntime(options)
+    }
+
+    await executeTemplateFlow(
+      { ...createInput(createBlankTemplateContent(), "Create an agreement."), model: "gemini-3.5-flash" },
+      deps
+    )
+    await expect(
+      executeTemplateFlow(
+        { ...createInput(createBlankTemplateContent(), "Create an agreement."), model: "gpt-unknown" },
+        deps
+      )
+    ).rejects.toMatchObject({ statusCode: 400 })
+
+    expect(picked).toEqual(["gemini-3.5-flash"])
+  })
+
   it("rejects a provider result model mismatch without fallback", async () => {
     const aiProvider = createTestAiProvider([
       rawFlowProviderResult(successfulFlowPayload(), {

@@ -241,7 +241,7 @@ export async function executeDocumentFlow(
   // `templateId`. ponytail: the conversation lives in the editor's tab; keep
   // it per document once someone needs it back after a reload.
   return executeTemplateFlow(
-    { actorUserId, draft: input.draft, instruction: input.instruction, organizationId, templateId: documentId },
+    { actorUserId, draft: input.draft, instruction: input.instruction, model: input.model, organizationId, templateId: documentId },
     {
       ...deps,
       authorizeTemplateManagement: async (): Promise<void> => {},
@@ -472,7 +472,7 @@ async function loadAiRuntime(
   startedAt: number
 ): Promise<AiRuntime> {
   try {
-    return (deps.getAiRuntime ?? createAiRuntime)()
+    return (deps.getAiRuntime ?? createAiRuntime)({ model: request.model })
   } catch (error: unknown) {
     console.error("template_flow_configuration_failed", {
       actorUserId: request.actorUserId,

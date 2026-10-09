@@ -1,6 +1,7 @@
 import { z } from "zod"
 
 import { type AdminSupabaseClient } from "@/lib/supabase/admin"
+import { flowModelSchema } from "@/services/ai/approved-models"
 import { type AiModelReference, type AiRuntime, type AiTokenUsage } from "@/services/ai/contracts"
 import { TEMPLATE_FLOW_OPERATION_TYPES } from "@/services/template-ai/flow-response-schema"
 import {
@@ -89,7 +90,8 @@ export const flowRequestSchema = z
     organizationId: z.string().trim().min(1),
     templateId: z.string().uuid(),
     draft: flowDraftSchema,
-    instruction: z.string().trim().min(2).max(2_000)
+    instruction: z.string().trim().min(2).max(2_000),
+    model: flowModelSchema.optional()
   })
   .strict()
 
@@ -353,7 +355,7 @@ export const flowStructuredResponseSchema = z
 
 // A rebuild takes back only what a Flow response could have held.
 export const flowRebuildRequestSchema = flowRequestSchema
-  .omit({ instruction: true })
+  .omit({ instruction: true, model: true })
   .extend({
     baseDraftFingerprint: z.string().min(1).max(200),
     operations: flowProviderResponseSchema.shape.operations
@@ -440,6 +442,7 @@ export type ExecuteTemplateFlowInput = {
   templateId: unknown
   draft: unknown
   instruction: unknown
+  model?: unknown
 }
 
 export type ExecuteDocumentFlowInput = {
@@ -448,9 +451,10 @@ export type ExecuteDocumentFlowInput = {
   documentId: string
   draft: unknown
   instruction: unknown
+  model?: unknown
 }
 
-export type RebuildTemplateFlowProposalInput = Omit<ExecuteTemplateFlowInput, "instruction"> & {
+export type RebuildTemplateFlowProposalInput = Omit<ExecuteTemplateFlowInput, "instruction" | "model"> & {
   baseDraftFingerprint: unknown
   operations: unknown
 }
@@ -482,7 +486,7 @@ export type TemplateFlowServiceDeps = {
   client?: TemplateFlowClient
   createId?: () => string
   createTraceId?: () => string
-  getAiRuntime?: () => AiRuntime
+  getAiRuntime?: (options?: { model?: string }) => AiRuntime
   loadHistory?: (input: {
     organizationId: string
     templateId: string
