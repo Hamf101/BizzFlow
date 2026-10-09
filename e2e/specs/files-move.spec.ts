@@ -1,14 +1,13 @@
-import { randomUUID } from "node:crypto"
-
 import { expect, test, uniqueName } from "../support/fixtures"
 import { waitForHydration } from "../support/hydration"
 import { retryConcurrentChange } from "../support/retry"
+import { seedFolder } from "../support/seed"
 
 test("moves a file into a folder from its menu, and puts it back with Undo", async ({
   admin,
   pageAs,
   tenant,
-}, testInfo) => {
+}) => {
   // Both device projects walk this at once against the shared tenant, so each
   // works on its own folders and file.
   const name = uniqueName("Move")
@@ -16,28 +15,8 @@ test("moves a file into a folder from its menu, and puts it back with Undo", asy
   const childName = `${name} 2026`
   const title = `${name} invoice.pdf`
   const owner = tenant.users.owner_admin
-  const seedFolder = async (
-    folderName: string,
-    parentFolderId: string | null
-  ): Promise<string> => {
-    const id = randomUUID()
-    const { error } = await retryConcurrentChange(() =>
-      admin.from("folders").insert({
-        created_by: owner.id,
-        id,
-        name: folderName,
-        org_id: tenant.organizationId,
-        parent_folder_id: parentFolderId,
-        updated_by: owner.id,
-      })
-    )
-    if (error) throw error
-
-    return id
-  }
-
-  const parent = await seedFolder(folderName, null)
-  await seedFolder(childName, parent)
+  const parent = await seedFolder(admin, tenant.organizationId, owner.id, folderName)
+  await seedFolder(admin, tenant.organizationId, owner.id, childName, parent)
   const { error } = await retryConcurrentChange(() =>
     admin.from("documents").insert({
       created_by: owner.id,
@@ -50,9 +29,6 @@ test("moves a file into a folder from its menu, and puts it back with Undo", asy
   if (error) throw error
 
   const page = await pageAs("owner_admin")
-  if (testInfo.project.use.viewport) {
-    await page.setViewportSize(testInfo.project.use.viewport)
-  }
   const actions = page.getByRole("button", { name: `Actions for ${title}` })
   const fileLink = page.getByRole("link", { exact: true, name: title })
   const dialog = page.getByRole("dialog")

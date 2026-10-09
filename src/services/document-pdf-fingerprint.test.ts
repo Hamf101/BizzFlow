@@ -1,4 +1,6 @@
 import { createHash } from "node:crypto"
+import { mkdir, writeFile } from "node:fs/promises"
+import { dirname } from "node:path"
 
 import {
   decodePDFRawStream,
@@ -28,9 +30,9 @@ import { createSampleDocumentInput } from "@/services/document-pdf/sample-docume
  * all.
  *
  * When a hash changes, that is not automatically a bug. Render the sample with
- * `pnpm tsx scripts/render-generated-document-sample.tsx out.pdf`, look at it,
- * and update the constant only once you are satisfied the change is the one you
- * intended.
+ * `RENDER_SAMPLE=1 pnpm vitest run src/services/document-pdf-fingerprint.test.ts`
+ * (or `RENDER_SAMPLE=<path>` to choose where it goes), look at it, and update
+ * the constant only once you are satisfied the change is the one you intended.
  */
 
 // Any fixed RFC 3339 instant works; this one matches the sample's signing dates
@@ -107,6 +109,20 @@ describe("generated document PDF fingerprint", () => {
 
     expect(document.getCreationDate()?.getTime()).toBe(expected)
     expect(document.getModificationDate()?.getTime()).toBe(expected)
+  })
+
+  // Not a check: writes the sample out for a person to look at.
+  it.runIf(process.env.RENDER_SAMPLE)("writes the sample for eyeballing", async () => {
+    const path =
+      process.env.RENDER_SAMPLE === "1"
+        ? "artifacts/verification/generated-document-sample.pdf"
+        : (process.env.RENDER_SAMPLE as string)
+    const pdf = await renderSample()
+
+    await mkdir(dirname(path), { recursive: true })
+    await writeFile(path, pdf)
+    console.info("generated_document_visual_sample_written", { path, byteSize: pdf.length })
+    expect(pdf.length).toBeGreaterThan(0)
   })
 }, PDF_RENDER_TIMEOUT_MS)
 

@@ -93,10 +93,23 @@ test.describe("submission intake", () => {
       uniqueName("Unpublished")
     )
 
+    const published = await seedTemplate(
+      admin,
+      tenant.organizationId,
+      uniqueName("Offered"),
+      "published"
+    )
+
     const staff = await pageAs("staff")
 
     await staff.goto("/submissions/new")
 
+    // The choices exist only while the picker is open, and the published
+    // one being there proves it is.
+    const picker = staff.getByLabel("Template")
+    await waitForHydration(picker)
+    await picker.click()
+    await expect(staff.getByRole("option", { name: published.title })).toBeVisible()
     await expect(
       staff.getByRole("option", { name: draft.title })
     ).toHaveCount(0)

@@ -3,14 +3,11 @@ import { waitForHydration } from "../support/hydration"
 
 test("files a new folder, then archives, restores, trashes, and purges it from its menu", async ({
   pageAs,
-}, testInfo) => {
+}) => {
   // Both device projects walk this at once against the shared tenant, so each
   // works on its own folder.
   const name = uniqueName("Leases")
   const page = await pageAs("owner_admin")
-  if (testInfo.project.use.viewport) {
-    await page.setViewportSize(testInfo.project.use.viewport)
-  }
   const states = page.getByRole("navigation", { name: "Show files by state" })
   const folderLink = page.getByRole("link", { exact: true, name })
   const actions = page.getByRole("button", { name: `Actions for ${name}` })

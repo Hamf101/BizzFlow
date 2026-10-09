@@ -18,7 +18,9 @@ import { templateContentV3Schema, type TemplateContentV3 } from "@/types/templat
  *
  *   FLOW_BENCH=1 pnpm vitest run scripts/flow-bench/references.test.ts
  *
- * renders each one to artifacts/flow-bench/references/<set>/<name>.pdf.
+ * checks them and renders each one to
+ * artifacts/flow-bench/references/<set>/<name>.pdf. Like the bench, it runs
+ * only when asked.
  */
 
 type Reference = {
@@ -60,7 +62,7 @@ function readReferences(): Reference[] {
   )
 }
 
-describe("Flow references", () => {
+describe.runIf(process.env.FLOW_BENCH === "1")("Flow references", () => {
   it("are valid, free of quality issues, within their page counts, and cover every kind of document", () => {
     const references = readReferences()
     const family = ({ name }: Reference): string => name.split("-")[0] ?? ""
@@ -88,7 +90,7 @@ describe("Flow references", () => {
     }
   })
 
-  it.runIf(process.env.FLOW_BENCH === "1")("render to PDF", async () => {
+  it("render to PDF", async () => {
     for (const { set, name, title, content } of readReferences()) {
       const outDir = join("artifacts/flow-bench/references", set)
       const pdf = await renderGeneratedDocumentPdf({

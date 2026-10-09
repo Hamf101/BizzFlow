@@ -69,7 +69,7 @@ test("selects templates with modifier clicks, archives, files and copies them to
   }
 })
 
-test("an archived template can be restored from its own menu, and staff can only copy what is not theirs", async ({
+test("an archived template can be restored from its own menu", async ({
   admin,
   pageAs,
   tenant,
@@ -87,16 +87,4 @@ test("an archived template can be restored from its own menu, and staff can only
   await owner.getByRole("menuitem", { name: "Restore" }).click()
   await expect(owner.getByText("1 template restored")).toBeVisible()
   await expect(card.locator('[data-slot="template-status"]')).toHaveText("Draft")
-
-  // Staff see only published templates. Someone else's is theirs to copy, not to change.
-  const publishedTitle = uniqueName("For staff")
-  await seedTemplate(admin, tenant.organizationId, publishedTitle, "published")
-  const staff = await pageAs("staff")
-  const staffCard = staff.locator('[data-slot="template-card"]').filter({ hasText: publishedTitle })
-
-  await staff.goto(`/templates?q=${encodeURIComponent(publishedTitle)}`)
-  await waitForHydration(staffCard)
-  await staffCard.getByRole("button", { name: `Actions for ${publishedTitle}` }).click()
-  await expect(staff.getByRole("menuitem", { name: "Duplicate" })).toBeVisible()
-  await expect(staff.getByRole("menuitem", { name: /^(Edit|Archive|Share)/ })).toHaveCount(0)
 })

@@ -83,9 +83,11 @@ test.describe("public form", () => {
     const page = await context.newPage()
     let arrive = (): void => undefined
     const code = new Promise<void>((resolve) => (arrive = resolve))
+    let held = 0
 
     // The page's code is held back until the visitor has typed.
     await page.route("**/_next/static/chunks/**/*.js", async (route) => {
+      held += 1
       await code
       await route.continue()
     })
@@ -93,6 +95,8 @@ test.describe("public form", () => {
 
     const field = page.getByLabel("Client reference")
     await field.fill("EXT-9002")
+    // Typing happened while code really was being held.
+    expect(held).toBeGreaterThan(0)
     arrive()
     await waitForHydration(field)
     await expect(field).toHaveValue("EXT-9002")
@@ -115,10 +119,11 @@ test.describe("public form", () => {
       template.id
     )
 
-    await admin
+    const { error } = await admin
       .from("public_form_links")
       .update({ status: "disabled" })
       .eq("token_hash", createHash("sha256").update(token, "utf8").digest("hex"))
+    if (error) throw error
 
     const context = await browser.newContext()
     const page = await context.newPage()
@@ -127,9 +132,8 @@ test.describe("public form", () => {
 
     // Revoking a link has to take effect immediately — it is the only control a
     // tenant has once a URL is loose.
-    await expect(
-      page.getByRole("button", { name: "Submit" })
-    ).toBeHidden()
+    await expect(page.getByRole("heading", { level: 1, name: "Link turned off" })).toBeVisible()
+    await expect(page.getByRole("button", { name: "Submit" })).toHaveCount(0)
 
     await context.close()
   })

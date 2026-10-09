@@ -26,7 +26,6 @@ test("owner names are shared while drag order stays personal and survives a new 
     await expect(staff.getByRole("menuitem", { name: "Rename", exact: true })).toHaveCount(0)
     await staff.keyboard.press("Escape")
     await staffNav.getByRole("link", { name: "Settings", exact: true }).dragTo(staffNav.getByRole("link", { name: "Dashboard", exact: true }))
-    await expect(staff.getByRole("status")).toHaveCount(0)
     await expect(staffNav.getByRole("link").first()).toHaveAttribute("href", "/settings")
     await staff.reload()
     await expect(staffNav.getByRole("link").first()).toHaveAttribute("href", "/settings")

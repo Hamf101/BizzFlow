@@ -7,7 +7,7 @@ test("narrows the audit log by kind, unfolds an event, and downloads exactly tha
   admin,
   pageAs,
   tenant,
-}, testInfo) => {
+}) => {
   // Other specs record events in this tenant at the same time, so every
   // assertion either finds this spec's own events by reference or holds for
   // any event of the chosen kind.
@@ -31,9 +31,6 @@ test("narrows the audit log by kind, unfolds an event, and downloads exactly tha
   if (error) throw error
 
   const page = await pageAs("owner_admin")
-  if (testInfo.project.use.viewport) {
-    await page.setViewportSize(testInfo.project.use.viewport)
-  }
 
   await page.goto("/audit-log")
   await expect(page.getByRole("heading", { level: 1 })).toHaveAccessibleName(

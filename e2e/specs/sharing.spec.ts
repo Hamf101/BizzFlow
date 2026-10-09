@@ -1,22 +1,10 @@
-import { randomUUID } from "node:crypto"
-
 import type { Page } from "@playwright/test"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 import { expect, test, uniqueName } from "../support/fixtures"
 import { waitForHydration } from "../support/hydration"
 import { retryConcurrentChange } from "../support/retry"
-
-test.describe.configure({ mode: "serial" })
-
-async function seedFolder(admin: SupabaseClient, organizationId: string, ownerId: string, name: string): Promise<string> {
-  const id = randomUUID()
-  const { error } = await retryConcurrentChange(() =>
-    admin.from("folders").insert({ created_by: ownerId, id, name, org_id: organizationId, updated_by: ownerId })
-  )
-  if (error) throw error
-  return id
-}
+import { seedFolder } from "../support/seed"
 
 async function seedDocument(
   admin: SupabaseClient,
@@ -63,7 +51,10 @@ test("the person who made a document shares it with a manager, who hears about i
   const staffPage = await pageAs("staff")
   await staffPage.goto("/documents")
   const dialog = await openShare(staffPage, title)
-  await expect(dialog).toContainText("Owner")
+  // Whoever made it is listed as its owner.
+  await expect(
+    dialog.getByRole("region", { name: "People with access" }).getByRole("listitem").filter({ hasText: "E2E staff" })
+  ).toContainText("Owner")
   await expect(dialog).toContainText("Owner admins always have access.")
 
   await dialog.getByLabel("Find a person or group").fill(manager.email)

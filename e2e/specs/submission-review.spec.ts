@@ -99,8 +99,8 @@ test.describe("submission review", () => {
 
     // One of two approving is not enough.
     await manager.getByRole("button", { name: "Approve" }).click()
-    await expectStatus(admin, submissionId, "in_review")
     await expect(manager.getByText("1 of 2 approvals")).toBeVisible()
+    await expectStatus(admin, submissionId, "in_review")
 
     // The other reviewer asks for changes, which holds it up.
     await owner.goto(`/submissions/${submissionId}`)
@@ -150,8 +150,10 @@ test.describe("submission review", () => {
     // Note deliberately left blank.
     await manager.getByRole("button", { name: "Reject" }).click()
 
+    // The form's own help text also says a note is required, so look for the
+    // refusal itself; only once it shows does the status say anything.
+    await expect(manager.getByRole("status").filter({ hasText: "Some information needs attention" })).toBeVisible()
     await expectStatus(admin, submissionId, "in_review")
-    await expect(manager.getByText(/note is required/i).first()).toBeVisible()
   })
 
   test("lets an outside reviewer approve and comment as a reviewer, but not reject, and keeps staff from deciding", async ({
@@ -186,8 +188,8 @@ test.describe("submission review", () => {
     await outside.getByRole("button", { exact: true, name: "Comment" }).click()
     await expect(outside.getByRole("region", { name: "Reviewers" })).toContainText("Looks fine from outside.")
     await outside.getByRole("button", { name: "Approve" }).click()
-    await expectStatus(admin, submissionId, "in_review")
     await expect(outside.getByText("1 of 2 approvals")).toBeVisible()
+    await expectStatus(admin, submissionId, "in_review")
 
     // Their decision counts: the manager's approval completes it.
     await manager.goto(`/submissions/${submissionId}`)

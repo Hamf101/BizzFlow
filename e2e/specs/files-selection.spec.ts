@@ -1,7 +1,7 @@
 import { expect, test, uniqueName } from "../support/fixtures"
 import { waitForHydration } from "../support/hydration"
-import { retryConcurrentChange } from "../support/retry"
 import { searchList } from "../support/search"
+import { seedFolder } from "../support/seed"
 
 test("selects files with modifier clicks, archives them together, and undoes it", async ({
   admin,
@@ -11,17 +11,7 @@ test("selects files with modifier clicks, archives them together, and undoes it"
   const owner = tenant.users.owner_admin
   const names = [uniqueName("Selected A"), uniqueName("Selected B")]
 
-  for (const name of names) {
-    const { error } = await retryConcurrentChange(() =>
-      admin.from("folders").insert({
-        created_by: owner.id,
-        name,
-        org_id: tenant.organizationId,
-        updated_by: owner.id,
-      })
-    )
-    if (error) throw error
-  }
+  for (const name of names) await seedFolder(admin, tenant.organizationId, owner.id, name)
 
   const page = await pageAs("owner_admin")
   const tile = (name: string) =>
@@ -71,17 +61,7 @@ test("right-click acts on the selection, or selects the item it lands on", async
   const owner = tenant.users.owner_admin
   const names = [uniqueName("Clicked A"), uniqueName("Clicked B"), uniqueName("Clicked C")]
 
-  for (const name of names) {
-    const { error } = await retryConcurrentChange(() =>
-      admin.from("folders").insert({
-        created_by: owner.id,
-        name,
-        org_id: tenant.organizationId,
-        updated_by: owner.id,
-      })
-    )
-    if (error) throw error
-  }
+  for (const name of names) await seedFolder(admin, tenant.organizationId, owner.id, name)
 
   const page = await pageAs("owner_admin")
   const tile = (name: string) =>
@@ -130,17 +110,7 @@ test("keeps a selection through a search, and starts fresh in another view", asy
   const shared = uniqueName("Kept")
   const names = [`${shared} kept here`, uniqueName("Kept elsewhere")]
 
-  for (const name of names) {
-    const { error } = await retryConcurrentChange(() =>
-      admin.from("folders").insert({
-        created_by: owner.id,
-        name,
-        org_id: tenant.organizationId,
-        updated_by: owner.id,
-      })
-    )
-    if (error) throw error
-  }
+  for (const name of names) await seedFolder(admin, tenant.organizationId, owner.id, name)
 
   const page = await pageAs("owner_admin")
   const tile = (name: string) =>
@@ -178,17 +148,7 @@ test("keeps a selection when you open something and come back", async ({
   const owner = tenant.users.owner_admin
   const names = [uniqueName("Revisited A"), uniqueName("Revisited B")]
 
-  for (const name of names) {
-    const { error } = await retryConcurrentChange(() =>
-      admin.from("folders").insert({
-        created_by: owner.id,
-        name,
-        org_id: tenant.organizationId,
-        updated_by: owner.id,
-      })
-    )
-    if (error) throw error
-  }
+  for (const name of names) await seedFolder(admin, tenant.organizationId, owner.id, name)
 
   const page = await pageAs("owner_admin")
   const tile = (name: string) =>

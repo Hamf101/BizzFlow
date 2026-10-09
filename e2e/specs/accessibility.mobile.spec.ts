@@ -1,6 +1,7 @@
 import { expect, test } from "../support/fixtures"
 import { waitForHydration } from "../support/hydration"
 
+// Phones only: the tab bar's More button doesn't exist on a desktop.
 test("the More button says whether its sheet is open", async ({ pageAs }) => {
   const page = await pageAs("staff")
 

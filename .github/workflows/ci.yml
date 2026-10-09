@@ -35,7 +35,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       # The steps below are `pnpm check`, in order, one step each so a failure
-      # names its gate. scripts/ci-workflow.test.mjs keeps the two in step.
+      # names its gate. Keep the two in step by hand.
       - name: Lint
         run: pnpm lint
 

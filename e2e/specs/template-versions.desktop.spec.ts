@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto"
 
-import { expect, test, uniqueName } from "../support/fixtures"
+import { expect, expectSaved, test, uniqueName } from "../support/fixtures"
 import { waitForHydration } from "../support/hydration"
 import { seedTemplate } from "../support/seed"
 
@@ -12,15 +12,8 @@ test("a published template's edits are kept as they're made, reach staff on Upda
   const terms = { alignment: "left", id: randomUUID(), text: "Pay within 30 days.", type: "paragraph" }
   const template = await seedTemplate(admin, tenant.organizationId, uniqueName("Payment terms"), "published", [terms])
   const page = await pageAs("owner_admin")
-  const text = (relation: string) =>
-    expect.poll(
-      async () => {
-        const { data, error } = await admin.from(relation).select("content").eq("id", template.id).single()
-        if (error) throw error
-        return data.content.blocks.map((block: { text?: string }) => block.text)
-      },
-      { timeout: 15_000 }
-    )
+  const text = (relation: "document_templates" | "published_document_templates") =>
+    expectSaved(admin, relation, template.id, ({ blocks }) => blocks.map(({ text }) => text))
   const update = page.getByRole("button", { exact: true, name: "Update" })
   const save = page.getByRole("button", { exact: true, name: "Save" })
   const opened = page.waitForResponse((response) => response.url().endsWith(`/api/templates/${template.id}/room`))

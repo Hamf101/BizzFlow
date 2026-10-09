@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto"
 
 import type { Page } from "@playwright/test"
 
-import { expect, test, uniqueName } from "../support/fixtures"
+import { expect, expectSaved, signInAs, test, uniqueName } from "../support/fixtures"
 import { waitForHydration } from "../support/hydration"
 import { seedTemplate } from "../support/seed"
 import { insertMember } from "../support/tenant"
@@ -23,24 +23,12 @@ test("two people edit one template at once, see each other's words, and someone 
 }) => {
   const intro = { alignment: "left", id: randomUUID(), text: "Welcome aboard.", type: "paragraph" }
   const template = await seedTemplate(admin, tenant.organizationId, uniqueName("Welcome pack"), "draft", [intro])
-  const saved = () =>
-    expect.poll(
-      async () => {
-        const { data, error } = await admin.from("document_templates").select("content").eq("id", template.id).single()
-        if (error) throw error
-        return data.content.blocks.map((block: { text?: string }) => block.text)
-      },
-      { timeout: 15_000 }
-    )
+  const saved = () => expectSaved(admin, "document_templates", template.id, ({ blocks }) => blocks.map(({ text }) => text))
   const owner = await pageAs("owner_admin")
   // A manager of their own, so taking their access away touches no other spec.
   const colleague = await insertMember(admin, tenant.organizationId, "manager", `collab-${randomUUID().slice(0, 8)}`)
   const manager = await (await browser.newContext()).newPage()
-  await manager.goto("/login")
-  await manager.getByLabel("Email").fill(colleague.email)
-  await manager.getByLabel("Password", { exact: true }).fill(colleague.password)
-  await manager.getByRole("button", { name: /log in/i }).click()
-  await manager.waitForURL(/\/dashboard/, { timeout: 30_000 })
+  await signInAs(manager, colleague.email, colleague.password)
   await Promise.all([openTemplate(owner, template.id), openTemplate(manager, template.id)])
 
   // Each types in the same line, one at its end and one at its start, without waiting for the other.

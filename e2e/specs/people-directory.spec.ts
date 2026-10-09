@@ -1,27 +1,10 @@
-import type { Browser, Page, TestInfo } from "@playwright/test"
+import type { Page } from "@playwright/test"
 
 import { expect, test, uniqueName } from "../support/fixtures"
 import { waitForHydration } from "../support/hydration"
-import { authStatePath } from "../support/paths"
 
-/**
- * Opens People as the Owner with the project's real device settings.
- *
- * `pageAs` creates a bare context, so a phone project would otherwise run with
- * a desktop viewport and no touch input; this spec needs both to be genuine.
- */
-async function openPeopleAsOwner(browser: Browser, testInfo: TestInfo): Promise<Page> {
-  const device = testInfo.project.use
-  const context = await browser.newContext({
-    baseURL: device.baseURL ?? process.env.NEXT_PUBLIC_APP_URL,
-    deviceScaleFactor: device.deviceScaleFactor,
-    hasTouch: device.hasTouch,
-    isMobile: device.isMobile,
-    storageState: authStatePath("owner_admin"),
-    userAgent: device.userAgent,
-    viewport: device.viewport,
-  })
-  const page = await context.newPage()
+/** Opens People on a page signed in as the Owner. */
+async function openPeople(page: Page): Promise<Page> {
   await page.goto("/people")
   await expect(page.getByRole("heading", { name: /People/ })).toBeVisible()
   await waitForHydration(page.locator('[data-slot="member-profile-trigger"]').first())
@@ -39,76 +22,69 @@ async function firstMemberPreview(page: Page) {
 
 test.describe("People directory", () => {
   test("opens a member preview after a deliberate hover every time and at once on focus, or at once on tap", async ({
-    browser,
-  }, testInfo) => {
-    const page = await openPeopleAsOwner(browser, testInfo)
+    hasTouch,
+    pageAs,
+  }) => {
+    const page = await openPeople(await pageAs("owner_admin"))
 
-    try {
-      const { preview, trigger } = await firstMemberPreview(page)
+    const { preview, trigger } = await firstMemberPreview(page)
 
-      // Each device project proves its own input: a phone has no hover, so it
-      // taps; a pointer device hovers twice and then uses the keyboard.
-      if (testInfo.project.use.hasTouch) {
-        const tappedAt = Date.now()
-        await trigger.tap()
-        await expect(preview).toBeVisible()
-        expect(Date.now() - tappedAt).toBeLessThan(800)
-        await expect(preview).toContainText("@")
-        return
-      }
+    // Each device project proves its own input: a phone has no hover, so it
+    // taps; a pointer device hovers twice and then uses the keyboard.
+    if (hasTouch) {
+      const tappedAt = Date.now()
+      await trigger.tap()
+      await expect(preview).toBeVisible()
+      expect(Date.now() - tappedAt).toBeLessThan(800)
+      await expect(preview).toContainText("@")
+      return
+    }
 
-      for (const attempt of [1, 2]) {
-        await page.mouse.move(0, 0)
-        await expect(preview).toBeHidden()
-        const hoveredAt = Date.now()
-        await trigger.hover()
-        await expect(preview).toBeVisible()
-        expect(Date.now() - hoveredAt, `hover attempt ${attempt}`).toBeGreaterThanOrEqual(800)
-      }
-
+    for (const attempt of [1, 2]) {
       await page.mouse.move(0, 0)
       await expect(preview).toBeHidden()
-      const focusedAt = Date.now()
-      await trigger.focus()
+      const hoveredAt = Date.now()
+      await trigger.hover()
       await expect(preview).toBeVisible()
-      expect(Date.now() - focusedAt).toBeLessThan(800)
-      await page.keyboard.press("Escape")
-      await expect(preview).toBeHidden()
-    } finally {
-      await page.context().close()
+      expect(Date.now() - hoveredAt, `hover attempt ${attempt}`).toBeGreaterThanOrEqual(800)
     }
+
+    await page.mouse.move(0, 0)
+    await expect(preview).toBeHidden()
+    const focusedAt = Date.now()
+    await trigger.focus()
+    await expect(preview).toBeVisible()
+    expect(Date.now() - focusedAt).toBeLessThan(800)
+    await page.keyboard.press("Escape")
+    await expect(preview).toBeHidden()
   })
 
-  test("keeps the open-bottom outline and fits the viewport", async ({ browser }, testInfo) => {
-    const page = await openPeopleAsOwner(browser, testInfo)
+  test("keeps the open-bottom outline and fits the viewport", async ({ pageAs }) => {
+    const page = await openPeople(await pageAs("owner_admin"))
 
-    try {
-      const outline = page.locator("main", { has: page.locator('[data-slot="people-workspace"]') })
-      const borders = await outline.evaluate((element) => {
-        const style = getComputedStyle(element)
-        return {
-          bottom: style.borderBottomWidth,
-          left: style.borderLeftWidth,
-          right: style.borderRightWidth,
-          top: style.borderTopWidth,
-        }
-      })
+    const outline = page.locator("main", { has: page.locator('[data-slot="people-workspace"]') })
+    const borders = await outline.evaluate((element) => {
+      const style = getComputedStyle(element)
+      return {
+        bottom: style.borderBottomWidth,
+        left: style.borderLeftWidth,
+        right: style.borderRightWidth,
+        top: style.borderTopWidth,
+      }
+    })
 
-      expect(borders).toEqual({ bottom: "0px", left: "1px", right: "1px", top: "1px" })
-      expect(
-        await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)
-      ).toBe(true)
-    } finally {
-      await page.context().close()
-    }
+    expect(borders).toEqual({ bottom: "0px", left: "1px", right: "1px", top: "1px" })
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)
+    ).toBe(true)
   })
 
   test("names an existing-member error, keeps dialog focus accessible, and succeeds on retry", async ({
     admin,
-    browser,
+    pageAs,
     tenant,
-  }, testInfo) => {
-    const page = await openPeopleAsOwner(browser, testInfo)
+  }) => {
+    const page = await openPeople(await pageAs("owner_admin"))
     const inviteeEmail = `${uniqueName("invitee").replace(/[^a-z0-9]+/gi, "-").toLowerCase()}@example.test`
 
     try {
@@ -148,7 +124,6 @@ test.describe("People directory", () => {
         .update({ status: "revoked" })
         .eq("org_id", tenant.organizationId)
         .eq("email", inviteeEmail)
-      await page.context().close()
     }
   })
 })

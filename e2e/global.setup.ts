@@ -3,6 +3,8 @@ import { mkdir, writeFile } from "node:fs/promises"
 import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3"
 import { expect, test as setup, type Page } from "@playwright/test"
 
+import { signInAs } from "./support/fixtures"
+
 import {
   authStateDirectory,
   authStatePath,
@@ -101,14 +103,7 @@ async function signIn(
   tenant: SeededTenant,
   role: OrganizationRole
 ): Promise<void> {
-  const user = tenant.users[role]
-
-  await page.goto("/login")
-  await page.getByLabel("Email").fill(user.email)
-  await page.getByLabel("Password", { exact: true }).fill(user.password)
-  await page.getByRole("button", { name: /log in/i }).click()
-
-  await page.waitForURL(/\/dashboard/, { timeout: 30_000 })
+  await signInAs(page, tenant.users[role].email, tenant.users[role].password)
   await expect(
     page.getByRole("complementary").getByText(`${tenant.organizationName}'s workspace`, { exact: true })
   ).toBeVisible()

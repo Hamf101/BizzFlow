@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto"
 
-import { expect, test, uniqueName } from "../support/fixtures"
+import { expect, expectSaved, test, uniqueName } from "../support/fixtures"
 import { waitForHydration } from "../support/hydration"
 import { seedTemplate } from "../support/seed"
 
@@ -19,15 +19,7 @@ test("on a phone the line in use drags by the grip beside it, and the grip's arr
   const template = await seedTemplate(admin, tenant.organizationId, uniqueName("Grip"), "draft", lines)
   const page = await pageAs("owner_admin")
   const grip = (text: string) => page.locator("[data-block-id]", { hasText: text }).getByRole("button", { exact: true, name: "Move" })
-  const saved = () =>
-    expect.poll(
-      async () => {
-        const { data, error } = await admin.from("document_templates").select("content").eq("id", template.id).single()
-        if (error) throw error
-        return data.content.blocks.map(({ id }: { id: string }) => id)
-      },
-      { timeout: 15_000 }
-    )
+  const saved = () => expectSaved(admin, "document_templates", template.id, ({ blocks }) => blocks.map(({ id }) => id))
 
   await page.goto(`/templates/${template.id}/edit`)
   await waitForHydration(page.getByRole("textbox", { name: "Title" }))

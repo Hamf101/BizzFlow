@@ -3,7 +3,7 @@ import { createHash, randomBytes } from "node:crypto"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 import { chooseOption } from "../support/choose"
-import { expect, signInAs, test } from "../support/fixtures"
+import { expect, signInAs, test, uniqueEmail, uniqueName } from "../support/fixtures"
 import type { SeededTenant } from "../support/tenant"
 
 /**
@@ -23,7 +23,7 @@ test.describe("invitations", () => {
     tenant,
   }) => {
     const owner = await pageAs("owner_admin")
-    const inviteeEmail = `invitee-${Date.now().toString(36)}@e2e.bizflow.test`
+    const inviteeEmail = uniqueEmail("invitee")
     const password = "e2e-BizFlow-Passw0rd"
 
     await owner.goto("/people")
@@ -110,26 +110,24 @@ test.describe("invitations", () => {
     browser,
     tenant,
   }) => {
-    const suffix = Date.now().toString(36)
-    const inviteeEmail = `existing-${suffix}@e2e.bizflow.test`
-    const otherEmail = `other-${suffix}@e2e.bizflow.test`
+    const inviteeEmail = uniqueEmail("existing")
+    const otherEmail = uniqueEmail("other")
     const password = "e2e-BizFlow-Passw0rd"
-    const token = `e2e-invite-${suffix}`
+    const token = uniqueName("e2e-invite").replace(" ", "-")
 
     const userIds: string[] = []
-
-    for (const email of [inviteeEmail, otherEmail]) {
-      const { data, error } = await admin.auth.admin.createUser({ email, email_confirm: true, password })
-      expect(error).toBeNull()
-      userIds.push(data.user?.id as string)
-    }
-
-    await seedInvite(admin, tenant, inviteeEmail, token)
-
     const context = await browser.newContext()
     const page = await context.newPage()
 
     try {
+      for (const email of [inviteeEmail, otherEmail]) {
+        const { data, error } = await admin.auth.admin.createUser({ email, email_confirm: true, password })
+        expect(error).toBeNull()
+        userIds.push(data.user?.id as string)
+      }
+
+      await seedInvite(admin, tenant, inviteeEmail, token)
+
       await signInAs(page, otherEmail, password)
       await page.goto(`/accept-invite/${token}`)
       await page.getByRole("button", { name: "Log out and continue" }).click()
