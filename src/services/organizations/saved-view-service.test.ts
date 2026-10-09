@@ -105,9 +105,9 @@ class SavedViewQuery extends PostgrestReadQuery {
 
 function fixture({ failWrites = false } = {}) {
   const memberships: FakeRow[] = [
-    { id: "member-1", org_id: "org-1", user_id: "user-1", status: "active" },
-    { id: "member-2", org_id: "org-1", user_id: "user-2", status: "active" },
-    { id: "member-3", org_id: "org-2", user_id: "user-1", status: "active" },
+    { id: "member-1", org_id: "org-1", user_id: "user-1", role: "staff", status: "active" },
+    { id: "member-2", org_id: "org-1", user_id: "user-2", role: "staff", status: "active" },
+    { id: "member-3", org_id: "org-2", user_id: "user-1", role: "staff", status: "active" },
   ]
   const views: FakeRow[] = []
   const tables: Record<string, FakeRow[]> = {

@@ -276,6 +276,14 @@ describe("PeopleWorkspace", () => {
     expect(document.body.textContent).not.toContain("Unnamed member")
   })
 
+  it("names the manage action by email when a member's name is blank", () => {
+    renderWorkspace({ members: [{ ...members[1], fullName: "" }] })
+
+    expect(
+      document.querySelector('button[aria-label="Manage mara@acme.test"]')
+    ).toBeInstanceOf(HTMLButtonElement)
+  })
+
   it("uses a compact role selector on mobile without duplicating the desktop filters", async () => {
     renderWorkspace()
 

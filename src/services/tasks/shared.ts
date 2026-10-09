@@ -155,7 +155,6 @@ export async function requireTaskPermission(
   const subject = await requireOrgPermission(client, organizationId, actorUserId, action, {
     loadFailed: (error) => createTaskDatabaseError(error, "Unable to load task permissions."),
     denied: () => new TaskServiceError(rejectionMessage, 403),
-    unknownRole: () => new TaskServiceError("Database returned unsupported organization permissions.", 500),
   })
 
   return getOrganizationRoleFromSubject(subject)

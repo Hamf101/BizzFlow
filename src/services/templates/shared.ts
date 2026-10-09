@@ -72,7 +72,6 @@ export async function requirePermission(
   return requireOrgPermission(client, organizationId, actorUserId, action, {
     loadFailed: (error) => createDatabaseError(error, "Unable to load document permissions."),
     denied: () => new TemplateServiceError(rejectionMessage, 403),
-    unknownRole: () => new TemplateServiceError("Database returned an unsupported organization role.", 500),
   })
 }
 

@@ -757,6 +757,7 @@ describe("member settings", () => {
       organization_memberships: [
         {
           data: {
+            role: "owner_admin",
             email_notifications_enabled: false,
             sms_notifications_enabled: true,
           },
@@ -800,6 +801,7 @@ describe("member settings", () => {
       organization_memberships: [
         {
           data: {
+            role: "owner_admin",
             email_notifications_enabled: null,
             sms_notifications_enabled: null,
           },

@@ -15,7 +15,7 @@ import {
 import { ListQuery } from "@/components/data/list-query"
 import { ListEmpty } from "@/components/data/list-heading"
 import { DatedTitle } from "@/components/navigation/dated-title"
-import { getMemberDisplayName, getMemberRoleName } from "@/components/people/member-name"
+import { getInitials, getMemberDisplayName, getMemberRoleName, memberLabel } from "@/components/people/member-name"
 import { useTimeZone } from "@/components/ui/local-date"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -325,7 +325,7 @@ function MemberRow({
           aria-hidden="true"
           className="grid size-9 shrink-0 place-items-center rounded-full bg-secondary text-xs font-medium text-secondary-foreground"
         >
-          {getInitials(memberLabel)}
+          {getInitials(memberLabel, member.email)}
         </span>
         <MemberProfilePreview member={member} name={memberLabel} />
       </div>
@@ -444,17 +444,17 @@ function MemberRoleDialog({
   roles: OrganizationRoleDefinition[]
   updateMemberAccessAction: ServerFormAction
 }): ReactElement {
-  const memberLabel = member.fullName ?? member.email
+  const label = memberLabel(member)
 
   return (
     <Dialog>
       <DialogTrigger
         render={
           <Button
-            aria-label={`Manage ${memberLabel}`}
+            aria-label={`Manage ${label}`}
             className="font-normal"
             size="icon-sm"
-            title={`Manage ${memberLabel}`}
+            title={`Manage ${label}`}
             type="button"
             variant="ghost"
           >
@@ -465,7 +465,7 @@ function MemberRoleDialog({
       <DialogContent className="sm:aspect-square sm:max-w-md sm:content-start">
         <DialogHeader>
           <DialogTitle className="font-medium">Manage member</DialogTitle>
-          <DialogDescription>{memberLabel}</DialogDescription>
+          <DialogDescription>{label}</DialogDescription>
         </DialogHeader>
         <form action={updateMemberAccessAction} className="flex flex-col gap-5">
           <input name="organizationId" type="hidden" value={organizationId} />
@@ -850,14 +850,3 @@ function getRoleFilterDetails(
   }
 }
 
-function getInitials(value: string): string {
-  const parts = value
-    .trim()
-    .split(/[^\p{L}\p{N}]+/u)
-    .filter(Boolean)
-
-  return parts
-    .slice(0, 2)
-    .map((part) => part.charAt(0).toUpperCase())
-    .join("") || "?"
-}

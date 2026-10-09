@@ -7,7 +7,7 @@ import { ListPagination } from "@/components/data/list-pagination"
 import { ListQuery } from "@/components/data/list-query"
 import { ListEmpty, ListHeading } from "@/components/data/list-heading"
 import { type ListSavedViews, ListViewMenu } from "@/components/data/list-view-menu"
-import { formatMemberName } from "@/components/people/member-name"
+import { formatMemberName, getInitials } from "@/components/people/member-name"
 import {
   getSubmissionStatusOptions,
   getSubmissionViewMenuSections,
@@ -279,16 +279,7 @@ function AssigneeInitials({
           ? "border border-dashed border-border"
           : "bg-secondary text-secondary-foreground"
       )}
-      data-initials={member ? getInitials(member.fullName || member.email) : ""}
+      data-initials={member ? getInitials(member.fullName, member.email) : ""}
     />
   )
-}
-
-function getInitials(name: string): string {
-  return name
-    .split(/[\s@._-]+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part: string) => part.charAt(0).toUpperCase())
-    .join("")
 }

@@ -4,6 +4,7 @@ import { cache } from "react"
 import {
   canPerformOrganizationAction,
   createOrganizationPermissionSubject,
+  isOrganizationRole,
   type OrganizationPermissionAction,
   type OrganizationPermissionSubject,
 } from "@/lib/permissions"
@@ -19,30 +20,43 @@ const ACTIVE_MEMBERSHIP_COLUMNS =
  * share it. Nothing outlives the render, and actions and route handlers read
  * afresh every time, so a changed role or setting counts from the next page.
  *
+ * A stored role this build does not know reads as no membership, so every
+ * caller fails closed with its own "denied" answer rather than a 500.
+ *
  * @param client - The admin client, which one request shares throughout.
  * @param organizationId - The organization.
  * @param userId - The member.
  * @returns The query result: the membership row, or null.
  */
 export const loadActiveMembership = cache(
-  async (client: Pick<AdminSupabaseClient, "from">, organizationId: string, userId: string) =>
-    client
+  async (client: Pick<AdminSupabaseClient, "from">, organizationId: string, userId: string) => {
+    const result = await client
       .from("organization_memberships")
       .select(ACTIVE_MEMBERSHIP_COLUMNS)
       .eq("org_id", organizationId)
       .eq("user_id", userId)
       .eq("status", "active")
       .maybeSingle()
+
+    if (result.data && !isOrganizationRole(result.data.role)) {
+      console.warn("organization_membership_unknown_role", {
+        organizationId,
+        userId,
+        membershipId: result.data.id,
+      })
+      return { ...result, data: null }
+    }
+
+    return result
+  }
 )
 
 /** How a domain reports each way a permission check can fail, in its own words. */
 export type OrgPermissionFailures = {
   /** The membership read failed. */
   loadFailed: (error: PostgrestError) => Error
-  /** No active membership, or one without the permission. */
+  /** No active membership (an unknown stored role counts), or one without the permission. */
   denied: () => Error
-  /** The stored role is one this build does not know. Denied when absent. */
-  unknownRole?: () => Error
 }
 
 /**
@@ -70,8 +84,7 @@ export async function requireOrgPermission(
 
   const subject = createOrganizationPermissionSubject(data.role, data.role_definition?.permissions)
 
-  if (!subject) throw (fail.unknownRole ?? fail.denied)()
-  if (action && !canPerformOrganizationAction(subject, action)) throw fail.denied()
+  if (!subject || (action && !canPerformOrganizationAction(subject, action))) throw fail.denied()
 
   return subject
 }

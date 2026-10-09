@@ -419,7 +419,7 @@ function getSupabaseSetupFailureMessage(error: unknown): string | null {
     searchableMessage.includes("could not find the table") ||
     searchableMessage.includes("schema cache")
   ) {
-    return "Supabase database schema is not installed or exposed. Apply the Sprint 2 and Sprint 3 migrations."
+    return "The Supabase database schema is missing tables this code needs, or does not expose them. Apply the latest migrations."
   }
 
   if (

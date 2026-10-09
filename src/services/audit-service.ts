@@ -296,7 +296,6 @@ async function requireAuditView(
   await requireOrgPermission(client, organizationId, actorUserId, "audit_logs:view", {
     loadFailed: () => new AuditServiceError("Unable to load audit permissions.", 500),
     denied: () => new AuditServiceError("You cannot view audit logs.", 403),
-    unknownRole: () => new AuditServiceError("Database returned an unsupported role.", 500),
   })
 }
 

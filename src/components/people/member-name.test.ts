@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { formatMemberName } from "@/components/people/member-name"
+import { formatMemberName, getInitials } from "@/components/people/member-name"
 import type { OrganizationMember } from "@/types/organization"
 
 const VIEWER_ID = "20000000-0000-4000-8000-000000000001"
@@ -44,5 +44,19 @@ describe("formatMemberName", () => {
 
   it("names the viewer like anyone else when no viewer is given", () => {
     expect(formatMemberName(VIEWER_ID, members)).toBe("Sam Reyes")
+  })
+})
+
+describe("getInitials", () => {
+  it.each([
+    ["Sam Reyes", "sam@example.test", "SR"],
+    ["  mara  de la  bell ", "mara@example.test", "MB"],
+    ["Cher", "cher@example.test", "C"],
+    ["", "jo@example.test", "J"],
+    ["   ", "jo@example.test", "J"],
+    [null, "_kai@example.test", "K"],
+    ["", "", "?"],
+  ])("reads %j with email %j as %j", (name, email, expected) => {
+    expect(getInitials(name, email)).toBe(expected)
   })
 })
