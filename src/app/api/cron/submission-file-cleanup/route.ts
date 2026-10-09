@@ -1,7 +1,4 @@
-import { timingSafeEqual } from "node:crypto"
-
-import { NextResponse } from "next/server"
-
+import { createNoStoreResponse, refuseCronRequest } from "@/app/api/cron/_cron"
 import { captureUnexpectedError, describeErrorForLog } from "@/lib/observability"
 import {
   cleanupExpiredSubmissionFileObjects,
@@ -21,23 +18,14 @@ export const maxDuration = 300
  */
 export async function GET(request: Request): Promise<Response> {
   const startedAt = Date.now()
-  const cronSecret = process.env.CRON_SECRET?.trim()
+  const refusal = refuseCronRequest(
+    request,
+    { event: "submission_file_cleanup_cron", notConfigured: "Submission cleanup is not configured." },
+    startedAt
+  )
 
-  if (!cronSecret || cronSecret.length < 16) {
-    console.error("submission_file_cleanup_cron_misconfigured", {
-      durationMs: Date.now() - startedAt,
-    })
-    return createNoStoreResponse(
-      { error: "Submission cleanup is not configured." },
-      503
-    )
-  }
-
-  if (!hasValidCronAuthorization(request, cronSecret)) {
-    console.warn("submission_file_cleanup_cron_rejected", {
-      durationMs: Date.now() - startedAt,
-    })
-    return createNoStoreResponse({ error: "Unauthorized." }, 401)
+  if (refusal) {
+    return refusal
   }
 
   try {
@@ -80,27 +68,4 @@ async function expireAbandonedFilesOrReport(
     captureUnexpectedError(error, { routeName: "cron_submission_file_expiry" })
     return null
   }
-}
-
-function hasValidCronAuthorization(
-  request: Request,
-  cronSecret: string
-): boolean {
-  const actual = Buffer.from(request.headers.get("authorization") ?? "")
-  const expected = Buffer.from(`Bearer ${cronSecret}`)
-
-  return actual.length === expected.length && timingSafeEqual(actual, expected)
-}
-
-function createNoStoreResponse(
-  body: Record<string, unknown>,
-  status: number
-): Response {
-  return NextResponse.json(body, {
-    status,
-    headers: {
-      "Cache-Control": "private, no-store, max-age=0",
-      Pragma: "no-cache",
-    },
-  })
 }

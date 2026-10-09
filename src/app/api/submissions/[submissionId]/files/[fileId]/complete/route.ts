@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server"
 
 import { getAuthenticatedUser } from "@/lib/auth"
-import { readTrustedJsonObject } from "@/lib/request-security"
+import { getRequiredString, readTrustedJsonObject } from "@/lib/request-security"
 import { completeInternalSubmissionFile } from "@/services/submission-service"
 
 import {
   createSubmissionRouteErrorResponse,
-  getRequiredSubmissionString,
 } from "../../../../_utils"
 
 type CompleteSubmissionFileRouteContext = {
@@ -30,7 +29,7 @@ export async function POST(
     const { fileId, submissionId } = await context.params
     const result = await completeInternalSubmissionFile({
       actorUserId: user.id,
-      organizationId: getRequiredSubmissionString(
+      organizationId: getRequiredString(
         body,
         "organizationId",
         "Organization id"

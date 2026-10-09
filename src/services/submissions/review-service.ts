@@ -1,5 +1,4 @@
 import type {
-  AssignInternalSubmissionInput,
   CreateInternalSubmissionCommentInput,
   SubmissionServiceClient,
   SubmissionServiceDeps,
@@ -30,7 +29,6 @@ import {
   type SubmissionReviewData,
   type SubmissionReviewTransition,
 } from "@/types/submission-review"
-import { normalizeUuid as normalizeSharedUuid } from "@/services/input"
 
 /** Columns required by the canonical submission-comment parser. */
 export const SUBMISSION_COMMENT_COLUMNS =
@@ -39,66 +37,6 @@ export const SUBMISSION_COMMENT_COLUMNS =
 /** Columns required by the canonical submission-activity parser. */
 export const SUBMISSION_ACTIVITY_COLUMNS =
   "id,org_id,submission_id,actor_user_id,event_type,from_status,to_status,assignee_user_id,comment_id,submission_revision,created_at"
-
-/**
- * Assigns or reassigns one submission through the atomic review RPC.
- *
- * Assigning a submitted row starts review; reassignment in an active workflow
- * retains the current state. The database validates tenant membership and the
- * assignee's eligible role inside the transaction.
- *
- * @param input - Actor, tenant, submission revision, and target assignee.
- * @param deps - Optional trusted database dependency.
- * @returns Updated submission with its next revision.
- * @throws SubmissionServiceError when access, validation, or persistence fails.
- */
-export async function assignInternalSubmission(
-  input: AssignInternalSubmissionInput,
-  deps: SubmissionServiceDeps = {}
-): Promise<Submission> {
-  return runSubmissionOperation(
-    "assign_internal_submission",
-    {
-      actorUserId: input.actorUserId,
-      organizationId: input.organizationId,
-      submissionId: input.submissionId,
-      expectedRevision: input.expectedRevision,
-      assignedTo: input.assignedTo,
-    },
-    async (): Promise<Submission> => {
-      const client = getSubmissionClient(deps)
-
-      await requireSubmissionPermission(
-        client,
-        input.organizationId,
-        input.actorUserId,
-        "submissions:assign",
-        "You cannot assign internal submissions."
-      )
-      const expectedRevision = normalizeExpectedRevision(input.expectedRevision)
-      const assignedTo = normalizeUuid(
-        input.assignedTo,
-        "Submission assignee must be a valid user id."
-      )
-      const { data, error } = await client.rpc("assign_internal_submission", {
-        target_org_id: input.organizationId,
-        target_submission_id: input.submissionId,
-        target_expected_revision: expectedRevision,
-        target_assignee_user_id: assignedTo,
-        target_actor_user_id: input.actorUserId,
-      })
-
-      if (error || !data) {
-        throw createSubmissionMutationError(
-          error,
-          "Unable to assign internal submission."
-        )
-      }
-
-      return parseSubmissionRow(data)
-    }
-  )
-}
 
 /**
  * Applies one binding review decision through an atomic transition RPC.
@@ -326,10 +264,6 @@ function normalizeExpectedRevision(value: number): number {
   }
 
   return value
-}
-
-function normalizeUuid(value: unknown, message: string): string {
-  return normalizeSharedUuid(value, () => new SubmissionServiceError(message, 400))
 }
 
 function normalizeReviewTransition(

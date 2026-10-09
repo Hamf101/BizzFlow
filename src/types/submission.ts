@@ -1,5 +1,6 @@
 import type { ClientFile } from "@/lib/r2/stored-file"
 import { z } from "zod"
+import { uuidSchema, timestampSchema } from "@/types/schemas"
 
 import {
   templateContentSchema,
@@ -14,8 +15,6 @@ const FIELD_KEY_PATTERN = /^[A-Za-z][A-Za-z0-9_-]{0,79}$/
 const SHA256_PATTERN = /^[a-f0-9]{64}$/
 const SAFE_FILENAME_PATTERN = /^(?!\.{1,2}$)[A-Za-z0-9._-]+$/
 
-const uuidSchema = z.string().uuid()
-const timestampSchema = z.string().datetime({ offset: true })
 const actorIdSchema = uuidSchema.nullable()
 const answerValuesSchema = z.record(z.string(), templateAnswerValueSchema)
 

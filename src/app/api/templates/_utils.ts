@@ -1,10 +1,6 @@
-import { NextResponse } from "next/server"
-
-import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
-import { captureUnexpectedError } from "@/lib/observability"
-import { checkRateLimit, RateLimitError } from "@/lib/rate-limit"
-import { createRateLimitResponse } from "@/lib/rate-limit-response"
-import { RequestSecurityError } from "@/lib/request-security"
+import { createRouteErrorResponse } from "@/app/api/_route-error"
+import { getAuthenticatedUser } from "@/lib/auth"
+import { checkRateLimit } from "@/lib/rate-limit"
 import {
   getCurrentOrganizationContext,
   OrganizationServiceError,
@@ -57,41 +53,13 @@ export function createTemplateRouteErrorResponse(
   routeName: string,
   failure = "Unable to complete the Flow request."
 ): Response {
-  if (error instanceof RateLimitError) {
-    return createRateLimitResponse(error, "template_route_rejected", routeName)
-  }
-
-  if (error instanceof RequestSecurityError) {
-    return NextResponse.json(
-      { error: error.message },
-      { status: error.statusCode }
-    )
-  }
-
-  if (error instanceof AuthenticationError) {
-    return NextResponse.json({ error: error.message }, { status: 401 })
-  }
-
-  if (
-    error instanceof TemplateFlowServiceError ||
-    error instanceof OrganizationServiceError ||
-    error instanceof WorkingCopyServiceError
-  ) {
-    console.warn("template_route_rejected", {
-      reason: error.message,
-      routeName,
-      statusCode: error.statusCode,
-    })
-    return NextResponse.json(
-      { error: error.message },
-      { status: error.statusCode }
-    )
-  }
-
-  console.error("template_route_failed", {
-    reason: error instanceof Error ? error.message : "Unknown route error",
-    routeName,
+  return createRouteErrorResponse(error, routeName, {
+    event: "template_route",
+    failure,
+    known: [
+      TemplateFlowServiceError,
+      OrganizationServiceError,
+      WorkingCopyServiceError,
+    ],
   })
-  captureUnexpectedError(error, { routeName })
-  return NextResponse.json({ error: failure }, { status: 500 })
 }

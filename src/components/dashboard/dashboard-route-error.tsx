@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useEffect, type ComponentType, type ReactElement } from "react"
+import { useEffect, type ReactElement } from "react"
 
 import { Button, buttonVariants } from "@/components/ui/button"
 import { ErrorState } from "@/components/ui/page-state"
@@ -59,54 +59,3 @@ export function DashboardRouteError({
     </div>
   )
 }
-
-/** Creates the fixed route wrapper required by a Next.js `error.tsx` file. */
-function createDashboardRouteErrorBoundary(
-  boundary: string,
-  routeName: string
-): ComponentType<DashboardErrorBoundaryProps> {
-  function RouteErrorBoundary(
-    props: DashboardErrorBoundaryProps
-  ): ReactElement {
-    return (
-      <DashboardRouteError
-        {...props}
-        boundary={boundary}
-        routeName={routeName}
-      />
-    )
-  }
-
-  RouteErrorBoundary.displayName = `${routeName}RouteError`
-  return RouteErrorBoundary
-}
-
-export const DashboardPageError = createDashboardRouteErrorBoundary(
-  "dashboard",
-  "Dashboard"
-)
-export const DocumentsPageError = createDashboardRouteErrorBoundary(
-  "documents",
-  "Files"
-)
-export const TemplatesPageError = createDashboardRouteErrorBoundary(
-  "templates",
-  "Templates"
-)
-export const SubmissionsPageError = createDashboardRouteErrorBoundary(
-  "submissions",
-  "Submissions"
-)
-export const TasksPageError = createDashboardRouteErrorBoundary("tasks", "Tasks")
-export const PeoplePageError = createDashboardRouteErrorBoundary(
-  "people",
-  "People"
-)
-export const AuditLogPageError = createDashboardRouteErrorBoundary(
-  "audit_log",
-  "Audit log"
-)
-export const SettingsPageError = createDashboardRouteErrorBoundary(
-  "settings",
-  "Settings"
-)

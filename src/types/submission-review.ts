@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { uuidSchema, timestampSchema } from "@/types/schemas"
 
 import type { SubmissionStatus } from "@/types/submission"
 import {
@@ -146,9 +147,7 @@ export class SubmissionReviewDomainError extends Error {
   }
 }
 
-const uuidSchema = z.string().uuid()
 const nullableUuidSchema = uuidSchema.nullable()
-const timestampSchema = z.string().datetime({ offset: true })
 const submissionStatusSchema = z.enum([
   "draft",
   "submitted",

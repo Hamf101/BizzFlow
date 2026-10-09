@@ -4,7 +4,6 @@ import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
 import type { OrganizationRole } from "@/lib/permissions"
 import { getCurrentOrganizationContext } from "@/services/organization-service"
 import {
-  assignInternalSubmission,
   createInternalSubmissionDraft,
   createInternalSubmissionComment,
   decideSubmissionSuggestion,
@@ -18,7 +17,6 @@ import {
 } from "@/services/submission-service"
 
 import {
-  assignSubmissionAction,
   commentFromReviewAction,
   createSubmissionAction,
   createSubmissionCommentAction,
@@ -65,7 +63,6 @@ vi.mock("@/services/submission-service", async (importOriginal) => {
     await importOriginal<typeof import("@/services/submission-service")>()
   return {
     ...actual,
-    assignInternalSubmission: vi.fn(),
     createInternalSubmissionComment: vi.fn(),
     createInternalSubmissionDraft: vi.fn(),
     decideSubmissionSuggestion: vi.fn(),
@@ -97,28 +94,6 @@ describe("submission review actions", () => {
 
   afterEach(() => {
     vi.restoreAllMocks()
-  })
-
-  it("derives assignment tenant and actor values on the server", async () => {
-    const formData = createSubmissionFormData()
-    formData.set("assignedTo", ASSIGNEE_USER_ID)
-    formData.set("organizationId", "untrusted-organization")
-
-    await expect(assignSubmissionAction(formData)).rejects.toThrow(
-      `NEXT_REDIRECT:/submissions/${SUBMISSION_ID}?feedback=submission_assigned`
-    )
-
-    expect(assignInternalSubmission).toHaveBeenCalledWith({
-      actorUserId: ACTOR_USER_ID,
-      organizationId: ORGANIZATION_ID,
-      submissionId: SUBMISSION_ID,
-      expectedRevision: 3,
-      assignedTo: ASSIGNEE_USER_ID,
-    })
-    expect(revalidatePathMock).toHaveBeenCalledWith("/submissions")
-    expect(revalidatePathMock).toHaveBeenCalledWith(
-      `/submissions/${SUBMISSION_ID}`
-    )
   })
 
   it("names the reviewers and the approvals needed, taking the tenant and actor from the server", async () => {
@@ -240,13 +215,13 @@ describe("submission review actions", () => {
   })
 
   it("maps submission service details to a fixed conflict outcome", async () => {
-    vi.mocked(assignInternalSubmission).mockRejectedValue(
+    vi.mocked(transitionInternalSubmission).mockRejectedValue(
       new SubmissionServiceError("Private revision and tenant detail", 409)
     )
     const formData = createSubmissionFormData()
-    formData.set("assignedTo", ASSIGNEE_USER_ID)
+    formData.set("targetStatus", "approved")
 
-    await expect(assignSubmissionAction(formData)).rejects.toThrow(
+    await expect(transitionSubmissionAction(formData)).rejects.toThrow(
       `NEXT_REDIRECT:/submissions/${SUBMISSION_ID}?feedback=refresh_required`
     )
     expect(redirectMock).not.toHaveBeenCalledWith(

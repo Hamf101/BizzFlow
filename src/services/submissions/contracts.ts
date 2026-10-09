@@ -129,12 +129,6 @@ export type SubmitInternalSubmissionInput = GetInternalSubmissionInput & {
   values: unknown
 }
 
-/** Input for assigning or reassigning a submission review. */
-export type AssignInternalSubmissionInput = GetInternalSubmissionInput & {
-  expectedRevision: number
-  assignedTo: string
-}
-
 /** Input for naming who reviews a submission. */
 export type SetInternalSubmissionReviewersInput = GetInternalSubmissionInput & {
   expectedRevision: number

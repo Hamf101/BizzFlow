@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { uuidSchema } from "@/types/schemas"
 
 import { type AdminSupabaseClient } from "@/lib/supabase/admin"
 import { flowModelSchema } from "@/services/ai/approved-models"
@@ -66,7 +67,6 @@ export const MAX_FLOW_CONTEXT_CHARACTERS = 400_000
 
 export const MAX_FLOW_STRUCTURE_CONTEXT_CHARACTERS = 40_000
 
-const uuidSchema = z.string().uuid()
 
 const hexColorSchema = z.string().regex(/^#[0-9A-Fa-f]{6}$/)
 

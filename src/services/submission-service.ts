@@ -31,7 +31,6 @@ export {
   listSubmissionPage,
 } from "@/services/submissions/workspace-service"
 export {
-  assignInternalSubmission,
   createInternalSubmissionComment,
   transitionInternalSubmission,
 } from "@/services/submissions/review-service"

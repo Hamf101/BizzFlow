@@ -133,3 +133,26 @@ function assertJsonContentType(request: Request): void {
     )
   }
 }
+
+/**
+ * Reads a required string field from a parsed JSON body.
+ *
+ * @param body - Parsed JSON body.
+ * @param key - Field name to read.
+ * @param label - User-safe field label for validation errors.
+ * @returns Trimmed string value.
+ * @throws RequestSecurityError (400) when the field is missing or blank.
+ */
+export function getRequiredString(
+  body: Record<string, unknown>,
+  key: string,
+  label: string
+): string {
+  const value = body[key]
+
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new RequestSecurityError(`${label} is required.`, 400)
+  }
+
+  return value.trim()
+}

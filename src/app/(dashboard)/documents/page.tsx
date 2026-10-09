@@ -16,6 +16,7 @@ import {
 } from "@/components/files/file-list-view"
 import { FilesWorkspace } from "@/components/files/files-workspace"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { SetupIncomplete } from "@/components/ui/page-state"
 import { buildFeedbackRedirect } from "@/lib/action-result"
 import type { RawSearchParams } from "@/lib/list-state"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
@@ -81,10 +82,7 @@ export default async function FilesPage({
     if (contextErrorMessage) {
       return (
         <FilesShell>
-          <Alert variant="destructive">
-            <AlertTitle>Supabase setup incomplete</AlertTitle>
-            <AlertDescription>{contextErrorMessage}</AlertDescription>
-          </Alert>
+          <SetupIncomplete message={contextErrorMessage} />
         </FilesShell>
       )
     }

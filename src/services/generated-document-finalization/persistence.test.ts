@@ -73,7 +73,7 @@ describe("generated document finalization Supabase persistence", () => {
       },
       {
         relation: "documents",
-        columns: "lifecycle_state,archived_at",
+        columns: "lifecycle_state",
         filters: [
           ["id", DOCUMENT_ID],
           ["org_id", ORGANIZATION_ID],

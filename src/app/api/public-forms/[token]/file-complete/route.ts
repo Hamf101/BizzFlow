@@ -2,11 +2,10 @@ import { NextResponse } from "next/server"
 
 import { getClientIp } from "@/lib/client-ip"
 import { checkRateLimit } from "@/lib/rate-limit"
-import { readTrustedJsonObject } from "@/lib/request-security"
+import { getRequiredString, readTrustedJsonObject } from "@/lib/request-security"
 import { completePublicFormFileUpload } from "@/services/public-form-service"
 import {
   createSubmissionRouteErrorResponse,
-  getRequiredSubmissionString,
 } from "@/app/api/submissions/_utils"
 
 type PublicFormFileCompleteRouteContext = {
@@ -33,12 +32,12 @@ export async function POST(
 
     const result = await completePublicFormFileUpload({
       token,
-      draftToken: getRequiredSubmissionString(
+      draftToken: getRequiredString(
         body,
         "draftToken",
         "Form session"
       ),
-      fileId: getRequiredSubmissionString(body, "fileId", "File id"),
+      fileId: getRequiredString(body, "fileId", "File id"),
     })
 
     return NextResponse.json(result)

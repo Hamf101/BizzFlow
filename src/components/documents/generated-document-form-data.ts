@@ -27,6 +27,9 @@ type GeneratedDocumentFormDataParserOptions = {
 
 /** Error raised when dynamic document form data cannot be normalized safely. */
 export class GeneratedDocumentFormDataError extends Error {
+  /** Malformed input, so the action answers as a validation failure. */
+  readonly statusCode = 400
+
   /**
    * Creates a user-safe dynamic form error.
    *

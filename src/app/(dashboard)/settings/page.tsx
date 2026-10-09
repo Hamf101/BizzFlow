@@ -3,6 +3,7 @@ import type { ReactElement, ReactNode } from "react"
 
 import { DatedTitle } from "@/components/navigation/dated-title"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { SetupIncomplete } from "@/components/ui/page-state"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -59,10 +60,7 @@ export default async function SettingsPage(): Promise<ReactElement> {
     if (contextErrorMessage) {
       return (
         <SettingsShell>
-          <Alert variant="destructive">
-            <AlertTitle>Supabase setup incomplete</AlertTitle>
-            <AlertDescription>{contextErrorMessage}</AlertDescription>
-          </Alert>
+          <SetupIncomplete message={contextErrorMessage} />
         </SettingsShell>
       )
     }

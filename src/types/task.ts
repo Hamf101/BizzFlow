@@ -1,7 +1,6 @@
 import { z } from "zod"
+import { uuidSchema, timestampSchema } from "@/types/schemas"
 
-const uuidSchema = z.string().uuid()
-const timestampSchema = z.string().datetime({ offset: true })
 
 /** Lifecycle states implemented by the task workflow. */
 export const TASK_STATUSES = [

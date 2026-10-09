@@ -12,6 +12,7 @@ import { DocumentReplaceForm } from "@/components/documents/document-replace-for
 import { PurgeRequestForm } from "@/components/documents/purge-request-form"
 import { ShareButton } from "@/components/sharing/share-button"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { SetupIncomplete } from "@/components/ui/page-state"
 import { Badge } from "@/components/ui/badge"
 import {
   Card,
@@ -70,10 +71,7 @@ export default async function DocumentDetailPage({
     if (contextErrorMessage) {
       return (
         <DocumentDetailShell>
-          <Alert variant="destructive">
-            <AlertTitle>Supabase setup incomplete</AlertTitle>
-            <AlertDescription>{contextErrorMessage}</AlertDescription>
-          </Alert>
+          <SetupIncomplete message={contextErrorMessage} />
         </DocumentDetailShell>
       )
     }

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 
 import { getAuthenticatedUser } from "@/lib/auth"
 import { checkRateLimit } from "@/lib/rate-limit"
-import { readTrustedJsonObject } from "@/lib/request-security"
+import { getRequiredString, readTrustedJsonObject } from "@/lib/request-security"
 import {
   createDocumentReplacementUploadUrl,
   type CreateDocumentReplacementUploadUrlInput,
@@ -12,7 +12,6 @@ import {
   createDocumentRouteErrorResponse,
   getOptionalNonEmptyString,
   getRequiredNumber,
-  getRequiredString,
 } from "../../_utils"
 
 type ReplaceUploadUrlRouteContext = {

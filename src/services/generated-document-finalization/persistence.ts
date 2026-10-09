@@ -122,7 +122,7 @@ async function requireReadableFinalizationDocument(
   requireReadableDocument(
     await client
       .from("documents")
-      .select("lifecycle_state,archived_at")
+      .select("lifecycle_state")
       .eq("id", input.documentId)
       .eq("org_id", input.organizationId)
       .maybeSingle(),

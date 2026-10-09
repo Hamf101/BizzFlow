@@ -3,6 +3,7 @@ import type { ReactElement } from "react"
 
 import { PeopleWorkspace } from "@/components/people/people-workspace"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { SetupIncomplete } from "@/components/ui/page-state"
 import { buildFeedbackRedirect } from "@/lib/action-result"
 import type { RawSearchParams } from "@/lib/list-state"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
@@ -42,10 +43,7 @@ export default async function PeoplePage({
     if (contextErrorMessage) {
       return (
         <PeopleShell>
-          <Alert variant="destructive">
-            <AlertTitle>Supabase setup incomplete</AlertTitle>
-            <AlertDescription>{contextErrorMessage}</AlertDescription>
-          </Alert>
+          <SetupIncomplete message={contextErrorMessage} />
         </PeopleShell>
       )
     }

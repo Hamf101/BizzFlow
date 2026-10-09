@@ -7,6 +7,7 @@ import {
 } from "@/components/audit/audit-log-view"
 import { AuditLogWorkspace } from "@/components/audit/audit-log-workspace"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { SetupIncomplete } from "@/components/ui/page-state"
 import { buildFeedbackRedirect } from "@/lib/action-result"
 import { getLastPage, type RawSearchParams } from "@/lib/list-state"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
@@ -45,10 +46,7 @@ export default async function AuditLogPage({
     if (contextErrorMessage) {
       return (
         <AuditLogShell>
-          <Alert variant="destructive">
-            <AlertTitle>Supabase setup incomplete</AlertTitle>
-            <AlertDescription>{contextErrorMessage}</AlertDescription>
-          </Alert>
+          <SetupIncomplete message={contextErrorMessage} />
         </AuditLogShell>
       )
     }

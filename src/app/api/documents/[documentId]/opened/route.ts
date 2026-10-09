@@ -1,13 +1,7 @@
-import { NextResponse } from "next/server"
-
-import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
-import { captureUnexpectedError } from "@/lib/observability"
-import { checkRateLimit, RateLimitError } from "@/lib/rate-limit"
-import { createRateLimitResponse } from "@/lib/rate-limit-response"
-import {
-  readTrustedJsonObject,
-  RequestSecurityError,
-} from "@/lib/request-security"
+import { createRouteErrorResponse } from "@/app/api/_route-error"
+import { getAuthenticatedUser } from "@/lib/auth"
+import { checkRateLimit } from "@/lib/rate-limit"
+import { getRequiredString, readTrustedJsonObject } from "@/lib/request-security"
 import {
   recordDocumentRecentAccess,
   TemplateServiceError,
@@ -37,7 +31,7 @@ export async function POST(
 
     const { documentId } = await context.params
     const body = await readTrustedJsonObject(request)
-    const organizationId = getRequiredString(body, "organizationId")
+    const organizationId = getRequiredString(body, "organizationId", "Organization id")
 
     await recordDocumentRecentAccess({
       actorUserId: user.id,
@@ -46,52 +40,10 @@ export async function POST(
     })
     return new Response(null, { status: 204 })
   } catch (error: unknown) {
-    if (error instanceof RateLimitError) {
-      return createRateLimitResponse(
-        error,
-        "document_route_rejected",
-        "documents_opened"
-      )
-    }
-
-    if (error instanceof AuthenticationError) {
-      return NextResponse.json({ error: error.message }, { status: 401 })
-    }
-
-    if (error instanceof RequestSecurityError) {
-      return NextResponse.json(
-        { error: error.message },
-        { status: error.statusCode }
-      )
-    }
-
-    if (error instanceof TemplateServiceError) {
-      return NextResponse.json(
-        { error: error.message },
-        { status: error.statusCode }
-      )
-    }
-
-    console.error("document_open_route_failed", {
-      reason: error instanceof Error ? error.message : "Unknown route error",
+    return createRouteErrorResponse(error, "documents_opened", {
+      event: "document_open_route",
+      failure: "Unable to record document open.",
+      known: [TemplateServiceError],
     })
-    captureUnexpectedError(error, { routeName: "documents_opened" })
-    return NextResponse.json(
-      { error: "Unable to record document open." },
-      { status: 500 }
-    )
   }
-}
-
-function getRequiredString(
-  body: Record<string, unknown>,
-  key: string
-): string {
-  const value = body[key]
-
-  if (typeof value !== "string" || value.trim().length === 0) {
-    throw new TemplateServiceError("Organization id is required.", 400)
-  }
-
-  return value.trim()
 }

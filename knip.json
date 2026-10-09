@@ -22,10 +22,6 @@
     // error class and the factory's test reset are used only by tests today.
     "src/services/sms/termii-provider.ts": ["exports"],
     "src/services/sms/provider-factory.ts": ["exports"],
-    // Server actions used only by their tests. They live in src/app, which the
-    // services pass does not touch; the app pass decides whether they go.
-    "src/app/(dashboard)/people/actions.ts": ["exports"],
-    "src/app/(dashboard)/submissions/actions.ts": ["exports"],
     // next.config.ts imports it, but production mode reads that file as
     // configuration and does not follow its imports.
     "src/lib/content-security-policy.ts": ["files"]

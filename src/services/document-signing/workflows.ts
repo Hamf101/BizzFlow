@@ -919,7 +919,7 @@ async function requireSigningDocumentLifecycle(
   requireReadableDocument(
     await client
       .from("documents")
-      .select("lifecycle_state,archived_at")
+      .select("lifecycle_state")
       .eq("id", documentId)
       .eq("org_id", organizationId)
       .maybeSingle(),

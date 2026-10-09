@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { timestampSchema } from "@/types/schemas"
 
 /** Channels a notification can be delivered through. */
 export const NOTIFICATION_CHANNELS = ["email", "sms"] as const
@@ -35,7 +36,6 @@ export const notificationDeliveryStatusSchema = z.enum(
 )
 export const notificationPurposeSchema = z.enum(NOTIFICATION_PURPOSES)
 
-const timestampSchema = z.string().datetime({ offset: true })
 
 const notificationDeliveryRowSchema = z.object({
   id: z.string().uuid(),

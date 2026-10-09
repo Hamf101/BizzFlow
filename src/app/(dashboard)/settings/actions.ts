@@ -4,16 +4,17 @@ import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 import { z } from "zod"
 
-import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
+import { getAuthenticatedUser } from "@/lib/auth"
 import {
   ORGANIZATION_PERMISSION_ACTIONS,
   type OrganizationPermissionAction,
 } from "@/lib/permissions"
 import {
   buildFeedbackRedirect,
-  getActionErrorFeedbackCode,
+  type ActionFeedbackCode,
 } from "@/lib/action-result"
-import { buildRedirect, getFormString } from "@/lib/form-utils"
+import { runFormAction } from "@/lib/form-action"
+import { getFormString } from "@/lib/form-utils"
 import {
   updateOrganizationNotificationSettings,
 } from "@/services/notification-service"
@@ -65,25 +66,13 @@ export async function updateProfileAction(formData: FormData): Promise<void> {
     redirect(buildFeedbackRedirect("/settings", "invalid_input"))
   }
 
-  try {
-    const user = await getAuthenticatedUser()
-    await updateProfile({
-      actorUserId: user.id,
+  await runSettingsAction("/settings", "changes_saved", (actorUserId) =>
+    updateProfile({
+      actorUserId,
       displayName: parsed.data.displayName,
       phoneNumber: parsed.data.phoneNumber,
     })
-  } catch (error: unknown) {
-    if (error instanceof AuthenticationError) {
-      redirect(buildRedirect("/login", { next: "/settings" }))
-    }
-
-    redirect(
-      buildFeedbackRedirect("/settings", getActionErrorFeedbackCode(error))
-    )
-  }
-
-  revalidatePath("/settings")
-  redirect(buildFeedbackRedirect("/settings", "changes_saved"))
+  )
 }
 
 /**
@@ -103,33 +92,15 @@ export async function updateNotificationPreferencesAction(formData: FormData): P
     redirect(buildFeedbackRedirect("/settings", "invalid_input"))
   }
 
-  try {
-    const user = await getAuthenticatedUser()
-    await updateNotificationPreferences({
-      actorUserId: user.id,
+  await runSettingsAction("/settings", "changes_saved", (actorUserId) =>
+    updateNotificationPreferences({
+      actorUserId,
       organizationId: parsed.data.organizationId,
       emailNotificationsEnabled: parsed.data.emailNotificationsEnabled,
       smsNotificationsEnabled: parsed.data.smsNotificationsEnabled,
     })
-  } catch (error: unknown) {
-    if (error instanceof AuthenticationError) {
-      redirect(buildRedirect("/login", { next: "/settings" }))
-    }
-
-    redirect(
-      buildFeedbackRedirect("/settings", getActionErrorFeedbackCode(error))
-    )
-  }
-
-  revalidatePath("/settings")
-  redirect(buildFeedbackRedirect("/settings", "changes_saved"))
+  )
 }
-
-const updateOrganizationSettingsSchema = z.object({
-  organizationId: z.string().uuid("Organization ID is required."),
-  emailNotificationsEnabled: z.boolean(),
-  smsNotificationsEnabled: z.boolean(),
-})
 
 /**
  * Updates the organization-wide notification switches.
@@ -142,7 +113,7 @@ const updateOrganizationSettingsSchema = z.object({
 export async function updateOrganizationNotificationSettingsAction(
   formData: FormData
 ): Promise<void> {
-  const parsed = updateOrganizationSettingsSchema.safeParse({
+  const parsed = updatePreferencesSchema.safeParse({
     organizationId: getFormString(formData, "organizationId"),
     emailNotificationsEnabled:
       formData.get("orgEmailNotificationsEnabled") === "on",
@@ -153,26 +124,14 @@ export async function updateOrganizationNotificationSettingsAction(
     redirect(buildFeedbackRedirect("/settings", "invalid_input"))
   }
 
-  try {
-    const user = await getAuthenticatedUser()
-    await updateOrganizationNotificationSettings({
-      actorUserId: user.id,
+  await runSettingsAction("/settings", "changes_saved", (actorUserId) =>
+    updateOrganizationNotificationSettings({
+      actorUserId,
       organizationId: parsed.data.organizationId,
       emailNotificationsEnabled: parsed.data.emailNotificationsEnabled,
       smsNotificationsEnabled: parsed.data.smsNotificationsEnabled,
     })
-  } catch (error: unknown) {
-    if (error instanceof AuthenticationError) {
-      redirect(buildRedirect("/login", { next: "/settings" }))
-    }
-
-    redirect(
-      buildFeedbackRedirect("/settings", getActionErrorFeedbackCode(error))
-    )
-  }
-
-  revalidatePath("/settings")
-  redirect(buildFeedbackRedirect("/settings", "changes_saved"))
+  )
 }
 
 /**
@@ -194,18 +153,17 @@ export async function createOrganizationRoleAction(
     redirect(buildFeedbackRedirect(SETTINGS_ACCESS_PATH, "invalid_input"))
   }
 
-  await runAuthenticatedSettingsMutation(async (actorUserId: string) => {
-    await createOrganizationRole({
-      actorUserId,
-      organizationId: parsed.data.organizationId,
-      name: parsed.data.name,
-      permissions: parsed.data.permissions,
-    })
-  })
-
-  revalidatePath("/settings")
-  revalidatePath("/people")
-  redirect(buildFeedbackRedirect(SETTINGS_ACCESS_PATH, "role_created"))
+  await runSettingsAction(
+    SETTINGS_ACCESS_PATH,
+    "role_created",
+    (actorUserId) =>
+      createOrganizationRole({
+        actorUserId,
+        organizationId: parsed.data.organizationId,
+        name: parsed.data.name,
+        permissions: parsed.data.permissions,
+      })
+  )
 }
 
 /**
@@ -232,21 +190,20 @@ export async function updateOrganizationRoleAction(
     redirect(buildFeedbackRedirect(SETTINGS_ACCESS_PATH, "invalid_input"))
   }
 
-  await runAuthenticatedSettingsMutation(async (actorUserId: string) => {
-    await updateOrganizationRole({
-      actorUserId,
-      organizationId: parsed.data.organizationId,
-      roleId: parsed.data.roleId,
-      name: parsed.data.name,
-      permissions: parsed.data.permissionsLocked
-        ? undefined
-        : parsed.data.permissions,
-    })
-  })
-
-  revalidatePath("/settings")
-  revalidatePath("/people")
-  redirect(buildFeedbackRedirect(SETTINGS_ACCESS_PATH, "role_updated"))
+  await runSettingsAction(
+    SETTINGS_ACCESS_PATH,
+    "role_updated",
+    (actorUserId) =>
+      updateOrganizationRole({
+        actorUserId,
+        organizationId: parsed.data.organizationId,
+        roleId: parsed.data.roleId,
+        name: parsed.data.name,
+        permissions: parsed.data.permissionsLocked
+          ? undefined
+          : parsed.data.permissions,
+      })
+  )
 }
 
 /**
@@ -267,20 +224,17 @@ export async function archiveOrganizationRoleAction(
     redirect(buildFeedbackRedirect(SETTINGS_ACCESS_PATH, "invalid_input"))
   }
 
-  await runAuthenticatedSettingsMutation(
-    async (actorUserId: string) => {
-      await archiveOrganizationRole({
+  await runSettingsAction(
+    SETTINGS_ACCESS_PATH,
+    "role_removed",
+    (actorUserId) =>
+      archiveOrganizationRole({
         actorUserId,
         organizationId: parsed.data.organizationId,
         roleId: parsed.data.roleId,
-      })
-    },
-    "role_in_use"
+      }),
+    isRoleInUse
   )
-
-  revalidatePath("/settings")
-  revalidatePath("/people")
-  redirect(buildFeedbackRedirect(SETTINGS_ACCESS_PATH, "role_removed"))
 }
 
 function getPermissionValues(
@@ -296,25 +250,34 @@ function getPermissionValues(
     )
 }
 
-async function runAuthenticatedSettingsMutation(
-  operation: (actorUserId: string) => Promise<void>,
-  conflictFeedbackCode?: "role_in_use"
-): Promise<void> {
-  try {
-    const user = await getAuthenticatedUser()
-    await operation(user.id)
-  } catch (error: unknown) {
-    if (error instanceof AuthenticationError) {
-      redirect(buildRedirect("/login", { next: "/settings" }))
-    }
+// Each settings service checks the actor's permission itself.
+async function runSettingsAction(
+  path: string,
+  success: ActionFeedbackCode,
+  operation: (actorUserId: string) => Promise<unknown>,
+  failure?: (error: unknown) => ActionFeedbackCode | undefined
+): Promise<never> {
+  return runFormAction({
+    event: `settings_${success}_action`,
+    failure,
+    path,
+    success,
+    run: async () => {
+      const user = await getAuthenticatedUser()
+      await operation(user.id)
+      revalidatePath("/settings")
 
-    const feedbackCode =
-      conflictFeedbackCode &&
-      error instanceof OrganizationServiceError &&
-      error.statusCode === 409
-        ? conflictFeedbackCode
-        : getActionErrorFeedbackCode(error)
+      // Roles also show on People.
+      if (path === SETTINGS_ACCESS_PATH) {
+        revalidatePath("/people")
+      }
+    },
+  })
+}
 
-    redirect(buildFeedbackRedirect(SETTINGS_ACCESS_PATH, feedbackCode))
-  }
+// Archiving a role that still has members or invites is a conflict worth naming.
+function isRoleInUse(error: unknown): ActionFeedbackCode | undefined {
+  return error instanceof OrganizationServiceError && error.statusCode === 409
+    ? "role_in_use"
+    : undefined
 }

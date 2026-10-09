@@ -25,7 +25,6 @@ export {
   getMemberSettings,
   listOrganizationPeople,
   updateMemberAccess,
-  updateProfilePhone,
   updateProfile,
   updateNotificationPreferences,
   type MemberSettings,

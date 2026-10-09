@@ -8,14 +8,12 @@ import {
   OrganizationServiceError,
   revokeInvite,
   updateMemberAccess,
-  updateProfilePhone,
 } from "@/services/organization-service"
 
 import {
   createInviteAction,
   revokeInviteAction,
   updateMemberAccessAction,
-  updateProfilePhoneAction,
 } from "./actions"
 
 const { redirectMock, revalidatePathMock } = vi.hoisted(() => ({
@@ -60,7 +58,6 @@ vi.mock("@/services/organization-service", () => ({
   },
   revokeInvite: vi.fn(),
   updateMemberAccess: vi.fn(),
-  updateProfilePhone: vi.fn(),
 }))
 
 const MEMBER_ID = "20000000-0000-4000-8000-000000000001"
@@ -200,7 +197,6 @@ describe("people profile and permission actions", () => {
     } as never)
     vi.mocked(updateMemberAccess).mockResolvedValue(undefined as never)
     vi.mocked(revokeInvite).mockResolvedValue(undefined as never)
-    vi.mocked(updateProfilePhone).mockResolvedValue(undefined as never)
   })
 
   it("updates a workspace name and custom role as one authoritative change", async () => {
@@ -235,19 +231,6 @@ describe("people profile and permission actions", () => {
     )
     expect(getAuthenticatedUser).not.toHaveBeenCalled()
     expect(updateMemberAccess).not.toHaveBeenCalled()
-  })
-
-  it("updates the authenticated member phone without trusting a submitted user id", async () => {
-    const formData = new FormData()
-    formData.set("phoneNumber", "+14155552671")
-
-    await expect(updateProfilePhoneAction(formData)).rejects.toThrow(
-      "NEXT_REDIRECT:/people?feedback=changes_saved"
-    )
-    expect(updateProfilePhone).toHaveBeenCalledExactlyOnceWith({
-      actorUserId: MEMBER_ID,
-      phoneNumber: "+14155552671",
-    })
   })
 
   it("revokes a tenant-scoped invite using the authenticated actor", async () => {

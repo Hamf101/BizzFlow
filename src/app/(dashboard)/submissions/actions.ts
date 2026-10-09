@@ -1,22 +1,18 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { redirect } from "next/navigation"
 
+import { parseGeneratedDocumentAnswers } from "@/components/documents/generated-document-form-data"
+import type { ActionFeedbackCode } from "@/lib/action-result"
 import {
-  GeneratedDocumentFormDataError,
-  parseGeneratedDocumentAnswers,
-} from "@/components/documents/generated-document-form-data"
-import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
+  ActionError,
+  loadActionContext,
+  requireFormId,
+  runFormAction,
+  type ActionActor,
+} from "@/lib/form-action"
+import { getFormString } from "@/lib/form-utils"
 import {
-  buildFeedbackRedirect,
-  getActionErrorFeedbackCode,
-  type ActionFeedbackCode,
-} from "@/lib/action-result"
-import { buildRedirect, getFormString } from "@/lib/form-utils"
-import { getCurrentOrganizationContext } from "@/services/organization-service"
-import {
-  assignInternalSubmission,
   createInternalSubmissionComment,
   createInternalSubmissionDraft,
   decideSubmissionSuggestion,
@@ -29,22 +25,8 @@ import {
   transitionInternalSubmission,
   type SubmissionReviewTransition,
 } from "@/services/submission-service"
-import type { OrganizationContext } from "@/types/organization"
 
-type SubmissionActionContext = {
-  actorUserId: string
-  context: OrganizationContext
-}
-
-class SubmissionActionError extends Error {
-  readonly statusCode: number
-
-  constructor(message: string, statusCode = 400) {
-    super(message)
-    this.name = "SubmissionActionError"
-    this.statusCode = statusCode
-  }
-}
+const NO_ORGANIZATION = "Create an organization before managing submissions."
 
 /**
  * Starts an internal submission draft from an immutable published template.
@@ -53,44 +35,23 @@ class SubmissionActionError extends Error {
  * @returns Never returns; redirects to the draft or a user-safe error.
  */
 export async function createSubmissionAction(formData: FormData): Promise<void> {
-  const startedAt = Date.now()
-  let submissionId = ""
+  await runFormAction({
+    event: "submission_create_action",
+    path: "/submissions/new",
+    success: "submission_created",
+    run: async () => {
+      const { actor } = await loadActionContext(NO_ORGANIZATION)
+      const submission = await createInternalSubmissionDraft({
+        ...actor,
+        submissionId: requireFormId(getFormString(formData, "submissionId"), "Submission id"),
+        templateId: requireFormId(getFormString(formData, "templateId"), "Template id"),
+        title: getFormString(formData, "title"),
+      })
 
-  try {
-    const actionContext = await loadSubmissionActionContext()
-    const submission = await createInternalSubmissionDraft({
-      actorUserId: actionContext.actorUserId,
-      organizationId: actionContext.context.organization.id,
-      submissionId: requireIdentifier(
-        getFormString(formData, "submissionId"),
-        "Submission id"
-      ),
-      templateId: requireIdentifier(
-        getFormString(formData, "templateId"),
-        "Template id"
-      ),
-      title: getFormString(formData, "title"),
-    })
-    submissionId = submission.id
-    revalidatePath("/submissions")
-    console.info("submission_create_action_completed", {
-      durationMs: Date.now() - startedAt,
-      organizationId: actionContext.context.organization.id,
-      submissionId,
-    })
-  } catch (error: unknown) {
-    handleSubmissionActionFailure({
-      error,
-      eventName: "submission_create_action_failed",
-      nextPath: "/submissions/new",
-      startedAt,
-      submissionId,
-    })
-  }
-
-  redirect(
-    buildFeedbackRedirect(getSubmissionPath(submissionId), "submission_created")
-  )
+      revalidatePath("/submissions")
+      return { path: getSubmissionPath(submission.id) }
+    },
+  })
 }
 
 /**
@@ -100,7 +61,9 @@ export async function createSubmissionAction(formData: FormData): Promise<void> 
  * @returns Never returns; redirects to the refreshed submission or an error.
  */
 export async function saveSubmissionAction(formData: FormData): Promise<void> {
-  await mutateSubmissionFromForm(formData, "save")
+  await runSubmissionFormAction(formData, "changes_saved", (actor, submissionId) =>
+    saveInternalSubmissionDraft({ ...actor, ...readAnswers(formData, submissionId) })
+  )
 }
 
 /**
@@ -110,54 +73,9 @@ export async function saveSubmissionAction(formData: FormData): Promise<void> {
  * @returns Never returns; redirects to the immutable detail or an error.
  */
 export async function submitSubmissionAction(formData: FormData): Promise<void> {
-  await mutateSubmissionFromForm(formData, "submit")
-}
-
-/**
- * Assigns an eligible organization member to a submission review.
- *
- * @param formData - Submission id, expected revision, and assignee user id.
- * @returns Never returns; redirects to the refreshed submission or an error.
- */
-export async function assignSubmissionAction(formData: FormData): Promise<void> {
-  const submissionId = getFormString(formData, "submissionId")
-  const submissionPath = getSubmissionPath(submissionId)
-  const startedAt = Date.now()
-
-  try {
-    const actionContext = await loadSubmissionActionContext()
-    const assignedTo = requireIdentifier(
-      getFormString(formData, "assignedTo"),
-      "Assignee"
-    )
-    await assignInternalSubmission({
-      actorUserId: actionContext.actorUserId,
-      organizationId: actionContext.context.organization.id,
-      submissionId: requireIdentifier(submissionId, "Submission id"),
-      expectedRevision: parseExpectedRevision(
-        getFormString(formData, "expectedRevision")
-      ),
-      assignedTo,
-    })
-
-    revalidateSubmissionPaths(submissionId)
-    console.info("submission_assign_action_completed", {
-      assignedTo,
-      durationMs: Date.now() - startedAt,
-      organizationId: actionContext.context.organization.id,
-      submissionId,
-    })
-  } catch (error: unknown) {
-    handleSubmissionActionFailure({
-      error,
-      eventName: "submission_assign_action_failed",
-      nextPath: submissionPath,
-      startedAt,
-      submissionId,
-    })
-  }
-
-  redirect(buildFeedbackRedirect(submissionPath, "submission_assigned"))
+  await runSubmissionFormAction(formData, "submission_submitted", (actor, submissionId) =>
+    submitInternalSubmission({ ...actor, ...readAnswers(formData, submissionId) })
+  )
 }
 
 /**
@@ -168,35 +86,17 @@ export async function assignSubmissionAction(formData: FormData): Promise<void> 
  * @returns Never returns; redirects to the refreshed submission or an error.
  */
 export async function setSubmissionReviewersAction(formData: FormData): Promise<void> {
-  const submissionId = getFormString(formData, "submissionId")
-  const submissionPath = getSubmissionPath(submissionId)
-  const startedAt = Date.now()
-
-  try {
-    const actionContext = await loadSubmissionActionContext()
+  await runSubmissionFormAction(formData, "submission_assigned", (actor, submissionId) => {
     const needed = getFormString(formData, "requiredApprovals").trim()
 
-    await setInternalSubmissionReviewers({
-      actorUserId: actionContext.actorUserId,
+    return setInternalSubmissionReviewers({
+      ...actor,
       expectedRevision: parseExpectedRevision(getFormString(formData, "expectedRevision")),
-      organizationId: actionContext.context.organization.id,
       requiredApprovals: needed ? Number(needed) : null,
       reviewerIds: formData.getAll("reviewerIds").map((id) => String(id)),
-      submissionId: requireIdentifier(submissionId, "Submission id"),
-    })
-
-    revalidateSubmissionPaths(submissionId)
-  } catch (error: unknown) {
-    handleSubmissionActionFailure({
-      error,
-      eventName: "submission_reviewers_action_failed",
-      nextPath: submissionPath,
-      startedAt,
       submissionId,
     })
-  }
-
-  redirect(buildFeedbackRedirect(submissionPath, "submission_assigned"))
+  })
 }
 
 /**
@@ -207,40 +107,22 @@ export async function setSubmissionReviewersAction(formData: FormData): Promise<
  * @returns Never returns; redirects to the refreshed submission or an error.
  */
 export async function dismissChangesRequestAction(formData: FormData): Promise<void> {
-  const submissionId = getFormString(formData, "submissionId")
-  const submissionPath = getSubmissionPath(submissionId)
-  const startedAt = Date.now()
-
-  try {
-    const actionContext = await loadSubmissionActionContext()
+  await runSubmissionFormAction(formData, "submission_review_updated", (actor, submissionId) => {
     const comment = getFormString(formData, "comment").trim()
 
     if (!comment) {
-      throw new SubmissionActionError("Add a note saying why the change request is set aside.")
+      throw new ActionError("Add a note saying why the change request is set aside.")
     }
 
-    await dismissSubmissionChangesRequest({
-      actorUserId: actionContext.actorUserId,
+    return dismissSubmissionChangesRequest({
+      ...actor,
       alsoApprove: getFormString(formData, "alsoApprove") === "yes",
       comment,
       expectedRevision: parseExpectedRevision(getFormString(formData, "expectedRevision")),
-      organizationId: actionContext.context.organization.id,
-      reviewerUserId: requireIdentifier(getFormString(formData, "reviewerUserId"), "Reviewer"),
-      submissionId: requireIdentifier(submissionId, "Submission id"),
-    })
-
-    revalidateSubmissionPaths(submissionId)
-  } catch (error: unknown) {
-    handleSubmissionActionFailure({
-      error,
-      eventName: "submission_dismiss_action_failed",
-      nextPath: submissionPath,
-      startedAt,
+      reviewerUserId: requireFormId(getFormString(formData, "reviewerUserId"), "Reviewer"),
       submissionId,
     })
-  }
-
-  redirect(buildFeedbackRedirect(submissionPath, "submission_review_updated"))
+  })
 }
 
 /**
@@ -282,7 +164,7 @@ export async function decideSuggestionAction(formData: FormData): Promise<void> 
       ...actor,
       accept,
       submissionId,
-      suggestionId: requireIdentifier(getFormString(formData, "suggestionId"), "Suggestion"),
+      suggestionId: requireFormId(getFormString(formData, "suggestionId"), "Suggestion"),
     })
   )
 }
@@ -301,6 +183,8 @@ export async function commentFromReviewAction(formData: FormData): Promise<void>
 
 /**
  * Applies a binding manager review transition with optimistic revision matching.
+ * The service asks for review permission where the decision needs it, and the
+ * database checks the reviewer.
  *
  * @param formData - Submission id, expected revision, transition, and review note.
  * @returns Never returns; redirects to the refreshed submission or an error.
@@ -308,23 +192,12 @@ export async function commentFromReviewAction(formData: FormData): Promise<void>
 export async function transitionSubmissionAction(
   formData: FormData
 ): Promise<void> {
-  const submissionId = getFormString(formData, "submissionId")
-  const submissionPath = getSubmissionPath(submissionId)
-  const startedAt = Date.now()
-  let transition: SubmissionReviewTransition | null = null
-
-  try {
-    // The service asks for review permission where the decision needs it,
-    // and the database checks the reviewer.
-    const actionContext = await loadSubmissionActionContext()
-    transition = parseReviewTransition(getFormString(formData, "targetStatus"))
+  await runSubmissionFormAction(formData, "submission_review_updated", (actor, submissionId) => {
+    const transition = parseReviewTransition(getFormString(formData, "targetStatus"))
     const comment = getFormString(formData, "comment").trim()
 
-    if (
-      (transition === "needs_changes" || transition === "rejected") &&
-      !comment
-    ) {
-      throw new SubmissionActionError(
+    if ((transition === "needs_changes" || transition === "rejected") && !comment) {
+      throw new ActionError(
         transition === "needs_changes"
           ? "Add a note explaining the requested changes."
           : "Add a note explaining why the submission was rejected."
@@ -332,42 +205,17 @@ export async function transitionSubmissionAction(
     }
 
     if (comment.length > 2_000) {
-      throw new SubmissionActionError(
-        "Review comments must be 2,000 characters or fewer."
-      )
+      throw new ActionError("Review comments must be 2,000 characters or fewer.")
     }
 
-    await transitionInternalSubmission({
-      actorUserId: actionContext.actorUserId,
-      organizationId: actionContext.context.organization.id,
-      submissionId: requireIdentifier(submissionId, "Submission id"),
-      expectedRevision: parseExpectedRevision(
-        getFormString(formData, "expectedRevision")
-      ),
+    return transitionInternalSubmission({
+      ...actor,
+      submissionId,
+      expectedRevision: parseExpectedRevision(getFormString(formData, "expectedRevision")),
       targetStatus: transition,
       comment: comment || undefined,
     })
-
-    revalidateSubmissionPaths(submissionId)
-    console.info("submission_transition_action_completed", {
-      durationMs: Date.now() - startedAt,
-      organizationId: actionContext.context.organization.id,
-      submissionId,
-      transition,
-    })
-  } catch (error: unknown) {
-    handleSubmissionActionFailure({
-      error,
-      eventName: "submission_transition_action_failed",
-      nextPath: submissionPath,
-      startedAt,
-      submissionId,
-    })
-  }
-
-  redirect(
-    buildFeedbackRedirect(submissionPath, "submission_review_updated")
-  )
+  })
 }
 
 /**
@@ -379,145 +227,62 @@ export async function transitionSubmissionAction(
 export async function createSubmissionCommentAction(
   formData: FormData
 ): Promise<void> {
-  const submissionId = getFormString(formData, "submissionId")
-  const submissionPath = getSubmissionPath(submissionId)
-  const startedAt = Date.now()
-
-  try {
-    const actionContext = await loadSubmissionActionContext()
+  await runSubmissionFormAction(formData, "comment_added", (actor, submissionId) => {
     const body = getFormString(formData, "body").trim()
 
     if (!body) {
-      throw new SubmissionActionError("Comment is required.")
+      throw new ActionError("Comment is required.")
     }
 
     if (body.length > 2_000) {
-      throw new SubmissionActionError(
-        "Comments must be 2,000 characters or fewer."
-      )
+      throw new ActionError("Comments must be 2,000 characters or fewer.")
     }
 
-    await createInternalSubmissionComment({
-      actorUserId: actionContext.actorUserId,
-      organizationId: actionContext.context.organization.id,
-      submissionId: requireIdentifier(submissionId, "Submission id"),
-      body,
-    })
-
-    revalidateSubmissionPaths(submissionId)
-    console.info("submission_comment_action_completed", {
-      durationMs: Date.now() - startedAt,
-      organizationId: actionContext.context.organization.id,
-      submissionId,
-    })
-  } catch (error: unknown) {
-    handleSubmissionActionFailure({
-      error,
-      eventName: "submission_comment_action_failed",
-      nextPath: submissionPath,
-      startedAt,
-      submissionId,
-    })
-  }
-
-  redirect(buildFeedbackRedirect(submissionPath, "comment_added"))
+    return createInternalSubmissionComment({ ...actor, submissionId, body })
+  })
 }
 
-async function mutateSubmissionFromForm(
-  formData: FormData,
-  operation: "save" | "submit"
-): Promise<never> {
-  const submissionId = getFormString(formData, "submissionId")
-  const submissionPath = getSubmissionPath(submissionId)
-  const startedAt = Date.now()
-
-  try {
-    const actionContext = await loadSubmissionActionContext()
-    const input = {
-      actorUserId: actionContext.actorUserId,
-      organizationId: actionContext.context.organization.id,
-      submissionId: requireIdentifier(submissionId, "Submission id"),
-      expectedRevision: parseExpectedRevision(
-        getFormString(formData, "expectedRevision")
-      ),
-      values: parseGeneratedDocumentAnswers(formData),
-    }
-
-    if (operation === "save") {
-      await saveInternalSubmissionDraft(input)
-    } else {
-      await submitInternalSubmission(input)
-    }
-
-    revalidateSubmissionPaths(submissionId)
-    console.info(`submission_${operation}_action_completed`, {
-      durationMs: Date.now() - startedAt,
-      organizationId: actionContext.context.organization.id,
-      submissionId,
-    })
-  } catch (error: unknown) {
-    handleSubmissionActionFailure({
-      error,
-      eventName: `submission_${operation}_action_failed`,
-      nextPath: submissionPath,
-      startedAt,
-      submissionId,
-    })
-  }
-
-  redirect(
-    buildFeedbackRedirect(
-      submissionPath,
-      operation === "save" ? "changes_saved" : "submission_submitted"
-    )
-  )
-}
-
-// Parses the submission, runs one service call as the signed-in member, and
-// redirects back with how it went.
+// Runs one service call on the submission as the signed-in member, and
+// redirects back to it with how it went.
 async function runSubmissionFormAction(
   formData: FormData,
   feedback: ActionFeedbackCode,
-  run: (actor: { actorUserId: string; organizationId: string }, submissionId: string) => Promise<unknown>
+  run: (actor: ActionActor, submissionId: string) => Promise<unknown>
 ): Promise<never> {
   const submissionId = getFormString(formData, "submissionId")
   const submissionPath = getSubmissionPath(submissionId)
-  const startedAt = Date.now()
 
-  try {
-    const { actorUserId, context } = await loadSubmissionActionContext()
+  return runFormAction({
+    event: `submission_${feedback}_action`,
+    log: { submissionId },
+    path: submissionPath,
+    success: feedback,
+    run: async () => {
+      const { actor } = await loadActionContext(NO_ORGANIZATION)
 
-    await run({ actorUserId, organizationId: context.organization.id }, requireIdentifier(submissionId, "Submission id"))
-    revalidateSubmissionPaths(submissionId)
-  } catch (error: unknown) {
-    handleSubmissionActionFailure({ error, eventName: `submission_${feedback}_action_failed`, nextPath: submissionPath, startedAt, submissionId })
-  }
-
-  redirect(buildFeedbackRedirect(submissionPath, feedback))
+      await run(actor, requireFormId(submissionId, "Submission id"))
+      revalidatePath("/submissions")
+      revalidatePath(submissionPath)
+    },
+  })
 }
 
-// Each submission service checks the actor's permission itself.
-async function loadSubmissionActionContext(): Promise<SubmissionActionContext> {
-  const user = await getAuthenticatedUser()
-  const context = await getCurrentOrganizationContext(user.id)
-
-  if (!context) {
-    throw new SubmissionActionError(
-      "Create an organization before managing submissions.",
-      428
-    )
+function readAnswers(
+  formData: FormData,
+  submissionId: string
+): { expectedRevision: number; submissionId: string; values: ReturnType<typeof parseGeneratedDocumentAnswers> } {
+  return {
+    submissionId,
+    expectedRevision: parseExpectedRevision(getFormString(formData, "expectedRevision")),
+    values: parseGeneratedDocumentAnswers(formData),
   }
-
-  return { actorUserId: user.id, context }
 }
 
 function parseExpectedRevision(value: string): number {
   const revision = Number(value)
 
   if (!Number.isInteger(revision) || revision < 1) {
-    throw new SubmissionActionError(
-      "Submission revision must be a positive integer."
-    )
+    throw new ActionError("Submission revision must be a positive integer.")
   }
 
   return revision
@@ -533,17 +298,7 @@ function parseReviewTransition(value: string): SubmissionReviewTransition {
     return value
   }
 
-  throw new SubmissionActionError("Choose a valid review action.")
-}
-
-function requireIdentifier(value: string, label: string): string {
-  const identifier = value.trim()
-
-  if (!identifier) {
-    throw new SubmissionActionError(`${label} is required.`)
-  }
-
-  return identifier
+  throw new ActionError("Choose a valid review action.")
 }
 
 function getSubmissionPath(submissionId: string): string {
@@ -551,39 +306,4 @@ function getSubmissionPath(submissionId: string): string {
   return identifier
     ? `/submissions/${encodeURIComponent(identifier)}`
     : "/submissions"
-}
-
-function revalidateSubmissionPaths(submissionId: string): void {
-  revalidatePath("/submissions")
-  revalidatePath(getSubmissionPath(submissionId))
-}
-
-function handleSubmissionActionFailure(input: {
-  error: unknown
-  eventName: string
-  nextPath: string
-  startedAt: number
-  submissionId: string
-}): never {
-  if (input.error instanceof AuthenticationError) {
-    redirect(buildRedirect("/login", { next: input.nextPath }))
-  }
-
-  const reason =
-    input.error instanceof Error
-      ? input.error.message
-      : "Unknown submission action error"
-  console.warn(input.eventName, {
-    durationMs: Date.now() - input.startedAt,
-    reason,
-    submissionId: input.submissionId,
-  })
-  redirect(
-    buildFeedbackRedirect(
-      input.nextPath,
-      input.error instanceof GeneratedDocumentFormDataError
-        ? "invalid_input"
-        : getActionErrorFeedbackCode(input.error)
-    )
-  )
 }

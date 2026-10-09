@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from "vitest"
 
 import {
   allocateInternalSubmissionFile,
-  assignInternalSubmission,
   cleanupExpiredSubmissionFileObjects,
   completeInternalSubmissionFile,
   countSubmissionsByStatus,
@@ -927,64 +926,6 @@ describe("internal submission draft lifecycle", () => {
 })
 
 describe("internal submission review workflow", () => {
-  it("assigns an eligible reviewer through the revision-guarded RPC", async () => {
-    const client = createClient({
-      submissions: [
-        createSubmissionRow({
-          status: "submitted",
-          revision: 2,
-          submitted_by: STAFF_ID,
-          submitted_at: "2026-07-18T17:00:00.000Z"
-        })
-      ]
-    })
-    client.rpc.mockImplementation(async (functionName, args) => {
-      expect(functionName).toBe("assign_internal_submission")
-      expect(args).toEqual({
-        target_org_id: ORGANIZATION_ID,
-        target_submission_id: SUBMISSION_ID,
-        target_expected_revision: 2,
-        target_assignee_user_id: EXTERNAL_ID,
-        target_actor_user_id: MANAGER_ID
-      })
-      return { data: createAssignedSubmissionRow(), error: null }
-    })
-
-    const result = await assignInternalSubmission(
-      {
-        actorUserId: MANAGER_ID,
-        organizationId: ORGANIZATION_ID,
-        submissionId: SUBMISSION_ID,
-        expectedRevision: 2,
-        assignedTo: EXTERNAL_ID
-      },
-      { client: client as never }
-    )
-
-    expect(result).toMatchObject({
-      status: "in_review",
-      assignedTo: EXTERNAL_ID
-    })
-  })
-
-  it("denies assignment to staff before invoking the RPC", async () => {
-    const client = createClient()
-
-    await expect(
-      assignInternalSubmission(
-        {
-          actorUserId: STAFF_ID,
-          organizationId: ORGANIZATION_ID,
-          submissionId: SUBMISSION_ID,
-          expectedRevision: 1,
-          assignedTo: EXTERNAL_ID
-        },
-        { client: client as never }
-      )
-    ).rejects.toMatchObject({ statusCode: 403 })
-    expect(client.rpc).not.toHaveBeenCalled()
-  })
-
   it("returns the safe review conflict message from the database", async () => {
     const client = createClient()
     client.rpc.mockResolvedValue({
@@ -996,13 +937,13 @@ describe("internal submission review workflow", () => {
     })
 
     await expect(
-      assignInternalSubmission(
+      transitionInternalSubmission(
         {
           actorUserId: MANAGER_ID,
           organizationId: ORGANIZATION_ID,
           submissionId: SUBMISSION_ID,
           expectedRevision: 2,
-          assignedTo: EXTERNAL_ID
+          targetStatus: "approved"
         },
         { client: client as never }
       )

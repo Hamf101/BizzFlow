@@ -1,4 +1,5 @@
-const DEFAULT_POSTHOG_HOST = "https://us.i.posthog.com"
+// Relative: next.config.ts imports this file, outside the "@/" alias.
+import { DEFAULT_POSTHOG_HOST } from "./env"
 
 export type ContentSecurityPolicyInput = {
   appUrl?: string

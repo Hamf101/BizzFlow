@@ -1,5 +1,6 @@
 import type { ReactElement, ReactNode } from "react"
 
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { cn } from "@/lib/utils"
 
 type PageStateProps = {
@@ -174,5 +175,20 @@ function ErrorState({
   )
 }
 
-export { ErrorState, PageSkeleton }
+/**
+ * The page state for an organization context that failed to load.
+ *
+ * @param props - The loader's safe error message.
+ * @returns A destructive alert naming the incomplete setup.
+ */
+function SetupIncomplete({ message }: { message: string }): ReactElement {
+  return (
+    <Alert variant="destructive">
+      <AlertTitle>Supabase setup incomplete</AlertTitle>
+      <AlertDescription>{message}</AlertDescription>
+    </Alert>
+  )
+}
+
+export { ErrorState, PageSkeleton, SetupIncomplete }
 export type { PageSkeletonProps, PageStateProps }

@@ -1,16 +1,18 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { redirect } from "next/navigation"
 import { z } from "zod"
 
-import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
+import { AuthenticationError } from "@/lib/auth"
 import {
-  buildFeedbackRedirect,
-  getActionErrorFeedbackCode,
-} from "@/lib/action-result"
-import { buildRedirect, getFormString } from "@/lib/form-utils"
-import { getCurrentOrganizationContext } from "@/services/organization-service"
+  ActionError,
+  loadActionContext,
+  loadActionContextOrSignIn,
+  requireFormId,
+  runFormAction,
+  type ActionActor,
+} from "@/lib/form-action"
+import { getFormString } from "@/lib/form-utils"
 import {
   archiveDocumentTemplate,
   changeDocumentTemplates,
@@ -33,22 +35,12 @@ import {
   type DocumentTemplate,
   type TemplateContent,
 } from "@/types/template"
-import type { OrganizationContext } from "@/types/organization"
 
-type TemplateActionContext = {
-  actorUserId: string
-  context: OrganizationContext
-}
+const NO_ORGANIZATION = "Create an organization before managing document templates."
 
-class TemplateActionError extends Error {
-  readonly statusCode: number
-
-  constructor(message: string, statusCode = 400) {
-    super(message)
-    this.name = "TemplateActionError"
-    this.statusCode = statusCode
-  }
-}
+// The service judges each template, since sharing can let someone edit one their role could not.
+const loadTemplateActionContext = (): ReturnType<typeof loadActionContext> =>
+  loadActionContext(NO_ORGANIZATION, 403)
 
 /**
  * Creates an initial draft template and opens its guided editor.
@@ -57,52 +49,26 @@ class TemplateActionError extends Error {
  * @returns Never returns; redirects to the new editor or a user-safe error.
  */
 export async function createTemplateAction(formData: FormData): Promise<void> {
-  const startedAt = Date.now()
-  let createdTemplateId = ""
+  await runFormAction({
+    event: "template_create_action",
+    path: "/templates/new",
+    success: "template_created",
+    run: async () => {
+      const { actor, organization } = await loadTemplateActionContext()
+      const content = createEmptyDocumentContent()
+      content.branding.organizationName = organization.name
+      const template = await createDocumentTemplate({
+        ...actor,
+        title: getFormString(formData, "title"),
+        description: getFormString(formData, "description") || null,
+        category: getFormString(formData, "category") || null,
+        content,
+      })
 
-  try {
-    const actionContext = await loadTemplateActionContext()
-    const content = createEmptyDocumentContent()
-    content.branding.organizationName = actionContext.context.organization.name
-    const template = await createDocumentTemplate({
-      actorUserId: actionContext.actorUserId,
-      organizationId: actionContext.context.organization.id,
-      title: getFormString(formData, "title"),
-      description: getFormString(formData, "description") || null,
-      category: getFormString(formData, "category") || null,
-      content,
-    })
-
-    revalidatePath("/templates")
-    console.info("template_create_action_completed", {
-      durationMs: Date.now() - startedAt,
-      organizationId: actionContext.context.organization.id,
-      templateId: template.id,
-    })
-    createdTemplateId = template.id
-  } catch (error: unknown) {
-    if (error instanceof AuthenticationError) {
-      redirect(buildRedirect("/login", { next: "/templates/new" }))
-    }
-
-    logTemplateActionFailure("template_create_action_failed", {
-      durationMs: Date.now() - startedAt,
-      reason: getUnknownErrorMessage(error),
-    })
-    redirect(
-      buildFeedbackRedirect(
-        "/templates/new",
-        getActionErrorFeedbackCode(error)
-      )
-    )
-  }
-
-  redirect(
-    buildFeedbackRedirect(
-      `/templates/${createdTemplateId}/edit`,
-      "template_created"
-    )
-  )
+      revalidatePath("/templates")
+      return { path: `/templates/${template.id}/edit` }
+    },
+  })
 }
 
 /** A template as the editor saves it while it changes. */
@@ -125,7 +91,7 @@ export type TemplateDraftInput = {
  */
 export async function saveTemplateDraftAction(input: TemplateDraftInput): Promise<SaveResult> {
   try {
-    const actionContext = await loadTemplateActionContext()
+    const { actor } = await loadTemplateActionContext()
     let content: TemplateContent
 
     try {
@@ -135,9 +101,8 @@ export async function saveTemplateDraftAction(input: TemplateDraftInput): Promis
     }
 
     const template = await updateDocumentTemplate({
-      actorUserId: actionContext.actorUserId,
-      organizationId: actionContext.context.organization.id,
-      templateId: requireTemplateId(input.templateId),
+      ...actor,
+      templateId: requireFormId(input.templateId, "Template id"),
       expectedRevision: input.expectedRevision,
       title: input.title,
       description: input.description || null,
@@ -157,7 +122,7 @@ export async function saveTemplateDraftAction(input: TemplateDraftInput): Promis
     }
 
     const statusCode =
-      error instanceof TemplateServiceError || error instanceof TemplateActionError ? error.statusCode : 500
+      error instanceof TemplateServiceError || error instanceof ActionError ? error.statusCode : 500
 
     logTemplateActionFailure("template_draft_save_failed", {
       reason: getUnknownErrorMessage(error),
@@ -179,54 +144,36 @@ export async function saveTemplateDraftAction(input: TemplateDraftInput): Promis
  */
 export async function publishTemplateAction(formData: FormData): Promise<void> {
   const templateId = getFormString(formData, "templateId")
-  const editorPath = getEditorPath(templateId)
-  const startedAt = Date.now()
-  let outcome: "template_published" | "template_updated" = "template_published"
 
-  try {
-    const actionContext = await loadTemplateActionContext()
-    const roomId = getFormString(formData, "roomId")
-    // Edited live, the template already holds what was typed: publish it as the room shows it.
-    const savedTemplate = roomId
-      ? await getDocumentTemplate({
-          actorUserId: actionContext.actorUserId,
-          organizationId: actionContext.context.organization.id,
-          templateId: requireTemplateId(templateId),
-        })
-      : await persistTemplateDraftOrConfirmUnchanged(formData, actionContext)
-    const template = roomId
-      ? await publishTemplateRoom({
-          actorUserId: actionContext.actorUserId,
-          organizationId: actionContext.context.organization.id,
-          roomId,
-          roomRevision: parseRoomRevision(getFormString(formData, "roomRevision")),
-          templateId: savedTemplate.id,
-        })
-      : await publishDocumentTemplate({
-          actorUserId: actionContext.actorUserId,
-          organizationId: actionContext.context.organization.id,
-          templateId: savedTemplate.id,
-          expectedRevision: savedTemplate.revision,
-        })
+  await runFormAction({
+    event: "template_publish_action",
+    log: { templateId },
+    path: getEditorPath(templateId),
+    success: "template_published",
+    run: async () => {
+      const { actor } = await loadTemplateActionContext()
+      const roomId = getFormString(formData, "roomId")
+      // Edited live, the template already holds what was typed: publish it as the room shows it.
+      const savedTemplate = roomId
+        ? await getDocumentTemplate({ ...actor, templateId: requireFormId(templateId, "Template id") })
+        : await persistTemplateDraftOrConfirmUnchanged(formData, actor)
+      const template = roomId
+        ? await publishTemplateRoom({
+            ...actor,
+            roomId,
+            roomRevision: parseRoomRevision(getFormString(formData, "roomRevision")),
+            templateId: savedTemplate.id,
+          })
+        : await publishDocumentTemplate({
+            ...actor,
+            templateId: savedTemplate.id,
+            expectedRevision: savedTemplate.revision,
+          })
 
-    revalidateTemplatePaths(template.id)
-    console.info("template_publish_action_completed", {
-      durationMs: Date.now() - startedAt,
-      organizationId: actionContext.context.organization.id,
-      templateId: template.id,
-    })
-    outcome = savedTemplate.status === "published" ? "template_updated" : "template_published"
-  } catch (error: unknown) {
-    handleTemplateActionFailure({
-      error,
-      eventName: "template_publish_action_failed",
-      nextPath: editorPath,
-      startedAt,
-      templateId,
-    })
-  }
-
-  redirect(buildFeedbackRedirect(editorPath, outcome))
+      revalidateTemplatePaths(template.id)
+      return { code: savedTemplate.status === "published" ? "template_updated" : "template_published" }
+    },
+  })
 }
 
 /** What a published version held, for the editor to bring back. */
@@ -244,17 +191,15 @@ export type TemplateVersionResult =
  */
 export async function loadTemplateVersionAction(templateId: string, revision: number): Promise<TemplateVersionResult> {
   try {
-    const actionContext = await loadTemplateActionContext()
-    const organizationId = actionContext.context.organization.id
+    const { actor } = await loadTemplateActionContext()
     const version = await getDocumentTemplateVersion({
-      actorUserId: actionContext.actorUserId,
-      organizationId,
+      ...actor,
       revision,
-      templateId: requireTemplateId(templateId),
+      templateId: requireFormId(templateId, "Template id"),
     })
 
     // Pictures get addresses this person can load, as the editor page gives them.
-    return { ok: true, version: { ...version, content: await withTemplateImageUrls(version.content, organizationId) } }
+    return { ok: true, version: { ...version, content: await withTemplateImageUrls(version.content, actor.organizationId) } }
   } catch (error: unknown) {
     logTemplateActionFailure("template_version_load_failed", {
       reason: getUnknownErrorMessage(error),
@@ -278,34 +223,23 @@ export async function loadTemplateVersionAction(templateId: string, revision: nu
  */
 export async function archiveTemplateAction(formData: FormData): Promise<void> {
   const templateId = getFormString(formData, "templateId")
-  const editorPath = getEditorPath(templateId)
-  const startedAt = Date.now()
 
-  try {
-    const actionContext = await loadTemplateActionContext()
-    const template = await archiveDocumentTemplate({
-      actorUserId: actionContext.actorUserId,
-      organizationId: actionContext.context.organization.id,
-      templateId: requireTemplateId(templateId),
-    })
+  await runFormAction({
+    event: "template_archive_action",
+    log: { templateId },
+    path: getEditorPath(templateId),
+    success: "resource_archived",
+    run: async () => {
+      const { actor } = await loadTemplateActionContext()
+      const template = await archiveDocumentTemplate({
+        ...actor,
+        templateId: requireFormId(templateId, "Template id"),
+      })
 
-    revalidateTemplatePaths(template.id)
-    console.info("template_archive_action_completed", {
-      durationMs: Date.now() - startedAt,
-      organizationId: actionContext.context.organization.id,
-      templateId: template.id,
-    })
-  } catch (error: unknown) {
-    handleTemplateActionFailure({
-      error,
-      eventName: "template_archive_action_failed",
-      nextPath: editorPath,
-      startedAt,
-      templateId,
-    })
-  }
-
-  redirect(buildFeedbackRedirect("/templates", "resource_archived"))
+      revalidateTemplatePaths(template.id)
+      return { path: "/templates" }
+    },
+  })
 }
 
 /**
@@ -316,41 +250,23 @@ export async function archiveTemplateAction(formData: FormData): Promise<void> {
  */
 export async function duplicateTemplateAction(formData: FormData): Promise<void> {
   const templateId = getFormString(formData, "templateId")
-  const startedAt = Date.now()
-  let createdTemplateId = ""
 
-  try {
-    const actionContext = await loadTemplateActionContext()
-    const template = await duplicateDocumentTemplate({
-      actorUserId: actionContext.actorUserId,
-      organizationId: actionContext.context.organization.id,
-      templateId: requireTemplateId(templateId),
-    })
+  await runFormAction({
+    event: "template_duplicate_action",
+    log: { templateId },
+    path: "/templates",
+    success: "template_duplicated",
+    run: async () => {
+      const { actor } = await loadTemplateActionContext()
+      const template = await duplicateDocumentTemplate({
+        ...actor,
+        templateId: requireFormId(templateId, "Template id"),
+      })
 
-    revalidatePath("/templates")
-    console.info("template_duplicate_action_completed", {
-      durationMs: Date.now() - startedAt,
-      organizationId: actionContext.context.organization.id,
-      sourceTemplateId: templateId,
-      newTemplateId: template.id,
-    })
-    createdTemplateId = template.id
-  } catch (error: unknown) {
-    handleTemplateActionFailure({
-      error,
-      eventName: "template_duplicate_action_failed",
-      nextPath: "/templates", // Fallback path if duplication fails
-      startedAt,
-      templateId,
-    })
-  }
-
-  redirect(
-    buildFeedbackRedirect(
-      `/templates/${createdTemplateId}/edit`,
-      "template_duplicated"
-    )
-  )
+      revalidatePath("/templates")
+      return { path: `/templates/${template.id}/edit` }
+    },
+  })
 }
 
 const templateChangeSchema = z.object({
@@ -372,23 +288,8 @@ export type TemplateChange = z.infer<typeof templateChangeSchema>
  */
 export async function changeTemplatesAction(input: TemplateChange): Promise<TemplateBulkResult> {
   const change = templateChangeSchema.parse(input)
-  let actionContext: TemplateActionContext
-
-  try {
-    actionContext = await loadTemplateActionContext()
-  } catch (error: unknown) {
-    if (error instanceof AuthenticationError) {
-      redirect(buildRedirect("/login", { next: "/templates" }))
-    }
-
-    throw error
-  }
-
-  const result = await changeDocumentTemplates({
-    ...change,
-    actorUserId: actionContext.actorUserId,
-    organizationId: actionContext.context.organization.id,
-  })
+  const { actor } = await loadActionContextOrSignIn("/templates", NO_ORGANIZATION, 403)
+  const result = await changeDocumentTemplates({ ...change, ...actor })
 
   revalidatePath("/templates")
   return result
@@ -396,10 +297,10 @@ export async function changeTemplatesAction(input: TemplateChange): Promise<Temp
 
 async function persistTemplateDraftOrConfirmUnchanged(
   formData: FormData,
-  actionContext: TemplateActionContext
+  actor: ActionActor
 ): Promise<DocumentTemplate> {
   try {
-    return await persistTemplateDraft(formData, actionContext)
+    return await persistTemplateDraft(formData, actor)
   } catch (error: unknown) {
     if (
       !(error instanceof TemplateServiceError) ||
@@ -416,9 +317,8 @@ async function persistTemplateDraftOrConfirmUnchanged(
       getFormString(formData, "expectedRevision")
     )
     const template = await getDocumentTemplate({
-      actorUserId: actionContext.actorUserId,
-      organizationId: actionContext.context.organization.id,
-      templateId: requireTemplateId(getFormString(formData, "templateId")),
+      ...actor,
+      templateId: requireFormId(getFormString(formData, "templateId"), "Template id"),
     })
 
     if (template.revision !== expectedRevision) {
@@ -432,34 +332,18 @@ async function persistTemplateDraftOrConfirmUnchanged(
   }
 }
 
-async function loadTemplateActionContext(): Promise<TemplateActionContext> {
-  const user = await getAuthenticatedUser()
-  const context = await getCurrentOrganizationContext(user.id)
-
-  if (!context) {
-    throw new TemplateActionError(
-      "Create an organization before managing document templates.",
-      403
-    )
-  }
-
-  // The service judges each template, since sharing can let someone edit one their role could not.
-  return { actorUserId: user.id, context }
-}
-
 async function persistTemplateDraft(
   formData: FormData,
-  actionContext: TemplateActionContext
+  actor: ActionActor
 ): Promise<DocumentTemplate> {
-  const templateId = requireTemplateId(getFormString(formData, "templateId"))
+  const templateId = requireFormId(getFormString(formData, "templateId"), "Template id")
   const expectedRevision = parseExpectedRevision(
     getFormString(formData, "expectedRevision")
   )
   const content = parseTemplateContentField(getFormString(formData, "content"))
 
   return updateDocumentTemplate({
-    actorUserId: actionContext.actorUserId,
-    organizationId: actionContext.context.organization.id,
+    ...actor,
     templateId,
     expectedRevision,
     title: getFormString(formData, "title"),
@@ -473,7 +357,7 @@ function parseTemplateContentField(value: string): TemplateContent {
   try {
     return parseTemplateContent(JSON.parse(value) as unknown)
   } catch {
-    throw new TemplateActionError(
+    throw new ActionError(
       "Template content is invalid. Review incomplete blocks and try again."
     )
   }
@@ -483,7 +367,7 @@ function parseExpectedRevision(value: string): number {
   const revision = Number(value)
 
   if (!Number.isInteger(revision) || revision < 1) {
-    throw new TemplateActionError("Template revision is invalid.")
+    throw new ActionError("Template revision is invalid.")
   }
 
   return revision
@@ -494,20 +378,10 @@ function parseRoomRevision(value: string): number {
   const revision = Number(value)
 
   if (!Number.isSafeInteger(revision) || revision < 0) {
-    throw new TemplateActionError("Template revision is invalid.")
+    throw new ActionError("Template revision is invalid.")
   }
 
   return revision
-}
-
-function requireTemplateId(value: string): string {
-  const templateId = value.trim()
-
-  if (!templateId) {
-    throw new TemplateActionError("Template id is required.")
-  }
-
-  return templateId
 }
 
 function getEditorPath(templateId: string): string {
@@ -520,30 +394,6 @@ function getEditorPath(templateId: string): string {
 function revalidateTemplatePaths(templateId: string): void {
   revalidatePath("/templates")
   revalidatePath(`/templates/${templateId}/edit`)
-}
-
-function handleTemplateActionFailure(input: {
-  error: unknown
-  eventName: string
-  nextPath: string
-  startedAt: number
-  templateId: string
-}): never {
-  if (input.error instanceof AuthenticationError) {
-    redirect(buildRedirect("/login", { next: input.nextPath }))
-  }
-
-  logTemplateActionFailure(input.eventName, {
-    durationMs: Date.now() - input.startedAt,
-    reason: getUnknownErrorMessage(input.error),
-    templateId: input.templateId,
-  })
-  redirect(
-    buildFeedbackRedirect(
-      input.nextPath,
-      getActionErrorFeedbackCode(input.error)
-    )
-  )
 }
 
 function logTemplateActionFailure(

@@ -5,19 +5,16 @@ import { redirect } from "next/navigation"
 import { z } from "zod"
 
 import { enforceOutboundEmailRateLimit } from "@/lib/action-rate-limit"
-import {
-  buildFeedbackRedirect,
-  getActionErrorFeedbackCode,
-} from "@/lib/action-result"
-import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
-import { buildRedirect, getFormString } from "@/lib/form-utils"
+import { buildFeedbackRedirect } from "@/lib/action-result"
+import { getAuthenticatedUser } from "@/lib/auth"
+import { runFormAction } from "@/lib/form-action"
+import { getFormString } from "@/lib/form-utils"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
 import {
   createInvite,
   OrganizationServiceError,
   revokeInvite,
   updateMemberAccess,
-  updateProfilePhone,
 } from "@/services/organization-service"
 
 const inviteSchema = z.object({
@@ -56,42 +53,30 @@ export async function createInviteAction(formData: FormData): Promise<void> {
     redirectPath: "/people",
   })
 
-  try {
-    await createInvite({
-      actorUserId: user.id,
-      organizationId: parsed.data.organizationId,
-      email: getFormString(formData, "email"),
-      roleId: parsed.data.roleDefinitionId,
-    })
-  } catch (error: unknown) {
-    const logContext = {
-      organizationId,
-      reason: error instanceof Error ? error.message : "Unknown invite error",
-    }
-
-    if (error instanceof OrganizationServiceError) {
-      console.warn("create_invite_action_failed", logContext)
-    } else {
-      console.error("create_invite_action_failed", logContext)
-    }
-
+  await runFormAction({
+    event: "create_invite_action",
+    log: { organizationId },
+    path: "/people",
+    success: "invite_email_sent",
     // A conflict here means the address already belongs to an active member (a
     // pending invite is replaced, not rejected); the generic "this item
     // changed" prompt would not say so.
-    redirect(
-      buildFeedbackRedirect(
-        "/people",
-        error instanceof OrganizationServiceError && error.statusCode === 409
-          ? "invite_already_member"
-          : error instanceof OrganizationServiceError && error.statusCode === 502
-            ? "invite_email_failed"
-            : getActionErrorFeedbackCode(error)
-      )
-    )
-  }
-
-  revalidatePath("/people")
-  redirect(buildFeedbackRedirect("/people", "invite_email_sent"))
+    failure: (error) =>
+      error instanceof OrganizationServiceError && error.statusCode === 409
+        ? "invite_already_member"
+        : error instanceof OrganizationServiceError && error.statusCode === 502
+          ? "invite_email_failed"
+          : undefined,
+    run: async () => {
+      await createInvite({
+        actorUserId: user.id,
+        organizationId: parsed.data.organizationId,
+        email: getFormString(formData, "email"),
+        roleId: parsed.data.roleDefinitionId,
+      })
+      revalidatePath("/people")
+    },
+  })
 }
 
 /**
@@ -112,40 +97,24 @@ export async function updateMemberAccessAction(formData: FormData): Promise<void
     redirect(buildFeedbackRedirect("/people", "invalid_input"))
   }
 
-  try {
-    const user = await getAuthenticatedUser()
-    await updateMemberAccess({
-      actorUserId: user.id,
-      organizationId: parsed.data.organizationId,
-      membershipId: parsed.data.membershipId,
-      roleId: parsed.data.roleDefinitionId,
-      workspaceDisplayName: parsed.data.workspaceDisplayName || null,
-    })
-  } catch (error: unknown) {
-    if (error instanceof AuthenticationError) {
-      redirect(buildRedirect("/login", { next: "/people" }))
-    }
-
-    const logContext = {
-      organizationId: parsed.data.organizationId,
-      membershipId: parsed.data.membershipId,
-      reason: error instanceof Error ? error.message : "Unknown member access update error",
-    }
-
-    if (error instanceof OrganizationServiceError) {
-      console.warn("update_member_access_action_failed", logContext)
-    } else {
-      console.error("update_member_access_action_failed", logContext)
-    }
-
-    redirect(
-      buildFeedbackRedirect("/people", getActionErrorFeedbackCode(error))
-    )
-  }
-
-  revalidatePath("/people")
-  revalidatePath("/settings")
-  redirect(buildFeedbackRedirect("/people", "member_access_updated"))
+  await runFormAction({
+    event: "update_member_access_action",
+    log: { membershipId: parsed.data.membershipId, organizationId: parsed.data.organizationId },
+    path: "/people",
+    success: "member_access_updated",
+    run: async () => {
+      const user = await getAuthenticatedUser()
+      await updateMemberAccess({
+        actorUserId: user.id,
+        organizationId: parsed.data.organizationId,
+        membershipId: parsed.data.membershipId,
+        roleId: parsed.data.roleDefinitionId,
+        workspaceDisplayName: parsed.data.workspaceDisplayName || null,
+      })
+      revalidatePath("/people")
+      revalidatePath("/settings")
+    },
+  })
 }
 
 /**
@@ -158,52 +127,15 @@ export async function revokeInviteAction(formData: FormData): Promise<void> {
   const organizationId = getFormString(formData, "organizationId")
   const inviteId = getFormString(formData, "inviteId")
 
-  try {
-    const user = await getAuthenticatedUser()
-    await revokeInvite({
-      actorUserId: user.id,
-      organizationId,
-      inviteId,
-    })
-  } catch (error: unknown) {
-    if (error instanceof AuthenticationError) {
-      redirect(buildRedirect("/login", { next: "/people" }))
-    }
-
-    redirect(
-      buildFeedbackRedirect("/people", getActionErrorFeedbackCode(error))
-    )
-  }
-
-  revalidatePath("/people")
-  redirect(buildFeedbackRedirect("/people", "invite_deleted"))
-}
-
-/**
- * Handles profile phone number updates.
- *
- * @param formData - Submitted phone form data.
- * @returns Never returns; redirects to People with status.
- */
-export async function updateProfilePhoneAction(formData: FormData): Promise<void> {
-  const phoneNumber = getFormString(formData, "phoneNumber")
-
-  try {
-    const user = await getAuthenticatedUser()
-    await updateProfilePhone({
-      actorUserId: user.id,
-      phoneNumber: phoneNumber === "" ? null : phoneNumber,
-    })
-  } catch (error: unknown) {
-    if (error instanceof AuthenticationError) {
-      redirect(buildRedirect("/login", { next: "/people" }))
-    }
-
-    redirect(
-      buildFeedbackRedirect("/people", getActionErrorFeedbackCode(error))
-    )
-  }
-
-  revalidatePath("/people")
-  redirect(buildFeedbackRedirect("/people", "changes_saved"))
+  await runFormAction({
+    event: "revoke_invite_action",
+    log: { organizationId },
+    path: "/people",
+    success: "invite_deleted",
+    run: async () => {
+      const user = await getAuthenticatedUser()
+      await revokeInvite({ actorUserId: user.id, organizationId, inviteId })
+      revalidatePath("/people")
+    },
+  })
 }
