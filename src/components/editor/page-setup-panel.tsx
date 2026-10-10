@@ -12,6 +12,8 @@ import { fitMargins, marginSizeOf, maxMargin, paragraphGap, resizeTemplateLayout
 import { MARGIN_SIZES, type MarginSize, type TemplateLayout } from "@/types/template"
 import { applyDocumentStyle, type DocumentStyle, documentStyleOf } from "@/types/template-styles"
 
+import { setMarginText } from "./margin-text-band"
+
 // A whole look at once; a page changed by hand afterwards is in a style of its own.
 const STYLES: ReadonlyArray<readonly [DocumentStyle, string]> = [
   ["modern", "Modern"],
@@ -227,25 +229,6 @@ export function PageSetupPanel({
       </div>
     </div>
   )
-}
-
-// An emptied slot is removed, and a margin with none left drops its text.
-// Words written in a margin that is off turn it on, so they show.
-function setMarginText(
-  layout: TemplateLayout,
-  key: "headerText" | "footerText",
-  slot: "left" | "center" | "right",
-  value: string
-): TemplateLayout {
-  const text = Object.fromEntries(Object.entries({ ...layout[key], [slot]: value }).filter(([, words]) => words?.trim()))
-  const policy = key === "headerText" ? "headerPolicy" : "footerPolicy"
-  const written = Object.keys(text).length > 0
-
-  return {
-    ...layout,
-    [key]: written ? text : undefined,
-    [policy]: written && layout[policy] === "none" ? "all_pages" : layout[policy],
-  }
 }
 
 function Row({ children, label }: { children: ReactNode; label: string }): ReactElement {

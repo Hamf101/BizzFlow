@@ -21,6 +21,7 @@ export const DESIGN_TOOLS: DesignTools = {
   FrameEdges,
   nudgeFrame,
   MarginGuides: dynamic(() => import("./margin-guides").then((module) => module.MarginGuides)),
+  MarginTextBand: dynamic(() => import("./margin-text-band").then((module) => module.MarginTextBand)),
   RichLine,
   SectionPieces,
   SlashMenu: dynamic(() => import("./slash-menu").then((module) => module.SlashMenu)),

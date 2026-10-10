@@ -16,6 +16,7 @@ export type DesignTools = Readonly<{
   FrameEdges: Tool<typeof import("./editor-canvas-editing").FrameEdges>
   nudgeFrame: typeof import("./editor-canvas-editing").nudgeFrame
   MarginGuides: Tool<typeof import("./margin-guides").MarginGuides>
+  MarginTextBand: Tool<typeof import("./margin-text-band").MarginTextBand>
   RichLine: Tool<typeof import("./rich-line").RichLine>
   SectionPieces: Tool<typeof import("./section-pieces").SectionPieces>
   SlashMenu: Tool<typeof import("./slash-menu").SlashMenu>
