@@ -104,3 +104,17 @@ it("keeps what is typed in the moment the page takes over from the server's", as
 
   expect(field("Your name").value).toBe("Ana")
 })
+
+it("posts a drawing already in the document, so a box shown signed is sent signed", async () => {
+  const drawn = "data:image/png;base64,AAAA"
+  const content = templateContentV3Schema.parse({
+    ...createEmptyDocumentContent(),
+    blocks: [{ fieldKey: "sender_signature", helpText: null, id: NAME, label: "Signature", required: true, signer: "sender", type: "signature_field" }],
+  })
+  form = document.body.appendChild(document.createElement("form"))
+  root = mount(form)
+  await act(async () => root.render(<PublicAnswerPaper content={content} initialAnswers={{ sender_signature: drawn }} initialFiles={[]} phone title="Agreement" token="t" />))
+
+  expect(form.checkValidity()).toBe(true)
+  expect(parseGeneratedDocumentAnswers(new FormData(form))).toEqual({ sender_signature: drawn })
+})

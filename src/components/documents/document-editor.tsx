@@ -234,7 +234,8 @@ export function DocumentEditor({
     // Live, what the room has kept is saved; anything waiting stays on this device too.
     saved: { answers: savedAnswers, page: !liveMode ? savedPage : history.liveStatus === "saved" ? page : initial },
     value: { answers, page },
-    version: content.version,
+    // Live, the room's saves move the server on too, so a copy is made on the room's revision.
+    version: live.session && live.roomId ? `${live.roomId}:${live.session.revision()}` : content.version,
   })
   const settingsBlock = page.content.blocks.find((block) => block.id === controller.settingsBlockId) ?? null
   const settingsIndex = settingsBlock ? page.content.blocks.indexOf(settingsBlock) : -1

@@ -11,6 +11,7 @@ import {
   SharingFakeClient,
   type FakeRow,
 } from "@/services/documents/sharing-service.test-support"
+import { requireDocumentReader } from "@/services/documents/access-service"
 import { getSharing } from "@/services/documents/sharing-service"
 import { OrganizationServiceError } from "@/services/organizations/errors"
 import type { OrganizationMember } from "@/types/organization"
@@ -489,6 +490,28 @@ describe("sharing a document with someone outside the workspace", () => {
     expect(client.tables.document_access_grants).toContainEqual(expect.objectContaining({ access_level: "viewer", user_id: REVIEWER }))
     expect(client.tables.document_guest_grants ?? []).toEqual([])
     expect(invite).not.toHaveBeenCalled()
+  })
+
+  it("changes and removes a guest's own access even after they join the workspace, so it cannot open again", async () => {
+    const GITA = "20000000-0000-4000-8000-000000000007"
+    const { client, deps } = setup()
+    const gita = { ...members()[3], email: "gita@example.test", fullName: "Gita Guest", id: `m-${GITA}`, userId: GITA }
+    client.tables.organization_memberships.push({ id: `m-${GITA}`, org_id: ORG, role: "staff", status: "active", user_id: GITA })
+    client.tables.document_guest_grants = [
+      { accepted_at: "2026-10-03T09:00:00.000Z", access_level: "viewer", document_id: DOC, email: "gita@example.test", id: "gg1", org_id: ORG, user_id: GITA },
+    ]
+    const asMember = { ...deps, listMembers: async () => [...members(), gita] }
+    const opens = () => requireDocumentReader({ actorUserId: GITA, documentId: DOC, organizationId: ORG }, client as never)
+
+    await expect(opens()).resolves.toMatchObject({ guest: true })
+
+    await setSharingAccess(guest("contributor", "gita@example.test"), asMember)
+    expect(client.tables.document_guest_grants).toMatchObject([{ access_level: "contributor", id: "gg1" }])
+    expect(client.tables.document_access_grants).not.toContainEqual(expect.objectContaining({ user_id: GITA }))
+
+    await expect(setSharingAccess(guest(null, "gita@example.test"), asMember)).resolves.toMatchObject({ guests: [] })
+    expect(client.tables.document_guest_grants).toEqual([])
+    await expect(opens()).rejects.toMatchObject({ statusCode: 404 })
   })
 
   it("sends nothing for a document that is not active", async () => {

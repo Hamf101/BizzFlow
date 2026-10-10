@@ -180,6 +180,25 @@ describe("generated document PDF route", () => {
     })
   })
 
+  it("gives a guest the preview of a signed document, never the finalized paper with every signer's details", async () => {
+    vi.mocked(getGeneratedDocumentSigningView).mockResolvedValue({
+      ...createSigningView("completed"),
+      guest: true,
+      recipients: [{ id: "signer-1", name: "Pat Signer", requiresSignature: true, signedAt: "2026-07-18T13:00:00.000Z", status: "signed" }],
+    })
+    vi.mocked(findFinalizedGeneratedDocumentVersionId).mockResolvedValue(VERSION_ID)
+    vi.mocked(renderGeneratedDocumentPdf).mockResolvedValue(Buffer.from("%PDF-preview"))
+
+    const response = await GET(createRequest(), createRouteContext())
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get("x-bizflow-pdf-state")).toBe("preview")
+    expect(createDocumentDownloadUrl).not.toHaveBeenCalled()
+    expect(vi.mocked(renderGeneratedDocumentPdf).mock.calls[0]?.[0].signers).toEqual([
+      expect.objectContaining({ email: "", initialsDataUrl: null, name: "Pat Signer", signatureDataUrl: null }),
+    ])
+  })
+
   it("previews a completed document that is not finalized yet instead of finalizing it", async () => {
     vi.mocked(getGeneratedDocumentSigningView).mockResolvedValue(
       createSigningView("completed")

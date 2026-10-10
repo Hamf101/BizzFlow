@@ -75,8 +75,10 @@ export async function GET(
       documentId,
     })
 
+    // A guest's copy is the preview below, which shows signers as a signing
+    // link does: the finalized paper carries every signer's email and signature.
     const finalizedVersionId =
-      view.workflowStatus === "completed"
+      view.workflowStatus === "completed" && !view.guest
         ? await findFinalizedGeneratedDocumentVersionId({ actorUserId: user.id, organizationId, documentId })
         : null
 

@@ -192,7 +192,8 @@ export function DrawnSignatureField({
           ref={canvasRef}
           role="img"
         />
-        <input name={name} type="hidden" value={dataUrl} />
+        {/* What shows is what is sent: the saved drawing, until one is drawn over it. */}
+        <input name={name} type="hidden" value={dataUrl || (redrawing ? "" : saved)} />
         {required ? <RequiredStandIn filled={dataUrl !== "" || (saved !== "" && !redrawing)} label={label} /> : null}
         {dataUrl ? (
           <button

@@ -106,3 +106,43 @@ it("never offers a copy kept on this device over newer work on the server", asyn
   await open("server", "1")
   expect(offered).not.toBeNull()
 })
+
+it("offers a copy made in the room once the room shows nothing newer, though the room's saves moved the page on", async () => {
+  let offered: unknown = "unset"
+
+  function Editor({ value, version }: { value: string; version: string }): null {
+    offered = useLocalRecovery({ key: "roomed", saved: "server", value, version }).recovery
+    return null
+  }
+
+  async function reach(root: Root, version: string): Promise<Root> {
+    await act(async () => root.render(<Editor value="server" version={version} />))
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 5)))
+    return root
+  }
+
+  async function keepMineInTheRoom(): Promise<void> {
+    // Opened on page version 1; the room opened at its revision 3, saved
+    // there (page version 2), then this edit never reached it.
+    const root = await reach(mount(), "1")
+    await reach(root, "room-a:3")
+    await act(async () => root.render(<Editor value="mine" version="room-a:3" />))
+    await act(async () => root.unmount())
+  }
+
+  // Reopened on page version 2, and the room is where this copy left it.
+  await keepMineInTheRoom()
+  const reopened = await reach(mount(), "2")
+  expect(offered).toBeNull()
+  await reach(reopened, "room-a:3")
+  expect(offered).not.toBeNull()
+  await act(async () => reopened.unmount())
+
+  // Someone else changed the room since: the copy is older, and goes.
+  clearLocalDraft("roomed:offered")
+  await keepMineInTheRoom()
+  await reach(await reach(mount(), "3"), "room-a:5")
+  expect(offered).toBeNull()
+  expect(loadLocalDraft("roomed")).toBeNull()
+  expect(loadLocalDraft("roomed:offered")).toBeNull()
+})

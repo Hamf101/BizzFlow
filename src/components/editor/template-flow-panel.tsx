@@ -135,6 +135,8 @@ export function TemplateFlowPanel({
   const [isRebuilding, setIsRebuilding] = useState<boolean>(false)
   const timelineRef = useRef<HTMLDivElement>(null)
   const draftRef = useRef<TemplateFlowDraft>(draft)
+  // What the editor holds now, read after a rebuild: null once it was rejected.
+  const heldRef = useRef<TemplateFlowProposal | null>(pendingProposal)
   const displayedPendingProposal = useMemo((): TemplateFlowProposal | null => {
     if (
       pendingProposal?.status !== "pending" ||
@@ -150,6 +152,10 @@ export function TemplateFlowPanel({
   useEffect((): void => {
     draftRef.current = draft
   }, [draft])
+
+  useEffect((): void => {
+    heldRef.current = pendingProposal
+  }, [pendingProposal])
 
   const carried = useRef<string | null>(null)
   const sendCarried = useEffectEvent((message: string): void => {
@@ -308,6 +314,10 @@ export function TemplateFlowPanel({
     }
 
     setIsRebuilding(true)
+    // Until the rebuilt batch arrives the editor holds nothing to apply, so
+    // its own Apply cannot take the dropped changes; the page keeps its preview.
+    const held = pendingProposal ?? review.original
+    stageProposal({ ...held, operations: [], wireOperations: [] }, messageId)
 
     try {
       const response = await fetch(`${endpoint}/rebuild`, {
@@ -327,9 +337,17 @@ export function TemplateFlowPanel({
         throw new Error(response.ok ? "Flow returned an invalid response." : readApiError(payload))
       }
 
-      stageProposal(rebuilt, messageId)
+      // Rejected while it rebuilt: it stays rejected.
+      if (heldRef.current !== null) {
+        stageProposal(rebuilt, messageId)
+      }
     } catch (error: unknown) {
+      if (heldRef.current === null) {
+        return
+      }
+
       setReview(review)
+      stageProposal(held, messageId)
       setErrorMessage(error instanceof Error ? error.message : "Unable to reach Flow.")
     } finally {
       setIsRebuilding(false)

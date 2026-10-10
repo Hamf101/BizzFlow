@@ -271,6 +271,11 @@ describe("document archive and download lifecycle", () => {
     await expect(asGuest()).resolves.toMatchObject({ versionId: "version-2" })
     await expect(asGuest("version-1")).rejects.toMatchObject({ statusCode: 404 })
 
+    // A generated document's versions are its signed paper, naming every signer; a guest gets the preview instead.
+    client.tables.documents[0].source_kind = "generated"
+    await expect(asGuest()).rejects.toMatchObject({ statusCode: 404 })
+    client.tables.documents[0].source_kind = "upload"
+
     client.tables.document_guest_grants.length = 0
     await expect(asGuest()).rejects.toMatchObject({ statusCode: 404 })
   })

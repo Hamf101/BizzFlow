@@ -156,8 +156,9 @@ export async function prepareSharingAccess(
     const email = guestEmail(input.principal.email)
     const member = people.find((person) => person.status === "active" && person.email.toLowerCase() === email)
 
-    // Someone already in the workspace is shared with as a member.
-    if (!member) {
+    // Someone already in the workspace is shared with as a member, unless this
+    // is their guest row: that changes the guest grant, even after they joined.
+    if (!member || (input.resource.kind === "document" && (await findGuestRow(client, input.organizationId, input.resource.id, email)))) {
       const guest = { ...input, principal: { email } }
 
       checkGuest(guest, target)
@@ -561,6 +562,25 @@ function checkGuest(input: GuestInput, target: Target): void {
   }
 }
 
+async function findGuestRow(
+  client: DocumentServiceClient,
+  organizationId: string,
+  documentId: string,
+  email: string
+): Promise<{ id: string } | null> {
+  const { data, error } = await client
+    .from("document_guest_grants")
+    .select("id")
+    .eq("org_id", organizationId)
+    .eq("document_id", documentId)
+    .eq("email", email)
+    .maybeSingle()
+
+  if (error) throw createSupabaseServiceError(error, "Unable to read the sharing.")
+
+  return data
+}
+
 // Invites someone outside the workspace to one document, changes their level,
 // or takes it away. The invite holds only a hash of its link; if the email
 // cannot go out the invite is taken back, since nobody else could deliver it.
@@ -573,15 +593,7 @@ async function shareWithGuest(
 ): Promise<void> {
   const { email } = input.principal
   const where = { document_id: input.resource.id, email, org_id: input.organizationId }
-  const { data: existing, error: findError } = await client
-    .from("document_guest_grants")
-    .select("id")
-    .eq("org_id", where.org_id)
-    .eq("document_id", where.document_id)
-    .eq("email", email)
-    .maybeSingle()
-
-  if (findError) throw createSupabaseServiceError(findError, "Unable to read the sharing.")
+  const existing = await findGuestRow(client, input.organizationId, input.resource.id, email)
 
   if (input.level === null) {
     if (existing) {

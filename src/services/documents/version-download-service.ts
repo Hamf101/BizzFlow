@@ -57,8 +57,10 @@ export async function createDocumentDownloadUrl(
       const versionId =
         normalizeNullableId(input.versionId) ?? document.currentVersionId
 
-      // A guest was given the document as it stands, not its history.
-      if (guest && versionId !== document.currentVersionId) {
+      // A guest was given the document as it stands, not its history. A
+      // generated document's versions are its finalized paper, which carries
+      // every signer's email and signature; a guest reads its preview instead.
+      if (guest && (versionId !== document.currentVersionId || document.sourceKind === "generated")) {
         throw new DocumentServiceError("Document version was not found.", 404)
       }
 
