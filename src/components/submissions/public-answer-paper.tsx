@@ -35,6 +35,17 @@ function typedSoFar(token: string): Record<string, unknown> {
   }
 }
 
+// What the page shows before anyone answers: a checkbox's default answers it
+// until it is changed, so what it shows is what is sent.
+function startingAnswers(content: TemplateContentV3, initialAnswers: Readonly<Record<string, unknown>>): Record<string, unknown> {
+  return {
+    ...Object.fromEntries(
+      content.blocks.flatMap((block: TemplateBlock) => (block.type === "checkbox_field" ? [[block.fieldKey, block.checkedByDefault]] : []))
+    ),
+    ...initialAnswers,
+  }
+}
+
 type Control = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
 
 // The control an event came from, and the block it answers.
@@ -74,13 +85,7 @@ export function PublicAnswerPaper({
   token: string
 }): ReactElement {
   const controller = useReadOnlyController(content)
-  const [answers, setAnswers] = useState<Record<string, unknown>>(() => ({
-    // A checkbox's default answers it until it is changed, so what it shows is what is sent.
-    ...Object.fromEntries(
-      content.blocks.flatMap((block: TemplateBlock) => (block.type === "checkbox_field" ? [[block.fieldKey, block.checkedByDefault]] : []))
-    ),
-    ...initialAnswers,
-  }))
+  const [answers, setAnswers] = useState<Record<string, unknown>>(() => startingAnswers(content, initialAnswers))
   const [files, setFiles] = useState(initialFiles)
   const [errors, setErrors] = useState<Readonly<Record<string, string>>>({})
   const narrow = useMediaQuery(NARROW, phone)
@@ -90,12 +95,15 @@ export function PublicAnswerPaper({
   const zoom = narrow || available === 0 ? 1 : Math.min(1, Math.max(0.3, available / (geometry.widthPoints * geometry.scale * POINT_PX)))
 
   // Read once the page has taken over from the server's, so both drew the same first.
+  // Only what differs from what the server drew was typed: a box still blank
+  // here must not blank out what someone types before the next tick.
   useEffect(() => {
-    const typed = typedSoFar(token)
-    const timer = window.setTimeout(() => setAnswers((current) => ({ ...current, ...typed })), 0)
+    const drawn = startingAnswers(content, initialAnswers)
+    const typed = Object.entries(typedSoFar(token)).filter(([key, value]) => value !== (drawn[key] ?? ""))
+    const timer = window.setTimeout(() => setAnswers((current) => ({ ...current, ...Object.fromEntries(typed) })), 0)
 
     return () => window.clearTimeout(timer)
-  }, [token])
+  }, [content, initialAnswers, token])
 
   useEffect(() => {
     const element = frameRef.current

@@ -6,12 +6,10 @@ import {
   type ListOptionSection,
   type ListSortOption,
 } from "@/components/data/list-option"
-import { formatMediumDate } from "@/lib/date-format"
 import { defineListState, formatListSort } from "@/lib/list-state"
 import type {
   AccessibleDocumentFolder,
   AccessibleDocumentSummary,
-  DocumentLifecycleState,
 } from "@/types/document"
 import type { GeneratedDocumentWorkflowStatus } from "@/types/template"
 
@@ -472,29 +470,3 @@ export function getFileExtension(name: string): string | null {
   return /\.([a-z0-9]{1,5})$/i.exec(name.trim())?.[1]?.toUpperCase() ?? null
 }
 
-/**
- * Says when a trashed item goes for good, in few enough words for one line on
- * a phone.
- *
- * @param lifecycleState - The item's lifecycle state.
- * @param purgeAfter - When it is scheduled for permanent deletion, if ever.
- * @param timeZone - The viewer's time zone.
- * @returns A short note for the item's row.
- */
-export function describeTrashNote(
-  lifecycleState: DocumentLifecycleState,
-  purgeAfter: string | null,
-  timeZone?: string
-): string {
-  if (lifecycleState === "purge_pending") {
-    return "Permanent deletion pending"
-  }
-
-  if (purgeAfter === null) {
-    return "Won't be deleted automatically"
-  }
-
-  return Number.isNaN(new Date(purgeAfter).getTime())
-    ? "Deletion date unavailable"
-    : `Deletes on ${formatMediumDate(purgeAfter, timeZone)}`
-}

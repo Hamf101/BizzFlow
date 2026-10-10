@@ -123,7 +123,6 @@ export async function sendToAnswer(input: SendToAnswerInput, deps: SendToAnswerD
         template_id: snapshot.templateId,
         template_revision_snapshot: snapshot.revision,
         title_snapshot: snapshot.title,
-        token: null,
         token_hash: hashToken(token),
         updated_at: now.toISOString(),
       }))

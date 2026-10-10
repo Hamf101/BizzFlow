@@ -17,7 +17,6 @@ import {
 } from "@/components/files/file-layouts"
 import {
   describeDocumentKind,
-  describeTrashNote,
   describeWorkflowStatus,
   fileListState,
   FILES_PATH,
@@ -49,8 +48,7 @@ import type { MoveDestination } from "@/components/files/move-to-dialog"
 import { NewFileMenu, type NewFolderForm } from "@/components/files/new-file-menu"
 import { SelectionBar } from "@/components/files/selection-bar"
 import { PhoneSelectButton } from "@/components/data/selection"
-import { useTimeZone } from "@/components/ui/local-date"
-import { formatMediumDate } from "@/lib/date-format"
+import { LocalDate } from "@/components/ui/local-date"
 import { buildDocumentFolderPath } from "@/lib/page-document-folders"
 import {
   canPerformOrganizationAction,
@@ -135,7 +133,6 @@ export function FilesWorkspace({
   savedViews: ListSavedViews["saved"]
   view: FileListView
 }): ReactElement {
-  const timeZone = useTimeZone()
   const lifecycle = getFileLifecycleView(view)
   const openFolder = view.filters.folderId ?? null
   const location = selectLocation(view, folders, documents)
@@ -327,11 +324,11 @@ export function FilesWorkspace({
           id: folder.id,
           kind: "folder",
           menu: folderMenu(folder),
-          modified: formatMediumDate(folder.updatedAt, timeZone),
+          modified: <LocalDate value={folder.updatedAt} />,
           name: folder.name,
           note:
             lifecycle === "trash"
-              ? describeTrashNote(folder.lifecycleState, folder.purgeAfter, timeZone)
+              ? describeTrashNote(folder.lifecycleState, folder.purgeAfter)
               : filedIn(folder.parentFolderId),
           selectHref:
             folderChoice === "open"
@@ -353,11 +350,11 @@ export function FilesWorkspace({
           id: document.id,
           kind: generated ? "document" : "upload",
           menu: documentMenu(document),
-          modified: formatMediumDate(document.updatedAt, timeZone),
+          modified: <LocalDate value={document.updatedAt} />,
           name: document.title,
           note:
             lifecycle === "trash"
-              ? describeTrashNote(document.lifecycleState, document.purgeAfter, timeZone)
+              ? describeTrashNote(document.lifecycleState, document.purgeAfter)
               : filedIn(document.folderId),
           selectHref: getItemHref(view, document.id, where),
           status: describeWorkflowStatus(card?.workflowStatus ?? null),
@@ -639,4 +636,29 @@ function describeEmptyLocation(
   }
 
   return activeFolder ? "This folder is empty." : "No files yet."
+}
+
+/**
+ * Says when a trashed item goes for good, in few enough words for one line on
+ * a phone.
+ *
+ * @param lifecycleState - The item's lifecycle state.
+ * @param purgeAfter - When it is scheduled for permanent deletion, if ever.
+ * @returns A short note for the item's row.
+ */
+function describeTrashNote(
+  lifecycleState: DocumentLifecycleState,
+  purgeAfter: string | null
+): ReactNode {
+  if (lifecycleState === "purge_pending") {
+    return "Permanent deletion pending"
+  }
+
+  if (purgeAfter === null) {
+    return "Won't be deleted automatically"
+  }
+
+  return Number.isNaN(new Date(purgeAfter).getTime())
+    ? "Deletion date unavailable"
+    : <>Deletes on <LocalDate value={purgeAfter} /></>
 }

@@ -87,3 +87,20 @@ it("holds back an unanswered required field with its reason under it, until it i
   await act(async () => field("I have an account").click())
   expect(form.checkValidity()).toBe(false)
 })
+
+it("keeps what is typed in the moment the page takes over from the server's", async () => {
+  form = document.body.appendChild(document.createElement("form"))
+  // The page's form carries the link's token, which is how the paper finds its boxes.
+  form.appendChild(Object.assign(document.createElement("input"), { name: "token", type: "hidden", value: "t" }))
+  root = mount(form.appendChild(document.createElement("div")))
+  // The page's code arrives with the boxes still blank, and someone types before its first tick is over.
+  act(() => root.render(<PublicAnswerPaper content={CONTENT} initialAnswers={{}} initialFiles={[]} phone title="Sign-up" token="t" />))
+  act(() => {
+    const input = field("Your name")
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "Ana")
+    input.dispatchEvent(new Event("input", { bubbles: true }))
+  })
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 10)))
+
+  expect(field("Your name").value).toBe("Ana")
+})

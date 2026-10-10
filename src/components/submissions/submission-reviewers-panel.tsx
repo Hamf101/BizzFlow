@@ -1,9 +1,8 @@
 import type { ReactElement } from "react"
 
-import { useTimeZone } from "@/components/ui/local-date"
+import { LocalDate } from "@/components/ui/local-date"
 import { Badge } from "@/components/ui/badge"
 import { memberLabel } from "@/components/people/member-name"
-import { formatMediumDateTime } from "@/lib/date-format"
 import type { OrganizationRole } from "@/lib/permissions"
 import type { OrganizationMember } from "@/types/organization"
 import type { Submission } from "@/types/submission"
@@ -71,7 +70,6 @@ export function SubmissionReviewersPanel({
   submission: Submission
   tally: SubmissionReviewTally
 }): ReactElement | null {
-  const timeZone = useTimeZone()
   const approvers = reviewers.filter((reviewer) => reviewer.canApprove)
   const shared = reviewers.filter((reviewer) => !reviewer.canApprove)
 
@@ -99,11 +97,11 @@ export function SubmissionReviewersPanel({
         {reviewer.note ? (
           <p className="whitespace-pre-wrap break-words border-l-2 pl-3 text-sm text-muted-foreground">{reviewer.note}</p>
         ) : null}
-        {reviewer.decidedAt ? <p className="text-xs text-muted-foreground">{formatMediumDateTime(reviewer.decidedAt, timeZone)}</p> : null}
+        {reviewer.decidedAt ? <p className="text-xs text-muted-foreground"><LocalDate time value={reviewer.decidedAt} /></p> : null}
         {reviewerComments(reviewer.userId, comments, activity).map((comment) => (
           <p className="whitespace-pre-wrap break-words rounded-md bg-muted/50 px-3 py-2 text-sm" key={comment.id}>
             {comment.body}
-            <span className="mt-1 block text-xs text-muted-foreground">Commented {formatMediumDateTime(comment.createdAt, timeZone)}</span>
+            <span className="mt-1 block text-xs text-muted-foreground">Commented <LocalDate time value={comment.createdAt} /></span>
           </p>
         ))}
       </li>

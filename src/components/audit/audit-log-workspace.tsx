@@ -12,9 +12,8 @@ import { ListFilterChips } from "@/components/data/list-filter-chips"
 import { ListPagination } from "@/components/data/list-pagination"
 import { ListEmpty, ListHeading } from "@/components/data/list-heading"
 import { type ListSavedViews, ListViewMenu } from "@/components/data/list-view-menu"
-import { useTimeZone } from "@/components/ui/local-date"
+import { LocalDate } from "@/components/ui/local-date"
 import { memberLabel } from "@/components/people/member-name"
-import { formatMediumDateTime } from "@/lib/date-format"
 import type { AuditLogEntry } from "@/types/audit"
 import type { OrganizationMember } from "@/types/organization"
 
@@ -93,7 +92,6 @@ function AuditEventRow({
   entry: AuditLogEntry
   members: OrganizationMember[]
 }): ReactElement {
-  const timeZone = useTimeZone()
   return (
     <li data-slot="audit-event">
       <details className="rounded-[12px] transition-colors hover:bg-card/65 open:bg-card/65">
@@ -116,7 +114,7 @@ function AuditEventRow({
             className="text-sm text-muted-foreground tabular-nums"
             dateTime={entry.createdAt}
           >
-            {formatMediumDateTime(entry.createdAt, timeZone)}
+            <LocalDate time value={entry.createdAt} />
           </time>
         </summary>
         <dl className="grid gap-1 px-1 pb-3 text-xs md:px-3">

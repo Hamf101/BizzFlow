@@ -2,12 +2,11 @@ import { ArrowRight, Check, X } from "lucide-react"
 import type { ReactElement } from "react"
 
 import { decideSuggestionAction } from "@/app/(dashboard)/submissions/actions"
-import { useTimeZone } from "@/components/ui/local-date"
+import { LocalDate } from "@/components/ui/local-date"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { memberLabel } from "@/components/people/member-name"
-import { formatMediumDateTime } from "@/lib/date-format"
 import type { OrganizationMember } from "@/types/organization"
 import type { Submission } from "@/types/submission"
 import type { SubmissionSuggestion } from "@/types/submission-review"
@@ -54,7 +53,6 @@ export function SubmissionSuggestions({
   submission: Submission
   suggestions: readonly SubmissionSuggestion[]
 }): ReactElement | null {
-  const timeZone = useTimeZone()
   if (suggestions.length === 0) {
     return null
   }
@@ -90,7 +88,7 @@ export function SubmissionSuggestions({
                   <span className="break-words">{describeAnswer(suggestion.proposedValue)}</span>
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  {by} · {formatMediumDateTime(suggestion.suggestedAt, timeZone)}
+                  {by} · <LocalDate time value={suggestion.suggestedAt} />
                 </p>
                 {open && decides ? (
                   <form action={decideSuggestionAction} className="flex flex-wrap gap-2">

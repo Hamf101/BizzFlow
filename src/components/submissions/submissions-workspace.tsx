@@ -20,9 +20,8 @@ import {
   SubmissionStatusMark,
 } from "@/components/submissions/submission-progress"
 import { SubmissionTitlePreview } from "@/components/submissions/submission-title-preview"
-import { useTimeZone } from "@/components/ui/local-date"
+import { LocalDate } from "@/components/ui/local-date"
 import { buttonVariants } from "@/components/ui/button"
-import { formatMediumDate } from "@/lib/date-format"
 import { cn } from "@/lib/utils"
 import type { OrganizationMember } from "@/types/organization"
 import type { Submission } from "@/types/submission"
@@ -192,8 +191,7 @@ function SubmissionRow({
   organizationId: string
   submission: Submission
 }): ReactElement {
-  const timeZone = useTimeZone()
-  const updated = formatMediumDate(submission.updatedAt, timeZone)
+  const updated = <LocalDate value={submission.updatedAt} />
   const riseDelay = {
     "--row-delay": `${Math.min(index, MAX_STAGGERED_ROWS) * ROW_STAGGER_MS}ms`,
   } as CSSProperties

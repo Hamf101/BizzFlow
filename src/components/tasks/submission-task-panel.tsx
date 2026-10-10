@@ -4,7 +4,7 @@ import type { ReactElement } from "react"
 
 import { formatMemberName, memberLabel } from "@/components/people/member-name"
 import { TaskStatusBadge } from "@/components/tasks/task-presentation"
-import { useTimeZone } from "@/components/ui/local-date"
+import { LocalDate } from "@/components/ui/local-date"
 import { Button, buttonVariants } from "@/components/ui/button"
 import {
   Card,
@@ -17,7 +17,6 @@ import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { formatMediumDateTime } from "@/lib/date-format"
 import { cn } from "@/lib/utils"
 import type { OrganizationMember } from "@/types/organization"
 import type { Task } from "@/types/task"
@@ -61,7 +60,6 @@ export function SubmissionTaskPanel({
   createAction,
   errorMessage = null,
 }: SubmissionTaskPanelProps): ReactElement {
-  const timeZone = useTimeZone()
   return (
     <Card>
       <CardHeader>
@@ -96,8 +94,8 @@ export function SubmissionTaskPanel({
                       currentUserId
                     )}
                     {task.dueAt
-                      ? ` · due ${formatMediumDateTime(task.dueAt, timeZone)}`
-                      : ""}
+                      ? <> · due <LocalDate time value={task.dueAt} /></>
+                      : null}
                   </span>
                 </Link>
               </li>
