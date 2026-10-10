@@ -61,9 +61,12 @@ test("keeps a template's actions behind its card menu and its public links on th
   // links and they cannot open the public links page.
   const staffPage = await pageAs("staff")
 
+  const staffActions = staffPage.getByRole("button", { name: `Actions for ${title}` })
+
   await staffPage.goto(libraryPath)
-  await expect(staffPage.locator('[data-slot="template-card"]').first()).toBeVisible()
-  await staffPage.getByRole("button", { name: `Actions for ${title}` }).click()
+  // A press before the page's code arrives opens nothing.
+  await waitForHydration(staffActions)
+  await staffActions.click()
   await expect(staffPage.getByRole("menuitem", { name: "Duplicate" })).toBeVisible()
   await expect(staffPage.getByRole("menuitem", { name: "Public links" })).toHaveCount(0)
   await staffPage.keyboard.press("Escape")

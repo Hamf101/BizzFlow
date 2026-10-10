@@ -4,6 +4,7 @@ import type { APIResponse } from "@playwright/test"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 import { expect, test, uniqueName } from "../support/fixtures"
+import { waitForHydration } from "../support/hydration"
 import { retryConcurrentChange } from "../support/retry"
 import { seedSigningDocument, seedSubmission, seedTemplate } from "../support/seed"
 import {
@@ -173,7 +174,9 @@ test("sharing aimed at tenant B's document by rewriting the request changes noth
 
   const page = await pageAs("owner_admin")
   let rewriting = false
-  let rewritten = 0
+  // What the server answered each rewritten action, read as it arrives: a
+  // response picked up afterwards may be another action's, or already gone.
+  const answers: string[] = []
   // A tampered client: every server action that names the actor's own
   // document names tenant B's instead.
   await page.route("**/*", async (route) => {
@@ -181,8 +184,9 @@ test("sharing aimed at tenant B's document by rewriting the request changes noth
     const body = request.postData()
 
     if (rewriting && request.method() === "POST" && request.headers()["next-action"] && body?.includes(own.id)) {
-      rewritten += 1
-      await route.continue({ postData: body.replaceAll(own.id, other.documentId) })
+      const response = await route.fetch({ postData: body.replaceAll(own.id, other.documentId) })
+      answers.push(await response.text())
+      await route.fulfill({ response })
       return
     }
 
@@ -190,6 +194,8 @@ test("sharing aimed at tenant B's document by rewriting the request changes noth
   })
 
   await page.goto(`/documents?q=${encodeURIComponent(title)}`)
+  // A press before the page's code arrives opens nothing.
+  await waitForHydration(page.getByRole("button", { name: `Actions for ${title}` }))
   const openShare = async () => {
     await page.getByRole("button", { name: `Actions for ${title}` }).click()
     await page.getByRole("menuitem", { name: "Share…" }).click()
@@ -201,21 +207,20 @@ test("sharing aimed at tenant B's document by rewriting the request changes noth
   await openShare()
   await expect(dialog.getByRole("heading", { name: `Share “${title}”` })).toBeVisible()
   rewriting = true
-  const granted = page.waitForResponse((response) => Boolean(response.request().headers()["next-action"]))
   await dialog.getByLabel("Find a person or group").fill(tenant.users.manager.email)
   await dialog
     .getByRole("list", { name: "People you can add" })
     .getByRole("button", { name: new RegExp(tenant.users.manager.email) })
     .click()
-  await expectNothingOf(await granted, "rewritten grant")
+  await expect.poll(() => answers.length).toBe(1)
+  await expectNothingOf({ text: async () => answers[0] as string }, "rewritten grant")
   await page.keyboard.press("Escape")
 
   // Reading: the dialog asks for tenant B's sharing.
-  const loaded = page.waitForResponse((response) => Boolean(response.request().headers()["next-action"]))
   await openShare()
-  await expectNothingOf(await loaded, "rewritten sharing read")
+  await expect.poll(() => answers.length).toBe(2)
+  await expectNothingOf({ text: async () => answers[1] as string }, "rewritten sharing read")
   await expect(page.getByText(other.titles[1])).toHaveCount(0)
 
-  expect(rewritten).toBeGreaterThanOrEqual(2)
   expect(await snapshotOther(admin)).toEqual(before)
 })

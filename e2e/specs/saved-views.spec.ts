@@ -52,7 +52,10 @@ test("saves a list's settings as a view, reopens, renames, and deletes it", asyn
 
   await viewOptions.click()
   await expect(savedView(renamed)).toHaveAttribute("aria-current", "true")
-  await page.getByRole("menuitem", { name: "Delete this view" }).click()
+  // Deleting asks once more, in place, before it goes.
+  await viewItem("Delete this view").click()
+  await expect(savedView(renamed)).toBeVisible()
+  await viewItem("Yes, delete this view").click()
   await expect(page.getByText("View deleted")).toBeVisible()
   await expect(heading).not.toContainText(renamed)
 

@@ -26,34 +26,39 @@ test("two people edit one template at once, see each other's words, and someone 
   const saved = () => expectSaved(admin, "document_templates", template.id, ({ blocks }) => blocks.map(({ text }) => text))
   const owner = await pageAs("owner_admin")
   // A manager of their own, so taking their access away touches no other spec.
+  // Named apart from the shared "E2E manager", whom other specs pick by name
+  // while this one runs.
   const colleague = await insertMember(admin, tenant.organizationId, "manager", `collab-${randomUUID().slice(0, 8)}`)
   const manager = await (await browser.newContext()).newPage()
-  await signInAs(manager, colleague.email, colleague.password)
-  await Promise.all([openTemplate(owner, template.id), openTemplate(manager, template.id)])
 
-  // Each types in the same line, one at its end and one at its start, without waiting for the other.
-  await owner.getByText("Welcome aboard.").click()
-  await owner.keyboard.press("End")
-  await manager.getByText("Welcome aboard.").click()
-  await manager.keyboard.press("Home")
-  await Promise.all([owner.keyboard.type(" We're glad you're here."), manager.keyboard.type("Hello! ")])
-
-  const both = "Hello! Welcome aboard. We're glad you're here."
-  await expect(owner.getByText(both)).toBeVisible()
-  await expect(manager.getByText(both)).toBeVisible()
-  await saved().toEqual([both])
-
-  // What the room kept is what a newcomer opens.
-  await manager.reload()
-  await expect(manager.getByText(both)).toBeVisible()
-
-  // Staff can't edit templates, so they can't open its room either.
-  const staff = await pageAs("staff")
-  await staff.goto("/dashboard")
-  expect((await staff.request.post(`/api/templates/${template.id}/room`)).status()).toBe(403)
-
-  // The colleague loses the right to edit templates: their next change is refused and dropped.
   try {
+    const { error: renameError } = await admin.from("profiles").update({ full_name: "E2E collaborator" }).eq("id", colleague.id)
+    if (renameError) throw renameError
+    await signInAs(manager, colleague.email, colleague.password)
+    await Promise.all([openTemplate(owner, template.id), openTemplate(manager, template.id)])
+
+    // Each types in the same line, one at its end and one at its start, without waiting for the other.
+    await owner.getByText("Welcome aboard.").click()
+    await owner.keyboard.press("End")
+    await manager.getByText("Welcome aboard.").click()
+    await manager.keyboard.press("Home")
+    await Promise.all([owner.keyboard.type(" We're glad you're here."), manager.keyboard.type("Hello! ")])
+
+    const both = "Hello! Welcome aboard. We're glad you're here."
+    await expect(owner.getByText(both)).toBeVisible()
+    await expect(manager.getByText(both)).toBeVisible()
+    await saved().toEqual([both])
+
+    // What the room kept is what a newcomer opens.
+    await manager.reload()
+    await expect(manager.getByText(both)).toBeVisible()
+
+    // Staff can't edit templates, so they can't open its room either.
+    const staff = await pageAs("staff")
+    await staff.goto("/dashboard")
+    expect((await staff.request.post(`/api/templates/${template.id}/room`)).status()).toBe(403)
+
+    // The colleague loses the right to edit templates: their next change is refused and dropped.
     const { error } = await admin
       .from("organization_memberships")
       .update({ role: "staff" })

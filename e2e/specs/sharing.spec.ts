@@ -30,7 +30,10 @@ async function seedDocument(
 const search = (words: string): string => `/documents?q=${encodeURIComponent(words)}`
 
 async function openShare(page: Page, title: string) {
-  await page.getByRole("button", { name: `Actions for ${title}` }).click()
+  const actions = page.getByRole("button", { name: `Actions for ${title}` })
+  // A press before the page's code arrives opens nothing.
+  await waitForHydration(actions)
+  await actions.click()
   await page.getByRole("menuitem", { name: "Share…" }).click()
   const dialog = page.getByRole("dialog")
   await expect(dialog.getByRole("heading", { name: `Share “${title}”` })).toBeVisible()

@@ -79,7 +79,7 @@ test.describe("People directory", () => {
     ).toBe(true)
   })
 
-  test("names an existing-member error, keeps dialog focus accessible, and succeeds on retry", async ({
+  test("names an existing-member error, keeps dialog focus accessible, and takes a retry", async ({
     admin,
     pageAs,
     tenant,
@@ -108,16 +108,14 @@ test.describe("People directory", () => {
         page.getByRole("status").filter({ hasText: "That person is already a member" })
       ).toBeVisible()
 
+      // The retry gets past the member check to delivery. The e2e server
+      // reaches no email provider, and the email holds the only copy of the
+      // link, so the invite is withdrawn (invitations.spec checks nothing is
+      // left pending).
       await inviteButton.click()
       await dialog.getByLabel("Email address").fill(inviteeEmail)
       await dialog.getByRole("button", { name: "Send invite" }).click()
-      await expect(
-        page.getByRole("status").filter({ hasText: /Invite (email sent|created)/ })
-      ).toBeVisible()
-
-      await inviteButton.click()
-      await dialog.getByRole("tab", { name: /Manage invites/ }).click()
-      await expect(dialog.getByText(inviteeEmail)).toBeVisible()
+      await expect(page.getByText("Couldn't send the invite email")).toBeVisible()
     } finally {
       await admin
         .from("invites")
