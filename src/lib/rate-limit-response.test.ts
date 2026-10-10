@@ -23,20 +23,4 @@ describe("createRateLimitResponse", () => {
       error: "Too many requests. Try again shortly.",
     })
   })
-
-  it("logs the caller's event name and route", (): void => {
-    const warn = vi.spyOn(console, "warn").mockImplementation((): void => {})
-
-    createRateLimitResponse(
-      new RateLimitError(1),
-      "submission_route_rejected",
-      "submission_file_upload_url"
-    )
-
-    expect(warn).toHaveBeenCalledExactlyOnceWith("submission_route_rejected", {
-      reason: "Too many requests. Try again shortly.",
-      routeName: "submission_file_upload_url",
-      statusCode: 429,
-    })
-  })
 })

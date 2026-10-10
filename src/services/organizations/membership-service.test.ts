@@ -30,7 +30,7 @@ describe("member notification preferences", () => {
 
     expect(rows.map((row) => [row.email_notifications_enabled, row.sms_notifications_enabled]))
       .toEqual([[false, false], [true, true], [true, true]])
-    expect(rows[0].updated_at).toBe("2026-07-09T12:00:00.000Z")
+    expect(rows[0].updated_at).toBe("2026-09-09T18:00:00.000Z")
   })
 
   it.each([

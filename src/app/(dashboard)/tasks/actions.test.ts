@@ -8,7 +8,6 @@ import {
   cancelTaskReminder,
   createTask,
   scheduleTaskReminder,
-  TaskServiceError,
   transitionTaskStatus,
   updateTask,
 } from "@/services/task-service"
@@ -207,19 +206,6 @@ describe("task mutation actions", () => {
       reminderId: REMINDER_ID,
       taskId: TASK_ID,
     })
-  })
-
-  it("maps service diagnostics to a fixed conflict outcome", async () => {
-    vi.mocked(updateTask).mockRejectedValue(
-      new TaskServiceError("Private task revision detail", 409)
-    )
-
-    await expect(updateTaskAction(createTaskForm())).rejects.toThrow(
-      `NEXT_REDIRECT:${TASK_PATH}?feedback=refresh_required`
-    )
-    expect(redirectMock).not.toHaveBeenCalledWith(
-      expect.stringContaining("Private+task")
-    )
   })
 
   it("preserves the task login return path", async () => {

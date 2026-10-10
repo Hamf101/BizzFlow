@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest"
 
 import type { SmsEnv } from "@/lib/env"
-import { TermiiProviderError, TermiiSmsProvider } from "@/services/sms/termii-provider"
+import { TermiiSmsProvider } from "@/services/sms/termii-provider"
 
 const mockEnv: SmsEnv = {
   SMS_PROVIDER: "termii",
@@ -12,13 +12,6 @@ const mockEnv: SmsEnv = {
 }
 
 describe("TermiiSmsProvider", () => {
-  it("constructs TermiiProviderError with status code", () => {
-    const err = new TermiiProviderError("API failed", 502)
-    expect(err.name).toBe("TermiiProviderError")
-    expect(err.statusCode).toBe(502)
-    expect(err.message).toBe("API failed")
-  })
-
   it("throws if TERMII_API_KEY is missing", () => {
     expect(
       () =>

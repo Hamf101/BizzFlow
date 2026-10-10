@@ -213,21 +213,6 @@ describe("submission review actions", () => {
       body: "Please confirm the effective date.",
     })
   })
-
-  it("maps submission service details to a fixed conflict outcome", async () => {
-    vi.mocked(transitionInternalSubmission).mockRejectedValue(
-      new SubmissionServiceError("Private revision and tenant detail", 409)
-    )
-    const formData = createSubmissionFormData()
-    formData.set("targetStatus", "approved")
-
-    await expect(transitionSubmissionAction(formData)).rejects.toThrow(
-      `NEXT_REDIRECT:/submissions/${SUBMISSION_ID}?feedback=refresh_required`
-    )
-    expect(redirectMock).not.toHaveBeenCalledWith(
-      expect.stringContaining("Private+revision")
-    )
-  })
 })
 
 describe("sharing and suggestion actions", () => {

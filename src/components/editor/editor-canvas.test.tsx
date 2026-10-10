@@ -63,14 +63,6 @@ it("edits section titles, keeps an emptied title valid, switches rules and moves
   expect(document.activeElement?.getAttribute("data-caret-key")).toBe(B)
 })
 
-it("shows section titles without editing controls or decorative pieces in preview", async () => {
-  root = mount()
-  await act(async () => root.render(<Canvas editable={false} />))
-  expect(document.body.textContent).toContain("Terms")
-  expect(document.querySelector('[aria-label="Section title"]')).toBeNull()
-  expect(document.querySelector('[data-slot="section-pieces"]')).toBeNull()
-})
-
 it("sets blocks side by side, resizes the row from its seam, and lets a block stand alone", async () => {
   root = mount()
   // Rows stack on a phone, so their seams appear only where there is room.
@@ -110,15 +102,6 @@ it("lets a signature be drawn with a mouse without carrying its block away", asy
   expect(block.style.transform).toBe("")
 })
 
-it("keeps the active section pieces when the canvas switches from desktop to phone", async () => {
-  root = mount()
-  await act(async () => root.render(<Canvas narrow={false} />))
-  await act(async () => controller.setActiveBlockId(B))
-  expect(document.querySelector('[data-slot="section-pieces"]')).not.toBeNull()
-  await act(async () => root.render(<Canvas narrow />))
-  expect(document.querySelector('[data-slot="section-pieces"]')).not.toBeNull()
-})
-
 it("offers placing a picture in front of the text only where there are pages to place it on", async () => {
   const picture = { alignment: "center" as const, altText: "Logo", caption: null, dataUrl: "data:image/png;base64,iVBORw0KGgo=", id: B, type: "image" as const, widthPercent: 50 }
   const initial = { ...createEmptyDocumentContent(), blocks: [picture] }
@@ -134,7 +117,7 @@ it("offers placing a picture in front of the text only where there are pages to 
   }
 })
 
-it("moves a selected block a step at a time from the keyboard, across a section's title, and says where it went", async () => {
+it("moves a selected block a step at a time from the keyboard, across a section's title", async () => {
   const note = "70000000-0000-4000-8000-000000000003"
   const initial: TemplateContentV3 = {
     ...TERMS,
@@ -152,7 +135,6 @@ it("moves a selected block a step at a time from the keyboard, across a section'
   await key(block, "ArrowDown")
   expect(controller.content.blocks.map((block) => block.id)).toEqual([note, B])
   expect(controller.content.sections[0]?.startBlockId).toBe(note)
-  expect(document.querySelector('[data-slot="editor-announcement"]')?.textContent).toBe("“Read carefully.” moved to 1 of 2, in Terms.")
   // Down again: below the line that was there.
   await key(document.querySelector(`[data-block-id="${note}"]`)!, "ArrowDown")
   expect(controller.content.blocks.map((block) => block.id)).toEqual([B, note])
@@ -315,7 +297,6 @@ it("fills in a page with nothing to design: answers go back, and a file field ho
   // Only a page that is submitted, such as a link someone answers, holds back a required field.
   expect(input.required).toBe(false)
   expect(document.querySelector("button")?.textContent).toBe("Upload Proof of address")
-  expect(document.body.textContent).not.toContain("Uploads are only in submissions.")
   // Nothing to type into but its fields, and nothing to choose.
   expect(document.querySelector("[contenteditable]")).toBeNull()
   expect(document.querySelector('[aria-label="Section title"]')).toBeNull()

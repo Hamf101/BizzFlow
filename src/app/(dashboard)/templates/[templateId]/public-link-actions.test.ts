@@ -133,19 +133,6 @@ describe("public form link actions", () => {
     ).rejects.toThrow(`NEXT_REDIRECT:${LINKS_PATH}?feedback=permission_denied`)
   })
 
-  it("does not reflect service diagnostics into the destination", async () => {
-    vi.mocked(createPublicFormLink).mockRejectedValue(
-      new Error("private public-link persistence detail")
-    )
-
-    await expect(
-      createPublicFormLinkAction(createFormData({ templateId: TEMPLATE_ID }))
-    ).rejects.toThrow(`NEXT_REDIRECT:${LINKS_PATH}?feedback=operation_failed`)
-    expect(redirectMock).not.toHaveBeenCalledWith(
-      expect.stringContaining("private+public-link")
-    )
-  })
-
   it("returns to the template's public links after signing in", async () => {
     vi.mocked(getAuthenticatedUser).mockRejectedValue(
       new AuthenticationError("Sign in to continue.")

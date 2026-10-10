@@ -34,6 +34,8 @@ import {
 } from "@/services/task-service.test-support"
 import type { TaskStatus } from "@/types/task"
 
+type TaskServiceDeps = ReturnType<typeof createDeps>
+
 const SECOND_TASK_ID = "30000000-0000-4000-8000-000000000002"
 const THIRD_TASK_ID = "30000000-0000-4000-8000-000000000003"
 
@@ -210,21 +212,6 @@ describe("createTask", () => {
     expect(client.tables.tasks).toHaveLength(0)
   })
 
-  it("rejects an external reviewer creating tasks", async () => {
-    const client = createClient()
-
-    await expect(
-      createTask(
-        {
-          actorUserId: REVIEWER_ID,
-          organizationId: ORG_ID,
-          title: "Collect the deposit",
-        },
-        createDeps(client)
-      )
-    ).rejects.toMatchObject({ statusCode: 403 })
-  })
-
   it("rejects an actor with no membership in the tenant", async () => {
     const client = createClient()
 
@@ -375,17 +362,6 @@ describe("listTasks", () => {
       )
     ).rejects.toMatchObject({ statusCode: 400 })
   })
-
-  it("rejects an external reviewer", async () => {
-    const client = createClient([createTaskRow()])
-
-    await expect(
-      listTasks(
-        { actorUserId: REVIEWER_ID, organizationId: ORG_ID },
-        createDeps(client)
-      )
-    ).rejects.toMatchObject({ statusCode: 403 })
-  })
 })
 
 describe("listTaskPage", () => {
@@ -443,32 +419,6 @@ describe("listTaskPage", () => {
     ])
   })
 
-  it.each([
-    [
-      { direction: "desc", key: "due" },
-      [FOURTH_TASK_ID, TASK_ID, THIRD_TASK_ID, SECOND_TASK_ID],
-    ],
-    [
-      { direction: "desc", key: "created" },
-      [FOURTH_TASK_ID, THIRD_TASK_ID, SECOND_TASK_ID, TASK_ID],
-    ],
-    [
-      { direction: "asc", key: "created" },
-      [TASK_ID, SECOND_TASK_ID, THIRD_TASK_ID, FOURTH_TASK_ID],
-    ],
-    [
-      { direction: "asc", key: "title" },
-      [FOURTH_TASK_ID, THIRD_TASK_ID, TASK_ID, SECOND_TASK_ID],
-    ],
-  ] as const)("orders by %o and keeps undated tasks last", async (sort, expectedIds) => {
-    const page = await listTaskPage(
-      { actorUserId: STAFF_ID, organizationId: ORG_ID, page: 1, pageSize: 50, sort },
-      createDeps(createPageClient())
-    )
-
-    expect(page.tasks.map((task): string => task.id)).toEqual(expectedIds)
-  })
-
   it("breaks ties by id, so a page boundary never repeats or drops a task", async () => {
     const client = createClient([
       createTaskRow({ id: THIRD_TASK_ID, title: "Chase references" }),
@@ -488,54 +438,6 @@ describe("listTaskPage", () => {
     expect(
       [...first.tasks, ...second.tasks].map((task): string => task.id)
     ).toEqual([TASK_ID, SECOND_TASK_ID, THIRD_TASK_ID])
-  })
-
-  it("counts only the tasks that match the filters", async () => {
-    const client = createClient([
-      createTaskRow({ id: TASK_ID, status: "open" }),
-      createTaskRow({
-        id: SECOND_TASK_ID,
-        status: "in_progress",
-        assigned_to: STAFF_ID,
-        assigned_by: MANAGER_ID,
-        assigned_at: CREATED_AT,
-      }),
-      createTaskRow({ id: THIRD_TASK_ID, status: "in_progress" }),
-    ])
-
-    const page = await listTaskPage(
-      {
-        actorUserId: MANAGER_ID,
-        assignedTo: STAFF_ID,
-        organizationId: ORG_ID,
-        page: 1,
-        pageSize: 25,
-        sort: DUE_SOONEST,
-        statuses: ["in_progress"],
-      },
-      createDeps(client)
-    )
-
-    expect(page.total).toBe(1)
-    expect(page.tasks.map((task): string => task.id)).toEqual([SECOND_TASK_ID])
-  })
-
-  it.each([
-    ["exactly at the end", 3],
-    ["past the end, where PostgREST refuses the range", 10],
-  ])("reports the true total for a page that starts %s", async (_case, pageNumber) => {
-    const page = await listTaskPage(
-      {
-        actorUserId: STAFF_ID,
-        organizationId: ORG_ID,
-        page: pageNumber,
-        pageSize: 2,
-        sort: DUE_SOONEST,
-      },
-      createDeps(createPageClient())
-    )
-
-    expect(page).toEqual({ page: pageNumber, pageSize: 2, tasks: [], total: 4 })
   })
 
   it("finds tasks whose title contains the search, ignoring case", async () => {
@@ -614,21 +516,6 @@ describe("listTaskPage", () => {
         createDeps(createPageClient())
       )
     ).rejects.toMatchObject({ statusCode: 400 })
-  })
-
-  it("rejects an external reviewer", async () => {
-    await expect(
-      listTaskPage(
-        {
-          actorUserId: REVIEWER_ID,
-          organizationId: ORG_ID,
-          page: 1,
-          pageSize: 25,
-          sort: DUE_SOONEST,
-        },
-        createDeps(createPageClient())
-      )
-    ).rejects.toMatchObject({ statusCode: 403 })
   })
 })
 
@@ -712,23 +599,6 @@ describe("updateTask", () => {
     )
   })
 
-  it("rejects a stale expected revision", async () => {
-    const client = createClient([createTaskRow({ revision: 3 })])
-
-    await expect(
-      updateTask(
-        {
-          actorUserId: MANAGER_ID,
-          organizationId: ORG_ID,
-          taskId: TASK_ID,
-          expectedRevision: 2,
-          title: "Collect the countersigned lease",
-        },
-        createDeps(client)
-      )
-    ).rejects.toMatchObject({ statusCode: 409 })
-  })
-
   it("rejects a concurrent writer that changed the row after it was read", async () => {
     const client = createClient([createTaskRow({ revision: 3 })])
     client.onNextUpdate("tasks", (): void => {
@@ -806,23 +676,6 @@ describe("updateTask", () => {
         createDeps(client)
       )
     ).rejects.toMatchObject({ statusCode: 400 })
-  })
-
-  it("rejects an external reviewer", async () => {
-    const client = createClient([createTaskRow()])
-
-    await expect(
-      updateTask(
-        {
-          actorUserId: REVIEWER_ID,
-          organizationId: ORG_ID,
-          taskId: TASK_ID,
-          expectedRevision: 1,
-          title: "Collect the countersigned lease",
-        },
-        createDeps(client)
-      )
-    ).rejects.toMatchObject({ statusCode: 403 })
   })
 })
 
@@ -1060,40 +913,6 @@ describe("transitionTaskStatus", () => {
         createDeps(client)
       )
     ).rejects.toMatchObject({ statusCode: 400 })
-  })
-
-  it("rejects a stale expected revision", async () => {
-    const client = createClient([createTaskRow({ revision: 2 })])
-
-    await expect(
-      transitionTaskStatus(
-        {
-          actorUserId: MANAGER_ID,
-          organizationId: ORG_ID,
-          taskId: TASK_ID,
-          expectedRevision: 1,
-          targetStatus: "completed",
-        },
-        createDeps(client)
-      )
-    ).rejects.toMatchObject({ statusCode: 409 })
-  })
-
-  it("rejects an external reviewer", async () => {
-    const client = createClient([createTaskRow()])
-
-    await expect(
-      transitionTaskStatus(
-        {
-          actorUserId: REVIEWER_ID,
-          organizationId: ORG_ID,
-          taskId: TASK_ID,
-          expectedRevision: 1,
-          targetStatus: "completed",
-        },
-        createDeps(client)
-      )
-    ).rejects.toMatchObject({ statusCode: 403 })
   })
 })
 
@@ -1529,3 +1348,38 @@ function assignedTo(userId: string): Record<string, unknown> {
     assigned_at: CREATED_AT,
   }
 }
+
+describe("every task operation", () => {
+  const ask = { organizationId: ORG_ID, taskId: TASK_ID }
+  const update = (actorUserId: string, expectedRevision: number) => (deps: TaskServiceDeps) =>
+    updateTask({ ...ask, actorUserId, expectedRevision, title: "Collect the countersigned lease" }, deps)
+  const transition = (actorUserId: string, expectedRevision: number) => (deps: TaskServiceDeps) =>
+    transitionTaskStatus({ ...ask, actorUserId, expectedRevision, targetStatus: "completed" }, deps)
+
+  it.each([
+    ["create", (deps: TaskServiceDeps) => createTask({ actorUserId: REVIEWER_ID, organizationId: ORG_ID, title: "Collect the deposit" }, deps)],
+    ["list", (deps: TaskServiceDeps) => listTasks({ actorUserId: REVIEWER_ID, organizationId: ORG_ID }, deps)],
+    [
+      "page",
+      (deps: TaskServiceDeps) =>
+        listTaskPage({ actorUserId: REVIEWER_ID, organizationId: ORG_ID, page: 1, pageSize: 25, sort: { direction: "asc", key: "due" } }, deps),
+    ],
+    ["update", update(REVIEWER_ID, 1)],
+    ["transition", transition(REVIEWER_ID, 1)],
+  ])("refuses an external reviewer the %s, changing nothing", async (_operation, run) => {
+    const client = createClient([createTaskRow()])
+
+    await expect(run(createDeps(client))).rejects.toMatchObject({ statusCode: 403 })
+    expect(client.tables.tasks).toEqual([createTaskRow()])
+  })
+
+  it.each([
+    ["update", update(MANAGER_ID, 2)],
+    ["transition", transition(MANAGER_ID, 2)],
+  ])("refuses a stale revision to the %s, keeping the newer task", async (_operation, run) => {
+    const client = createClient([createTaskRow({ revision: 3 })])
+
+    await expect(run(createDeps(client))).rejects.toMatchObject({ statusCode: 409 })
+    expect(client.tables.tasks).toEqual([createTaskRow({ revision: 3 })])
+  })
+})

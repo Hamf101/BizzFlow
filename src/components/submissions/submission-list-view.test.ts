@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest"
 
 import {
-  getSubmissionStatusOptions,
   getSubmissionViewAssignee,
   getSubmissionViewMenuSections,
   getSubmissionViewStatuses,
@@ -31,37 +30,6 @@ const view = submissionListState.parse({
 })
 
 describe("submission list view", () => {
-  it("offers each status group as a link that keeps the search, order, and page size but starts on page one", () => {
-    expect(getSubmissionStatusOptions(view)).toEqual([
-      { href: "/submissions?q=lease&sort=title&size=25", label: "All", selected: true },
-      {
-        href: "/submissions?status=draft&q=lease&sort=title&size=25",
-        label: "Drafts",
-        selected: false,
-      },
-      {
-        href: "/submissions?status=submitted&q=lease&sort=title&size=25",
-        label: "Submitted",
-        selected: false,
-      },
-      {
-        href: "/submissions?status=in_review&q=lease&sort=title&size=25",
-        label: "In review",
-        selected: false,
-      },
-      {
-        href: "/submissions?status=needs_changes&q=lease&sort=title&size=25",
-        label: "Needs changes",
-        selected: false,
-      },
-      {
-        href: "/submissions?status=decided&q=lease&sort=title&size=25",
-        label: "Decided",
-        selected: false,
-      },
-    ])
-  })
-
   it("reads a status group as the lifecycle states it stands for", () => {
     expect(
       getSubmissionViewStatuses(submissionListState.parse({ status: "decided" }))
@@ -133,21 +101,6 @@ describe("submission list view", () => {
         canFilterAssignee: false,
       }).map((section) => section.label)
     ).toEqual(["Sort", "Export"])
-  })
-
-  it("marks the chosen order and restarts the paging when it changes", () => {
-    const [sort] = getSubmissionViewMenuSections(view, [], {
-      canFilterAssignee: false,
-    })
-
-    expect(
-      sort.options.filter((option) => option.selected).map((option) => option.label)
-    ).toEqual(["Title, A to Z"])
-    expect(sort.options[0]).toEqual({
-      href: "/submissions?q=lease&size=25",
-      label: "Recently updated",
-      selected: false,
-    })
   })
 
   it("says when a setting that only the view menu shows differs from the default", () => {

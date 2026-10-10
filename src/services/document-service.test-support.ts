@@ -614,9 +614,8 @@ class FakeQueryBuilder {
 
     if (this.updateValues) {
       matchingRows.forEach((row: FakeRow) => {
-        Object.assign(row, this.updateValues, {
-          updated_at: "2026-07-09T12:00:00.000Z",
-        })
+        // A write that names its own time keeps it, as the column would.
+        Object.assign(row, { updated_at: "2026-07-09T12:00:00.000Z" }, this.updateValues)
       })
       return matchingRows
     }

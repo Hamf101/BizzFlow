@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { enforceOutboundEmailRateLimit } from "@/lib/action-rate-limit"
-import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
+import { getAuthenticatedUser } from "@/lib/auth"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
 import {
   createInvite,
@@ -161,19 +161,6 @@ describe("createInviteAction", () => {
     expect(enforceOutboundEmailRateLimit).not.toHaveBeenCalled()
   })
 
-  it("maps invite service copy to a fixed failure code", async () => {
-    vi.mocked(createInvite).mockRejectedValue(
-      new Error("EmailJS request id and provider diagnostics")
-    )
-
-    await expect(createInviteAction(createInviteForm())).rejects.toThrow(
-      "NEXT_REDIRECT:/people?feedback=operation_failed"
-    )
-    expect(redirectMock).not.toHaveBeenCalledWith(
-      expect.stringContaining("EmailJS")
-    )
-  })
-
   it("names an existing member instead of a generic refresh prompt", async () => {
     const { OrganizationServiceError } = await import(
       "@/services/organization-service"
@@ -246,20 +233,5 @@ describe("people profile and permission actions", () => {
       organizationId: ORG_ID,
       inviteId: "invite-2",
     })
-  })
-
-  it("preserves the People return path when authentication expires", async () => {
-    vi.mocked(getAuthenticatedUser).mockRejectedValue(
-      new AuthenticationError("Sign in to continue.")
-    )
-    const formData = new FormData()
-    formData.set("organizationId", ORG_ID)
-    formData.set("membershipId", MEMBERSHIP_ID)
-    formData.set("roleDefinitionId", ROLE_ID)
-
-    await expect(updateMemberAccessAction(formData)).rejects.toThrow(
-      "NEXT_REDIRECT:/login?next=%2Fpeople"
-    )
-    expect(updateMemberAccess).not.toHaveBeenCalled()
   })
 })

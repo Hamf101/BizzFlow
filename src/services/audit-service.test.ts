@@ -296,11 +296,12 @@ describe("export audit logs", () => {
     expect(new Set(entries.map((entry) => entry.seq)).size).toBe(1_234)
   })
 
-  it("exports oldest first and only the chosen kinds of record", async () => {
+  it("exports oldest first, only the chosen kinds of record, and only this workspace's", async () => {
     const client = createEventClient([
       createEventRow(1),
       createEventRow(2, { action: "document.created", target_type: "document" }),
       createEventRow(3),
+      createEventRow(4, { id: "audit-other", org_id: "org-2" }),
     ])
 
     const entries = await exportAuditLogs(

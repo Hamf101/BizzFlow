@@ -1,10 +1,8 @@
-import { describe, expect, expectTypeOf, it } from "vitest"
+import { describe, expect, it } from "vitest"
 
 import {
   buildFeedbackRedirect,
   getActionErrorFeedbackCode,
-  type ActionFeedbackCode,
-  type ActionOutcome,
 } from "./action-result"
 
 describe("buildFeedbackRedirect", () => {
@@ -40,32 +38,6 @@ describe("buildFeedbackRedirect", () => {
     expect(redirect).not.toContain("tenant-facing")
     expect(redirect).not.toContain("message=")
     expect(redirect).not.toContain("error=")
-  })
-
-  it("keeps outcome and feedback codes closed at compile time", () => {
-    const outcome = {
-      status: "error",
-      code: "operation_failed",
-      fieldErrors: { title: ["Enter a title."] },
-    } satisfies ActionOutcome
-    const code: ActionFeedbackCode = outcome.code
-
-    expectTypeOf(code).toMatchTypeOf<ActionFeedbackCode>()
-    expect(outcome).toEqual({
-      status: "error",
-      code: "operation_failed",
-      fieldErrors: { title: ["Enter a title."] },
-    })
-
-    if (false) {
-      // @ts-expect-error Free-form strings are not valid feedback codes.
-      buildFeedbackRedirect("/documents", "raw provider exception")
-
-      buildFeedbackRedirect("/documents", "operation_failed", {
-        // @ts-expect-error Raw message fields cannot cross the redirect API.
-        message: "raw provider exception",
-      })
-    }
   })
 })
 

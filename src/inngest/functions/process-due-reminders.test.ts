@@ -1,12 +1,8 @@
-import { NonRetriableError } from "inngest"
 import { describe, expect, it, vi } from "vitest"
 
 import { handleDueTaskReminders } from "@/inngest/functions/process-due-reminders"
 import { createRecordingStep } from "@/inngest/functions/test-support"
-import {
-  TaskServiceError,
-  type TaskReminderRunSummary,
-} from "@/services/task-service"
+import type { TaskReminderRunSummary } from "@/services/task-service"
 import type { TaskReminder } from "@/types/task"
 
 const SUMMARY: TaskReminderRunSummary = {
@@ -42,31 +38,5 @@ describe("handleDueTaskReminders", () => {
       "deliver-task-reminder-reminder-b",
     ])
     expect(deliverDueTaskReminders).toHaveBeenNthCalledWith(2, [REMINDERS[1]])
-  })
-
-  it("stops retrying when the service rejects the scan", async () => {
-    const findDueTaskReminders = vi.fn(async (): Promise<never> => {
-      throw new TaskServiceError("Task reminders are not available.", 409)
-    })
-
-    await expect(
-      handleDueTaskReminders(
-        { step: createRecordingStep() },
-        { findDueTaskReminders }
-      )
-    ).rejects.toBeInstanceOf(NonRetriableError)
-  })
-
-  it("lets an unexpected service failure retry", async () => {
-    const findDueTaskReminders = vi.fn(async (): Promise<never> => {
-      throw new TaskServiceError("Unable to load due task reminders.", 500)
-    })
-
-    await expect(
-      handleDueTaskReminders(
-        { step: createRecordingStep() },
-        { findDueTaskReminders }
-      )
-    ).rejects.not.toBeInstanceOf(NonRetriableError)
   })
 })

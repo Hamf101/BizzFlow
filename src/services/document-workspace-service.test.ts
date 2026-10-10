@@ -454,6 +454,8 @@ describe("recent documents", () => {
 
 describe("folder creation beside a colleague's write", () => {
   it("creates the folder once the database stops asking for a retry, and asks the member to try again when it never does", async () => {
+    // The retry's jitter is a random share of its window; none here, so nothing waits.
+    vi.spyOn(Math, "random").mockReturnValue(0)
     const client = new FakeSupabaseClient({
       organization_memberships: [createMembershipRow("manager")],
     })

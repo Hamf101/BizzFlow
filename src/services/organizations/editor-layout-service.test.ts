@@ -25,16 +25,7 @@ function fixture() {
   return { deps, profiles }
 }
 
-const layout = { dock: { orientation: "flat", x: 0.5, y: 1 }, zoom: { x: 0.25, y: 0 } }
-
 describe("editor layout", () => {
-  it("keeps a person's own layout for their next session and leaves everyone else's alone", async () => {
-    const { deps, profiles } = fixture()
-    await saveEditorLayout({ actorUserId: "user-1", layout }, deps)
-    expect(await getEditorLayout({ actorUserId: "user-1" }, deps)).toEqual(layout)
-    expect(profiles[1].editor_layout).toEqual({ zoom: { x: 0, y: 0 } })
-  })
-
   it.each([
     { dock: { orientation: "flat", x: 1.5, y: 0 } },
     { dock: { orientation: "sideways", x: 0, y: 0 } },

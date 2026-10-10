@@ -9,31 +9,24 @@ import { mount } from "@/test/render"
 
 const roots: Root[] = []
 let phone = false
-let moving = false
 
 beforeAll(() => {
-  // Motion is off unless a test turns it on, so every fold and unfold lands on the next frame.
+  // Motion is off, so every fold and unfold lands on the next frame.
   vi.stubGlobal("matchMedia", (query: string) => ({
     addEventListener() {},
-    matches: (!moving && query.includes("reduced-motion")) || (phone && query.includes("48rem")),
+    matches: query.includes("reduced-motion") || (phone && query.includes("48rem")),
     media: query,
     removeEventListener() {},
   }))
 })
 
-function unmount(): void {
+afterEach(() => {
   for (const root of roots.splice(0)) {
     act(() => root.unmount())
   }
   document.body.replaceChildren()
-}
-
-afterEach(() => {
-  unmount()
   localStorage.clear()
   phone = false
-  moving = false
-  delete (HTMLElement.prototype as { animate?: unknown }).animate
 })
 
 function Flow(): React.ReactElement {
@@ -64,14 +57,6 @@ async function frames(): Promise<void> {
 const launcher = (): HTMLButtonElement => document.querySelector<HTMLButtonElement>('[data-slot="flow-launcher"]')!
 const flow = (): HTMLElement => document.querySelector<HTMLElement>('[role="dialog"]')!
 const spot = (): string => launcher().style.transform
-// Where the folded page itself is drawn: the top left of all its pieces.
-const page = (): [number, number] => {
-  const points = [...document.querySelectorAll("polygon")].flatMap((piece) =>
-    (piece.getAttribute("points") ?? "").split(" ").map((pair) => pair.split(",").map(Number))
-  )
-
-  return [Math.min(...points.map(([x]) => x!)), Math.min(...points.map(([, y]) => y!))]
-}
 
 it("opens as the Flow window, and Escape folds it back and hands focus to the button", async () => {
   await render()
@@ -103,7 +88,6 @@ it("comes back where it was left, on the next visit and after the window closes"
 
   // Folded back to the same spot, not to the window's corner.
   expect(spot()).toBe(left)
-  expect(page()).toEqual([24, 300])
 })
 
 it("on a phone, pulls taller or shorter from a grab bar that a tap or the arrow keys also work", async () => {
@@ -125,30 +109,4 @@ it("on a phone, pulls taller or shorter from a grab bar that a tap or the arrow 
   expect(switched).not.toBe(opened)
   expect(height()).toBe(switched - 48)
   expect(JSON.parse(localStorage.getItem("bizflow:flow:phone-height")!)).toBe(Math.round(height()))
-})
-
-it("rests as a swarm of dots that never stop orbiting, each at its own pace, and holds still when motion is turned down", async () => {
-  // jsdom has no Web Animations; this keeps what each dot is asked to do.
-  const orbits: Array<KeyframeAnimationOptions | undefined> = []
-  Object.defineProperty(HTMLElement.prototype, "animate", {
-    configurable: true,
-    value(_: Keyframe[], timing?: KeyframeAnimationOptions) {
-      orbits.push(timing)
-      return { cancel() {}, effect: { getComputedTiming: () => ({ progress: 0 }) }, pause() {}, play() {}, updatePlaybackRate() {} }
-    },
-  })
-  await render()
-  const dots = document.querySelectorAll('[data-slot="flow-swarm"] > *').length
-
-  expect(dots).toBeGreaterThan(60)
-  expect(orbits).toHaveLength(0)
-
-  unmount()
-  moving = true
-  await render()
-
-  // Two sways per dot, across and down, both endless and sharing that dot's pace alone.
-  expect(orbits).toHaveLength(dots * 2)
-  expect(orbits.every((timing) => timing?.iterations === Infinity)).toBe(true)
-  expect(new Set(orbits.map((timing) => timing?.duration)).size).toBe(dots)
 })

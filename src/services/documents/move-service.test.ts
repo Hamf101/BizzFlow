@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, onTestFinished, vi } from "vitest"
 
 import { moveDocument, moveFolder } from "@/services/document-service"
 import {
@@ -176,6 +176,9 @@ describe("moving files", (): void => {
   })
 
   it("asks again for a busy folder tree, then gives up in words", async (): Promise<void> => {
+    // The retry's jitter is a random share of its window; none here, so nothing waits.
+    const random = vi.spyOn(Math, "random").mockReturnValue(0)
+    onTestFinished(() => random.mockRestore())
     const client = new FakeSupabaseClient({
       organization_memberships: [createMembershipRow("owner_admin")],
       folders: [

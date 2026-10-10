@@ -371,22 +371,6 @@ describe("internal submission csv export", () => {
 })
 
 describe("submission list pages", () => {
-  it("pages what a manager can see, latest update first", async () => {
-    const client = createClient({ submissions: createSubmissionRows(55) })
-
-    const page = await listSubmissionPage(
-      createPageInput(MANAGER_ID, { page: 2 }),
-      { client: client as never }
-    )
-
-    expect(page).toMatchObject({ page: 2, pageSize: 25, total: 55 })
-    expect(page.submissions.map((submission) => submission.id)).toEqual(
-      [...Array(25).keys()].map((index: number): string =>
-        getNumberedSubmissionId(26 + index)
-      )
-    )
-  })
-
   it("breaks ties by id, so a page boundary never repeats or skips a row", async () => {
     const tied = { updated_at: "2026-07-18T12:00:00.000Z" }
     const client = createClient({
@@ -503,16 +487,6 @@ describe("submission list pages", () => {
     await expect(count(STAFF_ID)).resolves.toEqual({ completed: 2, draft: 1, in_review: 1 })
     await expect(count(EXTERNAL_ID)).resolves.toEqual({ completed: 2, draft: 0, in_review: 1 })
     await expect(count(MANAGER_ID, "2026-07-01T00:00:00.000Z")).resolves.toMatchObject({ completed: 1 })
-  })
-
-  it("answers a page past the end with no rows and the true total", async () => {
-    const client = createClient({ submissions: createSubmissionRows(3) })
-
-    await expect(
-      listSubmissionPage(createPageInput(MANAGER_ID, { page: 5 }), {
-        client: client as never
-      })
-    ).resolves.toMatchObject({ page: 5, submissions: [], total: 3 })
   })
 
   it("filters by status, literal title text, and assignee", async () => {

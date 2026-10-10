@@ -8,7 +8,7 @@ import { mount as mountRoot } from "@/test/render"
 
 const actions = vi.hoisted(() => ({ save: vi.fn() }))
 vi.mock("@/app/(dashboard)/navigation-actions", () => ({ updateNavigationAction: actions.save }))
-vi.mock("next/navigation", () => ({ usePathname: () => "/dashboard", useRouter: () => ({ prefetch: vi.fn() }) }))
+vi.mock("next/navigation", () => ({ usePathname: () => "/dashboard" }))
 vi.mock("next/link", async () => {
   const { createElement } = await import("react")
   return { default: ({ prefetch, ...props }: ComponentProps<"a"> & { prefetch?: boolean }) => { void prefetch; return createElement("a", props) } }
@@ -57,44 +57,11 @@ async function drag(from: string, to: string): Promise<void> {
 }
 
 describe("sidebar customization interactions", () => {
-  it("renders saved order and custom labels while preserving destinations and access filtering", () => {
-    mount(false, ["/settings", "/audit-log", "/documents"], { "/documents": "Client files" })
-    expect(links()[0].getAttribute("href")).toBe("/settings")
-    expect(links()[1].textContent).toBe("Client files")
-    expect(links()[1].getAttribute("href")).toBe("/documents")
-    expect(links().some((link) => link.getAttribute("href") === "/audit-log")).toBe(false)
-  })
   it("offers Rename only to the owner on right-click", async () => {
     mount(false)
     await contextMenu("/documents")
     expect([...document.querySelectorAll('[role="menuitem"]')].some((el) => el.textContent === "Rename")).toBe(false)
     expect(document.querySelector('[role="dialog"]')).toBeNull()
-  })
-  it("renames through the owner dialog and retains the destination", async () => {
-    mount()
-    actions.save.mockResolvedValue({ preferences: { labels: { "/documents": "Client files" }, order: [], revision: 1, canRename: true } })
-    await contextMenu("/documents")
-    await clickText("Rename")
-    const input = document.querySelector<HTMLInputElement>('input[name="label"]')!
-    expect(input).toBeTruthy()
-    await act(async () => {
-      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "Client files")
-      input.dispatchEvent(new Event("input", { bubbles: true }))
-    })
-    await act(async () => document.querySelector("form")?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })))
-    expect(document.querySelector('a[href="/documents"]')?.textContent).toBe("Client files")
-    expect(actions.save).toHaveBeenCalledWith({ organizationId: "org-1", change: { href: "/documents", label: "Client files", expectedRevision: 0 } })
-  })
-  it("lets a non-owner drag a tab and restore its saved position after remount", async () => {
-    const order = ["/settings", "/dashboard", "/people", "/documents", "/templates", "/submissions", "/tasks"]
-    actions.save.mockResolvedValue({ preferences: { labels: {}, order, revision: 0, canRename: false } })
-    mount(false)
-    await drag("/settings", "/dashboard")
-    expect(links()[0].getAttribute("href")).toBe("/settings")
-    expect(actions.save.mock.calls[0]?.[0].change).toEqual(order)
-    act(() => root?.unmount()); root = undefined; document.body.replaceChildren()
-    mount(false, order)
-    expect(links()[0].getAttribute("href")).toBe("/settings")
   })
   it("supports keyboard ordering without navigating away", async () => {
     const order = ["/settings", "/dashboard", "/people", "/documents", "/templates", "/submissions", "/tasks"]

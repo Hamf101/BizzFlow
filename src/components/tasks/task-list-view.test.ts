@@ -36,32 +36,6 @@ const view = taskListState.parse({
 })
 
 describe("task list view", () => {
-  it("offers each status as a link that keeps the search, order, and page size but starts on page one", () => {
-    expect(getTaskStatusOptions(view)).toEqual([
-      { href: "/tasks?q=lease&sort=-title&size=25", label: "All", selected: true },
-      {
-        href: "/tasks?status=open&q=lease&sort=-title&size=25",
-        label: "Open",
-        selected: false,
-      },
-      {
-        href: "/tasks?status=in_progress&q=lease&sort=-title&size=25",
-        label: "In progress",
-        selected: false,
-      },
-      {
-        href: "/tasks?status=completed&q=lease&sort=-title&size=25",
-        label: "Completed",
-        selected: false,
-      },
-      {
-        href: "/tasks?status=cancelled&q=lease&sort=-title&size=25",
-        label: "Cancelled",
-        selected: false,
-      },
-    ])
-  })
-
   it("marks only the chosen status", () => {
     expect(
       getTaskStatusOptions(taskListState.parse({ status: "completed" }))

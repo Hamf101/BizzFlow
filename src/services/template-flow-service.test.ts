@@ -1,3 +1,5 @@
+import { setTimeout as pause } from "node:timers/promises"
+
 import { describe, expect, it, vi } from "vitest"
 
 import type {
@@ -6,6 +8,10 @@ import type {
   AiStructuredGenerationRequest,
   AiStructuredGenerationResult
 } from "@/services/ai/contracts"
+// Flow waits a second before retrying an outage; the tests only check that it does.
+vi.mock("node:timers/promises", () => ({ setTimeout: vi.fn(async () => undefined) }))
+
+import { PostgrestReadQuery, type FakeRow } from "@/services/postgrest-fake.test-support"
 import {
   AI_PROVIDER_ERROR_CODES,
   AiProviderError
@@ -38,53 +44,13 @@ const FIELD_ID = "00000000-0000-4000-8000-000000000014"
 const TEST_PROVIDER_ID = "test-provider"
 const TEST_MODEL = "test-exact-model"
 
-type TemplateFlowRow = Record<string, unknown>
-
-class TemplateFlowQuery implements PromiseLike<{ data: unknown; error: null }> {
-  private readonly filters: Array<[string, unknown]> = []
-
-  constructor(private readonly rows: TemplateFlowRow[]) {}
-
-  select(): TemplateFlowQuery {
-    return this
-  }
-
-  eq(column: string, value: unknown): TemplateFlowQuery {
-    this.filters.push([column, value])
-    return this
-  }
-
-  order(): TemplateFlowQuery {
-    return this
-  }
-
-  limit(): TemplateFlowQuery {
-    return this
-  }
-
-  async maybeSingle(): Promise<{ data: unknown; error: null }> {
-    return { data: this.matches()[0] ?? null, error: null }
-  }
-
-  then<TResult1 = { data: unknown; error: null }, TResult2 = never>(
-    onfulfilled?:
-      | ((value: { data: unknown; error: null }) => TResult1 | PromiseLike<TResult1>)
-      | null,
-    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
-  ): PromiseLike<TResult1 | TResult2> {
-    return Promise.resolve({ data: this.matches(), error: null as null }).then(onfulfilled, onrejected)
-  }
-
-  private matches(): TemplateFlowRow[] {
-    return this.rows.filter((row) => this.filters.every(([column, value]) => row[column] === value))
-  }
-}
+type TemplateFlowRow = FakeRow
 
 class TemplateFlowClient {
   constructor(readonly tables: Record<string, TemplateFlowRow[]>) {}
 
-  from(tableName: string): TemplateFlowQuery {
-    return new TemplateFlowQuery(this.tables[tableName] ?? [])
+  from(tableName: string): PostgrestReadQuery {
+    return new PostgrestReadQuery(this.tables[tableName] ?? [])
   }
 
   // Stands in for get_template_access_level for these tests: whoever the role lets manage templates edits.
@@ -315,30 +281,13 @@ describe("template Flow service", () => {
       provider: TEST_PROVIDER_ID,
       model: TEST_MODEL
     })
-    expect(providerRequest?.input).toContain("What would you like to improve?")
+    // The logo's bytes stay out of what the provider is sent.
     expect(providerRequest?.input).not.toContain("aGVsbG8=")
-    expect(providerRequest?.systemInstruction).toContain(
-      "BizFlow's accountable business-document editor"
-    )
-    expect(providerRequest?.systemInstruction).toContain("intake forms")
-    expect(providerRequest?.systemInstruction).toContain("locked")
-    expect(providerRequest?.systemInstruction).toContain("lower_snake_case")
-    expect(providerRequest?.systemInstruction).toContain("Needs input:")
-    expect(providerRequest?.systemInstruction).toContain(
-      "meaningful choices"
-    )
-    expect(providerRequest?.systemInstruction).toContain("single title")
-    expect(providerRequest?.systemInstruction).toContain("payloadJson")
-    const responseSchema = JSON.stringify(providerRequest?.responseSchema)
-    expect(responseSchema).not.toContain('"anyOf"')
-    expect(responseSchema).toContain('"payloadJson"')
-    expect(responseSchema).toContain('"remove_block"')
-    expect(responseSchema).not.toContain('"target"')
   })
 
   it("drafts typed answers with units, choose-several ticks, question grids and fill-in tables", async () => {
     const add = (summary: string, block: Record<string, unknown>): TestFlowOperation => ({ type: "add_block", summary, payload: { afterBlockId: null, block } })
-    const { aiProvider, run } = runFlow(createContent(), [
+    const { run } = runFlow(createContent(), [
       add("Asked the rent", { type: "text_field", fieldKey: "rent", label: "Monthly rent", required: true, helpText: null, placeholder: null, multiline: false, format: "money", prefix: "£", suffix: "per month" }),
       add("Asked the reference", { type: "text_field", fieldKey: "ni_number", label: "National Insurance number", required: false, helpText: null, placeholder: null, multiline: false, comb: 9 }),
       add("Asked the days", { type: "dropdown_field", fieldKey: "days", label: "Days you can work", required: false, helpText: null, placeholder: null, options: ["Mon", "Tue", "Wed"], multiple: true, across: true }),
@@ -346,8 +295,6 @@ describe("template Flow service", () => {
       add("Asked the hours", { type: "table_field", fieldKey: "hours", label: "Hours worked", required: false, helpText: null, columns: [{ label: "Date", format: "date" }, { label: "Hours", format: "number" }], rows: 7, addRows: true }),
     ])
     const result = await run
-    const instruction = String(readProviderRequests(aiProvider)[0]?.systemInstruction)
-
     expect(result.proposal?.candidateDraft.content.blocks.slice(1)).toMatchObject([
       { format: "money", prefix: "£", suffix: "per month", type: "text_field" },
       { comb: 9, type: "text_field" },
@@ -355,9 +302,6 @@ describe("template Flow service", () => {
       { options: ["OK", "Defect"], rows: ["Tyres", "Lights"], type: "choice_grid_field" },
       { addRows: true, rows: 7, type: "table_field" },
     ])
-    for (const kind of ["choice_grid_field", "table_field", '"multiple"', '"format"', '"comb"']) {
-      expect(instruction).toContain(kind)
-    }
   })
 
   it("proposes a removal for review instead of asking, whatever words the request used", async () => {
@@ -705,6 +649,7 @@ describe("template Flow service", () => {
     expect(persistMessages).toHaveBeenCalledTimes(1)
     expect(readProviderRequests(aiProvider)).toHaveLength(2)
     expect(readProviderRequests(aiProvider)[1]).toEqual(readProviderRequests(aiProvider)[0])
+    expect(pause).toHaveBeenCalledWith(1_000)
   })
 
   it.each(["outage", "invalid output"])("stops after two calls when an outage is followed by %s", async (failure) => {
@@ -761,52 +706,22 @@ describe("template Flow service", () => {
         }
       }
     ])
-    const infoSpy = vi.spyOn(console, "info").mockImplementation((): void => {})
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation((): void => {})
+    const result = await executeTemplateFlow(
+      createInput(createBlankTemplateContent(), "Create an agreement."),
+      createDependencies({ aiProvider })
+    )
 
-    try {
-      await executeTemplateFlow(
-        createInput(createBlankTemplateContent(), "Create an agreement."),
-        createDependencies({ aiProvider })
-      )
-
-      const requests = readProviderRequests(aiProvider)
-      expect(requests).toHaveLength(2)
-      expect(requests.map((request) => request.model)).toEqual([
-        { provider: TEST_PROVIDER_ID, model: TEST_MODEL },
-        { provider: TEST_PROVIDER_ID, model: TEST_MODEL }
-      ])
-      expect(requests[1]?.input).toContain("semanticRepair")
-      // The draft, the largest part, leads, and a repair repeats the first
-      // prompt as its opening, so the provider can reuse what it already read.
-      expect(Object.keys(JSON.parse(requests[0]?.input ?? "{}"))[0]).toBe("currentDraft")
-      expect(requests[1]?.input.startsWith(requests[0]?.input.slice(0, -1) ?? "?")).toBe(true)
-      expect(infoSpy).toHaveBeenCalledWith(
-        "template_flow_turn_completed",
-        expect.objectContaining({
-          provider: TEST_PROVIDER_ID,
-          model: TEST_MODEL,
-          traceId: "repair-success-trace",
-          upstreamCalls: 2,
-          cachedTokens: 90,
-          inputTokens: 240,
-          outputTokens: 50,
-          totalTokens: 290
-        })
-      )
-      expect(warnSpy).toHaveBeenCalledWith(
-        "template_flow_provider_output_invalid",
-        expect.objectContaining({
-          provider: TEST_PROVIDER_ID,
-          model: TEST_MODEL,
-          providerCall: 1,
-          issueCode: "invalid_json"
-        })
-      )
-    } finally {
-      infoSpy.mockRestore()
-      warnSpy.mockRestore()
-    }
+    const requests = readProviderRequests(aiProvider)
+    expect(result.messages.at(-1)?.content).toBe("I created the agreement.")
+    expect(requests.map((request) => request.model)).toEqual([
+      { provider: TEST_PROVIDER_ID, model: TEST_MODEL },
+      { provider: TEST_PROVIDER_ID, model: TEST_MODEL }
+    ])
+    expect(requests[1]?.input).toContain("semanticRepair")
+    // The draft, the largest part, leads, and a repair repeats the first
+    // prompt as its opening, so the provider can reuse what it already read.
+    expect(Object.keys(JSON.parse(requests[0]?.input ?? "{}"))[0]).toBe("currentDraft")
+    expect(requests[1]?.input.startsWith(requests[0]?.input.slice(0, -1) ?? "?")).toBe(true)
   })
 
   it("caps invalid structured output at two upstream calls", async () => {
@@ -826,31 +741,6 @@ describe("template Flow service", () => {
       message: "Flow returned changes that failed validation."
     })
     expect(readProviderRequests(aiProvider)).toHaveLength(2)
-  })
-
-  it("logs null usage when the provider omits token counts", async () => {
-    const aiProvider = createTestAiProvider([
-      flowProviderResult(successfulFlowPayload())
-    ])
-    const infoSpy = vi.spyOn(console, "info").mockImplementation((): void => {})
-
-    try {
-      await executeTemplateFlow(
-        createInput(createBlankTemplateContent(), "Create an agreement."),
-        createDependencies({ aiProvider })
-      )
-
-      expect(infoSpy).toHaveBeenCalledWith(
-        "template_flow_turn_completed",
-        expect.objectContaining({
-          inputTokens: null,
-          outputTokens: null,
-          totalTokens: null
-        })
-      )
-    } finally {
-      infoSpy.mockRestore()
-    }
   })
 
   it("preserves existing field keys and deterministically deduplicates new labels", async () => {

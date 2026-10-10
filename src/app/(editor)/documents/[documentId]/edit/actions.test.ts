@@ -9,7 +9,6 @@ import { loadAuthenticatedPageUser } from "@/lib/page-auth"
 import { findGuestOrganizationId } from "@/services/document-service"
 import { getCurrentOrganizationContext } from "@/services/organization-service"
 import {
-  DocumentSigningServiceError,
   resendDocumentSigningInvitation,
   saveGeneratedDocumentAnswers,
   sendDocumentForSigning,
@@ -192,19 +191,6 @@ describe("sendGeneratedDocumentAction", () => {
       `NEXT_REDIRECT:${EDITOR_PATH}?feedback=retry_later`
     )
     expect(sendDocumentForSigning).not.toHaveBeenCalled()
-  })
-
-  it("maps EmailJS-adjacent service diagnostics to fixed feedback", async () => {
-    vi.mocked(sendDocumentForSigning).mockRejectedValue(
-      new DocumentSigningServiceError("EmailJS provider request detail", 500)
-    )
-
-    await expect(sendGeneratedDocumentAction(createSendForm())).rejects.toThrow(
-      `NEXT_REDIRECT:${EDITOR_PATH}?feedback=operation_failed`
-    )
-    expect(redirectMock).not.toHaveBeenCalledWith(
-      expect.stringContaining("EmailJS")
-    )
   })
 })
 

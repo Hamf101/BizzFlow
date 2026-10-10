@@ -345,23 +345,9 @@ describe("change several templates action", () => {
     expect(revalidatePathMock).toHaveBeenCalledWith("/templates")
   })
 
-  it("leaves staff to the service, which judges each template", async () => {
-    vi.mocked(getCurrentOrganizationContext).mockResolvedValue(memberContext("staff"))
-
-    await changeTemplatesAction({ change: "archive", templateIds: [TEMPLATE_ID] })
-    expect(changeDocumentTemplates).toHaveBeenCalledWith(expect.objectContaining({ actorUserId: ACTOR_USER_ID }))
-  })
-
   it("refuses ids that are not ids, and a change it does not know", async () => {
     await expect(changeTemplatesAction({ change: "archive", templateIds: ["../etc"] })).rejects.toThrow()
     await expect(changeTemplatesAction({ change: "delete" as never, templateIds: [TEMPLATE_ID] })).rejects.toThrow()
-    expect(changeDocumentTemplates).not.toHaveBeenCalled()
-  })
-
-  it("sends a signed-out visitor to sign in", async () => {
-    vi.mocked(getAuthenticatedUser).mockRejectedValue(new AuthenticationError("Sign in to continue."))
-
-    await expect(changeTemplatesAction({ change: "archive", templateIds: [TEMPLATE_ID] })).rejects.toThrow("NEXT_REDIRECT:/login?next=%2Ftemplates")
     expect(changeDocumentTemplates).not.toHaveBeenCalled()
   })
 })

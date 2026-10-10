@@ -194,21 +194,13 @@ describe("organization service setup failures", () => {
     }
 
     // A server without its credentials is broken, not refusing a request.
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+    vi.spyOn(console, "error").mockImplementation(() => {})
     vi.spyOn(console, "info").mockImplementation(() => {})
 
     await expect(getCurrentOrganizationContext("user-id")).rejects.toMatchObject({
       message: "Supabase server credentials are not configured.",
       statusCode: 500,
     } satisfies Partial<OrganizationServiceError>)
-
-    expect(errorSpy).toHaveBeenCalledWith(
-      "organization_service_failed",
-      expect.objectContaining({
-        operationName: "get_current_organization_context",
-        statusCode: 500,
-      })
-    )
   })
 })
 

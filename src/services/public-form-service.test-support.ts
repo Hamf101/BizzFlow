@@ -1,6 +1,11 @@
 import { vi } from "vitest"
 
 import { hashToken } from "@/services/document-signing/token-security"
+import {
+  PostgrestWriteQuery,
+  type FakeOperation,
+  type FakeRow,
+} from "@/services/postgrest-fake.test-support"
 import type { PublicFormServiceDeps } from "@/services/public-form-service"
 import { answerTemplateAccess } from "@/services/templates/access.test-support"
 import { templateContentV3Schema } from "@/types/template"
@@ -39,9 +44,8 @@ const KNOWN_TABLES = [
 ] as const
 
 export type FakeTableName = (typeof KNOWN_TABLES)[number]
-export type FakeRow = Record<string, unknown>
+export type { FakeRow }
 
-type FakeResult = { data: unknown; error: { message: string } | null }
 type FakeRpcResult = {
   data: unknown
   error: { code?: string; message: string } | null
@@ -172,115 +176,6 @@ export function createFileRow(overrides: FakeRow = {}): FakeRow {
   }
 }
 
-class FakeQueryBuilder implements PromiseLike<FakeResult> {
-  private readonly filters: Array<(row: FakeRow) => boolean> = []
-  private insertRows: FakeRow[] | null = null
-  private updateValues: FakeRow | null = null
-
-  constructor(
-    private readonly client: FakePublicFormClient,
-    private readonly tableName: FakeTableName
-  ) {}
-
-  select(): this {
-    return this
-  }
-
-  insert(values: FakeRow | FakeRow[]): this {
-    this.insertRows = Array.isArray(values) ? values : [values]
-    return this
-  }
-
-  update(values: FakeRow): this {
-    this.updateValues = values
-    return this
-  }
-
-  eq(column: string, value: unknown): this {
-    this.filters.push((row) => row[column] === value)
-    return this
-  }
-
-  is(column: string, value: null): this {
-    this.filters.push((row) => (row[column] ?? null) === value)
-    return this
-  }
-
-  order(): this {
-    return this
-  }
-
-  async single(): Promise<FakeResult> {
-    const writeError = this.getWriteError()
-
-    if (writeError) {
-      return writeError
-    }
-
-    const rows = this.run()
-    return rows.length === 1
-      ? { data: rows[0], error: null }
-      : { data: null, error: { message: "Expected exactly one row." } }
-  }
-
-  async maybeSingle(): Promise<FakeResult> {
-    const writeError = this.getWriteError()
-
-    if (writeError) {
-      return writeError
-    }
-
-    const rows = this.run()
-    return rows.length > 1
-      ? { data: null, error: { message: "Expected zero or one row." } }
-      : { data: rows[0] ?? null, error: null }
-  }
-
-  then<TResult1 = FakeResult, TResult2 = never>(
-    onfulfilled?:
-      | ((value: FakeResult) => TResult1 | PromiseLike<TResult1>)
-      | null,
-    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
-  ): PromiseLike<TResult1 | TResult2> {
-    return Promise.resolve(
-      this.getWriteError() ?? { data: this.run(), error: null }
-    ).then(onfulfilled, onrejected)
-  }
-
-  private getWriteError(): FakeResult | null {
-    const writes = this.insertRows !== null || this.updateValues !== null
-
-    return writes && this.client.failingWrites.has(this.tableName)
-      ? {
-          data: null,
-          error: { message: `Writes to ${this.tableName} are failing.` },
-        }
-      : null
-  }
-
-  private run(): FakeRow[] {
-    const table = this.client.tables[this.tableName]
-
-    if (this.insertRows) {
-      const inserted = this.insertRows.map((row) => ({ ...row }))
-      table.push(...inserted)
-      return inserted
-    }
-
-    const matched = table.filter((row) =>
-      this.filters.every((predicate) => predicate(row))
-    )
-
-    if (this.updateValues) {
-      for (const row of matched) {
-        Object.assign(row, this.updateValues)
-      }
-    }
-
-    return matched
-  }
-}
-
 /**
  * In-memory Supabase stand-in scoped to the relations this service may use.
  */
@@ -304,14 +199,19 @@ export class FakePublicFormClient {
     }
   }
 
-  from(tableName: string): FakeQueryBuilder {
+  from(tableName: string): PostgrestWriteQuery {
     if (!(KNOWN_TABLES as readonly string[]).includes(tableName)) {
       throw new Error(
         `Query against unknown relation "${tableName}". Known relations: ${KNOWN_TABLES.join(", ")}.`
       )
     }
 
-    return new FakeQueryBuilder(this, tableName as FakeTableName)
+    return new PostgrestWriteQuery(this.tables, tableName, {
+      before: (table: string, operation: FakeOperation) =>
+        (operation === "insert" || operation === "update") && this.failingWrites.has(table as FakeTableName)
+          ? { message: `Writes to ${table} are failing.` }
+          : undefined,
+    })
   }
 
   async rpc(

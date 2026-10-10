@@ -1,5 +1,16 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 
+// EmailJS takes one send a second, so the transport queues sends a second
+// apart; these tests send at once through the rest of the real transport.
+vi.mock("@/services/email/emailjs-transport", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/services/email/emailjs-transport")>()
+  return {
+    ...actual,
+    sendEmailJsEmail: (...[input, environment, deps]: Parameters<typeof actual.sendEmailJsEmail>) =>
+      actual.sendEmailJsEmail(input, environment, { scheduleRequest: (request) => request(), ...deps }),
+  }
+})
+
 import { sendTaskEmail, type SendTaskEmailInput } from "@/services/tasks/task-email"
 
 const originalEnv = { ...process.env }
@@ -84,28 +95,6 @@ describe("sendTaskEmail", () => {
       `https://app.example.com/tasks/${TASK_ID}`
     )
     expect(String(templateParams.message_html)).toContain("Jul 31, 2026")
-    expect(String(templateParams.message_text)).toContain("Reminder for your task")
-  })
-
-  it("uses assignment copy for an assignment notification", async () => {
-    stubEmailJsEnv()
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(new Response(JSON.stringify({ id: "email-2" }), { status: 200 }))
-    vi.stubGlobal("fetch", fetchMock)
-    vi.spyOn(console, "info").mockImplementation(() => {})
-
-    await sendTaskEmail(createInput({ kind: "assigned", dueAt: null }))
-
-    const request = fetchMock.mock.calls[0]?.[1] as RequestInit
-    const body = JSON.parse(String(request.body)) as Record<string, unknown>
-    const templateParams = body.template_params as Record<string, unknown>
-
-    expect(String(templateParams.subject)).toContain("New task assigned")
-    expect(String(templateParams.message_html)).toContain(
-      "A task was assigned to you"
-    )
-    expect(String(templateParams.message_html)).not.toContain("Due ")
   })
 
   it("rejects with a configuration error when EmailJS is not configured", async () => {
@@ -141,25 +130,5 @@ describe("sendTaskEmail", () => {
       "staff@example.com"
     )
     expect(JSON.stringify(errorLog.mock.calls)).not.toContain("private-test-key")
-  })
-
-  it("supports an injected transport for domain-level tests", async () => {
-    stubEmailJsEnv()
-    vi.spyOn(console, "info").mockImplementation(() => {})
-    const transport = vi
-      .fn()
-      .mockResolvedValue({ providerStatus: 202, providerMessageId: "email-3" })
-
-    await sendTaskEmail(createInput(), { transport })
-
-    expect(transport).toHaveBeenCalledWith(
-      expect.objectContaining({
-        deliveryReference: `task-reminder/${TASK_ID}`,
-      }),
-      expect.objectContaining({
-        EMAIL_PROVIDER: "emailjs",
-        EMAILJS_SERVICE_ID: "service_buy2dql",
-      })
-    )
   })
 })

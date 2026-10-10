@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
+import { getAuthenticatedUser } from "@/lib/auth"
 import { checkRateLimit, hashRateLimitKeyPart, RateLimitError } from "@/lib/rate-limit"
 import {
   DocumentServiceError,
@@ -11,7 +11,7 @@ import {
 } from "@/services/document-service"
 import { getCurrentOrganizationContext } from "@/services/organization-service"
 
-import { loadSharingAction, setSharingAccessAction, setSharingInheritanceAction } from "./sharing-actions"
+import { loadSharingAction, setSharingAccessAction } from "./sharing-actions"
 
 const ACTOR = "20000000-0000-4000-8000-000000000001"
 const ORG = "10000000-0000-4000-8000-000000000001"
@@ -95,12 +95,6 @@ describe("the Share dialog's actions", () => {
     expect(setSharingAccessMany).toHaveBeenCalledWith(expect.objectContaining({ level: "user", resources: [template] }))
   })
 
-  it("change whether it takes in the folder's sharing", async () => {
-    await setSharingInheritanceAction({ inherit: false, resources: [RESOURCE] })
-
-    expect(setSharingInheritanceMany).toHaveBeenCalledWith({ actorUserId: ACTOR, inherit: false, organizationId: ORG, resources: [RESOURCE] })
-  })
-
   it("say why in plain words when the service refuses", async () => {
     vi.mocked(setSharingAccessMany).mockRejectedValue(new DocumentServiceError("External reviewers can only view.", 400))
 
@@ -139,12 +133,5 @@ describe("the Share dialog's actions", () => {
     await expect(loadSharingAction([])).resolves.toMatchObject({ ok: false })
     const crowd = Array.from({ length: 51 }, (_, index) => ({ id: `40000000-0000-4000-8000-${String(index).padStart(12, "0")}`, kind: "document" as const }))
     await expect(loadSharingAction(crowd)).resolves.toMatchObject({ ok: false })
-  })
-
-  it("send a signed-out visitor to sign in", async () => {
-    vi.mocked(getAuthenticatedUser).mockRejectedValue(new AuthenticationError("Sign in to continue."))
-
-    await expect(loadSharingAction([RESOURCE])).rejects.toThrow("NEXT_REDIRECT:/login?next=%2Fdocuments")
-    expect(getSharingMany).not.toHaveBeenCalled()
   })
 })

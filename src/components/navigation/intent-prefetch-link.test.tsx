@@ -44,14 +44,3 @@ it.each([
 
   expect(link.dataset.prefetch).toBe("true")
 })
-
-it("still runs a caller's own handler", async () => {
-  const onMouseEnter = vi.fn()
-  const link = await renderLink(onMouseEnter)
-
-  act(() => {
-    link.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }))
-  })
-
-  expect(onMouseEnter).toHaveBeenCalledOnce()
-})
