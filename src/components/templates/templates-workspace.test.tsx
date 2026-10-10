@@ -46,6 +46,7 @@ function createTemplate(
     revision: 1,
     status: "draft",
     title: "Vendor intake",
+    trashedAt: null,
     updatedAt: "2026-09-02T09:00:00.000Z",
     ...overrides,
   }
@@ -139,6 +140,10 @@ describe("TemplatesWorkspace", () => {
       [...document.querySelectorAll('button[aria-label^="Actions for"]')].map((button: Element) => button.getAttribute("aria-label"))
     ).toEqual(["Actions for Mine", "Actions for Theirs"])
     expect(readCards("template-status")).toEqual(["Draft", undefined])
+    // Their own template moved to Trash is still in reach.
+    expect(
+      [...document.querySelectorAll('nav[aria-label="Filter templates by status"] a')].map((link: Element) => link.textContent)
+    ).toEqual(["All", "Trash"])
   })
 
   it("keeps editing, menus, pills, statuses, and new templates to people who manage templates", () => {
@@ -197,5 +202,27 @@ describe("TemplatesWorkspace", () => {
 
     expect(chip?.textContent).toContain("Matching “old”")
     expect(chip?.getAttribute("href")).toBe("/templates?category=Leasing&status=draft&size=25")
+  })
+
+  it("has a Trash that says when each template there goes for good, and when it is empty", () => {
+    const trash = templateListState.parse({ status: "trash" })
+
+    renderWorkspace({
+      templates: [createTemplate({ id: ARCHIVED_ID, status: "archived", title: "Old checklist", trashedAt: "2026-09-01T12:00:00.000Z" })],
+      view: trash,
+    })
+
+    expect(
+      [...document.querySelectorAll('nav[aria-label="Filter templates by status"] a')].map((link: Element) => link.textContent)
+    ).toEqual(["All", "Drafts", "Published", "Archived", "Trash"])
+    expect(document.querySelector('nav[aria-label="Filter templates by status"] a[aria-current="true"]')?.textContent).toBe("Trash")
+    // 30 days after it went to Trash.
+    expect(readCards("template-detail")[0]).toContain("Deletes on Oct 1, 2026")
+    expect(document.querySelector('a[data-slot="template-title"]')).toBeNull()
+    expect(document.querySelector('[data-slot="template-new"]')).toBeNull()
+
+    renderWorkspace({ templates: [], total: 0, view: trash })
+
+    expect(document.querySelector('[role="status"]')?.textContent).toBe("Trash is empty.")
   })
 })

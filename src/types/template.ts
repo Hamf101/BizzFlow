@@ -1170,6 +1170,8 @@ export type DocumentTemplateRow = Record<string, unknown> & {
   archived_at: string | null
   /** The working copy's revision it was last published at; null until published. */
   published_revision: number | null
+  /** When it went to Trash; only document_templates has it, the published view never holds one. */
+  trashed_at?: string | null
 }
 
 /** One immutable published version of a template. */
@@ -1214,18 +1216,20 @@ export type DocumentTemplate = {
    * version; a working copy past it has changes not yet published.
    */
   publishedRevision: number | null
+  /** When it was moved to Trash, where it is archived until restored or deleted; null otherwise. */
+  trashedAt: string | null
 }
 
 /** Database columns the templates list reads. */
 export type DocumentTemplateSummaryRow = Pick<
   DocumentTemplateRow,
-  "category" | "created_at" | "id" | "org_id" | "revision" | "status" | "title" | "updated_at"
+  "category" | "created_at" | "id" | "org_id" | "revision" | "status" | "title" | "trashed_at" | "updated_at"
 >
 
 /** A template as the templates list shows it, without its content. */
 export type DocumentTemplateSummary = Pick<
   DocumentTemplate,
-  "category" | "createdAt" | "id" | "organizationId" | "revision" | "status" | "title" | "updatedAt"
+  "category" | "createdAt" | "id" | "organizationId" | "revision" | "status" | "title" | "trashedAt" | "updatedAt"
 >
 
 /** A template in the library, with the content its card draws its first page from. */

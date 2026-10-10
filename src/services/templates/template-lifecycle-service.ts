@@ -1,9 +1,11 @@
 import {
   createBlankTemplateContent,
+  DOCUMENT_TEMPLATE_STATUSES,
   parseTemplateContent,
   upgradeV2TemplateContentToV3,
   type DocumentTemplate,
   type DocumentTemplateRow,
+  type DocumentTemplateStatus,
   type DocumentTemplateVersion,
   type DocumentTemplateVersionRow,
   type TemplateContent,
@@ -15,7 +17,9 @@ import type {
   GetDocumentTemplateInput,
   ListDocumentTemplatesInput,
   PublishDocumentTemplateInput,
+  PurgeTrashedDocumentTemplateInput,
   TemplateActorInput,
+  TemplateServiceClient,
   TemplateServiceDeps,
   UpdateDocumentTemplateInput,
   DuplicateDocumentTemplateInput,
@@ -40,9 +44,14 @@ import {
   requireUsableImages,
   runTemplateOperation,
   TEMPLATE_COLUMNS,
+  TEMPLATE_TABLE_COLUMNS,
 } from "./shared"
 import { withoutImageUrls } from "@/types/template-images"
 import { canPerformOrganizationAction } from "@/lib/permissions"
+import { recordAuditLogBestEffort } from "@/services/audit-service"
+import { asSupabaseError } from "@/services/supabase-error"
+import type { AuditMetadata } from "@/types/audit"
+import { TEMPLATE_ANSWERED_MESSAGE } from "@/types/template-trash"
 
 /**
  * Lists the templates a member can start from: each published template as it
@@ -136,12 +145,13 @@ export async function listDocumentTemplateCategories(
         "templates:view",
         "You cannot view document templates."
       )
-      // Restricted templates they cannot open, and drafts only editors see, are left out.
+      // Restricted templates they cannot open, drafts only editors see, and Trash are left out.
       const { data, error } = await onlyVisibleTemplates(
         client
           .from("document_templates")
           .select("category")
-          .eq("org_id", input.organizationId),
+          .eq("org_id", input.organizationId)
+          .is("trashed_at", null),
         await templateVisibility(client, input.organizationId, input.actorUserId),
         canPerformOrganizationAction(subject, "templates:manage")
       )
@@ -653,7 +663,9 @@ export async function archiveDocumentTemplate(
 
 /**
  * Brings an archived template back: published if it was ever published, else a
- * draft. Nothing else about it changes, so Undo of an archive is exact.
+ * draft. Nothing else about it changes, so Undo of an archive is exact. A
+ * template in Trash goes back to exactly the status it had before, archived
+ * included.
  *
  * @param input - Actor, organization, and template identifiers.
  * @param deps - Optional injected dependencies for tests.
@@ -677,6 +689,10 @@ export async function restoreDocumentTemplate(
         return existing
       }
 
+      if (existing.trashedAt) {
+        return restoreFromTrash(client, input, existing, deps)
+      }
+
       const { data, error } = await client
         .from("document_templates")
         .update({
@@ -689,6 +705,7 @@ export async function restoreDocumentTemplate(
         .eq("org_id", input.organizationId)
         .eq("revision", existing.revision)
         .eq("status", "archived")
+        .is("trashed_at", null)
         .select(TEMPLATE_COLUMNS)
         .maybeSingle()
 
@@ -702,6 +719,242 @@ export async function restoreDocumentTemplate(
 
       return mapDocumentTemplate(data as DocumentTemplateRow)
     }
+  )
+}
+
+async function restoreFromTrash(
+  client: TemplateServiceClient,
+  input: ChangeDocumentTemplateStatusInput,
+  existing: DocumentTemplate,
+  deps: TemplateServiceDeps
+): Promise<DocumentTemplate> {
+  const { data: held, error: heldError } = await client
+    .from("document_templates")
+    .select("pre_trash_status")
+    .eq("id", input.templateId)
+    .eq("org_id", input.organizationId)
+    .maybeSingle()
+
+  if (heldError) {
+    throw createDatabaseError(heldError, "Unable to restore document template.")
+  }
+
+  const previous = (held as { pre_trash_status?: unknown } | null)?.pre_trash_status
+
+  if (!DOCUMENT_TEMPLATE_STATUSES.includes(previous as DocumentTemplateStatus)) {
+    throw new TemplateServiceError("Database returned an unsupported template status.", 500)
+  }
+
+  // An archive from before Trash stays as it was; Trash's own archive goes.
+  const wasArchived = previous === "archived"
+  const { data, error } = await client
+    .from("document_templates")
+    .update({
+      status: previous as DocumentTemplateStatus,
+      archived_at: wasArchived ? existing.archivedAt : null,
+      archived_by: wasArchived ? existing.archivedBy : null,
+      trashed_at: null,
+      trashed_by: null,
+      pre_trash_status: null,
+      updated_by: input.actorUserId,
+    })
+    .eq("id", input.templateId)
+    .eq("org_id", input.organizationId)
+    .eq("revision", existing.revision)
+    .eq("status", "archived")
+    .not("trashed_at", "is", null)
+    .select(TEMPLATE_TABLE_COLUMNS)
+    .maybeSingle()
+
+  if (error) {
+    throw createDatabaseError(error, "Unable to restore document template.")
+  }
+
+  if (!data) {
+    throw new TemplateServiceError("Document template changed before it could be restored.", 409)
+  }
+
+  const restored = mapDocumentTemplate(data as DocumentTemplateRow)
+
+  await recordTemplateAudit(deps, input, "template.restored", { title: restored.title, status: restored.status })
+  return restored
+}
+
+/**
+ * Moves a template to Trash: it is archived, so nobody can start from it or
+ * answer it, and remembers its status for Restore. Its pictures stay where
+ * they are. A template anyone has sent answers through, a draft answer
+ * included, can only be archived.
+ *
+ * @param input - Actor, organization, and template identifiers.
+ * @param deps - Optional injected dependencies for tests.
+ * @returns The template in Trash.
+ * @throws TemplateServiceError 409 when it has answers, is already in Trash, or changed meanwhile.
+ */
+export async function trashDocumentTemplate(
+  input: ChangeDocumentTemplateStatusInput,
+  deps: TemplateServiceDeps = {}
+): Promise<DocumentTemplate> {
+  return runTemplateOperation(
+    "trash_document_template",
+    input,
+    async (): Promise<DocumentTemplate> => {
+      const client = getClient(deps)
+
+      await requireTemplateAccess(client, input, "editor", "You cannot manage document templates.")
+      const existing = await getTemplateById(client, input.organizationId, input.templateId)
+
+      if (existing.trashedAt) {
+        throw new TemplateServiceError("Document template is already in Trash.", 409)
+      }
+
+      // ponytail: checked before the write, not in one statement. An answer
+      // started in between leaves a trashed template that deleting refuses,
+      // in the database, so nothing answered is ever lost.
+      // A document made from it and sent to answer counts too: its links
+      // belong to the template, and deleting it would take them.
+      const [answers, sent] = await Promise.all([
+        client.from("submissions").select("id").eq("org_id", input.organizationId).eq("template_id", input.templateId).limit(1),
+        client
+          .from("public_form_links")
+          .select("id")
+          .eq("org_id", input.organizationId)
+          .eq("template_id", input.templateId)
+          .not("document_id", "is", null)
+          .limit(1),
+      ])
+      const lookupError = answers.error ?? sent.error
+
+      if (lookupError) {
+        throw createDatabaseError(lookupError, "Unable to move the template to Trash.")
+      }
+
+      if ((answers.data ?? []).length > 0 || (sent.data ?? []).length > 0) {
+        throw new TemplateServiceError(TEMPLATE_ANSWERED_MESSAGE, 409)
+      }
+
+      const now = nowIso(deps)
+      const wasArchived = existing.status === "archived"
+      const { data, error } = await client
+        .from("document_templates")
+        .update({
+          status: "archived",
+          archived_at: wasArchived ? existing.archivedAt : now,
+          archived_by: wasArchived ? existing.archivedBy : input.actorUserId,
+          trashed_at: now,
+          trashed_by: input.actorUserId,
+          pre_trash_status: existing.status,
+          updated_by: input.actorUserId,
+        })
+        .eq("id", input.templateId)
+        .eq("org_id", input.organizationId)
+        .eq("revision", existing.revision)
+        .eq("status", existing.status)
+        .is("trashed_at", null)
+        .select(TEMPLATE_TABLE_COLUMNS)
+        .maybeSingle()
+
+      if (error) {
+        throw createDatabaseError(error, "Unable to move the template to Trash.")
+      }
+
+      if (!data) {
+        throw new TemplateServiceError("Document template changed before it could be moved to Trash.", 409)
+      }
+
+      const trashed = mapDocumentTemplate(data as DocumentTemplateRow)
+
+      await recordTemplateAudit(deps, input, "template.trashed", { title: trashed.title, previousStatus: existing.status })
+      return trashed
+    }
+  )
+}
+
+/**
+ * Deletes a template in Trash for good, once its exact title is typed. The
+ * documents made from it keep their own copy and stop pointing at it; its
+ * pictures stay, since those documents share them. The database does it in
+ * one step and records it in the audit log.
+ *
+ * @param input - Actor, organization, template, and the typed title.
+ * @param deps - Optional injected dependencies for tests.
+ * @throws TemplateServiceError 404 when it is not in Trash, 400 when the title does not match, 409 when it has answers.
+ */
+export async function purgeTrashedDocumentTemplate(
+  input: PurgeTrashedDocumentTemplateInput,
+  deps: TemplateServiceDeps = {}
+): Promise<void> {
+  return runTemplateOperation(
+    "purge_trashed_document_template",
+    { actorUserId: input.actorUserId, organizationId: input.organizationId, templateId: input.templateId },
+    async (): Promise<void> => {
+      const client = getClient(deps)
+
+      await requireTemplateAccess(client, input, "editor", "You cannot manage document templates.")
+
+      const { error } = await client.rpc("purge_trashed_document_template", {
+        target_actor_user_id: input.actorUserId,
+        target_confirmation_title: input.confirmationTitle,
+        target_org_id: input.organizationId,
+        target_template_id: input.templateId,
+      })
+
+      if (error) {
+        throw toPurgeError(error)
+      }
+    }
+  )
+}
+
+/**
+ * Empties Trash of the templates that have been there 30 days, in every
+ * workspace, leaving any that people answered. Run by the purge cron.
+ *
+ * @param deps - Optional injected dependencies for tests.
+ * @returns How many templates were deleted.
+ * @throws TemplateServiceError when the database refuses.
+ */
+export async function purgeDueTrashedTemplates(deps: TemplateServiceDeps = {}): Promise<number> {
+  return runTemplateOperation("purge_due_trashed_templates", {}, async (): Promise<number> => {
+    // Every workspace at once, by design: the function picks only templates
+    // past their 30 days and audits each in its own workspace.
+    const { data, error } = await getClient(deps).rpc("purge_due_trashed_document_templates", { target_limit: 100 })
+
+    if (error || typeof data !== "number") {
+      throw createDatabaseError(error, "Unable to empty template Trash.")
+    }
+
+    return data
+  })
+}
+
+function toPurgeError(error: unknown): TemplateServiceError {
+  const code = asSupabaseError(error)?.code
+
+  if (code === "P0002") return new TemplateServiceError("This template is not in Trash.", 404)
+  if (code === "22023") return new TemplateServiceError("The title you typed does not match the template's.", 400)
+  // 23503: an answer or document arrived as it was being deleted.
+  if (code === "P0001" || code === "23503") return new TemplateServiceError(TEMPLATE_ANSWERED_MESSAGE, 409)
+
+  return createDatabaseError(error, "Unable to delete the template.")
+}
+
+function recordTemplateAudit(
+  deps: TemplateServiceDeps,
+  input: ChangeDocumentTemplateStatusInput,
+  action: "template.restored" | "template.trashed",
+  metadata: AuditMetadata
+): Promise<void> {
+  return recordAuditLogBestEffort(
+    {
+      action,
+      actorUserId: input.actorUserId,
+      metadata,
+      organizationId: input.organizationId,
+      targetId: input.templateId,
+      targetType: "template",
+    },
+    deps.recordAuditLog
   )
 }
 

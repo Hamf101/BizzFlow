@@ -901,6 +901,21 @@ export type AdminDatabase = {
         }
         Returns: number
       }
+      purge_trashed_document_template: {
+        Args: {
+          target_org_id: string
+          target_template_id: string
+          target_actor_user_id: string
+          target_confirmation_title: string
+        }
+        Returns: undefined
+      }
+      purge_due_trashed_document_templates: {
+        Args: {
+          target_limit: number
+        }
+        Returns: number
+      }
       lease_resource_purge_objects: {
         Args: {
           target_limit: number

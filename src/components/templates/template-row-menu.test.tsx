@@ -12,7 +12,7 @@ async function duplicateAction(): Promise<void> {}
 
 async function openMenu(
   status: "archived" | "draft" | "published",
-  rights: { canDuplicate?: boolean; canEdit?: boolean } = {}
+  rights: { canDuplicate?: boolean; canEdit?: boolean; trashed?: boolean } = {}
 ): Promise<void> {
   const root = mount()
   act(() =>
@@ -24,6 +24,7 @@ async function openMenu(
         status={status}
         templateId={TEMPLATE_ID}
         title="Lease renewal"
+        trashed={rights.trashed ?? false}
       />
     )
   )
@@ -52,7 +53,7 @@ function readItems(): Array<[string | undefined, string | null]> {
 }
 
 describe("TemplateRowMenu", () => {
-  it("offers a draft's editor, a copy, archiving and a category, but no public links", async () => {
+  it("offers a draft's editor, a copy, archiving, Trash and a category, but no public links", async () => {
     await openMenu("draft")
 
     expect(readItems()).toEqual([
@@ -60,14 +61,36 @@ describe("TemplateRowMenu", () => {
       ["Share…", null],
       ["Duplicate", null],
       ["Archive", null],
+      ["Move to Trash", null],
       ["Category…", null],
     ])
   })
 
-  it("offers an archived template only a way back", async () => {
+  it("offers an archived template a way back, or on to Trash", async () => {
     await openMenu("archived")
 
-    expect(readItems()).toEqual([["Restore", null]])
+    expect(readItems()).toEqual([["Restore", null], ["Move to Trash", null]])
+  })
+
+  it("offers a template in Trash a way back, or to delete it for good after typing its title", async () => {
+    await openMenu("archived", { trashed: true })
+
+    expect(readItems()).toEqual([["Restore", null], ["Delete permanently…", null]])
+
+    const purge = [...document.querySelectorAll('[role="menuitem"]')].find(
+      (item: Element): boolean => item.textContent?.trim() === "Delete permanently…"
+    )
+
+    await act(async () => {
+      ;(purge as HTMLElement).click()
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+    })
+
+    const dialog = document.querySelector('[role="dialog"]')
+
+    expect(dialog?.textContent).toContain("Delete Lease renewal permanently?")
+    expect(dialog?.querySelector('input[name="templateId"]')?.getAttribute("value")).toBe(TEMPLATE_ID)
+    expect(dialog?.querySelector('input[name="confirmationTitle"]')?.hasAttribute("required")).toBe(true)
   })
 
   it("adds sending to answer and the public links once the template is published", async () => {
@@ -80,6 +103,7 @@ describe("TemplateRowMenu", () => {
       ["Share…", null],
       ["Duplicate", null],
       ["Archive", null],
+      ["Move to Trash", null],
       ["Category…", null],
     ])
   })
@@ -93,7 +117,7 @@ describe("TemplateRowMenu", () => {
   it("lets someone who was given the template to edit share it without being able to copy it", async () => {
     await openMenu("draft", { canDuplicate: false })
 
-    expect(readItems().map(([label]) => label)).toEqual(["Edit", "Share…", "Archive", "Category…"])
+    expect(readItems().map(([label]) => label)).toEqual(["Edit", "Share…", "Archive", "Move to Trash", "Category…"])
   })
 
   it("duplicates by submitting the template's id from inside the menu", async () => {

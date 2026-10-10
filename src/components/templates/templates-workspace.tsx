@@ -10,6 +10,7 @@ import { type ListSavedViews, ListViewMenu } from "@/components/data/list-view-m
 import {
   getTemplateStatusOptions,
   getTemplateViewMenuSections,
+  isTemplateTrashView,
   isTemplateViewAdjusted,
   templateListState,
   type TemplateListView,
@@ -25,12 +26,14 @@ import { LocalDate } from "@/components/ui/local-date"
 import { buttonVariants } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import type { DocumentTemplateCard, DocumentTemplateStatus } from "@/types/template"
+import { TEMPLATE_TRASH_RETENTION_DAYS } from "@/types/template-trash"
 
 const TEMPLATES_PATH = "/templates"
 
 /** Cards rise in one after another; later cards share the last step's delay. */
 const MAX_STAGGERED_CARDS = 10
 const CARD_STAGGER_MS = 30
+const DAY_MS = 86_400_000
 
 const STATUS_LOOKS: Record<DocumentTemplateStatus, { dot: string; label: string }> = {
   archived: { dot: "bg-destructive", label: "Archived" },
@@ -115,16 +118,23 @@ export function TemplatesWorkspace({
         />
       ) : null}
 
-      {canManage ? (
+      {/* Statuses are for those who manage templates; someone who only makes their own still reaches Trash. */}
+      {canManage || canCreate ? (
         <ListFilterChips
           glide
           label="Filter templates by status"
-          options={getTemplateStatusOptions(view)}
+          options={getTemplateStatusOptions(view, canManage ? undefined : ["trash"])}
         />
       ) : null}
 
       {templates.length === 0 && !offersNew ? (
-        <ListEmpty>{filtered ? "No templates match this view." : "No templates yet."}</ListEmpty>
+        <ListEmpty>
+          {isTemplateTrashView(view) && !view.query && !view.filters.category
+            ? "Trash is empty."
+            : filtered
+              ? "No templates match this view."
+              : "No templates yet."}
+        </ListEmpty>
       ) : (
         <SelectableLibrary canCreate={canCreate} categories={categories} templates={templates}>
           <ul
@@ -188,7 +198,13 @@ function SelectableLibrary({
       categories={categories}
       templates={templates
         .filter((template) => actsOn(template, canCreate))
-        .map((template) => ({ canDuplicate: canCreate, canEdit: template.canEdit, id: template.id, status: template.status }))}
+        .map((template) => ({
+          canDuplicate: canCreate,
+          canEdit: template.canEdit,
+          id: template.id,
+          status: template.status,
+          trashed: template.trashedAt !== null,
+        }))}
     >
       {children}
       <TemplateSelectionBar />
@@ -238,10 +254,17 @@ function TemplateCard({
   const editable = template.canEdit && template.status !== "archived"
   const acts = actsOn(template, canCreate)
   // Statuses are for those who work on the template; everyone else sees what was published.
-  const showsStatus = canManage || template.canEdit
+  // In Trash, how long it has left says more than its status.
+  const showsStatus = (canManage || template.canEdit) && !template.trashedAt
   const status = STATUS_LOOKS[template.status]
-  const detail =
-    template.category ?? <>Updated <LocalDate value={template.updatedAt} /></>
+  // Trash says how long each one has left, as Files does.
+  const detail = template.trashedAt ? (
+    <>
+      Deletes on <LocalDate value={new Date(Date.parse(template.trashedAt) + TEMPLATE_TRASH_RETENTION_DAYS * DAY_MS).toISOString()} />
+    </>
+  ) : (
+    (template.category ?? <>Updated <LocalDate value={template.updatedAt} /></>)
+  )
   const riseDelay = {
     "--card-delay": `${Math.min(index, MAX_STAGGERED_CARDS) * CARD_STAGGER_MS}ms`,
   } as CSSProperties
@@ -285,6 +308,7 @@ function TemplateCard({
               status={template.status}
               templateId={template.id}
               title={template.title}
+              trashed={template.trashedAt !== null}
             />
           </div>
         ) : null}
@@ -302,7 +326,7 @@ function TemplateCard({
       <div
         className={cn(
           "flex min-w-0 items-center gap-1.5 border-t border-border/60 px-2.5 py-2 text-[10.5px] text-muted-foreground sm:px-3.5 sm:py-2.5 sm:text-xs",
-          editable && "max-sm:pr-10"
+          acts && "max-sm:pr-10"
         )}
         data-slot="template-meta"
       >

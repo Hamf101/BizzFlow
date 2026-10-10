@@ -274,6 +274,31 @@ describe("listTemplatePage", () => {
     expect(await editable(MANAGER_ID)).toEqual({ "Someone else's": true, "Staff draft": true })
   })
 
+  it("keeps templates in Trash out of every list but Trash, which shows only them and when they went", async () => {
+    const TRASHED_AT = "2026-08-02T00:00:00.000Z"
+    const templates = [
+      createTemplateRow(1),
+      createTemplateRow(2, { archived_at: at(1), status: "archived" }),
+      createTemplateRow(3, { archived_at: at(1), created_by: STAFF_ID, pre_trash_status: "draft", status: "archived", trashed_at: TRASHED_AT }),
+    ]
+    const page = (actorUserId: string, overrides: Partial<ListTemplatePageInput> = {}) =>
+      listTemplatePage(createPageInput(actorUserId, overrides), createDeps(templates))
+
+    expect(await listIds(MANAGER_ID, templates)).toEqual([1, 2].map(templateId))
+    expect(await listIds(MANAGER_ID, templates, { statuses: ["archived"] })).toEqual([templateId(2)])
+    expect(await listIds(MANAGER_ID, templates, { query: "Template" })).toEqual([1, 2].map(templateId))
+    // Its maker edits it, but it is still in Trash for them too.
+    expect(await listIds(STAFF_ID, templates)).toEqual([templateId(1)])
+
+    await expect(page(MANAGER_ID, { trash: true })).resolves.toMatchObject({
+      templates: [{ id: templateId(3), trashedAt: TRASHED_AT }],
+      total: 1,
+    })
+    expect(await listIds(STAFF_ID, templates, { trash: true })).toEqual([templateId(3)])
+    // Someone who only uses templates has no Trash.
+    expect(await listIds(REVIEWER_ID, templates, { trash: true }).catch(() => [])).toEqual([])
+  })
+
   it("filters a manager's templates by status", async () => {
     expect(
       await listIds(MANAGER_ID, lifecycle, { statuses: ["draft", "archived"] })

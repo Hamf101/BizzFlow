@@ -83,9 +83,13 @@ export class PostgrestReadQuery implements PromiseLike<PostgrestFakeResult> {
     return this.where((row: FakeRow): boolean => values.includes(row[column]))
   }
 
-  // Only `not(column, "in", "(a,b)")` is stood in for.
-  not(column: string, operator: string, value: string): this {
-    const excluded = operator === "in" ? value.slice(1, -1).split(",") : []
+  // Only `not(column, "in", "(a,b)")` and `not(column, "is", null)` are stood in for.
+  not(column: string, operator: string, value: string | null): this {
+    if (operator === "is" && value === null) {
+      return this.where((row: FakeRow): boolean => (row[column] ?? null) !== null)
+    }
+
+    const excluded = operator === "in" ? (value ?? "()").slice(1, -1).split(",") : []
 
     return this.where((row: FakeRow): boolean => !excluded.includes(String(row[column])))
   }

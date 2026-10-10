@@ -136,6 +136,7 @@ function createTemplate(): DocumentTemplate {
     revision: 1,
     status: "draft",
     title: "Client agreement",
+    trashedAt: null,
     updatedAt: "2026-09-01T09:00:00.000Z",
     updatedBy: null,
   }

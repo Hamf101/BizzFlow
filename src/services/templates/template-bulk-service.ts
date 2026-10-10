@@ -12,11 +12,13 @@ import {
   duplicateDocumentTemplate,
   restoreDocumentTemplate,
   setDocumentTemplateCategory,
+  trashDocumentTemplate,
 } from "./template-lifecycle-service"
+import { TEMPLATE_ANSWERED_MESSAGE } from "@/types/template-trash"
 
 /**
- * Changes several templates at once: archive, restore, duplicate, or file
- * under a category. Each goes through the same checks and audit trail as a
+ * Changes several templates at once: archive, restore, move to Trash,
+ * duplicate, or file under a category. Each goes through the same checks and audit trail as a
  * single change; one that fails is counted and the rest still change, so the
  * page can say what happened and offer Undo for exactly what moved.
  *
@@ -42,7 +44,7 @@ export async function changeDocumentTemplates(
         throw new TemplateServiceError(`Choose between 1 and ${MAX_BULK_TEMPLATES} templates.`, 400)
       }
 
-      const result: ChangeDocumentTemplatesResult = { changed: [], created: [], failed: 0, previousCategories: {} }
+      const result: ChangeDocumentTemplatesResult = { answered: 0, changed: [], created: [], failed: 0, previousCategories: {} }
 
       // ponytail: one after another, like the Files bulk changes; a selection
       // near the limit is a few hundred small writes. Batch them in one
@@ -55,6 +57,8 @@ export async function changeDocumentTemplates(
             await archiveDocumentTemplate(one, deps)
           } else if (input.change === "restore") {
             await restoreDocumentTemplate(one, deps)
+          } else if (input.change === "trash") {
+            await trashDocumentTemplate(one, deps)
           } else if (input.change === "duplicate") {
             result.created.push((await duplicateDocumentTemplate(one, deps)).id)
           } else {
@@ -63,9 +67,14 @@ export async function changeDocumentTemplates(
           }
 
           result.changed.push(templateId)
-        } catch {
-          // The single change has already logged why; the page only needs the count.
+        } catch (error: unknown) {
+          // The single change has already logged why; the page only needs the
+          // count, and whether answers are what kept some out of Trash.
           result.failed += 1
+
+          if (error instanceof TemplateServiceError && error.message === TEMPLATE_ANSWERED_MESSAGE) {
+            result.answered += 1
+          }
         }
       }
 

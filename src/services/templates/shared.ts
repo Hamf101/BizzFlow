@@ -53,6 +53,9 @@ import { normalizeName } from "@/services/input"
 export const TEMPLATE_COLUMNS =
   "id,org_id,title,description,category,status,revision,content,created_by,updated_by,published_by,archived_by,created_at,updated_at,published_at,archived_at,published_revision"
 
+/** TEMPLATE_COLUMNS with the Trash column only the table has, not the published view. */
+export const TEMPLATE_TABLE_COLUMNS = `${TEMPLATE_COLUMNS},trashed_at`
+
 /** Columns the templates list reads; template content stays behind. */
 export const TEMPLATE_SUMMARY_COLUMNS =
   "id,org_id,title,category,status,revision,created_at,updated_at"
@@ -82,7 +85,7 @@ export async function getTemplateById(
 ): Promise<DocumentTemplate> {
   const { data, error } = await client
     .from("document_templates")
-    .select(TEMPLATE_COLUMNS)
+    .select(TEMPLATE_TABLE_COLUMNS)
     .eq("id", templateId)
     .eq("org_id", organizationId)
     .maybeSingle()
@@ -192,6 +195,7 @@ export function mapDocumentTemplate(
     publishedAt: row.published_at,
     archivedAt: row.archived_at,
     publishedRevision: row.published_revision ?? null,
+    trashedAt: row.trashed_at ?? null,
   }
 }
 
@@ -212,6 +216,7 @@ export function mapDocumentTemplateSummary(
     revision: row.revision,
     status: parseDocumentTemplateStatus(row.status),
     title: row.title,
+    trashedAt: row.trashed_at ?? null,
     updatedAt: row.updated_at,
   }
 }

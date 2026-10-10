@@ -23,17 +23,21 @@ const TEMPLATES_PATH = "/templates"
 // library's links have always spelled it.
 const NO_CATEGORY = "none"
 
-const TEMPLATE_STATUS_LABELS: Record<DocumentTemplateStatus, string> = {
+// The status pills, ending with Trash, which holds archived templates on their way out.
+const TEMPLATE_VIEWS = [...DOCUMENT_TEMPLATE_STATUSES, "trash"] as const
+
+const TEMPLATE_STATUS_LABELS: Record<(typeof TEMPLATE_VIEWS)[number], string> = {
   archived: "Archived",
   draft: "Drafts",
   published: "Published",
+  trash: "Trash",
 }
 
 /** The Templates page's URL state; unknown or stale values open the default view. */
 export const templateListState = defineListState({
   filters: {
     category: z.string().trim().min(1).max(TEMPLATE_CATEGORY_MAX_LENGTH),
-    status: z.enum(DOCUMENT_TEMPLATE_STATUSES),
+    status: z.enum(TEMPLATE_VIEWS),
   },
   pageSizes: [50, 25, 100],
   search: { maxLength: TEMPLATE_SEARCH_MAX_LENGTH },
@@ -57,7 +61,17 @@ const DEFAULT_TEMPLATE_VIEW = templateListState.parse({})
 export function getTemplateViewStatuses(
   view: TemplateListView
 ): readonly DocumentTemplateStatus[] | undefined {
-  return view.filters.status === undefined ? undefined : [view.filters.status]
+  return view.filters.status === undefined || view.filters.status === "trash" ? undefined : [view.filters.status]
+}
+
+/**
+ * Whether a view is the Trash.
+ *
+ * @param view - Current Templates view.
+ * @returns True when it lists only the templates in Trash.
+ */
+export function isTemplateTrashView(view: TemplateListView): boolean {
+  return view.filters.status === "trash"
 }
 
 /**
@@ -76,10 +90,14 @@ export function getTemplateViewCategory(
  * Lists the status pills, each a link that keeps the rest of the view.
  *
  * @param view - Current Templates view.
- * @returns "All" followed by one option per template status.
+ * @param views - The pills offered; someone who only makes their own templates gets Trash alone.
+ * @returns "All", then one option per view offered.
  */
-export function getTemplateStatusOptions(view: TemplateListView): ListOption[] {
-  return createFilterOptions(DOCUMENT_TEMPLATE_STATUSES, view.filters.status, (status) => TEMPLATE_STATUS_LABELS[status], (status) =>
+export function getTemplateStatusOptions(
+  view: TemplateListView,
+  views: ReadonlyArray<(typeof TEMPLATE_VIEWS)[number]> = TEMPLATE_VIEWS
+): ListOption[] {
+  return createFilterOptions(views, view.filters.status, (status) => TEMPLATE_STATUS_LABELS[status], (status) =>
     templateListState.href(TEMPLATES_PATH, view, { filters: { status } })
   )
 }

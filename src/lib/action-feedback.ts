@@ -1,4 +1,5 @@
 import type { ActionFeedbackCode } from "@/lib/action-result"
+import { TEMPLATE_ANSWERED_MESSAGE } from "@/types/template-trash"
 import type { AnalyticsEventName } from "@/lib/posthog"
 
 type ActionFeedbackDefinition = Readonly<{
@@ -77,6 +78,8 @@ export const ACTION_FEEDBACK = {
   signing_invitation_resent: done("Signing invitation resent"),
   signing_invitations_sent: done("Signing invitations sent"),
   starter_content_added: done("Starter templates ready"),
+  template_deleted: done("Template deleted"),
+  template_has_answers: problem("This template can't be deleted", TEMPLATE_ANSWERED_MESSAGE, "info"),
   submission_assigned: done("Submission assigned"),
   submission_created: done("Submission created", "submission_created"),
   submission_review_updated: done("Submission review updated"),

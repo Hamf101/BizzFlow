@@ -317,11 +317,12 @@ function createTemplate(
       status === "published" ? "2026-07-18T12:00:00.000Z" : null,
     archivedAt: null,
     publishedRevision: status === "published" ? 1 : null,
+    trashedAt: null,
   }
 }
 
 describe("change several templates action", () => {
-  const result = { changed: [TEMPLATE_ID], created: [], failed: 0, previousCategories: {} }
+  const result = { answered: 0, changed: [TEMPLATE_ID], created: [], failed: 0, previousCategories: {} }
 
   beforeEach(() => {
     vi.clearAllMocks()

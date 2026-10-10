@@ -4,6 +4,7 @@ import type { ReactElement, ReactNode } from "react"
 import {
   getTemplateViewCategory,
   getTemplateViewStatuses,
+  isTemplateTrashView,
   templateListState,
 } from "@/components/templates/template-list-view"
 import { TemplatesWorkspace } from "@/components/templates/templates-workspace"
@@ -85,6 +86,7 @@ export default async function TemplatesPage({
       // Everyone else sees published templates only, so only people who
       // manage templates filter by status.
       statuses: canManage ? getTemplateViewStatuses(view) : undefined,
+      trash: isTemplateTrashView(view),
     })
       .then((templatePage: TemplatePage) => ({
         errorMessage: null,

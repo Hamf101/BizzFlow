@@ -2,6 +2,7 @@ import { Trash2 } from "lucide-react"
 import type { ReactElement } from "react"
 
 import { PermissionButton } from "@/components/auth/permission-button"
+import { Button } from "@/components/ui/button"
 import { DialogFooter } from "@/components/ui/dialog"
 import {
   Field,
@@ -22,11 +23,23 @@ type PurgeRequestFormProps = {
   /** Lays the form out as a dialog's body and footer instead of a framed panel. */
   inDialog?: boolean
   inputId: string
-  permissionAction: OrganizationPermissionAction
-  resourceKind: "document" | "folder"
   resourceName: string
-  role: OrganizationPermissionSubject
-}
+} & (
+  | {
+      permissionAction: OrganizationPermissionAction
+      resourceKind: "document" | "folder"
+      role: OrganizationPermissionSubject
+    }
+  // A template's own access decides, which the service checks.
+  | { resourceKind: "template" }
+)
+
+const CONFIRMATION_LABELS = { document: "document title", folder: "folder name", template: "template title" } as const
+const LOSSES = {
+  document: "Stored files are deleted and this document stops being recoverable.",
+  folder: "Every document in this folder subtree is deleted and stops being recoverable.",
+  template: "Documents made from it keep everything in them.",
+} as const
 
 /**
  * Renders the typed-confirmation form that requests permanent deletion.
@@ -37,33 +50,27 @@ type PurgeRequestFormProps = {
  * @param props - Server action, tenant-scoped hidden fields, and resource name.
  * @returns The destructive confirmation form for the trashed resource.
  */
-export function PurgeRequestForm({
-  action,
-  confirmationFieldName,
-  hiddenFields,
-  inDialog = false,
-  inputId,
-  permissionAction,
-  resourceKind,
-  resourceName,
-  role,
-}: PurgeRequestFormProps): ReactElement {
-  const confirmationLabel =
-    resourceKind === "document" ? "document title" : "folder name"
-  const submit = (
-    <PermissionButton
-      action={permissionAction}
-      aria-label={`Permanently delete ${resourceName}`}
-      className={inDialog ? undefined : "self-start"}
-      role={role}
-      size={inDialog ? "default" : "xs"}
-      type="submit"
-      variant="destructive"
-    >
-      <Trash2 data-icon="inline-start" />
-      Delete permanently
-    </PermissionButton>
-  )
+export function PurgeRequestForm(props: PurgeRequestFormProps): ReactElement {
+  const { action, confirmationFieldName, hiddenFields, inDialog = false, inputId, resourceKind, resourceName } = props
+  const button = {
+    "aria-label": `Permanently delete ${resourceName}`,
+    children: (
+      <>
+        <Trash2 data-icon="inline-start" />
+        Delete permanently
+      </>
+    ),
+    className: inDialog ? undefined : "self-start",
+    size: inDialog ? ("default" as const) : ("xs" as const),
+    type: "submit" as const,
+    variant: "destructive" as const,
+  }
+  const submit =
+    props.resourceKind === "template" ? (
+      <Button {...button} />
+    ) : (
+      <PermissionButton {...button} action={props.permissionAction} role={props.role} />
+    )
 
   return (
     <form
@@ -87,7 +94,7 @@ export function PurgeRequestForm({
       <FieldGroup>
         <Field>
           <FieldLabel htmlFor={inputId}>
-            Type the exact {confirmationLabel} to delete permanently
+            Type the exact {CONFIRMATION_LABELS[resourceKind]} to delete permanently
           </FieldLabel>
           <Input
             autoComplete="off"
@@ -98,10 +105,7 @@ export function PurgeRequestForm({
             type="text"
           />
           <FieldDescription>
-            {resourceKind === "document"
-              ? "Stored files are deleted and this document stops being recoverable."
-              : "Every document in this folder subtree is deleted and stops being recoverable."}{" "}
-            This cannot be undone.
+            {LOSSES[resourceKind]} This cannot be undone.
           </FieldDescription>
         </Field>
       </FieldGroup>

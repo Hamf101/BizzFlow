@@ -530,12 +530,15 @@ export type Database = {
           description: string | null
           id: string
           org_id: string
+          pre_trash_status: string | null
           published_at: string | null
           published_by: string | null
           published_revision: number | null
           revision: number
           status: string
           title: string
+          trashed_at: string | null
+          trashed_by: string | null
           updated_at: string
           updated_by: string | null
         }
@@ -550,12 +553,15 @@ export type Database = {
           description?: string | null
           id?: string
           org_id: string
+          pre_trash_status?: string | null
           published_at?: string | null
           published_by?: string | null
           published_revision?: number | null
           revision?: number
           status?: string
           title: string
+          trashed_at?: string | null
+          trashed_by?: string | null
           updated_at?: string
           updated_by?: string | null
         }
@@ -570,12 +576,15 @@ export type Database = {
           description?: string | null
           id?: string
           org_id?: string
+          pre_trash_status?: string | null
           published_at?: string | null
           published_by?: string | null
           published_revision?: number | null
           revision?: number
           status?: string
           title?: string
+          trashed_at?: string | null
+          trashed_by?: string | null
           updated_at?: string
           updated_by?: string | null
         }
@@ -614,6 +623,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "document_template_versions"
             referencedColumns: ["org_id", "template_id", "revision"]
+          },
+          {
+            foreignKeyName: "document_templates_trashed_by_fkey"
+            columns: ["trashed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "document_templates_updated_by_fkey"
@@ -3623,6 +3639,19 @@ export type Database = {
           target_pdf_sha256: string
         }
         Returns: string
+      }
+      purge_due_trashed_document_templates: {
+        Args: { target_limit: number }
+        Returns: number
+      }
+      purge_trashed_document_template: {
+        Args: {
+          target_actor_user_id: string
+          target_confirmation_title: string
+          target_org_id: string
+          target_template_id: string
+        }
+        Returns: undefined
       }
       record_internal_submission_file_upload_window: {
         Args: {
