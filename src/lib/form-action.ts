@@ -47,19 +47,17 @@ export type ActionActor = { actorUserId: string; organizationId: string }
  * checks the actor's permission itself.
  *
  * @param noOrganization - Why the action needs an organization, for when there is none.
- * @param statusCode - The rejection's status: 428 asks for an organization.
  * @returns The actor to spread into a service call, and the organization.
- * @throws AuthenticationError when signed out; ActionError without an organization.
+ * @throws AuthenticationError when signed out; ActionError (428) without an organization.
  */
 export async function loadActionContext(
-  noOrganization: string,
-  statusCode = 428
+  noOrganization: string
 ): Promise<{ actor: ActionActor; organization: Organization }> {
   const user = await getAuthenticatedUser()
   const context = await getCurrentOrganizationContext(user.id)
 
   if (!context) {
-    throw new ActionError(noOrganization, statusCode)
+    throw new ActionError(noOrganization, 428)
   }
 
   return {
@@ -74,16 +72,14 @@ export async function loadActionContext(
  *
  * @param next - Where signing in returns to.
  * @param noOrganization - Why the action needs an organization.
- * @param statusCode - The rejection's status without one.
  * @returns The actor and the organization.
  */
 export async function loadActionContextOrSignIn(
   next: string,
-  noOrganization: string,
-  statusCode?: number
+  noOrganization: string
 ): ReturnType<typeof loadActionContext> {
   try {
-    return await loadActionContext(noOrganization, statusCode)
+    return await loadActionContext(noOrganization)
   } catch (error: unknown) {
     if (error instanceof AuthenticationError) {
       redirect(buildRedirect("/login", { next }))

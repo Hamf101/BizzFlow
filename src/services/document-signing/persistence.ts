@@ -257,6 +257,7 @@ export async function loadRecipientByToken(
   client: SigningServiceClient,
   tokenHash: string
 ): Promise<DocumentSigningRecipientRow> {
+  // tenant-scope: a public signer holds only the token; its hash finds the one row, whose org_id then scopes every later read
   const { data, error } = await client
     .from("document_signing_recipients")
     .select(RECIPIENT_COLUMNS)
@@ -319,6 +320,7 @@ export async function insertSigningRecipients(
   client: SigningServiceClient,
   rows: DocumentSigningRecipientRow[]
 ): Promise<DocumentSigningRecipientRow[]> {
+  // tenant-scope: rows are typed DocumentSigningRecipientRow; workflows.ts sets org_id to the authorized organization
   const { data, error } = await client
     .from("document_signing_recipients")
     .insert(rows)
@@ -407,6 +409,7 @@ export async function markSigningRecipientViewed(
   recipient: DocumentSigningRecipientRow,
   viewedAt: string
 ): Promise<DocumentSigningRecipientRow> {
+  // tenant-scope: id + token_hash of the recipient loadRecipientByToken just read; the token is the only authority here
   const { data, error } = await client
     .from("document_signing_recipients")
     .update({ status: "viewed", viewed_at: viewedAt })

@@ -213,6 +213,7 @@ export async function listAuditLogPage(
   const from = (page - 1) * pageSize
   const { rows, total } = await readCountedPage(
     await filterAuditLogs(
+      // tenant-scope: filterAuditLogs adds .eq("org_id", organizationId)
       client.from("audit_logs").select(AUDIT_LOG_COLUMNS, { count: "exact" }),
       input.organizationId,
       targetTypes
@@ -257,6 +258,7 @@ export async function exportAuditLogs(
   const rows = await readAllInBatches(
     async (previous: AuditLogRow | undefined) => {
       let query = filterAuditLogs(
+        // tenant-scope: filterAuditLogs adds .eq("org_id", organizationId)
         client.from("audit_logs").select(AUDIT_LOG_COLUMNS),
         input.organizationId,
         targetTypes
@@ -331,6 +333,7 @@ async function countAuditLogs(
   targetTypes: readonly AuditLogTargetType[] | null
 ): Promise<number> {
   const { count, error } = await filterAuditLogs(
+    // tenant-scope: filterAuditLogs adds .eq("org_id", organizationId)
     client.from("audit_logs").select("id", { count: "exact", head: true }),
     organizationId,
     targetTypes

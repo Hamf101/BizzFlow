@@ -43,6 +43,7 @@ export async function resolvePublicDraft(
   }
 
   const client = getClient(deps)
+  // tenant-scope: an anonymous visitor holds only the draft handle; its hash plus the link id find the row
   const { data, error } = await client
     .from("submissions")
     .select(

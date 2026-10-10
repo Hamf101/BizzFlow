@@ -601,6 +601,7 @@ async function shareWithGuest(
     const id = createId(deps)
     const token = deps.createToken?.() ?? createSecureToken()
     const now = deps.now?.() ?? new Date()
+    // tenant-scope: `where` carries org_id: input.organizationId
     const { error } = await client.from("document_guest_grants").insert({
       ...where,
       access_level: input.level as DocumentLevel,

@@ -147,7 +147,7 @@ export async function updateMemberAccess(
         workspaceDisplayName,
       })
 
-      const membership = await getMembershipById(client, input.membershipId)
+      const membership = await getMembershipById(client, input.organizationId, input.membershipId)
 
       if (
         membership.organizationId !== input.organizationId ||

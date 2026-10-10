@@ -266,18 +266,21 @@ export async function getActiveMembership(
  * Loads a membership by identifier.
  *
  * @param client - Trusted Supabase client.
+ * @param organizationId - Organization the member belongs to.
  * @param membershipId - Membership identifier.
  * @returns Membership DTO.
  * @throws OrganizationServiceError when the member is absent.
  */
 export async function getMembershipById(
   client: OrganizationServiceClient,
+  organizationId: string,
   membershipId: string
 ): Promise<OrganizationMembership> {
   const { data, error } = await client
     .from("organization_memberships")
     .select(MEMBERSHIP_SELECT)
     .eq("id", membershipId)
+    .eq("org_id", organizationId)
     .single()
 
   if (error) {
@@ -519,6 +522,7 @@ export async function getPendingInviteByToken(
   client: OrganizationServiceClient,
   token: string
 ): Promise<OrganizationInvite> {
+  // tenant-scope: an invite link carries only its token; the hash finds the invite, whose org_id the caller then joins
   const { data, error } = await client
     .from("invites")
     .select("id,org_id,email,role,role_definition_id,invited_by,status,expires_at,created_at,role_definition:organization_roles!invites_role_definition_fk(id,name,system_key)")
@@ -759,7 +763,7 @@ export async function archiveOrganizationRoleRecord(
  *
  * @param client - Trusted Supabase client.
  * @param inviteId - Invite identifier.
- * @param organizationId - Organization identifier for log context.
+ * @param organizationId - Organization the invite belongs to.
  */
 export async function revokeUndeliveredInvite(
   client: OrganizationServiceClient,
@@ -770,6 +774,7 @@ export async function revokeUndeliveredInvite(
     .from("invites")
     .update({ status: "revoked" })
     .eq("id", inviteId)
+    .eq("org_id", organizationId)
     .eq("status", "pending")
 
   if (error) {

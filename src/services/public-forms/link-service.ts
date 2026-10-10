@@ -217,6 +217,7 @@ export async function getPublicFormLinkByToken(
     return invalid("not_found")
   }
 
+  // tenant-scope: a public link carries only its token; the hash finds the one link, whose org_id scopes the rest
   const { data: linkRow, error: linkError } = await client
     .from("public_form_links")
     .select("*")

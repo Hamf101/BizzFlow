@@ -35,6 +35,7 @@ export async function findGuestGrant(
   client: DocumentServiceClient,
   input: { documentId: string; organizationId?: string; userId: string }
 ): Promise<{ accessLevel: GuestLevel; organizationId: string } | null> {
+  // tenant-scope: a guest is no member: the grant on (document_id, user_id) is the access, and org_id is narrowed when given
   let query = client
     .from("document_guest_grants")
     .select("org_id,access_level")
@@ -112,6 +113,7 @@ export async function listGuestDocuments(userId: string, deps: GuestDeps = {}): 
   return runDocumentOperation("list_guest_documents", { userId }, async () => {
     const client = getClient(deps)
     // ponytail: unpaged; a guest holds a handful of documents. Page it if that changes.
+    // tenant-scope: a guest's own grants across workspaces, by their user_id
     const { data: grants, error } = await client
       .from("document_guest_grants")
       .select("org_id,document_id,access_level,accepted_at")
@@ -120,6 +122,7 @@ export async function listGuestDocuments(userId: string, deps: GuestDeps = {}): 
     if (error) throw createSupabaseServiceError(error, "Unable to load your shared documents.")
     if (!grants?.length) return []
 
+    // tenant-scope: ids come from this person's own grants, and each row is matched back to its grant's org_id below
     const { data: documents, error: documentsError } = await client
       .from("documents")
       .select("id,org_id,title,source_kind,lifecycle_state")
@@ -220,6 +223,7 @@ export async function acceptDocumentGuestInvite(
     }
 
     // Matching the hash again makes a second, simultaneous accept find nothing.
+    // tenant-scope: id + token_hash of the invite loadPendingInvite just read; the emailed token is the authority
     const { data, error } = await client
       .from("document_guest_grants")
       .update({
@@ -285,6 +289,7 @@ async function loadPendingInvite(client: DocumentServiceClient, token: string, d
   }
 
   const tokenHash = hashToken(token)
+  // tenant-scope: an invite link carries only its token; the hash finds the one grant, whose org_id scopes the rest
   const { data: invite, error } = await client
     .from("document_guest_grants")
     .select("id,org_id,document_id,email,access_level,invite_expires_at")

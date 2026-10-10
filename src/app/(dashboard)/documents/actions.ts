@@ -89,10 +89,7 @@ export async function createGeneratedDocumentAction(
     path: buildRedirect("/documents/new", folderId ? { folderId } : {}),
     success: "document_created",
     run: async () => {
-      const { actor, organization } = await loadActionContext(
-        "Create an organization before adding documents.",
-        403
-      )
+      const { actor, organization } = await loadActionContext("Create an organization before adding documents.")
       const blankContent = templateId ? undefined : createEmptyDocumentContent()
 
       if (blankContent) {
@@ -260,7 +257,7 @@ async function runDocumentAction(
       : detailPath,
     success,
     run: async () => {
-      const { actor } = await loadActionContext(NO_ORGANIZATION, 403)
+      const { actor } = await loadActionContext(NO_ORGANIZATION)
       await change({ ...actor, documentId })
       revalidatePath("/documents")
       revalidatePath(detailPath)
@@ -282,7 +279,7 @@ async function runFolderAction(
     path: getDocumentsReturnPath(formData),
     success,
     run: async () => {
-      const { actor } = await loadActionContext(NO_ORGANIZATION, 403)
+      const { actor } = await loadActionContext(NO_ORGANIZATION)
       await change({ ...actor, folderId })
       revalidatePath("/documents")
     },
@@ -335,7 +332,7 @@ export async function changeFilesLifecycleAction(
   input: FileLifecycleChange
 ): Promise<FileLifecycleResult> {
   const { change, documentIds, folderIds } = fileLifecycleChangeSchema.parse(input)
-  const { actor } = await loadActionContextOrSignIn("/documents", NO_ORGANIZATION, 403)
+  const { actor } = await loadActionContextOrSignIn("/documents", NO_ORGANIZATION)
 
   return changeEachFile(actor, `bulk_${change}`, { documentIds, folderIds }, {
     document: (documentId) => DOCUMENT_CHANGES[change]({ ...actor, documentId }),
@@ -361,7 +358,7 @@ export type FileMove = z.infer<typeof fileMoveSchema>
  */
 export async function moveFilesAction(input: FileMove): Promise<FileLifecycleResult> {
   const { destinationFolderId, documentIds, folderIds } = fileMoveSchema.parse(input)
-  const { actor } = await loadActionContextOrSignIn("/documents", NO_ORGANIZATION, 403)
+  const { actor } = await loadActionContextOrSignIn("/documents", NO_ORGANIZATION)
 
   return changeEachFile(actor, "bulk_move", { documentIds, folderIds }, {
     document: (documentId) => moveDocument({ ...actor, documentId, folderId: destinationFolderId }),

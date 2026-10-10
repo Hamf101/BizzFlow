@@ -360,6 +360,7 @@ async function insertDocument(
   // The insert takes the folder tree's lock without waiting, so a colleague's
   // write at the same instant asks for a retry.
   const { data, error } = await retrySerializationFailure(() =>
+    // tenant-scope: row is typed with org_id; the caller sets it to input.organizationId
     client
       .from("documents")
       .insert(row)
@@ -391,6 +392,7 @@ async function insertDocumentVersion(
     upload_authorization_expires_at: string
   }
 ): Promise<DocumentVersion> {
+  // tenant-scope: row is typed with org_id; the caller sets it to input.organizationId
   const { data, error } = await client
     .from("document_versions")
     .insert(row)

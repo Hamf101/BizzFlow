@@ -40,7 +40,7 @@ const NO_ORGANIZATION = "Create an organization before managing document templat
 
 // The service judges each template, since sharing can let someone edit one their role could not.
 const loadTemplateActionContext = (): ReturnType<typeof loadActionContext> =>
-  loadActionContext(NO_ORGANIZATION, 403)
+  loadActionContext(NO_ORGANIZATION)
 
 /**
  * Creates an initial draft template and opens its guided editor.
@@ -288,7 +288,7 @@ export type TemplateChange = z.infer<typeof templateChangeSchema>
  */
 export async function changeTemplatesAction(input: TemplateChange): Promise<TemplateBulkResult> {
   const change = templateChangeSchema.parse(input)
-  const { actor } = await loadActionContextOrSignIn("/templates", NO_ORGANIZATION, 403)
+  const { actor } = await loadActionContextOrSignIn("/templates", NO_ORGANIZATION)
   const result = await changeDocumentTemplates({ ...change, ...actor })
 
   revalidatePath("/templates")

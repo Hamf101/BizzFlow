@@ -200,6 +200,7 @@ export async function persistFlowMessages(
       created_at: message.createdAt
     })
   )
+  // tenant-scope: rows are built above with org_id: input.organizationId
   const { error } = await client.from("template_flow_messages").insert(rows)
 
   if (error) {

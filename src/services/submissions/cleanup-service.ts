@@ -173,6 +173,7 @@ async function listExpiredCleanupRows(
   now: Date,
   batchSize: number
 ): Promise<CleanupFileRow[]> {
+  // tenant-scope: scheduled cleanup sweeps superseded files across every organization by design
   const { data, error } = await client
     .from("submission_files")
     .select("id,storage_key,cleanup_after")

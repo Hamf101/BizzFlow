@@ -114,6 +114,13 @@ jobs:
       - name: Run database tests
         run: pnpm test:sql
 
+      # src/types/database.ts must be what the migrations produce: a migration
+      # committed without `pnpm db:types` fails here.
+      - name: Check generated database types
+        run: |
+          pnpm db:types
+          git diff --exit-code src/types/database.ts
+
       # Object storage. The app targets the S3 API with path-style addressing,
       # so MinIO is a drop-in stand-in for R2.
       - name: Start object storage

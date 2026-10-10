@@ -530,6 +530,7 @@ async function listDueTaskReminders(
   nowIso: string,
   leaseCutoffIso: string
 ): Promise<TaskReminder[]> {
+  // tenant-scope: the reminder cron delivers due reminders for every organization by design
   const { data, error } = await client
     .from("task_reminders")
     .select(TASK_REMINDER_COLUMNS)
@@ -619,11 +620,13 @@ async function loadDueReminderContext(
   )
   const [taskResult, profileResult, membershipResult, organizationSettings] =
     await Promise.all([
+      // tenant-scope: ids come from due reminders; a task whose org_id differs from its reminder is skipped
       client.from("tasks").select(TASK_COLUMNS).in("id", taskIds),
       client
         .from("profiles")
         .select(PROFILE_CONTACT_COLUMNS)
         .in("id", recipientIds),
+      // tenant-scope: cross-organization cron: rows are keyed by (org_id, user_id) and matched to each reminder's org
       client
         .from("organization_memberships")
         .select(

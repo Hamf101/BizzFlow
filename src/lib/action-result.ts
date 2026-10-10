@@ -56,20 +56,6 @@ export const ACTION_FEEDBACK_CODES = [
 
 export type ActionFeedbackCode = (typeof ACTION_FEEDBACK_CODES)[number]
 
-/** Field-specific validation copy that remains beside the owning form control. */
-export type ActionFieldErrors = Readonly<Record<string, readonly string[]>>
-
-/**
- * A completed server-action result without raw exception or provider text.
- *
- * The stable code is resolved to user-facing copy by the client feedback registry.
- */
-export type ActionOutcome = Readonly<{
-  status: "success" | "error"
-  code: ActionFeedbackCode
-  fieldErrors?: ActionFieldErrors
-  destination?: string
-}>
 
 type FeedbackRedirectParams = Readonly<
   Record<string, string | null | undefined>

@@ -96,6 +96,7 @@ export async function listSubmissionPage(
         createSubmissionListFilters(input, getOrganizationRoleFromSubject(permissionSubject))
       )
       let query = filterVisibleSubmissions(
+        // tenant-scope: filterVisibleSubmissions adds .eq("org_id", filters.organizationId)
         client.from("submissions").select(SUBMISSION_COLUMNS, { count: "exact" }),
         filters
       )
@@ -150,6 +151,7 @@ export async function countSubmissionsByStatus(
       const scope = await withReviewedIds(client, createSubmissionListFilters(input, role))
       const counts = await Promise.all(
         input.statuses.map(async (status: SubmissionStatus) => {
+          // tenant-scope: filterVisibleSubmissions adds .eq("org_id", scope.organizationId)
           const selected = client
             .from("submissions")
             .select("id", { count: "exact", head: true })
@@ -176,6 +178,7 @@ async function countVisibleSubmissions(
   filters: SubmissionListFilters
 ): Promise<number> {
   const { count, error } = await filterVisibleSubmissions(
+    // tenant-scope: filterVisibleSubmissions adds .eq("org_id", filters.organizationId)
     client.from("submissions").select("id", { count: "exact", head: true }),
     filters
   )

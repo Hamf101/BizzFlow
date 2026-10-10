@@ -128,6 +128,7 @@ async function countTaskList(
   filters: TaskListFilters
 ): Promise<number> {
   const { count, error } = await filterTaskList(
+    // tenant-scope: filterTaskList adds .eq("org_id", filters.organizationId)
     client.from("tasks").select("id", { count: "exact", head: true }),
     filters
   )
@@ -292,6 +293,7 @@ export async function listTasks(
         input.submissionId,
         "Task submission filter must be a valid submission id."
       )
+      // tenant-scope: filterTaskList adds .eq("org_id", input.organizationId)
       let query = filterTaskList(client.from("tasks").select(TASK_COLUMNS), {
         assignedTo,
         organizationId: input.organizationId,
@@ -360,6 +362,7 @@ export async function listTaskPage(
         statuses: normalizeTaskStatusFilter(input.statuses),
       }
       let query = filterTaskList(
+        // tenant-scope: filterTaskList adds .eq("org_id", filters.organizationId)
         client.from("tasks").select(TASK_COLUMNS, { count: "exact" }),
         filters
       )

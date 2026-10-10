@@ -55,10 +55,7 @@ async function runPublicLinkAction(
     path: linksPath,
     success,
     run: async () => {
-      const { actor } = await loadActionContext(
-        "You do not have permission to manage public form links.",
-        403
-      )
+      const { actor } = await loadActionContext("Create an organization before managing public form links.")
       await change(actor, templateId)
       revalidatePath(linksPath)
     },
