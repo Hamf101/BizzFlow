@@ -166,12 +166,13 @@ export async function savePublicFormDraft(
   const preview = await requireValidLink(input.token, deps)
   const link = preview.link as PublicFormLink
   // Submit enforces this too; here it keeps a reload from showing someone else's box filled.
-  const posted = answeringAs((preview.template as DocumentTemplate).content, parsed.data.values, preview.answers, link.signer).values
+  // Read against the form the draft was opened on, which a republish does not change.
+  const posted = (snapshot: TemplateContent) => answeringAs(snapshot, parsed.data.values, preview.answers, link.signer).values
 
   if (!parsed.data.draftToken) {
     const values = await normalizePublicDraftValues(
       (preview.template as DocumentTemplate).content,
-      posted
+      posted((preview.template as DocumentTemplate).content)
     )
     const created = await createPublicDraft(input.token, preview, values, deps)
 
@@ -188,7 +189,7 @@ export async function savePublicFormDraft(
     throw new PublicFormServiceError(DRAFT_CHANGED, 409)
   }
 
-  const values = await normalizePublicDraftValues(draft.snapshot, posted)
+  const values = await normalizePublicDraftValues(draft.snapshot, posted(draft.snapshot))
   const nextRevision = draft.revision + 1
   const client = getClient(deps)
   const { data, error } = await client

@@ -508,6 +508,20 @@ describe("public form draft checkpoints", () => {
     ).rejects.toMatchObject({ message: "This form draft changed in another tab. Reload and try again.", statusCode: 409 })
   })
 
+  it("keeps a drawing in a draft by the form the visitor opened, even after a republish moves its box to another signer", async () => {
+    const withBox = (signer: "sender" | number) =>
+      templateContentV3Schema.parse({
+        ...(createTemplateContent() as TemplateContentV3),
+        blocks: [{ fieldKey: "sig", helpText: null, id: "70000000-0000-4000-8000-000000000061", label: "Signature", required: false, signer, type: "signature_field" }],
+      })
+    const client = seedValidLink({ submissions: [createDraftRow({ template_snapshot: withBox(1) })] })
+    client.tables.published_document_templates[0]!.content = withBox(2)
+
+    await savePublicFormDraft({ token: PUBLIC_TOKEN, draftToken: DRAFT_TOKEN, expectedRevision: 1, values: { sig: DRAWING_DATA_URL } }, createDeps(client))
+
+    expect(client.tables.submissions[0]?.values).toEqual({ sig: DRAWING_DATA_URL })
+  })
+
   it("supersedes an exact token-scoped public file through the RPC", async () => {
     const client = seedValidLink({
       submissions: [createDraftRow()],
