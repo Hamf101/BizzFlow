@@ -1,13 +1,14 @@
 "use client"
 
-import { type FormEvent, type ReactElement, useEffect, useRef, useState } from "react"
+import { type FormEvent, type ReactElement, useEffect, useMemo, useRef, useState } from "react"
 
 import { parseGeneratedDocumentAnswers } from "@/components/documents/generated-document-form-data"
 import { EditorCanvas, POINT_PX } from "@/components/editor/editor-canvas"
-import { PaperAnswering } from "@/components/editor/paper-field"
+import { PaperAnswering, PaperSigning } from "@/components/editor/paper-field"
 import { useReadOnlyController } from "@/components/editor/read-only-controller"
 import { describeInvalidField } from "@/components/ui/toaster"
 import { resolvePageGeometry } from "@/services/templates/template-render-plan"
+import { answeringSigner } from "@/types/box-signers"
 import type { TemplateBlock, TemplateContentV3 } from "@/types/template"
 import { applyVisibleTemplateFieldValue } from "@/types/template-visibility"
 
@@ -65,7 +66,7 @@ function answering(event: FormEvent<HTMLElement>): { blockId: string; control: C
  * answer: they type into its boxes, upload into its file fields, and Submit.
  * Nothing they do changes the document.
  *
- * @param props - The frozen content, any answers and files from an earlier try, whether a phone asked, and the link's token.
+ * @param props - The frozen content, any answers and files from an earlier try, whether a phone asked, whose boxes they sign, and the link's token.
  * @returns The page of paper, inside the answering form.
  */
 export function PublicAnswerPaper({
@@ -73,6 +74,7 @@ export function PublicAnswerPaper({
   initialAnswers,
   initialFiles,
   phone,
+  signer = 1,
   title,
   token,
 }: {
@@ -81,10 +83,13 @@ export function PublicAnswerPaper({
   initialFiles: readonly PublicFormInitialFile[]
   /** Whether the request came from a phone, so the first paint is already the phone's column. */
   phone: boolean
+  /** Their place in the send, which says whose drawn boxes they sign; every other box shows what the sender put there. */
+  signer?: number
   title: string
   token: string
 }): ReactElement {
   const controller = useReadOnlyController(content)
+  const signing = useMemo(() => ({ drawer: answeringSigner(content.blocks, signer), signers: [] }), [content.blocks, signer])
   const [answers, setAnswers] = useState<Record<string, unknown>>(() => startingAnswers(content, initialAnswers))
   const [files, setFiles] = useState(initialFiles)
   const [errors, setErrors] = useState<Readonly<Record<string, string>>>({})
@@ -142,6 +147,7 @@ export function PublicAnswerPaper({
   return (
     <div className="flex justify-center" onChangeCapture={clear} onInputCapture={clear} onInvalidCapture={refuse} ref={frameRef}>
       <PaperAnswering.Provider value={errors}>
+        <PaperSigning.Provider value={signing}>
         <EditorCanvas
           allowFiles={false}
           answers={answers}
@@ -166,6 +172,7 @@ export function PublicAnswerPaper({
           textEditable={false}
           zoom={zoom}
         />
+        </PaperSigning.Provider>
       </PaperAnswering.Provider>
     </div>
   )

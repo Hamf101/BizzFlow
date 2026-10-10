@@ -13,6 +13,7 @@ import {
   submitPublicForm,
   supersedePublicFormFile,
 } from "@/services/public-form-service"
+import { DRAWING_DATA_URL } from "@/services/document-signing-service.test-support"
 import { derivePublicLinkToken } from "@/services/public-forms/shared"
 import {
   CHECKSUM,
@@ -698,6 +699,33 @@ describe("submitPublicForm", () => {
       full_name: "Ada Lovelace",
       agreed: true,
     })
+  })
+
+  it.each([
+    // Their own box is the only one they draw; the sender's stays the sender's, and Signer 1's is not theirs to fill.
+    { signer: 2, signers: ["sender", 1, 2], posted: { first_box: DRAWING_DATA_URL, second_box: DRAWING_DATA_URL, sender_box: "" }, kept: { second_box: DRAWING_DATA_URL, sender_box: DRAWING_DATA_URL } },
+    // A form with one signer sent to several people: each signs it as Signer 1.
+    { signer: 3, signers: ["sender", 1], posted: { first_box: DRAWING_DATA_URL }, kept: { first_box: DRAWING_DATA_URL, sender_box: DRAWING_DATA_URL } },
+  ] as const)("keeps each drawn box to its own signer on a link sent as person $signer", async ({ kept, posted, signer, signers }) => {
+    const keys = { 1: "first_box", 2: "second_box", sender: "sender_box" } as const
+    const client = seedValidLink({
+      public_form_links: [
+        createLinkRow({
+          answers_snapshot: { sender_box: DRAWING_DATA_URL },
+          content_snapshot: templateContentV3Schema.parse({
+            ...(createTemplateContent() as TemplateContentV3),
+            blocks: signers.map((who, index) => ({ fieldKey: keys[who], helpText: null, id: `70000000-0000-4000-8000-00000000005${index}`, label: keys[who], required: true, signer: who, type: "signature_field" })),
+          }),
+          recipient_email: "someone@example.com",
+          signer,
+          template_revision_snapshot: 1,
+        }),
+      ],
+    })
+
+    await submitPublicForm({ token: PUBLIC_TOKEN, values: posted }, createDeps(client, [SUBMISSION_ID]))
+
+    expect(client.tables.submissions[0].values).toEqual(kept)
   })
 
   it("rejects a field key the template snapshot does not declare", async () => {

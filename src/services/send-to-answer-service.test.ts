@@ -73,7 +73,9 @@ describe("sendToAnswer", () => {
       expect.objectContaining({ delivered: true, email: "ben@example.com", token: null }),
     ])
     expect(tables.public_form_links).toHaveLength(2)
-    expect(tables.public_form_links?.[0]).toMatchObject({ max_submissions: 1, recipient_email: "ana@example.com", token_hash: hashToken(TOKENS[0]!) })
+    expect(tables.public_form_links?.[0]).toMatchObject({ max_submissions: 1, recipient_email: "ana@example.com", signer: 1, token_hash: hashToken(TOKENS[0]!) })
+    // People sign as they were listed: the second is Signer 2.
+    expect(tables.public_form_links?.[1]).toMatchObject({ recipient_email: "ben@example.com", signer: 2 })
     // The plaintext column is gone (20261005120000_tokens_audit_locks); naming it fails the insert.
     expect(tables.public_form_links?.[0]).not.toHaveProperty("token")
     expect(sendRequest).toHaveBeenCalledWith(expect.objectContaining({ recipientEmail: "ana@example.com", senderName: "Morgan Lee", title: "Professional services agreement", token: TOKENS[0] }))

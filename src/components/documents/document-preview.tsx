@@ -48,7 +48,7 @@ export function DocumentPreview({
   const [answers, setAnswers] = useState<Record<string, unknown>>(view.answers)
   // As in the editor: each drawn box is its signer's, and shows only their mark.
   const marked = useMemo(() => withBoxMarks(content.blocks, answers, view.recipients), [answers, content.blocks, view.recipients])
-  const signing = useMemo(() => ({ sent: view.workflowStatus !== "draft" || view.recipients.length > 0, signers: view.recipients }), [view.recipients, view.workflowStatus])
+  const signing = useMemo(() => ({ drawer: view.workflowStatus !== "draft" || view.recipients.length > 0 ? null : ("sender" as const), signers: view.recipients }), [view.recipients, view.workflowStatus])
   const [sending, setSending] = useState(false)
   const geometry = resolvePageGeometry(content.layout)
   const editHref = `/documents/${encodeURIComponent(document.id)}/edit`

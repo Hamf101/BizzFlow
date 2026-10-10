@@ -40,7 +40,7 @@ describe("GeneratedDocumentContent", () => {
     const paper = renderToStaticMarkup(
       createElement(
         PaperSigning.Provider,
-        { value: { sent: true, signers } },
+        { value: { drawer: null, signers } },
         createElement(PaperField, { answers: {}, block: box(1, 1), mode: "read", onAnswerChange: () => undefined })
       )
     )

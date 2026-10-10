@@ -9,6 +9,7 @@ import {
 } from "react"
 
 import { UPLOAD_ACCEPT, uploadFileToSignedUrl } from "@/components/documents/document-upload-client"
+import { getGeneratedDocumentAnswerName } from "@/components/documents/generated-document-form-data"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { RequiredStandIn } from "@/components/ui/required-stand-in"
 import { cn } from "@/lib/utils"
@@ -87,6 +88,17 @@ export function PublicSubmissionFileField({
     )
   }
 
+  // A drawing lives in its box, not in `answers`, so it is read from the form,
+  // as Submit reads it; otherwise a reload after this upload would lose it.
+  function drawings(): Record<string, string> {
+    const form = containerRef.current?.closest("form")
+    const prefix = getGeneratedDocumentAnswerName("drawing", "")
+
+    return form
+      ? Object.fromEntries([...new FormData(form)].flatMap(([name, value]) => (name.startsWith(prefix) && typeof value === "string" && value !== "" ? [[name.slice(prefix.length), value]] : [])))
+      : {}
+  }
+
   async function handleUpload(selectedFile: File): Promise<void> {
     // Client-side size check (20 MB limit)
     const MAX_FILE_SIZE = 20 * 1024 * 1024
@@ -114,7 +126,7 @@ export function PublicSubmissionFileField({
         token,
         draftToken: currentDraftToken,
         draftRevision: currentDraftRevision,
-        answers,
+        answers: { ...answers, ...drawings() },
       })
 
       if (tokenInput) {

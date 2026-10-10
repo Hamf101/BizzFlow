@@ -129,6 +129,7 @@ export default async function PublicFormPage({
               initialAnswers={{ ...preview.answers, ...draftState?.values }}
               initialFiles={draftState?.files ?? []}
               phone={userAgent({ headers: await headers() }).device.type === "mobile"}
+              signer={preview.link?.signer}
               title={preview.template.title}
               token={token}
             />

@@ -514,6 +514,16 @@ describe("sharing a document with someone outside the workspace", () => {
     await expect(opens()).rejects.toMatchObject({ statusCode: 404 })
   })
 
+  it("does not let someone raise their own access through the guest invite they had before joining", async () => {
+    const { client, deps } = setup({ access: { [`${MANAGER}:${DOC}`]: "viewer" } })
+    client.tables.document_guest_grants = [
+      { accepted_at: "2026-10-03T09:00:00.000Z", access_level: "viewer", document_id: DOC, email: "maya@example.test", id: "gg1", org_id: ORG, user_id: MANAGER },
+    ]
+
+    await expect(setSharingAccess(guest("contributor", "maya@example.test"), deps)).rejects.toMatchObject({ statusCode: 403 })
+    expect(client.tables.document_guest_grants).toMatchObject([{ access_level: "viewer" }])
+  })
+
   it("sends nothing for a document that is not active", async () => {
     const { client, deps, invite } = setup()
     client.tables.documents[0].lifecycle_state = "trashed"

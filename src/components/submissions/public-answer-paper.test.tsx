@@ -1,13 +1,17 @@
 // @vitest-environment jsdom
 import { act } from "react"
 import type { Root } from "react-dom/client"
-import { beforeAll, expect, it } from "vitest"
+import { beforeAll, expect, it, vi } from "vitest"
 
 import { parseGeneratedDocumentAnswers } from "@/components/documents/generated-document-form-data"
 import { createEmptyDocumentContent, templateContentV3Schema } from "@/types/template"
 
 import { PublicAnswerPaper } from "./public-answer-paper"
 import { mount } from "@/test/render"
+
+const checkpoint = vi.hoisted(() => vi.fn())
+vi.mock("./public-form-file-client", () => ({ checkpointPublicFormDraft: checkpoint }))
+vi.mock("./submission-file-client", () => ({ calculateSubmissionFileChecksum: async () => "0".repeat(64), resolveSubmissionFileContentType: () => "application/pdf" }))
 
 const NAME = "70000000-0000-4000-8000-000000000041"
 const ACCOUNT = "70000000-0000-4000-8000-000000000042"
@@ -105,16 +109,66 @@ it("keeps what is typed in the moment the page takes over from the server's", as
   expect(field("Your name").value).toBe("Ana")
 })
 
-it("posts a drawing already in the document, so a box shown signed is sent signed", async () => {
+it("lets a recipient draw only in their own box, showing the sender's signature as signed", async () => {
   const drawn = "data:image/png;base64,AAAA"
+  const box = (fieldKey: string, id: string, label: string, signer: "sender" | number) => ({ fieldKey, helpText: null, id, label, required: true, signer, type: "signature_field" })
   const content = templateContentV3Schema.parse({
     ...createEmptyDocumentContent(),
-    blocks: [{ fieldKey: "sender_signature", helpText: null, id: NAME, label: "Signature", required: true, signer: "sender", type: "signature_field" }],
+    blocks: [box("sender_box", NAME, "Sender", "sender"), box("first_box", ACCOUNT, "First", 1), box("second_box", NUMBER, "Second", 2)],
   })
   form = document.body.appendChild(document.createElement("form"))
   root = mount(form)
-  await act(async () => root.render(<PublicAnswerPaper content={content} initialAnswers={{ sender_signature: drawn }} initialFiles={[]} phone title="Agreement" token="t" />))
+  await act(async () => root.render(<PublicAnswerPaper content={content} initialAnswers={{ sender_box: drawn }} initialFiles={[]} phone signer={2} title="Agreement" token="t" />))
 
-  expect(form.checkValidity()).toBe(true)
-  expect(parseGeneratedDocumentAnswers(new FormData(form))).toEqual({ sender_signature: drawn })
+  expect([...form.querySelectorAll("canvas")].map((canvas) => canvas.getAttribute("aria-label"))).toEqual(["Second drawing area"])
+  expect(form.querySelector<HTMLImageElement>('img[alt="Saved Sender"]')?.getAttribute("src")).toBe(drawn)
+  expect(form.textContent).toContain("Signer 1 signs here")
+  // Only their own box is theirs to complete, and only it is sent.
+  expect(form.checkValidity()).toBe(false)
+  expect(parseGeneratedDocumentAnswers(new FormData(form))).toEqual({})
+})
+
+it("lets everyone a one-signer form went to sign it as Signer 1", async () => {
+  const content = templateContentV3Schema.parse({
+    ...createEmptyDocumentContent(),
+    blocks: [{ fieldKey: "first_box", helpText: null, id: NAME, label: "First", required: true, signer: 1, type: "signature_field" }],
+  })
+  form = document.body.appendChild(document.createElement("form"))
+  root = mount(form)
+  await act(async () => root.render(<PublicAnswerPaper content={content} initialAnswers={{}} initialFiles={[]} phone signer={3} title="Agreement" token="t" />))
+
+  expect(form.querySelector('canvas[aria-label="First drawing area"]')).not.toBeNull()
+})
+
+it("saves a drawing with the answers when a file is uploaded, so a reload keeps it", async () => {
+  const drawn = "data:image/png;base64,BBBB"
+  const content = templateContentV3Schema.parse({
+    ...createEmptyDocumentContent(),
+    blocks: [
+      { fieldKey: "my_box", helpText: null, id: NAME, label: "Signature", required: true, signer: 1, type: "signature_field" },
+      { fieldKey: "id_copy", helpText: null, id: COLOUR, label: "ID copy", required: false, type: "file_field" },
+    ],
+  })
+  Object.assign(HTMLCanvasElement.prototype, {
+    getContext: () => ({ beginPath() {}, clearRect() {}, lineTo() {}, moveTo() {}, stroke() {} }),
+    setPointerCapture() {},
+    toDataURL: () => drawn,
+  })
+  checkpoint.mockRejectedValue(new Error("stop after the checkpoint"))
+  form = document.body.appendChild(document.createElement("form"))
+  root = mount(form)
+  await act(async () => root.render(<PublicAnswerPaper content={content} initialAnswers={{}} initialFiles={[]} phone signer={1} title="Agreement" token="t" />))
+
+  const canvas = form.querySelector("canvas")!
+  await act(async () => {
+    for (const type of ["pointerdown", "pointermove", "pointerup"]) {
+      canvas.dispatchEvent(new MouseEvent(type, { bubbles: true, clientX: 5, clientY: 5 }))
+    }
+  })
+  const file = form.querySelector<HTMLInputElement>('input[type="file"]')!
+  const chosen = new File(["%PDF"], "id.pdf", { type: "application/pdf" })
+  Object.defineProperty(file, "files", { value: Object.assign([chosen], { item: () => chosen }) })
+  await act(async () => file.dispatchEvent(new Event("change", { bubbles: true })))
+
+  expect(checkpoint).toHaveBeenCalledWith(expect.objectContaining({ answers: expect.objectContaining({ my_box: drawn }) }))
 })

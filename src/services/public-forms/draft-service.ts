@@ -1,4 +1,5 @@
 import { hashToken } from "@/services/document-signing/token-security"
+import { answeringAs } from "@/types/box-signers"
 import { normalizeSubmissionDraftAnswers } from "@/services/submissions/validation"
 import type { PublicFormLink } from "@/types/public-link"
 import { SubmissionDomainError } from "@/types/submission"
@@ -164,11 +165,13 @@ export async function savePublicFormDraft(
 
   const preview = await requireValidLink(input.token, deps)
   const link = preview.link as PublicFormLink
+  // Submit enforces this too; here it keeps a reload from showing someone else's box filled.
+  const posted = answeringAs((preview.template as DocumentTemplate).content, parsed.data.values, preview.answers, link.signer).values
 
   if (!parsed.data.draftToken) {
     const values = await normalizePublicDraftValues(
       (preview.template as DocumentTemplate).content,
-      parsed.data.values
+      posted
     )
     const created = await createPublicDraft(input.token, preview, values, deps)
 
@@ -185,10 +188,7 @@ export async function savePublicFormDraft(
     throw new PublicFormServiceError(DRAFT_CHANGED, 409)
   }
 
-  const values = await normalizePublicDraftValues(
-    draft.snapshot,
-    parsed.data.values
-  )
+  const values = await normalizePublicDraftValues(draft.snapshot, posted)
   const nextRevision = draft.revision + 1
   const client = getClient(deps)
   const { data, error } = await client

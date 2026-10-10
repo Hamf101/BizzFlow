@@ -151,6 +151,15 @@ export async function prepareSharingAccess(
   const kind = KINDS[input.resource.kind]
   const people = await listMembers(deps, input)
   const view = (): Promise<SharingView> => buildView(client, input, target, deps)
+  const { level } = input
+  const levels: readonly SharingLevel[] = kind.levels
+
+  // Managing folders lets someone change who an item is shared with, not give themselves more than they have.
+  const refuseRaisingSelf = (self: boolean): void => {
+    if (self && level !== null && target.actor.level !== null && levels.indexOf(level) > levels.indexOf(target.actor.level)) {
+      throw new DocumentServiceError("You cannot give yourself more access than you have.", 403)
+    }
+  }
 
   if ("email" in input.principal) {
     const email = guestEmail(input.principal.email)
@@ -162,6 +171,8 @@ export async function prepareSharingAccess(
       const guest = { ...input, principal: { email } }
 
       checkGuest(guest, target)
+      // Their own guest row counts as them: the edit check falls back to it.
+      refuseRaisingSelf(member?.userId === input.actorUserId)
 
       return { apply: () => shareWithGuest(client, guest, target, people, deps), view }
     }
@@ -172,15 +183,8 @@ export async function prepareSharingAccess(
   const who = checkPrincipal(input, target, people)
   // An email was turned into a member above, or went to the guest path.
   const principal = input.principal as MemberPrincipal
-  const { level } = input
 
-  // Managing folders lets someone change who an item is shared with, not give themselves more than they have.
-  const self = "userId" in principal ? principal.userId === input.actorUserId : principal.role === target.actor.role
-  const levels: readonly SharingLevel[] = kind.levels
-
-  if (self && level !== null && target.actor.level !== null && levels.indexOf(level) > levels.indexOf(target.actor.level)) {
-    throw new DocumentServiceError("You cannot give yourself more access than you have.", 403)
-  }
+  refuseRaisingSelf("userId" in principal ? principal.userId === input.actorUserId : principal.role === target.actor.role)
 
   const apply = async (): Promise<void> => {
     const where = { [kind.grantColumn]: input.resource.id, org_id: input.organizationId }

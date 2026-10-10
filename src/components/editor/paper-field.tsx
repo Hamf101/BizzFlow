@@ -13,7 +13,7 @@ import { RequiredStandIn } from "@/components/ui/required-stand-in"
 import { Select } from "@/components/ui/select"
 import { describeDateFormat, formatDateAnswer } from "@/lib/date-format"
 import { cn } from "@/lib/utils"
-import { boxNote, boxSigner } from "@/types/box-signers"
+import { boxNote, type BoxSigner, boxSigner } from "@/types/box-signers"
 import type { TemplateBlock, TemplateLayout, TextFieldBlock } from "@/types/template"
 import { isTemplateAnswerComplete } from "@/types/template-answer"
 import { readChoiceList } from "@/types/template-answer-kinds"
@@ -69,11 +69,12 @@ const RULED: CSSProperties = {
 export const PaperAnswering = createContext<Readonly<Record<string, string>> | null>(null)
 
 /**
- * Set by a document that is sent for signing: each drawn box is then its
- * signer's, and only the sender's own box is drawn here, until it is sent.
- * Its signers, in the order they were added, say whose boxes are signed.
+ * Set by a page whose drawn boxes each belong to their signer: only the
+ * drawer's own boxes are drawn here (the sender's on a document until it is
+ * sent, none after; a recipient's own on a link they answer). Its signers, in
+ * the order they were added, say whose boxes are signed.
  */
-export const PaperSigning = createContext<Readonly<{ sent: boolean; signers: ReadonlyArray<{ status: string }> }> | null>(null)
+export const PaperSigning = createContext<Readonly<{ drawer: BoxSigner | null; signers: ReadonlyArray<{ status: string }> }> | null>(null)
 
 const BARE =
   "h-auto min-h-0 rounded-none border-0 bg-transparent p-0 text-[1em] leading-[1.5] shadow-none focus-visible:border-0 focus-visible:ring-0 data-popup-open:border-0 md:h-auto md:text-[1em]"
@@ -261,9 +262,9 @@ export function PaperField({
     case "signature_field":
     case "initials_field": {
       height = BOX_HEIGHT.drawing
-      // On a document, a box is its signer's; only the sender draws here, until it is sent.
+      // A box is its signer's; only its own signer draws in it.
       const signer = boxSigner(block)
-      answer = fill && (!signing || (signer === "sender" && !signing.sent)) ? (
+      answer = fill && (!signing || signer === signing.drawer) ? (
         <DrawnSignatureField
           bare
           label={block.label}

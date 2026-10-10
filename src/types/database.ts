@@ -1429,6 +1429,7 @@ export type Database = {
           org_id: string
           recipient_email: string | null
           sent_by: string | null
+          signer: number | null
           status: string
           submission_count: number
           template_id: string
@@ -1449,6 +1450,7 @@ export type Database = {
           org_id: string
           recipient_email?: string | null
           sent_by?: string | null
+          signer?: number | null
           status?: string
           submission_count?: number
           template_id: string
@@ -1469,6 +1471,7 @@ export type Database = {
           org_id?: string
           recipient_email?: string | null
           sent_by?: string | null
+          signer?: number | null
           status?: string
           submission_count?: number
           template_id?: string

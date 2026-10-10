@@ -151,7 +151,7 @@ export function DocumentEditor({
   // Each drawn box shows only its own signer's mark; the sender's is drawn
   // here until the document is sent.
   const marked = useMemo(() => withBoxMarks(page.content.blocks, answers, view.recipients), [answers, page.content.blocks, view.recipients])
-  const signing = useMemo(() => ({ sent: view.workflowStatus !== "draft" || view.recipients.length > 0, signers: view.recipients }), [view.recipients, view.workflowStatus])
+  const signing = useMemo(() => ({ drawer: view.workflowStatus !== "draft" || view.recipients.length > 0 ? null : ("sender" as const), signers: view.recipients }), [view.recipients, view.workflowStatus])
   const [drawings, setDrawings] = useState(0)
   const [sending, setSending] = useState(false)
   const [sharing, setSharing] = useState(false)

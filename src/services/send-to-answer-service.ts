@@ -106,7 +106,7 @@ export async function sendToAnswer(input: SendToAnswerInput, deps: SendToAnswerD
     }))
     // Every link is stored before any email goes, so no email carries a link that was never kept.
     const { error } = await client.from("public_form_links").insert(
-      requests.map(({ email, linkId, token }) => ({
+      requests.map(({ email, linkId, token }, index) => ({
         answers_snapshot: snapshot.answers,
         content_snapshot: snapshot.content as Record<string, unknown>,
         created_at: now.toISOString(),
@@ -118,6 +118,8 @@ export async function sendToAnswer(input: SendToAnswerInput, deps: SendToAnswerD
         org_id: input.organizationId,
         recipient_email: email,
         sent_by: input.actorUserId,
+        // The k-th person listed signs Signer k's boxes.
+        signer: index + 1,
         status: "active",
         submission_count: 0,
         template_id: snapshot.templateId,

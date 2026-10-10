@@ -3,6 +3,7 @@ import type { PublicFormLink } from "@/types/public-link"
 import { SubmissionDomainError } from "@/types/submission"
 import type { DocumentTemplate, TemplateContent } from "@/types/template"
 import { isStructuredAnswerBlock } from "@/types/template-answer"
+import { answeringAs } from "@/types/box-signers"
 import {
   createPublicSubmissionError,
   loadAvailableFileFieldKeys,
@@ -105,12 +106,10 @@ export async function submitPublicForm(
 
   let normalizedValues: Record<string, unknown>
 
+  const own = answeringAs(snapshot, coercePublicFormValues(snapshot, input.values), preview.answers, link.signer)
+
   try {
-    normalizedValues = await validateSubmissionForSubmit(
-      snapshot,
-      coercePublicFormValues(snapshot, input.values),
-      availableFileFieldKeys
-    )
+    normalizedValues = await validateSubmissionForSubmit(own.content, own.values, availableFileFieldKeys)
   } catch (error: unknown) {
     if (error instanceof SubmissionDomainError) {
       throw new PublicFormServiceError(error.message, error.statusCode)

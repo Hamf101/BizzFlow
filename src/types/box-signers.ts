@@ -73,3 +73,52 @@ export function withBoxMarks(
 
   return marked
 }
+
+/**
+ * Whose boxes the k-th person a link was sent to signs: Signer k's, or Signer
+ * 1's when the document has no box for them, as when one form goes to several
+ * people who each answer their own copy.
+ *
+ * @param blocks - What the link serves.
+ * @param k - Their place in the send; 1 on a link for anyone.
+ * @returns The signer whose boxes they draw.
+ */
+export function answeringSigner(blocks: readonly TemplateBlock[], k: number): number {
+  return blocks.some((block) => (block.type === "signature_field" || block.type === "initials_field") && boxSigner(block) === k) ? k : 1
+}
+
+/**
+ * Someone answering a link signs only their own boxes: every other drawn box
+ * keeps what the sender stored in it, whatever was posted, and is not theirs
+ * to complete.
+ *
+ * @param content - What the link serves.
+ * @param values - What they posted.
+ * @param stored - The answers the document was sent with.
+ * @param k - Their place in the send, as answeringSigner reads it.
+ * @returns The content to check the answers against, and the answers to keep.
+ */
+export function answeringAs<T extends { blocks: readonly TemplateBlock[] }>(
+  content: T,
+  values: Readonly<Record<string, unknown>>,
+  stored: Readonly<Record<string, unknown>>,
+  k: number
+): { content: T; values: Record<string, unknown> } {
+  const signer = answeringSigner(content.blocks, k)
+  const kept: Record<string, unknown> = { ...values }
+  const blocks = content.blocks.map((block) => {
+    if ((block.type !== "signature_field" && block.type !== "initials_field") || boxSigner(block) === signer) {
+      return block
+    }
+
+    delete kept[block.fieldKey]
+
+    if (boxSigner(block) === "sender" && stored[block.fieldKey]) {
+      kept[block.fieldKey] = stored[block.fieldKey]
+    }
+
+    return { ...block, required: false }
+  })
+
+  return { content: { ...content, blocks }, values: kept }
+}
