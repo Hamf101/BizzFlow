@@ -5,13 +5,14 @@ BizFlow Docs is a mobile-first, multi-tenant workflow portal for reusable forms,
 ## Current Status
 
 - Project phase: implementation — nearing MVP completion.
-- Sprint: Sprints 0–11, 13, and 14 are implemented and migrated. Sprint 12 (offline/PWA) is deferred.
-- Application scaffold: Next.js App Router foundation with versioned documents, organization templates, guided signing/PDF workflows, creator-owned submission drafts, private verified files, a tenant-scoped review inbox, tasks with Inngest reminders, SMS notifications via Termii, public form links, template duplication, notification preferences, PostHog analytics, and an append-only audit log with CSV export.
-- Delivery direction: cloud-first. Offline/PWA work and related packages are deferred until explicitly reprioritized.
+- Built: versioned documents, organization templates, guided signing/PDF workflows, creator-owned submission drafts, private verified files, a tenant-scoped review inbox, tasks with Inngest reminders, public form links, template duplication, notification preferences, the Flow AI editor, and an append-only audit log with CSV export.
+- SMS: the Termii adapter sends task notifications when configured (a mock stands in locally). Sending documents by SMS is not built yet.
+- PostHog analytics is wired in but stays off unless `NEXT_PUBLIC_POSTHOG_KEY` is set.
+- Offline sync is planned but not built: there is no service worker or local store. The app shows an offline banner, and the editors retry saving when the connection returns.
 
 ## MVP Scope
 
-The cloud MVP includes organizations, members, reusable templates, document storage, internal submissions, public submissions, review workflows, comments, tasks, reminders, activity history, audit logs, and email/SMS notifications. Offline drafts are deferred.
+The MVP includes organizations, members, reusable templates, document storage, internal submissions, public submissions, review workflows, comments, tasks, reminders, activity history, audit logs, and email/SMS notifications.
 
 MVP non-goals:
 
@@ -21,7 +22,7 @@ MVP non-goals:
 - Advanced workflow builders or custom role builders.
 - Public developer APIs.
 
-## Planned Stack
+## Stack
 
 - Frontend: Next.js App Router, React, TypeScript.
 - UI: Tailwind CSS and shadcn/ui.
@@ -30,9 +31,8 @@ MVP non-goals:
 - Database and auth: Supabase PostgreSQL, Supabase Auth, and Postgres RLS.
 - Storage: Cloudflare R2 private buckets with signed URLs.
 - Background jobs: Inngest.
-- Notifications: EmailJS for transactional email and Termii for initial SMS support.
-- Offline: deferred; no PWA, service-worker, IndexedDB/Dexie, or desktop-runtime dependency is part of the current cloud build.
-- Monitoring and analytics: Sentry plus PostHog or an internal event table.
+- Notifications: EmailJS for transactional email and Termii for SMS.
+- Monitoring and analytics: Sentry, plus PostHog when its key is set.
 - Hosting: Vercel, Supabase, Cloudflare R2, and Inngest.
 
 ## Local Development
@@ -48,7 +48,7 @@ pnpm dev
 
 The app runs at `http://localhost:3000`. Configure your own Supabase project and private R2 bucket using the sections below, and apply the database migrations before using the app. Optional integrations require their own credentials.
 
-Personal editor/agent settings, local environments, and generated files are excluded from Git. Configure those tools yourself if needed. Shared build/test configuration, the dependency lockfile, and the credential-free `.env.example` stay versioned so fresh clones can be installed and checked. Run `pnpm check` locally before pushing; CI runs the same gate, and the end-to-end journeys, on every pull request and push to `main`. Next.js regenerates its type declarations during development, builds, and `pnpm typecheck`.
+Personal editor/agent settings, local environments, and generated files are excluded from Git. Configure those tools yourself if needed. Shared build/test configuration, the dependency lockfile, and the credential-free `.env.example` stay versioned so fresh clones can be installed and checked. Run `pnpm check` locally before pushing; CI runs the same gate, plus the SQL tests and the end-to-end journeys, on every pull request and push to `main`. Next.js regenerates its type declarations during development, builds, and `pnpm typecheck`.
 
 Example authenticated API calls:
 
@@ -102,15 +102,15 @@ Expected variable groups:
 
 - App: `NEXT_PUBLIC_APP_URL`.
 - Scheduled maintenance: server-only `CRON_SECRET` (at least 16 random characters).
-- Supabase: `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, `SUPABASE_JWKS_URL`, `SUPABASE_PROJECT_REF`, `SUPABASE_DB_URL`, and `SUPABASE_POOLER_URL`.
+- Supabase: `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, and `SUPABASE_SECRET_KEY`.
 - Cloudflare R2: `CLOUDFLARE_R2_ACCOUNT_ID`, `CLOUDFLARE_R2_ACCESS_KEY_ID`, `CLOUDFLARE_R2_SECRET_ACCESS_KEY`, `CLOUDFLARE_R2_BUCKET_NAME`, `CLOUDFLARE_R2_ENDPOINT`, `CLOUDFLARE_R2_REGION`, and `CLOUDFLARE_R2_SIGNED_URL_TTL_SECONDS`.
 - File uploads: `FILE_UPLOAD_MAX_BYTES` and `FILE_UPLOAD_ALLOWED_MIME_TYPES`.
 - Inngest: event key and signing key.
-- Email: server-only EmailJS credentials, optional `EMAIL_REPLY_TO_EMAIL`, and `EMAIL_TIMEOUT_MS` for invitations, signing links, task assignments, and reminders. `EMAIL_PROVIDER=emailjs` documents the temporarily pinned provider.
-- AI Flow: server-only `AI_PROVIDER`, `AI_MODEL`, `AI_TIMEOUT_MS`, and the selected adapter's credential (currently `GEMINI_API_KEY`) for stateless, schema-validated document editing.
-- SMS: Termii credentials, with Africa's Talking placeholders reserved for a later provider switch.
+- Email: server-only EmailJS credentials, optional `EMAIL_REPLY_TO_EMAIL`, and `EMAIL_TIMEOUT_MS` for invitations, signing links, task assignments, and reminders.
+- AI Flow: server-only `AI_PROVIDER`, `AI_MODEL`, `AI_TIMEOUT_MS`, optional `AI_EFFORT`, and the selected adapter's credential (`GEMINI_API_KEY` or `OPENROUTER_API_KEY`).
+- SMS: `SMS_PROVIDER` (`termii` or `mock`; the mock is refused in production), `SMS_TIMEOUT_MS`, and the Termii credentials.
 - Rate limiting: `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` share one budget across instances; when unset, production counts per process and dev/CI do not limit. `CLIENT_IP_HEADER` and `TRUSTED_PROXY_COUNT` say which header your proxy sets and how many proxies append to it (see [Denial-of-service protection](#denial-of-service-protection)).
-- Observability: Sentry DSN and PostHog key or internal analytics settings.
+- Observability: Sentry DSNs, and the PostHog key and host (analytics stay off without the key).
 
 Do not commit real secrets. Keep local secrets in `.env.local` and deployment secrets in the target hosting provider.
 
@@ -118,20 +118,20 @@ Do not commit real secrets. Keep local secrets in `.env.local` and deployment se
 
 The template studio includes a persistent Flow chat beside a single free-form document canvas. Blocks remain in one ordered flow inside the visible printable boundary—there are no fixed header, body, or footer regions. Flow can answer questions, create blocks, revise or move existing content, update document details and branding, and explain what it changed. Document actions are returned as compact structured operations, validated against the canonical Zod schemas, applied to the unsaved browser draft, highlighted in the page margin, and grouped into an undoable change receipt inside the conversation.
 
-Gemini is the currently enabled AI adapter. It uses the official Google Gen AI SDK and stable Interactions API with provider-side storage disabled (`store: false`). Flow's business contract identifies models by provider plus exact model and never silently switches to another model. The application sends a bounded copy of its own Supabase-backed conversation history on each turn, so the team retains the template chat without relying on provider interaction retention. Flow cannot publish or archive a template. Existing logos and images are preserved unless removal is explicitly requested, and ambiguous destructive requests require confirmation.
+Gemini is the default AI adapter; OpenRouter is also registered. The Gemini adapter uses the official Google Gen AI SDK and stable Interactions API with provider-side storage disabled (`store: false`). Flow's business contract identifies models by provider plus exact model and never silently switches to another model. The application sends a bounded copy of its own Supabase-backed conversation history on each turn, so the team retains the template chat without relying on provider interaction retention. Flow cannot publish or archive a template. Existing logos and images are preserved unless removal is explicitly requested, and ambiguous destructive requests require confirmation.
 
 Create a Gemini API key in Google AI Studio, restrict it to the Gemini API, and configure the server-only variables:
 
 ```bash
 AI_PROVIDER=gemini
 AI_MODEL=gemini-3.8-flash
-AI_TIMEOUT_MS=30000
+AI_TIMEOUT_MS=90000
 GEMINI_API_KEY=<your-key>
 ```
 
-`AI_PROVIDER` defaults to the registered `gemini` adapter. Flow offers the models in `src/services/ai/approved-models.ts` (Gemini 3.8, 3.6 and 3.5 Flash), and each member picks one under Flow's message box; the choice is remembered on their device and the server refuses any model not on that list. `AI_MODEL` (default `gemini-3.8-flash`) covers requests that name no model. The Flow service itself is provider-neutral: adding another adapter is isolated to the provider registry and its credential configuration. An unregistered provider is rejected without fallback.
+`AI_PROVIDER` defaults to `gemini`. Flow offers the models in `src/services/ai/approved-models.ts` (Gemini 3.8, 3.6 and 3.5 Flash), and each member picks one under Flow's message box; the choice is remembered on their device and the server refuses any model not on that list. `AI_MODEL` (default `gemini-3.8-flash`) covers requests that name no model, and `AI_TIMEOUT_MS` defaults to 90 seconds. An unregistered provider is rejected without fallback.
 
-Restart the application after changing local environment values. In deployed environments, add the same values to the hosting provider and redeploy. Only active organization owners and managers can use a template's shared Flow conversation.
+Restart the application after changing local environment values. In deployed environments, add the same values to the hosting provider and redeploy. Any active member with edit access to a template can use its shared Flow conversation.
 
 Authenticated example:
 
@@ -154,7 +154,7 @@ curl -X POST http://localhost:3000/api/templates/flow \
 
 Inviting a person sends an email containing a one-time BizFlow invite URL. The same server-side provider-neutral transport delivers private, seven-day document signing links, task assignments, and reminders without exposing tokens or provider credentials to browser code.
 
-Transactional delivery is temporarily pinned to EmailJS in code. A missing or stale `EMAIL_PROVIDER` value cannot route mail through Resend. Keep `EMAIL_PROVIDER=emailjs` in deployed environments to document the active provider. `EMAIL_TIMEOUT_MS` defaults to 10 seconds, and `EMAIL_REPLY_TO_EMAIL` can remain empty until a monitored reply address is available.
+EmailJS is the only email provider. `EMAILJS_PRIVATE_KEY` is required in production. `EMAIL_TIMEOUT_MS` defaults to 10 seconds, and `EMAIL_REPLY_TO_EMAIL` can remain empty until a monitored reply address is available.
 
 EmailJS setup:
 
@@ -162,11 +162,7 @@ EmailJS setup:
 2. In the selected EmailJS template, set **To Email** to `{{to_email}}`, **Subject** to `{{subject}}`, and the content source to `{{{message_html}}}`. Triple braces are required so the already-escaped application HTML is rendered instead of displayed as text.
 3. Use the connected service's default From Email. Set the dashboard's From Name to the desired sender label. Leave Reply To empty when `EMAIL_REPLY_TO_EMAIL` is not configured.
 
-The EmailJS REST API permits one request per second. BizFlow serializes sends within each running application instance so multi-recipient signing invitations do not burst through that limit. EmailJS receives the internal delivery reference for tracing, but unlike Resend it does not provide an equivalent idempotency-key guarantee.
-
-Paused Resend adapter:
-
-The standalone Resend adapter remains in the repository for later reactivation after sender-domain verification. It is not imported by the active shared transport, and Resend credentials are not read by runtime email configuration.
+The EmailJS REST API permits one request per second. BizFlow serializes sends within each running application instance so multi-recipient signing invitations do not burst through that limit. EmailJS has no idempotency-key guarantee.
 
 The application owns the full branded HTML document (`wrapEmailDocument` in `src/services/email/html.ts`) and passes it to EmailJS along with a plain-text body. EmailJS receives the delivery reference for tracing without exposing raw tokens.
 
@@ -186,36 +182,9 @@ npx supabase link --project-ref <your-project-ref>
 npx supabase db push
 ```
 
-If the CLI cannot be linked, open the Supabase SQL Editor and run the migration files in order:
+If the CLI cannot be linked, run the files in `supabase/migrations` in filename order in the Supabase SQL Editor.
 
-```text
-supabase/migrations/20260708170500_sprint_2_organizations_roles.sql
-supabase/migrations/20260708174500_sprint_3_rls_permissions.sql
-supabase/migrations/20260708190000_sprint_4_documents.sql
-supabase/migrations/20260717190016_sprint_5_document_versioning_comments.sql
-supabase/migrations/20260717193648_sprint_5_atomic_document_comments.sql
-supabase/migrations/20260717194631_sprint_5_completion_archive_hardening.sql
-supabase/migrations/20260717205037_document_templates_signing_recents.sql
-supabase/migrations/20260718002902_audit_security_hardening.sql
-supabase/migrations/20260718070000_generated_document_finalizations.sql
-supabase/migrations/20260718171349_sprint_7_internal_submissions.sql
-supabase/migrations/20260718175458_sprint_7_submission_function_hardening.sql
-supabase/migrations/20260718180607_sprint_7_submission_drawing_values.sql
-supabase/migrations/20260718181552_sprint_7_submission_upload_hardening.sql
-supabase/migrations/20260718184631_sprint_7_submission_storage_cleanup.sql
-supabase/migrations/20260718190946_sprint_8_submission_review_workflow.sql
-supabase/migrations/20260718194429_sprint_8_submission_function_lint.sql
-supabase/migrations/20260723172350_template_flow_messages.sql
-supabase/migrations/20260725200000_audit_log_hash_chain.sql
-supabase/migrations/20260729121109_template_content_v3_expand.sql
-supabase/migrations/20260730090000_sprint_9_tasks_reminders.sql
-supabase/migrations/20260730110000_sprint_10_sms.sql
-supabase/migrations/20260730120000_sprint_11_public_form_links.sql
-supabase/migrations/20260730180000_sprint_10_notification_preferences.sql
-supabase/migrations/20260803160319_document_upload_authorization_barrier.sql
-```
-
-The Sprint 3 through Sprint 8 migrations include explicit Data API grants for `authenticated` and `service_role`, plus PostgREST schema-cache reloads. The guided-document migration adds organization-wide template revisions, immutable per-document snapshots, shared answers, unordered all-party signer state, per-user recent access, and tenant-scoped RLS. The audit hardening migration closes profile-email claiming and moves high-integrity mutations into transactional service-role RPCs. The finalization migration promotes one deterministic, create-only R2 PDF to an exact immutable document version. Sprint 7 adds role-aware submissions, immutable template snapshots, optimistic draft revisions, checksum-bound create-only file allocations, recoverable file tombstones, expiry-safe object cleanup, and atomic create/save/submit RPCs with audit evidence. Sprint 8 adds assignment, requested-change resubmission, binding manager decisions, immutable comments/activity, and assigned-only external-reviewer access. The Flow migration adds manager-visible, template-scoped chat history with browser writes revoked and service-role persistence.
+`pnpm supabase:check` (`supabase migration list --linked`) shows which migrations the linked project has applied. After a schema change, run `pnpm db:types` to regenerate `src/types/database.ts` from the local stack; CI fails when it differs from what the migrations produce.
 
 The document upload-authorization barrier migration (`20260803160319`) needed a one-off `reconcile_document_upload_authorization_barriers` run when it was first rolled out over existing data. `20261005110000_db_hygiene` drops that function, so a database that never ran it must do so before applying that migration; a fresh database needs no extra step.
 
@@ -254,73 +223,6 @@ Implemented guided-document pages:
 - `/submissions/new` for starting a draft from a published template.
 - `/submissions/:id` for draft/resubmission editing, verified files, assignment, review decisions, comments, and activity history.
 
-Planned routes may be adjusted during implementation.
-
-Organizations and access:
-
-- `POST /api/organizations`
-- `GET /api/organizations/current`
-- `POST /api/invites`
-- `GET /api/invites/:token`
-- `POST /api/invites/:token/accept`
-- `GET /api/members`
-- `PATCH /api/members/:id/role`
-- `PATCH /api/members/:id/disable`
-
-Documents and folders:
-
-- `GET /api/folders`
-- `POST /api/folders`
-- `PATCH /api/folders/:id`
-- `DELETE /api/folders/:id`
-- `GET /api/documents`
-- `POST /api/documents`
-- `GET /api/documents/:id`
-- `POST /api/documents/:id/replace-upload-url`
-- `POST /api/documents/:id/replace`
-- `POST /api/documents/:id/archive`
-
-Templates and submissions:
-
-- `GET /api/templates`
-- `POST /api/templates`
-- `GET /api/templates/:id`
-- `PATCH /api/templates/:id`
-- `POST /api/templates/:id/duplicate`
-- `POST /api/templates/:id/archive`
-- `GET /api/submissions`
-- `POST /api/submissions`
-- `GET /api/submissions/:id`
-- `PATCH /api/submissions/:id`
-- `POST /api/submissions/:id/submit`
-- `POST /api/submissions/:id/assign`
-- `POST /api/submissions/:id/status`
-- `POST /api/submissions/:id/file-upload-url`
-
-Public forms:
-
-- `POST /api/public-forms`
-- `GET /api/public-forms/:token`
-- `POST /api/public-forms/:token/submit`
-- `POST /api/public-forms/:token/file-upload-url`
-- `POST /api/public-forms/:id/disable`
-
-Comments, tasks, and reminders:
-
-- `GET /api/comments?target_type=submission&target_id=...`
-- `POST /api/comments`
-- `GET /api/tasks`
-- `POST /api/tasks`
-- `GET /api/tasks/:id`
-- `PATCH /api/tasks/:id`
-- `POST /api/tasks/:id/complete`
-- `POST /api/reminders`
-- `PATCH /api/reminders/:id`
-
-Activity, audit, and background jobs:
-
-- `POST /api/inngest`
-
 ## Denial-of-service protection
 
 Host-independent, in the app (`src/lib/rate-limit.ts`, `src/lib/request-rate-limit.ts`):
@@ -341,7 +243,9 @@ Run the aggregate local quality gate before submitting changes:
 pnpm check
 ```
 
-The aggregate gate runs lint, strict TypeScript, unit/integration tests, production-code duplication detection, a production build, and a production dependency audit. When configured with local secrets, also run `pnpm supabase:check`.
+The aggregate gate runs, in order: lint, typecheck, a test-integrity check (no committed `.only`/`.skip`/`.todo`), the Vitest suite, the duplication budget, dead-code detection (knip, including `knip --production`), the production build, the per-route JavaScript budget, and the production dependency audit.
+
+PDF output is guarded by `src/services/document-pdf-fingerprint.test.ts`. When a change moves its hashes, render the sample with `RENDER_SAMPLE=1 pnpm vitest run src/services/document-pdf-fingerprint.test.ts`, look at it, then update the constant.
 
 The database's own rules are proven against a real database by the scripts in `supabase/tests/`: access levels, sharing, submissions, signing, invites and public forms, each exercising the SQL functions directly, plus `catalog-security.sql`, which reads the migrated catalog and fails if a table in `public` or `private` lacks enabled and forced row-level security, if a non-trigger function is executable by `public`, `anon` or `authenticated` outside its justified allow-list, if a security definer function leaves `search_path` unset, if signed-in or anonymous callers hold any privilege on a relation (or by default on new ones), or if `realtime.messages` carries an unintended policy. Signed-in users have no direct Data API access to tenant tables: tenant data reaches them only through the service layer, which checks current role-definition permissions.
 
