@@ -172,13 +172,39 @@ function withRuns<Block extends { runs?: TextRun[]; text: string }>(block: Block
   return (fitted ? { ...rest, runs: fitted } : rest) as Block
 }
 
-function withItemRuns<Block extends { itemRuns?: Array<TextRun[] | null>; items: string[] }>(block: Block): Block {
-  const { itemRuns, ...rest } = block
+function withItemRuns<Block extends { itemRuns?: Array<TextRun[] | null>; items: string[]; levels?: number[] }>(block: Block): Block {
+  const { itemRuns, levels, ...rest } = block
   const fitted = itemRuns?.length === block.items.length
     ? itemRuns.map((runs, index: number) => fitRuns(block.items[index] ?? "", runs) ?? null)
     : []
+  const nested = fitLevels(block.items.length, levels)
 
-  return (fitted.some(Boolean) ? { ...rest, itemRuns: fitted } : rest) as Block
+  return { ...rest, ...(fitted.some(Boolean) ? { itemRuns: fitted } : {}), ...(nested ? { levels: nested } : {}) } as Block
+}
+
+/** How deep a list item can sit: 0 at the top, then (a), then (i). */
+export const MAX_LIST_LEVEL = 2
+
+/**
+ * A list's levels, one an item, each at most one deeper than the item above
+ * it and the first at the top; none when every item is at the top.
+ *
+ * @param count - How many items the list has.
+ * @param levels - The levels as given, if any.
+ * @returns The levels that hold, or undefined for a flat list.
+ */
+export function fitLevels(count: number, levels: readonly number[] | undefined): number[] | undefined {
+  if (!levels?.some((level) => level > 0)) {
+    return undefined
+  }
+
+  const fitted: number[] = []
+
+  for (let index = 0; index < count; index += 1) {
+    fitted.push(Math.max(0, Math.min(levels[index] ?? 0, index === 0 ? 0 : fitted[index - 1]! + 1, MAX_LIST_LEVEL)))
+  }
+
+  return fitted.some((level) => level > 0) ? fitted : undefined
 }
 
 // The block shapes as plain objects, for building other shapes from; the
@@ -211,6 +237,8 @@ const listItemsShape = {
   items: z.array(z.string().trim().min(1).max(2_000)).min(1).max(MAX_LIST_ITEMS),
   // Each item's formatting, beside it; null for a plain item.
   itemRuns: z.array(textRunsSchema.nullable()).max(MAX_LIST_ITEMS).optional(),
+  // How far each item is set in: 0 at the top, 1 under it, 2 below that.
+  levels: z.array(z.number().int().min(0).max(MAX_LIST_LEVEL)).max(MAX_LIST_ITEMS).optional(),
   ...visibleWhenShape
 } as const
 
@@ -542,8 +570,9 @@ export const templateLayoutSchema = z
      * section, carried over pages.
      */
     sectionStyle: z.enum(["plain", "band", "box"]).optional(),
-    // Titled sections numbered in order: A, B, C or 1, 2, 3. Absent, none.
-    sectionNumbers: z.enum(["letters", "numbers"]).optional(),
+    // Titled sections numbered in order: A, B, C or 1, 2, 3, or as clauses,
+    // 1, 2, 3 with each section's numbered lists going on 3.1, 3.2. Absent, none.
+    sectionNumbers: z.enum(["letters", "numbers", "clauses"]).optional(),
     /**
      * Words in the top and bottom margins, left, centre and right, such as a
      * form's number and revision. {page}, {pages} and {title} are filled in

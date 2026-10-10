@@ -1352,6 +1352,30 @@ describe("Flow building with the blocks it adds", () => {
     expect(String(readProviderRequests(early.aiProvider)[1]?.input)).toMatch(/formula: Nothing above is called \{Subtotal\}/)
   })
 
+  it("numbers an agreement's clauses: sections 1, 2 with their lists going on 1.1, and sub-clauses a level in", async () => {
+    const { aiProvider, run } = runFlow(createContent(), [
+      { type: "set_layout", summary: "Numbered the clauses", payload: { sectionNumbers: "clauses" } },
+      { type: "add_block", summary: "Added the services clause", payload: { afterBlockId: null, block: { type: "numbered_list", items: ["The provider does the work.", "On time.", "With care."], levels: [0, 1, 1] } } },
+    ])
+    const draft = (await run).proposal?.candidateDraft.content
+    const instruction = String(readProviderRequests(aiProvider)[0]?.systemInstruction)
+
+    expect(draft && "layout" in draft ? draft.layout.sectionNumbers : null).toBe("clauses")
+    expect(draft?.blocks.at(-1)).toMatchObject({ type: "numbered_list", levels: [0, 1, 1] })
+    expect(instruction).toContain('"levels"')
+    expect(instruction).toContain("letters|numbers|clauses|none")
+
+    // Rewording the clauses keeps their sub-clauses; a list of another length starts flat unless Flow sets levels.
+    const content = createContent()
+    content.blocks.push({ id: FIELD_ID, type: "numbered_list", items: ["The provider does the work.", "On time.", "With care."], levels: [0, 1, 1] })
+    const reword = (items: string[]) => runFlow(content, [{ type: "update_block", summary: "Reworded the services clause", payload: { blockId: FIELD_ID, block: { type: "numbered_list", items } } }]).run
+    const kept = (await reword(["The provider does the work.", "Promptly.", "Carefully."])).proposal?.candidateDraft.content.blocks.at(-1)
+    const regrown = (await reword(["The provider does the work.", "Promptly."])).proposal?.candidateDraft.content.blocks.at(-1)
+
+    expect(kept).toMatchObject({ items: ["The provider does the work.", "Promptly.", "Carefully."], levels: [0, 1, 1] })
+    expect(regrown).not.toHaveProperty("levels")
+  })
+
   it("tells the model which operation failed and why, so its one correction lands", async () => {
     const add = { type: "add_block", summary: "Added a note", payload: { ref: "new:1", afterBlockId: null, block: { type: "paragraph", text: "A note.", alignment: "left" } } }
     const { aiProvider, run } = runFlow(createContent(), [add, { type: "move_block", summary: "Moved it up", payload: { blockId: "new:2", afterBlockId: null } }], [add])

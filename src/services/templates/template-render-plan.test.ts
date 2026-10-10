@@ -12,6 +12,7 @@ import {
 } from "@/services/templates/template-render-plan"
 import {
   createBlankTemplateContent,
+  templateContentV3Schema,
   templateLayoutSchema,
   type TemplateContentV2,
   type TemplateContentV3
@@ -501,3 +502,58 @@ function createStructuredContent(): TemplateContentV3 {
     ]
   }
 }
+
+describe("clause numbering", () => {
+  const id = (n: number): string => `30000000-0000-4000-8000-0000000000${String(n).padStart(2, "0")}`
+  const list = (n: number, items: number, levels?: number[]) => ({
+    id: id(n),
+    type: "numbered_list",
+    items: Array.from({ length: items }, (_, index) => `Item ${index + 1}`),
+    ...(levels ? { levels } : {}),
+  })
+  const numbered = (sectionNumbers: "clauses" | "numbers"): TemplateContentV3 => {
+    const blank = createBlankTemplateContent()
+
+    return templateContentV3Schema.parse({
+      ...blank,
+      layout: { ...blank.layout, sectionNumbers },
+      blocks: [
+        list(1, 2),
+        { id: id(2), type: "paragraph", text: "Between the lists.", alignment: "left" },
+        list(3, 7, [0, 1, 1, 2, 2, 0, 1]),
+        list(4, 1),
+        // A level can only go one deeper than the item above it, and a list starts at the top.
+        list(5, 3, [2, 2, 1]),
+      ],
+      sections: [
+        { id: id(11), label: "Services", startBlockId: id(1), pageBreakBefore: false, keepTogether: false },
+        { id: id(12), label: "Fees", startBlockId: id(4), pageBreakBefore: false, keepTogether: false },
+      ],
+    }) as TemplateContentV3
+  }
+  const markers = (content: TemplateContentV3): Array<readonly string[] | null> =>
+    createTemplateRenderPlan({ content, mode: "final", title: "Agreement" }).blocks.map((block) => block.listMarkers)
+
+  it("numbers a section's lists on from its own number, 3.1 and 3.2, with (a) and (i) under them", () => {
+    expect(markers(numbered("clauses"))).toEqual([
+      ["1.1", "1.2"],
+      null,
+      ["1.3", "(a)", "(b)", "(i)", "(ii)", "1.4", "(a)"],
+      ["2.1"],
+      ["2.2", "(a)", "(b)"],
+    ])
+    expect(createTemplateRenderPlan({ content: numbered("clauses"), mode: "final", title: "Agreement" }).blocks[3]?.sectionNumber).toBe("2.")
+  })
+
+  it("prints the same numbers in the preview and thumbnails: each section's number, then its clauses", () => {
+    const markup = renderToStaticMarkup(createElement(TemplatePreview, { renderPlan: createTemplateRenderPlan({ content: numbered("clauses"), mode: "final", title: "Agreement" }) }))
+
+    for (const printed of [">1. Services<", ">2. Fees<", ">1.3<", ">(ii)<", ">2.2<"]) {
+      expect(markup).toContain(printed)
+    }
+  })
+
+  it("starts each list at 1 under other numbering, keeping the levels", () => {
+    expect(markers(numbered("numbers"))).toEqual([["1.", "2."], null, ["1.", "(a)", "(b)", "(i)", "(ii)", "2.", "(a)"], ["1."], ["1.", "(a)", "(b)"]])
+  })
+})

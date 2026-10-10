@@ -39,6 +39,8 @@ export type TemplateRenderBlock = Readonly<{
   sectionLabel: string | null
   /** The number its section's title prints before it, such as "A." or "1.", or null. */
   sectionNumber: string | null
+  /** A numbered list's markers, one an item, such as "3.1", "(a)" and "(i)"; null for any other block. */
+  listMarkers: readonly string[] | null
   fieldGroupId: string | null
   fieldGroupLabel: string | null
   /** How many blocks its row sets side by side (1 when it is in no row). */
@@ -144,12 +146,22 @@ export function createTemplateRenderPlan(
   )
   const structure = createStructureIndex(input.content, canonicalIndexById)
   const opened = new Map<IndexedSection, string | null>()
-  const blocks = visibleBlocks.map(
-    (block: TemplateBlock, index: number): TemplateRenderBlock => ({
-      ...decorateRenderBlock(block, canonicalIndexById, structure, opened, layout.sectionNumbers),
-      cue: everyBranch ? branchCue(input.content, block, visibleBlocks[index - 1]) : null
-    })
-  )
+  // Under clause numbering, how many top-level items each section's lists have numbered so far.
+  const clauses = new Map<string | null, number>()
+  const blocks = visibleBlocks.map((block: TemplateBlock, index: number): TemplateRenderBlock => {
+    const decorated = decorateRenderBlock(block, canonicalIndexById, structure, opened, layout.sectionNumbers)
+    let listMarkers: string[] | null = null
+
+    if (block.type === "numbered_list") {
+      const asClauses = layout.sectionNumbers === "clauses"
+      const numbered = numberListItems(block.items.length, block.levels, asClauses ? decorated.sectionNumber : null, asClauses ? (clauses.get(decorated.sectionId) ?? 0) : 0)
+
+      listMarkers = numbered.markers
+      if (asClauses) clauses.set(decorated.sectionId, numbered.top)
+    }
+
+    return { ...decorated, listMarkers, cue: everyBranch ? branchCue(input.content, block, visibleBlocks[index - 1]) : null }
+  })
 
   return {
     title: resolvePrintedTitle(input.title, layout),
@@ -468,7 +480,7 @@ function decorateRenderBlock(
   structure: StructureIndex,
   opened: Map<IndexedSection, string | null>,
   numbering: TemplateLayout["sectionNumbers"]
-): Omit<TemplateRenderBlock, "cue"> {
+): Omit<TemplateRenderBlock, "cue" | "listMarkers"> {
   const canonicalIndex = canonicalIndexById.get(block.id) ?? -1
   const indexedSection = structure.sections.find(
     (candidate: IndexedSection): boolean =>
@@ -573,6 +585,76 @@ export const SECTION_BOX_INSET = SECTION_BOX_EDGE + 8
 /** The space under a boxed section, in points. */
 export const SECTION_BOX_GAP = 10
 
+/**
+ * A section's title as it prints, after its number when it has one: "3. Fees".
+ *
+ * @param section - The section.
+ * @returns Its title, or null for the untitled part before the first section.
+ */
+export function numberedSectionTitle(section: TemplateRenderSection): string | null {
+  const number = section.blocks[0]?.sectionNumber
+
+  return section.label && number ? `${number} ${section.label}` : section.label
+}
+
+/**
+ * A numbered list's markers. Top-level items count on from those before
+ * them: under a clause, after its number, as 3.1 and 3.2; otherwise 1. and
+ * 2. A level down they are (a), (b), and below that (i), (ii), each counting
+ * again from the first under a new item above.
+ *
+ * @param count - How many items.
+ * @param levels - Each item's level, or none for a flat list.
+ * @param clause - The section's number, such as "3.", under clause numbering.
+ * @param before - Top-level items numbered before this list.
+ * @returns The markers, and how many top-level items there are now.
+ */
+export function numberListItems(
+  count: number,
+  levels: readonly number[] | undefined,
+  clause: string | null,
+  before: number
+): { markers: string[]; top: number } {
+  const counts = [before, 0, 0]
+  const markers: string[] = []
+
+  for (let index = 0; index < count; index += 1) {
+    const level = Math.min(Math.max(levels?.[index] ?? 0, 0), 2)
+    const n = (counts[level] = counts[level]! + 1)
+
+    counts.fill(0, level + 1)
+    markers.push(
+      level === 0 ? (clause ? `${clause.replace(/\.$/, "")}.${n}` : `${n}.`) : level === 1 ? `(${lettersFor(n).toLowerCase()})` : `(${romanFor(n)})`
+    )
+  }
+
+  return { markers, top: counts[0]! }
+}
+
+// 1 to i, 4 to iv, 9 to ix, as far as a list goes.
+function romanFor(n: number): string {
+  const steps: ReadonlyArray<readonly [number, string]> = [[1000, "m"], [900, "cm"], [500, "d"], [400, "cd"], [100, "c"], [90, "xc"], [50, "l"], [40, "xl"], [10, "x"], [9, "ix"], [5, "v"], [4, "iv"], [1, "i"]]
+  let rest = n
+  let roman = ""
+
+  for (const [value, letters] of steps) {
+    for (; rest >= value; rest -= value) roman += letters
+  }
+
+  return roman
+}
+
+// 1 to A, 26 to Z, then AA and AB, as a spreadsheet's columns.
+function lettersFor(n: number): string {
+  let letters = ""
+
+  for (let rest = n; rest > 0; rest = Math.floor((rest - 1) / 26)) {
+    letters = String.fromCharCode(65 + ((rest - 1) % 26)) + letters
+  }
+
+  return letters
+}
+
 // The number a titled section prints before its title, counting from 0:
 // "A." to "Z.", then "AA.", "AB." as a spreadsheet's columns; or "1.", "2.".
 function formatSectionNumber(numbering: TemplateLayout["sectionNumbers"], index: number): string | null {
@@ -580,15 +662,5 @@ function formatSectionNumber(numbering: TemplateLayout["sectionNumbers"], index:
     return null
   }
 
-  if (numbering === "numbers") {
-    return `${index + 1}.`
-  }
-
-  let letters = ""
-
-  for (let rest = index + 1; rest > 0; rest = Math.floor((rest - 1) / 26)) {
-    letters = String.fromCharCode(65 + ((rest - 1) % 26)) + letters
-  }
-
-  return `${letters}.`
+  return numbering === "letters" ? `${lettersFor(index + 1)}.` : `${index + 1}.`
 }

@@ -560,7 +560,7 @@ function UnitBlocks({ actions, unit }: { actions: CanvasActions; unit: CanvasUni
         }}
       >
         {unit.blocks.map((renderBlock) => (
-          <CanvasBlock actions={actions} block={renderBlock.block} key={renderBlock.block.id} />
+          <CanvasBlock actions={actions} block={renderBlock.block} key={renderBlock.block.id} listMarkers={renderBlock.listMarkers} />
         ))}
         {actions.textEditable && !actions.narrow ? <RowSeams controller={actions.controller} unit={unit} /> : null}
         {FrameEdges && actions.textEditable && !actions.narrow && unit.columns === 1 && unit.blocks[0] ? (

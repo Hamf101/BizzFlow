@@ -1020,6 +1020,35 @@ describe("document PDF service", () => {
     expect((await titles("#F2C94C")).map((title) => title.color)).toEqual(letters.map(() => [0.07, 0.09, 0.13]))
   })
 
+  it("numbers clauses on from their section, 1.1 then (a) then (i), each level set further in", { timeout: PDF_RENDER_TIMEOUT_MS }, async () => {
+    const input = createPdfInput({ repeatHeader: false, repeatFooter: false })
+    const content = requireVersionThreeContent(input)
+    const id = (n: number): string => `58100000-0000-4000-8000-${String(n).padStart(12, "0")}`
+
+    content.layout = { ...content.layout, sectionNumbers: "clauses", sectionStyle: "plain" }
+    content.blocks = [
+      { id: id(1), type: "numbered_list", items: ["The work.", "Its parts.", "Their pieces.", "Its timing."], levels: [0, 1, 2, 0] },
+      { id: id(2), type: "numbered_list", items: ["Fees are due monthly."] },
+    ]
+    content.sections = [
+      { id: id(11), label: "Services", startBlockId: id(1), pageBreakBefore: false, keepTogether: false },
+      { id: id(12), label: "Fees", startBlockId: id(2), pageBreakBefore: false, keepTogether: false },
+    ]
+    content.fieldGroups = []
+    content.blockRules = []
+    input.signers = []
+
+    const metrics = pdfMetrics(input)
+    const pdf = await PDFDocument.load(await renderGeneratedDocumentPdf(input))
+    const texts = drawnTexts(pdf, 0)
+    const at = (text: string) => texts.find((drawn) => drawn.text === text)
+
+    expect(at("1. Services")).toBeDefined()
+    // Each marker a level further in, and its words hanging clear of it, so a long item wraps under its words.
+    expect(["1.1", "(a)", "(i)", "1.2", "2.1"].map((marker) => (at(marker)?.x ?? 0) - metrics.margin)).toEqual([12, 30, 48, 12, 12])
+    expect(["The work.", "Its parts.", "Their pieces.", "Its timing."].map((words) => (at(words)?.x ?? 0) - metrics.margin)).toEqual([38, 56, 74, 38])
+  })
+
   it("holds a boxed section's rows, cells and long text inside its edge over pages, open where a page breaks it", { timeout: PDF_RENDER_TIMEOUT_MS }, async () => {
     const input = createPdfInput({ repeatHeader: false, repeatFooter: false })
     const content = requireVersionThreeContent(input)

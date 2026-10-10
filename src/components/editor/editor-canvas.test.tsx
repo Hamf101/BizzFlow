@@ -301,3 +301,30 @@ it("fills in a page with nothing to design: answers go back, and a file field ho
   expect(document.querySelector("[contenteditable]")).toBeNull()
   expect(document.querySelector('[aria-label="Section title"]')).toBeNull()
 })
+
+it("numbers a section's list as its clauses, and Tab sets an item in a level as (a), Shift+Tab out again", async () => {
+  const L = "70000000-0000-4000-8000-000000000031"
+  const clauses: TemplateContentV3 = {
+    ...createEmptyDocumentContent(),
+    layout: { ...createEmptyDocumentContent().layout, sectionNumbers: "clauses" },
+    blocks: [{ id: L, type: "numbered_list", items: ["Pay monthly.", "Late fees.", "Interest."] }],
+    sections: [{ id: S, label: "Terms", startBlockId: L, keepTogether: false, pageBreakBefore: false }],
+  }
+  root = mount()
+  await act(async () => root.render(<Canvas initial={clauses} />))
+  const item = (index: number) => document.querySelector<HTMLElement>(`[data-caret-key="${L}:${index}"]`)!
+  const markers = () => [0, 1, 2].map((index) => document.querySelector<HTMLElement>(`[data-line-key="${L}:${index}"]`)!.style.getPropertyValue("--marker"))
+  const press = (index: number, shiftKey = false) =>
+    act(async () => void item(index).dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Tab", shiftKey })))
+
+  expect(markers()).toEqual(['"1.1"', '"1.2"', '"1.3"'])
+
+  // The first item has nothing above to sit under.
+  await press(0)
+  await press(1)
+  expect(markers()).toEqual(['"1.1"', '"(a)"', '"1.2"'])
+
+  await press(1, true)
+  expect(markers()).toEqual(['"1.1"', '"1.2"', '"1.3"'])
+  expect(controller.content.blocks[0]).toMatchObject({ levels: undefined })
+})

@@ -828,6 +828,8 @@ function applyUpdateBlockOperation(
     // and a box keeps the height and signer its author gave it unless Flow sets them.
     ..."runs" in existingBlock ? { runs: existingBlock.runs } : {},
     ..."itemRuns" in existingBlock ? { itemRuns: existingBlock.itemRuns } : {},
+    // A list restated with the same items keeps how far each is set in, unless Flow sets levels.
+    ..."levels" in existingBlock && "items" in payload.block && payload.block.items.length === existingBlock.items.length ? { levels: existingBlock.levels } : {},
     ..."boxHeight" in existingBlock ? { boxHeight: existingBlock.boxHeight } : {},
     ..."signer" in existingBlock ? { signer: existingBlock.signer } : {},
     ...payload.block,

@@ -171,8 +171,10 @@ export function PageSetupPanel({
         onChange={(sectionNumbers) => onChange({ ...layout, sectionNumbers: sectionNumbers === "none" ? undefined : sectionNumbers })}
         options={[
           ["none", "None"],
-          ["letters", "A, B, C"],
-          ["numbers", "1, 2, 3"],
+          // Each as it prints; 1.1 numbers sections 1, 2 and their numbered lists 1.1, 1.2, as a contract's clauses.
+          ["letters", "A."],
+          ["numbers", "1."],
+          ["clauses", "1.1"],
         ]}
         value={layout.sectionNumbers ?? "none"}
       />
@@ -310,7 +312,7 @@ function Choice<Value extends string>({
           <button
             aria-checked={option === value}
             className={cn(
-              "h-8 rounded-[8px] px-2.5 text-[13px] text-muted-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40",
+              "h-8 rounded-[8px] px-2.5 text-[13px] whitespace-nowrap text-muted-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40",
               option === value && "bg-card text-foreground shadow-sm"
             )}
             key={option}

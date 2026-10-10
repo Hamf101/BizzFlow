@@ -935,7 +935,7 @@ function splitListBlock(
     (
       item: string,
       itemIndex: number
-    ): Array<{ marker: string; runs?: TextRun[]; text: string }> => {
+    ): Array<{ level: number; marker: string; runs?: TextRun[]; text: string }> => {
       const formatted = block.itemRuns?.[itemIndex]
       const pieces = formatted
         ? splitRuns(formatted, scaleChunk(entryCharacters, formatted, 10)).map((runs: TextRun[]) => ({ runs, text: runs.map((run: TextRun): string => run.text).join("") }))
@@ -943,18 +943,19 @@ function splitListBlock(
 
       return pieces.map((piece, chunkIndex: number) => ({
         ...piece,
+        level: block.levels?.[itemIndex] ?? 0,
         marker:
           chunkIndex === 0
             ? block.type === "bullet_list"
               ? "-"
-              : `${itemIndex + 1}.`
+              : (renderBlock.listMarkers?.[itemIndex] ?? `${itemIndex + 1}.`)
             : ""
       }))
     }
   )
   const chunks: PdfBlockFlowItem[] = []
   const chunkHeight = Math.min(LIST_CHUNK_HEIGHT, pageCapacity * 0.72)
-  let currentEntries: Array<{ marker: string; runs?: TextRun[]; text: string }> = []
+  let currentEntries: Array<{ level: number; marker: string; runs?: TextRun[]; text: string }> = []
   let currentHeight = 0
 
   const flush = (): void => {
@@ -973,7 +974,8 @@ function splitListBlock(
           : undefined
       },
       renderBlock,
-      listMarkers: currentEntries.map((entry): string => entry.marker)
+      listMarkers: currentEntries.map((entry): string => entry.marker),
+      listLevels: currentEntries.map((entry): number => entry.level)
     })
     currentEntries = []
     currentHeight = 0

@@ -37,6 +37,7 @@ import { cn } from "@/lib/utils"
 import {
   createTemplateRenderPlan,
   shouldRenderTemplateFooter,
+  numberedSectionTitle,
   shouldRenderTemplateHeader,
   type TemplateRenderBlock,
   type TemplateRenderPlan,
@@ -350,7 +351,7 @@ function GeneratedSection({
           data-template-section-label="true"
           style={{ color: "var(--document-primary)" }}
         >
-          {section.label}
+          {numberedSectionTitle(section)}
         </h2>
       )}
       {groups.map((group: TemplateWebRenderGroup, groupIndex: number) => (
@@ -447,6 +448,7 @@ function GeneratedFieldGroup({
                 answers={answers}
                 block={renderBlock.block}
                 editable={editable}
+                listMarkers={renderBlock.listMarkers}
                 fileFieldContent={fileFieldContent}
                 onAnswerChange={onAnswerChange}
                 recipientSigned={recipientSigned}
@@ -472,6 +474,7 @@ export function GeneratedBlock({
   block,
   editable,
   fileFieldContent,
+  listMarkers,
   onAnswerChange,
   recipientSigned,
   recipientSigning
@@ -483,12 +486,14 @@ export function GeneratedBlock({
   onAnswerChange: (fieldKey: string, value: unknown) => void
   recipientSigned: boolean
   recipientSigning: boolean
+  listMarkers?: readonly string[] | null
 }): ReactElement {
   if (isStaticTemplateBlock(block)) {
     return (
       <TemplateStaticBlock
         accentColorVariable="var(--document-accent)"
         block={block}
+        listMarkers={listMarkers}
         primaryColorVariable="var(--document-primary)"
       />
     )

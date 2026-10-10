@@ -736,6 +736,10 @@ async function drawPdfLibColumns(
   return bottom
 }
 
+const LIST_LEVEL_INDENT = 18
+// Room for a number as wide as 12.12 or (viii) before an item's words.
+const LIST_NUMBER_HANG = 26
+
 async function drawPdfLibList(
   item: PdfBlockFlowItem,
   context: PdfLibRenderContext,
@@ -755,39 +759,22 @@ async function drawPdfLibList(
     const defaultMarker =
       item.block.type === "bullet_list" ? "-" : `${index + 1}.`
     const marker = item.listMarkers?.[index] ?? defaultMarker
-    const text = `${marker}${marker.length === 0 ? "    " : " "}${value}`
+    // Each level down is set in by a further 18 points, and the words hang
+    // clear of the marker, so a long item wraps under its words, not its number.
+    const indent = 12 + (item.listLevels?.[index] ?? 0) * LIST_LEVEL_INDENT
+    const hang = item.block.type === "bullet_list" ? 10 : LIST_NUMBER_HANG
+    const lineHeight = 10 * (context.layout.lineSpacing ?? 1.5)
+    const ink = rgb(0.07, 0.09, 0.13)
     const runs = item.block.itemRuns?.[index]
 
-    if (runs) {
-      cursorY =
-        (await drawRichPdfText(
-          context,
-          marker ? [{ text: `${marker} ` }, ...runs] : runs,
-          cursorY,
-          frame.x + 12,
-          frame.width - 12,
-          10,
-          10 * (context.layout.lineSpacing ?? 1.5),
-          false,
-          rgb(0.07, 0.09, 0.13),
-          "left"
-        )) - 3
-      continue
+    if (marker) {
+      drawWrappedPdfText(context, marker, cursorY, frame.x + indent, frame.width - indent, 10, lineHeight, context.regularFont, ink, "left")
     }
 
     cursorY =
-      drawWrappedPdfText(
-        context,
-        text,
-        cursorY,
-        frame.x + 12,
-        frame.width - 12,
-        10,
-        10 * (context.layout.lineSpacing ?? 1.5),
-        context.regularFont,
-        rgb(0.07, 0.09, 0.13),
-        "left"
-      ) - 3
+      (runs
+        ? await drawRichPdfText(context, runs, cursorY, frame.x + indent + hang, frame.width - indent - hang, 10, lineHeight, false, ink, "left")
+        : drawWrappedPdfText(context, value, cursorY, frame.x + indent + hang, frame.width - indent - hang, 10, lineHeight, context.regularFont, ink, "left")) - 3
   }
 
   return cursorY - 5

@@ -287,7 +287,7 @@ const flowWireOperationSchema = z.discriminatedUnion("type", [
           fieldStyle: templateLayoutSchema.shape.fieldStyle,
           sectionStyle: templateLayoutSchema.shape.sectionStyle,
           // "none" takes numbering away, where absent leaves it as it is.
-          sectionNumbers: z.enum(["letters", "numbers", "none"]).optional(),
+          sectionNumbers: z.enum(["letters", "numbers", "clauses", "none"]).optional(),
           headerText: templateLayoutSchema.shape.headerText,
           footerText: templateLayoutSchema.shape.footerText,
           headerPolicy: templateLayoutSchema.shape.headerPolicy.unwrap().optional(),

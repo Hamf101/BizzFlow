@@ -43,6 +43,8 @@ export type PdfBlockFlowItem = {
   answerOverride?: string
   fieldContinued?: boolean
   listMarkers?: string[]
+  /** How far each of a list's items is set in: 0 at the top. */
+  listLevels?: number[]
   /** Where it sits across the page, when not across the whole of it. */
   frame?: BlockFrame
   /** A cell that the next cell on its page sits on, with no gap between. */

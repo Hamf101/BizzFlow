@@ -1,4 +1,4 @@
-import { type TemplateBlock, type TemplateContentV3, type TextRun } from "@/types/template"
+import { fitLevels, type TemplateBlock, type TemplateContentV3, type TextRun } from "@/types/template"
 import { fitRuns, MAX_LIST_ITEMS, MAX_TEMPLATE_BLOCK_COUNT, ruleHasEffect } from "@/types/template-limits"
 import {
   deleteTemplateBlock,
@@ -473,8 +473,8 @@ export function normalizeContentForSave(content: TemplateContentV3): TemplateCon
   }
 }
 
-/** One list item with its formatting, as the canvas edits items. */
-export type ListEntry = Readonly<{ runs?: TextRun[]; text: string }>
+/** One list item with its formatting and how far it is set in, as the canvas edits items. */
+export type ListEntry = Readonly<{ level?: number; runs?: TextRun[]; text: string }>
 
 /**
  * A list's items beside their formatting.
@@ -483,7 +483,7 @@ export type ListEntry = Readonly<{ runs?: TextRun[]; text: string }>
  * @returns One entry for each item.
  */
 export function listEntries(block: ListBlock): ListEntry[] {
-  return block.items.map((text, index): ListEntry => ({ runs: block.itemRuns?.[index] ?? undefined, text }))
+  return block.items.map((text, index): ListEntry => ({ level: block.levels?.[index] ?? 0, runs: block.itemRuns?.[index] ?? undefined, text }))
 }
 
 /**
@@ -501,6 +501,7 @@ export function withEntries<Block extends ListBlock>(block: Block, entries: read
     ...block,
     itemRuns: itemRuns.some(Boolean) ? itemRuns : undefined,
     items: entries.map((entry) => entry.text),
+    levels: fitLevels(entries.length, entries.map((entry) => entry.level ?? 0)),
   }
 }
 
