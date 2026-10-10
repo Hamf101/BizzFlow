@@ -153,9 +153,10 @@ export function FileListLayout({
 }
 
 /**
- * Things on a desk: folders and pages with their names underneath. The name's
- * link covers the whole tile, and the tile's menu shows on hover or focus. A
- * ⌘-, Ctrl-, or Shift-click selects a tile instead of opening it.
+ * Cards the way Templates draws them: the name over the item's picture and
+ * its date under it. The name's link covers the whole card; the menu sits in
+ * the card's corner on wide screens and at its foot on phones, never on the
+ * picture. A ⌘-, Ctrl-, or Shift-click selects a card instead of opening it.
  *
  * @param props - The open folder's entries, the chosen one, and extra classes.
  * @returns The Icons layout.
@@ -173,7 +174,7 @@ export function FileIconsLayout({
     <ul
       aria-label="Files"
       className={cn(
-        "grid grid-cols-3 gap-x-1.5 gap-y-3.5 sm:grid-cols-[repeat(auto-fill,minmax(112px,1fr))] sm:gap-x-4 sm:gap-y-5",
+        "grid grid-cols-2 gap-2.5 sm:grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] sm:gap-4 xl:grid-cols-[repeat(auto-fill,minmax(14rem,1fr))]",
         className
       )}
       data-slot="file-icons"
@@ -182,37 +183,44 @@ export function FileIconsLayout({
         <SelectableFileItem
           as="li"
           className={cn(
-            "group/tile relative grid min-w-0 content-start justify-items-center gap-1.5 rounded-[12px] px-1 pt-2.5 pb-2 text-center transition-colors hover:bg-card/65 sm:px-1.5",
+            "group/tile relative grid min-w-0 grid-rows-[auto_1fr_auto] overflow-hidden rounded-[12px] border border-border bg-card/70 transition-[translate,box-shadow,border-color,background-color] duration-200 active:scale-[0.98] sm:hover:border-primary/35 sm:hover:shadow-[0_10px_24px_rgba(37,35,41,0.1)] sm:motion-safe:hover:-translate-y-0.5",
             RISE,
-            entry.id === selected && "bg-secondary/70"
+            entry.id === selected && "border-primary/45 bg-secondary/70"
           )}
           itemId={entry.id}
           key={entry.id}
           slot="file-tile"
           style={riseDelay(index)}
         >
-          {/* First in the markup so Tab meets it where the eye does, at the
-              tile's top corner, before the name below the picture. */}
-          {entry.menu ? (
-            <div className="absolute top-1 right-1 z-10 opacity-0 transition-opacity group-focus-within/tile:opacity-100 group-hover/tile:opacity-100 has-[[data-popup-open]]:opacity-100 [@media(hover:none)]:opacity-100">
-              {entry.menu}
-            </div>
-          ) : null}
-          <span className="grid h-[70px] w-[58px] items-end justify-items-center sm:h-[86px] sm:w-[72px]">
-            <FileArt entry={entry} size="icon" />
-          </span>
-          <span className="flex max-w-full min-w-0 items-start justify-center gap-1.5">
+          <div className="flex min-w-0 items-start gap-1.5 px-2.5 pt-2.5 pb-2 sm:px-3.5 sm:pt-3">
             <StatusDot className="mt-[5px]" status={entry.status} />
             <Link
-              className="line-clamp-2 min-w-0 rounded-[6px] text-[11.5px] leading-snug font-medium break-words text-foreground outline-none after:absolute after:inset-0 after:rounded-[12px] focus-visible:after:ring-2 focus-visible:after:ring-ring/35 sm:text-[12.5px]"
+              className="line-clamp-2 min-h-[2.6em] min-w-0 flex-1 rounded-[6px] text-[11.5px] leading-[1.3] font-medium text-balance break-words text-foreground outline-none after:absolute after:inset-0 after:rounded-[12px] hover:text-primary focus-visible:after:ring-2 focus-visible:after:ring-ring/35 sm:line-clamp-1 sm:min-h-0 sm:text-[13.5px] sm:leading-snug"
               data-slot="file-name"
               href={entry.href}
             >
               {entry.name}
             </Link>
-          </span>
+            {entry.menu ? (
+              // Above the card's own link, so the menu opens instead of the item.
+              <div className="relative z-10 -my-1 -mr-1.5 max-sm:absolute max-sm:right-1.5 max-sm:bottom-0 max-sm:m-0">
+                {entry.menu}
+              </div>
+            ) : null}
+          </div>
+          <div
+            className={cn(
+              "mx-1.5 grid h-[104px] justify-items-center overflow-hidden rounded-t-[8px] bg-card/45 sm:h-[150px]",
+              entry.kind === "folder" ? "place-items-center" : "pt-3 sm:pt-4"
+            )}
+          >
+            <FileArt entry={entry} size="card" />
+          </div>
           <span
-            className="text-[11px] text-muted-foreground tabular-nums"
+            className={cn(
+              "truncate border-t border-border/60 px-2.5 py-2 text-[10.5px] text-muted-foreground tabular-nums sm:px-3.5 sm:py-2.5 sm:text-xs",
+              entry.menu && "max-sm:pr-10"
+            )}
             data-slot={entry.note ? "file-retention" : "file-meta"}
           >
             {entry.note ??

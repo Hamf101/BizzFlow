@@ -38,11 +38,11 @@ export type FileEntry = {
 }
 
 /** How large a file is drawn, from a filmstrip frame to the Gallery stage. */
-export type FileArtSize = "film" | "icon" | "preview" | "stage"
+export type FileArtSize = "card" | "film" | "preview" | "stage"
 
 const FOLDER_ART: Record<FileArtSize, string> = {
+  card: "size-[64px] sm:size-[88px]",
   film: "size-10 opacity-75",
-  icon: "size-[60px] sm:size-[74px]",
   preview: "size-[110px]",
   stage: "size-[168px]",
 }
@@ -77,7 +77,7 @@ export function FileArt({
     )
   }
 
-  const large = size === "preview" || size === "stage"
+  const large = size !== "film"
 
   return (
     <span
