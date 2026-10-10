@@ -31,7 +31,10 @@ const SAMPLE_INITIALS_DATA_URL =
  * @returns Template content covering every block type the renderer supports.
  */
 export function createSampleDocumentContent(): TemplateContent {
-  const content = createBlankTemplateContent()
+  const blank = createBlankTemplateContent()
+  // Held at the 40-point preset content was made with before new paper took
+  // an inch, which is what the sample's measurements and fingerprints are of.
+  const content = { ...blank, layout: { ...blank.layout, margins: undefined } }
   const detailParagraphs: ParagraphBlock[] = Array.from(
     { length: 18 },
     (_value: unknown, index: number): ParagraphBlock => ({

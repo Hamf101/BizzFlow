@@ -34,6 +34,7 @@ import type { DocumentLifecycleState } from "@/types/document"
 import { MAX_SIGNING_RECIPIENTS } from "@/types/box-signers"
 import { IMAGE_DATA_URL_PATTERN, MAX_IMAGE_DATA_URL_LENGTH } from "@/types/template-limits"
 import { formulaProblem, MAX_FORMULA_LENGTH } from "@/types/template-formula"
+import { MARGIN_SIZES } from "@/types/template-margins"
 import { visibilityConditions } from "@/types/template-visibility"
 
 /** Maximum serialized size accepted for one complete guided document layout. */
@@ -532,6 +533,8 @@ const marginTextSchema = z
     right: z.string().trim().max(120).optional()
   })
   .strict()
+
+export { MARGIN_SIZES, type MarginSize } from "@/types/template-margins"
 
 /** Page and repeated-element controls captured in version-three snapshots. */
 export const templateLayoutSchema = z
@@ -1391,12 +1394,16 @@ export function createEmptyDocumentContent(): TemplateContentV3 {
  * @returns Fresh version-three content with current A4 portrait defaults.
  */
 export function createBlankTemplateContent(): TemplateContentV3 {
-  return templateContentV3Schema.parse({
+  const content = templateContentV3Schema.parse({
     schemaVersion: 3,
     blocks: [],
     sections: [],
     fieldGroups: [],
     blockRules: []
   })
+
+  // New paper starts with an inch all round, as a word processor's does;
+  // content saved before keeps the preset it was made with.
+  return { ...content, layout: { ...content.layout, margins: { ...MARGIN_SIZES.normal } } }
 }
 

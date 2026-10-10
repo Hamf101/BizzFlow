@@ -1376,6 +1376,24 @@ describe("Flow building with the blocks it adds", () => {
     expect(regrown).not.toHaveProperty("levels")
   })
 
+  it("sets margins by name or side by side, keeps the sides it does not name, and gives a style its own", async () => {
+    const layoutOf = async (...operations: TestFlowOperation[]) => {
+      const content = (await runFlow(createContent(), operations).run).proposal?.candidateDraft.content
+
+      return content && "layout" in content ? content.layout : null
+    }
+    const margins = (payload: Record<string, unknown>): TestFlowOperation => ({ type: "set_layout", summary: "Set the margins", payload })
+
+    expect((await layoutOf(margins({ margins: "wide" })))?.margins).toEqual({ top: 72, right: 144, bottom: 72, left: 144 })
+    expect((await layoutOf(margins({ margins: "narrow" }), margins({ margins: { left: 90 } })))?.margins).toEqual({ top: 36, right: 36, bottom: 36, left: 90 })
+    expect((await layoutOf(margins({ style: "official" })))?.margins).toEqual({ top: 36, right: 36, bottom: 36, left: 36 })
+
+    const told = runFlow(createContent(), [margins({ margins: "normal" })])
+
+    await told.run
+    expect(String(readProviderRequests(told.aiProvider)[0]?.systemInstruction)).toContain('"margins":"narrow|normal|wide"')
+  })
+
   it("tells the model which operation failed and why, so its one correction lands", async () => {
     const add = { type: "add_block", summary: "Added a note", payload: { ref: "new:1", afterBlockId: null, block: { type: "paragraph", text: "A note.", alignment: "left" } } }
     const { aiProvider, run } = runFlow(createContent(), [add, { type: "move_block", summary: "Moved it up", payload: { blockId: "new:2", afterBlockId: null } }], [add])

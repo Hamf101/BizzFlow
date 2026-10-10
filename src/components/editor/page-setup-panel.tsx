@@ -8,8 +8,8 @@ import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { cn } from "@/lib/utils"
-import { maxMargin, paragraphGap, resizeTemplateLayout, resolvePageGeometry } from "@/services/templates/template-render-plan"
-import type { TemplateLayout } from "@/types/template"
+import { fitMargins, marginSizeOf, maxMargin, paragraphGap, resizeTemplateLayout, resolvePageGeometry } from "@/services/templates/template-render-plan"
+import { MARGIN_SIZES, type MarginSize, type TemplateLayout } from "@/types/template"
 import { applyDocumentStyle, type DocumentStyle, documentStyleOf } from "@/types/template-styles"
 
 // A whole look at once; a page changed by hand afterwards is in a style of its own.
@@ -101,14 +101,14 @@ export function PageSetupPanel({
       />
       <Choice
         label="Margins"
-        onChange={(marginPreset) => onChange({ ...layout, marginPreset, margins: undefined })}
+        onChange={(size: MarginSize) => onChange({ ...layout, margins: fitMargins(geometry, MARGIN_SIZES[size]) })}
         options={[
-          ["compact", "Narrow"],
-          ["standard", "Normal"],
-          ["generous", "Wide"],
+          ["narrow", "Narrow"],
+          ["normal", "Normal"],
+          ["wide", "Wide"],
         ]}
-        // Margins set side by side match no preset.
-        value={layout.margins ? null : layout.marginPreset}
+        // Margins set side by side match no size.
+        value={marginSizeOf(geometry.margins)}
       />
       <div className="grid grid-cols-2 gap-x-3 gap-y-2">
         {MARGIN_SIDES.map(([side, label]) => (

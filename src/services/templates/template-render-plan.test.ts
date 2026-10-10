@@ -5,6 +5,8 @@ import { describe, expect, it } from "vitest"
 import { TemplatePreview } from "@/components/templates/template-preview"
 import {
   createTemplateRenderPlan,
+  fitMargins,
+  marginSizeOf,
   resizeTemplateLayout,
   resolvePageGeometry,
   shouldRenderTemplateFooter,
@@ -12,6 +14,7 @@ import {
 } from "@/services/templates/template-render-plan"
 import {
   createBlankTemplateContent,
+  MARGIN_SIZES,
   templateContentV3Schema,
   templateLayoutSchema,
   type TemplateContentV2,
@@ -439,7 +442,9 @@ describe("template render plan", () => {
 })
 
 function createStructuredContent(): TemplateContentV3 {
-  let content = createBlankTemplateContent()
+  const blank = createBlankTemplateContent()
+  // At the preset margins, so a layout's marginPreset is what decides them.
+  let content: TemplateContentV3 = { ...blank, layout: { ...blank.layout, margins: undefined } }
 
   content = insertTemplateBlock(content, null, {
     id: SOURCE_ID,
@@ -555,5 +560,19 @@ describe("clause numbering", () => {
 
   it("starts each list at 1 under other numbering, keeping the levels", () => {
     expect(markers(numbered("numbers"))).toEqual([["1.", "2."], null, ["1.", "(a)", "(b)", "(i)", "(ii)", "2.", "(a)"], ["1."], ["1.", "(a)", "(b)"]])
+  })
+})
+
+describe("margins", () => {
+  it("starts new paper at an inch all round, keeps older content's preset, and names a size only when all four sides match", () => {
+    const blank = createBlankTemplateContent().layout
+
+    expect(resolvePageGeometry(blank).margins).toEqual({ top: 72, right: 72, bottom: 72, left: 72 })
+    // Content saved before keeps the margins it was made with.
+    expect(resolvePageGeometry({ ...blank, margins: undefined }).margins.left).toBe(40)
+    expect(marginSizeOf(resolvePageGeometry(blank).margins)).toBe("normal")
+    expect(marginSizeOf({ ...MARGIN_SIZES.wide, left: 100 })).toBeNull()
+    // Each side held to its page: none below 0, none past 40% of the page.
+    expect(fitMargins({ heightPoints: 100, widthPoints: 100 }, { top: -5, right: 999, bottom: 10.4, left: 39.6 })).toEqual({ top: 0, right: 40, bottom: 10, left: 40 })
   })
 })

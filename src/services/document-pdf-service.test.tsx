@@ -1735,7 +1735,9 @@ function createPdfInput(options: {
   repeatFooter: boolean
   repeatHeader: boolean
 }): RenderGeneratedDocumentPdfInput {
-  const content = createBlankTemplateContent()
+  const blank = createBlankTemplateContent()
+  // At the preset margins the measurements below were taken at.
+  const content = { ...blank, layout: { ...blank.layout, margins: undefined } }
 
   return {
     documentId: "document-1",

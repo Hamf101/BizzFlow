@@ -1,7 +1,7 @@
 import { z } from "zod"
 
-import { resizeTemplateLayout } from "@/services/templates/template-render-plan"
-import { singleVisibilityCondition, templateBlockSchema, visibilityConditions, type TemplateBlock, type TemplateContentV3 } from "@/types/template"
+import { fitMargins, type PageSide, resizeTemplateLayout, resolvePageGeometry } from "@/services/templates/template-render-plan"
+import { MARGIN_SIZES, singleVisibilityCondition, templateBlockSchema, visibilityConditions, type TemplateBlock, type TemplateContentV3 } from "@/types/template"
 import { applyDocumentStyle } from "@/types/template-styles"
 import {
   createUniqueTemplateFieldKey,
@@ -507,7 +507,7 @@ function applySetLayoutOperation(
   draft: EditableFlowDraft,
   payload: FlowOperationPayload<"set_layout">
 ): void {
-  const { orientation, pageSize, sectionNumbers, style, ...rest } = payload
+  const { margins, orientation, pageSize, sectionNumbers, style, ...rest } = payload
   let layout = style === undefined ? draft.content.layout : applyDocumentStyle(draft.content.layout, style)
 
   if (pageSize !== undefined || orientation !== undefined) {
@@ -524,7 +524,24 @@ function applySetLayoutOperation(
     layout.margins = undefined
   }
 
+  if (margins !== undefined) {
+    layout.margins = flowMargins(layout, margins)
+  }
+
   draft.content.layout = layout
+}
+
+// A named size, or the sides Flow names in points with the rest as they are.
+function flowMargins(
+  layout: EditableFlowDraft["content"]["layout"],
+  margins: NonNullable<FlowOperationPayload<"set_layout">["margins"]>
+): Record<PageSide, number> {
+  const geometry = resolvePageGeometry(layout)
+
+  return fitMargins(
+    geometry,
+    typeof margins === "string" ? MARGIN_SIZES[margins] : { ...geometry.margins, ...Object.fromEntries(Object.entries(margins).filter(([, points]) => points !== undefined)) }
+  )
 }
 
 // The editor's own helpers leave the document as it was when they cannot do

@@ -383,7 +383,9 @@ export function createBaseTables(): FakeTables {
 export function createTemplateContent(
   options: { requiredInitials?: boolean } = {}
 ): TemplateContent {
-  const content = createBlankTemplateContent()
+  const blank = createBlankTemplateContent()
+  // At the preset margins, so a layout's marginPreset is what decides them.
+  const content = { ...blank, layout: { ...blank.layout, margins: undefined } }
   const bodyBlocks: TemplateBlock[] = [
     {
       id: "50000000-0000-4000-8000-000000000001",

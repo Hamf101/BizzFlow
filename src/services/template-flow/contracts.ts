@@ -281,7 +281,22 @@ const flowWireOperationSchema = z.discriminatedUnion("type", [
           style: z.enum(Object.keys(DOCUMENT_STYLES) as [DocumentStyle, ...DocumentStyle[]]).optional(),
           pageSize: templateLayoutSchema.shape.pageSize.unwrap().optional(),
           orientation: templateLayoutSchema.shape.orientation.unwrap().optional(),
+          // Kept so proposals already made still rebuild; Flow now sets margins.
           marginPreset: templateLayoutSchema.shape.marginPreset.unwrap().optional(),
+          // A named size, or points for the sides that change.
+          margins: z
+            .union([
+              z.enum(["narrow", "normal", "wide"]),
+              z
+                .object({
+                  top: z.number().min(0).max(144).optional(),
+                  right: z.number().min(0).max(144).optional(),
+                  bottom: z.number().min(0).max(144).optional(),
+                  left: z.number().min(0).max(144).optional(),
+                })
+                .strict(),
+            ])
+            .optional(),
           lineSpacing: templateLayoutSchema.shape.lineSpacing,
           paragraphSpacing: templateLayoutSchema.shape.paragraphSpacing,
           fieldStyle: templateLayoutSchema.shape.fieldStyle,

@@ -8,6 +8,7 @@ import type {
   TemplateLayout,
   TemplateSection
 } from "@/types/template"
+import { MARGIN_SIZES, type MarginSize } from "@/types/template-margins"
 import { describeVisibilityRule, getVisibleTemplateBlocks } from "@/types/template-visibility"
 
 /**
@@ -368,6 +369,38 @@ export type PageSide = keyof TemplatePageGeometry["margins"]
  */
 export function maxMargin(page: Readonly<{ heightPoints: number; widthPoints: number }>, side: PageSide): number {
   return Math.min(144, Math.floor((side === "left" || side === "right" ? page.widthPoints : page.heightPoints) * 0.4))
+}
+
+const PAGE_SIDES: readonly PageSide[] = ["top", "right", "bottom", "left"]
+
+/**
+ * Margins as asked, each held to what its page can take.
+ *
+ * @param page - The page's size in points.
+ * @param margins - The margins wanted, in points.
+ * @returns The margins, rounded to the point and kept within the page.
+ */
+export function fitMargins(
+  page: Readonly<{ heightPoints: number; widthPoints: number }>,
+  margins: Readonly<Record<PageSide, number>>
+): Record<PageSide, number> {
+  return Object.fromEntries(
+    PAGE_SIDES.map((side) => [side, Math.round(Math.max(0, Math.min(maxMargin(page, side), margins[side])))])
+  ) as Record<PageSide, number>
+}
+
+/**
+ * The named size a page's margins are, if they are one.
+ *
+ * @param margins - The page's margins in points.
+ * @returns Narrow, normal or wide, or null for margins set side by side.
+ */
+export function marginSizeOf(margins: Readonly<Record<PageSide, number>>): MarginSize | null {
+  return (
+    (Object.keys(MARGIN_SIZES) as MarginSize[]).find((size) =>
+      PAGE_SIDES.every((side) => Math.round(margins[side]) === MARGIN_SIZES[size][side])
+    ) ?? null
+  )
 }
 
 /**
