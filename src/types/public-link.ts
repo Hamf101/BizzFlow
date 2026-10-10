@@ -6,7 +6,18 @@ export type PublicFormLink = {
   id: string
   organizationId: string
   templateId: string
+  /**
+   * Empty unless the app can derive it: every link keeps only its token's
+   * hash, so a link sent to one person, and a link for anyone made before
+   * tokens were derived, cannot be shown again.
+   */
   token: string
+  /** Who a link was sent to; null on a link for anyone. */
+  recipientEmail: string | null
+  /** The document a link was sent from, while it exists. */
+  documentId: string | null
+  /** Their place in the send (the k-th person listed); 1 on a link for anyone. answeringSigner says whose boxes that is. */
+  signer: number
   status: PublicFormLinkStatus
   expiresAt: string | null
   maxSubmissions: number | null
@@ -33,9 +44,13 @@ export function parsePublicFormLinkRow(row: unknown): PublicFormLink {
   const organizationId = typeof record.org_id === "string" ? record.org_id : ""
   const templateId = typeof record.template_id === "string" ? record.template_id : ""
   const token = typeof record.token === "string" ? record.token : ""
+  const recipientEmail = typeof record.recipient_email === "string" ? record.recipient_email : null
+  const documentId = typeof record.document_id === "string" ? record.document_id : null
+  const signer = typeof record.signer === "number" ? record.signer : 1
+  // A status this build does not know must not open the form to anyone.
   const status = PUBLIC_FORM_LINK_STATUSES.includes(record.status as PublicFormLinkStatus)
     ? (record.status as PublicFormLinkStatus)
-    : "active"
+    : "disabled"
   const expiresAt = typeof record.expires_at === "string" ? record.expires_at : null
   const maxSubmissions = typeof record.max_submissions === "number" ? record.max_submissions : null
   const submissionCount = typeof record.submission_count === "number" ? record.submission_count : 0
@@ -48,6 +63,9 @@ export function parsePublicFormLinkRow(row: unknown): PublicFormLink {
     organizationId,
     templateId,
     token,
+    recipientEmail,
+    documentId,
+    signer,
     status,
     expiresAt,
     maxSubmissions,

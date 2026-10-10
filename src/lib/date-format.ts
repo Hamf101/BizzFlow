@@ -2,11 +2,14 @@
  * Formats an ISO date value using the application's medium English date style.
  *
  * @param value - Date-compatible string value.
+ * @param timeZone - Whose day it is; a page the server draws passes the
+ *   viewer's (see useTimeZone), or the day can be wrong near midnight.
  * @returns Localized medium-length date text.
  */
-export function formatMediumDate(value: string): string {
+export function formatMediumDate(value: string, timeZone?: string): string {
   return new Intl.DateTimeFormat("en", {
     dateStyle: "medium",
+    timeZone,
   }).format(new Date(value))
 }
 
@@ -14,13 +17,33 @@ export function formatMediumDate(value: string): string {
  * Formats an ISO date-time value using the application's shared display style.
  *
  * @param value - Date-compatible string value.
+ * @param timeZone - Whose clock it is; a page the server draws passes the viewer's (see useTimeZone).
  * @returns Localized medium date and short time text.
  */
-export function formatMediumDateTime(value: string): string {
+export function formatMediumDateTime(value: string, timeZone?: string): string {
   return new Intl.DateTimeFormat("en", {
     dateStyle: "medium",
     timeStyle: "short",
+    timeZone,
   }).format(new Date(value))
+}
+
+/** Where the browser keeps its time zone, for pages the server words in it, such as the dashboard. */
+export const TIME_ZONE_COOKIE = "bizflow-tz"
+
+/**
+ * Reads a time zone a browser sent, falling back to UTC for one this runtime
+ * does not know, or none.
+ *
+ * @param value - The cookie's value.
+ * @returns A time zone Intl accepts.
+ */
+export function readTimeZone(value: string | undefined): string {
+  try {
+    return value ? new Intl.DateTimeFormat("en", { timeZone: value }).resolvedOptions().timeZone : "UTC"
+  } catch {
+    return "UTC"
+  }
 }
 
 /**

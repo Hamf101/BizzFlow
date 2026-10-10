@@ -1,3 +1,4 @@
+import { toClientFile } from "@/lib/r2/stored-file"
 import {
   assertSubmissionFilenameMatchesContentType,
   buildSubmissionFileObjectKey,
@@ -208,7 +209,7 @@ export async function allocateInternalSubmissionFile(
       }
 
       return {
-        file: parseSubmissionFileRow(recordedFileData),
+        file: toClientFile(parseSubmissionFileRow(recordedFileData)),
         uploadUrl: signedUrl.uploadUrl,
         expiresInSeconds: signedUrl.expiresInSeconds
       }
@@ -317,7 +318,7 @@ export async function completeInternalSubmissionFile(
         )
       }
 
-      return { file: parseSubmissionFileRow(data) }
+      return { file: toClientFile(parseSubmissionFileRow(data)) }
     }
   )
 }

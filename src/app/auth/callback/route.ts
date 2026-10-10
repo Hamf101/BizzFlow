@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server"
 
 import { getSafeNextPath } from "@/lib/auth-redirects"
 import { getAppUrlEnv } from "@/lib/env"
+import { buildRedirect } from "@/lib/form-utils"
 import { createClient } from "@/lib/supabase/server"
 
 /**
@@ -54,11 +55,17 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     // A code only comes back once the email is confirmed. Opened on another
     // device, it can't sign in there, so the person logs in to carry on.
     loginUrl.searchParams.set("confirmed", "1")
-  } else {
-    loginUrl.searchParams.set("error", "That link has expired or was already used. Log in, or sign up again for a new one.")
+    loginUrl.searchParams.set("next", next)
+    return NextResponse.redirect(loginUrl)
   }
 
-  loginUrl.searchParams.set("next", next)
-
-  return NextResponse.redirect(loginUrl)
+  return NextResponse.redirect(
+    new URL(
+      buildRedirect("/login", {
+        error: "That link has expired or was already used. Log in, or sign up again for a new one.",
+        next,
+      }),
+      loginUrl
+    )
+  )
 }

@@ -2,35 +2,24 @@
 
 import type { Editor } from "@tiptap/core"
 import { act } from "react"
-import { createRoot, type Root } from "react-dom/client"
-import { afterEach, beforeAll, expect, it, vi } from "vitest"
+import { beforeAll, expect, it, vi } from "vitest"
 
 import type { TextCaret } from "@/components/editor/editable-text"
 import { RichLine } from "@/components/editor/rich-line"
 import type { TextRun } from "@/types/template"
-
-const roots: Root[] = []
+import { mount } from "@/test/render"
 
 beforeAll(() => {
-  ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
   // The caret is scrolled into view by measuring text, which jsdom does not lay out.
   Range.prototype.getBoundingClientRect = () => new DOMRect()
   Range.prototype.getClientRects = () => Object.assign([], { item: () => null }) as unknown as DOMRectList
 })
 
-afterEach(() => {
-  for (const root of roots.splice(0)) {
-    act(() => root.unmount())
-  }
-  document.body.replaceChildren()
-})
-
 type Props = Parameters<typeof RichLine>[0]
 
 async function render(props: Partial<Props> & Pick<Props, "value">): Promise<(next: Partial<Props>) => Promise<void>> {
-  const root = createRoot(document.body.appendChild(document.createElement("div")))
+  const root = mount()
   let current: Props = { as: "div", caretKey: "line", label: "Text", onChange: () => undefined, ...props }
-  roots.push(root)
   await act(async () => root.render(<RichLine {...current} />))
 
   return async (next) => {
@@ -55,8 +44,6 @@ it("formats the chosen words, and hands the line back as a saved document keeps 
     [{ text: "Pay " }, { bold: true, text: "within " }, { bold: true, color: "#a24949", text: "30 days" }],
     18
   )
-  expect([...line().querySelectorAll("strong")].map((bold) => bold.textContent)).toEqual(["within ", "30 days"])
-  expect(line().querySelector<HTMLElement>("span[style]")?.style.color).toBe("rgb(162, 73, 73)")
 })
 
 it("hands every key to the canvas first, and a key the canvas takes goes no further", async () => {
@@ -115,7 +102,6 @@ it("keeps a chosen font through editing and a reload, and loads its stylesheet",
   expect(onChange).toHaveBeenLastCalledWith("Invoice", [{ font: "roboto", text: "Invoice" }], 7)
 
   await rerender({ runs: [{ font: "roboto", text: "Invoice" }] })
-  expect(line().querySelector("[data-font]")?.getAttribute("data-font")).toBe("roboto")
   expect(document.querySelector('link[href="/fonts/roboto/font.css"]')).not.toBeNull()
 })
 

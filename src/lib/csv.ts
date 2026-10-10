@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server"
 
+import { getErrorStatusCode } from "@/lib/action-result"
+import { AuthenticationError } from "@/lib/auth"
+import { captureUnexpectedError, describeErrorForLog } from "@/lib/observability"
+
 /**
  * Leading characters a spreadsheet treats as the start of a formula.
  *
@@ -99,4 +103,34 @@ export function createCsvDownloadResponse(
       "Cache-Control": "no-store",
     },
   })
+}
+
+/**
+ * Translates a failed CSV export: 401 for a signed-out caller, a service's
+ * own status and message when it refused the request, and otherwise a logged,
+ * reported 500 whose body says nothing about the cause.
+ *
+ * @param error - What the export threw.
+ * @param fallback - Body for an unexpected failure.
+ * @param routeName - Safe route label for logs and monitoring.
+ * @returns The plain-text error response.
+ */
+export function createCsvExportErrorResponse(
+  error: unknown,
+  fallback: string,
+  routeName: string
+): NextResponse {
+  if (error instanceof AuthenticationError) {
+    return new NextResponse(error.message, { status: 401 })
+  }
+
+  const statusCode = getErrorStatusCode(error)
+
+  if (error instanceof Error && statusCode !== null && statusCode < 500) {
+    return new NextResponse(error.message, { status: statusCode })
+  }
+
+  console.error("csv_export_failed", { routeName, ...describeErrorForLog(error) })
+  captureUnexpectedError(error, { routeName })
+  return new NextResponse(fallback, { status: 500 })
 }

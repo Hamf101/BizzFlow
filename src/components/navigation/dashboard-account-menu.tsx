@@ -12,6 +12,7 @@ import Link from "next/link"
 import { useTheme } from "next-themes"
 import type { ReactElement } from "react"
 
+import { getInitials } from "@/components/people/member-name"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -52,26 +53,6 @@ const roleLabels: Record<OrganizationRole, string> = {
 }
 
 /**
- * Builds a short, stable avatar label from a member's display name.
- *
- * @param displayName - The visible account name.
- * @returns One or two uppercase initials.
- */
-function getAccountInitials(displayName: string): string {
-  const words = displayName.trim().split(/\s+/).filter(Boolean)
-
-  if (words.length === 0) {
-    return "?"
-  }
-
-  return words
-    .slice(0, 2)
-    .map((word) => word.charAt(0))
-    .join("")
-    .toUpperCase()
-}
-
-/**
  * Renders the signed-in member identity and the account actions supported by BizFlow.
  *
  * @param props - Account identity, sidebar state, and the server sign-out action.
@@ -103,7 +84,7 @@ export function DashboardAccountMenu({
         title={collapsed ? account.displayName : undefined}
       >
         <span className="grid size-9 shrink-0 place-items-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
-          {getAccountInitials(account.displayName)}
+          {getInitials(account.displayName, account.email)}
         </span>
         <span
           className={cn(

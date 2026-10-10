@@ -19,6 +19,7 @@ async function noPause(): Promise<void> {}
 
 afterEach(() => {
   vi.useRealTimers()
+  vi.restoreAllMocks()
 })
 
 describe("retrySerializationFailure", () => {
@@ -33,8 +34,9 @@ describe("retrySerializationFailure", () => {
     expect(write).toHaveBeenCalledTimes(3)
   })
 
-  it("outlasts a lock held for a second, as trashing a thousand-file folder can", async () => {
+  it("outlasts a lock held for a second, as trashing a thousand-file folder can, at the average pause", async () => {
     vi.useFakeTimers()
+    vi.spyOn(Math, "random").mockReturnValue(0.5)
     const released = Date.now() + 1_000
     const write = vi.fn(async () => (Date.now() < released ? busy : saved))
 
@@ -42,6 +44,24 @@ describe("retrySerializationFailure", () => {
     await vi.runAllTimersAsync()
 
     await expect(result).resolves.toBe(saved)
+  })
+
+  it("waits a random share of each doubling window, so writers that collided do not collide again", async () => {
+    vi.useFakeTimers()
+    vi.spyOn(Math, "random").mockReturnValue(0.1)
+    const startedAt = Date.now()
+    const at: number[] = []
+    const write = vi.fn(async () => {
+      at.push(Date.now() - startedAt)
+      return at.length < 4 ? busy : saved
+    })
+
+    const result = retrySerializationFailure(write)
+    await vi.runAllTimersAsync()
+
+    await expect(result).resolves.toBe(saved)
+    // A tenth of 50, 100 and 200 ms.
+    expect(at).toEqual([0, 5, 15, 35])
   })
 
   it("stops after seven attempts with the last answer, and never repeats other errors", async () => {

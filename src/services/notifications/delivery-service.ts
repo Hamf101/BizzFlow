@@ -1,15 +1,18 @@
 import { randomUUID } from "node:crypto"
 
 import { createAdminClient, type AdminSupabaseClient } from "@/lib/supabase/admin"
-import { recordAuditLog as defaultRecordAuditLog } from "@/services/audit-service"
+import { recordAuditLog, recordAuditLogBestEffort } from "@/services/audit-service"
+import { requireOrgPermission } from "@/services/organizations/active-membership"
 import type { AuditLogAction, AuditMetadata } from "@/types/audit"
 import {
   parseNotificationDeliveryRow,
+  parseNotificationDeliveryRows,
   type NotificationChannel,
   type NotificationDelivery,
   type NotificationDeliveryStatus,
   type NotificationPurpose,
 } from "@/types/notification"
+import { ServiceError } from "@/services/service-error"
 
 /** Narrow trusted client used by notification persistence. */
 export type NotificationServiceClient = Pick<AdminSupabaseClient, "from">
@@ -44,14 +47,8 @@ export type RecordNotificationDeliveryInput = {
 }
 
 /** Error raised by notification delivery persistence. */
-export class NotificationServiceError extends Error {
-  readonly statusCode: number
-
-  constructor(message: string, statusCode: number) {
-    super(message)
-    this.name = "NotificationServiceError"
-    this.statusCode = statusCode
-  }
+export class NotificationServiceError extends ServiceError {
+  override readonly name = "NotificationServiceError"
 }
 
 const DELIVERY_COLUMNS =
@@ -147,9 +144,32 @@ export async function recordNotificationDelivery(
   }
 }
 
-/** Input for reading a tenant's recent delivery history. */
-export type ListNotificationDeliveriesInput = {
+/** A member acting on one organization's notification setup. */
+export type NotificationActorInput = {
+  actorUserId: string
   organizationId: string
+}
+
+/**
+ * Refuses anyone without `organization:manage`: notification switches and
+ * delivery history are organization administration.
+ *
+ * @param client - Trusted database client.
+ * @param input - Actor and tenant.
+ * @throws NotificationServiceError 403 without the permission, 500 when the read fails.
+ */
+export async function requireNotificationAdmin(
+  client: NotificationServiceClient,
+  input: NotificationActorInput
+): Promise<void> {
+  await requireOrgPermission(client, input.organizationId, input.actorUserId, "organization:manage", {
+    loadFailed: () => new NotificationServiceError("Unable to verify your organization access.", 500),
+    denied: () => new NotificationServiceError("You do not have permission to manage organization notifications.", 403),
+  })
+}
+
+/** Input for reading a tenant's recent delivery history. */
+export type ListNotificationDeliveriesInput = NotificationActorInput & {
   limit?: number
 }
 
@@ -159,16 +179,17 @@ const MAX_DELIVERY_PAGE = 200
 /**
  * Lists a tenant's most recent notification delivery attempts.
  *
- * @param input - Tenant identifier and optional page size.
+ * @param input - Actor, tenant, and optional page size.
  * @param deps - Optional database dependency for tests.
  * @returns Deliveries newest first.
- * @throws NotificationServiceError when the read fails.
+ * @throws NotificationServiceError without organization:manage or when the read fails.
  */
 export async function listNotificationDeliveries(
   input: ListNotificationDeliveriesInput,
   deps: NotificationServiceDeps = {}
 ): Promise<NotificationDelivery[]> {
   const client = deps.client ?? createAdminClient()
+  await requireNotificationAdmin(client, input)
   const limit = Math.min(Math.max(input.limit ?? 50, 1), MAX_DELIVERY_PAGE)
 
   const { data, error } = await client
@@ -185,7 +206,7 @@ export async function listNotificationDeliveries(
     )
   }
 
-  return data.map(parseNotificationDeliveryRow)
+  return parseNotificationDeliveryRows(data)
 }
 
 /**
@@ -207,10 +228,8 @@ async function recordDeliveryAuditLog(
   deps: NotificationServiceDeps,
   delivery: NotificationDelivery
 ): Promise<void> {
-  const recordAuditLog = deps.recordAuditLog ?? defaultRecordAuditLog
-
-  try {
-    await recordAuditLog({
+  await recordAuditLogBestEffort(
+    {
       organizationId: delivery.organizationId,
       // A notification is emitted by a background job, not a member.
       actorUserId: null,
@@ -223,13 +242,7 @@ async function recordDeliveryAuditLog(
         recipientUserId: delivery.recipientUserId,
         attemptCount: delivery.attemptCount,
       },
-    })
-  } catch (error: unknown) {
-    console.warn("notification_audit_log_failed", {
-      organizationId: delivery.organizationId,
-      action: AUDIT_ACTION_BY_STATUS[delivery.status],
-      deliveryId: delivery.id,
-      reason: error instanceof Error ? error.message : "Unknown audit error",
-    })
-  }
+    },
+    deps.recordAuditLog ?? recordAuditLog
+  )
 }

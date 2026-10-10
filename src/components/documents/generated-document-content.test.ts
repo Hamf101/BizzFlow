@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server"
 import { describe, expect, it } from "vitest"
 
 import { GeneratedDocumentContent } from "@/components/documents/generated-document-content"
+import { PaperField, PaperSigning } from "@/components/editor/paper-field"
 import {
   createBlankTemplateContent,
   type TemplateContentV3
@@ -15,6 +16,38 @@ const SECTION_ID = "20000000-0000-4000-8000-000000000011"
 const GROUP_ID = "20000000-0000-4000-8000-000000000021"
 
 describe("GeneratedDocumentContent", () => {
+  it("says a co-signer's box is signed once they sign, where their drawing is not shown", () => {
+    const box = (index: number, signer: number) => ({
+      fieldKey: `box_${index}`,
+      helpText: null,
+      id: `20000000-0000-4000-8000-00000000010${index}`,
+      label: `Box ${index}`,
+      required: false,
+      signer,
+      type: "signature_field" as const
+    })
+    const content = { ...createBlankTemplateContent(), blocks: [box(1, 1), box(2, 2), box(3, 3)] }
+    const signers = [{ status: "signed" as const }, { status: "viewed" as const }, { status: "pending" as const }]
+    const signingPage = renderToStaticMarkup(
+      createElement(GeneratedDocumentContent, { answers: {}, content, editable: true, recipientSigning: true, signerNumber: 3, signers, title: "Lease" })
+    )
+
+    expect(signingPage).toContain("Signer 1 signed.")
+    expect(signingPage).toContain("Signer 2 signs here.")
+    expect(signingPage).toContain("You sign here, from the Sign step below.")
+
+    // A guest's web view gets no drawings either.
+    const paper = renderToStaticMarkup(
+      createElement(
+        PaperSigning.Provider,
+        { value: { drawer: null, signers } },
+        createElement(PaperField, { answers: {}, block: box(1, 1), mode: "read", onAnswerChange: () => undefined })
+      )
+    )
+
+    expect(paper).toContain("Signer 1 signed")
+  })
+
   it("renders structured sections and two-column groups with print hints", () => {
     const content = createStructuredContent()
     content.branding = {

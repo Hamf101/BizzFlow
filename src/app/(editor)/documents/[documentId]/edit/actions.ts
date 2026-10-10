@@ -1,28 +1,24 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { redirect } from "next/navigation"
 
-import {
-  GeneratedDocumentFormDataError,
-  parseGeneratedDocumentAnswers,
-} from "@/components/documents/generated-document-form-data"
+import { parseGeneratedDocumentAnswers } from "@/components/documents/generated-document-form-data"
 import {
   enforceActionRateLimit,
   enforceOutboundEmailRateLimit,
 } from "@/lib/action-rate-limit"
+import { getErrorStatusCode } from "@/lib/action-result"
 import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
 import {
-  buildFeedbackRedirect,
-  getActionErrorFeedbackCode,
-} from "@/lib/action-result"
-import { buildRedirect, getFormString } from "@/lib/form-utils"
+  ActionError,
+  loadActionContext,
+  requireFormId,
+  runFormAction,
+  type ActionActor,
+} from "@/lib/form-action"
+import { getFormString } from "@/lib/form-utils"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
-import {
-  canPerformOrganizationAction,
-  type OrganizationPermissionAction,
-} from "@/lib/permissions"
-import { getCurrentOrganizationContext } from "@/services/organization-service"
+import { findGuestOrganizationId } from "@/services/document-service"
 import type { SaveResult } from "@/components/editor/use-autosave"
 import {
   resendDocumentSigningInvitation,
@@ -31,22 +27,9 @@ import {
   updateGeneratedDocumentContent,
 } from "@/services/document-signing-service"
 import type { DocumentRecipientInput } from "@/types/signing"
-import type { OrganizationContext } from "@/types/organization"
 
-type MemberDocumentActionContext = {
-  actorUserId: string
-  context: OrganizationContext
-}
-
-class MemberDocumentActionError extends Error {
-  readonly statusCode: number
-
-  constructor(message: string, statusCode = 400) {
-    super(message)
-    this.name = "MemberDocumentActionError"
-    this.statusCode = statusCode
-  }
-}
+// The signing services check the actor's document access and permission themselves.
+const NO_ORGANIZATION = "Create an organization before managing documents."
 
 /** A draft's title and page, as the editor saves them while they change. */
 export type DocumentContentInput = {
@@ -65,11 +48,10 @@ export type DocumentContentInput = {
  */
 export async function saveDocumentContentAction(input: DocumentContentInput): Promise<SaveResult> {
   try {
-    const actionContext = await loadMemberActionContext("documents:fill")
+    const documentId = requireFormId(input.documentId, "Document id")
     const saved = await updateGeneratedDocumentContent({
-      actorUserId: actionContext.actorUserId,
-      organizationId: actionContext.context.organization.id,
-      documentId: requireIdentifier(input.documentId, "Document id"),
+      ...(await loadFillActionContext(documentId)),
+      documentId,
       expectedUpdatedAt: input.expectedUpdatedAt,
       title: input.title,
       content: input.content,
@@ -92,11 +74,10 @@ export async function saveDocumentAnswersAction(formData: FormData): Promise<Sav
   const documentId = getFormString(formData, "documentId")
 
   try {
-    const actionContext = await loadMemberActionContext("documents:fill")
+    const id = requireFormId(documentId, "Document id")
     await saveGeneratedDocumentAnswers({
-      actorUserId: actionContext.actorUserId,
-      organizationId: actionContext.context.organization.id,
-      documentId: requireIdentifier(documentId, "Document id"),
+      ...(await loadFillActionContext(id)),
+      documentId: id,
       values: parseGeneratedDocumentAnswers(formData),
     })
 
@@ -111,12 +92,7 @@ function toSaveFailure(error: unknown, eventName: string, documentId: string): S
     return { message: "Sign in again to keep saving.", ok: false, status: 401 }
   }
 
-  const statusCode =
-    error instanceof GeneratedDocumentFormDataError
-      ? 400
-      : typeof (error as { statusCode?: unknown }).statusCode === "number"
-        ? (error as { statusCode: number }).statusCode
-        : 500
+  const statusCode = getErrorStatusCode(error) ?? 500
 
   console.warn(eventName, {
     documentId,
@@ -141,46 +117,31 @@ export async function sendGeneratedDocumentAction(
 ): Promise<void> {
   const documentId = getFormString(formData, "documentId")
   const editorPath = getDocumentEditorPath(documentId)
-  const startedAt = Date.now()
 
   // One submission fans out to as many as MAX_RECIPIENTS emails. Both calls
-  // reject by throwing (a redirect), so they must stay outside the try below.
+  // reject by throwing (a redirect), so they must stay outside the action run below.
   const user = await loadAuthenticatedPageUser(editorPath)
   await enforceOutboundEmailRateLimit({
     userId: user.id,
     redirectPath: editorPath,
   })
 
-  try {
-    const actionContext = await loadMemberActionContext("documents:send")
-    const recipients = parseRecipientCollection(
-      getFormString(formData, "recipients")
-    )
+  await runFormAction({
+    event: "generated_document_send_action",
+    log: { documentId },
+    path: editorPath,
+    success: "signing_invitations_sent",
+    run: async () => {
+      const { actor } = await loadActionContext(NO_ORGANIZATION)
 
-    await sendDocumentForSigning({
-      actorUserId: actionContext.actorUserId,
-      organizationId: actionContext.context.organization.id,
-      documentId: requireIdentifier(documentId, "Document id"),
-      recipients,
-    })
-    revalidateDocumentEditor(documentId)
-    console.info("generated_document_send_action_completed", {
-      documentId,
-      durationMs: Date.now() - startedAt,
-      organizationId: actionContext.context.organization.id,
-      recipientCount: recipients.length,
-    })
-  } catch (error: unknown) {
-    handleMemberActionFailure({
-      documentId,
-      error,
-      eventName: "generated_document_send_action_failed",
-      nextPath: editorPath,
-      startedAt,
-    })
-  }
-
-  redirect(buildFeedbackRedirect(editorPath, "signing_invitations_sent"))
+      await sendDocumentForSigning({
+        ...actor,
+        documentId: requireFormId(documentId, "Document id"),
+        recipients: parseRecipientCollection(getFormString(formData, "recipients")),
+      })
+      revalidateDocumentEditor(documentId)
+    },
+  })
 }
 
 /**
@@ -195,12 +156,11 @@ export async function resendGeneratedDocumentInvitationAction(
   const documentId = getFormString(formData, "documentId")
   const recipientId = getFormString(formData, "recipientId")
   const editorPath = getDocumentEditorPath(documentId)
-  const startedAt = Date.now()
 
   // This action re-mails one external recipient on demand, so it needs a budget
   // per recipient as well as per member: without it a resend loop is a mailbomb
   // aimed at a third party. Both calls redirect by throwing — keep them outside
-  // the try below.
+  // the action run below.
   const user = await loadAuthenticatedPageUser(editorPath)
   await enforceActionRateLimit({
     bucket: "email_recipient",
@@ -213,55 +173,35 @@ export async function resendGeneratedDocumentInvitationAction(
     redirectPath: editorPath,
   })
 
-  try {
-    const actionContext = await loadMemberActionContext("documents:send")
-    await resendDocumentSigningInvitation({
-      actorUserId: actionContext.actorUserId,
-      organizationId: actionContext.context.organization.id,
-      documentId: requireIdentifier(documentId, "Document id"),
-      recipientId: requireIdentifier(recipientId, "Recipient id"),
-    })
-    revalidateDocumentEditor(documentId)
-    console.info("generated_document_resend_action_completed", {
-      documentId,
-      durationMs: Date.now() - startedAt,
-      organizationId: actionContext.context.organization.id,
-      recipientId,
-    })
-  } catch (error: unknown) {
-    handleMemberActionFailure({
-      documentId,
-      error,
-      eventName: "generated_document_resend_action_failed",
-      nextPath: editorPath,
-      startedAt,
-    })
-  }
+  await runFormAction({
+    event: "generated_document_resend_action",
+    log: { documentId, recipientId },
+    path: editorPath,
+    success: "signing_invitation_resent",
+    run: async () => {
+      const { actor } = await loadActionContext(NO_ORGANIZATION)
 
-  redirect(buildFeedbackRedirect(editorPath, "signing_invitation_resent"))
+      await resendDocumentSigningInvitation({
+        ...actor,
+        documentId: requireFormId(documentId, "Document id"),
+        recipientId: requireFormId(recipientId, "Recipient id"),
+      })
+      revalidateDocumentEditor(documentId)
+    },
+  })
 }
 
-async function loadMemberActionContext(
-  action: OrganizationPermissionAction
-): Promise<MemberDocumentActionContext> {
+// Someone outside the workspace given the document as an Editor fills it in
+// its own workspace; the service then checks their grant like a member's access.
+async function loadFillActionContext(documentId: string): Promise<ActionActor> {
   const user = await getAuthenticatedUser()
-  const context = await getCurrentOrganizationContext(user.id)
+  const guestOrganizationId = await findGuestOrganizationId({ documentId, userId: user.id })
 
-  if (!context) {
-    throw new MemberDocumentActionError(
-      "Create an organization before managing documents.",
-      428
-    )
+  if (guestOrganizationId) {
+    return { actorUserId: user.id, organizationId: guestOrganizationId }
   }
 
-  if (!canPerformOrganizationAction(context.membership, action)) {
-    throw new MemberDocumentActionError(
-      "You do not have permission to perform this document action.",
-      403
-    )
-  }
-
-  return { actorUserId: user.id, context }
+  return (await loadActionContext(NO_ORGANIZATION)).actor
 }
 
 function parseRecipientCollection(value: string): DocumentRecipientInput[] {
@@ -270,16 +210,16 @@ function parseRecipientCollection(value: string): DocumentRecipientInput[] {
   try {
     parsedValue = JSON.parse(value) as unknown
   } catch {
-    throw new MemberDocumentActionError("The recipient collection is invalid.")
+    throw new ActionError("The recipient collection is invalid.")
   }
 
   if (!Array.isArray(parsedValue)) {
-    throw new MemberDocumentActionError("The recipient collection is invalid.")
+    throw new ActionError("The recipient collection is invalid.")
   }
 
   return parsedValue.map((value: unknown): DocumentRecipientInput => {
     if (typeof value !== "object" || value === null || Array.isArray(value)) {
-      throw new MemberDocumentActionError("A signing recipient is invalid.")
+      throw new ActionError("A signing recipient is invalid.")
     }
 
     const name = "name" in value ? value.name : null
@@ -292,23 +232,13 @@ function parseRecipientCollection(value: string): DocumentRecipientInput[] {
       typeof email !== "string" ||
       requiresSignature !== true
     ) {
-      throw new MemberDocumentActionError(
+      throw new ActionError(
         "Every document recipient must provide a signature."
       )
     }
 
     return { name, email, requiresSignature: true }
   })
-}
-
-function requireIdentifier(value: string, label: string): string {
-  const normalizedValue = value.trim()
-
-  if (!normalizedValue) {
-    throw new MemberDocumentActionError(`${label} is required.`)
-  }
-
-  return normalizedValue
 }
 
 function revalidateDocumentEditor(documentId: string): void {
@@ -322,33 +252,4 @@ function getDocumentEditorPath(documentId: string): string {
   return normalizedDocumentId
     ? `/documents/${encodeURIComponent(normalizedDocumentId)}/edit`
     : "/documents"
-}
-
-function handleMemberActionFailure(input: {
-  documentId: string
-  error: unknown
-  eventName: string
-  nextPath: string
-  startedAt: number
-}): never {
-  if (input.error instanceof AuthenticationError) {
-    redirect(buildRedirect("/login", { next: input.nextPath }))
-  }
-
-  console.warn(input.eventName, {
-    documentId: input.documentId,
-    durationMs: Date.now() - input.startedAt,
-    reason:
-      input.error instanceof Error
-        ? input.error.message
-        : "Unknown generated document action error",
-  })
-  redirect(
-    buildFeedbackRedirect(
-      input.nextPath,
-      input.error instanceof GeneratedDocumentFormDataError
-        ? "invalid_input"
-        : getActionErrorFeedbackCode(input.error)
-    )
-  )
 }

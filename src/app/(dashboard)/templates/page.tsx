@@ -14,7 +14,7 @@ import { loadAuthenticatedPageUser } from "@/lib/page-auth"
 import { getPageErrorMessage } from "@/lib/page-errors"
 import { loadPageOrganizationContext } from "@/lib/page-organization-context"
 import { canPerformOrganizationAction } from "@/lib/permissions"
-import { listSavedViews } from "@/services/saved-view-service"
+import { listSavedViews } from "@/services/organizations/saved-view-service"
 import {
   listDocumentTemplateCategories,
   listTemplatePage,

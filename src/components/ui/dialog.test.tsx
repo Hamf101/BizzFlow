@@ -1,27 +1,13 @@
 // @vitest-environment jsdom
 
 import { act, createElement } from "react"
-import { createRoot, type Root } from "react-dom/client"
-import { afterEach, beforeAll, describe, expect, it } from "vitest"
+import { describe, expect, it } from "vitest"
 
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
-
-const mounted: Root[] = []
-
-beforeAll(() => {
-  ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
-})
-
-afterEach(() => {
-  for (const root of mounted.splice(0)) act(() => root.unmount())
-  document.body.replaceChildren()
-})
+import { mount } from "@/test/render"
 
 async function openDialog(): Promise<HTMLElement> {
-  const container = document.createElement("div")
-  document.body.append(container)
-  const root = createRoot(container)
-  mounted.push(root)
+  const root = mount()
 
   await act(async () => {
     root.render(

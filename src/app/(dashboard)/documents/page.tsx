@@ -16,6 +16,7 @@ import {
 } from "@/components/files/file-list-view"
 import { FilesWorkspace } from "@/components/files/files-workspace"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { SetupIncomplete } from "@/components/ui/page-state"
 import { buildFeedbackRedirect } from "@/lib/action-result"
 import type { RawSearchParams } from "@/lib/list-state"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
@@ -28,7 +29,7 @@ import {
   listWorkspaceFolders,
   type DocumentCard,
 } from "@/services/document-service"
-import { listSavedViews } from "@/services/saved-view-service"
+import { listSavedViews } from "@/services/organizations/saved-view-service"
 import type {
   AccessibleDocumentFolder,
   AccessibleDocumentSummary,
@@ -59,6 +60,10 @@ import type { Metadata } from "next"
  */
 export const metadata: Metadata = { title: "Files" }
 
+// Server actions run under the page that posts them: a bulk change or move
+// handles up to 1,000 items one by one, which the default limit cuts short.
+export const maxDuration = 300
+
 export default async function FilesPage({
   searchParams,
 }: {
@@ -77,10 +82,7 @@ export default async function FilesPage({
     if (contextErrorMessage) {
       return (
         <FilesShell>
-          <Alert variant="destructive">
-            <AlertTitle>Supabase setup incomplete</AlertTitle>
-            <AlertDescription>{contextErrorMessage}</AlertDescription>
-          </Alert>
+          <SetupIncomplete message={contextErrorMessage} />
         </FilesShell>
       )
     }

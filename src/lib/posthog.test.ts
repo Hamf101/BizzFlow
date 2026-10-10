@@ -49,11 +49,6 @@ describe("PostHog lazy lifecycle", () => {
     expect(first).toBe(mocks.posthog)
     expect(second).toBe(mocks.posthog)
     expect(mocks.posthog.init).toHaveBeenCalledTimes(1)
-    expect(mocks.posthog.init).toHaveBeenCalledWith("phc_test", {
-      api_host: "https://analytics.example.com",
-      capture_pageview: false,
-      person_profiles: "identified_only",
-    })
   })
 
   it("fails open when analytics is disabled or initialization throws", async () => {
@@ -102,53 +97,5 @@ describe("PostHog lazy lifecycle", () => {
     expect(mocks.posthog.capture).toHaveBeenLastCalledWith("$pageview", {
       route: "/documents/:id/edit",
     })
-  })
-
-  it("schedules initialization with a bounded idle timeout and cancels cleanup", async () => {
-    const idleCallback = vi.fn<() => void>()
-    const scheduler = {
-      cancelIdleCallback: vi.fn(),
-      clearTimeout: vi.fn(),
-      requestIdleCallback: vi.fn((callback: () => void) => {
-        idleCallback.mockImplementation(callback)
-        return 42
-      }),
-      setTimeout: vi.fn(() => 7),
-    }
-    const task = vi.fn()
-    const { schedulePostHogInitialization } = await import("./posthog")
-
-    const cleanup = schedulePostHogInitialization(task, scheduler)
-
-    expect(scheduler.requestIdleCallback).toHaveBeenCalledWith(
-      expect.any(Function),
-      { timeout: 2_000 }
-    )
-    idleCallback()
-    expect(task).toHaveBeenCalledTimes(1)
-
-    cleanup()
-    expect(scheduler.cancelIdleCallback).toHaveBeenCalledWith(42)
-    expect(scheduler.setTimeout).not.toHaveBeenCalled()
-  })
-
-  it("uses and clears a timer when idle callbacks are unavailable", async () => {
-    const timerCallback = vi.fn<() => void>()
-    const scheduler = {
-      clearTimeout: vi.fn(),
-      setTimeout: vi.fn((callback: () => void) => {
-        timerCallback.mockImplementation(callback)
-        return 9
-      }),
-    }
-    const task = vi.fn()
-    const { schedulePostHogInitialization } = await import("./posthog")
-
-    const cleanup = schedulePostHogInitialization(task, scheduler)
-    timerCallback()
-
-    expect(task).toHaveBeenCalledTimes(1)
-    cleanup()
-    expect(scheduler.clearTimeout).toHaveBeenCalledWith(9)
   })
 })

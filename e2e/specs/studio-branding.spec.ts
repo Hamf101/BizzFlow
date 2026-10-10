@@ -1,4 +1,4 @@
-import { expect, test, uniqueName } from "../support/fixtures"
+import { expect, expectSaved, test, uniqueName } from "../support/fixtures"
 import { waitForHydration } from "../support/hydration"
 import { seedTemplate } from "../support/seed"
 
@@ -6,12 +6,9 @@ test("saves the exact brand colors picked, and prints the page with them", async
   admin,
   pageAs,
   tenant,
-}, testInfo) => {
+}) => {
   const template = await seedTemplate(admin, tenant.organizationId, uniqueName("Brand"))
   const page = await pageAs("owner_admin")
-  if (testInfo.project.use.viewport) {
-    await page.setViewportSize(testInfo.project.use.viewport)
-  }
   await page.goto(`/templates/${template.id}/edit`)
   const brand = page.getByRole("button", { name: "Brand", exact: true })
   await waitForHydration(brand)
@@ -26,33 +23,26 @@ test("saves the exact brand colors picked, and prints the page with them", async
   }
 
   // Any colour saves as picked, even one that is hard to read on paper.
-  await expect.poll(async () => {
-    const { data, error } = await admin.from("document_templates")
-      .select("content")
-      .eq("id", template.id)
-      .eq("org_id", tenant.organizationId)
-      .single()
-    if (error) throw error
-    return data.content.branding
-  }, { timeout: 15_000 }).toMatchObject({ primaryColor: "#ffffff", accentColor: "#eeeeee" })
+  await expectSaved(admin, "document_templates", template.id, ({ branding }) => branding).toMatchObject({
+    primaryColor: "#ffffff",
+    accentColor: "#eeeeee",
+  })
 
   await page.reload()
   const pages = page.locator('[data-slot="editor-pages"]')
   await waitForHydration(pages)
+  // The page draws each colour from exactly the one picked, flipped for dark mode as light and dark flip.
   expect(await pages.evaluate((element) => ({
     primary: (element as HTMLElement).style.getPropertyValue("--doc-primary"),
     accent: (element as HTMLElement).style.getPropertyValue("--doc-accent"),
-  }))).toEqual({ primary: "#ffffff", accent: "#eeeeee" })
+  }))).toEqual({ primary: expect.stringContaining("from #ffffff "), accent: expect.stringContaining("from #eeeeee ") })
 })
 
 test("duplicates fields and renames one in its settings on the page, with unique saved field keys", async ({
   admin, pageAs, tenant,
-}, testInfo) => {
+}) => {
   const template = await seedTemplate(admin, tenant.organizationId, uniqueName("Duplicate"))
   const page = await pageAs("owner_admin")
-  if (testInfo.project.use.viewport) {
-    await page.setViewportSize(testInfo.project.use.viewport)
-  }
   await page.goto(`/templates/${template.id}/edit`)
   const textFields = page.locator('[data-block-type="text_field"]')
   const toolbar = page.getByRole("toolbar", { name: "Block" })
@@ -69,14 +59,9 @@ test("duplicates fields and renames one in its settings on the page, with unique
   await toolbar.getByRole("button", { name: "Duplicate", exact: true }).click()
   await expect(textFields).toHaveCount(3)
 
-  await expect.poll(async () => {
-    const { data, error } = await admin.from("document_templates")
-      .select("content").eq("id", template.id).eq("org_id", tenant.organizationId).single()
-    if (error) throw error
-    return data.content.blocks
-      .filter((block: { type: string }) => block.type === "text_field")
-      .map((block: { fieldKey: string; label: string }) => ({ fieldKey: block.fieldKey, label: block.label }))
-  }, { timeout: 15_000 }).toEqual([
+  await expectSaved(admin, "document_templates", template.id, ({ blocks }) =>
+    blocks.filter(({ type }) => type === "text_field").map(({ fieldKey, label }) => ({ fieldKey, label }))
+  ).toEqual([
     { fieldKey: "client_reference", label: "Client reference" },
     { fieldKey: "client_reference_2", label: "Copied reference" },
     { fieldKey: "client_reference_2_2", label: "Copied reference" },

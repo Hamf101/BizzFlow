@@ -18,10 +18,13 @@ import { everyoneWho } from "@/services/documents/sharing-words"
 type Level = SharingLevel
 // An owner admin's role is never shared; they always have access.
 type SharableRole = "external_reviewer" | "manager" | "staff"
-type Principal = { role: SharableRole } | { userId: string }
+type Principal = { email: string } | { role: SharableRole } | { userId: string }
 type Share = (principal: Principal, level: Level | null) => Promise<void>
 
 const SHAREABLE_ROLES: readonly SharableRole[] = ["manager", "staff", "external_reviewer"]
+const LABEL: Record<Level, string> = { contributor: "Editor", editor: "Editor", user: "User", viewer: "Viewer" }
+// Loose on purpose: the server validates the address; this only decides whether to offer an invite.
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const ROW = "flex items-center justify-between gap-3 py-2"
 const CHOICE =
   "flex w-full items-center justify-between gap-3 rounded-[10px] px-2.5 py-2 text-left text-sm outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/40"
@@ -153,7 +156,7 @@ function WhoHasAccess({ busy, onChange, templates, view }: { busy: boolean; onCh
         {view.owner ? (
           <li className={ROW}>
             <Who person={view.owner} />
-            <span className="text-sm text-muted-foreground">Owner, can always edit</span>
+            <span className="text-sm text-muted-foreground">Owner</span>
           </li>
         ) : null}
         {view.grants.map((grant) => {
@@ -167,14 +170,35 @@ function WhoHasAccess({ busy, onChange, templates, view }: { busy: boolean; onCh
                 busy={busy}
                 label={label}
                 level={grant.level}
+                levels={
+                  (grant.kind === "person" ? grant.person.role : grant.role) === "external_reviewer"
+                    ? ["viewer"]
+                    : templates
+                      ? ["viewer", "user", "editor"]
+                      : ["viewer", "contributor"]
+                }
                 mixed={grant.mixed === true}
                 onChoose={(level) => void onChange(principal, level)}
-                templates={templates}
-                viewOnly={(grant.kind === "person" ? grant.person.role : grant.role) === "external_reviewer"}
               />
             </li>
           )
         })}
+        {view.guests.map((guest) => (
+          <li className={ROW} key={`email:${guest.email}`}>
+            <span className="min-w-0 text-sm">
+              <span className="block truncate">{guest.email}</span>
+              <span className="block text-xs text-muted-foreground">Outside · {guest.joined ? "Joined" : "Invited"}</span>
+            </span>
+            <AccessChoice
+              busy={busy}
+              label={guest.email}
+              level={guest.level}
+              levels={view.outsideLevels}
+              mixed={false}
+              onChoose={(level) => void onChange({ email: guest.email }, level)}
+            />
+          </li>
+        ))}
       </ul>
       <p className="pt-1 text-xs text-muted-foreground">
         {view.owner ? "Owner admins always have access." : "Only people who can open all of them are listed. Owner admins and whoever made each one always have access."}
@@ -196,20 +220,18 @@ function AccessChoice({
   busy,
   label,
   level,
+  levels,
   mixed,
   onChoose,
-  templates,
-  viewOnly,
 }: {
   busy: boolean
   label: string
   level: Level
+  /** The levels this person may be given here. */
+  levels: readonly Level[]
   /** The selected items give this person different levels. */
   mixed: boolean
   onChoose: (level: Level | null) => void
-  /** A template is used as well as viewed or edited. */
-  templates: boolean
-  viewOnly: boolean
 }): ReactElement {
   return (
     <select
@@ -224,15 +246,11 @@ function AccessChoice({
           Different on each
         </option>
       ) : null}
-      {viewOnly ? (
-        <option value="viewer">Can view only</option>
-      ) : (
-        <>
-          <option value="viewer">Can view</option>
-          {templates ? <option value="user">Can use</option> : null}
-          <option value={templates ? "editor" : "contributor"}>Can edit</option>
-        </>
-      )}
+      {levels.map((choice) => (
+        <option key={choice} value={choice}>
+          {LABEL[choice]}
+        </option>
+      ))}
       <option value="remove">Remove access</option>
     </select>
   )
@@ -263,13 +281,41 @@ function AddPeople({
       `${person.name} ${person.email}`.toLowerCase().includes(needle)
   )
   const groups = SHAREABLE_ROLES.filter((role) => !heldRoles.has(role) && everyoneWho(role).toLowerCase().includes(needle))
+  const invitable = view.outsideLevels.length > 0
+  // A member's address finds the member; someone already listed is changed in the list above.
+  const outsider =
+    invitable &&
+    EMAIL.test(needle) &&
+    !view.members.some((person) => person.email.toLowerCase() === needle) &&
+    !view.guests.some((guest) => guest.email.toLowerCase() === needle)
+      ? needle
+      : null
+  const hint = invitable ? "Find a person or group, or type an email" : "Find a person or group"
 
   return (
     <section aria-label="Add people">
       <h3 className="pb-1.5 text-sm font-medium">Add people</h3>
-      <Input aria-label="Find a person or group" onChange={(event) => onQuery(event.target.value)} placeholder="Find a person or group" value={query} />
+      <Input aria-label={hint} onChange={(event) => onQuery(event.target.value)} placeholder={hint} value={query} />
       {/* A list beside the field, not a pop-up, which would hide this dialog from a screen reader. */}
       <ul aria-label="People you can add" className="mt-1 max-h-44 overflow-y-auto">
+        {outsider ? (
+          <li>
+            <button
+              className={CHOICE}
+              disabled={busy}
+              onClick={() => {
+                onQuery("")
+                void onAdd({ email: outsider }, "viewer")
+              }}
+              type="button"
+            >
+              <span className="min-w-0 text-sm">
+                <span className="block truncate">Invite {outsider}</span>
+                <span className="block truncate text-xs text-muted-foreground">Outside this workspace</span>
+              </span>
+            </button>
+          </li>
+        ) : null}
         {groups.map((role) => (
           <li key={role}>
             <button className={CHOICE} disabled={busy} onClick={() => void onAdd({ role }, "viewer")} type="button">
@@ -284,7 +330,7 @@ function AddPeople({
             </button>
           </li>
         ))}
-        {people.length + groups.length === 0 ? <li className="px-2.5 py-2 text-sm text-muted-foreground">No one else to add.</li> : null}
+        {people.length + groups.length === 0 && !outsider ? <li className="px-2.5 py-2 text-sm text-muted-foreground">No one else to add.</li> : null}
       </ul>
     </section>
   )
@@ -325,7 +371,7 @@ function FromFolder({ busy, onChange, view }: { busy: boolean; onChange: (inheri
           {view.inherited.map((entry) => (
             <li className={ROW} key={`${entry.from}:${entry.label}`}>
               <span className="text-sm">{entry.label}</span>
-              <span className="text-sm text-muted-foreground">{entry.level === "contributor" ? "Can edit" : "Can view"}</span>
+              <span className="text-sm text-muted-foreground">{LABEL[entry.level]}</span>
             </li>
           ))}
           {view.inherited.length === 0 ? <li className="py-2 text-sm text-muted-foreground">Nobody else yet.</li> : null}

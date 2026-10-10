@@ -1,7 +1,7 @@
 import {
   createSignedDocumentDownloadUrl as defaultCreateSignedDocumentDownloadUrl,
 } from "@/services/document-storage-service"
-import { requireDocumentAccess } from "@/services/documents/access-service"
+import { requireDocumentReader } from "@/services/documents/access-service"
 import { recordRequiredDocumentAuditLog } from "@/services/documents/audit"
 import type {
   CreateDocumentDownloadUrlInput,
@@ -40,17 +40,7 @@ export async function createDocumentDownloadUrl(
     async (): Promise<CreateDocumentDownloadUrlResponse> => {
       const client = getClient(deps)
 
-      await requireDocumentAccess(
-        {
-          actorUserId: input.actorUserId,
-          organizationId: input.organizationId,
-          documentId: input.documentId,
-          requiredAccess: "viewer",
-          operation: "read",
-          requiredOrganizationPermissionAction: "documents:view",
-        },
-        client
-      )
+      const { guest } = await requireDocumentReader(input, client)
 
       const document = await getDocumentById(
         client,
@@ -66,6 +56,13 @@ export async function createDocumentDownloadUrl(
       }
       const versionId =
         normalizeNullableId(input.versionId) ?? document.currentVersionId
+
+      // A guest was given the document as it stands, not its history. A
+      // generated document's versions are its finalized paper, which carries
+      // every signer's email and signature; a guest reads its preview instead.
+      if (guest && (versionId !== document.currentVersionId || document.sourceKind === "generated")) {
+        throw new DocumentServiceError("Document version was not found.", 404)
+      }
 
       if (!versionId) {
         throw new DocumentServiceError(
@@ -93,8 +90,8 @@ export async function createDocumentDownloadUrl(
         defaultCreateSignedDocumentDownloadUrl
       const signedUrl = await createSignedDocumentDownloadUrl(
         input.view && isViewableDocumentType(version.contentType)
-          ? { storageKey: version.storageKey, viewAs: version.contentType }
-          : { storageKey: version.storageKey }
+          ? { downloadFilename: version.originalFilename, storageKey: version.storageKey, viewAs: version.contentType }
+          : { downloadFilename: version.originalFilename, storageKey: version.storageKey }
       )
 
       await recordRequiredDocumentAuditLog(deps, {

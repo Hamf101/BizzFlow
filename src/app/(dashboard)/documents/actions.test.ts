@@ -306,20 +306,15 @@ describe("document creation and collaboration actions", (): void => {
     })
   })
 
-  it("adds a comment without reflecting a service error in the redirect", async (): Promise<void> => {
-    vi.mocked(createDocumentComment).mockRejectedValue(
-      new Error("private comment persistence detail")
-    )
+  it("keeps a crafted document id inside the documents path", async (): Promise<void> => {
+    vi.mocked(createDocumentComment).mockResolvedValue(undefined as never)
     const formData = new FormData()
     formData.set("organizationId", ORGANIZATION_ID)
-    formData.set("documentId", DOCUMENT_ID)
-    formData.set("body", "Please review this section.")
+    formData.set("documentId", "..//evil.example")
+    formData.set("body", "Hi")
 
     await expect(createDocumentCommentAction(formData)).rejects.toThrow(
-      `NEXT_REDIRECT:${DETAIL_PATH}?feedback=operation_failed`
-    )
-    expect(redirectMock).not.toHaveBeenCalledWith(
-      expect.stringContaining("private+comment+persistence+detail")
+      "NEXT_REDIRECT:/documents/..%2F%2Fevil.example?"
     )
   })
 })

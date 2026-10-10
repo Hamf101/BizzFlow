@@ -38,6 +38,7 @@ import {
   requireActiveFolder,
   requirePermission,
   requireTenantDocument,
+  requireUsableImages,
   runTemplateOperation
 } from "./shared"
 import { withoutImageUrls } from "@/types/template-images"
@@ -126,6 +127,11 @@ export async function createGeneratedDocument(
           "File upload fields are only supported in internal submissions.",
           409
         )
+      }
+
+      // A template's pictures were checked when it was saved; a blank document's are checked here.
+      if (!template) {
+        await requireUsableImages(snapshot, null, input.organizationId)
       }
 
       const documentId = createId(deps)

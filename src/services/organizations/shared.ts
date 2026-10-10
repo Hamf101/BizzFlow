@@ -1,12 +1,11 @@
 import { randomUUID } from "node:crypto"
 
 import {
+  isOrganizationPermissionAction,
   isOrganizationRole,
-  ORGANIZATION_PERMISSION_ACTIONS,
-  type OrganizationPermissionAction,
   type OrganizationRole,
 } from "@/lib/permissions"
-import { recordAuditLog } from "@/services/audit-service"
+import { recordAuditLog, recordAuditLogBestEffort } from "@/services/audit-service"
 import type {
   InviteRow,
   LogValue,
@@ -14,7 +13,6 @@ import type {
   OrganizationAuditLogInput,
   OrganizationRoleRow,
   OrganizationRow,
-  SupabaseErrorLike,
 } from "@/services/organizations/contracts"
 import { OrganizationServiceError } from "@/services/organizations/errors"
 import type {
@@ -26,6 +24,8 @@ import type {
   OrganizationRoleDefinition,
 } from "@/types/organization"
 import { runOperation } from "@/services/operation"
+import { asSupabaseError } from "@/services/supabase-error"
+import { normalizeName } from "@/services/input"
 
 /**
  * Runs an organization operation with consistent observability and error translation.
@@ -62,16 +62,7 @@ export async function recordOrganizationAuditLog(
   input: OrganizationAuditLogInput,
   recorder: (input: OrganizationAuditLogInput) => Promise<unknown> = recordAuditLog
 ): Promise<void> {
-  try {
-    await recorder(input)
-  } catch (error: unknown) {
-    console.warn("organization_audit_log_failed", {
-      organizationId: input.organizationId,
-      actorUserId: input.actorUserId,
-      action: input.action,
-      reason: error instanceof Error ? error.message : "Unknown audit error",
-    })
-  }
+  await recordAuditLogBestEffort(input, recorder)
 }
 
 /**
@@ -99,12 +90,7 @@ export function mapOrganization(row: OrganizationRow): Organization {
  */
 export function mapMembership(row: MembershipRow): OrganizationMembership {
   const roleDefinition = row.role_definition ?? null
-  const rolePermissions = roleDefinition?.permissions?.filter(
-    (permission): permission is OrganizationPermissionAction =>
-      ORGANIZATION_PERMISSION_ACTIONS.includes(
-        permission as OrganizationPermissionAction
-      )
-  )
+  const rolePermissions = roleDefinition?.permissions?.filter(isOrganizationPermissionAction)
 
   return {
     id: row.id,
@@ -134,12 +120,7 @@ export function mapOrganizationRole(
     row.system_key !== null && isOrganizationRole(row.system_key)
       ? row.system_key
       : null
-  const permissions = row.permissions?.filter(
-    (permission): permission is OrganizationPermissionAction =>
-      ORGANIZATION_PERMISSION_ACTIONS.includes(
-        permission as OrganizationPermissionAction
-      )
-  ) ?? null
+  const permissions = row.permissions?.filter(isOrganizationPermissionAction) ?? null
 
   return {
     id: row.id,
@@ -169,7 +150,6 @@ export function mapInvite(row: InviteRow): OrganizationInvite {
     role: parseOrganizationRole(row.role),
     roleDefinitionId: row.role_definition_id ?? roleDefinition?.id ?? null,
     roleName: roleDefinition?.name ?? null,
-    token: row.token,
     invitedBy: row.invited_by ?? null,
     status: parseInviteStatus(row.status),
     expiresAt: row.expires_at,
@@ -208,7 +188,7 @@ export function createSupabaseServiceError(
 export function createAcceptInviteMutationError(
   error: unknown
 ): OrganizationServiceError {
-  const errorLike = getSupabaseErrorLike(error)
+  const errorLike = asSupabaseError(error)
 
   if (errorLike?.code === "P0002") {
     return new OrganizationServiceError("Invite is invalid or expired.", 404)
@@ -230,7 +210,7 @@ export function createAcceptInviteMutationError(
 export function createMemberRoleMutationError(
   error: unknown
 ): OrganizationServiceError {
-  const errorLike = getSupabaseErrorLike(error)
+  const errorLike = asSupabaseError(error)
 
   if (errorLike?.code === "23514") {
     return new OrganizationServiceError(
@@ -263,7 +243,7 @@ export function createMemberRoleMutationError(
 export function createRoleArchiveMutationError(
   error: unknown
 ): OrganizationServiceError {
-  const errorLike = getSupabaseErrorLike(error)
+  const errorLike = asSupabaseError(error)
 
   if (errorLike?.code === "23503") {
     return new OrganizationServiceError(
@@ -301,16 +281,7 @@ export function createRoleArchiveMutationError(
  * @throws OrganizationServiceError when the name length is invalid.
  */
 export function normalizeOrganizationName(name: string): string {
-  const normalizedName = name.trim().replace(/\s+/g, " ")
-
-  if (normalizedName.length < 2 || normalizedName.length > 120) {
-    throw new OrganizationServiceError(
-      "Workspace name must be between 2 and 120 characters.",
-      400
-    )
-  }
-
-  return normalizedName
+  return normalizeName(name, "Workspace name", 2, 120, (message) => new OrganizationServiceError(message, 400))
 }
 
 /**
@@ -419,7 +390,7 @@ function createOrganizationSetupError(
 }
 
 function getSupabaseSetupFailureMessage(error: unknown): string | null {
-  const errorLike = getSupabaseErrorLike(error)
+  const errorLike = asSupabaseError(error)
   const searchableMessage = [
     errorLike?.code,
     errorLike?.message,
@@ -448,7 +419,7 @@ function getSupabaseSetupFailureMessage(error: unknown): string | null {
     searchableMessage.includes("could not find the table") ||
     searchableMessage.includes("schema cache")
   ) {
-    return "Supabase database schema is not installed or exposed. Apply the Sprint 2 and Sprint 3 migrations."
+    return "The Supabase database schema is missing tables this code needs, or does not expose them. Apply the latest migrations."
   }
 
   if (
@@ -461,10 +432,3 @@ function getSupabaseSetupFailureMessage(error: unknown): string | null {
   return null
 }
 
-function getSupabaseErrorLike(error: unknown): SupabaseErrorLike | null {
-  if (!error || typeof error !== "object") {
-    return null
-  }
-
-  return error as SupabaseErrorLike
-}

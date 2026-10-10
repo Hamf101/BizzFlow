@@ -1,27 +1,14 @@
 // @vitest-environment jsdom
 
 import { act } from "react"
-import { createRoot, type Root } from "react-dom/client"
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 
 import type { QueueItem } from "@/components/dashboard/dashboard-view"
 
 vi.mock("next/link", () => ({ default: "a" }))
 
 import { QueueList } from "./queue-list"
-
-const roots: Root[] = []
-
-beforeAll(() => {
-  ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
-})
-
-afterEach(() => {
-  for (const root of roots.splice(0)) {
-    act(() => root.unmount())
-  }
-  document.body.replaceChildren()
-})
+import { mount } from "@/test/render"
 
 describe("the waiting-on-you list", () => {
   it("never keeps work out of reach: what the first page leaves out opens in place", async () => {
@@ -43,10 +30,7 @@ describe("the waiting-on-you list", () => {
 })
 
 async function render(items: QueueItem[]): Promise<void> {
-  const container = document.createElement("div")
-  document.body.append(container)
-  const root = createRoot(container)
-  roots.push(root)
+  const root = mount()
 
   await act(async () => root.render(<QueueList items={items} />))
 }

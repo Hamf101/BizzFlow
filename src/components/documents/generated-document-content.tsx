@@ -3,9 +3,11 @@
 import Image from "next/image"
 import {
   type ChangeEvent,
+  createContext,
   type CSSProperties,
   type ReactElement,
   type ReactNode,
+  useContext,
   useEffect,
   useMemo,
   useState
@@ -16,7 +18,7 @@ import {
   isStaticTemplateBlock,
   TemplateStaticBlock
 } from "@/components/templates/template-static-block"
-import { BLOCK_GAP, pageStyle, PlacedImages, printableMargin } from "@/components/templates/printed-page"
+import { BLOCK_GAP, pageStyle, paginationStyle, PlacedImages, printableMargin } from "@/components/templates/printed-page"
 import {
   groupTemplateRenderBlocks,
   ROW_GRID,
@@ -24,7 +26,7 @@ import {
   type TemplateWebRenderGroup
 } from "@/components/templates/template-render-groups"
 import { DatePicker } from "@/components/ui/date-picker"
-import { PaperGrid, PaperTable, readChoiceList } from "@/components/editor/paper-answer-kinds"
+import { PaperGrid, PaperTable } from "@/components/editor/paper-answer-kinds"
 import { CheckboxChoices, RadioChoices } from "@/components/ui/radio-choices"
 import { TypedInput } from "@/components/ui/typed-input"
 import { Select } from "@/components/ui/select"
@@ -39,12 +41,14 @@ import {
   type TemplateRenderPlan,
   type TemplateRenderSection
 } from "@/services/templates/template-render-plan"
+import { boxNote, boxSigner } from "@/types/box-signers"
 import type {
   TemplateBlock,
   TemplateBranding,
   TemplateContent,
   TemplateLayout
 } from "@/types/template"
+import { readChoiceList } from "@/types/template-answer-kinds"
 import { IMAGE_DATA_URL_PATTERN, MAX_IMAGE_DATA_URL_LENGTH } from "@/types/template-limits"
 import {
   applyVisibleTemplateFieldValue,
@@ -54,21 +58,12 @@ import {
 import { getGeneratedDocumentAnswerName } from "./generated-document-form-data"
 import { imageSource } from "@/types/template-images"
 
-/**
- * Hands answer ownership to the caller so it survives this component's mount.
- *
- * Supplying a control makes the component fully controlled: it renders exactly
- * the answers it is given and reports every edit instead of storing one.
- */
-export type GeneratedDocumentAnswerControl = Readonly<{
-  answers: Record<string, unknown>
-  onChange: (answers: Record<string, unknown>) => void
-}>
+// The place of the signer reading a signing link, whose own boxes say so, and
+// who has signed, whose boxes say that instead.
+const ReadingSigner = createContext<{ reader: number; signers: ReadonlyArray<{ status: string }> }>({ reader: 0, signers: [] })
 
 type GeneratedDocumentContentProps = {
-  /** Present when the caller owns answer state across mounts. */
-  answerControl?: GeneratedDocumentAnswerControl
-  /** Seed answers for the uncontrolled component. Ignored beside `answerControl`. */
+  /** Seed answers; the component owns them from then on. */
   answers?: Record<string, unknown>
   content: TemplateContent
   editable: boolean
@@ -76,6 +71,10 @@ type GeneratedDocumentContentProps = {
   onAnswersChange?: (answers: Record<string, unknown>) => void
   recipientSigning?: boolean
   recipientSigned?: boolean
+  /** The signing link's signer, by the order they were added. */
+  signerNumber?: number
+  /** Every signer, in that order. */
+  signers?: ReadonlyArray<{ status: string }>
   title?: string
 }
 
@@ -86,7 +85,6 @@ type GeneratedDocumentContentProps = {
  * @returns A paper-like generated document suitable for member and public forms.
  */
 export function GeneratedDocumentContent({
-  answerControl,
   answers = {},
   content,
   editable,
@@ -94,36 +92,22 @@ export function GeneratedDocumentContent({
   onAnswersChange,
   recipientSigning = false,
   recipientSigned = false,
+  signerNumber = 0,
+  signers,
   title
 }: GeneratedDocumentContentProps): ReactElement {
   // Server-rendered call sites post answers through FormData and cannot own
-  // React state, so the uncontrolled path stays the default.
-  const [uncontrolledAnswers, setUncontrolledAnswers] =
+  // React state, so the component keeps the answers.
+  const [currentAnswers, setCurrentAnswers] =
     useState<Record<string, unknown>>(() =>
       pruneHiddenTemplateFieldValues(content, answers)
     )
-  const ownedAnswers = answerControl?.answers
-  const currentAnswers = useMemo((): Record<string, unknown> => {
-    if (!ownedAnswers) {
-      return uncontrolledAnswers
-    }
-
-    const visibleAnswers = pruneHiddenTemplateFieldValues(content, ownedAnswers)
-
-    // Pruning only ever drops keys, so an equal key count means an equal map.
-    // Returning the caller's own object then keeps identity stable, which stops
-    // an owner that also observes `onAnswersChange` from looping on two equal
-    // objects.
-    return Object.keys(visibleAnswers).length ===
-      Object.keys(ownedAnswers).length
-      ? ownedAnswers
-      : visibleAnswers
-  }, [content, ownedAnswers, uncontrolledAnswers])
 
   useEffect((): void => {
     onAnswersChange?.(currentAnswers)
   }, [currentAnswers, onAnswersChange])
 
+  const reading = useMemo(() => ({ reader: signerNumber, signers: signers ?? [] }), [signerNumber, signers])
   const renderPlan = useMemo(
     () =>
       createTemplateRenderPlan({
@@ -136,19 +120,7 @@ export function GeneratedDocumentContent({
   )
 
   function applyAnswer(fieldKey: string, value: unknown): void {
-    if (answerControl) {
-      answerControl.onChange(
-        applyVisibleTemplateFieldValue(
-          content,
-          answerControl.answers,
-          fieldKey,
-          value
-        )
-      )
-      return
-    }
-
-    setUncontrolledAnswers(
+    setCurrentAnswers(
       (priorAnswers: Record<string, unknown>): Record<string, unknown> =>
         applyVisibleTemplateFieldValue(content, priorAnswers, fieldKey, value)
     )
@@ -201,15 +173,17 @@ export function GeneratedDocumentContent({
           </h2>
         )}
 
-        <DocumentFlow
-          answers={currentAnswers}
-          editable={editable}
-          fileFieldContent={fileFieldContent}
-          renderPlan={renderPlan}
-          onAnswerChange={applyAnswer}
-          recipientSigned={recipientSigned}
-          recipientSigning={recipientSigning}
-        />
+        <ReadingSigner.Provider value={reading}>
+          <DocumentFlow
+            answers={currentAnswers}
+            editable={editable}
+            fileFieldContent={fileFieldContent}
+            renderPlan={renderPlan}
+            onAnswerChange={applyAnswer}
+            recipientSigned={recipientSigned}
+            recipientSigning={recipientSigning}
+          />
+        </ReadingSigner.Provider>
         {shouldRenderTemplateFooter(renderPlan.layout, 1) &&
           renderPlan.layout.pageNumbering === "page_x_of_y" && (
             <GeneratedPageFooter />
@@ -363,7 +337,7 @@ function GeneratedSection({
       data-keep-together={section.keepTogether ? "true" : undefined}
       data-page-break-before={section.pageBreakBefore ? "true" : undefined}
       data-template-section-id={section.id ?? "implicit"}
-      style={getGeneratedPaginationStyle({
+      style={paginationStyle({
         keepTogether: section.keepTogether,
         pageBreakBefore: section.pageBreakBefore
       })}
@@ -425,7 +399,7 @@ function GeneratedFieldGroup({
       data-keep-together={group.keepTogether ? "true" : undefined}
       data-template-field-group-columns={group.columns}
       data-template-field-group-id={group.id ?? "ungrouped"}
-      style={getGeneratedPaginationStyle({
+      style={paginationStyle({
         keepTogether: group.keepTogether
       })}
     >
@@ -456,7 +430,7 @@ function GeneratedFieldGroup({
               }
               data-template-block-id={renderBlock.block.id}
               key={renderBlock.block.id}
-              style={getGeneratedPaginationStyle({
+              style={paginationStyle({
                 keepWithNext: renderBlock.keepWithNext,
                 pageBreakBefore:
                   renderBlock.pageBreakBefore &&
@@ -482,28 +456,6 @@ function GeneratedFieldGroup({
       </div>
     </section>
   )
-}
-
-function getGeneratedPaginationStyle({
-  keepTogether = false,
-  keepWithNext = false,
-  pageBreakBefore = false
-}: {
-  keepTogether?: boolean
-  keepWithNext?: boolean
-  pageBreakBefore?: boolean
-}): CSSProperties {
-  return {
-    ...(pageBreakBefore
-      ? { breakBefore: "page", pageBreakBefore: "always" }
-      : {}),
-    ...(keepTogether
-      ? { breakInside: "avoid-page", pageBreakInside: "avoid" }
-      : {}),
-    ...(keepWithNext
-      ? { breakAfter: "avoid-page", pageBreakAfter: "avoid" }
-      : {})
-  }
 }
 
 /**
@@ -645,6 +597,9 @@ export function GeneratedBlock({
                   ? "✓"
                   : ""}
               </span>
+              <span className="sr-only">
+                {readBooleanAnswer(answers, block.fieldKey, block.checkedByDefault) ? "Checked: " : "Not checked: "}
+              </span>
               {block.label}
             </div>
           )}
@@ -732,11 +687,11 @@ export function GeneratedBlock({
       if (recipientSigning) {
         return (
           <AnswerFieldFrame block={block}>
-            <div className="rounded-lg border border-dashed border-border px-4 py-5 text-sm text-muted-foreground">
-              {recipientSigned
-                ? `${drawingLabel === "signature" ? "Signature" : "Initials"} recorded.`
-                : `${drawingLabel === "signature" ? "Signature" : "Initials"} will be captured in the signing acknowledgement below.`}
-            </div>
+            <SignerBox
+              block={block}
+              mark={existingValue}
+              signed={recipientSigned}
+            />
           </AnswerFieldFrame>
         )
       }
@@ -762,6 +717,44 @@ export function GeneratedBlock({
       )
     }
   }
+}
+
+/**
+ * A drawn box on a signing link: its signer's mark once made, or whose it is.
+ * The reader's own boxes take the drawing they make in the Sign step.
+ */
+function SignerBox({
+  block,
+  mark,
+  signed
+}: {
+  block: Extract<TemplateBlock, { type: "initials_field" | "signature_field" }>
+  mark: string
+  signed: boolean
+}): ReactElement {
+  const { reader, signers } = useContext(ReadingSigner)
+  const signer = boxSigner(block)
+  const initials = block.type === "initials_field"
+
+  if (mark) {
+    return <DrawingPreview label={block.label} value={mark} />
+  }
+
+  if (signer === "sender") {
+    return <ReadOnlyAnswer value="" />
+  }
+
+  return (
+    <div className="rounded-lg border border-dashed border-border px-4 py-5 text-sm text-muted-foreground">
+      {signer !== reader
+        ? `${boxNote(block, signers)}.`
+        : signed
+          ? `Signed without ${initials ? "initials" : "a drawing"}.`
+          : initials
+            ? "Your initials go here, from the Sign step below."
+            : "You sign here, from the Sign step below."}
+    </div>
+  )
 }
 
 function AnswerFieldFrame({

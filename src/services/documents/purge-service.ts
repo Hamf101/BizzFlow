@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto"
 
+import { describeErrorForLog } from "@/lib/observability"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { deleteDocumentStorageObject } from "@/services/document-storage-service"
 import {
@@ -22,6 +23,7 @@ import {
   createSupabaseServiceError,
   runDocumentOperation,
 } from "@/services/documents/shared"
+import { asSupabaseError } from "@/services/supabase-error"
 
 const DEFAULT_JOB_LIMIT = 10
 const DEFAULT_OBJECT_LIMIT = 25
@@ -31,12 +33,6 @@ const MAX_OBJECT_LIMIT = 100
 const MIN_LEASE_SECONDS = 15
 const MAX_LEASE_SECONDS = 600
 
-type SupabaseErrorLike = {
-  code?: string
-  details?: string
-  hint?: string
-  message?: string
-}
 
 /**
  * Atomically queues permanent deletion of one trashed document.
@@ -243,7 +239,21 @@ export async function processDueResourcePurges(
         continue
       }
 
-      await completeObjectDelete(client, object)
+      // A lease that expired during a long batch is not fatal: the bytes are
+      // gone, the object is re-leased later, and deleting an absent key again
+      // succeeds. Skip it and keep going.
+      try {
+        await completeObjectDelete(client, object)
+      } catch (error: unknown) {
+        retryScheduled += 1
+        console.warn("resource_purge_object_completion_deferred", {
+          jobId: object.job_id,
+          objectId: object.object_id,
+          ...describeErrorForLog(error),
+        })
+        continue
+      }
+
       deleted += 1
     }
 
@@ -263,14 +273,15 @@ export async function processDueResourcePurges(
     })
     return result
   } catch (error: unknown) {
+    console.error("resource_purge_batch_failed", {
+      durationMs: Date.now() - startedAt,
+      ...describeErrorForLog(error),
+    })
+
     if (error instanceof DocumentServiceError) {
       throw error
     }
 
-    console.error("resource_purge_batch_failed", {
-      durationMs: Date.now() - startedAt,
-      reason: error instanceof Error ? error.name : "Unknown purge error",
-    })
     throw createSupabaseServiceError(error, "Unable to process document purge.")
   }
 }
@@ -410,10 +421,7 @@ function createManualPurgeError(
   error: unknown,
   resourceKind: "document" | "folder"
 ): DocumentServiceError {
-  const errorLike =
-    error && typeof error === "object"
-      ? (error as SupabaseErrorLike)
-      : null
+  const errorLike = asSupabaseError(error)
 
   if (errorLike?.code === "P0002") {
     return new DocumentServiceError(

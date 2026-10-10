@@ -57,6 +57,32 @@ describe("document upload lifecycle", () => {
     expect(client.tables.document_versions).toHaveLength(0)
   })
 
+  it("checks the title before it signs anything, and leaves no document behind when its version cannot be stored", async () => {
+    const client = new FakeSupabaseClient({
+      organization_memberships: [createMembershipRow("staff")],
+    })
+    const deps = createDeps(client, ["document-1", "version-1", "document-2", "version-2"])
+    const upload = {
+      actorUserId: "user-1",
+      organizationId: "org-1",
+      folderId: null,
+      title: "   ",
+      description: null,
+      originalFilename: "contract.pdf",
+      contentType: "application/pdf",
+      byteSize: 1024,
+    }
+
+    await expect(createDocumentUploadUrl(upload, deps)).rejects.toMatchObject({ statusCode: 400 })
+    expect(deps.createSignedDocumentUploadUrl).not.toHaveBeenCalled()
+
+    client.failNextWrites("document_versions", "23514")
+
+    await expect(createDocumentUploadUrl({ ...upload, title: "Signed contract" }, deps)).rejects.toMatchObject({ statusCode: 500 })
+    expect(client.tables.documents).toHaveLength(0)
+    expect(client.tables.document_versions).toHaveLength(0)
+  })
+
   it("does not persist document rows when upload URL signing fails", async () => {
     const client = new FakeSupabaseClient({
       organization_memberships: [createMembershipRow("staff")],
@@ -114,8 +140,6 @@ describe("document upload lifecycle", () => {
       documentId: "document-1",
       versionId: "version-1",
       uploadUrl: "https://r2.example/upload",
-      storageKey:
-        "organizations/org-1/documents/document-1/versions/version-1/original.pdf",
       expiresInSeconds: 900,
     })
     expect(client.tables.documents).toMatchObject([
@@ -434,52 +458,43 @@ describe("document upload lifecycle", () => {
     expect(deps.createSignedDocumentUploadUrl).not.toHaveBeenCalled()
   })
 
-  it("rejects replacements for archived documents", async () => {
+  it("never puts an uploaded file in place of a generated or signed document", async () => {
     const client = new FakeSupabaseClient({
       organization_memberships: [createMembershipRow("staff")],
-      documents: [
-        createDocumentRow({
-          current_version_id: "version-1",
-          archived_at: "2026-07-09T11:30:00.000Z",
-        }),
-      ],
-      document_versions: [createVersionRow()],
+      documents: [createDocumentRow({ source_kind: "generated" })],
+      document_versions: [createVersionRow(), createVersionRow({ id: "version-2", status: "upload_pending", version_number: 2 })],
     })
-    const deps = createDeps(client, ["version-2"])
+    const deps = createDeps(client, ["version-3"])
+    const actor = { actorUserId: "user-1", organizationId: "org-1", documentId: "document-1" }
 
     await expect(
       createDocumentReplacementUploadUrl(
-        {
-          actorUserId: "user-1",
-          organizationId: "org-1",
-          documentId: "document-1",
-          originalFilename: "contract-revised.pdf",
-          contentType: "application/pdf",
-          byteSize: 2048,
-        },
+        { ...actor, originalFilename: "forged.pdf", contentType: "application/pdf", byteSize: 2048 },
         deps
       )
-    ).rejects.toMatchObject({
-      message: "Only active documents can be replaced.",
-      statusCode: 409,
-    })
+    ).rejects.toMatchObject({ statusCode: 409 })
+    await expect(completeDocumentUpload({ ...actor, versionId: "version-2" }, deps)).rejects.toMatchObject({ statusCode: 409 })
 
-    expect(client.tables.document_versions).toHaveLength(1)
+    expect(client.tables.document_versions).toHaveLength(2)
+    expect(client.tables.document_versions[1].status).toBe("upload_pending")
+    expect(client.tables.documents[0].current_version_id).toBe("version-1")
   })
 
-  it("does not allocate a replacement version when upload URL signing fails", async () => {
+  it.each([
+    ["an archived document", 409, {}, { archived_at: "2026-07-09T11:30:00.000Z" }],
+    ["a failed upload signature", 500, { failSigning: true }, {}],
+  ])("allocates no replacement version for %s", async (_case, statusCode, { failSigning }: { failSigning?: boolean }, document) => {
     const client = new FakeSupabaseClient({
       organization_memberships: [createMembershipRow("staff")],
-      documents: [createDocumentRow()],
+      documents: [createDocumentRow({ current_version_id: "version-1", ...document })],
       document_versions: [createVersionRow()],
     })
     const deps = createDeps(client, ["version-2"])
-    deps.createSignedDocumentUploadUrl = vi.fn().mockRejectedValue(
-      new DocumentStorageServiceError(
-        "Unable to create signed document upload URL.",
-        500
+    if (failSigning) {
+      deps.createSignedDocumentUploadUrl = vi.fn().mockRejectedValue(
+        new DocumentStorageServiceError("Unable to create signed document upload URL.", 500)
       )
-    )
+    }
 
     await expect(
       createDocumentReplacementUploadUrl(
@@ -493,10 +508,7 @@ describe("document upload lifecycle", () => {
         },
         deps
       )
-    ).rejects.toMatchObject({
-      message: "Unable to create signed document upload URL.",
-      statusCode: 500,
-    })
+    ).rejects.toMatchObject({ statusCode })
 
     expect(client.tables.document_versions).toHaveLength(1)
   })
@@ -508,6 +520,7 @@ describe("document upload lifecycle", () => {
       document_versions: [createVersionRow({ status: "upload_pending" })],
     })
     const deps = createDeps(client)
+    deps.verifyDocumentUpload = vi.fn().mockResolvedValue("a".repeat(64))
 
     const version = await completeDocumentUpload(
       {
@@ -520,6 +533,7 @@ describe("document upload lifecycle", () => {
     )
 
     expect(version.status).toBe("available")
+    expect(client.tables.document_versions[0].checksum_sha256).toBe("a".repeat(64))
     expect(client.tables.documents[0]).toMatchObject({
       current_version_id: "version-1",
       updated_by: "user-1",
@@ -587,7 +601,10 @@ describe("document upload lifecycle", () => {
     expect(client.tables.document_activity_events).toHaveLength(1)
   })
 
-  it("keeps a pending replacement out of current state when its object is missing", async () => {
+  it.each([
+    ["its object is missing", "Uploaded document object was not found."],
+    ["its metadata mismatches", "Uploaded document byte size does not match the pending version."],
+  ])("keeps a pending replacement out of current state when %s", async (_case, reason) => {
     const client = new FakeSupabaseClient({
       organization_memberships: [createMembershipRow("staff")],
       documents: [createDocumentRow()],
@@ -603,80 +620,18 @@ describe("document upload lifecycle", () => {
       ],
     })
     const deps = createDeps(client)
-    deps.verifyDocumentUpload = vi.fn().mockRejectedValue(
-      new DocumentStorageServiceError(
-        "Uploaded document object was not found.",
-        409
-      )
-    )
+    deps.verifyDocumentUpload = vi.fn().mockRejectedValue(new DocumentStorageServiceError(reason, 409))
     const rpcSpy = vi.spyOn(client, "rpc")
 
     await expect(
       completeDocumentUpload(
-        {
-          actorUserId: "user-1",
-          organizationId: "org-1",
-          documentId: "document-1",
-          versionId: "version-2",
-        },
+        { actorUserId: "user-1", organizationId: "org-1", documentId: "document-1", versionId: "version-2" },
         deps
       )
-    ).rejects.toMatchObject({
-      message: "Uploaded document object was not found.",
-      statusCode: 409,
-    })
+    ).rejects.toMatchObject({ statusCode: 409 })
 
     expect(client.tables.documents[0]?.current_version_id).toBe("version-1")
     expect(client.tables.document_versions[1]?.status).toBe("upload_pending")
-    expect(rpcSpy.mock.calls.map(([functionName]) => functionName)).toEqual([
-      "get_document_access_level",
-    ])
-  })
-
-  it("keeps a pending replacement out of current state when metadata mismatches", async () => {
-    const client = new FakeSupabaseClient({
-      organization_memberships: [createMembershipRow("staff")],
-      documents: [createDocumentRow()],
-      document_versions: [
-        createVersionRow(),
-        createVersionRow({
-          id: "version-2",
-          version_number: 2,
-          status: "upload_pending",
-          storage_key:
-            "organizations/org-1/documents/document-1/versions/version-2/original.pdf",
-        }),
-      ],
-    })
-    const deps = createDeps(client)
-    deps.verifyDocumentUpload = vi.fn().mockRejectedValue(
-      new DocumentStorageServiceError(
-        "Uploaded document byte size does not match the pending version.",
-        409
-      )
-    )
-    const rpcSpy = vi.spyOn(client, "rpc")
-
-    await expect(
-      completeDocumentUpload(
-        {
-          actorUserId: "user-1",
-          organizationId: "org-1",
-          documentId: "document-1",
-          versionId: "version-2",
-        },
-        deps
-      )
-    ).rejects.toMatchObject({
-      message:
-        "Uploaded document byte size does not match the pending version.",
-      statusCode: 409,
-    })
-
-    expect(client.tables.documents[0]?.current_version_id).toBe("version-1")
-    expect(client.tables.document_versions[1]?.status).toBe("upload_pending")
-    expect(rpcSpy.mock.calls.map(([functionName]) => functionName)).toEqual([
-      "get_document_access_level",
-    ])
+    expect(rpcSpy.mock.calls.map(([functionName]) => functionName)).toEqual(["get_document_access_level"])
   })
 })

@@ -1,16 +1,10 @@
 // @vitest-environment jsdom
 
 import { act, type ReactElement, useState } from "react"
-import { createRoot } from "react-dom/client"
-import { afterEach, expect, it } from "vitest"
+import { expect, it } from "vitest"
 
 import { DatePicker, DateTimePicker } from "./date-picker"
-
-;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
-
-afterEach(() => {
-  document.body.replaceChildren()
-})
+import { mount } from "@/test/render"
 
 function Harness(): ReactElement {
   const [value, setValue] = useState("2026-01-31")
@@ -37,7 +31,7 @@ async function settle(): Promise<void> {
 it("steps to the end of a shorter month, lays weeks out from Monday, and posts the day as stored", async () => {
   const host = document.createElement("div")
   document.body.append(host)
-  await act(async () => createRoot(host).render(<Harness />))
+  await act(async () => mount(host).render(<Harness />))
 
   const face = document.getElementById("moved-in") as HTMLButtonElement
   expect(face.textContent).toBe("31/01/2026")
@@ -71,7 +65,7 @@ it("holds a form whose required day and time are still empty, before the calenda
   const host = document.createElement("div")
   document.body.append(host)
   await act(async () =>
-    createRoot(host).render(
+    mount(host).render(
       <form>
         <DateTimePicker id="remind-at" name="remindAt" required />
       </form>
@@ -79,4 +73,25 @@ it("holds a form whose required day and time are still empty, before the calenda
   )
 
   expect(document.querySelector("form")!.checkValidity()).toBe(false)
+})
+
+it("posts a day and time as the moment it is where the viewer is, and shows a saved one in their own time", async () => {
+  const host = document.createElement("div")
+  document.body.append(host)
+  const saved = "2026-10-01T16:30:00.000Z"
+  await act(async () =>
+    mount(host).render(
+      <form>
+        <DateTimePicker defaultValue={saved} id="due" name="dueAt" />
+      </form>
+    )
+  )
+
+  const posted = new FormData(document.querySelector("form") as HTMLFormElement).get("dueAt") as string
+  const local = new Date(saved)
+  const shown = `${String(local.getHours()).padStart(2, "0")}:${String(local.getMinutes()).padStart(2, "0")}`
+
+  expect(new Date(posted).toISOString()).toBe(saved)
+  expect(posted).toMatch(/(Z|[+-]\d{2}:\d{2})$/)
+  expect((document.querySelector('input[type="time"]') as HTMLInputElement).value).toBe(shown)
 })

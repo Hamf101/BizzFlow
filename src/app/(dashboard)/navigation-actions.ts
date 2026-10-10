@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
-import { getNavigationPreferences, renameNavigationTab, saveNavigationOrder } from "@/services/navigation-service"
+import { getNavigationPreferences, renameNavigationTab, saveNavigationOrder } from "@/services/organizations/navigation-service"
 import { getCurrentOrganizationContext } from "@/services/organization-service"
 import { OrganizationServiceError } from "@/services/organizations/errors"
 import { navigationOrderSchema, renameNavigationSchema, type NavigationPreferences } from "@/types/navigation"

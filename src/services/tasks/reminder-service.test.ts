@@ -3,12 +3,13 @@ import { describe, expect, it, vi } from "vitest"
 import {
   cancelTaskReminder,
   notifyTaskAssignee,
-  processDueTaskReminders,
   scheduleTaskReminder,
-  TASK_REMINDER_BATCH_LIMIT,
-  TASK_REMINDER_MAX_ATTEMPTS,
   TaskServiceError,
 } from "@/services/task-service"
+import {
+  TASK_REMINDER_BATCH_LIMIT,
+  TASK_REMINDER_MAX_ATTEMPTS,
+} from "@/services/tasks/reminder-delivery-service"
 import {
   createDeps,
   createMembershipRow,
@@ -24,6 +25,7 @@ import {
   NOW,
   ORG_ID,
   PAST_AT,
+  processDueTaskReminders,
   REMINDER_ID,
   REVIEWER_ID,
   STAFF_ID,
@@ -125,7 +127,12 @@ describe("scheduleTaskReminder", () => {
     ).rejects.toMatchObject({ statusCode: 400 })
   })
 
-  it("rejects an unparsable reminder instant", async () => {
+  it.each([
+    ["an unparsable reminder instant", "tomorrow morning", "valid timestamp"],
+    // Without an offset the server would read the member's wall-clock time as
+    // UTC and fire the reminder hours early or late.
+    ["a reminder instant with no time zone offset", "2026-07-31T09:00", "time zone offset"],
+  ])("rejects %s", async (_label: string, remindAt: string, reason: string) => {
     const client = createReminderClient()
 
     await expect(
@@ -135,11 +142,14 @@ describe("scheduleTaskReminder", () => {
           organizationId: ORG_ID,
           taskId: TASK_ID,
           recipientUserId: STAFF_ID,
-          remindAt: "tomorrow morning",
+          remindAt,
         },
         createDeps(client, [NEW_REMINDER_ID])
       )
-    ).rejects.toMatchObject({ statusCode: 400 })
+    ).rejects.toMatchObject({
+      statusCode: 400,
+      message: expect.stringContaining(reason),
+    })
   })
 
   it("rejects an external reviewer as the recipient", async () => {
@@ -429,6 +439,68 @@ describe("processDueTaskReminders", () => {
 
     expect(summary).toMatchObject({ sentCount: 1 })
     expect(deps.sendSms).toHaveBeenCalledTimes(1)
+    expect(client.tables.task_reminders[0]).toMatchObject({ status: "sent" })
+  })
+
+  it.each([
+    ["a sent email", "email", null, null, "sent"],
+    ["a thrown email", "email", null, "throw", "failed"],
+    ["a sent sms", "sms", "+14155552671", null, "sent"],
+    ["a thrown sms", "sms", "+14155552671", "throw", "failed"],
+    ["an sms with no phone number", "sms", null, null, "failed"],
+  ])(
+    "records one delivery row for %s",
+    async (
+      _label: string,
+      channel: string,
+      phone: string | null,
+      failure: string | null,
+      status: string
+    ) => {
+      const client = createReminderClient([createTaskReminderRow({ channel })])
+      client.tables.profiles[0].phone_number = phone
+      const deps = createDeps(client)
+      if (failure) {
+        vi.mocked(deps.sendTaskEmail).mockRejectedValue(new Error("down"))
+        vi.mocked(deps.sendSms).mockRejectedValue(new Error("down"))
+      }
+
+      await processDueTaskReminders(deps)
+
+      expect(client.tables.notification_deliveries).toEqual([
+        expect.objectContaining({
+          channel,
+          purpose: "task_reminder",
+          reference: `task-reminder/${REMINDER_ID}`,
+          status,
+        }),
+      ])
+    }
+  )
+
+  it("never resends a reminder already on the delivery ledger after its outcome write was lost", async () => {
+    // The send went out and was recorded, but marking the reminder sent
+    // failed, so the lease expired with the row still pending.
+    const client = new FakeSupabaseClient({
+      organization_memberships: createMembershipRows(),
+      profiles: [createProfileRow()],
+      tasks: [createTaskRow()],
+      task_reminders: [createTaskReminderRow({ attempt_count: 1 })],
+      notification_deliveries: [
+        {
+          org_id: ORG_ID,
+          channel: "email",
+          reference: `task-reminder/${REMINDER_ID}`,
+          status: "sent",
+        },
+      ],
+    })
+    const deps = createDeps(client)
+
+    const summary = await processDueTaskReminders(deps)
+
+    expect(deps.sendTaskEmail).not.toHaveBeenCalled()
+    expect(summary.sentCount).toBe(1)
     expect(client.tables.task_reminders[0]).toMatchObject({ status: "sent" })
   })
 
@@ -741,6 +813,24 @@ describe("notifyTaskAssignee", () => {
         recipientEmail: "staff@example.com",
       })
     )
+  })
+
+  it("notifies once when the assignment event is handled twice", async () => {
+    // Inngest runs are at-least-once: a retried step must not re-send.
+    const client = createReminderClient([], [{ ...assignedTaskRow }])
+    client.tables.profiles[0].phone_number = "+14155552671"
+    const deps = createDeps(client)
+    const input = {
+      organizationId: ORG_ID,
+      taskId: TASK_ID,
+      assignedToUserId: STAFF_ID,
+    }
+
+    await notifyTaskAssignee(input, deps)
+    await notifyTaskAssignee(input, deps)
+
+    expect(deps.sendTaskEmail).toHaveBeenCalledTimes(1)
+    expect(deps.sendSms).toHaveBeenCalledTimes(1)
   })
 
   it("skips a stale event whose assignee already changed", async () => {

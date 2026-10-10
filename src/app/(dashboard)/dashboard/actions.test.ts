@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
+import { getAuthenticatedUser } from "@/lib/auth"
 import {
   createOrganization,
   getCurrentOrganizationContext,
@@ -167,16 +167,6 @@ describe("createOrganizationAction", () => {
 
     await expect(createOrganizationAction(welcomeForm())).rejects.toThrow(
       "NEXT_REDIRECT:/welcome?error=Workspace+name+must+be+between+2+and+120+characters."
-    )
-  })
-
-  it("returns to naming the workspace after logging in", async () => {
-    vi.mocked(getAuthenticatedUser).mockRejectedValue(
-      new AuthenticationError("Sign in to continue.")
-    )
-
-    await expect(createOrganizationAction(welcomeForm())).rejects.toThrow(
-      "NEXT_REDIRECT:/login?next=%2Fwelcome"
     )
   })
 })

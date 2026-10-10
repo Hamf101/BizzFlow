@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto"
 
 import type { Locator, Page } from "@playwright/test"
 
-import { expect, test, uniqueName } from "../support/fixtures"
+import { expect, expectSaved, test, uniqueName } from "../support/fixtures"
 import { waitForHydration } from "../support/hydration"
 import { seedTemplate } from "../support/seed"
 
@@ -45,15 +45,7 @@ test("blocks drag to new places and stay there, but a field never goes above the
   const template = await seedTemplate(admin, tenant.organizationId, uniqueName("Reorder"), "draft", [account, terms, number])
   const page = await pageAs("owner_admin")
   const block = (id: string): Locator => page.locator(`[data-block-id="${id}"]`)
-  const saved = () =>
-    expect.poll(
-      async () => {
-        const { data, error } = await admin.from("document_templates").select("content").eq("id", template.id).single()
-        if (error) throw error
-        return data.content.blocks.map(({ id }: { id: string }) => id)
-      },
-      { timeout: 15_000 }
-    )
+  const saved = () => expectSaved(admin, "document_templates", template.id, ({ blocks }) => blocks.map(({ id }) => id))
 
   await page.goto(`/templates/${template.id}/edit`)
   await waitForHydration(page.getByRole("textbox", { name: "Title" }))

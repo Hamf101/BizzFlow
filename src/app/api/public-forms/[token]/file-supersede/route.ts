@@ -2,11 +2,10 @@ import { NextResponse } from "next/server"
 
 import {
   createSubmissionRouteErrorResponse,
-  getRequiredSubmissionString,
 } from "@/app/api/submissions/_utils"
 import { getClientIp } from "@/lib/client-ip"
 import { checkRateLimit } from "@/lib/rate-limit"
-import { readTrustedJsonObject } from "@/lib/request-security"
+import { getRequiredString, readTrustedJsonObject } from "@/lib/request-security"
 import { supersedePublicFormFile } from "@/services/public-form-service"
 
 type PublicFormFileSupersedeRouteContext = {
@@ -32,12 +31,12 @@ export async function POST(
     const { token } = await context.params
     const result = await supersedePublicFormFile({
       token,
-      draftToken: getRequiredSubmissionString(
+      draftToken: getRequiredString(
         body,
         "draftToken",
         "Form session"
       ),
-      fileId: getRequiredSubmissionString(body, "fileId", "File id"),
+      fileId: getRequiredString(body, "fileId", "File id"),
     })
 
     return NextResponse.json(result, {

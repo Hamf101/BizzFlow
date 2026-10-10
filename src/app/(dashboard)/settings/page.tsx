@@ -3,6 +3,7 @@ import type { ReactElement, ReactNode } from "react"
 
 import { DatedTitle } from "@/components/navigation/dated-title"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { SetupIncomplete } from "@/components/ui/page-state"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -18,7 +19,7 @@ import { Switch } from "@/components/ui/switch"
 import { NoticeSoundSwitch } from "@/components/sharing/notice-sound-switch"
 import { RolesAndAccessSettings } from "@/components/settings/roles-and-access-settings"
 import { buildFeedbackRedirect } from "@/lib/action-result"
-import { formatMediumDateTime } from "@/lib/date-format"
+import { LocalDate } from "@/components/ui/local-date"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
 import { loadPageOrganizationContext } from "@/lib/page-organization-context"
 import { canPerformOrganizationAction } from "@/lib/permissions"
@@ -59,10 +60,7 @@ export default async function SettingsPage(): Promise<ReactElement> {
     if (contextErrorMessage) {
       return (
         <SettingsShell>
-          <Alert variant="destructive">
-            <AlertTitle>Supabase setup incomplete</AlertTitle>
-            <AlertDescription>{contextErrorMessage}</AlertDescription>
-          </Alert>
+          <SetupIncomplete message={contextErrorMessage} />
         </SettingsShell>
       )
     }
@@ -78,16 +76,25 @@ export default async function SettingsPage(): Promise<ReactElement> {
   )
 
   let settings: MemberSettings
-  let organizationSettings: OrganizationNotificationSettings
+  let organizationSettings: OrganizationNotificationSettings | null
+  let deliveries: NotificationDelivery[]
   const isOwner = context.membership.role === "owner_admin"
 
   try {
-    ;[settings, organizationSettings] = await Promise.all([
+    ;[settings, organizationSettings, deliveries] = await Promise.all([
       getMemberSettings({
         actorUserId: user.id,
         organizationId: context.organization.id,
       }),
-      getOrganizationNotificationSettings(context.organization.id),
+      canManageOrganization
+        ? getOrganizationNotificationSettings({
+            actorUserId: user.id,
+            organizationId: context.organization.id,
+          })
+        : null,
+      canManageOrganization
+        ? loadRecentDeliveries(user.id, context.organization.id)
+        : [],
     ])
   } catch (error: unknown) {
     return (
@@ -191,7 +198,7 @@ export default async function SettingsPage(): Promise<ReactElement> {
         </Card>
       </div>
 
-      {canManageOrganization && (
+      {organizationSettings && (
         <Card>
           <CardHeader>
             <CardTitle>Organization notifications</CardTitle>
@@ -252,9 +259,7 @@ export default async function SettingsPage(): Promise<ReactElement> {
       )}
 
       {canManageOrganization && (
-        <NotificationActivityCard
-          deliveries={await loadRecentDeliveries(context.organization.id)}
-        />
+        <NotificationActivityCard deliveries={deliveries} />
       )}
     </SettingsShell>
   )
@@ -309,10 +314,11 @@ async function RolesAndAccessSection({
  * settings page down with it.
  */
 async function loadRecentDeliveries(
+  actorUserId: string,
   organizationId: string
 ): Promise<NotificationDelivery[]> {
   try {
-    return await listNotificationDeliveries({ organizationId, limit: 10 })
+    return await listNotificationDeliveries({ actorUserId, organizationId, limit: 10 })
   } catch (error: unknown) {
     console.warn("settings_notification_history_load_failed", {
       organizationId,
@@ -353,7 +359,7 @@ function NotificationActivityCard({
                     {delivery.channel.toUpperCase()}
                   </span>
                   <span className="text-xs text-muted-foreground">
-                    {formatMediumDateTime(delivery.createdAt)}
+                    <LocalDate time value={delivery.createdAt} />
                   </span>
                   {delivery.lastError && (
                     <span className="text-xs text-destructive">

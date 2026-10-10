@@ -1,8 +1,7 @@
 // @vitest-environment jsdom
 
 import { act, createElement } from "react"
-import { createRoot, type Root } from "react-dom/client"
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import {
   loadSharingAction,
@@ -12,6 +11,7 @@ import {
 import type { SharingPerson, SharingView } from "@/services/document-service"
 
 import { ShareDialog } from "./share-dialog"
+import { mount } from "@/test/render"
 
 vi.mock("@/app/(dashboard)/documents/sharing-actions", () => ({
   loadSharingAction: vi.fn(),
@@ -34,19 +34,15 @@ const admin = person("u-admin", "Ada", "owner_admin")
 
 const view = (changes: Partial<SharingView> = {}): SharingView => ({
   grants: [],
+  guests: [],
   inherit: true,
   inherited: [],
   members: [maya, sam, erin, admin],
   name: "Lease",
+  outsideLevels: [],
   owner: maya,
   parent: null,
   ...changes,
-})
-
-const mounted: Root[] = []
-
-beforeAll(() => {
-  ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 })
 
 beforeEach(() => {
@@ -54,17 +50,11 @@ beforeEach(() => {
   vi.mocked(setSharingInheritanceAction).mockReset()
 })
 
-afterEach(() => {
-  for (const root of mounted.splice(0)) act(() => root.unmount())
-  document.body.replaceChildren()
-})
-
 async function open(shown: SharingView, shared: typeof resource | typeof templateResource = resource): Promise<void> {
   vi.mocked(loadSharingAction).mockResolvedValue({ ok: true, view: shown })
   const container = document.createElement("div")
   document.body.append(container)
-  const root = createRoot(container)
-  mounted.push(root)
+  const root = mount(container)
   await act(async () => {
     root.render(createElement(ShareDialog, { name: "Lease", onOpenChange: vi.fn(), open: true, resources: [shared] }))
   })
@@ -77,6 +67,14 @@ const button = (label: string): HTMLButtonElement =>
 async function click(element: Element): Promise<void> {
   await act(async () => {
     element.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+  })
+}
+
+async function type(words: string): Promise<void> {
+  const box = document.querySelector<HTMLInputElement>('[aria-label="Add people"] input') as HTMLInputElement
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(box, words)
+    box.dispatchEvent(new Event("input", { bubbles: true }))
   })
 }
 
@@ -93,7 +91,7 @@ describe("ShareDialog", () => {
 
     expect(text()).toContain("Share “Lease”")
     expect(text()).toContain("Maya")
-    expect(text()).toContain("Owner, can always edit")
+    expect(text()).toContain("Owner")
     expect(text()).toContain("Owner admins always have access")
     expect(document.body.textContent).not.toMatch(/\bgrant|ACL|principal/i)
   })
@@ -128,6 +126,7 @@ describe("ShareDialog", () => {
     })
     const select = document.querySelector<HTMLSelectElement>('select[aria-label="Access for Sam"]') as HTMLSelectElement
 
+    expect([...select.options].map((option) => option.textContent)).toEqual(["Viewer", "Editor", "Remove access"])
     await choose(select, "contributor")
     expect(setSharingAccessAction).toHaveBeenLastCalledWith({ level: "contributor", principal: { userId: "u-sam" }, resources: [resource] })
 
@@ -139,7 +138,7 @@ describe("ShareDialog", () => {
     await open(view({ grants: [{ kind: "person", level: "viewer", person: erin }] }))
     const select = document.querySelector<HTMLSelectElement>('select[aria-label="Access for Erin"]') as HTMLSelectElement
 
-    expect([...select.options].map((option) => option.textContent)).toEqual(["Can view only", "Remove access"])
+    expect([...select.options].map((option) => option.textContent)).toEqual(["Viewer", "Remove access"])
   })
 
   it("shares with everyone who holds a role", async () => {
@@ -198,12 +197,62 @@ describe("ShareDialog", () => {
     expect(select.selectedOptions[0]?.textContent).toBe("Different on each")
   })
 
+  it("invites someone outside the workspace by email, but not a member", async () => {
+    await open(view({ outsideLevels: ["viewer", "contributor"] }))
+    vi.mocked(setSharingAccessAction).mockResolvedValue({
+      ok: true,
+      view: view({ guests: [{ email: "pat@outside.com", joined: false, level: "viewer" }], outsideLevels: ["viewer", "contributor"] }),
+    })
+
+    await type("sam@example.com")
+    expect(button("Invite")).toBeUndefined()
+    expect(button("Sam")).toBeDefined()
+
+    await type("pat@outside.com")
+    expect(button("Invite pat@outside.com")?.textContent).toContain("Outside this workspace")
+    await click(button("Invite pat@outside.com"))
+
+    expect(setSharingAccessAction).toHaveBeenCalledWith({ level: "viewer", principal: { email: "pat@outside.com" }, resources: [resource] })
+    expect(document.querySelector<HTMLInputElement>('[aria-label="Add people"] input')?.value).toBe("")
+    expect(document.querySelector('select[aria-label="Access for pat@outside.com"]')).not.toBeNull()
+  })
+
+  it("never offers an outsider where they cannot be invited", async () => {
+    await open(view())
+
+    await type("pat@outside.com")
+
+    expect(button("Invite")).toBeUndefined()
+  })
+
+  it("lists people outside the workspace with only the levels they may have, and removes them", async () => {
+    await open(
+      view({
+        guests: [
+          { email: "pat@outside.com", joined: false, level: "viewer" },
+          { email: "lee@outside.com", joined: true, level: "viewer" },
+        ],
+        outsideLevels: ["viewer"],
+      })
+    )
+    const select = (email: string) => document.querySelector<HTMLSelectElement>(`select[aria-label="Access for ${email}"]`) as HTMLSelectElement
+    const row = (email: string) => select(email).closest("li")?.textContent
+
+    expect(row("pat@outside.com")).toContain("Outside")
+    expect(row("pat@outside.com")).toContain("Invited")
+    expect(row("lee@outside.com")).toContain("Joined")
+    expect([...select("pat@outside.com").options].map((option) => option.textContent)).toEqual(["Viewer", "Remove access"])
+
+    await choose(select("pat@outside.com"), "remove")
+
+    expect(setSharingAccessAction).toHaveBeenCalledWith({ level: null, principal: { email: "pat@outside.com" }, resources: [resource] })
+  })
+
   it("says so when it cannot be opened", async () => {
     vi.mocked(loadSharingAction).mockResolvedValue({ message: "You cannot share this.", ok: false })
     const container = document.createElement("div")
     document.body.append(container)
-    const root = createRoot(container)
-    mounted.push(root)
+    const root = mount(container)
     await act(async () => {
       root.render(createElement(ShareDialog, { name: "Lease", onOpenChange: vi.fn(), open: true, resources: [resource] }))
     })
@@ -220,9 +269,9 @@ describe("ShareDialog for a template", () => {
     )
     const select = (name: string) => document.querySelector<HTMLSelectElement>(`select[aria-label="Access for ${name}"]`) as HTMLSelectElement
 
-    expect([...select("Sam").options].map((option) => option.textContent)).toEqual(["Can view", "Can use", "Can edit", "Remove access"])
+    expect([...select("Sam").options].map((option) => option.textContent)).toEqual(["Viewer", "User", "Editor", "Remove access"])
     expect(select("Sam").value).toBe("user")
-    expect([...select("Erin").options].map((option) => option.textContent)).toEqual(["Can view only", "Remove access"])
+    expect([...select("Erin").options].map((option) => option.textContent)).toEqual(["Viewer", "Remove access"])
   })
 
   it("changes a person to the level chosen", async () => {

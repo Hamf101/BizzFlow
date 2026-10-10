@@ -1,6 +1,6 @@
 "use client"
 
-import { Copy, Ellipsis, Link2, Pencil, UserPlus } from "lucide-react"
+import { Copy, Ellipsis, Link2, Pencil, Send, UserPlus } from "lucide-react"
 import Link from "next/link"
 import { type ReactElement, useState } from "react"
 
@@ -14,6 +14,7 @@ import {
   useTemplateChanges,
   useTemplateSelection,
 } from "@/components/templates/template-selection"
+import { SendToAnswerDialog } from "@/components/editor/lazy-panels"
 import { ShareDialog } from "@/components/sharing/share-dialog"
 import { Button } from "@/components/ui/button"
 import {
@@ -27,7 +28,7 @@ import type { DocumentTemplateStatus } from "@/types/template"
 
 /**
  * Keeps a template's actions behind one quiet button on its card, and on a
- * right-click anywhere on it: edit, public links once it is published,
+ * right-click anywhere on it: edit, send to answer and public links once it is published,
  * duplicate, archive, and file under a category; an archived template offers
  * restore. When the card is part of a selection, the menu acts on every
  * selected template instead, offering only what all of them allow.
@@ -55,6 +56,7 @@ export function TemplateRowMenu({
   const selection = useTemplateSelection()
   const [filing, setFiling] = useState(false)
   const [sharing, setSharing] = useState(false)
+  const [asking, setAsking] = useState(false)
   const opensOnRightClick = useOpensOnRightClick()
   const inSelection = selection !== null && selection.selected.size > 1 && selection.selected.has(templateId)
   const targets = inSelection
@@ -102,10 +104,16 @@ export function TemplateRowMenu({
         </DropdownMenuItem>
       ) : null}
       {canEdit && status === "published" ? (
-        <DropdownMenuItem render={<Link href={`${templatePath}/links`} />}>
-          <Link2 aria-hidden="true" />
-          Public links
-        </DropdownMenuItem>
+        <>
+          <DropdownMenuItem onClick={() => setAsking(true)}>
+            <Send aria-hidden="true" />
+            Send to answer…
+          </DropdownMenuItem>
+          <DropdownMenuItem render={<Link href={`${templatePath}/links`} />}>
+            <Link2 aria-hidden="true" />
+            Public links
+          </DropdownMenuItem>
+        </>
       ) : null}
       {shareItem}
       {canDuplicate ? (
@@ -136,7 +144,7 @@ export function TemplateRowMenu({
             <Button
               aria-label={`Actions for ${title}`}
               className={cn(
-                "size-8 rounded-[8px] text-muted-foreground",
+                "size-8 rounded-[8px] text-muted-foreground max-md:size-11",
                 // While a phone selects, its bar holds the actions.
                 selection?.phoneSelecting && "invisible"
               )}
@@ -153,6 +161,7 @@ export function TemplateRowMenu({
         </DropdownMenuContent>
       </DropdownMenu>
       {opensOnRightClick ? <DropdownMenuContent className="w-52">{items}</DropdownMenuContent> : null}
+      {asking ? <SendToAnswerDialog name={title} onOpenChange={setAsking} open source={{ kind: "template", templateId }} /> : null}
       {share ? <ShareDialog name={title} onOpenChange={setSharing} open={sharing} resources={share} /> : null}
       <CategoryDialog
         count={targets.length}

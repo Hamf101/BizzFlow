@@ -14,11 +14,15 @@ export const ROUTE_BUDGETS = [
   {
     label: "Public form",
     route: "/forms/[token]/page",
-    // 56 from 55 (2026-10-01): side-by-side rows, radios and section numbers
-    // joined in-place field errors; what remains is drawn, not dead code.
-    // 57 from 56 (2026-10-01): typed answers, checkboxes and their visibility;
-    // grids and tables load only on forms that have them.
-    ceilingKiB: 57,
+    // Set by who answers (2026-10-02): people on 4G, often a weak signal, on
+    // a cheap phone. Published guidance gives a page that must work in three
+    // seconds there about 300 KiB of JavaScript; 200 KiB keeps well inside it,
+    // where comparable form pages ship 240 KiB to several MiB. It is drawn on
+    // the editor's own paper, which designing's code never reaches; grids,
+    // tables and signature pads load only on forms that have them. The page
+    // is drawn on the server, so it can be read and typed into before any of
+    // this arrives.
+    ceilingKiB: 200,
   },
   {
     label: "Public signing",

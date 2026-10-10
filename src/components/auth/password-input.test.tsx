@@ -1,33 +1,13 @@
 // @vitest-environment jsdom
 
 import { act } from "react"
-import { createRoot, type Root } from "react-dom/client"
-import { afterEach, beforeAll, describe, expect, it } from "vitest"
+import { describe, expect, it } from "vitest"
 
 import { PasswordInput } from "./password-input"
-
-const mountedRoots: Root[] = []
-
-beforeAll(() => {
-  ;(
-    globalThis as typeof globalThis & {
-      IS_REACT_ACT_ENVIRONMENT: boolean
-    }
-  ).IS_REACT_ACT_ENVIRONMENT = true
-})
-
-afterEach(() => {
-  for (const root of mountedRoots.splice(0)) {
-    act(() => root.unmount())
-  }
-  document.body.replaceChildren()
-})
+import { mount } from "@/test/render"
 
 async function renderPasswordInput(): Promise<void> {
-  const container = document.createElement("div")
-  document.body.append(container)
-  const root = createRoot(container)
-  mountedRoots.push(root)
+  const root = mount()
 
   await act(async () =>
     root.render(

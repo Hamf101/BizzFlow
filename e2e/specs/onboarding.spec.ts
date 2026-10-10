@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-import { expect, test, uniqueName } from "../support/fixtures"
+import { expect, test, uniqueEmail, uniqueName } from "../support/fixtures"
 
 /**
  * Journey 1 — sign up, create an organization, land on the dashboard.
@@ -23,71 +23,73 @@ test.describe("onboarding", () => {
     admin,
     page,
   }) => {
-    const email = `owner-${Date.now().toString(36)}@e2e.bizflow.test`
+    const email = uniqueEmail("owner")
     const password = "e2e-BizFlow-Passw0rd"
     const organizationName = uniqueName("Acme")
 
-    await page.goto("/signup")
-    await page.getByLabel("Email").fill(email)
-    await page.getByLabel("Password", { exact: true }).fill(password)
-    await page.getByLabel("Confirm password").fill(password)
-    await page.getByRole("button", { name: "Sign up" }).click()
+    try {
+      await page.goto("/signup")
+      await page.getByLabel("Email").fill(email)
+      await page.getByLabel("Password", { exact: true }).fill(password)
+      await page.getByLabel("Confirm password").fill(password)
+      await page.getByRole("button", { name: "Sign up" }).click()
 
-    // A session is returned inline when confirmations are disabled, so the app
-    // goes straight on to naming the workspace rather than via /login.
-    await page.waitForURL(/\/welcome/)
+      // A session is returned inline when confirmations are disabled, so the app
+      // goes straight on to naming the workspace rather than via /login.
+      await page.waitForURL(/\/welcome/)
 
-    await expect(
-      page.getByRole("button", { name: "Create workspace" })
-    ).toBeVisible()
+      await expect(
+        page.getByRole("button", { name: "Create workspace" })
+      ).toBeVisible()
 
-    // Who they are goes in with the workspace, the phone written as people write it.
-    await page.getByLabel("Your name").fill("Talora Reyes")
-    await page.getByLabel("Phone").fill("+44 20 7946 0958")
-    await page.getByLabel("Workspace name").fill(organizationName)
-    await page.getByRole("button", { name: "Create workspace" }).click()
+      // Who they are goes in with the workspace, the phone written as people write it.
+      await page.getByLabel("Your name").fill("Talora Reyes")
+      await page.getByLabel("Phone").fill("+44 20 7946 0958")
+      await page.getByLabel("Workspace name").fill(organizationName)
+      await page.getByRole("button", { name: "Create workspace" }).click()
 
-    await expect(
-      page.getByRole("status").filter({ hasText: "Workspace created" })
-    ).toBeVisible()
-    await expect(page.getByText("Welcome back, Talora!", { exact: true })).toBeVisible()
-    // The workspace's name sits in the account menu on every screen size.
-    await page.getByRole("button", { name: /^Open account menu/ }).click()
-    await expect(page.getByRole("menu").getByText(organizationName)).toBeVisible()
-    await page.keyboard.press("Escape")
-    await expect(page.getByRole("region", { name: "Waiting on you" })).toBeVisible()
+      await expect(
+        page.getByRole("status").filter({ hasText: "Workspace created" })
+      ).toBeVisible()
+      await expect(page.getByText("Welcome back, Talora!", { exact: true })).toBeVisible()
+      // The workspace's name sits in the account menu on every screen size.
+      await page.getByRole("button", { name: /^Open account menu/ }).click()
+      await expect(page.getByRole("menu").getByText(organizationName)).toBeVisible()
+      await page.keyboard.press("Escape")
+      await expect(page.getByRole("region", { name: "Waiting on you" })).toBeVisible()
 
-    // The creator is the owner; every permission the app grants keys off this.
-    const organization = await admin
-      .from("organizations")
-      .select("id")
-      .eq("name", organizationName)
-      .single()
-    if (organization.error) throw organization.error
-    const membership = await admin
-      .from("organization_memberships")
-      .select("role,user_id")
-      .eq("org_id", organization.data.id)
-      .single()
-    if (membership.error) throw membership.error
-    expect(membership.data.role).toBe("owner_admin")
+      // The creator is the owner; every permission the app grants keys off this.
+      const organization = await admin
+        .from("organizations")
+        .select("id")
+        .eq("name", organizationName)
+        .single()
+      if (organization.error) throw organization.error
+      const membership = await admin
+        .from("organization_memberships")
+        .select("role,user_id")
+        .eq("org_id", organization.data.id)
+        .single()
+      if (membership.error) throw membership.error
+      expect(membership.data.role).toBe("owner_admin")
 
-    const profile = await admin
-      .from("profiles")
-      .select("full_name,phone_number")
-      .eq("id", membership.data.user_id)
-      .single()
-    if (profile.error) throw profile.error
-    expect(profile.data).toEqual({ full_name: "Talora Reyes", phone_number: "+442079460958" })
-
-    await cleanUp(admin, email, organizationName)
+      const profile = await admin
+        .from("profiles")
+        .select("full_name,phone_number")
+        .eq("id", membership.data.user_id)
+        .single()
+      if (profile.error) throw profile.error
+      expect(profile.data).toEqual({ full_name: "Talora Reyes", phone_number: "+442079460958" })
+    } finally {
+      await cleanUp(admin, email, organizationName)
+    }
   })
 
   test("confirms a new address from the emailed link in any browser, once, then goes on to naming the workspace", async ({
     admin,
     browser,
   }) => {
-    const email = `confirm-${Date.now().toString(36)}@e2e.bizflow.test`
+    const email = uniqueEmail("confirm")
     // Where a project asks for confirmation, this is the link the email carries.
     const { data, error } = await admin.auth.admin.generateLink({ email, password: "e2e-BizFlow-Passw0rd", type: "signup" })
     if (error) throw error
@@ -115,7 +117,7 @@ test.describe("onboarding", () => {
 
   test("refuses a weak password, and two passwords that don't match", async ({ page }) => {
     await page.goto("/signup")
-    await page.getByLabel("Email").fill(`weak-${Date.now().toString(36)}@e2e.bizflow.test`)
+    await page.getByLabel("Email").fill(uniqueEmail("weak"))
     await page.getByLabel("Password", { exact: true }).fill("longbutweak")
     await page.getByLabel("Confirm password").fill("longbutweak")
     await page.getByRole("button", { name: "Sign up" }).click()

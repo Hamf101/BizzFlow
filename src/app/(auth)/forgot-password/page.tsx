@@ -4,12 +4,14 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { readSignedFlash } from "@/lib/form-utils"
 import { AuthPageCard } from "@/lib/page-auth-card"
 
 import { requestPasswordResetAction } from "./actions"
 
 type ForgotPasswordSearchParams = Promise<{
   error?: string
+  sig?: string
   sent?: string
 }>
 
@@ -19,6 +21,7 @@ export default async function ForgotPasswordPage({
   searchParams: ForgotPasswordSearchParams
 }) {
   const params = await searchParams
+  const flashError = readSignedFlash(params).error
   const backToLogIn = (
     <Link className="text-sm font-medium text-primary underline-offset-4 hover:underline" href="/login">
       Back to log in
@@ -42,10 +45,10 @@ export default async function ForgotPasswordPage({
       title="Forgot your password?"
     >
       <form action={requestPasswordResetAction} className="flex flex-col gap-5">
-        {params.error && (
+        {flashError && (
           <Alert variant="destructive">
             <AlertTitle>Unable to send a link</AlertTitle>
-            <AlertDescription>{params.error}</AlertDescription>
+            <AlertDescription>{flashError}</AlertDescription>
           </Alert>
         )}
         <FieldGroup>

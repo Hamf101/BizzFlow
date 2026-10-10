@@ -1,9 +1,6 @@
 import { randomUUID } from "node:crypto"
 
 import {
-  canPerformOrganizationAction,
-  createOrganizationPermissionSubject,
-  isOrganizationRole,
   type OrganizationPermissionAction,
   type OrganizationPermissionSubject,
   type OrganizationRole,
@@ -29,28 +26,18 @@ import {
   type SubmissionFileStatus,
 } from "@/types/submission"
 import { SubmissionReviewDomainError } from "@/types/submission-review"
-import { loadActiveMembership } from "@/services/organizations/active-membership"
+import { requireOrgPermission } from "@/services/organizations/active-membership"
 import { runOperation } from "@/services/operation"
+import { asSupabaseError } from "@/services/supabase-error"
 
 /** Columns required by the canonical submission row parser. */
 export const SUBMISSION_COLUMNS =
-  "id,org_id,title,template_id,template_revision,template_snapshot,values,status,revision,created_by,updated_by,submitted_by,assigned_to,assigned_by,created_at,updated_at,submitted_at,assigned_at,required_approvals"
+  "id,org_id,title,template_id,template_revision,template_snapshot,values,status,revision,created_by,updated_by,submitted_by,assigned_to,assigned_by,created_at,updated_at,submitted_at,assigned_at,required_approvals,public_form_link:public_form_links!submissions_public_form_link_fkey(recipient_email)"
 
 /** Columns required by the canonical submission-file row parser. */
 export const SUBMISSION_FILE_COLUMNS =
   "id,org_id,submission_id,field_key,status,storage_key,original_filename,safe_filename,content_type,byte_size,expected_checksum_sha256,checksum_sha256,uploaded_by,created_at,updated_at,available_at"
 
-type SupabaseErrorLike = {
-  code?: string
-  details?: string
-  hint?: string
-  message?: string
-}
-
-type MembershipRow = {
-  role: string
-  role_definition?: { permissions: string[] | null } | null
-}
 
 /**
  * Runs a submission operation with contextual timing and safe error translation.
@@ -109,34 +96,10 @@ export async function requireSubmissionPermission(
   action: OrganizationPermissionAction,
   rejectionMessage: string
 ): Promise<OrganizationPermissionSubject> {
-  const { data, error } = await loadActiveMembership(client, organizationId, actorUserId)
-
-  if (error) {
-    throw createSubmissionDatabaseError(
-      error,
-      "Unable to load organization membership."
-    )
-  }
-
-  const row = data as MembershipRow | null
-  const role = row?.role
-  const subject = role
-    ? createOrganizationPermissionSubject(
-        role,
-        row?.role_definition?.permissions
-      )
-    : null
-
-  if (
-    !role ||
-    !isOrganizationRole(role) ||
-    !subject ||
-    !canPerformOrganizationAction(subject, action)
-  ) {
-    throw new SubmissionServiceError(rejectionMessage, 403)
-  }
-
-  return subject
+  return requireOrgPermission(client, organizationId, actorUserId, action, {
+    loadFailed: (error) => createSubmissionDatabaseError(error, "Unable to load organization membership."),
+    denied: () => new SubmissionServiceError(rejectionMessage, 403),
+  })
 }
 
 /**
@@ -452,11 +415,6 @@ function toSubmissionServiceError(error: unknown): SubmissionServiceError {
   return new SubmissionServiceError("Submission service failed.", 500)
 }
 
-function asSupabaseError(error: unknown): SupabaseErrorLike | null {
-  return error && typeof error === "object"
-    ? (error as SupabaseErrorLike)
-    : null
-}
 
 function getKnownMutationMessage(message: string | undefined): string | null {
   if (!message || message.length > 500 || /[\r\n]/.test(message)) {
@@ -474,6 +432,7 @@ function getKnownMutationMessage(message: string | undefined): string | null {
     "Only the assigned reviewer",
     "Only an assigned reviewer",
     "Only the person who assigned the reviewers",
+    "The reviewers were chosen by someone more senior",
     "A reviewer who has already decided",
     "A note of up to 2000",
     "Change request identifiers",

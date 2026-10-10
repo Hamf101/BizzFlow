@@ -5,6 +5,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { FieldGroup } from "@/components/ui/field"
 import { getAuthenticatedUser } from "@/lib/auth"
+import { readSignedFlash } from "@/lib/form-utils"
 import { AuthPageCard } from "@/lib/page-auth-card"
 import { cn } from "@/lib/utils"
 
@@ -12,6 +13,7 @@ import { resetPasswordAction } from "./actions"
 
 type ResetPasswordSearchParams = Promise<{
   error?: string
+  sig?: string
   token_hash?: string
 }>
 
@@ -21,6 +23,7 @@ export default async function ResetPasswordPage({
   searchParams: ResetPasswordSearchParams
 }) {
   const params = await searchParams
+  const flashError = readSignedFlash(params).error
   // The emailed link brings its token; someone already signed in needs none.
   const canReset =
     Boolean(params.token_hash) || (await getAuthenticatedUser().then(() => true, () => false))
@@ -49,10 +52,10 @@ export default async function ResetPasswordPage({
     <AuthPageCard footer={backToLogIn} title="Choose a new password">
       <form action={resetPasswordAction} className="flex flex-col gap-5">
         {params.token_hash && <input name="token_hash" type="hidden" value={params.token_hash} />}
-        {params.error && (
+        {flashError && (
           <Alert variant="destructive">
             <AlertTitle>Password not saved</AlertTitle>
-            <AlertDescription>{params.error}</AlertDescription>
+            <AlertDescription>{flashError}</AlertDescription>
           </Alert>
         )}
         <FieldGroup>

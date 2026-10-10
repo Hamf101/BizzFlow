@@ -5,6 +5,8 @@ import { type CSSProperties, type ReactElement, type ReactNode, useEffect, useId
 import { createPortal } from "react-dom"
 
 import { CORNERS, FACETS, FLAP, type Point, type Tone } from "@/components/brand/folded-page"
+import { clamp, subscribeNever } from "@/lib/utils"
+import { useMediaQuery } from "@/lib/use-media-query"
 
 type Rect = { h: number; w: number; x: number; y: number }
 type Spot = { x: number; y: number }
@@ -27,6 +29,10 @@ const SINE = "cubic-bezier(0.37, 0, 0.63, 1)"
 // Mostly purples, with a little rose and sage.
 const DOT_TONES: readonly Tone[] = ["lavender", "lavender", "lavender", "lavender", "lilac", "lilac", "lilac", "lilac", "wisteria", "wisteria", "wisteria", "orchid", "orchid", "orchid", "periwinkle", "periwinkle", "periwinkle", "rose", "sage"]
 const SMALLEST = { h: 380, w: 320 }
+// Flow's message box, one line tall and growing with the message to about
+// six, and its send button inside it; the same wherever Flow is asked.
+export const FLOW_COMPOSER = "field-sizing-content max-h-36 min-h-10 w-full resize-none rounded-[12px] border border-border bg-card px-3 py-2.5 pr-12 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
+export const FLOW_SEND = "absolute right-1.5 bottom-1 grid size-8 place-items-center max-md:size-11 rounded-full text-primary outline-none transition-opacity hover:opacity-75 disabled:opacity-35 focus-visible:ring-2 focus-visible:ring-ring/40"
 const SMALLEST_ON_PHONE = 280
 const PHONE = "(width < 48rem)"
 const KEPT = "bizflow:flow:"
@@ -35,7 +41,6 @@ const middle = (points: readonly Point[]): Point => [
   points.reduce((sum, [x]) => sum + x, 0) / points.length,
   points.reduce((sum, [, y]) => sum + y, 0) / points.length,
 ]
-const clamp = (value: number, low: number, high: number): number => Math.min(high, Math.max(low, value))
 const between = (low: number, high: number): number => low + Math.random() * (high - low)
 const either = (): number => (Math.random() < 0.5 ? -1 : 1)
 const smooth = (from: number, to: number, value: number): number => {
@@ -883,15 +888,6 @@ function animate(parts: Parts): {
   }
 }
 
-const subscribeNever = (): (() => void) => () => undefined
-
-function subscribeToPhone(onChange: () => void): () => void {
-  const query = matchMedia(PHONE)
-  query.addEventListener("change", onChange)
-
-  return () => query.removeEventListener("change", onChange)
-}
-
 // How much of the bottom a phone keeps for its home bar.
 function readSafeBottom(): number {
   const probe = document.createElement("div")
@@ -938,20 +934,18 @@ export function FlowWindow({
   onOpenChange,
   open,
   phoneBottom = 16,
-  title = "Flow",
 }: {
   children: ReactNode
   onOpenChange: (open: boolean) => void
   open: boolean
   phoneBottom?: number
-  title?: string
 }): ReactElement | null {
   // Drawn only in the browser, over everything, once the page has hydrated.
   const mounted = useSyncExternalStore(subscribeNever, () => true, () => false)
   const [mode, setMode] = useState<Mode>("closed")
   const dock = useSyncExternalStore(subscribeToDock, () => dockSlot, () => null)
   const [dots] = useState(makeSwarm)
-  const phone = useSyncExternalStore(subscribeToPhone, () => matchMedia(PHONE).matches, () => false)
+  const phone = useMediaQuery(PHONE)
   const titleId = useId()
   const windowId = useId()
   const shadowId = useId()
@@ -1048,18 +1042,18 @@ export function FlowWindow({
           ref={head}
         >
           <button
-            aria-label={`Resize ${title}`}
+            aria-label="Resize Flow"
             className="absolute top-0 left-1/2 hidden h-6 w-18 -translate-x-1/2 cursor-ns-resize touch-none rounded-[12px] outline-none before:absolute before:top-[7px] before:left-4 before:h-[5px] before:w-10 before:rounded-full before:bg-muted-foreground/50 focus-visible:ring-2 focus-visible:ring-ring/40 max-md:block"
             ref={grab}
             title="Drag or tap to resize"
             type="button"
           />
           <h2 className="text-[15px] font-semibold" id={titleId}>
-            {title}
+            Flow
           </h2>
           {/* The page's folded corner is the way to close it. */}
           <button
-            aria-label={`Close ${title}`}
+            aria-label="Close Flow"
             className="absolute top-0 right-0 size-[34px] text-secondary-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40 max-md:size-10"
             onClick={() => latest.current.onOpenChange(false)}
             type="button"
@@ -1083,7 +1077,7 @@ export function FlowWindow({
       <button
         aria-controls={windowId}
         aria-haspopup="dialog"
-        aria-label={title}
+        aria-label="Flow"
         className="group fixed top-0 left-0 z-40 cursor-pointer touch-none rounded-[12px] outline-none [-webkit-tap-highlight-color:transparent] focus-visible:ring-2 focus-visible:ring-ring/40"
         data-slot="flow-launcher"
         hidden={mode !== "closed"}

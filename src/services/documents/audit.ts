@@ -1,4 +1,7 @@
-import { recordAuditLog as defaultRecordAuditLog } from "@/services/audit-service"
+import {
+  recordAuditLog as defaultRecordAuditLog,
+  recordAuditLogBestEffort,
+} from "@/services/audit-service"
 import type {
   DocumentAuditLogInput,
   DocumentServiceDeps,
@@ -15,18 +18,7 @@ export async function recordDocumentAuditLog(
   deps: DocumentServiceDeps,
   input: DocumentAuditLogInput
 ): Promise<void> {
-  const recordAuditLog = deps.recordAuditLog ?? defaultRecordAuditLog
-
-  try {
-    await recordAuditLog(input)
-  } catch (error: unknown) {
-    console.warn("document_audit_log_failed", {
-      organizationId: input.organizationId,
-      actorUserId: input.actorUserId,
-      action: input.action,
-      reason: error instanceof Error ? error.message : "Unknown audit error",
-    })
-  }
+  await recordAuditLogBestEffort(input, deps.recordAuditLog)
 }
 
 /**

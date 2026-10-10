@@ -17,6 +17,7 @@ import { Field, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
+import { memberLabel } from "@/components/people/member-name"
 import type { OrganizationMember } from "@/types/organization"
 
 /**
@@ -67,7 +68,7 @@ export function NewTaskDialog({
           </Field>
           <div className="flex flex-col gap-4 sm:flex-row">
             <Field className="sm:flex-1">
-              <FieldLabel htmlFor="new-task-due">Due (UTC)</FieldLabel>
+              <FieldLabel htmlFor="new-task-due">Due</FieldLabel>
               <DateTimePicker id="new-task-due" name="dueAt" />
             </Field>
             {canAssign ? (
@@ -77,7 +78,7 @@ export function NewTaskDialog({
                   <option value="">Unassigned</option>
                   {members.map((member: OrganizationMember) => (
                     <option key={member.id} value={member.userId}>
-                      {member.fullName?.trim() || member.email}
+                      {memberLabel(member)}
                     </option>
                   ))}
                 </Select>

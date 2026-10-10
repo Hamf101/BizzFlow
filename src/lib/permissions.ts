@@ -23,9 +23,6 @@ export const ORGANIZATION_PERMISSION_ACTIONS = [
   "members:invite",
   "members:update_role",
   "audit_logs:view",
-  // Chain verification is an incident-response signal for the tenant owner;
-  // owner_admin receives it through the full-array grant below.
-  "audit_logs:verify",
   "templates:view",
   "templates:create",
   "templates:manage",
@@ -134,14 +131,28 @@ export function isOrganizationRole(value: string): value is OrganizationRole {
 }
 
 /**
+ * Checks whether a stored permission string is an action this build knows.
+ *
+ * @param value - Permission string read from a role definition.
+ * @returns True when the value is a supported permission action.
+ */
+export function isOrganizationPermissionAction(
+  value: string
+): value is OrganizationPermissionAction {
+  return ORGANIZATION_PERMISSION_ACTIONS.includes(value as OrganizationPermissionAction)
+}
+
+/**
  * Parses a persisted base role and optional editable permission set.
  *
- * Unknown roles or permission actions fail closed instead of silently falling
- * back to broader starter-role access.
+ * An unknown role fails closed. An unknown permission action is dropped: a
+ * migration can add one before the code that knows it is deployed, and
+ * rejecting the whole role then locked every member on it out of the app.
+ * Dropping can only narrow access, never widen it.
  *
  * @param role - Legacy base role stored for row-scope compatibility.
  * @param permissions - Role-definition permissions, or null for protected Owner.
- * @returns A permission subject, or null when persisted data is unsupported.
+ * @returns A permission subject, or null when the role is unsupported.
  */
 export function createOrganizationPermissionSubject(
   role: string,
@@ -155,20 +166,9 @@ export function createOrganizationPermissionSubject(
     return role
   }
 
-  if (
-    permissions.some(
-      (permission) =>
-        !ORGANIZATION_PERMISSION_ACTIONS.includes(
-          permission as OrganizationPermissionAction
-        )
-    )
-  ) {
-    return null
-  }
-
   return {
     role,
-    customPermissions: [...permissions] as OrganizationPermissionAction[],
+    customPermissions: permissions.filter(isOrganizationPermissionAction),
   }
 }
 
@@ -208,6 +208,39 @@ export function canPerformOrganizationAction(
       : subject.customPermissions
 
   return permissions.includes(action)
+}
+
+/**
+ * Whether someone may choose who else can open a document or folder: anyone
+ * who can edit it, and anyone who manages folders, while it is in use.
+ *
+ * @param subject - Current member role and optional custom permissions.
+ * @param item - Their access to the item, and where it is in its life.
+ * @returns True when they may share it.
+ */
+export function canShareResource(
+  subject: OrganizationPermissionSubject,
+  item: { accessLevel?: string | null; lifecycleState: string }
+): boolean {
+  return (
+    item.lifecycleState === "active" &&
+    (item.accessLevel === "contributor" || canPerformOrganizationAction(subject, "folders:manage"))
+  )
+}
+
+/**
+ * Whether a member may send a document out, for signing or to answer: they
+ * may send documents and edit this one, and it is not archived or in Trash.
+ *
+ * @param subject - The member's role and permissions.
+ * @param item - The document's access level for them and its lifecycle.
+ * @returns True when Send is offered.
+ */
+export function canSendDocument(
+  subject: OrganizationPermissionSubject,
+  item: { accessLevel?: string | null; lifecycleState: string }
+): boolean {
+  return canPerformOrganizationAction(subject, "documents:send") && item.accessLevel === "contributor" && item.lifecycleState === "active"
 }
 
 /**

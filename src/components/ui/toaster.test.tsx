@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 
 import { act } from "react"
-import { createRoot } from "react-dom/client"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const sonner = vi.hoisted(() => ({
@@ -19,6 +18,7 @@ vi.mock("sonner", () => ({
 }))
 
 import { BizFlowToaster, bizflowToast } from "./toaster"
+import { mount } from "@/test/render"
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -77,8 +77,7 @@ describe("bizflowToast", () => {
 
 describe("BizFlowToaster", () => {
   it("names the first missing field in a toast instead of the browser's bubble", async () => {
-    ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
-    const root = createRoot(document.body.appendChild(document.createElement("div")))
+    const root = mount()
 
     await act(async () => {
       root.render(

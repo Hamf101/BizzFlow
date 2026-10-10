@@ -15,15 +15,8 @@ vi.mock("@/lib/auth", () => ({
   getAuthenticatedUser: mocks.getAuthenticatedUser,
 }))
 
-vi.mock("@/lib/request-security", () => ({
-  RequestSecurityError: class RequestSecurityError extends Error {
-    readonly statusCode: number
-
-    constructor(message: string, statusCode: number) {
-      super(message)
-      this.statusCode = statusCode
-    }
-  },
+vi.mock("@/lib/request-security", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/request-security")>()),
   readTrustedJsonObject: mocks.readTrustedJsonObject,
 }))
 

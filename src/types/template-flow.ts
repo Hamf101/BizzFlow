@@ -27,6 +27,18 @@ export type TemplateFlowLedgerItem = {
   summary: string
   target: string
   affectedBlockIds: string[]
+  /** Indices of the earlier changes in the same batch this one cannot stand without. */
+  dependsOn: number[]
+}
+
+/**
+ * One change as Flow's response gave it, kept so a batch can be rebuilt on the
+ * server from the changes a reviewer keeps. The browser never reads inside it.
+ */
+export type TemplateFlowWireOperation = {
+  type: TemplateFlowOperationType
+  summary: string
+  payload: Record<string, unknown>
 }
 
 /** Deterministic usability finding attached to a Flow proposal for review. */
@@ -52,6 +64,8 @@ export type TemplateFlowProposal = {
   baseDraftFingerprint: string
   candidateDraft: TemplateFlowDraft
   operations: TemplateFlowLedgerItem[]
+  /** The changes behind `operations`, one each, in the same order. */
+  wireOperations: TemplateFlowWireOperation[]
   changedBlockIds: string[]
   qualityIssues: TemplateFlowQualityIssue[]
 }

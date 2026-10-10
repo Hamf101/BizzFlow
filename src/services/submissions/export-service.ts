@@ -107,6 +107,7 @@ export async function exportInternalSubmissionsCsv(
       const rows = await readAllInBatches(
         async (previous: SubmissionExportRow | undefined) => {
           let query = filterVisibleSubmissions(
+            // tenant-scope: filterVisibleSubmissions adds .eq("org_id", filters.organizationId)
             client.from("submissions").select(SUBMISSION_EXPORT_COLUMNS),
             filters
           )

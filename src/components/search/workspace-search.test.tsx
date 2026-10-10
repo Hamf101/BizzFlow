@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 
 import { act } from "react"
-import { createRoot, type Root } from "react-dom/client"
+import type { Root } from "react-dom/client"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 
 import { WorkspaceSearch } from "./workspace-search"
+import { mount } from "@/test/render"
 
 const push = vi.fn()
 
@@ -14,8 +15,6 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push }),
   useSearchParams: () => new URLSearchParams("size=25&page=3"),
 }))
-
-;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 const WHEN = "2026-09-20T10:00:00.000Z"
 const LEASE_FILE = { createdAt: WHEN, description: null, id: "file-1", lifecycleState: "active", sourceKind: "upload", title: "Lease — 14 Harbour St", updatedAt: WHEN }
@@ -53,6 +52,8 @@ const fetchMock = vi.fn(async (url: string) => ({
 }))
 
 beforeEach(() => {
+  // The box waits for typing to pause; the tests step past that wait.
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] })
   vi.stubGlobal("fetch", fetchMock)
   // jsdom lays nothing out, so there is nothing to scroll, and says nothing
   // of the screen: a wide one, where the bar can be carried about.
@@ -71,13 +72,13 @@ beforeEach(() => {
   localStorage.clear()
   const host = document.createElement("div")
   document.body.append(host)
-  root = createRoot(host)
+  root = mount(host)
   act(() => root.render(<WorkspaceSearch role="owner_admin" />))
 })
 
 afterEach(() => {
   act(() => root.unmount())
-  document.body.replaceChildren()
+  vi.useRealTimers()
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
   fetchMock.mockClear()
@@ -98,7 +99,7 @@ async function type(words: string): Promise<void> {
     box.dispatchEvent(new Event("input", { bubbles: true }))
   })
   // Past the pause for typing, and the answer.
-  await act(async () => new Promise((resolve) => setTimeout(resolve, 200)))
+  await act(() => vi.advanceTimersByTimeAsync(200))
 }
 
 async function press(key: string): Promise<void> {
@@ -134,7 +135,7 @@ it("narrows to one section, whose whole list opens with the same words in the vi
   const files = [...document.querySelectorAll("button[aria-pressed]")].find((pill) => pill.textContent?.startsWith("Files"))!
   expect(files.textContent).toBe("Files3")
   await act(async () => (files as HTMLButtonElement).click())
-  await act(async () => new Promise((resolve) => setTimeout(resolve, 200)))
+  await act(() => vi.advanceTimersByTimeAsync(200))
 
   expect(fetchMock).toHaveBeenLastCalledWith("/api/search?kind=files&q=lease", expect.anything())
   expect(options()).toEqual([
@@ -153,7 +154,7 @@ it("opens a section's own list when it is chosen before any words", async () => 
 
   const tasks = [...document.querySelectorAll("button[aria-pressed]")].find((pill) => pill.textContent === "Tasks")!
   await act(async () => (tasks as HTMLButtonElement).click())
-  await act(async () => new Promise((resolve) => setTimeout(resolve, 200)))
+  await act(() => vi.advanceTimersByTimeAsync(200))
 
   expect(fetchMock).toHaveBeenLastCalledWith("/api/search?kind=tasks", expect.anything())
   expect(document.querySelector('[role="listbox"]')?.textContent).toContain("Due soon")
@@ -173,46 +174,17 @@ async function carry(from: Element, x: number, y: number): Promise<void> {
 }
 
 const hints = (bar: HTMLElement): Element => [...bar.querySelectorAll("span")].find((span) => span.textContent === "Only what you can open")!
-const where = (bar: HTMLElement): string[] =>
-  ["--search-x", "--search-top", "--search-bottom"].map((name) => bar.style.getPropertyValue(name))
+const stored = (): unknown => JSON.parse(localStorage.getItem("bizflow.search.place") ?? "null")
 
-it("moves when carried by anything but its controls, and opens where it was left", async () => {
+it("remembers where it is carried by anything but its controls", async () => {
   await open()
   const bar = document.querySelector<HTMLElement>('[data-slot="workspace-search"]')!
 
   // Pressing in the box selects its words; the bar stays.
   await carry(document.querySelector('[role="combobox"]')!, 60, 40)
-  expect(where(bar)).toEqual(["0px", "13vh", "auto"])
+  expect(stored()).toBeNull()
 
   // Left in the top half, it still opens underneath, held by its top edge.
   await carry(hints(bar), 60, 40)
-  expect(where(bar)).toEqual(["60px", "140px", "auto"])
-  expect(bar.dataset.opens).toBe("down")
-  expect(JSON.parse(localStorage.getItem("bizflow.search.place") ?? "null")).toEqual({ edge: 140, up: false, x: 60 })
-})
-
-it("opens upward once carried into the bottom half, and goes as high as the top", async () => {
-  await open()
-  const bar = document.querySelector<HTMLElement>('[data-slot="workspace-search"]')!
-
-  await carry(hints(bar), 0, 400)
-  expect(bar.dataset.opens).toBe("up")
-  expect(where(bar)).toEqual(["0px", "auto", "168px"])
-
-  // Back up past the top it stops at the screen's edge, opening underneath.
-  await carry(hints(bar), 0, -600)
-  expect(bar.dataset.opens).toBe("down")
-  expect(where(bar)).toEqual(["0px", "16px", "auto"])
-})
-
-it("can be carried into the bottom half with its results open, and turns them upward", async () => {
-  await open()
-  await type("lease")
-  const bar = document.querySelector<HTMLElement>('[data-slot="workspace-search"]')!
-
-  // Only its box and filters need stay on screen while it is carried.
-  await carry(hints(bar), 0, 350)
-  expect(bar.dataset.opens).toBe("up")
-  // Held by its bottom edge, with room above for everything it shows.
-  expect(where(bar)).toEqual(["0px", "auto", "215px"])
+  expect(stored()).toEqual({ edge: 140, up: false, x: 60 })
 })

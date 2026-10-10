@@ -6,10 +6,13 @@ import { type ReactElement, useEffect, useMemo, useRef, useState } from "react"
 import type { DocumentContentInput } from "@/app/(editor)/documents/[documentId]/edit/actions"
 import { DocumentRecipientCollection } from "@/components/documents/document-recipient-collection"
 import { useFlowHandoff } from "@/components/flow/flow-handoff"
+import { DesignToolsContext } from "@/components/editor/design-tools"
+import { DESIGN_TOOLS } from "@/components/editor/design-tools-provided"
 import { EditorCanvas } from "@/components/editor/editor-canvas"
 import { normalizeContentForSave } from "@/components/editor/editor-content"
 import { type DockTool, EditorDock } from "@/components/editor/editor-dock"
 import { FormatBar } from "@/components/editor/format-bar"
+import { PaperSigning } from "@/components/editor/paper-field"
 import { FlowDockSlot, FlowWindow } from "@/components/flow/flow-window"
 import { EditorFrame, type EditorLayoutStore, EditorNotice, EditorSidePanel } from "@/components/editor/editor-frame"
 import { type SaveResult, useAutosave } from "@/components/editor/use-autosave"
@@ -24,6 +27,7 @@ import {
   TemplateFlowPanel,
   PageSetupPanel,
   TemplateBrandingPanel,
+  SendToAnswerDialog,
   ShareDialog,
 } from "@/components/editor/lazy-panels"
 import { useLiveRoom } from "@/components/editor/use-live-room"
@@ -31,7 +35,8 @@ import { useRoomPlace } from "@/components/editor/use-room-place"
 import { useLocalRecovery } from "@/components/editor/use-local-recovery"
 import { useMissingPictureAddresses, usePictureAddresses } from "@/components/editor/use-picture-addresses"
 import { useWorkingCopyHistory } from "@/components/editor/use-working-copy-history"
-import type { FlowStarter } from "@/components/templates/template-flow-panel"
+import type { FlowStarter } from "@/components/editor/template-flow-panel"
+import { useTimeZone } from "@/components/ui/local-date"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import {
@@ -48,7 +53,8 @@ import { SigningRecipientStatusBadge } from "@/lib/page-status-badges"
 import { cn } from "@/lib/utils"
 import { createTemplateFlowDraftFingerprint } from "@/services/template-flow-proposal-state"
 import { resolvePageGeometry } from "@/services/templates/template-render-plan"
-import type { DocumentSigningRecipient, GeneratedDocumentSigningView } from "@/types/signing"
+import type { DocumentSigningRecipient, GeneratedDocumentSigningView, PublicSignerStatus } from "@/types/signing"
+import { withBoxMarks } from "@/types/box-signers"
 import { type TemplateContentV3, upgradeV2TemplateContentToV3 } from "@/types/template"
 import type { TemplateFlowProposal } from "@/types/template-flow"
 import { applyVisibleTemplateFieldValue } from "@/types/template-visibility"
@@ -76,6 +82,8 @@ type DocumentEditorProps = {
   canShare: boolean
   /** Where this person keeps the dock and zoom. */
   editorLayout?: EditorLayoutStore
+  /** Someone outside the workspace given this one document: no Flow, and Back goes to what is shared with them. */
+  guest?: boolean
   /** Who is writing, as the others in the room see them. */
   me: Readonly<{ id: string; name: string }>
   resendAction: (formData: FormData) => Promise<void>
@@ -99,6 +107,7 @@ export function DocumentEditor({
   canSend,
   canShare,
   editorLayout,
+  guest = false,
   me,
   resendAction,
   saveAnswersAction,
@@ -106,6 +115,7 @@ export function DocumentEditor({
   sendAction,
   view,
 }: DocumentEditorProps): ReactElement {
+  const timeZone = useTimeZone()
   const document = view.document
   const completed = view.workflowStatus === "completed"
   const writable = canFill && view.workflowStatus === "draft" && view.recipients.length === 0
@@ -138,9 +148,14 @@ export function DocumentEditor({
   const editable = writable && history.liveStatus !== "stopped"
   const page = history.state
   const [answers, setAnswers] = useState<Record<string, unknown>>(view.answers)
+  // Each drawn box shows only its own signer's mark; the sender's is drawn
+  // here until the document is sent.
+  const marked = useMemo(() => withBoxMarks(page.content.blocks, answers, view.recipients), [answers, page.content.blocks, view.recipients])
+  const signing = useMemo(() => ({ drawer: view.workflowStatus !== "draft" || view.recipients.length > 0 ? null : ("sender" as const), signers: view.recipients }), [view.recipients, view.workflowStatus])
   const [drawings, setDrawings] = useState(0)
   const [sending, setSending] = useState(false)
   const [sharing, setSharing] = useState(false)
+  const [asking, setAsking] = useState(false)
   const [savedPage, setSavedPage] = useState(initial)
   const [savedAnswers, setSavedAnswers] = useState<Record<string, unknown>>(view.answers)
   const [proposal, setProposal] = useState<TemplateFlowProposal | null>(null)
@@ -193,7 +208,12 @@ export function DocumentEditor({
       // New fields reach the server before their answers do.
       await (live.session ? live.session.flush() : content.flush())
 
-      const formData = new FormData(formRef.current ?? undefined)
+      // Once the editor has closed the fields are gone; the copy on this device keeps the answers.
+      if (!formRef.current) {
+        return { message: "The answers are no longer on the page.", ok: false, status: 0 }
+      }
+
+      const formData = new FormData(formRef.current)
       formData.set("documentId", document.id)
 
       const result = await saveAnswersAction(formData)
@@ -214,6 +234,8 @@ export function DocumentEditor({
     // Live, what the room has kept is saved; anything waiting stays on this device too.
     saved: { answers: savedAnswers, page: !liveMode ? savedPage : history.liveStatus === "saved" ? page : initial },
     value: { answers, page },
+    // Live, the room's saves move the server on too, so a copy is made on the room's revision.
+    version: live.session && live.roomId ? `${live.roomId}:${live.session.revision()}` : content.version,
   })
   const settingsBlock = page.content.blocks.find((block) => block.id === controller.settingsBlockId) ?? null
   const settingsIndex = settingsBlock ? page.content.blocks.indexOf(settingsBlock) : -1
@@ -308,10 +330,10 @@ export function DocumentEditor({
   }
 
   return (
-    <>
+    <DesignToolsContext.Provider value={DESIGN_TOOLS}>
       <EditorFrame
         backHref={backHref}
-        backLabel="Back to Files"
+        backLabel={guest ? "Shared with you" : "Back to Files"}
         banner={
           recovery.recovery && (writable || fillable) ? (
             <EditorNotice
@@ -338,7 +360,7 @@ export function DocumentEditor({
               actions={
                 proposal.status === "pending" && writable
                   ? [
-                      { label: "Apply", onClick: () => applyProposal(proposal, proposal.id) },
+                      ...(proposal.operations.length > 0 ? [{ label: "Apply", onClick: () => applyProposal(proposal, proposal.id) }] : []),
                       { label: "Reject", onClick: () => setProposal(null) },
                     ]
                   : [{ label: "Dismiss", onClick: () => setProposal(null) }]
@@ -362,7 +384,7 @@ export function DocumentEditor({
               narrow={narrow}
               orientation={orientation}
               tools={tools}
-              trail={narrow ? <FlowDockSlot /> : undefined}
+              trail={narrow && !guest ? <FlowDockSlot /> : undefined}
             />
           ) : null
         }
@@ -378,7 +400,7 @@ export function DocumentEditor({
               </PopoverTrigger>
               <PopoverContent align="end" className="w-[min(22rem,calc(100vw-2rem))]">
                 <ul className="grid gap-2">
-                  {view.recipients.map((recipient: DocumentSigningRecipient) => (
+                  {view.recipients.map((recipient: PublicSignerStatus & Partial<DocumentSigningRecipient>) => (
                     <li className="grid gap-1.5 rounded-[12px] bg-muted/50 p-2.5" key={recipient.id}>
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
@@ -389,13 +411,15 @@ export function DocumentEditor({
                       </div>
                       <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
                         {recipient.signedAt
-                          ? `Signed ${formatMediumDateTime(recipient.signedAt)}`
-                          : `Link expires ${formatMediumDateTime(recipient.tokenExpiresAt)}`}
+                          ? `Signed ${formatMediumDateTime(recipient.signedAt, timeZone)}`
+                          : recipient.tokenExpiresAt
+                            ? `Link expires ${formatMediumDateTime(recipient.tokenExpiresAt, timeZone)}`
+                            : null}
                         {canSend && recipient.status !== "signed" && !completed ? (
                           <form action={resendAction}>
                             <input name="documentId" type="hidden" value={document.id} />
                             <input name="recipientId" type="hidden" value={recipient.id} />
-                            <Button className="h-8 px-2 text-xs md:h-8" size="sm" type="submit" variant="ghost">
+                            <Button className="h-11 px-2 text-xs md:h-8" size="sm" type="submit" variant="ghost">
                               Resend
                             </Button>
                           </form>
@@ -432,6 +456,13 @@ export function DocumentEditor({
                 <DropdownMenuItem onClick={() => setSharing(true)}>
                   <UserPlus />
                   Share…
+                </DropdownMenuItem>
+              ) : null}
+              {/* Answers are kept as a template's submissions, so it needs one. */}
+              {canSend && document.templateId ? (
+                <DropdownMenuItem onClick={() => setAsking(true)}>
+                  <Send />
+                  Send to answer…
                 </DropdownMenuItem>
               ) : null}
             </DropdownMenuContent>
@@ -471,31 +502,33 @@ export function DocumentEditor({
               ) : null}
             </EditorSidePanel>
             {/* On a phone Flow's button rests in the tools' row, or above the page without it. */}
-            <FlowWindow onOpenChange={setFlowOpen} open={flowOpen} phoneBottom={writable && !proposal ? 84 : 16}>
-              <TemplateFlowPanel
-                canUndo={flowUndo !== null}
-                draft={flowDraft}
-                endpoint={`/api/documents/${encodeURIComponent(document.id)}/flow`}
-                initialMessages={[]}
-                lastAppliedMessageId={flowUndo?.messageId ?? null}
-                onApplyProposal={applyProposal}
-                onProposalReceived={(next) => {
-                  setProposal(next)
-                  controller.select(null)
-                }}
-                onProposalStale={setProposal}
-                onRejectProposal={() => setProposal(null)}
-                onUndo={() => {
-                  if (flowUndo) {
-                    history.set(() => flowUndo.page)
-                    setFlowUndo(null)
-                  }
-                }}
-                autoSend={carried}
-                pendingProposal={proposal}
-                starter={writable ? DRAFT_STARTER : SENT_STARTER}
-              />
-            </FlowWindow>
+            {guest ? null : (
+              <FlowWindow onOpenChange={setFlowOpen} open={flowOpen} phoneBottom={writable && !proposal ? 84 : 16}>
+                <TemplateFlowPanel
+                  canUndo={flowUndo !== null}
+                  draft={flowDraft}
+                  endpoint={`/api/documents/${encodeURIComponent(document.id)}/flow`}
+                  initialMessages={[]}
+                  lastAppliedMessageId={flowUndo?.messageId ?? null}
+                  onApplyProposal={applyProposal}
+                  onProposalReceived={(next) => {
+                    setProposal(next)
+                    controller.select(null)
+                  }}
+                  onProposalStale={setProposal}
+                  onRejectProposal={() => setProposal(null)}
+                  onUndo={() => {
+                    if (flowUndo) {
+                      history.set(() => flowUndo.page)
+                      setFlowUndo(null)
+                    }
+                  }}
+                  autoSend={carried}
+                  pendingProposal={proposal}
+                  starter={writable ? DRAFT_STARTER : SENT_STARTER}
+                />
+              </FlowWindow>
+            )}
           </>
         )}
         primary={
@@ -524,21 +557,23 @@ export function DocumentEditor({
             onSubmit={(event) => event.preventDefault()}
             ref={formRef}
           >
-            <EditorCanvas
-              allowFiles={false}
-              answers={answers}
-              controller={proposal ? preview : controller}
-              designable={editable && !proposal}
-              documentTitle={proposal ? proposal.candidateDraft.title : page.title}
-              fields={fillable && !proposal ? "fill" : "read"}
-              narrow={narrow}
-              onAnswerChange={(fieldKey, value) =>
-                setAnswers((current) => applyVisibleTemplateFieldValue(page.content, current, fieldKey, value))
-              }
-              overlay={room && !proposal ? <RoomLayer narrow={narrow} others={live.others} revision={page.content} room={room} /> : null}
-              textEditable={editable && !proposal}
-              zoom={zoom}
-            />
+            <PaperSigning.Provider value={signing}>
+              <EditorCanvas
+                allowFiles={false}
+                answers={marked}
+                controller={proposal ? preview : controller}
+                designable={editable && !proposal}
+                documentTitle={proposal ? proposal.candidateDraft.title : page.title}
+                fields={fillable && !proposal ? "fill" : "read"}
+                narrow={narrow}
+                onAnswerChange={(fieldKey, value) =>
+                  setAnswers((current) => applyVisibleTemplateFieldValue(page.content, current, fieldKey, value))
+                }
+                overlay={room && !proposal ? <RoomLayer narrow={narrow} others={live.others} revision={page.content} room={room} /> : null}
+                textEditable={editable && !proposal}
+                zoom={zoom}
+              />
+            </PaperSigning.Provider>
           </form>
         )}
       </EditorFrame>
@@ -550,9 +585,12 @@ export function DocumentEditor({
           <DocumentRecipientCollection action={sendAction} documentId={document.id} />
         </DialogContent>
       </Dialog>
+      {asking ? (
+        <SendToAnswerDialog name={document.title} onOpenChange={setAsking} open source={{ documentId: document.id, kind: "document" }} />
+      ) : null}
       {canShare && sharing ? (
         <ShareDialog name={document.title} onOpenChange={setSharing} open resources={[{ id: document.id, kind: "document" }]} />
       ) : null}
-    </>
+    </DesignToolsContext.Provider>
   )
 }

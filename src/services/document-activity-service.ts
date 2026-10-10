@@ -9,8 +9,11 @@ import {
   uniqueDocumentCollaborationProfileIds,
   type DocumentCollaborationProfileRow,
 } from "@/services/document-collaboration/profiles"
-import { requireDocumentAccess } from "@/services/documents/access-service"
-import { DocumentServiceError } from "@/services/documents/errors"
+import {
+  requireDocumentAccess,
+  requireDocumentAccessAs,
+  requireReadableDocument,
+} from "@/services/documents/access-service"
 import {
   DOCUMENT_ACTIVITY_EVENT_TYPES,
   type ActivityMetadata,
@@ -20,12 +23,10 @@ import {
   type DocumentActivityEventType,
 } from "@/types/activity"
 import { runOperation, type LogValue } from "@/services/operation"
+import { ServiceError } from "@/services/service-error"
+import { normalizeLimit } from "@/services/input"
 
 type DocumentActivityServiceClient = Pick<AdminSupabaseClient, "from" | "rpc">
-
-type DocumentStateRow = {
-  lifecycle_state?: unknown
-}
 
 export type ListDocumentActivityInput = {
   actorUserId: string
@@ -41,20 +42,8 @@ export type DocumentActivityServiceDeps = {
 /**
  * Error raised by document activity operations.
  */
-export class DocumentActivityServiceError extends Error {
-  readonly statusCode: number
-
-  /**
-   * Creates a document activity service error.
-   *
-   * @param message - User-safe error message.
-   * @param statusCode - HTTP-style status code for route/action translation.
-   */
-  constructor(message: string, statusCode: number) {
-    super(message)
-    this.name = "DocumentActivityServiceError"
-    this.statusCode = statusCode
-  }
+export class DocumentActivityServiceError extends ServiceError {
+  override readonly name = "DocumentActivityServiceError"
 }
 
 /**
@@ -99,7 +88,7 @@ export async function listDocumentActivity(
         .eq("org_id", input.organizationId)
         .eq("document_id", input.documentId)
         .order("created_at", { ascending: false })
-        .limit(normalizeLimit(input.limit))
+        .limit(normalizeLimit(input.limit, "Document activity", 50, 100, (message) => new DocumentActivityServiceError(message, 400)))
 
       if (error || !data) {
         throw new DocumentActivityServiceError(
@@ -122,9 +111,15 @@ export async function listDocumentActivity(
       )
       const profileById = indexDocumentCollaborationProfiles(profiles)
 
-      return rows.map((row: DocumentActivityEventRow) =>
-        mapDocumentActivityEvent(row, profileById)
-      )
+      // An event newer than this build is left out rather than failing the feed.
+      return rows.flatMap((row: DocumentActivityEventRow) => {
+        if (!isDocumentActivityEventType(row.event_type)) {
+          console.warn("document_activity_unknown_event", { eventType: row.event_type })
+          return []
+        }
+
+        return [mapDocumentActivityEvent(row, profileById, row.event_type)]
+      })
     }
   )
 }
@@ -135,8 +130,8 @@ async function requireDocumentViewPermission(
   documentId: string,
   actorUserId: string
 ): Promise<void> {
-  try {
-    await requireDocumentAccess(
+  await requireDocumentAccessAs(
+    requireDocumentAccess(
       {
         organizationId,
         documentId,
@@ -146,66 +141,37 @@ async function requireDocumentViewPermission(
         requiredOrganizationPermissionAction: "documents:view",
       },
       client
-    )
-  } catch (error: unknown) {
-    if (error instanceof DocumentServiceError) {
-      throw new DocumentActivityServiceError(
-        error.statusCode === 403
-          ? "You cannot view document activity."
-          : error.message,
-        error.statusCode
-      )
-    }
-
-    throw error
-  }
+    ),
+    (message, statusCode) => new DocumentActivityServiceError(message, statusCode),
+    "You cannot view document activity."
+  )
 }
 
+// Only active and archived documents are readable; trash, purge and any state
+// newer than this build read as not found.
 async function requireReadableTenantDocument(
   client: DocumentActivityServiceClient,
   organizationId: string,
   documentId: string
 ): Promise<void> {
-  const { data, error } = await client
-    .from("documents")
-    .select("id,lifecycle_state")
-    .eq("id", documentId)
-    .eq("org_id", organizationId)
-    .maybeSingle()
-
-  if (error) {
-    throw new DocumentActivityServiceError("Unable to load document.", 500)
-  }
-
-  if (!data) {
-    throw new DocumentActivityServiceError("Document was not found.", 404)
-  }
-
-  const lifecycleState = (data as DocumentStateRow).lifecycle_state
-
-  if (
-    lifecycleState === "trashed" ||
-    lifecycleState === "purge_pending"
-  ) {
-    throw new DocumentActivityServiceError("Document was not found.", 404)
-  }
-
-  if (
-    lifecycleState !== undefined &&
-    lifecycleState !== null &&
-    lifecycleState !== "active" &&
-    lifecycleState !== "archived"
-  ) {
-    throw new DocumentActivityServiceError(
-      "Database returned an unsupported document lifecycle state.",
-      500
-    )
-  }
+  requireReadableDocument(
+    await client
+      .from("documents")
+      .select("id,lifecycle_state")
+      .eq("id", documentId)
+      .eq("org_id", organizationId)
+      .maybeSingle(),
+    {
+      loadFailed: () => new DocumentActivityServiceError("Unable to load document.", 500),
+      notFound: () => new DocumentActivityServiceError("Document was not found.", 404),
+    }
+  )
 }
 
 function mapDocumentActivityEvent(
   row: DocumentActivityEventRow,
-  profileById: ReadonlyMap<string, DocumentCollaborationProfileRow>
+  profileById: ReadonlyMap<string, DocumentCollaborationProfileRow>,
+  eventType: DocumentActivityEventType
 ): DocumentActivityEvent {
   return {
     id: row.id,
@@ -217,27 +183,14 @@ function mapDocumentActivityEvent(
       profileById,
       "System"
     ),
-    eventType: parseDocumentActivityEventType(row.event_type),
+    eventType,
     metadata: parseActivityMetadata(row.metadata),
     createdAt: row.created_at,
   }
 }
 
-function parseDocumentActivityEventType(
-  value: string
-): DocumentActivityEventType {
-  if (
-    DOCUMENT_ACTIVITY_EVENT_TYPES.includes(
-      value as DocumentActivityEventType
-    )
-  ) {
-    return value as DocumentActivityEventType
-  }
-
-  throw new DocumentActivityServiceError(
-    "Database returned an unsupported document activity event.",
-    500
-  )
+function isDocumentActivityEventType(value: string): value is DocumentActivityEventType {
+  return DOCUMENT_ACTIVITY_EVENT_TYPES.includes(value as DocumentActivityEventType)
 }
 
 function parseActivityMetadata(value: Record<string, unknown>): ActivityMetadata {
@@ -270,20 +223,6 @@ function isActivityMetadataValue(
   )
 }
 
-function normalizeLimit(value: number | undefined): number {
-  if (value === undefined) {
-    return 50
-  }
-
-  if (!Number.isInteger(value) || value < 1 || value > 100) {
-    throw new DocumentActivityServiceError(
-      "Document activity limit must be between 1 and 100.",
-      400
-    )
-  }
-
-  return value
-}
 
 function runDocumentActivityOperation<T>(
   operationName: string,

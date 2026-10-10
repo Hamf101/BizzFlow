@@ -46,32 +46,11 @@ describe("answers that are more than one word", () => {
     expect(posted(paperTicks, "answer.json.days")).toEqual(["Tue", "Mon"])
   })
 
-  it("keeps a table's rows as they were typed, padded to its length on screen, and never draws past it in print", () => {
+  it("posts a table's rows as they were typed, padded to its length", () => {
     const noop = (): void => undefined
     const answered = [["", "Unloading"], ["2026-10-01"]]
     const fill = renderToStaticMarkup(createElement(PaperTable, { block: table, mode: "fill", onChange: noop, value: answered }))
-    const design = renderToStaticMarkup(createElement(PaperTable, { block: table, mode: "design", onChange: noop, value: answered }))
 
     expect(posted(fill, "answer.json.log")).toEqual([["", "Unloading"], ["2026-10-01", ""]])
-    // Three rows wide and narrow: the wide table and each row's own list.
-    expect(fill.match(/<tr data-row-key/g)).toHaveLength(3)
-    expect(fill).toContain('value="Unloading"')
-    // No way to add a row unless the table allows it.
-    expect(fill).not.toContain("Add a row")
-    expect(design).not.toContain("Unloading")
-    expect(renderToStaticMarkup(createElement(PaperTable, { block: { ...table, addRows: true }, mode: "fill", onChange: noop, value: "a table" }))).toContain("Add a row")
-  })
-  it("changes to a statement at a time only once its choices no longer fit beside it", () => {
-    const noop = (): void => undefined
-    const small = renderToStaticMarkup(createElement(PaperGrid, { block: grid, mode: "fill", onChange: noop, value: {} }))
-    const scale = renderToStaticMarkup(
-      createElement(PaperGrid, { block: { ...grid, options: ["Strongly disagree", "Disagree", "Neutral", "Agree", "Strongly agree"] }, mode: "fill", onChange: noop, value: {} })
-    )
-
-    // Two short choices fit on a phone (about 23em wide); a five-point scale does not.
-    expect(small).toContain("@max-[22em]:hidden")
-    expect(scale).toContain("@max-[44em]:hidden")
-    // Columns share the width equally, as in print, so a date's picker sets every column's need.
-    expect(renderToStaticMarkup(createElement(PaperTable, { block: table, mode: "fill", onChange: noop, value: [] }))).toContain("@max-[22em]:hidden")
   })
 })

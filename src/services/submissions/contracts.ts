@@ -17,7 +17,7 @@ import type {
 import type {
   Submission,
   SubmissionAnswers,
-  SubmissionFile,
+  ClientSubmissionFile,
   SubmissionSortKey,
   SubmissionStatus,
 } from "@/types/submission"
@@ -39,7 +39,7 @@ export type SubmissionServiceClient = Pick<
 /** Submission with its single-file field allocations. */
 export type SubmissionDetail = {
   submission: Submission
-  files: SubmissionFile[]
+  files: ClientSubmissionFile[]
   comments: SubmissionComment[]
   activity: SubmissionActivityEvent[]
   /** The reviewers this viewer may see, with what each decided. */
@@ -102,7 +102,7 @@ export type SubmissionPage = {
 /** Input for exporting every visible submission that matches a view. */
 export type ExportSubmissionsInput = SubmissionActorInput &
   Partial<
-    Pick<ListSubmissionPageInput, "assignedTo" | "query" | "sort" | "statuses">
+    Pick<ListSubmissionPageInput, "assignedTo" | "createdBy" | "query" | "sort" | "statuses">
   >
 
 /** Input for loading one visible submission. */
@@ -127,12 +127,6 @@ export type SaveInternalSubmissionDraftInput = GetInternalSubmissionInput & {
 export type SubmitInternalSubmissionInput = GetInternalSubmissionInput & {
   expectedRevision: number
   values: unknown
-}
-
-/** Input for assigning or reassigning a submission review. */
-export type AssignInternalSubmissionInput = GetInternalSubmissionInput & {
-  expectedRevision: number
-  assignedTo: string
 }
 
 /** Input for naming who reviews a submission. */
@@ -197,7 +191,7 @@ export type AllocateInternalSubmissionFileInput = GetInternalSubmissionInput & {
 
 /** Signed upload details for one persisted file allocation. */
 export type AllocateInternalSubmissionFileResponse = {
-  file: SubmissionFile
+  file: ClientSubmissionFile
   uploadUrl: string
   expiresInSeconds: number
 }
@@ -209,7 +203,7 @@ export type CompleteInternalSubmissionFileInput = GetInternalSubmissionInput & {
 
 /** Completed available file returned after provider verification. */
 export type CompleteInternalSubmissionFileResponse = {
-  file: SubmissionFile
+  file: ClientSubmissionFile
 }
 
 /** Input for superseding a pending or available file in an editable draft. */

@@ -1,16 +1,10 @@
 // @vitest-environment jsdom
 
 import { act, type ReactElement, useState } from "react"
-import { createRoot } from "react-dom/client"
-import { afterEach, expect, it } from "vitest"
+import { expect, it } from "vitest"
 
 import { ColorWheel } from "./color-wheel"
-
-;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
-
-afterEach(() => {
-  document.body.replaceChildren()
-})
+import { mount } from "@/test/render"
 
 function Harness(): ReactElement {
   const [value, setValue] = useState("#ff0000")
@@ -24,7 +18,7 @@ function Harness(): ReactElement {
 }
 
 it("turns, fades and darkens a colour from the keyboard, keeping its hue through black", async () => {
-  await act(async () => createRoot(document.body.appendChild(document.createElement("div"))).render(<Harness />))
+  await act(async () => mount().render(<Harness />))
   const wheel = document.querySelector('[role="slider"][aria-label="Accent hue and saturation"]') as HTMLElement
   const brightness = document.querySelector('input[aria-label="Accent brightness"]') as HTMLInputElement
   const chosen = (): string | null | undefined => document.querySelector("output")?.textContent

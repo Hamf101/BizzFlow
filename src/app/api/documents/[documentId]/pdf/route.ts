@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server"
 
 import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
-import { captureUnexpectedError } from "@/lib/observability"
+import { resolveDocumentOrganizationId } from "@/lib/document-organization"
+import { captureUnexpectedError, describeErrorForLog } from "@/lib/observability"
 import { checkRateLimit, RateLimitError } from "@/lib/rate-limit"
 import { createRateLimitResponse } from "@/lib/rate-limit-response"
 import {
@@ -13,21 +14,19 @@ import {
   DocumentPdfServiceError,
 } from "@/services/document-pdf-service"
 import {
-  finalizeGeneratedDocumentPdf,
+  findFinalizedGeneratedDocumentVersionId,
   GeneratedDocumentFinalizationServiceError,
 } from "@/services/generated-document-finalization-service"
 import {
   getGeneratedDocumentSigningView,
   DocumentSigningServiceError,
 } from "@/services/document-signing-service"
-import {
-  getCurrentOrganizationContext,
-  OrganizationServiceError,
-} from "@/services/organization-service"
+import { OrganizationServiceError } from "@/services/organization-service"
 import { readTemplateImage } from "@/services/template-image-service"
+import type { DocumentSigningRecipient, PublicSignerStatus } from "@/types/signing"
 
 // A long document renders in a few seconds; this leaves room for pictures and a busy moment.
-export const maxDuration = 300
+export const maxDuration = 60
 
 type GeneratedDocumentPdfRouteContext = {
   params: Promise<{ documentId: string }>
@@ -35,6 +34,7 @@ type GeneratedDocumentPdfRouteContext = {
 
 /**
  * Delivers a private preview or redirects to the immutable finalized PDF.
+ * Reading never finalizes: the last signature does (see the signing action).
  *
  * @param request - Authenticated GET request; `?fillable=1` asks for form fields.
  * @param context - Dynamic document route parameters.
@@ -48,42 +48,46 @@ export async function GET(
 
   try {
     const user = await getAuthenticatedUser()
-    const organizationContext = await getCurrentOrganizationContext(user.id)
+    const { documentId } = await context.params
+    requestedDocumentId = documentId
+    const organizationId = await resolveDocumentOrganizationId(user.id, documentId)
 
-    if (!organizationContext) {
+    if (!organizationId) {
       throw new DocumentSigningServiceError(
         "Create or join an organization before downloading documents.",
         403
       )
     }
 
-    const { documentId } = await context.params
-    requestedDocumentId = documentId
     // Keyed on the document because the preview path below re-renders the whole
     // PDF on every request (no-store), so a hot loop on one large document is
     // the expensive case rather than a member opening many documents.
     await checkRateLimit(
       "pdf_render",
-      `${organizationContext.organization.id}:${documentId}`
+      `${organizationId}:${documentId}`
     )
+    // And on the member, so cycling through many documents is not free either.
+    await checkRateLimit("pdf_render_user", user.id)
 
     const view = await getGeneratedDocumentSigningView({
       actorUserId: user.id,
-      organizationId: organizationContext.organization.id,
+      organizationId,
       documentId,
     })
 
-    if (view.workflowStatus === "completed") {
-      const finalization = await finalizeGeneratedDocumentPdf({
-        actorUserId: user.id,
-        organizationId: organizationContext.organization.id,
-        documentId,
-      })
+    // A guest's copy is the preview below, which shows signers as a signing
+    // link does: the finalized paper carries every signer's email and signature.
+    const finalizedVersionId =
+      view.workflowStatus === "completed" && !view.guest
+        ? await findFinalizedGeneratedDocumentVersionId({ actorUserId: user.id, organizationId, documentId })
+        : null
+
+    if (finalizedVersionId) {
       const download = await createDocumentDownloadUrl({
         actorUserId: user.id,
-        organizationId: organizationContext.organization.id,
+        organizationId,
         documentId,
-        versionId: finalization.versionId,
+        versionId: finalizedVersionId,
       })
 
       return NextResponse.redirect(download.downloadUrl, {
@@ -104,19 +108,20 @@ export async function GET(
       content: view.document.templateSnapshot,
       answers: view.answers,
       workflowStatus: view.workflowStatus,
-      signers: view.recipients.map((recipient) => ({
+      // A guest's copy shows its signers as a signing link shows co-signers.
+      signers: view.recipients.map((recipient: PublicSignerStatus & Partial<DocumentSigningRecipient>) => ({
         id: recipient.id,
         name: recipient.name,
-        email: recipient.email,
+        email: recipient.email ?? "",
         requiresSignature: recipient.requiresSignature,
         status: recipient.status,
         signedAt: recipient.signedAt,
-        signatureDataUrl: recipient.signatureDataUrl,
-        initialsDataUrl: recipient.initialsDataUrl,
+        signatureDataUrl: recipient.signatureDataUrl ?? null,
+        initialsDataUrl: recipient.initialsDataUrl ?? null,
       })),
     }, {
       fillable,
-      readImage: (asset) => readTemplateImage(organizationContext.organization.id, asset),
+      readImage: (asset) => readTemplateImage(organizationId, asset),
     })
 
     return new Response(new Uint8Array(pdf), {
@@ -152,6 +157,13 @@ export async function GET(
       error instanceof DocumentServiceError ||
       error instanceof OrganizationServiceError
     ) {
+      if (error.statusCode >= 500) {
+        console.error("generated_document_pdf_route_failed", {
+          documentId: requestedDocumentId,
+          ...describeErrorForLog(error),
+        })
+      }
+
       return NextResponse.json(
         { error: error.message },
         { status: error.statusCode }
@@ -160,7 +172,7 @@ export async function GET(
 
     console.error("generated_document_pdf_route_failed", {
       documentId: requestedDocumentId,
-      errorName: error instanceof Error ? error.name : "UnknownError",
+      ...describeErrorForLog(error),
     })
     captureUnexpectedError(error, {
       routeName: "documents_pdf",

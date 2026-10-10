@@ -1,5 +1,8 @@
 import { inngest, taskAssignedEvent } from "@/inngest/client"
-import type { TaskAssignedNotification } from "@/services/task-service"
+import {
+  taskAssignmentReference,
+  type TaskAssignedNotification,
+} from "@/services/task-service"
 
 /** Envelope produced for one published assignment notification. */
 type TaskAssignedEventPayload = ReturnType<typeof taskAssignedEvent.create>
@@ -15,6 +18,8 @@ export type TaskAssignedPublisherDeps = {
  * This is the production edge the task service is handed: the service itself
  * never imports the background-job SDK, so it stays testable and the payload
  * stays identifier-only — the handler re-reads the task before emailing.
+ * The event id is the assignment's delivery reference, so a repeated publish
+ * of the same assignment is deduplicated by the event bus.
  *
  * @param event - Tenant, task, assignee, and actor identifiers.
  * @param deps - Optional event-bus override used by tests.
@@ -30,5 +35,12 @@ export async function publishTaskAssigned(
     ((payload: TaskAssignedEventPayload): Promise<unknown> =>
       inngest.send(payload))
 
-  await send(taskAssignedEvent.create(event))
+  const { assignedAt, ...data } = event
+  const id = taskAssignmentReference({
+    id: data.taskId,
+    assignedTo: data.assignedToUserId,
+    assignedAt,
+  })
+
+  await send(taskAssignedEvent.create(data, { id }))
 }

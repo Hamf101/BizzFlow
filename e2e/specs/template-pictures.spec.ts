@@ -11,12 +11,9 @@ test("stores an uploaded logo beside the document, shows it to a signer, prints 
   browser,
   pageAs,
   tenant,
-}, testInfo) => {
+}) => {
   const template = await seedTemplate(admin, tenant.organizationId, uniqueName("Logo"))
   const page = await pageAs("owner_admin")
-  if (testInfo.project.use.viewport) {
-    await page.setViewportSize(testInfo.project.use.viewport)
-  }
   await page.goto(`/templates/${template.id}/edit`)
   const brand = page.getByRole("button", { name: "Brand", exact: true })
   await waitForHydration(brand)
@@ -43,9 +40,6 @@ test("stores an uploaded logo beside the document, shows it to a signer, prints 
   // A signer is no member, yet sees the logo through the address their link earns.
   const signerContext = await browser.newContext()
   const signer = await signerContext.newPage()
-  if (testInfo.project.use.viewport) {
-    await signer.setViewportSize(testInfo.project.use.viewport)
-  }
   await signer.goto(`/sign/${signingToken}`)
   const shown = signer.getByRole("img", { name: /logo$/ }).first()
   await expect.poll(() => shown.evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth)).toBe(600)

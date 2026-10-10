@@ -5,9 +5,9 @@ import type { CSSProperties, ReactElement } from "react"
 import { ListFilterChips } from "@/components/data/list-filter-chips"
 import { ListPagination } from "@/components/data/list-pagination"
 import { ListQuery } from "@/components/data/list-query"
-import { type ListSavedViews, ListViewMenu, ListViewTitle } from "@/components/data/list-view-menu"
-import { DatedTitle } from "@/components/navigation/dated-title"
-import { formatMemberName } from "@/components/people/member-name"
+import { ListEmpty, ListHeading } from "@/components/data/list-heading"
+import { type ListSavedViews, ListViewMenu } from "@/components/data/list-view-menu"
+import { formatMemberName, getInitials } from "@/components/people/member-name"
 import {
   getSubmissionStatusOptions,
   getSubmissionViewMenuSections,
@@ -20,9 +20,8 @@ import {
   SubmissionStatusMark,
 } from "@/components/submissions/submission-progress"
 import { SubmissionTitlePreview } from "@/components/submissions/submission-title-preview"
+import { LocalDate } from "@/components/ui/local-date"
 import { buttonVariants } from "@/components/ui/button"
-import { formatMediumDate } from "@/lib/date-format"
-import { getLastPage } from "@/lib/list-state"
 import { cn } from "@/lib/utils"
 import type { OrganizationMember } from "@/types/organization"
 import type { Submission } from "@/types/submission"
@@ -70,7 +69,6 @@ export function SubmissionsWorkspace({
   total: number
   view: SubmissionListView
 }): ReactElement {
-  const lastPage = getLastPage(total, view.pageSize)
   const grid = canAssign ? GRID_WITH_ASSIGNEE : GRID_WITHOUT_ASSIGNEE
 
   const listViews: ListSavedViews = {
@@ -81,20 +79,8 @@ export function SubmissionsWorkspace({
 
   return (
     <section className="flex flex-col gap-5" data-slot="submissions-workspace">
-      {/* The real space keeps the accessible name "Submissions 12
-          submissions" rather than "Submissions12 submissions". */}
       <div className="flex items-center justify-between gap-3">
-        <DatedTitle>
-          <h1 className="min-w-0 text-2xl leading-none font-medium tracking-[-0.02em]">
-            <ListViewTitle title="Submissions" views={listViews} />{" "}
-            <span
-              aria-label={`${total} ${total === 1 ? "submission" : "submissions"}`}
-              className="ml-0.5 text-xl font-normal text-muted-foreground"
-            >
-              {total}
-            </span>
-          </h1>
-        </DatedTitle>
+        <ListHeading noun={["submission", "submissions"]} title="Submissions" total={total} views={listViews} />
         <div className="flex shrink-0 gap-2">
           <ListViewMenu
             adjusted={isSubmissionViewAdjusted(view)}
@@ -133,16 +119,11 @@ export function SubmissionsWorkspace({
       />
 
       {submissions.length === 0 ? (
-        // Outside the table: a table may only hold rows, and an empty list
-        // is a message, not a row.
-        <p
-          className="py-16 text-center text-sm text-muted-foreground"
-          role="status"
-        >
+        <ListEmpty>
           {view.query || view.filters.status || view.filters.assignee
             ? "No submissions match this view."
             : "No submissions yet."}
-        </p>
+        </ListEmpty>
       ) : (
         <div
           aria-label="Submissions"
@@ -184,22 +165,9 @@ export function SubmissionsWorkspace({
       )}
 
       <ListPagination
-        nextHref={
-          view.page < lastPage
-            ? submissionListState.href(SUBMISSIONS_PATH, view, {
-                page: view.page + 1,
-              })
-            : null
-        }
+        href={(page) => submissionListState.href(SUBMISSIONS_PATH, view, { page })}
         page={view.page}
         pageSize={view.pageSize}
-        previousHref={
-          view.page > 1
-            ? submissionListState.href(SUBMISSIONS_PATH, view, {
-                page: view.page - 1,
-              })
-            : null
-        }
         total={total}
       />
     </section>
@@ -223,7 +191,7 @@ function SubmissionRow({
   organizationId: string
   submission: Submission
 }): ReactElement {
-  const updated = formatMediumDate(submission.updatedAt)
+  const updated = <LocalDate value={submission.updatedAt} />
   const riseDelay = {
     "--row-delay": `${Math.min(index, MAX_STAGGERED_ROWS) * ROW_STAGGER_MS}ms`,
   } as CSSProperties
@@ -247,6 +215,11 @@ function SubmissionRow({
             submissionId={submission.id}
             title={submission.title}
           />
+          {submission.sentTo ? (
+            <span className="truncate text-xs text-muted-foreground" data-slot="submission-sent-to">
+              Sent to {submission.sentTo}
+            </span>
+          ) : null}
           <span
             className="text-xs text-muted-foreground tabular-nums lg:hidden"
             data-slot="submission-updated-compact"
@@ -304,16 +277,7 @@ function AssigneeInitials({
           ? "border border-dashed border-border"
           : "bg-secondary text-secondary-foreground"
       )}
-      data-initials={member ? getInitials(member.fullName || member.email) : ""}
+      data-initials={member ? getInitials(member.fullName, member.email) : ""}
     />
   )
-}
-
-function getInitials(name: string): string {
-  return name
-    .split(/[\s@._-]+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part: string) => part.charAt(0).toUpperCase())
-    .join("")
 }

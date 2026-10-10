@@ -1,47 +1,43 @@
 "use client"
 
-import { TriangleAlert } from "lucide-react"
-import { useEffect, type ReactElement } from "react"
+import { usePathname } from "next/navigation"
+import type { ReactElement } from "react"
 
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Button } from "@/components/ui/button"
-import { captureUnexpectedError } from "@/lib/observability"
+import {
+  DashboardRouteError,
+  type DashboardErrorBoundaryProps,
+} from "@/components/dashboard/dashboard-route-error"
+
+/** Each dashboard section's name, by its first path segment. */
+const SECTION_NAMES: Readonly<Record<string, string>> = {
+  "audit-log": "Audit log",
+  dashboard: "Dashboard",
+  documents: "Files",
+  people: "People",
+  settings: "Settings",
+  submissions: "Submissions",
+  tasks: "Tasks",
+  templates: "Templates",
+}
 
 /**
- * Dashboard segment error boundary that keeps the shell visible.
+ * Dashboard error boundary that keeps the shell visible and names the section
+ * that failed.
  *
  * @param props - Next.js error boundary props.
- * @returns An inline recovery panel for the failed page.
+ * @returns A recovery panel for the failed section.
  */
-export default function DashboardError({
-  error,
-  reset,
-}: {
-  error: Error & { digest?: string }
-  reset: () => void
-}): ReactElement {
-  useEffect(() => {
-    captureUnexpectedError(error, {
-      boundary: "dashboard",
-      digest: error.digest,
-    })
-  }, [error])
+export default function DashboardError(
+  props: DashboardErrorBoundaryProps
+): ReactElement {
+  const segment = usePathname().split("/")[1] ?? ""
+  const known = Object.hasOwn(SECTION_NAMES, segment)
 
   return (
-    <div className="flex flex-col gap-4">
-      <Alert variant="destructive">
-        <TriangleAlert />
-        <AlertTitle>This page failed to load</AlertTitle>
-        <AlertDescription>
-          Something unexpected went wrong while loading this page. Try again,
-          or head back to the dashboard.
-        </AlertDescription>
-      </Alert>
-      <div>
-        <Button onClick={() => reset()} size="sm" variant="outline">
-          Try again
-        </Button>
-      </div>
-    </div>
+    <DashboardRouteError
+      {...props}
+      boundary={known ? segment.replace("-", "_") : "dashboard"}
+      routeName={known ? SECTION_NAMES[segment] : "Dashboard"}
+    />
   )
 }

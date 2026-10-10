@@ -1,9 +1,9 @@
-import { timingSafeEqual } from "node:crypto"
-
-import { NextResponse } from "next/server"
-
-import { captureUnexpectedError } from "@/lib/observability"
+import { createNoStoreResponse, refuseCronRequest } from "@/app/api/cron/_cron"
+import { captureUnexpectedError, describeErrorForLog } from "@/lib/observability"
 import { processDueResourcePurges } from "@/services/document-service"
+
+/** Leaves the batch room to finish rather than be killed mid-delete. */
+export const maxDuration = 300
 
 /**
  * Processes a bounded batch of due document and folder purge work.
@@ -13,23 +13,14 @@ import { processDueResourcePurges } from "@/services/document-service"
  */
 export async function GET(request: Request): Promise<Response> {
   const startedAt = Date.now()
-  const cronSecret = process.env.CRON_SECRET?.trim()
+  const refusal = refuseCronRequest(
+    request,
+    { event: "document_purge_cron", notConfigured: "Document purge is not configured." },
+    startedAt
+  )
 
-  if (!cronSecret || cronSecret.length < 16) {
-    console.error("document_purge_cron_misconfigured", {
-      durationMs: Date.now() - startedAt,
-    })
-    return createNoStoreResponse(
-      { error: "Document purge is not configured." },
-      503
-    )
-  }
-
-  if (!hasValidCronAuthorization(request, cronSecret)) {
-    console.warn("document_purge_cron_rejected", {
-      durationMs: Date.now() - startedAt,
-    })
-    return createNoStoreResponse({ error: "Unauthorized." }, 401)
+  if (refusal) {
+    return refusal
   }
 
   try {
@@ -38,32 +29,9 @@ export async function GET(request: Request): Promise<Response> {
   } catch (error: unknown) {
     console.error("document_purge_cron_failed", {
       durationMs: Date.now() - startedAt,
-      reason: error instanceof Error ? error.name : "Unknown purge error",
+      ...describeErrorForLog(error),
     })
     captureUnexpectedError(error, { routeName: "cron_document_purge" })
     return createNoStoreResponse({ error: "Document purge failed." }, 500)
   }
-}
-
-function hasValidCronAuthorization(
-  request: Request,
-  cronSecret: string
-): boolean {
-  const actual = Buffer.from(request.headers.get("authorization") ?? "")
-  const expected = Buffer.from(`Bearer ${cronSecret}`)
-
-  return actual.length === expected.length && timingSafeEqual(actual, expected)
-}
-
-function createNoStoreResponse(
-  body: Record<string, unknown>,
-  status: number
-): Response {
-  return NextResponse.json(body, {
-    status,
-    headers: {
-      "Cache-Control": "private, no-store, max-age=0",
-      Pragma: "no-cache",
-    },
-  })
 }

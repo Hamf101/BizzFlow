@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server"
 
 import { getAuthenticatedUser } from "@/lib/auth"
-import { readTrustedJsonObject } from "@/lib/request-security"
+import { getRequiredString, readTrustedJsonObject } from "@/lib/request-security"
 import { completeDocumentUpload } from "@/services/document-service"
 
 import {
   createDocumentRouteErrorResponse,
-  getRequiredString,
 } from "../../_utils"
 
 type CompleteUploadRouteContext = {

@@ -1,114 +1,65 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { redirect } from "next/navigation"
 import { z } from "zod"
 
-import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
-import {
-  buildFeedbackRedirect,
-  getActionErrorFeedbackCode,
-} from "@/lib/action-result"
-import { buildRedirect, getFormString } from "@/lib/form-utils"
-import { getCurrentOrganizationContext } from "@/services/organization-service"
-import { canEditDocumentTemplate } from "@/services/template-service"
+import type { ActionFeedbackCode } from "@/lib/action-result"
+import { loadActionContext, runFormAction, type ActionActor } from "@/lib/form-action"
+import { getFormString } from "@/lib/form-utils"
 import {
   createPublicFormLink,
   disablePublicFormLink,
 } from "@/services/public-form-service"
-
-class PublicLinkActionError extends Error {
-  readonly statusCode = 403
-}
 
 const templateIdSchema = z.string().uuid()
 
 export async function createPublicFormLinkAction(
   formData: FormData
 ): Promise<void> {
-  const templateId = getFormString(formData, "templateId")
-  const linksPath = getPublicLinksPath(templateId)
   const expiresAt = getFormString(formData, "expiresAt")
   const maxSubmissionsRaw = getFormString(formData, "maxSubmissions")
 
-  try {
-    const user = await getAuthenticatedUser()
-    const context = await getCurrentOrganizationContext(user.id)
-
-    // Whoever may edit the template may open it to the public.
-    if (
-      !context ||
-      !(await canEditDocumentTemplate({ actorUserId: user.id, organizationId: context.organization.id, templateId }))
-    ) {
-      throw new PublicLinkActionError(
-        "You do not have permission to manage public form links."
-      )
-    }
-
-    const maxSubmissions = maxSubmissionsRaw
-      ? Number.parseInt(maxSubmissionsRaw, 10)
-      : null
-
-    await createPublicFormLink({
-      actorUserId: user.id,
-      organizationId: context.organization.id,
+  await runPublicLinkAction(formData, "public_link_created", (actor, templateId) =>
+    createPublicFormLink({
+      ...actor,
       templateId,
       expiresAt: expiresAt || null,
-      maxSubmissions: Number.isNaN(maxSubmissions) ? null : maxSubmissions,
+      maxSubmissions: maxSubmissionsRaw ? Number(maxSubmissionsRaw) : null,
     })
-
-    revalidatePath(linksPath)
-  } catch (error: unknown) {
-    if (error instanceof AuthenticationError) {
-      redirect(buildRedirect("/login", { next: linksPath }))
-    }
-
-    redirect(
-      buildFeedbackRedirect(linksPath, getActionErrorFeedbackCode(error))
-    )
-  }
-
-  redirect(buildFeedbackRedirect(linksPath, "public_link_created"))
+  )
 }
 
 export async function disablePublicFormLinkAction(
   formData: FormData
 ): Promise<void> {
-  const linkId = getFormString(formData, "linkId")
+  await runPublicLinkAction(formData, "public_link_disabled", (actor, templateId) =>
+    disablePublicFormLink({
+      ...actor,
+      templateId,
+      linkId: getFormString(formData, "linkId"),
+    })
+  )
+}
+
+// Who may manage a template's links is the service's to decide.
+async function runPublicLinkAction(
+  formData: FormData,
+  success: ActionFeedbackCode,
+  change: (actor: ActionActor, templateId: string) => Promise<unknown>
+): Promise<never> {
   const templateId = getFormString(formData, "templateId")
   const linksPath = getPublicLinksPath(templateId)
 
-  try {
-    const user = await getAuthenticatedUser()
-    const context = await getCurrentOrganizationContext(user.id)
-
-    if (
-      !context ||
-      !(await canEditDocumentTemplate({ actorUserId: user.id, organizationId: context.organization.id, templateId }))
-    ) {
-      throw new PublicLinkActionError(
-        "You do not have permission to manage public form links."
-      )
-    }
-
-    await disablePublicFormLink({
-      actorUserId: user.id,
-      organizationId: context.organization.id,
-      linkId,
-    })
-
-    revalidatePath(linksPath)
-  } catch (error: unknown) {
-    if (error instanceof AuthenticationError) {
-      redirect(buildRedirect("/login", { next: linksPath }))
-    }
-
-    redirect(
-      buildFeedbackRedirect(linksPath, getActionErrorFeedbackCode(error))
-    )
-  }
-
-  redirect(buildFeedbackRedirect(linksPath, "public_link_disabled"))
+  return runFormAction({
+    event: `${success}_action`,
+    path: linksPath,
+    success,
+    run: async () => {
+      const { actor } = await loadActionContext("Create an organization before managing public form links.")
+      await change(actor, templateId)
+      revalidatePath(linksPath)
+    },
+  })
 }
 
 /**

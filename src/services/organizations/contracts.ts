@@ -16,12 +16,6 @@ export type OrganizationServiceClient = AdminSupabaseClient
 
 export type LogValue = string | number | boolean | null | undefined
 
-export type SupabaseErrorLike = {
-  code?: string
-  details?: string
-  hint?: string
-  message?: string
-}
 
 export type OrganizationRow = {
   id: string
@@ -78,7 +72,8 @@ export type InviteRow = {
     name: string
     system_key: string | null
   } | null
-  token: string
+  /** SHA-256 of the emailed link's secret; the secret itself is never kept. */
+  token_hash: string
   invited_by?: string | null
   status: string
   expires_at: string
@@ -104,16 +99,9 @@ export type RevokeInviteInput = {
   inviteId: string
 }
 
-/**
- * Outcome of creating an invite.
- *
- * `emailDelivered` is false when the invite exists and is usable but the
- * notification could not be sent, so the caller can offer the link instead.
- */
+/** Outcome of creating an invite: it exists only once its email went out. */
 export type CreateInviteResult = {
   invite: OrganizationInvite
-  emailDelivered: boolean
-  emailFailureReason: string | null
 }
 
 export type AcceptInviteInput = {

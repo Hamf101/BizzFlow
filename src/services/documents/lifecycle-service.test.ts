@@ -13,13 +13,17 @@ import {
   trashDocument,
   trashFolder,
 } from "@/services/documents/lifecycle-service"
+import {
+  PostgrestWriteQuery,
+  type FakeRow,
+  type PostgrestFakeError,
+} from "@/services/postgrest-fake.test-support"
 import type {
   DocumentFolder,
   DocumentLifecycleState,
   DocumentSummary,
 } from "@/types/document"
 
-type FakeRow = Record<string, unknown>
 type LifecycleRpcName =
   | "restore_document"
   | "trash_document"
@@ -46,7 +50,7 @@ type FakeLifecycleClientOptions = {
   folderAccess?: unknown
   accessError?: unknown
   membershipRole?: OrganizationRole | null
-  membershipError?: unknown
+  membershipError?: PostgrestFakeError
   documentPurgeAfter?: string | null
   folderPurgeAfter?: string | null
   lifecycleResults?: Partial<Record<LifecycleRpcName, FakeRpcResult>>
@@ -200,7 +204,7 @@ describe("document lifecycle transitions", (): void => {
       lifecycleState: "active",
     })
     expect(warning).toHaveBeenCalledWith(
-      "document_audit_log_failed",
+      "audit_log_lost",
       expect.objectContaining({
         organizationId: "org-1",
         actorUserId: "user-1",
@@ -748,11 +752,10 @@ class FakeLifecycleClient {
       ): Promise<FakeRpcResult> => this.executeRpc(functionName, args)
     )
     this.from = vi.fn(
-      (tableName: string): FakeMaybeSingleQuery =>
-        new FakeMaybeSingleQuery(
-          this.getRows(tableName),
-          this.getQueryError(tableName)
-        )
+      (tableName: string): PostgrestWriteQuery =>
+        new PostgrestWriteQuery({ [tableName]: this.getRows(tableName) }, tableName, {
+          before: () => this.getQueryError(tableName),
+        })
     )
   }
 
@@ -865,57 +868,8 @@ class FakeLifecycleClient {
     return []
   }
 
-  private getQueryError(tableName: string): unknown {
-    return tableName === "organization_memberships"
-      ? (this.options.membershipError ?? null)
-      : null
-  }
-}
-
-class FakeMaybeSingleQuery {
-  private readonly filters: Array<(row: FakeRow) => boolean> = []
-
-  constructor(
-    private readonly rows: FakeRow[],
-    private readonly error: unknown
-  ) {}
-
-  select(columns: string): FakeMaybeSingleQuery {
-    void columns
-    return this
-  }
-
-  eq(column: string, value: unknown): FakeMaybeSingleQuery {
-    this.filters.push((row: FakeRow): boolean => row[column] === value)
-    return this
-  }
-
-  async maybeSingle(): Promise<FakeRpcResult> {
-    if (this.error) {
-      return {
-        data: null,
-        error: this.error,
-      }
-    }
-
-    const matchingRows = this.rows.filter((row: FakeRow): boolean =>
-      this.filters.every(
-        (filter: (candidate: FakeRow) => boolean): boolean =>
-          filter(row)
-      )
-    )
-
-    if (matchingRows.length > 1) {
-      return {
-        data: null,
-        error: new Error("Expected zero or one row."),
-      }
-    }
-
-    return {
-      data: matchingRows[0] ?? null,
-      error: null,
-    }
+  private getQueryError(tableName: string): PostgrestFakeError | undefined {
+    return tableName === "organization_memberships" ? this.options.membershipError : undefined
   }
 }
 

@@ -1,9 +1,13 @@
 import type { AdminSupabaseClient } from "@/lib/supabase/admin"
-import { requireDocumentAccess } from "@/services/documents/access-service"
+import {
+  requireDocumentReader,
+  requireReadableDocument,
+} from "@/services/documents/access-service"
 import type { DocumentServiceClient } from "@/services/documents/contracts"
 import { DocumentServiceError } from "@/services/documents/errors"
 
 import type {
+  CompletedGeneratedDocument,
   FinalizeGeneratedDocumentPdfInput,
   GeneratedDocumentFinalizationPersistence,
   GeneratedDocumentFinalizationRecord,
@@ -16,13 +20,11 @@ import {
   normalizeFinalizationMetadataTimestamp,
 } from "./domain"
 import { GeneratedDocumentFinalizationServiceError } from "./errors"
+import type { SupabaseErrorLike } from "@/services/supabase-error"
 
 const FINALIZATION_COLUMNS =
   "id,status,storage_key,render_input_sha256,pdf_sha256,byte_size,document_version_id,created_at"
 
-type SupabaseErrorLike = {
-  code?: string
-}
 
 type QueryResult = {
   data: unknown
@@ -52,11 +54,6 @@ type FinalizationRow = {
   byte_size: unknown
   document_version_id: unknown
   created_at: unknown
-}
-
-type FinalizationDocumentStateRow = {
-  lifecycle_state?: unknown
-  archived_at?: unknown
 }
 
 /**
@@ -90,6 +87,8 @@ export function createSupabaseFinalizationPersistence(
     promote: (
       input: PromoteGeneratedDocumentFinalizationInput
     ): Promise<string> => promoteFinalization(client, input),
+    listUnfinalized: (limit: number): Promise<CompletedGeneratedDocument[]> =>
+      listUnfinalizedDocuments(client, limit),
   }
 }
 
@@ -98,15 +97,8 @@ async function requireViewPermission(
   input: FinalizeGeneratedDocumentPdfInput
 ): Promise<void> {
   try {
-    await requireDocumentAccess(
-      {
-        organizationId: input.organizationId,
-        documentId: input.documentId,
-        actorUserId: input.actorUserId,
-        requiredAccess: "viewer",
-        operation: "read",
-        requiredOrganizationPermissionAction: "documents:view",
-      },
+    await requireDocumentReader(
+      { organizationId: input.organizationId, documentId: input.documentId, actorUserId: input.actorUserId },
       client as unknown as DocumentServiceClient
     )
   } catch (error: unknown) {
@@ -127,51 +119,20 @@ async function requireReadableFinalizationDocument(
   client: FinalizationDatabaseClient,
   input: FinalizeGeneratedDocumentPdfInput
 ): Promise<void> {
-  const { data, error } = await client
-    .from("documents")
-    .select("lifecycle_state,archived_at")
-    .eq("id", input.documentId)
-    .eq("org_id", input.organizationId)
-    .maybeSingle()
-
-  if (error) {
-    throw createPersistenceError(
-      error,
-      "Unable to verify generated document lifecycle."
-    )
-  }
-
-  if (!data) {
-    throw new GeneratedDocumentFinalizationServiceError(
-      "Document was not found.",
-      404
-    )
-  }
-
-  const document = data as FinalizationDocumentStateRow
-  const lifecycleState = document.lifecycle_state
-
-  if (
-    lifecycleState === "trashed" ||
-    lifecycleState === "purge_pending"
-  ) {
-    throw new GeneratedDocumentFinalizationServiceError(
-      "Document was not found.",
-      404
-    )
-  }
-
-  if (
-    lifecycleState !== undefined &&
-    lifecycleState !== null &&
-    lifecycleState !== "active" &&
-    lifecycleState !== "archived"
-  ) {
-    throw new GeneratedDocumentFinalizationServiceError(
-      "Database returned an unsupported document lifecycle state.",
-      500
-    )
-  }
+  requireReadableDocument(
+    await client
+      .from("documents")
+      .select("lifecycle_state")
+      .eq("id", input.documentId)
+      .eq("org_id", input.organizationId)
+      .maybeSingle(),
+    {
+      loadFailed: (error) => createPersistenceError(error, "Unable to verify generated document lifecycle."),
+      notFound: () => new GeneratedDocumentFinalizationServiceError("Document was not found.", 404),
+      unsupported: () =>
+        new GeneratedDocumentFinalizationServiceError("Database returned an unsupported document lifecycle state.", 500),
+    }
+  )
 }
 
 async function findFinalizationByDocument(
@@ -220,6 +181,23 @@ async function prepareFinalization(
   }
 
   return mapFinalizationRecord(unwrapRpcRow(data))
+}
+
+async function listUnfinalizedDocuments(
+  client: FinalizationDatabaseClient,
+  limit: number
+): Promise<CompletedGeneratedDocument[]> {
+  const { data, error } = await client.rpc("list_unfinalized_generated_documents", { target_limit: limit })
+
+  if (error || !Array.isArray(data)) {
+    throw createPersistenceError(error ?? {}, "Unable to list documents to finalize.")
+  }
+
+  return (data as Array<{ org_id: string; document_id: string; created_by: string | null }>).map((row) => ({
+    id: row.document_id,
+    organizationId: row.org_id,
+    createdBy: row.created_by,
+  }))
 }
 
 async function promoteFinalization(

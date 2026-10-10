@@ -6,12 +6,12 @@ import { redirect } from "next/navigation"
 import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
 import {
   buildFeedbackRedirect,
-  getActionErrorFeedbackCode,
+  type ActionFeedbackCode,
 } from "@/lib/action-result"
+import { loadActionContext, runFormAction, type ActionActor } from "@/lib/form-action"
 import { buildRedirect, getFormString } from "@/lib/form-utils"
 import {
   createOrganization,
-  getCurrentOrganizationContext,
   OrganizationServiceError,
   updateProfile,
 } from "@/services/organization-service"
@@ -81,43 +81,19 @@ export async function createOrganizationAction(formData: FormData): Promise<void
   redirect(buildFeedbackRedirect("/dashboard", "organization_created"))
 }
 
+/**
+ * Seeds the starter templates into the member's organization.
+ *
+ * @returns Never returns; redirects to the dashboard with status.
+ */
 export async function seedStarterTemplatesAction(): Promise<void> {
-  try {
-    const user = await getAuthenticatedUser()
-    const context = await getCurrentOrganizationContext(user.id)
-
-    if (!context) {
-      throw new SeedActionError("Create an organization before adding starter templates.")
-    }
-
-    await seedStarterTemplatesForOrganization({
-      actorUserId: user.id,
-      organizationId: context.organization.id,
-    })
-
-    revalidatePath("/dashboard")
-    revalidatePath("/templates")
-  } catch (error: unknown) {
-    if (error instanceof AuthenticationError) {
-      redirect(buildRedirect("/login", { next: "/dashboard" }))
-    }
-
-    const reason = error instanceof Error ? error.message : "Unknown seeding error"
-    console.warn("seed_starter_templates_action_failed", { reason })
-
-    redirect(
-      buildFeedbackRedirect(
-        "/dashboard",
-        error instanceof SeedActionError
-          ? "organization_required"
-          : getActionErrorFeedbackCode(error)
-      )
-    )
-  }
-
-  // Outside the try: redirect() signals by throwing NEXT_REDIRECT, and a catch
-  // around it would turn every success into "Unable to add starter templates."
-  redirect(buildFeedbackRedirect("/dashboard", "starter_content_added"))
+  await runSeedAction(
+    "seed_starter_templates_action",
+    "Create an organization before adding starter templates.",
+    "starter_content_added",
+    seedStarterTemplatesForOrganization,
+    "/templates"
+  )
 }
 
 /**
@@ -126,51 +102,31 @@ export async function seedStarterTemplatesAction(): Promise<void> {
  * @returns Never returns; redirects to the dashboard with status.
  */
 export async function seedSampleSubmissionsAction(): Promise<void> {
-  try {
-    const user = await getAuthenticatedUser()
-    const context = await getCurrentOrganizationContext(user.id)
-
-    if (!context) {
-      throw new SeedActionError(
-        "Create an organization before adding sample submissions."
-      )
-    }
-
-    await seedSampleSubmissionsForOrganization({
-      actorUserId: user.id,
-      organizationId: context.organization.id,
-    })
-
-    revalidatePath("/dashboard")
-    revalidatePath("/submissions")
-  } catch (error: unknown) {
-    if (error instanceof AuthenticationError) {
-      redirect(buildRedirect("/login", { next: "/dashboard" }))
-    }
-
-    const reason = error instanceof Error ? error.message : "Unknown seeding error"
-    console.warn("seed_sample_submissions_action_failed", { reason })
-
-    redirect(
-      buildFeedbackRedirect(
-        "/dashboard",
-        error instanceof SeedActionError
-          ? "organization_required"
-          : getActionErrorFeedbackCode(error)
-      )
-    )
-  }
-
-  // Outside the try, for the same reason as seedStarterTemplatesAction.
-  redirect(buildFeedbackRedirect("/dashboard", "sample_content_added"))
+  await runSeedAction(
+    "seed_sample_submissions_action",
+    "Create an organization before adding sample submissions.",
+    "sample_content_added",
+    seedSampleSubmissionsForOrganization,
+    "/submissions"
+  )
 }
 
-/** Rejection raised by the dashboard seeding action before it reaches a service. */
-class SeedActionError extends Error {
-  readonly statusCode = 403
-
-  constructor(message: string) {
-    super(message)
-    this.name = "SeedActionError"
-  }
+async function runSeedAction(
+  event: string,
+  noOrganization: string,
+  success: ActionFeedbackCode,
+  seed: (actor: ActionActor) => Promise<unknown>,
+  seededPath: string
+): Promise<never> {
+  return runFormAction({
+    event,
+    path: "/dashboard",
+    success,
+    run: async () => {
+      const { actor } = await loadActionContext(noOrganization)
+      await seed(actor)
+      revalidatePath("/dashboard")
+      revalidatePath(seededPath)
+    },
+  })
 }

@@ -30,7 +30,7 @@ import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { buildFeedbackRedirect } from "@/lib/action-result"
-import { formatMediumDateTime } from "@/lib/date-format"
+import { LocalDate } from "@/components/ui/local-date"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
 import { getPageErrorMessage } from "@/lib/page-errors"
 import { loadPageOrganizationContext } from "@/lib/page-organization-context"
@@ -54,7 +54,7 @@ import {
   transitionTaskStatusAction,
   updateTaskAction,
 } from "../actions"
-import { formatMemberName } from "@/components/people/member-name"
+import { formatMemberName, memberLabel } from "@/components/people/member-name"
 import {
   getTaskStatusLabel,
   listInternalTaskMembers,
@@ -189,7 +189,7 @@ export default async function TaskDetailPage({
         <p className="text-sm text-muted-foreground">
           {formatMemberName(task.assignedTo, members, user.id)} ·{" "}
           {task.dueAt
-            ? `Due ${formatMediumDateTime(task.dueAt)}`
+            ? <>Due <LocalDate time value={task.dueAt} /></>
             : "No due date"}
         </p>
         {task.submissionId && (
@@ -213,7 +213,7 @@ export default async function TaskDetailPage({
           </AlertTitle>
           {task.completedAt ? (
             <AlertDescription>
-              {`Completed ${formatMediumDateTime(task.completedAt)}.`}
+              Completed <LocalDate time value={task.completedAt} />.
             </AlertDescription>
           ) : null}
         </Alert>
@@ -331,7 +331,7 @@ function TaskAssignmentPanel({
         <CardTitle>Assignment</CardTitle>
         {task.assignedAt ? (
           <CardDescription>
-            {`Handed over ${formatMediumDateTime(task.assignedAt)}.`}
+            Handed over <LocalDate time value={task.assignedAt} />.
           </CardDescription>
         ) : null}
       </CardHeader>
@@ -355,7 +355,7 @@ function TaskAssignmentPanel({
                   <option value="">Unassigned</option>
                   {members.map((member: OrganizationMember) => (
                     <option key={member.id} value={member.userId}>
-                      {member.fullName?.trim() || member.email}
+                      {memberLabel(member)}
                     </option>
                   ))}
                 </Select>
@@ -407,9 +407,9 @@ function TaskDetailsPanel({ task }: { task: Task }): ReactElement {
             />
           </Field>
           <Field>
-            <FieldLabel htmlFor="task-due">Due (UTC)</FieldLabel>
+            <FieldLabel htmlFor="task-due">Due</FieldLabel>
             <DateTimePicker
-              defaultValue={toDateTimeLocalValue(task.dueAt)}
+              defaultValue={task.dueAt ?? ""}
               id="task-due"
               name="dueAt"
             />
@@ -459,7 +459,7 @@ function TaskRemindersPanel({
               >
                 <div className="flex min-w-0 flex-col gap-1">
                   <span className="text-sm">
-                    {formatMediumDateTime(reminder.remindAt)}
+                    <LocalDate time value={reminder.remindAt} />
                   </span>
                   <span className="text-xs text-muted-foreground">
                     {formatMemberName(
@@ -519,7 +519,7 @@ function TaskRemindersPanel({
                 </option>
                 {members.map((member: OrganizationMember) => (
                   <option key={member.id} value={member.userId}>
-                    {member.fullName?.trim() || member.email}
+                    {memberLabel(member)}
                   </option>
                 ))}
               </Select>
@@ -538,7 +538,7 @@ function TaskRemindersPanel({
             </Field>
             <Field>
               <FieldLabel htmlFor="reminder-remind-at">
-                Remind at (UTC)
+                Remind at
               </FieldLabel>
               <DateTimePicker
                 id="reminder-remind-at"
@@ -556,8 +556,4 @@ function TaskRemindersPanel({
       </CardContent>
     </Card>
   )
-}
-
-function toDateTimeLocalValue(value: string | null): string {
-  return value ? value.slice(0, 16) : ""
 }

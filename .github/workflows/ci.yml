@@ -35,7 +35,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       # The steps below are `pnpm check`, in order, one step each so a failure
-      # names its gate. scripts/ci-workflow.test.mjs keeps the two in step.
+      # names its gate. Keep the two in step by hand.
       - name: Lint
         run: pnpm lint
 
@@ -108,6 +108,18 @@ jobs:
       # project, so a run needs no Supabase credentials.
       - name: Start Supabase
         run: pnpm exec supabase start
+
+      # The database's own authorization: every supabase/tests/*.sql, each in a
+      # transaction that is rolled back, against the migrations just applied.
+      - name: Run database tests
+        run: pnpm test:sql
+
+      # src/types/database.ts must be what the migrations produce: a migration
+      # committed without `pnpm db:types` fails here.
+      - name: Check generated database types
+        run: |
+          pnpm db:types
+          git diff --exit-code src/types/database.ts
 
       # Object storage. The app targets the S3 API with path-style addressing,
       # so MinIO is a drop-in stand-in for R2.

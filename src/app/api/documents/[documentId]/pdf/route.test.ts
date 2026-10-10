@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { getAuthenticatedUser } from "@/lib/auth"
-import { createDocumentDownloadUrl } from "@/services/document-service"
+import { checkRateLimit, RateLimitError } from "@/lib/rate-limit"
+import { createDocumentDownloadUrl, findGuestOrganizationId } from "@/services/document-service"
 import { renderGeneratedDocumentPdf } from "@/services/document-pdf-service"
 import {
   finalizeGeneratedDocumentPdf,
-  GeneratedDocumentFinalizationServiceError,
+  findFinalizedGeneratedDocumentVersionId,
 } from "@/services/generated-document-finalization-service"
 import { getGeneratedDocumentSigningView } from "@/services/document-signing-service"
 import { getCurrentOrganizationContext } from "@/services/organization-service"
@@ -21,6 +22,11 @@ const VERSION_ID = "40000000-0000-4000-8000-000000000001"
 vi.mock("@/lib/auth", () => ({
   AuthenticationError: class AuthenticationError extends Error {},
   getAuthenticatedUser: vi.fn(),
+}))
+
+vi.mock("@/lib/rate-limit", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/rate-limit")>()),
+  checkRateLimit: vi.fn(),
 }))
 
 vi.mock("@/services/organization-service", () => ({
@@ -56,6 +62,7 @@ vi.mock("@/services/generated-document-finalization-service", () => ({
       }
     },
   finalizeGeneratedDocumentPdf: vi.fn(),
+  findFinalizedGeneratedDocumentVersionId: vi.fn(),
 }))
 
 vi.mock("@/services/document-service", () => ({
@@ -63,11 +70,13 @@ vi.mock("@/services/document-service", () => ({
     readonly statusCode = 500
   },
   createDocumentDownloadUrl: vi.fn(),
+  findGuestOrganizationId: vi.fn(async () => null),
 }))
 
 describe("generated document PDF route", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.mocked(checkRateLimit).mockResolvedValue(undefined)
     vi.mocked(getAuthenticatedUser).mockResolvedValue({
       id: ACTOR_ID,
       email: "member@example.com",
@@ -113,14 +122,39 @@ describe("generated document PDF route", () => {
     expect(createDocumentDownloadUrl).not.toHaveBeenCalled()
   })
 
-  it("redirects completed documents to the exact audited final version", async () => {
+  it("reads a guest's document in the workspace that shared it, even when they have no workspace of their own", async () => {
+    const SHARING_ORG = "10000000-0000-4000-8000-000000000002"
+    vi.mocked(getCurrentOrganizationContext).mockResolvedValue(null)
+    vi.mocked(findGuestOrganizationId).mockResolvedValueOnce(SHARING_ORG)
+    vi.mocked(getGeneratedDocumentSigningView).mockResolvedValue(createSigningView("draft"))
+    vi.mocked(renderGeneratedDocumentPdf).mockResolvedValue(Buffer.from("%PDF-preview"))
+
+    const response = await GET(createRequest(), createRouteContext())
+
+    expect(response.status).toBe(200)
+    expect(getGeneratedDocumentSigningView).toHaveBeenCalledWith(
+      expect.objectContaining({ actorUserId: ACTOR_ID, documentId: DOCUMENT_ID, organizationId: SHARING_ORG })
+    )
+  })
+
+  it("refuses a member rendering too many documents in a minute, whichever documents they are, before rendering", async () => {
+    vi.mocked(getGeneratedDocumentSigningView).mockResolvedValue(createSigningView("draft"))
+    vi.mocked(checkRateLimit).mockImplementation(async (bucket, key) => {
+      if (bucket === "pdf_render_user" && key === ACTOR_ID) throw new RateLimitError(20)
+    })
+
+    const response = await GET(createRequest(), createRouteContext())
+
+    expect(response.status).toBe(429)
+    expect(response.headers.get("retry-after")).toBe("20")
+    expect(renderGeneratedDocumentPdf).not.toHaveBeenCalled()
+  })
+
+  it("redirects a completed document to its finalized version without finalizing on GET", async () => {
     vi.mocked(getGeneratedDocumentSigningView).mockResolvedValue(
       createSigningView("completed")
     )
-    vi.mocked(finalizeGeneratedDocumentPdf).mockResolvedValue({
-      finalizationId: "50000000-0000-4000-8000-000000000001",
-      versionId: VERSION_ID,
-    })
+    vi.mocked(findFinalizedGeneratedDocumentVersionId).mockResolvedValue(VERSION_ID)
     vi.mocked(createDocumentDownloadUrl).mockResolvedValue({
       documentId: DOCUMENT_ID,
       versionId: VERSION_ID,
@@ -137,6 +171,7 @@ describe("generated document PDF route", () => {
     expect(response.headers.get("cache-control")).toBe("private, no-store")
     expect(response.headers.get("x-bizflow-pdf-state")).toBe("finalized")
     expect(renderGeneratedDocumentPdf).not.toHaveBeenCalled()
+    expect(finalizeGeneratedDocumentPdf).not.toHaveBeenCalled()
     expect(createDocumentDownloadUrl).toHaveBeenCalledWith({
       actorUserId: ACTOR_ID,
       organizationId: ORGANIZATION_ID,
@@ -145,25 +180,39 @@ describe("generated document PDF route", () => {
     })
   })
 
-  it("maps a finalization conflict to a safe response", async () => {
-    vi.mocked(getGeneratedDocumentSigningView).mockResolvedValue(
-      createSigningView("completed")
-    )
-    vi.mocked(finalizeGeneratedDocumentPdf).mockRejectedValue(
-      new GeneratedDocumentFinalizationServiceError(
-        "Final document evidence does not match.",
-        409
-      )
-    )
+  it("gives a guest the preview of a signed document, never the finalized paper with every signer's details", async () => {
+    vi.mocked(getGeneratedDocumentSigningView).mockResolvedValue({
+      ...createSigningView("completed"),
+      guest: true,
+      recipients: [{ id: "signer-1", name: "Pat Signer", requiresSignature: true, signedAt: "2026-07-18T13:00:00.000Z", status: "signed" }],
+    })
+    vi.mocked(findFinalizedGeneratedDocumentVersionId).mockResolvedValue(VERSION_ID)
+    vi.mocked(renderGeneratedDocumentPdf).mockResolvedValue(Buffer.from("%PDF-preview"))
 
     const response = await GET(createRequest(), createRouteContext())
 
-    expect(response.status).toBe(409)
-    await expect(response.json()).resolves.toEqual({
-      error: "Final document evidence does not match.",
-    })
+    expect(response.status).toBe(200)
+    expect(response.headers.get("x-bizflow-pdf-state")).toBe("preview")
     expect(createDocumentDownloadUrl).not.toHaveBeenCalled()
-    expect(renderGeneratedDocumentPdf).not.toHaveBeenCalled()
+    expect(vi.mocked(renderGeneratedDocumentPdf).mock.calls[0]?.[0].signers).toEqual([
+      expect.objectContaining({ email: "", initialsDataUrl: null, name: "Pat Signer", signatureDataUrl: null }),
+    ])
+  })
+
+  it("previews a completed document that is not finalized yet instead of finalizing it", async () => {
+    vi.mocked(getGeneratedDocumentSigningView).mockResolvedValue(
+      createSigningView("completed")
+    )
+    vi.mocked(findFinalizedGeneratedDocumentVersionId).mockResolvedValue(null)
+    vi.mocked(renderGeneratedDocumentPdf).mockResolvedValue(Buffer.from("%PDF-preview"))
+
+    const response = await GET(createRequest(), createRouteContext())
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get("cache-control")).toBe("private, no-store")
+    expect(response.headers.get("x-bizflow-pdf-state")).toBe("preview")
+    expect(finalizeGeneratedDocumentPdf).not.toHaveBeenCalled()
+    expect(createDocumentDownloadUrl).not.toHaveBeenCalled()
   })
 })
 

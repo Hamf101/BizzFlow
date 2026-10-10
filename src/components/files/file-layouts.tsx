@@ -278,7 +278,7 @@ export function FileColumnsLayout({
                     )}
                   />
                   <span className="min-w-0 truncate">{entry.name}</span>
-                  <StatusDot labelled={false} status={entry.status} />
+                  <StatusDot status={entry.status} />
                   {entry.kind === "folder" ? (
                     <ChevronRight
                       aria-hidden="true"

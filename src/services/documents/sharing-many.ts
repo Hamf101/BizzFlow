@@ -12,9 +12,11 @@ import type {
 import {
   getSharing,
   listSharingMembers,
-  setSharingAccess,
-  setSharingInheritance,
+  prepareSharingAccess,
+  prepareSharingInheritance,
+  type PreparedSharingChange,
 } from "@/services/documents/sharing-service"
+import { runDocumentOperation } from "@/services/documents/shared"
 
 /** The most items one Share covers; more would make a slow, hard-to-read dialog. */
 export const MAX_SHARED_ITEMS = 50
@@ -51,23 +53,25 @@ export async function setSharingAccessMany(
   input: Many<SetSharingAccessInput>,
   deps: SharingServiceDeps = {}
 ): Promise<SharingView> {
-  const shared = once(deps)
-  const { level, principal, ...rest } = input
-  await viewsOf(rest, shared)
-  const told: SharingNotice[] = []
+  return runDocumentOperation("set_sharing_access_many", identifiers(input), async () => {
+    const shared = once(deps)
+    const { level, principal } = input
 
-  for (const resource of input.resources) {
-    await setSharingAccess(
-      { actorUserId: input.actorUserId, level, organizationId: input.organizationId, principal, resource },
-      input.resources.length === 1 ? shared : { ...shared, notify: async (notice) => void told.push(notice) }
-    )
-  }
+    if ("email" in principal && input.resources.length > 1) {
+      throw new DocumentServiceError("Share one document at a time with someone outside the workspace.", 400)
+    }
 
-  if (input.resources.length > 1) {
-    await tellOnce(told, deps)
-  }
+    checkSelection(input)
+    const told: SharingNotice[] = []
+    const each = input.resources.length === 1 ? shared : { ...shared, notify: async (notice: SharingNotice) => void told.push(notice) }
+    const changes: PreparedSharingChange[] = []
 
-  return getSharingMany(rest, shared)
+    for (const resource of input.resources) {
+      changes.push(await prepareSharingAccess({ actorUserId: input.actorUserId, level, organizationId: input.organizationId, principal, resource }, each))
+    }
+
+    return applyAll(changes, () => (input.resources.length > 1 ? tellOnce(told, deps) : undefined))
+  })
 }
 
 /**
@@ -82,15 +86,37 @@ export async function setSharingInheritanceMany(
   input: Many<SetSharingInheritanceInput>,
   deps: SharingServiceDeps = {}
 ): Promise<SharingView> {
-  const shared = once(deps)
-  const { inherit, ...rest } = input
-  await viewsOf(rest, shared)
+  return runDocumentOperation("set_sharing_inheritance_many", identifiers(input), async () => {
+    const shared = once(deps)
+    const changes: PreparedSharingChange[] = []
 
-  for (const resource of input.resources) {
-    await setSharingInheritance({ actorUserId: input.actorUserId, inherit, organizationId: input.organizationId, resource }, shared)
-  }
+    checkSelection(input)
 
-  return getSharingMany(rest, shared)
+    for (const resource of input.resources) {
+      changes.push(await prepareSharingInheritance({ actorUserId: input.actorUserId, inherit: input.inherit, organizationId: input.organizationId, resource }, shared))
+    }
+
+    return applyAll(changes)
+  })
+}
+
+const identifiers = (input: SharingManyInput): Record<string, string | number> => ({
+  actorUserId: input.actorUserId,
+  items: input.resources.length,
+  organizationId: input.organizationId,
+})
+
+// Every item was checked before this; each is then changed, and read back once.
+async function applyAll(changes: PreparedSharingChange[], after?: () => Promise<void> | undefined): Promise<SharingView> {
+  for (const change of changes) await change.apply()
+
+  await after?.()
+
+  const views: SharingView[] = []
+
+  for (const change of changes) views.push(await change.view())
+
+  return views.length === 1 ? (views[0] as SharingView) : combine(views)
 }
 
 // Everyone in the workspace is read once, not once per item.
@@ -101,12 +127,16 @@ function once(deps: SharingServiceDeps): SharingServiceDeps {
   return { ...deps, listMembers: (organizationId, actorUserId) => (people ??= list(organizationId, actorUserId)) }
 }
 
-async function viewsOf(input: SharingManyInput, deps: SharingServiceDeps): Promise<SharingView[]> {
+function checkSelection(input: SharingManyInput): void {
   const unique = new Set(input.resources.map((resource) => `${resource.kind}:${resource.id}`))
 
   if (unique.size === 0 || unique.size !== input.resources.length || unique.size > MAX_SHARED_ITEMS) {
     throw new DocumentServiceError(`Choose between 1 and ${MAX_SHARED_ITEMS} different items.`, 400)
   }
+}
+
+async function viewsOf(input: SharingManyInput, deps: SharingServiceDeps): Promise<SharingView[]> {
+  checkSelection(input)
 
   const views: SharingView[] = []
 
@@ -140,10 +170,13 @@ function combine(views: SharingView[]): SharingView {
 
   return {
     grants,
+    // People outside the workspace are given one document at a time.
+    guests: [],
     inherit: first.inherit,
     inherited: sameFolder ? first.inherited : [],
     members: first.members,
     name: `${views.length} items`,
+    outsideLevels: [],
     owner: null,
     parent: sameFolder ? first.parent : null,
   }

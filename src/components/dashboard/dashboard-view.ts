@@ -65,6 +65,8 @@ type QueueInput = Readonly<{
   now: Date
   submissions: readonly Submission[]
   tasks: readonly Task[]
+  /** The viewer's, whose calendar days are counted. */
+  timeZone?: string
 }>
 
 /**
@@ -75,7 +77,7 @@ type QueueInput = Readonly<{
  * @returns Rows in the order to act on them.
  */
 export function buildQueue(input: QueueInput): QueueItem[] {
-  const { actorUserId, members, now } = input
+  const { actorUserId, members, now, timeZone } = input
   const late = input.tasks
     .filter((task) => task.assignedTo === actorUserId && isOverdue(task, now))
     .sort(byOldest((task: Task) => task.dueAt ?? ""))
@@ -87,7 +89,7 @@ export function buildQueue(input: QueueInput): QueueItem[] {
       kind: "Overdue task",
       title: task.title,
       tone: "critical",
-      when: `Due ${relativeDay(task.dueAt ?? "", now)}`,
+      when: `Due ${relativeDay(task.dueAt ?? "", now, timeZone)}`,
     }))
   const reviews = input.canReview
     ? input.submissions
@@ -108,7 +110,7 @@ export function buildQueue(input: QueueInput): QueueItem[] {
           kind: "Review",
           title: submission.title,
           tone: "you",
-          when: `Submitted ${relativeDay(submission.submittedAt ?? submission.updatedAt, now)}`,
+          when: `Submitted ${relativeDay(submission.submittedAt ?? submission.updatedAt, now, timeZone)}`,
         }))
     : []
   const own = input.submissions.filter((submission) => submission.createdBy === actorUserId)
@@ -123,7 +125,7 @@ export function buildQueue(input: QueueInput): QueueItem[] {
       kind: "Needs changes",
       title: submission.title,
       tone: "you",
-      when: `Returned ${relativeDay(submission.updatedAt, now)}`,
+      when: `Returned ${relativeDay(submission.updatedAt, now, timeZone)}`,
     }))
   const signatures = [...input.awaitingSignatures]
     .sort(byOldest((document: AccessibleDocumentSummary) => document.updatedAt))
@@ -135,7 +137,7 @@ export function buildQueue(input: QueueInput): QueueItem[] {
       kind: "Awaiting signatures",
       title: document.title,
       tone: "you",
-      when: `Sent ${relativeDay(document.updatedAt, now)}`,
+      when: `Sent ${relativeDay(document.updatedAt, now, timeZone)}`,
     }))
   const drafts = own
     .filter((submission) => submission.status === "draft")
@@ -148,7 +150,7 @@ export function buildQueue(input: QueueInput): QueueItem[] {
       kind: "Draft",
       title: submission.title,
       tone: "quiet",
-      when: `Edited ${relativeDay(submission.updatedAt, now)}`,
+      when: `Edited ${relativeDay(submission.updatedAt, now, timeZone)}`,
     }))
 
   return [...late, ...reviews, ...returned, ...signatures, ...drafts]
@@ -170,7 +172,8 @@ export function selectDueThisWeek(
   members: readonly OrganizationMember[],
   actorUserId: string,
   now: Date,
-  team: boolean
+  team: boolean,
+  timeZone?: string
 ): DueTask[] {
   const end = now.getTime() + WEEK_DAYS * DAY_MS
 
@@ -187,7 +190,7 @@ export function selectDueThisWeek(
     .sort(byOldest((task: Task) => task.dueAt ?? ""))
     .map((task) => ({
       assignee: formatMemberName(task.assignedTo, members, actorUserId),
-      due: new Intl.DateTimeFormat("en", { day: "numeric", month: "short", weekday: "short" }).format(
+      due: new Intl.DateTimeFormat("en", { day: "numeric", month: "short", timeZone, weekday: "short" }).format(
         new Date(task.dueAt ?? "")
       ),
       href: `/tasks/${encodeURIComponent(task.id)}`,
@@ -208,14 +211,15 @@ export function selectDueThisWeek(
 export function describeRecentFiles(
   documents: readonly AccessibleDocumentSummary[],
   statuses: ReadonlyMap<string, GeneratedDocumentWorkflowStatus | null>,
-  now: Date
+  now: Date,
+  timeZone?: string
 ): RecentFile[] {
   return documents.map((document) => ({
     href: getDocumentHref(document),
     id: document.id,
     meta:
       describeWorkflowStatus(statuses.get(document.id) ?? null)?.label ??
-      `${describeDocumentKind(document)} · Edited ${relativeDay(document.updatedAt, now)}`,
+      `${describeDocumentKind(document)} · Edited ${relativeDay(document.updatedAt, now, timeZone)}`,
     title: document.title,
   }))
 }
@@ -233,10 +237,11 @@ export function describeActivity(
   entries: readonly AuditLogEntry[],
   members: readonly OrganizationMember[],
   actorUserId: string,
-  now: Date
+  now: Date,
+  timeZone?: string
 ): ActivityRow[] {
   return entries.map((entry) => {
-    const when = relativeDay(entry.createdAt, now)
+    const when = relativeDay(entry.createdAt, now, timeZone)
 
     return {
       actor: entry.actorUserId ? formatMemberName(entry.actorUserId, members, actorUserId) : null,
@@ -253,14 +258,17 @@ export function describeActivity(
  *
  * @param value - When it happened.
  * @param now - The moment the page loaded.
+ * @param timeZone - The viewer's, whose calendar days are counted.
  * @returns A short phrase to follow a verb, such as "Submitted".
  */
-export function relativeDay(value: string, now: Date): string {
-  const days = Math.max(0, Math.floor((now.getTime() - Date.parse(value)) / DAY_MS))
+export function relativeDay(value: string, now: Date, timeZone?: string): string {
+  // Each moment's calendar day there, as midnight UTC, so a difference is whole days.
+  const day = (date: Date): number => Date.parse(new Intl.DateTimeFormat("en-CA", { timeZone }).format(date))
+  const days = Math.max(0, Math.round((day(now) - day(new Date(value))) / DAY_MS))
 
   return days < WEEK_DAYS
     ? new Intl.RelativeTimeFormat("en", { numeric: "auto" }).format(-days, "day")
-    : new Intl.DateTimeFormat("en", { day: "numeric", month: "short" }).format(new Date(value))
+    : new Intl.DateTimeFormat("en", { day: "numeric", month: "short", timeZone }).format(new Date(value))
 }
 
 function byOldest<Item>(at: (item: Item) => string): (left: Item, right: Item) => number {

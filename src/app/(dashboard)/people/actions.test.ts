@@ -1,20 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { enforceOutboundEmailRateLimit } from "@/lib/action-rate-limit"
-import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
+import { getAuthenticatedUser } from "@/lib/auth"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
 import {
   createInvite,
+  OrganizationServiceError,
   revokeInvite,
   updateMemberAccess,
-  updateProfilePhone,
 } from "@/services/organization-service"
 
 import {
   createInviteAction,
   revokeInviteAction,
   updateMemberAccessAction,
-  updateProfilePhoneAction,
 } from "./actions"
 
 const { redirectMock, revalidatePathMock } = vi.hoisted(() => ({
@@ -47,9 +46,7 @@ vi.mock("@/lib/action-rate-limit", () => ({
 
 vi.mock("@/services/organization-service", () => ({
   createInvite: vi.fn().mockResolvedValue({
-    invite: { id: "invite-1", token: "invite-token" },
-    emailDelivered: true,
-    emailFailureReason: null,
+    invite: { id: "invite-1" },
   }),
   OrganizationServiceError: class extends Error {
     readonly statusCode: number
@@ -61,7 +58,6 @@ vi.mock("@/services/organization-service", () => ({
   },
   revokeInvite: vi.fn(),
   updateMemberAccess: vi.fn(),
-  updateProfilePhone: vi.fn(),
 }))
 
 const MEMBER_ID = "20000000-0000-4000-8000-000000000001"
@@ -90,9 +86,7 @@ describe("createInviteAction", () => {
     } as never)
     vi.mocked(enforceOutboundEmailRateLimit).mockResolvedValue(undefined)
     vi.mocked(createInvite).mockResolvedValue({
-      invite: { id: "invite-1", token: "invite-token" },
-      emailDelivered: true,
-      emailFailureReason: null,
+      invite: { id: "invite-1" },
     } as never)
   })
 
@@ -114,17 +108,14 @@ describe("createInviteAction", () => {
     })
   })
 
-  it("keeps the invite and says so when the email could not be sent", async () => {
-    // A misconfigured email provider must not look like a broken invite: the
-    // token is still valid, so the manager is told to share the link instead.
-    vi.mocked(createInvite).mockResolvedValue({
-      invite: { id: "invite-1", token: "invite-token" },
-      emailDelivered: false,
-      emailFailureReason: "The email provider refused the request.",
-    } as never)
+  it("says the invite was not sent when its email could not go", async () => {
+    // The email holds the only copy of the link, so the service withdrew it.
+    vi.mocked(createInvite).mockRejectedValue(
+      new OrganizationServiceError("The email provider refused the request.", 502)
+    )
 
     await expect(createInviteAction(createInviteForm())).rejects.toThrow(
-      "NEXT_REDIRECT:/people?feedback=invite_created_email_failed"
+      "NEXT_REDIRECT:/people?feedback=invite_email_failed"
     )
     expect(redirectMock).not.toHaveBeenCalledWith(
       expect.stringContaining("provider+refused")
@@ -170,19 +161,6 @@ describe("createInviteAction", () => {
     expect(enforceOutboundEmailRateLimit).not.toHaveBeenCalled()
   })
 
-  it("maps invite service copy to a fixed failure code", async () => {
-    vi.mocked(createInvite).mockRejectedValue(
-      new Error("EmailJS request id and provider diagnostics")
-    )
-
-    await expect(createInviteAction(createInviteForm())).rejects.toThrow(
-      "NEXT_REDIRECT:/people?feedback=operation_failed"
-    )
-    expect(redirectMock).not.toHaveBeenCalledWith(
-      expect.stringContaining("EmailJS")
-    )
-  })
-
   it("names an existing member instead of a generic refresh prompt", async () => {
     const { OrganizationServiceError } = await import(
       "@/services/organization-service"
@@ -206,7 +184,6 @@ describe("people profile and permission actions", () => {
     } as never)
     vi.mocked(updateMemberAccess).mockResolvedValue(undefined as never)
     vi.mocked(revokeInvite).mockResolvedValue(undefined as never)
-    vi.mocked(updateProfilePhone).mockResolvedValue(undefined as never)
   })
 
   it("updates a workspace name and custom role as one authoritative change", async () => {
@@ -243,19 +220,6 @@ describe("people profile and permission actions", () => {
     expect(updateMemberAccess).not.toHaveBeenCalled()
   })
 
-  it("updates the authenticated member phone without trusting a submitted user id", async () => {
-    const formData = new FormData()
-    formData.set("phoneNumber", "+14155552671")
-
-    await expect(updateProfilePhoneAction(formData)).rejects.toThrow(
-      "NEXT_REDIRECT:/people?feedback=changes_saved"
-    )
-    expect(updateProfilePhone).toHaveBeenCalledExactlyOnceWith({
-      actorUserId: MEMBER_ID,
-      phoneNumber: "+14155552671",
-    })
-  })
-
   it("revokes a tenant-scoped invite using the authenticated actor", async () => {
     const formData = new FormData()
     formData.set("organizationId", ORG_ID)
@@ -269,20 +233,5 @@ describe("people profile and permission actions", () => {
       organizationId: ORG_ID,
       inviteId: "invite-2",
     })
-  })
-
-  it("preserves the People return path when authentication expires", async () => {
-    vi.mocked(getAuthenticatedUser).mockRejectedValue(
-      new AuthenticationError("Sign in to continue.")
-    )
-    const formData = new FormData()
-    formData.set("organizationId", ORG_ID)
-    formData.set("membershipId", MEMBERSHIP_ID)
-    formData.set("roleDefinitionId", ROLE_ID)
-
-    await expect(updateMemberAccessAction(formData)).rejects.toThrow(
-      "NEXT_REDIRECT:/login?next=%2Fpeople"
-    )
-    expect(updateMemberAccess).not.toHaveBeenCalled()
   })
 })

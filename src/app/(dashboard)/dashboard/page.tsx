@@ -1,3 +1,4 @@
+import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
 import type { ReactElement } from "react"
 
@@ -11,6 +12,7 @@ import {
 import { OnboardingChecklist } from "@/components/dashboard/onboarding-checklist"
 import { DatedTitle } from "@/components/navigation/dated-title"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { readTimeZone, TIME_ZONE_COOKIE } from "@/lib/date-format"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
 import { getPageErrorMessage } from "@/lib/page-errors"
 import { loadPageOrganizationContext } from "@/lib/page-organization-context"
@@ -20,7 +22,7 @@ import {
   type OrganizationPermissionAction,
 } from "@/lib/permissions"
 import { listAuditLogPage } from "@/services/audit-service"
-import { listDocumentCards, listRecentDocuments } from "@/services/document-service"
+import { listDocumentCards, listGuestDocuments, listRecentDocuments } from "@/services/document-service"
 import {
   getOnboardingProgress,
   listOrganizationPeople,
@@ -54,10 +56,14 @@ export default async function DashboardPage(): Promise<ReactElement> {
       failureEvent: "dashboard_context_load_failed",
     })
   const now = new Date()
+  // The viewer's calendar, as their browser said; UTC until it has.
+  const timeZone = readTimeZone((await cookies()).get(TIME_ZONE_COOKIE)?.value)
 
   if (!context) {
     if (!contextErrorMessage) {
-      redirect("/welcome")
+      // Someone given documents from outside a workspace starts at those.
+      const shared = await listGuestDocuments(user.id).catch(() => [])
+      redirect(shared.length ? "/shared" : "/welcome")
     }
 
     return (
@@ -99,7 +105,7 @@ export default async function DashboardPage(): Promise<ReactElement> {
   }
 
   const answers = await Promise.all([
-    orEmpty("dashboard_onboarding_progress_failed", () => getOnboardingProgress(organizationId), {
+    orEmpty("dashboard_onboarding_progress_failed", () => getOnboardingProgress({ actorUserId: user.id, organizationId }), {
       hasInvitedMembers: false,
       hasPublishedTemplate: false,
       hasSubmission: false,
@@ -295,9 +301,9 @@ export default async function DashboardPage(): Promise<ReactElement> {
       ) : null}
 
       <DashboardHome
-        activity={activity ? describeActivity(activity.value, members.value, user.id, now) : null}
+        activity={activity ? describeActivity(activity.value, members.value, user.id, now, timeZone) : null}
         degraded={unavailable}
-        dueThisWeek={tasks ? selectDueThisWeek(tasks.value, members.value, user.id, now, can("tasks:assign")) : null}
+        dueThisWeek={tasks ? selectDueThisWeek(tasks.value, members.value, user.id, now, can("tasks:assign"), timeZone) : null}
         queue={buildQueue({
           actorUserId: user.id,
           awaitingSignatures: files?.value?.awaitingSignatures ?? [],
@@ -306,8 +312,9 @@ export default async function DashboardPage(): Promise<ReactElement> {
           now,
           submissions: [...reviews.value, ...own.value],
           tasks: tasks?.value ?? [],
+          timeZone,
         })}
-        recentFiles={files?.value ? describeRecentFiles(files.value.recent, files.value.statuses, now) : null}
+        recentFiles={files?.value ? describeRecentFiles(files.value.recent, files.value.statuses, now, timeZone) : null}
         workflow={
           counts
             ? {

@@ -25,9 +25,11 @@ test("owner names are shared while drag order stays personal and survives a new 
     await staffNav.getByRole("link", { name, exact: true }).click({ button: "right" })
     await expect(staff.getByRole("menuitem", { name: "Rename", exact: true })).toHaveCount(0)
     await staff.keyboard.press("Escape")
+    // The new order shows at once, but only the server action's answer means it was kept.
+    const saved = staff.waitForResponse((response) => response.request().method() === "POST" && response.request().headers()["next-action"] !== undefined)
     await staffNav.getByRole("link", { name: "Settings", exact: true }).dragTo(staffNav.getByRole("link", { name: "Dashboard", exact: true }))
-    await expect(staff.getByRole("status")).toHaveCount(0)
     await expect(staffNav.getByRole("link").first()).toHaveAttribute("href", "/settings")
+    expect((await saved).ok()).toBe(true)
     await staff.reload()
     await expect(staffNav.getByRole("link").first()).toHaveAttribute("href", "/settings")
     await owner.reload()

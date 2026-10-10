@@ -27,11 +27,9 @@ function createEntry(overrides: Partial<AuditLogEntry> = {}): AuditLogEntry {
     action: "task.created",
     actorUserId: MARA_ID,
     createdAt: "2026-09-10T12:00:00.000Z",
-    entryHash: "d".repeat(64),
     id: "audit-1",
     metadata: { title: "Chase references" },
     organizationId: "10000000-0000-4000-8000-000000000001",
-    prevHash: null,
     seq: 1,
     targetId: null,
     targetType: "task",
@@ -54,7 +52,6 @@ function renderWorkspace(
   render(
     <AuditLogWorkspace
       entries={entries}
-      integrity={null}
       members={[mara]}
       savedViews={[]}
       total={entries.length}

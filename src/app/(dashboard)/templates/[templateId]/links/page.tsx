@@ -12,7 +12,7 @@ import { getPageErrorMessage } from "@/lib/page-errors"
 import { loadPageOrganizationContext } from "@/lib/page-organization-context"
 import { cn } from "@/lib/utils"
 import { listPublicFormLinks } from "@/services/public-form-service"
-import { canEditDocumentTemplate, getDocumentTemplate } from "@/services/template-service"
+import { getDocumentTemplate } from "@/services/template-service"
 import type { PublicFormLink } from "@/types/public-link"
 import type { DocumentTemplate } from "@/types/template"
 
@@ -61,24 +61,19 @@ export default async function TemplateLinksPage({
 
   const context = contextResult.context
 
-  if (!(await canEditDocumentTemplate({ actorUserId: user.id, organizationId: context.organization.id, templateId }))) {
-    redirect(buildFeedbackRedirect("/templates", "permission_denied"))
-  }
-
-  const result = await Promise.all([
-    getDocumentTemplate({
-      actorUserId: user.id,
-      organizationId: context.organization.id,
-      templateId,
-    }),
-    listPublicFormLinks(context.organization.id, templateId),
-  ])
+  const access = { actorUserId: user.id, organizationId: context.organization.id, templateId }
+  const result = await Promise.all([getDocumentTemplate(access), listPublicFormLinks(access)])
     .then(([template, links]: [DocumentTemplate, PublicFormLink[]]) => ({
       errorMessage: null,
       links,
       template,
     }))
     .catch((error: unknown) => {
+      // The service refuses whoever cannot edit the template; send them back.
+      if ((error as { statusCode?: number }).statusCode === 403) {
+        redirect(buildFeedbackRedirect("/templates", "permission_denied"))
+      }
+
       const errorMessage = getPageErrorMessage(
         error,
         "Unable to load public links."

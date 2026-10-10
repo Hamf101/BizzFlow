@@ -43,9 +43,12 @@ export function SharingNoticesListener(): ReactElement | null {
         },
         params: { apikey: first.key },
       })
+      // Let go of if the page leaves while it signs in.
+      stop = () => client.disconnect()
       await client.setAuth()
 
       if (stopped) {
+        client.disconnect()
         return
       }
 

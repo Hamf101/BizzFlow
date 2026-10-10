@@ -53,6 +53,15 @@ describe("what a member may do with one template", () => {
     await expect(getTemplateAccess(clientAnswering({ level: null }), input)).resolves.toBeNull()
   })
 
+  it("refuses a level this build does not know rather than letting it through", async () => {
+    const commenter = clientAnswering({ level: "commenter" as never })
+    const inherited = clientAnswering({ level: "toString" as never })
+
+    await expect(requireTemplateAccess(commenter, input, "editor", "No.")).rejects.toMatchObject({ statusCode: 500 })
+    await expect(requireTemplateAccess(commenter, input, "viewer", "No.")).rejects.toMatchObject({ statusCode: 500 })
+    await expect(requireTemplateAccess(inherited, input, "viewer", "No.")).rejects.toMatchObject({ statusCode: 500 })
+  })
+
   it("says the template does not exist to someone who cannot open it", async () => {
     await expect(requireTemplateAccess(clientAnswering({ level: null }), input, "viewer", "No.")).rejects.toMatchObject({
       message: "Document template was not found.",

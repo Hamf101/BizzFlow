@@ -3,118 +3,34 @@
  * answers the filters and writes the service uses, and access questions the
  * service asks the database (rpc) from a table the test fills in.
  */
-export type FakeRow = Record<string, unknown>
-type Filter = (row: FakeRow) => boolean
-type Result = { data: unknown; error: null | { code?: string; message: string } }
+import type {
+  SetSharingAccessInput,
+  SetSharingInheritanceInput,
+  SharingInput,
+  SharingServiceDeps,
+  SharingView,
+} from "@/services/documents/sharing-contracts"
+import {
+  prepareSharingAccess,
+  prepareSharingInheritance,
+  type PreparedSharingChange,
+} from "@/services/documents/sharing-service"
+import { runDocumentOperation } from "@/services/documents/shared"
+import {
+  PostgrestWriteQuery,
+  type FakeOperation,
+  type FakeRow,
+} from "@/services/postgrest-fake.test-support"
 
-class FakeQuery implements PromiseLike<Result> {
-  private readonly filters: Filter[] = []
-  private mode: "delete" | "insert" | "select" | "update" = "select"
-  private values: FakeRow | FakeRow[] = {}
+export type { FakeRow }
 
-  constructor(
-    private readonly rows: FakeRow[],
-    private readonly seenWrites: string[],
-    private readonly table: string
-  ) {}
-
-  select(): this {
-    return this
-  }
-
-  eq(column: string, value: unknown): this {
-    this.filters.push((row) => row[column] === value)
-    return this
-  }
-
-  in(column: string, values: readonly unknown[]): this {
-    this.filters.push((row) => values.includes(row[column]))
-    return this
-  }
-
-  is(column: string, value: null): this {
-    this.filters.push((row) => (row[column] ?? null) === value)
-    return this
-  }
-
-  order(): this {
-    return this
-  }
-
-  insert(values: FakeRow | FakeRow[]): this {
-    this.mode = "insert"
-    this.values = values
-    return this
-  }
-
-  update(values: FakeRow): this {
-    this.mode = "update"
-    this.values = values
-    return this
-  }
-
-  delete(): this {
-    this.mode = "delete"
-    return this
-  }
-
-  async maybeSingle(): Promise<Result> {
-    const result = this.run()
-    const rows = result.data as FakeRow[]
-
-    return { data: rows[0] ?? null, error: result.error }
-  }
-
-  async single(): Promise<Result> {
-    return this.maybeSingle()
-  }
-
-  then<T1 = Result, T2 = never>(
-    onfulfilled?: ((value: Result) => T1 | PromiseLike<T1>) | null,
-    onrejected?: ((reason: unknown) => T2 | PromiseLike<T2>) | null
-  ): PromiseLike<T1 | T2> {
-    return Promise.resolve(this.run()).then(onfulfilled, onrejected)
-  }
-
-  private run(): Result {
-    const matches = this.rows.filter((row) => this.filters.every((filter) => filter(row)))
-
-    if (this.mode === "insert") {
-      const inserted = (Array.isArray(this.values) ? this.values : [this.values]).map((row) => ({ ...row }))
-      const clash = inserted.find((row) =>
-        this.rows.some(
-          (existing) =>
-            existing.org_id === row.org_id &&
-            (existing.document_id ?? existing.folder_id ?? existing.template_id) === (row.document_id ?? row.folder_id ?? row.template_id) &&
-            existing.user_id === row.user_id &&
-            existing.organization_role === row.organization_role
-        )
-      )
-
-      if (clash && "access_level" in clash) {
-        return { data: null, error: { code: "23505", message: "duplicate key" } }
-      }
-
-      this.rows.push(...inserted)
-      this.seenWrites.push(`insert ${this.table}`)
-      return { data: inserted, error: null }
-    }
-
-    if (this.mode === "update") {
-      for (const row of matches) Object.assign(row, this.values)
-      this.seenWrites.push(`update ${this.table}`)
-      return { data: matches, error: null }
-    }
-
-    if (this.mode === "delete") {
-      for (const row of matches) this.rows.splice(this.rows.indexOf(row), 1)
-      this.seenWrites.push(`delete ${this.table}`)
-      return { data: matches, error: null }
-    }
-
-    return { data: matches.map((row) => ({ ...row })), error: null }
-  }
-}
+// A grant is unique per item and grantee, as the tables' unique indexes keep it.
+const sameGrant = (left: FakeRow, right: FakeRow): boolean =>
+  left.org_id === right.org_id &&
+  (left.document_id ?? left.folder_id ?? left.template_id) === (right.document_id ?? right.folder_id ?? right.template_id) &&
+  left.user_id === right.user_id &&
+  left.organization_role === right.organization_role &&
+  left.email === right.email
 
 export class SharingFakeClient {
   readonly writes: string[] = []
@@ -129,9 +45,18 @@ export class SharingFakeClient {
     private readonly access: Record<string, "contributor" | "editor" | "user" | "viewer"> = {}
   ) {}
 
-  from(table: string): FakeQuery {
-    this.tables[table] ??= []
-    return new FakeQuery(this.tables[table], this.writes, table)
+  from(table: string): PostgrestWriteQuery {
+    return new PostgrestWriteQuery(this.tables, table, {
+      before: (tableName: string, operation: FakeOperation, rows: readonly FakeRow[]) => {
+        const existing = this.tables[tableName] ?? []
+
+        if (operation === "insert" && rows.some((row) => "access_level" in row && existing.some((other) => sameGrant(other, row)))) {
+          return { code: "23505", message: "duplicate key" }
+        }
+
+        if (operation !== "select") this.writes.push(`${operation} ${tableName}`)
+      },
+    })
   }
 
   async rpc(_name: string, args: Record<string, unknown>): Promise<{ data: unknown; error: null }> {
@@ -140,3 +65,30 @@ export class SharingFakeClient {
     return { data: this.access[`${String(args.target_actor_user_id)}:${String(item)}`] ?? null, error: null }
   }
 }
+
+/**
+ * Makes one item's sharing change at once. The app shares through the Many
+ * variants; the tests drive the single-item checks through this.
+ */
+async function runSharingChange(
+  name: string,
+  input: SharingInput,
+  prepare: () => Promise<PreparedSharingChange>
+): Promise<SharingView> {
+  return runDocumentOperation(name, { actorUserId: input.actorUserId, organizationId: input.organizationId }, async () => {
+    const change = await prepare()
+
+    await change.apply()
+
+    return change.view()
+  })
+}
+
+export const setSharingAccess = (input: SetSharingAccessInput, deps: SharingServiceDeps = {}): Promise<SharingView> =>
+  runSharingChange("set_sharing_access", input, () => prepareSharingAccess(input, deps))
+
+export const setSharingInheritance = (
+  input: SetSharingInheritanceInput,
+  deps: SharingServiceDeps = {}
+): Promise<SharingView> =>
+  runSharingChange("set_sharing_inheritance", input, () => prepareSharingInheritance(input, deps))

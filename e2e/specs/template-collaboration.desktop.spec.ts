@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto"
 
 import type { Page } from "@playwright/test"
 
-import { expect, test, uniqueName } from "../support/fixtures"
+import { expect, expectSaved, signInAs, test, uniqueName } from "../support/fixtures"
 import { waitForHydration } from "../support/hydration"
 import { seedTemplate } from "../support/seed"
 import { insertMember } from "../support/tenant"
@@ -23,49 +23,42 @@ test("two people edit one template at once, see each other's words, and someone 
 }) => {
   const intro = { alignment: "left", id: randomUUID(), text: "Welcome aboard.", type: "paragraph" }
   const template = await seedTemplate(admin, tenant.organizationId, uniqueName("Welcome pack"), "draft", [intro])
-  const saved = () =>
-    expect.poll(
-      async () => {
-        const { data, error } = await admin.from("document_templates").select("content").eq("id", template.id).single()
-        if (error) throw error
-        return data.content.blocks.map((block: { text?: string }) => block.text)
-      },
-      { timeout: 15_000 }
-    )
+  const saved = () => expectSaved(admin, "document_templates", template.id, ({ blocks }) => blocks.map(({ text }) => text))
   const owner = await pageAs("owner_admin")
   // A manager of their own, so taking their access away touches no other spec.
+  // Named apart from the shared "E2E manager", whom other specs pick by name
+  // while this one runs.
   const colleague = await insertMember(admin, tenant.organizationId, "manager", `collab-${randomUUID().slice(0, 8)}`)
   const manager = await (await browser.newContext()).newPage()
-  await manager.goto("/login")
-  await manager.getByLabel("Email").fill(colleague.email)
-  await manager.getByLabel("Password", { exact: true }).fill(colleague.password)
-  await manager.getByRole("button", { name: /log in/i }).click()
-  await manager.waitForURL(/\/dashboard/, { timeout: 30_000 })
-  await Promise.all([openTemplate(owner, template.id), openTemplate(manager, template.id)])
 
-  // Each types in the same line, one at its end and one at its start, without waiting for the other.
-  await owner.getByText("Welcome aboard.").click()
-  await owner.keyboard.press("End")
-  await manager.getByText("Welcome aboard.").click()
-  await manager.keyboard.press("Home")
-  await Promise.all([owner.keyboard.type(" We're glad you're here."), manager.keyboard.type("Hello! ")])
-
-  const both = "Hello! Welcome aboard. We're glad you're here."
-  await expect(owner.getByText(both)).toBeVisible()
-  await expect(manager.getByText(both)).toBeVisible()
-  await saved().toEqual([both])
-
-  // What the room kept is what a newcomer opens.
-  await manager.reload()
-  await expect(manager.getByText(both)).toBeVisible()
-
-  // Staff can't edit templates, so they can't open its room either.
-  const staff = await pageAs("staff")
-  await staff.goto("/dashboard")
-  expect((await staff.request.post(`/api/templates/${template.id}/room`)).status()).toBe(403)
-
-  // The colleague loses the right to edit templates: their next change is refused and dropped.
   try {
+    const { error: renameError } = await admin.from("profiles").update({ full_name: "E2E collaborator" }).eq("id", colleague.id)
+    if (renameError) throw renameError
+    await signInAs(manager, colleague.email, colleague.password)
+    await Promise.all([openTemplate(owner, template.id), openTemplate(manager, template.id)])
+
+    // Each types in the same line, one at its end and one at its start, without waiting for the other.
+    await owner.getByText("Welcome aboard.").click()
+    await owner.keyboard.press("End")
+    await manager.getByText("Welcome aboard.").click()
+    await manager.keyboard.press("Home")
+    await Promise.all([owner.keyboard.type(" We're glad you're here."), manager.keyboard.type("Hello! ")])
+
+    const both = "Hello! Welcome aboard. We're glad you're here."
+    await expect(owner.getByText(both)).toBeVisible()
+    await expect(manager.getByText(both)).toBeVisible()
+    await saved().toEqual([both])
+
+    // What the room kept is what a newcomer opens.
+    await manager.reload()
+    await expect(manager.getByText(both)).toBeVisible()
+
+    // Staff can't edit templates, so they can't open its room either.
+    const staff = await pageAs("staff")
+    await staff.goto("/dashboard")
+    expect((await staff.request.post(`/api/templates/${template.id}/room`)).status()).toBe(403)
+
+    // The colleague loses the right to edit templates: their next change is refused and dropped.
     const { error } = await admin
       .from("organization_memberships")
       .update({ role: "staff" })

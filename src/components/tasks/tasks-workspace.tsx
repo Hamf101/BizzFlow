@@ -4,8 +4,8 @@ import type { ReactElement } from "react"
 import { ListFilterChips } from "@/components/data/list-filter-chips"
 import { ListPagination } from "@/components/data/list-pagination"
 import { ListQuery } from "@/components/data/list-query"
-import { type ListSavedViews, ListViewMenu, ListViewTitle } from "@/components/data/list-view-menu"
-import { DatedTitle } from "@/components/navigation/dated-title"
+import { ListEmpty, ListHeading } from "@/components/data/list-heading"
+import { type ListSavedViews, ListViewMenu } from "@/components/data/list-view-menu"
 import { formatMemberName } from "@/components/people/member-name"
 import { NewTaskDialog } from "@/components/tasks/new-task-dialog"
 import {
@@ -16,8 +16,7 @@ import {
   type TaskListView,
 } from "@/components/tasks/task-list-view"
 import { TaskStatusBadge } from "@/components/tasks/task-presentation"
-import { formatMediumDate } from "@/lib/date-format"
-import { getLastPage } from "@/lib/list-state"
+import { LocalDate } from "@/components/ui/local-date"
 import { cn } from "@/lib/utils"
 import type { OrganizationMember } from "@/types/organization"
 import type { Task } from "@/types/task"
@@ -62,7 +61,6 @@ export function TasksWorkspace({
   total: number
   view: TaskListView
 }): ReactElement {
-  const lastPage = getLastPage(total, view.pageSize)
 
   const listViews: ListSavedViews = {
     list: "tasks",
@@ -72,20 +70,8 @@ export function TasksWorkspace({
 
   return (
     <section className="flex flex-col gap-5" data-slot="tasks-workspace">
-      {/* The real space keeps the accessible name "Tasks 55 tasks" rather
-          than "Tasks55 tasks"; the small margin keeps the visual gap. */}
       <div className="flex items-center justify-between gap-3">
-        <DatedTitle>
-          <h1 className="min-w-0 text-2xl leading-none font-medium tracking-[-0.02em]">
-            <ListViewTitle title="Tasks" views={listViews} />{" "}
-            <span
-              aria-label={`${total} ${total === 1 ? "task" : "tasks"}`}
-              className="ml-0.5 text-xl font-normal text-muted-foreground"
-            >
-              {total}
-            </span>
-          </h1>
-        </DatedTitle>
+        <ListHeading noun={["task", "tasks"]} title="Tasks" total={total} views={listViews} />
         <div className="flex shrink-0 gap-2">
           <ListViewMenu
             adjusted={isTaskViewAdjusted(view)}
@@ -116,16 +102,11 @@ export function TasksWorkspace({
       />
 
       {items.length === 0 ? (
-        // Outside the table: a table may only hold rows, and an empty list
-        // is a message, not a row.
-        <p
-          className="py-16 text-center text-sm text-muted-foreground"
-          role="status"
-        >
+        <ListEmpty>
           {view.query || view.filters.status || view.filters.assignee
             ? "No tasks match this view."
             : "No tasks yet."}
-        </p>
+        </ListEmpty>
       ) : (
         <div
           aria-label="Tasks"
@@ -157,18 +138,9 @@ export function TasksWorkspace({
       )}
 
       <ListPagination
-        nextHref={
-          view.page < lastPage
-            ? taskListState.href("/tasks", view, { page: view.page + 1 })
-            : null
-        }
+        href={(page) => taskListState.href("/tasks", view, { page })}
         page={view.page}
         pageSize={view.pageSize}
-        previousHref={
-          view.page > 1
-            ? taskListState.href("/tasks", view, { page: view.page - 1 })
-            : null
-        }
         total={total}
       />
     </section>
@@ -264,8 +236,9 @@ function TaskDue({
       )}
       data-slot={slot}
     >
-      {overdue ? <span className="sr-only">Overdue </span> : null}
-      {formatMediumDate(dueAt)}
+      {/* Said in words, not only in red. */}
+      {overdue ? "Overdue · " : null}
+      <LocalDate value={dueAt} />
     </span>
   )
 }

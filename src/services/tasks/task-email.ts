@@ -1,11 +1,6 @@
-import { getAppUrlEnv, getEmailEnv } from "@/lib/env"
-import {
-  EmailTransportError,
-  type EmailPayload,
-  type EmailTransport,
-} from "@/services/email/contracts"
-import { escapeHtml, wrapEmailDocument } from "@/services/email/html"
-import { sendEmail } from "@/services/email/transport"
+import type { EmailTransport } from "@/services/email/contracts"
+import { escapeHtml } from "@/services/email/html"
+import { deliverTransactionalEmail } from "@/services/email/transport"
 import { TaskServiceError } from "@/services/tasks/errors"
 
 /** Reason a task notification email is being sent. */
@@ -63,74 +58,24 @@ export async function sendTaskEmail(
   input: SendTaskEmailInput,
   deps: TaskEmailDeps = {}
 ): Promise<void> {
-  const startedAt = Date.now()
-  let emailEnv: ReturnType<typeof getEmailEnv>
-  let taskUrl: string
-
-  try {
-    emailEnv = getEmailEnv()
-    taskUrl = new URL(
-      `/tasks/${encodeURIComponent(input.taskId)}`,
-      getAppUrlEnv().NEXT_PUBLIC_APP_URL
-    ).toString()
-  } catch {
-    console.error("task_email_configuration_failed", {
-      kind: input.kind,
-      taskId: input.taskId,
-      durationMs: Date.now() - startedAt,
-      failureKind: "invalid_configuration",
-    })
-    throw new TaskServiceError(
-      "Task email is not configured. Add the required email provider environment variables.",
-      500
-    )
-  }
-
   const copy = TASK_EMAIL_COPY[input.kind]
-  const subject = `${copy.subjectPrefix}: ${input.taskTitle}`
-  const payload: EmailPayload = {
+
+  await deliverTransactionalEmail({
+    name: "task",
+    logPrefix: "task_email",
+    ids: { kind: input.kind, taskId: input.taskId },
+    path: () => `/tasks/${encodeURIComponent(input.taskId)}`,
+    deliveryReference: input.deliveryReference,
     toEmail: input.recipientEmail,
-    subject,
-    html: wrapEmailDocument({
-      subject,
+    compose: (taskUrl) => ({
+      subject: `${copy.subjectPrefix}: ${input.taskTitle}`,
       contentHtml: createTaskEmailHtml(input, taskUrl),
+      text: createTaskEmailText(input, taskUrl),
     }),
-    text: createTaskEmailText(input, taskUrl),
-    ...(emailEnv.EMAIL_REPLY_TO_EMAIL
-      ? { replyTo: emailEnv.EMAIL_REPLY_TO_EMAIL }
-      : {}),
-  }
-
-  try {
-    const transport = deps.transport ?? sendEmail
-    const result = await transport(
-      { deliveryReference: input.deliveryReference, payload },
-      emailEnv
-    )
-
-    console.info("task_email_delivered", {
-      kind: input.kind,
-      taskId: input.taskId,
-      providerStatus: result.providerStatus,
-      providerMessageId: result.providerMessageId,
-      durationMs: Date.now() - startedAt,
-    })
-  } catch (error: unknown) {
-    const transportError = error instanceof EmailTransportError ? error : null
-
-    console.error("task_email_delivery_failed", {
-      kind: input.kind,
-      taskId: input.taskId,
-      durationMs: Date.now() - startedAt,
-      failureKind: transportError?.kind ?? "unexpected_transport_error",
-      providerStatus: transportError?.providerStatus ?? null,
-    })
-
-    throw new TaskServiceError(
-      "Unable to send the task email. Try again shortly.",
-      502
-    )
-  }
+    fail: (message, statusCode) => new TaskServiceError(message, statusCode),
+    explainRejection: false,
+    transport: deps.transport,
+  })
 }
 
 /**

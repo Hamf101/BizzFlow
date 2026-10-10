@@ -18,8 +18,10 @@ import {
   getDocumentById,
   getFolderById,
   runDocumentOperation,
+  isLifecycleAccessRefusal,
 } from "@/services/documents/shared"
 import type { DocumentFolder, DocumentSummary } from "@/types/document"
+import { asSupabaseError, searchableErrorText, type SupabaseErrorLike } from "@/services/supabase-error"
 
 type DocumentLifecycleRpc = "restore_document" | "trash_document"
 type DocumentLifecycleTransition =
@@ -37,12 +39,6 @@ type FolderLifecycleRpc =
   | "restore_folder"
   | "trash_folder"
 
-type SupabaseErrorLike = {
-  code?: string
-  details?: string
-  hint?: string
-  message?: string
-}
 
 /**
  * Restores an archived document to Active or a trashed document to its
@@ -379,15 +375,8 @@ function createLifecycleMutationError(
   error: unknown,
   fallbackMessage: string
 ): DocumentServiceError {
-  const errorLike = getSupabaseErrorLike(error)
-  const message = [
-    errorLike?.message,
-    errorLike?.details,
-    errorLike?.hint,
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase()
+  const errorLike = asSupabaseError(error)
+  const message = searchableErrorText(errorLike)
 
   if (errorLike?.code === "P0002") {
     return new DocumentServiceError(
@@ -421,13 +410,7 @@ function isLifecycleAccessDenied(
   searchableMessage: string
 ): boolean {
   if (error?.code === "42501") {
-    return (
-      searchableMessage.includes("active organization membership") ||
-      searchableMessage.includes(
-        "contributor access and a manager role"
-      ) ||
-      searchableMessage.includes("sufficient access")
-    )
+    return isLifecycleAccessRefusal(error, searchableMessage)
   }
 
   return (
@@ -437,11 +420,6 @@ function isLifecycleAccessDenied(
   )
 }
 
-function getSupabaseErrorLike(error: unknown): SupabaseErrorLike | null {
-  return error && typeof error === "object"
-    ? (error as SupabaseErrorLike)
-    : null
-}
 
 function getTransitionVerb(
   rpcName: DocumentLifecycleRpc | FolderLifecycleRpc

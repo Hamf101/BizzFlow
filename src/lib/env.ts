@@ -41,8 +41,7 @@ const aiEnvSchema = z.object({
     .string()
     .trim()
     .min(1)
-    .regex(/^[a-z][a-z0-9_-]*$/)
-    .default("gemini"),
+    .regex(/^[a-z][a-z0-9_-]*$/),
   AI_MODEL: z.string().trim().min(1),
   // A Flow turn that builds a form has taken Gemini 12-43 seconds, and its
   // longest answer (8,192 tokens) takes longer still.
@@ -143,29 +142,12 @@ const smsEnvSchema = z.object({
   ),
 })
 
-type PublicSupabaseInput = z.infer<typeof publicSupabaseSchema>
-type AdminSupabaseInput = z.infer<typeof adminSupabaseSchema>
-
-export type PublicSupabaseEnv = {
-  SUPABASE_URL: string
-  SUPABASE_PUBLISHABLE_KEY: string
-}
-
-export type AdminSupabaseEnv = PublicSupabaseEnv & {
-  SUPABASE_SECRET_KEY: string
-}
+export type PublicSupabaseEnv = z.infer<typeof publicSupabaseSchema>
+export type AdminSupabaseEnv = z.infer<typeof adminSupabaseSchema>
 
 export type AppUrlEnv = z.infer<typeof appUrlSchema>
 export type EmailJsEmailEnv = z.infer<typeof emailJsEmailEnvSchema>
 export type EmailEnv = EmailJsEmailEnv
-/** Dormant Resend adapter configuration retained for later reactivation. */
-export type ResendEmailEnv = {
-  EMAIL_PROVIDER: "resend"
-  EMAIL_REPLY_TO_EMAIL?: string
-  EMAIL_TIMEOUT_MS: number
-  RESEND_API_KEY: string
-  RESEND_FROM_EMAIL: string
-}
 export type AiEnv = z.infer<typeof aiEnvSchema>
 export type AiKeyedProvider = keyof typeof AI_PROVIDER_KEY_NAMES
 export type R2Env = z.infer<typeof r2EnvSchema>
@@ -237,24 +219,22 @@ function parseAllowedMimeTypes(
   return mimeTypes
 }
 
-function formatEnvError(error: z.ZodError): string {
-  return error.issues
-    .map((issue: z.core.$ZodIssue) => `${issue.path.join(".")}: ${issue.message}`)
-    .join("; ")
-}
+// Zod objects drop undeclared keys, so only the schema's own values come back.
+function parseEnv<Schema extends z.ZodType>(
+  schema: Schema,
+  source: unknown,
+  label: string
+): z.infer<Schema> {
+  const result = schema.safeParse(source)
 
-function normalizePublicSupabaseEnv(env: PublicSupabaseInput): PublicSupabaseEnv {
-  return {
-    SUPABASE_URL: env.SUPABASE_URL,
-    SUPABASE_PUBLISHABLE_KEY: env.SUPABASE_PUBLISHABLE_KEY,
+  if (!result.success) {
+    const issues = result.error.issues
+      .map((issue: z.core.$ZodIssue) => `${issue.path.join(".")}: ${issue.message}`)
+      .join("; ")
+    throw new Error(`Invalid ${label} environment: ${issues}`)
   }
-}
 
-function normalizeAdminSupabaseEnv(env: AdminSupabaseInput): AdminSupabaseEnv {
-  return {
-    ...normalizePublicSupabaseEnv(env),
-    SUPABASE_SECRET_KEY: env.SUPABASE_SECRET_KEY,
-  }
+  return result.data
 }
 
 /**
@@ -264,13 +244,7 @@ function normalizeAdminSupabaseEnv(env: AdminSupabaseInput): AdminSupabaseEnv {
  * @throws Error when the URL or publishable key is missing or invalid.
  */
 export function getPublicSupabaseEnv(): PublicSupabaseEnv {
-  const result = publicSupabaseSchema.safeParse(process.env)
-
-  if (!result.success) {
-    throw new Error(`Invalid public Supabase environment: ${formatEnvError(result.error)}`)
-  }
-
-  return normalizePublicSupabaseEnv(result.data)
+  return parseEnv(publicSupabaseSchema, process.env, "public Supabase")
 }
 
 /**
@@ -279,13 +253,7 @@ export function getPublicSupabaseEnv(): PublicSupabaseEnv {
  * @returns True when the URL and publishable key are set.
  */
 export function isPublicSupabaseEnvConfigured(): boolean {
-  const result = publicSupabaseSchema.safeParse(process.env)
-
-  if (!result.success) {
-    return false
-  }
-
-  return true
+  return publicSupabaseSchema.safeParse(process.env).success
 }
 
 /**
@@ -295,13 +263,7 @@ export function isPublicSupabaseEnvConfigured(): boolean {
  * @throws Error when any required admin value is missing or invalid.
  */
 export function getAdminSupabaseEnv(): AdminSupabaseEnv {
-  const result = adminSupabaseSchema.safeParse(process.env)
-
-  if (!result.success) {
-    throw new Error(`Invalid admin Supabase environment: ${formatEnvError(result.error)}`)
-  }
-
-  return normalizeAdminSupabaseEnv(result.data)
+  return parseEnv(adminSupabaseSchema, process.env, "admin Supabase")
 }
 
 /**
@@ -311,71 +273,89 @@ export function getAdminSupabaseEnv(): AdminSupabaseEnv {
  * @throws Error when the configured app URL is invalid.
  */
 export function getAppUrlEnv(): AppUrlEnv {
-  const result = appUrlSchema.safeParse(process.env)
-
-  if (!result.success) {
-    throw new Error(`Invalid app URL environment: ${formatEnvError(result.error)}`)
-  }
-
-  return result.data
+  return parseEnv(appUrlSchema, process.env, "app URL")
 }
 
 /**
  * Reads and validates the active server-side EmailJS configuration.
  *
- * Transactional delivery is temporarily pinned to EmailJS while the Resend
- * sender is unavailable. A stale EMAIL_PROVIDER value cannot reactivate the
- * dormant Resend adapter.
+ * Transactional delivery is pinned to EmailJS, the only email provider; a
+ * stale EMAIL_PROVIDER value cannot select another one.
  *
  * @returns The validated EmailJS delivery configuration.
  * @throws Error when required email-delivery values are missing or invalid.
  */
 export function getEmailEnv(): EmailEnv {
-  const result = emailJsEmailEnvSchema.safeParse({
-    ...process.env,
-    EMAIL_PROVIDER: "emailjs",
-  })
+  const env = parseEnv(
+    emailJsEmailEnvSchema,
+    { ...process.env, EMAIL_PROVIDER: "emailjs" },
+    "email"
+  )
 
-  if (!result.success) {
+  // EmailJS's public key ships to browsers by design; without the private key
+  // anyone holding it could send through this account.
+  if (isProductionRuntime() && !env.EMAILJS_PRIVATE_KEY) {
     throw new Error(
-      `Invalid email environment: ${formatEnvError(result.error)}`
+      "Invalid email environment: EMAILJS_PRIVATE_KEY is required in production."
     )
   }
 
-  return result.data
+  return env
+}
+
+/**
+ * Fails a Vercel production deployment at boot when a value every request
+ * path depends on is missing, instead of on the first user who reaches it.
+ * Optional services (Sentry, PostHog, Upstash, AI, SMS) keep their fallbacks.
+ *
+ * @throws Error naming the first missing or invalid value.
+ */
+export function assertProductionEnv(): void {
+  if (process.env.VERCEL_ENV !== "production") {
+    return
+  }
+
+  getAdminSupabaseEnv()
+  getAppUrlEnv()
+  getEmailEnv()
+  getR2Env()
+  getFileUploadPolicyEnv()
+}
+
+/**
+ * Whether this is a production build or a Vercel production deployment,
+ * where a development fallback must fail closed rather than pretend to work.
+ *
+ * @returns True when NODE_ENV or VERCEL_ENV is `production`.
+ */
+export function isProductionRuntime(): boolean {
+  return (
+    process.env.NODE_ENV === "production" ||
+    process.env.VERCEL_ENV === "production"
+  )
 }
 
 /**
  * Reads and validates the server-only AI provider configuration.
- *
- * The deprecated Gemini model and timeout names remain read-only compatibility
- * aliases for one release. Canonical AI-prefixed values always take precedence.
  *
  * @returns Provider, exact model identifier, provider credential, and timeout.
  * @throws Error when required AI configuration is missing or invalid.
  */
 export function getAiEnv(): AiEnv {
   const provider = process.env.AI_PROVIDER?.trim() || "gemini"
-  const result = aiEnvSchema.safeParse({
-    AI_PROVIDER: provider,
-    AI_MODEL: readCanonicalOrDeprecatedEnvValue(
-      process.env.AI_MODEL,
-      provider === "gemini" ? process.env.GEMINI_MODEL : undefined
-    ) ?? (provider === "gemini" ? "gemini-flash-latest" : undefined),
-    AI_TIMEOUT_MS: readCanonicalOrDeprecatedEnvValue(
-      process.env.AI_TIMEOUT_MS,
-      provider === "gemini" ? process.env.GEMINI_TIMEOUT_MS : undefined
-    ),
-    AI_EFFORT: process.env.AI_EFFORT?.trim() || undefined,
-  })
-
-  if (!result.success) {
-    throw new Error(
-      `Invalid AI environment: ${formatEnvError(result.error)}`
-    )
-  }
-
-  return result.data
+  return parseEnv(
+    aiEnvSchema,
+    {
+      AI_PROVIDER: provider,
+      AI_MODEL:
+        process.env.AI_MODEL?.trim() ||
+        // The newest approved model (services/ai/approved-models.ts).
+        (provider === "gemini" ? "gemini-3.8-flash" : undefined),
+      AI_TIMEOUT_MS: process.env.AI_TIMEOUT_MS,
+      AI_EFFORT: process.env.AI_EFFORT?.trim() || undefined,
+    },
+    "AI"
+  )
 }
 
 /**
@@ -396,27 +376,6 @@ export function getAiProviderKey(provider: AiKeyedProvider): string {
   return value
 }
 
-function readCanonicalOrDeprecatedEnvValue(
-  canonicalValue: string | undefined,
-  deprecatedValue: string | undefined
-): string | undefined {
-  if (
-    typeof canonicalValue === "string" &&
-    canonicalValue.trim().length > 0
-  ) {
-    return canonicalValue
-  }
-
-  if (
-    typeof deprecatedValue === "string" &&
-    deprecatedValue.trim().length > 0
-  ) {
-    return deprecatedValue
-  }
-
-  return undefined
-}
-
 /**
  * Reads and validates server-only Cloudflare R2 environment values.
  *
@@ -424,13 +383,7 @@ function readCanonicalOrDeprecatedEnvValue(
  * @throws Error when required values are missing or invalid.
  */
 export function getR2Env(): R2Env {
-  const result = r2EnvSchema.safeParse(process.env)
-
-  if (!result.success) {
-    throw new Error(`Invalid R2 environment: ${formatEnvError(result.error)}`)
-  }
-
-  return result.data
+  return parseEnv(r2EnvSchema, process.env, "R2")
 }
 
 /**
@@ -440,13 +393,7 @@ export function getR2Env(): R2Env {
  * @throws Error when the size or MIME type list is missing or invalid.
  */
 export function getFileUploadPolicyEnv(): FileUploadPolicyEnv {
-  const result = fileUploadPolicySchema.safeParse(process.env)
-
-  if (!result.success) {
-    throw new Error(`Invalid file upload policy environment: ${formatEnvError(result.error)}`)
-  }
-
-  return result.data
+  return parseEnv(fileUploadPolicySchema, process.env, "file upload policy")
 }
 
 /**
@@ -456,13 +403,7 @@ export function getFileUploadPolicyEnv(): FileUploadPolicyEnv {
  * @throws Error when the URL or token is missing or invalid.
  */
 export function getUpstashRedisEnv(): UpstashRedisEnv {
-  const result = upstashRedisEnvSchema.safeParse(process.env)
-
-  if (!result.success) {
-    throw new Error(`Invalid Upstash Redis environment: ${formatEnvError(result.error)}`)
-  }
-
-  return result.data
+  return parseEnv(upstashRedisEnvSchema, process.env, "Upstash Redis")
 }
 
 /**
@@ -474,13 +415,7 @@ export function getUpstashRedisEnv(): UpstashRedisEnv {
  * @returns True when the REST URL and token are both set and valid.
  */
 export function isUpstashRedisEnvConfigured(): boolean {
-  const result = upstashRedisEnvSchema.safeParse(process.env)
-
-  if (!result.success) {
-    return false
-  }
-
-  return true
+  return upstashRedisEnvSchema.safeParse(process.env).success
 }
 
 /**
@@ -494,13 +429,7 @@ export function isUpstashRedisEnvConfigured(): boolean {
  * @throws Error when a configured value is present but malformed.
  */
 export function getInngestEnv(): InngestEnv {
-  const result = inngestEnvSchema.safeParse(process.env)
-
-  if (!result.success) {
-    throw new Error(`Invalid Inngest environment: ${formatEnvError(result.error)}`)
-  }
-
-  return result.data
+  return parseEnv(inngestEnvSchema, process.env, "Inngest")
 }
 
 /**
@@ -520,13 +449,18 @@ export function getSentryEnv(): SentryEnv | null {
     return null
   }
 
-  const result = sentryEnvSchema.safeParse(process.env)
-
-  if (!result.success) {
-    throw new Error(`Invalid Sentry environment: ${formatEnvError(result.error)}`)
-  }
-
-  return result.data
+  return parseEnv(
+    sentryEnvSchema,
+    {
+      ...process.env,
+      // Unset, a deploy reports as its Vercel environment, not "development".
+      SENTRY_ENVIRONMENT:
+        process.env.SENTRY_ENVIRONMENT?.trim() ||
+        process.env.VERCEL_ENV?.trim() ||
+        undefined,
+    },
+    "Sentry"
+  )
 }
 
 /** Default PostHog ingest origin used when no host is configured. */
@@ -549,17 +483,11 @@ export function getPosthogEnv(): { key: string; host: string } | null {
     return null
   }
 
-  const result = posthogEnvSchema.safeParse(process.env)
-
-  if (!result.success) {
-    throw new Error(
-      `Invalid PostHog environment: ${formatEnvError(result.error)}`
-    )
-  }
+  const env = parseEnv(posthogEnvSchema, process.env, "PostHog")
 
   return {
     key: configuredKey,
-    host: result.data.NEXT_PUBLIC_POSTHOG_HOST ?? DEFAULT_POSTHOG_HOST,
+    host: env.NEXT_PUBLIC_POSTHOG_HOST ?? DEFAULT_POSTHOG_HOST,
   }
 }
 
@@ -570,11 +498,5 @@ export function getPosthogEnv(): { key: string; host: string } | null {
  * @throws Error when SMS environment configuration is invalid.
  */
 export function getSmsEnv(): SmsEnv {
-  const result = smsEnvSchema.safeParse(process.env)
-
-  if (!result.success) {
-    throw new Error(`Invalid SMS environment: ${formatEnvError(result.error)}`)
-  }
-
-  return result.data
+  return parseEnv(smsEnvSchema, process.env, "SMS")
 }

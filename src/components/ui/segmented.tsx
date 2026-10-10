@@ -54,7 +54,7 @@ export function Segmented<Value extends string>({
         <button
           aria-checked={option.value === value}
           className={cn(
-            "h-8 rounded-[9px] px-3 text-[13px] text-muted-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40",
+            "h-8 rounded-[9px] px-3 text-[13px] max-md:h-11 text-muted-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40",
             option.value === value && "bg-card text-foreground shadow-sm"
           )}
           data-value={option.value}

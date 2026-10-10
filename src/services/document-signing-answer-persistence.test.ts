@@ -10,6 +10,7 @@ import { DocumentSigningServiceError as InternalDocumentSigningServiceError } fr
 import {
   createBaseTables,
   createRecipientRow,
+  createTemplateContent,
   DOCUMENT_ID,
   DRAWING_DATA_URL,
   FakeClient,
@@ -304,7 +305,7 @@ describe("document signing answer persistence", () => {
     })
   })
 
-  it("freezes an answer once a signer has agreed to it, for members and for later signers", async () => {
+  it("freezes an answer once a signer has agreed to it", async () => {
     const secondRecipientId = "40000000-0000-4000-8000-000000000002"
     const secondToken = "token_two_abcdefghijklmnopqrstuvwxyz123456"
     const signedTables = () => {
@@ -337,20 +338,8 @@ describe("document signing answer persistence", () => {
     ).rejects.toMatchObject({ statusCode: 409 })
     expect(memberTables.document_answers[0].values).toEqual({ client_name: "As signed" })
 
-    const signerTables = signedTables()
-    const signerClient = new FakeClient(signerTables)
-    await expect(
-      completePublicDocumentSigning(
-        {
-          baselineValues: { client_name: "As signed" },
-          signatureDataUrl: DRAWING_DATA_URL,
-          token: secondToken,
-          values: { client_name: "Changed after signing" },
-        },
-        { client: signerClient as never, now: (): Date => NOW }
-      )
-    ).rejects.toMatchObject({ statusCode: 409 })
-    expect(signerTables.document_answers[0].values).toEqual({ client_name: "As signed" })
+    // A later signer's change is refused under the answer row's lock, which
+    // supabase/tests/signing-and-document-guards-live-rpc.sql proves.
 
     // Signing on without changing what was agreed still completes.
     const completingTables = signedTables()
@@ -367,6 +356,64 @@ describe("document signing answer persistence", () => {
 
     expect(completed.workflowStatus).toBe("completed")
     expect(completingTables.document_answers[0].values).toEqual({ client_name: "As signed" })
+  })
+
+  it("takes a drawing only in the sender's own box, from a member, before the document is sent", async () => {
+    const tablesWithBoxes = (sent: boolean) => {
+      const tables = createBaseTables()
+      const content = createTemplateContent({ requiredInitials: true })
+      content.blocks.push({
+        id: "50000000-0000-4000-8000-000000000003",
+        type: "signature_field",
+        fieldKey: "sender_signature",
+        label: "Sender signature",
+        required: false,
+        helpText: null,
+        signer: "sender",
+      })
+      tables.documents[0].template_snapshot = content
+
+      if (sent) {
+        tables.document_signing_recipients.push(
+          createRecipientRow(RECIPIENT_ONE_ID, TOKEN_ONE, "Avery Morgan", "avery@example.com")
+        )
+        tables.document_answers[0].workflow_status = "awaiting_signatures"
+      }
+      return tables
+    }
+    const saveAsMember = (tables: ReturnType<typeof createBaseTables>, values: Record<string, unknown>) =>
+      saveGeneratedDocumentAnswers(
+        { actorUserId: MANAGER_ID, documentId: DOCUMENT_ID, organizationId: ORG_ID, values },
+        { client: new FakeClient(tables) as never }
+      )
+
+    const draftTables = tablesWithBoxes(false)
+    await saveAsMember(draftTables, { sender_signature: DRAWING_DATA_URL })
+    expect(draftTables.document_answers[0].values).toEqual({ sender_signature: DRAWING_DATA_URL })
+
+    // A box with no signer named is Signer 1's, never the sender's.
+    await expect(saveAsMember(tablesWithBoxes(false), { client_initials: DRAWING_DATA_URL })).rejects.toMatchObject({ statusCode: 400 })
+
+    const sentTables = tablesWithBoxes(true)
+    await expect(saveAsMember(sentTables, { sender_signature: DRAWING_DATA_URL })).rejects.toMatchObject({ statusCode: 409 })
+    expect(sentTables.document_answers[0].values).toEqual({})
+
+    for (const key of ["client_initials", "sender_signature"]) {
+      const signerTables = tablesWithBoxes(true)
+      await expect(
+        completePublicDocumentSigning(
+          {
+            initialsDataUrl: DRAWING_DATA_URL,
+            signatureDataUrl: DRAWING_DATA_URL,
+            token: TOKEN_ONE,
+            values: { [key]: DRAWING_DATA_URL, client_name: "Northstar" },
+          },
+          { client: new FakeClient(signerTables) as never, now: (): Date => NOW }
+        )
+      ).rejects.toMatchObject({ statusCode: 400 })
+      expect(signerTables.document_answers[0].values).toEqual({})
+      expect(signerTables.document_signing_recipients[0].status).toBe("pending")
+    }
   })
 
   it("prunes a stale hidden value at read and across controller patches", async () => {

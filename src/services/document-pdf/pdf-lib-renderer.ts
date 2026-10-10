@@ -83,7 +83,7 @@ import {
   RADIO_ACROSS_GAP,
   RULED_LINE_PITCH,
   RULED_TEXT_RISE,
-  SIGNER_NOTE,
+  drawnBoxNote,
   TABLE_CELL_PADDING,
   TABLE_ROW_LEAST,
   tickedOptions,
@@ -212,7 +212,7 @@ export async function renderPdfLibDocument(
       faceFor,
       formFont,
       freeImages,
-      hasSigners: input.signers.length > 0,
+      signers: input.signers,
       imageCache,
       layout,
       page,
@@ -1115,9 +1115,8 @@ async function drawPdfLibField(
       contentBottom = boxTop - ANSWER_BOX_PADDING - size.height
     } else {
       const answer =
-        (block.type === "signature_field" || block.type === "initials_field") &&
-        context.hasSigners
-          ? SIGNER_NOTE
+        block.type === "signature_field" || block.type === "initials_field"
+          ? drawnBoxNote(block, context.signers)
           : (item.answerOverride ??
             formatFieldValue(block, context.answers[block.fieldKey]))
 
@@ -1287,7 +1286,7 @@ function styledAnswer(item: PdfBlockFlowItem, block: StyledFieldBlock, context: 
   if (block.type === "signature_field" || block.type === "initials_field") {
     const drawing = normalizeDrawingDataUrl(context.answers[block.fieldKey])
 
-    return { answer: !drawing && context.hasSigners ? SIGNER_NOTE : "", drawing }
+    return { answer: drawing ? "" : drawnBoxNote(block, context.signers), drawing }
   }
 
   return { answer: item.answerOverride ?? formatFieldValue(block, context.answers[block.fieldKey]), drawing: null }

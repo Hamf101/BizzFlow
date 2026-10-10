@@ -1,7 +1,6 @@
 import { z } from "zod"
+import { uuidSchema, timestampSchema } from "@/types/schemas"
 
-const uuidSchema = z.string().uuid()
-const timestampSchema = z.string().datetime({ offset: true })
 
 /** Lifecycle states implemented by the task workflow. */
 export const TASK_STATUSES = [
@@ -107,8 +106,9 @@ const taskRowShape = {
   description: z.string().trim().min(1).max(5_000).nullable(),
   due_at: timestampSchema.nullable(),
   submission_id: uuidSchema.nullable(),
-  created_by: uuidSchema,
-  updated_by: uuidSchema,
+  // Null once that member's account is deleted.
+  created_by: uuidSchema.nullable(),
+  updated_by: uuidSchema.nullable(),
   revision: z.number().int().positive(),
   created_at: timestampSchema,
   updated_at: timestampSchema,
@@ -154,7 +154,7 @@ const taskReminderRowShape = {
   origin: taskReminderOriginSchema.default("manual"),
   attempt_count: z.number().int().min(0),
   last_error: z.string().trim().min(1).max(500).nullable(),
-  created_by: uuidSchema,
+  created_by: uuidSchema.nullable(),
   created_at: timestampSchema,
   updated_at: timestampSchema,
 } as const
@@ -219,8 +219,8 @@ export type TaskBase = {
   description: string | null
   dueAt: string | null
   submissionId: string | null
-  createdBy: string
-  updatedBy: string
+  createdBy: string | null
+  updatedBy: string | null
   revision: number
   createdAt: string
   updatedAt: string
@@ -245,7 +245,7 @@ export type TaskReminderBase = {
   origin: TaskReminderOrigin
   attemptCount: number
   lastError: string | null
-  createdBy: string
+  createdBy: string | null
   createdAt: string
   updatedAt: string
 }

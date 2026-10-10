@@ -67,6 +67,14 @@ describe("the dashboard queue", () => {
     expect(selectDueThisWeek(tasks, MEMBERS, ME, NOW, false).map((task) => task.id)).toEqual(["mine-tuesday"])
     expect(relativeDay("2026-09-02T12:00:00.000Z", NOW)).toBe("Sep 2")
   })
+
+  it("counts calendar days in the viewer's time zone, not 24-hour blocks", () => {
+    // 00:30 in Auckland on the 17th; last thing the evening before was yesterday there.
+    const justAfterMidnight = new Date("2026-09-16T12:30:00.000Z")
+
+    expect(relativeDay("2026-09-16T10:00:00.000Z", justAfterMidnight, "Pacific/Auckland")).toBe("yesterday")
+    expect(relativeDay("2026-09-16T10:00:00.000Z", justAfterMidnight, "UTC")).toBe("today")
+  })
 })
 
 function createTask(id: string, overrides: Partial<Task> = {}): Task {

@@ -1,7 +1,8 @@
 import { rgb } from "pdf-lib"
 
 import { embedPdfLibImage, fitPdfImage } from "./pdf-lib-images"
-import { normalizeStandardFontText } from "./pdf-lib-text"
+import { SIGNER_NAME_LEADING, signerNameWidth } from "./layout"
+import { normalizeStandardFontText, wrapPdfText } from "./pdf-lib-text"
 import type { PdfLibRenderContext } from "./pdf-lib-types"
 import {
   formatSignedAt,
@@ -68,7 +69,10 @@ export async function drawPdfLibSigner(
   const hasDrawings = Boolean(
     signer.signatureDataUrl || signer.initialsDataUrl
   )
-  const boxHeight = hasDrawings ? 68 : 54
+  // A long name wraps left of the drawings, the card a line taller for each line more.
+  const nameLines = wrapPdfText(signer.name, context.boldFont, 10, signerNameWidth(signer, contentWidth))
+  const below = (nameLines.length - 1) * SIGNER_NAME_LEADING
+  const boxHeight = (hasDrawings ? 68 : 54) + below
   const boxBottom = topY - boxHeight
 
   context.page.drawRectangle({
@@ -79,21 +83,20 @@ export async function drawPdfLibSigner(
     borderColor: rgb(0.9, 0.91, 0.93),
     borderWidth: 0.8,
   })
-  context.page.drawText(
-    normalizeStandardFontText(signer.name, context.boldFont),
-    {
+  nameLines.forEach((line: string, index: number): void => {
+    context.page.drawText(normalizeStandardFontText(line, context.boldFont), {
       x: margin + 7,
-      y: topY - 17,
+      y: topY - 17 - index * SIGNER_NAME_LEADING,
       color: rgb(0.07, 0.09, 0.13),
       font: context.boldFont,
       size: 10,
-    }
-  )
+    })
+  })
   context.page.drawText(
     normalizeStandardFontText(signer.email, context.regularFont),
     {
       x: margin + 7,
-      y: topY - 31,
+      y: topY - 31 - below,
       color: rgb(0.29, 0.33, 0.39),
       font: context.regularFont,
       size: 8,
@@ -110,7 +113,7 @@ export async function drawPdfLibSigner(
     ),
     {
       x: margin + 7,
-      y: topY - 44,
+      y: topY - 44 - below,
       color: rgb(0.29, 0.33, 0.39),
       font: context.regularFont,
       size: 8,

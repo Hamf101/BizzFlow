@@ -140,6 +140,18 @@ describe("stored pictures", () => {
     expect(render.embedPng).not.toHaveBeenCalled()
     await expect(embedPdfLibImage(render.context, { asset: PICTURE })).rejects.toMatchObject({ statusCode: 500 })
   })
+
+  it("counts stored PNG print copies toward the 64-megapixel allowance", async () => {
+    const render = createStubRender()
+    const context = { ...render.context, readImage: async () => new Uint8Array(createPngHeaderBytes(4_000, 4_000)) }
+
+    for (const id of ["a", "b", "c", "d"]) {
+      await embedPdfLibImage(context, { asset: { ...PICTURE, id: `${PICTURE.id.slice(0, -1)}${id}` } })
+    }
+
+    await expect(embedPdfLibImage(context, createPngDataUrl(4_000, 4_000, 9))).rejects.toMatchObject({ statusCode: 400 })
+    expect(render.embedPng).toHaveBeenCalledTimes(4)
+  })
 })
 
 function createPngDataUrl(width: number, height: number, salt = 0): string {

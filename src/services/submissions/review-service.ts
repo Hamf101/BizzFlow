@@ -1,5 +1,4 @@
 import type {
-  AssignInternalSubmissionInput,
   CreateInternalSubmissionCommentInput,
   SubmissionServiceClient,
   SubmissionServiceDeps,
@@ -16,13 +15,14 @@ import {
   requireSubmissionPermission,
   runSubmissionOperation,
 } from "@/services/submissions/shared"
-import { getOrganizationRoleFromSubject } from "@/lib/permissions"
+import { getOrganizationRoleFromSubject, type OrganizationRole } from "@/lib/permissions"
+import { readReviewers } from "@/services/submissions/reviewer-service"
 import {
   parseSubmissionRow,
   type Submission,
 } from "@/types/submission"
 import {
-  parseSubmissionActivityEventRow,
+  parseSubmissionActivityEventRows,
   parseSubmissionCommentRow,
   SUBMISSION_REVIEW_TRANSITIONS,
   type SubmissionComment,
@@ -37,66 +37,6 @@ export const SUBMISSION_COMMENT_COLUMNS =
 /** Columns required by the canonical submission-activity parser. */
 export const SUBMISSION_ACTIVITY_COLUMNS =
   "id,org_id,submission_id,actor_user_id,event_type,from_status,to_status,assignee_user_id,comment_id,submission_revision,created_at"
-
-/**
- * Assigns or reassigns one submission through the atomic review RPC.
- *
- * Assigning a submitted row starts review; reassignment in an active workflow
- * retains the current state. The database validates tenant membership and the
- * assignee's eligible role inside the transaction.
- *
- * @param input - Actor, tenant, submission revision, and target assignee.
- * @param deps - Optional trusted database dependency.
- * @returns Updated submission with its next revision.
- * @throws SubmissionServiceError when access, validation, or persistence fails.
- */
-export async function assignInternalSubmission(
-  input: AssignInternalSubmissionInput,
-  deps: SubmissionServiceDeps = {}
-): Promise<Submission> {
-  return runSubmissionOperation(
-    "assign_internal_submission",
-    {
-      actorUserId: input.actorUserId,
-      organizationId: input.organizationId,
-      submissionId: input.submissionId,
-      expectedRevision: input.expectedRevision,
-      assignedTo: input.assignedTo,
-    },
-    async (): Promise<Submission> => {
-      const client = getSubmissionClient(deps)
-
-      await requireSubmissionPermission(
-        client,
-        input.organizationId,
-        input.actorUserId,
-        "submissions:assign",
-        "You cannot assign internal submissions."
-      )
-      const expectedRevision = normalizeExpectedRevision(input.expectedRevision)
-      const assignedTo = normalizeUuid(
-        input.assignedTo,
-        "Submission assignee must be a valid user id."
-      )
-      const { data, error } = await client.rpc("assign_internal_submission", {
-        target_org_id: input.organizationId,
-        target_submission_id: input.submissionId,
-        target_expected_revision: expectedRevision,
-        target_assignee_user_id: assignedTo,
-        target_actor_user_id: input.actorUserId,
-      })
-
-      if (error || !data) {
-        throw createSubmissionMutationError(
-          error,
-          "Unable to assign internal submission."
-        )
-      }
-
-      return parseSubmissionRow(data)
-    }
-  )
-}
 
 /**
  * Applies one binding review decision through an atomic transition RPC.
@@ -239,33 +179,47 @@ export async function createInternalSubmissionComment(
   )
 }
 
+// Events that name a reviewer or someone it was shared with.
+const NAMES_A_REVIEWER = new Set<string>([
+  "assigned",
+  "changes_dismissed",
+  "reviewer_removed",
+  "shared",
+  "unshared",
+  "suggestion_accepted",
+  "suggestion_declined",
+])
+
 /**
- * Loads immutable comments and activity for an already-authorized submission.
+ * Loads immutable comments and activity for an already-authorized submission,
+ * leaving out what names a reviewer the viewer may not see (the same rule as
+ * the reviewer panel) and the notes those events carry.
  *
  * @param client - Trusted Supabase client.
- * @param organizationId - Tenant identifier.
- * @param submissionId - Submission identifier.
+ * @param submission - The submission, already known to be visible to the viewer.
+ * @param viewer - Who is looking, and their role.
  * @returns Review comments and timeline events in chronological order.
  * @throws SubmissionServiceError when either query fails or rows are invalid.
  */
 export async function listSubmissionReviewData(
   client: SubmissionServiceClient,
-  organizationId: string,
-  submissionId: string
+  submission: Submission,
+  viewer: { role: OrganizationRole; userId: string }
 ): Promise<SubmissionReviewData> {
-  const [commentsResult, activityResult] = await Promise.all([
+  const [commentsResult, activityResult, reviewers] = await Promise.all([
     client
       .from("submission_comments")
       .select(SUBMISSION_COMMENT_COLUMNS)
-      .eq("org_id", organizationId)
-      .eq("submission_id", submissionId)
+      .eq("org_id", submission.organizationId)
+      .eq("submission_id", submission.id)
       .order("created_at", { ascending: true }),
     client
       .from("submission_activity_events")
       .select(SUBMISSION_ACTIVITY_COLUMNS)
-      .eq("org_id", organizationId)
-      .eq("submission_id", submissionId)
+      .eq("org_id", submission.organizationId)
+      .eq("submission_id", submission.id)
       .order("created_at", { ascending: true }),
+    readReviewers(client, submission, viewer),
   ])
 
   if (commentsResult.error || !commentsResult.data) {
@@ -282,9 +236,22 @@ export async function listSubmissionReviewData(
     )
   }
 
+  const seen = new Set([viewer.userId, ...reviewers.visible.map((reviewer) => reviewer.userId)])
+  const activity = parseSubmissionActivityEventRows(activityResult.data)
+  const hidden = reviewers.seesAll
+    ? []
+    : activity.filter(
+        (event) =>
+          NAMES_A_REVIEWER.has(event.eventType) &&
+          event.assigneeUserId !== null &&
+          !seen.has(event.assigneeUserId) &&
+          event.actorUserId !== viewer.userId
+      )
+  const hiddenNotes = new Set(hidden.map((event) => event.commentId))
+
   return {
-    comments: commentsResult.data.map(parseSubmissionCommentRow),
-    activity: activityResult.data.map(parseSubmissionActivityEventRow),
+    comments: commentsResult.data.map(parseSubmissionCommentRow).filter((comment) => !hiddenNotes.has(comment.id)),
+    activity: activity.filter((event) => !hidden.includes(event)),
   }
 }
 
@@ -297,24 +264,6 @@ function normalizeExpectedRevision(value: number): number {
   }
 
   return value
-}
-
-function normalizeUuid(value: unknown, message: string): string {
-  if (typeof value !== "string") {
-    throw new SubmissionServiceError(message, 400)
-  }
-
-  const normalizedValue = value.trim().toLowerCase()
-
-  if (
-    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(
-      normalizedValue
-    )
-  ) {
-    throw new SubmissionServiceError(message, 400)
-  }
-
-  return normalizedValue
 }
 
 function normalizeReviewTransition(

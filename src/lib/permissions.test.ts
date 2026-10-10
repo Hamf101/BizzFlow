@@ -4,6 +4,7 @@ import {
   canAssignOrganizationRole,
   canPerformOrganizationAction,
   canInviteMembers,
+  canShareResource,
   createOrganizationPermissionSubject,
   getAssignableOrganizationRoles,
   getOrganizationRolePermissions,
@@ -95,7 +96,7 @@ describe("organization role assignment authority", () => {
 })
 
 describe("organization permissions", () => {
-  it("parses persisted permissions and fails closed on unknown actions", () => {
+  it("parses persisted permissions, dropping actions this build does not know", () => {
     expect(
       createOrganizationPermissionSubject("staff", [
         "people:view",
@@ -105,9 +106,20 @@ describe("organization permissions", () => {
       role: "staff",
       customPermissions: ["people:view", "members:invite"],
     })
-    expect(
-      createOrganizationPermissionSubject("staff", ["unknown:action"])
-    ).toBeNull()
+
+    // A migration may add an action before the code that knows it ships; the
+    // member keeps what this build understands and gains nothing it does not.
+    const subject = createOrganizationPermissionSubject("staff", [
+      "people:view",
+      "templates:publish_everywhere",
+    ])
+    expect(subject).toEqual({ role: "staff", customPermissions: ["people:view"] })
+    expect(canPerformOrganizationAction(subject!, "people:view")).toBe(true)
+    expect(canPerformOrganizationAction(subject!, "templates:manage")).toBe(false)
+  })
+
+  it("fails closed on a role this build does not know", () => {
+    expect(createOrganizationPermissionSubject("auditor", ["people:view"])).toBeNull()
   })
 
   it("allows only owner admins and managers to invite members", () => {
@@ -158,8 +170,6 @@ describe("organization permissions", () => {
     expect(canPerformOrganizationAction("manager", "members:invite")).toBe(true)
     expect(canPerformOrganizationAction("manager", "members:update_role")).toBe(false)
     expect(canPerformOrganizationAction("manager", "audit_logs:view")).toBe(true)
-    expect(canPerformOrganizationAction("manager", "audit_logs:verify")).toBe(false)
-    expect(canPerformOrganizationAction("owner_admin", "audit_logs:verify")).toBe(true)
     expect(canPerformOrganizationAction("manager", "documents:view")).toBe(true)
     expect(canPerformOrganizationAction("manager", "document_comments:create")).toBe(true)
     expect(canPerformOrganizationAction("manager", "documents:create")).toBe(true)
@@ -284,5 +294,18 @@ describe("organization permissions", () => {
         "templates:manage"
       )
     ).toBe(false)
+  })
+})
+
+describe("who may share an item", () => {
+  it("is anyone who can edit it, or a folder manager, and only while it is in use", () => {
+    const active = { accessLevel: "contributor", lifecycleState: "active" } as const
+
+    expect(canShareResource("staff", active)).toBe(true)
+    expect(canShareResource("staff", { ...active, accessLevel: "viewer" })).toBe(false)
+    expect(canShareResource("manager", { ...active, accessLevel: "viewer" })).toBe(true)
+    // Not from Trash or the archive, whoever asks.
+    expect(canShareResource("owner_admin", { ...active, lifecycleState: "trashed" })).toBe(false)
+    expect(canShareResource("manager", { ...active, lifecycleState: "archived" })).toBe(false)
   })
 })

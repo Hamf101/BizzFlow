@@ -48,9 +48,15 @@ import {
   refreshSigningRecipientLink,
   resolveSigningClient,
   startSigningWorkflow,
+  toPublicSignerStatus,
 } from "@/services/document-signing/persistence"
-import { requireDocumentAccess } from "@/services/documents/access-service"
-import { DocumentServiceError } from "@/services/documents/errors"
+import {
+  requireDocumentAccess,
+  requireDocumentReader,
+  requireDocumentWriter,
+  requireReadableDocument,
+  requireDocumentAccessAs,
+} from "@/services/documents/access-service"
 import type { DocumentAccessLevel } from "@/types/document"
 import {
   assertNewRecipientEmails,
@@ -68,16 +74,19 @@ import {
 import type {
   DocumentSigningRecipient,
   GeneratedDocumentSigningView,
+  MemberDocumentSigningView,
   PublicDocumentSigningView,
   PublicSignerStatus,
   SendDocumentForSigningResult,
 } from "@/types/signing"
+import { boxSigner } from "@/types/box-signers"
 import {
   MAX_TEMPLATE_CONTENT_JSON_LENGTH,
   parseTemplateContent,
   type DocumentSigningRecipientRow,
   type TemplateContent,
 } from "@/types/template"
+import { getVisibleTemplateBlocks } from "@/types/template-visibility"
 import { requireStoredImages, TemplateImageServiceError } from "@/services/template-image-service"
 import { withoutImageUrls } from "@/types/template-images"
 
@@ -88,11 +97,6 @@ type PendingInvitation = {
   id: string
   token: string
   row: DocumentSigningRecipientRow
-}
-
-type SigningDocumentStateRow = {
-  lifecycle_state?: unknown
-  archived_at?: unknown
 }
 
 /**
@@ -113,14 +117,8 @@ export async function getGeneratedDocumentSigningView(
     async (): Promise<GeneratedDocumentSigningView> => {
       const client = resolveSigningClient(deps.client)
 
-      const accessLevel = await requireMemberDocumentAccess(
-        client,
-        input.organizationId,
-        input.documentId,
-        input.actorUserId,
-        "viewer",
-        "read",
-        "documents:view",
+      const { accessLevel, guest } = await asSigningError(
+        requireDocumentReader(input, client),
         "You cannot view this document."
       )
       await requireMemberSigningDocumentLifecycle(
@@ -136,9 +134,21 @@ export async function getGeneratedDocumentSigningView(
         input.documentId
       )
 
-      return { ...view, accessLevel }
+      return guest ? toGuestView({ ...view, accessLevel }) : { ...view, accessLevel }
     }
   )
+}
+
+// Someone outside the workspace sees the document as its paper shows it: not
+// where it is filed or who made it, and its signers only as a signing link
+// shows its co-signers.
+function toGuestView(view: MemberDocumentSigningView): GeneratedDocumentSigningView {
+  return {
+    ...view,
+    document: { ...view.document, createdBy: null, folderId: null, templateId: null, templateRevision: null, updatedBy: null },
+    guest: true,
+    recipients: view.recipients.map(toPublicSignerStatus),
+  }
 }
 
 /**
@@ -163,16 +173,7 @@ export async function saveGeneratedDocumentAnswers(
     async (): Promise<GeneratedDocumentSigningView> => {
       const client = resolveSigningClient(deps.client)
 
-      await requireMemberDocumentAccess(
-        client,
-        input.organizationId,
-        input.documentId,
-        input.actorUserId,
-        "contributor",
-        "mutation",
-        "documents:fill",
-        "You cannot fill this document."
-      )
+      await asSigningError(requireDocumentWriter(input, client), "You cannot fill this document.")
       await requireMemberSigningDocumentLifecycle(
         client,
         input.organizationId,
@@ -207,7 +208,8 @@ export async function saveGeneratedDocumentAnswers(
       const content = view.document.templateSnapshot
       const normalizedPatch = await normalizeAnswerPatch(
         collectFields(content),
-        input.values
+        input.values,
+        { sent: view.workflowStatus !== "draft" || view.recipients.length > 0 }
       )
       const visiblePatch = pruneHiddenAnswerPatch(
         content,
@@ -264,16 +266,7 @@ export async function updateGeneratedDocumentContent(
     async (): Promise<{ title: string; updatedAt: string }> => {
       const client = resolveSigningClient(deps.client)
 
-      await requireMemberDocumentAccess(
-        client,
-        input.organizationId,
-        input.documentId,
-        input.actorUserId,
-        "contributor",
-        "mutation",
-        "documents:fill",
-        "You cannot edit this document."
-      )
+      await asSigningError(requireDocumentWriter(input, client), "You cannot edit this document.")
       await requireMemberSigningDocumentLifecycle(
         client,
         input.organizationId,
@@ -342,47 +335,45 @@ export async function updateGeneratedDocumentContent(
 }
 
 /**
- * Keeps a signature meaningful: once anyone has signed, an answer that already
- * had a value stays as it was signed. Whoever signs next may still fill what
- * was left empty.
+ * Refuses to send while a required box of the sender's has no drawing, or a
+ * signature or initials box is assigned to a signer beyond those the document
+ * will have, so no box waits for no one.
  *
- * @param view - Every signer's status and the answers as stored.
- * @param recipientId - The signer submitting these answers.
- * @param patch - The answers they would change.
- * @throws DocumentSigningServiceError when a signed answer would change.
+ * @param content - The document's page.
+ * @param answers - Its answers, which hold the sender's drawings.
+ * @param signerCount - Signers the document has once these are added.
+ * @throws DocumentSigningServiceError naming the first box that is not ready.
  */
-function assertSignedAnswersUnchanged(
-  view: {
-    answers: Record<string, unknown>
-    signers: readonly PublicSignerStatus[]
-  },
-  recipientId: string,
-  patch: Record<string, unknown>
+function assertBoxesReadyToSend(
+  content: TemplateContent,
+  answers: Record<string, unknown>,
+  signerCount: number
 ): void {
-  const signedAlready = view.signers.some(
-    (signer: PublicSignerStatus): boolean =>
-      signer.id !== recipientId && signer.status === "signed"
-  )
-
-  if (!signedAlready) {
-    return
+  for (const block of getVisibleTemplateBlocks(content, answers)) {
+    if (
+      (block.type === "signature_field" || block.type === "initials_field") &&
+      block.required &&
+      boxSigner(block) === "sender" &&
+      !answers[block.fieldKey]
+    ) {
+      throw new DocumentSigningServiceError(`Sign "${block.label}" before sending.`, 400)
+    }
   }
 
-  const rewritesSigned = Object.entries(patch).some(
-    ([fieldKey, value]: [string, unknown]): boolean => {
-      const signedValue = view.answers[fieldKey]
+  const needed = Math.max(
+    0,
+    ...content.blocks.map((block): number => {
+      const signer = block.type === "signature_field" || block.type === "initials_field" ? boxSigner(block) : 0
 
-      return (
-        signedValue !== undefined &&
-        signedValue !== null &&
-        signedValue !== "" &&
-        !isDeepStrictEqual(signedValue, value)
-      )
-    }
+      return signer === "sender" ? 0 : signer
+    })
   )
 
-  if (rewritesSigned) {
-    throw new DocumentSigningServiceError(SIGNED_ANSWERS_MESSAGE, 409)
+  if (needed > signerCount) {
+    throw new DocumentSigningServiceError(
+      `This document has a box for Signer ${needed}. Add at least ${needed} signers to send it.`,
+      400
+    )
   }
 }
 
@@ -453,6 +444,11 @@ export async function sendDocumentForSigning(
 
       const recipients = normalizeRecipientInputs(input.recipients)
       assertNewRecipientEmails(view.recipients, recipients)
+      assertBoxesReadyToSend(
+        view.document.templateSnapshot,
+        view.answers,
+        view.recipients.length + recipients.length
+      )
       const now = getSigningNow(deps.now)
       const expiresAt = new Date(now.getTime() + TOKEN_LIFETIME_MS).toISOString()
       const createId = deps.createId ?? randomUUID
@@ -785,7 +781,8 @@ export async function completePublicDocumentSigning(
         view.answers,
         changedAnswerPatch
       )
-      assertSignedAnswersUnchanged(view, recipient.id, answerPatch)
+      // An answer someone else has signed is kept as signed by
+      // complete_document_recipient_signature, under its row lock.
       const effectiveValues = pruneHiddenAnswerValues(
         view.document.templateSnapshot,
         { ...view.answers, ...answerPatch }
@@ -798,7 +795,8 @@ export async function completePublicDocumentSigning(
       )
       const requiresInitials = templateRequiresRecipientInitials(
         view.document.templateSnapshot,
-        effectiveValues
+        effectiveValues,
+        view.signers.findIndex((signer: PublicSignerStatus): boolean => signer.id === recipient.id) + 1
       )
       const [signatureData, initialsData] = await Promise.all([
         recipient.requires_signature
@@ -850,8 +848,8 @@ async function requireMemberDocumentAccess(
   organizationAction: OrganizationPermissionAction,
   rejectionMessage: string
 ): Promise<DocumentAccessLevel> {
-  try {
-    return await requireDocumentAccess(
+  return asSigningError(
+    requireDocumentAccess(
       {
         organizationId,
         documentId,
@@ -861,17 +859,17 @@ async function requireMemberDocumentAccess(
         requiredOrganizationPermissionAction: organizationAction,
       },
       client
-    )
-  } catch (error: unknown) {
-    if (error instanceof DocumentServiceError) {
-      throw new DocumentSigningServiceError(
-        error.statusCode === 403 ? rejectionMessage : error.message,
-        error.statusCode
-      )
-    }
+    ),
+    rejectionMessage
+  )
+}
 
-    throw error
-  }
+function asSigningError<T>(access: Promise<T>, rejectionMessage: string): Promise<T> {
+  return requireDocumentAccessAs(
+    access,
+    (message, statusCode) => new DocumentSigningServiceError(message, statusCode),
+    rejectionMessage
+  )
 }
 
 async function requireMemberSigningDocumentLifecycle(
@@ -918,54 +916,21 @@ async function requireSigningDocumentLifecycle(
   operation: "read" | "mutation",
   messages: { inactive: string; unavailable: string }
 ): Promise<void> {
-  const { data, error } = await client
-    .from("documents")
-    .select("lifecycle_state,archived_at")
-    .eq("id", documentId)
-    .eq("org_id", organizationId)
-    .maybeSingle()
-
-  if (error) {
-    throw createDatabaseError(error, "Unable to load generated document.")
-  }
-
-  const lifecycleState = data
-    ? normalizeSigningDocumentLifecycle(data as SigningDocumentStateRow)
-    : null
-
-  if (
-    lifecycleState === null ||
-    lifecycleState === "trashed" ||
-    lifecycleState === "purge_pending"
-  ) {
-    throw new DocumentSigningServiceError(messages.unavailable, 404)
-  }
-
-  if (operation === "mutation" && lifecycleState !== "active") {
-    throw new DocumentSigningServiceError(messages.inactive, 409)
-  }
-}
-
-function normalizeSigningDocumentLifecycle(
-  document: SigningDocumentStateRow
-): "active" | "archived" | "trashed" | "purge_pending" {
-  const lifecycleState = document.lifecycle_state
-
-  if (
-    lifecycleState === "active" ||
-    lifecycleState === "archived" ||
-    lifecycleState === "trashed" ||
-    lifecycleState === "purge_pending"
-  ) {
-    return lifecycleState
-  }
-
-  if (lifecycleState === undefined || lifecycleState === null) {
-    return document.archived_at == null ? "active" : "archived"
-  }
-
-  throw new DocumentSigningServiceError(
-    "Database returned an unsupported document lifecycle state.",
-    500
+  requireReadableDocument(
+    await client
+      .from("documents")
+      .select("lifecycle_state")
+      .eq("id", documentId)
+      .eq("org_id", organizationId)
+      .maybeSingle(),
+    {
+      loadFailed: (error) => createDatabaseError(error, "Unable to load generated document."),
+      notFound: () => new DocumentSigningServiceError(messages.unavailable, 404),
+      unsupported: () =>
+        new DocumentSigningServiceError("Database returned an unsupported document lifecycle state.", 500),
+      ...(operation === "mutation"
+        ? { archived: () => new DocumentSigningServiceError(messages.inactive, 409) }
+        : {}),
+    }
   )
 }

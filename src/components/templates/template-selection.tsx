@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Field, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import { bizflowToast } from "@/components/ui/toaster"
+import { announceChange, bizflowToast } from "@/components/ui/toaster"
 import type { TemplateBulkResult } from "@/services/template-service"
 import type { DocumentTemplateStatus } from "@/types/template"
 
@@ -98,21 +98,8 @@ function announce(change: Change, result: TemplateBulkResult): void {
   const noun = count === 1 ? "template" : "templates"
   const title =
     result.failed > 0 ? `${count} of ${count + result.failed} templates ${DONE[change]}` : `${count} ${noun} ${DONE[change]}`
-  const undo = count > 0 ? undoOf(change, result) : null
 
-  bizflowToast.success(title, {
-    action: undo
-      ? {
-          label: "Undo",
-          onClick: () => {
-            undo()
-              .then(() => bizflowToast.success("Undone"))
-              .catch(() => bizflowToast.error("That could not be undone."))
-          },
-        }
-      : undefined,
-    description: result.failed > 0 ? "The rest changed since you looked, or aren't yours to change." : undefined,
-  })
+  announceChange(title, result.failed, count > 0 ? undoOf(change, result) : null)
 }
 
 function undoOf(change: Change, result: TemplateBulkResult): (() => Promise<unknown>) | null {

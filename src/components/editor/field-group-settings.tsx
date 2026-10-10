@@ -2,7 +2,7 @@
 
 import type { ChangeEvent, ReactElement } from "react"
 
-import { CheckboxControl } from "@/components/templates/template-block-editor"
+import { CheckboxControl } from "@/components/editor/block-fields"
 import { Field, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import type { TemplateFieldGroup } from "@/types/template"

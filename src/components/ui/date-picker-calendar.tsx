@@ -120,7 +120,7 @@ export default function DatePickerCalendar({
           <div className="flex items-center gap-1">
             <Button
               aria-label="Previous month"
-              className="size-8"
+              className="size-8 max-md:size-11"
               onClick={() => setFocused(isoOf(year, month - 1, day))}
               size="icon-sm"
               type="button"
@@ -153,7 +153,7 @@ export default function DatePickerCalendar({
             </Select>
             <Button
               aria-label="Next month"
-              className="size-8"
+              className="size-8 max-md:size-11"
               onClick={() => setFocused(isoOf(year, month + 1, day))}
               size="icon-sm"
               type="button"
@@ -194,7 +194,7 @@ export default function DatePickerCalendar({
                           aria-current={shown === today ? "date" : undefined}
                           aria-label={`${WEEKDAYS[weekdayOf(shown)]}, ${formatDateAnswer(shown, SPOKEN_DATE)}`}
                           className={cn(
-                            "grid size-10 place-items-center rounded-[10px] text-sm tabular-nums outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/40",
+                            "grid size-10 place-items-center rounded-[10px] text-sm tabular-nums max-md:size-11 outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/40",
                             shownMonth !== month && "text-muted-foreground/60",
                             shown === today && "font-semibold text-primary",
                             shown === chosen && "bg-primary text-primary-foreground hover:bg-primary"

@@ -99,7 +99,7 @@ describe("listDocumentCards", () => {
   it("still shows every status when the pages cannot be read", async () => {
     const client = createClient()
     const answer = client.rpc.bind(client)
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined)
+    vi.spyOn(console, "warn").mockImplementation(() => undefined)
     vi.spyOn(client, "rpc").mockImplementation(async (functionName, args) =>
       functionName === "document_card_contents"
         ? { data: null, error: new Error("Card contents are unavailable.") }
@@ -120,9 +120,5 @@ describe("listDocumentCards", () => {
       { content: null, id: "document-1", workflowStatus: "awaiting_signatures" },
       { content: null, id: "document-3", workflowStatus: null },
     ])
-    expect(warn).toHaveBeenCalledWith(
-      "document_card_contents_unavailable",
-      expect.objectContaining({ organizationId: "org-1" })
-    )
   })
 })

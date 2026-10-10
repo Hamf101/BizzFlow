@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 
 import { getAuthenticatedUser } from "@/lib/auth"
+import { resolveDocumentOrganizationId } from "@/lib/document-organization"
 import { getPublicSupabaseEnv } from "@/lib/env"
 import { checkRateLimit, type RateLimitBucket } from "@/lib/rate-limit"
 import { readTrustedJsonObject } from "@/lib/request-security"
@@ -34,7 +35,7 @@ export type RoomSubject = Readonly<{ documentId: string }> | Readonly<{ template
  */
 export async function openRoom(subject: RoomSubject): Promise<Response> {
   try {
-    const member = await startRoomRequest("working_copy_read")
+    const member = await startRoomRequest("working_copy_read", subject)
     const room = await openWorkingCopyRoom({ ...member, ...subject })
     const env = getPublicSupabaseEnv()
 
@@ -59,7 +60,7 @@ export async function openRoom(subject: RoomSubject): Promise<Response> {
  */
 export async function sendRoomUpdate(request: Request, subject: RoomSubject): Promise<Response> {
   try {
-    const member = await startRoomRequest("working_copy_write")
+    const member = await startRoomRequest("working_copy_write", subject)
     const body = await readTrustedJsonObject(request)
     const update = typeof body.update === "string" ? new Uint8Array(Buffer.from(body.update, "base64")) : new Uint8Array()
 
@@ -78,7 +79,7 @@ export async function sendRoomUpdate(request: Request, subject: RoomSubject): Pr
  */
 export async function readRoomUpdates(request: Request, subject: RoomSubject): Promise<Response> {
   try {
-    const member = await startRoomRequest("working_copy_read")
+    const member = await startRoomRequest("working_copy_read", subject)
     const query = new URL(request.url).searchParams
     const after = Number(query.get("after"))
     const result = await readWorkingCopySince({
@@ -107,7 +108,7 @@ export async function readRoomUpdates(request: Request, subject: RoomSubject): P
  */
 export async function signRoomPictures(request: Request, subject: RoomSubject): Promise<Response> {
   try {
-    const member = await startRoomRequest("working_copy_read")
+    const member = await startRoomRequest("working_copy_read", subject)
     const body = await readTrustedJsonObject(request)
     const assetIds = Array.isArray(body.ids) ? body.ids.filter((id): id is string => typeof id === "string") : []
     const urls = await signWorkingCopyPictures({ ...member, ...subject, assetIds, roomId: readRoomId(body.roomId) })
@@ -128,7 +129,7 @@ export async function signRoomPictures(request: Request, subject: RoomSubject): 
  */
 export async function readRoomNotes(request: Request, subject: RoomSubject): Promise<Response> {
   try {
-    const member = await startRoomRequest("working_copy_read")
+    const member = await startRoomRequest("working_copy_read", subject)
     const query = new URL(request.url).searchParams
     const room = { ...member, ...subject, roomId: readRoomId(query.get("roomId")) }
     const kind = query.get("kind")
@@ -161,7 +162,7 @@ export async function readRoomNotes(request: Request, subject: RoomSubject): Pro
  */
 export async function writeRoomNotes(request: Request, subject: RoomSubject): Promise<Response> {
   try {
-    const member = await startRoomRequest("working_copy_write")
+    const member = await startRoomRequest("working_copy_write", subject)
     const body = await readTrustedJsonObject(request)
     const room = { ...member, ...subject, roomId: readRoomId(body.roomId) }
     const text = (key: string): string => (typeof body[key] === "string" ? (body[key] as string) : "")
@@ -196,25 +197,34 @@ export async function writeRoomNotes(request: Request, subject: RoomSubject): Pr
  */
 export async function renewRoomToken(): Promise<Response> {
   try {
-    await startRoomRequest("working_copy_read")
+    // Only their own token comes back, so being signed in is enough.
+    const user = await getAuthenticatedUser()
+    await checkRateLimit("working_copy_read", user.id)
     return NextResponse.json(await readRealtimeToken(), { headers: { "Cache-Control": "no-store" } })
   } catch (error: unknown) {
     return createTemplateRouteErrorResponse(error, "working_copy_token", "Unable to reconnect.")
   }
 }
 
-// Signs the member in, spends one request from a room budget, and names the
-// organization they are working in, read from their session rather than the request.
-async function startRoomRequest(bucket: RateLimitBucket): Promise<{ actorUserId: string; organizationId: string }> {
+// Signs the person in, spends one request from a room budget, and names the
+// organization they are working in, never read from the request: their
+// session's, or a shared document's own for a guest from outside it.
+async function startRoomRequest(
+  bucket: RateLimitBucket,
+  subject: RoomSubject
+): Promise<{ actorUserId: string; organizationId: string }> {
   const user = await getAuthenticatedUser()
   await checkRateLimit(bucket, user.id)
-  const context = await getCurrentOrganizationContext(user.id)
+  const organizationId =
+    "documentId" in subject
+      ? await resolveDocumentOrganizationId(user.id, readRoomId(subject.documentId))
+      : (await getCurrentOrganizationContext(user.id))?.organization.id
 
-  if (!context) {
+  if (!organizationId) {
     throw new OrganizationServiceError("Create or join an organization first.", 403)
   }
 
-  return { actorUserId: user.id, organizationId: context.organization.id }
+  return { actorUserId: user.id, organizationId }
 }
 
 // The member's own access token, which the browser shows Realtime to join the

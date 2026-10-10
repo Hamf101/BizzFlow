@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 
 import {
   captureUnexpectedError,
-  redactSigningTokens,
+  redactUrlTokens,
   scrubMonitoringEvent,
   setErrorReporter,
 } from "./observability"
@@ -51,18 +51,22 @@ describe("captureUnexpectedError", () => {
   })
 })
 
-describe("redactSigningTokens", () => {
-  it("redacts every signing token path segment", () => {
+describe("redactUrlTokens", () => {
+  it("redacts every bearer token carried in a public link's path", () => {
     expect(
-      redactSigningTokens(
-        "https://app.example.com/sign/abc123XY?step=2 and /sign/other-token"
+      redactUrlTokens(
+        "https://app.example.com/sign/abc123XY?step=2 and /forms/f0rm-T0ken/success " +
+          "/shared/gUest_tok /accept-invite/inv1te /api/public-forms/pf-tok/file-upload-url"
       )
-    ).toBe("https://app.example.com/sign/[redacted]?step=2 and /sign/[redacted]")
+    ).toBe(
+      "https://app.example.com/sign/[redacted]?step=2 and /forms/[redacted]/success " +
+        "/shared/[redacted] /accept-invite/[redacted] /api/public-forms/[redacted]/file-upload-url"
+    )
   })
 
   it("leaves unrelated paths untouched", () => {
-    expect(redactSigningTokens("/documents/abc/sign-off")).toBe(
-      "/documents/abc/sign-off"
+    expect(redactUrlTokens("/documents/abc/sign-off /shared /settings/forms")).toBe(
+      "/documents/abc/sign-off /shared /settings/forms"
     )
   })
 })

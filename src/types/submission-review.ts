@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { uuidSchema, timestampSchema } from "@/types/schemas"
 
 import type { SubmissionStatus } from "@/types/submission"
 import {
@@ -146,9 +147,7 @@ export class SubmissionReviewDomainError extends Error {
   }
 }
 
-const uuidSchema = z.string().uuid()
 const nullableUuidSchema = uuidSchema.nullable()
-const timestampSchema = z.string().datetime({ offset: true })
 const submissionStatusSchema = z.enum([
   "draft",
   "submitted",
@@ -246,6 +245,32 @@ export function parseSubmissionActivityEventRow(
     submissionRevision: result.data.submission_revision,
     createdAt: result.data.created_at,
   }
+}
+
+/**
+ * Parses a page of activity rows, leaving out any event this build does not
+ * know: a newer one must not take down the whole review page.
+ *
+ * @param rows - Untrusted persistence data.
+ * @returns The events this build can show, in order.
+ * @throws SubmissionReviewDomainError when a row is otherwise invalid.
+ */
+export function parseSubmissionActivityEventRows(
+  rows: readonly unknown[]
+): SubmissionActivityEvent[] {
+  return rows.flatMap((row) => {
+    const eventType = (row as { event_type?: unknown } | null)?.event_type
+
+    if (
+      typeof eventType === "string" &&
+      !SUBMISSION_ACTIVITY_EVENT_TYPES.includes(eventType as SubmissionActivityEventType)
+    ) {
+      console.warn("submission_activity_unknown_event", { eventType })
+      return []
+    }
+
+    return [parseSubmissionActivityEventRow(row)]
+  })
 }
 
 /**

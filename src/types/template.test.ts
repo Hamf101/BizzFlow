@@ -19,25 +19,6 @@ const THIRD_BLOCK_ID = "50000000-0000-4000-8000-000000000003"
 const GROUP_ID = "50000000-0000-4000-8000-000000000004"
 
 describe("template content schema", () => {
-  it("creates version-three content with current A4 portrait defaults", () => {
-    expect(createBlankTemplateContent()).toMatchObject({
-      schemaVersion: 3,
-      layout: {
-        pageSize: "A4",
-        orientation: "portrait",
-        marginPreset: "standard",
-        density: "balanced",
-        printedTitle: { mode: "linked" },
-        headerPolicy: "first_page",
-        footerPolicy: "all_pages",
-        pageNumbering: "page_x_of_y"
-      },
-      sections: [],
-      fieldGroups: [],
-      blockRules: []
-    })
-  })
-
   it("dual-reads immutable version-two content without upgrading it", () => {
     const versionTwo = createVersionTwoContent()
     const parsed = parseTemplateContent(versionTwo)

@@ -1,10 +1,10 @@
 "use client"
 
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Trash2 } from "lucide-react"
-import { Fragment, type KeyboardEvent, type ReactElement, useRef, useState } from "react"
+import { type KeyboardEvent, type ReactElement, useRef, useState } from "react"
 
-import { EditableText } from "@/components/editor/editable-text"
 import type { CanvasActions } from "@/components/editor/editor-block"
+import { type Cell, type TableBlock, TableCells } from "@/components/editor/table-cells"
 import { editTable, MAX_TABLE_COLUMNS, MAX_TABLE_ROWS, type TableEdit } from "@/components/editor/table-edit"
 import { Button } from "@/components/ui/button"
 import { ContextMenu, ContextMenuTrigger } from "@/components/ui/context-menu"
@@ -15,10 +15,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import type { TemplateBlock } from "@/types/template"
-
-type TableBlock = Extract<TemplateBlock, { type: "table" }>
-type Cell = Readonly<{ column: number; row: number }>
+import { updateTemplateBlock } from "@/types/template-structure"
 
 /**
  * A table typed into cell by cell. Tab moves to the next cell and, from the
@@ -43,15 +40,24 @@ export function EditorTable({
   // The heading row is row -1.
   const [cell, setCell] = useState<Cell>({ column: 0, row: 0 })
 
-  function change(edit: TableEdit, at: Cell = cell): void {
-    controller.updateBlock(editTable(block, edit, at.row, at.column))
+  // Each edit is made on the table as it is when the change lands, so a cell
+  // someone else is typing in keeps what they typed.
+  function edit(apply: (now: TableBlock) => TableBlock, coalesceKey?: string): void {
+    controller.change((current) => {
+      const now = current.blocks.find((candidate) => candidate.id === block.id)
+      return now?.type === "table" ? updateTemplateBlock(current, apply(now)) : current
+    }, coalesceKey)
+  }
+
+  function change(change: TableEdit, at: Cell = cell): void {
+    edit((now) => editTable(now, change, at.row, at.column))
   }
 
   function write(at: Cell, text: string): void {
     const put = (values: readonly string[]): string[] => values.map((value, column) => (column === at.column ? text : value))
 
-    controller.updateBlock(
-      at.row < 0 ? { ...block, headers: put(block.headers) } : { ...block, rows: block.rows.map((row, index) => (index === at.row ? put(row) : row)) },
+    edit(
+      (now) => (at.row < 0 ? { ...now, headers: put(now.headers) } : { ...now, rows: now.rows.map((row, index) => (index === at.row ? put(row) : row)) }),
       `table:${block.id}`
     )
   }
@@ -144,48 +150,14 @@ export function EditorTable({
       ) : null}
       <ContextMenu disabled={!actions.textEditable}>
         <ContextMenuTrigger render={<div />}>
-          <table
-            className="w-full border-collapse"
+          <TableCells
+            block={block}
+            breaks={breaks}
+            cellProps={cellProps}
             // A right-click chooses its cell before the menu opens.
             onContextMenu={(event) => setCell((current) => cellOf(event.target, block.id) ?? current)}
-            ref={table}
-            style={{ fontSize: "0.9em", lineHeight: 1.4 }}
-          >
-            <thead>
-              <tr>
-                {block.headers.map((header: string, column: number) => (
-                  <EditableText
-                    as="th"
-                    className="border border-border bg-muted/50 px-[0.6em] py-[0.4em] text-left font-semibold"
-                    key={column}
-                    {...cellProps({ column, row: -1 }, header)}
-                  />
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {block.rows.map((row: string[], rowIndex: number) => (
-                <Fragment key={rowIndex}>
-                  {breaks[`${block.id}:row${rowIndex}`] ? (
-                    <tr aria-hidden="true" style={{ display: "var(--page-space-display, table-row)" }}>
-                      <td colSpan={block.headers.length} style={{ border: 0, height: breaks[`${block.id}:row${rowIndex}`], padding: 0 }} />
-                    </tr>
-                  ) : null}
-                  {/* The first row stays with the heading row, so a page never ends between them. */}
-                  <tr data-row-key={rowIndex > 0 ? `${block.id}:row${rowIndex}` : undefined}>
-                    {row.map((value: string, column: number) => (
-                      <EditableText
-                        as="td"
-                        className="border border-border px-[0.6em] py-[0.4em] align-top"
-                        key={column}
-                        {...cellProps({ column, row: rowIndex }, value)}
-                      />
-                    ))}
-                  </tr>
-                </Fragment>
-              ))}
-            </tbody>
-          </table>
+            tableRef={table}
+          />
         </ContextMenuTrigger>
         {menu}
       </ContextMenu>

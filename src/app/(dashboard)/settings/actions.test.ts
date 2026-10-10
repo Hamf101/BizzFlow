@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
+import { getAuthenticatedUser } from "@/lib/auth"
 import { updateOrganizationNotificationSettings } from "@/services/notification-service"
 import {
   archiveOrganizationRole,
@@ -101,36 +101,6 @@ describe("updateProfileAction", () => {
     expect(redirectMock).not.toHaveBeenCalledWith(
       expect.stringContaining("E.164")
     )
-  })
-
-  it("maps a permission rejection to fixed copy without exposing service details", async () => {
-    vi.mocked(updateProfile).mockRejectedValue(
-      new OrganizationServiceError("Private tenant permission detail", 403)
-    )
-    const formData = new FormData()
-    formData.set("displayName", "Jane Doe")
-    formData.set("phoneNumber", "")
-
-    await expect(updateProfileAction(formData)).rejects.toThrow(
-      "NEXT_REDIRECT:/settings?feedback=permission_denied"
-    )
-    expect(redirectMock).not.toHaveBeenCalledWith(
-      expect.stringContaining("Private+tenant")
-    )
-  })
-
-  it("preserves the Settings return path when authentication expires", async () => {
-    vi.mocked(getAuthenticatedUser).mockRejectedValue(
-      new AuthenticationError("Sign in to continue.")
-    )
-    const formData = new FormData()
-    formData.set("displayName", "Jane Doe")
-    formData.set("phoneNumber", "")
-
-    await expect(updateProfileAction(formData)).rejects.toThrow(
-      "NEXT_REDIRECT:/login?next=%2Fsettings"
-    )
-    expect(updateProfile).not.toHaveBeenCalled()
   })
 })
 

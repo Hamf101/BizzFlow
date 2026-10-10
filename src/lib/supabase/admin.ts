@@ -133,6 +133,22 @@ type DocumentAccessGrantRow = Record<string, unknown> & {
   updated_at: string
 }
 
+/** Someone outside the workspace given one document: invited until they join. */
+type DocumentGuestGrantRow = Record<string, unknown> & {
+  id: string
+  org_id: string
+  document_id: string
+  email: string
+  user_id: string | null
+  access_level: DocumentAccessLevel
+  invite_token_hash: string | null
+  invite_expires_at: string | null
+  invited_by: string | null
+  accepted_at: string | null
+  created_at: string
+  updated_at: string
+}
+
 /** What a template is shared at: read it, make documents from it, or edit it. */
 export type TemplateAccessLevel = "viewer" | "user" | "editor"
 
@@ -188,19 +204,9 @@ type AuditLogRow = Record<string, unknown> & {
   target_type: string
   target_id: string | null
   metadata: Record<string, unknown>
-  // Chain columns are computed by the audit_logs_chain_link trigger;
-  // client-supplied values are always overwritten.
+  /** The order the log is read in, from a sequence. */
   seq: number
-  prev_hash: string | null
-  entry_hash: string
   created_at: string
-}
-
-export type AuditChainVerificationRow = {
-  valid: boolean
-  checked_count: number
-  first_invalid_seq: number | null
-  failure_reason: string | null
 }
 
 export type LeasedResourcePurgeObjectRow = {
@@ -310,8 +316,8 @@ type AdminTaskRow = Record<string, unknown> & {
   assigned_by: string | null
   assigned_at: string | null
   submission_id: string | null
-  created_by: string
-  updated_by: string
+  created_by: string | null
+  updated_by: string | null
   completed_at: string | null
   revision: number
   created_at: string
@@ -330,7 +336,7 @@ type AdminTaskReminderRow = Record<string, unknown> & {
   attempt_count: number
   last_error: string | null
   sent_at: string | null
-  created_by: string
+  created_by: string | null
   created_at: string
   updated_at: string
 }
@@ -404,7 +410,15 @@ export type AdminPublicFormLinkRow = Record<string, unknown> & {
   id: string
   org_id: string
   template_id: string
-  token: string
+  /** Every link keeps only its token's SHA-256; a link for anyone's token is derived again by the app. */
+  token_hash: string
+  recipient_email: string | null
+  document_id: string | null
+  content_snapshot: Record<string, unknown> | null
+  answers_snapshot: Record<string, unknown> | null
+  title_snapshot: string | null
+  template_revision_snapshot: number | null
+  sent_by: string | null
   status: "active" | "expired" | "disabled"
   expires_at: string | null
   max_submissions: number | null
@@ -422,7 +436,7 @@ type TaskReminderInsert = Partial<AdminTaskReminderRow> &
     "id" | "org_id" | "task_id" | "recipient_user_id" | "remind_at" | "created_by"
   >
 type PublicFormLinkInsert = Partial<AdminPublicFormLinkRow> &
-  Pick<AdminPublicFormLinkRow, "id" | "org_id" | "template_id" | "token">
+  Pick<AdminPublicFormLinkRow, "id" | "org_id" | "template_id" | "token_hash">
 
 type FolderInsert = Partial<FolderRow> & Pick<FolderRow, "id" | "org_id" | "name">
 type DocumentInsert = Partial<AdminDocumentRow> &
@@ -542,7 +556,7 @@ export type AdminDatabase = {
       >
       invites: DatabaseTable<
         InviteRow,
-        Partial<InviteRow> & Pick<InviteRow, "org_id" | "email" | "role" | "token">,
+        Partial<InviteRow> & Pick<InviteRow, "org_id" | "email" | "role" | "token_hash">,
         Partial<InviteRow>,
         [
           {
@@ -570,6 +584,12 @@ export type AdminDatabase = {
         DocumentAccessGrantRow,
         DocumentAccessGrantInsert,
         Partial<DocumentAccessGrantRow>
+      >
+      document_guest_grants: DatabaseTable<
+        DocumentGuestGrantRow,
+        Partial<DocumentGuestGrantRow> &
+          Pick<DocumentGuestGrantRow, "org_id" | "document_id" | "email" | "access_level">,
+        Partial<DocumentGuestGrantRow>
       >
       template_access_grants: DatabaseTable<
         TemplateAccessGrantRow,
@@ -790,12 +810,6 @@ export type AdminDatabase = {
           document: DocumentRow
         }[]
       }
-      verify_audit_log_chain: {
-        Args: {
-          target_org_id: string
-        }
-        Returns: AuditChainVerificationRow[]
-      }
       document_card_contents: {
         Args: {
           document_ids: string[]
@@ -901,12 +915,6 @@ export type AdminDatabase = {
         }
         Returns: boolean
       }
-      increment_public_form_link_submission_count: {
-        Args: {
-          p_token: string
-        }
-        Returns: boolean
-      }
       submit_public_form_entry: {
         Args: {
           target_public_form_token: string
@@ -919,6 +927,18 @@ export type AdminDatabase = {
           target_template_snapshot: Record<string, unknown> | null
           target_values: Record<string, unknown>
           target_submitted_at: string
+        }
+        Returns: AdminSubmissionRow
+      }
+      start_public_form_draft: {
+        Args: {
+          target_public_form_token: string
+          target_public_draft_token: string
+          target_submission_id: string
+          target_title: string
+          target_template_revision: number
+          target_values: Record<string, unknown>
+          target_created_at: string
         }
         Returns: AdminSubmissionRow
       }
@@ -1184,15 +1204,6 @@ export type AdminDatabase = {
           target_actor_user_id: string
         }
         Returns: SubmissionCommentRow
-      }
-      update_organization_member_role: {
-        Args: {
-          target_org_id: string
-          target_membership_id: string
-          target_actor_user_id: string
-          target_role: DatabaseOrganizationRole
-        }
-        Returns: string
       }
       update_organization_member_access: {
         Args: {

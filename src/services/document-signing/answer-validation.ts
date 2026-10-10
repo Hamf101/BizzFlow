@@ -1,7 +1,8 @@
 import { isDeepStrictEqual } from "node:util"
 
-import { normalizeRequiredDrawing } from "@/services/document-signing/drawing-validation"
+import { normalizeOptionalDrawing } from "@/services/document-signing/drawing-validation"
 import { DocumentSigningServiceError } from "@/services/document-signing/errors"
+import { boxSigner } from "@/types/box-signers"
 import type { TemplateBlock, TemplateContent } from "@/types/template"
 import {
   isTemplateAnswerComplete,
@@ -54,12 +55,15 @@ export function collectFields(
  *
  * @param fieldByKey - Snapshot fields indexed by field key.
  * @param patch - Untrusted answer object.
+ * @param sender - Set only on a member's save: whether the document has been
+ *   sent, which freezes the sender's own boxes. A signer passes nothing.
  * @returns Normalized answer patch containing only known fields.
  * @throws DocumentSigningServiceError when a field or value is invalid.
  */
 export async function normalizeAnswerPatch(
   fieldByKey: Map<string, FieldBlock>,
-  patch: Record<string, unknown>
+  patch: Record<string, unknown>,
+  sender?: { sent: boolean }
 ): Promise<Record<string, unknown>> {
   if (!patch || typeof patch !== "object" || Array.isArray(patch)) {
     throw new DocumentSigningServiceError(
@@ -80,7 +84,7 @@ export async function normalizeAnswerPatch(
       )
     }
 
-    normalizedPatch[fieldKey] = await normalizeFieldAnswer(block, value)
+    normalizedPatch[fieldKey] = await normalizeFieldAnswer(block, value, sender)
   }
 
   return normalizedPatch
@@ -200,17 +204,19 @@ export function assertRequiredAnswersComplete(
 }
 
 /**
- * Determines whether a snapshot requires a separate recipient initials drawing.
+ * Determines whether a snapshot requires one signer's initials drawing.
  *
  * @param content - Validated immutable template snapshot.
  * @param values - Effective answer state used to resolve conditional fields.
- * @returns `true` when at least one required initials field exists.
+ * @param signer - The signer's place in the order they were added.
+ * @returns `true` when a visible required initials box is theirs.
  */
 export function templateRequiresRecipientInitials(
   content: TemplateContent,
-  values: Readonly<Record<string, unknown>> = {}
+  values: Readonly<Record<string, unknown>>,
+  signer: number
 ): boolean {
-  return templateRequiresVisibleInitials(content, values)
+  return templateRequiresVisibleInitials(content, values, signer)
 }
 
 function collectVisibleFieldKeys(
@@ -227,23 +233,33 @@ function collectVisibleFieldKeys(
 
 async function normalizeFieldAnswer(
   block: FieldBlock,
-  value: unknown
+  value: unknown,
+  sender: { sent: boolean } | undefined
 ): Promise<unknown> {
-  if (block.type !== "signature_field" && block.type !== "initials_field") {
-    return normalizeTemplateAnswer(
-      block,
-      value,
-      (message: string) => new DocumentSigningServiceError(message, 400)
-    )
+  if (block.type === "signature_field" || block.type === "initials_field") {
+    // A drawn box is its signer's own act. Only the sender's box takes a
+    // drawing as an answer, from the sender, until it is sent; a signer's
+    // drawing is captured with their signature, so no one signs for another.
+    if (!sender || boxSigner(block) !== "sender") {
+      throw new DocumentSigningServiceError(
+        `${block.label} is signed in the signing step, not answered.`,
+        400
+      )
+    }
+
+    if (sender.sent) {
+      throw new DocumentSigningServiceError(
+        "This document was sent for signing, so the sender's signature can no longer change.",
+        409
+      )
+    }
+
+    return (await normalizeOptionalDrawing(value, block.label))?.dataUrl ?? ""
   }
 
-  if (typeof value !== "string") {
-    throw new DocumentSigningServiceError(`${block.label} must be text.`, 400)
-  }
-
-  const normalizedValue = value.trim()
-
-  return normalizedValue.length === 0
-    ? ""
-    : (await normalizeRequiredDrawing(normalizedValue, block.label)).dataUrl
+  return normalizeTemplateAnswer(
+    block,
+    value,
+    (message: string) => new DocumentSigningServiceError(message, 400)
+  )
 }

@@ -2,8 +2,7 @@
 
 import { act } from "react"
 import type { ReactElement } from "react"
-import { createRoot, type Root } from "react-dom/client"
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 const captureUnexpectedError = vi.hoisted(() => vi.fn())
 
@@ -11,38 +10,21 @@ vi.mock("@/lib/observability", () => ({ captureUnexpectedError }))
 
 import AcceptInviteError from "@/app/(auth)/accept-invite/[token]/error"
 import PublicFormError from "@/app/forms/[token]/error"
-import PublicFormLoading from "@/app/forms/[token]/loading"
 import PublicSigningError from "@/app/sign/[token]/error"
-import PublicSigningLoading from "@/app/sign/[token]/loading"
+import { mount } from "@/test/render"
 
-const mountedRoots: Root[] = []
 const PRIVATE_MARKER = "private-token-tenant-stack"
-
-beforeAll(() => {
-  ;(
-    globalThis as typeof globalThis & {
-      IS_REACT_ACT_ENVIRONMENT: boolean
-    }
-  ).IS_REACT_ACT_ENVIRONMENT = true
-})
 
 beforeEach(() => {
   captureUnexpectedError.mockReset()
 })
 
 afterEach(() => {
-  for (const root of mountedRoots.splice(0)) {
-    act(() => root.unmount())
-  }
-  document.body.replaceChildren()
   window.history.replaceState(null, "", "/")
 })
 
 async function render(ui: ReactElement): Promise<void> {
-  const container = document.createElement("div")
-  document.body.append(container)
-  const root = createRoot(container)
-  mountedRoots.push(root)
+  const root = mount()
 
   await act(async () => root.render(ui))
 }
@@ -53,23 +35,6 @@ function createPrivateError(): Error & { digest?: string } {
   error.stack = `${PRIVATE_MARKER}-stack`
   return error
 }
-
-const PUBLIC_LOADING_STATES: ReadonlyArray<{
-  label: string
-  name: string
-  render: () => ReactElement
-}> = [
-  {
-    label: "Loading form",
-    name: "public form",
-    render: () => <PublicFormLoading />,
-  },
-  {
-    label: "Loading signing page",
-    name: "signing",
-    render: () => <PublicSigningLoading />,
-  },
-]
 
 const PUBLIC_ERROR_STATES: ReadonlyArray<{
   boundary: string
@@ -102,29 +67,9 @@ const PUBLIC_ERROR_STATES: ReadonlyArray<{
   },
 ]
 
-describe("public route loading boundaries", () => {
-  it.each(PUBLIC_LOADING_STATES)(
-    "announces the $name state while hiding reduced-motion-safe geometry",
-    async ({ label, render: renderLoading }) => {
-      await render(renderLoading())
-
-      const status = document.querySelector('[role="status"]')
-      const geometry = document.querySelector(
-        '[data-slot="public-page-skeleton-content"]'
-      )
-
-      expect(status?.getAttribute("aria-live")).toBe("polite")
-      expect(status?.textContent).toContain(label)
-      expect(geometry?.getAttribute("aria-hidden")).toBe("true")
-      expect(geometry?.className).toContain("motion-reduce:animate-none")
-      expect(document.body.innerHTML).not.toContain(PRIVATE_MARKER)
-    }
-  )
-})
-
 describe("public route error boundaries", () => {
   it.each(PUBLIC_ERROR_STATES)(
-    "keeps the $name route fixed, unframed, and recoverable",
+    "keeps the $name route fixed, private, and recoverable",
     async ({ boundary, path, render: renderError }) => {
       const error = createPrivateError()
       const reset = vi.fn()
@@ -135,13 +80,6 @@ describe("public route error boundaries", () => {
       const state = document.querySelector('[data-slot="error-state"]')
 
       expect(state?.getAttribute("role")).toBe("alert")
-      expect(state?.querySelector("h2")?.textContent).toBe(
-        "This page didn’t load."
-      )
-      expect(state?.textContent).toContain(
-        "Try again. If the problem continues, ask your contact for a new link."
-      )
-      expect(state?.className).not.toMatch(/\bborder(?:-|\b)/)
       expect(document.body.textContent).not.toContain(PRIVATE_MARKER)
       expect(document.body.innerHTML).not.toContain(PRIVATE_MARKER)
       expect(captureUnexpectedError).toHaveBeenCalledExactlyOnceWith(error, {

@@ -19,6 +19,8 @@ import {
   TOKEN_ONE,
 } from "@/services/document-signing-service.test-support"
 
+const SECOND_RECIPIENT_ID = "40000000-0000-4000-8000-000000000002"
+const SECOND_TOKEN = "token_two_abcdefghijklmnopqrstuvwxyz123456"
 const MALFORMED_DRAWING_DATA_URL = "data:image/png;base64,aGVsbG8="
 const TINY_DRAWING_DATA_URL =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
@@ -143,8 +145,9 @@ describe("document signing drawing and signature validation", () => {
     expect(tables.document_signing_recipients[0].status).toBe("pending")
   })
 
-  it("requires and stores recipient initials when the snapshot requires them", async () => {
+  it("requires initials only from the signer whose required initials box it is, and stores them", async () => {
     const tables = createBaseTables()
+    // The required initials box names no signer, so it is Signer 1's.
     tables.documents[0].template_snapshot = createTemplateContent({
       requiredInitials: true,
     })
@@ -154,17 +157,23 @@ describe("document signing drawing and signature validation", () => {
         TOKEN_ONE,
         "Avery Morgan",
         "avery@example.com"
-      )
+      ),
+      createRecipientRow(SECOND_RECIPIENT_ID, SECOND_TOKEN, "Jordan Lee", "jordan@example.com")
     )
     tables.document_answers[0].workflow_status = "awaiting_signatures"
     const client = new FakeClient(tables)
+    const deps = { client: client as never, now: (): Date => NOW }
 
-    const view = await getPublicDocumentSigningView(
-      { token: TOKEN_ONE },
-      { client: client as never, now: (): Date => NOW }
+    await expect(getPublicDocumentSigningView({ token: TOKEN_ONE }, deps)).resolves.toMatchObject({ requiresInitials: true })
+    await expect(getPublicDocumentSigningView({ token: SECOND_TOKEN }, deps)).resolves.toMatchObject({ requiresInitials: false })
+
+    // Signer 2 has no initials box, so signs without initials.
+    await completePublicDocumentSigning(
+      { token: SECOND_TOKEN, values: { client_name: "Northstar Labs" }, signatureDataUrl: DRAWING_DATA_URL },
+      deps
     )
+    expect(tables.document_signing_recipients[1].status).toBe("signed")
 
-    expect(view.requiresInitials).toBe(true)
     await expect(
       completePublicDocumentSigning(
         {
@@ -172,7 +181,7 @@ describe("document signing drawing and signature validation", () => {
           values: { client_name: "Northstar Labs" },
           signatureDataUrl: DRAWING_DATA_URL,
         },
-        { client: client as never, now: (): Date => NOW }
+        deps
       )
     ).rejects.toMatchObject({
       statusCode: 400,
@@ -186,7 +195,7 @@ describe("document signing drawing and signature validation", () => {
         signatureDataUrl: DRAWING_DATA_URL,
         initialsDataUrl: DRAWING_DATA_URL,
       },
-      { client: client as never, now: (): Date => NOW }
+      deps
     )
 
     expect(completedView.workflowStatus).toBe("completed")

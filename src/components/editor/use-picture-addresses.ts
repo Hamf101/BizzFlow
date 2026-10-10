@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 
 import type { LiveSession } from "@/lib/collaboration/live-session"
 import type { TemplateContentV3 } from "@/types/template"
@@ -24,21 +24,23 @@ export type PictureAddresses = Readonly<{
  * @returns How to put addresses back and remember new ones.
  */
 export function usePictureAddresses(initial: TemplateContentV3): PictureAddresses {
-  const [urls] = useState(() => {
-    const known = new Map<string, string>()
-    collect(known, initial)
-    return known
+  // One object for the editor's life, so what depends on it runs only when it should.
+  const [pictures] = useState((): PictureAddresses => {
+    const urls = new Map<string, string>()
+    collect(urls, initial)
+
+    return {
+      attach: (content) =>
+        mapImageAssets(content, (asset) => {
+          const url = urls.get(asset.id)
+          return url ? { ...asset, url } : asset
+        }),
+      remember: (content) => collect(urls, content),
+      urls,
+    }
   })
 
-  return {
-    attach: (content) =>
-      mapImageAssets(content, (asset) => {
-        const url = urls.get(asset.id)
-        return url ? { ...asset, url } : asset
-      }),
-    remember: (content) => collect(urls, content),
-    urls,
-  }
+  return pictures
 }
 
 /**
@@ -55,12 +57,14 @@ export function useMissingPictureAddresses(options: Readonly<{
   session: Pick<LiveSession<unknown>, "refresh"> | null
 }>): void {
   const { content, path, pictures, roomId, session } = options
-  const [fetched, setFetched] = useState(0)
+  // Each picture is asked for once; one with no address to give is not asked for again.
+  const asked = useRef(new Set<string>())
+  const [, setFetched] = useState(0)
 
   useEffect(() => {
     const missing = new Set<string>()
     mapImageAssets(content, (asset) => {
-      if (!asset.url && !pictures.urls.has(asset.id)) missing.add(asset.id)
+      if (!asset.url && !pictures.urls.has(asset.id) && !asked.current.has(asset.id)) missing.add(asset.id)
       return asset
     })
 
@@ -68,7 +72,10 @@ export function useMissingPictureAddresses(options: Readonly<{
       return
     }
 
-    let stopped = false
+    missing.forEach((id) => asked.current.add(id))
+    // A request that failed may be made again when the page next changes.
+    const retry = (): void => missing.forEach((id) => asked.current.delete(id))
+
     void fetch(`${path}/pictures`, {
       body: JSON.stringify({ ids: [...missing], roomId }),
       headers: { "Content-Type": "application/json" },
@@ -76,18 +83,17 @@ export function useMissingPictureAddresses(options: Readonly<{
     })
       .then((response) => (response.ok ? (response.json() as Promise<{ urls: Record<string, string> }>) : null))
       .then((result) => {
-        if (!stopped && result) {
-          for (const [id, url] of Object.entries(result.urls)) pictures.urls.set(id, url)
-          session.refresh()
-          setFetched((count) => count + 1)
+        if (!result) {
+          retry()
+          return
         }
-      })
-      .catch(() => undefined)
 
-    return () => {
-      stopped = true
-    }
-  }, [content, fetched, path, pictures, roomId, session])
+        for (const [id, url] of Object.entries(result.urls)) pictures.urls.set(id, url)
+        session.refresh()
+        setFetched((count) => count + 1)
+      })
+      .catch(retry)
+  }, [content, path, pictures, roomId, session])
 }
 
 function collect(urls: Map<string, string>, content: TemplateContentV3): void {

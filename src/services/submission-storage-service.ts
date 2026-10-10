@@ -16,13 +16,20 @@ import {
   type R2Env,
 } from "@/lib/env"
 import { createR2Client } from "@/lib/r2/client"
+import {
+  hasAllowedFileSignature,
+  SIGNED_URL_MAX_TTL_SECONDS,
+  UUID_PATTERN,
+} from "@/lib/r2/stored-file"
 import { runOperation, type LogValue } from "@/services/operation"
+import { ServiceError } from "@/services/service-error"
+import { isR2NotFound, signCreateOnlyPut } from "@/services/r2-objects"
 
 /** Hard upper bound for one internal-submission file. */
 export const SUBMISSION_FILE_MAX_BYTES = 20 * 1024 * 1024
 
 /** Short maximum lifetime for a browser upload capability. */
-export const SUBMISSION_UPLOAD_URL_MAX_TTL_SECONDS = 15 * 60
+export const SUBMISSION_UPLOAD_URL_MAX_TTL_SECONDS = SIGNED_URL_MAX_TTL_SECONDS
 
 /** Buffer between upload URL expiry and durable orphan cleanup eligibility. */
 export const SUBMISSION_UPLOAD_CLEANUP_GRACE_SECONDS = 5 * 60
@@ -39,9 +46,6 @@ export const SUBMISSION_FILE_CONTENT_TYPES = [
 
 const FIELD_KEY_PATTERN = /^[A-Za-z][A-Za-z0-9_-]{0,79}$/
 const SHA256_PATTERN = /^[a-f0-9]{64}$/
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
-const MAX_OOXML_UNCOMPRESSED_BYTES = 100 * 1024 * 1024
 
 const CONTENT_TYPE_EXTENSIONS: Readonly<Record<string, readonly string[]>> = {
   "application/pdf": [".pdf"],
@@ -143,20 +147,8 @@ export type SignedSubmissionDownloadUrl = {
 }
 
 /** Error raised by submission-specific R2 operations. */
-export class SubmissionStorageServiceError extends Error {
-  readonly statusCode: number
-
-  /**
-   * Creates a storage error safe to translate at a route boundary.
-   *
-   * @param message - User-safe rejection description.
-   * @param statusCode - HTTP-style response status.
-   */
-  constructor(message: string, statusCode: number) {
-    super(message)
-    this.name = "SubmissionStorageServiceError"
-    this.statusCode = statusCode
-  }
+export class SubmissionStorageServiceError extends ServiceError {
+  override readonly name = "SubmissionStorageServiceError"
 }
 
 /**
@@ -355,16 +347,12 @@ export async function createSignedSubmissionUploadUrl(
         r2Env.CLOUDFLARE_R2_SIGNED_URL_TTL_SECONDS,
         SUBMISSION_UPLOAD_URL_MAX_TTL_SECONDS
       )
-      const command = new PutObjectCommand({
-        Bucket: r2Env.CLOUDFLARE_R2_BUCKET_NAME,
-        Key: storageKey,
-        ContentLength: input.byteSize,
-        ContentType: input.contentType,
-        IfNoneMatch: "*",
-      })
-      const uploadUrl = await signer(r2Client, command, {
+      const uploadUrl = await signCreateOnlyPut(signer, r2Client, {
+        bucket: r2Env.CLOUDFLARE_R2_BUCKET_NAME,
+        key: storageKey,
+        byteSize: input.byteSize,
+        contentType: input.contentType,
         expiresIn: expiresInSeconds,
-        signableHeaders: new Set(["content-type"]),
       })
 
       return {
@@ -391,7 +379,7 @@ export async function verifySubmissionUpload(
   return runSubmissionStorageOperation(
     "verify_submission_upload",
     {
-      storageKey: input.storageKey,
+      ...storageKeyIds(input.storageKey),
       contentType: input.contentType,
       byteSize: input.byteSize,
     },
@@ -412,7 +400,7 @@ export async function verifySubmissionUpload(
           })
         )
       } catch (error: unknown) {
-        if (isObjectNotFoundError(error)) {
+        if (isR2NotFound(error)) {
           throw new SubmissionStorageServiceError(
             "Uploaded submission file was not found.",
             409
@@ -454,7 +442,9 @@ export async function verifySubmissionUpload(
         )
       }
 
-      assertSubmissionFileSignature(bytes, input.contentType)
+      if (!hasAllowedFileSignature(bytes, input.contentType)) {
+        throw invalidStoredFileType()
+      }
     }
   )
 }
@@ -473,7 +463,7 @@ export async function deleteSubmissionStorageObject(
 ): Promise<void> {
   return runSubmissionStorageOperation(
     "delete_superseded_submission_object",
-    { storageKey: input.storageKey },
+    storageKeyIds(input.storageKey),
     async (): Promise<void> => {
       if (!isSafePersistedStorageKey(input.storageKey)) {
         throw new SubmissionStorageServiceError(
@@ -512,7 +502,7 @@ export async function createSignedSubmissionDownloadUrl(
 ): Promise<SignedSubmissionDownloadUrl> {
   return runSubmissionStorageOperation(
     "create_submission_download_url",
-    { storageKey: input.storageKey },
+    storageKeyIds(input.storageKey),
     async (): Promise<SignedSubmissionDownloadUrl> => {
       if (!isSafePersistedStorageKey(input.storageKey)) {
         throw new SubmissionStorageServiceError(
@@ -548,6 +538,14 @@ function runSubmissionStorageOperation<T>(
   operation: () => Promise<T>
 ): Promise<T> {
   return runOperation("submission_storage", toSubmissionStorageError, operationName, identifiers, operation)
+}
+
+// A key ends in the name a person gave their file, so only its ids are logged.
+function storageKeyIds(storageKey: string): Record<string, LogValue> {
+  const [, organizationId, , submissionId, , , fileId] = storageKey.split("/")
+  const id = (value: string | undefined): string | null => (value && UUID_PATTERN.test(value) ? value : null)
+
+  return { fileId: id(fileId), organizationId: id(organizationId), submissionId: id(submissionId) }
 }
 
 function assertStoredObjectInput(input: VerifySubmissionUploadInput): void {
@@ -609,29 +607,6 @@ function toSubmissionStorageError(error: unknown): SubmissionStorageServiceError
   )
 }
 
-function isObjectNotFoundError(error: unknown): boolean {
-  if (!error || typeof error !== "object") {
-    return false
-  }
-
-  const candidate = error as {
-    name?: unknown
-    code?: unknown
-    Code?: unknown
-    $metadata?: { httpStatusCode?: unknown }
-  }
-
-  return (
-    candidate.$metadata?.httpStatusCode === 404 ||
-    [candidate.name, candidate.code, candidate.Code].some(
-      (code: unknown): boolean =>
-        code === "NotFound" ||
-        code === "NoSuchKey" ||
-        code === "NoSuchObject"
-    )
-  )
-}
-
 async function getSubmissionStorageObject(
   client: S3Client,
   command: GetObjectCommand
@@ -679,245 +654,6 @@ async function readSubmissionObjectBytes(
   }
 
   return bytes
-}
-
-function assertSubmissionFileSignature(
-  bytes: Uint8Array,
-  contentType: string
-): void {
-  if (contentType === "application/pdf") {
-    const header = new TextDecoder("latin1").decode(bytes.slice(0, 1_024))
-
-    if (!header.includes("%PDF-")) {
-      throw invalidStoredFileType()
-    }
-
-    return
-  }
-
-  if (contentType === "image/png") {
-    const pngSignature = [137, 80, 78, 71, 13, 10, 26, 10]
-
-    if (!pngSignature.every((value: number, index: number) => bytes[index] === value)) {
-      throw invalidStoredFileType()
-    }
-
-    return
-  }
-
-  if (contentType === "image/jpeg") {
-    if (bytes[0] !== 0xff || bytes[1] !== 0xd8 || bytes[2] !== 0xff) {
-      throw invalidStoredFileType()
-    }
-
-    return
-  }
-
-  if (contentType === "text/csv") {
-    assertUtf8Csv(bytes)
-    return
-  }
-
-  if (
-    contentType ===
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-  ) {
-    assertOoxmlContainer(bytes, "word/document.xml")
-    return
-  }
-
-  if (
-    contentType ===
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-  ) {
-    assertOoxmlContainer(bytes, "xl/workbook.xml")
-    return
-  }
-
-  throw invalidStoredFileType()
-}
-
-function assertUtf8Csv(bytes: Uint8Array): void {
-  let value: string
-
-  try {
-    value = new TextDecoder("utf-8", { fatal: true }).decode(bytes)
-  } catch {
-    throw invalidStoredFileType()
-  }
-
-  for (const character of value) {
-    const code = character.charCodeAt(0)
-
-    if (code < 32 && code !== 9 && code !== 10 && code !== 13) {
-      throw invalidStoredFileType()
-    }
-  }
-}
-
-function assertOoxmlContainer(
-  bytes: Uint8Array,
-  requiredDocumentEntry: string
-): void {
-  const entries = readZipCentralDirectoryEntries(bytes)
-
-  if (
-    !entries.has("[Content_Types].xml") ||
-    !entries.has(requiredDocumentEntry) ||
-    entries.has("word/vbaProject.bin") ||
-    entries.has("xl/vbaProject.bin")
-  ) {
-    throw invalidStoredFileType()
-  }
-}
-
-function readZipCentralDirectoryEntries(bytes: Uint8Array): ReadonlySet<string> {
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
-  const minimumEocdSize = 22
-  const searchStart = Math.max(0, bytes.byteLength - 65_557)
-  let eocdOffset = -1
-
-  for (
-    let offset = bytes.byteLength - minimumEocdSize;
-    offset >= searchStart;
-    offset -= 1
-  ) {
-    if (view.getUint32(offset, true) === 0x06054b50) {
-      eocdOffset = offset
-      break
-    }
-  }
-
-  if (eocdOffset < 0) {
-    throw invalidStoredFileType()
-  }
-
-  const diskNumber = view.getUint16(eocdOffset + 4, true)
-  const centralDirectoryDisk = view.getUint16(eocdOffset + 6, true)
-  const entryCount = view.getUint16(eocdOffset + 10, true)
-  const centralDirectorySize = view.getUint32(eocdOffset + 12, true)
-  const centralDirectoryOffset = view.getUint32(eocdOffset + 16, true)
-
-  if (
-    diskNumber !== 0 ||
-    centralDirectoryDisk !== 0 ||
-    entryCount === 0xffff ||
-    centralDirectorySize === 0xffffffff ||
-    centralDirectoryOffset === 0xffffffff ||
-    centralDirectoryOffset + centralDirectorySize > eocdOffset
-  ) {
-    throw invalidStoredFileType()
-  }
-
-  const entries = new Set<string>()
-  let offset = centralDirectoryOffset
-  let totalUncompressedBytes = 0
-
-  for (let entryIndex = 0; entryIndex < entryCount; entryIndex += 1) {
-    if (offset + 46 > eocdOffset || view.getUint32(offset, true) !== 0x02014b50) {
-      throw invalidStoredFileType()
-    }
-
-    const flags = view.getUint16(offset + 8, true)
-    const compressedSize = view.getUint32(offset + 20, true)
-    const uncompressedSize = view.getUint32(offset + 24, true)
-    const filenameLength = view.getUint16(offset + 28, true)
-    const extraLength = view.getUint16(offset + 30, true)
-    const commentLength = view.getUint16(offset + 32, true)
-    const localHeaderOffset = view.getUint32(offset + 42, true)
-    const entryEnd = offset + 46 + filenameLength + extraLength + commentLength
-
-    totalUncompressedBytes += uncompressedSize
-
-    if (
-      (flags & 0x1) !== 0 ||
-      compressedSize === 0xffffffff ||
-      uncompressedSize === 0xffffffff ||
-      totalUncompressedBytes > MAX_OOXML_UNCOMPRESSED_BYTES ||
-      entryEnd > eocdOffset
-    ) {
-      throw invalidStoredFileType()
-    }
-
-    let filename: string
-
-    try {
-      filename = new TextDecoder("utf-8", { fatal: true }).decode(
-        bytes.slice(offset + 46, offset + 46 + filenameLength)
-      )
-    } catch {
-      throw invalidStoredFileType()
-    }
-
-    const normalizedFilename = filename.replace(/\\/g, "/")
-
-    if (
-      normalizedFilename.startsWith("/") ||
-      normalizedFilename.split("/").includes("..")
-    ) {
-      throw invalidStoredFileType()
-    }
-
-    assertZipLocalEntry({
-      bytes,
-      centralDirectoryOffset,
-      compressedSize,
-      expectedFilename: filename,
-      localHeaderOffset,
-      view,
-    })
-
-    entries.add(normalizedFilename)
-    offset = entryEnd
-  }
-
-  if (offset !== centralDirectoryOffset + centralDirectorySize) {
-    throw invalidStoredFileType()
-  }
-
-  return entries
-}
-
-function assertZipLocalEntry(input: {
-  bytes: Uint8Array
-  centralDirectoryOffset: number
-  compressedSize: number
-  expectedFilename: string
-  localHeaderOffset: number
-  view: DataView
-}): void {
-  if (
-    input.localHeaderOffset + 30 > input.centralDirectoryOffset ||
-    input.view.getUint32(input.localHeaderOffset, true) !== 0x04034b50
-  ) {
-    throw invalidStoredFileType()
-  }
-
-  const filenameLength = input.view.getUint16(input.localHeaderOffset + 26, true)
-  const extraLength = input.view.getUint16(input.localHeaderOffset + 28, true)
-  const dataOffset = input.localHeaderOffset + 30 + filenameLength + extraLength
-  const dataEnd = dataOffset + input.compressedSize
-
-  if (dataEnd > input.centralDirectoryOffset) {
-    throw invalidStoredFileType()
-  }
-
-  let localFilename: string
-
-  try {
-    localFilename = new TextDecoder("utf-8", { fatal: true }).decode(
-      input.bytes.slice(
-        input.localHeaderOffset + 30,
-        input.localHeaderOffset + 30 + filenameLength
-      )
-    )
-  } catch {
-    throw invalidStoredFileType()
-  }
-
-  if (localFilename !== input.expectedFilename) {
-    throw invalidStoredFileType()
-  }
 }
 
 function invalidStoredFileType(): SubmissionStorageServiceError {

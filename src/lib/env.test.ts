@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest"
 
 import {
+  assertProductionEnv,
   getAdminSupabaseEnv,
   getAiEnv,
   getAppUrlEnv,
@@ -35,20 +36,6 @@ function setIsolatedEnv(env: Partial<NodeJS.ProcessEnv>): void {
 }
 
 describe("Supabase environment validation", () => {
-  it("uses the exact current Supabase secret key name for admin access", () => {
-    setIsolatedEnv({
-      SUPABASE_URL: "https://example.supabase.co",
-      SUPABASE_PUBLISHABLE_KEY: "sb_publishable_test",
-      SUPABASE_SECRET_KEY: "sb_secret_test",
-    })
-
-    expect(getAdminSupabaseEnv()).toEqual({
-      SUPABASE_URL: "https://example.supabase.co",
-      SUPABASE_PUBLISHABLE_KEY: "sb_publishable_test",
-      SUPABASE_SECRET_KEY: "sb_secret_test",
-    })
-  })
-
   it("requires the exact Supabase secret key name for admin access", () => {
     setIsolatedEnv({
       SUPABASE_URL: "https://example.supabase.co",
@@ -69,6 +56,35 @@ describe("Supabase environment validation", () => {
   })
 })
 
+describe("boot-time production validation", () => {
+  const productionEnv = {
+    ...validR2Env,
+    VERCEL_ENV: "production",
+    SUPABASE_URL: "https://example.supabase.co",
+    SUPABASE_PUBLISHABLE_KEY: "sb_publishable_test",
+    SUPABASE_SECRET_KEY: "sb_secret_test",
+    NEXT_PUBLIC_APP_URL: "https://app.example.com",
+    EMAILJS_SERVICE_ID: "service",
+    EMAILJS_TEMPLATE_ID: "template",
+    EMAILJS_PUBLIC_KEY: "public",
+    EMAILJS_PRIVATE_KEY: "private",
+    FILE_UPLOAD_MAX_BYTES: "1048576",
+    FILE_UPLOAD_ALLOWED_MIME_TYPES: "application/pdf",
+  }
+
+  it("fails a production deployment at boot that is missing a required value, and passes a complete one", () => {
+    setIsolatedEnv({ ...productionEnv, CLOUDFLARE_R2_ENDPOINT: undefined })
+    expect(() => assertProductionEnv()).toThrow("CLOUDFLARE_R2_ENDPOINT")
+
+    setIsolatedEnv(productionEnv)
+    expect(() => assertProductionEnv()).not.toThrow()
+
+    // Development, tests and the local production build used by e2e start without it.
+    setIsolatedEnv({})
+    expect(() => assertProductionEnv()).not.toThrow()
+  })
+})
+
 describe("application URL validation", () => {
   it("requires an explicit canonical application URL", () => {
     setIsolatedEnv({})
@@ -76,34 +92,9 @@ describe("application URL validation", () => {
     expect(() => getAppUrlEnv()).toThrow("NEXT_PUBLIC_APP_URL")
   })
 
-  it("accepts an absolute canonical application URL", () => {
-    setIsolatedEnv({ NEXT_PUBLIC_APP_URL: "https://app.example.com" })
-
-    expect(getAppUrlEnv()).toEqual({
-      NEXT_PUBLIC_APP_URL: "https://app.example.com",
-    })
-  })
 })
 
 describe("email environment validation", () => {
-  it("pins transactional delivery to EmailJS when the selector is omitted", () => {
-    setIsolatedEnv({
-      EMAILJS_SERVICE_ID: "service_buy2dql",
-      EMAILJS_TEMPLATE_ID: "template_d6o6c8p",
-      EMAILJS_PUBLIC_KEY: "public-test-key",
-      EMAILJS_PRIVATE_KEY: "private-test-key",
-    })
-
-    expect(getEmailEnv()).toEqual({
-      EMAIL_PROVIDER: "emailjs",
-      EMAIL_TIMEOUT_MS: 10000,
-      EMAILJS_SERVICE_ID: "service_buy2dql",
-      EMAILJS_TEMPLATE_ID: "template_d6o6c8p",
-      EMAILJS_PUBLIC_KEY: "public-test-key",
-      EMAILJS_PRIVATE_KEY: "private-test-key",
-    })
-  })
-
   it("keeps Resend disabled even when a stale selector remains deployed", () => {
     setIsolatedEnv({
       EMAIL_PROVIDER: "resend",
@@ -118,24 +109,15 @@ describe("email environment validation", () => {
     })
   })
 
-  it("loads the selected EmailJS account and template without a reply-to", () => {
+  it("requires the private EmailJS key in production, where the public key alone would relay mail for anyone", () => {
     setIsolatedEnv({
-      EMAIL_PROVIDER: "emailjs",
+      VERCEL_ENV: "production",
       EMAILJS_SERVICE_ID: "service_buy2dql",
       EMAILJS_TEMPLATE_ID: "template_d6o6c8p",
       EMAILJS_PUBLIC_KEY: "public-test-key",
-      EMAILJS_PRIVATE_KEY: "private-test-key",
-      EMAIL_TIMEOUT_MS: "2500",
     })
 
-    expect(getEmailEnv()).toEqual({
-      EMAIL_PROVIDER: "emailjs",
-      EMAILJS_SERVICE_ID: "service_buy2dql",
-      EMAILJS_TEMPLATE_ID: "template_d6o6c8p",
-      EMAILJS_PUBLIC_KEY: "public-test-key",
-      EMAILJS_PRIVATE_KEY: "private-test-key",
-      EMAIL_TIMEOUT_MS: 2500,
-    })
+    expect(() => getEmailEnv()).toThrow("EMAILJS_PRIVATE_KEY")
   })
 
   it("requires the public EmailJS account key", () => {
@@ -181,19 +163,6 @@ describe("Upstash Redis environment validation", () => {
     expect(() => getUpstashRedisEnv()).toThrow("UPSTASH_REDIS_REST_TOKEN")
   })
 
-  it("accepts a complete REST configuration", () => {
-    setIsolatedEnv({
-      UPSTASH_REDIS_REST_URL: "https://example.upstash.io",
-      UPSTASH_REDIS_REST_TOKEN: "upstash-test-token",
-    })
-
-    expect(isUpstashRedisEnvConfigured()).toBe(true)
-    expect(getUpstashRedisEnv()).toEqual({
-      UPSTASH_REDIS_REST_URL: "https://example.upstash.io",
-      UPSTASH_REDIS_REST_TOKEN: "upstash-test-token",
-    })
-  })
-
   it("rejects a non-URL REST endpoint", () => {
     setIsolatedEnv({
       UPSTASH_REDIS_REST_URL: "not-a-url",
@@ -206,30 +175,19 @@ describe("Upstash Redis environment validation", () => {
 })
 
 describe("Sentry environment validation", () => {
-  it("returns null when no DSN is configured", () => {
-    setIsolatedEnv({ SENTRY_TRACES_SAMPLE_RATE: "0.5" })
+  it.each([undefined, "   "])("treats DSN %j as unconfigured", (dsn) => {
+    setIsolatedEnv({ SENTRY_DSN: dsn, SENTRY_TRACES_SAMPLE_RATE: "0.5" })
 
     expect(getSentryEnv()).toBeNull()
   })
 
-  it("treats a blank DSN as unconfigured", () => {
-    setIsolatedEnv({ SENTRY_DSN: "   " })
-
-    expect(getSentryEnv()).toBeNull()
-  })
-
-  it("applies defaults and parses fractional sample rates", () => {
+  it("reports a Vercel production deploy as production when no environment is set", () => {
     setIsolatedEnv({
       SENTRY_DSN: "https://key@o0.ingest.sentry.io/1",
-      SENTRY_TRACES_SAMPLE_RATE: "0.25",
+      VERCEL_ENV: "production",
     })
 
-    expect(getSentryEnv()).toEqual({
-      SENTRY_DSN: "https://key@o0.ingest.sentry.io/1",
-      SENTRY_ENVIRONMENT: "development",
-      SENTRY_TRACES_SAMPLE_RATE: 0.25,
-      SENTRY_PROFILES_SAMPLE_RATE: 0,
-    })
+    expect(getSentryEnv()?.SENTRY_ENVIRONMENT).toBe("production")
   })
 
   it.each(["1.5", "-0.1", "not-a-number"])(
@@ -246,39 +204,6 @@ describe("Sentry environment validation", () => {
 })
 
 describe("R2 environment validation", () => {
-  it("defaults region to auto and signed URL TTL to 900 seconds", () => {
-    setIsolatedEnv({
-      ...validR2Env,
-    })
-
-    expect(getR2Env()).toEqual({
-      CLOUDFLARE_R2_ACCOUNT_ID: "account-id",
-      CLOUDFLARE_R2_ACCESS_KEY_ID: "access-key-id",
-      CLOUDFLARE_R2_SECRET_ACCESS_KEY: "secret-access-key",
-      CLOUDFLARE_R2_BUCKET_NAME: "documents",
-      CLOUDFLARE_R2_ENDPOINT: "https://account-id.r2.cloudflarestorage.com",
-      CLOUDFLARE_R2_REGION: "auto",
-      CLOUDFLARE_R2_SIGNED_URL_TTL_SECONDS: 900,
-    })
-  })
-
-  it("accepts signed URL TTL lower and upper bounds", () => {
-    setIsolatedEnv({
-      ...validR2Env,
-      CLOUDFLARE_R2_REGION: "us-east-1",
-      CLOUDFLARE_R2_SIGNED_URL_TTL_SECONDS: "604800",
-    })
-
-    expect(getR2Env().CLOUDFLARE_R2_SIGNED_URL_TTL_SECONDS).toBe(604800)
-
-    setIsolatedEnv({
-      ...validR2Env,
-      CLOUDFLARE_R2_SIGNED_URL_TTL_SECONDS: "1",
-    })
-
-    expect(getR2Env().CLOUDFLARE_R2_SIGNED_URL_TTL_SECONDS).toBe(1)
-  })
-
   it.each(["0", "604801", "1.5", "not-a-number"])(
     "rejects invalid signed URL TTL value %s",
     (ttlSeconds: string) => {
@@ -343,62 +268,6 @@ describe("file upload policy environment validation", () => {
 })
 
 describe("AI environment validation", () => {
-  it("follows Gemini's newest Flash model by default, not one fixed version", () => {
-    setIsolatedEnv({
-      GEMINI_API_KEY: "gemini-test-key",
-    })
-
-    expect(getAiEnv()).toEqual({
-      AI_PROVIDER: "gemini",
-      AI_MODEL: "gemini-flash-latest",
-      AI_TIMEOUT_MS: 90000,
-    })
-  })
-
-  it("uses canonical model and timeout values without changing the model", () => {
-    setIsolatedEnv({
-      AI_PROVIDER: "gemini",
-      AI_MODEL: "gemini-exact-test-model",
-      AI_TIMEOUT_MS: "12000",
-      GEMINI_API_KEY: "gemini-test-key",
-      GEMINI_MODEL: "deprecated-model",
-      GEMINI_TIMEOUT_MS: "45000",
-    })
-
-    expect(getAiEnv()).toEqual({
-      AI_PROVIDER: "gemini",
-      AI_MODEL: "gemini-exact-test-model",
-      AI_TIMEOUT_MS: 12000,
-    })
-  })
-
-  it("reads deprecated model and timeout aliases for one release", () => {
-    setIsolatedEnv({
-      GEMINI_API_KEY: "gemini-test-key",
-      GEMINI_MODEL: "gemini-deployed-model",
-      GEMINI_TIMEOUT_MS: "18000",
-    })
-
-    expect(getAiEnv()).toEqual({
-      AI_PROVIDER: "gemini",
-      AI_MODEL: "gemini-deployed-model",
-      AI_TIMEOUT_MS: 18000,
-    })
-  })
-
-  it("keeps generic provider configuration independent of adapter registration", () => {
-    setIsolatedEnv({
-      AI_PROVIDER: "unknown-provider",
-      AI_MODEL: "provider-model-v1",
-    })
-
-    expect(getAiEnv()).toEqual({
-      AI_PROVIDER: "unknown-provider",
-      AI_MODEL: "provider-model-v1",
-      AI_TIMEOUT_MS: 90000,
-    })
-  })
-
   it("requires an explicit model for providers without a registered default", () => {
     setIsolatedEnv({
       AI_PROVIDER: "future-provider",

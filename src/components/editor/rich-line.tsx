@@ -16,7 +16,7 @@ import { type CSSProperties, type ReactElement, useEffect, useLayoutEffect, useR
 import { PLACEHOLDER_CLASS, type TextCaret } from "@/components/editor/editable-text"
 import { DocumentFontStyles, documentFontFamily } from "@/components/templates/document-font-styles"
 import { RichText } from "@/components/templates/rich-text"
-import { cn } from "@/lib/utils"
+import { cn, subscribeNever } from "@/lib/utils"
 import { fitRuns, textRunSchema, type TextRun } from "@/types/template"
 
 // The document is the line itself: its words and their formatting, nothing more.
@@ -322,10 +322,6 @@ function keepPlace(before: string, after: string, position: number): number {
   }
 
   return position >= before.length - suffix ? position + after.length - before.length : after.length - suffix
-}
-
-function subscribeNever(): () => void {
-  return () => undefined
 }
 
 function readCaret(state: EditorState): TextCaret {

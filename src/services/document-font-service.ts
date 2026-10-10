@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises"
 import path from "node:path"
 
 import { z } from "zod"
+import { ServiceError } from "@/services/service-error"
 
 // Written by scripts/update-document-fonts.mjs from Fontsource's copy of Google Fonts.
 const FACES_PATH = path.join(process.cwd(), "public/fonts/faces.json")
@@ -35,14 +36,8 @@ let faces: Promise<Faces> | undefined
 const spans = new Map<number, Array<readonly [number, number]>>()
 
 /** A font asset that cannot be served, with the HTTP status that says why. */
-export class DocumentFontError extends Error {
-  readonly statusCode: number
-
-  constructor(message: string, statusCode: number) {
-    super(message)
-    this.name = "DocumentFontError"
-    this.statusCode = statusCode
-  }
+export class DocumentFontError extends ServiceError {
+  override readonly name = "DocumentFontError"
 }
 
 /**

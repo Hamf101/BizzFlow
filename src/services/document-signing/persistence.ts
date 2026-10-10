@@ -19,7 +19,7 @@ import {
 } from "@/services/generated-documents/generated-document-persistence"
 import type {
   DocumentSigningRecipient,
-  GeneratedDocumentSigningView,
+  MemberDocumentSigningView,
   PublicDocumentSigningView,
   PublicSignerStatus,
 } from "@/types/signing"
@@ -87,7 +87,7 @@ export async function loadGeneratedDocumentView(
   client: SigningServiceClient,
   organizationId: string,
   documentId: string
-): Promise<GeneratedDocumentSigningView> {
+): Promise<MemberDocumentSigningView> {
   const [documentResult, answerResult, recipientResult, organizationResult] =
     await Promise.all([
       client
@@ -107,7 +107,8 @@ export async function loadGeneratedDocumentView(
         .select(RECIPIENT_COLUMNS)
         .eq("document_id", documentId)
         .eq("org_id", organizationId)
-        .order("invited_at", { ascending: true }),
+        // The order they were added in, which a signer's boxes are assigned by.
+        .order("signer_number", { ascending: true }),
       client
         .from("organizations")
         .select("name")
@@ -207,7 +208,8 @@ export async function loadPublicSigningView(
     workflowStatus: view.workflowStatus,
     requiresInitials: templateRequiresRecipientInitials(
       view.document.templateSnapshot,
-      view.answers
+      view.answers,
+      view.recipients.indexOf(currentRecipient) + 1
     ),
     recipient: {
       id: currentRecipient.id,
@@ -217,16 +219,29 @@ export async function loadPublicSigningView(
       status: currentRecipient.status,
       tokenExpiresAt: currentRecipient.tokenExpiresAt,
       signedAt: currentRecipient.signedAt,
+      signatureDataUrl: currentRecipient.signatureDataUrl,
+      initialsDataUrl: currentRecipient.initialsDataUrl,
     },
-    signers: view.recipients.map(
-      (signer: DocumentSigningRecipient): PublicSignerStatus => ({
-        id: signer.id,
-        name: signer.name,
-        requiresSignature: signer.requiresSignature,
-        status: signer.status,
-        signedAt: signer.signedAt,
-      })
-    ),
+    signers: view.recipients.map(toPublicSignerStatus),
+  }
+}
+
+/**
+ * Narrows a recipient to what anyone outside the workspace may see of a
+ * co-signer: no address, drawing, or link expiry.
+ *
+ * @param signer - Member-facing recipient.
+ * @returns Public signer status.
+ */
+export function toPublicSignerStatus(
+  signer: DocumentSigningRecipient
+): PublicSignerStatus {
+  return {
+    id: signer.id,
+    name: signer.name,
+    requiresSignature: signer.requiresSignature,
+    status: signer.status,
+    signedAt: signer.signedAt,
   }
 }
 
@@ -242,6 +257,7 @@ export async function loadRecipientByToken(
   client: SigningServiceClient,
   tokenHash: string
 ): Promise<DocumentSigningRecipientRow> {
+  // tenant-scope: a public signer holds only the token; its hash finds the one row, whose org_id then scopes every later read
   const { data, error } = await client
     .from("document_signing_recipients")
     .select(RECIPIENT_COLUMNS)
@@ -304,6 +320,7 @@ export async function insertSigningRecipients(
   client: SigningServiceClient,
   rows: DocumentSigningRecipientRow[]
 ): Promise<DocumentSigningRecipientRow[]> {
+  // tenant-scope: rows are typed DocumentSigningRecipientRow; workflows.ts sets org_id to the authorized organization
   const { data, error } = await client
     .from("document_signing_recipients")
     .insert(rows)
@@ -392,6 +409,7 @@ export async function markSigningRecipientViewed(
   recipient: DocumentSigningRecipientRow,
   viewedAt: string
 ): Promise<DocumentSigningRecipientRow> {
+  // tenant-scope: id + token_hash of the recipient loadRecipientByToken just read; the token is the only authority here
   const { data, error } = await client
     .from("document_signing_recipients")
     .update({ status: "viewed", viewed_at: viewedAt })

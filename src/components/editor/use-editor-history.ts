@@ -19,13 +19,12 @@ const COALESCE_MS = 1_000
  * together, such as typing in one line, undo as one step.
  *
  * @param initial - The state the editor opened with.
- * @returns The current state, a way to change it, and undo, redo and reset.
+ * @returns The current state, a way to change it, and undo and redo.
  */
 export function useEditorHistory<State>(initial: State): {
   canRedo: boolean
   canUndo: boolean
   redo: () => void
-  reset: (state: State) => void
   set: (update: (state: State) => State, coalesceKey?: string) => void
   state: State
   undo: () => void
@@ -94,15 +93,10 @@ export function useEditorHistory<State>(initial: State): {
     })
   }, [])
 
-  const reset = useCallback((state: State): void => {
-    setHistory({ future: [], lastAt: 0, lastKey: null, past: [], present: state })
-  }, [])
-
   return {
     canRedo: history.future.length > 0,
     canUndo: history.past.length > 0,
     redo,
-    reset,
     set,
     state: history.present,
     undo,

@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useSyncExternalStore } from "react"
 import type { LiveSession, LiveStatus } from "@/lib/collaboration/live-session"
 
 import { useEditorHistory } from "./use-editor-history"
+import { subscribeNever } from "@/lib/utils"
 
 type Update<State> = (state: State) => State
 
@@ -133,8 +134,4 @@ export function useWorkingCopyHistory<State>(
     state,
     undo,
   }
-}
-
-function subscribeNever(): () => void {
-  return () => undefined
 }

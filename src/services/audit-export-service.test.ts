@@ -12,8 +12,6 @@ const ENTRY: AuditLogEntry = {
   targetId: "doc-123",
   metadata: { revision: 2 },
   seq: 7,
-  prevHash: "prev-hash",
-  entryHash: "entry-hash",
   createdAt: "2026-07-30T12:00:00Z",
 }
 

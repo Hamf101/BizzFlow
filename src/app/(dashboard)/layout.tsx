@@ -1,5 +1,5 @@
 import { NavigationPreferencesProvider } from "@/components/navigation/navigation-preferences-provider"
-import { getNavigationPreferences } from "@/services/navigation-service"
+import { getNavigationPreferences } from "@/services/organizations/navigation-service"
 import * as Sentry from "@sentry/nextjs"
 import { redirect } from "next/navigation"
 import { Suspense, type ReactElement, type ReactNode } from "react"
@@ -14,6 +14,7 @@ import { MobileTopBar } from "@/components/navigation/mobile-top-bar"
 import { DashboardSidebar } from "@/components/navigation/dashboard-sidebar"
 import { WorkspaceSearch } from "@/components/search/workspace-search"
 import { ActionFeedback } from "@/components/ui/action-feedback"
+import { TimeZoneCookie } from "@/components/ui/local-date"
 import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
 import { getFallbackDisplayName } from "@/lib/display-name"
 import { captureUnexpectedError } from "@/lib/observability"
@@ -33,34 +34,6 @@ async function signOutAction(): Promise<void> {
   await supabase.auth.signOut({ scope: "local" })
   redirect("/login")
 }
-
-/**
- * Attaches the signed-in member to the request's error-reporting scope.
- *
- * Renders nothing and never redirects: `src/lib/supabase/proxy.ts` already
- * bounces unauthenticated and unconfigured requests for every protected prefix,
- * and each page resolves the member itself. Awaiting auth in the layout body
- * instead would block the entire shell on a round trip the proxy already made.
- *
- * @returns Nothing; this component exists only for its scope side effect.
- */
-async function DashboardUserScope(): Promise<null> {
-  try {
-    const user = await getAuthenticatedUser()
-    Sentry.setUser({ id: user.id })
-  } catch (error: unknown) {
-    if (!(error instanceof AuthenticationError)) {
-      console.error("dashboard_layout_configuration_failed", {
-        reason:
-          error instanceof Error ? error.message : "Unknown configuration error",
-      })
-      captureUnexpectedError(error, { boundary: "dashboard_layout" })
-    }
-  }
-
-  return null
-}
-
 
 /**
  * Loads account details used by the persistent dashboard sidebar.
@@ -134,9 +107,18 @@ export default async function DashboardLayout({
   try {
     const user = await getAuthenticatedUser()
     userId = user.id
+    // Attaches the member to the request's error-reporting scope.
+    Sentry.setUser({ id: user.id })
     account = await getDashboardAccount(user)
-  } catch {
-    // Missing/invalid session handled by proxy or scope
+  } catch (error: unknown) {
+    // A missing session is the proxy's to bounce; anything else is configuration.
+    if (!(error instanceof AuthenticationError)) {
+      console.error("dashboard_layout_configuration_failed", {
+        reason:
+          error instanceof Error ? error.message : "Unknown configuration error",
+      })
+      captureUnexpectedError(error, { boundary: "dashboard_layout" })
+    }
   }
 
   return (
@@ -145,6 +127,8 @@ export default async function DashboardLayout({
       <Suspense fallback={null}>
         <ActionFeedback />
       </Suspense>
+      {/* Tells the dashboard the viewer's time zone, for its "yesterday". */}
+      <TimeZoneCookie />
       <div className="flex min-h-dvh flex-col bg-canvas text-foreground" data-ground="canvas">
         {/* The sidebar has a dozen stops; this is the first, so a keyboard user can skip them. */}
         <a
@@ -160,7 +144,6 @@ export default async function DashboardLayout({
             <main className="flex flex-1 flex-col rounded-t-[18px] border-x border-t border-border/70 bg-background outline-none" id="main-content" tabIndex={-1}>
               <div className="min-w-0 flex-1 px-5 pt-6 pb-[calc(8.25rem+env(safe-area-inset-bottom))] sm:px-7 sm:pt-7 md:pb-20">
                 <Suspense fallback={<DashboardContentSkeleton />}>
-                  <DashboardUserScope />
                   {children}
                 </Suspense>
               </div>

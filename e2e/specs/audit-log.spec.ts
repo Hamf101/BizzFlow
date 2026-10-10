@@ -7,7 +7,7 @@ test("narrows the audit log by kind, unfolds an event, and downloads exactly tha
   admin,
   pageAs,
   tenant,
-}, testInfo) => {
+}) => {
   // Other specs record events in this tenant at the same time, so every
   // assertion either finds this spec's own events by reference or holds for
   // any event of the chosen kind.
@@ -20,8 +20,7 @@ test("narrows the audit log by kind, unfolds an event, and downloads exactly tha
     org_id: tenant.organizationId,
     target_type: targetType,
   })
-  // The table's trigger assigns the sequence and chain hashes, so seeded
-  // events are as tamper-evident as recorded ones.
+  // The table's sequence numbers seeded events as it does recorded ones.
   const { error } = await admin
     .from("audit_logs")
     .insert([
@@ -32,9 +31,6 @@ test("narrows the audit log by kind, unfolds an event, and downloads exactly tha
   if (error) throw error
 
   const page = await pageAs("owner_admin")
-  if (testInfo.project.use.viewport) {
-    await page.setViewportSize(testInfo.project.use.viewport)
-  }
 
   await page.goto("/audit-log")
   await expect(page.getByRole("heading", { level: 1 })).toHaveAccessibleName(

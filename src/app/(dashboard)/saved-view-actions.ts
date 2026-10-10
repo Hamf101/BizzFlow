@@ -1,26 +1,15 @@
 "use server"
 
-import { redirect } from "next/navigation"
-
-import {
-  buildFeedbackRedirect,
-  getActionErrorFeedbackCode,
-  type ActionFeedbackCode,
-} from "@/lib/action-result"
-import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
-import { buildRedirect, getFormString } from "@/lib/form-utils"
-import {
-  getCurrentOrganizationContext,
-  OrganizationServiceError,
-} from "@/services/organization-service"
+import type { ActionFeedbackCode } from "@/lib/action-result"
+import { loadActionContext, runFormAction, type ActionActor } from "@/lib/form-action"
+import { getFormString } from "@/lib/form-utils"
+import { OrganizationServiceError } from "@/services/organization-service"
 import {
   deleteSavedView,
   renameSavedView,
   saveListView,
-} from "@/services/saved-view-service"
+} from "@/services/organizations/saved-view-service"
 import { savedViewListSchema } from "@/types/saved-view"
-
-type Actor = { actorUserId: string; organizationId: string }
 
 function readQuery(formData: FormData): string {
   return new URLSearchParams(getFormString(formData, "query")).toString()
@@ -46,33 +35,22 @@ function readDestination(formData: FormData): string {
 async function runSavedViewAction(
   formData: FormData,
   success: ActionFeedbackCode,
-  change: (actor: Actor) => Promise<unknown>,
+  change: (actor: ActionActor) => Promise<unknown>,
   conflict?: ActionFeedbackCode
 ): Promise<never> {
-  const destination = readDestination(formData)
-
-  try {
-    const user = await getAuthenticatedUser()
-    const context = await getCurrentOrganizationContext(user.id)
-
-    if (!context) {
-      throw new OrganizationServiceError("Choose a workspace first.", 428)
-    }
-
-    await change({ actorUserId: user.id, organizationId: context.organization.id })
-  } catch (error: unknown) {
-    if (error instanceof AuthenticationError) {
-      redirect(buildRedirect("/login", { next: destination }))
-    }
-
-    const code =
+  return runFormAction({
+    event: `saved_${success}_action`,
+    path: readDestination(formData),
+    success,
+    failure: (error) =>
       conflict && error instanceof OrganizationServiceError && error.statusCode === 409
         ? conflict
-        : getActionErrorFeedbackCode(error)
-    redirect(buildFeedbackRedirect(destination, code))
-  }
-
-  redirect(buildFeedbackRedirect(destination, success))
+        : undefined,
+    run: async () => {
+      const { actor } = await loadActionContext("Choose a workspace first.")
+      await change(actor)
+    },
+  })
 }
 
 /**
@@ -85,7 +63,7 @@ export async function saveListViewAction(formData: FormData): Promise<void> {
   await runSavedViewAction(
     formData,
     "view_saved",
-    (actor: Actor) =>
+    (actor: ActionActor) =>
       saveListView({
         ...actor,
         list: getFormString(formData, "list"),
@@ -106,7 +84,7 @@ export async function renameSavedViewAction(formData: FormData): Promise<void> {
   await runSavedViewAction(
     formData,
     "view_renamed",
-    (actor: Actor) =>
+    (actor: ActionActor) =>
       renameSavedView({
         ...actor,
         name: getFormString(formData, "name"),
@@ -123,7 +101,7 @@ export async function renameSavedViewAction(formData: FormData): Promise<void> {
  * @returns Never returns; redirects back to the list with the outcome.
  */
 export async function deleteSavedViewAction(formData: FormData): Promise<void> {
-  await runSavedViewAction(formData, "view_deleted", (actor: Actor) =>
+  await runSavedViewAction(formData, "view_deleted", (actor: ActionActor) =>
     deleteSavedView({ ...actor, viewId: getFormString(formData, "viewId") })
   )
 }

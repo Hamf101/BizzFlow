@@ -17,11 +17,13 @@ import {
   listDocumentTemplateVersions,
   publishDocumentTemplate,
   recordDocumentRecentAccess,
-  restoreDocumentTemplate,
-  setDocumentTemplateCategory,
   updateDocumentTemplate,
   duplicateDocumentTemplate
 } from "@/services/template-service"
+import {
+  restoreDocumentTemplate,
+  setDocumentTemplateCategory,
+} from "@/services/templates/template-lifecycle-service"
 import {
   createBlankTemplateContent,
   parseTemplateContent,
@@ -31,16 +33,14 @@ import {
   type TemplateContentV3
 } from "@/types/template"
 import { insertTemplateBlock } from "@/types/template-structure"
+import {
+  PostgrestWriteQuery,
+  type FakeOperation,
+  type FakeRow,
+  type FakeTables,
+} from "@/services/postgrest-fake.test-support"
 import { answerTemplateAccess } from "@/services/templates/access.test-support"
 
-type FakeRow = Record<string, unknown>
-type FakeTables = Record<string, FakeRow[]>
-type FakeResult = {
-  data: unknown
-  error: null
-}
-type FakeFilter = (row: FakeRow) => boolean
-type FakeOperation = "select" | "insert" | "update" | "upsert" | "delete"
 type FakeOperationHook = (tableName: string, operation: FakeOperation) => void
 
 const ORG_ID = "10000000-0000-4000-8000-000000000001"
@@ -114,189 +114,22 @@ function createLegacyUsableTemplateContent(): TemplateContentV2 {
   }
 }
 
-class FakeQuery implements PromiseLike<FakeResult> {
-  private operation: FakeOperation = "select"
-  private payload: FakeRow | null = null
-  private readonly filters: FakeFilter[] = []
-  private orderColumn: string | null = null
-  private orderAscending = true
-  private rowLimit: number | null = null
-
-  constructor(
-    private readonly tableName: string,
-    private readonly tables: FakeTables,
-    private readonly beforeOperation?: FakeOperationHook
-  ) {}
-
-  select(): FakeQuery {
-    return this
-  }
-
-  insert(payload: FakeRow): FakeQuery {
-    this.operation = "insert"
-    this.payload = payload
-    return this
-  }
-
-  update(payload: FakeRow): FakeQuery {
-    this.operation = "update"
-    this.payload = payload
-    return this
-  }
-
-  upsert(payload: FakeRow): FakeQuery {
-    this.operation = "upsert"
-    this.payload = payload
-    return this
-  }
-
-  delete(): FakeQuery {
-    this.operation = "delete"
-    return this
-  }
-
-  eq(column: string, value: unknown): FakeQuery {
-    this.filters.push((row: FakeRow): boolean => row[column] === value)
-    return this
-  }
-
-  is(column: string, value: unknown): FakeQuery {
-    this.filters.push((row: FakeRow): boolean => row[column] === value)
-    return this
-  }
-
-  in(column: string, values: readonly unknown[]): FakeQuery {
-    this.filters.push((row: FakeRow): boolean => values.includes(row[column]))
-    return this
-  }
-
-  // Only "not in (a,b)" is used: leaving out hidden templates.
-  not(column: string, operator: string, value: string): FakeQuery {
-    const ids = operator === "in" ? value.slice(1, -1).split(",") : []
-    this.filters.push((row: FakeRow): boolean => !ids.includes(row[column] as string))
-    return this
-  }
-
-  // Only "status.eq.published,id.in.(a,b)" is used: published, or one of a list.
-  or(expression: string): FakeQuery {
-    const [, status] = /status\.eq\.(\w+)/.exec(expression) ?? []
-    const ids = (/id\.in\.\(([^)]*)\)/.exec(expression)?.[1] ?? "").split(",")
-    this.filters.push((row: FakeRow): boolean => row.status === status || ids.includes(row.id as string))
-    return this
-  }
-
-  order(column: string, options: { ascending: boolean }): FakeQuery {
-    this.orderColumn = column
-    this.orderAscending = options.ascending
-    return this
-  }
-
-  limit(value: number): FakeQuery {
-    this.rowLimit = value
-    return this
-  }
-
-  async single(): Promise<FakeResult> {
-    const result = this.execute()
-    const rows = result.data as FakeRow[]
-    return { data: rows[0] ?? null, error: null }
-  }
-
-  async maybeSingle(): Promise<FakeResult> {
-    return this.single()
-  }
-
-  then<TResult1 = FakeResult, TResult2 = never>(
-    onfulfilled?:
-      ((value: FakeResult) => TResult1 | PromiseLike<TResult1>) | null,
-    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
-  ): PromiseLike<TResult1 | TResult2> {
-    return Promise.resolve(this.execute()).then(onfulfilled, onrejected)
-  }
-
-  private execute(): FakeResult {
-    const table =
-      this.tables[this.tableName] ?? (this.tables[this.tableName] = [])
-    this.beforeOperation?.(this.tableName, this.operation)
-
-    if (this.operation === "insert") {
-      const row = withDatabaseDefaults(this.tableName, this.payload ?? {})
-      table.push(row)
-      return { data: [row], error: null }
-    }
-
-    if (this.operation === "upsert") {
-      const payload = this.payload ?? {}
-      const existing = table.find((row: FakeRow): boolean => {
-        return (
-          row.org_id === payload.org_id &&
-          row.user_id === payload.user_id &&
-          row.document_id === payload.document_id
-        )
-      })
-
-      if (existing) {
-        Object.assign(existing, payload)
-        return { data: [existing], error: null }
-      }
-
-      const row = { ...payload }
-      table.push(row)
-      return { data: [row], error: null }
-    }
-
-    const matchingRows = table.filter((row: FakeRow): boolean =>
-      this.filters.every((filter: FakeFilter): boolean => filter(row))
-    )
-
-    if (this.operation === "update") {
-      matchingRows.forEach((row: FakeRow): void => {
-        Object.assign(row, this.payload ?? {}, {
-          updated_at: "2026-07-17T20:00:00.000Z"
-        })
-      })
-      return { data: matchingRows, error: null }
-    }
-
-    if (this.operation === "delete") {
-      this.tables[this.tableName] = table.filter(
-        (row: FakeRow): boolean => !matchingRows.includes(row)
-      )
-      return { data: matchingRows, error: null }
-    }
-
-    let selectedRows = [...matchingRows]
-
-    if (this.orderColumn) {
-      const column = this.orderColumn
-      const direction = this.orderAscending ? 1 : -1
-      selectedRows.sort((left: FakeRow, right: FakeRow): number => {
-        return (
-          String(left[column]).localeCompare(String(right[column])) * direction
-        )
-      })
-    }
-
-    if (this.rowLimit !== null) {
-      selectedRows = selectedRows.slice(0, this.rowLimit)
-    }
-
-    return { data: selectedRows, error: null }
-  }
-}
-
 class FakeClient {
   constructor(
     readonly tables: FakeTables,
     private readonly beforeOperation?: FakeOperationHook
   ) {}
 
-  from(tableName: string): FakeQuery {
+  from(tableName: string): PostgrestWriteQuery {
     if (tableName === "published_document_templates") {
       this.tables.published_document_templates = publishedTemplates(this.tables)
     }
 
-    return new FakeQuery(tableName, this.tables, this.beforeOperation)
+    return new PostgrestWriteQuery(this.tables, tableName, {
+      before: this.beforeOperation,
+      defaults: withDatabaseDefaults,
+      updatedAt: "2026-07-17T20:00:00.000Z",
+    })
   }
 
   async rpc(
@@ -1099,6 +932,23 @@ describe("template service", () => {
     expect(tables.document_answers).toEqual([])
   })
 
+  it("checks a blank document's own pictures as a template's are checked", async () => {
+    const tables = createBaseTables()
+    const documentCount = tables.documents.length
+
+    await expect(
+      createGeneratedDocument(
+        {
+          actorUserId: STAFF_ID,
+          organizationId: ORG_ID,
+          content: createContentWithBlocks([createImageBlock(1, "data:image/png;base64,aGVsbG8=")])
+        },
+        { client: new FakeClient(tables) as never, createId: (): string => CREATED_DOCUMENT_ID }
+      )
+    ).rejects.toMatchObject({ statusCode: 400 })
+    expect(tables.documents).toHaveLength(documentCount)
+  })
+
   it("keeps one recent per document, stamped with the latest opening", async () => {
     const tables = createBaseTables()
     tables.document_recent_accesses.push({
@@ -1393,6 +1243,38 @@ describe("template service", () => {
       await expect(
         duplicateDocumentTemplate({ actorUserId: EXTERNAL_ID, organizationId: ORG_ID, templateId: TEMPLATE_ID }, deps)
       ).rejects.toMatchObject({ message: "You cannot create templates.", statusCode: 403 })
+    })
+
+    it("copies what was published for someone who only uses the template, never the working copy", async () => {
+      const tables = createBaseTables()
+      tables.document_templates[0].published_revision = 1
+      tables.document_template_versions = [
+        {
+          content: createUsableTemplateContent(),
+          description: null,
+          org_id: ORG_ID,
+          published_at: "2026-07-17T19:00:00.000Z",
+          published_by: MANAGER_ID,
+          revision: 1,
+          template_id: TEMPLATE_ID,
+          title: "Published handbook"
+        }
+      ]
+      Object.assign(tables.document_templates[0], { revision: 2, title: "Unannounced rewrite" })
+      // A draft staff were let use still has nothing published to copy.
+      tables.template_access_grants = [{ access_level: "user", org_id: ORG_ID, organization_role: "staff", template_id: DRAFT_TEMPLATE_ID, user_id: null }]
+      const deps = { client: new FakeClient(tables) as never, createId: (): string => "30000000-0000-4000-8000-000000000099" }
+
+      await expect(
+        duplicateDocumentTemplate({ actorUserId: STAFF_ID, organizationId: ORG_ID, templateId: TEMPLATE_ID }, deps)
+      ).resolves.toMatchObject({ title: "Published handbook (Copy)" })
+      await expect(
+        duplicateDocumentTemplate({ actorUserId: STAFF_ID, organizationId: ORG_ID, templateId: DRAFT_TEMPLATE_ID }, deps)
+      ).rejects.toMatchObject({ statusCode: 404 })
+      // The author still copies their working copy.
+      await expect(
+        duplicateDocumentTemplate({ actorUserId: MANAGER_ID, organizationId: ORG_ID, templateId: TEMPLATE_ID }, deps)
+      ).resolves.toMatchObject({ title: "Unannounced rewrite (Copy)" })
     })
 
     it("rejects duplicating a non-existent template", async () => {

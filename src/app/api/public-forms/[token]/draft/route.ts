@@ -32,7 +32,7 @@ export async function POST(
 ): Promise<Response> {
   try {
     const clientIp = getClientIp(request.headers)
-    await checkRateLimit("public_form_file_upload", clientIp)
+    await checkRateLimit("public_form_draft", clientIp)
 
     const body = await readTrustedJsonObject(request)
     const { token } = await context.params

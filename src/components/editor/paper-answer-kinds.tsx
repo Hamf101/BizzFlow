@@ -1,18 +1,19 @@
 "use client"
 
 import { Plus } from "lucide-react"
-import type { ReactElement, ReactNode } from "react"
+import { Fragment, type ReactElement, type ReactNode, useContext } from "react"
 
 import { getGeneratedDocumentAnswerName } from "@/components/documents/generated-document-form-data"
+import { PageBreaks } from "@/components/editor/table-cells"
 import { cn } from "@/lib/utils"
-import type { ChoiceGridFieldBlock, TableFieldBlock, TextFieldBlock } from "@/types/template"
+import type { ChoiceGridFieldBlock, TableFieldBlock } from "@/types/template"
 import { MAX_TABLE_FIELD_ROWS } from "@/types/template-answer-kinds"
 
-// The printed edge of a mark, a grid's rules and a table's cells (see paper-field).
-const EDGE = "rgb(156 163 176)"
-const RULE = `0.07em solid ${EDGE}`
-// A comb box prints 16 points wide and 22 tall.
-const COMB = { height: 2.2, width: 1.6 } as const
+// The printed edge of a checkbox, a signature's line, a boxed section, a
+// grid's rules and a table's cells. An answer box's edge is fainter, the
+// page's own border colour, as it prints.
+export const EDGE = "rgb(156 163 176)"
+export const RULE = `0.07em solid ${EDGE}`
 
 type Mode = "design" | "fill" | "read"
 
@@ -71,16 +72,6 @@ export function readTableAnswer(value: unknown, columns: number): string[][] {
   return value
     .filter((row): row is unknown[] => Array.isArray(row))
     .map((row) => Array.from({ length: columns }, (_, at) => (typeof row[at] === "string" ? (row[at] as string) : "")))
-}
-
-/**
- * Ticked choices of a choose-several question.
- *
- * @param value - Whatever the answers hold for it.
- * @returns The ticked choices.
- */
-export function readChoiceList(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []
 }
 
 // What a form posts for an answer that is more than one word: the whole of it, as JSON.
@@ -221,6 +212,7 @@ export function PaperTable({
   value: unknown
 }): ReactElement {
   const fill = mode === "fill"
+  const breaks = useContext(PageBreaks)
   const answered = mode === "design" ? [] : readTableAnswer(value, block.columns.length)
   const blank = (): string[] => block.columns.map(() => "")
   const rows = [...answered, ...Array.from({ length: Math.max(0, block.rows - answered.length) }, blank)]
@@ -261,13 +253,22 @@ export function PaperTable({
         </thead>
         <tbody>
           {rows.map((row, rowIndex) => (
-            <tr data-row-key={`${block.id}-${rowIndex}`} key={rowIndex}>
-              {row.map((text, column) => (
-                <td className="align-top focus-within:ring-2 focus-within:ring-ring/40 focus-within:ring-inset" key={column} style={{ border: RULE, height: "2em", padding: "0.25em 0.4em" }}>
-                  {cell(rowIndex, column, text)}
-                </td>
-              ))}
-            </tr>
+            <Fragment key={rowIndex}>
+              {/* A page ends before this row: the space to the next page's margin. */}
+              {breaks[`${block.id}:row${rowIndex}`] ? (
+                <tr aria-hidden="true" style={{ display: "var(--page-space-display, table-row)" }}>
+                  <td colSpan={block.columns.length} style={{ border: 0, height: breaks[`${block.id}:row${rowIndex}`], padding: 0 }} />
+                </tr>
+              ) : null}
+              {/* The first row stays with the heading row, so a page never ends between them. */}
+              <tr data-row-key={rowIndex > 0 ? `${block.id}:row${rowIndex}` : undefined}>
+                {row.map((text, column) => (
+                  <td className="align-top focus-within:ring-2 focus-within:ring-ring/40 focus-within:ring-inset" key={column} style={{ border: RULE, height: "2em", padding: "0.25em 0.4em" }}>
+                    {cell(rowIndex, column, text)}
+                  </td>
+                ))}
+              </tr>
+            </Fragment>
           ))}
         </tbody>
       </table>
@@ -297,62 +298,5 @@ export function PaperTable({
         </button>
       ) : null}
     </div>
-  )
-}
-
-/**
- * An answer written one character a box, as a reference or account number
- * prints: boxes of 16 by 22 points, narrowed to fit a narrow column.
- *
- * @param props - The field, its answer, and its input when it is being filled in.
- * @returns The row of boxes.
- */
-export function PaperComb({ block, input, text }: { block: TextFieldBlock & { comb: number }; input?: ReactElement; text: string }): ReactElement {
-  // Measured against the column, not the font, so the typed letters and the boxes agree.
-  const width = `min(${COMB.width}em, max(1em, 100cqw / ${block.comb}))`
-
-  return (
-    <div className="@container w-full">
-      <div
-        className="relative flex"
-        style={{
-          ["--comb" as string]: width,
-          height: `${COMB.height}em`,
-          width: `calc(${width} * ${block.comb})`,
-        }}
-      >
-        {Array.from({ length: block.comb }, (_, at) => (
-          <span
-            className="flex flex-1 items-center justify-center"
-            key={at}
-            style={{ borderBottom: RULE, borderLeft: RULE, borderRight: at === block.comb - 1 ? RULE : undefined, borderTop: RULE }}
-          >
-            {input ? null : text[at]}
-          </span>
-        ))}
-        {input}
-      </div>
-    </div>
-  )
-}
-
-/**
- * An answer between the words printed before and after it, such as "£" and
- * "per month", in the label's colour.
- *
- * @param props - The field and its answer.
- * @returns The answer with its words around it.
- */
-export function Affixed({ block, children }: { block: TextFieldBlock; children: ReactNode }): ReactElement {
-  if (!block.prefix && !block.suffix) {
-    return <>{children}</>
-  }
-
-  return (
-    <span className="flex min-w-0 items-baseline gap-[0.3em]">
-      {block.prefix ? <span className="shrink-0 text-muted-foreground">{block.prefix}</span> : null}
-      <span className={cn("min-w-0 flex-1")}>{children}</span>
-      {block.suffix ? <span className="shrink-0 text-muted-foreground">{block.suffix}</span> : null}
-    </span>
   )
 }

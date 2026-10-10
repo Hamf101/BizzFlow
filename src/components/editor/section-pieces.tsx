@@ -85,6 +85,8 @@ export function SectionPieces({
   const nodes = useRef<(SVGGElement | null)[]>([])
   const state = useRef<Flock>({ pieces: CHARACTER.map(({ wander }) => resting(wander)), start: resting(CHARACTER[0]!.wander) })
   const latest = useRef<View>({ narrow, sectionId, zoom })
+  // Starts the frames again after they stopped; a no-op while they run.
+  const wake = useRef((): void => undefined)
 
   useEffect(() => {
     latest.current = { narrow, sectionId, zoom }
@@ -104,17 +106,36 @@ export function SectionPieces({
       last = now
       pieces.forEach((piece, index) => draw(nodes.current[index], piece, now, dt, false, latest.current.narrow))
       draw(nodes.current[POOL], start, now, dt, true, latest.current.narrow)
-      frame = requestAnimationFrame(tick)
+      // Once home, only a visible piece that wanders needs frames: the triangle,
+      // a piece kept still for reduced motion and a faded one wait to be sent again.
+      const home = (piece: Piece): boolean => !piece.from || now >= piece.t0 + piece.dur
+      const resting = home(start) && pieces.every((piece) => home(piece) && (!piece.from || piece.still || piece.alphaTo === 0))
+      frame = resting ? 0 : requestAnimationFrame(tick)
     }
 
-    frame = requestAnimationFrame(tick)
+    wake.current = () => {
+      if (frame === 0) {
+        last = performance.now()
+        frame = requestAnimationFrame(tick)
+      }
+    }
+    wake.current()
 
-    return () => cancelAnimationFrame(frame)
+    return () => {
+      cancelAnimationFrame(frame)
+      wake.current = () => undefined
+    }
   }, [])
 
   // A move to another section breaks away; writing only glides.
-  useEffect(() => retarget(root.current, state.current, latest.current, "move"), [root, sectionId, narrow])
-  useEffect(() => retarget(root.current, state.current, latest.current, "gentle"), [root, revision, zoom])
+  useEffect(() => {
+    retarget(root.current, state.current, latest.current, "move")
+    wake.current()
+  }, [root, sectionId, narrow])
+  useEffect(() => {
+    retarget(root.current, state.current, latest.current, "gentle")
+    wake.current()
+  }, [root, revision, zoom])
   useEffect(() => {
     const canvas = root.current
 
@@ -122,7 +143,10 @@ export function SectionPieces({
       return
     }
 
-    const observer = new ResizeObserver(() => retarget(root.current, state.current, latest.current, "gentle"))
+    const observer = new ResizeObserver(() => {
+      retarget(root.current, state.current, latest.current, "gentle")
+      wake.current()
+    })
     observer.observe(canvas)
 
     return () => observer.disconnect()

@@ -1,12 +1,12 @@
 import { expect, test, uniqueName } from "../support/fixtures"
 import { retryConcurrentChange } from "../support/retry"
-import { seedTemplate } from "../support/seed"
+import { seedFolder, seedTemplate } from "../support/seed"
 
 test("switches Files between Finder's views, remembers the choice, and follows the chosen document", async ({
   admin,
   pageAs,
   tenant,
-}, testInfo) => {
+}) => {
   // Each device project fills its own folder in the shared tenant.
   const name = uniqueName("Lettings")
   const lease = `${name} lease`
@@ -17,19 +17,7 @@ test("switches Files between Finder's views, remembers the choice, and follows t
     `${name} template`,
     "published"
   )
-  const { data: folder, error: folderError } = await retryConcurrentChange(() =>
-    admin
-      .from("folders")
-      .insert({
-        created_by: owner.id,
-        name,
-        org_id: tenant.organizationId,
-        updated_by: owner.id,
-      })
-      .select("id")
-      .single()
-  )
-  if (folderError) throw folderError
+  const folderId = await seedFolder(admin, tenant.organizationId, owner.id, name)
 
   const { data: rows, error } = await retryConcurrentChange(() =>
     admin
@@ -37,7 +25,7 @@ test("switches Files between Finder's views, remembers the choice, and follows t
       .insert([
       {
         created_by: owner.id,
-        folder_id: folder.id,
+        folder_id: folderId,
         org_id: tenant.organizationId,
         source_kind: "generated",
         template_id: template.id,
@@ -47,7 +35,7 @@ test("switches Files between Finder's views, remembers the choice, and follows t
       },
       {
         created_by: owner.id,
-        folder_id: folder.id,
+        folder_id: folderId,
         org_id: tenant.organizationId,
         source_kind: "upload",
         title: `${name} scan.pdf`,
@@ -66,17 +54,13 @@ test("switches Files between Finder's views, remembers the choice, and follows t
   if (answersError) throw answersError
 
   const page = await pageAs("owner_admin")
-  const viewport = testInfo.project.use.viewport
-  if (viewport) {
-    await page.setViewportSize(viewport)
-  }
   const layoutButton = (label: string) =>
     page.getByRole("button", { exact: true, name: `${label} view` })
   const expectLayout = async (label: string): Promise<void> => {
     await expect(layoutButton(label)).toHaveAttribute("aria-pressed", "true")
   }
 
-  await page.goto(`/documents?folderId=${folder.id}`)
+  await page.goto(`/documents?folderId=${folderId}`)
 
   // A new person starts in Icons, where the document shows its page and status.
   await expectLayout("Icons")
@@ -86,7 +70,7 @@ test("switches Files between Finder's views, remembers the choice, and follows t
   await expect(tile.locator('[data-slot="template-page"]')).toBeVisible()
   await expect(tile).toContainText("Awaiting signatures")
 
-  if ((viewport?.width ?? 1280) < 768) {
+  if ((page.viewportSize()?.width ?? 1280) < 768) {
     // A phone offers Icons and List only.
     await expect(layoutButton("Columns")).toBeHidden()
     await layoutButton("List").click()

@@ -1,4 +1,6 @@
+import type { ClientFile } from "@/lib/r2/stored-file"
 import { z } from "zod"
+import { uuidSchema, timestampSchema } from "@/types/schemas"
 
 import {
   templateContentSchema,
@@ -13,8 +15,6 @@ const FIELD_KEY_PATTERN = /^[A-Za-z][A-Za-z0-9_-]{0,79}$/
 const SHA256_PATTERN = /^[a-f0-9]{64}$/
 const SAFE_FILENAME_PATTERN = /^(?!\.{1,2}$)[A-Za-z0-9._-]+$/
 
-const uuidSchema = z.string().uuid()
-const timestampSchema = z.string().datetime({ offset: true })
 const actorIdSchema = uuidSchema.nullable()
 const answerValuesSchema = z.record(z.string(), templateAnswerValueSchema)
 
@@ -49,6 +49,8 @@ const submissionRowShape = {
   created_at: timestampSchema,
   updated_at: timestampSchema,
   required_approvals: z.number().int().positive().nullish(),
+  // The link it came through, when it was sent to one person to answer.
+  public_form_link: z.object({ recipient_email: z.string().nullable() }).nullish(),
 } as const
 
 const draftSubmissionRowSchema = z.object({
@@ -216,6 +218,8 @@ export type SubmissionBase = {
   assignedAt: string | null
   /** How many reviewers must approve; null means all of them. */
   requiredApprovals: number | null
+  /** Whom it was sent to answer, when it came through a link sent to one person. */
+  sentTo?: string | null
   createdAt: string
   updatedAt: string
 }
@@ -291,6 +295,9 @@ export type AvailableSubmissionFile = SubmissionFileBase & {
 /** Single-file metadata associated with one template file field. */
 export type SubmissionFile = PendingSubmissionFile | AvailableSubmissionFile
 
+/** Submission file metadata as a browser receives it, without its object key. */
+export type ClientSubmissionFile = ClientFile<SubmissionFile>
+
 /**
  * Parses an unknown database or RPC row into a typed internal submission.
  *
@@ -315,6 +322,7 @@ export function parseSubmissionRow(value: unknown): Submission {
     "assignedTo" | "assignedBy" | "assignedAt"
   > = {
     requiredApprovals: row.required_approvals ?? null,
+    sentTo: row.public_form_link?.recipient_email ?? null,
     id: row.id,
     organizationId: row.org_id,
     title: row.title,

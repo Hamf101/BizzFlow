@@ -1,5 +1,6 @@
 import type { InngestFunction } from "inngest"
 
+import { finalizeCompletedDocumentsFunction } from "@/inngest/functions/finalize-completed-documents"
 import { processDueRemindersFunction } from "@/inngest/functions/process-due-reminders"
 import { taskAssignedFunction } from "@/inngest/functions/task-assigned"
 
@@ -10,6 +11,7 @@ import { taskAssignedFunction } from "@/inngest/functions/task-assigned"
  * once it appears here.
  */
 export const inngestFunctions: InngestFunction.Any[] = [
+  finalizeCompletedDocumentsFunction,
   processDueRemindersFunction,
   taskAssignedFunction,
 ]

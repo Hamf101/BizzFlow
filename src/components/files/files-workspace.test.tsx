@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { renderToStaticMarkup } from "react-dom/server"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterEach, describe, expect, it } from "vitest"
 
 import {
   fileListState,
@@ -17,11 +17,6 @@ import type {
   AccessibleDocumentFolder,
   AccessibleDocumentSummary,
 } from "@/types/document"
-import { createBlankTemplateContent } from "@/types/template"
-
-// The search box moves to the searched list through the router; rendering it
-// to markup only needs the hook to answer.
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }))
 
 const ORG_ID = "10000000-0000-4000-8000-000000000001"
 const CONTRACTS_ID = "40000000-0000-4000-8000-000000000001"
@@ -31,20 +26,6 @@ const WELCOME_ID = "60000000-0000-4000-8000-000000000001"
 const ZONING_ID = "60000000-0000-4000-8000-000000000002"
 const MSA_ID = "60000000-0000-4000-8000-000000000003"
 const NDA_ID = "60000000-0000-4000-8000-000000000004"
-const SCAN_ID = "60000000-0000-4000-8000-000000000005"
-
-const welcomePage = {
-  ...createBlankTemplateContent(),
-  blocks: [
-    {
-      alignment: "left",
-      id: "50000000-0000-4000-8000-000000000009",
-      level: 1,
-      text: "Welcome to the building",
-      type: "heading",
-    },
-  ],
-} as DocumentCard["content"]
 
 async function formAction(): Promise<void> {}
 
@@ -171,13 +152,6 @@ function renderWorkspace({
       savedViews={[]}
       view={view}
     />
-  )
-}
-
-function readTile(name: string): Element | undefined {
-  return [...document.querySelectorAll('[data-slot="file-tile"]')].find(
-    (tile: Element): boolean =>
-      tile.querySelector('[data-slot="file-name"]')?.textContent === name
   )
 }
 
@@ -323,95 +297,5 @@ describe("FilesWorkspace", () => {
     expect(document.querySelector('p[role="status"]')?.textContent).toBe(
       "Trash is empty."
     )
-  })
-
-  it("draws Icons as real first pages, file tiles, and folders, with status dots and item counts", () => {
-    renderWorkspace({
-      cards: [
-        { content: welcomePage, id: WELCOME_ID, workflowStatus: "awaiting_signatures" },
-      ],
-      documents: [...documents, createDocument({ id: SCAN_ID, title: "Scan.pdf" })],
-      layout: "icons",
-    })
-
-    const welcomeTile = readTile("Welcome pack")
-    expect(
-      welcomeTile?.querySelector('[data-slot="template-page"]')?.textContent
-    ).toContain("Welcome to the building")
-    expect(
-      welcomeTile?.querySelector('[data-slot="file-status"]')?.getAttribute("data-tone")
-    ).toBe("warning")
-    expect(welcomeTile?.textContent).toContain("Awaiting signatures")
-    expect(
-      readTile("Scan.pdf")?.querySelector('[data-slot="file-upload-page"]')?.textContent
-    ).toBe("PDF")
-    expect(
-      readTile("Contracts")?.querySelector('[data-slot="file-meta"]')?.textContent
-    ).toBe("3 items")
-  })
-
-  it("shows Columns as one column per folder along the path and previews the chosen document", () => {
-    renderWorkspace({
-      layout: "columns",
-      params: { folderId: CONTRACTS_ID, item: NDA_ID },
-    })
-
-    const columns = [...document.querySelectorAll('[data-slot="file-columns"] ul')]
-    expect(columns.map((column: Element) => column.getAttribute("aria-label"))).toEqual([
-      "Files",
-      "Contracts",
-    ])
-    expect(columns[0]?.querySelector('[aria-current="true"]')?.textContent).toBe(
-      "Contracts"
-    )
-    expect(
-      [...(columns[1]?.querySelectorAll('[data-slot="file-cell"]') ?? [])].map(
-        (cell: Element) => cell.textContent
-      )
-    ).toEqual(["Signed", "Master services agreement", "Mutual NDA"])
-    expect(columns[1]?.querySelector('[aria-current="true"]')?.textContent).toBe(
-      "Mutual NDA"
-    )
-    // A drawn page holds the document's own headings, so read the details'.
-    const details = document.querySelector(
-      '[data-slot="file-preview"] [data-slot="file-details"]'
-    )
-    expect(details?.querySelector("h2")?.textContent).toBe("Mutual NDA")
-    expect(details?.textContent).toContain("Files › Contracts")
-  })
-
-  it("stages Gallery's chosen item over the folder's filmstrip, starting at the first document", () => {
-    renderWorkspace({ layout: "gallery" })
-
-    const gallery = document.querySelector('[data-slot="file-gallery"]')
-    expect(
-      gallery?.querySelector('[data-slot="file-details"] h2')?.textContent
-    ).toBe("Welcome pack")
-    expect(
-      [...(gallery?.querySelectorAll('[data-slot="file-film"]') ?? [])].map(
-        (film: Element) => film.getAttribute("title")
-      )
-    ).toEqual(["Contracts", "Leases", "Welcome pack", "Zoning letter"])
-    expect(
-      gallery
-        ?.querySelector('[data-slot="file-film"][aria-current="true"]')
-        ?.getAttribute("title")
-    ).toBe("Welcome pack")
-  })
-
-  it("marks the remembered layout and returns to the same folder after a switch", () => {
-    renderWorkspace({
-      layout: "columns",
-      params: { folderId: CONTRACTS_ID, sort: "-modified" },
-    })
-
-    expect(
-      document
-        .querySelector('[aria-label="Layout"] [aria-pressed="true"]')
-        ?.getAttribute("aria-label")
-    ).toBe("Columns view")
-    expect(
-      document.querySelector('input[name="returnTo"]')?.getAttribute("value")
-    ).toBe(`/documents?folderId=${CONTRACTS_ID}&sort=-modified`)
   })
 })

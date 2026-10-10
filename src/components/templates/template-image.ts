@@ -3,6 +3,9 @@ import { EMBEDDED_PNG_TOO_LARGE_MESSAGE, exceedsEmbeddedImageLimit } from "@/lib
 import type { TemplateImageAsset } from "@/types/template"
 import { DISPLAY_MAX_EDGE, IMAGE_COPY_MAX_BYTES, type ImageCopy, PRINT_MAX_WIDTH } from "@/types/template-images"
 
+/** The pictures a template takes, for a file input's `accept`. */
+export const IMAGE_ACCEPT = "image/png,image/jpeg"
+
 type CopySpec = { bytes: number; contentType: "image/jpeg" | "image/png" | "image/webp" }
 
 /** What the server needs to make room for a picture. */

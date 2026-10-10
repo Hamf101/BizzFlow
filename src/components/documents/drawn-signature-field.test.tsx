@@ -1,18 +1,13 @@
 // @vitest-environment jsdom
 
 import { act, createElement } from "react"
-import { createRoot, type Root } from "react-dom/client"
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { DrawnSignatureField } from "./drawn-signature-field"
+import { mount as mountRoot } from "@/test/render"
 
-const mounted: Root[] = []
 const PNG = "data:image/png;base64,AAAA"
 const context = { clearRect: vi.fn(), fillText: vi.fn(), font: "", textBaseline: "", fillStyle: "" }
-
-beforeAll(() => {
-  ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
-})
 
 beforeEach(() => {
   vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(context as never)
@@ -22,16 +17,13 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  for (const root of mounted.splice(0)) act(() => root.unmount())
-  document.body.replaceChildren()
   vi.restoreAllMocks()
 })
 
 function mount(): { hidden: HTMLInputElement; typed: HTMLInputElement } {
-  const container = document.createElement("div")
+  const container = document.createElement("form")
   document.body.append(container)
-  const root = createRoot(container)
-  mounted.push(root)
+  const root = mountRoot(container)
   act(() => root.render(createElement(DrawnSignatureField, { label: "Signature", name: "signature", required: true })))
   return {
     hidden: container.querySelector('input[name="signature"]') as HTMLInputElement,
@@ -83,5 +75,14 @@ describe("a signature that can be typed instead of drawn", () => {
 
     expect(typed.value).toBe("")
     expect(hidden.value).toBe("")
+  })
+
+  it("holds the form back until something is drawn or typed", () => {
+    const { typed } = mount()
+    const form = typed.form!
+
+    expect(form.checkValidity()).toBe(false)
+    type(typed, "Ada Lovelace")
+    expect(form.checkValidity()).toBe(true)
   })
 })

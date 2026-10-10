@@ -26,6 +26,8 @@ export const AUDIT_LOG_ACTIONS = [
   "document.purged",
   "document.access_granted",
   "document.access_revoked",
+  "document.guest_joined",
+  "document.sent_to_answer",
   "document.sharing_inheritance_changed",
   "document.finalized",
   "document_version.created",
@@ -33,6 +35,11 @@ export const AUDIT_LOG_ACTIONS = [
   "template.access_granted",
   "template.access_revoked",
   "template.sharing_restriction_changed",
+  "template.sent_to_answer",
+  "public_form_link.created",
+  "public_form_link.disabled",
+  "public_form_link.resent",
+  "public_form_link.revoked",
   "submission.created",
   "submission.submitted",
   "submission.resubmitted",
@@ -72,6 +79,7 @@ export const AUDIT_LOG_TARGET_TYPES = [
   "document",
   "document_version",
   "template",
+  "public_form_link",
   "submission",
   "task",
   "task_reminder",
@@ -94,19 +102,12 @@ export type AuditLogEntry = {
   id: string
   organizationId: string
   actorUserId: string | null
-  action: AuditLogAction
-  targetType: AuditLogTargetType
+  /** Usually an AuditLogAction; a newer action this build does not know is kept as written. */
+  action: string
+  /** Usually an AuditLogTargetType; kept as written when this build does not know it. */
+  targetType: string
   targetId: string | null
   metadata: AuditMetadata
   seq: number
-  prevHash: string | null
-  entryHash: string
   createdAt: string
-}
-
-export type AuditChainVerification = {
-  valid: boolean
-  checkedCount: number
-  firstInvalidSeq: number | null
-  failureReason: string | null
 }

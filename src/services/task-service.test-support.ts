@@ -5,7 +5,13 @@ import {
   PostgrestReadQuery,
   type PostgrestFakeResult,
 } from "@/services/postgrest-fake.test-support"
-import type { TaskServiceDeps } from "@/services/task-service"
+import type { RecordNotificationDeliveryInput } from "@/services/notification-service"
+import {
+  deliverDueTaskReminders,
+  findDueTaskReminders,
+  type TaskReminderRunSummary,
+  type TaskServiceDeps,
+} from "@/services/task-service"
 
 /** Tenant identifier shared by every task fixture. */
 export const ORG_ID = "10000000-0000-4000-8000-000000000001"
@@ -359,6 +365,30 @@ export function createDeps(
     // every success path read `.success` off undefined.
     sendSms: vi.fn().mockResolvedValue({ success: true, messageId: "sms-1" }),
     publishTaskAssigned: vi.fn().mockResolvedValue(undefined),
-    recordNotificationDelivery: vi.fn().mockResolvedValue(null),
+    // Writes the ledger row the real recorder would, so a replayed send can
+    // be proven to find it.
+    recordNotificationDelivery: vi.fn(
+      async (input: RecordNotificationDeliveryInput): Promise<null> => {
+        client.tables.notification_deliveries.push({
+          org_id: input.organizationId,
+          recipient_user_id: input.recipientUserId,
+          channel: input.channel,
+          purpose: input.purpose,
+          reference: input.reference,
+          status: input.status,
+        })
+        return null
+      }
+    ),
   }
+}
+
+/**
+ * One whole reminder pass, find then deliver, as the scheduled job runs it in
+ * two steps.
+ */
+export async function processDueTaskReminders(
+  deps: TaskServiceDeps = {}
+): Promise<TaskReminderRunSummary> {
+  return deliverDueTaskReminders(await findDueTaskReminders(deps), deps)
 }

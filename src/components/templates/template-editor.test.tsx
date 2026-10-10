@@ -1,17 +1,14 @@
 // @vitest-environment jsdom
 
 import { act } from "react"
-import { createRoot, type Root } from "react-dom/client"
 import { afterEach, beforeAll, expect, it, vi } from "vitest"
 
 import { TemplateEditor } from "@/components/templates/template-editor"
 import { createBlankTemplateContent, type DocumentTemplate } from "@/types/template"
+import { mount } from "@/test/render"
 
 const NAME_BLOCK_ID = "20000000-0000-4000-8000-000000000001"
-const roots: Root[] = []
-
 beforeAll(() => {
-  ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
   window.matchMedia ??= ((query: string) =>
     ({ addEventListener() {}, matches: false, media: query, removeEventListener() {} }) as unknown as MediaQueryList)
   globalThis.ResizeObserver ??= class {
@@ -22,17 +19,12 @@ beforeAll(() => {
 })
 
 afterEach(() => {
-  for (const root of roots.splice(0)) {
-    act(() => root.unmount())
-  }
-  document.body.replaceChildren()
   window.localStorage.clear()
 })
 
 it("lets an author try the form by typing into its boxes while editing, and clear the try-out", async () => {
   const container = document.body.appendChild(document.createElement("div"))
-  const root = createRoot(container)
-  roots.push(root)
+  const root = mount(container)
 
   await act(async () => {
     root.render(
@@ -60,8 +52,7 @@ it("asks Flow with only the title, description and content its request accepts",
   const fetchFlow = vi.fn(async () => ({ json: async () => ({ error: "Stop here." }), ok: false }))
   vi.stubGlobal("fetch", fetchFlow)
   const container = document.body.appendChild(document.createElement("div"))
-  const root = createRoot(container)
-  roots.push(root)
+  const root = mount(container)
 
   await act(async () => {
     root.render(

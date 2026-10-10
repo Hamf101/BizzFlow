@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs"
 
-import { test as base, type Page } from "@playwright/test"
+import { expect, test as base, type Page } from "@playwright/test"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 import { authStatePath, TENANT_STATE_PATH } from "./paths"
@@ -28,6 +28,14 @@ export type TenantFixtures = {
 }
 
 export const test = base.extend<TenantFixtures>({
+  // Each test is someone on a device of their own. The app's limits are per
+  // address, and one address for the whole suite would spend everyone's sign-in
+  // and answering budgets on whichever tests ran first. Contexts a spec opens
+  // itself take this too.
+  extraHTTPHeaders: async ({}, use) => {
+    await use({ "x-forwarded-for": `198.18.${Math.floor(Math.random() * 256)}.${1 + Math.floor(Math.random() * 254)}` })
+  },
+
   admin: async ({}, use) => {
     await use(createAdminClient())
   },
@@ -56,7 +64,7 @@ export const test = base.extend<TenantFixtures>({
   },
 })
 
-export { expect } from "@playwright/test"
+export { expect }
 
 /**
  * Signs a user in through the login form.
@@ -74,12 +82,17 @@ export async function signInAs(
   email: string,
   password: string
 ): Promise<void> {
+  await submitLogin(page, email, password)
+  // Someone without a workspace goes on to name one.
+  await page.waitForURL(/\/(dashboard|welcome)/)
+}
+
+/** Fills the login form and presses Log in, without waiting for where it leads. */
+export async function submitLogin(page: Page, email: string, password: string): Promise<void> {
   await page.goto("/login")
   await page.getByLabel("Email").fill(email)
   await page.getByLabel("Password", { exact: true }).fill(password)
   await page.getByRole("button", { name: "Log in" }).click()
-  // Someone without a workspace goes on to name one.
-  await page.waitForURL(/\/(dashboard|welcome)/)
 }
 
 /**
@@ -94,4 +107,40 @@ export async function signInAs(
  */
 export function uniqueName(prefix: string): string {
   return `${prefix} ${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
+}
+
+/** A unique address no mail server will ever see, for an account a spec creates. */
+export function uniqueEmail(prefix: string): string {
+  return `${uniqueName(prefix).toLowerCase().replace(/[^a-z0-9]+/g, "-")}@e2e.bizflow.test`
+}
+
+type SavedBlock = { fieldKey: string; id: string; label: string; text?: string; type: string }
+type SavedContent = { blocks: SavedBlock[]; branding: Record<string, unknown> }
+
+/**
+ * Polls what a document or template has saved until the editor's autosave
+ * lands, as `pick` reads it.
+ *
+ * @param admin - Service-role client.
+ * @param relation - Where the content lives: a document's snapshot, a
+ *   template's working copy, or its published version.
+ * @param id - The record.
+ * @param pick - What to compare from the saved content.
+ */
+export function expectSaved<T>(
+  admin: SupabaseClient,
+  relation: "documents" | "document_templates" | "published_document_templates",
+  id: string,
+  pick: (content: SavedContent) => T
+) {
+  const column = relation === "documents" ? "template_snapshot" : "content"
+
+  return expect.poll(
+    async () => {
+      const { data, error } = await admin.from(relation).select(column).eq("id", id).single()
+      if (error) throw error
+      return pick((data as Record<string, SavedContent>)[column])
+    },
+    { timeout: 15_000 }
+  )
 }

@@ -1,17 +1,18 @@
 import { z } from "zod"
 
-import type {
-  ListOption,
-  ListOptionSection,
+import {
+  createFilterOptions,
+  createSortSection,
+  isOrderOrSizeAdjusted,
+  type ListOption,
+  type ListOptionSection,
 } from "@/components/data/list-option"
 import {
   defineListState,
-  formatListSort,
   type ListSort,
 } from "@/lib/list-state"
 import {
   AUDIT_LOG_SORT_KEYS,
-  type AuditLogAction,
   type AuditLogSortKey,
   type AuditLogTargetType,
 } from "@/types/audit"
@@ -96,22 +97,9 @@ export function getAuditTargetTypes(
  * @returns "All" followed by one option per kind of record.
  */
 export function getAuditKindOptions(view: AuditLogView): ListOption[] {
-  return [
-    {
-      href: auditLogListState.href(AUDIT_LOG_PATH, view, {
-        filters: { kind: undefined },
-      }),
-      label: "All",
-      selected: view.filters.kind === undefined,
-    },
-    ...AUDIT_LOG_KIND_KEYS.map(
-      (kind: AuditLogKind): ListOption => ({
-        href: auditLogListState.href(AUDIT_LOG_PATH, view, { filters: { kind } }),
-        label: AUDIT_LOG_KINDS[kind].label,
-        selected: view.filters.kind === kind,
-      })
-    ),
-  ]
+  return createFilterOptions(AUDIT_LOG_KIND_KEYS, view.filters.kind, (kind) => AUDIT_LOG_KINDS[kind].label, (kind) =>
+    auditLogListState.href(AUDIT_LOG_PATH, view, { filters: { kind } })
+  )
 }
 
 /**
@@ -125,16 +113,9 @@ export function getAuditViewMenuSections(
   view: AuditLogView
 ): ListOptionSection[] {
   return [
-    {
-      label: "Sort",
-      options: AUDIT_SORT_OPTIONS.map(
-        ({ label, sort }): ListOption => ({
-          href: auditLogListState.href(AUDIT_LOG_PATH, view, { sort }),
-          label,
-          selected: formatListSort(view.sort) === formatListSort(sort),
-        })
-      ),
-    },
+    createSortSection(AUDIT_SORT_OPTIONS, view.sort, (sort): string =>
+      auditLogListState.href(AUDIT_LOG_PATH, view, { sort })
+    ),
     {
       label: "Export",
       options: [
@@ -160,10 +141,7 @@ export function getAuditViewMenuSections(
  * @returns True when the order or page size is not the default.
  */
 export function isAuditViewAdjusted(view: AuditLogView): boolean {
-  return (
-    formatListSort(view.sort) !== formatListSort(DEFAULT_AUDIT_VIEW.sort) ||
-    view.pageSize !== DEFAULT_AUDIT_VIEW.pageSize
-  )
+  return isOrderOrSizeAdjusted(view, DEFAULT_AUDIT_VIEW)
 }
 
 /**
@@ -172,7 +150,7 @@ export function isAuditViewAdjusted(view: AuditLogView): boolean {
  * @param action - Recorded audit action.
  * @returns Sentence-case label with common acronyms kept upper-case.
  */
-export function formatAuditAction(action: AuditLogAction): string {
+export function formatAuditAction(action: string): string {
   const sentence = action
     .split(/[._]/)
     .map((word: string): string => ACRONYMS[word] ?? word)

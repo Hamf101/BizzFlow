@@ -7,7 +7,8 @@ import { type FormEvent, type KeyboardEvent, type ReactElement, useRef, useState
 import { createGeneratedDocumentAction } from "@/app/(dashboard)/documents/actions"
 import { createTemplateAction } from "@/app/(dashboard)/templates/actions"
 import { handOffToFlow } from "@/components/flow/flow-handoff"
-import { FlowWindow } from "@/components/flow/flow-window"
+import { FlowModelPicker, useFlowModel } from "@/components/flow/flow-model-picker"
+import { FLOW_COMPOSER, FLOW_SEND, FlowWindow } from "@/components/flow/flow-window"
 import { cn } from "@/lib/utils"
 import type { WorkspaceFlowAnswer, WorkspaceFlowItem } from "@/services/workspace-flow-service"
 
@@ -46,6 +47,9 @@ function FlowConversation({ onLeave }: { onLeave: () => void }): ReactElement {
   const [busy, setBusy] = useState(false)
   const [, startTransition] = useTransition()
   const nextId = useRef(0)
+  // Read at once, not from the last render, so a quick second Enter never sends twice.
+  const sending = useRef(false)
+  const flowModel = useFlowModel()
 
   function add(turn: Omit<Turn, "id">): void {
     const id = nextId.current++
@@ -55,9 +59,11 @@ function FlowConversation({ onLeave }: { onLeave: () => void }): ReactElement {
   async function send(message: string): Promise<void> {
     const trimmed = message.trim()
 
-    if (trimmed.length < 2 || busy) {
+    if (trimmed.length < 2 || sending.current) {
       return
     }
+
+    sending.current = true
 
     const history = turns.slice(-6).map((turn) => ({ role: turn.role, text: turn.text }))
     add({ role: "member", text: trimmed })
@@ -66,7 +72,7 @@ function FlowConversation({ onLeave }: { onLeave: () => void }): ReactElement {
 
     try {
       const response = await fetch("/api/flow", {
-        body: JSON.stringify({ history, message: trimmed }),
+        body: JSON.stringify({ history, message: trimmed, model: flowModel.chosen() }),
         headers: { "Content-Type": "application/json" },
         method: "POST",
       })
@@ -97,6 +103,7 @@ function FlowConversation({ onLeave }: { onLeave: () => void }): ReactElement {
       add({ failed: true, role: "flow", text: error instanceof Error ? error.message : "Flow couldn't answer that." })
       setText(trimmed)
     } finally {
+      sending.current = false
       setBusy(false)
     }
   }
@@ -174,7 +181,7 @@ function FlowConversation({ onLeave }: { onLeave: () => void }): ReactElement {
         <div className="relative">
           {/* One line tall, growing with the message to about six. */}
           <textarea
-            className="field-sizing-content max-h-36 min-h-10 w-full resize-none rounded-[12px] border border-border bg-card px-3 py-2.5 pr-12 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
+            className={FLOW_COMPOSER}
             disabled={busy}
             id="workspace-flow-composer"
             maxLength={2_000}
@@ -185,13 +192,14 @@ function FlowConversation({ onLeave }: { onLeave: () => void }): ReactElement {
           />
           <button
             aria-label="Send to Flow"
-            className="absolute right-1.5 bottom-1 grid size-8 place-items-center rounded-full text-primary outline-none transition-opacity hover:opacity-75 disabled:opacity-35 focus-visible:ring-2 focus-visible:ring-ring/40"
+            className={FLOW_SEND}
             disabled={busy || text.trim().length < 2}
             type="submit"
           >
             <ArrowUp aria-hidden="true" className="size-5" />
           </button>
         </div>
+        <FlowModelPicker disabled={busy} model={flowModel.model} onChange={flowModel.pick} />
       </form>
     </>
   )

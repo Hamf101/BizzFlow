@@ -1,8 +1,6 @@
 "use client"
 
 import {
-  Copy,
-  ExternalLink,
   MoreHorizontal,
   Plus,
   Trash2,
@@ -15,8 +13,10 @@ import {
 } from "react"
 
 import { ListQuery } from "@/components/data/list-query"
+import { ListEmpty } from "@/components/data/list-heading"
 import { DatedTitle } from "@/components/navigation/dated-title"
-import { getMemberDisplayName, getMemberRoleName } from "@/components/people/member-name"
+import { getInitials, getMemberDisplayName, getMemberRoleName, memberLabel } from "@/components/people/member-name"
+import { useTimeZone } from "@/components/ui/local-date"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -282,9 +282,7 @@ function MemberDirectory({
       </div>
 
       {members.length === 0 ? (
-        <p className="py-16 text-center text-sm text-muted-foreground" role="status">
-          No people match this search.
-        </p>
+        <ListEmpty>No people match this search.</ListEmpty>
       ) : (
         members.map((member: OrganizationMember) => (
           <MemberRow
@@ -314,6 +312,7 @@ function MemberRow({
   roles: OrganizationRoleDefinition[]
   updateMemberAccessAction: ServerFormAction
 }): ReactElement {
+  const timeZone = useTimeZone()
   const memberLabel = getMemberDisplayName(member)
 
   return (
@@ -326,7 +325,7 @@ function MemberRow({
           aria-hidden="true"
           className="grid size-9 shrink-0 place-items-center rounded-full bg-secondary text-xs font-medium text-secondary-foreground"
         >
-          {getInitials(memberLabel)}
+          {getInitials(memberLabel, member.email)}
         </span>
         <MemberProfilePreview member={member} name={memberLabel} />
       </div>
@@ -339,7 +338,7 @@ function MemberRow({
         className="hidden text-sm text-muted-foreground lg:block"
         role="cell"
       >
-        {formatMediumDate(member.createdAt)}
+        {formatMediumDate(member.createdAt, timeZone)}
       </span>
 
       <div className="justify-self-end" role="cell">
@@ -364,6 +363,7 @@ function MemberProfilePreview({
   member: OrganizationMember
   name: string
 }): ReactElement {
+  const timeZone = useTimeZone()
   const [previewHandle] = useState(createPreviewCardHandle)
   const triggerId = `member-profile-${member.id}`
 
@@ -417,7 +417,7 @@ function MemberProfilePreview({
           {member.phoneNumber ? (
             <ProfileDetail label="Phone" value={member.phoneNumber} />
           ) : null}
-          <ProfileDetail label="Joined" value={formatMediumDate(member.createdAt)} />
+          <ProfileDetail label="Joined" value={formatMediumDate(member.createdAt, timeZone)} />
         </dl>
       </PreviewCardContent>
     </PreviewCard>
@@ -444,17 +444,17 @@ function MemberRoleDialog({
   roles: OrganizationRoleDefinition[]
   updateMemberAccessAction: ServerFormAction
 }): ReactElement {
-  const memberLabel = member.fullName ?? member.email
+  const label = memberLabel(member)
 
   return (
     <Dialog>
       <DialogTrigger
         render={
           <Button
-            aria-label={`Manage ${memberLabel}`}
+            aria-label={`Manage ${label}`}
             className="font-normal"
             size="icon-sm"
-            title={`Manage ${memberLabel}`}
+            title={`Manage ${label}`}
             type="button"
             variant="ghost"
           >
@@ -465,7 +465,7 @@ function MemberRoleDialog({
       <DialogContent className="sm:aspect-square sm:max-w-md sm:content-start">
         <DialogHeader>
           <DialogTitle className="font-medium">Manage member</DialogTitle>
-          <DialogDescription>{memberLabel}</DialogDescription>
+          <DialogDescription>{label}</DialogDescription>
         </DialogHeader>
         <form action={updateMemberAccessAction} className="flex flex-col gap-5">
           <input name="organizationId" type="hidden" value={organizationId} />
@@ -782,6 +782,7 @@ function InviteItem({
   revokeInviteAction: ServerFormAction
   state: "active" | "expired"
 }): ReactElement {
+  const timeZone = useTimeZone()
   return (
     <article
       className={cn(
@@ -794,29 +795,10 @@ function InviteItem({
         <p className="truncate text-sm font-medium">{invite.email}</p>
         <p className="mt-1 text-xs text-muted-foreground">
           {invite.roleName ?? ORGANIZATION_ROLE_LABELS[invite.role]} · {state === "active" ? "expires" : "expired"}{" "}
-          {formatMediumDate(invite.expiresAt)}
+          {formatMediumDate(invite.expiresAt, timeZone)}
         </p>
       </div>
       <div className="flex shrink-0 gap-1">
-        {state === "active" ? (
-          <>
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <Link
-                    aria-label={`Open invite for ${invite.email}`}
-                    className="inline-flex size-11 items-center justify-center rounded-[8px] text-muted-foreground outline-none hover:bg-secondary/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/35 md:size-8"
-                    href={`/accept-invite/${invite.token}`}
-                  >
-                    <ExternalLink aria-hidden="true" className="size-4" />
-                  </Link>
-                }
-              />
-              <TooltipContent>Open invite link</TooltipContent>
-            </Tooltip>
-            <CopyInviteButton invite={invite} />
-          </>
-        ) : null}
         <form action={revokeInviteAction}>
           <input name="organizationId" type="hidden" value={organizationId} />
           <input name="inviteId" type="hidden" value={invite.id} />
@@ -839,45 +821,6 @@ function InviteItem({
         </form>
       </div>
     </article>
-  )
-}
-
-function CopyInviteButton({ invite }: { invite: OrganizationInvite }): ReactElement {
-  const [copied, setCopied] = useState(false)
-
-  async function copyInvite(): Promise<void> {
-    const inviteUrl = new URL(
-      `/accept-invite/${invite.token}`,
-      window.location.origin
-    ).toString()
-
-    try {
-      await navigator.clipboard.writeText(inviteUrl)
-      setCopied(true)
-      window.setTimeout(() => setCopied(false), 2_000)
-    } catch {
-      window.prompt("Copy this invite link:", inviteUrl)
-    }
-  }
-
-  return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <Button
-            aria-label={`Copy invite for ${invite.email}`}
-            className="font-normal"
-            onClick={copyInvite}
-            size="icon-sm"
-            type="button"
-            variant="ghost"
-          >
-            <Copy aria-hidden="true" />
-          </Button>
-        }
-      />
-      <TooltipContent>{copied ? "Copied" : "Copy invite link"}</TooltipContent>
-    </Tooltip>
   )
 }
 
@@ -907,14 +850,3 @@ function getRoleFilterDetails(
   }
 }
 
-function getInitials(value: string): string {
-  const parts = value
-    .trim()
-    .split(/[^\p{L}\p{N}]+/u)
-    .filter(Boolean)
-
-  return parts
-    .slice(0, 2)
-    .map((part) => part.charAt(0).toUpperCase())
-    .join("") || "?"
-}

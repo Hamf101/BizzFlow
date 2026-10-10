@@ -161,8 +161,6 @@ describe("document API routes", () => {
       documentId: "document-1",
       versionNumber: 1,
       status: "available",
-      storageKey:
-        "organizations/org-1/documents/document-1/versions/version-1/original.pdf",
       originalFilename: "contract.pdf",
       contentType: "application/pdf",
       byteSize: 1024,
@@ -202,8 +200,6 @@ describe("document API routes", () => {
       documentId: "document-1",
       versionId: "version-2",
       uploadUrl: "https://r2.example/upload",
-      storageKey:
-        "organizations/org-1/documents/document-1/versions/version-2/original.pdf",
       expiresInSeconds: 900,
     })
 

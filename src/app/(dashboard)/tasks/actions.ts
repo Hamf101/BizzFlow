@@ -1,22 +1,17 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { redirect } from "next/navigation"
 import { z } from "zod"
 
 import { publishTaskAssigned } from "@/inngest/publish-task-assigned"
-import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
+import type { ActionFeedbackCode } from "@/lib/action-result"
 import {
-  buildFeedbackRedirect,
-  getActionErrorFeedbackCode,
-  type ActionFeedbackCode,
-} from "@/lib/action-result"
-import { buildRedirect, getFormString } from "@/lib/form-utils"
-import {
-  canPerformOrganizationAction,
-  type OrganizationPermissionAction,
-} from "@/lib/permissions"
-import { getCurrentOrganizationContext } from "@/services/organization-service"
+  ActionError,
+  loadActionContext,
+  runFormAction,
+  type ActionActor,
+} from "@/lib/form-action"
+import { getFormString } from "@/lib/form-utils"
 import {
   assignTask,
   cancelTaskReminder,
@@ -26,7 +21,6 @@ import {
   updateTask,
   type TaskServiceDeps,
 } from "@/services/task-service"
-import type { OrganizationContext } from "@/types/organization"
 import { taskReminderChannelSchema, taskStatusSchema } from "@/types/task"
 
 const TASKS_PATH = "/tasks"
@@ -34,28 +28,6 @@ const TASKS_PATH = "/tasks"
 // The service stays free of the background-job SDK, so the edge hands it the
 // publisher. Without this, an assignment would never email the new assignee.
 const TASK_NOTIFICATION_DEPS: TaskServiceDeps = { publishTaskAssigned }
-
-type TaskActionContext = {
-  actorUserId: string
-  organizationId: string
-}
-
-type TaskActionRun = (context: TaskActionContext) => Promise<string>
-
-class TaskActionError extends Error {
-  readonly statusCode: number
-
-  /**
-   * Creates a user-safe rejection raised by a task server action.
-   *
-   * @param message - Description shown to the member who submitted the form.
-   */
-  constructor(message: string, statusCode = 400) {
-    super(message)
-    this.name = "TaskActionError"
-    this.statusCode = statusCode
-  }
-}
 
 const identifierSchema = z.string().uuid("Choose a valid record.")
 const memberSchema = z.string().uuid("Choose a valid team member.")
@@ -136,9 +108,8 @@ export async function createTaskAction(formData: FormData): Promise<void> {
   await runTaskAction({
     errorPath: getSubmissionPath(submissionId) ?? TASKS_PATH,
     eventName: "task_create_action",
-    permission: "tasks:create",
     successCode: "task_created",
-    run: async (context: TaskActionContext): Promise<string> => {
+    run: async (context: ActionActor): Promise<string> => {
       const input = parseTaskActionInput(createTaskSchema, {
         assignedTo: getFormString(formData, "assignedTo"),
         description: getFormString(formData, "description"),
@@ -148,11 +119,10 @@ export async function createTaskAction(formData: FormData): Promise<void> {
       })
       const task = await createTask(
         {
-          actorUserId: context.actorUserId,
+          ...context,
           assignedTo: toNullableValue(input.assignedTo),
           description: toNullableValue(input.description),
           dueAt: toNullableValue(input.dueAt),
-          organizationId: context.organizationId,
           submissionId: toNullableValue(input.submissionId),
           title: input.title,
         },
@@ -176,9 +146,8 @@ export async function updateTaskAction(formData: FormData): Promise<void> {
   await runTaskAction({
     errorPath: taskPath,
     eventName: "task_update_action",
-    permission: "tasks:edit",
     successCode: "changes_saved",
-    run: async (context: TaskActionContext): Promise<string> => {
+    run: async (context: ActionActor): Promise<string> => {
       const input = parseTaskActionInput(updateTaskSchema, {
         description: getFormString(formData, "description"),
         dueAt: getFormString(formData, "dueAt"),
@@ -187,11 +156,10 @@ export async function updateTaskAction(formData: FormData): Promise<void> {
         title: getFormString(formData, "title"),
       })
       await updateTask({
-        actorUserId: context.actorUserId,
+        ...context,
         description: toNullableValue(input.description),
         dueAt: toNullableValue(input.dueAt),
         expectedRevision: input.expectedRevision,
-        organizationId: context.organizationId,
         taskId: input.taskId,
         title: input.title,
       })
@@ -213,9 +181,8 @@ export async function assignTaskAction(formData: FormData): Promise<void> {
   await runTaskAction({
     errorPath: taskPath,
     eventName: "task_assign_action",
-    permission: "tasks:assign",
     successCode: "changes_saved",
-    run: async (context: TaskActionContext): Promise<string> => {
+    run: async (context: ActionActor): Promise<string> => {
       const input = parseTaskActionInput(assignTaskSchema, {
         assignedTo: getFormString(formData, "assignedTo"),
         expectedRevision: getFormString(formData, "expectedRevision"),
@@ -223,10 +190,9 @@ export async function assignTaskAction(formData: FormData): Promise<void> {
       })
       await assignTask(
         {
-          actorUserId: context.actorUserId,
+          ...context,
           assignedTo: toNullableValue(input.assignedTo),
           expectedRevision: input.expectedRevision,
-          organizationId: context.organizationId,
           taskId: input.taskId,
         },
         TASK_NOTIFICATION_DEPS
@@ -251,18 +217,16 @@ export async function transitionTaskStatusAction(
   await runTaskAction({
     errorPath: taskPath,
     eventName: "task_transition_action",
-    permission: "tasks:edit",
     successCode: "task_status_updated",
-    run: async (context: TaskActionContext): Promise<string> => {
+    run: async (context: ActionActor): Promise<string> => {
       const input = parseTaskActionInput(transitionTaskSchema, {
         expectedRevision: getFormString(formData, "expectedRevision"),
         targetStatus: getFormString(formData, "targetStatus"),
         taskId: getFormString(formData, "taskId"),
       })
       await transitionTaskStatus({
-        actorUserId: context.actorUserId,
+        ...context,
         expectedRevision: input.expectedRevision,
-        organizationId: context.organizationId,
         targetStatus: input.targetStatus,
         taskId: input.taskId,
       })
@@ -286,9 +250,8 @@ export async function scheduleTaskReminderAction(
   await runTaskAction({
     errorPath: taskPath,
     eventName: "task_reminder_schedule_action",
-    permission: "tasks:edit",
     successCode: "changes_saved",
-    run: async (context: TaskActionContext): Promise<string> => {
+    run: async (context: ActionActor): Promise<string> => {
       const input = parseTaskActionInput(scheduleReminderSchema, {
         channel: getFormString(formData, "channel"),
         recipientUserId: getFormString(formData, "recipientUserId"),
@@ -296,9 +259,8 @@ export async function scheduleTaskReminderAction(
         taskId: getFormString(formData, "taskId"),
       })
       await scheduleTaskReminder({
-        actorUserId: context.actorUserId,
+        ...context,
         channel: input.channel === "" ? "email" : input.channel,
-        organizationId: context.organizationId,
         recipientUserId: input.recipientUserId,
         remindAt: input.remindAt,
         taskId: input.taskId,
@@ -323,16 +285,14 @@ export async function cancelTaskReminderAction(
   await runTaskAction({
     errorPath: taskPath,
     eventName: "task_reminder_cancel_action",
-    permission: "tasks:edit",
     successCode: "changes_saved",
-    run: async (context: TaskActionContext): Promise<string> => {
+    run: async (context: ActionActor): Promise<string> => {
       const input = parseTaskActionInput(cancelReminderSchema, {
         reminderId: getFormString(formData, "reminderId"),
         taskId: getFormString(formData, "taskId"),
       })
       await cancelTaskReminder({
-        actorUserId: context.actorUserId,
-        organizationId: context.organizationId,
+        ...context,
         reminderId: input.reminderId,
         taskId: input.taskId,
       })
@@ -345,65 +305,25 @@ export async function cancelTaskReminderAction(
 async function runTaskAction(input: {
   errorPath: string
   eventName: string
-  permission: OrganizationPermissionAction
-  run: TaskActionRun
+  run: (context: ActionActor) => Promise<string>
   successCode: ActionFeedbackCode
 }): Promise<never> {
-  const startedAt = Date.now()
-  let successPath = input.errorPath
+  return runFormAction({
+    event: input.eventName,
+    path: input.errorPath,
+    success: input.successCode,
+    run: async () => {
+      const { actor } = await loadActionContext("Create an organization before managing tasks.")
+      const successPath = await input.run(actor)
+      // The origin page is refreshed too, so a task raised from a submission
+      // appears on that submission without a manual reload.
+      new Set([TASKS_PATH, input.errorPath, successPath]).forEach((path: string): void => {
+        revalidatePath(path)
+      })
 
-  try {
-    const context = await loadTaskActionContext(input.permission)
-    successPath = await input.run(context)
-    // The origin page is refreshed too, so a task raised from a submission
-    // appears on that submission without a manual reload.
-    revalidateTaskPaths([TASKS_PATH, input.errorPath, successPath])
-
-    console.info(`${input.eventName}_completed`, {
-      durationMs: Date.now() - startedAt,
-      organizationId: context.organizationId,
-    })
-  } catch (error: unknown) {
-    if (error instanceof AuthenticationError) {
-      redirect(buildRedirect("/login", { next: input.errorPath }))
-    }
-
-    const reason =
-      error instanceof Error ? error.message : "Unknown task action error"
-    console.warn(`${input.eventName}_failed`, {
-      durationMs: Date.now() - startedAt,
-      reason,
-    })
-    redirect(
-      buildFeedbackRedirect(input.errorPath, getActionErrorFeedbackCode(error))
-    )
-  }
-
-  redirect(buildFeedbackRedirect(successPath, input.successCode))
-}
-
-async function loadTaskActionContext(
-  permission: OrganizationPermissionAction
-): Promise<TaskActionContext> {
-  const user = await getAuthenticatedUser()
-  const context: OrganizationContext | null =
-    await getCurrentOrganizationContext(user.id)
-
-  if (!context) {
-    throw new TaskActionError(
-      "Create an organization before managing tasks.",
-      428
-    )
-  }
-
-  if (!canPerformOrganizationAction(context.membership, permission)) {
-    throw new TaskActionError(
-      "You do not have permission to perform this task action.",
-      403
-    )
-  }
-
-  return { actorUserId: user.id, organizationId: context.organization.id }
+      return { path: successPath }
+    },
+  })
 }
 
 function parseTaskActionInput<TValue>(
@@ -413,7 +333,7 @@ function parseTaskActionInput<TValue>(
   const result = schema.safeParse(value)
 
   if (!result.success) {
-    throw new TaskActionError(
+    throw new ActionError(
       result.error.issues[0]?.message ?? "Check the task details and try again."
     )
   }
@@ -435,10 +355,4 @@ function getSubmissionPath(submissionId: string): string | null {
   const identifier = submissionId.trim()
 
   return identifier ? `/submissions/${encodeURIComponent(identifier)}` : null
-}
-
-function revalidateTaskPaths(paths: readonly string[]): void {
-  new Set(paths).forEach((path: string): void => {
-    revalidatePath(path)
-  })
 }

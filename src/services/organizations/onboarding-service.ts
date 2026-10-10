@@ -1,4 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin"
+import { OrganizationServiceError } from "@/services/organizations/errors"
+import { getActiveMembership } from "@/services/organizations/repository"
 import { runOrganizationOperation } from "@/services/organizations/shared"
 import type { OrganizationMutationDeps } from "@/services/organizations/contracts"
 
@@ -20,19 +22,24 @@ export type OnboardingProgress = {
  * checklist is guidance, and a workspace on an older schema should still see
  * a usable dashboard.
  *
- * @param organizationId - Tenant whose progress is being summarised.
+ * @param input - The member asking and the tenant whose progress is summarised.
  * @param deps - Optional database dependency for tests.
  * @returns One boolean per milestone after the organization itself.
+ * @throws OrganizationServiceError 403 unless the actor is an active member.
  */
 export async function getOnboardingProgress(
-  organizationId: string,
+  { actorUserId, organizationId }: { actorUserId: string; organizationId: string },
   deps: OrganizationMutationDeps = {}
 ): Promise<OnboardingProgress> {
   return runOrganizationOperation(
     "get_onboarding_progress",
-    { organizationId },
+    { actorUserId, organizationId },
     async (): Promise<OnboardingProgress> => {
       const client = deps.client ?? createAdminClient()
+
+      if (!(await getActiveMembership(client, organizationId, actorUserId))) {
+        throw new OrganizationServiceError("You are not a member of this organization.", 403)
+      }
 
       const [members, invites, templates, submissions] = await Promise.all([
         client

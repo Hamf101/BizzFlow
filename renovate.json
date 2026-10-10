@@ -49,8 +49,7 @@
         "react",
         "react-dom",
         "@types/react",
-        "@types/react-dom",
-        "@next/**"
+        "@types/react-dom"
       ],
       "groupName": "Next.js and React toolchain"
     },
@@ -65,17 +64,11 @@
       "groupName": "Supabase"
     },
     {
-      "description": "Group linting toolchain updates",
-      "matchPackageNames": ["eslint", "@eslint/**"],
-      "groupName": "linting toolchain"
-    },
-    {
       "description": "Group test and static-analysis toolchain updates",
       "matchPackageNames": [
         "@playwright/test",
         "vitest",
         "jscpd",
-        "jscpd-**",
         "knip"
       ],
       "groupName": "test and static-analysis toolchain"

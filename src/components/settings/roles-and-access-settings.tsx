@@ -1,7 +1,7 @@
 "use client"
 
 import { ChevronRight, Plus, ShieldCheck, Trash2 } from "lucide-react"
-import type { ReactElement, ReactNode } from "react"
+import { type ReactElement, type ReactNode, useState } from "react"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -50,7 +50,6 @@ const permissionLabels: Record<OrganizationPermissionAction, string> = {
   "members:invite": "Invite people",
   "members:update_role": "Update member access",
   "audit_logs:view": "View audit log",
-  "audit_logs:verify": "Verify audit chain",
   "templates:view": "View templates",
   "templates:create": "Create templates",
   "templates:manage": "Edit any template",
@@ -114,7 +113,7 @@ const permissionGroups: readonly PermissionGroupDefinition[] = [
   },
   {
     label: "Audit",
-    permissions: ["audit_logs:view", "audit_logs:verify"],
+    permissions: ["audit_logs:view"],
   },
 ]
 
@@ -193,6 +192,8 @@ function RoleEditorDialog({
   organizationId: string
   role: OrganizationRoleDefinition
 }): ReactElement {
+  // Removing asks once more, so a stray press never takes a role away.
+  const [removing, setRemoving] = useState(false)
   const isOwner = role.systemKey === "owner_admin"
   const permissions = isOwner
     ? ORGANIZATION_PERMISSION_ACTIONS
@@ -264,13 +265,19 @@ function RoleEditorDialog({
               <input name="organizationId" type="hidden" value={organizationId} />
               <input name="roleId" type="hidden" value={role.id} />
               <Button
-                aria-label={`Remove ${role.name} role`}
+                aria-label={removing ? `Yes, remove the ${role.name} role` : `Remove ${role.name} role`}
                 className="font-normal text-destructive hover:bg-destructive/10 hover:text-destructive"
+                onClick={(event) => {
+                  if (!removing) {
+                    event.preventDefault()
+                    setRemoving(true)
+                  }
+                }}
                 type="submit"
                 variant="ghost"
               >
                 <Trash2 aria-hidden="true" data-icon="inline-start" />
-                Remove role
+                {removing ? "Yes, remove role" : "Remove role"}
               </Button>
             </form>
           ) : null}

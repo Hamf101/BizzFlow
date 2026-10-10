@@ -28,11 +28,27 @@ class FakeQuery {
     return this
   }
 
-  async maybeSingle(): Promise<{ data: FakeRow | null; error: null }> {
-    const matched = this.rows.filter((row: FakeRow): boolean =>
-      this.filters.every((filter): boolean => filter(row))
-    )
-    return { data: matched[0] ?? null, error: null }
+  private count = Number.POSITIVE_INFINITY
+
+  limit(count: number): FakeQuery {
+    this.count = count
+    return this
+  }
+
+  // As PostgREST answers: more than one row is an error, not the first of them.
+  async maybeSingle(): Promise<{ data: FakeRow | null; error: { code: string; message: string } | null }> {
+    const matched = this.matched()
+    return matched.length > 1
+      ? { data: null, error: { code: "PGRST116", message: "JSON object requested, multiple rows returned" } }
+      : { data: matched[0] ?? null, error: null }
+  }
+
+  then<T>(onfulfilled: (value: { data: FakeRow[]; error: null }) => T): Promise<T> {
+    return Promise.resolve({ data: this.matched().slice(0, this.count), error: null }).then(onfulfilled)
+  }
+
+  private matched(): FakeRow[] {
+    return this.rows.filter((row: FakeRow): boolean => this.filters.every((filter): boolean => filter(row)))
   }
 }
 
@@ -166,6 +182,22 @@ describe("seedSampleSubmissionsForOrganization", () => {
       skippedCount: SAMPLE_SUBMISSION_COUNT,
     })
     expect(secondDeps.createInternalSubmissionDraft).not.toHaveBeenCalled()
+  })
+
+  it("re-runs where a title is used twice, as members may have done", async () => {
+    const tables = createTables()
+    tables.document_templates.push({ ...tables.document_templates[0], id: `${TEMPLATE_ID}9` })
+    const client = new FakeClient(tables)
+    const first = createSubmissionDeps(client)
+    await seedSampleSubmissionsForOrganization({ actorUserId: MANAGER_ID, organizationId: ORG_ID }, first)
+    client.tables.submissions.push({ ...client.tables.submissions[0], id: "copy" })
+
+    const again = createSubmissionDeps(client)
+
+    await expect(
+      seedSampleSubmissionsForOrganization({ actorUserId: MANAGER_ID, organizationId: ORG_ID }, again)
+    ).resolves.toEqual({ seededCount: 0, skippedCount: SAMPLE_SUBMISSION_COUNT })
+    expect(again.createInternalSubmissionDraft).not.toHaveBeenCalled()
   })
 
   it("skips a starter template that has not been seeded yet", async () => {

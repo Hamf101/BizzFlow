@@ -1,4 +1,4 @@
-import type { ReactElement, ReactNode } from "react"
+import type { ReactElement } from "react"
 
 import {
   auditLogListState,
@@ -10,10 +10,10 @@ import {
 } from "@/components/audit/audit-log-view"
 import { ListFilterChips } from "@/components/data/list-filter-chips"
 import { ListPagination } from "@/components/data/list-pagination"
-import { type ListSavedViews, ListViewMenu, ListViewTitle } from "@/components/data/list-view-menu"
-import { DatedTitle } from "@/components/navigation/dated-title"
-import { formatMediumDateTime } from "@/lib/date-format"
-import { getLastPage } from "@/lib/list-state"
+import { ListEmpty, ListHeading } from "@/components/data/list-heading"
+import { type ListSavedViews, ListViewMenu } from "@/components/data/list-view-menu"
+import { LocalDate } from "@/components/ui/local-date"
+import { memberLabel } from "@/components/people/member-name"
 import type { AuditLogEntry } from "@/types/audit"
 import type { OrganizationMember } from "@/types/organization"
 
@@ -25,26 +25,22 @@ const EVENT_GRID =
  * time, with each event's details folded away and the order and export kept
  * behind the view menu.
  *
- * @param props - The current view, its page of events, members, and the integrity mark.
+ * @param props - The current view, its page of events, and members.
  * @returns The audit log workspace.
  */
 export function AuditLogWorkspace({
   entries,
-  integrity,
   members,
   savedViews,
   total,
   view,
 }: {
   entries: AuditLogEntry[]
-  /** Tamper-check mark shown beside the title, when the viewer may verify. */
-  integrity: ReactNode
   members: OrganizationMember[]
   savedViews: ListSavedViews["saved"]
   total: number
   view: AuditLogView
 }): ReactElement {
-  const lastPage = getLastPage(total, view.pageSize)
 
   const listViews: ListSavedViews = {
     list: "audit-log",
@@ -55,27 +51,13 @@ export function AuditLogWorkspace({
   return (
     <section className="flex flex-col gap-5" data-slot="audit-log-workspace">
       <div className="flex items-center justify-between gap-3">
-        {/* The real space keeps the accessible name "Audit log 2 events". */}
-        <DatedTitle>
-          <h1 className="text-2xl leading-none font-medium tracking-[-0.02em]">
-            <ListViewTitle title="Audit log" views={listViews} />{" "}
-            <span
-              aria-label={`${total} ${total === 1 ? "event" : "events"}`}
-              className="ml-0.5 text-xl font-normal text-muted-foreground"
-            >
-              {total}
-            </span>
-          </h1>
-        </DatedTitle>
-        <div className="flex items-center gap-2">
-          {integrity}
-          <ListViewMenu
-            adjusted={isAuditViewAdjusted(view)}
-            label="View options"
-            sections={getAuditViewMenuSections(view)}
-            views={listViews}
-          />
-        </div>
+        <ListHeading noun={["event", "events"]} shrink={false} title="Audit log" total={total} views={listViews} />
+        <ListViewMenu
+          adjusted={isAuditViewAdjusted(view)}
+          label="View options"
+          sections={getAuditViewMenuSections(view)}
+          views={listViews}
+        />
       </div>
 
       <ListFilterChips
@@ -84,12 +66,7 @@ export function AuditLogWorkspace({
       />
 
       {entries.length === 0 ? (
-        <p
-          className="py-16 text-center text-sm text-muted-foreground"
-          role="status"
-        >
-          {view.filters.kind ? "No events of this kind." : "No events yet."}
-        </p>
+        <ListEmpty>{view.filters.kind ? "No events of this kind." : "No events yet."}</ListEmpty>
       ) : (
         <ul aria-label="Audit events" className="flex flex-col gap-1">
           {entries.map((entry: AuditLogEntry) => (
@@ -99,18 +76,9 @@ export function AuditLogWorkspace({
       )}
 
       <ListPagination
-        nextHref={
-          view.page < lastPage
-            ? auditLogListState.href("/audit-log", view, { page: view.page + 1 })
-            : null
-        }
+        href={(page) => auditLogListState.href("/audit-log", view, { page })}
         page={view.page}
         pageSize={view.pageSize}
-        previousHref={
-          view.page > 1
-            ? auditLogListState.href("/audit-log", view, { page: view.page - 1 })
-            : null
-        }
         total={total}
       />
     </section>
@@ -146,7 +114,7 @@ function AuditEventRow({
             className="text-sm text-muted-foreground tabular-nums"
             dateTime={entry.createdAt}
           >
-            {formatMediumDateTime(entry.createdAt)}
+            <LocalDate time value={entry.createdAt} />
           </time>
         </summary>
         <dl className="grid gap-1 px-1 pb-3 text-xs md:px-3">
@@ -182,5 +150,5 @@ function formatAuditActor(
     (candidate: OrganizationMember): boolean => candidate.userId === actorUserId
   )
 
-  return member?.fullName?.trim() || member?.email || "Member"
+  return (member && memberLabel(member)) || "Member"
 }

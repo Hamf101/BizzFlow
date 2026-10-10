@@ -26,11 +26,10 @@ import {
   TextCursorInput,
   Underline,
 } from "lucide-react"
-import { type FormEvent, type ReactElement, type ReactNode, useEffect, useState } from "react"
+import { type FormEvent, type ReactElement, type ReactNode, useEffect, useState, useSyncExternalStore } from "react"
 
 import { findInsertChoices, INSERT_CHOICES, type InsertChoice } from "@/components/editor/block-catalog"
-import { isLine, isList } from "@/components/editor/editor-block"
-import { convertTextBlock, liftListItem, sectionOfTitle, type TextBlockKind } from "@/components/editor/editor-content"
+import { canStartSection, convertTextBlock, isLine, isList, liftListItem, sectionOfTitle, type TextBlockKind } from "@/components/editor/editor-content"
 import { FontPicker } from "@/components/editor/font-picker"
 import type { EditorController } from "@/components/editor/use-editor-controller"
 import { Button } from "@/components/ui/button"
@@ -44,7 +43,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { cn } from "@/lib/utils"
+import { cn, subscribeNever } from "@/lib/utils"
 import { type TemplateBlock, textRunSchema } from "@/types/template"
 
 type LineKind = Extract<TextBlockKind, { type: "heading" | "paragraph" }>
@@ -104,10 +103,12 @@ export function FormatBar({
   controller: EditorController
   narrow: boolean
 }): ReactElement {
-  const lineBlockId = controller.line?.view.dom.dataset.caretKey?.split(":")[0]
+  // A line replaced by a block (a / command) has no view left to read.
+  const live = controller.line && !controller.line.isDestroyed ? controller.line : null
+  const lineBlockId = live?.view.dom.dataset.caretKey?.split(":")[0]
   const line =
-    controller.line && !controller.line.isDestroyed && lineBlockId === controller.activeBlockId
-      ? controller.line
+    live && lineBlockId === controller.activeBlockId
+      ? live
       : null
   const marks = useEditorState({
     editor: line,
@@ -136,7 +137,8 @@ export function FormatBar({
   const base = block?.type === "heading" ? HEADING_POINTS[block.level] : 10
   const size = marks?.size ?? base
   const head = (): number => line?.state.selection.head ?? 0
-  const mod = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘" : "Ctrl+"
+  // Ctrl+ on the server and while its page is taken over, so the two agree.
+  const mod = useSyncExternalStore(subscribeNever, () => (/Mac|iPhone|iPad/.test(navigator.platform) ? "⌘" : "Ctrl+"), () => "Ctrl+")
 
   useEffect(() => {
     function openLink(event: KeyboardEvent): void {
@@ -173,9 +175,9 @@ export function FormatBar({
     const offset = head()
 
     if (isList(textBlock)) {
-      const lifted = liftListItem(content, textBlock.id, item, kind, [crypto.randomUUID(), crypto.randomUUID()])
+      const ids: [string, string] = [crypto.randomUUID(), crypto.randomUUID()]
+      const lifted = controller.edit((page) => liftListItem(page, textBlock.id, item, kind, ids))
 
-      controller.change(() => lifted.content)
       controller.requestFocus({ ...lifted.focus, offset })
       return
     }
@@ -317,7 +319,7 @@ export function FormatBar({
           }
         />
         <DropdownMenuContent className="w-44" side={narrow ? "top" : "bottom"}>
-          <DropdownMenuItem disabled={!isLine(block) || block.text.trim().length > 160 || content.sections.some((section) => section.startBlockId === block?.id)} onClick={() => block && controller.turnIntoSection(block.id)}><Section />Section</DropdownMenuItem>
+          <DropdownMenuItem disabled={!isLine(block) || !canStartSection(content, block)} onClick={() => block && controller.turnIntoSection(block.id)}><Section />Section</DropdownMenuItem>
           {STYLES.map(([label, kind]) => (
             <DropdownMenuItem key={label} onClick={() => setStyle(kind)}>
               <span style={kind.type === "heading" ? { fontSize: `${[1.35, 1.2, 1.05][kind.level - 1]}em`, fontWeight: 600 } : undefined}>

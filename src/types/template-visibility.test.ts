@@ -148,10 +148,10 @@ describe("template visibility", () => {
       sections: [section(CHECKBOX_ID)]
     })
 
-    expect(templateRequiresVisibleInitials(content, { approved: false })).toBe(
+    expect(templateRequiresVisibleInitials(content, { approved: false }, 1)).toBe(
       false
     )
-    expect(templateRequiresVisibleInitials(content, { approved: true })).toBe(
+    expect(templateRequiresVisibleInitials(content, { approved: true }, 1)).toBe(
       true
     )
   })

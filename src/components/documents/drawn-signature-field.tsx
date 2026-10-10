@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { RequiredStandIn } from "@/components/ui/required-stand-in"
 
 type DrawnSignatureFieldProps = {
   /** Only the drawing area, filling the box it is put in, as a page shows it. */
@@ -191,7 +192,9 @@ export function DrawnSignatureField({
           ref={canvasRef}
           role="img"
         />
-        <input name={name} type="hidden" value={dataUrl} />
+        {/* What shows is what is sent: the saved drawing, until one is drawn over it. */}
+        <input name={name} type="hidden" value={dataUrl || (redrawing ? "" : saved)} />
+        {required ? <RequiredStandIn filled={dataUrl !== "" || (saved !== "" && !redrawing)} label={label} /> : null}
         {dataUrl ? (
           <button
             className="absolute top-[0.3em] right-[0.5em] text-[0.8em] text-muted-foreground hover:text-foreground"
@@ -245,6 +248,8 @@ export function DrawnSignatureField({
         onChange={(event) => writeTypedName(event.target.value)}
         value={typed}
       />
+      {/* An empty drawing never reaches the server as a signature. */}
+      {required ? <RequiredStandIn filled={dataUrl !== ""} label={label} /> : null}
     </Field>
   )
 }

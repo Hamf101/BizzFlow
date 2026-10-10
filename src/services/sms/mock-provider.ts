@@ -22,7 +22,7 @@ export class MockSmsProvider implements SmsProvider {
 
   async sendSms(input: SendSmsInput): Promise<SendSmsResult> {
     if (this.shouldFail) {
-      console.warn("mock_sms_failed", { reference: input.reference, recipientPhone: input.recipientPhone })
+      console.warn("mock_sms_failed", { reference: input.reference })
       return {
         success: false,
         error: this.failureReason,
@@ -34,7 +34,6 @@ export class MockSmsProvider implements SmsProvider {
 
     console.info("mock_sms_sent", {
       reference: input.reference,
-      recipientPhone: input.recipientPhone,
       messageId,
       textLength: input.message.length,
     })

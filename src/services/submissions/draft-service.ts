@@ -25,6 +25,7 @@ import {
   type Submission,
 } from "@/types/submission"
 import { parseTemplateContent } from "@/types/template"
+import { normalizeName, normalizeUuid } from "@/services/input"
 
 /**
  * Starts an internal draft from the exact current published template revision.
@@ -291,30 +292,11 @@ export async function submitInternalSubmission(
 }
 
 function normalizeSubmissionTitle(title: string): string {
-  const normalizedTitle = title.trim().replace(/\s+/g, " ")
-
-  if (normalizedTitle.length < 1 || normalizedTitle.length > 180) {
-    throw new SubmissionServiceError(
-      "Submission title must be between 1 and 180 characters.",
-      400
-    )
-  }
-
-  return normalizedTitle
+  return normalizeName(title, "Submission title", 1, 180, (message) => new SubmissionServiceError(message, 400))
 }
 
 function normalizeSubmissionId(submissionId: string): string {
-  const normalizedSubmissionId = submissionId.trim().toLowerCase()
-
-  if (
-    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(
-      normalizedSubmissionId
-    )
-  ) {
-    throw new SubmissionServiceError("Submission id must be a valid UUID.", 400)
-  }
-
-  return normalizedSubmissionId
+  return normalizeUuid(submissionId, () => new SubmissionServiceError("Submission id must be a valid UUID.", 400))
 }
 
 // A restricted template is only for those it was shared with, and to use it

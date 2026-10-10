@@ -3,7 +3,12 @@
 import { cookies, headers } from "next/headers"
 import { redirect } from "next/navigation"
 
+import {
+  GeneratedDocumentFormDataError,
+  parseGeneratedDocumentAnswers,
+} from "@/components/documents/generated-document-form-data"
 import { getClientIp } from "@/lib/client-ip"
+import type { PublicAnswerResult } from "@/components/submissions/public-answer-form"
 import { getFormString } from "@/lib/form-utils"
 import {
   getPublicFormDraftCookieOptions,
@@ -15,17 +20,17 @@ import {
   submitPublicForm,
 } from "@/services/public-form-service"
 
-const FIELD_PREFIX = "field_"
-
 /**
  * Validates and finalizes one public form submission from browser FormData.
  *
+ * @param _previous - What the last try reported.
  * @param formData - Public token, optimistic draft identity, and visible fields.
- * @returns Never returns normally because both success and failure redirect.
+ * @returns Why it was not sent, so the page keeps every answer; success redirects.
  */
 export async function submitPublicFormAction(
+  _previous: PublicAnswerResult,
   formData: FormData
-): Promise<void> {
+): Promise<PublicAnswerResult> {
   const token = getFormString(formData, "token")
   const draftToken = getFormString(formData, "draftToken")
   const rawDraftRevision = getFormString(formData, "draftRevision")
@@ -35,21 +40,13 @@ export async function submitPublicFormAction(
   const reqHeaders = await headers()
   const clientIp = getClientIp(reqHeaders)
 
-  // Only scalar answers are read from the form. File completion is proven by
-  // verified `submission_files` rows keyed to the draft, never by file metadata
-  // the browser claims here.
-  const values: Record<string, unknown> = {}
-
-  for (const [key, value] of formData.entries()) {
-    if (!key.startsWith(FIELD_PREFIX) || typeof value !== "string") {
-      continue
-    }
-
-    values[key.slice(FIELD_PREFIX.length)] = value
-  }
-
   try {
     await checkRateLimit("public_form_submission", clientIp)
+
+    // The page posts answers under the document's own names. File completion
+    // is proven by verified `submission_files` rows keyed to the draft, never
+    // by file metadata the browser claims here.
+    const values = parseGeneratedDocumentAnswers(formData)
 
     await submitPublicForm({
       token,
@@ -62,7 +59,7 @@ export async function submitPublicFormAction(
     })
   } catch (error: unknown) {
     const message =
-      error instanceof PublicFormServiceError
+      error instanceof PublicFormServiceError || error instanceof GeneratedDocumentFormDataError
         ? error.message
         : error instanceof RateLimitError
           ? "Too many requests. Try again shortly."
@@ -77,7 +74,7 @@ export async function submitPublicFormAction(
       )
     }
 
-    redirect(`${formPath}?error=${encodeURIComponent(message)}`)
+    return { error: message }
   }
 
   const cookieStore = await cookies()

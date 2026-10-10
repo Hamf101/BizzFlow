@@ -1,22 +1,10 @@
-import { randomUUID } from "node:crypto"
-
 import type { Page } from "@playwright/test"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 import { expect, test, uniqueName } from "../support/fixtures"
 import { waitForHydration } from "../support/hydration"
 import { retryConcurrentChange } from "../support/retry"
-
-test.describe.configure({ mode: "serial" })
-
-async function seedFolder(admin: SupabaseClient, organizationId: string, ownerId: string, name: string): Promise<string> {
-  const id = randomUUID()
-  const { error } = await retryConcurrentChange(() =>
-    admin.from("folders").insert({ created_by: ownerId, id, name, org_id: organizationId, updated_by: ownerId })
-  )
-  if (error) throw error
-  return id
-}
+import { seedFolder } from "../support/seed"
 
 async function seedDocument(
   admin: SupabaseClient,
@@ -38,8 +26,14 @@ async function seedDocument(
   if (error) throw error
 }
 
+// The shared tenant's Files outgrow one page, so each list opens on this run's names.
+const search = (words: string): string => `/documents?q=${encodeURIComponent(words)}`
+
 async function openShare(page: Page, title: string) {
-  await page.getByRole("button", { name: `Actions for ${title}` }).click()
+  const actions = page.getByRole("button", { name: `Actions for ${title}` })
+  // A press before the page's code arrives opens nothing.
+  await waitForHydration(actions)
+  await actions.click()
   await page.getByRole("menuitem", { name: "Share…" }).click()
   const dialog = page.getByRole("dialog")
   await expect(dialog.getByRole("heading", { name: `Share “${title}”` })).toBeVisible()
@@ -56,14 +50,17 @@ test("the person who made a document shares it with a manager, who hears about i
   await seedDocument(admin, tenant.organizationId, staff.id, title)
 
   const managerPage = await pageAs("manager")
-  await managerPage.goto("/documents")
+  await managerPage.goto(search(title))
   await waitForHydration(managerPage.getByRole("link", { name: "Files" }).first())
   await expect(managerPage.getByRole("link", { exact: true, name: title })).toHaveCount(0)
 
   const staffPage = await pageAs("staff")
-  await staffPage.goto("/documents")
+  await staffPage.goto(search(title))
   const dialog = await openShare(staffPage, title)
-  await expect(dialog).toContainText("Owner, can always edit")
+  // Whoever made it is listed as its owner.
+  await expect(
+    dialog.getByRole("region", { name: "People with access" }).getByRole("listitem").filter({ hasText: "E2E staff" })
+  ).toContainText("Owner")
   await expect(dialog).toContainText("Owner admins always have access.")
 
   await dialog.getByLabel("Find a person or group").fill(manager.email)
@@ -92,7 +89,8 @@ test("a folder shared with a role reaches what is in it, until the document stop
   tenant,
 }) => {
   const name = uniqueName("Clients")
-  const title = `${name} contract`
+  // Not named after the folder, so a search for the folder finds only the folder.
+  const title = uniqueName("Contract")
   const owner = tenant.users.owner_admin
   const folderId = await seedFolder(admin, tenant.organizationId, owner.id, name)
   await seedDocument(admin, tenant.organizationId, owner.id, title, folderId)
@@ -103,7 +101,7 @@ test("a folder shared with a role reaches what is in it, until the document stop
   await expect(staffPage.getByText("Folder unavailable")).toBeVisible()
 
   // Share the folder with everyone who is staff.
-  await ownerPage.goto("/documents")
+  await ownerPage.goto(search(name))
   const folderDialog = await openShare(ownerPage, name)
   await expect(folderDialog.getByText("From the folder")).toHaveCount(0)
   await folderDialog.getByRole("list", { name: "People you can add" }).getByRole("button", { name: "Everyone who is staff" }).click()
@@ -137,7 +135,7 @@ test("several files are shared at once, and staff who can edit one can pass it o
   for (const title of titles) await seedDocument(admin, tenant.organizationId, owner.id, title)
 
   const ownerPage = await pageAs("owner_admin")
-  await ownerPage.goto("/documents")
+  await ownerPage.goto(search(name))
   const tile = (title: string) =>
     ownerPage.locator('[data-slot="file-tile"]').filter({ has: ownerPage.getByRole("link", { exact: true, name: title }) })
   await waitForHydration(tile(titles[0]))
@@ -160,7 +158,7 @@ test("several files are shared at once, and staff who can edit one can pass it o
 
   // Both arrive, and because staff can edit them, staff can share them too.
   const staffPage = await pageAs("staff")
-  await staffPage.goto("/documents")
+  await staffPage.goto(search(name))
   for (const title of titles) {
     await expect(staffPage.getByRole("link", { exact: true, name: title })).toBeVisible()
   }

@@ -1,13 +1,16 @@
 import { z } from "zod"
 
 import {
+  createFilterOptions,
   createSortSection,
+  isOrderOrSizeAdjusted,
   type ListOption,
   type ListOptionSection,
   type ListSortOption,
 } from "@/components/data/list-option"
 import { getTaskStatusLabel } from "@/components/tasks/task-presentation"
-import { defineListState, formatListSort } from "@/lib/list-state"
+import { memberLabel } from "@/components/people/member-name"
+import { defineListState } from "@/lib/list-state"
 import type { OrganizationMember } from "@/types/organization"
 import {
   TASK_SEARCH_MAX_LENGTH,
@@ -54,22 +57,9 @@ const TASK_SORT_OPTIONS: ReadonlyArray<ListSortOption<TaskSortKey>> = [
  * @returns "All" followed by one option per task status.
  */
 export function getTaskStatusOptions(view: TaskListView): ListOption[] {
-  return [
-    {
-      href: taskListState.href(TASKS_PATH, view, {
-        filters: { status: undefined },
-      }),
-      label: "All",
-      selected: view.filters.status === undefined,
-    },
-    ...TASK_STATUSES.map(
-      (status): ListOption => ({
-        href: taskListState.href(TASKS_PATH, view, { filters: { status } }),
-        label: getTaskStatusLabel(status),
-        selected: view.filters.status === status,
-      })
-    ),
-  ]
+  return createFilterOptions(TASK_STATUSES, view.filters.status, getTaskStatusLabel, (status) =>
+    taskListState.href(TASKS_PATH, view, { filters: { status } })
+  )
 }
 
 /**
@@ -102,7 +92,7 @@ export function getTaskViewMenuSections(
             href: taskListState.href(TASKS_PATH, view, {
               filters: { assignee: member.userId },
             }),
-            label: member.fullName?.trim() || member.email,
+            label: memberLabel(member),
             selected: view.filters.assignee === member.userId,
           })
         ),
@@ -120,9 +110,7 @@ export function getTaskViewMenuSections(
  */
 export function isTaskViewAdjusted(view: TaskListView): boolean {
   return (
-    view.filters.assignee !== undefined ||
-    formatListSort(view.sort) !== formatListSort(DEFAULT_TASK_VIEW.sort) ||
-    view.pageSize !== DEFAULT_TASK_VIEW.pageSize
+    view.filters.assignee !== undefined || isOrderOrSizeAdjusted(view, DEFAULT_TASK_VIEW)
   )
 }
 

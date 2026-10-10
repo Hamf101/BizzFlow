@@ -20,7 +20,8 @@ import { Button, buttonVariants } from "@/components/ui/button"
 import { DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu"
 import { Sheet, SheetClose, SheetContent, SheetTitle } from "@/components/ui/sheet"
 import { bizflowToast } from "@/components/ui/toaster"
-import { cn } from "@/lib/utils"
+import { clamp, cn, subscribeNever } from "@/lib/utils"
+import { useMediaQuery } from "@/lib/use-media-query"
 import type { EditorLayout } from "@/types/editor-layout"
 
 const ZOOM_STEPS = [0.5, 0.67, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2] as const
@@ -104,11 +105,10 @@ export function EditorFrame({
   titleEditable,
   toolbar,
 }: EditorFrameProps): ReactElement {
-  const narrow = useSyncExternalStore(
-    subscribeToWidth,
-    () => window.matchMedia(NARROW).matches,
-    () => false
-  )
+  const narrow = useMediaQuery(NARROW)
+  // The server can't know the width, so the tools wait for the browser: a phone
+  // drawing the laptop dock first would swap it out and lose a tool opened meanwhile.
+  const sized = useSyncExternalStore(subscribeNever, () => true, () => false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const [layout, setLayout] = useState<EditorLayout>(layoutStore?.initial ?? {})
   const orientation = layout.dock?.orientation ?? "upright"
@@ -178,6 +178,9 @@ export function EditorFrame({
         } else {
           onUndo()
         }
+      } else if (narrow) {
+        // The page has no zoom of its own on a phone's column: the browser's zoom stays the browser's.
+        return
       } else if (key === "=" || key === "+" || key === "-") {
         event.preventDefault()
         setChosenZoom(stepZoom(zoom, key === "-" ? -1 : 1))
@@ -189,14 +192,14 @@ export function EditorFrame({
 
     document.addEventListener("keydown", handleKey)
     return () => document.removeEventListener("keydown", handleKey)
-  }, [onRedo, onSave, onUndo, zoom])
+  }, [narrow, onRedo, onSave, onUndo, zoom])
 
   return (
     <div className="flex h-dvh flex-col bg-canvas text-foreground" data-slot="editor">
       <header className="relative z-20 flex h-14 shrink-0 items-center gap-1 px-2 sm:px-3">
         <Link
           aria-label={backLabel}
-          className={cn(buttonVariants({ size: "icon", variant: "ghost" }), "size-10 shrink-0")}
+          className={cn(buttonVariants({ size: "icon", variant: "ghost" }), "size-10 shrink-0 max-md:size-11")}
           href={backHref}
           title={backLabel}
         >
@@ -225,7 +228,7 @@ export function EditorFrame({
           <>
             <Button
               aria-label="Undo"
-              className="size-9 md:size-10"
+              className="size-11 md:size-10"
               disabled={!canUndo}
               onClick={onUndo}
               size="icon"
@@ -237,7 +240,7 @@ export function EditorFrame({
             </Button>
             <Button
               aria-label="Redo"
-              className="size-9 md:size-10"
+              className="size-11 md:size-10"
               disabled={!canRedo}
               onClick={onRedo}
               size="icon"
@@ -289,7 +292,7 @@ export function EditorFrame({
           )}
           data-slot="editor-tools"
         >
-          {narrow ? (
+          {!sized ? null : narrow ? (
             <div className="pointer-events-auto absolute right-0 bottom-[calc(1rem+env(safe-area-inset-bottom))] left-2 flex">
               {dock(true, "flat")}
             </div>
@@ -414,21 +417,18 @@ export function EditorNotice({
  */
 export function EditorSidePanel({
   children,
-  keepMounted = false,
   narrow,
   onClose,
   open,
   title,
 }: {
   children: ReactNode
-  /** Keeps what is inside alive while closed, such as a conversation. */
-  keepMounted?: boolean
   narrow: boolean
   onClose: () => void
   open: boolean
   title: string
 }): ReactElement | null {
-  if (narrow && !keepMounted) {
+  if (narrow) {
     return (
       <Sheet onOpenChange={(next: boolean) => (next ? undefined : onClose())} open={open}>
         <SheetContent>
@@ -442,7 +442,7 @@ export function EditorSidePanel({
     )
   }
 
-  if (!open && !keepMounted) {
+  if (!open) {
     return null
   }
 
@@ -527,12 +527,4 @@ function stepZoom(current: number, direction: -1 | 1): number {
   return next ?? (direction > 0 ? 2 : 0.5)
 }
 
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value))
-}
 
-function subscribeToWidth(onChange: () => void): () => void {
-  const query = window.matchMedia(NARROW)
-  query.addEventListener("change", onChange)
-  return () => query.removeEventListener("change", onChange)
-}

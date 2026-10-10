@@ -19,10 +19,7 @@ import {
   listProfilesByUserIds,
   updateOrganizationMemberAccessRecord,
 } from "@/services/organizations/repository"
-import {
-  recordOrganizationAuditLog,
-  runOrganizationOperation,
-} from "@/services/organizations/shared"
+import { runOrganizationOperation } from "@/services/organizations/shared"
 import type {
   OrganizationMember,
   OrganizationMembership,
@@ -108,7 +105,7 @@ export async function listOrganizationPeople(
  * Updates a member's workspace-specific name and access role atomically.
  *
  * @param input - Owner, tenant, membership, role, and display-name values.
- * @param deps - Optional database and audit dependencies for tests.
+ * @param deps - Optional database dependency for tests.
  * @returns Verified updated membership.
  * @throws OrganizationServiceError when authorization or validation fails.
  */
@@ -150,7 +147,7 @@ export async function updateMemberAccess(
         workspaceDisplayName,
       })
 
-      const membership = await getMembershipById(client, input.membershipId)
+      const membership = await getMembershipById(client, input.organizationId, input.membershipId)
 
       if (
         membership.organizationId !== input.organizationId ||
@@ -163,20 +160,7 @@ export async function updateMemberAccess(
         )
       }
 
-      await recordOrganizationAuditLog(
-        {
-          organizationId: input.organizationId,
-          actorUserId: input.actorUserId,
-          action: "membership.access_updated",
-          targetType: "membership",
-          targetId: input.membershipId,
-          metadata: {
-            roleDefinitionId: input.roleId,
-            workspaceDisplayName,
-          },
-        },
-        deps.recordAuditLog
-      )
+      // update_organization_member_access writes its audit row with the change.
 
       return membership
     }
@@ -355,49 +339,6 @@ export async function updateNotificationPreferences(
           "You do not have access to this organization.",
           403
         )
-      }
-    }
-  )
-}
-
-/** Input for updating a profile's phone number. */
-export type UpdateProfilePhoneInput = {
-  actorUserId: string
-  phoneNumber: string | null
-}
-
-/**
- * Updates an actor profile's phone number in E.164 format.
- *
- * @param input - Actor user ID and phone number.
- * @param deps - Optional database dependencies.
- * @throws OrganizationServiceError when format validation or write fails.
- */
-export async function updateProfilePhone(
-  input: UpdateProfilePhoneInput,
-  deps: OrganizationMutationDeps = {}
-): Promise<void> {
-  return runOrganizationOperation(
-    "update_profile_phone",
-    { userId: input.actorUserId },
-    async (): Promise<void> => {
-      const client = deps.client ?? createAdminClient()
-      const phone = input.phoneNumber?.trim() || null
-
-      if (phone !== null && !/^\+[1-9]\d{1,14}$/.test(phone)) {
-        throw new OrganizationServiceError(
-          "Phone number must be in valid E.164 format (e.g. +14155552671).",
-          400
-        )
-      }
-
-      const { error } = await client
-        .from("profiles")
-        .update({ phone_number: phone, updated_at: new Date().toISOString() })
-        .eq("id", input.actorUserId)
-
-      if (error) {
-        throw new OrganizationServiceError("Unable to update profile phone number.", 500)
       }
     }
   )

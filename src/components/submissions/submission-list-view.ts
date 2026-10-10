@@ -1,12 +1,15 @@
 import { z } from "zod"
 
 import {
+  createFilterOptions,
   createSortSection,
+  isOrderOrSizeAdjusted,
   RECORD_SORT_OPTIONS,
   type ListOption,
   type ListOptionSection,
 } from "@/components/data/list-option"
-import { defineListState, formatListSort } from "@/lib/list-state"
+import { defineListState } from "@/lib/list-state"
+import { memberLabel } from "@/components/people/member-name"
 import type { OrganizationMember } from "@/types/organization"
 import {
   SUBMISSION_SEARCH_MAX_LENGTH,
@@ -95,24 +98,12 @@ export function getSubmissionViewAssignee(
 export function getSubmissionStatusOptions(
   view: SubmissionListView
 ): ListOption[] {
-  return [
-    {
-      href: submissionListState.href(SUBMISSIONS_PATH, view, {
-        filters: { status: undefined },
-      }),
-      label: "All",
-      selected: view.filters.status === undefined,
-    },
-    ...SUBMISSION_STATUS_FILTER_KEYS.map(
-      (status: SubmissionStatusFilter): ListOption => ({
-        href: submissionListState.href(SUBMISSIONS_PATH, view, {
-          filters: { status },
-        }),
-        label: SUBMISSION_STATUS_FILTERS[status].label,
-        selected: view.filters.status === status,
-      })
-    ),
-  ]
+  return createFilterOptions(
+    SUBMISSION_STATUS_FILTER_KEYS,
+    view.filters.status,
+    (status) => SUBMISSION_STATUS_FILTERS[status].label,
+    (status) => submissionListState.href(SUBMISSIONS_PATH, view, { filters: { status } })
+  )
 }
 
 /**
@@ -173,7 +164,7 @@ export function getSubmissionViewMenuSections(
           href: submissionListState.href(SUBMISSIONS_PATH, view, {
             filters: { assignee: member.userId },
           }),
-          label: member.fullName?.trim() || member.email,
+          label: memberLabel(member),
           selected: view.filters.assignee === member.userId,
         })
       ),
@@ -192,9 +183,7 @@ export function getSubmissionViewMenuSections(
  */
 export function isSubmissionViewAdjusted(view: SubmissionListView): boolean {
   return (
-    view.filters.assignee !== undefined ||
-    formatListSort(view.sort) !== formatListSort(DEFAULT_SUBMISSION_VIEW.sort) ||
-    view.pageSize !== DEFAULT_SUBMISSION_VIEW.pageSize
+    view.filters.assignee !== undefined || isOrderOrSizeAdjusted(view, DEFAULT_SUBMISSION_VIEW)
   )
 }
 

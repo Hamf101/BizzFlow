@@ -5,6 +5,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { readSignedFlash } from "@/lib/form-utils"
 import { AuthPageCard } from "@/lib/page-auth-card"
 
 import { loginAction } from "./actions"
@@ -12,6 +13,7 @@ import { loginAction } from "./actions"
 type LoginSearchParams = Promise<{
   confirmed?: string
   error?: string
+  sig?: string
   next?: string
 }>
 
@@ -21,6 +23,7 @@ export default async function LoginPage({
   searchParams: LoginSearchParams
 }) {
   const params = await searchParams
+  const flashError = readSignedFlash(params).error
 
   return (
     <AuthPageCard
@@ -47,10 +50,10 @@ export default async function LoginPage({
     >
       <form action={loginAction} className="flex flex-col gap-5">
         <input type="hidden" name="next" value={params.next ?? ""} />
-        {params.error && (
+        {flashError && (
           <Alert variant="destructive">
             <AlertTitle>Unable to log in</AlertTitle>
-            <AlertDescription>{params.error}</AlertDescription>
+            <AlertDescription>{flashError}</AlertDescription>
           </Alert>
         )}
         <FieldGroup>

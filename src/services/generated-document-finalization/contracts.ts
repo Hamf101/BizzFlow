@@ -6,7 +6,8 @@ import type {
   RenderGeneratedDocumentPdfInput,
   RenderGeneratedDocumentPdfOptions,
 } from "@/services/document-pdf-service"
-import type { GeneratedDocumentSigningView } from "@/types/signing"
+import type { MemberDocumentSigningView } from "@/types/signing"
+import type { GeneratedDocument } from "@/types/template"
 
 /** Identifiers required to finalize one completed generated document. */
 export type FinalizeGeneratedDocumentPdfInput = {
@@ -54,8 +55,13 @@ export type PromoteGeneratedDocumentFinalizationInput = {
   finalizedBy: string
 }
 
+/** A completed generated document, finalized on behalf of its creator. */
+export type CompletedGeneratedDocument = Pick<GeneratedDocument, "id" | "organizationId" | "createdBy">
+
 /** Persistence port used by the application finalization use case. */
 export type GeneratedDocumentFinalizationPersistence = {
+  /** Completed, active documents with no finalized PDF, at most `limit`. */
+  listUnfinalized: (limit: number) => Promise<CompletedGeneratedDocument[]>
   requireViewPermission: (
     input: FinalizeGeneratedDocumentPdfInput
   ) => Promise<void>
@@ -89,7 +95,7 @@ export type GeneratedDocumentFinalizationStorage = {
 /** Focused loader for the tenant-scoped generated signing view. */
 export type GeneratedDocumentSigningViewLoader = (
   input: FinalizeGeneratedDocumentPdfInput
-) => Promise<GeneratedDocumentSigningView>
+) => Promise<MemberDocumentSigningView>
 
 /** Focused renderer for an immutable generated-document snapshot. */
 export type GeneratedDocumentFinalPdfRenderer = (

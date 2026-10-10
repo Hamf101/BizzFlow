@@ -2,16 +2,23 @@ import { describe, expect, it, vi } from "vitest"
 
 import {
   getOrganizationNotificationSettings,
+  listNotificationDeliveries,
   recordNotificationDelivery,
   updateOrganizationNotificationSettings,
 } from "@/services/notification-service"
+import {
+  PostgrestWriteQuery,
+  type FakeRow,
+  type FakeTables,
+} from "@/services/postgrest-fake.test-support"
 import { isNotificationChannelEnabled } from "@/types/notification"
 
 // Production callers pass no deps, so the only way to prove the audit event
 // actually fires is to watch the module the service falls back to.
 const recordAuditLogSpy = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
 
-vi.mock("@/services/audit-service", () => ({
+vi.mock("@/services/audit-service", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/services/audit-service")>()),
   recordAuditLog: recordAuditLogSpy,
 }))
 
@@ -21,12 +28,9 @@ const MANAGER_ID = "20000000-0000-4000-8000-000000000002"
 const DELIVERY_ID = "30000000-0000-4000-8000-000000000001"
 const NOW = "2026-08-01T09:00:00.000Z"
 
-type FakeRow = Record<string, unknown>
-
-/** Minimal in-memory client covering the two relations this service touches. */
+/** Minimal in-memory client covering the relations this service touches. */
 class FakeClient {
-  readonly tables: { organizations: FakeRow[]; notification_deliveries: FakeRow[] }
-  readonly memberships: FakeRow[]
+  readonly tables: FakeTables
 
   constructor(seed: {
     organizations?: FakeRow[]
@@ -34,100 +38,18 @@ class FakeClient {
     memberships?: FakeRow[]
   } = {}) {
     this.tables = {
-      organizations: seed.organizations ?? [],
       notification_deliveries: seed.notification_deliveries ?? [],
+      organization_memberships: seed.memberships ?? [],
+      organizations: seed.organizations ?? [],
     }
-    this.memberships = seed.memberships ?? []
   }
 
-  from(tableName: string): FakeQuery {
-    if (tableName === "organization_memberships") {
-      return new FakeQuery(this.memberships)
-    }
-
-    if (tableName === "organizations") {
-      return new FakeQuery(this.tables.organizations)
+  from(tableName: string): PostgrestWriteQuery {
+    if (!(tableName in this.tables)) {
+      throw new Error(`Unexpected relation "${tableName}".`)
     }
 
-    if (tableName === "notification_deliveries") {
-      return new FakeQuery(this.tables.notification_deliveries)
-    }
-
-    throw new Error(`Unexpected relation "${tableName}".`)
-  }
-}
-
-class FakeQuery implements PromiseLike<{ data: FakeRow[]; error: null }> {
-  private readonly filters: Array<(row: FakeRow) => boolean> = []
-  private inserted: FakeRow[] | null = null
-  private updateValues: FakeRow | null = null
-
-  constructor(private readonly rows: FakeRow[]) {}
-
-  select(): this {
-    return this
-  }
-
-  insert(values: FakeRow): this {
-    this.inserted = [{ ...values }]
-    return this
-  }
-
-  update(values: FakeRow): this {
-    this.updateValues = values
-    return this
-  }
-
-  eq(column: string, value: unknown): this {
-    this.filters.push((row) => row[column] === value)
-    return this
-  }
-
-  in(column: string, values: readonly unknown[]): this {
-    this.filters.push((row) => values.includes(row[column]))
-    return this
-  }
-
-  order(): this {
-    return this
-  }
-
-  limit(): this {
-    return this
-  }
-
-  async maybeSingle(): Promise<{ data: FakeRow | null; error: null }> {
-    const rows = this.run()
-    return { data: rows[0] ?? null, error: null }
-  }
-
-  then<TResult1 = { data: FakeRow[]; error: null }, TResult2 = never>(
-    onfulfilled?:
-      | ((value: { data: FakeRow[]; error: null }) => TResult1 | PromiseLike<TResult1>)
-      | null,
-    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
-  ): PromiseLike<TResult1 | TResult2> {
-    return Promise.resolve({ data: this.run(), error: null as null }).then(
-      onfulfilled,
-      onrejected
-    )
-  }
-
-  private run(): FakeRow[] {
-    if (this.inserted) {
-      this.rows.push(...this.inserted)
-      return this.inserted
-    }
-
-    const matched = this.rows.filter((row) =>
-      this.filters.every((predicate) => predicate(row))
-    )
-
-    if (this.updateValues) {
-      for (const row of matched) Object.assign(row, this.updateValues)
-    }
-
-    return matched
+    return new PostgrestWriteQuery(this.tables, tableName)
   }
 }
 
@@ -322,6 +244,8 @@ describe("recordNotificationDelivery", () => {
   })
 })
 
+const OWNER_MEMBERSHIP = { org_id: ORG_ID, user_id: OWNER_ID, role: "owner_admin", status: "active" }
+
 describe("organization notification settings", () => {
   it("reads the stored switches", async () => {
     const client = new FakeClient({
@@ -332,10 +256,11 @@ describe("organization notification settings", () => {
           sms_notifications_enabled: false,
         },
       ],
+      memberships: [OWNER_MEMBERSHIP],
     })
 
     await expect(
-      getOrganizationNotificationSettings(ORG_ID, createDeps(client))
+      getOrganizationNotificationSettings({ actorUserId: OWNER_ID, organizationId: ORG_ID }, createDeps(client))
     ).resolves.toEqual({
       emailNotificationsEnabled: true,
       smsNotificationsEnabled: false,
@@ -348,11 +273,26 @@ describe("organization notification settings", () => {
     vi.spyOn(console, "warn").mockImplementation(() => {})
 
     await expect(
-      getOrganizationNotificationSettings(ORG_ID, createDeps(new FakeClient()))
+      getOrganizationNotificationSettings(
+        { actorUserId: OWNER_ID, organizationId: ORG_ID },
+        createDeps(new FakeClient({ memberships: [OWNER_MEMBERSHIP] }))
+      )
     ).resolves.toEqual({
       emailNotificationsEnabled: true,
       smsNotificationsEnabled: true,
     })
+  })
+
+  it("refuses the switches and delivery history to a member without organization:manage", async () => {
+    const client = new FakeClient({
+      organizations: [{ id: ORG_ID, email_notifications_enabled: true, sms_notifications_enabled: true }],
+      notification_deliveries: [{ id: DELIVERY_ID, org_id: ORG_ID }],
+      memberships: [{ org_id: ORG_ID, user_id: MANAGER_ID, role: "manager", status: "active" }],
+    })
+    const actor = { actorUserId: MANAGER_ID, organizationId: ORG_ID }
+
+    await expect(getOrganizationNotificationSettings(actor, createDeps(client))).rejects.toMatchObject({ statusCode: 403 })
+    await expect(listNotificationDeliveries(actor, createDeps(client))).rejects.toMatchObject({ statusCode: 403 })
   })
 
   it("lets an owner change the switches", async () => {

@@ -1,13 +1,12 @@
-import { AlertCircle, CheckCircle2, ShieldCheck } from "lucide-react"
-import { cookies } from "next/headers"
+import { AlertCircle, ShieldCheck } from "lucide-react"
+import { cookies, headers } from "next/headers"
+import { userAgent } from "next/server"
 import type { ReactElement } from "react"
 
-import { PublicFormFields } from "@/components/submissions/public-form-fields"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Button } from "@/components/ui/button"
+import { PublicAnswerError, PublicAnswerForm, PublicAnswerSubmit } from "@/components/submissions/public-answer-form"
+import { PublicAnswerPaper } from "@/components/submissions/public-answer-paper"
 import {
   Card,
-  CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
@@ -19,7 +18,7 @@ import {
   type PublicFormDraftState,
 } from "@/services/public-form-service"
 import { withTemplateImageUrls } from "@/services/template-image-service"
-import type { TemplateContent } from "@/types/template"
+import { type TemplateContent, upgradeV2TemplateContentToV3 } from "@/types/template"
 
 import { submitPublicFormAction } from "./actions"
 
@@ -27,24 +26,18 @@ type PublicFormPageParams = Promise<{
   token: string
 }>
 
-type PublicFormPageSearchParams = Promise<{
-  error?: string
-}>
-
 /**
  * Renders one active public form and restores its path-scoped draft session.
  *
- * @param props - Async route params and optional redirected error message.
+ * @param props - Async route params.
  * @returns Public form, unavailable state, or restored draft controls.
  */
 export default async function PublicFormPage({
   params,
-  searchParams,
 }: {
   params: PublicFormPageParams
-  searchParams: PublicFormPageSearchParams
 }): Promise<ReactElement> {
-  const [{ token }, query] = await Promise.all([params, searchParams])
+  const { token } = await params
   const preview = await getPublicFormLinkByToken(token)
 
   if (!preview.valid || !preview.template) {
@@ -82,7 +75,7 @@ export default async function PublicFormPage({
   const templateContent = preview.template.content as TemplateContent | null
   // The link was checked above, so its pictures get addresses the visitor can load.
   const content = templateContent
-    ? await withTemplateImageUrls(templateContent, preview.template.organizationId)
+    ? upgradeV2TemplateContentToV3(await withTemplateImageUrls(templateContent, preview.template.organizationId))
     : null
   const cookieStore = await cookies()
   const storedDraftToken =
@@ -101,69 +94,53 @@ export default async function PublicFormPage({
   }
 
   return (
-    <main className="flex min-h-screen flex-col bg-muted/20 px-4 py-8">
-      <div className="mx-auto w-full max-w-2xl flex-1">
-        {query.error && (
-          <Alert className="mb-6" variant="destructive">
-            <AlertTitle>Submission error</AlertTitle>
-            <AlertDescription>{query.error}</AlertDescription>
-          </Alert>
-        )}
+    <main className="min-h-dvh bg-muted/20">
+      <PublicAnswerForm action={submitPublicFormAction}>
+        <input name="token" type="hidden" value={token} />
+        {/* Shared public draft handle. File fields write the server-issued
+            value here so every upload is parented by one draft submission. */}
+        <input name="draftToken" type="hidden" defaultValue={draftState?.draftToken ?? ""} />
+        <input name="draftRevision" type="hidden" defaultValue={draftState?.revision ?? ""} />
 
-        <Card className="border-border shadow-sm">
-          <CardHeader>
-            {preview.organizationName && (
-              <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                {preview.organizationName}
-              </span>
-            )}
-            <CardTitle className="text-2xl">
-              <h1>{preview.template.title}</h1>
-            </CardTitle>
-            {preview.template.description && (
-              <CardDescription>{preview.template.description}</CardDescription>
-            )}
-          </CardHeader>
+        <header className="sticky top-0 z-20 border-b border-border bg-background/95 backdrop-blur">
+          <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-2.5">
+            <div className="min-w-0 flex-1">
+              {preview.organizationName ? (
+                <p className="truncate text-xs text-muted-foreground">{preview.organizationName}</p>
+              ) : null}
+              {/* The paper prints the title as the page's heading; this keeps it in view. */}
+              <p className="truncate text-base font-semibold">{preview.template.title}</p>
+            </div>
+            <PublicAnswerSubmit />
+          </div>
+        </header>
 
-          <CardContent>
-            <form action={submitPublicFormAction} className="flex flex-col gap-6">
-              <input name="token" type="hidden" value={token} />
-              {/* Shared public draft handle. File fields write the server-issued
-                  value here so every upload is parented by one draft submission. */}
-              <input
-                name="draftToken"
-                type="hidden"
-                defaultValue={draftState?.draftToken ?? ""}
-              />
-              <input
-                name="draftRevision"
-                type="hidden"
-                defaultValue={draftState?.revision ?? ""}
-              />
+        <div className="mx-auto flex max-w-5xl flex-col gap-4 px-4 pt-4 empty:hidden">
+          <PublicAnswerError />
+          {preview.template.description ? (
+            <p className="text-sm text-muted-foreground">{preview.template.description}</p>
+          ) : null}
+        </div>
 
-              {content && (
-                <PublicFormFields
-                  content={content}
-                  initialAnswers={draftState?.values}
-                  initialFiles={draftState?.files}
-                  token={token}
-                />
-              )}
+        <div className="py-4 md:px-4 md:py-6">
+          {content ? (
+            <PublicAnswerPaper
+              content={content}
+              initialAnswers={{ ...preview.answers, ...draftState?.values }}
+              initialFiles={draftState?.files ?? []}
+              phone={userAgent({ headers: await headers() }).device.type === "mobile"}
+              signer={preview.link?.signer}
+              title={preview.template.title}
+              token={token}
+            />
+          ) : null}
+        </div>
 
-              <div className="flex flex-col gap-3 pt-4 border-t border-border">
-                <Button size="lg" type="submit">
-                  <CheckCircle2 className="mr-2 size-4" />
-                  Submit form
-                </Button>
-                <div className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
-                  <ShieldCheck className="size-3.5" />
-                  <span>Secured by BizFlow</span>
-                </div>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
-      </div>
+        <p className="flex items-center justify-center gap-1.5 pb-8 text-xs text-muted-foreground">
+          <ShieldCheck className="size-3.5" />
+          Secured by BizFlow
+        </p>
+      </PublicAnswerForm>
     </main>
   )
 }

@@ -8,9 +8,8 @@ import {
 /**
  * The canonical rich sample document.
  *
- * One fixture serves two callers: `scripts/render-generated-document-sample.tsx`
- * writes it out for eyeballing, and `document-pdf-fingerprint.test.ts` hashes it
- * to guard the renderer. Keeping a single copy is what stops the two drifting —
+ * `document-pdf-fingerprint.test.ts` hashes it to guard the renderer, and
+ * writes it out for eyeballing when asked. Keeping a single copy is what stops the two drifting —
  * a fingerprint taken against a stale fixture guards nothing.
  *
  * It deliberately exercises every renderer path that can regress: multi-page

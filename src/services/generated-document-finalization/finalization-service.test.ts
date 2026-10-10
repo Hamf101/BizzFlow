@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from "vitest"
 
 import {
+  finalizeCompletedGeneratedDocument,
+  finalizeCompletedGeneratedDocuments,
   finalizeGeneratedDocumentPdf,
+  findFinalizedGeneratedDocumentVersionId,
   type FinalizeGeneratedDocumentPdfInput,
 } from "@/services/generated-document-finalization-service"
 import type {
@@ -12,7 +15,7 @@ import type {
 import { buildGeneratedDocumentFinalizationStorageKey } from "@/services/generated-document-finalization/domain"
 import { buildCanonicalFinalizationRenderInput } from "@/services/generated-document-finalization/render-input"
 import type { RenderGeneratedDocumentPdfInput } from "@/services/document-pdf-service"
-import type { GeneratedDocumentSigningView } from "@/types/signing"
+import type { MemberDocumentSigningView } from "@/types/signing"
 import { createBlankTemplateContent } from "@/types/template"
 
 const ACTOR_ID = "10000000-0000-4000-8000-000000000001"
@@ -31,6 +34,25 @@ const input: FinalizeGeneratedDocumentPdfInput = {
 }
 
 describe("generated document finalization service", () => {
+  it("finalizes on completion as the document's creator, and a later read finds that version without writing", async () => {
+    const persistence = createPersistence()
+    const storage = createStorage()
+
+    await finalizeCompletedGeneratedDocument(
+      { id: DOCUMENT_ID, organizationId: ORGANIZATION_ID, createdBy: ACTOR_ID },
+      { persistence, storage, loadSigningView: async () => createSigningView("completed"), renderPdf: async () => PDF, createId: () => FINALIZATION_ID }
+    )
+
+    expect(persistence.prepare).toHaveBeenCalledWith(expect.objectContaining({ createdBy: ACTOR_ID }))
+    expect(storage.store).toHaveBeenCalledOnce()
+
+    const pending = createPersistence({ existing: createFinalizationRecord() })
+    await expect(findFinalizedGeneratedDocumentVersionId(input, { persistence: pending })).resolves.toBeNull()
+    expect(pending.requireViewPermission).toHaveBeenCalledOnce()
+    expect(pending.prepare).not.toHaveBeenCalled()
+    expect(pending.promote).not.toHaveBeenCalled()
+  })
+
   it("returns the exact finalized version without loading, rendering, or uploading", async () => {
     const view = createSigningView("completed")
     const renderHash = buildCanonicalFinalizationRenderInput(view).sha256
@@ -140,6 +162,52 @@ describe("generated document finalization service", () => {
         storageKey: existing.storageKey,
       })
     )
+  })
+
+  it("replaces a pending finalization prepared from older render input with a fresh one", async () => {
+    // Prepared before signers were ordered by signer number: its hash and its
+    // stored object (if any) can never match this render, so it is not reused.
+    const persistence = createPersistence({ existing: createFinalizationRecord({ renderInputSha256: "c".repeat(64) }) })
+    const storage = createStorage()
+
+    const result = await finalizeGeneratedDocumentPdf(input, {
+      persistence,
+      loadSigningView: async () => createSigningView("completed"),
+      renderPdf: async () => PDF,
+      storage,
+      createId: () => WINNER_FINALIZATION_ID,
+    })
+
+    const freshKey = buildGeneratedDocumentFinalizationStorageKey(ORGANIZATION_ID, DOCUMENT_ID, WINNER_FINALIZATION_ID)
+
+    expect(persistence.prepare).toHaveBeenCalledWith(expect.objectContaining({ finalizationId: WINNER_FINALIZATION_ID, storageKey: freshKey }))
+    expect(storage.store).toHaveBeenCalledWith(expect.objectContaining({ storageKey: freshKey }))
+    expect(result).toEqual({ finalizationId: WINNER_FINALIZATION_ID, versionId: VERSION_ID })
+  })
+
+  it("sweeps completed documents that were never finalized, each once, and leaves finalized ones alone", async () => {
+    const OTHER_DOCUMENT_ID = "30000000-0000-4000-8000-000000000002"
+    const records = new Map<string, GeneratedDocumentFinalizationRecord>([
+      [OTHER_DOCUMENT_ID, createFinalizationRecord({ status: "finalized", documentVersionId: VERSION_ID, pdfSha256: "b".repeat(64), byteSize: 1 })],
+    ])
+    const completed = [DOCUMENT_ID, OTHER_DOCUMENT_ID].map((id) => ({ id, organizationId: ORGANIZATION_ID, createdBy: ACTOR_ID }))
+    const persistence: GeneratedDocumentFinalizationPersistence = {
+      ...createPersistence(),
+      findByDocument: async (_organizationId, documentId) => records.get(documentId) ?? null,
+      // As the database lists them: completed, with no finalized PDF yet.
+      listUnfinalized: async () => completed.filter((document) => records.get(document.id)?.status !== "finalized"),
+      promote: async (promoteInput) => {
+        records.set(promoteInput.documentId, createFinalizationRecord({ status: "finalized", documentVersionId: VERSION_ID }))
+        return VERSION_ID
+      },
+    }
+    const renderPdf = vi.fn(async () => PDF)
+    const deps = { persistence, storage: createStorage(), loadSigningView: async () => createSigningView("completed"), renderPdf, createId: () => FINALIZATION_ID }
+
+    await expect(finalizeCompletedGeneratedDocuments(deps)).resolves.toEqual({ scannedCount: 1, finalizedCount: 1 })
+    await expect(finalizeCompletedGeneratedDocuments(deps)).resolves.toEqual({ scannedCount: 0, finalizedCount: 0 })
+    expect(renderPdf).toHaveBeenCalledOnce()
+    expect(renderPdf).toHaveBeenCalledWith(expect.objectContaining({ documentId: DOCUMENT_ID }), expect.anything())
   })
 
   it("joins a concurrent prepare winner with a different id and key", async () => {
@@ -290,9 +358,11 @@ describe("generated document finalization service", () => {
       "2026-07-18T07:08:09.000Z"
     )
     expect(expectedBase.input.metadataTimestamp).toBeUndefined()
+    // Signers keep the order they were added in, as the view reads them; a
+    // resend's later invitation never moves a signer off their boxes.
     expect(renderedInput?.signers?.map((signer) => signer.id)).toEqual([
-      "70000000-0000-4000-8000-000000000001",
       "70000000-0000-4000-8000-000000000002",
+      "70000000-0000-4000-8000-000000000001",
     ])
   })
 })
@@ -316,8 +386,9 @@ function createPersistence(options: {
       })
   )
   const promote = vi.fn(async (): Promise<string> => VERSION_ID)
+  const listUnfinalized = vi.fn(async () => [])
 
-  return { requireViewPermission, findByDocument, prepare, promote }
+  return { requireViewPermission, findByDocument, prepare, promote, listUnfinalized }
 }
 
 function createStorage(): GeneratedDocumentFinalizationStorage & {
@@ -350,7 +421,7 @@ function createFinalizationRecord(
 
 function createSigningView(
   workflowStatus: "draft" | "awaiting_signatures" | "completed"
-): GeneratedDocumentSigningView {
+): MemberDocumentSigningView {
   return {
     organizationName: "BizFlow Studio",
     document: {

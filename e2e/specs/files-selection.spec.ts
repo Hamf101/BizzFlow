@@ -1,7 +1,7 @@
 import { expect, test, uniqueName } from "../support/fixtures"
 import { waitForHydration } from "../support/hydration"
-import { retryConcurrentChange } from "../support/retry"
 import { searchList } from "../support/search"
+import { seedFolder } from "../support/seed"
 
 test("selects files with modifier clicks, archives them together, and undoes it", async ({
   admin,
@@ -9,19 +9,11 @@ test("selects files with modifier clicks, archives them together, and undoes it"
   tenant,
 }) => {
   const owner = tenant.users.owner_admin
-  const names = [uniqueName("Selected A"), uniqueName("Selected B")]
+  // One prefix narrows the shared tenant's files to this run's folders.
+  const prefix = uniqueName("Selected")
+  const names = [`${prefix} A`, `${prefix} B`]
 
-  for (const name of names) {
-    const { error } = await retryConcurrentChange(() =>
-      admin.from("folders").insert({
-        created_by: owner.id,
-        name,
-        org_id: tenant.organizationId,
-        updated_by: owner.id,
-      })
-    )
-    if (error) throw error
-  }
+  for (const name of names) await seedFolder(admin, tenant.organizationId, owner.id, name)
 
   const page = await pageAs("owner_admin")
   const tile = (name: string) =>
@@ -29,7 +21,7 @@ test("selects files with modifier clicks, archives them together, and undoes it"
       .locator('[data-slot="file-tile"]')
       .filter({ has: page.getByRole("link", { exact: true, name }) })
 
-  await page.goto("/documents")
+  await page.goto(`/documents?q=${encodeURIComponent(prefix)}`)
   await waitForHydration(tile(names[0]))
 
   // A modified click selects instead of opening, as in Finder.
@@ -38,7 +30,7 @@ test("selects files with modifier clicks, archives them together, and undoes it"
       .getByRole("link", { exact: true, name })
       .click({ modifiers: ["ControlOrMeta"] })
   }
-  await expect(page).toHaveURL(/\/documents$/)
+  await expect(page).toHaveURL(/\/documents\?q=[^&]+$/)
   // The selection floats in a bar with its count and the changes it allows.
   const bar = page.getByRole("group", { name: "Selection" })
   await expect(bar).toContainText("2 selected")
@@ -69,19 +61,10 @@ test("right-click acts on the selection, or selects the item it lands on", async
   tenant,
 }) => {
   const owner = tenant.users.owner_admin
-  const names = [uniqueName("Clicked A"), uniqueName("Clicked B"), uniqueName("Clicked C")]
+  const prefix = uniqueName("Clicked")
+  const names = [`${prefix} A`, `${prefix} B`, `${prefix} C`]
 
-  for (const name of names) {
-    const { error } = await retryConcurrentChange(() =>
-      admin.from("folders").insert({
-        created_by: owner.id,
-        name,
-        org_id: tenant.organizationId,
-        updated_by: owner.id,
-      })
-    )
-    if (error) throw error
-  }
+  for (const name of names) await seedFolder(admin, tenant.organizationId, owner.id, name)
 
   const page = await pageAs("owner_admin")
   const tile = (name: string) =>
@@ -91,7 +74,7 @@ test("right-click acts on the selection, or selects the item it lands on", async
   const link = (name: string) => tile(name).getByRole("link", { exact: true, name })
   const bar = page.getByRole("group", { name: "Selection" })
 
-  await page.goto("/documents")
+  await page.goto(`/documents?q=${encodeURIComponent(prefix)}`)
   await waitForHydration(tile(names[0]))
   await link(names[0]).click({ modifiers: ["ControlOrMeta"] })
   await link(names[1]).click({ modifiers: ["ControlOrMeta"] })
@@ -127,20 +110,11 @@ test("keeps a selection through a search, and starts fresh in another view", asy
   tenant,
 }) => {
   const owner = tenant.users.owner_admin
-  const shared = uniqueName("Kept")
-  const names = [`${shared} kept here`, uniqueName("Kept elsewhere")]
+  const prefix = uniqueName("Kept")
+  const shared = `${prefix} here`
+  const names = [`${shared} kept`, `${prefix} elsewhere`]
 
-  for (const name of names) {
-    const { error } = await retryConcurrentChange(() =>
-      admin.from("folders").insert({
-        created_by: owner.id,
-        name,
-        org_id: tenant.organizationId,
-        updated_by: owner.id,
-      })
-    )
-    if (error) throw error
-  }
+  for (const name of names) await seedFolder(admin, tenant.organizationId, owner.id, name)
 
   const page = await pageAs("owner_admin")
   const tile = (name: string) =>
@@ -149,7 +123,7 @@ test("keeps a selection through a search, and starts fresh in another view", asy
       .filter({ has: page.getByRole("link", { exact: true, name }) })
   const bar = page.getByRole("group", { name: "Selection" })
 
-  await page.goto("/documents")
+  await page.goto(`/documents?q=${encodeURIComponent(prefix)}`)
   await waitForHydration(tile(names[0]))
 
   for (const name of names) {
@@ -159,9 +133,9 @@ test("keeps a selection through a search, and starts fresh in another view", asy
   }
   await expect(bar).toContainText("2 selected")
 
-  // The search narrows what is shown; both stay chosen.
+  // A narrower search shows less what is shown; both stay chosen.
   await searchList(page, "Files", shared)
-  await expect(page).toHaveURL(/[?&]q=/)
+  await expect(page).toHaveURL(/[?&]q=[^&]*here/)
   await expect(tile(names[1])).toHaveCount(0)
   await expect(bar).toContainText("2 selected")
 
@@ -176,19 +150,10 @@ test("keeps a selection when you open something and come back", async ({
   tenant,
 }) => {
   const owner = tenant.users.owner_admin
-  const names = [uniqueName("Revisited A"), uniqueName("Revisited B")]
+  const prefix = uniqueName("Revisited")
+  const names = [`${prefix} A`, `${prefix} B`]
 
-  for (const name of names) {
-    const { error } = await retryConcurrentChange(() =>
-      admin.from("folders").insert({
-        created_by: owner.id,
-        name,
-        org_id: tenant.organizationId,
-        updated_by: owner.id,
-      })
-    )
-    if (error) throw error
-  }
+  for (const name of names) await seedFolder(admin, tenant.organizationId, owner.id, name)
 
   const page = await pageAs("owner_admin")
   const tile = (name: string) =>
@@ -197,7 +162,7 @@ test("keeps a selection when you open something and come back", async ({
       .filter({ has: page.getByRole("link", { exact: true, name }) })
   const bar = page.getByRole("group", { name: "Selection" })
 
-  await page.goto("/documents")
+  await page.goto(`/documents?q=${encodeURIComponent(prefix)}`)
   await waitForHydration(tile(names[0]))
 
   for (const name of names) {
@@ -214,6 +179,6 @@ test("keeps a selection when you open something and come back", async ({
 
   // Coming back finds the selection as it was left.
   await page.goBack()
-  await expect(page).toHaveURL(/\/documents$/)
+  await expect(page).toHaveURL(/\/documents\?q=[^&]+$/)
   await expect(bar).toContainText("2 selected")
 })

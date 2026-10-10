@@ -3,14 +3,11 @@ import { waitForHydration } from "../support/hydration"
 
 test("files a new folder, then archives, restores, trashes, and purges it from its menu", async ({
   pageAs,
-}, testInfo) => {
+}) => {
   // Both device projects walk this at once against the shared tenant, so each
   // works on its own folder.
   const name = uniqueName("Leases")
   const page = await pageAs("owner_admin")
-  if (testInfo.project.use.viewport) {
-    await page.setViewportSize(testInfo.project.use.viewport)
-  }
   const states = page.getByRole("navigation", { name: "Show files by state" })
   const folderLink = page.getByRole("link", { exact: true, name })
   const actions = page.getByRole("button", { name: `Actions for ${name}` })
@@ -21,8 +18,15 @@ test("files a new folder, then archives, restores, trashes, and purges it from i
     await actions.click()
     await page.getByRole("menuitem", { exact: true, name: item }).click()
   }
+  // The shared tenant's Files outgrow one page, and every view link clears the
+  // search, so each view is narrowed to this run's folder once it opens.
+  const narrow = async (): Promise<void> => {
+    const url = new URL(page.url())
+    url.searchParams.set("q", name)
+    await page.goto(url.toString())
+  }
 
-  await page.goto("/documents")
+  await page.goto(`/documents?q=${encodeURIComponent(name)}`)
 
   // The journey reads rows, so it switches to List; the choice is remembered.
   const listView = page.getByRole("button", { name: "List view" })
@@ -51,17 +55,20 @@ test("files a new folder, then archives, restores, trashes, and purges it from i
   await expect(page.getByText("This folder is empty.")).toBeVisible()
   await path.getByRole("link", { name: "Files" }).click()
   await expect.poll(() => param("folderId")).toBeNull()
+  await narrow()
 
   // Archiving takes it out of Active; Archived brings it back.
   await choose("Archive")
   await expect(folderLink).toHaveCount(0)
   await states.getByRole("link", { name: "Archived" }).click()
   await expect.poll(() => param("view")).toBe("archived")
+  await narrow()
   await choose("Restore")
   await expect(folderLink).toHaveCount(0)
 
   await states.getByRole("link", { name: "Active" }).click()
   await expect.poll(() => param("view")).toBeNull()
+  await narrow()
   await choose("Move to Trash")
   await expect(folderLink).toHaveCount(0)
 
@@ -69,6 +76,7 @@ test("files a new folder, then archives, restores, trashes, and purges it from i
   // which the folder offers nothing more.
   await states.getByRole("link", { name: "Trash" }).click()
   await expect.poll(() => param("view")).toBe("trash")
+  await narrow()
   await choose("Delete permanently…")
   const purge = page.getByRole("dialog", { name: `Delete ${name} permanently?` })
   await purge

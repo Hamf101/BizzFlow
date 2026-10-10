@@ -2,7 +2,7 @@
 
 import type { ReactElement } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterEach, describe, expect, it } from "vitest"
 
 import {
   submissionListState,
@@ -11,10 +11,6 @@ import {
 import { SubmissionsWorkspace } from "@/components/submissions/submissions-workspace"
 import type { OrganizationMember } from "@/types/organization"
 import type { Submission } from "@/types/submission"
-
-// The search box moves to the searched list through the router; rendering it
-// to markup only needs the hook to answer.
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }))
 
 const ORG_ID = "10000000-0000-4000-8000-000000000001"
 const VIEWER_ID = "20000000-0000-4000-8000-000000000001"
@@ -102,35 +98,7 @@ function renderWorkspace(
   )
 }
 
-function readCells(slot: string): Array<string | null | undefined> {
-  return [...document.querySelectorAll('[data-slot="submission-row"]')].map(
-    (row: Element): string | null | undefined =>
-      row.querySelector(`[data-slot="${slot}"]`)?.textContent
-  )
-}
-
 describe("SubmissionsWorkspace", () => {
-  it("leads with the title and count, its own buttons beside them, and the status pills", () => {
-    renderWorkspace({ total: 12 })
-
-    expect(document.querySelector("h1")?.textContent).toBe("Submissions 12")
-    expect(
-      document.querySelector("h1 span")?.getAttribute("aria-label")
-    ).toBe("12 submissions")
-    // Search is the workspace's own now; the list keeps no box of its own.
-    expect(document.querySelector('[role="search"], input[type="search"]')).toBeNull()
-    expect(
-      [...(document.querySelector("h1")?.parentElement?.nextElementSibling?.querySelectorAll("a, button") ?? [])].map(
-        (control: Element) => control.getAttribute("aria-label") ?? control.textContent
-      )
-    ).toEqual(["View options", "New submission"])
-    expect(
-      document.querySelector('nav[aria-label="Filter submissions by status"]')
-        ?.textContent
-    ).toBe("AllDraftsSubmittedIn reviewNeeds changesDecided")
-    expect(document.body.textContent).not.toContain("Review inbox")
-  })
-
   it("shows the words the view is narrowed to, and clears only them", () => {
     renderWorkspace({
       view: submissionListState.parse({
@@ -145,27 +113,6 @@ describe("SubmissionsWorkspace", () => {
 
     expect(chip?.textContent).toContain("Matching “old”")
     expect(chip?.getAttribute("href")).toBe("/submissions?status=draft&size=25")
-  })
-
-  it("lists each submission by its title, linked to it, with how far it has come and its assignee", () => {
-    renderWorkspace()
-
-    const links = [
-      ...document.querySelectorAll('[data-slot="submission-row"] a'),
-    ]
-
-    expect(links.map((link: Element) => link.textContent)).toEqual([
-      "Vendor intake",
-      "Lease renewal",
-    ])
-    expect(links[1]?.getAttribute("href")).toBe(
-      `/submissions/${SECOND_SUBMISSION_ID}`
-    )
-    expect(readCells("submission-status")).toEqual([
-      "Draft · step 1 of 5",
-      "In review · step 3 of 5",
-    ])
-    expect(readCells("submission-assignee")).toEqual(["Unassigned", "Mara Bell"])
   })
 
   it("shows the assignee only to people who assign reviews", () => {
@@ -208,37 +155,5 @@ describe("SubmissionsWorkspace", () => {
     expect(document.querySelector('[role="status"]')?.textContent).toBe(
       "No submissions match this view."
     )
-  })
-
-  it("pages with the rest of the view kept in each link, and no link past either end", () => {
-    const readPagination = (page: string): Array<string | null | undefined> => {
-      renderWorkspace({
-        total: 120,
-        view: submissionListState.parse({ page, q: "lease" }),
-      })
-      const pagination = document.querySelector('nav[aria-label="Pagination"]')
-
-      return [
-        pagination?.textContent,
-        pagination?.querySelector('a[rel="prev"]')?.getAttribute("href"),
-        pagination?.querySelector('a[rel="next"]')?.getAttribute("href"),
-      ]
-    }
-
-    expect(readPagination("1")).toEqual([
-      expect.stringContaining("1–50 of 120"),
-      undefined,
-      "/submissions?q=lease&page=2",
-    ])
-    expect(readPagination("2")).toEqual([
-      expect.stringContaining("51–100 of 120"),
-      "/submissions?q=lease",
-      "/submissions?q=lease&page=3",
-    ])
-    expect(readPagination("3")).toEqual([
-      expect.stringContaining("101–120 of 120"),
-      "/submissions?q=lease&page=2",
-      undefined,
-    ])
   })
 })

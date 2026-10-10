@@ -84,10 +84,10 @@ describe("document signing answer visibility", () => {
 
   it("requires recipient initials only while the initials block is visible", () => {
     expect(
-      templateRequiresRecipientInitials(CONTENT, { include_details: false })
+      templateRequiresRecipientInitials(CONTENT, { include_details: false }, 1)
     ).toBe(false)
     expect(
-      templateRequiresRecipientInitials(CONTENT, { include_details: true })
+      templateRequiresRecipientInitials(CONTENT, { include_details: true }, 1)
     ).toBe(true)
   })
 })

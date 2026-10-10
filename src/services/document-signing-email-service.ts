@@ -1,16 +1,9 @@
 import { createHash } from "node:crypto"
 
-import { getAppUrlEnv, getEmailEnv } from "@/lib/env"
-import {
-  EmailTransportError,
-  type EmailPayload,
-  type EmailTransport,
-} from "@/services/email/contracts"
-import { escapeHtml, wrapEmailDocument } from "@/services/email/html"
-import {
-  describeEmailRejection,
-  sendEmail,
-} from "@/services/email/transport"
+import type { EmailTransport } from "@/services/email/contracts"
+import { escapeHtml } from "@/services/email/html"
+import { deliverTransactionalEmail } from "@/services/email/transport"
+import { ServiceError } from "@/services/service-error"
 
 export type SendDocumentSigningEmailInput = {
   documentId: string
@@ -29,20 +22,8 @@ export type DocumentSigningEmailServiceDeps = {
 /**
  * Error raised when a document-signing invitation cannot be delivered.
  */
-export class DocumentSigningEmailServiceError extends Error {
-  readonly statusCode: number
-
-  /**
-   * Creates a document-signing email error.
-   *
-   * @param message - User-safe delivery failure message.
-   * @param statusCode - HTTP-style status code for the caller.
-   */
-  constructor(message: string, statusCode: number) {
-    super(message)
-    this.name = "DocumentSigningEmailServiceError"
-    this.statusCode = statusCode
-  }
+export class DocumentSigningEmailServiceError extends ServiceError {
+  override readonly name = "DocumentSigningEmailServiceError"
 }
 
 /**
@@ -57,83 +38,22 @@ export async function sendDocumentSigningEmail(
   input: SendDocumentSigningEmailInput,
   deps: DocumentSigningEmailServiceDeps = {}
 ): Promise<void> {
-  const startedAt = performance.now()
-  let signingUrl: string
-  let emailEnv: ReturnType<typeof getEmailEnv>
-
-  try {
-    emailEnv = getEmailEnv()
-    signingUrl = new URL(
-      `/sign/${encodeURIComponent(input.token)}`,
-      getAppUrlEnv().NEXT_PUBLIC_APP_URL
-    ).toString()
-  } catch {
-    console.error("document_signing_email_configuration_failed", {
-      documentId: input.documentId,
-      recipientId: input.recipientId,
-      durationMs: Math.round(performance.now() - startedAt),
-      failureKind: "invalid_configuration",
-    })
-    throw new DocumentSigningEmailServiceError(
-      "Document email is not configured. Add the required email provider environment variables.",
-      500
-    )
-  }
-
-  const subject = `${input.organizationName} sent you ${input.documentTitle}`
-  const payload: EmailPayload = {
+  await deliverTransactionalEmail({
+    name: "document",
+    logPrefix: "document_signing_email",
+    ids: { documentId: input.documentId, recipientId: input.recipientId },
+    path: () => `/sign/${encodeURIComponent(input.token)}`,
+    deliveryReference: createSigningDeliveryReference(input),
     toEmail: input.recipientEmail,
-    subject,
-    html: wrapEmailDocument({
-      subject,
+    compose: (signingUrl) => ({
+      subject: `${input.organizationName} sent you ${input.documentTitle}`,
       contentHtml: createSigningEmailHtml(input, signingUrl),
+      text: createSigningEmailText(input, signingUrl),
     }),
-    text: createSigningEmailText(input, signingUrl),
-    ...(emailEnv.EMAIL_REPLY_TO_EMAIL
-      ? { replyTo: emailEnv.EMAIL_REPLY_TO_EMAIL }
-      : {}),
-  }
-
-  try {
-    const transport = deps.transport ?? sendEmail
-    const result = await transport(
-      {
-        deliveryReference: createSigningDeliveryReference(input),
-        payload,
-      },
-      emailEnv
-    )
-
-    console.info("document_signing_email_delivered", {
-      documentId: input.documentId,
-      recipientId: input.recipientId,
-      providerStatus: result.providerStatus,
-      providerMessageId: result.providerMessageId,
-      durationMs: Math.round(performance.now() - startedAt),
-    })
-  } catch (error: unknown) {
-    const transportError = error instanceof EmailTransportError ? error : null
-
-    console.error("document_signing_email_delivery_failed", {
-      documentId: input.documentId,
-      recipientId: input.recipientId,
-      durationMs: Math.round(performance.now() - startedAt),
-      failureKind: transportError?.kind ?? "unexpected_transport_error",
-      providerStatus: transportError?.providerStatus ?? null,
-    })
-
-    if (transportError?.kind === "provider_rejected") {
-      throw new DocumentSigningEmailServiceError(
-        `Unable to send the document email. ${describeEmailRejection(transportError.providerStatus)}`,
-        502
-      )
-    }
-
-    throw new DocumentSigningEmailServiceError(
-      "Unable to send the document email. Try again shortly.",
-      502
-    )
-  }
+    fail: (message, statusCode) => new DocumentSigningEmailServiceError(message, statusCode),
+    explainRejection: true,
+    transport: deps.transport,
+  })
 }
 
 function createSigningEmailHtml(

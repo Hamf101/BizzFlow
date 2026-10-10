@@ -2,13 +2,12 @@ import { NextResponse } from "next/server"
 
 import { getAuthenticatedUser } from "@/lib/auth"
 import { checkRateLimit } from "@/lib/rate-limit"
-import { readTrustedJsonObject } from "@/lib/request-security"
+import { getRequiredString, readTrustedJsonObject } from "@/lib/request-security"
 import { allocateInternalSubmissionFile } from "@/services/submission-service"
 
 import {
   createSubmissionRouteErrorResponse,
   getRequiredSubmissionInteger,
-  getRequiredSubmissionString,
 } from "../../../_utils"
 
 type SubmissionUploadUrlRouteContext = {
@@ -33,7 +32,7 @@ export async function POST(
     const { submissionId } = await context.params
     const result = await allocateInternalSubmissionFile({
       actorUserId: user.id,
-      organizationId: getRequiredSubmissionString(
+      organizationId: getRequiredString(
         body,
         "organizationId",
         "Organization id"
@@ -44,19 +43,19 @@ export async function POST(
         "expectedRevision",
         "Expected revision"
       ),
-      fieldKey: getRequiredSubmissionString(body, "fieldKey", "File field"),
-      originalFilename: getRequiredSubmissionString(
+      fieldKey: getRequiredString(body, "fieldKey", "File field"),
+      originalFilename: getRequiredString(
         body,
         "originalFilename",
         "Original filename"
       ),
-      contentType: getRequiredSubmissionString(
+      contentType: getRequiredString(
         body,
         "contentType",
         "Content type"
       ),
       byteSize: getRequiredSubmissionInteger(body, "byteSize", "Byte size"),
-      checksumSha256: getRequiredSubmissionString(
+      checksumSha256: getRequiredString(
         body,
         "checksumSha256",
         "File checksum"

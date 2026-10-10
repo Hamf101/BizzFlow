@@ -1,0 +1,939 @@
+"use client"
+
+import {
+  ArrowDownToLine,
+  ArrowRight,
+  ArrowUp,
+  AlertTriangle,
+  Check,
+  Columns2,
+  LayoutTemplate,
+  LoaderCircle,
+  type LucideIcon,
+  Move,
+  PencilLine,
+  RotateCcw,
+  Rows2,
+  Section,
+  Trash2,
+  X
+} from "lucide-react"
+import {
+  type ChangeEvent,
+  type FormEvent,
+  type KeyboardEvent,
+  type ReactElement,
+  useEffect,
+  useEffectEvent,
+  useMemo,
+  useRef,
+  useState
+} from "react"
+import { FlowModelPicker, useFlowModel } from "@/components/flow/flow-model-picker"
+import { z } from "zod"
+
+import { FLOW_COMPOSER, FLOW_SEND } from "@/components/flow/flow-window"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
+import { TEMPLATE_FLOW_OPERATION_TYPES } from "@/services/template-ai/flow-response-schema"
+import {
+  createTemplateFlowDraftFingerprint,
+  toTemplateFlowDraft
+} from "@/services/template-flow-proposal-state"
+import { templateContentSchema } from "@/types/template"
+import type {
+  TemplateFlowDraft,
+  TemplateFlowLedgerItem,
+  TemplateFlowMessage,
+  TemplateFlowOperationType,
+  TemplateFlowProposal,
+  TemplateFlowQualityIssue,
+  TemplateFlowResult,
+  TemplateFlowWireOperation
+} from "@/types/template-flow"
+
+// The server bounds every AI call itself (two at most per turn), so this only
+// catches a connection that never answers, and must outlast the longest turn.
+const REQUEST_TIMEOUT_MS = 300_000
+const TEMPLATE_STARTER: FlowStarter = {
+  heading: "Ask Flow to build or change this document.",
+  placeholder: "Ask Flow to create or change something…",
+  prompts: [
+    "Create a clear client intake form",
+    "Organize this into a professional agreement",
+    "Explain the structure of this document"
+  ]
+}
+
+/** What an empty conversation offers: a line, a few first messages, and the box's hint. */
+export type FlowStarter = Readonly<{ heading: string; placeholder: string; prompts: readonly string[] }>
+
+/** A proposal as Flow made it, and the changes its reviewer dropped by hand. */
+type FlowReview = Readonly<{ original: TemplateFlowProposal; dropped: ReadonlySet<number> }>
+
+type TemplateFlowPanelProps = {
+  canUndo: boolean
+  draft: TemplateFlowDraft
+  initialMessages: TemplateFlowMessage[]
+  lastAppliedMessageId: string | null
+  onApplyProposal: (
+    proposal: TemplateFlowProposal,
+    messageId: string
+  ) => void
+  onProposalReceived?: (
+    proposal: TemplateFlowProposal,
+    messageId: string
+  ) => void
+  onProposalStale?: (proposal: TemplateFlowProposal) => void
+  onRejectProposal?: (proposal: TemplateFlowProposal) => void
+  onUndo: () => void
+  /** The proposal on show, which the editor owns so the page can preview it. */
+  pendingProposal: TemplateFlowProposal | null
+  /** A request carried in from elsewhere, sent once when it arrives. */
+  autoSend?: string | null
+  /** Where turns go; a document's Flow answers at its own route. */
+  endpoint?: string
+  /** The empty conversation's line and first messages, for what is open. */
+  starter?: FlowStarter
+  /** Sent with each turn to the template route, which reads it from the body. */
+  templateId?: string
+}
+
+/**
+ * Renders Flow as a persistent chat with reviewable proposal receipts.
+ *
+ * @param props - Current draft, history, proposal callbacks, and template id.
+ * @returns A chat-first panel that stages coherent batches before acceptance.
+ */
+export function TemplateFlowPanel({
+  canUndo,
+  draft,
+  initialMessages,
+  lastAppliedMessageId,
+  onApplyProposal,
+  onProposalReceived,
+  onProposalStale,
+  onRejectProposal,
+  onUndo,
+  pendingProposal,
+  autoSend = null,
+  endpoint = "/api/templates/flow",
+  starter = TEMPLATE_STARTER,
+  templateId
+}: TemplateFlowPanelProps): ReactElement {
+  // First, so the kept model is read before a carried message is sent.
+  const flowModel = useFlowModel()
+  const [messages, setMessages] =
+    useState<TemplateFlowMessage[]>(initialMessages)
+  const [instruction, setInstruction] = useState<string>("")
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [warningMessage, setWarningMessage] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState<boolean>(false)
+  const [pendingMessageId, setPendingMessageId] = useState<string | null>(null)
+  const [review, setReview] = useState<FlowReview | null>(null)
+  const [isRebuilding, setIsRebuilding] = useState<boolean>(false)
+  const timelineRef = useRef<HTMLDivElement>(null)
+  const draftRef = useRef<TemplateFlowDraft>(draft)
+  // What the editor holds now, read after a rebuild: null once it was rejected.
+  const heldRef = useRef<TemplateFlowProposal | null>(pendingProposal)
+  const displayedPendingProposal = useMemo((): TemplateFlowProposal | null => {
+    if (
+      pendingProposal?.status !== "pending" ||
+      pendingProposal.baseDraftFingerprint ===
+        createTemplateFlowDraftFingerprint(draft)
+    ) {
+      return pendingProposal
+    }
+
+    return { ...pendingProposal, status: "stale" }
+  }, [draft, pendingProposal])
+
+  useEffect((): void => {
+    draftRef.current = draft
+  }, [draft])
+
+  useEffect((): void => {
+    heldRef.current = pendingProposal
+  }, [pendingProposal])
+
+  const carried = useRef<string | null>(null)
+  const sendCarried = useEffectEvent((message: string): void => {
+    void submitMessage(message)
+  })
+
+  useEffect((): void => {
+    // The ref keeps a development double-run from sending it twice.
+    if (autoSend && carried.current !== autoSend) {
+      carried.current = autoSend
+      sendCarried(autoSend)
+    }
+  }, [autoSend])
+
+  useEffect((): void => {
+    const timeline = timelineRef.current
+
+    if (timeline) {
+      timeline.scrollTop = timeline.scrollHeight
+    }
+  }, [messages, isLoading, pendingProposal])
+
+  async function submitMessage(message: string): Promise<void> {
+    const trimmedInstruction = message.trim()
+
+    if (!trimmedInstruction || isLoading || pendingProposal !== null) {
+      return
+    }
+
+    setErrorMessage(null)
+    setWarningMessage(null)
+    setIsLoading(true)
+    setInstruction("")
+    const controller = new AbortController()
+    const timeoutId = window.setTimeout(
+      (): void => controller.abort(),
+      REQUEST_TIMEOUT_MS
+    )
+    const startedAt = performance.now()
+
+    try {
+      const response = await fetch(endpoint, {
+        body: JSON.stringify({
+          templateId,
+          draft: toTemplateFlowDraft(draft),
+          instruction: trimmedInstruction,
+          model: flowModel.chosen()
+        }),
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+        signal: controller.signal
+      })
+      const payload = await readJsonResponse(response)
+
+      if (!response.ok) {
+        throw new Error(readApiError(payload))
+      }
+
+      const result = parseFlowResult(payload)
+      setMessages((currentMessages: TemplateFlowMessage[]) => [
+        ...currentMessages,
+        ...result.messages
+      ])
+
+      const assistantMessage = result.messages[1]
+
+      if (result.proposal !== null) {
+        const isCurrentBase =
+          result.proposal.baseDraftFingerprint ===
+          createTemplateFlowDraftFingerprint(draftRef.current)
+        const stagedProposal: TemplateFlowProposal = isCurrentBase
+          ? result.proposal
+          : { ...result.proposal, status: "stale" }
+
+        setPendingMessageId(assistantMessage.id)
+        setReview({ original: stagedProposal, dropped: new Set() })
+        stageProposal(stagedProposal, assistantMessage.id)
+
+        if (!isCurrentBase) {
+          setErrorMessage(
+            "The draft changed while Flow was preparing this proposal. Reject it and ask Flow again."
+          )
+          onProposalStale?.(stagedProposal)
+        }
+      }
+
+      if (result.persistenceWarning) {
+        setWarningMessage(result.persistenceWarning)
+      }
+
+      console.info("template_flow_response_loaded", {
+        durationMs: Math.round(performance.now() - startedAt),
+        operationCount: result.proposal?.operations.length ?? 0,
+        proposalId: result.proposal?.id ?? null,
+        endpoint
+      })
+    } catch (error: unknown) {
+      const reason =
+        error instanceof DOMException && error.name === "AbortError"
+          ? "Flow took too long to answer. Try again."
+          : error instanceof Error
+            ? error.message
+            : "Unable to reach Flow."
+
+      console.warn("template_flow_response_failed", {
+        durationMs: Math.round(performance.now() - startedAt),
+        reason,
+        endpoint
+      })
+      setErrorMessage(reason)
+      setInstruction(trimmedInstruction)
+    } finally {
+      window.clearTimeout(timeoutId)
+      setIsLoading(false)
+    }
+  }
+
+  function stageProposal(next: TemplateFlowProposal, messageId: string): void {
+    onProposalReceived?.(next, messageId)
+  }
+
+  // Dropping or keeping a change rebuilds the batch on the server from the
+  // changes still kept, so the page shows, and Apply takes, exactly those.
+  async function reviewChange(index: number, drop: boolean): Promise<void> {
+    if (review === null || isRebuilding) {
+      return
+    }
+
+    const dropped = new Set(review.dropped)
+    const messageId = pendingMessageId ?? review.original.id
+
+    if (drop) {
+      dropped.add(index)
+    } else {
+      dropped.delete(index)
+    }
+
+    setReview({ ...review, dropped })
+    setErrorMessage(null)
+
+    if (dropped.size === 0) {
+      stageProposal(review.original, messageId)
+      return
+    }
+
+    const droppedBy = readDroppedBy(review.original.operations, dropped)
+    const kept = review.original.wireOperations.filter((_, at: number): boolean => droppedBy[at] === null)
+
+    // Nothing left to apply: show the page as it is, with no server call.
+    if (kept.length === 0) {
+      stageProposal(
+        { ...review.original, candidateDraft: toTemplateFlowDraft(draftRef.current), changedBlockIds: [], operations: [], qualityIssues: [], wireOperations: [] },
+        messageId
+      )
+      return
+    }
+
+    setIsRebuilding(true)
+    // Until the rebuilt batch arrives the editor holds nothing to apply, so
+    // its own Apply cannot take the dropped changes; the page keeps its preview.
+    const held = pendingProposal ?? review.original
+    stageProposal({ ...held, operations: [], wireOperations: [] }, messageId)
+
+    try {
+      const response = await fetch(`${endpoint}/rebuild`, {
+        body: JSON.stringify({
+          templateId,
+          draft: toTemplateFlowDraft(draftRef.current),
+          baseDraftFingerprint: review.original.baseDraftFingerprint,
+          operations: kept
+        }),
+        headers: { "Content-Type": "application/json" },
+        method: "POST"
+      })
+      const payload = await readJsonResponse(response)
+      const rebuilt = response.ok && isRecord(payload) ? parseFlowProposal(payload.proposal) : null
+
+      if (rebuilt === null) {
+        throw new Error(response.ok ? "Flow returned an invalid response." : readApiError(payload))
+      }
+
+      // Rejected while it rebuilt: it stays rejected.
+      if (heldRef.current !== null) {
+        stageProposal(rebuilt, messageId)
+      }
+    } catch (error: unknown) {
+      if (heldRef.current === null) {
+        return
+      }
+
+      setReview(review)
+      stageProposal(held, messageId)
+      setErrorMessage(error instanceof Error ? error.message : "Unable to reach Flow.")
+    } finally {
+      setIsRebuilding(false)
+    }
+  }
+
+  function applyPendingProposal(): void {
+    if (pendingProposal === null) {
+      return
+    }
+
+    const messageId = pendingMessageId ?? pendingProposal.id
+    const isCurrentBase =
+      pendingProposal.status === "pending" &&
+      pendingProposal.baseDraftFingerprint ===
+        createTemplateFlowDraftFingerprint(draftRef.current)
+
+    if (!isCurrentBase) {
+      const staleProposal: TemplateFlowProposal = {
+        ...pendingProposal,
+        status: "stale"
+      }
+
+      setErrorMessage(
+        "This proposal is stale because the draft changed. Reject it and ask Flow again."
+      )
+      onProposalStale?.(staleProposal)
+      return
+    }
+
+    onApplyProposal(pendingProposal, messageId)
+    setPendingMessageId(null)
+    setErrorMessage(null)
+  }
+
+  function rejectPendingProposal(): void {
+    if (pendingProposal === null) {
+      return
+    }
+
+    onRejectProposal?.(displayedPendingProposal ?? pendingProposal)
+    setPendingMessageId(null)
+    setErrorMessage(null)
+  }
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>): void {
+    event.preventDefault()
+    void submitMessage(instruction)
+  }
+
+  function handleComposerKeyDown(
+    event: KeyboardEvent<HTMLTextAreaElement>
+  ): void {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault()
+      void submitMessage(instruction)
+    }
+  }
+
+  return (
+    <aside aria-label="Flow document assistant" className="flex min-h-0 flex-1 flex-col">
+
+      <div
+        aria-live="polite"
+        className="min-h-0 flex-1 overflow-y-auto px-4 py-4"
+        ref={timelineRef}
+      >
+        {messages.length === 0 ? (
+          <FlowEmptyState onSelectPrompt={submitMessage} starter={starter} />
+        ) : (
+          <ol className="flex flex-col gap-5">
+            {messages.map((message: TemplateFlowMessage) => (
+              <FlowMessageEntry
+                canUndo={
+                  canUndo &&
+                  message.role === "assistant" &&
+                  message.id === lastAppliedMessageId
+                }
+                key={message.id}
+                message={message}
+                onUndo={onUndo}
+                // The open card lists these changes and tracks drops; one list, not two.
+                showChanges={displayedPendingProposal === null || message.id !== pendingMessageId}
+              />
+            ))}
+          </ol>
+        )}
+
+        {displayedPendingProposal !== null && (
+          <FlowPendingProposalReceipt
+            canApply={displayedPendingProposal.status === "pending" && !isRebuilding}
+            isRebuilding={isRebuilding}
+            onApply={applyPendingProposal}
+            onReject={rejectPendingProposal}
+            onReview={(index: number, drop: boolean): void => {
+              void reviewChange(index, drop)
+            }}
+            proposal={displayedPendingProposal}
+            review={review ?? { original: displayedPendingProposal, dropped: new Set() }}
+          />
+        )}
+
+        {isLoading && (
+          <div className="mt-5 flex items-center gap-2 border-l border-primary/30 pl-3 text-sm text-muted-foreground">
+            <LoaderCircle className="size-4 animate-spin text-primary" />
+            <span>Flow is reading the document…</span>
+          </div>
+        )}
+      </div>
+
+      {(errorMessage || warningMessage) && (
+        <div className="px-4 pb-3">
+          <Alert variant={errorMessage ? "destructive" : "default"}>
+            <AlertTitle>
+              {errorMessage ? "Flow could not respond" : "History not saved"}
+            </AlertTitle>
+            <AlertDescription>
+              {errorMessage ?? warningMessage}
+            </AlertDescription>
+          </Alert>
+        </div>
+      )}
+
+      <form className="px-3 pt-1 pb-3" onSubmit={handleSubmit}>
+        <label className="sr-only" htmlFor="flow-composer">
+          Ask Flow
+        </label>
+        <div className="relative">
+          {/* One line tall, growing with the message to about six. */}
+          <textarea
+            aria-describedby={pendingProposal ? "flow-composer-hint" : undefined}
+            className={`${FLOW_COMPOSER} disabled:opacity-60`}
+            disabled={isLoading || pendingProposal !== null}
+            id="flow-composer"
+            maxLength={2_000}
+            onChange={(event: ChangeEvent<HTMLTextAreaElement>): void =>
+              setInstruction(event.target.value)
+            }
+            onKeyDown={handleComposerKeyDown}
+            placeholder={starter.placeholder}
+            value={instruction}
+          />
+          <button
+            aria-label="Send message to Flow"
+            className={FLOW_SEND}
+            disabled={
+              isLoading ||
+              pendingProposal !== null ||
+              instruction.trim().length < 2
+            }
+            type="submit"
+          >
+            <ArrowUp aria-hidden="true" className="size-5" />
+          </button>
+        </div>
+        <div className="flex items-center gap-2">
+          <FlowModelPicker disabled={isLoading} model={flowModel.model} onChange={flowModel.pick} />
+          {pendingProposal ? (
+            <p className="text-[10px] text-muted-foreground" id="flow-composer-hint">
+              Apply or reject the proposal first
+            </p>
+          ) : null}
+        </div>
+      </form>
+    </aside>
+  )
+}
+
+function FlowPendingProposalReceipt({
+  canApply,
+  isRebuilding,
+  onApply,
+  onReject,
+  onReview,
+  proposal,
+  review
+}: {
+  canApply: boolean
+  isRebuilding: boolean
+  onApply: () => void
+  onReject: () => void
+  onReview: (index: number, drop: boolean) => void
+  proposal: TemplateFlowProposal
+  review: FlowReview
+}): ReactElement {
+  const isStale = proposal.status === "stale"
+  const items = review.original.operations
+  const droppedBy = readDroppedBy(items, review.dropped)
+  const keptCount = droppedBy.filter((by: number | null): boolean => by === null).length
+
+  return (
+    <section
+      aria-label="Pending Flow proposal"
+      className="mt-5 overflow-hidden rounded-[8px] border border-primary/20 bg-card shadow-sm"
+    >
+      <div className="flex items-start justify-between gap-3 border-b border-primary/10 px-3 py-2.5">
+        <div>
+          <span className="editorial-kicker text-primary">
+            {isStale ? "Stale proposal" : "Pending proposal"}
+          </span>
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+            {isStale
+              ? "The base draft changed. This batch can no longer be applied."
+              : keptCount < items.length
+                ? `${keptCount} of ${items.length} changes will apply.`
+                : `${items.length} ${
+                    items.length === 1 ? "change" : "changes"
+                  } proposed as one reviewable batch.`}
+          </p>
+        </div>
+        {isStale && (
+          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive" />
+        )}
+      </div>
+
+      <ul className="border-b border-primary/10">
+        {items.map((item: TemplateFlowLedgerItem, index: number) => {
+          const by = droppedBy[index] ?? null
+          const removes =
+            item.type === "remove_block" ||
+            review.original.wireOperations[index]?.payload.removeLogo === true
+
+          return (
+            <li
+              className={cn(
+                "flex items-center gap-2 border-b border-primary/8 py-1 pr-1.5 pl-3 last:border-b-0",
+                by !== null && by !== index && "pl-7"
+              )}
+              key={item.id}
+            >
+              {renderOperationIcon(removes ? "remove_block" : item.type, removes ? "text-destructive" : undefined)}
+              <div className="min-w-0 flex-1 py-1">
+                <p
+                  className={cn(
+                    "text-xs",
+                    removes && "text-destructive",
+                    by !== null && "text-muted-foreground line-through"
+                  )}
+                >
+                  {item.summary}
+                </p>
+                {by !== null && by !== index && (
+                  <p className="mt-0.5 text-[10px] text-muted-foreground">
+                    {`Dropped with "${items[by]?.summary ?? ""}", since it needs that change.`}
+                  </p>
+                )}
+              </div>
+              {isStale || (by !== null && by !== index) ? null : by === index ? (
+                <button
+                  className="h-7 shrink-0 rounded-full px-2.5 text-xs font-medium text-primary outline-none transition-opacity hover:opacity-75 focus-visible:ring-2 focus-visible:ring-ring/40 disabled:opacity-35 max-md:h-11"
+                  disabled={isRebuilding}
+                  onClick={(): void => onReview(index, false)}
+                  type="button"
+                >
+                  Keep
+                </button>
+              ) : (
+                <button
+                  aria-label="Drop this change"
+                  className="grid size-7 shrink-0 place-items-center rounded-full text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40 disabled:opacity-35 max-md:size-11"
+                  disabled={isRebuilding}
+                  onClick={(): void => onReview(index, true)}
+                  type="button"
+                >
+                  <X aria-hidden="true" className="size-3.5" />
+                </button>
+              )}
+            </li>
+          )
+        })}
+      </ul>
+
+      {proposal.qualityIssues.length > 0 && (
+        <div className="border-b border-primary/10 px-3 py-2.5">
+          <p className="text-[11px] font-medium">Checks</p>
+          <ul className="mt-1.5 space-y-1.5">
+            {proposal.qualityIssues.map(
+              (issue: TemplateFlowQualityIssue, index: number) => (
+                <li
+                  className="flex gap-2 text-[11px] leading-relaxed text-muted-foreground"
+                  key={`${issue.code}-${index}`}
+                >
+                  <AlertTriangle
+                    className={cn(
+                      "mt-0.5 size-3 shrink-0",
+                      issue.severity === "critical"
+                        ? "text-destructive"
+                        : "text-primary"
+                    )}
+                  />
+                  <span>{issue.message}</span>
+                </li>
+              )
+            )}
+          </ul>
+        </div>
+      )}
+
+      <div className="flex flex-wrap justify-end gap-2 px-3 py-2.5">
+        <Button onClick={onReject} size="sm" type="button" variant="outline">
+          <X />
+          Reject all
+        </Button>
+        <Button disabled={!canApply || keptCount === 0} onClick={onApply} size="sm" type="button">
+          <Check />
+          Apply {keptCount} {keptCount === 1 ? "change" : "changes"}
+        </Button>
+      </div>
+    </section>
+  )
+}
+
+function FlowEmptyState({
+  onSelectPrompt,
+  starter
+}: {
+  onSelectPrompt: (prompt: string) => Promise<void>
+  starter: FlowStarter
+}): ReactElement {
+  return (
+    <div className="flex min-h-full flex-col justify-center py-6">
+      <h3 className="max-w-xs font-editorial text-2xl font-semibold leading-tight">
+        {starter.heading}
+      </h3>
+      <div className="mt-5 flex flex-col gap-2">
+        {starter.prompts.map((prompt: string) => (
+          <button
+            className="group flex items-center justify-between gap-3 rounded-[8px] border border-primary/10 bg-card/65 px-3 py-2.5 text-left text-sm transition-colors hover:border-primary/25 hover:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+            key={prompt}
+            onClick={(): void => {
+              void onSelectPrompt(prompt)
+            }}
+            type="button"
+          >
+            <span>{prompt}</span>
+            <ArrowRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function FlowMessageEntry({
+  canUndo,
+  message,
+  onUndo,
+  showChanges
+}: {
+  canUndo: boolean
+  message: TemplateFlowMessage
+  onUndo: () => void
+  showChanges: boolean
+}): ReactElement {
+  const isUser = message.role === "user"
+
+  return (
+    <li
+      className={cn(
+        "border-l pl-3",
+        isUser ? "border-border" : "border-primary/35"
+      )}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground">
+          {isUser ? message.authorName || "Team member" : "Flow"}
+        </span>
+        <time
+          className="text-[10px] text-muted-foreground"
+          dateTime={message.createdAt}
+        >
+          {formatMessageTime(message.createdAt)}
+        </time>
+      </div>
+      <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed">
+        {message.content}
+      </p>
+
+      {showChanges && message.operations.length > 0 && (
+        <div className="mt-3 overflow-hidden rounded-[8px] border border-primary/12 bg-card/70">
+          <div className="border-b border-primary/10 px-3 py-2">
+            <span className="editorial-kicker text-primary">
+              Proposed change set
+            </span>
+          </div>
+          <ul>
+            {message.operations.map((operation: TemplateFlowLedgerItem) => (
+              <FlowLedgerRow key={operation.id} operation={operation} />
+            ))}
+          </ul>
+          <div className="flex items-center justify-between gap-3 border-t border-primary/10 px-3 py-2">
+            <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+              <PencilLine className="size-3.5 text-primary" />
+              {message.operations.length}{" "}
+              {message.operations.length === 1 ? "change" : "changes"} proposed
+            </span>
+            {canUndo && (
+              <Button onClick={onUndo} size="xs" type="button" variant="ghost">
+                <RotateCcw />
+                Undo
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+    </li>
+  )
+}
+
+function FlowLedgerRow({
+  operation
+}: {
+  operation: TemplateFlowLedgerItem
+}): ReactElement {
+  return (
+    <li className="grid grid-cols-[auto_minmax(0,1fr)] gap-2 border-b border-primary/8 px-3 py-2.5 last:border-b-0">
+      {renderOperationIcon(operation.type)}
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+          <span className="font-mono text-[9px] uppercase tracking-[0.12em] text-primary">
+            {formatOperationType(operation.type)}
+          </span>
+          <span className="text-xs font-medium">{operation.summary}</span>
+        </div>
+        <p className="mt-0.5 truncate text-[10px] text-muted-foreground">
+          {operation.target}
+        </p>
+      </div>
+    </li>
+  )
+}
+
+// One for every kind of change, so a new kind cannot go without.
+const OPERATION_ICONS: Record<TemplateFlowOperationType, LucideIcon> = {
+  set_title: PencilLine,
+  set_description: PencilLine,
+  set_branding: PencilLine,
+  add_block: ArrowDownToLine,
+  update_block: PencilLine,
+  update_image: PencilLine,
+  move_block: Move,
+  remove_block: Trash2,
+  set_section: Section,
+  set_row: Columns2,
+  stand_alone: Rows2,
+  set_block_rule: LayoutTemplate,
+  set_layout: LayoutTemplate
+}
+
+function renderOperationIcon(type: TemplateFlowOperationType, className = "text-primary"): ReactElement {
+  const Icon = OPERATION_ICONS[type]
+
+  return <Icon aria-hidden="true" className={cn("mt-0.5 size-3.5 shrink-0", className)} />
+}
+
+/**
+ * Which hand-dropped change each change goes with: itself when dropped by
+ * hand, the dropped change it needs, or null when it is kept. Changes only
+ * need earlier ones, so one pass in order settles it.
+ */
+function readDroppedBy(items: readonly TemplateFlowLedgerItem[], dropped: ReadonlySet<number>): Array<number | null> {
+  const droppedBy: Array<number | null> = []
+
+  items.forEach((item: TemplateFlowLedgerItem, index: number): void => {
+    const need = item.dependsOn.find((at: number): boolean => at < index && droppedBy[at] !== null)
+
+    droppedBy.push(dropped.has(index) ? index : need === undefined ? null : (droppedBy[need] ?? null))
+  })
+
+  return droppedBy
+}
+
+function formatOperationType(type: TemplateFlowOperationType): string {
+  const labels: Record<TemplateFlowOperationType, string> = {
+    set_title: "Rename",
+    set_description: "Describe",
+    set_branding: "Brand",
+    add_block: "Add",
+    update_block: "Revise",
+    update_image: "Position",
+    move_block: "Move",
+    remove_block: "Remove",
+    set_section: "Section",
+    set_row: "Row",
+    stand_alone: "Separate",
+    set_block_rule: "Lay out",
+    set_layout: "Page setup"
+  }
+
+  return labels[type]
+}
+
+function formatMessageTime(value: string): string {
+  const date = new Date(value)
+
+  if (Number.isNaN(date.getTime())) {
+    return ""
+  }
+
+  return new Intl.DateTimeFormat(undefined, {
+    hour: "numeric",
+    minute: "2-digit"
+  }).format(date)
+}
+
+async function readJsonResponse(response: Response): Promise<unknown> {
+  try {
+    return await response.json()
+  } catch {
+    throw new Error("Flow returned an unreadable response.")
+  }
+}
+
+function readApiError(payload: unknown): string {
+  if (
+    isRecord(payload) &&
+    typeof payload.error === "string" &&
+    payload.error.length > 0
+  ) {
+    return payload.error
+  }
+
+  return "Unable to complete the Flow request."
+}
+
+const strings = z.array(z.unknown()).transform((values) => values.filter((value): value is string => typeof value === "string"))
+
+const ledgerItemSchema = z.object({
+  id: z.string(),
+  // The one list of what Flow can do: a type left off a second list here
+  // would drop the whole proposal it arrived in.
+  type: z.enum(TEMPLATE_FLOW_OPERATION_TYPES),
+  summary: z.string(),
+  target: z.string(),
+  affectedBlockIds: strings,
+  dependsOn: z.array(z.unknown()).catch([]).transform((values) => values.filter((value): value is number => Number.isInteger(value)))
+})
+
+const flowProposalSchema = z
+  .object({
+    id: z.string(),
+    status: z.enum(["pending", "stale"]),
+    baseDraftFingerprint: z.string(),
+    candidateDraft: z.object({ title: z.string(), description: z.string(), content: templateContentSchema }),
+    operations: z.array(ledgerItemSchema),
+    // Read only by the server, which checks them again before using them.
+    wireOperations: z.array(z.custom<TemplateFlowWireOperation>(isRecord)),
+    changedBlockIds: z.array(z.string()),
+    qualityIssues: z.array(
+      z.object({ code: z.string(), severity: z.enum(["critical", "warning"]), message: z.string(), affectedBlockIds: z.array(z.string()) })
+    )
+  })
+  .refine((proposal) => proposal.wireOperations.length === proposal.operations.length)
+
+const flowMessageSchema = z.object({
+  id: z.string(),
+  role: z.enum(["user", "assistant"]),
+  content: z.string(),
+  authorName: z.string().nullable(),
+  operations: z.array(ledgerItemSchema),
+  changedBlockIds: strings,
+  receiptStatus: z.literal("proposed").nullable(),
+  createdAt: z.string()
+})
+
+const flowResultSchema = z.object({
+  proposal: flowProposalSchema.nullable(),
+  messages: z.tuple([flowMessageSchema, flowMessageSchema]),
+  needsConfirmation: z.boolean(),
+  persistenceWarning: z.string().nullable().catch(null)
+})
+
+export function parseFlowResult(payload: unknown): TemplateFlowResult {
+  const result = flowResultSchema.safeParse(payload)
+
+  if (!result.success) {
+    throw new Error("Flow returned an invalid response.")
+  }
+
+  return result.data
+}
+
+export function parseFlowProposal(value: unknown): TemplateFlowProposal | null {
+  return flowProposalSchema.safeParse(value).data ?? null
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+}

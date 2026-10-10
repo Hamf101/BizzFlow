@@ -5,8 +5,8 @@ import type { CSSProperties, ReactElement, ReactNode } from "react"
 import { ListFilterChips } from "@/components/data/list-filter-chips"
 import { ListPagination } from "@/components/data/list-pagination"
 import { ListQuery } from "@/components/data/list-query"
-import { type ListSavedViews, ListViewMenu, ListViewTitle } from "@/components/data/list-view-menu"
-import { DatedTitle } from "@/components/navigation/dated-title"
+import { ListEmpty, ListHeading } from "@/components/data/list-heading"
+import { type ListSavedViews, ListViewMenu } from "@/components/data/list-view-menu"
 import {
   getTemplateStatusOptions,
   getTemplateViewMenuSections,
@@ -21,9 +21,8 @@ import {
   TemplateSelection,
   TemplateSelectionBar,
 } from "@/components/templates/template-selection"
+import { LocalDate } from "@/components/ui/local-date"
 import { buttonVariants } from "@/components/ui/button"
-import { formatMediumDate } from "@/lib/date-format"
-import { getLastPage } from "@/lib/list-state"
 import { cn } from "@/lib/utils"
 import type { DocumentTemplateCard, DocumentTemplateStatus } from "@/types/template"
 
@@ -70,7 +69,6 @@ export function TemplatesWorkspace({
   total: number
   view: TemplateListView
 }): ReactElement {
-  const lastPage = getLastPage(total, view.pageSize)
   const filtered = Boolean(
     view.query || view.filters.status || view.filters.category
   )
@@ -86,20 +84,8 @@ export function TemplatesWorkspace({
 
   return (
     <section className="flex flex-col gap-5" data-slot="templates-workspace">
-      {/* The real space keeps the accessible name "Templates 12 templates"
-          rather than "Templates12 templates". */}
       <div className="flex items-center justify-between gap-3">
-        <DatedTitle>
-          <h1 className="min-w-0 text-2xl leading-none font-medium tracking-[-0.02em]">
-            <ListViewTitle title="Templates" views={listViews} />{" "}
-            <span
-              aria-label={`${total} ${total === 1 ? "template" : "templates"}`}
-              className="ml-0.5 text-xl font-normal text-muted-foreground"
-            >
-              {total}
-            </span>
-          </h1>
-        </DatedTitle>
+        <ListHeading noun={["template", "templates"]} title="Templates" total={total} views={listViews} />
         <div className="flex shrink-0 gap-2">
           <ListViewMenu
             adjusted={isTemplateViewAdjusted(view)}
@@ -138,12 +124,7 @@ export function TemplatesWorkspace({
       ) : null}
 
       {templates.length === 0 && !offersNew ? (
-        <p
-          className="py-16 text-center text-sm text-muted-foreground"
-          role="status"
-        >
-          {filtered ? "No templates match this view." : "No templates yet."}
-        </p>
+        <ListEmpty>{filtered ? "No templates match this view." : "No templates yet."}</ListEmpty>
       ) : (
         <SelectableLibrary canCreate={canCreate} categories={categories} templates={templates}>
           <ul
@@ -173,22 +154,9 @@ export function TemplatesWorkspace({
       ) : null}
 
       <ListPagination
-        nextHref={
-          view.page < lastPage
-            ? templateListState.href(TEMPLATES_PATH, view, {
-                page: view.page + 1,
-              })
-            : null
-        }
+        href={(page) => templateListState.href(TEMPLATES_PATH, view, { page })}
         page={view.page}
         pageSize={view.pageSize}
-        previousHref={
-          view.page > 1
-            ? templateListState.href(TEMPLATES_PATH, view, {
-                page: view.page - 1,
-              })
-            : null
-        }
         total={total}
       />
     </section>
@@ -273,7 +241,7 @@ function TemplateCard({
   const showsStatus = canManage || template.canEdit
   const status = STATUS_LOOKS[template.status]
   const detail =
-    template.category ?? `Updated ${formatMediumDate(template.updatedAt)}`
+    template.category ?? <>Updated <LocalDate value={template.updatedAt} /></>
   const riseDelay = {
     "--card-delay": `${Math.min(index, MAX_STAGGERED_CARDS) * CARD_STAGGER_MS}ms`,
   } as CSSProperties

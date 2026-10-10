@@ -1,29 +1,41 @@
 import { z } from "zod"
 
 import {
+  answerBoxHeight,
+  BOX_HEIGHT_POINTS,
+  fitRuns,
+  isPinnedBlock,
+  MAX_LIST_ITEMS,
+  MAX_ROW_COLUMNS,
+  MAX_TABLE_ROWS,
+  MAX_TEMPLATE_BLOCK_COUNT,
+  ruleHasEffect,
+} from "@/types/template-limits"
+
+export {
+  answerBoxHeight,
+  BOX_HEIGHT_POINTS,
+  fitRuns,
+  isPinnedBlock,
+  MAX_LIST_ITEMS,
+  MAX_ROW_COLUMNS,
+  MAX_TABLE_ROWS,
+  MAX_TEMPLATE_BLOCK_COUNT,
+  ruleHasEffect,
+}
+
+import {
   DATE_MONTH_STYLES,
   DATE_ORDERS,
   DATE_SEPARATORS,
   type DateFormat
 } from "@/lib/date-format"
 import type { DocumentLifecycleState } from "@/types/document"
+import { MAX_SIGNING_RECIPIENTS } from "@/types/box-signers"
 import { IMAGE_DATA_URL_PATTERN, MAX_IMAGE_DATA_URL_LENGTH } from "@/types/template-limits"
-
 
 /** Maximum serialized size accepted for one complete guided document layout. */
 export const MAX_TEMPLATE_CONTENT_JSON_LENGTH = 8_000_000
-
-/**
- * Maximum number of ordered blocks accepted in one canonical document: room
- * for a 50-page agreement or handbook, at up to 50 blocks a page.
- */
-export const MAX_TEMPLATE_BLOCK_COUNT = 2_500
-
-/** The most rows one table holds; a long price list prints over several pages. */
-export const MAX_TABLE_ROWS = 500
-
-/** The most items one list holds. */
-export const MAX_LIST_ITEMS = 500
 
 const FIELD_KEY_PATTERN = /^[A-Za-z][A-Za-z0-9_-]{0,79}$/
 const HEX_COLOR_PATTERN = /^#[0-9A-Fa-f]{6}$/
@@ -72,20 +84,10 @@ const fieldBlockShape = {
   visibleWhen: templateFieldVisibilitySchema.optional()
 } as const
 
-/** One handwritten line of an answer box, in points. */
-const ANSWER_BOX_LINE = 15
-/** Room to sign in, in points. */
-const ANSWER_BOX_SIGNATURE = 56
-
-// How tall a field's answer box prints, in points, when its author has made it
-// taller or shorter: never less than a written line and its padding (15 + 6 + 6),
-// and it still grows to hold what is written in it.
-export const BOX_HEIGHT_POINTS = { max: 600, min: 27 } as const
 const boxHeightSchema = z.number().min(BOX_HEIGHT_POINTS.min).max(BOX_HEIGHT_POINTS.max).optional()
 
 // A link opens a web page or writes an email, never runs anything.
 const LINK_PATTERN = /^(?:https?:\/\/|mailto:)\S+$/i
-const RUN_MARKS = ["bold", "italic", "underline", "strike", "color", "highlight", "size", "link", "font"] as const
 
 /**
  * A stretch of text and how it looks: the marks the toolbar puts on it. A mark
@@ -111,50 +113,6 @@ export const textRunSchema = z
 export type TextRun = z.infer<typeof textRunSchema>
 
 const textRunsSchema = z.array(textRunSchema).max(2_000)
-
-/**
- * Keeps formatting only while it spells out the text it formats. The text is
- * trimmed when saved, so its formatting is trimmed with it, while text being
- * typed keeps its spaces; neighbours that look alike are joined; and
- * formatting that no longer matches its text, as after an edit that rewrote
- * the words alone, or that marks nothing, is let go.
- *
- * @param text - The text, trimmed when saved or as typed while edited.
- * @param runs - Its formatting, as it arrived.
- * @returns The formatting to keep, or undefined when the text is plain.
- */
-export function fitRuns(text: string, runs: readonly TextRun[] | null | undefined): TextRun[] | undefined {
-  if (!runs?.length) {
-    return undefined
-  }
-
-  const joined = runs.map((run: TextRun): string => run.text).join("")
-  let skip = joined.startsWith(text) ? 0 : joined.length - joined.trimStart().length
-  let keep = text.length
-  const fitted: TextRun[] = []
-
-  for (const run of runs) {
-    const cut = Math.min(skip, run.text.length)
-    const piece = run.text.slice(cut, cut + keep)
-    const last = fitted.at(-1)
-    skip -= cut
-    keep -= piece.length
-
-    if (!piece) {
-      continue
-    }
-
-    if (last && RUN_MARKS.every((mark) => last[mark] === run[mark])) {
-      last.text += piece
-    } else {
-      fitted.push({ ...run, text: piece })
-    }
-  }
-
-  const marked = fitted.some((run: TextRun): boolean => RUN_MARKS.some((mark) => run[mark] !== undefined))
-
-  return marked && fitted.map((run: TextRun): string => run.text).join("") === text ? fitted : undefined
-}
 
 function withRuns<Block extends { runs?: TextRun[]; text: string }>(block: Block): Block {
   const { runs, ...rest } = block
@@ -375,11 +333,18 @@ export const tableFieldBlockSchema = z
 
 export { MAX_TABLE_FIELD_ROWS } from "@/types/template-answer-kinds"
 
+// Who signs a drawn box: the sender, before sending, or the signer at that
+// place in the order they were added. Missing means Signer 1, never the sender.
+const boxSignerSchema = z
+  .union([z.literal("sender"), z.number().int().min(1).max(MAX_SIGNING_RECIPIENTS)])
+  .optional()
+
 /** Drawn initials input block. */
 export const initialsFieldBlockSchema = z
   .object({
     ...fieldBlockShape,
     boxHeight: boxHeightSchema,
+    signer: boxSignerSchema,
     type: z.literal("initials_field")
   })
   .strict()
@@ -389,6 +354,7 @@ export const signatureFieldBlockSchema = z
   .object({
     ...fieldBlockShape,
     boxHeight: boxHeightSchema,
+    signer: boxSignerSchema,
     type: z.literal("signature_field")
   })
   .strict()
@@ -546,9 +512,6 @@ export const templateSectionSchema = z
   })
   .strict()
 
-/** The most blocks one row sets side by side. */
-export const MAX_ROW_COLUMNS = 4
-
 /**
  * One contiguous range of blocks set side by side: a row of up to four
  * columns, sized in twelfths of the page's width (equal when `widths` is
@@ -595,18 +558,6 @@ export const templateBlockRuleSchema = z
   })
   .strict()
   .refine(ruleHasEffect, "A block rule must change how its block is laid out.")
-
-/**
- * Tells a block rule that changes anything, as one left at its defaults does not.
- *
- * @param rule - A block's rule.
- * @returns Whether it breaks a page, keeps with the next, adds space or moves the block across.
- */
-export function ruleHasEffect(
-  rule: Readonly<{ pageBreakBefore: boolean; keepWithNext: boolean; spaceAbove?: number; frame?: BlockFrame }>
-): boolean {
-  return rule.pageBreakBefore || rule.keepWithNext || (rule.spaceAbove ?? 0) > 0 || rule.frame !== undefined
-}
 
 /** Read-compatible version-two template content retained for immutable snapshots. */
 export const templateContentV2Schema = z
@@ -1052,16 +1003,6 @@ function findSectionIndex(
   return result
 }
 
-/**
- * Tells a block pinned to a spot on its page, outside the flow of the rest.
- *
- * @param block - Canonical template block.
- * @returns Whether the block has a place of its own on a page.
- */
-export function isPinnedBlock(block: TemplateBlock): boolean {
-  return "placement" in block && block.placement !== undefined
-}
-
 function isFieldBlock(
   block: TemplateBlock
 ): block is Extract<TemplateBlock, { fieldKey: string }> {
@@ -1322,22 +1263,3 @@ export function createBlankTemplateContent(): TemplateContentV3 {
   })
 }
 
-/**
- * The least height of a field's answer box, in points, so a blank form leaves
- * room to write by hand: as its author made it, or else two lines for a short
- * answer, four for a long one, and room to sign.
- *
- * @param block - The field.
- * @returns The box's least height.
- */
-export function answerBoxHeight(block: TemplateBlock): number {
-  if ("boxHeight" in block && block.boxHeight !== undefined) {
-    return block.boxHeight
-  }
-
-  if (block.type === "signature_field" || block.type === "initials_field") {
-    return ANSWER_BOX_SIGNATURE
-  }
-
-  return block.type === "text_field" && block.multiline ? ANSWER_BOX_LINE * 4 : ANSWER_BOX_LINE * 2
-}

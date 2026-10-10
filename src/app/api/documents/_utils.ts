@@ -1,34 +1,6 @@
-import { NextResponse } from "next/server"
-
-import { AuthenticationError } from "@/lib/auth"
-import { captureUnexpectedError } from "@/lib/observability"
-import { RateLimitError } from "@/lib/rate-limit"
-import { createRateLimitResponse } from "@/lib/rate-limit-response"
-import { RequestSecurityError } from "@/lib/request-security"
+import { createRouteErrorResponse } from "@/app/api/_route-error"
+import { getRequiredString } from "@/lib/request-security"
 import { DocumentServiceError } from "@/services/document-service"
-
-/**
- * Reads a required string field from a parsed JSON body.
- *
- * @param body - Parsed JSON body.
- * @param key - Field name to read.
- * @param label - User-safe field label for validation errors.
- * @returns Trimmed string value.
- * @throws DocumentServiceError when the field is missing or empty.
- */
-export function getRequiredString(
-  body: Record<string, unknown>,
-  key: string,
-  label: string
-): string {
-  const value = body[key]
-
-  if (typeof value !== "string" || value.trim().length === 0) {
-    throw new DocumentServiceError(`${label} is required.`, 400)
-  }
-
-  return value.trim()
-}
 
 /**
  * Reads an optional string field from a parsed JSON body.
@@ -98,7 +70,7 @@ export function getRequiredNumber(
 }
 
 /**
- * Converts route errors into JSON responses.
+ * Converts document route failures into user-safe JSON responses.
  *
  * @param error - Unknown caught error.
  * @param routeName - Route identifier for logs.
@@ -108,44 +80,9 @@ export function createDocumentRouteErrorResponse(
   error: unknown,
   routeName: string
 ): Response {
-  if (error instanceof RateLimitError) {
-    return createRateLimitResponse(error, "document_route_rejected", routeName)
-  }
-
-  if (error instanceof RequestSecurityError) {
-    console.warn("document_route_rejected", {
-      routeName,
-      reason: error.message,
-      statusCode: error.statusCode,
-    })
-    return NextResponse.json(
-      { error: error.message },
-      { status: error.statusCode }
-    )
-  }
-
-  if (error instanceof AuthenticationError) {
-    console.warn("document_route_rejected", {
-      routeName,
-      reason: error.message,
-      statusCode: 401,
-    })
-    return NextResponse.json({ error: error.message }, { status: 401 })
-  }
-
-  if (error instanceof DocumentServiceError) {
-    console.warn("document_route_rejected", {
-      routeName,
-      reason: error.message,
-      statusCode: error.statusCode,
-    })
-    return NextResponse.json({ error: error.message }, { status: error.statusCode })
-  }
-
-  console.error("document_route_failed", {
-    routeName,
-    reason: error instanceof Error ? error.message : "Unknown route error",
+  return createRouteErrorResponse(error, routeName, {
+    event: "document_route",
+    failure: "Document request failed.",
+    known: [DocumentServiceError],
   })
-  captureUnexpectedError(error, { routeName })
-  return NextResponse.json({ error: "Document request failed." }, { status: 500 })
 }

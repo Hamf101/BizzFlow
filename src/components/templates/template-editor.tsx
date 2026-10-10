@@ -1,11 +1,13 @@
 "use client"
 
-import { Archive, FilePenLine, Files, History, Link2, ListChecks, MessageSquare, MoreHorizontal, Palette, UserPlus } from "lucide-react"
+import { Archive, FilePenLine, Files, History, Link2, ListChecks, MessageSquare, MoreHorizontal, Palette, Send, UserPlus } from "lucide-react"
 import Link from "next/link"
 import { type ReactElement, useEffect, useMemo, useRef, useState, useTransition } from "react"
 
 import type { TemplateDraftInput, TemplateVersionResult } from "@/app/(dashboard)/templates/actions"
 import { useFlowHandoff } from "@/components/flow/flow-handoff"
+import { DesignToolsContext } from "@/components/editor/design-tools"
+import { DESIGN_TOOLS } from "@/components/editor/design-tools-provided"
 import { EditorCanvas } from "@/components/editor/editor-canvas"
 import { normalizeContentForSave } from "@/components/editor/editor-content"
 import { type DockTool, EditorDock } from "@/components/editor/editor-dock"
@@ -25,6 +27,7 @@ import {
   PageSetupPanel,
   TemplateBrandingPanel,
   TemplateChecksPanel,
+  SendToAnswerDialog,
   ShareDialog,
 } from "@/components/editor/lazy-panels"
 import { useLiveRoom } from "@/components/editor/use-live-room"
@@ -157,6 +160,7 @@ export function TemplateEditor({
   })
   const [detailsOpen, setDetailsOpen] = useState(false)
   const [sharing, setSharing] = useState(false)
+  const [asking, setAsking] = useState(false)
   const [savedState, setSavedState] = useState(initial)
   const [, startTransition] = useTransition()
   const revisionRef = useRef(template.revision)
@@ -205,6 +209,8 @@ export function TemplateEditor({
     // Live, what the room has kept is saved; anything waiting stays on this device too.
     saved: !liveMode ? savedState : history.liveStatus === "saved" ? state : initial,
     value: state,
+    // Live, the room's saves move the server on too, so a copy is made on the room's revision.
+    version: live.session && live.roomId ? `${live.roomId}:${live.session.revision()}` : autosave.version,
   })
   const settingsBlock = content.blocks.find((block) => block.id === controller.settingsBlockId) ?? null
   const settingsIndex = settingsBlock ? content.blocks.indexOf(settingsBlock) : -1
@@ -427,7 +433,7 @@ export function TemplateEditor({
   ]
 
   return (
-    <>
+    <DesignToolsContext.Provider value={DESIGN_TOOLS}>
       <EditorFrame
         backHref="/templates"
         backLabel="Back to templates"
@@ -457,7 +463,7 @@ export function TemplateEditor({
                 proposal.status === "stale"
                   ? [{ label: "Dismiss", onClick: () => setProposal(null) }]
                   : [
-                      { label: "Apply", onClick: () => applyProposal(proposal, proposal.id) },
+                      ...(proposal.operations.length > 0 ? [{ label: "Apply", onClick: () => applyProposal(proposal, proposal.id) }] : []),
                       { label: "Reject", onClick: () => setProposal(null) },
                     ]
               }
@@ -498,10 +504,16 @@ export function TemplateEditor({
                 Details
               </DropdownMenuItem>
               {template.status === "published" ? (
-                <DropdownMenuItem render={<Link href={`/templates/${template.id}/links`} />}>
-                  <Link2 />
-                  Public links
-                </DropdownMenuItem>
+                <>
+                  <DropdownMenuItem onClick={() => setAsking(true)}>
+                    <Send />
+                    Send to answer…
+                  </DropdownMenuItem>
+                  <DropdownMenuItem render={<Link href={`/templates/${template.id}/links`} />}>
+                    <Link2 />
+                    Public links
+                  </DropdownMenuItem>
+                </>
               ) : null}
               {/* Whoever can open the editor can edit the template, which is what sharing it takes. */}
               <DropdownMenuItem onClick={() => setSharing(true)}>
@@ -624,6 +636,7 @@ export function TemplateEditor({
           />
         )}
       </EditorFrame>
+      {asking ? <SendToAnswerDialog name={template.title} onOpenChange={setAsking} open source={{ kind: "template", templateId: template.id }} /> : null}
       {sharing ? <ShareDialog name={template.title} onOpenChange={setSharing} open resources={[{ id: template.id, kind: "template" }]} /> : null}
       <Dialog onOpenChange={setDetailsOpen} open={detailsOpen}>
         <DialogContent>
@@ -661,7 +674,7 @@ export function TemplateEditor({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </>
+    </DesignToolsContext.Provider>
   )
 }
 

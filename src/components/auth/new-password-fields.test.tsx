@@ -1,21 +1,13 @@
 // @vitest-environment jsdom
 
 import { act } from "react"
-import { createRoot, type Root } from "react-dom/client"
-import { afterEach, beforeAll, expect, it } from "vitest"
+import type { Root } from "react-dom/client"
+import { expect, it } from "vitest"
 
 import { NewPasswordFields } from "./new-password-fields"
+import { mount } from "@/test/render"
 
 let root: Root | null = null
-
-beforeAll(() => {
-  ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
-})
-
-afterEach(() => {
-  act(() => root?.unmount())
-  document.body.replaceChildren()
-})
 
 // React hears typing through the input's native value setter and an input event.
 async function type(input: HTMLInputElement, value: string): Promise<void> {
@@ -27,7 +19,7 @@ async function type(input: HTMLInputElement, value: string): Promise<void> {
 
 it("holds the form until the password meets every rule and both match", async () => {
   const container = document.body.appendChild(document.createElement("div"))
-  root = createRoot(container)
+  root = mount(container)
   await act(async () =>
     root!.render(
       <form>

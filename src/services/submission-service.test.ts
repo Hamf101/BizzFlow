@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from "vitest"
 
 import {
   allocateInternalSubmissionFile,
-  assignInternalSubmission,
   cleanupExpiredSubmissionFileObjects,
   completeInternalSubmissionFile,
   countSubmissionsByStatus,
@@ -352,25 +351,26 @@ describe("internal submission csv export", () => {
       getNumberedSubmissionId(1)
     ])
   })
-})
 
-describe("submission list pages", () => {
-  it("pages what a manager can see, latest update first", async () => {
-    const client = createClient({ submissions: createSubmissionRows(55) })
+  it("keeps an export to the submissions one member started", async () => {
+    const client = createClient({
+      submissions: [
+        createNumberedSubmissionRow(1),
+        createNumberedSubmissionRow(2, { created_by: OTHER_STAFF_ID, updated_by: OTHER_STAFF_ID })
+      ]
+    })
 
-    const page = await listSubmissionPage(
-      createPageInput(MANAGER_ID, { page: 2 }),
+    const csv = await exportInternalSubmissionsCsv(
+      { actorUserId: MANAGER_ID, createdBy: STAFF_ID, organizationId: ORGANIZATION_ID },
       { client: client as never }
     )
 
-    expect(page).toMatchObject({ page: 2, pageSize: 25, total: 55 })
-    expect(page.submissions.map((submission) => submission.id)).toEqual(
-      [...Array(25).keys()].map((index: number): string =>
-        getNumberedSubmissionId(26 + index)
-      )
-    )
+    expect(csv).toContain(getNumberedSubmissionId(1))
+    expect(csv).not.toContain(getNumberedSubmissionId(2))
   })
+})
 
+describe("submission list pages", () => {
   it("breaks ties by id, so a page boundary never repeats or skips a row", async () => {
     const tied = { updated_at: "2026-07-18T12:00:00.000Z" }
     const client = createClient({
@@ -487,16 +487,6 @@ describe("submission list pages", () => {
     await expect(count(STAFF_ID)).resolves.toEqual({ completed: 2, draft: 1, in_review: 1 })
     await expect(count(EXTERNAL_ID)).resolves.toEqual({ completed: 2, draft: 0, in_review: 1 })
     await expect(count(MANAGER_ID, "2026-07-01T00:00:00.000Z")).resolves.toMatchObject({ completed: 1 })
-  })
-
-  it("answers a page past the end with no rows and the true total", async () => {
-    const client = createClient({ submissions: createSubmissionRows(3) })
-
-    await expect(
-      listSubmissionPage(createPageInput(MANAGER_ID, { page: 5 }), {
-        client: client as never
-      })
-    ).resolves.toMatchObject({ page: 5, submissions: [], total: 3 })
   })
 
   it("filters by status, literal title text, and assignee", async () => {
@@ -910,64 +900,6 @@ describe("internal submission draft lifecycle", () => {
 })
 
 describe("internal submission review workflow", () => {
-  it("assigns an eligible reviewer through the revision-guarded RPC", async () => {
-    const client = createClient({
-      submissions: [
-        createSubmissionRow({
-          status: "submitted",
-          revision: 2,
-          submitted_by: STAFF_ID,
-          submitted_at: "2026-07-18T17:00:00.000Z"
-        })
-      ]
-    })
-    client.rpc.mockImplementation(async (functionName, args) => {
-      expect(functionName).toBe("assign_internal_submission")
-      expect(args).toEqual({
-        target_org_id: ORGANIZATION_ID,
-        target_submission_id: SUBMISSION_ID,
-        target_expected_revision: 2,
-        target_assignee_user_id: EXTERNAL_ID,
-        target_actor_user_id: MANAGER_ID
-      })
-      return { data: createAssignedSubmissionRow(), error: null }
-    })
-
-    const result = await assignInternalSubmission(
-      {
-        actorUserId: MANAGER_ID,
-        organizationId: ORGANIZATION_ID,
-        submissionId: SUBMISSION_ID,
-        expectedRevision: 2,
-        assignedTo: EXTERNAL_ID
-      },
-      { client: client as never }
-    )
-
-    expect(result).toMatchObject({
-      status: "in_review",
-      assignedTo: EXTERNAL_ID
-    })
-  })
-
-  it("denies assignment to staff before invoking the RPC", async () => {
-    const client = createClient()
-
-    await expect(
-      assignInternalSubmission(
-        {
-          actorUserId: STAFF_ID,
-          organizationId: ORGANIZATION_ID,
-          submissionId: SUBMISSION_ID,
-          expectedRevision: 1,
-          assignedTo: EXTERNAL_ID
-        },
-        { client: client as never }
-      )
-    ).rejects.toMatchObject({ statusCode: 403 })
-    expect(client.rpc).not.toHaveBeenCalled()
-  })
-
   it("returns the safe review conflict message from the database", async () => {
     const client = createClient()
     client.rpc.mockResolvedValue({
@@ -979,13 +911,13 @@ describe("internal submission review workflow", () => {
     })
 
     await expect(
-      assignInternalSubmission(
+      transitionInternalSubmission(
         {
           actorUserId: MANAGER_ID,
           organizationId: ORGANIZATION_ID,
           submissionId: SUBMISSION_ID,
           expectedRevision: 2,
-          assignedTo: EXTERNAL_ID
+          targetStatus: "approved"
         },
         { client: client as never }
       )
@@ -1144,17 +1076,12 @@ describe("several reviewers on one submission", () => {
     expect(client.rpc).not.toHaveBeenCalled()
   })
 
-  it("keeps the reviewers an owner chose out of a manager's hands", async () => {
-    const client = createClient({
-      organization_memberships: [createMembership(OWNER_ID, "owner_admin"), createMembership(MANAGER_ID, "manager")],
-      submissions: [createAssignedSubmissionRow({ assigned_by: OWNER_ID, assigned_to: OWNER_ID })]
-    })
-    client.rpc.mockResolvedValue({ data: createAssignedSubmissionRow(), error: null })
-    const set = (actor: string) => setInternalSubmissionReviewers(input(actor), { client: client as never })
+  it("says so when the database keeps the reviewers someone more senior chose out of a manager's hands", async () => {
+    const client = createClient()
+    const refusal = "The reviewers were chosen by someone more senior, so only they or an owner can change them."
+    client.rpc.mockResolvedValue({ data: null, error: Object.assign(new Error(refusal), { code: "42501" }) })
 
-    await expect(set(MANAGER_ID)).rejects.toMatchObject({ statusCode: 403 })
-    expect(client.rpc).not.toHaveBeenCalled()
-    await expect(set(OWNER_ID)).resolves.toBeDefined()
+    await expect(setInternalSubmissionReviewers(input(MANAGER_ID), { client: client as never })).rejects.toMatchObject({ message: refusal, statusCode: 403 })
   })
 
   it("sets a change request aside only with a note, and only for someone who may review", async () => {
@@ -1183,7 +1110,7 @@ describe("several reviewers on one submission", () => {
   })
 
   describe("who sees the other reviewers", () => {
-    const detailFor = async (actorUserId: string, assignedBy: string) => {
+    const detailFor = async (actorUserId: string, assignedBy: string, more: FakeTables = {}) => {
       const client = createClient({
         organization_memberships: [
           createMembership(OWNER_ID, "owner_admin"),
@@ -1196,7 +1123,8 @@ describe("several reviewers on one submission", () => {
           createReviewerRow(MANAGER_ID, { assigned_by: assignedBy, decision: "approved", decided_at: "2026-07-18T18:00:00.000Z" }),
           createReviewerRow(SECOND_MANAGER_ID, { assigned_by: assignedBy, decision: "changes_requested", decided_at: "2026-07-18T18:05:00.000Z", note: "Total is wrong" })
         ],
-        submissions: [createAssignedSubmissionRow({ assigned_by: assignedBy, assigned_to: actorUserId === EXTERNAL_ID ? EXTERNAL_ID : MANAGER_ID, status: "needs_changes" })]
+        submissions: [createAssignedSubmissionRow({ assigned_by: assignedBy, assigned_to: actorUserId === EXTERNAL_ID ? EXTERNAL_ID : MANAGER_ID, status: "needs_changes" })],
+        ...more
       })
 
       return getInternalSubmission(
@@ -1221,6 +1149,47 @@ describe("several reviewers on one submission", () => {
     it("shows the lower ranks nothing of the panel", async () => {
       expect(seen(await detailFor(MANAGER_ID, OWNER_ID))).toEqual([MANAGER_ID])
       expect(seen(await detailFor(EXTERNAL_ID, MANAGER_ID))).toEqual([])
+    })
+
+    it("keeps the reviewers a viewer may not see out of the activity, and the notes on it", async () => {
+      const NOTE_ID = "70000000-0000-4000-8000-000000000002"
+      const event = (id: string, overrides: FakeRow) => createActivityRow({ id: `80000000-0000-4000-8000-00000000000${id}`, actor_user_id: OWNER_ID, ...overrides })
+      const history = {
+        submission_comments: [createCommentRow(), createCommentRow({ id: NOTE_ID, body: "Second reviewer was wrong", created_by: OWNER_ID })],
+        submission_activity_events: [
+          event("1", { assignee_user_id: MANAGER_ID }),
+          event("2", { assignee_user_id: SECOND_MANAGER_ID }),
+          event("3", { event_type: "changes_dismissed", assignee_user_id: SECOND_MANAGER_ID, comment_id: NOTE_ID }),
+          event("4", { event_type: "commented", assignee_user_id: null, comment_id: COMMENT_ID })
+        ]
+      }
+      const told = async (actor: string) => {
+        const detail = await detailFor(actor, OWNER_ID, history)
+        return { assignees: detail.activity.map((entry) => entry.assigneeUserId), comments: detail.comments.map((comment) => comment.id) }
+      }
+
+      expect(await told(MANAGER_ID)).toEqual({ assignees: [MANAGER_ID, null], comments: [COMMENT_ID] })
+      expect(await told(OWNER_ID)).toEqual({ assignees: [MANAGER_ID, SECOND_MANAGER_ID, SECOND_MANAGER_ID, null], comments: [COMMENT_ID, NOTE_ID] })
+    })
+
+    it("refuses to show the panel when whoever assigned it cannot be looked up, rather than showing it all", async () => {
+      const client = createClient({
+        organization_memberships: [createMembership(MANAGER_ID, "manager")],
+        submission_reviewers: [createReviewerRow(MANAGER_ID, { assigned_by: OWNER_ID }), createReviewerRow(SECOND_MANAGER_ID, { assigned_by: OWNER_ID })],
+        submissions: [createAssignedSubmissionRow({ assigned_by: OWNER_ID, assigned_to: MANAGER_ID, status: "in_review" })]
+      })
+      const from = client.from.bind(client)
+      // The viewer's own membership reads fine; the assigner's lookup fails.
+      client.from = (table: string) => {
+        const query = from(table)
+        const eq = query.eq.bind(query)
+        query.eq = (column: string, value: unknown) => (column === "user_id" && value === OWNER_ID ? Object.assign(query, { maybeSingle: async () => ({ data: null, error: Object.assign(new Error("connection reset"), { code: "08006" }) }) }) : eq(column, value))
+        return query
+      }
+
+      await expect(
+        getInternalSubmission({ actorUserId: MANAGER_ID, organizationId: ORGANIZATION_ID, submissionId: SUBMISSION_ID }, { client: client as never })
+      ).rejects.toMatchObject({ statusCode: 500 })
     })
 
     it("counts every reviewer for the summary, including the ones this viewer may not see", async () => {
@@ -1536,6 +1505,8 @@ describe("internal submission file workflow", () => {
       uploadUrl: "https://r2.example/upload",
       expiresInSeconds: 300
     })
+    // The object key is internal: nothing that reaches a browser carries it.
+    expect(result.file).not.toHaveProperty("storageKey")
     expect(createSignedSubmissionUploadUrl).toHaveBeenCalledOnce()
     expect(client.rpc).toHaveBeenCalledTimes(2)
   })

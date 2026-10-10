@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { timestampSchema } from "@/types/schemas"
 
 /** Channels a notification can be delivered through. */
 export const NOTIFICATION_CHANNELS = ["email", "sms"] as const
@@ -35,7 +36,6 @@ export const notificationDeliveryStatusSchema = z.enum(
 )
 export const notificationPurposeSchema = z.enum(NOTIFICATION_PURPOSES)
 
-const timestampSchema = z.string().datetime({ offset: true })
 
 const notificationDeliveryRowSchema = z.object({
   id: z.string().uuid(),
@@ -75,6 +75,36 @@ export class NotificationDomainError extends Error {
     this.name = "NotificationDomainError"
     this.statusCode = statusCode
   }
+}
+
+/**
+ * Parses a page of delivery rows, leaving out any whose channel, purpose or
+ * status this build does not know, so a newer kind cannot take down the list.
+ *
+ * @param rows - Untrusted persistence data.
+ * @returns The deliveries this build can show, in order.
+ * @throws NotificationDomainError when a row is otherwise invalid.
+ */
+export function parseNotificationDeliveryRows(
+  rows: readonly unknown[]
+): NotificationDelivery[] {
+  return rows.flatMap((row) => {
+    const record = (row ?? {}) as Record<string, unknown>
+    const unknownField = (
+      [
+        ["channel", NOTIFICATION_CHANNELS],
+        ["purpose", NOTIFICATION_PURPOSES],
+        ["status", NOTIFICATION_DELIVERY_STATUSES],
+      ] as const
+    ).find(([field, known]) => typeof record[field] === "string" && !(known as readonly string[]).includes(record[field] as string))
+
+    if (unknownField) {
+      console.warn("notification_delivery_unknown_value", { field: unknownField[0], value: record[unknownField[0]] })
+      return []
+    }
+
+    return [parseNotificationDeliveryRow(row)]
+  })
 }
 
 /**

@@ -5,10 +5,8 @@ import {
   isTerminalTaskStatus,
   parseTaskReminderRow,
   parseTaskRow,
-  TASK_STATUS_TRANSITIONS,
   TASK_STATUSES,
   TaskDomainError,
-  type TaskStatus,
 } from "@/types/task"
 
 const TASK_ID = "10000000-0000-4000-8000-000000000001"
@@ -68,40 +66,11 @@ const PENDING_REMINDER_ROW = {
 }
 
 describe("task status contract", () => {
-  it.each([
-    { from: "open", to: "in_progress", allowed: true },
-    { from: "open", to: "completed", allowed: true },
-    { from: "open", to: "cancelled", allowed: true },
-    { from: "open", to: "open", allowed: false },
-    { from: "in_progress", to: "completed", allowed: true },
-    { from: "in_progress", to: "cancelled", allowed: true },
-    { from: "in_progress", to: "open", allowed: false },
-    { from: "in_progress", to: "in_progress", allowed: false },
-    { from: "completed", to: "open", allowed: false },
-    { from: "completed", to: "in_progress", allowed: false },
-    { from: "completed", to: "cancelled", allowed: false },
-    { from: "completed", to: "completed", allowed: false },
-    { from: "cancelled", to: "open", allowed: false },
-    { from: "cancelled", to: "in_progress", allowed: false },
-    { from: "cancelled", to: "completed", allowed: false },
-    { from: "cancelled", to: "cancelled", allowed: false },
-  ] as const satisfies ReadonlyArray<{
-    from: TaskStatus
-    to: TaskStatus
-    allowed: boolean
-  }>)("allows $from → $to: $allowed", ({ from, to, allowed }) => {
-    expect(canTransitionTaskStatus(from, to)).toBe(allowed)
-    expect(TASK_STATUS_TRANSITIONS[from].includes(to)).toBe(allowed)
-  })
+  it("lets work move forward but never back to open, and a finished task nowhere", () => {
+    const moves = TASK_STATUSES.flatMap((from) => TASK_STATUSES.filter((to) => canTransitionTaskStatus(from, to)).map((to) => `${from}→${to}`))
 
-  it("covers every status in the transition table and marks terminal states", () => {
-    expect(Object.keys(TASK_STATUS_TRANSITIONS).sort()).toEqual(
-      [...TASK_STATUSES].sort()
-    )
-    expect(TASK_STATUSES.filter(isTerminalTaskStatus)).toEqual([
-      "completed",
-      "cancelled",
-    ])
+    expect(moves).toEqual(["open→in_progress", "open→completed", "open→cancelled", "in_progress→completed", "in_progress→cancelled"])
+    expect(TASK_STATUSES.filter(isTerminalTaskStatus)).toEqual(["completed", "cancelled"])
   })
 })
 
@@ -132,56 +101,11 @@ describe("task persistence types", () => {
     })
   })
 
-  it("parses a standalone task without optional associations", () => {
-    const task = parseTaskRow({
-      ...OPEN_TASK_ROW,
-      description: null,
-      due_at: null,
-      submission_id: null,
-    })
+  it("keeps a task and its reminder whose creator's account was deleted", () => {
+    const task = parseTaskRow({ ...OPEN_TASK_ROW, created_by: null, updated_by: null })
+    const reminder = parseTaskReminderRow({ ...PENDING_REMINDER_ROW, created_by: null })
 
-    expect(task.description).toBeNull()
-    expect(task.dueAt).toBeNull()
-    expect(task.submissionId).toBeNull()
-  })
-
-  it.each(["open", "in_progress", "cancelled"] as const)(
-    "preserves assignment metadata for a %s task",
-    (status) => {
-      const task = parseTaskRow({
-        ...OPEN_TASK_ROW,
-        ...ASSIGNED_ROW_METADATA,
-        status,
-      })
-
-      expect(task.status).toBe(status)
-      expect(task.completedAt).toBeNull()
-      expect(task.assignedTo).toBe(ASSIGNEE_ID)
-      expect(task.assignedBy).toBe(ASSIGNER_ID)
-      expect(task.assignedAt).toBe(ASSIGNED_AT)
-    }
-  )
-
-  it("parses a completed task with and without assignment metadata", () => {
-    const unassigned = parseTaskRow({
-      ...OPEN_TASK_ROW,
-      status: "completed",
-      completed_at: COMPLETED_AT,
-    })
-    const assigned = parseTaskRow({
-      ...OPEN_TASK_ROW,
-      ...ASSIGNED_ROW_METADATA,
-      status: "completed",
-      completed_at: COMPLETED_AT,
-      revision: 4,
-    })
-
-    expect(unassigned.status).toBe("completed")
-    expect(unassigned.completedAt).toBe(COMPLETED_AT)
-    expect(unassigned.assignedTo).toBeNull()
-    expect(assigned.completedAt).toBe(COMPLETED_AT)
-    expect(assigned.assignedTo).toBe(ASSIGNEE_ID)
-    expect(assigned.revision).toBe(4)
+    expect([task.createdBy, task.updatedBy, reminder.createdBy]).toEqual([null, null, null])
   })
 
   it.each([
@@ -220,7 +144,7 @@ describe("task persistence types", () => {
       reason: "description over the column limit",
     },
     { row: { ...OPEN_TASK_ROW, revision: 0 }, reason: "non-positive revision" },
-    { row: { ...OPEN_TASK_ROW, created_by: null }, reason: "missing author" },
+    { row: { ...OPEN_TASK_ROW, created_by: "someone" }, reason: "non-uuid author" },
     { row: { ...OPEN_TASK_ROW, org_id: "org-1" }, reason: "non-uuid tenant" },
     {
       row: { ...OPEN_TASK_ROW, due_at: "2026-08-05" },
@@ -257,38 +181,6 @@ describe("task persistence types", () => {
       createdAt: CREATED_AT,
       updatedAt: UPDATED_AT,
     })
-  })
-
-  it("parses a sent reminder and a failed reminder with a safe reason", () => {
-    const sent = parseTaskReminderRow({
-      ...PENDING_REMINDER_ROW,
-      status: "sent",
-      attempt_count: 1,
-      sent_at: SENT_AT,
-    })
-    const failed = parseTaskReminderRow({
-      ...PENDING_REMINDER_ROW,
-      status: "failed",
-      attempt_count: 3,
-      last_error: "Recipient mailbox rejected the message.",
-    })
-
-    expect(sent.status).toBe("sent")
-    expect(sent.sentAt).toBe(SENT_AT)
-    expect(sent.attemptCount).toBe(1)
-    expect(failed.status).toBe("failed")
-    expect(failed.sentAt).toBeNull()
-    expect(failed.lastError).toBe("Recipient mailbox rejected the message.")
-  })
-
-  it("parses a cancelled reminder", () => {
-    const cancelled = parseTaskReminderRow({
-      ...PENDING_REMINDER_ROW,
-      status: "cancelled",
-    })
-
-    expect(cancelled.status).toBe("cancelled")
-    expect(cancelled.sentAt).toBeNull()
   })
 
   it.each([

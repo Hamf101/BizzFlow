@@ -1,4 +1,5 @@
 import { expect, signInAs, test, uniqueName } from "../support/fixtures"
+import { seedFolder } from "../support/seed"
 import { destroyTenant, seedTenant } from "../support/tenant"
 
 // PostgREST answers at most 1,000 rows per request (`max_rows`), so a listing
@@ -16,22 +17,12 @@ test("lists every document in a folder that holds more than one response's worth
   const tenant = await seedTenant(admin)
   const name = uniqueName("Archive boxes")
   const owner = tenant.users.owner_admin
-  const { data: folder, error: folderError } = await admin
-    .from("folders")
-    .insert({
-      created_by: owner.id,
-      name,
-      org_id: tenant.organizationId,
-      updated_by: owner.id,
-    })
-    .select("id")
-    .single()
-  if (folderError) throw folderError
+  const folderId = await seedFolder(admin, tenant.organizationId, owner.id, name)
 
   const { error } = await admin.from("documents").insert(
     Array.from({ length: DOCUMENTS }, (_, index: number) => ({
       created_by: owner.id,
-      folder_id: folder.id,
+      folder_id: folderId,
       org_id: tenant.organizationId,
       source_kind: "upload",
       title: `${name} ${String(index + 1).padStart(4, "0")}`,
@@ -43,7 +34,7 @@ test("lists every document in a folder that holds more than one response's worth
   await signInAs(page, owner.email, owner.password)
 
   const started = Date.now()
-  await page.goto(`/documents?folderId=${folder.id}`)
+  await page.goto(`/documents?folderId=${folderId}`)
   await expect(page.getByRole("heading", { level: 1 })).toHaveAccessibleName(
     `Files ${DOCUMENTS} items`
   )

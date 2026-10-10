@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { applyWorkingCopyUpdate, openWorkingCopyRoom, readWorkingCopySince, type WorkingCopyServiceDeps } from "@/services/working-copy-service"
 import {
@@ -80,6 +80,30 @@ const intro = (copy: WorkingCopy): unknown => copy.content.blocks[0] && "text" i
 const label = (copy: WorkingCopy): unknown => (copy.content.blocks[1] as { label?: string }).label
 
 describe("live editing", () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it("gathers keystrokes for seconds while alone in the room, and for a moment once someone joins", async () => {
+    const { join } = room()
+    const mine = await join(MANAGER_ID)
+    vi.useFakeTimers()
+
+    mine.alone(true)
+    mine.change(retypeIntro("Alone"))
+    await vi.advanceTimersByTimeAsync(2_900)
+    expect(mine.status()).toBe("saving")
+    await vi.advanceTimersByTimeAsync(200)
+    expect(mine.status()).toBe("saved")
+
+    mine.change(retypeIntro("Alone, still"))
+    await vi.advanceTimersByTimeAsync(1_000)
+    // Someone joins: what is waiting goes out within the shorter gathering.
+    mine.alone(false)
+    await vi.advanceTimersByTimeAsync(300)
+    expect(mine.status()).toBe("saved")
+  })
+
   it("shows each editor what the other made, and saves the template with both", async () => {
     const { join, settle, tables } = room()
     const mine = await join(MANAGER_ID)

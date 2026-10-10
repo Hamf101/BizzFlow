@@ -6,12 +6,13 @@ import {
   submissionListState,
 } from "@/components/submissions/submission-list-view"
 import { getAuthenticatedUser } from "@/lib/auth"
-import { buildCsvExportFilename, createCsvDownloadResponse } from "@/lib/csv"
-import { getCurrentOrganizationContext } from "@/services/organization-service"
 import {
-  exportInternalSubmissionsCsv,
-  SubmissionServiceError,
-} from "@/services/submission-service"
+  buildCsvExportFilename,
+  createCsvDownloadResponse,
+  createCsvExportErrorResponse,
+} from "@/lib/csv"
+import { getCurrentOrganizationContext } from "@/services/organization-service"
+import { exportInternalSubmissionsCsv } from "@/services/submission-service"
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
@@ -45,10 +46,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       buildCsvExportFilename("submissions", context.organization.id)
     )
   } catch (error: unknown) {
-    if (error instanceof SubmissionServiceError) {
-      return new NextResponse(error.message, { status: error.statusCode })
-    }
-
-    return new NextResponse("Unable to export submissions CSV.", { status: 500 })
+    return createCsvExportErrorResponse(error, "Unable to export submissions CSV.", "export_submissions")
   }
 }

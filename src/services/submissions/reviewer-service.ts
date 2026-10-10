@@ -21,11 +21,11 @@ import {
 } from "@/services/submissions/shared"
 import { parseSubmissionRow, type Submission } from "@/types/submission"
 import { parseSubmissionReviewerRow, type SubmissionReviewer, type SubmissionReviewTally } from "@/types/submission-review"
+import { LOWERCASE_UUID_PATTERN } from "@/services/input"
 
 const REVIEWER_COLUMNS = "user_id,assigned_by,assigned_at,can_approve,decision,note,decided_at"
 const MAX_REVIEWERS = 20
 const MAX_SHARED = 50
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
 
 // Who outranks whom when it comes to seeing the other reviewers.
 const RANK: Record<OrganizationRole, number> = { external_reviewer: 0, manager: 2, owner_admin: 3, staff: 1 }
@@ -49,7 +49,7 @@ export async function setInternalSubmissionReviewers(
     async (): Promise<Submission> => {
       const client = getSubmissionClient(deps)
 
-      const subject = await requireSubmissionPermission(
+      await requireSubmissionPermission(
         client,
         input.organizationId,
         input.actorUserId,
@@ -57,24 +57,15 @@ export async function setInternalSubmissionReviewers(
         "You cannot assign internal submissions."
       )
 
-      // Reviewers someone more senior chose are not for a more junior person to change.
+      // The database keeps reviewers someone more senior chose out of a junior's hands.
       const current = await getSubmissionById(client, input.organizationId, input.submissionId)
-
-      if (
-        current.assignedBy &&
-        current.assignedBy !== input.actorUserId &&
-        RANK[getOrganizationRoleFromSubject(subject)] < RANK[await roleOf(client, current, current.assignedBy)]
-      ) {
-        throw new SubmissionServiceError("The reviewers were chosen by someone more senior, so only they or an owner can change them.", 403)
-      }
-
       const reviewerIds = input.reviewerIds.map((id) => id.trim().toLowerCase())
 
       if (
         reviewerIds.length < 1 ||
         reviewerIds.length > MAX_REVIEWERS ||
         new Set(reviewerIds).size !== reviewerIds.length ||
-        !reviewerIds.every((id) => UUID.test(id))
+        !reviewerIds.every((id) => LOWERCASE_UUID_PATTERN.test(id))
       ) {
         throw new SubmissionServiceError(`Choose between 1 and ${MAX_REVIEWERS} different reviewers.`, 400)
       }
@@ -191,7 +182,7 @@ export async function shareInternalSubmission(
 
       const ticked = [...new Set(input.userIds.map((id) => id.trim().toLowerCase()))]
 
-      if (ticked.length > MAX_SHARED || !ticked.every((id) => UUID.test(id))) {
+      if (ticked.length > MAX_SHARED || !ticked.every((id) => LOWERCASE_UUID_PATTERN.test(id))) {
         throw new SubmissionServiceError(`Share with at most ${MAX_SHARED} people.`, 400)
       }
 
@@ -296,11 +287,18 @@ export function isReviewRequester(submission: Submission, viewer: { role: Organi
   return submission.assignedBy === viewer.userId && (viewer.role === "owner_admin" || viewer.role === "manager")
 }
 
-async function readReviewers(
+/**
+ * Every reviewer, and the ones this viewer may see: all of them for someone of
+ * the same rank as whoever assigned the reviewers or above, otherwise only
+ * themselves and the people they added.
+ *
+ * @throws SubmissionServiceError when a read fails.
+ */
+export async function readReviewers(
   client: SubmissionServiceClient,
   submission: Submission,
   viewer: { role: OrganizationRole; userId: string }
-): Promise<{ all: SubmissionReviewer[]; visible: SubmissionReviewer[] }> {
+): Promise<{ all: SubmissionReviewer[]; seesAll: boolean; visible: SubmissionReviewer[] }> {
   const { data, error } = await client
     .from("submission_reviewers")
     .select(REVIEWER_COLUMNS)
@@ -318,6 +316,7 @@ async function readReviewers(
 
   return {
     all,
+    seesAll,
     visible: seesAll ? all : all.filter((reviewer) => reviewer.userId === viewer.userId || reviewer.assignedBy === viewer.userId),
   }
 }
@@ -383,7 +382,13 @@ async function nameOf(client: SubmissionServiceClient, organizationId: string, u
 async function roleOf(client: SubmissionServiceClient, submission: Submission, userId: string | null): Promise<OrganizationRole> {
   if (!userId) return "external_reviewer"
 
-  const { data } = await loadActiveMembership(client, submission.organizationId, userId)
+  const { data, error } = await loadActiveMembership(client, submission.organizationId, userId)
+
+  // A failed lookup must not rank them lowest and open the panel to everyone.
+  if (error) {
+    throw createSubmissionDatabaseError(error, "Unable to load who assigned the reviewers.")
+  }
+
   const role = (data as { role?: string } | null)?.role
 
   return role && isOrganizationRole(role) ? role : "external_reviewer"

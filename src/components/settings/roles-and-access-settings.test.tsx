@@ -1,8 +1,7 @@
 // @vitest-environment jsdom
 
 import { act } from "react"
-import { createRoot, type Root } from "react-dom/client"
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest"
+import { beforeAll, describe, expect, it, vi } from "vitest"
 
 import type {
   OrganizationMember,
@@ -10,12 +9,11 @@ import type {
 } from "@/types/organization"
 
 import { RolesAndAccessSettings } from "./roles-and-access-settings"
+import { mount } from "@/test/render"
 
 const ORGANIZATION_ID = "10000000-0000-4000-8000-000000000001"
 const OWNER_ROLE_ID = "50000000-0000-4000-8000-000000000001"
 const MANAGER_ROLE_ID = "50000000-0000-4000-8000-000000000002"
-const mountedRoots: Root[] = []
-
 const roles: OrganizationRoleDefinition[] = [
   {
     id: MANAGER_ROLE_ID,
@@ -69,18 +67,8 @@ beforeAll(() => {
     .IS_REACT_ACT_ENVIRONMENT = true
 })
 
-afterEach(() => {
-  for (const root of mountedRoots.splice(0)) {
-    act(() => root.unmount())
-  }
-  document.body.replaceChildren()
-})
-
 function renderSettings(): void {
-  const container = document.createElement("div")
-  document.body.append(container)
-  const root = createRoot(container)
-  mountedRoots.push(root)
+  const root = mount()
 
   act(() =>
     root.render(

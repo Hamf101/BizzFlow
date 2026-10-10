@@ -19,8 +19,8 @@ export type SharingInput = {
   resource: SharingResource
 }
 
-/** Someone, or everyone who holds a role. */
-export type SharingPrincipal = { userId: string } | { role: OrganizationRole }
+/** Someone, everyone who holds a role, or someone outside the workspace by email. */
+export type SharingPrincipal = { userId: string } | { role: OrganizationRole } | { email: string }
 
 /** Several items at once. */
 export type SharingManyInput = {
@@ -53,6 +53,13 @@ export type SharingGrant =
   | { kind: "person"; level: SharingLevel; mixed?: boolean; person: SharingPerson }
   | { kind: "role"; level: SharingLevel; mixed?: boolean; role: OrganizationRole }
 
+/** Someone outside the workspace given this document: invited until they accept. */
+export type SharingGuest = {
+  email: string
+  joined: boolean
+  level: SharingLevel
+}
+
 /** Access that arrives from a folder above, which cannot be changed here. */
 export type SharingInherited = {
   from: string
@@ -73,6 +80,13 @@ export type SharingView = {
   /** The folder it sits in, or null at the top. */
   parent: { id: string; name: string } | null
   grants: SharingGrant[]
+  /** People outside the workspace; only documents have them. */
+  guests: SharingGuest[]
+  /**
+   * What someone outside the workspace may be given here: nothing for folders,
+   * templates or several items at once, view only for an uploaded file.
+   */
+  outsideLevels: SharingLevel[]
 }
 
 /** Word for the person a document or folder was just shared with. */
@@ -86,9 +100,24 @@ export type SharingNotice = {
   resourceName: string
 }
 
+/** The email that invites someone outside the workspace to one document. */
+export type GuestInvite = {
+  documentTitle: string
+  grantId: string
+  inviterName: string
+  organizationName: string
+  recipientEmail: string
+  token: string
+}
+
 export type SharingServiceDeps = {
   client?: DocumentServiceClient
   createId?: () => string
+  /** A fresh secret for an invite link. */
+  createToken?: () => string
+  /** Emails an invite; a failure takes the invite back. */
+  inviteGuest?: (invite: GuestInvite) => Promise<void>
+  now?: () => Date
   /** Everyone in the workspace, with names. Defaults to the people service. */
   listMembers?: (organizationId: string, actorUserId: string) => Promise<OrganizationMember[]>
   /** Tells someone it was shared with them. A failure never undoes the share. */

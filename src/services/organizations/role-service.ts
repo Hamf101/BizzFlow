@@ -22,6 +22,7 @@ import {
   runOrganizationOperation,
 } from "@/services/organizations/shared"
 import type { OrganizationRoleDefinition } from "@/types/organization"
+import { normalizeName } from "@/services/input"
 
 /**
  * Creates an editable custom access role.
@@ -165,18 +166,7 @@ export async function archiveOrganizationRole(
         input.actorUserId,
         input.roleId
       )
-
-      await recordOrganizationAuditLog(
-        {
-          organizationId: input.organizationId,
-          actorUserId: input.actorUserId,
-          action: "organization_role.archived",
-          targetType: "organization_role",
-          targetId: input.roleId,
-          metadata: {},
-        },
-        deps.recordAuditLog
-      )
+      // archive_organization_role writes its audit row with the change.
     }
   )
 }
@@ -197,16 +187,7 @@ async function requireOwner(
 }
 
 function normalizeRoleName(name: string): string {
-  const normalized = name.trim().replace(/\s+/g, " ")
-
-  if (normalized.length < 2 || normalized.length > 60) {
-    throw new OrganizationServiceError(
-      "Role name must be between 2 and 60 characters.",
-      400
-    )
-  }
-
-  return normalized
+  return normalizeName(name, "Role name", 2, 60, (message) => new OrganizationServiceError(message, 400))
 }
 
 function normalizePermissions(

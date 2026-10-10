@@ -765,6 +765,57 @@ describe("document PDF service", () => {
     expect(drawnTexts(printed, 0).some((drawn) => drawn.size === 10 && Math.abs(drawn.x - long.x) < 0.5 && Math.abs(drawn.y - (long.y + 2 + 15 - 10)) < 0.5)).toBe(true)
   })
 
+  it("never prints a drawing stored as an answer in a signature or initials box, in any field style", { timeout: PDF_RENDER_TIMEOUT_MS }, async () => {
+    const input = createPdfInput({ repeatHeader: false, repeatFooter: false })
+    const content = requireVersionThreeContent(input)
+    const shared = { helpText: null, required: false }
+
+    content.blocks = [
+      { ...shared, fieldKey: "sign", id: "55000000-0000-4000-8000-000000000001", label: "Signature", type: "signature_field" },
+      { ...shared, fieldKey: "initial", id: "55000000-0000-4000-8000-000000000002", label: "Initials", type: "initials_field" }
+    ]
+    content.sections = []
+    content.fieldGroups = []
+    content.blockRules = []
+    // Only a signer's own drawing, in the signing record, is a signature.
+    input.answers = { initial: VALID_DRAWING_DATA_URL, sign: VALID_DRAWING_DATA_URL }
+    input.signers = []
+
+    for (const fieldStyle of ["box", "line", "cell"] as const) {
+      content.layout = { ...content.layout, fieldStyle }
+      const bytes = Buffer.from(await renderGeneratedDocumentPdf(input))
+
+      expect(bytes.toString("latin1")).not.toContain("/Subtype /Image")
+    }
+  })
+
+  it("prints whose each empty drawn box is, or that its signer signed, in every field style", { timeout: PDF_RENDER_TIMEOUT_MS }, async () => {
+    const input = createPdfInput({ repeatHeader: false, repeatFooter: false })
+    const content = requireVersionThreeContent(input)
+    const shared = { helpText: null, required: false }
+
+    content.blocks = [
+      { ...shared, fieldKey: "first", id: "56000000-0000-4000-8000-000000000001", label: "First", type: "signature_field" },
+      { ...shared, fieldKey: "second", id: "56000000-0000-4000-8000-000000000002", label: "Second", signer: 2, type: "initials_field" }
+    ]
+    content.sections = []
+    content.fieldGroups = []
+    content.blockRules = []
+    // A guest's preview: who has signed, without anyone's drawing.
+    input.signers = [
+      { email: "", id: "signer-1", name: "Avery Morgan", requiresSignature: true, signedAt: "2026-07-17T18:30:00.000Z", status: "signed" },
+      { email: "", id: "signer-2", name: "Jordan Lee", requiresSignature: true, signedAt: null, status: "viewed" }
+    ]
+
+    for (const fieldStyle of ["box", "line", "cell"] as const) {
+      content.layout = { ...content.layout, fieldStyle }
+      const texts = drawnTexts(await PDFDocument.load(await renderGeneratedDocumentPdf(input)), 0).map((drawn) => drawn.text)
+
+      expect(texts).toContain("Signer 1 signed")
+      expect(texts).toContain("Signer 2 initials here")
+    }
+  })
+
   it("prints answers in cells that touch beside and below each other, and stay inside the room the planner left", { timeout: PDF_RENDER_TIMEOUT_MS }, async () => {
     const input = createPdfInput({ repeatHeader: false, repeatFooter: false })
     const content = requireVersionThreeContent(input)
@@ -1409,6 +1460,46 @@ describe("document PDF service", () => {
 
     expect(blank.getPageCount()).toBe(2)
     expect(lowest - (loneMetrics.flowTopY - loneMetrics.pageCapacity)).toBeLessThan(20 + 10)
+  })
+
+  it("keeps long titles, headings, section and group labels, and a long signer's name above the footer and inside the page", { timeout: PDF_RENDER_TIMEOUT_MS }, async () => {
+    const input = createPdfInput({ repeatHeader: false, repeatFooter: true })
+    const content = requireVersionThreeContent(input)
+    const long = (word: string): string => `${word} ${"Wide words Whom MMWW ".repeat(7).trim()}`
+    const headings = Array.from({ length: 24 }, (_value: unknown, index: number) => ({
+      id: `58000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
+      type: "heading" as const,
+      text: long(`Heading${index}`),
+      level: 1 as const,
+      alignment: "left" as const
+    }))
+
+    content.blocks = headings
+    content.sections = headings.filter((_block, index: number) => index % 4 === 0).map((block, index: number) => ({
+      id: `59000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
+      label: long(`Section${index}`),
+      startBlockId: block.id,
+      pageBreakBefore: false,
+      keepTogether: false
+    }))
+    content.fieldGroups = []
+    content.blockRules = []
+    input.title = long("Title")
+    input.signers = [{ ...(input.signers ?? [])[0], name: `Signer ${"Maximiliana Wolfeschlegelsteinhausen ".repeat(4).trim()}` }]
+
+    const metrics = pdfMetrics(input)
+    const flowBottom = metrics.flowTopY - metrics.pageCapacity
+    const pdf = await PDFDocument.load(await renderGeneratedDocumentPdf(input))
+    const bold = await probeFont(PDF_BOLD_FONT_PATH)
+    const nameLines = pdf.getPages().flatMap((_page, index: number) => drawnTexts(pdf, index).filter((piece) => piece.size === 10 && /Maximiliana|Signer/.test(piece.text)))
+
+    pdf.getPages().forEach((_page, index: number) => {
+      // Everything above the footer's 7-point words stays inside the flow.
+      expect(Math.min(...drawnTexts(pdf, index).filter((piece) => piece.size >= 8).map((piece) => piece.y))).toBeGreaterThanOrEqual(flowBottom - 0.5)
+    })
+    // The name wraps onto lines that each fit left of the signature and initials.
+    expect(nameLines.length).toBeGreaterThan(1)
+    nameLines.forEach((piece) => expect(piece.x + bold.widthOfTextAtSize(piece.text, 10)).toBeLessThanOrEqual(metrics.margin + metrics.contentWidth - 7 - 88 - 10 - 48 - 10 + 0.5))
   })
 
   it("prints an answer of the wrong shape as unanswered, and never fails on one", { timeout: PDF_RENDER_TIMEOUT_MS }, async () => {

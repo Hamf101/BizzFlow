@@ -1,9 +1,10 @@
 "use client"
 
-import { type ReactElement, useEffect, useRef, useSyncExternalStore } from "react"
+import { type ReactElement, useEffect, useRef } from "react"
 
 import { CORNERS, FACETS, FLAP, type Point, WAVES } from "@/components/brand/folded-page"
 import { cn } from "@/lib/utils"
+import { useMediaQuery } from "@/lib/use-media-query"
 
 // The same facets become a wide folder with a raised tab at its top left.
 const FOLDER: Record<keyof typeof CORNERS, Point> = {
@@ -23,12 +24,6 @@ const PIECES = [
 const points = (vertices: readonly Point[]): string => vertices.map((point) => point.join(",")).join(" ")
 const MOTION_QUERY = "(prefers-reduced-motion: reduce)"
 const CYCLE = "20s"
-
-function subscribeMotion(onChange: () => void): () => void {
-  const query = matchMedia(MOTION_QUERY)
-  query.addEventListener("change", onChange)
-  return () => query.removeEventListener("change", onChange)
-}
 
 /** Holds each silhouette before smoothly morphing its matching vertices or lines. */
 function Morph({ attribute, page, folder }: { attribute: string; page: string; folder: string }): ReactElement {
@@ -67,7 +62,7 @@ function Reassemble({ index, vertices }: { index: number; vertices: readonly Poi
  */
 export function BizFlowMark({ className }: { className?: string }): ReactElement {
   const ref = useRef<SVGSVGElement>(null)
-  const reduced = useSyncExternalStore(subscribeMotion, () => matchMedia(MOTION_QUERY).matches, () => true)
+  const reduced = useMediaQuery(MOTION_QUERY, true)
 
   useEffect(() => {
     const svg = ref.current

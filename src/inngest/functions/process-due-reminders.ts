@@ -6,9 +6,11 @@ import {
   type BackgroundStepRunner,
 } from "@/inngest/functions/shared"
 import {
-  processDueTaskReminders,
+  deliverDueTaskReminders,
+  findDueTaskReminders,
   type TaskReminderRunSummary,
 } from "@/services/task-service"
+import type { TaskReminder } from "@/types/task"
 
 /** Schedule the due-reminder scan runs on, in UTC. */
 export const DUE_TASK_REMINDER_CRON = "*/15 * * * *"
@@ -20,18 +22,23 @@ export type DueTaskReminderContext = {
 
 /** Injectable service surface, so tests never reach a real database. */
 export type DueTaskReminderDeps = {
-  processDueTaskReminders?: () => Promise<TaskReminderRunSummary>
+  findDueTaskReminders?: () => Promise<TaskReminder[]>
+  deliverDueTaskReminders?: (
+    reminders: TaskReminder[]
+  ) => Promise<TaskReminderRunSummary>
 }
 
 /**
  * Delivers one bounded batch of task reminders whose instant has passed.
  *
  * Every decision — batch size, claiming, delivery, and the failure record —
- * belongs to the service. This edge only runs it as a durable step so a
- * completed batch is memoized and never re-sent when a later attempt replays.
+ * belongs to the service. This edge lists the batch in one durable step and
+ * delivers each reminder in its own, so no single step runs a hundred sends
+ * past the route's time limit, and a killed run replays only the reminder in
+ * flight while every completed send stays memoized.
  *
  * @param context - Run context supplying durable step tooling.
- * @param deps - Optional service override used by tests.
+ * @param deps - Optional service overrides used by tests.
  * @returns Counters for the scanned, sent, failed, and skipped reminders.
  * @throws NonRetriableError when the scan is rejected, the service error otherwise.
  */
@@ -39,11 +46,34 @@ export async function handleDueTaskReminders(
   { step }: DueTaskReminderContext,
   deps: DueTaskReminderDeps = {}
 ): Promise<TaskReminderRunSummary> {
-  const processReminders = deps.processDueTaskReminders ?? processDueTaskReminders
-
-  return runBackgroundStep(step, "process-due-task-reminders", () =>
-    processReminders()
+  const findDue = deps.findDueTaskReminders ?? findDueTaskReminders
+  const deliver =
+    deps.deliverDueTaskReminders ??
+    ((reminders: TaskReminder[]) => deliverDueTaskReminders(reminders))
+  const reminders = await runBackgroundStep(step, "find-due-task-reminders", () =>
+    findDue()
   )
+  const summary: TaskReminderRunSummary = {
+    scannedCount: 0,
+    sentCount: 0,
+    failedCount: 0,
+    retryingCount: 0,
+    skippedCount: 0,
+  }
+
+  for (const reminder of reminders) {
+    const outcome = await runBackgroundStep(
+      step,
+      `deliver-task-reminder-${reminder.id}`,
+      () => deliver([reminder])
+    )
+
+    for (const key of Object.keys(summary) as Array<keyof TaskReminderRunSummary>) {
+      summary[key] += outcome[key]
+    }
+  }
+
+  return summary
 }
 
 /**

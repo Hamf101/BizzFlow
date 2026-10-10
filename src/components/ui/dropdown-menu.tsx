@@ -103,6 +103,22 @@ function DropdownMenuCheckboxItem({ children, className, ...props }: MenuPrimiti
   )
 }
 
+/** One choice of several; the chosen item carries a tick at its end. */
+function DropdownMenuRadioGroup(props: MenuPrimitive.RadioGroup.Props) {
+  return <MenuPrimitive.RadioGroup data-slot="dropdown-menu-radio-group" {...props} />
+}
+
+function DropdownMenuRadioItem({ children, className, ...props }: MenuPrimitive.RadioItem.Props) {
+  return (
+    <MenuPrimitive.RadioItem className={cn(ITEM_CLASS, className)} data-slot="dropdown-menu-radio-item" {...props}>
+      {children}
+      <MenuPrimitive.RadioItemIndicator className="ml-auto">
+        <Check aria-hidden="true" />
+      </MenuPrimitive.RadioItemIndicator>
+    </MenuPrimitive.RadioItem>
+  )
+}
+
 function DropdownMenuSeparator({
   className,
   ...props
@@ -141,6 +157,8 @@ export {
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuSub,
   DropdownMenuSubTrigger,

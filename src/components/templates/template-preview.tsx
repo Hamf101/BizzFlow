@@ -1,12 +1,3 @@
-import {
-  ArrowDown,
-  ArrowUp,
-  Check,
-  Copy,
-  Plus,
-  Settings2,
-  Trash2
-} from "lucide-react"
 import Image from "next/image"
 import type { CSSProperties, ReactElement } from "react"
 
@@ -14,14 +5,13 @@ import {
   isStaticTemplateBlock,
   TemplateStaticBlock
 } from "@/components/templates/template-static-block"
-import { BLOCK_GAP, pageStyle, PlacedImages, printableMargin } from "@/components/templates/printed-page"
+import { BLOCK_GAP, pageStyle, paginationStyle, PlacedImages, printableMargin } from "@/components/templates/printed-page"
 import {
   groupTemplateRenderBlocks,
   ROW_GRID,
   rowGridStyle,
   type TemplateWebRenderGroup
 } from "@/components/templates/template-render-groups"
-import { Button } from "@/components/ui/button"
 import {
   resolveDocumentSurfaceInk,
   type DocumentSurface
@@ -36,6 +26,7 @@ import {
   type TemplateRenderSection
 } from "@/services/templates/template-render-plan"
 import { describeDateFormat } from "@/lib/date-format"
+import { boxNote } from "@/types/box-signers"
 import type {
   TemplateBlock,
   TemplateBranding,
@@ -43,18 +34,8 @@ import type {
 } from "@/types/template"
 import { imageSource } from "@/types/template-images"
 
-const EMPTY_CHANGED_BLOCK_IDS: ReadonlySet<string> = new Set<string>()
-
 type TemplatePreviewProps = {
   renderPlan: TemplateRenderPlan
-  className?: string
-  changedBlockIds?: ReadonlySet<string>
-  onBlockSelect?: (blockId: string) => void
-  onDeleteBlock?: (blockId: string) => void
-  onDuplicateBlock?: (blockId: string) => void
-  onMoveBlock?: (blockId: string, direction: "up" | "down") => void
-  onRequestInsert?: (afterBlockId: string | null) => void
-  selectedBlockId?: string | null
   /**
    * `screen` follows the interface theme and is what an author edits against.
    * `paper` reproduces the printed page, brand ink included, and belongs only
@@ -63,22 +44,16 @@ type TemplatePreviewProps = {
   surface?: DocumentSurface
 }
 
+const CONTENT_PADDING = "min-w-0 overflow-hidden px-5 sm:px-8"
+
 /**
  * Renders a print-oriented preview of the guided template content.
  *
- * @param props - Shared render plan and optional editorial interactions.
+ * @param props - Shared render plan and the surface it is drawn on.
  * @returns A paper-like preview with one bounded, free-form content flow.
  */
 export function TemplatePreview({
   renderPlan,
-  className,
-  changedBlockIds = EMPTY_CHANGED_BLOCK_IDS,
-  onBlockSelect,
-  onDeleteBlock,
-  onDuplicateBlock,
-  onMoveBlock,
-  onRequestInsert,
-  selectedBlockId = null,
   surface = "screen"
 }: TemplatePreviewProps): ReactElement {
   const ink = resolveDocumentSurfaceInk(surface, renderPlan.branding)
@@ -90,8 +65,6 @@ export function TemplatePreview({
   const printableAreaStyle = {
     margin: printableMargin(renderPlan)
   } as CSSProperties
-  const showEditorialGutter =
-    onBlockSelect !== undefined || onRequestInsert !== undefined
 
   return (
     <article
@@ -101,8 +74,7 @@ export function TemplatePreview({
         renderPlan.layout.orientation === "portrait"
           ? "max-w-[46rem]"
           : "max-w-[64rem]",
-        showEditorialGutter ? "overflow-visible" : "overflow-hidden",
-        className
+        "overflow-hidden"
       )}
       data-document-surface={surface}
       data-template-density={renderPlan.layout.density}
@@ -117,40 +89,33 @@ export function TemplatePreview({
         className="relative min-h-[30rem] min-w-0 border border-dashed border-border"
         style={printableAreaStyle}
       >
-        {showEditorialGutter && (
-          <span className="absolute -top-2.5 right-3 bg-card px-2 font-mono text-[8px] uppercase tracking-[0.16em] text-muted-foreground">
-            Printable area
-          </span>
-        )}
         {shouldRenderTemplateHeader(renderPlan.layout, 1) && (
-          <TemplateBrandHeader
-            branding={renderPlan.branding}
-            showEditorialGutter={showEditorialGutter}
-          />
+          <TemplateBrandHeader branding={renderPlan.branding} />
         )}
-        <TemplatePrintedTitle
-          showEditorialGutter={showEditorialGutter}
-          title={renderPlan.title}
-        />
+        <div className="grid min-w-0 pt-7 grid-cols-1">
+          <h1
+            className="min-w-0 overflow-hidden font-editorial text-3xl font-semibold leading-tight px-5 sm:px-8"
+            data-template-printed-title="true"
+            style={{ color: "var(--template-primary)" }}
+          >
+            {renderPlan.title}
+          </h1>
+        </div>
         <PreviewFlow
           blocks={renderPlan.blocks}
-          changedBlockIds={changedBlockIds}
-          onBlockSelect={onBlockSelect}
-          onDeleteBlock={onDeleteBlock}
-          onDuplicateBlock={onDuplicateBlock}
-          onMoveBlock={onMoveBlock}
-          onRequestInsert={onRequestInsert}
-          selectedBlockId={selectedBlockId}
-          showEditorialGutter={showEditorialGutter}
           density={renderPlan.layout.density}
           sections={renderPlan.sections}
         />
         {shouldRenderTemplateFooter(renderPlan.layout, 1) &&
           renderPlan.layout.pageNumbering === "page_x_of_y" && (
-            <TemplatePageFooter
-              layout={renderPlan.layout}
-              showEditorialGutter={showEditorialGutter}
-            />
+            <footer
+              className="grid min-w-0 border-t border-border pt-3 pb-1 grid-cols-1"
+              data-template-page-footer="true"
+            >
+              <p className="text-right font-mono text-[9px] uppercase tracking-[0.12em] text-muted-foreground px-5 sm:px-8">
+                Page 1 of 1
+              </p>
+            </footer>
           )}
       </div>
       <PlacedImages plan={renderPlan} />
@@ -158,45 +123,10 @@ export function TemplatePreview({
   )
 }
 
-function TemplatePrintedTitle({
-  showEditorialGutter,
-  title
-}: {
-  showEditorialGutter: boolean
-  title: string
-}): ReactElement {
-  return (
-    <div
-      className={cn(
-        "grid min-w-0 pt-7",
-        showEditorialGutter
-          ? "grid-cols-[3.5rem_minmax(0,1fr)]"
-          : "grid-cols-1"
-      )}
-    >
-      {showEditorialGutter && (
-        <span aria-hidden="true" className="border-r border-border" />
-      )}
-      <h1
-        className={cn(
-          "min-w-0 overflow-hidden font-editorial text-3xl font-semibold leading-tight",
-          showEditorialGutter ? "pr-5 pl-5 sm:pr-8" : "px-5 sm:px-8"
-        )}
-        data-template-printed-title="true"
-        style={{ color: "var(--template-primary)" }}
-      >
-        {title}
-      </h1>
-    </div>
-  )
-}
-
 function TemplateBrandHeader({
-  branding,
-  showEditorialGutter
+  branding
 }: {
   branding: TemplateBranding
-  showEditorialGutter: boolean
 }): ReactElement | null {
   const logo = imageSource(branding.logoAsset, branding.logoDataUrl)
 
@@ -206,15 +136,9 @@ function TemplateBrandHeader({
 
   return (
     <div
-      className={cn(
-        "grid min-w-0 border-b border-border",
-        showEditorialGutter ? "grid-cols-[3.5rem_minmax(0,1fr)]" : "grid-cols-1"
-      )}
+      className="grid min-w-0 border-b border-border grid-cols-1"
       data-template-brand-header="true"
     >
-      {showEditorialGutter && (
-        <span aria-hidden="true" className="border-r border-border" />
-      )}
       <div
         className={cn(
           "flex min-w-0 flex-col gap-2 overflow-hidden px-5 py-5 sm:px-8",
@@ -247,75 +171,15 @@ function TemplateBrandHeader({
   )
 }
 
-function TemplatePageFooter({
-  layout,
-  showEditorialGutter
-}: {
-  layout: TemplateLayout
-  showEditorialGutter: boolean
-}): ReactElement {
-  return (
-    <footer
-      className={cn(
-        "grid min-w-0 border-t border-border pt-3 pb-1",
-        showEditorialGutter
-          ? "grid-cols-[3.5rem_minmax(0,1fr)]"
-          : "grid-cols-1"
-      )}
-      data-template-page-footer="true"
-    >
-      {showEditorialGutter && (
-        <span aria-hidden="true" className="border-r border-border" />
-      )}
-      <p
-        className={cn(
-          "text-right font-mono text-[9px] uppercase tracking-[0.12em] text-muted-foreground",
-          showEditorialGutter ? "pr-5 pl-3 sm:pr-8" : "px-5 sm:px-8"
-        )}
-      >
-        {layout.pageNumbering === "page_x_of_y" ? "Page 1 of 1" : null}
-      </p>
-    </footer>
-  )
-}
-
 function PreviewFlow({
   blocks,
-  changedBlockIds,
   density,
-  onBlockSelect,
-  onDeleteBlock,
-  onDuplicateBlock,
-  onMoveBlock,
-  onRequestInsert,
-  sections,
-  selectedBlockId,
-  showEditorialGutter
+  sections
 }: {
   blocks: readonly TemplateRenderBlock[]
-  changedBlockIds: ReadonlySet<string>
   density: TemplateLayout["density"]
-  onBlockSelect?: (blockId: string) => void
-  onDeleteBlock?: (blockId: string) => void
-  onDuplicateBlock?: (blockId: string) => void
-  onMoveBlock?: (blockId: string, direction: "up" | "down") => void
-  onRequestInsert?: (afterBlockId: string | null) => void
   sections: readonly TemplateRenderSection[]
-  selectedBlockId: string | null
-  showEditorialGutter: boolean
 }): ReactElement {
-  const contentPadding = showEditorialGutter
-    ? "min-w-0 overflow-hidden pr-5 pl-3 sm:pr-8 sm:pl-5"
-    : "min-w-0 overflow-hidden px-5 sm:px-8"
-  const visibleIndexById = new Map<string, number>(
-    blocks.map(
-      (renderBlock: TemplateRenderBlock, index: number): [string, number] => [
-        renderBlock.block.id,
-        index
-      ]
-    )
-  )
-
   return (
     <section
       aria-label="Document content preview"
@@ -327,23 +191,8 @@ function PreviewFlow({
       )}
     >
       {blocks.length === 0 ? (
-        <div
-          className={cn(
-            "grid",
-            showEditorialGutter
-              ? "grid-cols-[3.5rem_minmax(0,1fr)]"
-              : "grid-cols-1"
-          )}
-        >
-          {showEditorialGutter && (
-            <EditorialGutterMarker
-              blockId={null}
-              changed={false}
-              index={0}
-              onRequestInsert={onRequestInsert}
-            />
-          )}
-          <div className={contentPadding}>
+        <div className="grid grid-cols-1">
+          <div className={CONTENT_PADDING}>
             <div className="rounded-[6px] border border-dashed border-border px-4 py-12 text-center text-xs text-muted-foreground">
               Add an element or ask Flow to create the document
             </div>
@@ -360,20 +209,9 @@ function PreviewFlow({
         >
           {sections.map((section: TemplateRenderSection, index: number) => (
             <PreviewSection
-              blockCount={blocks.length}
-              changedBlockIds={changedBlockIds}
-              contentPadding={contentPadding}
               density={density}
               key={section.id ?? `implicit-section-${index}`}
-              onBlockSelect={onBlockSelect}
-              onDeleteBlock={onDeleteBlock}
-              onDuplicateBlock={onDuplicateBlock}
-              onMoveBlock={onMoveBlock}
-              onRequestInsert={onRequestInsert}
               section={section}
-              selectedBlockId={selectedBlockId}
-              showEditorialGutter={showEditorialGutter}
-              visibleIndexById={visibleIndexById}
             />
           ))}
         </div>
@@ -383,33 +221,11 @@ function PreviewFlow({
 }
 
 function PreviewSection({
-  blockCount,
-  changedBlockIds,
-  contentPadding,
   density,
-  onBlockSelect,
-  onDeleteBlock,
-  onDuplicateBlock,
-  onMoveBlock,
-  onRequestInsert,
-  section,
-  selectedBlockId,
-  showEditorialGutter,
-  visibleIndexById
+  section
 }: {
-  blockCount: number
-  changedBlockIds: ReadonlySet<string>
-  contentPadding: string
   density: TemplateLayout["density"]
-  onBlockSelect?: (blockId: string) => void
-  onDeleteBlock?: (blockId: string) => void
-  onDuplicateBlock?: (blockId: string) => void
-  onMoveBlock?: (blockId: string, direction: "up" | "down") => void
-  onRequestInsert?: (afterBlockId: string | null) => void
   section: TemplateRenderSection
-  selectedBlockId: string | null
-  showEditorialGutter: boolean
-  visibleIndexById: ReadonlyMap<string, number>
 }): ReactElement {
   const groups = groupTemplateRenderBlocks(section.blocks)
 
@@ -419,37 +235,29 @@ function PreviewSection({
       data-keep-together={section.keepTogether ? "true" : undefined}
       data-page-break-before={section.pageBreakBefore ? "true" : undefined}
       data-template-section-id={section.id ?? "implicit"}
-      style={getPaginationStyle({
+      style={paginationStyle({
         keepTogether: section.keepTogether,
         pageBreakBefore: section.pageBreakBefore
       })}
     >
       {section.label && (
-        <StructureLabel
-          contentPadding={contentPadding}
-          label={section.label}
-          showEditorialGutter={showEditorialGutter}
-          type="section"
-        />
+        <div className="grid min-w-0 grid-cols-1">
+          <h2
+            className={cn("font-editorial text-xl font-semibold leading-tight", CONTENT_PADDING)}
+            data-template-section-label="true"
+            style={{ color: "var(--template-primary)" }}
+          >
+            {section.label}
+          </h2>
+        </div>
       )}
       {groups.map((group: TemplateWebRenderGroup, groupIndex: number) => (
         <PreviewFieldGroup
-          blockCount={blockCount}
-          changedBlockIds={changedBlockIds}
-          contentPadding={contentPadding}
           density={density}
           group={group}
           isFirstInSection={groupIndex === 0}
           key={group.id ?? `ungrouped-${group.blocks[0]?.block.id}`}
-          onBlockSelect={onBlockSelect}
-          onDeleteBlock={onDeleteBlock}
-          onDuplicateBlock={onDuplicateBlock}
-          onMoveBlock={onMoveBlock}
-          onRequestInsert={onRequestInsert}
           sectionBreaksBefore={section.pageBreakBefore}
-          selectedBlockId={selectedBlockId}
-          showEditorialGutter={showEditorialGutter}
-          visibleIndexById={visibleIndexById}
         />
       ))}
     </section>
@@ -457,57 +265,33 @@ function PreviewSection({
 }
 
 function PreviewFieldGroup({
-  blockCount,
-  changedBlockIds,
-  contentPadding,
   density,
   group,
   isFirstInSection,
-  onBlockSelect,
-  onDeleteBlock,
-  onDuplicateBlock,
-  onMoveBlock,
-  onRequestInsert,
-  sectionBreaksBefore,
-  selectedBlockId,
-  showEditorialGutter,
-  visibleIndexById
+  sectionBreaksBefore
 }: {
-  blockCount: number
-  changedBlockIds: ReadonlySet<string>
-  contentPadding: string
   density: TemplateLayout["density"]
   group: TemplateWebRenderGroup
   isFirstInSection: boolean
-  onBlockSelect?: (blockId: string) => void
-  onDeleteBlock?: (blockId: string) => void
-  onDuplicateBlock?: (blockId: string) => void
-  onMoveBlock?: (blockId: string, direction: "up" | "down") => void
-  onRequestInsert?: (afterBlockId: string | null) => void
   sectionBreaksBefore: boolean
-  selectedBlockId: string | null
-  showEditorialGutter: boolean
-  visibleIndexById: ReadonlyMap<string, number>
 }): ReactElement {
-  const twoColumnContentPadding = showEditorialGutter
-    ? "min-w-0"
-    : "min-w-0 px-5 sm:px-8"
-
   return (
     <section
       className={cn("flex min-w-0 flex-col", BLOCK_GAP[density])}
       data-keep-together={group.keepTogether ? "true" : undefined}
       data-template-field-group-columns={group.columns}
       data-template-field-group-id={group.id ?? "ungrouped"}
-      style={getPaginationStyle({ keepTogether: group.keepTogether })}
+      style={paginationStyle({ keepTogether: group.keepTogether })}
     >
       {group.label && (
-        <StructureLabel
-          contentPadding={contentPadding}
-          label={group.label}
-          showEditorialGutter={showEditorialGutter}
-          type="group"
-        />
+        <div className="grid min-w-0 grid-cols-1">
+          <h3
+            className={cn("text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground", CONTENT_PADDING)}
+            data-template-field-group-label="true"
+          >
+            {group.label}
+          </h3>
+        </div>
       )}
       <div
         style={rowGridStyle(group)}
@@ -515,369 +299,39 @@ function PreviewFieldGroup({
           // Rows stack on a phone and are laid out as they print from sm up.
           ROW_GRID,
           BLOCK_GAP[density],
-          group.columns > 1 && twoColumnContentPadding
+          group.columns > 1 && "min-w-0 px-5 sm:px-8"
         )}
       >
         {group.blocks.map(
-          (renderBlock: TemplateRenderBlock, blockIndex: number) => {
-            const visibleIndex =
-              visibleIndexById.get(renderBlock.block.id) ?? 0
-            const suppressSectionBreak =
-              sectionBreaksBefore && isFirstInSection && blockIndex === 0
-
-            return (
-              <PreviewBlockRow
-                canMoveDown={visibleIndex < blockCount - 1}
-                canMoveUp={visibleIndex > 0}
-                changed={changedBlockIds.has(renderBlock.block.id)}
-                contentPadding={
-                  group.columns > 1 ? "min-w-0" : contentPadding
-                }
-                key={renderBlock.block.id}
-                onBlockSelect={onBlockSelect}
-                onDeleteBlock={onDeleteBlock}
-                onDuplicateBlock={onDuplicateBlock}
-                onMoveBlock={onMoveBlock}
-                onRequestInsert={onRequestInsert}
-                renderBlock={renderBlock}
-                selected={selectedBlockId === renderBlock.block.id}
-                showEditorialGutter={showEditorialGutter}
-                suppressPageBreak={suppressSectionBreak}
-              />
-            )
-          }
+          (renderBlock: TemplateRenderBlock, blockIndex: number) => (
+            <div
+              className="grid min-w-0 grid-cols-1"
+              data-keep-with-next={renderBlock.keepWithNext ? "true" : undefined}
+              data-page-break-before={
+                renderBlock.pageBreakBefore ? "true" : undefined
+              }
+              data-template-block-id={renderBlock.block.id}
+              key={renderBlock.block.id}
+              style={paginationStyle({
+                keepWithNext: renderBlock.keepWithNext,
+                pageBreakBefore:
+                  renderBlock.pageBreakBefore &&
+                  !(sectionBreaksBefore && isFirstInSection && blockIndex === 0)
+              })}
+            >
+              <div className={group.columns > 1 ? "min-w-0" : CONTENT_PADDING}>
+                <div className="relative rounded-[4px] border border-transparent transition-colors">
+                  <div className="relative z-10 px-2 py-1.5">
+                    <PreviewBlock block={renderBlock.block} />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )
         )}
       </div>
     </section>
   )
-}
-
-function PreviewBlockRow({
-  canMoveDown,
-  canMoveUp,
-  changed,
-  contentPadding,
-  onBlockSelect,
-  onDeleteBlock,
-  onDuplicateBlock,
-  onMoveBlock,
-  onRequestInsert,
-  renderBlock,
-  selected,
-  showEditorialGutter,
-  suppressPageBreak
-}: {
-  canMoveDown: boolean
-  canMoveUp: boolean
-  changed: boolean
-  contentPadding: string
-  onBlockSelect?: (blockId: string) => void
-  onDeleteBlock?: (blockId: string) => void
-  onDuplicateBlock?: (blockId: string) => void
-  onMoveBlock?: (blockId: string, direction: "up" | "down") => void
-  onRequestInsert?: (afterBlockId: string | null) => void
-  renderBlock: TemplateRenderBlock
-  selected: boolean
-  showEditorialGutter: boolean
-  suppressPageBreak: boolean
-}): ReactElement {
-  const { block } = renderBlock
-
-  return (
-    <div
-      className={cn(
-        "grid min-w-0",
-        showEditorialGutter
-          ? "grid-cols-[3.5rem_minmax(0,1fr)]"
-          : "grid-cols-1"
-      )}
-      data-keep-with-next={renderBlock.keepWithNext ? "true" : undefined}
-      data-page-break-before={
-        renderBlock.pageBreakBefore ? "true" : undefined
-      }
-      data-template-block-id={block.id}
-      style={getPaginationStyle({
-        keepWithNext: renderBlock.keepWithNext,
-        pageBreakBefore: renderBlock.pageBreakBefore && !suppressPageBreak
-      })}
-    >
-      {showEditorialGutter && (
-        <EditorialGutterMarker
-          blockId={block.id}
-          changed={changed}
-          index={renderBlock.canonicalIndex}
-          onBlockSelect={onBlockSelect}
-          onRequestInsert={onRequestInsert}
-          selected={selected}
-        />
-      )}
-      <div className={contentPadding}>
-        <EditablePreviewBlock
-          block={block}
-          canMoveDown={canMoveDown}
-          canMoveUp={canMoveUp}
-          changed={changed}
-          onBlockSelect={onBlockSelect}
-          onDeleteBlock={onDeleteBlock}
-          onDuplicateBlock={onDuplicateBlock}
-          onMoveBlock={onMoveBlock}
-          selected={selected}
-        />
-      </div>
-    </div>
-  )
-}
-
-function StructureLabel({
-  contentPadding,
-  label,
-  showEditorialGutter,
-  type
-}: {
-  contentPadding: string
-  label: string
-  showEditorialGutter: boolean
-  type: "group" | "section"
-}): ReactElement {
-  return (
-    <div
-      className={cn(
-        "grid min-w-0",
-        showEditorialGutter
-          ? "grid-cols-[3.5rem_minmax(0,1fr)]"
-          : "grid-cols-1"
-      )}
-    >
-      {showEditorialGutter && (
-        <span aria-hidden="true" className="border-r border-border" />
-      )}
-      {type === "section" ? (
-        <h2
-          className={cn(
-            "font-editorial text-xl font-semibold leading-tight",
-            contentPadding
-          )}
-          data-template-section-label="true"
-          style={{ color: "var(--template-primary)" }}
-        >
-          {label}
-        </h2>
-      ) : (
-        <h3
-          className={cn(
-            "text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground",
-            contentPadding
-          )}
-          data-template-field-group-label="true"
-        >
-          {label}
-        </h3>
-      )}
-    </div>
-  )
-}
-
-function getPaginationStyle({
-  keepTogether = false,
-  keepWithNext = false,
-  pageBreakBefore = false
-}: {
-  keepTogether?: boolean
-  keepWithNext?: boolean
-  pageBreakBefore?: boolean
-}): CSSProperties {
-  return {
-    ...(pageBreakBefore
-      ? { breakBefore: "page", pageBreakBefore: "always" }
-      : {}),
-    ...(keepTogether
-      ? { breakInside: "avoid-page", pageBreakInside: "avoid" }
-      : {}),
-    ...(keepWithNext
-      ? { breakAfter: "avoid-page", pageBreakAfter: "avoid" }
-      : {})
-  }
-}
-
-function EditorialGutterMarker({
-  blockId,
-  changed,
-  index,
-  onBlockSelect,
-  onRequestInsert,
-  selected = false
-}: {
-  blockId: string | null
-  changed: boolean
-  index: number
-  onBlockSelect?: (blockId: string) => void
-  onRequestInsert?: (afterBlockId: string | null) => void
-  selected?: boolean
-}): ReactElement {
-  return (
-    <div className="relative flex min-h-12 flex-col items-center border-r border-border">
-      <span className="font-editorial text-xs text-muted-foreground">
-        §{index + 1}
-      </span>
-      {blockId && (
-        <button
-          aria-label={`Select element ${index + 1}`}
-          className={cn(
-            "mt-1.5 grid size-5 place-items-center rounded-full border border-border bg-card text-[9px] text-muted-foreground transition-colors",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/35",
-            selected && "border-primary bg-primary text-primary-foreground",
-            changed && !selected && "border-ring text-primary"
-          )}
-          onClick={(): void => onBlockSelect?.(blockId)}
-          type="button"
-        >
-          {changed ? (
-            <Check className="size-3" />
-          ) : (
-            <span aria-hidden="true">·</span>
-          )}
-        </button>
-      )}
-      <span
-        aria-hidden="true"
-        className={cn(
-          "my-1 min-h-4 flex-1 border-l border-dashed border-border",
-          changed && "border-solid border-ring"
-        )}
-      />
-      {onRequestInsert && (
-        <button
-          aria-label={`Add an element after element ${index + 1}`}
-          className="grid size-5 place-items-center rounded-full border border-border bg-card text-muted-foreground transition-colors hover:border-ring hover:bg-secondary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/35"
-          onClick={(): void => onRequestInsert(blockId)}
-          type="button"
-        >
-          <Plus className="size-3" />
-        </button>
-      )}
-    </div>
-  )
-}
-
-function EditablePreviewBlock({
-  block,
-  canMoveDown,
-  canMoveUp,
-  changed,
-  onBlockSelect,
-  onDeleteBlock,
-  onDuplicateBlock,
-  onMoveBlock,
-  selected
-}: {
-  block: TemplateBlock
-  canMoveDown: boolean
-  canMoveUp: boolean
-  changed: boolean
-  onBlockSelect?: (blockId: string) => void
-  onDeleteBlock?: (blockId: string) => void
-  onDuplicateBlock?: (blockId: string) => void
-  onMoveBlock?: (blockId: string, direction: "up" | "down") => void
-  selected: boolean
-}): ReactElement {
-  function selectBlock(): void {
-    onBlockSelect?.(block.id)
-  }
-
-  const selectionLabel = `Edit ${formatPreviewBlockType(block.type)}`
-
-  return (
-    <div
-      className={cn(
-        "relative rounded-[4px] border border-transparent transition-colors",
-        selected && "border-ring bg-secondary/35",
-        changed && !selected && "border-l-ring"
-      )}
-    >
-      {onBlockSelect && (
-        <button
-          aria-label={selectionLabel}
-          aria-pressed={selected}
-          className="absolute inset-0 z-0 cursor-pointer rounded-[4px] border border-transparent transition-colors hover:border-primary/40 hover:bg-secondary/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
-          onClick={selectBlock}
-          type="button"
-        >
-          <span className="sr-only">{selectionLabel}</span>
-        </button>
-      )}
-      {selected && (
-        // Keep controls inside the block so narrow canvas overflow cannot clip them.
-        <div className="relative z-20 mb-1 ml-auto flex w-fit items-center gap-0.5 rounded-[7px] border border-border bg-card p-1 text-secondary-foreground shadow-[0_4px_14px_rgba(37,35,41,0.09)]">
-          <Button
-            aria-label="Edit block settings"
-            onClick={selectBlock}
-            size="icon-xs"
-            title="Edit settings"
-            type="button"
-            variant="ghost"
-          >
-            <Settings2 />
-          </Button>
-          <Button
-            aria-label="Move block up"
-            disabled={!canMoveUp}
-            onClick={(): void => onMoveBlock?.(block.id, "up")}
-            size="icon-xs"
-            title="Move up"
-            type="button"
-            variant="ghost"
-          >
-            <ArrowUp />
-          </Button>
-          <Button
-            aria-label="Move block down"
-            disabled={!canMoveDown}
-            onClick={(): void => onMoveBlock?.(block.id, "down")}
-            size="icon-xs"
-            title="Move down"
-            type="button"
-            variant="ghost"
-          >
-            <ArrowDown />
-          </Button>
-          <Button
-            aria-label="Delete block"
-            onClick={(): void => onDeleteBlock?.(block.id)}
-            size="icon-xs"
-            title="Delete"
-            type="button"
-            variant="destructive"
-          >
-            <Trash2 />
-          </Button>
-          {onDuplicateBlock && (
-            <Button
-              aria-label="Duplicate block"
-              onClick={(): void => onDuplicateBlock(block.id)}
-              size="icon-xs"
-              title="Duplicate"
-              type="button"
-              variant="ghost"
-            >
-              <Copy />
-            </Button>
-          )}
-        </div>
-      )}
-      <div
-        className={cn(
-          "relative z-10 px-2 py-1.5",
-          onBlockSelect && "pointer-events-none"
-        )}
-      >
-        <PreviewBlock block={block} />
-      </div>
-    </div>
-  )
-}
-
-function formatPreviewBlockType(type: TemplateBlock["type"]): string {
-  return type.replaceAll("_", " ")
 }
 
 function PreviewBlock({ block }: { block: TemplateBlock }): ReactElement {
@@ -981,7 +435,7 @@ function PreviewBlock({ block }: { block: TemplateBlock }): ReactElement {
           required={block.required}
         >
           <div className="flex h-14 w-28 items-end rounded-sm border border-dashed border-muted-foreground/40 px-3 py-2 text-xs text-muted-foreground">
-            Initials
+            {boxNote(block, [])}
           </div>
         </PreviewField>
       )
@@ -993,7 +447,7 @@ function PreviewBlock({ block }: { block: TemplateBlock }): ReactElement {
           required={block.required}
         >
           <div className="flex h-24 items-end rounded-sm border border-dashed border-muted-foreground/40 px-3 py-2 text-xs text-muted-foreground">
-            Drawn signature
+            {boxNote(block, [])}
           </div>
         </PreviewField>
       )

@@ -8,6 +8,7 @@ import {
   shouldRenderTemplateHeader,
   type TemplateRenderBlock
 } from "@/services/templates/template-render-plan"
+import { boxNote } from "@/types/box-signers"
 import type { TemplateBlock, TemplateContent, TextRun } from "@/types/template"
 
 import {
@@ -27,6 +28,8 @@ import {
   createPdfLayoutMetrics,
   getPdfRowFrames,
   scalePdfCharacterEstimate,
+  SIGNER_NAME_LEADING,
+  signerNameWidth,
   SECTION_BOX_GAP,
   SECTION_BOX_INSET,
   type PdfLayoutMetrics
@@ -62,7 +65,6 @@ import {
   normalizeDrawingDataUrl,
   printedOptions,
   RULED_LINE_PITCH,
-  SIGNER_NOTE,
   TABLE_CELL_PADDING,
   TABLE_ROW_LEAST,
   tableRows,
@@ -829,6 +831,11 @@ function lineCount(text: string, bold: boolean, size: number, width: number): nu
   return text.trim() ? wrapPdfText(text, measuringFace(bold), size, width).length : 0
 }
 
+// Bold words as drawn, an empty one still taking its line.
+function boldLines(text: string, size: number, width: number): number {
+  return Math.max(1, lineCount(text, true, size, width))
+}
+
 // The title, as long as it reads continued, and the header row of options or columns.
 function estimateRowsHead(block: RowsFieldBlock, width: number): number {
   const title = lineCount(`${block.label} (continued)`, true, 9, width) * 13 + 3
@@ -1174,30 +1181,16 @@ function estimateFlowItemHeight(
       baseHeight = estimateBrandingHeight(input.content)
       break
     case "title":
-      baseHeight =
-        estimateWrappedTextHeight(
-          item.title,
-          scalePdfCharacterEstimate(55, metrics.contentWidth),
-          35
-        ) + 16
+      baseHeight = boldLines(item.title, 24, metrics.contentWidth) * 35 + 16
       break
     case "section_label":
       // In a bar: 11 points on 15, padded 5 above and below, 8 under the bar.
       baseHeight = metrics.sectionStyle === "band"
-        ? estimateWrappedTextHeight(item.label, scalePdfCharacterEstimate(88, metrics.contentWidth - 12), 15) + 18
-        : estimateWrappedTextHeight(
-          item.label,
-          scalePdfCharacterEstimate(65, metrics.contentWidth),
-          22
-        ) + 10
+        ? boldLines(item.label, 11, metrics.contentWidth - 12) * 15 + 18
+        : boldLines(item.label, 15, metrics.contentWidth) * 22 + 10
       break
     case "field_group_label":
-      baseHeight =
-        estimateWrappedTextHeight(
-          item.label,
-          scalePdfCharacterEstimate(90, metrics.contentWidth),
-          13
-        ) + 8
+      baseHeight = boldLines(item.label.toUpperCase(), 9, metrics.contentWidth) * 13 + 8
       break
     case "space":
       return item.height
@@ -1238,20 +1231,9 @@ function estimateFlowItemHeight(
       baseHeight = 52
       break
     case "signer":
-      baseHeight = Math.max(
-        item.signer.signatureDataUrl || item.signer.initialsDataUrl ? 74 : 60,
-        estimateWrappedTextHeight(
-          item.signer.name,
-          scalePdfCharacterEstimate(75, metrics.contentWidth),
-          12
-        ) +
-          estimateWrappedTextHeight(
-            item.signer.email,
-            scalePdfCharacterEstimate(90, metrics.contentWidth),
-            10
-          ) +
-          24
-      )
+      // The card and the gap under it, a line taller for each the name wraps onto.
+      baseHeight = (item.signer.signatureDataUrl || item.signer.initialsDataUrl ? 74 : 60) +
+        (boldLines(item.signer.name, 10, signerNameWidth(item.signer, metrics.contentWidth)) - 1) * SIGNER_NAME_LEADING
       break
   }
 
@@ -1283,19 +1265,11 @@ function estimateBlockHeight(
 
   switch (block.type) {
     case "heading": {
-      const baselineCharacters =
-        block.level === 1 ? 55 : block.level === 2 ? 65 : 75
       const size = block.level === 1 ? 20 : block.level === 2 ? 16 : 13
       const lineHeight = lineSpacing ? size * lineSpacing : block.level === 1 ? 29 : block.level === 2 ? 24 : 20
       const scale = runScale(block.runs, size)
 
-      return (
-        estimateWrappedTextHeight(
-          block.text,
-          scalePdfCharacterEstimate(baselineCharacters, availableWidth) / scale,
-          lineHeight * scale
-        ) + 16
-      )
+      return boldLines(block.text, size * scale, availableWidth) * lineHeight * scale + 16
     }
     case "paragraph": {
       const scale = runScale(block.runs, 10)
@@ -1362,11 +1336,7 @@ function estimateBlockHeight(
         10
       )
     case "file_field": {
-      const labelHeight = estimateWrappedTextHeight(
-        block.label,
-        scalePdfCharacterEstimate(78, availableWidth),
-        13
-      )
+      const labelHeight = estimateFieldLabelHeight(block, availableWidth)
       const noticeHeight = estimateWrappedTextHeight(
         "Uploads are only in submissions.",
         scalePdfCharacterEstimate(88, availableWidth),
@@ -1452,7 +1422,8 @@ function estimateStyledFieldHeight(
   const label = `${block.label} (continued)`
   const signing = block.type === "signature_field" || block.type === "initials_field"
   const room = signing ? drawingRoom(block, Boolean(normalizeDrawingDataUrl(answers[block.fieldKey]))) : 0
-  const answer = signing ? SIGNER_NOTE : (answerOverride ?? formatFieldValue(block, answers[block.fieldKey]))
+  // Room for the longest note an empty box prints, whoever has signed.
+  const answer = signing ? boxNote(block, []) : (answerOverride ?? formatFieldValue(block, answers[block.fieldKey]))
   const multiline = block.type === "text_field" && block.multiline
   const help = (across: number): number =>
     block.helpText ? estimateWrappedTextHeight(block.helpText, scalePdfCharacterEstimate(110, across), 10) : 0
@@ -1486,7 +1457,7 @@ function estimateLineFieldDepth(block: StyledFieldBlock, answers: Record<string,
   const label = `${block.label} (continued)`
 
   if (block.type === "signature_field" || block.type === "initials_field") {
-    return Math.max(drawingRoom(block, Boolean(normalizeDrawingDataUrl(answers[block.fieldKey]))), estimateWordWrappedHeight(SIGNER_NOTE, width - ANSWER_BOX_PADDING * 2, 15) + ANSWER_BOX_PADDING * 2)
+    return Math.max(drawingRoom(block, Boolean(normalizeDrawingDataUrl(answers[block.fieldKey]))), estimateWordWrappedHeight(boxNote(block, []), width - ANSWER_BOX_PADDING * 2, 15) + ANSWER_BOX_PADDING * 2)
   }
 
   const answer = answerOverride ?? formatFieldValue(block, answers[block.fieldKey])
@@ -1506,8 +1477,9 @@ function estimateLineFieldDepth(block: StyledFieldBlock, answers: Record<string,
   return Math.max(estimateWordWrappedHeight(label, width * LINE_LABEL_SHARE, 15), estimateWordWrappedHeight(answer, estimateAnswerWidth(block, width * (1 - LINE_LABEL_SHARE) - LINE_LABEL_GAP), 15)) + LINE_RULE_DROP
 }
 
+// Bold 9 on 13, measured with the longest mark it can carry.
 function estimateFieldLabelHeight(block: PdfFieldBlock, availableWidth: number): number {
-  return estimateWrappedTextHeight(block.label, scalePdfCharacterEstimate(78, availableWidth), 13)
+  return boldLines(`${block.label} (continued)`, 9, availableWidth) * 13
 }
 
 function estimateHelpHeight(block: PdfFieldBlock, availableWidth: number): number {

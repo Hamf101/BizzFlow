@@ -28,7 +28,7 @@ import type { TemplateBlock } from "@/types/template"
 export type RoomNotes = Readonly<{ path: string; roomId: string; seen: RoomNotesSeen }>
 
 type Kind = keyof RoomNotesSeen
-type List = { data: readonly unknown[] | null; listeners: Set<() => void>; shown: number; started: number; tick: number }
+type List = { data: readonly unknown[] | null; failed: boolean; listeners: Set<() => void>; shown: number; started: number; tick: number }
 type Thread = Readonly<{ first: WorkingCopyComment; replies: readonly WorkingCopyComment[] }>
 type Box = Readonly<{ color: string; height: number; key: string; names: readonly string[]; width: number; x: number; y: number }>
 type Fold = Readonly<{ blockId: string; count: number; x: number; y: number }>
@@ -227,6 +227,7 @@ export function RoomPeople({
       heading={heading}
       me={me}
       messages={messages}
+      room={room}
       tint={tintAmong(others)}
       onSend={(body) => post(room, "chat", { action: "message", body })}
       placeholder={people.length > 0 ? `Message ${sayNames(names)}…` : "Message everyone editing this…"}
@@ -314,7 +315,7 @@ export function RoomComments({
   return (
     <div className="grid gap-3" data-slot="room-comments">
       {comments === null ? (
-        <p className="text-[13px] text-muted-foreground">Loading…</p>
+        <NotesWaiting className="text-[13px] text-muted-foreground" kind="comments" room={room} />
       ) : threads.length === resolved.length ? (
         <p className="text-[13px] text-muted-foreground">No open comments.</p>
       ) : null}
@@ -468,6 +469,7 @@ function Chat({
   messages,
   onSend,
   placeholder,
+  room,
   tint,
   today,
 }: {
@@ -476,6 +478,7 @@ function Chat({
   messages: readonly WorkingCopyChatMessage[] | null
   onSend: (body: string) => Promise<unknown>
   placeholder: string
+  room: RoomNotes
   tint: (userId: string | null) => string
   today: string
 }): ReactElement {
@@ -493,7 +496,7 @@ function Chat({
       {heading}
       <div className="flex min-h-24 flex-col gap-2.5 overflow-y-auto px-3.5 pt-1.5 pb-1 text-[13.5px]" ref={list}>
         {messages === null ? (
-          <p className="m-auto text-[12.5px] text-muted-foreground">Loading…</p>
+          <NotesWaiting className="m-auto text-[12.5px] text-muted-foreground" kind="chat" room={room} />
         ) : messages.length === 0 ? (
           <p className="m-auto max-w-56 text-center text-[12.5px] text-muted-foreground">
             Nothing said yet. Only people who can edit this see what is said here.
@@ -565,11 +568,13 @@ function Composer({
     }
 
     setBusy(true)
-    const kept = await onSend(body)
-    setBusy(false)
 
-    if (kept) {
-      setText("")
+    try {
+      if (await onSend(body)) {
+        setText("")
+      }
+    } finally {
+      setBusy(false)
     }
   }
 
@@ -764,7 +769,7 @@ function listOf(roomId: string, kind: Kind): List {
     return found
   }
 
-  const list: List = { data: null, listeners: new Set(), shown: 0, started: 0, tick: -1 }
+  const list: List = { data: null, failed: false, listeners: new Set(), shown: 0, started: 0, tick: -1 }
   lists.set(key, list)
   return list
 }
@@ -779,8 +784,29 @@ async function reload(room: RoomNotes, kind: Kind): Promise<void> {
   if (Array.isArray(body?.notes) && order > list.shown) {
     list.shown = order
     list.data = body.notes
+    list.failed = false
+    list.listeners.forEach((listener) => listener())
+  } else if (!Array.isArray(body?.notes) && order === list.started) {
+    // Asked again the next time it is opened or the room hears of a change.
+    list.tick = -1
+    list.failed = true
     list.listeners.forEach((listener) => listener())
   }
+}
+
+// What a list shows before it has anything: that it is coming, or that it could not be fetched.
+function NotesWaiting({ className, kind, room }: { className: string; kind: Kind; room: RoomNotes }): ReactElement {
+  const list = listOf(room.roomId, kind)
+  const subscribe = useCallback(
+    (listener: () => void) => {
+      list.listeners.add(listener)
+      return () => void list.listeners.delete(listener)
+    },
+    [list]
+  )
+  const failed = useSyncExternalStore(subscribe, () => list.failed, () => false)
+
+  return <p className={className}>{failed ? "Couldn’t load. Close and open this again to retry." : "Loading…"}</p>
 }
 
 // Everything showing a list shares it; it is fetched once for each change the room hears of.

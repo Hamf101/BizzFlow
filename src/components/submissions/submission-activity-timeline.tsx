@@ -10,7 +10,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { formatMediumDateTime } from "@/lib/date-format"
+import { LocalDate } from "@/components/ui/local-date"
+import { memberLabel } from "@/components/people/member-name"
 import type { OrganizationMember } from "@/types/organization"
 
 /**
@@ -31,7 +32,7 @@ export function SubmissionActivityTimeline({
   const memberLabels = new Map<string, string>(
     members.map((member: OrganizationMember): [string, string] => [
       member.userId,
-      member.fullName?.trim() || member.email,
+      memberLabel(member),
     ])
   )
   const commentsById = new Map<string, SubmissionComment>(
@@ -82,7 +83,7 @@ export function SubmissionActivityTimeline({
                       </p>
                     )}
                     <p className="mt-2 text-xs text-muted-foreground">
-                      {formatMediumDateTime(event.createdAt)} · revision{" "}
+                      <LocalDate time value={event.createdAt} /> · revision{" "}
                       {event.submissionRevision}
                     </p>
                   </div>

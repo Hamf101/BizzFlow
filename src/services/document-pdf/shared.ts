@@ -1,5 +1,6 @@
 import { formatDateAnswer } from "@/lib/date-format"
 import { createTemplateRenderPlan } from "@/services/templates/template-render-plan"
+import { boxNote, boxSigner, withBoxMarks } from "@/types/box-signers"
 import {
   answerBoxHeight,
   MAX_TABLE_FIELD_ROWS,
@@ -63,7 +64,8 @@ export function normalizePdfInput(
   )
 
   for (const signer of signers) {
-    if (!signer.id.trim() || !signer.name.trim() || !signer.email.trim()) {
+    // A guest's copy leaves out each signer's address.
+    if (!signer.id.trim() || !signer.name.trim()) {
       throw new DocumentPdfServiceError("A signer record is invalid.", 400)
     }
 
@@ -76,14 +78,19 @@ export function normalizePdfInput(
     }
   }
 
+  // A drawn box prints only its own signer's mark, never a drawing anyone
+  // else stored as its answer.
+  const answers = withBoxMarks(content.blocks, input.answers, signers)
+
   return {
     ...input,
+    answers,
     title,
     content,
     renderPlan: createTemplateRenderPlan({
       title,
       content,
-      answers: input.answers,
+      answers,
       mode: "final",
     }),
     metadataTimestamp,
@@ -167,8 +174,16 @@ export const ANSWER_BOX_PADDING = 6
 /** How far a checkbox's label sits from the box's left edge, in points. */
 export const CHECKBOX_LABEL_INSET = 16
 
-/** What a signature or initials field prints in its room when signers sign in the signing record. */
-export const SIGNER_NOTE = "Captured per signer in signing record below"
+/**
+ * What an empty signature or initials box prints once the document has
+ * signers: whose it is, or that they signed. The sender's box, past sending,
+ * prints nothing.
+ */
+export function drawnBoxNote(block: PdfDrawnBox, signers: ReadonlyArray<{ status: string }>): string {
+  return signers.length > 0 && boxSigner(block) !== "sender" ? boxNote(block, signers) : ""
+}
+
+type PdfDrawnBox = Extract<TemplateBlock, { type: "initials_field" | "signature_field" }>
 
 /**
  * The room a signature or initials field leaves to sign in: its box, taller

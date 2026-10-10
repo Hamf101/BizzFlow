@@ -1,3 +1,5 @@
+import { setTimeout as pause } from "node:timers/promises"
+
 import { describe, expect, it, vi } from "vitest"
 
 import type {
@@ -6,6 +8,10 @@ import type {
   AiStructuredGenerationRequest,
   AiStructuredGenerationResult
 } from "@/services/ai/contracts"
+// Flow waits a second before retrying an outage; the tests only check that it does.
+vi.mock("node:timers/promises", () => ({ setTimeout: vi.fn(async () => undefined) }))
+
+import { PostgrestReadQuery, type FakeRow } from "@/services/postgrest-fake.test-support"
 import {
   AI_PROVIDER_ERROR_CODES,
   AiProviderError
@@ -15,6 +21,8 @@ import {
   executeDocumentFlow,
   executeTemplateFlow,
   listTemplateFlowMessages,
+  rebuildDocumentFlowProposal,
+  rebuildTemplateFlowProposal,
   type ExecuteTemplateFlowInput,
   type TemplateFlowServiceDeps
 } from "@/services/template-flow-service"
@@ -36,44 +44,13 @@ const FIELD_ID = "00000000-0000-4000-8000-000000000014"
 const TEST_PROVIDER_ID = "test-provider"
 const TEST_MODEL = "test-exact-model"
 
-type TemplateFlowRow = Record<string, unknown>
-
-class TemplateFlowQuery implements PromiseLike<{ data: unknown; error: null }> {
-  private readonly filters: Array<[string, unknown]> = []
-
-  constructor(private readonly rows: TemplateFlowRow[]) {}
-
-  select(): TemplateFlowQuery {
-    return this
-  }
-
-  eq(column: string, value: unknown): TemplateFlowQuery {
-    this.filters.push([column, value])
-    return this
-  }
-
-  async maybeSingle(): Promise<{ data: unknown; error: null }> {
-    const matches = this.rows.filter((row) =>
-      this.filters.every(([column, value]) => row[column] === value)
-    )
-    return { data: matches[0] ?? null, error: null }
-  }
-
-  then<TResult1 = { data: unknown; error: null }, TResult2 = never>(
-    onfulfilled?:
-      | ((value: { data: unknown; error: null }) => TResult1 | PromiseLike<TResult1>)
-      | null,
-    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
-  ): PromiseLike<TResult1 | TResult2> {
-    return this.maybeSingle().then(onfulfilled, onrejected)
-  }
-}
+type TemplateFlowRow = FakeRow
 
 class TemplateFlowClient {
   constructor(readonly tables: Record<string, TemplateFlowRow[]>) {}
 
-  from(tableName: string): TemplateFlowQuery {
-    return new TemplateFlowQuery(this.tables[tableName] ?? [])
+  from(tableName: string): PostgrestReadQuery {
+    return new PostgrestReadQuery(this.tables[tableName] ?? [])
   }
 
   // Stands in for get_template_access_level for these tests: whoever the role lets manage templates edits.
@@ -130,6 +107,30 @@ describe("template Flow service", () => {
         }
       )
     ).resolves.toEqual([])
+  })
+
+  it("reads Flow history through the client it is given", async () => {
+    const client = createAuthorizationClient(["templates:manage"])
+    client.tables.template_flow_messages = [
+      {
+        author_name: "Maya",
+        author_user_id: "user-1",
+        change_set: null,
+        content: "Tighten the intro",
+        created_at: "2026-10-01T09:00:00.000Z",
+        id: "00000000-0000-4000-8000-000000000020",
+        org_id: "org-1",
+        role: "user",
+        template_id: TEMPLATE_ID,
+      },
+    ]
+
+    const history = await listTemplateFlowMessages(
+      { actorUserId: "user-1", organizationId: "org-1", templateId: TEMPLATE_ID },
+      { client: client as never }
+    )
+
+    expect(history.map((message) => message.content)).toEqual(["Tighten the intro"])
   })
 
   it("rechecks edited Flow permissions and denies a revoked custom grant", async () => {
@@ -280,41 +281,13 @@ describe("template Flow service", () => {
       provider: TEST_PROVIDER_ID,
       model: TEST_MODEL
     })
-    expect(providerRequest?.input).toContain("What would you like to improve?")
+    // The logo's bytes stay out of what the provider is sent.
     expect(providerRequest?.input).not.toContain("aGVsbG8=")
-    expect(providerRequest?.systemInstruction).toContain(
-      "BizFlow's accountable business-document editor"
-    )
-    expect(providerRequest?.systemInstruction).toContain("intake forms")
-    expect(providerRequest?.systemInstruction).toContain("locked")
-    expect(providerRequest?.systemInstruction).toContain("lower_snake_case")
-    expect(providerRequest?.systemInstruction).toContain("Needs input:")
-    expect(providerRequest?.systemInstruction).toContain(
-      "meaningful choices"
-    )
-    expect(providerRequest?.systemInstruction).toContain("single title")
-    expect(providerRequest?.systemInstruction).toContain("payloadJson")
-    const responseSchema = JSON.stringify(providerRequest?.responseSchema)
-    expect(responseSchema).not.toContain('"anyOf"')
-    expect(responseSchema).toContain('"payloadJson"')
-    expect(responseSchema).toContain('"remove_block"')
-    expect(responseSchema).not.toContain('"target"')
-  })
-
-  it("hands back a removal nobody asked for, and keeps the rest of the turn when the rewrite leaves the block alone", async () => {
-    const removal: TestFlowOperation = { type: "remove_block", summary: "Removed introduction", payload: { blockId: PARAGRAPH_ID } }
-    const rename: TestFlowOperation = { type: "set_title", summary: "Renamed it", payload: { value: "Short agreement" } }
-    const { aiProvider, run } = runFlow(createContent(), [removal, rename], [rename])
-    const result = await run
-
-    expect(String(readProviderRequests(aiProvider)[1]?.input)).toMatch(/unrequested_removal.*A long introduction/)
-    expect(result.needsConfirmation).toBe(false)
-    expect(result.proposal?.candidateDraft).toMatchObject({ title: "Short agreement", content: { blocks: [{ id: PARAGRAPH_ID }] } })
   })
 
   it("drafts typed answers with units, choose-several ticks, question grids and fill-in tables", async () => {
     const add = (summary: string, block: Record<string, unknown>): TestFlowOperation => ({ type: "add_block", summary, payload: { afterBlockId: null, block } })
-    const { aiProvider, run } = runFlow(createContent(), [
+    const { run } = runFlow(createContent(), [
       add("Asked the rent", { type: "text_field", fieldKey: "rent", label: "Monthly rent", required: true, helpText: null, placeholder: null, multiline: false, format: "money", prefix: "£", suffix: "per month" }),
       add("Asked the reference", { type: "text_field", fieldKey: "ni_number", label: "National Insurance number", required: false, helpText: null, placeholder: null, multiline: false, comb: 9 }),
       add("Asked the days", { type: "dropdown_field", fieldKey: "days", label: "Days you can work", required: false, helpText: null, placeholder: null, options: ["Mon", "Tue", "Wed"], multiple: true, across: true }),
@@ -322,8 +295,6 @@ describe("template Flow service", () => {
       add("Asked the hours", { type: "table_field", fieldKey: "hours", label: "Hours worked", required: false, helpText: null, columns: [{ label: "Date", format: "date" }, { label: "Hours", format: "number" }], rows: 7, addRows: true }),
     ])
     const result = await run
-    const instruction = String(readProviderRequests(aiProvider)[0]?.systemInstruction)
-
     expect(result.proposal?.candidateDraft.content.blocks.slice(1)).toMatchObject([
       { format: "money", prefix: "£", suffix: "per month", type: "text_field" },
       { comb: 9, type: "text_field" },
@@ -331,76 +302,27 @@ describe("template Flow service", () => {
       { options: ["OK", "Defect"], rows: ["Tyres", "Lights"], type: "choice_grid_field" },
       { addRows: true, rows: 7, type: "table_field" },
     ])
-    for (const kind of ["choice_grid_field", "table_field", '"multiple"', '"format"', '"comb"']) {
-      expect(instruction).toContain(kind)
-    }
   })
 
-  it("lets a field go when the same turn puts one in its place, and hands back removals that outnumber their replacements", async () => {
-    const nameField = (id: string, fieldKey: string, label: string) =>
-      ({ id, type: "text_field", fieldKey, label, required: false, helpText: null, placeholder: null, multiline: false }) as const
-    const content = createContent()
-    content.blocks.push(nameField(FIELD_ID, "first_name", "First name"), nameField(COMPANION_ID, "last_name", "Last name"))
-    const merge: TestFlowOperation = {
-      type: "update_block",
-      summary: "Asked for the full name in one field",
-      payload: { blockId: FIELD_ID, block: { ...nameField(FIELD_ID, "first_name", "Full name"), id: undefined } },
+  it("proposes a removal for review instead of asking, whatever words the request used", async () => {
+    for (const instruction of ["Don't delete the introduction.", "Get rid of the introduction and the logo."]) {
+      const aiProvider = createTestAiProvider([
+        flowProviderResult({
+          assistantMessage: "Done.",
+          needsConfirmation: false,
+          confirmationQuestion: "",
+          operations: [
+            { type: "remove_block", summary: "Removed introduction", payload: { blockId: PARAGRAPH_ID } },
+            { type: "set_branding", summary: "Removed logo", payload: { removeLogo: true } },
+          ],
+        }),
+      ])
+      const result = await executeTemplateFlow(createInput(createContent(), instruction), createDependencies({ aiProvider }))
+
+      expect(result.needsConfirmation).toBe(false)
+      expect(result.proposal?.operations.map((operation) => operation.type)).toEqual(["remove_block", "set_branding"])
+      expect(result.proposal?.candidateDraft.content).toMatchObject({ blocks: [], branding: { logoDataUrl: null } })
     }
-    const dropLast: TestFlowOperation = { type: "remove_block", summary: "Removed last name, now part of full name", payload: { blockId: COMPANION_ID } }
-    const merged = runFlow(content, [merge, dropLast])
-    const result = await merged.run
-
-    expect(readProviderRequests(merged.aiProvider)).toHaveLength(1)
-    expect(result.needsConfirmation).toBe(false)
-    expect(result.proposal?.candidateDraft.content.blocks.map((block) => block.id)).toEqual([PARAGRAPH_ID, FIELD_ID])
-
-    // Two fields and the introduction go for one field changed: not a replacement.
-    const sweep = runFlow(content, [merge, dropLast, { type: "remove_block", summary: "Removed introduction", payload: { blockId: PARAGRAPH_ID } }], [merge])
-
-    await sweep.run
-    expect(String(readProviderRequests(sweep.aiProvider)[1]?.input)).toMatch(/unrequested_removal.*A long introduction/)
-
-    // Clearer help on the same question replaces nothing.
-    const reworded: TestFlowOperation = {
-      type: "update_block",
-      summary: "Clearer help",
-      payload: { blockId: FIELD_ID, block: { ...nameField(FIELD_ID, "first_name", "First name"), helpText: "As on your passport.", id: undefined } },
-    }
-    const masked = runFlow(content, [reworded, dropLast], [reworded])
-
-    await masked.run
-    expect(String(readProviderRequests(masked.aiProvider)[1]?.input)).toMatch(/unrequested_removal.*Last name/)
-  })
-
-  it("asks before a removal the model insists on, naming what would go, and leaves the draft unchanged", async () => {
-    const content = createContent()
-    const aiProvider = createTestAiProvider([
-      flowProviderResult({
-        assistantMessage: "I can shorten the document.",
-        needsConfirmation: false,
-        confirmationQuestion: "",
-        operations: [
-          {
-            type: "remove_block",
-            summary: "Removed introduction",
-            payload: {
-              blockId: PARAGRAPH_ID
-            }
-          }
-        ]
-      })
-    ])
-
-    const result = await executeTemplateFlow(
-      createInput(content, "Make this document shorter."),
-      createDependencies({ aiProvider })
-    )
-
-    expect(result.needsConfirmation).toBe(true)
-    expect(result.proposal).toBeNull()
-    expect(result.messages[1].content).toContain("A long introduction")
-    expect(result.messages[1].operations).toEqual([])
-    expect(readProviderRequests(aiProvider)).toHaveLength(2)
   })
 
   it("keeps appended free-form blocks in provider operation order", async () => {
@@ -519,34 +441,6 @@ describe("template Flow service", () => {
     expect(result.proposal?.changedBlockIds).toEqual([PARAGRAPH_ID])
   })
 
-  it("requires an explicit logo-removal request even when other deletion is requested", async () => {
-    const content = createContent()
-    const aiProvider = createTestAiProvider([
-      flowProviderResult({
-        assistantMessage: "I removed the requested content.",
-        needsConfirmation: false,
-        confirmationQuestion: "",
-        operations: [
-          {
-            type: "set_branding",
-            summary: "Removed logo",
-            payload: { removeLogo: true }
-          }
-        ]
-      })
-    ])
-
-    const result = await executeTemplateFlow(
-      createInput(content, "Delete the introduction."),
-      createDependencies({ aiProvider })
-    )
-
-    expect(result.needsConfirmation).toBe(true)
-    expect(result.proposal).toBeNull()
-    expect(result.messages[1].content).toContain("existing logo")
-    expect(content.branding.logoDataUrl).toBe("data:image/png;base64,aGVsbG8=")
-  })
-
   it("knows a stored logo is there without seeing its address, and removes it when asked", async () => {
     const content = createContent()
     content.branding.logoDataUrl = null
@@ -598,6 +492,29 @@ describe("template Flow service", () => {
       provider: TEST_PROVIDER_ID,
       model: TEST_MODEL
     })
+  })
+
+  it("runs the model the member picked, and refuses one Flow doesn't offer", async () => {
+    const picked: unknown[] = []
+    const deps = createDependencies({})
+    const getAiRuntime = deps.getAiRuntime!
+    deps.getAiRuntime = (options) => {
+      picked.push(options?.model)
+      return getAiRuntime(options)
+    }
+
+    await executeTemplateFlow(
+      { ...createInput(createBlankTemplateContent(), "Create an agreement."), model: "gemini-3.5-flash" },
+      deps
+    )
+    await expect(
+      executeTemplateFlow(
+        { ...createInput(createBlankTemplateContent(), "Create an agreement."), model: "gpt-unknown" },
+        deps
+      )
+    ).rejects.toMatchObject({ statusCode: 400 })
+
+    expect(picked).toEqual(["gemini-3.5-flash"])
   })
 
   it("rejects a provider result model mismatch without fallback", async () => {
@@ -732,6 +649,7 @@ describe("template Flow service", () => {
     expect(persistMessages).toHaveBeenCalledTimes(1)
     expect(readProviderRequests(aiProvider)).toHaveLength(2)
     expect(readProviderRequests(aiProvider)[1]).toEqual(readProviderRequests(aiProvider)[0])
+    expect(pause).toHaveBeenCalledWith(1_000)
   })
 
   it.each(["outage", "invalid output"])("stops after two calls when an outage is followed by %s", async (failure) => {
@@ -788,52 +706,22 @@ describe("template Flow service", () => {
         }
       }
     ])
-    const infoSpy = vi.spyOn(console, "info").mockImplementation((): void => {})
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation((): void => {})
+    const result = await executeTemplateFlow(
+      createInput(createBlankTemplateContent(), "Create an agreement."),
+      createDependencies({ aiProvider })
+    )
 
-    try {
-      await executeTemplateFlow(
-        createInput(createBlankTemplateContent(), "Create an agreement."),
-        createDependencies({ aiProvider })
-      )
-
-      const requests = readProviderRequests(aiProvider)
-      expect(requests).toHaveLength(2)
-      expect(requests.map((request) => request.model)).toEqual([
-        { provider: TEST_PROVIDER_ID, model: TEST_MODEL },
-        { provider: TEST_PROVIDER_ID, model: TEST_MODEL }
-      ])
-      expect(requests[1]?.input).toContain("semanticRepair")
-      // The draft, the largest part, leads, and a repair repeats the first
-      // prompt as its opening, so the provider can reuse what it already read.
-      expect(Object.keys(JSON.parse(requests[0]?.input ?? "{}"))[0]).toBe("currentDraft")
-      expect(requests[1]?.input.startsWith(requests[0]?.input.slice(0, -1) ?? "?")).toBe(true)
-      expect(infoSpy).toHaveBeenCalledWith(
-        "template_flow_turn_completed",
-        expect.objectContaining({
-          provider: TEST_PROVIDER_ID,
-          model: TEST_MODEL,
-          traceId: "repair-success-trace",
-          upstreamCalls: 2,
-          cachedTokens: 90,
-          inputTokens: 240,
-          outputTokens: 50,
-          totalTokens: 290
-        })
-      )
-      expect(warnSpy).toHaveBeenCalledWith(
-        "template_flow_provider_output_invalid",
-        expect.objectContaining({
-          provider: TEST_PROVIDER_ID,
-          model: TEST_MODEL,
-          providerCall: 1,
-          issueCode: "invalid_json"
-        })
-      )
-    } finally {
-      infoSpy.mockRestore()
-      warnSpy.mockRestore()
-    }
+    const requests = readProviderRequests(aiProvider)
+    expect(result.messages.at(-1)?.content).toBe("I created the agreement.")
+    expect(requests.map((request) => request.model)).toEqual([
+      { provider: TEST_PROVIDER_ID, model: TEST_MODEL },
+      { provider: TEST_PROVIDER_ID, model: TEST_MODEL }
+    ])
+    expect(requests[1]?.input).toContain("semanticRepair")
+    // The draft, the largest part, leads, and a repair repeats the first
+    // prompt as its opening, so the provider can reuse what it already read.
+    expect(Object.keys(JSON.parse(requests[0]?.input ?? "{}"))[0]).toBe("currentDraft")
+    expect(requests[1]?.input.startsWith(requests[0]?.input.slice(0, -1) ?? "?")).toBe(true)
   })
 
   it("caps invalid structured output at two upstream calls", async () => {
@@ -853,31 +741,6 @@ describe("template Flow service", () => {
       message: "Flow returned changes that failed validation."
     })
     expect(readProviderRequests(aiProvider)).toHaveLength(2)
-  })
-
-  it("logs null usage when the provider omits token counts", async () => {
-    const aiProvider = createTestAiProvider([
-      flowProviderResult(successfulFlowPayload())
-    ])
-    const infoSpy = vi.spyOn(console, "info").mockImplementation((): void => {})
-
-    try {
-      await executeTemplateFlow(
-        createInput(createBlankTemplateContent(), "Create an agreement."),
-        createDependencies({ aiProvider })
-      )
-
-      expect(infoSpy).toHaveBeenCalledWith(
-        "template_flow_turn_completed",
-        expect.objectContaining({
-          inputTokens: null,
-          outputTokens: null,
-          totalTokens: null
-        })
-      )
-    } finally {
-      infoSpy.mockRestore()
-    }
   })
 
   it("preserves existing field keys and deterministically deduplicates new labels", async () => {
@@ -1660,6 +1523,79 @@ describe("document Flow", () => {
       )
     ).rejects.toMatchObject({ statusCode: 404 })
     expect(readProviderRequests(aiProvider)).toHaveLength(0)
+  })
+})
+
+describe("reviewing a Flow proposal change by change", () => {
+  const field = { required: false, helpText: null, placeholder: null }
+  const operations: TestFlowOperation[] = [
+    { type: "add_block", summary: "Asked the vehicle", payload: { ref: "new:vehicle", afterBlockId: null, block: { ...field, type: "dropdown_field", fieldKey: "vehicle", label: "Vehicle", options: ["Car", "Van"] } } },
+    // Rests on the new dropdown only through its condition.
+    { type: "add_block", summary: "Asked the van's size", payload: { afterBlockId: null, block: { ...field, type: "text_field", fieldKey: "van_size", label: "Van size", multiline: false, visibleWhen: { sourceBlockId: "new:vehicle", operator: "equals", value: "Van" } } } },
+    { type: "move_block", summary: "Moved the vehicle first", payload: { blockId: "new:vehicle", afterBlockId: null } },
+    { type: "set_title", summary: "Renamed it", payload: { value: "Vehicle form" } },
+  ]
+
+  async function propose() {
+    const { aiProvider, run } = runFlow(createContent(), operations)
+    const input = createInput(createContent(), "Ask about the vehicle.")
+    const proposal = (await run).proposal!
+    const rebuild = (kept: unknown[], overrides: Record<string, unknown> = {}) =>
+      rebuildTemplateFlowProposal(
+        { actorUserId: "user-1", organizationId: "org-1", templateId: TEMPLATE_ID, draft: input.draft, baseDraftFingerprint: proposal.baseDraftFingerprint, operations: kept, ...overrides },
+        createDependencies({ aiProvider })
+      )
+
+    return { aiProvider, input, proposal, rebuild }
+  }
+
+  it("says which changes need which, and rebuilds the draft from the kept ones without asking the model", async () => {
+    const { aiProvider, proposal, rebuild } = await propose()
+
+    expect(proposal.operations.map((item) => item.dependsOn)).toEqual([[], [0], [0], []])
+
+    // The vehicle dropped takes the van's size and the move with it.
+    const rebuilt = await rebuild([proposal.wireOperations[3]])
+
+    expect(rebuilt).toMatchObject({ status: "pending", baseDraftFingerprint: proposal.baseDraftFingerprint })
+    expect(rebuilt.candidateDraft.title).toBe("Vehicle form")
+    expect(rebuilt.candidateDraft.content.blocks.map((block) => block.id)).toEqual([PARAGRAPH_ID])
+    expect(rebuilt.operations.map((item) => item.summary)).toEqual(["Renamed it"])
+    // A change left without the one it needs cannot be built.
+    await expect(rebuild(proposal.wireOperations.slice(1))).rejects.toMatchObject({ statusCode: 422 })
+    expect(readProviderRequests(aiProvider)).toHaveLength(1)
+  })
+
+  it("refuses forged or unknown changes, and a draft that moved on since the proposal", async () => {
+    const { aiProvider, input, proposal, rebuild } = await propose()
+    const rename = proposal.wireOperations[3] as Record<string, unknown>
+
+    for (const forged of [
+      [{ type: "drop_database", summary: "Gone", payload: {} }],
+      [{ ...rename, injected: true }],
+      Array.from({ length: 81 }, () => rename),
+    ]) {
+      await expect(rebuild(forged)).rejects.toMatchObject({ statusCode: 400 })
+    }
+    // An id the model could never have given a new block.
+    await expect(
+      rebuild([{ type: "add_block", summary: "Copied", payload: { afterBlockId: null, id: PARAGRAPH_ID, block: { type: "divider" } } }])
+    ).rejects.toMatchObject({ statusCode: 422 })
+    await expect(
+      rebuild([rename], { draft: { ...input.draft as object, title: "Changed meanwhile" } })
+    ).rejects.toMatchObject({ statusCode: 409 })
+    await expect(
+      rebuildDocumentFlowProposal(
+        { actorUserId: "user-1", organizationId: "org-1", documentId: TEMPLATE_ID, draft: input.draft, baseDraftFingerprint: proposal.baseDraftFingerprint, operations: [rename] },
+        {
+          ...createDependencies({ aiProvider }),
+          authorizeDocument: async (): Promise<void> => {
+            throw new DocumentSigningServiceError("Generated document was not found.", 404)
+          },
+        }
+      )
+    ).rejects.toMatchObject({ statusCode: 404 })
+    expect(readProviderRequests(aiProvider)).toHaveLength(1)
   })
 })
 

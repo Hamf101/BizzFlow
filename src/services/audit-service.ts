@@ -1,11 +1,6 @@
 import type { ListSort } from "@/lib/list-state"
 import { createAdminClient } from "@/lib/supabase/admin"
-import {
-  canPerformOrganizationAction,
-  createOrganizationPermissionSubject,
-  isOrganizationRole,
-  type OrganizationPermissionSubject,
-} from "@/lib/permissions"
+import { captureUnexpectedError } from "@/lib/observability"
 import { createListInputValidators } from "@/services/list-input"
 import {
   POSTGREST_BATCH_SIZE,
@@ -16,19 +11,19 @@ import {
   AUDIT_LOG_ACTIONS,
   AUDIT_LOG_SORT_KEYS,
   AUDIT_LOG_TARGET_TYPES,
-  type AuditChainVerification,
   type AuditLogAction,
   type AuditLogEntry,
   type AuditLogSortKey,
   type AuditLogTargetType,
   type AuditMetadata,
 } from "@/types/audit"
-import { loadActiveMembership } from "@/services/organizations/active-membership"
+import { requireOrgPermission } from "@/services/organizations/active-membership"
+import { ServiceError } from "@/services/service-error"
 
 type AdminClient = ReturnType<typeof createAdminClient>
 
 const AUDIT_LOG_COLUMNS =
-  "id,org_id,actor_user_id,action,target_type,target_id,metadata,seq,prev_hash,entry_hash,created_at"
+  "id,org_id,actor_user_id,action,target_type,target_id,metadata,seq,created_at"
 
 type AuditLogRow = {
   id: string
@@ -39,17 +34,10 @@ type AuditLogRow = {
   target_id: string | null
   metadata: Record<string, unknown>
   seq: number
-  prev_hash: string | null
-  entry_hash: string
   created_at: string
 }
 
-type MembershipRow = {
-  role: string
-  role_definition?: { permissions: string[] | null } | null
-}
-
-type RecordAuditLogInput = {
+export type RecordAuditLogInput = {
   organizationId: string
   actorUserId: string | null
   action: AuditLogAction
@@ -98,20 +86,8 @@ const MAX_AUDIT_PAGE_SIZE = 200
 /**
  * Error type raised by audit log service operations.
  */
-export class AuditServiceError extends Error {
-  readonly statusCode: number
-
-  /**
-   * Creates an audit service error with an HTTP-style status code.
-   *
-   * @param message - User-safe error message.
-   * @param statusCode - HTTP-style status code for route/action translation.
-   */
-  constructor(message: string, statusCode: number) {
-    super(message)
-    this.name = "AuditServiceError"
-    this.statusCode = statusCode
-  }
+export class AuditServiceError extends ServiceError {
+  override readonly name = "AuditServiceError"
 }
 
 // The audit log has no search, so its checks leave the search limit out.
@@ -126,16 +102,18 @@ const AUDIT_LIST_INPUT = createListInputValidators({
  * Records an audit event through the trusted admin client.
  *
  * @param input - Organization, actor, target, and metadata for the event.
+ * @param deps - Optional trusted database client.
  * @returns Created audit log entry.
  * @throws AuditServiceError when the audit event cannot be written.
  */
 export async function recordAuditLog(
-  input: RecordAuditLogInput
+  input: RecordAuditLogInput,
+  deps: AuditServiceDeps = {}
 ): Promise<AuditLogEntry> {
   const startedAt = Date.now()
 
   try {
-    const client = createAdminClient()
+    const client = deps.client ?? createAdminClient()
     const { data, error } = await client
       .from("audit_logs")
       .insert({
@@ -186,7 +164,34 @@ export async function recordAuditLog(
 }
 
 /**
- * Lists one page of an organization's audit events, in chain order, with the
+ * Records an audit event that must not undo the change it records, which is
+ * already made. A lost event is logged and reported to monitoring by its ids
+ * alone: its metadata can name people.
+ *
+ * @param input - Organization, actor, target, and metadata for the event.
+ * @param record - The writer; tests pass their own.
+ */
+export async function recordAuditLogBestEffort<TInput extends RecordAuditLogInput>(
+  input: TInput,
+  record: (input: TInput) => Promise<unknown> = recordAuditLog
+): Promise<void> {
+  try {
+    await record(input)
+  } catch (error: unknown) {
+    const ids = {
+      action: input.action,
+      actorUserId: input.actorUserId,
+      organizationId: input.organizationId,
+      targetId: input.targetId ?? null,
+    }
+
+    console.warn("audit_log_lost", { ...ids, reason: error instanceof Error ? error.message : "Unknown audit error" })
+    captureUnexpectedError(error, { operation: "audit_log", ...ids })
+  }
+}
+
+/**
+ * Lists one page of an organization's audit events, in sequence order, with the
  * number of events that match the filters.
  *
  * @param input - Actor, organization, page, order, and kinds of record.
@@ -208,11 +213,12 @@ export async function listAuditLogPage(
   const from = (page - 1) * pageSize
   const { rows, total } = await readCountedPage(
     await filterAuditLogs(
+      // tenant-scope: filterAuditLogs adds .eq("org_id", organizationId)
       client.from("audit_logs").select(AUDIT_LOG_COLUMNS, { count: "exact" }),
       input.organizationId,
       targetTypes
     )
-      // seq is the chain's total order per organization.
+      // seq is the total order the log is read in.
       .order("seq", { ascending })
       .range(from, from + pageSize - 1),
     () => countAuditLogs(client, input.organizationId, targetTypes),
@@ -230,7 +236,7 @@ export async function listAuditLogPage(
 /**
  * Reads every audit event that matches a view, for a complete export.
  *
- * Batches follow the chain's sequence rather than offsets, so an event
+ * Batches follow the log's sequence rather than offsets, so an event
  * recorded during the export can neither shift a batch boundary nor appear
  * twice. An export larger than the limit is refused, never truncated.
  *
@@ -252,6 +258,7 @@ export async function exportAuditLogs(
   const rows = await readAllInBatches(
     async (previous: AuditLogRow | undefined) => {
       let query = filterAuditLogs(
+        // tenant-scope: filterAuditLogs adds .eq("org_id", organizationId)
         client.from("audit_logs").select(AUDIT_LOG_COLUMNS),
         input.organizationId,
         targetTypes
@@ -288,11 +295,10 @@ async function requireAuditView(
   organizationId: string,
   actorUserId: string
 ): Promise<void> {
-  const actor = await getOrganizationRole(client, organizationId, actorUserId)
-
-  if (!actor || !canPerformOrganizationAction(actor, "audit_logs:view")) {
-    throw new AuditServiceError("You cannot view audit logs.", 403)
-  }
+  await requireOrgPermission(client, organizationId, actorUserId, "audit_logs:view", {
+    loadFailed: () => new AuditServiceError("Unable to load audit permissions.", 500),
+    denied: () => new AuditServiceError("You cannot view audit logs.", 403),
+  })
 }
 
 // Filters go through a minimal view of the query builder: relating
@@ -327,6 +333,7 @@ async function countAuditLogs(
   targetTypes: readonly AuditLogTargetType[] | null
 ): Promise<number> {
   const { count, error } = await filterAuditLogs(
+    // tenant-scope: filterAuditLogs adds .eq("org_id", organizationId)
     client.from("audit_logs").select("id", { count: "exact", head: true }),
     organizationId,
     targetTypes
@@ -359,124 +366,30 @@ function normalizeAuditTargetTypes(
   return targetTypes
 }
 
-type VerifyAuditLogChainInput = {
-  actorUserId: string
-  organizationId: string
-}
-
-/**
- * Verifies the organization's audit hash chain server-side, from the entry
- * the last check vouched for, or from the first entry once a day.
- *
- * Recomputation happens inside the database function, so no cross-language
- * jsonb canonicalization is ever relied on. Reads bypass RLS via the admin
- * client, so permission is enforced here like every other audit read.
- *
- * @param input - Actor and organization identifiers.
- * @returns Chain verification verdict with the first invalid sequence, if any.
- * @throws AuditServiceError when the actor lacks permission or the check fails.
- */
-export async function verifyAuditLogChain(
-  input: VerifyAuditLogChainInput
-): Promise<AuditChainVerification> {
-  const client = createAdminClient()
-  const actorRole = await getOrganizationRole(
-    client,
-    input.organizationId,
-    input.actorUserId
-  )
-
-  if (
-    !actorRole ||
-    !canPerformOrganizationAction(actorRole, "audit_logs:verify")
-  ) {
-    throw new AuditServiceError("You cannot verify audit logs.", 403)
-  }
-
-  const { data, error } = await client.rpc("verify_audit_log_chain", {
-    target_org_id: input.organizationId,
-  })
-
-  const verdict = data?.[0]
-
-  if (error || !verdict) {
-    throw new AuditServiceError("Unable to verify the audit log chain.", 500)
-  }
-
-  return {
-    valid: verdict.valid,
-    checkedCount: verdict.checked_count,
-    firstInvalidSeq: verdict.first_invalid_seq,
-    failureReason: verdict.failure_reason,
-  }
-}
-
-async function getOrganizationRole(
-  client: AuditServiceClient,
-  organizationId: string,
-  userId: string
-): Promise<OrganizationPermissionSubject | null> {
-  const { data, error } = await loadActiveMembership(client, organizationId, userId)
-
-  if (error) {
-    throw new AuditServiceError("Unable to load audit permissions.", 500)
-  }
-
-  if (!data) {
-    return null
-  }
-
-  const row = data as MembershipRow
-
-  if (!isOrganizationRole(row.role)) {
-    throw new AuditServiceError("Database returned an unsupported role.", 500)
-  }
-
-  const subject = createOrganizationPermissionSubject(
-    row.role,
-    row.role_definition?.permissions
-  )
-
-  if (!subject) {
-    throw new AuditServiceError(
-      "Database returned unsupported role permissions.",
-      500
-    )
-  }
-
-  return subject
-}
-
 function mapAuditLog(row: AuditLogRow): AuditLogEntry {
   return {
     id: row.id,
     organizationId: row.org_id,
     actorUserId: row.actor_user_id,
-    action: parseAuditLogAction(row.action),
-    targetType: parseAuditLogTargetType(row.target_type),
+    action: readKnownOrRaw(row.action, AUDIT_LOG_ACTIONS, "action"),
+    targetType: readKnownOrRaw(row.target_type, AUDIT_LOG_TARGET_TYPES, "target"),
     targetId: row.target_id,
     metadata: parseAuditMetadata(row.metadata),
     seq: row.seq,
-    prevHash: row.prev_hash,
-    entryHash: row.entry_hash,
     createdAt: row.created_at,
   }
 }
 
-function parseAuditLogAction(value: string): AuditLogAction {
-  if (AUDIT_LOG_ACTIONS.includes(value as AuditLogAction)) {
-    return value as AuditLogAction
+/**
+ * Reads a stored action or target. A value newer than this build is kept as
+ * written, so one unfamiliar entry cannot take down the log or its export.
+ */
+function readKnownOrRaw(value: string, known: readonly string[], kind: string): string {
+  if (!known.includes(value)) {
+    console.warn("audit_log_unknown_value", { kind, value })
   }
 
-  throw new AuditServiceError("Database returned an unsupported audit action.", 500)
-}
-
-function parseAuditLogTargetType(value: string): AuditLogTargetType {
-  if (AUDIT_LOG_TARGET_TYPES.includes(value as AuditLogTargetType)) {
-    return value as AuditLogTargetType
-  }
-
-  throw new AuditServiceError("Database returned an unsupported audit target.", 500)
+  return value
 }
 
 function parseAuditMetadata(value: Record<string, unknown>): AuditMetadata {

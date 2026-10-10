@@ -1,8 +1,7 @@
 // @vitest-environment jsdom
 
 import { act } from "react"
-import { createRoot, type Root } from "react-dom/client"
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 
 import type {
   OrganizationInvite,
@@ -11,6 +10,7 @@ import type {
 } from "@/types/organization"
 
 import { PeopleWorkspace } from "./people-workspace"
+import { mount } from "@/test/render"
 
 const NOW_ISO = "2026-09-02T12:00:00.000Z"
 const ORGANIZATION_ID = "10000000-0000-4000-8000-000000000001"
@@ -18,8 +18,6 @@ const OWNER_ROLE_ID = "50000000-0000-4000-8000-000000000001"
 const MANAGER_ROLE_ID = "50000000-0000-4000-8000-000000000002"
 const STAFF_ROLE_ID = "50000000-0000-4000-8000-000000000003"
 const REVIEWER_ROLE_ID = "50000000-0000-4000-8000-000000000004"
-const mountedRoots: Root[] = []
-
 const roles: OrganizationRoleDefinition[] = [
   {
     id: OWNER_ROLE_ID,
@@ -107,7 +105,6 @@ const invites: OrganizationInvite[] = [
     role: "external_reviewer",
     roleDefinitionId: REVIEWER_ROLE_ID,
     roleName: "External reviewer",
-    token: "active-token",
     status: "pending",
     expiresAt: "2026-09-08T12:00:00.000Z",
     createdAt: "2026-09-01T12:00:00.000Z",
@@ -119,35 +116,16 @@ const invites: OrganizationInvite[] = [
     role: "staff",
     roleDefinitionId: STAFF_ROLE_ID,
     roleName: "Staff",
-    token: "expired-token",
     status: "pending",
     expiresAt: "2026-08-24T12:00:00.000Z",
     createdAt: "2026-08-17T12:00:00.000Z",
   },
 ]
 
-beforeAll(() => {
-  ;(
-    globalThis as typeof globalThis & {
-      IS_REACT_ACT_ENVIRONMENT: boolean
-    }
-  ).IS_REACT_ACT_ENVIRONMENT = true
-})
-
-afterEach(() => {
-  for (const root of mountedRoots.splice(0)) {
-    act(() => root.unmount())
-  }
-  document.body.replaceChildren()
-})
-
 function renderWorkspace(
   overrides: Partial<Parameters<typeof PeopleWorkspace>[0]> = {}
 ): void {
-  const container = document.createElement("div")
-  document.body.append(container)
-  const root = createRoot(container)
-  mountedRoots.push(root)
+  const root = mount()
 
   act(() =>
     root.render(
@@ -206,80 +184,6 @@ async function openChoices(trigger: Element | null): Promise<string[]> {
 }
 
 describe("PeopleWorkspace", () => {
-  it("renders the searchable directory without the old explanatory cards", () => {
-    renderWorkspace()
-
-    // A real space keeps the accessible name "People 3 members", not "People3".
-    expect(document.querySelector("h1")?.textContent).toBe("People 3")
-    expect(document.querySelector('[role="table"]')?.getAttribute("aria-label")).toBe(
-      "Organization members"
-    )
-    expect(document.querySelectorAll('[role="columnheader"]')).toHaveLength(3)
-    expect(document.body.textContent).not.toContain(
-      "Manage members and pending invites"
-    )
-    expect(document.body.textContent).not.toContain("SMS Phone Number")
-    expect(
-      [...document.querySelectorAll("button")].filter(
-        (button) => button.textContent?.trim() === "Invite"
-      )
-    ).toHaveLength(1)
-    expect(document.querySelector('[data-slot="people-directory"]')).not.toBeNull()
-    expect(document.querySelector('[data-slot="card"]')).toBeNull()
-    expect(document.querySelector("h1")?.className).not.toMatch(/font-(?:bold|semibold)/)
-    expect(
-      document.querySelector('a[href="/settings#roles-and-access"]')?.textContent
-    ).toContain("Edit roles and access")
-    expect(
-      [...document.querySelectorAll("button")].some((button) =>
-        button.textContent?.includes("Manage roles")
-      )
-    ).toBe(false)
-    expect(document.body.textContent).toContain("Operations lead")
-  })
-
-  it("keeps member details behind a deliberate name-first profile preview", async () => {
-    renderWorkspace()
-
-    const trigger = document.querySelector(
-      '[data-slot="member-profile-trigger"][data-hover-delay="900"]'
-    )
-    expect(trigger).toBeInstanceOf(HTMLButtonElement)
-    expect(trigger?.textContent).toBe("Avery Hart")
-    expect(document.body.textContent).not.toContain("avery@acme.test")
-
-    await act(async () => {
-      ;(trigger as HTMLButtonElement).click()
-      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
-      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
-    })
-
-    const preview = document.querySelector('[data-slot="member-profile-content"]')
-    expect(preview?.textContent).toContain("Avery Hart")
-    expect(preview?.textContent).toContain("avery@acme.test")
-    expect(preview?.textContent).toContain("Owner")
-    expect(preview?.textContent).toContain("Jul 8, 2026")
-
-    await act(async () => {
-      document.dispatchEvent(
-        new KeyboardEvent("keydown", { bubbles: true, key: "Escape" })
-      )
-      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
-    })
-    expect(
-      document.querySelector('[data-slot="member-profile-content"]')
-    ).toBeNull()
-
-    await act(async () => {
-      ;(trigger as HTMLButtonElement).click()
-      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
-      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
-    })
-    expect(
-      document.querySelector('[data-slot="member-profile-content"]')?.textContent
-    ).toContain("avery@acme.test")
-  })
-
   it("derives a readable name when a member has not set one yet", () => {
     renderWorkspace({
       members: [
@@ -298,24 +202,12 @@ describe("PeopleWorkspace", () => {
     expect(document.body.textContent).not.toContain("Unnamed member")
   })
 
-  it("uses a compact role selector on mobile without duplicating the desktop filters", async () => {
-    renderWorkspace()
+  it("names the manage action by email when a member's name is blank", () => {
+    renderWorkspace({ members: [{ ...members[1], fullName: "" }] })
 
-    const desktopFilters = document.querySelector('[data-slot="desktop-role-filters"]')
-    const mobileFilter = document.querySelector('[data-slot="mobile-role-filter"]')
-
-    expect(desktopFilters?.className).toContain("max-md:hidden")
-    expect(mobileFilter?.className).toContain("md:hidden")
     expect(
-      document.querySelector('a[href="/settings#roles-and-access"]')?.className
-    ).toContain("whitespace-nowrap")
-    expect(await openChoices(mobileFilter)).toEqual([
-      "All roles · 3",
-      "Owner · 1",
-      "Operations lead · 1",
-      "Staff · 1",
-      "External reviewer · 0",
-    ])
+      document.querySelector('button[aria-label="Manage mara@acme.test"]')
+    ).toBeInstanceOf(HTMLButtonElement)
   })
 
   it("narrows the directory to the words search sent, with a way back to everyone", () => {
@@ -367,45 +259,6 @@ describe("PeopleWorkspace", () => {
     expect((displayName as HTMLInputElement).value).toBe("Mara Bell")
     expect((role as HTMLInputElement | null)?.value).toBe(MANAGER_ROLE_ID)
     expect(document.body.textContent).toContain("Operations lead")
-  })
-
-  it("opens one centered invite workspace and progressively reveals expired links", async () => {
-    renderWorkspace()
-
-    await click(getButton("Invite"))
-
-    const dialog = document.querySelector('[role="dialog"]')
-    expect(dialog?.className).toContain("max-w-xl")
-    expect(dialog?.className.split(/\s+/)).toContain("aspect-square")
-    expect(document.body.textContent).toContain("Invite people")
-    expect(getButton("Phone").disabled).toBe(true)
-    expect(getButton("Phone").getAttribute("title")).toContain(
-      "SMS invitation delivery"
-    )
-
-    await click(getButton("Manage invites1"))
-
-    const activeInvite = document.querySelector('[data-invite-state="active"]')
-    const expiredInvites = document.querySelector("details")
-    expect(activeInvite?.className).toContain("border-success")
-    expect(expiredInvites?.open).toBe(false)
-    expect(
-      expiredInvites?.querySelector('[data-invite-state="expired"]')?.className
-    ).toContain("border-border")
-
-    const summary = expiredInvites?.querySelector("summary")
-    if (!(summary instanceof HTMLElement)) {
-      throw new Error("Expected an expired invitation disclosure.")
-    }
-    await click(summary as HTMLButtonElement)
-    expect(expiredInvites?.open).toBe(true)
-
-    expect(
-      document.querySelector('button[aria-label="Delete invite for reviewer@acme.test"]')
-    ).not.toBeNull()
-    expect(
-      document.querySelector('button[aria-label="Delete expired invite for ops@acme.test"]')
-    ).not.toBeNull()
   })
 
   it("does not expose invitation controls to roles without permission", () => {

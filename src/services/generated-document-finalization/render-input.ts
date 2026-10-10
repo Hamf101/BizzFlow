@@ -2,7 +2,7 @@ import { createHash } from "node:crypto"
 
 import type { RenderGeneratedDocumentPdfInput } from "@/services/document-pdf-service"
 import type { DocumentSigningRecipient } from "@/types/signing"
-import type { GeneratedDocumentSigningView } from "@/types/signing"
+import type { MemberDocumentSigningView } from "@/types/signing"
 
 import { GeneratedDocumentFinalizationServiceError } from "./errors"
 
@@ -15,24 +15,23 @@ export type CanonicalFinalizationRenderInput = {
 /**
  * Builds and freezes the complete document-derived PDF renderer input.
  *
- * Recipients retain invitation order, with their immutable identifier as a
- * tie-breaker, so database delivery order cannot change the rendered bytes.
+ * Recipients keep the order they were added in (their signer numbers), which
+ * the view is read in and which a signer-assigned box prints by.
  *
  * @param view - Completed, tenant-scoped generated signing view.
  * @returns A JSON-round-tripped render input and its canonical SHA-256.
  * @throws GeneratedDocumentFinalizationServiceError for unsupported JSON data.
  */
 export function buildCanonicalFinalizationRenderInput(
-  view: GeneratedDocumentSigningView
+  view: MemberDocumentSigningView
 ): CanonicalFinalizationRenderInput {
-  const recipients = [...view.recipients].sort(compareRecipients)
   const renderInput: RenderGeneratedDocumentPdfInput = {
     documentId: view.document.id,
     title: view.document.title,
     content: view.document.templateSnapshot,
     answers: view.answers,
     workflowStatus: view.workflowStatus,
-    signers: recipients.map((recipient: DocumentSigningRecipient) => ({
+    signers: view.recipients.map((recipient: DocumentSigningRecipient) => ({
       id: recipient.id,
       name: recipient.name,
       email: recipient.email,
@@ -71,16 +70,6 @@ export function canonicalizeJson(value: unknown): string {
       500
     )
   }
-}
-
-function compareRecipients(
-  left: DocumentSigningRecipient,
-  right: DocumentSigningRecipient
-): number {
-  return (
-    left.invitedAt.localeCompare(right.invitedAt) ||
-    left.id.localeCompare(right.id)
-  )
 }
 
 function serializeCanonicalJson(

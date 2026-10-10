@@ -2,8 +2,9 @@ import { ListChecks, Plus } from "lucide-react"
 import Link from "next/link"
 import type { ReactElement } from "react"
 
-import { formatMemberName } from "@/components/people/member-name"
+import { formatMemberName, memberLabel } from "@/components/people/member-name"
 import { TaskStatusBadge } from "@/components/tasks/task-presentation"
+import { LocalDate } from "@/components/ui/local-date"
 import { Button, buttonVariants } from "@/components/ui/button"
 import {
   Card,
@@ -16,7 +17,6 @@ import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { formatMediumDateTime } from "@/lib/date-format"
 import { cn } from "@/lib/utils"
 import type { OrganizationMember } from "@/types/organization"
 import type { Task } from "@/types/task"
@@ -94,8 +94,8 @@ export function SubmissionTaskPanel({
                       currentUserId
                     )}
                     {task.dueAt
-                      ? ` · due ${formatMediumDateTime(task.dueAt)}`
-                      : ""}
+                      ? <> · due <LocalDate time value={task.dueAt} /></>
+                      : null}
                   </span>
                 </Link>
               </li>
@@ -136,7 +136,7 @@ export function SubmissionTaskPanel({
                 <div className="flex flex-col gap-4 sm:flex-row">
                   <Field className="sm:flex-1">
                     <FieldLabel htmlFor="submission-task-due">
-                      Due (UTC)
+                      Due
                     </FieldLabel>
                     <DateTimePicker id="submission-task-due" name="dueAt" />
                     <FieldDescription>
@@ -156,7 +156,7 @@ export function SubmissionTaskPanel({
                         <option value="">Leave unassigned</option>
                         {members.map((member: OrganizationMember) => (
                           <option key={member.id} value={member.userId}>
-                            {member.fullName?.trim() || member.email}
+                            {memberLabel(member)}
                           </option>
                         ))}
                       </Select>

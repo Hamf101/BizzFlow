@@ -26,7 +26,37 @@ export function formatMemberName(
     (candidate: OrganizationMember): boolean => candidate.userId === userId
   )
 
-  return member?.fullName?.trim() || member?.email || "a former member"
+  return (member && memberLabel(member)) || "a former member"
+}
+
+/**
+ * Names a member by their full name, or their email without one. The name they
+ * go by in the workspace is the People page's; these labels never used it.
+ *
+ * @param member - The member.
+ * @returns The name or email.
+ */
+export function memberLabel(member: Pick<OrganizationMember, "email" | "fullName">): string {
+  return member.fullName?.trim() || member.email
+}
+
+/**
+ * Two letters for an avatar: the first letters of a name's first and last
+ * words, or the email's first letter when the name is blank.
+ *
+ * @param name - The name shown beside the avatar.
+ * @param email - Fallback when the name has no letters.
+ * @returns One or two uppercase letters, or "?" with neither.
+ */
+export function getInitials(name: string | null | undefined, email = ""): string {
+  const words = (name ?? "").split(/[^\p{L}\p{N}]+/u).filter(Boolean)
+  const letter = (word: string | undefined): string => (word ? [...word][0] : "")
+  const initials =
+    words.length > 1
+      ? letter(words[0]) + letter(words.at(-1))
+      : letter(words[0] ?? email.match(/[\p{L}\p{N}]/u)?.[0])
+
+  return initials.toUpperCase() || "?"
 }
 
 /**

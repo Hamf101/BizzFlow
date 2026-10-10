@@ -67,6 +67,20 @@ begin
   exception when sqlstate '22023' then null;
   end;
 
+  -- A row count that is not a whole number, and a day that does not exist,
+  -- are invalid answers, not cast errors.
+  for block in select value from jsonb_array_elements('[
+    [{"id": "t", "type": "table_field", "fieldKey": "t", "label": "T", "required": false, "rows": "2.5", "columns": [{"label": "A"}]}, {"t": [["x"]]}],
+    [{"id": "d", "type": "date_field", "fieldKey": "d", "label": "D", "required": false}, {"d": "2026-02-30"}]
+  ]'::jsonb)
+  loop
+    begin
+      perform public.validate_internal_submission_values(jsonb_build_object('schemaVersion', '3', 'blocks', jsonb_build_array(block -> 0)), block -> 1);
+      raise exception 'Accepted an invalid answer: %', block using errcode = 'XX001';
+    exception when sqlstate '22023' then null;
+    end;
+  end loop;
+
   -- Required: at least one choice, every grid row, one row with something in it.
   for block in select value from jsonb_array_elements(snapshot -> 'blocks') where value ->> 'required' = 'true'
   loop

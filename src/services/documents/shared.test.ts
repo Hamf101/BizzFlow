@@ -28,10 +28,14 @@ describe("document role-definition permissions", () => {
     })
   })
 
-  it("rejects unsupported persisted permissions instead of restoring broad access", async () => {
-    const client = createClient("manager", { permissions: ["unknown:permission"] })
+  it("ignores a permission this build does not know instead of failing or widening access", async () => {
+    const unknownOnly = createClient("manager", { permissions: ["unknown:permission"] })
+    await expect(checkArchive(unknownOnly)).rejects.toMatchObject({ statusCode: 403 })
 
-    await expect(checkArchive(client)).rejects.toMatchObject({ statusCode: 500 })
+    const alongsideKnown = createClient("manager", {
+      permissions: ["unknown:permission", "documents:archive"],
+    })
+    await expect(checkArchive(alongsideKnown)).resolves.toMatchObject({ role: "manager" })
   })
 
   it("keeps the protected owner role fully authorized", async () => {

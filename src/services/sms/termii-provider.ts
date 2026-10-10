@@ -4,20 +4,15 @@ import type {
   SendSmsResult,
   SmsProvider,
 } from "@/services/sms/contracts"
+import { ServiceError } from "@/services/service-error"
 
 export type TermiiProviderDeps = {
   fetchImpl?: typeof fetch
 }
 
 /** Error raised when Termii API returns a non-success response. */
-export class TermiiProviderError extends Error {
-  readonly statusCode: number
-
-  constructor(message: string, statusCode: number) {
-    super(message)
-    this.name = "TermiiProviderError"
-    this.statusCode = statusCode
-  }
+export class TermiiProviderError extends ServiceError {
+  override readonly name = "TermiiProviderError"
 }
 
 /**

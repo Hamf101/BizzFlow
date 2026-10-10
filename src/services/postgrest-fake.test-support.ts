@@ -6,7 +6,7 @@
  * exact counts (count-only `head` requests included), at most `max_rows`
  * rows per response, 416 (PGRST103) for a counted range that starts past the
  * last matching row, and PGRST116 when `single` or `maybeSingle` receives the
- * wrong number of rows. Harnesses that also write extend it.
+ * wrong number of rows. PostgrestWriteQuery adds the writes.
  */
 
 /** Loosely typed in-memory database row. */
@@ -244,6 +244,112 @@ export class PostgrestReadQuery implements PromiseLike<PostgrestFakeResult> {
     }
 
     return 0
+  }
+}
+
+/** In-memory tables by name; a write query adds a table the first time it is used. */
+export type FakeTables = Record<string, FakeRow[]>
+
+/** The statement a query runs. */
+export type FakeOperation = "select" | "insert" | "update" | "upsert" | "delete"
+
+export type PostgrestWriteOptions = {
+  /** Fills in the columns the database would default on insert. */
+  defaults?: (tableName: string, row: FakeRow) => FakeRow
+  /** Runs before each statement, with any rows it writes; a returned error is answered instead. */
+  before?: (tableName: string, operation: FakeOperation, rows: readonly FakeRow[]) => PostgrestFakeError | void
+  /** Stamped on each updated row, unless the update names its own. */
+  updatedAt?: string
+}
+
+/**
+ * A PostgREST-shaped read or write over in-memory tables: insert, update,
+ * upsert (on its `onConflict` columns, else `id`) and delete change the rows
+ * in place and answer with the rows they touched, so `.select().single()`
+ * after a write behaves as PostgREST does.
+ */
+export class PostgrestWriteQuery extends PostgrestReadQuery {
+  private operation: FakeOperation = "select"
+  private payload: FakeRow[] = []
+  private conflictColumns: string[] = ["id"]
+
+  constructor(
+    private readonly tables: FakeTables,
+    private readonly tableName: string,
+    private readonly options: PostgrestWriteOptions = {}
+  ) {
+    super((tables[tableName] ??= []))
+  }
+
+  insert(values: FakeRow | FakeRow[]): this {
+    return this.write("insert", values)
+  }
+
+  update(values: FakeRow): this {
+    return this.write("update", values)
+  }
+
+  upsert(values: FakeRow | FakeRow[], options: { onConflict?: string } = {}): this {
+    this.conflictColumns = options.onConflict?.split(",") ?? ["id"]
+    return this.write("upsert", values)
+  }
+
+  delete(): this {
+    return this.write("delete", [])
+  }
+
+  protected override execute(): PostgrestFakeResult {
+    const error = this.options.before?.(this.tableName, this.operation, this.payload)
+
+    if (error) {
+      return { count: null, data: null, error }
+    }
+
+    const table = this.tables[this.tableName] ?? []
+    const touched = (data: FakeRow[]): PostgrestFakeResult => ({ count: null, data, error: null })
+
+    switch (this.operation) {
+      case "insert": {
+        const rows = this.payload.map((row: FakeRow): FakeRow => this.options.defaults?.(this.tableName, { ...row }) ?? { ...row })
+        table.push(...rows)
+        return touched(rows)
+      }
+      case "upsert":
+        return touched(
+          this.payload.map((row: FakeRow): FakeRow => {
+            const existing = table.find((candidate: FakeRow): boolean =>
+              this.conflictColumns.every((column: string): boolean => candidate[column] === row[column])
+            )
+
+            if (existing) {
+              return Object.assign(existing, row)
+            }
+
+            const inserted = this.options.defaults?.(this.tableName, { ...row }) ?? { ...row }
+            table.push(inserted)
+            return inserted
+          })
+        )
+      case "update": {
+        const rows = this.matchingRows()
+        const stamp = this.options.updatedAt === undefined ? {} : { updated_at: this.options.updatedAt }
+        rows.forEach((row: FakeRow): void => void Object.assign(row, stamp, this.payload[0]))
+        return touched(rows)
+      }
+      case "delete": {
+        const rows = this.matchingRows()
+        rows.forEach((row: FakeRow): void => void table.splice(table.indexOf(row), 1))
+        return touched(rows)
+      }
+      default:
+        return super.execute()
+    }
+  }
+
+  private write(operation: FakeOperation, values: FakeRow | FakeRow[]): this {
+    this.operation = operation
+    this.payload = Array.isArray(values) ? values : [values]
+    return this
   }
 }
 

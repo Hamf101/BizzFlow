@@ -26,10 +26,10 @@ export type FileEntry = {
   kind: "document" | "folder" | "upload"
   /** The entry's actions, where the member may manage it. */
   menu: ReactNode
-  modified: string
+  modified: ReactNode
   name: string
   /** For something in Trash, when it goes for good. */
-  note: string | null
+  note: ReactNode
   /** Where choosing the entry in Columns or Gallery leads. */
   selectHref: string
   status: WorkflowStatusLook | null

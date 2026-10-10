@@ -48,7 +48,7 @@ const toastClassNames = {
   actionButton: `${TOAST_TEXT_BUTTON} text-primary hover:text-primary/75`,
   cancelButton: `${TOAST_TEXT_BUTTON} text-muted-foreground hover:text-foreground`,
   closeButton:
-    "order-last -my-1 -mr-1 grid size-7 shrink-0 place-items-center rounded-full text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/35",
+    "order-last -my-1 -mr-1 grid size-7 shrink-0 max-md:size-11 place-items-center rounded-full text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/35",
   content: "min-w-0 flex-1",
   description: "text-sm text-muted-foreground",
   error: "border-destructive/50 text-destructive",
@@ -59,6 +59,29 @@ const toastClassNames = {
   toast:
     "flex w-full items-center gap-3 rounded-[12px] border border-border bg-card py-3 pr-3 pl-4 text-card-foreground shadow-lg",
 } as const
+
+/**
+ * Says what a change to several items did, offering Undo while it reached any.
+ *
+ * @param title - What changed, such as "3 items archived".
+ * @param failed - How many it could not reach.
+ * @param undo - Puts them back, or null when nothing can.
+ */
+export function announceChange(title: string, failed: number, undo: (() => Promise<unknown>) | null): void {
+  bizflowToast.success(title, {
+    action: undo
+      ? {
+          label: "Undo",
+          onClick: () => {
+            undo()
+              .then(() => bizflowToast.success("Undone"))
+              .catch(() => bizflowToast.error("That could not be undone."))
+          },
+        }
+      : undefined,
+    description: failed > 0 ? "The rest changed since you looked, or aren't yours to change." : undefined,
+  })
+}
 
 /** Semantic toast entry points used by the fixed-copy feedback registry. */
 export const bizflowToast = {
@@ -89,7 +112,9 @@ export const bizflowToast = {
 export function describeInvalidField(
   field: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
 ): string {
-  const label = field.labels?.[0]?.textContent?.replace(/\s*\*$/, "").trim()
+  // A radio is named by its group; a field drawn on paper, by its own aria-label.
+  const group = field.type === "radio" ? field.closest("[role=radiogroup]")?.getAttribute("aria-label") : null
+  const label = (group ?? field.labels?.[0]?.textContent ?? field.getAttribute("aria-label"))?.replace(/\s*\*$/, "").trim()
 
   return field.validity.valueMissing && label
     ? `${label} is required.`
@@ -104,8 +129,8 @@ export function describeInvalidField(
  * @returns The configured Sonner toaster using Editorial Ledger tokens.
  */
 export function BizFlowToaster(): ReactElement<ToasterProps> {
-  // An editor's top bar holds its title and actions; notices drop below it.
-  const inEditor = /\/(documents|templates)\/[^/]+\/edit$/.test(usePathname() ?? "")
+  // An editor's top bar, and an answering page's, hold its title and actions; notices drop below it.
+  const inEditor = /\/(documents|templates)\/[^/]+\/edit$|^\/forms\/[^/]+$/.test(usePathname() ?? "")
 
   useEffect(() => {
     // One submission fires `invalid` at every bad field; the first one speaks.
@@ -157,4 +182,21 @@ export function BizFlowToaster(): ReactElement<ToasterProps> {
       }}
     />
   )
+}
+
+/**
+ * Copies text, and says so when the browser refuses, so nobody is told
+ * "Copied" with nothing on their clipboard.
+ *
+ * @param text - What to copy.
+ * @returns Whether it was copied.
+ */
+export async function copyText(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text)
+    return true
+  } catch {
+    bizflowToast.error("Couldn’t copy. Select it and copy it yourself.")
+    return false
+  }
 }

@@ -12,18 +12,19 @@ import {
   isFilesReturnPath,
   parseFilesLayout,
 } from "@/components/files/file-list-view"
-import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
+import type { ActionFeedbackCode } from "@/lib/action-result"
+import { getAuthenticatedUser } from "@/lib/auth"
 import {
-  buildFeedbackRedirect,
-  getActionErrorFeedbackCode,
-  type ActionFeedbackCode,
-} from "@/lib/action-result"
+  loadActionContext,
+  loadActionContextOrSignIn,
+  runFormAction,
+  type ActionActor,
+} from "@/lib/form-action"
 import { buildRedirect, getFormString } from "@/lib/form-utils"
 import {
   archiveDocument,
   archiveFolder,
   createFolder,
-  DocumentServiceError,
   moveDocument,
   moveFolder,
   requestDocumentPurge,
@@ -36,12 +37,10 @@ import {
 import {
   createDocumentComment,
 } from "@/services/document-comment-service"
-import { getCurrentOrganizationContext } from "@/services/organization-service"
-import {
-  createGeneratedDocument,
-  TemplateServiceError,
-} from "@/services/template-service"
+import { createGeneratedDocument } from "@/services/template-service"
 import { createEmptyDocumentContent } from "@/types/template"
+
+const NO_ORGANIZATION = "Create an organization before managing documents."
 
 /**
  * Handles folder creation from the Documents page.
@@ -52,35 +51,25 @@ import { createEmptyDocumentContent } from "@/types/template"
 export async function createFolderAction(formData: FormData): Promise<void> {
   const organizationId = getFormString(formData, "organizationId")
   const returnFolderId = getFormString(formData, "returnFolderId")
-  const returnPath = returnFolderId
-    ? `/documents?folderId=${encodeURIComponent(returnFolderId)}`
-    : "/documents"
 
-  try {
-    const user = await getAuthenticatedUser()
-    await createFolder({
-      actorUserId: user.id,
-      organizationId,
-      name: getFormString(formData, "name"),
-      parentFolderId: getFormString(formData, "parentFolderId") || null,
-    })
-    revalidatePath("/documents")
-  } catch (error: unknown) {
-    if (error instanceof AuthenticationError) {
-      redirect(buildRedirect("/login", { next: returnPath }))
-    }
-
-    logDocumentActionFailure("create_folder_action_failed", {
-      organizationId,
-      reason: error instanceof Error ? error.message : "Unknown folder error",
-    })
-
-    redirect(
-      buildFeedbackRedirect(returnPath, getActionErrorFeedbackCode(error))
-    )
-  }
-
-  redirect(buildFeedbackRedirect(returnPath, "folder_created"))
+  await runFormAction({
+    event: "create_folder_action",
+    log: { organizationId },
+    path: returnFolderId
+      ? `/documents?folderId=${encodeURIComponent(returnFolderId)}`
+      : "/documents",
+    success: "folder_created",
+    run: async () => {
+      const user = await getAuthenticatedUser()
+      await createFolder({
+        actorUserId: user.id,
+        organizationId,
+        name: getFormString(formData, "name"),
+        parentFolderId: getFormString(formData, "parentFolderId") || null,
+      })
+      revalidatePath("/documents")
+    },
+  })
 }
 
 /**
@@ -92,65 +81,33 @@ export async function createFolderAction(formData: FormData): Promise<void> {
 export async function createGeneratedDocumentAction(
   formData: FormData
 ): Promise<void> {
-  let organizationId = "unavailable"
   const folderId = getFormString(formData, "folderId")
   const templateId = getFormString(formData, "templateId")
-  const returnPath = buildRedirect(
-    "/documents/new",
-    folderId ? { folderId } : {}
-  )
-  let createdDocumentId: string
 
-  try {
-    const user = await getAuthenticatedUser()
-    const context = await getCurrentOrganizationContext(user.id)
+  await runFormAction({
+    event: "create_generated_document_action",
+    path: buildRedirect("/documents/new", folderId ? { folderId } : {}),
+    success: "document_created",
+    run: async () => {
+      const { actor, organization } = await loadActionContext("Create an organization before adding documents.")
+      const blankContent = templateId ? undefined : createEmptyDocumentContent()
 
-    if (!context) {
-      throw new TemplateServiceError(
-        "Create an organization before adding documents.",
-        403
-      )
-    }
+      if (blankContent) {
+        blankContent.branding.organizationName = organization.name
+      }
 
-    organizationId = context.organization.id
-    const blankContent = templateId ? undefined : createEmptyDocumentContent()
-
-    if (blankContent) {
-      blankContent.branding.organizationName = context.organization.name
-    }
-
-    const document = await createGeneratedDocument({
-      actorUserId: user.id,
-      organizationId,
-      folderId: folderId || null,
-      templateId: templateId || null,
-      title: getFormString(formData, "title"),
-      description: getFormString(formData, "description") || null,
-      content: blankContent,
-    })
-    createdDocumentId = document.id
-    revalidatePath("/documents")
-  } catch (error: unknown) {
-    if (error instanceof AuthenticationError) {
-      redirect(buildRedirect("/login", { next: returnPath }))
-    }
-
-    logDocumentActionFailure("create_generated_document_action_failed", {
-      organizationId,
-      reason:
-        error instanceof Error ? error.message : "Unknown generated document error",
-    })
-    redirect(
-      buildFeedbackRedirect(returnPath, getActionErrorFeedbackCode(error))
-    )
-  }
-
-  redirect(
-    buildFeedbackRedirect(
-      `/documents/${encodeURIComponent(createdDocumentId)}/edit`,
-      "document_created"
-    )
-  )
+      const document = await createGeneratedDocument({
+        ...actor,
+        folderId: folderId || null,
+        templateId: templateId || null,
+        title: getFormString(formData, "title"),
+        description: getFormString(formData, "description") || null,
+        content: blankContent,
+      })
+      revalidatePath("/documents")
+      return { path: `/documents/${encodeURIComponent(document.id)}/edit` }
+    },
+  })
 }
 
 /**
@@ -160,11 +117,7 @@ export async function createGeneratedDocumentAction(
  * @returns Never returns; redirects to document detail with status.
  */
 export async function archiveDocumentAction(formData: FormData): Promise<void> {
-  return runDocumentLifecycleAction(formData, {
-    operation: archiveDocument,
-    failureEvent: "archive_document_action_failed",
-    successCode: "resource_archived",
-  })
+  await runDocumentAction(formData, "archive_document_action", "resource_archived", archiveDocument)
 }
 
 /**
@@ -174,11 +127,7 @@ export async function archiveDocumentAction(formData: FormData): Promise<void> {
  * @returns Never returns; redirects to document detail with status.
  */
 export async function restoreDocumentAction(formData: FormData): Promise<void> {
-  return runDocumentLifecycleAction(formData, {
-    operation: restoreDocument,
-    failureEvent: "restore_document_action_failed",
-    successCode: "resource_restored",
-  })
+  await runDocumentAction(formData, "restore_document_action", "resource_restored", restoreDocument)
 }
 
 /**
@@ -188,11 +137,7 @@ export async function restoreDocumentAction(formData: FormData): Promise<void> {
  * @returns Never returns; redirects to document detail with status.
  */
 export async function trashDocumentAction(formData: FormData): Promise<void> {
-  return runDocumentLifecycleAction(formData, {
-    operation: trashDocument,
-    failureEvent: "trash_document_action_failed",
-    successCode: "resource_trashed",
-  })
+  await runDocumentAction(formData, "trash_document_action", "resource_trashed", trashDocument)
 }
 
 /**
@@ -202,11 +147,7 @@ export async function trashDocumentAction(formData: FormData): Promise<void> {
  * @returns Never returns; redirects to the Documents workspace with status.
  */
 export async function archiveFolderAction(formData: FormData): Promise<void> {
-  return runFolderLifecycleAction(formData, {
-    operation: archiveFolder,
-    failureEvent: "archive_folder_action_failed",
-    successCode: "resource_archived",
-  })
+  await runFolderAction(formData, "archive_folder_action", "resource_archived", archiveFolder)
 }
 
 /**
@@ -216,11 +157,7 @@ export async function archiveFolderAction(formData: FormData): Promise<void> {
  * @returns Never returns; redirects to the Documents workspace with status.
  */
 export async function restoreFolderAction(formData: FormData): Promise<void> {
-  return runFolderLifecycleAction(formData, {
-    operation: restoreFolder,
-    failureEvent: "restore_folder_action_failed",
-    successCode: "resource_restored",
-  })
+  await runFolderAction(formData, "restore_folder_action", "resource_restored", restoreFolder)
 }
 
 /**
@@ -230,11 +167,7 @@ export async function restoreFolderAction(formData: FormData): Promise<void> {
  * @returns Never returns; redirects to the Documents workspace with status.
  */
 export async function trashFolderAction(formData: FormData): Promise<void> {
-  return runFolderLifecycleAction(formData, {
-    operation: trashFolder,
-    failureEvent: "trash_folder_action_failed",
-    successCode: "resource_trashed",
-  })
+  await runFolderAction(formData, "trash_folder_action", "resource_trashed", trashFolder)
 }
 
 /**
@@ -246,26 +179,12 @@ export async function trashFolderAction(formData: FormData): Promise<void> {
 export async function requestDocumentPurgeAction(
   formData: FormData
 ): Promise<void> {
-  const documentId = getFormString(formData, "documentId")
-  const detailPath = `/documents/${encodeURIComponent(documentId)}`
-  // A purged document has no detail page left to return to, so workspace rows
-  // send the actor back to the list they acted from.
-  const returnPath = getFormString(formData, "returnView")
-    ? getDocumentsReturnPath(formData)
-    : detailPath
-
-  return runResourcePurgeAction({
-    failureEvent: "request_document_purge_action_failed",
-    logContext: { documentId },
-    requestPurge: (scope: ResourcePurgeActionScope): Promise<unknown> =>
-      requestDocumentPurge({
-        ...scope,
-        documentId,
-        confirmationTitle: getFormString(formData, "confirmationTitle"),
-      }),
-    returnPath,
-    revalidatePaths: ["/documents", detailPath],
-  })
+  await runDocumentAction(formData, "request_document_purge_action", "deletion_queued", (input) =>
+    requestDocumentPurge({
+      ...input,
+      confirmationTitle: getFormString(formData, "confirmationTitle"),
+    })
+  )
 }
 
 /**
@@ -278,20 +197,12 @@ export async function requestDocumentPurgeAction(
 export async function requestFolderPurgeAction(
   formData: FormData
 ): Promise<void> {
-  const folderId = getFormString(formData, "folderId")
-
-  return runResourcePurgeAction({
-    failureEvent: "request_folder_purge_action_failed",
-    logContext: { folderId },
-    requestPurge: (scope: ResourcePurgeActionScope): Promise<unknown> =>
-      requestFolderPurge({
-        ...scope,
-        folderId,
-        confirmationName: getFormString(formData, "confirmationName"),
-      }),
-    returnPath: getDocumentsReturnPath(formData),
-    revalidatePaths: ["/documents"],
-  })
+  await runFolderAction(formData, "request_folder_purge_action", "deletion_queued", (input) =>
+    requestFolderPurge({
+      ...input,
+      confirmationName: getFormString(formData, "confirmationName"),
+    })
+  )
 }
 
 /**
@@ -305,207 +216,86 @@ export async function createDocumentCommentAction(
 ): Promise<void> {
   const organizationId = getFormString(formData, "organizationId")
   const documentId = getFormString(formData, "documentId")
-  const detailPath = `/documents/${documentId}`
+  const detailPath = `/documents/${encodeURIComponent(documentId)}`
 
-  try {
-    const user = await getAuthenticatedUser()
-    await createDocumentComment({
-      actorUserId: user.id,
-      organizationId,
-      documentId,
-      body: getFormString(formData, "body"),
-    })
-    revalidatePath(detailPath)
-  } catch (error: unknown) {
-    if (error instanceof AuthenticationError) {
-      redirect(buildRedirect("/login", { next: detailPath }))
-    }
-
-    logDocumentActionFailure("create_document_comment_action_failed", {
-      organizationId,
-      documentId,
-      reason: error instanceof Error ? error.message : "Unknown comment error",
-    })
-
-    redirect(
-      buildFeedbackRedirect(detailPath, getActionErrorFeedbackCode(error))
-    )
-  }
-
-  redirect(buildFeedbackRedirect(detailPath, "comment_added"))
+  await runFormAction({
+    event: "create_document_comment_action",
+    log: { documentId, organizationId },
+    path: detailPath,
+    success: "comment_added",
+    run: async () => {
+      const user = await getAuthenticatedUser()
+      await createDocumentComment({
+        actorUserId: user.id,
+        organizationId,
+        documentId,
+        body: getFormString(formData, "body"),
+      })
+      revalidatePath(detailPath)
+    },
+  })
 }
 
-function logDocumentActionFailure(
-  eventName: string,
-  context: Record<string, string>
-): void {
-  if (context.reason) {
-    console.warn(eventName, context)
-  }
-}
-
-type DocumentLifecycleOperation = (input: {
-  actorUserId: string
-  organizationId: string
-  documentId: string
-}) => Promise<unknown>
-
-type FolderLifecycleOperation = (input: {
-  actorUserId: string
-  organizationId: string
-  folderId: string
-}) => Promise<unknown>
-
-type LifecycleActionConfig<Operation> = {
-  operation: Operation
-  failureEvent: string
-  successCode: ActionFeedbackCode
-}
-
-async function runDocumentLifecycleAction(
+// Workspace rows submit the return view so the actor stays in the list they
+// acted from. Detail-page forms omit it and fall back to the document itself,
+// which is the only safe target once a document has been trashed; a purged
+// one has no detail page left, so its rows always send a return view.
+async function runDocumentAction(
   formData: FormData,
-  config: LifecycleActionConfig<DocumentLifecycleOperation>
-): Promise<void> {
-  let organizationId = "unavailable"
+  event: string,
+  success: ActionFeedbackCode,
+  change: (input: ActionActor & { documentId: string }) => Promise<unknown>
+): Promise<never> {
   const documentId = getFormString(formData, "documentId")
   const detailPath = `/documents/${encodeURIComponent(documentId)}`
-  // Workspace rows submit the return view so the actor stays in the list they
-  // acted from. Detail-page forms omit it and fall back to the document itself,
-  // which is the only safe target once a document has been trashed.
-  const returnPath = getFormString(formData, "returnView")
-    ? getDocumentsReturnPath(formData)
-    : detailPath
 
-  try {
-    const actionContext = await loadLifecycleActionContext()
-    organizationId = actionContext.organizationId
-    await config.operation({
-      actorUserId: actionContext.actorUserId,
-      organizationId,
-      documentId,
-    })
-    revalidatePath("/documents")
-    revalidatePath(detailPath)
-  } catch (error: unknown) {
-    if (error instanceof AuthenticationError) {
-      redirect(buildRedirect("/login", { next: returnPath }))
-    }
-
-    logDocumentActionFailure(config.failureEvent, {
-      organizationId,
-      documentId,
-      reason:
-        error instanceof Error
-          ? error.message
-          : "Unknown document lifecycle error",
-    })
-
-    redirect(
-      buildFeedbackRedirect(returnPath, getActionErrorFeedbackCode(error))
-    )
-  }
-
-  redirect(buildFeedbackRedirect(returnPath, config.successCode))
+  return runFormAction({
+    event,
+    log: { documentId },
+    path: getFormString(formData, "returnView")
+      ? getDocumentsReturnPath(formData)
+      : detailPath,
+    success,
+    run: async () => {
+      const { actor } = await loadActionContext(NO_ORGANIZATION)
+      await change({ ...actor, documentId })
+      revalidatePath("/documents")
+      revalidatePath(detailPath)
+    },
+  })
 }
 
-async function runFolderLifecycleAction(
+async function runFolderAction(
   formData: FormData,
-  config: LifecycleActionConfig<FolderLifecycleOperation>
-): Promise<void> {
-  let organizationId = "unavailable"
+  event: string,
+  success: ActionFeedbackCode,
+  change: (input: ActionActor & { folderId: string }) => Promise<unknown>
+): Promise<never> {
   const folderId = getFormString(formData, "folderId")
-  const returnPath = getDocumentsReturnPath(formData)
 
-  try {
-    const actionContext = await loadLifecycleActionContext()
-    organizationId = actionContext.organizationId
-    await config.operation({
-      actorUserId: actionContext.actorUserId,
-      organizationId,
-      folderId,
-    })
-    revalidatePath("/documents")
-  } catch (error: unknown) {
-    if (error instanceof AuthenticationError) {
-      redirect(buildRedirect("/login", { next: returnPath }))
-    }
-
-    logDocumentActionFailure(config.failureEvent, {
-      organizationId,
-      folderId,
-      reason:
-        error instanceof Error
-          ? error.message
-          : "Unknown folder lifecycle error",
-    })
-
-    redirect(
-      buildFeedbackRedirect(returnPath, getActionErrorFeedbackCode(error))
-    )
-  }
-
-  redirect(buildFeedbackRedirect(returnPath, config.successCode))
+  return runFormAction({
+    event,
+    log: { folderId },
+    path: getDocumentsReturnPath(formData),
+    success,
+    run: async () => {
+      const { actor } = await loadActionContext(NO_ORGANIZATION)
+      await change({ ...actor, folderId })
+      revalidatePath("/documents")
+    },
+  })
 }
 
-type ResourcePurgeActionScope = {
-  actorUserId: string
-  organizationId: string
-}
-
-type ResourcePurgeActionConfig = {
-  failureEvent: string
-  logContext: Record<string, string>
-  requestPurge: (scope: ResourcePurgeActionScope) => Promise<unknown>
-  returnPath: string
-  revalidatePaths: string[]
-}
-
-async function runResourcePurgeAction(
-  config: ResourcePurgeActionConfig
-): Promise<void> {
-  let organizationId = "unavailable"
-
-  try {
-    const actionContext = await loadLifecycleActionContext()
-    organizationId = actionContext.organizationId
-    await config.requestPurge({
-      actorUserId: actionContext.actorUserId,
-      organizationId,
-    })
-
-    for (const revalidatedPath of config.revalidatePaths) {
-      revalidatePath(revalidatedPath)
-    }
-  } catch (error: unknown) {
-    if (error instanceof AuthenticationError) {
-      redirect(buildRedirect("/login", { next: config.returnPath }))
-    }
-
-    logDocumentActionFailure(config.failureEvent, {
-      organizationId,
-      ...config.logContext,
-      reason:
-        error instanceof Error ? error.message : "Unknown purge request error",
-    })
-
-    redirect(
-      buildFeedbackRedirect(
-        config.returnPath,
-        getActionErrorFeedbackCode(error)
-      )
-    )
-  }
-
-  redirect(buildFeedbackRedirect(config.returnPath, "deletion_queued"))
-}
-
-// ponytail: one request changes at most 500 folders and 500 documents, one at a
-// time, and a larger selection fails whole. Chunk it on the client, or move the
-// loop into one database call, once folders that large need bulk changes.
-const fileLifecycleChangeSchema = z.object({
-  change: z.enum(["archive", "restore", "trash"]),
+// ponytail: one request changes or moves at most 500 folders and 500
+// documents, one at a time, and a larger selection fails whole. Chunk it on the
+// client, or move the loop into one database call, once folders that large
+// need bulk changes.
+const fileSelectionSchema = z.object({
   documentIds: z.array(z.string().uuid()).max(500),
   folderIds: z.array(z.string().uuid()).max(500),
+})
+const fileLifecycleChangeSchema = fileSelectionSchema.extend({
+  change: z.enum(["archive", "restore", "trash"]),
 })
 
 /** One lifecycle change for several of the Files selection's items at once. */
@@ -542,67 +332,20 @@ export async function changeFilesLifecycleAction(
   input: FileLifecycleChange
 ): Promise<FileLifecycleResult> {
   const { change, documentIds, folderIds } = fileLifecycleChangeSchema.parse(input)
-  let actor: { actorUserId: string; organizationId: string }
+  const { actor } = await loadActionContextOrSignIn("/documents", NO_ORGANIZATION)
 
-  try {
-    actor = await loadLifecycleActionContext()
-  } catch (error: unknown) {
-    if (error instanceof AuthenticationError) {
-      redirect(buildRedirect("/login", { next: "/documents" }))
-    }
-
-    throw error
-  }
-
-  const result: FileLifecycleResult = { documentIds: [], failed: 0, folderIds: [] }
-  const failed = (kind: string, error: unknown): void => {
-    result.failed += 1
-    logDocumentActionFailure(`bulk_${change}_${kind}_failed`, {
-      organizationId: actor.organizationId,
-      reason: error instanceof Error ? error.message : `Unknown ${kind} error`,
-    })
-  }
-
-  for (const folderId of folderIds) {
-    try {
-      await FOLDER_CHANGES[change]({ ...actor, folderId })
-      result.folderIds.push(folderId)
-    } catch (error: unknown) {
-      failed("folder", error)
-    }
-  }
-
-  for (const documentId of documentIds) {
-    try {
-      await DOCUMENT_CHANGES[change]({ ...actor, documentId })
-      result.documentIds.push(documentId)
-    } catch (error: unknown) {
-      failed("document", error)
-    }
-  }
-
-  revalidatePath("/documents")
-  return result
+  return changeEachFile(actor, `bulk_${change}`, { documentIds, folderIds }, {
+    document: (documentId) => DOCUMENT_CHANGES[change]({ ...actor, documentId }),
+    folder: (folderId) => FOLDER_CHANGES[change]({ ...actor, folderId }),
+  })
 }
 
-// ponytail: one request moves at most 500 folders and 500 documents, one at a
-// time, like the lifecycle changes beside it. Chunk it on the client once a
-// folder that large needs moving.
-const fileMoveSchema = z.object({
+const fileMoveSchema = fileSelectionSchema.extend({
   destinationFolderId: z.string().uuid().nullable(),
-  documentIds: z.array(z.string().uuid()).max(500),
-  folderIds: z.array(z.string().uuid()).max(500),
 })
 
 /** Where the Files selection should go. */
 export type FileMove = z.infer<typeof fileMoveSchema>
-
-/** Which items moved, so the page can offer Undo, and how many could not. */
-export type FileMoveResult = {
-  documentIds: string[]
-  failed: number
-  folderIds: string[]
-}
 
 /**
  * Moves several of the Files selection's items into one folder, or out to the
@@ -613,69 +356,47 @@ export type FileMoveResult = {
  * @param input - The destination, and the selected folders and documents.
  * @returns The items that moved and how many could not.
  */
-export async function moveFilesAction(input: FileMove): Promise<FileMoveResult> {
+export async function moveFilesAction(input: FileMove): Promise<FileLifecycleResult> {
   const { destinationFolderId, documentIds, folderIds } = fileMoveSchema.parse(input)
-  let actor: { actorUserId: string; organizationId: string }
+  const { actor } = await loadActionContextOrSignIn("/documents", NO_ORGANIZATION)
 
-  try {
-    actor = await loadLifecycleActionContext()
-  } catch (error: unknown) {
-    if (error instanceof AuthenticationError) {
-      redirect(buildRedirect("/login", { next: "/documents" }))
-    }
+  return changeEachFile(actor, "bulk_move", { documentIds, folderIds }, {
+    document: (documentId) => moveDocument({ ...actor, documentId, folderId: destinationFolderId }),
+    folder: (folderId) => moveFolder({ ...actor, folderId, parentFolderId: destinationFolderId }),
+  })
+}
 
-    throw error
-  }
+// Folders first, then documents, one at a time; one that fails is counted
+// and logged, and the rest still change.
+async function changeEachFile(
+  actor: ActionActor,
+  event: string,
+  selection: { documentIds: string[]; folderIds: string[] },
+  change: Record<"document" | "folder", (id: string) => Promise<unknown>>
+): Promise<FileLifecycleResult> {
+  const result: FileLifecycleResult = { documentIds: [], failed: 0, folderIds: [] }
+  const batches = [
+    ["folder", selection.folderIds, result.folderIds],
+    ["document", selection.documentIds, result.documentIds],
+  ] as const
 
-  const result: FileMoveResult = { documentIds: [], failed: 0, folderIds: [] }
-  const failed = (kind: string, error: unknown): void => {
-    result.failed += 1
-    logDocumentActionFailure(`bulk_move_${kind}_failed`, {
-      organizationId: actor.organizationId,
-      reason: error instanceof Error ? error.message : `Unknown ${kind} error`,
-    })
-  }
-
-  for (const folderId of folderIds) {
-    try {
-      await moveFolder({ ...actor, folderId, parentFolderId: destinationFolderId })
-      result.folderIds.push(folderId)
-    } catch (error: unknown) {
-      failed("folder", error)
-    }
-  }
-
-  for (const documentId of documentIds) {
-    try {
-      await moveDocument({ ...actor, documentId, folderId: destinationFolderId })
-      result.documentIds.push(documentId)
-    } catch (error: unknown) {
-      failed("document", error)
+  for (const [kind, ids, changed] of batches) {
+    for (const id of ids) {
+      try {
+        await change[kind](id)
+        changed.push(id)
+      } catch (error: unknown) {
+        result.failed += 1
+        console.warn(`${event}_${kind}_failed`, {
+          organizationId: actor.organizationId,
+          reason: error instanceof Error ? error.message : `Unknown ${kind} error`,
+        })
+      }
     }
   }
 
   revalidatePath("/documents")
   return result
-}
-
-async function loadLifecycleActionContext(): Promise<{
-  actorUserId: string
-  organizationId: string
-}> {
-  const user = await getAuthenticatedUser()
-  const context = await getCurrentOrganizationContext(user.id)
-
-  if (!context) {
-    throw new DocumentServiceError(
-      "Create an organization before managing documents.",
-      403
-    )
-  }
-
-  return {
-    actorUserId: user.id,
-    organizationId: context.organization.id,
-  }
 }
 
 /**

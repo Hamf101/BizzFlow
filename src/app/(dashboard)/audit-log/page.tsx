@@ -1,6 +1,5 @@
-import { ShieldCheck } from "lucide-react"
 import { redirect } from "next/navigation"
-import { cache, Suspense, type ReactElement, type ReactNode } from "react"
+import { type ReactElement, type ReactNode } from "react"
 
 import {
   auditLogListState,
@@ -8,45 +7,18 @@ import {
 } from "@/components/audit/audit-log-view"
 import { AuditLogWorkspace } from "@/components/audit/audit-log-workspace"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Badge } from "@/components/ui/badge"
+import { SetupIncomplete } from "@/components/ui/page-state"
 import { buildFeedbackRedirect } from "@/lib/action-result"
 import { getLastPage, type RawSearchParams } from "@/lib/list-state"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
 import { getPageErrorMessage } from "@/lib/page-errors"
 import { loadPageOrganizationContext } from "@/lib/page-organization-context"
 import { canPerformOrganizationAction } from "@/lib/permissions"
-import {
-  listAuditLogPage,
-  verifyAuditLogChain,
-  type AuditLogPage,
-} from "@/services/audit-service"
+import { listAuditLogPage, type AuditLogPage } from "@/services/audit-service"
 import { listOrganizationPeople } from "@/services/organization-service"
-import { listSavedViews } from "@/services/saved-view-service"
-import type { AuditChainVerification } from "@/types/audit"
+import { listSavedViews } from "@/services/organizations/saved-view-service"
 import type { OrganizationMember } from "@/types/organization"
 import type { Metadata } from "next"
-
-// Chain verification hashes what was recorded since the last check, and every
-// entry once a day, so it streams in its own boundaries rather than delaying
-// the event list. Keyed on primitives
-// (an input object would defeat cache()'s identity-based memoization) so the
-// badge and the failure alert share one round trip.
-const getCachedChainVerification = cache(
-  async (
-    actorUserId: string,
-    organizationId: string
-  ): Promise<AuditChainVerification | null> =>
-    verifyAuditLogChain({ actorUserId, organizationId }).catch(
-      (error: unknown) => {
-        console.warn("audit_log_chain_verification_failed", {
-          userId: actorUserId,
-          organizationId,
-          reason: getPageErrorMessage(error, "Verification unavailable."),
-        })
-        return null
-      }
-    )
-)
 
 /**
  * Lists one page of the organization's audit events, narrowed, ordered, and
@@ -74,10 +46,7 @@ export default async function AuditLogPage({
     if (contextErrorMessage) {
       return (
         <AuditLogShell>
-          <Alert variant="destructive">
-            <AlertTitle>Supabase setup incomplete</AlertTitle>
-            <AlertDescription>{contextErrorMessage}</AlertDescription>
-          </Alert>
+          <SetupIncomplete message={contextErrorMessage} />
         </AuditLogShell>
       )
     }
@@ -145,108 +114,16 @@ export default async function AuditLogPage({
     redirect(auditLogListState.href("/audit-log", view, { page: lastPage }))
   }
 
-  const canVerifyChain = canPerformOrganizationAction(
-    context.membership,
-    "audit_logs:verify"
-  )
-
   return (
     <AuditLogShell>
-      {canVerifyChain ? (
-        <Suspense fallback={null}>
-          <AuditChainFailureAlert
-            actorUserId={user.id}
-            organizationId={context.organization.id}
-          />
-        </Suspense>
-      ) : null}
       <AuditLogWorkspace
         entries={result.auditPage.entries}
-        integrity={
-          canVerifyChain ? (
-            <Suspense fallback={null}>
-              <AuditChainVerifiedBadge
-                actorUserId={user.id}
-                organizationId={context.organization.id}
-              />
-            </Suspense>
-          ) : null
-        }
         members={members}
         savedViews={savedViews}
         total={result.auditPage.total}
         view={view}
       />
     </AuditLogShell>
-  )
-}
-
-/**
- * Warns when the tamper-evidence chain fails verification.
- *
- * @param props - Authenticated member and tenant identifiers.
- * @returns A destructive alert, or nothing when the chain is intact.
- */
-async function AuditChainFailureAlert({
-  actorUserId,
-  organizationId,
-}: {
-  actorUserId: string
-  organizationId: string
-}): Promise<ReactElement | null> {
-  const verification = await getCachedChainVerification(
-    actorUserId,
-    organizationId
-  )
-
-  if (!verification || verification.valid) {
-    return null
-  }
-
-  return (
-    <Alert variant="destructive">
-      <AlertTitle>Audit chain integrity check failed</AlertTitle>
-      <AlertDescription>
-        The tamper-evidence check failed at entry #
-        {verification.firstInvalidSeq ?? "unknown"} (
-        {verification.failureReason ?? "unknown reason"}). Investigate before
-        trusting this history.
-      </AlertDescription>
-    </Alert>
-  )
-}
-
-/**
- * Marks the log as verified once every entry passed the tamper-evidence check.
- *
- * @param props - Authenticated member and tenant identifiers.
- * @returns A quiet verified mark, or nothing when the chain is not intact.
- */
-async function AuditChainVerifiedBadge({
-  actorUserId,
-  organizationId,
-}: {
-  actorUserId: string
-  organizationId: string
-}): Promise<ReactElement | null> {
-  const verification = await getCachedChainVerification(
-    actorUserId,
-    organizationId
-  )
-
-  if (!verification?.valid) {
-    return null
-  }
-
-  return (
-    <Badge className="font-normal text-muted-foreground" variant="outline">
-      <ShieldCheck aria-hidden="true" />
-      Verified
-      <span className="sr-only">
-        : the tamper-evidence check passed for {verification.checkedCount}{" "}
-        {verification.checkedCount === 1 ? "entry" : "entries"}
-      </span>
-    </Badge>
   )
 }
 

@@ -24,6 +24,8 @@ declare
   suggested integer;
   first_suggestion uuid;
   second_suggestion uuid;
+  first_suggestion_stale uuid := gen_random_uuid();
+  misfit_suggestion uuid := gen_random_uuid();
 begin
   insert into auth.users (id, email, created_at, updated_at)
   select member.id, 'share-' || replace(member.id::text, '-', '') || '@example.invalid', now(), now()
@@ -202,10 +204,39 @@ begin
   exception when sqlstate '42501' then null;
   end;
 
+  -- An approval given before the answer changed goes back to waiting.
+  select * into result from public.transition_internal_submission(
+    organization_id, promoted_submission, (select revision from public.submissions where id = promoted_submission), 'approved', null, manager_id);
+
   select * into result from public.decide_submission_suggestion(organization_id, promoted_submission, first_suggestion, true, staff_id);
   if result.values ->> 'total' <> '120' or result.status <> 'in_review' then
     raise exception 'Accepting a suggestion did not change the answer.';
   end if;
+
+  if (select decision from public.submission_reviewers where submission_id = promoted_submission and user_id = manager_id) <> 'pending' then
+    raise exception 'An approval of the old answers survived an accepted suggestion.';
+  end if;
+
+  -- A suggestion over an answer that has since changed, or one that does not
+  -- fit its field, is refused.
+  reset role;
+  insert into public.submission_answer_suggestions (id, org_id, submission_id, field_key, previous_value, proposed_value, suggested_by)
+  values
+    (first_suggestion_stale, organization_id, promoted_submission, 'total', '"100"', '"130"', manager_id),
+    (misfit_suggestion, organization_id, promoted_submission, 'signed', 'false', '"yes"', owner_id);
+  set local role service_role;
+
+  begin
+    perform public.decide_submission_suggestion(organization_id, promoted_submission, first_suggestion_stale, true, staff_id);
+    raise exception 'A suggestion over a changed answer was accepted.' using errcode = 'XX001';
+  exception when sqlstate '40001' then null;
+  end;
+
+  begin
+    perform public.decide_submission_suggestion(organization_id, promoted_submission, misfit_suggestion, true, staff_id);
+    raise exception 'A suggestion that does not fit its field was accepted.' using errcode = 'XX001';
+  exception when sqlstate '22023' then null;
+  end;
 
   -- The same decision again changes nothing; a different one is refused.
   if (public.decide_submission_suggestion(organization_id, promoted_submission, first_suggestion, true, staff_id)).revision <> result.revision then

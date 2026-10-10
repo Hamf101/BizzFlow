@@ -72,6 +72,7 @@ export function OnboardingChecklist({
                   }`}
                 >
                   {step.title}
+                  {step.completed ? <span className="sr-only"> (done)</span> : null}
                 </span>
                 {!step.completed && (
                   <div className="pt-2">

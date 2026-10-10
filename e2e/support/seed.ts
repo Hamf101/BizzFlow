@@ -239,8 +239,9 @@ export async function seedSigningDocument(
 /**
  * Inserts an active public form link with a known token.
  *
- * Unlike signing tokens, these are stored in plaintext, so the value is chosen
- * here and used directly in the URL.
+ * Like signing tokens, a link keeps only its token's SHA-256, so the token is
+ * chosen here and its hash written. The app cannot derive it, so the link's
+ * page lists it as an older link with no address to copy.
  *
  * @param client - Service-role client.
  * @param organizationId - Owning organization.
@@ -258,7 +259,7 @@ export async function seedPublicFormLink(
     org_id: organizationId,
     status: "active",
     template_id: templateId,
-    token,
+    token_hash: createHash("sha256").update(token, "utf8").digest("hex"),
   })
 
   if (error) {
@@ -266,4 +267,36 @@ export async function seedPublicFormLink(
   }
 
   return token
+}
+
+/**
+ * Inserts a folder, retrying while another spec holds the folder-tree lock.
+ *
+ * @param client - Service-role client.
+ * @param organizationId - Owning organization.
+ * @param ownerId - Member recorded as creator.
+ * @param name - Folder name, unique per run.
+ * @param parentFolderId - Folder to file it in, or the top of Files.
+ * @returns The new folder id.
+ */
+export async function seedFolder(
+  client: SupabaseClient,
+  organizationId: string,
+  ownerId: string,
+  name: string,
+  parentFolderId: string | null = null
+): Promise<string> {
+  const { data, error } = await retryConcurrentChange(() =>
+    client
+      .from("folders")
+      .insert({ created_by: ownerId, name, org_id: organizationId, parent_folder_id: parentFolderId, updated_by: ownerId })
+      .select("id")
+      .single()
+  )
+
+  if (error) {
+    throw new Error(`Could not seed folder: ${error.message}`)
+  }
+
+  return data.id as string
 }

@@ -12,6 +12,16 @@ export function buildAcceptInvitePath(token: string): string {
 }
 
 /**
+ * Builds the public path where someone outside a workspace opens a document emailed to them.
+ *
+ * @param token - Opaque link token.
+ * @returns Encoded internal path for the shared-document link.
+ */
+export function buildSharedDocumentPath(token: string): string {
+  return `/shared/${encodeURIComponent(token)}`
+}
+
+/**
  * Restricts post-authentication redirects to paths within this application.
  *
  * @param nextPath - Untrusted path requested after authentication.

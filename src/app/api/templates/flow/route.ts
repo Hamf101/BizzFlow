@@ -24,6 +24,7 @@ export async function POST(request: Request): Promise<Response> {
       templateId: body.templateId,
       draft: body.draft,
       instruction: body.instruction,
+      model: body.model,
     })
 
     return NextResponse.json(result)

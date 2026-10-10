@@ -24,9 +24,13 @@ export async function loginAction(formData: FormData): Promise<void> {
     next: getFormString(formData, "next") || undefined,
   })
 
+  // Every way back to the form keeps where they were headed.
+  const next = getFormString(formData, "next")
+  const loginPath = next ? buildRedirect("/login", { next }) : "/login"
+
   if (!parsed.success) {
     redirect(
-      buildRedirect("/login", {
+      buildRedirect(loginPath, {
         error: "Enter a valid email and a password with at least 8 characters.",
       })
     )
@@ -37,7 +41,7 @@ export async function loginAction(formData: FormData): Promise<void> {
   await enforceActionRateLimit({
     bucket: "auth",
     key: `${clientIp}:${hashRateLimitKeyPart(parsed.data.email)}`,
-    redirectPath: "/login",
+    redirectPath: loginPath,
     message: "Too many sign-in attempts. Try again in a few minutes.",
   })
 
@@ -63,13 +67,11 @@ export async function loginAction(formData: FormData): Promise<void> {
       statusCode: error.status,
     })
     redirect(
-      buildRedirect("/login", {
+      buildRedirect(loginPath, {
         error:
           error.code === "email_not_confirmed"
             ? "Confirm your email first: open the link we sent when you signed up."
             : "Invalid email or password.",
-        // A mistyped password shouldn't lose where they were headed.
-        ...(parsed.data.next ? { next: parsed.data.next } : {}),
       })
     )
   }

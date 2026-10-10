@@ -28,6 +28,8 @@ import {
   requireActiveFolder,
   requirePermission,
   runDocumentOperation,
+  DOCUMENT_COLUMNS,
+  DOCUMENT_VERSION_COLUMNS,
 } from "@/services/documents/shared"
 import {
   createVersionMutationError,
@@ -35,6 +37,7 @@ import {
   normalizeOriginalFilename,
   requireMatchingStorageKey,
 } from "@/services/documents/version-shared"
+import { type ClientFile, toClientFile } from "@/lib/r2/stored-file"
 import { retrySerializationFailure } from "@/services/serialization-retry"
 import type {
   CreateDocumentUploadUrlResponse,
@@ -44,6 +47,7 @@ import type {
   DocumentVersionRow,
   DocumentVersionStatus,
 } from "@/types/document"
+import { normalizeName } from "@/services/input"
 
 /**
  * Creates document metadata, an upload-pending version, and a signed PUT URL.
@@ -116,6 +120,10 @@ export async function createDocumentUploadUrl(
         contentType: input.contentType,
         byteSize: input.byteSize,
       })
+      // Everything is checked before a URL is signed or a row is written.
+      const title = normalizeDocumentTitle(input.title)
+      const description = normalizeOptionalText(input.description)
+      const originalFilename = normalizeOriginalFilename(input.originalFilename)
 
       const storageKey = buildDocumentObjectKey({
         organizationId: input.organizationId,
@@ -140,14 +148,16 @@ export async function createDocumentUploadUrl(
         id: documentId,
         org_id: input.organizationId,
         folder_id: folderId,
-        title: normalizeDocumentTitle(input.title),
-        description: normalizeOptionalText(input.description),
+        title,
+        description,
         current_version_id: null,
         created_by: input.actorUserId,
         updated_by: input.actorUserId,
         archived_by: null,
         archived_at: null,
       })
+      // The two inserts are not one transaction, so a document whose first
+      // version could not be stored is taken back rather than left empty.
       const version = await insertDocumentVersion(client, {
         id: versionId,
         org_id: input.organizationId,
@@ -155,12 +165,15 @@ export async function createDocumentUploadUrl(
         version_number: 1,
         status: "upload_pending",
         storage_key: storageKey,
-        original_filename: normalizeOriginalFilename(input.originalFilename),
+        original_filename: originalFilename,
         content_type: input.contentType,
         byte_size: input.byteSize,
         checksum_sha256: null,
         uploaded_by: input.actorUserId,
         upload_authorization_expires_at: signedUrl.expiresAt,
+      }).catch(async (error: unknown) => {
+        await client.from("documents").delete().eq("id", document.id).eq("org_id", input.organizationId)
+        throw error
       })
 
       await recordDocumentAuditLog(deps, {
@@ -192,7 +205,6 @@ export async function createDocumentUploadUrl(
         documentId: document.id,
         versionId: version.id,
         uploadUrl: signedUrl.uploadUrl,
-        storageKey: signedUrl.storageKey,
         expiresInSeconds: signedUrl.expiresInSeconds,
       }
     }
@@ -210,7 +222,7 @@ export async function createDocumentUploadUrl(
 export async function completeDocumentUpload(
   input: CompleteDocumentUploadInput,
   deps: DocumentServiceDeps = {}
-): Promise<DocumentVersion> {
+): Promise<ClientFile<DocumentVersion>> {
   return runDocumentOperation(
     "complete_document_upload",
     {
@@ -247,6 +259,14 @@ export async function completeDocumentUpload(
         )
       }
 
+      // A generated document's versions are its finalized paper alone.
+      if (document.sourceKind === "generated") {
+        throw new DocumentServiceError(
+          "A generated document cannot take an uploaded file.",
+          409
+        )
+      }
+
       const version = await getDocumentVersionById(
         client,
         input.organizationId,
@@ -268,11 +288,25 @@ export async function completeDocumentUpload(
       const verifyDocumentUpload =
         deps.verifyDocumentUpload ?? defaultVerifyDocumentUpload
 
-      await verifyDocumentUpload({
+      const checksumSha256 = await verifyDocumentUpload({
         storageKey: version.storageKey,
         contentType: version.contentType,
         byteSize: version.byteSize,
       })
+      // The object is create-only, so the bytes just hashed are the bytes kept.
+      const { error: checksumError } = await client
+        .from("document_versions")
+        .update({ checksum_sha256: checksumSha256 })
+        .eq("id", input.versionId)
+        .eq("org_id", input.organizationId)
+        .eq("status", "upload_pending")
+
+      if (checksumError) {
+        throw createVersionMutationError(
+          checksumError,
+          "Unable to complete document upload."
+        )
+      }
 
       const { data: completed, error: completionError } = await client.rpc(
         "complete_document_version",
@@ -305,7 +339,7 @@ export async function completeDocumentUpload(
         input.versionId
       )
     }
-  )
+  ).then(toClientFile)
 }
 
 async function insertDocument(
@@ -326,10 +360,11 @@ async function insertDocument(
   // The insert takes the folder tree's lock without waiting, so a colleague's
   // write at the same instant asks for a retry.
   const { data, error } = await retrySerializationFailure(() =>
+    // tenant-scope: row is typed with org_id; the caller sets it to input.organizationId
     client
       .from("documents")
       .insert(row)
-      .select("id,org_id,folder_id,title,description,current_version_id,source_kind,template_id,template_revision,lifecycle_state,created_by,updated_by,archived_by,archived_at,trashed_by,trashed_at,purge_after,pre_trash_lifecycle_state,trash_operation_id,created_at,updated_at")
+      .select(DOCUMENT_COLUMNS)
       .single()
   )
 
@@ -357,10 +392,11 @@ async function insertDocumentVersion(
     upload_authorization_expires_at: string
   }
 ): Promise<DocumentVersion> {
+  // tenant-scope: row is typed with org_id; the caller sets it to input.organizationId
   const { data, error } = await client
     .from("document_versions")
     .insert(row)
-    .select("id,org_id,document_id,version_number,status,storage_key,original_filename,content_type,byte_size,checksum_sha256,uploaded_by,created_at,updated_at")
+    .select(DOCUMENT_VERSION_COLUMNS)
     .single()
 
   if (error || !data) {
@@ -374,16 +410,7 @@ async function insertDocumentVersion(
 }
 
 function normalizeDocumentTitle(title: string): string {
-  const normalizedTitle = title.trim().replace(/\s+/g, " ")
-
-  if (normalizedTitle.length < 1 || normalizedTitle.length > 180) {
-    throw new DocumentServiceError(
-      "Document title must be between 1 and 180 characters.",
-      400
-    )
-  }
-
-  return normalizedTitle
+  return normalizeName(title, "Document title", 1, 180, (message) => new DocumentServiceError(message, 400))
 }
 
 function normalizeOptionalText(value: string | null | undefined): string | null {

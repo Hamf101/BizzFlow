@@ -1,6 +1,5 @@
 "use client"
 
-import { Trash2, Upload } from "lucide-react"
 import {
   type ChangeEvent,
   type ReactElement,
@@ -9,10 +8,11 @@ import {
   useState,
 } from "react"
 
-import { uploadFileToSignedUrl } from "@/components/documents/document-upload-client"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
+import { UPLOAD_ACCEPT, uploadFileToSignedUrl } from "@/components/documents/document-upload-client"
+import { getGeneratedDocumentAnswerName } from "@/components/documents/generated-document-form-data"
+import { Button, buttonVariants } from "@/components/ui/button"
+import { RequiredStandIn } from "@/components/ui/required-stand-in"
+import { cn } from "@/lib/utils"
 import type { TemplateBlock } from "@/types/template"
 
 import {
@@ -21,12 +21,12 @@ import {
   requestPublicFormFileUpload,
   supersedePublicFormFile,
 } from "./public-form-file-client"
+import { useHoldWhileUploading } from "./public-answer-form"
 import {
   calculateSubmissionFileChecksum,
   resolveSubmissionFileContentType,
 } from "./submission-file-client"
 
-const SUBMISSION_FILE_ACCEPT = ".pdf,.png,.jpg,.jpeg,.docx,.xlsx,.csv"
 
 type PublicSubmissionFileFieldProps = {
   answers: Readonly<Record<string, unknown>>
@@ -43,10 +43,12 @@ type PublicSubmissionFileFieldProps = {
 }
 
 /**
- * Manages a token-scoped public file through checkpoint, upload, and removal.
+ * What a file field's box holds on a page someone answers: no file yet and a
+ * way to choose one, which uploads at once, or the file and a way to remove it.
+ * The box, label and help are the paper's own.
  *
  * @param props - Current answers, canonical file field, persisted file, and token.
- * @returns File selection or verified-file controls for the visible field.
+ * @returns The box's contents.
  */
 export function PublicSubmissionFileField({
   answers,
@@ -58,10 +60,11 @@ export function PublicSubmissionFileField({
 }: PublicSubmissionFileFieldProps): ReactElement {
   const inputId = useId()
   const containerRef = useRef<HTMLDivElement | null>(null)
-  const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isUploading, setIsUploading] = useState<boolean>(false)
   const uploadedFile = initialFile ?? null
+
+  useHoldWhileUploading(isUploading)
 
   /**
    * The form's hidden `draftToken` input is the shared session handle: every
@@ -85,12 +88,18 @@ export function PublicSubmissionFileField({
     )
   }
 
-  async function handleUpload(): Promise<void> {
-    if (!selectedFile) {
-      setErrorMessage("Choose a file to upload.")
-      return
-    }
+  // A drawing lives in its box, not in `answers`, so it is read from the form,
+  // as Submit reads it; otherwise a reload after this upload would lose it.
+  function drawings(): Record<string, string> {
+    const form = containerRef.current?.closest("form")
+    const prefix = getGeneratedDocumentAnswerName("drawing", "")
 
+    return form
+      ? Object.fromEntries([...new FormData(form)].flatMap(([name, value]) => (name.startsWith(prefix) && typeof value === "string" && value !== "" ? [[name.slice(prefix.length), value]] : [])))
+      : {}
+  }
+
+  async function handleUpload(selectedFile: File): Promise<void> {
     // Client-side size check (20 MB limit)
     const MAX_FILE_SIZE = 20 * 1024 * 1024
     if (selectedFile.size > MAX_FILE_SIZE) {
@@ -117,7 +126,7 @@ export function PublicSubmissionFileField({
         token,
         draftToken: currentDraftToken,
         draftRevision: currentDraftRevision,
-        answers,
+        answers: { ...answers, ...drawings() },
       })
 
       if (tokenInput) {
@@ -164,7 +173,6 @@ export function PublicSubmissionFileField({
         fileId: allocation.fileId,
         originalFilename: selectedFile.name,
       })
-      setSelectedFile(null)
     } catch (error: unknown) {
       if (pendingAllocation) {
         try {
@@ -196,8 +204,13 @@ export function PublicSubmissionFileField({
   }
 
   function handleFileChange(event: ChangeEvent<HTMLInputElement>): void {
-    setErrorMessage(null)
-    setSelectedFile(event.target.files?.item(0) ?? null)
+    const chosen = event.target.files?.item(0) ?? null
+    // Cleared, so choosing the same file again after a failure tries again.
+    event.target.value = ""
+
+    if (chosen) {
+      void handleUpload(chosen)
+    }
   }
 
   async function handleRemove(): Promise<void> {
@@ -232,74 +245,54 @@ export function PublicSubmissionFileField({
   }
   
   return (
-    <Field data-public-form-field-key={block.fieldKey} ref={containerRef}>
-      <FieldLabel htmlFor={inputId}>
-        {block.label}
-        {block.required && <span className="text-destructive ml-1">*</span>}
-      </FieldLabel>
-      
-      {uploadedFile ? (
-        <div className="flex flex-col gap-3 rounded-lg border border-border bg-muted px-4 py-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="min-w-0">
-              <p className="truncate text-sm font-medium">{uploadedFile.originalFilename}</p>
-              <p className="text-xs text-muted-foreground">
-                Uploaded and verified
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                disabled={isUploading}
-                onClick={() => void handleRemove()}
-                size="sm"
-                type="button"
-                variant="outline"
-              >
-                <Trash2 data-icon="inline-start" />
-                {isUploading ? "Removing" : "Remove"}
-              </Button>
-            </div>
-          </div>
-        </div>
-      ) : (
-        <div className="flex flex-col gap-3 rounded-lg border border-dashed border-border px-4 py-4">
-          <div className="flex flex-col gap-2">
-            <Input
-              accept={SUBMISSION_FILE_ACCEPT}
+    <div className="flex flex-col gap-1" data-public-form-field-key={block.fieldKey} ref={containerRef}>
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+        {uploadedFile ? (
+          <span className="min-w-0 truncate font-medium">{uploadedFile.originalFilename}</span>
+        ) : (
+          <span className="text-muted-foreground">{isUploading ? "Uploading…" : "No file yet"}</span>
+        )}
+        {uploadedFile ? (
+          <Button
+            aria-label={`Remove ${uploadedFile.originalFilename}`}
+            disabled={isUploading}
+            onClick={() => void handleRemove()}
+            size="sm"
+            type="button"
+            variant="ghost"
+          >
+            {isUploading ? "Removing…" : "Remove"}
+          </Button>
+        ) : (
+          <label
+            aria-disabled={isUploading}
+            className={cn(
+              buttonVariants({ size: "sm", variant: "outline" }),
+              "cursor-pointer focus-within:ring-2 focus-within:ring-ring/40",
+              isUploading && "pointer-events-none opacity-50"
+            )}
+          >
+            Choose a file
+            <input
+              accept={UPLOAD_ACCEPT}
+              // Named as it reads, so a spoken "Choose a file" finds it.
+              aria-label={`Choose a file for ${block.label}`}
+              className="sr-only"
               disabled={isUploading}
               id={inputId}
               onChange={handleFileChange}
               type="file"
             />
-            <p className="text-xs text-muted-foreground">
-              PDF, PNG, JPG, DOCX, XLSX, or CSV. Maximum 20 MB.
-            </p>
-          </div>
-          <div>
-            <Button
-              disabled={!selectedFile || isUploading}
-              onClick={handleUpload}
-              size="sm"
-              type="button"
-              variant="outline"
-            >
-              <Upload data-icon="inline-start" />
-              {isUploading ? "Uploading" : "Upload file"}
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {errorMessage && (
-        <p className="text-sm text-destructive" role="alert">
+          </label>
+        )}
+      </div>
+      {block.required ? <RequiredStandIn filled={uploadedFile !== null} label={block.label} /> : null}
+      {errorMessage ? (
+        <p className="text-destructive" role="alert" style={{ fontSize: "0.8em" }}>
           {errorMessage}
         </p>
-      )}
-      
-      {block.helpText && (
-        <FieldDescription>{block.helpText}</FieldDescription>
-      )}
-    </Field>
+      ) : null}
+    </div>
   )
 }
 

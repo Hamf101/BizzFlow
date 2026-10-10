@@ -10,7 +10,9 @@ import { DocumentDownloadButton } from "@/components/documents/document-download
 import { DocumentOpenTracker } from "@/components/documents/document-open-tracker"
 import { DocumentReplaceForm } from "@/components/documents/document-replace-form"
 import { PurgeRequestForm } from "@/components/documents/purge-request-form"
+import { ShareButton } from "@/components/sharing/share-button"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { SetupIncomplete } from "@/components/ui/page-state"
 import { Badge } from "@/components/ui/badge"
 import {
   Card,
@@ -19,7 +21,8 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { buildFeedbackRedirect } from "@/lib/action-result"
-import { formatMediumDateTime } from "@/lib/date-format"
+import { canShareResource } from "@/lib/permissions"
+import { LocalDate } from "@/components/ui/local-date"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
 import { getPageErrorMessage } from "@/lib/page-errors"
 import { loadPageOrganizationContext } from "@/lib/page-organization-context"
@@ -31,7 +34,6 @@ import type { DocumentComment } from "@/types/comment"
 import {
   type DocumentDetail,
   type DocumentLifecycleState,
-  type DocumentVersion,
   isViewableDocumentType,
 } from "@/types/document"
 import type { OrganizationContext } from "@/types/organization"
@@ -69,10 +71,7 @@ export default async function DocumentDetailPage({
     if (contextErrorMessage) {
       return (
         <DocumentDetailShell>
-          <Alert variant="destructive">
-            <AlertTitle>Supabase setup incomplete</AlertTitle>
-            <AlertDescription>{contextErrorMessage}</AlertDescription>
-          </Alert>
+          <SetupIncomplete message={contextErrorMessage} />
         </DocumentDetailShell>
       )
     }
@@ -290,22 +289,22 @@ function DocumentMetadataCard({
           label="Your access"
           value={
             detail.document.accessLevel === "contributor"
-              ? "Contributor"
+              ? "Editor"
               : "Viewer"
           }
         />
         <MetadataItem
           label="Created"
-          value={formatMediumDateTime(detail.document.createdAt)}
+          value={<LocalDate time value={detail.document.createdAt} />}
         />
         <MetadataItem
           label="Updated"
-          value={formatMediumDateTime(detail.document.updatedAt)}
+          value={<LocalDate time value={detail.document.updatedAt} />}
         />
         {detail.document.archivedAt ? (
           <MetadataItem
             label="Archived"
-            value={formatMediumDateTime(detail.document.archivedAt)}
+            value={<LocalDate time value={detail.document.archivedAt} />}
           />
         ) : null}
         {detail.document.lifecycleState === "trashed" ||
@@ -328,7 +327,7 @@ function MetadataItem({
   value,
 }: {
   label: string
-  value: string
+  value: ReactNode
 }): ReactElement {
   return (
     <div className="flex min-w-0 flex-col gap-1 rounded-lg border bg-background p-3">
@@ -349,7 +348,7 @@ function VersionListCard({
   currentVersionId: string | null
   documentId: string
   organizationId: string
-  versions: DocumentVersion[]
+  versions: DocumentDetail["versions"]
 }): ReactElement {
   return (
     <Card>
@@ -361,7 +360,7 @@ function VersionListCard({
           <p className="text-sm text-muted-foreground">No versions yet.</p>
         ) : (
           <div className="flex flex-col gap-3">
-            {versions.map((version: DocumentVersion) => (
+            {versions.map((version) => (
               <div
                 className="grid gap-3 rounded-lg border bg-background p-3 md:grid-cols-[minmax(0,1fr)_140px]"
                 key={version.id}
@@ -376,7 +375,7 @@ function VersionListCard({
                       {version.contentType} · {formatBytes(version.byteSize)}
                     </span>
                     <span className="text-xs text-muted-foreground">
-                      Added {formatMediumDateTime(version.createdAt)}
+                      Added <LocalDate time value={version.createdAt} />
                     </span>
                   </div>
                 </div>
@@ -441,7 +440,7 @@ function DocumentActivityCard({
                   {formatActivityDescription(event)}
                 </p>
                 <span className="text-xs text-muted-foreground">
-                  {formatMediumDateTime(event.createdAt)}
+                  <LocalDate time value={event.createdAt} />
                 </span>
               </div>
             ))}
@@ -493,7 +492,7 @@ function DocumentCommentsCard({
                     {comment.authorDisplayName}
                   </span>
                   <span className="text-xs text-muted-foreground">
-                    {formatMediumDateTime(comment.createdAt)}
+                    <LocalDate time value={comment.createdAt} />
                   </span>
                 </div>
                 <p className="whitespace-pre-wrap break-words text-sm text-muted-foreground">
@@ -571,6 +570,9 @@ function DocumentActionsCard({
             documentId={document.id}
             organizationId={context.organization.id}
           />
+        ) : null}
+        {canShareResource(context.membership, document) ? (
+          <ShareButton name={document.title} resource={{ id: document.id, kind: "document" }} />
         ) : null}
         {canContribute && document.lifecycleState === "active" ? (
           <RoleGuard
@@ -744,7 +746,7 @@ function getWorkspaceHref(
 function getRetentionDescription(
   lifecycleState: DocumentLifecycleState,
   purgeAfter: string | null
-): string {
+): ReactNode {
   if (lifecycleState === "purge_pending") {
     return "Permanent deletion is pending."
   }
@@ -759,7 +761,7 @@ function getRetentionDescription(
     return "Automatic purge timing is unavailable."
   }
 
-  return `Scheduled for permanent deletion ${formatMediumDateTime(purgeAfter)}.`
+  return <>Scheduled for permanent deletion <LocalDate time value={purgeAfter} />.</>
 }
 
 function formatActivityDescription(event: DocumentActivityEvent): string {

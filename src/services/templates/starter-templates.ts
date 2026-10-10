@@ -309,7 +309,8 @@ export async function seedStarterTemplatesForOrganization(
           .select("id")
           .eq("org_id", input.organizationId)
           .eq("title", starter.title)
-          .maybeSingle()
+          // Titles are not unique; any one is enough to skip.
+          .limit(1)
 
         if (lookupError) {
           throw createDatabaseError(
@@ -318,7 +319,7 @@ export async function seedStarterTemplatesForOrganization(
           )
         }
 
-        if (existing) {
+        if (existing.length > 0) {
           skippedCount += 1
           continue
         }
@@ -439,13 +440,14 @@ export async function seedSampleSubmissionsForOrganization(
       let skippedCount = 0
 
       for (const starter of STARTER_TEMPLATES) {
-        const { data: template, error: templateError } = await client
+        const { data: templates, error: templateError } = await client
           .from("document_templates")
           .select("id")
           .eq("org_id", input.organizationId)
           .eq("title", starter.title)
           .eq("status", "published")
-          .maybeSingle()
+          .limit(1)
+        const template = templates?.[0]
 
         if (templateError) {
           throw createDatabaseError(
@@ -467,7 +469,7 @@ export async function seedSampleSubmissionsForOrganization(
             .select("id")
             .eq("org_id", input.organizationId)
             .eq("title", sample.title)
-            .maybeSingle()
+            .limit(1)
 
           if (lookupError) {
             throw createDatabaseError(
@@ -476,7 +478,7 @@ export async function seedSampleSubmissionsForOrganization(
             )
           }
 
-          if (existing) {
+          if (existing.length > 0) {
             skippedCount += 1
             continue
           }

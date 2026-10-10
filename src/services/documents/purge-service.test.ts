@@ -314,6 +314,57 @@ describe("scheduled resource purge processing", () => {
     })
   })
 
+  it("skips an object whose lease expired mid-batch and still finishes the batch", async () => {
+    // 25 sequential R2 deletes can outlast the 120s lease; the object is
+    // re-leased later, and deleting an absent R2 key is harmless.
+    const leaseExpired = {
+      data: null,
+      error: { code: "P0001", message: "Purge object lease is invalid or expired." },
+    }
+    const { client, rpc } = createClient({
+      enqueue_due_resource_purges: success(0),
+      lease_resource_purge_objects: success([
+        leasedObject("object-1", "job-1", "opaque/a.pdf"),
+        leasedObject("object-2", "job-1", "opaque/b.pdf"),
+      ]),
+      complete_resource_purge_object: leaseExpired,
+      finalize_ready_resource_purges: success(0),
+    })
+    const deps = createDeps(client)
+    vi.spyOn(console, "warn").mockImplementation(() => {})
+
+    await expect(processDueResourcePurges({}, deps)).resolves.toMatchObject({
+      leased: 2,
+      deleted: 0,
+      retryScheduled: 2,
+    })
+    expect(deps.deleteDocumentStorageObject).toHaveBeenCalledTimes(2)
+    expect(rpc).toHaveBeenCalledWith("finalize_ready_resource_purges", {
+      target_limit: 10,
+    })
+  })
+
+  it("logs the database code and message when a purge step fails, and keeps the code on the error", async () => {
+    const { client } = createClient({
+      enqueue_due_resource_purges: {
+        data: null,
+        error: { code: "P0001", message: "Every folder in the purge subtree must be trashed." },
+      },
+    })
+    const errorLog = vi.spyOn(console, "error").mockImplementation(() => {})
+
+    await expect(
+      processDueResourcePurges({}, createDeps(client))
+    ).rejects.toMatchObject({ statusCode: 500, cause: { code: "P0001" } })
+    expect(errorLog).toHaveBeenCalledWith(
+      "resource_purge_batch_failed",
+      expect.objectContaining({
+        code: "P0001",
+        causeMessage: "Every folder in the purge subtree must be trashed.",
+      })
+    )
+  })
+
   it.each([
     [{ jobLimit: 0 }, "jobLimit"],
     [{ objectLimit: 101 }, "objectLimit"],

@@ -8,14 +8,17 @@ const usesHttps =
   isProduction && process.env.NEXT_PUBLIC_APP_URL?.startsWith("https://") === true
 
 // Sentry needs no connect-src entry because browser events tunnel through the
-// same-origin /monitoring route. Browser uploads do need the configured R2
-// origin, including the local MinIO origin used by the end-to-end suite.
+// same-origin /monitoring route. Browser uploads need the configured R2 origin
+// exactly, including the local MinIO origin used by the end-to-end suite.
 const contentSecurityPolicy = buildContentSecurityPolicy({
   appUrl: process.env.NEXT_PUBLIC_APP_URL,
   isProduction,
   posthogHost: process.env.NEXT_PUBLIC_POSTHOG_HOST,
   posthogKey: process.env.NEXT_PUBLIC_POSTHOG_KEY,
   r2Endpoint: process.env.CLOUDFLARE_R2_ENDPOINT,
+  // Headers are fixed here, at build time: a Vercel build missing an origin
+  // fails instead of shipping a policy that blocks it, or no HSTS.
+  requireOrigins: Boolean(process.env.VERCEL),
   supabaseUrl: process.env.SUPABASE_URL,
 })
 

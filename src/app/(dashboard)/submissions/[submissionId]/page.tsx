@@ -23,7 +23,8 @@ import {
   CardTitle
 } from "@/components/ui/card"
 import { buildFeedbackRedirect } from "@/lib/action-result"
-import { formatMediumDateTime } from "@/lib/date-format"
+import { LocalDate } from "@/components/ui/local-date"
+import { memberLabel } from "@/components/people/member-name"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
 import { getPageErrorMessage } from "@/lib/page-errors"
 import { loadPageOrganizationContext } from "@/lib/page-organization-context"
@@ -35,7 +36,7 @@ import type { SubmissionDetail } from "@/services/submission-service"
 import { listTasks } from "@/services/task-service"
 import { withTemplateImageUrls } from "@/services/template-image-service"
 import type { OrganizationMember } from "@/types/organization"
-import type { SubmissionFile } from "@/types/submission"
+import type { ClientSubmissionFile } from "@/types/submission"
 import type { Task } from "@/types/task"
 
 import { createTaskAction } from "../../tasks/actions"
@@ -214,6 +215,9 @@ export default async function SubmissionDetailPage({
             </h1>
             <SubmissionStatusBadge status={submission.status} />
           </div>
+          {submission.sentTo ? (
+            <p className="text-sm text-muted-foreground">Sent to {submission.sentTo}</p>
+          ) : null}
           {submission.assignedAt && (
             <p className="text-sm text-muted-foreground">
               Assigned to{" "}
@@ -230,7 +234,7 @@ export default async function SubmissionDetailPage({
         <Alert>
           <AlertTitle>Waiting for review</AlertTitle>
           <AlertDescription>
-            Submitted {formatMediumDateTime(submission.submittedAt)}.
+            Submitted <LocalDate time value={submission.submittedAt} />.
           </AlertDescription>
         </Alert>
       )}
@@ -469,8 +473,8 @@ function buildFileFieldContent(input: {
   editable: boolean
   organizationId: string
 }): Readonly<Record<string, ReactNode>> {
-  const filesByFieldKey = new Map<string, SubmissionFile>(
-    input.detail.files.map((file: SubmissionFile): [string, SubmissionFile] => [
+  const filesByFieldKey = new Map<string, ClientSubmissionFile>(
+    input.detail.files.map((file: ClientSubmissionFile): [string, ClientSubmissionFile] => [
       file.fieldKey,
       file
     ])
@@ -509,5 +513,5 @@ function getMemberDisplayName(
   const member = members.find(
     (candidate: OrganizationMember): boolean => candidate.userId === userId
   )
-  return member?.fullName?.trim() || member?.email || "a team member"
+  return (member && memberLabel(member)) || "a team member"
 }

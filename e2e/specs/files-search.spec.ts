@@ -1,5 +1,6 @@
 import { expect, test, uniqueName } from "../support/fixtures"
 import { retryConcurrentChange } from "../support/retry"
+import { seedFolder } from "../support/seed"
 
 test("finds a file filed anywhere, and only for a member who may open it", async ({
   admin,
@@ -10,24 +11,12 @@ test("finds a file filed anywhere, and only for a member who may open it", async
   const folderName = uniqueName("Private folder")
   const title = uniqueName("Buried lease")
 
-  const { data: folder, error: folderError } = await retryConcurrentChange(() =>
-    admin
-      .from("folders")
-      .insert({
-        created_by: owner.id,
-        name: folderName,
-        org_id: tenant.organizationId,
-        updated_by: owner.id,
-      })
-      .select("id")
-      .single()
-  )
-  if (folderError) throw folderError
+  const folderId = await seedFolder(admin, tenant.organizationId, owner.id, folderName)
 
   const { error } = await retryConcurrentChange(() =>
     admin.from("documents").insert({
       created_by: owner.id,
-      folder_id: folder.id,
+      folder_id: folderId,
       org_id: tenant.organizationId,
       source_kind: "upload",
       title,

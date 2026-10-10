@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
+import { getAuthenticatedUser } from "@/lib/auth"
+import { checkRateLimit, hashRateLimitKeyPart, RateLimitError } from "@/lib/rate-limit"
 import {
   DocumentServiceError,
   getSharingMany,
@@ -10,7 +11,7 @@ import {
 } from "@/services/document-service"
 import { getCurrentOrganizationContext } from "@/services/organization-service"
 
-import { loadSharingAction, setSharingAccessAction, setSharingInheritanceAction } from "./sharing-actions"
+import { loadSharingAction, setSharingAccessAction } from "./sharing-actions"
 
 const ACTOR = "20000000-0000-4000-8000-000000000001"
 const ORG = "10000000-0000-4000-8000-000000000001"
@@ -28,6 +29,7 @@ vi.mock("next/cache", () => ({ revalidatePath: revalidatePathMock }))
 vi.mock("next/navigation", () => ({ redirect: redirectMock }))
 vi.mock("@/lib/auth", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/auth")>()), getAuthenticatedUser: vi.fn() }))
 vi.mock("@/services/organization-service", () => ({ getCurrentOrganizationContext: vi.fn() }))
+vi.mock("@/lib/rate-limit", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/rate-limit")>()), checkRateLimit: vi.fn() }))
 vi.mock("@/services/document-service", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/services/document-service")>()),
   getSharingMany: vi.fn(),
@@ -35,7 +37,7 @@ vi.mock("@/services/document-service", async (importOriginal) => ({
   setSharingInheritanceMany: vi.fn(),
 }))
 
-const VIEW = { grants: [], inherit: true, inherited: [], members: [], name: "Lease", owner: null, parent: null } as SharingView
+const VIEW = { grants: [], guests: [], inherit: true, inherited: [], members: [], name: "Lease", outsideLevels: [], owner: null, parent: null } as SharingView
 const RESOURCE = { id: DOC, kind: "document" as const }
 
 beforeEach(() => {
@@ -64,17 +66,33 @@ describe("the Share dialog's actions", () => {
     expect(revalidatePathMock).toHaveBeenCalledWith("/templates")
   })
 
+  it("invite someone outside the workspace within the email budgets, and not past them", async () => {
+    const invite = { level: "viewer" as const, principal: { email: "gita@example.test" }, resources: [RESOURCE] }
+
+    await expect(setSharingAccessAction(invite)).resolves.toEqual({ ok: true, view: VIEW })
+    expect(vi.mocked(checkRateLimit).mock.calls).toEqual([
+      ["outbound_email", ACTOR],
+      ["outbound_email_daily", ACTOR],
+      ["email_recipient", hashRateLimitKeyPart(" Gita@Example.test ")],
+    ])
+
+    vi.mocked(checkRateLimit).mockRejectedValueOnce(new RateLimitError(60))
+    vi.mocked(setSharingAccessMany).mockClear()
+    await expect(setSharingAccessAction(invite)).resolves.toEqual({ message: expect.stringContaining("Too many"), ok: false })
+    expect(setSharingAccessMany).not.toHaveBeenCalled()
+
+    // Changing a member, or removing anyone, sends no email and spends nothing.
+    vi.mocked(checkRateLimit).mockClear()
+    await setSharingAccessAction({ ...invite, level: null })
+    await setSharingAccessAction({ level: "viewer", principal: { userId: PERSON }, resources: [RESOURCE] })
+    expect(checkRateLimit).not.toHaveBeenCalled()
+  })
+
   it("share a template at one of its three levels", async () => {
     const template = { id: "40000000-0000-4000-8000-000000000008", kind: "template" as const }
 
     await expect(setSharingAccessAction({ level: "user", principal: { userId: PERSON }, resources: [template] })).resolves.toEqual({ ok: true, view: VIEW })
     expect(setSharingAccessMany).toHaveBeenCalledWith(expect.objectContaining({ level: "user", resources: [template] }))
-  })
-
-  it("change whether it takes in the folder's sharing", async () => {
-    await setSharingInheritanceAction({ inherit: false, resources: [RESOURCE] })
-
-    expect(setSharingInheritanceMany).toHaveBeenCalledWith({ actorUserId: ACTOR, inherit: false, organizationId: ORG, resources: [RESOURCE] })
   })
 
   it("say why in plain words when the service refuses", async () => {
@@ -115,12 +133,5 @@ describe("the Share dialog's actions", () => {
     await expect(loadSharingAction([])).resolves.toMatchObject({ ok: false })
     const crowd = Array.from({ length: 51 }, (_, index) => ({ id: `40000000-0000-4000-8000-${String(index).padStart(12, "0")}`, kind: "document" as const }))
     await expect(loadSharingAction(crowd)).resolves.toMatchObject({ ok: false })
-  })
-
-  it("send a signed-out visitor to sign in", async () => {
-    vi.mocked(getAuthenticatedUser).mockRejectedValue(new AuthenticationError("Sign in to continue."))
-
-    await expect(loadSharingAction([RESOURCE])).rejects.toThrow("NEXT_REDIRECT:/login?next=%2Fdocuments")
-    expect(getSharingMany).not.toHaveBeenCalled()
   })
 })

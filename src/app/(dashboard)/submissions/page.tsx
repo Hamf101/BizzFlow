@@ -15,7 +15,7 @@ import { getPageErrorMessage } from "@/lib/page-errors"
 import { loadPageOrganizationContext } from "@/lib/page-organization-context"
 import { canPerformOrganizationAction } from "@/lib/permissions"
 import { listOrganizationPeople } from "@/services/organization-service"
-import { listSavedViews } from "@/services/saved-view-service"
+import { listSavedViews } from "@/services/organizations/saved-view-service"
 import {
   listSubmissionPage,
   type SubmissionPage,

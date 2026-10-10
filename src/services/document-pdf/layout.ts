@@ -145,3 +145,17 @@ export function getPdfRowFrames(
 ): Array<Readonly<{ x: number; width: number }>> {
   return getPdfColumnFrames(metrics, row.widths, isCellRow(row.cells, metrics.fieldStyle) ? -FIELD_RULE_WIDTH : metrics.columnGap)
 }
+
+/** Leading of a signer's bold 10-point name in the signing record. */
+export const SIGNER_NAME_LEADING = 13
+
+/**
+ * The width a signer's name wraps in: the card's inside, less its signature
+ * (88) and initials (48) and the 10-point gap left of each.
+ */
+export function signerNameWidth(
+  signer: Readonly<{ initialsDataUrl?: string | null; signatureDataUrl?: string | null }>,
+  contentWidth: number
+): number {
+  return contentWidth - 14 - (signer.signatureDataUrl ? 98 : 0) - (signer.initialsDataUrl ? 58 : 0)
+}

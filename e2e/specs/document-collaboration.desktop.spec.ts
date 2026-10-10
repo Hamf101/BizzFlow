@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto"
 
 import type { Page } from "@playwright/test"
 
-import { expect, test, uniqueName } from "../support/fixtures"
+import { expect, expectSaved, test, uniqueName } from "../support/fixtures"
 import { waitForHydration } from "../support/hydration"
 import { createBlankTemplateContent } from "@/types/template"
 
@@ -36,15 +36,7 @@ test("two people write one draft document at once, and nothing changes once it g
   })
   if (grantError) throw grantError
 
-  const saved = () =>
-    expect.poll(
-      async () => {
-        const { data, error: readError } = await admin.from("documents").select("template_snapshot").eq("id", document.id).single()
-        if (readError) throw readError
-        return data.template_snapshot.blocks.map((block: { text?: string }) => block.text)
-      },
-      { timeout: 15_000 }
-    )
+  const saved = () => expectSaved(admin, "documents", document.id, ({ blocks }) => blocks.map(({ text }) => text))
   const open = async (page: Page): Promise<void> => {
     const opened = page.waitForResponse((response) => response.url().endsWith(`/api/documents/${document.id}/room`))
     await page.goto(`/documents/${document.id}/edit`)

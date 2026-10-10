@@ -27,6 +27,7 @@ export async function POST(
       documentId,
       draft: body.draft,
       instruction: body.instruction,
+      model: body.model,
       organizationId,
     })
 

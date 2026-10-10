@@ -20,7 +20,8 @@ export type PdfLibRenderContext = {
   /** The whole regular face, for a fillable PDF's form fields; absent in a PDF to print. */
   formFont?: PDFFont
   freeImages: Array<Extract<TemplateBlock, { type: "image" }>>
-  hasSigners: boolean
+  /** Signers in the order they were added, whose empty boxes say whose they are. */
+  signers: NormalizedPdfInput["signers"]
   imageCache: Map<string, PDFImage>
   layout: PdfLayoutMetrics
   page: PDFPage

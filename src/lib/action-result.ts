@@ -10,7 +10,7 @@ export const ACTION_FEEDBACK_CODES = [
   "invalid_input",
   "invite_accepted",
   "invite_already_member",
-  "invite_created_email_failed",
+  "invite_email_failed",
   "invite_email_sent",
   "invite_deleted",
   "member_access_updated",
@@ -56,20 +56,6 @@ export const ACTION_FEEDBACK_CODES = [
 
 export type ActionFeedbackCode = (typeof ACTION_FEEDBACK_CODES)[number]
 
-/** Field-specific validation copy that remains beside the owning form control. */
-export type ActionFieldErrors = Readonly<Record<string, readonly string[]>>
-
-/**
- * A completed server-action result without raw exception or provider text.
- *
- * The stable code is resolved to user-facing copy by the client feedback registry.
- */
-export type ActionOutcome = Readonly<{
-  status: "success" | "error"
-  code: ActionFeedbackCode
-  fieldErrors?: ActionFieldErrors
-  destination?: string
-}>
 
 type FeedbackRedirectParams = Readonly<
   Record<string, string | null | undefined>
@@ -137,7 +123,8 @@ export function getActionErrorFeedbackCode(
   return fallback
 }
 
-function getErrorStatusCode(error: unknown): number | null {
+/** The HTTP-style `statusCode` a service error carries, or null. */
+export function getErrorStatusCode(error: unknown): number | null {
   if (typeof error !== "object" || error === null || !("statusCode" in error)) {
     return null
   }

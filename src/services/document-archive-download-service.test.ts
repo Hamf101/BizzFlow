@@ -33,6 +33,7 @@ describe("document archive and download lifecycle", () => {
           current_version_id: "version-1",
           created_by: "user-1",
           updated_by: "user-1",
+          lifecycle_state: "active",
           archived_by: null,
           archived_at: null,
           created_at: "2026-07-09T11:00:00.000Z",
@@ -160,6 +161,7 @@ describe("document archive and download lifecycle", () => {
           current_version_id: "version-1",
           created_by: "user-1",
           updated_by: "user-1",
+          lifecycle_state: "active",
           archived_by: null,
           archived_at: null,
           created_at: "2026-07-09T11:00:00.000Z",
@@ -203,6 +205,7 @@ describe("document archive and download lifecycle", () => {
       expiresInSeconds: 900,
     })
     expect(deps.createSignedDocumentDownloadUrl).toHaveBeenCalledWith({
+      downloadFilename: "contract.pdf",
       storageKey:
         "organizations/org-1/documents/document-1/versions/version-1/original.pdf",
     })
@@ -250,9 +253,31 @@ describe("document archive and download lifecycle", () => {
 
     expect(result.versionId).toBe("version-1")
     expect(deps.createSignedDocumentDownloadUrl).toHaveBeenCalledWith({
+      downloadFilename: "contract.pdf",
       storageKey:
         "organizations/org-1/documents/document-1/versions/version-1/original.pdf",
     })
+  })
+
+  it("lets a guest from outside the workspace download the document as it stands, never an older version", async () => {
+    const client = new FakeSupabaseClient({
+      documents: [createDocumentRow({ current_version_id: "version-2" })],
+      document_guest_grants: [{ access_level: "viewer", document_id: "document-1", org_id: "org-1", user_id: "guest-1" }],
+      document_versions: [createVersionRow(), createVersionRow({ id: "version-2", version_number: 2 })],
+    })
+    const asGuest = (versionId?: string) =>
+      createDocumentDownloadUrl({ actorUserId: "guest-1", documentId: "document-1", organizationId: "org-1", versionId }, createDeps(client))
+
+    await expect(asGuest()).resolves.toMatchObject({ versionId: "version-2" })
+    await expect(asGuest("version-1")).rejects.toMatchObject({ statusCode: 404 })
+
+    // A generated document's versions are its signed paper, naming every signer; a guest gets the preview instead.
+    client.tables.documents[0].source_kind = "generated"
+    await expect(asGuest()).rejects.toMatchObject({ statusCode: 404 })
+    client.tables.documents[0].source_kind = "upload"
+
+    client.tables.document_guest_grants.length = 0
+    await expect(asGuest()).rejects.toMatchObject({ statusCode: 404 })
   })
 
   it("opens a PDF or picture in the browser, and only ever downloads anything else", async () => {

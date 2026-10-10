@@ -5,8 +5,6 @@ import { expect, test, uniqueName } from "../support/fixtures"
 import { waitForHydration } from "../support/hydration"
 import { seedTemplate } from "../support/seed"
 
-test.describe.configure({ mode: "serial" })
-
 // The library's title on a card; the same words also print on the card's page preview.
 const shown = (page: Page, title: string) => page.locator('[data-slot="template-title"]', { hasText: title })
 const openable = (page: Page, title: string) => page.locator('a[data-slot="template-title"]', { hasText: title })
@@ -24,7 +22,7 @@ test("staff keep their own template to chosen people, then let a manager use it 
   const templateId = await seedMadeBy(admin, tenant.organizationId, staff.id, title)
 
   const staffPage = await pageAs("staff")
-  await staffPage.goto("/templates")
+  await staffPage.goto(`/templates?q=${encodeURIComponent(title)}`)
   // Their own template opens in the editor; staff made it, so it is theirs to change and to share.
   await waitForHydration(openable(staffPage, title))
   await expect(openable(staffPage, title)).toHaveAttribute("href", `/templates/${templateId}/edit`)
@@ -37,11 +35,11 @@ test("staff keep their own template to chosen people, then let a manager use it 
 
   // One page of the manager's listens for the notice; another is opened to look at the library.
   const managerPage = await pageAs("manager")
-  await managerPage.goto("/templates")
+  await managerPage.goto(`/templates?q=${encodeURIComponent(title)}`)
   await expect(shown(managerPage, title)).toBeVisible()
   const looking = await managerPage.context().newPage()
   const look = async () => {
-    await looking.goto("/templates")
+    await looking.goto(`/templates?q=${encodeURIComponent(title)}`)
     await waitForHydration(looking.getByRole("link", { name: "Templates" }).first())
   }
 
@@ -54,7 +52,7 @@ test("staff keep their own template to chosen people, then let a manager use it 
   await dialog.getByLabel("Find a person or group").fill(manager.email)
   await dialog.getByRole("list", { name: "People you can add" }).getByRole("button", { name: new RegExp(manager.email) }).click()
   const access = dialog.getByLabel("Access for E2E manager")
-  await expect(access.locator("option")).toHaveText(["Can view", "Can use", "Can edit", "Remove access"])
+  await expect(access.locator("option")).toHaveText(["Viewer", "User", "Editor", "Remove access"])
   await access.selectOption("user")
   await expect(access).toHaveValue("user")
 
@@ -75,16 +73,17 @@ test("staff cannot edit or share a template someone else made", async ({ admin, 
   const templateId = await seedMadeBy(admin, tenant.organizationId, tenant.users.manager.id, title)
 
   const staffPage = await pageAs("staff")
-  await staffPage.goto("/templates")
+  await staffPage.goto(`/templates?q=${encodeURIComponent(title)}`)
   await expect(shown(staffPage, title)).toBeVisible()
   await expect(openable(staffPage, title)).toHaveCount(0)
 
   // What the menu offers is copying, not editing or sharing.
   await staffPage.getByRole("button", { name: `Actions for ${title}` }).click()
   await expect(staffPage.getByRole("menuitem", { name: "Duplicate" })).toBeVisible()
-  await expect(staffPage.getByRole("menuitem", { name: "Share…" })).toHaveCount(0)
-  await expect(staffPage.getByRole("menuitem", { name: "Edit" })).toHaveCount(0)
+  await expect(staffPage.getByRole("menuitem", { name: /^(Edit|Archive|Share)/ })).toHaveCount(0)
 
+  // Its editor sends them back to the library.
   await staffPage.goto(`/templates/${templateId}/edit`)
-  await expect(staffPage.getByRole("heading", { name: title })).toHaveCount(0)
+  await expect(staffPage).toHaveURL(/\/templates(?:\?|$)/)
+  await expect(staffPage.getByRole("status").filter({ hasText: "You do not have permission for that action" })).toBeVisible()
 })

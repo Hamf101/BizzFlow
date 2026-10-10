@@ -2,8 +2,8 @@
 
 import dynamic from "next/dynamic"
 
-const loadBlockSettings = () => import("@/components/templates/template-block-editor")
-const loadFlowPanel = () => import("@/components/templates/template-flow-panel")
+const loadBlockSettings = () => import("@/components/editor/template-block-editor")
+const loadFlowPanel = () => import("@/components/editor/template-flow-panel")
 const loadRoom = () => import("@/components/editor/room-ui")
 const loadPageSetup = () => import("@/components/editor/page-setup-panel")
 const loadBranding = () => import("@/components/templates/template-branding-panel")
@@ -18,6 +18,7 @@ export const TemplateBrandingPanel = dynamic(() => loadBranding().then((panel) =
 export const TemplateChecksPanel = dynamic(() => loadChecks().then((panel) => panel.TemplateChecksPanel))
 // Opened from a menu, so it loads when asked for.
 export const ShareDialog = dynamic(() => loadShare().then((panel) => panel.ShareDialog))
+export const SendToAnswerDialog = dynamic(() => import("@/components/sharing/send-to-answer-dialog").then((panel) => panel.SendToAnswerDialog))
 // What editing together shows, once a room is open.
 export const RoomCheckpoints = dynamic(() => loadRoom().then((room) => room.RoomCheckpoints))
 export const RoomComments = dynamic(() => loadRoom().then((room) => room.RoomComments))

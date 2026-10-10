@@ -2,51 +2,28 @@
 
 import { act } from "react"
 import type { ReactElement } from "react"
-import { createRoot, type Root } from "react-dom/client"
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const captureUnexpectedError = vi.hoisted(() => vi.fn())
 
-vi.mock("@/lib/observability", () => ({ captureUnexpectedError }))
+const pathname = vi.hoisted(() => ({ current: "/dashboard" }))
 
-import AuditLogError from "@/app/(dashboard)/audit-log/error"
-import DashboardError from "@/app/(dashboard)/dashboard/error"
-import DocumentsError from "@/app/(dashboard)/documents/error"
-import PeopleError from "@/app/(dashboard)/people/error"
-import SettingsError from "@/app/(dashboard)/settings/error"
-import SubmissionsError from "@/app/(dashboard)/submissions/error"
-import TasksError from "@/app/(dashboard)/tasks/error"
-import TemplatesError from "@/app/(dashboard)/templates/error"
+vi.mock("@/lib/observability", () => ({ captureUnexpectedError }))
+vi.mock("next/navigation", () => ({ usePathname: () => pathname.current }))
+
+import DashboardError from "@/app/(dashboard)/error"
 
 import { DashboardRouteError } from "./dashboard-route-error"
+import { mount } from "@/test/render"
 
-const mountedRoots: Root[] = []
 const PRIVATE_MARKER = "private-token-tenant-stack"
-
-beforeAll(() => {
-  ;(
-    globalThis as typeof globalThis & {
-      IS_REACT_ACT_ENVIRONMENT: boolean
-    }
-  ).IS_REACT_ACT_ENVIRONMENT = true
-})
 
 beforeEach(() => {
   captureUnexpectedError.mockReset()
 })
 
-afterEach(() => {
-  for (const root of mountedRoots.splice(0)) {
-    act(() => root.unmount())
-  }
-  document.body.replaceChildren()
-})
-
 async function render(ui: ReactElement): Promise<void> {
-  const container = document.createElement("div")
-  document.body.append(container)
-  const root = createRoot(container)
-  mountedRoots.push(root)
+  const root = mount()
 
   await act(async () => root.render(ui))
 }
@@ -58,18 +35,15 @@ function createPrivateError(): Error & { digest?: string } {
   return error
 }
 
-const ROUTE_ERRORS: ReadonlyArray<{
-  name: string
-  render: (error: Error & { digest?: string }, reset: () => void) => ReactElement
-}> = [
-  { name: "Dashboard", render: (error, reset) => <DashboardError error={error} reset={reset} /> },
-  { name: "Files", render: (error, reset) => <DocumentsError error={error} reset={reset} /> },
-  { name: "Templates", render: (error, reset) => <TemplatesError error={error} reset={reset} /> },
-  { name: "Submissions", render: (error, reset) => <SubmissionsError error={error} reset={reset} /> },
-  { name: "Tasks", render: (error, reset) => <TasksError error={error} reset={reset} /> },
-  { name: "People", render: (error, reset) => <PeopleError error={error} reset={reset} /> },
-  { name: "Audit log", render: (error, reset) => <AuditLogError error={error} reset={reset} /> },
-  { name: "Settings", render: (error, reset) => <SettingsError error={error} reset={reset} /> },
+const SECTIONS = [
+  { name: "Dashboard", path: "/dashboard" },
+  { name: "Files", path: "/documents/123" },
+  { name: "Templates", path: "/templates" },
+  { name: "Submissions", path: "/submissions/new" },
+  { name: "Tasks", path: "/tasks" },
+  { name: "People", path: "/people" },
+  { name: "Audit log", path: "/audit-log" },
+  { name: "Settings", path: "/settings" },
 ]
 
 describe("DashboardRouteError", () => {
@@ -117,11 +91,12 @@ describe("DashboardRouteError", () => {
   })
 })
 
-describe("dashboard route error boundaries", () => {
-  it.each(ROUTE_ERRORS)(
+describe("dashboard route error boundary", () => {
+  it.each(SECTIONS)(
     "keeps $name fixed, recoverable, and free of exception detail",
-    async ({ name, render }) => {
-      await renderRouteError(render)
+    async ({ name, path }) => {
+      pathname.current = path
+      await render(<DashboardError error={createPrivateError()} reset={vi.fn()} />)
 
       expect(document.body.textContent).toContain(`${name} didn’t load.`)
       expect(document.body.textContent).not.toContain(PRIVATE_MARKER)
@@ -129,12 +104,3 @@ describe("dashboard route error boundaries", () => {
     }
   )
 })
-
-async function renderRouteError(
-  routeError: (
-    error: Error & { digest?: string },
-    reset: () => void
-  ) => ReactElement
-): Promise<void> {
-  await render(routeError(createPrivateError(), vi.fn()))
-}
