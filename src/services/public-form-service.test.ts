@@ -146,16 +146,16 @@ describe("derivePublicLinkToken", () => {
     vi.unstubAllEnvs()
   })
 
-  it("signs the link's id with the server's secret, and refuses without one", () => {
+  it("signs the link's id with its own secret, which survives a Supabase key rotation", () => {
+    vi.stubEnv("PUBLIC_LINK_SECRET", "a-public-link-secret-of-32-chars!")
     vi.stubEnv("SUPABASE_SECRET_KEY", "sb_secret_one")
     const token = derivePublicLinkToken(LINK_ID)
 
     expect(token).toMatch(/^[A-Za-z0-9_-]{43}$/)
-    expect(derivePublicLinkToken(LINK_ID)).toBe(token)
     expect(derivePublicLinkToken(TEMPLATE_ID)).not.toBe(token)
     vi.stubEnv("SUPABASE_SECRET_KEY", "sb_secret_two")
-    expect(derivePublicLinkToken(LINK_ID)).not.toBe(token)
-    vi.stubEnv("SUPABASE_SECRET_KEY", "")
+    expect(derivePublicLinkToken(LINK_ID)).toBe(token)
+    vi.stubEnv("PUBLIC_LINK_SECRET", "")
     expect(() => derivePublicLinkToken(LINK_ID)).toThrow()
   })
 })

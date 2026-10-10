@@ -89,6 +89,7 @@ const lines = [
   `SUPABASE_URL=${apiUrl}`,
   `SUPABASE_PUBLISHABLE_KEY=${anonKey}`,
   `SUPABASE_SECRET_KEY=${serviceRoleKey}`,
+  "PUBLIC_LINK_SECRET=e2e-public-link-secret-32-characters",
   "",
   "# MinIO speaks the S3 API that the R2 client already targets.",
   "CLOUDFLARE_R2_ACCOUNT_ID=e2e",

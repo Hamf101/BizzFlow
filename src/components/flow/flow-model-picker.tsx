@@ -10,13 +10,13 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { APPROVED_AI_MODELS, type FlowModelId } from "@/services/ai/approved-models"
+import { APPROVED_AI_MODELS, flowModelSchema, type FlowModelId } from "@/services/ai/approved-models"
 
 const KEY = "bizflow.flow-model"
 const DEFAULT = APPROVED_AI_MODELS[0].model
 
 function isOffered(value: unknown): value is FlowModelId {
-  return APPROVED_AI_MODELS.some((candidate) => candidate.model === value)
+  return flowModelSchema.safeParse(value).success
 }
 
 const listeners = new Set<() => void>()

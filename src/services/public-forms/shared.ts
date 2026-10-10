@@ -41,17 +41,19 @@ export const FORM_CHANGED = "This form changed after you opened it. Reload and t
 export const DRAFT_CHANGED = "This form draft changed in another tab. Reload and try again."
 
 /**
- * The token of a link for anyone: its id signed with the server's secret, so
- * the link keeps only the token's hash and its editor can still copy it.
+ * The token of a link for anyone: its id signed with PUBLIC_LINK_SECRET, so
+ * the link keeps only the token's hash and its editor can still copy it. The
+ * secret is its own so rotating the Supabase key leaves every link copyable;
+ * changing this one turns every Copy link into a dead address.
  *
  * @param linkId - The link's id.
  * @returns A 256-bit base64url token.
  * @throws PublicFormServiceError when the server has no secret.
  */
 export function derivePublicLinkToken(linkId: string): string {
-  const secret = process.env.SUPABASE_SECRET_KEY?.trim()
+  const secret = process.env.PUBLIC_LINK_SECRET?.trim()
 
-  if (!secret) {
+  if (!secret || secret.length < 32) {
     throw new PublicFormServiceError("Public form links are not configured.", 500)
   }
 
