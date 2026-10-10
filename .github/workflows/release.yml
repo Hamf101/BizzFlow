@@ -3,9 +3,14 @@ name: Release
 # A merge to main is a release. Vercel builds it at once but holds it off the
 # production domains until this job passes (a Vercel Deployment Check), so the
 # database is migrated first and the new code goes live seconds later. If a
-# migration fails, the old deployment keeps serving.
+# migration fails, the old deployment keeps serving. On a pull request into
+# main the same job only lists what the merge would apply (a dry run), which
+# also gives Vercel the check to require.
 on:
   push:
+    branches:
+      - main
+  pull_request:
     branches:
       - main
 
@@ -14,7 +19,7 @@ permissions:
 
 # Never cancel a migration halfway; a second merge waits its turn.
 concurrency:
-  group: release-production
+  group: ${{ github.event_name == 'push' && 'release-production' || format('release-check-{0}', github.ref) }}
   cancel-in-progress: false
 
 jobs:
@@ -43,16 +48,27 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # A release must not go out without them; a pull request only warns.
       - name: Require credentials
+        id: credentials
         run: |
-          test -n "$SUPABASE_ACCESS_TOKEN" || { echo "::error::Add the SUPABASE_ACCESS_TOKEN secret to the production environment."; exit 1; }
-          test -n "$SUPABASE_DB_PASSWORD" || { echo "::error::Add the SUPABASE_DB_PASSWORD secret to the production environment."; exit 1; }
+          if [ -n "$SUPABASE_ACCESS_TOKEN" ] && [ -n "$SUPABASE_DB_PASSWORD" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            echo "::error::Add SUPABASE_ACCESS_TOKEN and SUPABASE_DB_PASSWORD to the production environment."
+            exit 1
+          else
+            echo "::warning::No production credentials yet, so the migration dry run was skipped."
+          fi
 
       - name: Link the production project
+        if: steps.credentials.outputs.ready == 'true'
         run: pnpm exec supabase link --project-ref "$SUPABASE_PROJECT_REF"
 
       - name: Show pending migrations
+        if: steps.credentials.outputs.ready == 'true'
         run: pnpm exec supabase migration list --linked
 
       - name: Apply migrations
-        run: pnpm exec supabase db push --linked
+        if: steps.credentials.outputs.ready == 'true'
+        run: pnpm exec supabase db push --linked ${{ github.event_name == 'push' && '' || '--dry-run' }}
