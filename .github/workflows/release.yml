@@ -1,0 +1,58 @@
+name: Release
+
+# A merge to main is a release. Vercel builds it at once but holds it off the
+# production domains until this job passes (a Vercel Deployment Check), so the
+# database is migrated first and the new code goes live seconds later. If a
+# migration fails, the old deployment keeps serving.
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+# Never cancel a migration halfway; a second merge waits its turn.
+concurrency:
+  group: release-production
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    name: Migrate production database
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      SUPABASE_PROJECT_REF: tmciougnqzbopuqyuacu
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Require credentials
+        run: |
+          test -n "$SUPABASE_ACCESS_TOKEN" || { echo "::error::Add the SUPABASE_ACCESS_TOKEN secret to the production environment."; exit 1; }
+          test -n "$SUPABASE_DB_PASSWORD" || { echo "::error::Add the SUPABASE_DB_PASSWORD secret to the production environment."; exit 1; }
+
+      - name: Link the production project
+        run: pnpm exec supabase link --project-ref "$SUPABASE_PROJECT_REF"
+
+      - name: Show pending migrations
+        run: pnpm exec supabase migration list --linked
+
+      - name: Apply migrations
+        run: pnpm exec supabase db push --linked
