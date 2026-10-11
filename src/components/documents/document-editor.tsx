@@ -566,8 +566,8 @@ export function DocumentEditor({
                 documentTitle={proposal ? proposal.candidateDraft.title : page.title}
                 fields={fillable && !proposal ? "fill" : "read"}
                 narrow={narrow}
-                onAnswerChange={(fieldKey, value) =>
-                  setAnswers((current) => applyVisibleTemplateFieldValue(page.content, current, fieldKey, value))
+                onAnswerChange={(fieldKey, value, settle) =>
+                  setAnswers((current) => applyVisibleTemplateFieldValue(page.content, current, fieldKey, value, settle))
                 }
                 overlay={room && !proposal ? <RoomLayer narrow={narrow} others={live.others} revision={page.content} room={room} /> : null}
                 textEditable={editable && !proposal}

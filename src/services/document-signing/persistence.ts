@@ -60,6 +60,8 @@ export type CompleteRecipientSignatureInput = {
   values: Record<string, unknown>
   signatureData: DrawingData | null
   initialsData: DrawingData | null
+  // The answers the patch was worked out from; refused once they change.
+  expectedValues?: Record<string, unknown>
 }
 
 /**
@@ -285,13 +287,16 @@ export async function loadRecipientByToken(
  * @param organizationId - Tenant identifier.
  * @param documentId - Generated-document identifier.
  * @param values - Validated answer patch.
+ * @param expectedValues - Answers the patch was worked out from, when it was;
+ *   the database refuses the patch once they have changed.
  * @returns Stored answer object returned by the database function.
  */
 export async function mergeGeneratedDocumentAnswers(
   client: SigningServiceClient,
   organizationId: string,
   documentId: string,
-  values: Record<string, unknown>
+  values: Record<string, unknown>,
+  expectedValues?: Record<string, unknown>
 ): Promise<Record<string, unknown>> {
   const { data, error } = await client.rpc(
     "merge_generated_document_answers",
@@ -299,6 +304,7 @@ export async function mergeGeneratedDocumentAnswers(
       target_org_id: organizationId,
       target_document_id: documentId,
       target_values: values,
+      target_expected_values: expectedValues,
     }
   )
 
@@ -447,6 +453,7 @@ export async function completeRecipientSignature(
       target_values: input.values,
       target_signature_data: input.signatureData,
       target_initials_data: input.initialsData,
+      target_expected_values: input.expectedValues,
     }
   )
 

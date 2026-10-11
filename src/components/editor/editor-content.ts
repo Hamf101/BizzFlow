@@ -582,7 +582,9 @@ export function deleteAcross(
 
   let blocks = content.blocks
 
-  for (const id of gone) {
+  // Bottom up: a rule or formula names only what is above it, so whatever
+  // depends on a block in the selection is taken out before it is.
+  for (const id of [...gone].reverse()) {
     const allowed = evaluateTemplateBlockDeletion(blocks, id)
 
     if (!allowed.success) {

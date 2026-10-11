@@ -313,14 +313,17 @@ export function applyFlowOperations(
   const otherInvariantContext = createOtherCompanionInvariantContext(
     currentDraft.content
   )
-  // The fields with a condition, and what it rests on: those the document
-  // came with, then each an operation gives one, under that operation's name.
-  const conditioned = new Map<string, { sources: string[]; where: string }>(
-    currentDraft.content.blocks.flatMap((block: TemplateBlock) =>
-      "visibleWhen" in block && block.visibleWhen !== undefined
-        ? [[block.id, { sources: visibilityConditions(block.visibleWhen).map((condition) => condition.sourceBlockId), where: "operations" }] as const]
+  // The fields with a condition, how many tests it holds, and the source of
+  // each whose removal may take that test with it: those the document came
+  // with, then each an operation gives one, under that operation's name.
+  const conditioned = new Map<string, { sources: string[]; tests: number; where: string }>(
+    currentDraft.content.blocks.flatMap((block: TemplateBlock) => {
+      const tests = "visibleWhen" in block ? visibilityConditions(block.visibleWhen) : []
+
+      return tests.length > 0
+        ? [[block.id, { sources: tests.map((condition) => condition.sourceBlockId), tests: tests.length, where: "operations" }] as const]
         : []
-    )
+    })
   )
 
   // Which change added each block, and every change that touched it, so a
@@ -358,7 +361,7 @@ export function applyFlowOperations(
       if (operation.payload.block.visibleWhen === null) {
         conditioned.delete(affectedBlockIds[0])
       } else {
-        conditioned.set(affectedBlockIds[0], { sources: [], where: `operations[${index}] ${operation.type}` })
+        conditioned.set(affectedBlockIds[0], { sources: [], tests: visibilityConditions(operation.payload.block.visibleWhen).length, where: `operations[${index}] ${operation.type}` })
       }
     }
 
@@ -401,21 +404,21 @@ export function applyFlowOperations(
 
   // A condition the document cannot keep is taken off its field, as the field
   // goes in or as a move or a changed choice leaves it pointing nowhere. Once
-  // every operation has had its say, one still missing is told to Flow, so a
-  // field never ends up shown to everyone by mistake. A field whose source
-  // was removed on request has nothing left to depend on.
-  for (const [blockId, { sources, where }] of conditioned) {
+  // every operation has had its say, a rule missing one of its tests is told
+  // to Flow, so a field never ends up shown to everyone, or on a weaker rule,
+  // by mistake. A test whose source was removed on request has nothing left
+  // to depend on.
+  for (const [blockId, { sources, tests, where }] of conditioned) {
     const kept = nextDraft.content.blocks.find(
       (block: TemplateBlock): boolean => block.id === blockId
     )
-    const sourceGone =
-      sources.length > 0 &&
-      sources.every((source: string): boolean => !nextDraft.content.blocks.some((block: TemplateBlock): boolean => block.id === source))
-
+    const sourcesGone = sources.filter((source: string): boolean => !nextDraft.content.blocks.some((block: TemplateBlock): boolean => block.id === source)).length
     // A rule dropped as the block went in leaves no key behind.
-    if (kept !== undefined && (kept as { visibleWhen?: unknown }).visibleWhen === undefined && !sourceGone) {
+    const keptTests = kept !== undefined && "visibleWhen" in kept ? visibilityConditions(kept.visibleWhen).length : 0
+
+    if (kept !== undefined && keptTests < tests - sourcesGone) {
       throw new FlowOperationError(
-        `${where}: ${describeBlockTarget(kept)} would lose its visibleWhen, each of whose tests must name an earlier answer it suits`
+        `${where}: ${describeBlockTarget(kept)} would lose ${keptTests === 0 ? "its visibleWhen" : "a test of its visibleWhen"}, each of whose tests must name an earlier answer it suits`
       )
     }
   }

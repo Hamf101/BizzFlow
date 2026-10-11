@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest"
 
+import { createBlankTemplateContent, parseTemplateContent, type TemplateContent } from "@/types/template"
 import { calculateTemplateAnswers } from "@/types/template-calculation"
 import { createQuoteContent } from "@/types/template-calculation.test-support"
+import { applyVisibleTemplateFieldValue } from "@/types/template-visibility"
 
 describe("template calculations", () => {
   it("works out a quote in decimals as an invoice does: each line to the penny, half up, then the tax on the subtotal", () => {
@@ -28,6 +30,40 @@ describe("template calculations", () => {
     expect(calculateTemplateAnswers(quote, { items: [["Desk", "1", "5", ""]] })).toMatchObject({ vat: "1.00", total: "" })
   })
 
+  it("leaves a hidden worked-out answer out of the page and out of every later formula", () => {
+    const content = createFeeContent()
+
+    expect(calculateTemplateAnswers(content, { base: "100", fee: "1", total: "1" })).toEqual({ base: "100", total: "100.00" })
+    expect(calculateTemplateAnswers(content, { base: "100", charged: true })).toEqual({ base: "100", charged: true, fee: "10.00", total: "110.00" })
+  })
+
+  it("shows and keeps an answer whose rule tests a worked-out one, as it is typed", () => {
+    const id = (n: number): string => `74100000-0000-4000-8000-00000000000${n}`
+    const field = (n: number, label: string, extra: object = {}) => ({ id: id(n), type: "text_field", fieldKey: label.toLowerCase(), label, required: false, helpText: null, placeholder: null, multiline: false, ...extra })
+    const content = parseTemplateContent({
+      ...createBlankTemplateContent(),
+      sections: [],
+      blocks: [
+        field(1, "Base", { format: "number" }),
+        field(2, "Doubled", { format: "number", formula: "{Base} * 2" }),
+        field(3, "Details", { visibleWhen: { sourceBlockId: id(2), operator: "greater_than", value: "100" } }),
+      ],
+    })
+    // The page holds what it last worked out: Base 40 gave 80, before Base became 60.
+    const raised = applyVisibleTemplateFieldValue(content, { base: "40", doubled: "80" }, "base", "60", calculateTemplateAnswers)
+
+    expect(raised).toEqual({ base: "60", doubled: "120" })
+    expect(applyVisibleTemplateFieldValue(content, raised, "details", "Gate code 4512", calculateTemplateAnswers)).toEqual({ base: "60", doubled: "120", details: "Gate code 4512" })
+    // Lowering Base hides Details and lets its answer go.
+    expect(applyVisibleTemplateFieldValue(content, { ...raised, details: "x" }, "base", "10", calculateTemplateAnswers)).toEqual({ base: "10", doubled: "20" })
+  })
+
+  it("never shows a worked-out amount as minus nothing", () => {
+    const quote = createQuoteContent({ 3: { ...createQuoteContent().blocks[3], formula: "{Subtotal} - {VAT} * 5 - 0.001" } })
+
+    expect(calculateTemplateAnswers(quote, { items: [["Desk", "1", "5", ""]] })).toMatchObject({ subtotal: "5.00", vat: "1.00", total: "0.00" })
+  })
+
   it("gives up on numbers too long to be real, at once, rather than working them out", () => {
     const quote = createQuoteContent({ 3: { ...createQuoteContent().blocks[3], formula: Array.from({ length: 35 }, () => "{Subtotal}").join(" * ") } })
     const huge = "9".repeat(20_000)
@@ -38,3 +74,20 @@ describe("template calculations", () => {
     expect(performance.now() - started).toBeLessThan(500)
   })
 })
+
+// A fee charged only when ticked, and a total that adds it.
+function createFeeContent(): TemplateContent {
+  const id = (n: number): string => `74000000-0000-4000-8000-00000000000${n}`
+  const field = (n: number, label: string, extra: object) => ({ id: id(n), type: "text_field", fieldKey: label.toLowerCase(), label, required: false, helpText: null, placeholder: null, multiline: false, ...extra })
+
+  return parseTemplateContent({
+    ...createBlankTemplateContent(),
+    sections: [],
+    blocks: [
+      field(1, "Base", { format: "money" }),
+      { id: id(2), type: "checkbox_field", fieldKey: "charged", label: "Charged", required: false, helpText: null, checkedByDefault: false },
+      field(3, "Fee", { format: "money", formula: "{Base} * 10%", visibleWhen: { sourceBlockId: id(2), operator: "equals", value: true } }),
+      field(4, "Total", { format: "money", formula: "{Base} + {Fee}" }),
+    ],
+  })
+}

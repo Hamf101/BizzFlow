@@ -329,22 +329,24 @@ export function hasFormulas(blocks: readonly Block[]): boolean {
 }
 
 /**
- * Puts a new name where a formula named the old one, matched as references
- * are, whatever the case. "Items" also renames "{Items.Amount}" when `table`.
+ * Puts new names where a formula named old ones, matched as references are,
+ * whatever the case. Each reference is renamed once from the whole set, so a
+ * table and its column renamed together turn "{Items.Amount}" into
+ * "{Lines.Cost}"; a whole name wins over a renamed table's prefix.
  *
  * @param formula - The formula as written.
- * @param from - The old name.
- * @param to - The new name.
- * @param table - Whether a table was renamed, so its columns' names follow.
- * @returns The formula naming the new name.
+ * @param renames - Each old name, its new name, and whether it is a table's, so its columns' names follow.
+ * @returns The formula naming the new names.
  */
-export function renameInFormula(formula: string, from: string, to: string, table = false): string {
+export function renameInFormula(formula: string, renames: readonly { from: string; to: string; table: boolean }[]): string {
   return formula.replace(/\{([^{}]*)\}/g, (whole: string, name: string): string => {
-    if (same(name, from)) return `{${to}}`
+    const exact = renames.find((change) => same(name, change.from))
 
-    const dot = name.trim().toLowerCase().startsWith(`${from.trim().toLowerCase()}.`) ? from.trim().length : -1
+    if (exact) return `{${exact.to}}`
 
-    return table && dot !== -1 ? `{${to}${name.trim().slice(dot)}}` : whole
+    const table = renames.find((change) => change.table && name.trim().toLowerCase().startsWith(`${change.from.trim().toLowerCase()}.`))
+
+    return table ? `{${table.to}${name.trim().slice(table.from.trim().length)}}` : whole
   })
 }
 

@@ -1049,6 +1049,31 @@ describe("document PDF service", () => {
     expect(["The work.", "Its parts.", "Their pieces.", "Its timing."].map((words) => (at(words)?.x ?? 0) - metrics.margin)).toEqual([38, 56, 74, 38])
   })
 
+  it("keeps long sub-clauses in a narrow column above the footer, measured in the width their words are drawn in", { timeout: PDF_RENDER_TIMEOUT_MS }, async () => {
+    const input = createPdfInput({ repeatHeader: false, repeatFooter: true })
+    const content = requireVersionThreeContent(input)
+    const id = (n: number): string => `58200000-0000-4000-8000-${String(n).padStart(12, "0")}`
+    const clause = "The supplier shall deliver the services described in the schedule with reasonable skill and care, in accordance with good industry practice."
+    const items = Array.from({ length: 10 }, (_value: unknown, index: number): string => (index < 2 ? "Services." : clause))
+
+    // Four lists side by side, their (a)-level items set 74 points into a column about 120 wide.
+    content.blocks = [1, 2, 3, 4].map((n: number) => ({ id: id(n), type: "numbered_list" as const, items, levels: items.map((_item, index: number) => Math.min(index, 2)) }))
+    content.sections = []
+    content.fieldGroups = [{ id: id(10), label: null, startBlockId: id(1), endBlockId: id(4), columns: 4, keepTogether: false }]
+    content.blockRules = []
+    input.signers = []
+
+    const metrics = pdfMetrics(input)
+    const flowBottom = metrics.flowTopY - metrics.pageCapacity
+    const pdf = await PDFDocument.load(await renderGeneratedDocumentPdf(input))
+
+    expect(pdf.getPageCount()).toBeGreaterThan(1)
+    pdf.getPages().forEach((_page, index: number) => {
+      // Everything above the footer's 7-point words stays inside the flow.
+      expect(Math.min(...drawnTexts(pdf, index).filter((piece) => piece.size >= 8).map((piece) => piece.y))).toBeGreaterThanOrEqual(flowBottom - 0.5)
+    })
+  })
+
   it("holds a boxed section's rows, cells and long text inside its edge over pages, open where a page breaks it", { timeout: PDF_RENDER_TIMEOUT_MS }, async () => {
     const input = createPdfInput({ repeatHeader: false, repeatFooter: false })
     const content = requireVersionThreeContent(input)

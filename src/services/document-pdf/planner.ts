@@ -27,6 +27,7 @@ import {
   boxedPdfMetrics,
   createPdfLayoutMetrics,
   getPdfRowFrames,
+  listItemInset,
   scalePdfCharacterEstimate,
   SIGNER_NAME_LEADING,
   signerNameWidth,
@@ -926,16 +927,17 @@ function splitListBlock(
   availableWidth: number,
   pageCapacity: number
 ): PdfBlockFlowItem[] {
-  const entryCharacters = resolveChunkCharacters(
-    LIST_ENTRY_CHUNK_CHARACTERS,
-    availableWidth,
-    pageCapacity
-  )
   const entries = block.items.flatMap(
     (
       item: string,
       itemIndex: number
     ): Array<{ level: number; marker: string; runs?: TextRun[]; text: string }> => {
+      // An item is cut to fit the width its words are drawn in, set in under its marker.
+      const entryCharacters = resolveChunkCharacters(
+        LIST_ENTRY_CHUNK_CHARACTERS,
+        listWordsWidth(block.type, block.levels?.[itemIndex] ?? 0, availableWidth),
+        pageCapacity
+      )
       const formatted = block.itemRuns?.[itemIndex]
       const pieces = formatted
         ? splitRuns(formatted, scaleChunk(entryCharacters, formatted, 10)).map((runs: TextRun[]) => ({ runs, text: runs.map((run: TextRun): string => run.text).join("") }))
@@ -982,7 +984,7 @@ function splitListBlock(
   }
 
   for (const entry of entries) {
-    const entryHeight = estimateListEntryHeight(entry.text, availableWidth, entry.runs)
+    const entryHeight = estimateListEntryHeight(entry.text, listWordsWidth(block.type, entry.level, availableWidth), entry.runs)
 
     if (
       currentEntries.length > 0 &&
@@ -1316,8 +1318,8 @@ function estimateBlockHeight(
     case "numbered_list":
       return (
         block.items.reduce(
-          (height: number, item: string, index: number): number =>
-            height + estimateListEntryHeight(item, availableWidth, block.itemRuns?.[index]) * ((lineSpacing ?? 1.5) / 1.5),
+          (height: number, entry: string, index: number): number =>
+            height + estimateListEntryHeight(entry, listWordsWidth(block.type, item.listLevels?.[index] ?? 0, availableWidth), block.itemRuns?.[index]) * ((lineSpacing ?? 1.5) / 1.5),
           0
         ) + 8
       )
@@ -1537,9 +1539,16 @@ function hasBranding(content: TemplateContent): boolean {
   )
 }
 
+// The width an item's words are drawn in, beside its marker and set in by its level.
+function listWordsWidth(type: "bullet_list" | "numbered_list", level: number, availableWidth: number): number {
+  return availableWidth - listItemInset(type, level).words
+}
+
+// An item's words measured in the width they are drawn in, set in under its
+// marker, a little more cautiously than a paragraph's.
 function estimateListEntryHeight(
   value: string,
-  availableWidth: number,
+  wordsWidth: number,
   runs?: readonly TextRun[] | null
 ): number {
   const scale = runScale(runs, 10)
@@ -1547,7 +1556,7 @@ function estimateListEntryHeight(
   return (
     estimateWrappedTextHeight(
       value,
-      scalePdfCharacterEstimate(82, availableWidth) / scale,
+      scalePdfCharacterEstimate(82, wordsWidth) / scale,
       15 * scale
     ) + 4
   )

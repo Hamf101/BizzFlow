@@ -1,7 +1,8 @@
 import Big, { type Big as BigNumber } from "big.js"
 
 import type { TemplateBlock, TemplateContent } from "@/types/template"
-import { hasFormulas, parseFormula, resolveFormulaReference, type FormulaNode } from "@/types/template-formula"
+import { parseFormula, resolveFormulaReference, type FormulaNode } from "@/types/template-formula"
+import { visibilityPass } from "@/types/template-visibility"
 
 // Worked out in decimals, as money is: 0.1 times 3 is 0.3. Halves round up.
 const Decimal = Big()
@@ -22,23 +23,33 @@ type Row = string[]
 /**
  * Works out every answer a formula gives, from the answers it names: a
  * table's worked-out columns row by row, then its fields, top to bottom.
- * What a browser sent for a worked-out answer is replaced. Money is rounded
+ * What a browser sent for a worked-out answer is replaced. A hidden answer
+ * is let go on the way down, before anything below can read it, so the
+ * result is also the visible answer state. Money is rounded
  * to the penny, half up, on each line and on each field, as an invoice is.
  * An answer stays blank until something it names is answered, and when it
  * cannot be worked out: a division by nothing, or a number too long to be real.
  *
  * @param content - The document's content.
  * @param values - Its answers.
- * @returns The answers with every worked-out one in place.
+ * @returns The visible answers with every worked-out one in place.
  */
 export function calculateTemplateAnswers(content: TemplateContent, values: Readonly<Record<string, unknown>>): Record<string, unknown> {
   const next: Record<string, unknown> = { ...values }
 
-  if (content.schemaVersion !== 3 || !hasFormulas(content.blocks)) {
+  if (content.schemaVersion !== 3) {
     return next
   }
 
+  // Reads `next` as it fills: a rule tests only answers above it, already settled.
+  const shows = visibilityPass(content, next)
+
   for (const [index, block] of content.blocks.entries()) {
+    if ("fieldKey" in block && !shows(block)) {
+      delete next[block.fieldKey]
+      continue
+    }
+
     if (block.type === "text_field" && block.formula !== undefined) {
       next[block.fieldKey] = work(content.blocks, index, undefined, block.formula, block.format === "money", next, null)
     }
@@ -130,8 +141,10 @@ function work(
 
     if (!answered) return ""
 
-    // Never "-0.00".
-    return formatNumber(result.eq(0) ? new Decimal(0) : result, money)
+    // Rounded first, so a sliver below nothing shows as nothing, never "-0.00".
+    const shown = result.round(money ? 2 : 6)
+
+    return formatNumber(shown.eq(0) ? new Decimal(0) : shown, money)
   } catch (error) {
     if (error instanceof Unworkable) return ""
     throw error

@@ -1,4 +1,4 @@
-import { renameInFormula } from "@/types/template-formula"
+import { formulaProblem, renameInFormula } from "@/types/template-formula"
 import {
   type TemplateBlock,
   type TemplateContentV3,
@@ -46,13 +46,15 @@ export type TemplateDropdownOptionEditResult =
       dependentBlockIds: readonly string[]
     }>
 
-/** Stable reason code returned when a structural edit would break visibility. */
+/** Stable reason code returned when a structural edit would break visibility or a formula. */
 export type TemplateVisibilityStructureEditErrorCode =
   | "block_not_found"
   | "visibility_source_in_use"
   | "visibility_order_conflict"
+  | "formula_source_in_use"
+  | "formula_order_conflict"
 
-/** Validation result for a delete or move that can affect visibility rules. */
+/** Validation result for a delete or move that can affect visibility rules or formulas. */
 export type TemplateVisibilityStructureEditResult =
   | Readonly<{
       success: true
@@ -205,12 +207,12 @@ export function createUniqueTemplateFieldKey(
 }
 
 /**
- * Validates deleting a block without orphaning conditional fields.
+ * Validates deleting a block without orphaning conditional fields or formulas.
  *
  * @param blocks - Current canonical block order.
  * @param blockId - Block proposed for deletion.
- * @returns Success when no field uses the block as a visibility source, or an
- * actionable refusal containing every affected field id.
+ * @returns Success when no field uses the block as a visibility source and no
+ * formula names it, or an actionable refusal containing every affected field id.
  */
 export function evaluateTemplateBlockDeletion(
   blocks: readonly TemplateBlock[],
@@ -228,14 +230,16 @@ export function evaluateTemplateBlockDeletion(
   }
 
   const dependents = findTemplateVisibilityDependents(blocks, blockId)
-
-  if (dependents.length === 0) {
-    return { success: true }
-  }
-
   const sourceLabel = isTemplateFieldBlock(block)
     ? `“${block.label}”`
     : "This block"
+
+  if (dependents.length === 0) {
+    const broken = findBrokenFormulas(blocks, blocks.filter((candidate: TemplateBlock): boolean => candidate.id !== blockId))
+
+    return broken.length === 0 ? { success: true } : createFormulaConflict(broken, sourceLabel)
+  }
+
   const fieldWord = dependents.length === 1 ? "field depends" : "fields depend"
   const conditionWord = dependents.length === 1 ? "field" : "fields"
 
@@ -874,9 +878,10 @@ export function moveTemplateBlockTo(
   }
 
   const conflicts = findVisibilityOrderConflicts(blocks)
+  const broken = conflicts.length > 0 ? [] : findBrokenFormulas(content.blocks, blocks)
 
-  if (conflicts.length > 0) {
-    return createOrderConflict(conflicts)
+  if (conflicts.length > 0 || broken.length > 0) {
+    return conflicts.length > 0 ? createOrderConflict(conflicts) : createFormulaConflict(broken, null)
   }
 
   const index = createBlockIndex(blocks)
@@ -948,9 +953,10 @@ export function moveTemplateSection(
     ...content.blocks.slice(end),
   ]
   const conflicts = findVisibilityOrderConflicts(blocks)
+  const broken = conflicts.length > 0 ? [] : findBrokenFormulas(content.blocks, blocks)
 
-  if (conflicts.length > 0) {
-    return createOrderConflict(conflicts)
+  if (conflicts.length > 0 || broken.length > 0) {
+    return conflicts.length > 0 ? createOrderConflict(conflicts) : createFormulaConflict(broken, null)
   }
 
   const index = createBlockIndex(blocks)
@@ -1196,7 +1202,7 @@ function renameFormulaReferences(candidate: TemplateBlock, prior: TemplateBlock,
   const rename = (formula: string | undefined, own: boolean): string | undefined =>
     formula === undefined
       ? undefined
-      : renames.filter((change) => !change.ownColumns || own).reduce((written, change) => renameInFormula(written, change.from, change.to, change.table), formula)
+      : renameInFormula(formula, renames.filter((change) => !change.ownColumns || own))
 
   if (renames.length === 0) return candidate
   if (candidate.type === "text_field" && candidate.formula !== undefined) return { ...candidate, formula: rename(candidate.formula, false) }
@@ -1356,6 +1362,47 @@ function createOrderConflict(dependentBlockIds: readonly string[]): Extract<Temp
     code: "visibility_order_conflict",
     dependentBlockIds,
     message: `This move would place ${dependentBlockIds.length} conditional ${fieldWord} before the checkbox or dropdown that controls visibility. Keep each source above the fields it controls, or change the affected conditions first.`,
+    success: false,
+  }
+}
+
+type FormulaCheck = Readonly<{ blockId: string; name: string; works: boolean }>
+
+// Every formula, by the block holding it and the name it answers to: a
+// field's label, or a column's as {Table.Column}.
+function checkFormulas(blocks: readonly TemplateBlock[]): FormulaCheck[] {
+  return blocks.flatMap((block: TemplateBlock, index: number): FormulaCheck[] =>
+    block.type === "text_field"
+      ? block.formula === undefined ? [] : [{ blockId: block.id, name: block.label, works: formulaProblem(blocks, index, block.formula) === null }]
+      : block.type === "table_field"
+        ? block.columns.flatMap((column, at): FormulaCheck[] =>
+            column.formula === undefined ? [] : [{ blockId: block.id, name: `${block.label}.${column.label}`, works: formulaProblem(blocks, index, column.formula, at) === null }]
+          )
+        : []
+  )
+}
+
+// The formulas a delete or move would break: each works out before it and
+// not after. One already broken is not this change's doing.
+function findBrokenFormulas(before: readonly TemplateBlock[], after: readonly TemplateBlock[]): FormulaCheck[] {
+  const worked = new Set(checkFormulas(before).flatMap((check) => (check.works ? [`${check.blockId}.${check.name}`] : [])))
+
+  return checkFormulas(after).filter((check) => !check.works && worked.has(`${check.blockId}.${check.name}`))
+}
+
+// A delete (naming what is deleted) or a move (null) that would break formulas.
+function createFormulaConflict(broken: readonly FormulaCheck[], deleted: string | null): Extract<TemplateVisibilityStructureEditResult, { success: false }> {
+  const one = broken.length === 1
+  const formulas = `the ${one ? "formula" : "formulas"} in ${broken.map((check) => `“${check.name}”`).join(", ")}`
+  const change = one ? "that formula" : "those formulas"
+
+  return {
+    code: deleted === null ? "formula_order_conflict" : "formula_source_in_use",
+    dependentBlockIds: [...new Set(broken.map((check) => check.blockId))],
+    message:
+      deleted === null
+        ? `This move would put ${formulas} above ${one ? "an answer it uses" : "answers they use"}. Keep each answer above the formulas that use it, or change ${change} first.`
+        : `${deleted} cannot be deleted because ${formulas} ${one ? "uses" : "use"} it. Change ${change} first.`,
     success: false,
   }
 }

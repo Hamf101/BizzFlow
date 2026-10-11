@@ -1417,6 +1417,11 @@ describe("Flow building with the blocks it adds", () => {
         /operations\[0\] add_block: .*visibleWhen/,
         [{ type: "add_block", summary: "Asked the pet's name", payload: { afterBlockId: PARAGRAPH_ID, block: { type: "text_field", fieldKey: "name", label: "Pet's name", required: false, helpText: null, placeholder: null, multiline: false, visibleWhen: { sourceBlockId: FIELD_ID, operator: "equals", value: true } } } }],
       ],
+      // Two tests, one naming a field below: dropping that one would quietly weaken the rule.
+      [
+        /operations\[0\] add_block: .*visibleWhen/,
+        [{ type: "add_block", summary: "Asked the vet's name", payload: { afterBlockId: FIELD_ID, block: { type: "text_field", fieldKey: "vet", label: "Vet's name", required: false, helpText: null, placeholder: null, multiline: false, visibleWhen: { match: "all", conditions: [{ sourceBlockId: FIELD_ID, operator: "equals", value: true }, { sourceBlockId: COMPANION_ID, operator: "answered" }] } } } }],
+      ],
       // A move that puts a field's source after it: the field would show for everyone.
       [/operations\[0\] move_block: .*conditional field/, [{ type: "move_block", summary: "Moved the question down", payload: { blockId: FIELD_ID, afterBlockId: COMPANION_ID } }]],
     ]

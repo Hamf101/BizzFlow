@@ -630,8 +630,8 @@ export function TemplateEditor({
             // The boxes take answers, so the author tries the form as they build it.
             fields={proposal ? "read" : "fill"}
             narrow={narrow}
-            onAnswerChange={(fieldKey, value) =>
-              setTestAnswers((answers) => applyVisibleTemplateFieldValue(content, answers, fieldKey, value))
+            onAnswerChange={(fieldKey, value, settle) =>
+              setTestAnswers((answers) => applyVisibleTemplateFieldValue(content, answers, fieldKey, value, settle))
             }
             overlay={room && !proposal ? <RoomLayer narrow={narrow} others={live.others} revision={content} room={room} /> : null}
             textEditable={editable && !proposal}

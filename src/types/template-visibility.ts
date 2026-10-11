@@ -81,7 +81,58 @@ export function isTemplateBlockVisible(
   block: TemplateBlock,
   values: Readonly<Record<string, unknown>>
 ): boolean {
-  return isTemplateBlockVisibleInternal(content, block, values, new Set())
+  return visibilityPass(content, values)(block)
+}
+
+/**
+ * Visibility for one answer state, each block worked out once and reused by
+ * every rule that tests it, so chained rules stay linear. Answers are read as
+ * each block is asked about: a rule reads only earlier blocks, so a caller
+ * may fill answers in top to bottom as it goes.
+ *
+ * @param content - Parsed immutable template content.
+ * @param values - Answers keyed by stable field key.
+ * @returns Whether a block of the same content shows.
+ */
+export function visibilityPass(
+  content: TemplateContent,
+  values: Readonly<Record<string, unknown>>
+): (block: TemplateBlock) => boolean {
+  const known = new Map<string, boolean>()
+  const blockById = new Map<string, TemplateBlock>()
+
+  for (const block of content.blocks) {
+    if (!blockById.has(block.id)) blockById.set(block.id, block)
+  }
+
+  const shows = (block: TemplateBlock): boolean => {
+    if (content.schemaVersion !== 3 || !("visibleWhen" in block) || block.visibleWhen === undefined) {
+      return true
+    }
+
+    const found = known.get(block.id)
+
+    if (found !== undefined) {
+      return found
+    }
+
+    // A rule that leads back to its own block never holds.
+    known.set(block.id, false)
+
+    const holds = (condition: TemplateVisibilityCondition): boolean => {
+      const source = blockById.get(condition.sourceBlockId)
+
+      return source !== undefined && "fieldKey" in source && shows(source) && testCondition(condition, readEffectiveSourceValue(source, values))
+    }
+    const rule = block.visibleWhen
+    const result = "conditions" in rule && rule.match === "any" ? rule.conditions.some(holds) : visibilityConditions(rule).every(holds)
+
+    known.set(block.id, result)
+
+    return result
+  }
+
+  return shows
 }
 
 /**
@@ -95,9 +146,7 @@ export function getVisibleTemplateBlocks(
   content: TemplateContent,
   values: Readonly<Record<string, unknown>>
 ): TemplateBlock[] {
-  return content.blocks.filter((block: TemplateBlock): boolean =>
-    isTemplateBlockVisible(content, block, values)
-  )
+  return content.blocks.filter(visibilityPass(content, values))
 }
 
 /**
@@ -140,24 +189,29 @@ export function pruneHiddenTemplateFieldValues(
  * @param currentValues - Current browser answer state.
  * @param fieldKey - Stable key of the changed field.
  * @param value - New normalized browser value.
+ * @param settle - Brings answers to what the page shows: the hidden ones let
+ *   go, and for a document with formulas, what each works out, so a rule
+ *   testing a worked-out answer reads the new figure.
  * @returns Effective visible answer state after the change.
  */
 export function applyVisibleTemplateFieldValue(
   content: TemplateContent,
   currentValues: Readonly<Record<string, unknown>>,
   fieldKey: string,
-  value: unknown
+  value: unknown,
+  settle: AnswerSettler = pruneHiddenTemplateFieldValues
 ): Record<string, unknown> {
-  const visibleCurrentValues = pruneHiddenTemplateFieldValues(
-    content,
-    currentValues
-  )
-
-  return pruneHiddenTemplateFieldValues(content, {
-    ...visibleCurrentValues,
+  return settle(content, {
+    ...settle(content, currentValues),
     [fieldKey]: value
   })
 }
+
+/** Brings an answer state to what its page shows. */
+export type AnswerSettler = (
+  content: TemplateContent,
+  values: Readonly<Record<string, unknown>>
+) => Record<string, unknown>
 
 /**
  * Determines whether the visible template state requires one signer's initials
@@ -186,38 +240,6 @@ export function templateRequiresVisibleInitials(
       boxSigner(block) === signer &&
       visibleBlockIds.has(block.id)
   )
-}
-
-function isTemplateBlockVisibleInternal(
-  content: TemplateContent,
-  block: TemplateBlock,
-  values: Readonly<Record<string, unknown>>,
-  visitedBlockIds: ReadonlySet<string>
-): boolean {
-  if (content.schemaVersion !== 3 || !("visibleWhen" in block) || block.visibleWhen === undefined) {
-    return true
-  }
-
-  if (visitedBlockIds.has(block.id)) {
-    return false
-  }
-
-  const nextVisitedBlockIds = new Set(visitedBlockIds).add(block.id)
-  const holds = (condition: TemplateVisibilityCondition): boolean => {
-    const source = content.blocks.find((candidate: TemplateBlock): boolean => candidate.id === condition.sourceBlockId)
-
-    return (
-      source !== undefined &&
-      "fieldKey" in source &&
-      isTemplateBlockVisibleInternal(content, source, values, nextVisitedBlockIds) &&
-      testCondition(condition, readEffectiveSourceValue(source, values))
-    )
-  }
-  const rule = block.visibleWhen
-
-  return "conditions" in rule && rule.match === "any"
-    ? rule.conditions.some(holds)
-    : visibilityConditions(rule).every(holds)
 }
 
 function testCondition(condition: TemplateVisibilityCondition, answer: boolean | string | unknown[]): boolean {

@@ -29,7 +29,7 @@ import { PRINTED_HEADING, printedSpace } from "@/components/editor/paper-field"
 import { rowGridColumns } from "@/components/templates/template-render-groups"
 import type { EditorController, FocusRequest } from "@/components/editor/use-editor-controller"
 import { resolveDocumentSurfaceInk } from "@/lib/document-surface"
-import { getVisibleTemplateBlocks } from "@/types/template-visibility"
+import { getVisibleTemplateBlocks, type AnswerSettler } from "@/types/template-visibility"
 import { useCalculatedAnswers } from "@/components/editor/use-calculated-answers"
 import { cn } from "@/lib/utils"
 import {
@@ -75,7 +75,8 @@ export type EditorCanvasProps = Readonly<{
   documentTitle: string
   fields: "design" | "fill" | "read"
   narrow: boolean
-  onAnswerChange?: (fieldKey: string, value: unknown) => void
+  /** A change, with how to bring the answers to what the page shows once it is made. */
+  onAnswerChange?: (fieldKey: string, value: unknown, settle: AnswerSettler) => void
   /** Drawn over the pages at their shown size, such as where others are. */
   overlay?: ReactNode
   /** What a page that takes uploads puts in a file field while it is filled in. */
@@ -110,7 +111,7 @@ export function EditorCanvas({
   // Fixed for the page's life: an editor provides designing before its canvas first draws.
   const useEditing = useDesignTools()?.useCanvasEditing ?? useNoEditing
   const content = controller.content
-  const answers = useCalculatedAnswers(content, givenAnswers)
+  const { answers, settle } = useCalculatedAnswers(content, givenAnswers)
   const plan = useMemo(
     (): TemplateRenderPlan =>
       createTemplateRenderPlan({
@@ -262,7 +263,7 @@ export function EditorCanvas({
         ? focus
         : null
     },
-    onAnswerChange,
+    onAnswerChange: (fieldKey, value) => onAnswerChange(fieldKey, value, settle),
     renderFileField,
     ...editing.actions,
     textEditable,

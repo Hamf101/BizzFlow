@@ -166,6 +166,34 @@ describe("template visibility", () => {
     )
   })
 
+  it("works each rule out once, so a long chain of combined rules stays quick", () => {
+    const id = (n: number): string => `72000000-0000-4000-8000-${String(n).padStart(12, "0")}`
+    const levels = 24
+    // Each box shows when the one before is ticked, tested twice: the work doubles each level if a rule is re-run.
+    const content = parseTemplateContent({
+      ...createV3Root(),
+      blocks: Array.from({ length: levels }, (_, n) => ({
+        ...checkboxBlock(id(n), `box_${n}`, true),
+        ...(n === 0
+          ? {}
+          : {
+              visibleWhen: {
+                match: "all",
+                conditions: [
+                  { sourceBlockId: id(n - 1), operator: "equals", value: true },
+                  { sourceBlockId: id(n - 1), operator: "not_equals", value: false }
+                ]
+              }
+            })
+      }))
+    })
+    const started = performance.now()
+
+    expect(getVisibleTemplateBlocks(content, {})).toHaveLength(levels)
+    expect(getVisibleTemplateBlocks(content, { box_11: false })).toHaveLength(12)
+    expect(performance.now() - started).toBeLessThan(200)
+  })
+
   it("derives required initials from the live visible answer state", () => {
     const content = parseTemplateContent({
       ...createV3Root(),

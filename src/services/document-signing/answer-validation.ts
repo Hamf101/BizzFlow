@@ -169,6 +169,21 @@ export function pruneHiddenAnswerPatch(
 }
 
 /**
+ * The answers a formula is worked out from, for the database to refuse the
+ * save once someone else has changed them; none when nothing is worked out.
+ *
+ * @param content - Validated immutable template snapshot.
+ * @param storedValues - Answers as read before working anything out.
+ * @returns The stored answers, or undefined without a formula.
+ */
+export function calculationBase(
+  content: TemplateContent,
+  storedValues: Record<string, unknown>
+): Record<string, unknown> | undefined {
+  return calculatedFieldKeys(content.blocks).length > 0 ? storedValues : undefined
+}
+
+/**
  * Puts what each formula works out into a visible answer patch, from the
  * stored answers with the patch over them; what a page sent for one counts
  * for nothing. A worked-out answer that has not changed stays out, so a

@@ -1041,6 +1041,7 @@ export type AdminDatabase = {
           target_values: Record<string, unknown>
           target_signature_data: Record<string, unknown> | null
           target_initials_data: Record<string, unknown> | null
+          target_expected_values?: Record<string, unknown>
         }
         Returns: string
       }
@@ -1049,6 +1050,7 @@ export type AdminDatabase = {
           target_org_id: string
           target_document_id: string
           target_values: Record<string, unknown>
+          target_expected_values?: Record<string, unknown>
         }
         Returns: Record<string, unknown>
       }

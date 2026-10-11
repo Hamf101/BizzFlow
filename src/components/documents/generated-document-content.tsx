@@ -104,7 +104,7 @@ export function GeneratedDocumentContent({
     useState<Record<string, unknown>>(() =>
       pruneHiddenTemplateFieldValues(content, answers)
     )
-  const currentAnswers = useCalculatedAnswers(content, givenAnswers)
+  const { answers: currentAnswers, settle } = useCalculatedAnswers(content, givenAnswers)
 
   useEffect((): void => {
     onAnswersChange?.(currentAnswers)
@@ -125,7 +125,7 @@ export function GeneratedDocumentContent({
   function applyAnswer(fieldKey: string, value: unknown): void {
     setCurrentAnswers(
       (priorAnswers: Record<string, unknown>): Record<string, unknown> =>
-        applyVisibleTemplateFieldValue(content, priorAnswers, fieldKey, value)
+        applyVisibleTemplateFieldValue(content, priorAnswers, fieldKey, value, settle)
     )
   }
   // This component is only ever an editing or review surface: every caller
@@ -500,13 +500,16 @@ export function GeneratedBlock({
   }
 
   switch (block.type) {
-    case "text_field":
+    case "text_field": {
+      // A worked-out answer is never typed: it shows what its formula gives.
+      const typed = editable && block.formula === undefined
+
       return (
         <AnswerFieldFrame
           block={block}
-          labelFor={editable ? block.id : undefined}
+          labelFor={typed ? block.id : undefined}
         >
-          {editable ? (
+          {typed ? (
             block.multiline ? (
               <textarea
                 className="min-h-24 w-full resize-y rounded-lg border border-input bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
@@ -537,6 +540,7 @@ export function GeneratedBlock({
           )}
         </AnswerFieldFrame>
       )
+    }
     case "date_field":
       return (
         <AnswerFieldFrame

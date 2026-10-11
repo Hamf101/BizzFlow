@@ -3148,6 +3148,7 @@ export type Database = {
       complete_document_recipient_signature: {
         Args: {
           target_document_id: string
+          target_expected_values?: Json
           target_initials_data: Json
           target_org_id: string
           target_recipient_id: string
@@ -3603,6 +3604,7 @@ export type Database = {
       merge_generated_document_answers: {
         Args: {
           target_document_id: string
+          target_expected_values?: Json
           target_org_id: string
           target_values: Json
         }
