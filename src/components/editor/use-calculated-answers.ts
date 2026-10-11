@@ -31,8 +31,14 @@ export function useCalculatedAnswers(
     }
   }, [calculate, needed])
 
-  const settle = needed && calculate ? calculate : pruneHiddenTemplateFieldValues
+  // Until the arithmetic arrives nothing is let go: a rule may test a figure
+  // not yet worked out, and the first working out settles what was typed.
+  const settle = needed ? (calculate ?? keepAnswers) : pruneHiddenTemplateFieldValues
   const shown = useMemo(() => (needed && calculate ? calculate(content, answers) : answers), [answers, calculate, content, needed])
 
   return { answers: shown, settle }
+}
+
+function keepAnswers(_content: TemplateContent, values: Readonly<Record<string, unknown>>): Record<string, unknown> {
+  return { ...values }
 }

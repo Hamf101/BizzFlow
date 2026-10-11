@@ -11,7 +11,7 @@ import {
 } from "@/types/template-answer"
 import { calculateTemplateAnswers } from "@/types/template-calculation"
 import { calculatedFieldKeys } from "@/types/template-formula"
-import { getVisibleTemplateBlocks, pruneHiddenTemplateFieldValues } from "@/types/template-visibility"
+import { getVisibleTemplateBlocks } from "@/types/template-visibility"
 
 type SubmissionFieldBlock = Extract<TemplateBlock, { fieldKey: string }>
 
@@ -51,11 +51,8 @@ export async function normalizeSubmissionDraftAnswers(
     normalizedAnswers[fieldKey] = await normalizeFieldAnswer(field, value)
   }
 
-  // What a formula works out comes from the server, from every answer so far.
-  const calculated = calculateTemplateAnswers(
-    snapshot,
-    pruneHiddenTemplateFieldValues(snapshot, { ...baseAnswers, ...normalizedAnswers })
-  )
+  // What a formula works out comes from the server, from every visible answer so far.
+  const calculated = calculateTemplateAnswers(snapshot, { ...baseAnswers, ...normalizedAnswers })
 
   for (const fieldKey of calculatedFieldKeys(snapshot.blocks)) {
     if (calculated[fieldKey] !== undefined) {

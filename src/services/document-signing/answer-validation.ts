@@ -205,7 +205,7 @@ export function withCalculatedAnswers(
     return { ...patch }
   }
 
-  const calculated = calculateTemplateAnswers(content, pruneHiddenAnswerValues(content, { ...storedValues, ...patch }))
+  const calculated = calculateTemplateAnswers(content, { ...storedValues, ...patch })
   const next: Record<string, unknown> = { ...patch }
 
   for (const fieldKey of keys) {

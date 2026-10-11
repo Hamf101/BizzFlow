@@ -1,14 +1,20 @@
 -- Visibility rules and expected answers.
 --
--- 1. private.template_block_is_visible, from its latest version in
---    20261001120000_structured_answer_kinds, reads every rule the editor now
+-- 1. private.template_visible_block_ids reads every rule the editor now
 --    writes, as src/types/template-visibility.ts does: one test, or two to
 --    four joined by "all" or "any"; equals, not equals, answered, not
 --    answered, more than and less than; a tick box, choice, typed answer or
---    date as the source. A test holds only while its source is itself shown.
+--    date as the source. A test holds only while its source is itself shown;
+--    more and less than compare doubles, as JavaScript's Number() reads them.
 --    Sources always come earlier, so one pass from the first block to the
---    target answers every block once: a chain of rules with several tests on
---    the block before costs a step a block, not one a path.
+--    last answers every block once: a chain of rules with several tests on
+--    the block before costs a step a block, not one a path. It returns the
+--    shown blocks' ids as a jsonb object, so each lookup is one `?`.
+--    private.template_block_is_visible, from its latest version in
+--    20261001120000_structured_answer_kinds, keeps its signature and
+--    refusals and asks it. prune_template_scalar_values and
+--    validate_visible_submission_requirements (same source) ask it once per
+--    call, not once per block, and find each answer's block in one join.
 -- 2. merge_generated_document_answers and complete_document_recipient_signature
 --    take target_expected_values, the answers a formula was worked out from.
 --    Under the answer row's lock, once the visible stored answers differ from
@@ -18,14 +24,13 @@
 --    dropped and created again, so PostgREST sees one function, not two
 --    overloads; their grants are given again as before.
 --
--- `create or replace` keeps template_block_is_visible's grants.
+-- `create or replace` keeps each redefined private function's grants.
 
-create or replace function private.template_block_is_visible(
+create function private.template_visible_block_ids(
   target_template_snapshot jsonb,
-  target_block_id text,
   target_values jsonb
 )
-returns boolean
+returns jsonb
 language plpgsql
 immutable
 security invoker
@@ -38,9 +43,9 @@ declare
   snapshot_version text;
   blocks jsonb;
   block_positions jsonb;
-  target_position integer;
-  -- Whether each block up to the target shows, by its place.
+  -- Whether each block shows, by its place.
   shown boolean[] := array[]::boolean[];
+  shown_ids text[] := array[]::text[];
   current_position integer;
   current_block jsonb;
   rule jsonb;
@@ -55,6 +60,7 @@ declare
   answer jsonb;
   answer_text text;
   number_text text;
+  number_value double precision;
   is_answered boolean;
   is_equal boolean;
   holds boolean;
@@ -66,10 +72,8 @@ begin
       or jsonb_typeof(target_template_snapshot) <> 'object'
       or target_values is null
       or jsonb_typeof(target_values) <> 'object'
-      or target_block_id is null
-      or target_block_id = ''
       or jsonb_typeof(target_template_snapshot -> 'blocks') <> 'array' then
-    return false;
+    return '{}'::jsonb;
   end if;
 
   snapshot_version := target_template_snapshot ->> 'schemaVersion';
@@ -86,26 +90,25 @@ begin
     having count(*) = 1
   ) unique_blocks;
 
-  target_position := (block_positions ->> target_block_id)::integer;
-
-  if target_position is null then
-    return false;
-  end if;
-
+  -- A doubled id is never shown: no block answers to it alone.
   if snapshot_version = '2' then
-    return true;
+    return (
+      select coalesce(jsonb_object_agg(block_id, true), '{}'::jsonb)
+      from jsonb_object_keys(block_positions) block_id
+    );
   end if;
 
   if snapshot_version is distinct from '3' then
-    return false;
+    return '{}'::jsonb;
   end if;
 
-  for current_position in 1..target_position loop
+  for current_position in 1..jsonb_array_length(blocks) loop
     current_block := blocks -> (current_position - 1);
     shown[current_position] := false;
 
     if not current_block ? 'visibleWhen' then
       shown[current_position] := true;
+      shown_ids := array_append(shown_ids, current_block ->> 'id');
       continue;
     end if;
 
@@ -178,7 +181,11 @@ begin
             'equals', 'not_equals', 'answered', 'not_answered', 'greater_than', 'less_than'
           ])
           and (condition ? 'value') = (test_operator not in ('answered', 'not_answered'))
-          and (expected is null or jsonb_typeof(expected) in ('boolean', 'string'))
+          and (
+            expected is null
+            or jsonb_typeof(expected) = 'boolean'
+            or (jsonb_typeof(expected) = 'string' and char_length(expected #>> '{}') <= 240)
+          )
           and (
             test_operator not in ('greater_than', 'less_than')
             or (jsonb_typeof(expected) = 'string' and expected #>> '{}' ~ number_pattern)
@@ -234,20 +241,40 @@ begin
       elsif test_operator = 'not_answered' then
         holds := not is_answered;
       elsif test_operator in ('greater_than', 'less_than') then
-        -- A typed number, its thousands commas allowed; anything else is not one.
-        -- ponytail: compared as exact numeric, where the app compares doubles;
-        -- they differ only past about fifteen significant digits.
+        -- A typed number, its thousands commas allowed; anything else is not
+        -- one. Both sides are read as the nearest double, as Number() reads
+        -- them, so the database and the app agree on every comparison.
         number_text := case
           when jsonb_typeof(answer) = 'string'
             then regexp_replace(replace(answer #>> '{}', ',', ''), edge_space, '', 'g')
           else ''
         end;
-        holds := case
-          when number_text !~ number_pattern then false
-          when test_operator = 'greater_than'
-            then number_text::numeric > (expected #>> '{}')::numeric
-          else number_text::numeric < (expected #>> '{}')::numeric
-        end;
+
+        if number_text !~ number_pattern then
+          holds := false;
+        else
+          -- Under 300 characters a number is always within a double's range.
+          if char_length(number_text) < 300 then
+            number_value := number_text::double precision;
+          else
+            begin
+              number_value := number_text::double precision;
+            exception when numeric_value_out_of_range then
+              -- Past a double's range Number() reads Infinity, or zero far below it.
+              number_value := case
+                  when number_text ~ '^-?0*(\.|$)' then 0
+                  else 'Infinity'::double precision
+                end
+                * case when number_text like '-%' then -1 else 1 end;
+            end;
+          end if;
+
+          holds := case
+            when test_operator = 'greater_than'
+              then number_value > (expected #>> '{}')::double precision
+            else number_value < (expected #>> '{}')::double precision
+          end;
+        end if;
       else
         -- Equals on several choices means the value is among those ticked;
         -- typed words match whatever their case and spacing.
@@ -272,9 +299,176 @@ begin
 
     shown[current_position] := not malformed
       and case when match_any then any_holds else all_hold end;
+
+    if shown[current_position] then
+      shown_ids := array_append(shown_ids, current_block ->> 'id');
+    end if;
   end loop;
 
-  return shown[target_position];
+  return (
+    select coalesce(jsonb_object_agg(shown_id, true), '{}'::jsonb)
+    from unnest(shown_ids) shown_id
+    where block_positions ? shown_id
+  );
+end;
+$$;
+
+revoke all on function private.template_visible_block_ids(jsonb, jsonb)
+  from public, anon, authenticated;
+grant execute on function private.template_visible_block_ids(jsonb, jsonb)
+  to service_role;
+
+create or replace function private.template_block_is_visible(
+  target_template_snapshot jsonb,
+  target_block_id text,
+  target_values jsonb
+)
+returns boolean
+language sql
+immutable
+security invoker
+set search_path = ''
+as $$
+  select coalesce(
+    private.template_visible_block_ids(target_template_snapshot, target_values)
+      ? target_block_id,
+    false
+  )
+$$;
+
+create or replace function private.prune_template_scalar_values(
+  target_template_snapshot jsonb,
+  target_values jsonb
+)
+returns jsonb
+language plpgsql
+immutable
+security invoker
+set search_path = ''
+as $$
+declare
+  visible_block_ids jsonb;
+  pruned_values jsonb;
+begin
+  if target_template_snapshot is null
+      or jsonb_typeof(target_template_snapshot) <> 'object'
+      or target_values is null
+      or jsonb_typeof(target_values) <> 'object'
+      or jsonb_typeof(target_template_snapshot -> 'blocks') <> 'array' then
+    return '{}'::jsonb;
+  end if;
+
+  visible_block_ids := private.template_visible_block_ids(
+    target_template_snapshot,
+    target_values
+  );
+
+  -- An answer stays when exactly one block holds its key, that block takes a
+  -- kept answer, and it shows.
+  select coalesce(jsonb_object_agg(answer.key, answer.value), '{}'::jsonb)
+  into pruned_values
+  from jsonb_each(target_values) answer
+  join (
+    select
+      block ->> 'fieldKey' as field_key,
+      min(block ->> 'id') as block_id,
+      min(block ->> 'type') as block_type
+    from jsonb_array_elements(target_template_snapshot -> 'blocks') blocks(block)
+    where block ->> 'fieldKey' is not null
+    group by block ->> 'fieldKey'
+    having count(*) = 1
+  ) field on field.field_key = answer.key
+  where field.block_type = any(array[
+      'text_field',
+      'date_field',
+      'checkbox_field',
+      'dropdown_field',
+      'choice_grid_field',
+      'table_field',
+      'initials_field',
+      'signature_field'
+    ])
+    and visible_block_ids ? field.block_id;
+
+  return pruned_values;
+end;
+$$;
+
+create or replace function private.validate_visible_submission_requirements(
+  target_template_snapshot jsonb,
+  target_values jsonb,
+  target_submission_id uuid,
+  target_org_id uuid
+)
+returns void
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+  visible_block_ids jsonb := private.template_visible_block_ids(
+    target_template_snapshot,
+    target_values
+  );
+  required_block jsonb;
+  required_field_key text;
+  required_value jsonb;
+begin
+  for required_block in
+    select block
+    from jsonb_array_elements(
+      coalesce(target_template_snapshot -> 'blocks', '[]'::jsonb)
+    ) blocks(block)
+    where coalesce((block ->> 'required')::boolean, false)
+      and visible_block_ids ? (block ->> 'id')
+  loop
+    required_field_key := required_block ->> 'fieldKey';
+
+    if required_field_key is null or required_field_key = '' then
+      raise exception 'Submission snapshot contains an invalid required field.'
+        using errcode = '23514';
+    end if;
+
+    if required_block ->> 'type' = 'file_field' then
+      if not exists (
+        select 1
+        from public.submission_files submission_file
+        where submission_file.submission_id = target_submission_id
+          and submission_file.org_id = target_org_id
+          and submission_file.field_key = required_field_key
+          and submission_file.status = 'available'
+      ) then
+        raise exception 'Required submission file % is missing.', required_block ->> 'label'
+          using errcode = '22023';
+      end if;
+
+      continue;
+    end if;
+
+    if not coalesce(
+      required_block ->> 'type' = any(array[
+        'text_field',
+        'date_field',
+        'checkbox_field',
+        'dropdown_field',
+        'choice_grid_field',
+        'table_field',
+        'initials_field',
+        'signature_field'
+      ]),
+      false
+    ) then
+      raise exception 'Submission snapshot contains an invalid required field.'
+        using errcode = '23514';
+    end if;
+
+    required_value := target_values -> required_field_key;
+
+    if not private.template_answer_is_complete(required_block, required_value) then
+      raise exception 'Required submission field % is incomplete.', required_block ->> 'label'
+        using errcode = '22023';
+    end if;
+  end loop;
 end;
 $$;
 
@@ -440,6 +634,7 @@ declare
   matching_block jsonb;
   others_signed boolean;
   merged_values jsonb;
+  visible_block_ids jsonb;
   required_block jsonb;
   required_field_key text;
   recipient_requires_signature boolean;
@@ -592,6 +787,11 @@ begin
       and recipient.requires_signature
       and recipient.status <> 'signed'
   ) then
+    visible_block_ids := private.template_visible_block_ids(
+      document_snapshot,
+      merged_values
+    );
+
     for required_block in
       select block
       from jsonb_array_elements(
@@ -599,11 +799,7 @@ begin
       ) as required_blocks(block)
       where coalesce((block ->> 'required')::boolean, false)
         and block ->> 'type' not in ('signature_field', 'initials_field')
-        and private.template_block_is_visible(
-          document_snapshot,
-          block ->> 'id',
-          merged_values
-        )
+        and visible_block_ids ? (block ->> 'id')
     loop
       required_field_key := required_block ->> 'fieldKey';
 

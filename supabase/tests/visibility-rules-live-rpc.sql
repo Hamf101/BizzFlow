@@ -1,8 +1,8 @@
 -- The database shows and hides a block as src/types/template-visibility.ts
 -- does: one test or two to four joined by all or any, every operator, tick
--- box, choice, typed and date sources, a hidden source failing its test, and a
--- long chain of rules answered in one pass. Pure functions only: nothing is
--- written.
+-- box, choice, typed and date sources, numbers read as JavaScript reads them,
+-- a hidden source failing its test, and a long chain of rules answered, and
+-- pruned, in one pass. Pure functions only: nothing is written.
 do $$
 declare
   sources jsonb := jsonb_build_array(
@@ -49,6 +49,7 @@ declare
     [{"sourceBlockId": "income", "operator": "less_than", "value": "50000"}, {"income": "1e3"}, false],
     [{"sourceBlockId": "income", "operator": "less_than", "value": "50000"}, {}, false],
     [{"sourceBlockId": "income", "operator": "greater_than", "value": "-1.5"}, {"income": "-1.25"}, true],
+    [{"sourceBlockId": "income", "operator": "greater_than", "value": "50000"}, {"income": "50000.0000000000000001"}, false],
 
     [{"sourceBlockId": "start", "operator": "equals", "value": "2026-10-10"}, {"start": "2026-10-10"}, true],
     [{"sourceBlockId": "start", "operator": "not_equals", "value": "2026-10-10"}, {"start": "2026-10-11"}, true],
@@ -100,6 +101,7 @@ declare
   snapshot jsonb;
   chain jsonb := '[]';
   started timestamptz;
+  answers jsonb;
 begin
   for test in select value from jsonb_array_elements(cases)
   loop
@@ -116,7 +118,7 @@ begin
   -- Pruning keeps what an "any" rule shows and drops what it hides.
   snapshot := jsonb_build_object('schemaVersion', '3', 'blocks', sources || jsonb_build_array(
     jsonb_build_object('id', 't', 'type', 'text_field', 'fieldKey', 't', 'label', 'T', 'required', false,
-      'visibleWhen', cases -> 37 -> 0)
+      'visibleWhen', cases -> 38 -> 0)
   ));
   if not private.prune_template_scalar_values(snapshot, '{"status": "Retired", "t": "kept"}') ? 't'
       or private.prune_template_scalar_values(snapshot, '{"status": "Employed", "t": "dropped"}') ? 't' then
@@ -153,6 +155,31 @@ begin
 
   if clock_timestamp() - started > interval '2 seconds' then
     raise exception 'A long chain of rules took %.', clock_timestamp() - started;
+  end if;
+
+  -- The whole chain pruned in one call, every answer shown so every one kept,
+  -- in one pass: asking each of 301 blocks its own took about 0.7 s.
+  answers := (select jsonb_object_agg('b' || i, 'yes') from generate_series(0, 300) i);
+  started := clock_timestamp();
+
+  if private.prune_template_scalar_values(snapshot, answers) is distinct from answers then
+    raise exception 'Pruning a long chain of shown answers dropped some.';
+  end if;
+
+  if clock_timestamp() - started > interval '250 milliseconds' then
+    raise exception 'Pruning a long chain of rules took %.', clock_timestamp() - started;
+  end if;
+
+  -- Past a double's range, Number() reads Infinity, or zero far below it.
+  snapshot := jsonb_build_object('schemaVersion', '3', 'blocks', sources || jsonb_build_array(
+    jsonb_build_object('id', 't', 'type', 'text_field', 'fieldKey', 't', 'label', 'T', 'required', false,
+      'visibleWhen', '{"sourceBlockId": "income", "operator": "greater_than", "value": "50000"}'::jsonb)
+  ));
+
+  if not private.template_block_is_visible(snapshot, 't', jsonb_build_object('income', '1' || repeat('0', 400)))
+      or private.template_block_is_visible(snapshot, 't', jsonb_build_object('income', '-1' || repeat('0', 400)))
+      or private.template_block_is_visible(snapshot, 't', jsonb_build_object('income', '0.' || repeat('0', 400) || '1')) then
+    raise exception 'A number past a double''s range was not read as JavaScript reads it.';
   end if;
 end;
 $$;

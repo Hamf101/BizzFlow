@@ -1,6 +1,6 @@
 import { isDeepStrictEqual } from "node:util"
 
-import { describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 
 import {
   completePublicDocumentSigning,
@@ -81,6 +81,10 @@ const save = (client: FakeClient, values: Record<string, unknown>) =>
   saveGeneratedDocumentAnswers({ actorUserId: MANAGER_ID, organizationId: ORG_ID, documentId: DOCUMENT_ID, values }, { client: client as never })
 
 describe("answers a formula works out under concurrent saves", () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
   it("works a member's total out again from answers someone else saved meanwhile", async () => {
     const tables = createSumTables()
     const client = new LockingClient(tables)
@@ -115,7 +119,9 @@ describe("answers a formula works out under concurrent saves", () => {
     expect(tables.document_signing_recipients[0].status).toBe("signed")
   })
 
-  it("gives up after three tries while the answers keep changing", async () => {
+  it("gives up after the last try while the answers keep changing", async () => {
+    // No pause between tries: only how many there are matters here.
+    vi.spyOn(Math, "random").mockReturnValue(0)
     const tables = createSumTables()
     const client = new LockingClient(tables)
     let b = 1
@@ -128,8 +134,8 @@ describe("answers a formula works out under concurrent saves", () => {
       statusCode: 409,
       message: "This document changed while you were saving. Try again.",
     })
-    expect(client.locks).toBe(3)
-    expect(tables.document_answers[0].values).toEqual({ a: "1", b: "4", total: "5" })
+    expect(client.locks).toBe(7)
+    expect(tables.document_answers[0].values).toEqual({ a: "1", b: "8", total: "9" })
   })
 
   it("asks no check of a document without formulas", async () => {

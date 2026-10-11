@@ -361,7 +361,14 @@ export function applyFlowOperations(
       if (operation.payload.block.visibleWhen === null) {
         conditioned.delete(affectedBlockIds[0])
       } else {
-        conditioned.set(affectedBlockIds[0], { sources: [], tests: visibilityConditions(operation.payload.block.visibleWhen).length, where: `operations[${index}] ${operation.type}` })
+        const written = nextDraft.content.blocks.find((block: TemplateBlock): boolean => block.id === affectedBlockIds[0])
+
+        // Only a test that stood as it was written may go with a source removed later.
+        conditioned.set(affectedBlockIds[0], {
+          sources: written !== undefined && "visibleWhen" in written ? visibilityConditions(written.visibleWhen).map((condition) => condition.sourceBlockId) : [],
+          tests: visibilityConditions(operation.payload.block.visibleWhen).length,
+          where: `operations[${index}] ${operation.type}`
+        })
       }
     }
 

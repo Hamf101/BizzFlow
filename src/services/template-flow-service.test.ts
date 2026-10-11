@@ -349,6 +349,14 @@ describe("template Flow service", () => {
     const removed = await runFlow(content, [restate(null)]).run
 
     expect(removed.proposal?.candidateDraft.content.blocks.find((block) => block.id === COMPANION_ID)).not.toHaveProperty("visibleWhen")
+ 
+    // A rule Flow writes may lose a test whose source Flow then removes on request.
+    const { run: dropped } = runFlow(content, [
+      { type: "add_block", summary: "Added a note for higher earners", payload: { afterBlockId: COMPANION_ID, block: { type: "paragraph", text: "Read the higher-rate guide.", alignment: "left", visibleWhen: rule } } },
+      { type: "remove_block", summary: "Removed the employer question", payload: { blockId: COMPANION_ID } },
+    ])
+
+    expect((await dropped).proposal?.candidateDraft.content.blocks.at(-1)).toMatchObject({ visibleWhen: { sourceBlockId: FIELD_ID, operator: "greater_than" } })
   })
 
   it("keeps appended free-form blocks in provider operation order", async () => {

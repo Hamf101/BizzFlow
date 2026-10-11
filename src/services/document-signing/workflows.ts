@@ -32,6 +32,7 @@ import {
   normalizeOptionalDrawing,
   normalizeRequiredDrawing,
 } from "@/services/document-signing/drawing-validation"
+import { MAX_ATTEMPTS, waitBeforeRetry } from "@/services/serialization-retry"
 import {
   CHANGED_ANSWERS_MESSAGE,
   createDatabaseError,
@@ -849,8 +850,9 @@ export async function completePublicDocumentSigning(
 
 /**
  * Runs a save that works answers out from the answers it read, from a fresh
- * read each time the database finds someone else changed them first; the
- * third such conflict reaches the caller.
+ * read each time the database finds someone else changed them first, after
+ * a pause that spreads colliding writers out; the last conflict reaches the
+ * caller.
  *
  * @param attempt - The whole read, work-out and save.
  * @returns What the save that went through returns.
@@ -860,9 +862,11 @@ async function retryOnChangedAnswers<T>(attempt: () => Promise<T>): Promise<T> {
     try {
       return await attempt()
     } catch (error) {
-      if (tries === 3 || !(error instanceof DocumentSigningServiceError) || error.message !== CHANGED_ANSWERS_MESSAGE) {
+      if (tries === MAX_ATTEMPTS || !(error instanceof DocumentSigningServiceError) || error.message !== CHANGED_ANSWERS_MESSAGE) {
         throw error
       }
+
+      await waitBeforeRetry(tries)
     }
   }
 }

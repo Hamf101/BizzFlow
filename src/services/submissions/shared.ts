@@ -31,7 +31,6 @@ import { runOperation } from "@/services/operation"
 import { asSupabaseError } from "@/services/supabase-error"
 import { calculateTemplateAnswers } from "@/types/template-calculation"
 import { calculatedFieldKeys } from "@/types/template-formula"
-import { pruneHiddenTemplateFieldValues } from "@/types/template-visibility"
 
 /** Columns required by the canonical submission row parser. */
 export const SUBMISSION_COLUMNS =
@@ -495,10 +494,7 @@ export function parseSubmissionRow(value: unknown): Submission {
     return submission
   }
 
-  const calculated = calculateTemplateAnswers(
-    submission.templateSnapshot,
-    pruneHiddenTemplateFieldValues(submission.templateSnapshot, submission.values)
-  )
+  const calculated = calculateTemplateAnswers(submission.templateSnapshot, submission.values)
 
   return {
     ...submission,

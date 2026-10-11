@@ -1,4 +1,4 @@
-import { formulaProblem, renameInFormula } from "@/types/template-formula"
+import { formulaProblem, hasFormulas, renameInFormula } from "@/types/template-formula"
 import {
   type TemplateBlock,
   type TemplateContentV3,
@@ -1382,10 +1382,21 @@ function checkFormulas(blocks: readonly TemplateBlock[]): FormulaCheck[] {
   )
 }
 
+// What worked out before a change, kept per block list: a drag asks of the
+// same page at every step, so its formulas are read once, not each time.
+const workingFormulas = new WeakMap<readonly TemplateBlock[], ReadonlySet<string>>()
+
 // The formulas a delete or move would break: each works out before it and
 // not after. One already broken is not this change's doing.
 function findBrokenFormulas(before: readonly TemplateBlock[], after: readonly TemplateBlock[]): FormulaCheck[] {
-  const worked = new Set(checkFormulas(before).flatMap((check) => (check.works ? [`${check.blockId}.${check.name}`] : [])))
+  if (!hasFormulas(before)) return []
+
+  let worked = workingFormulas.get(before)
+
+  if (worked === undefined) {
+    worked = new Set(checkFormulas(before).flatMap((check) => (check.works ? [`${check.blockId}.${check.name}`] : [])))
+    workingFormulas.set(before, worked)
+  }
 
   return checkFormulas(after).filter((check) => !check.works && worked.has(`${check.blockId}.${check.name}`))
 }
