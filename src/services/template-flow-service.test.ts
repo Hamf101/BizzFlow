@@ -17,6 +17,7 @@ import {
   AiProviderError
 } from "@/services/ai/errors"
 import { DocumentSigningServiceError } from "@/services/document-signing-service"
+import { DRAWING_DATA_URL } from "@/services/document-signing-service.test-support"
 import {
   executeDocumentFlow,
   executeTemplateFlow,
@@ -35,6 +36,8 @@ import {
 } from "@/types/template"
 import type { TemplateFlowMessage } from "@/types/template-flow"
 import { createLongDocumentContent } from "@/types/long-document.test-support"
+import { loadFlowSource } from "@/services/template-flow/import-source"
+import { PDFDocument } from "pdf-lib"
 
 const TEMPLATE_ID = "00000000-0000-4000-8000-000000000010"
 const PARAGRAPH_ID = "00000000-0000-4000-8000-000000000011"
@@ -1725,6 +1728,154 @@ describe("reviewing a Flow proposal change by change", () => {
   })
 })
 
+describe("Flow recreating a form from a file", () => {
+  const SOURCE_ID = "00000000-0000-4000-8000-000000000030"
+  const VERSION_ID = "00000000-0000-4000-8000-000000000031"
+  const PNG_BYTES = Uint8Array.of(137, 80, 78, 71, 13, 10, 26, 10, 0, 0)
+
+  // Stands in for get_document_access_level: the member views what `visible` holds, in their own organization only.
+  class SourceClient {
+    constructor(readonly tables: Record<string, FakeRow[]>, readonly visible: string[] = [SOURCE_ID]) {}
+
+    from(tableName: string): PostgrestReadQuery {
+      return new PostgrestReadQuery(this.tables[tableName] ?? [])
+    }
+
+    async rpc(_name: string, args: Record<string, unknown>): Promise<{ data: "viewer" | null; error: null }> {
+      const document = this.tables.documents?.find((row) => row.id === args.target_document_id && row.org_id === args.target_org_id)
+
+      return { data: document && this.visible.includes(String(document.id)) ? "viewer" : null, error: null }
+    }
+  }
+
+  function sourceClient(file: { contentType: string; byteSize: number }, overrides: { documentOrg?: string; visible?: string[] } = {}): SourceClient {
+    const orgId = overrides.documentOrg ?? "org-1"
+    const stamp = "2026-07-23T17:00:00.000Z"
+
+    return new SourceClient(
+      {
+        organization_memberships: [
+          { id: "membership-1", org_id: "org-1", user_id: "user-1", role: "staff", status: "active", created_at: stamp, updated_at: stamp }
+        ],
+        documents: [
+          { id: SOURCE_ID, org_id: orgId, folder_id: null, title: "Intake", description: null, current_version_id: VERSION_ID, source_kind: "upload", lifecycle_state: "active", created_by: "user-2", updated_by: "user-2", archived_by: null, archived_at: null, created_at: stamp, updated_at: stamp }
+        ],
+        document_versions: [
+          { id: VERSION_ID, org_id: orgId, document_id: SOURCE_ID, version_number: 1, status: "available", storage_key: "organizations/org-1/documents/source/original", original_filename: "intake", content_type: file.contentType, byte_size: file.byteSize, checksum_sha256: "0".repeat(64), uploaded_by: "user-2", created_at: stamp, updated_at: stamp }
+        ]
+      },
+      overrides.visible
+    )
+  }
+
+  async function pdfOfPages(pages: number): Promise<Uint8Array> {
+    const pdf = await PDFDocument.create()
+
+    for (let page = 0; page < pages; page += 1) pdf.addPage()
+
+    return pdf.save()
+  }
+
+  function runSourceTurn(
+    client: SourceClient,
+    bytes: Uint8Array,
+    aiProvider: AiProvider = createTestAiProvider([flowProviderResult(successfulFlowPayload())]),
+    content: TemplateContent = createBlankTemplateContent()
+  ) {
+    const readObject = vi.fn(async (): Promise<Uint8Array> => bytes)
+    const run = executeTemplateFlow(
+      { ...createInput(content, "Recreate this form."), sourceDocumentId: SOURCE_ID },
+      createDependencies({ aiProvider, loadSource: (input) => loadFlowSource(input, { client: client as never, readObject }) })
+    )
+
+    return { aiProvider, readObject, run }
+  }
+
+  it("sends the uploaded PDF once, as it is stored, and stages the form it recreates", async () => {
+    const pdf = await pdfOfPages(2)
+    const aiProvider = createTestAiProvider([
+      flowProviderResult({ ...successfulFlowPayload(), operations: [createTextFieldOperation("Added the name", "Full name")] })
+    ])
+    const { run } = runSourceTurn(sourceClient({ contentType: "application/pdf", byteSize: pdf.byteLength }), pdf, aiProvider)
+    const result = await run
+
+    expect(readProviderRequests(aiProvider).map((request) => request.attachments)).toEqual([
+      [{ kind: "document", mimeType: "application/pdf", data: pdf }]
+    ])
+    expect(result.proposal?.candidateDraft.content.blocks).toEqual([expect.objectContaining({ type: "text_field", label: "Full name" })])
+  })
+
+  it("treats another organization's file, and one the member cannot view, as not found, and never asks the model", async () => {
+    for (const overrides of [{ documentOrg: "org-2" }, { visible: [] }]) {
+      const { aiProvider, readObject, run } = runSourceTurn(sourceClient({ contentType: "image/png", byteSize: PNG_BYTES.byteLength }, overrides), PNG_BYTES)
+
+      await expect(run).rejects.toMatchObject({ statusCode: 404 })
+      expect(readObject).not.toHaveBeenCalled()
+      expect(readProviderRequests(aiProvider)).toHaveLength(0)
+    }
+  })
+
+  it("refuses a file Flow cannot read, and never asks the model", async () => {
+    const elevenPages = await pdfOfPages(11)
+    const refusals = [
+      { file: { contentType: "text/csv", byteSize: 4 }, bytes: new TextEncoder().encode("a,b\n"), statusCode: 415 },
+      { file: { contentType: "image/png", byteSize: 4 }, bytes: new TextEncoder().encode("%PDF"), statusCode: 415 },
+      { file: { contentType: "image/png", byteSize: 15 * 1024 * 1024 + 1 }, bytes: PNG_BYTES, statusCode: 413 },
+      { file: { contentType: "application/pdf", byteSize: elevenPages.byteLength }, bytes: elevenPages, statusCode: 422 },
+      { file: { contentType: "application/pdf", byteSize: 9 }, bytes: new TextEncoder().encode("%PDF-1.7 "), statusCode: 422 }
+    ]
+
+    for (const refusal of refusals) {
+      const { aiProvider, run } = runSourceTurn(sourceClient(refusal.file), refusal.bytes)
+
+      await expect(run).rejects.toMatchObject({ statusCode: refusal.statusCode })
+      expect(readProviderRequests(aiProvider)).toHaveLength(0)
+    }
+  })
+
+  it("keeps the answers read off the form that fit its fields, never a signature, and returns them with the proposal", async () => {
+    const signature = { type: "signature_field", fieldKey: "signature", label: "Signature", required: false, helpText: null, signer: "sender" }
+    const aiProvider = createTestAiProvider([
+      flowProviderResult({
+        ...successfulFlowPayload(),
+        operations: [
+          createTextFieldOperation("Added the name", "Full name"),
+          { type: "add_block", summary: "Added the date of birth", payload: { afterBlockId: null, block: { type: "date_field", fieldKey: "date_of_birth", label: "Date of birth", required: false, helpText: null } } },
+          { type: "add_block", summary: "Added the signature", payload: { afterBlockId: null, block: signature } }
+        ],
+        sourceAnswersJson: JSON.stringify({
+          provider_supplied_key: "  Ada Lovelace ",
+          date_of_birth: "not a date",
+          signature: DRAWING_DATA_URL,
+          shoe_size: "9"
+        })
+      })
+    ])
+    const { run } = runSourceTurn(sourceClient({ contentType: "image/png", byteSize: PNG_BYTES.byteLength }), PNG_BYTES, aiProvider)
+    const result = await run
+
+    expect(readProviderRequests(aiProvider)[0]?.attachments).toEqual([{ kind: "image", mimeType: "image/png", data: PNG_BYTES }])
+    expect(result.proposal?.sourceAnswers).toEqual({ full_name: "Ada Lovelace" })
+  })
+
+  it("files an answer under the key Flow gives its field, not the one the model wrote", async () => {
+    const nameField = { type: "text_field", fieldKey: "name", label: "Name", required: false, helpText: null, placeholder: null, multiline: false } as const
+    const content = createBlankTemplateContent()
+    content.blocks = [{ ...nameField, id: FIELD_ID }]
+    const aiProvider = createTestAiProvider([
+      flowProviderResult({
+        ...successfulFlowPayload(),
+        operations: [{ type: "add_block", summary: "Added the pet's name", payload: { afterBlockId: FIELD_ID, block: nameField } }],
+        sourceAnswersJson: JSON.stringify({ name: "Biscuit" })
+      })
+    ])
+    const { run } = runSourceTurn(sourceClient({ contentType: "image/png", byteSize: PNG_BYTES.byteLength }), PNG_BYTES, aiProvider, content)
+
+    // "name" was taken by the field already there, which this form never answered.
+    expect((await run).proposal?.sourceAnswers).toEqual({ name_2: "Biscuit" })
+  })
+})
+
 function createTextFieldOperation(
   summary: string,
   label: string
@@ -1957,6 +2108,7 @@ type TestFlowPayload = {
   needsConfirmation: boolean
   confirmationQuestion: string
   operations: TestFlowOperation[]
+  sourceAnswersJson?: string
 }
 
 const testProviderRequests = new WeakMap<

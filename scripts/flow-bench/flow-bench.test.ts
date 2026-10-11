@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto"
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
-import { join } from "node:path"
+import { extname, join } from "node:path"
 
 import { describe, expect, it } from "vitest"
 
@@ -10,6 +10,7 @@ import { renderGeneratedDocumentPdf } from "@/services/document-pdf-service"
 import { createPdfPagePlans } from "@/services/document-pdf/planner"
 import { normalizePdfInput } from "@/services/document-pdf/shared"
 import { executeTemplateFlow } from "@/services/template-flow-service"
+import { toFlowAttachment } from "@/services/template-flow/import-source"
 import { evaluateTemplateQuality } from "@/services/templates/template-quality-service"
 import { STARTER_TEMPLATES } from "@/services/templates/starter-templates"
 import { createEmptyDocumentContent } from "@/types/template"
@@ -26,7 +27,9 @@ import type { TemplateFlowDraft, TemplateFlowMessage } from "@/types/template-fl
  *
  * Output lands in artifacts/flow-bench/<date>/<provider>__<model>/, which is
  * never committed. Nothing touches a database: authorization, history and
- * persistence are stood in for here.
+ * persistence are stood in for here. A job's `source`, a file in
+ * scripts/flow-bench/sources/, is attached to each of its turns as an uploaded
+ * form would be.
  */
 
 type Job = {
@@ -34,7 +37,10 @@ type Job = {
   family: string
   start: string
   turns: string[]
+  source?: string
 }
+
+const SOURCE_TYPES: Record<string, string> = { ".jpeg": "image/jpeg", ".jpg": "image/jpeg", ".pdf": "application/pdf", ".png": "image/png" }
 
 // Why a call was a second attempt: the reply before it was refused (corrected), or was valid but had faults (revised).
 function readFollowUp(input: string): { corrected: unknown; revised: unknown } {
@@ -133,14 +139,18 @@ async function runJob(job: Job, runtime: AiRuntime, outDir: string, name: string
   let draft = startingDraft(job.start)
   let operations = 0
   let error: string | null = null
+  const source = job.source ? join("scripts/flow-bench/sources", job.source) : null
+  // What Flow read off the source's filled-in answers, gathered over its turns.
+  const answers: Record<string, unknown> = {}
 
   for (const instruction of job.turns) {
     try {
       const result = await executeTemplateFlow(
-        { actorUserId: "bench", draft, instruction, organizationId: "bench", templateId },
+        { actorUserId: "bench", draft, instruction, organizationId: "bench", templateId, ...(source ? { sourceDocumentId: templateId } : {}) },
         {
           authorizeTemplateManagement: async () => {},
           getAiRuntime: () => recording,
+          loadSource: async () => toFlowAttachment(readFileSync(source!), SOURCE_TYPES[extname(source!).toLowerCase()] ?? ""),
           loadHistory: async () => [...history],
           persistMessages: async () => {},
           resolveAuthorName: async () => "Bench"
@@ -152,6 +162,7 @@ async function runJob(job: Job, runtime: AiRuntime, outDir: string, name: string
       if (result.proposal) {
         operations += result.proposal.operations.length
         draft = result.proposal.candidateDraft
+        Object.assign(answers, result.proposal.sourceAnswers)
       }
     } catch (caught: unknown) {
       error = caught instanceof Error ? caught.message : String(caught)
@@ -177,7 +188,7 @@ async function runJob(job: Job, runtime: AiRuntime, outDir: string, name: string
     pages = `unrenderable: ${caught instanceof Error ? caught.message : String(caught)}`
   }
 
-  writeFileSync(join(outDir, `${name}.json`), JSON.stringify({ draft, history, job, replies }, null, 2))
+  writeFileSync(join(outDir, `${name}.json`), JSON.stringify({ answers, draft, history, job, replies }, null, 2))
 
   return {
     calls,

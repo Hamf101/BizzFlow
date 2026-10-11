@@ -330,6 +330,8 @@ export function applyFlowOperations(
   // change can name the earlier ones it cannot stand without.
   const addedBy = new Map<string, number>()
   const touchedBy = new Map<string, number[]>()
+  // The key the model wrote for a field → the key Flow gave it.
+  const fieldKeys = new Map<string, string>()
 
   for (const [index, operation] of operations.entries()) {
     recordAffectedOtherDropdowns(nextDraft, operation, otherInvariantContext)
@@ -369,6 +371,14 @@ export function applyFlowOperations(
           tests: visibilityConditions(operation.payload.block.visibleWhen).length,
           where: `operations[${index}] ${operation.type}`
         })
+      }
+    }
+
+    if ((operation.type === "add_block" || operation.type === "update_block") && "fieldKey" in operation.payload.block) {
+      const written = nextDraft.content.blocks.find((block: TemplateBlock): boolean => block.id === affectedBlockIds[0])
+
+      if (written !== undefined && "fieldKey" in written) {
+        fieldKeys.set(operation.payload.block.fieldKey, written.fieldKey)
       }
     }
 
@@ -441,7 +451,8 @@ export function applyFlowOperations(
   return {
     draft: parsedDraft.data,
     ledgerItems,
-    changedBlockIds: [...changedBlockIds]
+    changedBlockIds: [...changedBlockIds],
+    fieldKeys
   }
 }
 

@@ -332,6 +332,7 @@ function normalizeFlowResponse(
     assistantMessage: response.assistantMessage,
     needsConfirmation: response.needsConfirmation,
     confirmationQuestion: response.confirmationQuestion,
+    ...(response.sourceAnswersJson === undefined ? {} : { sourceAnswersJson: response.sourceAnswersJson }),
     operations: response.operations.map(
       (
         operation: z.infer<

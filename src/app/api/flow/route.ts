@@ -10,7 +10,7 @@ export const maxDuration = 300
 /**
  * Completes one Flow turn sent from a workspace page.
  *
- * @param request - JSON request with the message and the conversation so far.
+ * @param request - JSON request with the message, the conversation so far, and an optional form to recreate.
  * @returns Work found, something to start, or a reply; or a safe error.
  */
 export async function POST(request: Request): Promise<Response> {
@@ -25,6 +25,7 @@ export async function POST(request: Request): Promise<Response> {
         message: body.message,
         model: body.model,
         organizationId,
+        sourceDocumentId: body.sourceDocumentId,
       })
     )
   } catch (error: unknown) {

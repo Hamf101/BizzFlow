@@ -7,6 +7,7 @@ import type {
   AiStructuredGenerationResult,
 } from "@/services/ai/contracts"
 import {
+  AI_PROVIDER_ERROR_CODES,
   AiProviderError,
   assertModelBelongsTo,
   classifyProviderFailure,
@@ -78,6 +79,19 @@ export class OpenRouterAiProvider implements AiProvider {
     request: AiStructuredGenerationRequest
   ): Promise<AiStructuredGenerationResult> {
     assertModelBelongsTo(request, this.id)
+
+    // ponytail: no file parts here; add them when an OpenRouter model joins Flow's approved list.
+    if (request.attachments?.length) {
+      throw createProviderError({
+        failure: {
+          code: AI_PROVIDER_ERROR_CODES.INVALID_REQUEST,
+          message: "This model can't read files yet.",
+          retryable: false,
+        },
+        provider: this.id,
+        request,
+      })
+    }
 
     let response: Response
 

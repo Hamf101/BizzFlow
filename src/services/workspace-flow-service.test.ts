@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest"
 
 import type { AiProvider } from "@/services/ai/contracts"
+import { TemplateFlowServiceError } from "@/services/template-flow-service"
 import { executeWorkspaceFlow, type WorkspaceFlowDeps } from "@/services/workspace-flow-service"
 import type { OrganizationPermissionSubject } from "@/lib/permissions"
 import type { Task } from "@/types/task"
@@ -49,6 +50,35 @@ describe("workspace Flow", () => {
       kind: "reply",
       reply: "Your role can't start templates or documents. Ask a manager.",
     })
+  })
+
+  it("starts a template that carries an attached form, and stops at a form the member can't read", async () => {
+    const SOURCE = "30000000-0000-4000-8000-000000000001"
+    const plan = { action: "create", reply: "Recreating your form.", target: "document", title: "Pet intake" }
+    const generateStructured = vi.fn(deps("staff", plan).getAiRuntime!().provider.generateStructured)
+    const withSource = (requireSource: WorkspaceFlowDeps["requireSource"]): WorkspaceFlowDeps => ({
+      ...deps("staff", plan),
+      getAiRuntime: () => ({ model: { model: "test-model", provider: "test" }, provider: { generateStructured, id: "test" } }),
+      requireSource,
+    })
+
+    await expect(
+      executeWorkspaceFlow(
+        { ...input("make this into a form"), sourceDocumentId: SOURCE },
+        withSource(async () => undefined)
+      )
+    ).resolves.toEqual({ kind: "create", reply: "Recreating your form.", sourceDocumentId: SOURCE, target: "template", title: "Pet intake" })
+
+    generateStructured.mockClear()
+    await expect(
+      executeWorkspaceFlow(
+        { ...input("make this into a form"), sourceDocumentId: SOURCE },
+        withSource(async () => {
+          throw new TemplateFlowServiceError("Document was not found.", 404)
+        })
+      )
+    ).rejects.toMatchObject({ statusCode: 404 })
+    expect(generateStructured).not.toHaveBeenCalled()
   })
 })
 

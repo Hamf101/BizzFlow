@@ -3,7 +3,7 @@ import { uuidSchema } from "@/types/schemas"
 
 import { type AdminSupabaseClient } from "@/lib/supabase/admin"
 import { flowModelSchema } from "@/services/ai/approved-models"
-import { type AiModelReference, type AiRuntime, type AiTokenUsage } from "@/services/ai/contracts"
+import { type AiAttachment, type AiModelReference, type AiRuntime, type AiTokenUsage } from "@/services/ai/contracts"
 import { TEMPLATE_FLOW_OPERATION_TYPES } from "@/services/template-ai/flow-response-schema"
 import {
   bulletListBlockObjectSchema,
@@ -92,7 +92,9 @@ export const flowRequestSchema = z
     templateId: z.string().uuid(),
     draft: flowDraftSchema,
     instruction: z.string().trim().min(2).max(2_000),
-    model: flowModelSchema.optional()
+    model: flowModelSchema.optional(),
+    // An uploaded form for Flow to recreate, sent again on each turn that continues it.
+    sourceDocumentId: z.string().uuid().optional()
   })
   .strict()
 
@@ -348,9 +350,13 @@ const flowResponseEnvelopeShape = {
   confirmationQuestion: z.string().trim().max(500)
 }
 
+// The answers written on an attached form. Whatever arrives here never fails the turn.
+const sourceAnswersJsonShape = { sourceAnswersJson: z.string().optional().catch(undefined) }
+
 export const flowProviderResponseSchema = z
   .object({
     ...flowResponseEnvelopeShape,
+    ...sourceAnswersJsonShape,
     operations: z.array(flowWireOperationSchema).max(FLOW_MAX_OPERATIONS)
   })
   .strict()
@@ -358,6 +364,7 @@ export const flowProviderResponseSchema = z
 export const flowStructuredResponseSchema = z
   .object({
     ...flowResponseEnvelopeShape,
+    ...sourceAnswersJsonShape,
     operations: z
       .array(
         z
@@ -374,7 +381,7 @@ export const flowStructuredResponseSchema = z
 
 // A rebuild takes back only what a Flow response could have held.
 export const flowRebuildRequestSchema = flowRequestSchema
-  .omit({ instruction: true, model: true })
+  .omit({ instruction: true, model: true, sourceDocumentId: true })
   .extend({
     baseDraftFingerprint: z.string().min(1).max(200),
     operations: flowProviderResponseSchema.shape.operations
@@ -431,6 +438,8 @@ export type FlowApplicationResult = {
   draft: EditableFlowDraft
   ledgerItems: TemplateFlowLedgerItem[]
   changedBlockIds: string[]
+  /** The key the model wrote for each field it added or changed → the key the field has. Never shown or logged. */
+  fieldKeys?: ReadonlyMap<string, string>
 }
 
 export type TemplateFlowProposalReceipt = {
@@ -462,7 +471,18 @@ export type ExecuteTemplateFlowInput = {
   draft: unknown
   instruction: unknown
   model?: unknown
+  sourceDocumentId?: unknown
 }
+
+/** An uploaded document Flow is asked to read, and who asks. */
+export type FlowSourceInput = {
+  actorUserId: string
+  organizationId: string
+  documentId: string
+}
+
+/** Reads a checked source document into the file the model is given. */
+export type LoadFlowSource = (input: FlowSourceInput) => Promise<AiAttachment>
 
 export type ExecuteDocumentFlowInput = {
   actorUserId: string
@@ -506,6 +526,7 @@ export type TemplateFlowServiceDeps = {
   createId?: () => string
   createTraceId?: () => string
   getAiRuntime?: (options?: { model?: string }) => AiRuntime
+  loadSource?: LoadFlowSource
   loadHistory?: (input: {
     organizationId: string
     templateId: string

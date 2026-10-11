@@ -14,7 +14,12 @@ import { listFolderDocuments, listRecentDocuments } from "@/services/document-se
 import { getCurrentOrganizationContext } from "@/services/organization-service"
 import { listSubmissionPage } from "@/services/submission-service"
 import { listTaskPage } from "@/services/task-service"
-import { TemplateFlowServiceError } from "@/services/template-flow-service"
+import {
+  type FlowSourceInput,
+  getFlowClient,
+  requireFlowSource,
+  TemplateFlowServiceError,
+} from "@/services/template-flow-service"
 import { listTemplatePage } from "@/services/template-service"
 import type { AccessibleDocumentSummary } from "@/types/document"
 import type { Submission, SubmissionStatus } from "@/types/submission"
@@ -29,7 +34,8 @@ export type WorkspaceFlowItem = Readonly<{ href: string; id: string; meta: strin
 
 /** What Flow does with a message sent from a workspace page. */
 export type WorkspaceFlowAnswer =
-  | Readonly<{ kind: "create"; reply: string; target: "document" | "template"; title: string }>
+  /** `sourceDocumentId`: the form to recreate, for the new template's first Flow turn. */
+  | Readonly<{ kind: "create"; reply: string; sourceDocumentId?: string; target: "document" | "template"; title: string }>
   | Readonly<{ items: readonly WorkspaceFlowItem[]; kind: "found"; moreHref: string; reply: string }>
   | Readonly<{ kind: "reply"; reply: string }>
 
@@ -41,6 +47,8 @@ export type WorkspaceFlowInput = {
   /** The model the member picked; the default when absent. */
   model?: unknown
   organizationId: string
+  /** An uploaded form the member wants recreated as a template. */
+  sourceDocumentId?: unknown
 }
 
 type Actor = { actorUserId: string; organizationId: string }
@@ -54,6 +62,7 @@ export type WorkspaceFlowDeps = {
   ) => Promise<Submission[]>
   listTemplates?: (input: Actor & { query?: string }) => Promise<DocumentTemplateCard[]>
   loadMembership?: (input: Actor) => Promise<OrganizationPermissionSubject>
+  requireSource?: (input: FlowSourceInput) => Promise<unknown>
   now?: () => Date
   searchFiles?: (input: Actor & { query?: string }) => Promise<AccessibleDocumentSummary[]>
 }
@@ -159,20 +168,42 @@ export async function executeWorkspaceFlow(
     throw new TemplateFlowServiceError("Pick one of the models Flow offers.", 400)
   }
 
+  const source = z.string().uuid().optional().safeParse(input.sourceDocumentId)
+
+  if (!source.success) {
+    throw new TemplateFlowServiceError("Document was not found.", 404)
+  }
+
   const actor = { actorUserId: input.actorUserId, organizationId: input.organizationId }
   const membership = await (deps.loadMembership ?? loadMembership)(actor)
+
+  // Checked now, so a file Flow can't read is refused before a template is
+  // started for it. Its bytes and page count are checked on the editor's turn.
+  if (source.data) {
+    await (deps.requireSource ?? ((subject) => requireFlowSource(subject, getFlowClient())))({ ...actor, documentId: source.data })
+  }
+
   const creatable = (["template", "document"] as const).filter((target) =>
     target === "template"
       ? canPerformOrganizationAction(membership, "templates:create") || canPerformOrganizationAction(membership, "templates:manage")
       : canPerformOrganizationAction(membership, "documents:create")
   )
-  const plan = await requestPlan(message.data, historySchema.parse(input.history), creatable, model.data, deps)
+  const plan = await requestPlan(
+    source.data ? `${message.data}\n\n(The member attached a form to recreate as a new template.)` : message.data,
+    historySchema.parse(input.history),
+    creatable,
+    model.data,
+    deps
+  )
 
   if (plan.action === "create") {
-    const target = creatable.includes(plan.target as "template") ? plan.target : creatable[0]
+    // Only the template editor recreates a form.
+    const target = source.data
+      ? creatable.find((candidate) => candidate === "template")
+      : creatable.includes(plan.target as "template") ? plan.target : creatable[0]
 
     return target && target !== "none"
-      ? { kind: "create", reply: plan.reply, target, title: plan.title.trim() || "Untitled" }
+      ? { kind: "create", reply: plan.reply, ...(source.data ? { sourceDocumentId: source.data } : {}), target, title: plan.title.trim() || "Untitled" }
       : { kind: "reply", reply: "Your role can't start templates or documents. Ask a manager." }
   }
 

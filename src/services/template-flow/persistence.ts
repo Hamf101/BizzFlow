@@ -72,6 +72,17 @@ export function createFlowMessages(input: {
   ]
 }
 
+/**
+ * The client a Flow read goes through: the one a caller was given, or the
+ * service-role client.
+ *
+ * @param client - An injected client, if any.
+ * @returns The client to read with.
+ */
+export function getFlowClient(client?: TemplateFlowClient): TemplateFlowClient {
+  return client ?? createAdminClient()
+}
+
 export async function requireTemplateManagement(
   input: {
     actorUserId: string

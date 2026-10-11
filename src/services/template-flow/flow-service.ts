@@ -4,6 +4,7 @@ import { setTimeout as delay } from "node:timers/promises"
 import { z } from "zod"
 
 import {
+  type AiAttachment,
   type AiRuntime,
   type AiStructuredGenerationResult,
   type AiTokenUsage,
@@ -52,12 +53,15 @@ import {
 import {
   createFlowMessages,
   createProposedAssistantContent,
+  getFlowClient,
   loadFlowHistory,
   persistFlowMessages,
   requireTemplateManagement,
   resolveFlowAuthorName,
 } from "@/services/template-flow/persistence"
+import { loadFlowSource, readSourceAnswers } from "@/services/template-flow/import-source"
 import {
+  FLOW_SOURCE_INSTRUCTION,
   buildFlowDocumentContext,
   createFlowRepairPrompt,
   createFlowRevisePrompt,
@@ -116,7 +120,14 @@ export async function executeTemplateFlow(
 
   await authorizeFlowRequest(request, deps, startedAt)
 
-  const [aiRuntime, history, authorName] = await Promise.all([
+  const [source, aiRuntime, history, authorName] = await Promise.all([
+    request.sourceDocumentId === undefined
+      ? null
+      : (deps.loadSource ?? ((subject) => loadFlowSource(subject, { client: getFlowClient(deps.client) })))({
+          actorUserId: request.actorUserId,
+          organizationId: request.organizationId,
+          documentId: request.sourceDocumentId
+        }),
     loadAiRuntime(deps, request, startedAt),
     (deps.loadHistory ?? ((history) => loadFlowHistory(history, deps.client)))({
       organizationId: request.organizationId,
@@ -130,6 +141,7 @@ export async function executeTemplateFlow(
     history,
     runtime: aiRuntime,
     request,
+    source,
     startedAt,
     traceId: deps.createTraceId?.() ?? randomUUID()
   })
@@ -145,6 +157,11 @@ export async function executeTemplateFlow(
           qualityIssues: providerResult.qualityIssues,
           wireOperations: providerResponse.operations
         })
+
+  if (proposal && application && source) {
+    proposal.sourceAnswers = await readSourceAnswers(providerResponse.sourceAnswersJson, application)
+  }
+
   const now = deps.now?.() ?? new Date()
   const assistantContent =
     providerResult.confirmationQuestion ??
@@ -494,6 +511,7 @@ async function requestFlowProvider(input: {
   history: TemplateFlowMessage[]
   request: EditableFlowRequest
   runtime: AiRuntime
+  source: AiAttachment | null
   startedAt: number
   traceId: string
 }): Promise<FlowProviderResult> {
@@ -516,7 +534,9 @@ async function requestFlowProvider(input: {
   }
 
   const systemInstruction = createFlowSystemInstruction()
-  const responseSchema = createTemplateFlowResponseSchema()
+  const responseSchema = createTemplateFlowResponseSchema({ sourceAnswers: input.source !== null })
+  // Every call reads the form: a repair or a rewrite redoes the whole response.
+  const attachments = input.source ? [input.source] : undefined
   // The draft, the largest part and the same from one message to the next,
   // leads, so Gemini can reuse what an earlier call read at a discount.
   const request = {
@@ -527,7 +547,8 @@ async function requestFlowProvider(input: {
         role: message.role,
         content: message.content
       })),
-    userMessage: input.request.instruction
+    userMessage: input.request.instruction,
+    ...(input.source ? { attachedForm: FLOW_SOURCE_INSTRUCTION } : {})
   }
   const initialPrompt = JSON.stringify(request)
   const usageReports: AiTokenUsage[] = []
@@ -558,6 +579,7 @@ async function requestFlowProvider(input: {
       const result = await input.runtime.provider.generateStructured({
         model,
         input: createFlowRevisePrompt({ request, priorResponse: firstText, faults, draft: first.application.draft }),
+        attachments,
         systemInstruction,
         responseSchema,
         maxOutputTokens: FLOW_MAX_OUTPUT_TOKENS,
@@ -615,6 +637,7 @@ async function requestFlowProvider(input: {
       result = await input.runtime.provider.generateStructured({
         model,
         input: currentPrompt,
+        attachments,
         systemInstruction,
         responseSchema,
         maxOutputTokens: FLOW_MAX_OUTPUT_TOKENS,

@@ -11,7 +11,7 @@ export const maxDuration = 300
 /**
  * Completes one authenticated Flow chat turn and returns a pending proposal.
  *
- * @param request - JSON request with template id, current draft, and user message.
+ * @param request - JSON request with template id, current draft, user message, and an optional uploaded form to recreate.
  * @returns A staged candidate batch, attributed messages, or a safe error.
  */
 export async function POST(request: Request): Promise<Response> {
@@ -25,6 +25,7 @@ export async function POST(request: Request): Promise<Response> {
       draft: body.draft,
       instruction: body.instruction,
       model: body.model,
+      sourceDocumentId: body.sourceDocumentId,
     })
 
     return NextResponse.json(result)

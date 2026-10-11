@@ -68,6 +68,11 @@ export type TemplateFlowProposal = {
   wireOperations: TemplateFlowWireOperation[]
   changedBlockIds: string[]
   qualityIssues: TemplateFlowQualityIssue[]
+  /**
+   * The answers written on the form it was recreated from, keyed by the
+   * candidate's field keys, to fill a copy with. Never signatures or files.
+   */
+  sourceAnswers?: Record<string, unknown>
 }
 
 export type TemplateFlowMessage = {

@@ -1,6 +1,7 @@
 import { GoogleGenAI, type Interactions } from "@google/genai"
 
 import type {
+  AiAttachment,
   AiEffort,
   AiProvider,
   AiStructuredGenerationRequest,
@@ -90,7 +91,9 @@ export class GeminiAiProvider implements AiProvider {
         {
           ...(request.model.model.endsWith("-latest") ? { api_version: GEMINI_ALIAS_API_VERSION } : {}),
           model: request.model.model,
-          input: request.input,
+          input: request.attachments?.length
+            ? [...request.attachments.map(toGeminiPart), { type: "text", text: request.input }]
+            : request.input,
           system_instruction: request.systemInstruction,
           store: false,
           response_format: {
@@ -155,6 +158,18 @@ function createSdkInteractionExecutor(
     options: GeminiInteractionRequestOptions
   ): Promise<GeminiInteractionResponse> =>
     client.interactions.create({ ...request, stream: false }, options)
+}
+
+// Inline base64, as https://ai.google.dev/gemini-api/docs/document-processing
+// sends it. Medium is the resolution the media-resolution guide recommends for
+// documents; the API takes it on an image part only, and a PDF page's default
+// already costs what medium does.
+function toGeminiPart(attachment: AiAttachment): Interactions.DocumentContent | Interactions.ImageContent {
+  const data = Buffer.from(attachment.data).toString("base64")
+
+  return attachment.kind === "document"
+    ? { type: "document", data, mime_type: attachment.mimeType }
+    : { type: "image", data, mime_type: attachment.mimeType, resolution: "medium" }
 }
 
 function readGeminiUsage(
