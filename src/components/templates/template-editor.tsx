@@ -2,14 +2,16 @@
 
 import { Archive, FilePenLine, Files, History, Link2, ListChecks, MessageSquare, MoreHorizontal, Palette, Send, UserPlus } from "lucide-react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { type ReactElement, useEffect, useMemo, useRef, useState, useTransition } from "react"
 
 import type { TemplateDraftInput, TemplateVersionResult } from "@/app/(dashboard)/templates/actions"
-import { useFlowHandoff } from "@/components/flow/flow-handoff"
+import { type FlowHandoff, useFlowHandoff } from "@/components/flow/flow-handoff"
 import { DesignToolsContext } from "@/components/editor/design-tools"
 import { DESIGN_TOOLS } from "@/components/editor/design-tools-provided"
 import { EditorCanvas } from "@/components/editor/editor-canvas"
 import { normalizeContentForSave } from "@/components/editor/editor-content"
+import { whyNotFill } from "@/components/documents/fill-answers"
 import { type DockTool, EditorDock } from "@/components/editor/editor-dock"
 import { FormatBar } from "@/components/editor/format-bar"
 import { FlowDockSlot, FlowWindow } from "@/components/flow/flow-window"
@@ -63,7 +65,7 @@ import {
   type TemplateContentV3,
   upgradeV2TemplateContentToV3,
 } from "@/types/template"
-import type { TemplateFlowMessage, TemplateFlowProposal } from "@/types/template-flow"
+import type { FlowFillResult, TemplateFlowMessage, TemplateFlowProposal } from "@/types/template-flow"
 import { withGeneratedFieldKeys } from "@/types/template-structure"
 import { applyVisibleTemplateFieldValue } from "@/types/template-visibility"
 
@@ -74,6 +76,8 @@ type TemplateEditorProps = {
   categorySuggestions?: readonly string[]
   /** Where this person keeps the dock and zoom. */
   editorLayout?: EditorLayoutStore
+  /** Makes a document of the template filled with answers Flow read off a form. */
+  fillCopyAction: (templateId: string, answers: unknown) => Promise<FlowFillResult>
   initialFlowMessages: TemplateFlowMessage[]
   loadVersionAction: (templateId: string, revision: number) => Promise<TemplateVersionResult>
   /** Who is editing, as the others in the room see them. */
@@ -99,6 +103,7 @@ export function TemplateEditor({
   archiveAction,
   categorySuggestions = [],
   editorLayout,
+  fillCopyAction,
   initialFlowMessages,
   loadVersionAction,
   me,
@@ -147,7 +152,7 @@ export function TemplateEditor({
   const [proposal, setProposal] = useState<TemplateFlowProposal | null>(null)
   const [flowUndo, setFlowUndo] = useState<{ messageId: string; state: TemplateEditorState } | null>(null)
   const [flowOpen, setFlowOpen] = useState(false)
-  const [carried, setCarried] = useState<string | null>(null)
+  const [carried, setCarried] = useState<FlowHandoff | null>(null)
 
   // A request made from a workspace page opens Flow here and carries on.
   useFlowHandoff((request) => {
@@ -159,6 +164,7 @@ export function TemplateEditor({
   const [asking, setAsking] = useState(false)
   const [savedState, setSavedState] = useState(initial)
   const [, startTransition] = useTransition()
+  const router = useRouter()
   const revisionRef = useRef(template.revision)
   const isDraft = template.status === "draft"
   const quality = useTemplateQuality(content, state.description, state.title)
@@ -182,8 +188,10 @@ export function TemplateEditor({
     [content, proposal]
   )
   const preview = useEditorController({ change: () => undefined, content: candidate, undo: () => undefined })
+  // Only a draft saves on its own, and only while its checks pass.
+  const autosaves = !live.session && live.unavailable && isDraft && quality !== null && validationErrors === 0
   const autosave = useAutosave<TemplateEditorState>({
-    enabled: !live.session && live.unavailable && isDraft && quality !== null && validationErrors === 0,
+    enabled: autosaves,
     initialVersion: String(template.revision),
     save: async (value, version) => {
       const result = await saveDraftAction(toDraftInput(template.id, Number(version), value))
@@ -323,7 +331,25 @@ export function TemplateEditor({
     return true
   }
 
-  function stageProposal(next: TemplateFlowProposal): void {
+  // A filled copy is made of the template as saved, so what is on screen
+  // saves first, but never past what saving would do on its own.
+  async function readyToFill(): Promise<string | null> {
+    const refusal = whyNotFill({ content, title: state.title }, { checking: quality === null, problems: validationErrors, unsavedByChoice: unsaved && !autosaves })
+
+    if (refusal) {
+      return refusal
+    }
+
+    const saved = live.session ? await live.session.flush() : autosaves ? await autosave.flush() : !liveMode
+
+    return saved ? null : "Your latest changes aren't saved yet. Try again in a moment."
+  }
+
+  // The message that brought the proposal, so applying from the banner is the same as from Flow.
+  const proposalMessage = useRef("")
+
+  function stageProposal(next: TemplateFlowProposal, messageId: string): void {
+    proposalMessage.current = messageId
     setProposal(next)
     controller.select(null)
   }
@@ -466,7 +492,7 @@ export function TemplateEditor({
                 proposal.status === "stale"
                   ? [{ label: "Dismiss", onClick: () => setProposal(null) }]
                   : [
-                      ...(proposal.operations.length > 0 ? [{ label: "Apply", onClick: () => applyProposal(proposal, proposal.id) }] : []),
+                      ...(proposal.operations.length > 0 ? [{ label: "Apply", onClick: () => applyProposal(proposal, proposalMessage.current || proposal.id) }] : []),
                       { label: "Reject", onClick: () => setProposal(null) },
                     ]
               }
@@ -586,6 +612,9 @@ export function TemplateEditor({
                   }
                 }}
                 autoSend={carried}
+                fill={{ action: (answers) => fillCopyAction(template.id, answers), open: (href) => router.push(href) }}
+                onSaveFirst={readyToFill}
+                organizationId={template.organizationId}
                 pendingProposal={proposal}
                 templateId={template.id}
               />

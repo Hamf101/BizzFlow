@@ -93,6 +93,29 @@ export async function normalizeAnswerPatch(
 }
 
 /**
+ * Keeps each answer its field takes, as a member's save would take it, and
+ * drops every other one rather than refusing them all: a key no field has, a
+ * value its field refuses, and any signature or initials, which no one gave.
+ *
+ * @param fieldByKey - Snapshot fields indexed by field key.
+ * @param answers - Untrusted answers keyed by field key.
+ * @returns The normalized answers that fit.
+ */
+export async function keepValidAnswers(
+  fieldByKey: Map<string, FieldBlock>,
+  answers: Record<string, unknown>
+): Promise<Record<string, unknown>> {
+  const kept: [string, unknown][] = []
+
+  for (const [fieldKey, value] of Object.entries(answers)) {
+    kept.push(...Object.entries(await normalizeAnswerPatch(fieldByKey, { [fieldKey]: value }).catch(() => ({}))))
+  }
+
+  // Defined, never assigned, so no key can reach a prototype.
+  return Object.fromEntries(kept)
+}
+
+/**
  * Removes submitted values that still match the signer's page baseline.
  *
  * @param submittedValues - Current normalized values from the signer.

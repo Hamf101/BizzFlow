@@ -7,6 +7,7 @@
 export { DocumentSigningServiceError } from "@/services/document-signing/errors"
 export {
   completePublicDocumentSigning,
+  fillGeneratedDocumentAnswers,
   getGeneratedDocumentSigningView,
   getPublicDocumentSigningView,
   resendDocumentSigningInvitation,

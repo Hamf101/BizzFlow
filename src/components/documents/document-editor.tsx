@@ -4,7 +4,8 @@ import { Download, FilePen, Files, History, MessageSquare, MoreHorizontal, Palet
 import { type ReactElement, useEffect, useMemo, useRef, useState } from "react"
 
 import type { DocumentContentInput } from "@/app/(editor)/documents/[documentId]/edit/actions"
-import { useFlowHandoff } from "@/components/flow/flow-handoff"
+import { mergeFilledAnswers, whyNotFill } from "@/components/documents/fill-answers"
+import { type FlowHandoff, useFlowHandoff } from "@/components/flow/flow-handoff"
 import { DesignToolsContext } from "@/components/editor/design-tools"
 import { DESIGN_TOOLS } from "@/components/editor/design-tools-provided"
 import { EditorCanvas } from "@/components/editor/editor-canvas"
@@ -56,7 +57,7 @@ import { resolvePageGeometry } from "@/services/templates/template-render-plan"
 import type { DocumentSigningRecipient, GeneratedDocumentSigningView, PublicSignerStatus } from "@/types/signing"
 import { withBoxMarks } from "@/types/box-signers"
 import { type TemplateContentV3, upgradeV2TemplateContentToV3 } from "@/types/template"
-import type { TemplateFlowProposal } from "@/types/template-flow"
+import type { FlowFillResult, TemplateFlowProposal } from "@/types/template-flow"
 import { applyVisibleTemplateFieldValue } from "@/types/template-visibility"
 
 type DocumentPage = { content: TemplateContentV3; title: string }
@@ -82,6 +83,8 @@ type DocumentEditorProps = {
   canShare: boolean
   /** Where this person keeps the dock and zoom. */
   editorLayout?: EditorLayoutStore
+  /** Fills the document with answers Flow read off a form, keeping only those its fields take. */
+  fillAnswersAction: (documentId: string, answers: unknown) => Promise<FlowFillResult>
   /** Someone outside the workspace given this one document: no Flow, and Back goes to what is shared with them. */
   guest?: boolean
   /** Who is writing, as the others in the room see them. */
@@ -107,6 +110,7 @@ export function DocumentEditor({
   canSend,
   canShare,
   editorLayout,
+  fillAnswersAction,
   guest = false,
   me,
   resendAction,
@@ -161,7 +165,7 @@ export function DocumentEditor({
   const [proposal, setProposal] = useState<TemplateFlowProposal | null>(null)
   const [flowUndo, setFlowUndo] = useState<{ messageId: string; page: DocumentPage } | null>(null)
   const [flowOpen, setFlowOpen] = useState(false)
-  const [carried, setCarried] = useState<string | null>(null)
+  const [carried, setCarried] = useState<FlowHandoff | null>(null)
 
   // A request made from a workspace page opens Flow here and carries on.
   useFlowHandoff((request) => {
@@ -237,6 +241,28 @@ export function DocumentEditor({
     // Live, the room's saves move the server on too, so a copy is made on the room's revision.
     version: live.session && live.roomId ? `${live.roomId}:${live.session.revision()}` : content.version,
   })
+  // The message that brought the proposal, so applying from the banner is the same as from Flow.
+  const proposalMessage = useRef("")
+  const answersRef = useRef(answers)
+
+  useEffect(() => {
+    answersRef.current = answers
+  })
+
+  // The fields the answers go in, and every answer typed so far, reach the
+  // server before a fill, which would otherwise miss or overwrite them.
+  async function readyToFill(): Promise<string | null> {
+    const refusal = writable ? whyNotFill({ content: page.content, title: page.title }) : null
+
+    if (refusal) {
+      return refusal
+    }
+
+    const pageSaved = !writable || (live.session ? await live.session.flush() : live.unavailable && (await content.flush()))
+
+    return pageSaved && (await answered.flush()) ? null : "Your latest changes aren't saved yet. Try again in a moment."
+  }
+
   const settingsBlock = page.content.blocks.find((block) => block.id === controller.settingsBlockId) ?? null
   const settingsIndex = settingsBlock ? page.content.blocks.indexOf(settingsBlock) : -1
   const geometry = resolvePageGeometry(page.content.layout)
@@ -360,7 +386,7 @@ export function DocumentEditor({
               actions={
                 proposal.status === "pending" && writable
                   ? [
-                      ...(proposal.operations.length > 0 ? [{ label: "Apply", onClick: () => applyProposal(proposal, proposal.id) }] : []),
+                      ...(proposal.operations.length > 0 ? [{ label: "Apply", onClick: () => applyProposal(proposal, proposalMessage.current || proposal.id) }] : []),
                       { label: "Reject", onClick: () => setProposal(null) },
                     ]
                   : [{ label: "Dismiss", onClick: () => setProposal(null) }]
@@ -511,7 +537,8 @@ export function DocumentEditor({
                   initialMessages={[]}
                   lastAppliedMessageId={flowUndo?.messageId ?? null}
                   onApplyProposal={applyProposal}
-                  onProposalReceived={(next) => {
+                  onProposalReceived={(next, messageId) => {
+                    proposalMessage.current = messageId
                     setProposal(next)
                     controller.select(null)
                   }}
@@ -524,6 +551,28 @@ export function DocumentEditor({
                     }
                   }}
                   autoSend={carried}
+                  fill={
+                    fillable
+                      ? {
+                          action: async (values) => {
+                            // Every answer was saved just now; one changed while the fill is away stays as typed.
+                            const before = answersRef.current
+                            const result = await fillAnswersAction(document.id, values)
+                            const filled = result.ok ? result.answers : undefined
+
+                            if (filled) {
+                              setAnswers((current) => mergeFilledAnswers(before, current, filled))
+                              setSavedAnswers(filled)
+                            }
+
+                            return result
+                          },
+                          here: true,
+                        }
+                      : undefined
+                  }
+                  onSaveFirst={readyToFill}
+                  organizationId={writable ? document.organizationId : undefined}
                   pendingProposal={proposal}
                   starter={writable ? DRAFT_STARTER : SENT_STARTER}
                 />

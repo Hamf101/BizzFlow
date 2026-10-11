@@ -21,12 +21,14 @@ import { loadAuthenticatedPageUser } from "@/lib/page-auth"
 import { findGuestOrganizationId } from "@/services/document-service"
 import type { SaveResult } from "@/components/editor/use-autosave"
 import {
+  fillGeneratedDocumentAnswers,
   resendDocumentSigningInvitation,
   saveGeneratedDocumentAnswers,
   sendDocumentForSigning,
   updateGeneratedDocumentContent,
 } from "@/services/document-signing-service"
 import type { DocumentRecipientInput } from "@/types/signing"
+import type { FlowFillResult } from "@/types/template-flow"
 
 // The signing services check the actor's document access and permission themselves.
 const NO_ORGANIZATION = "Create an organization before managing documents."
@@ -84,6 +86,27 @@ export async function saveDocumentAnswersAction(formData: FormData): Promise<Sav
     return { ok: true, version: "answers" }
   } catch (error: unknown) {
     return toSaveFailure(error, "generated_document_answers_save_failed", documentId)
+  }
+}
+
+/**
+ * Fills a document with the answers Flow read off the form it recreated,
+ * keeping only those its fields take.
+ *
+ * @param documentId - The document.
+ * @param answers - The answers, keyed by field key; the service checks each.
+ * @returns The answers the document now holds and how many fit, or why not.
+ */
+export async function fillDocumentAnswersAction(documentId: string, answers: unknown): Promise<FlowFillResult> {
+  try {
+    const id = requireFormId(documentId, "Document id")
+    const { dropped, kept, view } = await fillGeneratedDocumentAnswers({ ...(await loadFillActionContext(id)), answers, documentId: id })
+
+    return { answers: view.answers, dropped, kept, ok: true }
+  } catch (error: unknown) {
+    const failure = toSaveFailure(error, "generated_document_answers_fill_failed", documentId)
+
+    return { message: failure.ok ? "The answers couldn't be filled in." : failure.message, ok: false }
   }
 }
 

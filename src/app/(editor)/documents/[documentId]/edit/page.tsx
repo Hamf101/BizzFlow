@@ -13,6 +13,7 @@ import { saveEditorLayoutAction } from "@/app/(editor)/editor-layout-actions"
 
 import { loadDocumentPage } from "../load-document-page"
 import {
+  fillDocumentAnswersAction,
   resendGeneratedDocumentInvitationAction,
   saveDocumentAnswersAction,
   saveDocumentContentAction,
@@ -69,6 +70,7 @@ export default async function GeneratedDocumentEditorPage({
         guest
         me={{ id: user.id, name: guestName ?? getFallbackDisplayName(user.email) }}
         resendAction={resendGeneratedDocumentInvitationAction}
+        fillAnswersAction={fillDocumentAnswersAction}
         saveAnswersAction={saveDocumentAnswersAction}
         saveContentAction={saveDocumentContentAction}
         sendAction={sendGeneratedDocumentAction}
@@ -101,6 +103,7 @@ export default async function GeneratedDocumentEditorPage({
         editorLayout={{ initial: editorLayout, save: saveEditorLayoutAction }}
         me={{ id: user.id, name }}
         resendAction={resendGeneratedDocumentInvitationAction}
+        fillAnswersAction={fillDocumentAnswersAction}
         saveAnswersAction={saveDocumentAnswersAction}
         saveContentAction={saveDocumentContentAction}
         sendAction={sendGeneratedDocumentAction}

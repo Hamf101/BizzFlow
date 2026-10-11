@@ -1,4 +1,4 @@
-import { z } from "zod"
+import * as z from "zod"
 
 import { fitMargins, type PageSide, resizeTemplateLayout, resolvePageGeometry } from "@/services/templates/template-render-plan"
 import { MARGIN_SIZES, singleVisibilityCondition, templateBlockSchema, visibilityConditions, type TemplateBlock, type TemplateContentV3 } from "@/types/template"

@@ -1,4 +1,4 @@
-import { z } from "zod"
+import * as z from "zod"
 
 import { canPerformOrganizationAction, isOrganizationRole, type OrganizationRole } from "@/lib/permissions"
 import { createSecureToken, hashToken, TOKEN_LIFETIME_MS } from "@/services/document-signing/token-security"

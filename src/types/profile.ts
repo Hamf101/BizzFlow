@@ -1,4 +1,4 @@
-import { z } from "zod"
+import * as z from "zod"
 
 /**
  * A person's own name and phone number, as typed into a form. The phone is

@@ -12,6 +12,7 @@ import {
   getDocumentTemplate,
   getDocumentTemplateVersion,
   listDocumentTemplateCategories,
+  createFilledTemplateCopy,
   createGeneratedDocument,
   listDocumentTemplates,
   listDocumentTemplateVersions,
@@ -1726,5 +1727,100 @@ describe("templates in Trash", () => {
 
     await change("restore", trashed.changed)
     expect(shape(templateIn(tables, DRAFT_TEMPLATE_ID))).toMatchObject({ status: "draft", trashed_at: null })
+  })
+})
+
+describe("a filled copy of a template recreated from a form", () => {
+  const answered = (): TemplateContentV3 =>
+    createContentWithBlocks([
+      { id: "50000000-0000-4000-8000-000000000020", type: "text_field", fieldKey: "client_name", label: "Client name", required: true, helpText: null, placeholder: null, multiline: false },
+      { id: "50000000-0000-4000-8000-000000000021", type: "checkbox_field", fieldKey: "agreed", label: "Agreed", required: false, helpText: null, checkedByDefault: false },
+    ])
+
+  function setUp(): { deps: Parameters<typeof createFilledTemplateCopy>[1]; tables: FakeTables } {
+    const tables = createBaseTables()
+    // A form recreated with a place to attach something: documents take no file uploads.
+    const withUpload = createContentWithBlocks([
+      ...answered().blocks,
+      { id: "50000000-0000-4000-8000-000000000022", type: "file_field", fieldKey: "photo_id", label: "Photo ID", required: false, helpText: null },
+    ])
+    tables.document_templates[1] = createTemplateRow(DRAFT_TEMPLATE_ID, "draft", withUpload)
+    const deps = {
+      client: new FakeClient(tables) as never,
+      createId: (): string => CREATED_DOCUMENT_ID,
+      // Stands in for the member's own answer save, which checks again what it is given.
+      saveAnswers: async ({ documentId, values }: { documentId: string; values: Record<string, unknown> }): Promise<never> => {
+        const row = tables.document_answers.find((candidate: FakeRow): boolean => candidate.document_id === documentId)!
+        row.values = { ...(row.values as Record<string, unknown>), ...values }
+        return undefined as never
+      },
+    }
+
+    return { deps, tables }
+  }
+
+  const fill = (actorUserId: string, deps: Parameters<typeof createFilledTemplateCopy>[1], templateId = DRAFT_TEMPLATE_ID) =>
+    createFilledTemplateCopy(
+      { actorUserId, answers: { agreed: "maybe", client_name: "Ada Lovelace", unknown_field: "x" }, organizationId: ORG_ID, templateId },
+      deps
+    )
+
+  it("makes a standalone document of the working draft and keeps only the answers its fields take", async () => {
+    const { deps, tables } = setUp()
+
+    // One answer fit; a value its field refuses and a key no field has did not.
+    await expect(fill(MANAGER_ID, deps)).resolves.toEqual({ documentId: CREATED_DOCUMENT_ID, dropped: 2, kept: 1 })
+
+    expect(tables.documents.find((row: FakeRow): boolean => row.id === CREATED_DOCUMENT_ID)).toMatchObject({
+      source_kind: "generated",
+      template_id: null,
+      template_revision: null,
+      title: "Draft handbook (filled)",
+    })
+    expect(
+      (tables.documents.find((row: FakeRow): boolean => row.id === CREATED_DOCUMENT_ID)?.template_snapshot as TemplateContent).blocks.map(
+        (block: TemplateBlock): string => block.type
+      )
+    ).toEqual(["text_field", "checkbox_field"])
+    expect(tables.document_answers.find((row: FakeRow): boolean => row.document_id === CREATED_DOCUMENT_ID)?.values).toEqual({
+      client_name: "Ada Lovelace",
+    })
+  })
+
+  it("leaves no copy behind when its answers can't be saved, and makes none when no answer fits", async () => {
+    const { deps, tables } = setUp()
+    const made = (): boolean => tables.documents.some((row: FakeRow): boolean => row.id === CREATED_DOCUMENT_ID)
+
+    await expect(
+      fill(MANAGER_ID, {
+        ...deps,
+        saveAnswers: async (): Promise<never> => {
+          throw new Error("The database went away.")
+        },
+      })
+    ).rejects.toMatchObject({ statusCode: 500 })
+    expect(made()).toBe(false)
+
+    await expect(
+      createFilledTemplateCopy(
+        { actorUserId: MANAGER_ID, answers: { agreed: "maybe" }, organizationId: ORG_ID, templateId: DRAFT_TEMPLATE_ID },
+        deps
+      )
+    ).resolves.toEqual({ documentId: null, dropped: 1, kept: 0 })
+    expect(made()).toBe(false)
+  })
+
+  it("refuses a template in another workspace as not found, and a role that cannot make documents", async () => {
+    const { deps, tables } = setUp()
+    tables.document_templates[1]!.org_id = OTHER_ORG_ID
+
+    await expect(fill(MANAGER_ID, deps)).rejects.toMatchObject({ statusCode: 404 })
+
+    tables.document_templates[1]!.org_id = ORG_ID
+    // An external reviewer may view a template made for them, never make documents.
+    tables.document_templates[0]!.created_by = EXTERNAL_ID
+
+    await expect(fill(EXTERNAL_ID, deps, TEMPLATE_ID)).rejects.toMatchObject({ statusCode: 403 })
+    expect(tables.documents.some((row: FakeRow): boolean => row.id === CREATED_DOCUMENT_ID)).toBe(false)
   })
 })

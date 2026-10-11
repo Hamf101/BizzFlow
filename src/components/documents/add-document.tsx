@@ -11,12 +11,7 @@ import {
 } from "react"
 import { useFormStatus } from "react-dom"
 
-import {
-  completeDocumentUploadRequest,
-  readApiErrorMessage,
-  UPLOAD_ACCEPT,
-  uploadFileToSignedUrl,
-} from "@/components/documents/document-upload-client"
+import { UPLOAD_ACCEPT, uploadDocumentFile } from "@/components/documents/document-upload-client"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -31,7 +26,6 @@ import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
 import { bizflowToast } from "@/components/ui/toaster"
 import { trackEvent } from "@/lib/analytics"
-import type { CreateDocumentUploadUrlResponse } from "@/types/document"
 
 /** A published template a new document can copy. */
 export type DocumentTemplateChoice = { id: string; title: string }
@@ -81,36 +75,7 @@ export function AddDocument({
 
     try {
       const title = String(new FormData(event.currentTarget).get("title") ?? "").trim()
-      const response = await fetch("/api/documents/upload-url", {
-        body: JSON.stringify({
-          byteSize: file.size,
-          contentType: file.type,
-          description: null,
-          folderId,
-          organizationId,
-          originalFilename: file.name,
-          title,
-        }),
-        headers: { "content-type": "application/json" },
-        method: "POST",
-      })
-
-      if (!response.ok) {
-        throw new Error(await readApiErrorMessage(response, "Unable to prepare upload."))
-      }
-
-      const uploadMetadata = (await response.json()) as CreateDocumentUploadUrlResponse
-
-      await uploadFileToSignedUrl(
-        uploadMetadata.uploadUrl,
-        file,
-        "Unable to upload file to storage."
-      )
-      await completeDocumentUploadRequest(
-        uploadMetadata,
-        organizationId,
-        "Unable to complete upload."
-      )
+      const uploadMetadata = await uploadDocumentFile({ file, folderId, organizationId, title })
       trackEvent("document_uploaded")
       router.push(`/documents/${uploadMetadata.documentId}`)
       router.refresh()

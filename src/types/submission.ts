@@ -1,5 +1,5 @@
 import type { ClientFile } from "@/lib/r2/stored-file"
-import { z } from "zod"
+import * as z from "zod"
 import { uuidSchema, timestampSchema } from "@/types/schemas"
 
 import {

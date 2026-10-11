@@ -27,6 +27,7 @@ import type { TemplateFlowMessage } from "@/types/template-flow"
 
 import {
   archiveTemplateAction,
+  createFilledCopyAction,
   loadTemplateVersionAction,
   publishTemplateAction,
   saveTemplateDraftAction,
@@ -168,6 +169,7 @@ export default async function EditTemplatePage({
       archiveAction={archiveTemplateAction}
       categorySuggestions={categorySuggestions}
       editorLayout={{ initial: editorLayout, save: saveEditorLayoutAction }}
+      fillCopyAction={createFilledCopyAction}
       initialFlowMessages={initialFlowMessages}
       loadVersionAction={loadTemplateVersionAction}
       me={{ id: user.id, name }}

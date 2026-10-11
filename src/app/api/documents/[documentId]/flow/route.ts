@@ -10,7 +10,7 @@ export const maxDuration = 300
 /**
  * Completes one Flow chat turn about a generated document's own page.
  *
- * @param request - JSON request with the editor's current page and the message.
+ * @param request - JSON request with the editor's current page, the message, and an optional uploaded form to recreate.
  * @param context - The document the turn is about.
  * @returns A staged candidate batch and the turn's messages, or a safe error.
  */
@@ -29,6 +29,7 @@ export async function POST(
       instruction: body.instruction,
       model: body.model,
       organizationId,
+      sourceDocumentId: body.sourceDocumentId,
     })
 
     return NextResponse.json(result)

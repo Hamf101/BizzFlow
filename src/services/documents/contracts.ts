@@ -75,6 +75,8 @@ export type ListDocumentCardsInput = {
   documentIds: readonly string[]
   /** The ones among them whose first page the view draws. */
   contentIds: readonly string[]
+  /** Whether to say what kind of file each upload is, which Files' menus need. */
+  withContentTypes?: boolean
 }
 
 export type GetDocumentDetailInput = {

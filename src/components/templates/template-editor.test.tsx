@@ -7,6 +7,9 @@ import { TemplateEditor } from "@/components/templates/template-editor"
 import { createBlankTemplateContent, type DocumentTemplate } from "@/types/template"
 import { mount } from "@/test/render"
 
+// The editor opens a filled copy with the app's router, which a test renders without.
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }))
+
 const NAME_BLOCK_ID = "20000000-0000-4000-8000-000000000001"
 beforeAll(() => {
   window.matchMedia ??= ((query: string) =>
@@ -30,6 +33,7 @@ it("lets an author try the form by typing into its boxes while editing, and clea
     root.render(
       <TemplateEditor
         archiveAction={vi.fn()}
+        fillCopyAction={vi.fn()}
         initialFlowMessages={[]}
         me={{ id: "20000000-0000-4000-8000-000000000001", name: "Test editor" }}
         loadVersionAction={vi.fn()}
@@ -58,6 +62,7 @@ it("asks Flow with only the title, description and content its request accepts",
     root.render(
       <TemplateEditor
         archiveAction={vi.fn()}
+        fillCopyAction={vi.fn()}
         initialFlowMessages={[]}
         me={{ id: "20000000-0000-4000-8000-000000000001", name: "Test editor" }}
         loadVersionAction={vi.fn()}

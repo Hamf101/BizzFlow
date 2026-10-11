@@ -252,7 +252,8 @@ async function loadCards(
   }
 
   try {
-    const cards = await listDocumentCards({ actorUserId, organizationId, ...request })
+    // Files' menus offer Open in Flow by an upload's type.
+    const cards = await listDocumentCards({ actorUserId, organizationId, ...request, withContentTypes: true })
 
     return new Map(cards.map((card: DocumentCard) => [card.id, card]))
   } catch (error: unknown) {

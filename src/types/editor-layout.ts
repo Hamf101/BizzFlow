@@ -1,4 +1,4 @@
-import { z } from "zod"
+import * as z from "zod"
 
 // A share of the free room across or down the canvas: 0 at one edge, 1 at the other.
 const shareSchema = z.number().min(0).max(1)

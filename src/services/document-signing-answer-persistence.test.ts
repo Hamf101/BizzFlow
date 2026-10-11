@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest"
 import {
   completePublicDocumentSigning,
   DocumentSigningServiceError,
+  fillGeneratedDocumentAnswers,
   getGeneratedDocumentSigningView,
   saveGeneratedDocumentAnswers,
 } from "@/services/document-signing-service"
@@ -571,6 +572,37 @@ describe("document signing answer persistence", () => {
     expect(tables.document_answers[0].values).toEqual({
       include_details: false,
     })
+  })
+
+  it("fills a document with the answers read off a form, dropping each its fields refuse, and never after a signature", async () => {
+    const tables = createBaseTables()
+    tables.documents[0].template_snapshot = createTemplateContent({ requiredInitials: true })
+    const fill = (client: FakeClient) =>
+      fillGeneratedDocumentAnswers(
+        {
+          actorUserId: MANAGER_ID,
+          // A scanned mark is never anyone's initials here; a key the page lacks is no answer.
+          answers: { client_initials: "AL", client_name: "Ada Lovelace", unknown_field: "x" },
+          documentId: DOCUMENT_ID,
+          organizationId: ORG_ID,
+        },
+        { client: client as never }
+      )
+
+    const filled = await fill(new FakeClient(tables))
+
+    expect(filled).toMatchObject({ dropped: 2, kept: 1, view: { answers: { client_name: "Ada Lovelace" } } })
+    expect(tables.document_answers[0].values).toEqual({ client_name: "Ada Lovelace" })
+
+    tables.document_answers[0].values = {}
+    tables.document_signing_recipients.push({
+      ...createRecipientRow(RECIPIENT_ONE_ID, TOKEN_ONE, "Avery Morgan", "avery@example.com"),
+      signed_at: "2026-07-17T19:30:00.000Z",
+      status: "signed",
+    })
+
+    await expect(fill(new FakeClient(tables))).rejects.toMatchObject({ statusCode: 409 })
+    expect(tables.document_answers[0].values).toEqual({})
   })
 })
 

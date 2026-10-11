@@ -1,4 +1,4 @@
-import { z } from "zod"
+import * as z from "zod"
 
 /** Stable route identifiers; labels and order never change the destination. */
 export const NAVIGATION_HREFS = ["/dashboard", "/people", "/documents", "/templates", "/submissions", "/tasks", "/audit-log", "/settings"] as const

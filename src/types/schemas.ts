@@ -1,4 +1,4 @@
-import { z } from "zod"
+import * as z from "zod"
 
 /** A row or member id. */
 export const uuidSchema = z.string().uuid()

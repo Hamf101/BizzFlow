@@ -23,6 +23,8 @@ export type SelectableFile = {
   shareable: boolean
   /** Whether the member may send it to people to answer: a document made from a template. */
   sendable?: boolean
+  /** Whether Flow can recreate a form from it: an uploaded PDF, PNG or JPEG. */
+  flowable?: boolean
 }
 
 type FileExtras = {

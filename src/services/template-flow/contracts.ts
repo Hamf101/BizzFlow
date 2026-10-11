@@ -1,4 +1,4 @@
-import { z } from "zod"
+import * as z from "zod"
 import { uuidSchema } from "@/types/schemas"
 
 import { type AdminSupabaseClient } from "@/lib/supabase/admin"
@@ -491,6 +491,8 @@ export type ExecuteDocumentFlowInput = {
   draft: unknown
   instruction: unknown
   model?: unknown
+  /** An uploaded form for Flow to recreate on the page, sent again on each turn that continues it. */
+  sourceDocumentId?: unknown
 }
 
 export type RebuildTemplateFlowProposalInput = Omit<ExecuteTemplateFlowInput, "instruction" | "model"> & {

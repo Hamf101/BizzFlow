@@ -2,10 +2,12 @@
 
 import { ArrowRight, ArrowUp } from "lucide-react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { type FormEvent, type KeyboardEvent, type ReactElement, useRef, useState, useTransition } from "react"
 
 import { createGeneratedDocumentAction } from "@/app/(dashboard)/documents/actions"
 import { createTemplateAction } from "@/app/(dashboard)/templates/actions"
+import { FLOW_COMPOSER_ATTACH, FlowAttachButton, FlowAttachChip, RECREATE, useFlowAttachment, useFlowOpenWith } from "@/components/flow/flow-attach"
 import { handOffToFlow } from "@/components/flow/flow-handoff"
 import { FlowModelPicker, useFlowModel } from "@/components/flow/flow-model-picker"
 import { FLOW_COMPOSER, FLOW_SEND, FlowWindow } from "@/components/flow/flow-window"
@@ -28,20 +30,29 @@ type Turn = Readonly<{
  * that finds the member's work or starts something new. The conversation
  * stays as the member moves between pages.
  *
+ * @param props - The workspace a file attached to Flow goes into.
  * @returns The launcher and its conversation.
  */
-export function FlowLauncher(): ReactElement {
+export function FlowLauncher({ organizationId }: { organizationId: string }): ReactElement {
   const [open, setOpen] = useState(false)
 
   return (
     // On a phone it rests above the tab bar, which is 4.5rem tall.
     <FlowWindow onOpenChange={setOpen} open={open} phoneBottom={72}>
-      <FlowConversation onLeave={() => setOpen(false)} />
+      <FlowConversation onLeave={() => setOpen(false)} onShow={() => setOpen(true)} organizationId={organizationId} />
     </FlowWindow>
   )
 }
 
-function FlowConversation({ onLeave }: { onLeave: () => void }): ReactElement {
+function FlowConversation({
+  onLeave,
+  onShow,
+  organizationId,
+}: {
+  onLeave: () => void
+  onShow: () => void
+  organizationId: string
+}): ReactElement {
   const [turns, setTurns] = useState<Turn[]>([])
   const [text, setText] = useState("")
   const [busy, setBusy] = useState(false)
@@ -50,6 +61,17 @@ function FlowConversation({ onLeave }: { onLeave: () => void }): ReactElement {
   // Read at once, not from the last render, so a quick second Enter never sends twice.
   const sending = useRef(false)
   const flowModel = useFlowModel()
+  const router = useRouter()
+  // Files shows a file attached on it in place.
+  const attachment = useFlowAttachment(organizationId, () => {
+    if (window.location.pathname === "/documents") router.refresh()
+  })
+
+  // Files' "Open in Flow" opens it with that file attached.
+  useFlowOpenWith((source) => {
+    attachment.set(source)
+    onShow()
+  })
 
   function add(turn: Omit<Turn, "id">): void {
     const id = nextId.current++
@@ -57,9 +79,10 @@ function FlowConversation({ onLeave }: { onLeave: () => void }): ReactElement {
   }
 
   async function send(message: string): Promise<void> {
-    const trimmed = message.trim()
+    const source = attachment.source
+    const trimmed = message.trim() || (source ? RECREATE : "")
 
-    if (trimmed.length < 2 || sending.current) {
+    if (trimmed.length < 2 || sending.current || attachment.uploading) {
       return
     }
 
@@ -72,7 +95,7 @@ function FlowConversation({ onLeave }: { onLeave: () => void }): ReactElement {
 
     try {
       const response = await fetch("/api/flow", {
-        body: JSON.stringify({ history, message: trimmed, model: flowModel.chosen() }),
+        body: JSON.stringify({ history, message: trimmed, model: flowModel.chosen(), sourceDocumentId: source?.id }),
         headers: { "Content-Type": "application/json" },
         method: "POST",
       })
@@ -92,7 +115,7 @@ function FlowConversation({ onLeave }: { onLeave: () => void }): ReactElement {
 
       if (answer.kind === "create") {
         // The new draft's editor picks the request up and Flow carries on there.
-        handOffToFlow(trimmed)
+        handOffToFlow(trimmed, answer.sourceDocumentId && source ? source : undefined)
         const formData = new FormData()
         formData.set("title", answer.title)
         startTransition(() =>
@@ -101,7 +124,7 @@ function FlowConversation({ onLeave }: { onLeave: () => void }): ReactElement {
       }
     } catch (error: unknown) {
       add({ failed: true, role: "flow", text: error instanceof Error ? error.message : "Flow couldn't answer that." })
-      setText(trimmed)
+      setText(message.trim())
     } finally {
       sending.current = false
       setBusy(false)
@@ -178,10 +201,11 @@ function FlowConversation({ onLeave }: { onLeave: () => void }): ReactElement {
         <label className="sr-only" htmlFor="workspace-flow-composer">
           Ask Flow
         </label>
+        <FlowAttachChip attachment={attachment} />
         <div className="relative">
           {/* One line tall, growing with the message to about six. */}
           <textarea
-            className={FLOW_COMPOSER}
+            className={cn(FLOW_COMPOSER, FLOW_COMPOSER_ATTACH)}
             disabled={busy}
             id="workspace-flow-composer"
             maxLength={2_000}
@@ -190,10 +214,11 @@ function FlowConversation({ onLeave }: { onLeave: () => void }): ReactElement {
             placeholder="Ask Flow…"
             value={text}
           />
+          <FlowAttachButton attachment={attachment} disabled={busy} />
           <button
             aria-label="Send to Flow"
             className={FLOW_SEND}
-            disabled={busy || text.trim().length < 2}
+            disabled={busy || attachment.uploading || (text.trim().length < 2 && !attachment.source)}
             type="submit"
           >
             <ArrowUp aria-hidden="true" className="size-5" />

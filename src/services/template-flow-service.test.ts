@@ -1815,6 +1815,34 @@ describe("Flow recreating a form from a file", () => {
     }
   })
 
+  it("reads a form in a document's own Flow too, and refuses another organization's as not found before the model", async () => {
+    const pdf = await pdfOfPages(1)
+    const turn = (client: SourceClient, aiProvider: AiProvider) =>
+      executeDocumentFlow(
+        {
+          actorUserId: "user-1",
+          documentId: "00000000-0000-4000-8000-000000000020",
+          draft: { title: "Lease, Flat 3B", description: "", content: createBlankTemplateContent() },
+          instruction: "Recreate this form.",
+          organizationId: "org-1",
+          sourceDocumentId: SOURCE_ID
+        },
+        {
+          ...createDependencies({ aiProvider, loadSource: (input) => loadFlowSource(input, { client: client as never, readObject: async () => pdf }) }),
+          authorizeDocument: async (): Promise<void> => {}
+        }
+      )
+    const elsewhere = createTestAiProvider([flowProviderResult(successfulFlowPayload())])
+
+    await expect(turn(sourceClient({ contentType: "application/pdf", byteSize: pdf.byteLength }, { documentOrg: "org-2" }), elsewhere)).rejects.toMatchObject({ statusCode: 404 })
+    expect(readProviderRequests(elsewhere)).toHaveLength(0)
+
+    const here = createTestAiProvider([flowProviderResult(successfulFlowPayload())])
+
+    await turn(sourceClient({ contentType: "application/pdf", byteSize: pdf.byteLength }), here)
+    expect(readProviderRequests(here).map((request) => request.attachments)).toEqual([[{ kind: "document", mimeType: "application/pdf", data: pdf }]])
+  })
+
   it("refuses a file Flow cannot read, and never asks the model", async () => {
     const elevenPages = await pdfOfPages(11)
     const refusals = [

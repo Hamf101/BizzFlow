@@ -1,4 +1,4 @@
-import { z } from "zod"
+import * as z from "zod"
 
 import {
   createSortSection,
@@ -303,8 +303,9 @@ export function getChosenItemId(
 }
 
 /**
- * Names the documents a layout shows a status for, and the ones whose first
- * page it draws. Only generated documents have either.
+ * Names the documents a layout shows a card for, a generated document's
+ * status or an upload's file type, and the ones whose first page it draws,
+ * which only generated documents have.
  *
  * @param layout - The layout being drawn.
  * @param view - Current Files view.
@@ -347,7 +348,7 @@ export function getCardRequest(
         : layout === "columns"
           ? chosenPage
           : [...new Set([...chosenPage, ...pagesHere])].slice(0, MAX_FILE_PAGES),
-    documentIds: generated(shown),
+    documentIds: shown.map((document: AccessibleDocumentSummary): string => document.id),
   }
 }
 

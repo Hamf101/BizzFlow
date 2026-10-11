@@ -3,7 +3,7 @@
 import { headers } from "next/headers"
 import { redirect } from "next/navigation"
 import { after } from "next/server"
-import { z } from "zod"
+import * as z from "zod"
 
 import { enforceActionRateLimit } from "@/lib/action-rate-limit"
 import { getClientIp } from "@/lib/client-ip"

@@ -1,7 +1,7 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { z } from "zod"
+import * as z from "zod"
 
 import { AuthenticationError } from "@/lib/auth"
 import {
@@ -17,6 +17,7 @@ import {
   archiveDocumentTemplate,
   changeDocumentTemplates,
   createDocumentTemplate,
+  createFilledTemplateCopy,
   duplicateDocumentTemplate,
   getDocumentTemplate,
   getDocumentTemplateVersion,
@@ -30,6 +31,7 @@ import {
 import type { SaveResult } from "@/components/editor/use-autosave"
 import { withTemplateImageUrls } from "@/services/template-image-service"
 import { publishTemplateRoom } from "@/services/working-copy-service"
+import type { FlowFillResult } from "@/types/template-flow"
 import {
   createEmptyDocumentContent,
   parseTemplateContent,
@@ -211,6 +213,39 @@ export async function loadTemplateVersionAction(templateId: string, revision: nu
         error instanceof TemplateServiceError && error.statusCode !== 500
           ? error.message
           : "That version could not be loaded.",
+      ok: false,
+    }
+  }
+}
+
+/**
+ * Makes a document of a template filled with the answers Flow read off the
+ * form it was recreated from.
+ *
+ * @param templateId - The template to copy.
+ * @param answers - The answers, keyed by field key; the service checks each.
+ * @returns The new document's editor and how many answers fit, or why not.
+ */
+export async function createFilledCopyAction(templateId: string, answers: unknown): Promise<FlowFillResult> {
+  try {
+    const { actor } = await loadTemplateActionContext()
+    const { documentId, dropped, kept } = await createFilledTemplateCopy({
+      ...actor,
+      answers,
+      templateId: requireFormId(templateId, "Template id"),
+    })
+
+    if (!documentId) {
+      return { dropped, kept, ok: true }
+    }
+
+    revalidatePath("/documents")
+    return { dropped, href: `/documents/${encodeURIComponent(documentId)}/edit`, kept, ok: true }
+  } catch (error: unknown) {
+    logTemplateActionFailure("template_filled_copy_failed", { reason: getUnknownErrorMessage(error), templateId })
+    return {
+      message:
+        error instanceof TemplateServiceError && error.statusCode !== 500 ? error.message : "The filled copy couldn't be made. Try again.",
       ok: false,
     }
   }

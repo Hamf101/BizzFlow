@@ -1,6 +1,6 @@
 "use client"
 
-import { Archive, Ellipsis, FolderInput, RotateCcw, Send, Trash2, UserPlus } from "lucide-react"
+import { Archive, Ellipsis, FolderInput, RotateCcw, ScanText, Send, Trash2, UserPlus } from "lucide-react"
 import { type ReactElement, type ReactNode, useState, useTransition } from "react"
 
 import {
@@ -15,6 +15,7 @@ import {
   useOpensOnRightClick,
 } from "@/components/files/file-selection"
 import { MoveToDialog } from "@/components/files/move-to-dialog"
+import { openFlowWith } from "@/components/flow/flow-attach"
 import { SendToAnswerDialog } from "@/components/editor/lazy-panels"
 import { ShareDialog } from "@/components/sharing/share-dialog"
 import { Button } from "@/components/ui/button"
@@ -237,6 +238,12 @@ export function FileRowMenu({
     )
   ) : (
     <>
+      {item?.flowable ? (
+        <DropdownMenuItem onClick={() => openFlowWith({ id: itemId, name })}>
+          <ScanText aria-hidden="true" />
+          Open in Flow
+        </DropdownMenuItem>
+      ) : null}
       {shareItem}
       {item?.sendable ? (
         <DropdownMenuItem onClick={() => setAsking(true)}>

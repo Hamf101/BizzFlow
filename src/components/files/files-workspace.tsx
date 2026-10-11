@@ -58,6 +58,7 @@ import {
 } from "@/lib/permissions"
 import { cn } from "@/lib/utils"
 import type { DocumentCard } from "@/services/document-service"
+import { FLOW_FILE_TYPES } from "@/types/template-flow"
 import type {
   AccessibleDocumentFolder,
   AccessibleDocumentSummary,
@@ -224,6 +225,11 @@ export function FilesWorkspace({
       : []
 
   const canShare = (item: { accessLevel: string; lifecycleState: DocumentLifecycleState }): boolean => canShareResource(membership, item)
+  // An upload Flow can recreate a form from; what is in Trash is out of its reach.
+  const flowable = (document: AccessibleDocumentSummary): boolean =>
+    document.sourceKind !== "generated" &&
+    lifecycle !== "trash" &&
+    FLOW_FILE_TYPES.includes(cards.get(document.id)?.contentType ?? "")
 
   function folderMenu(folder: AccessibleDocumentFolder): ReactNode {
     const manageable = canManageFolders && isManageable(folder)
@@ -269,7 +275,7 @@ export function FilesWorkspace({
   function documentMenu(document: AccessibleDocumentSummary): ReactNode {
     const manageable = canManageDocuments && isManageable(document)
 
-    if (!manageable && !canShare(document)) {
+    if (!manageable && !canShare(document) && !flowable(document)) {
       return null
     }
 
@@ -391,6 +397,7 @@ export function FilesWorkspace({
             : [],
         shareable: canShare(document),
         sendable: Boolean(document.templateId) && canSendDocument(membership, document),
+        flowable: flowable(document),
       })
     ),
   ]

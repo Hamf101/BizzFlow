@@ -151,7 +151,7 @@ export default async function DashboardLayout({
           </div>
         </div>
         <MobileTabBar role={account.permissionSubject} />
-        {account.navigation?.organizationId ? <FlowLauncher /> : null}
+        {account.navigation?.organizationId ? <FlowLauncher organizationId={account.navigation.organizationId} /> : null}
         {userId ? <SharingNoticesListener /> : null}
         {/* Beside the sidebar rather than in a boundary of its own, so its
             buttons never come alive before the search they open. */}

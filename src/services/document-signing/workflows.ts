@@ -11,6 +11,7 @@ import {
   calculationBase,
   collectFields,
   deriveChangedAnswerPatch,
+  keepValidAnswers,
   normalizeAnswerPatch,
   pruneHiddenAnswerPatch,
   withCalculatedAnswers,
@@ -246,6 +247,42 @@ export async function saveGeneratedDocumentAnswers(
       })
     }
   )
+}
+
+/**
+ * Fills a document with answers read off a form Flow recreated it from. Each
+ * answer its field refuses is dropped, never the rest, and those left are
+ * saved as the member's own save saves them: pruned, calculated, and refused
+ * once the document is done or someone has signed.
+ *
+ * @param input - Actor, generated document, and the untrusted answers.
+ * @param deps - Optional injected database dependency for tests.
+ * @returns The document as it stands after the save, and how many answers did and didn't fit.
+ * @throws DocumentSigningServiceError for access, a done or signed document, or answers that are not an object.
+ */
+export async function fillGeneratedDocumentAnswers(
+  input: GetGeneratedDocumentSigningViewInput & { answers: unknown },
+  deps: DocumentSigningServiceDeps = {}
+): Promise<{ dropped: number; kept: number; view: GeneratedDocumentSigningView }> {
+  const { actorUserId, documentId, organizationId } = input
+
+  return runSigningOperation("fill_generated_document_answers", { actorUserId, documentId, organizationId }, async () => {
+    if (!input.answers || typeof input.answers !== "object" || Array.isArray(input.answers)) {
+      throw new DocumentSigningServiceError("Document answers must be a JSON object.", 400)
+    }
+
+    const view = await getGeneratedDocumentSigningView({ actorUserId, documentId, organizationId }, deps)
+    const values = await keepValidAnswers(collectFields(view.document.templateSnapshot), input.answers as Record<string, unknown>)
+
+    const kept = Object.keys(values).length
+
+    // Saved even when none fit, so its refusals still answer.
+    return {
+      dropped: Object.keys(input.answers).length - kept,
+      kept,
+      view: await saveGeneratedDocumentAnswers({ actorUserId, documentId, organizationId, values }, deps),
+    }
+  })
 }
 
 /**

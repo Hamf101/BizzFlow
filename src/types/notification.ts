@@ -1,4 +1,4 @@
-import { z } from "zod"
+import * as z from "zod"
 import { timestampSchema } from "@/types/schemas"
 
 /** Channels a notification can be delivered through. */

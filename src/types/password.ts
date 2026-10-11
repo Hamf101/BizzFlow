@@ -1,4 +1,4 @@
-import { z } from "zod"
+import * as z from "zod"
 
 /** What a new password needs, each in the words shown beside the field. */
 export const PASSWORD_RULES: ReadonlyArray<{ hint: string; met: (password: string) => boolean }> = [

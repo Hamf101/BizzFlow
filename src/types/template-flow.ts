@@ -105,3 +105,11 @@ export type TemplateFlowMessageRow = Record<string, unknown> & {
   change_set: Record<string, unknown> | null
   created_at: string
 }
+
+/** What filling with a form's answers did: a filled copy to open, or the answers the page now holds; or why not. */
+export type FlowFillResult =
+  | Readonly<{ answers?: Record<string, unknown>; dropped: number; href?: string; kept: number; ok: true }>
+  | Readonly<{ message: string; ok: false }>
+
+/** The kinds of file Flow recreates a form from; the server checks each again by its bytes. */
+export const FLOW_FILE_TYPES: readonly string[] = ["application/pdf", "image/png", "image/jpeg"]

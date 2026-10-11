@@ -5,7 +5,7 @@ import { getR2Env } from "@/lib/env"
 import { createR2Client } from "@/lib/r2/client"
 import { hasAllowedFileSignature } from "@/lib/r2/stored-file"
 import type { AiAttachment } from "@/services/ai/contracts"
-import { normalizeAnswerPatch, collectFields } from "@/services/document-signing/answer-validation"
+import { collectFields, keepValidAnswers } from "@/services/document-signing/answer-validation"
 import { requireDocumentAccess, requireDocumentAccessAs } from "@/services/documents/access-service"
 import { getDocumentById } from "@/services/documents/shared"
 import { getDocumentVersionById } from "@/services/documents/version-shared"
@@ -163,20 +163,15 @@ export async function readSourceAnswers(
     return {}
   }
 
-  const fieldByKey = collectFields(application.draft.content)
-  const kept: [string, unknown][] = []
-
-  for (const [writtenKey, value] of Object.entries(answers)) {
+  // Each moves to its field's own key; one no operation wrote is dropped.
+  const renamed = Object.entries(answers).flatMap(([writtenKey, value]): [string, unknown][] => {
     const fieldKey = application.fieldKeys?.get(writtenKey)
 
-    if (fieldKey === undefined) continue
+    return fieldKey === undefined ? [] : [[fieldKey, value]]
+  })
 
-    // With no sender given, a signature or initials box refuses any answer, and a file field is no field here.
-    kept.push(...Object.entries(await normalizeAnswerPatch(fieldByKey, { [fieldKey]: value }).catch(() => ({}))))
-  }
-
-  // Defined, never assigned, so no key can reach a prototype.
-  return Object.fromEntries(kept)
+  // With no sender given, a signature or initials box refuses any answer, and a file field is no field here.
+  return keepValidAnswers(collectFields(application.draft.content), Object.fromEntries(renamed))
 }
 
 function assertSourceType(contentType: string): AiAttachment["kind"] {

@@ -1,7 +1,7 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { z } from "zod"
+import * as z from "zod"
 
 import { publishTaskAssigned } from "@/inngest/publish-task-assigned"
 import type { ActionFeedbackCode } from "@/lib/action-result"

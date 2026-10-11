@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto"
 import { setTimeout as delay } from "node:timers/promises"
 
-import { z } from "zod"
+import * as z from "zod"
 
 import {
   type AiAttachment,
@@ -258,7 +258,15 @@ export async function executeDocumentFlow(
   // `templateId`. ponytail: the conversation lives in the editor's tab; keep
   // it per document once someone needs it back after a reload.
   return executeTemplateFlow(
-    { actorUserId, draft: input.draft, instruction: input.instruction, model: input.model, organizationId, templateId: documentId },
+    {
+      actorUserId,
+      draft: input.draft,
+      instruction: input.instruction,
+      model: input.model,
+      organizationId,
+      sourceDocumentId: input.sourceDocumentId,
+      templateId: documentId
+    },
     {
       ...deps,
       authorizeTemplateManagement: async (): Promise<void> => {},

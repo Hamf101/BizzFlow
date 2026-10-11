@@ -1,4 +1,4 @@
-import { z } from "zod"
+import * as z from "zod"
 
 import { createAdminClient } from "@/lib/supabase/admin"
 import { recordAuditLogBestEffort, type RecordAuditLogInput } from "@/services/audit-service"

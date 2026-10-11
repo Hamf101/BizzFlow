@@ -4,7 +4,7 @@ import { act, type ReactElement, useState } from "react"
 import type { Root } from "react-dom/client"
 import { afterEach, expect, it, vi } from "vitest"
 
-import { TemplateFlowPanel } from "@/components/editor/template-flow-panel"
+import { describeFill, TemplateFlowPanel } from "@/components/editor/template-flow-panel"
 import { createTemplateFlowDraftFingerprint } from "@/services/template-flow-proposal-state"
 import { createBlankTemplateContent } from "@/types/template"
 import type { TemplateFlowDraft, TemplateFlowLedgerItem, TemplateFlowOperationType, TemplateFlowProposal } from "@/types/template-flow"
@@ -96,7 +96,7 @@ it("drops a change with what needs it, applies only the kept ones, and keeps the
 
     return (
       <TemplateFlowPanel
-        autoSend="Ask about the vehicle."
+        autoSend={{ instruction: "Ask about the vehicle." }}
         canUndo={false}
         draft={draft}
         initialMessages={[]}
@@ -172,7 +172,7 @@ it("sends a message, even one carried in on open, to the model this person picke
   act(() =>
     root?.render(
       <TemplateFlowPanel
-        autoSend="Ask about the vehicle."
+        autoSend={{ instruction: "Ask about the vehicle." }}
         canUndo={false}
         draft={draft}
         initialMessages={[]}
@@ -213,7 +213,7 @@ it("keeps a proposal rejected while it rebuilds rejected", async () => {
 
     return (
       <TemplateFlowPanel
-        autoSend="Ask about the vehicle."
+        autoSend={{ instruction: "Ask about the vehicle." }}
         canUndo={false}
         draft={draft}
         initialMessages={[]}
@@ -241,4 +241,10 @@ it("keeps a proposal rejected while it rebuilds rejected", async () => {
   await act(async () => endRebuild())
   await settle()
   expect(held).toBeNull()
+})
+
+it("says how many answers from the form were filled in, and how many didn't fit", () => {
+  expect(describeFill(5, 0)).toBe("Filled 5 answers.")
+  expect(describeFill(1, 2)).toBe("Filled 1 answer. 2 didn't fit the form.")
+  expect(describeFill(0, 3)).toBe("No answers fit the form.")
 })

@@ -31,8 +31,8 @@ const DOT_TONES: readonly Tone[] = ["lavender", "lavender", "lavender", "lavende
 const SMALLEST = { h: 380, w: 320 }
 // Flow's message box, one line tall and growing with the message to about
 // six, and its send button inside it; the same wherever Flow is asked.
-export const FLOW_COMPOSER = "field-sizing-content max-h-36 min-h-10 w-full resize-none rounded-[12px] border border-border bg-card px-3 py-2.5 pr-12 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
-export const FLOW_SEND = "absolute right-1.5 bottom-1 grid size-8 place-items-center max-md:size-11 rounded-full text-primary outline-none transition-opacity hover:opacity-75 disabled:opacity-35 focus-visible:ring-2 focus-visible:ring-ring/40"
+export const FLOW_COMPOSER = "block field-sizing-content max-h-36 min-h-10 max-md:min-h-12 max-md:py-3.5 w-full resize-none rounded-[12px] border border-border bg-card px-3 py-2.5 pr-12 max-md:pr-14 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
+export const FLOW_SEND = "absolute right-1.5 bottom-1 max-md:bottom-0.5 grid size-8 place-items-center max-md:size-11 rounded-full text-primary outline-none transition-opacity hover:opacity-75 disabled:opacity-35 focus-visible:ring-2 focus-visible:ring-ring/40"
 const SMALLEST_ON_PHONE = 280
 const PHONE = "(width < 48rem)"
 const KEPT = "bizflow:flow:"

@@ -1,7 +1,7 @@
 "use server"
 
 import { redirect } from "next/navigation"
-import { z } from "zod"
+import * as z from "zod"
 
 import { buildRedirect, getFormString } from "@/lib/form-utils"
 import { createClient } from "@/lib/supabase/server"
