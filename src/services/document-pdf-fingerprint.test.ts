@@ -49,11 +49,14 @@ const EXPECTED_PAGE_SIZE = { height: 842, width: 595 }
 
 // The sample gained a prefix and suffix, a comb, a checkbox group, a choice
 // grid and a fill-in table (2026-10-01), which pushed it onto a fourth page.
+// A list's words hang clear of their markers (2026-10-05): the bullets are
+// drawn apart from their words, which also reorders the embedded glyphs, so
+// every page's stream changed.
 const EXPECTED_CONTENT_STREAM_SHA256: readonly string[] = [
-  "471b0b3c0b59254c140fb76bc202586f6fa3df694f09bcaea6989addbb66cc4e",
-  "f870402627999a036d326ecd4c06d0dbd9772bf1e45cff984d726036fb86f523",
-  "f95bc2718e26a2b359a84de7ba146f55ba401352b58f4b84ce3a2396db91eb38",
-  "315bfe826b97d99d6729678a3744a5023c50d8af162a7927d539ead8b52d83b7"
+  "d56eb776da576d770761cf52ef0e0d860a71774644784742a8ff426b754717e3",
+  "e1fe108f5673deb7f6ffa1c89ebf141618ac4cab1f15b194427d7995cdf1e1fa",
+  "cb54b16aca9b44cf9fa6b0b937b736a00bc66426effa810fb000dd1122122ac1",
+  "904db9abf1639d5000355b84ba1c9e1613c527a1a0676f58e4bbd26463ff4d7c"
 ]
 
 // Four pages of text with a few fields and a signature. Whole font files made

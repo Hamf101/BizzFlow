@@ -27,6 +27,7 @@ import {
   boxedPdfMetrics,
   createPdfLayoutMetrics,
   getPdfRowFrames,
+  listItemInset,
   scalePdfCharacterEstimate,
   SIGNER_NAME_LEADING,
   signerNameWidth,
@@ -68,6 +69,7 @@ import {
   TABLE_CELL_PADDING,
   TABLE_ROW_LEAST,
   tableRows,
+  tableTotalRow,
   type StyledFieldBlock
 } from "./shared"
 import type {
@@ -394,13 +396,15 @@ function createBlockPaginationUnits(
       continue
     }
 
+    const cue = createCueUnit([renderBlock], input)
     const blockUnits = createSingleBlockPaginationUnits(
       renderBlock,
       input,
       inner
     )
     units.push(
-      ...inBox(clearLeadingPageBreak(blockUnits, structureLabelUnits.length > 0 || space.length > 0))
+      ...inBox(clearLeadingPageBreak(cue, structureLabelUnits.length > 0 || space.length > 0)),
+      ...inBox(clearLeadingPageBreak(blockUnits, structureLabelUnits.length > 0 || space.length > 0 || cue.length > 0))
     )
     blockIndex += 1
   }
@@ -423,6 +427,17 @@ function createBlockPaginationUnits(
         }
       : unit
   })
+}
+
+// A blank form's rule in words, kept on the page with what it shows: a row's
+// cells may each start a branch, and their rules print as one line above it.
+function createCueUnit(renderBlocks: readonly TemplateRenderBlock[], input: NormalizedPdfInput): PdfPaginationUnit[] {
+  const label = [...new Set(renderBlocks.flatMap(({ cue }) => (cue ? [cue] : [])))].join("  ·  ")
+  const first = renderBlocks[0]
+
+  return label && first
+    ? [{ item: { kind: "cue", label }, keepTogetherKeys: getKeepTogetherKeys(first, input), keepWithNext: true, pageBreakBefore: first.pageBreakBefore }]
+    : []
 }
 
 // Space left above a block, moving with it to the next page.
@@ -554,6 +569,10 @@ function createRowPaginationUnits(
       units.push(...spaceAbove(row[0]))
     }
 
+    const cue = createCueUnit(row, input)
+
+    units.push(...cue)
+
     // A long block is split into pieces; each piece of the row prints as one line of cells.
     for (let piece = 0; piece < pieceCount; piece += 1) {
       units.push({
@@ -562,7 +581,7 @@ function createRowPaginationUnits(
           kind: "columns",
           widths
         },
-        pageBreakBefore: piece === 0 && row[0]?.pageBreakBefore === true,
+        pageBreakBefore: piece === 0 && cue.length === 0 && row[0]?.pageBreakBefore === true,
         keepTogetherKeys,
         keepWithNext: piece === pieceCount - 1 && lastBlock?.keepWithNext === true
       })
@@ -754,6 +773,13 @@ type RowsFieldBlock = Extract<TemplateBlock, { type: "choice_grid_field" | "tabl
  * header again; in a row of columns, as many as a page holds. A table's row
  * too tall for a page is cut into rows that fit.
  */
+// A table's rows numbered from 0, and its Total row after them as -1, which takes no form field.
+function withTotalRow(block: Extract<TemplateBlock, { type: "table_field" }>, rows: string[][]): Array<{ cells: string[]; index: number }> {
+  const total = tableTotalRow(block, rows)
+
+  return [...rows.map((cells: string[], index: number) => ({ cells, index })), ...(total ? [{ cells: total, index: -1 }] : [])]
+}
+
 function splitRowsField(
   block: RowsFieldBlock,
   renderBlock: TemplateRenderBlock,
@@ -766,7 +792,7 @@ function splitRowsField(
   const rows =
     block.type === "choice_grid_field"
       ? block.rows.map((row: string, index: number) => ({ cells: [row], index }))
-      : tableRows(block, answers[block.fieldKey]).flatMap((cells: string[], index: number) =>
+      : withTotalRow(block, tableRows(block, answers[block.fieldKey])).flatMap(({ cells, index }) =>
           (estimateRowHeight(block, cells, width) > most ? splitTableRow(cells, block.columns.length, width) : [cells]).map((segment: string[]) => ({ cells: segment, index }))
         )
   const pieces: Array<typeof rows> = [[]]
@@ -901,16 +927,17 @@ function splitListBlock(
   availableWidth: number,
   pageCapacity: number
 ): PdfBlockFlowItem[] {
-  const entryCharacters = resolveChunkCharacters(
-    LIST_ENTRY_CHUNK_CHARACTERS,
-    availableWidth,
-    pageCapacity
-  )
   const entries = block.items.flatMap(
     (
       item: string,
       itemIndex: number
-    ): Array<{ marker: string; runs?: TextRun[]; text: string }> => {
+    ): Array<{ level: number; marker: string; runs?: TextRun[]; text: string }> => {
+      // An item is cut to fit the width its words are drawn in, set in under its marker.
+      const entryCharacters = resolveChunkCharacters(
+        LIST_ENTRY_CHUNK_CHARACTERS,
+        listWordsWidth(block.type, block.levels?.[itemIndex] ?? 0, availableWidth),
+        pageCapacity
+      )
       const formatted = block.itemRuns?.[itemIndex]
       const pieces = formatted
         ? splitRuns(formatted, scaleChunk(entryCharacters, formatted, 10)).map((runs: TextRun[]) => ({ runs, text: runs.map((run: TextRun): string => run.text).join("") }))
@@ -918,18 +945,19 @@ function splitListBlock(
 
       return pieces.map((piece, chunkIndex: number) => ({
         ...piece,
+        level: block.levels?.[itemIndex] ?? 0,
         marker:
           chunkIndex === 0
             ? block.type === "bullet_list"
               ? "-"
-              : `${itemIndex + 1}.`
+              : (renderBlock.listMarkers?.[itemIndex] ?? `${itemIndex + 1}.`)
             : ""
       }))
     }
   )
   const chunks: PdfBlockFlowItem[] = []
   const chunkHeight = Math.min(LIST_CHUNK_HEIGHT, pageCapacity * 0.72)
-  let currentEntries: Array<{ marker: string; runs?: TextRun[]; text: string }> = []
+  let currentEntries: Array<{ level: number; marker: string; runs?: TextRun[]; text: string }> = []
   let currentHeight = 0
 
   const flush = (): void => {
@@ -948,14 +976,15 @@ function splitListBlock(
           : undefined
       },
       renderBlock,
-      listMarkers: currentEntries.map((entry): string => entry.marker)
+      listMarkers: currentEntries.map((entry): string => entry.marker),
+      listLevels: currentEntries.map((entry): number => entry.level)
     })
     currentEntries = []
     currentHeight = 0
   }
 
   for (const entry of entries) {
-    const entryHeight = estimateListEntryHeight(entry.text, availableWidth, entry.runs)
+    const entryHeight = estimateListEntryHeight(entry.text, listWordsWidth(block.type, entry.level, availableWidth), entry.runs)
 
     if (
       currentEntries.length > 0 &&
@@ -1192,6 +1221,9 @@ function estimateFlowItemHeight(
     case "field_group_label":
       baseHeight = boldLines(item.label.toUpperCase(), 9, metrics.contentWidth) * 13 + 8
       break
+    case "cue":
+      baseHeight = estimateWrappedTextHeight(item.label, scalePdfCharacterEstimate(100, metrics.contentWidth), 12) + 4
+      break
     case "space":
       return item.height
     case "block":
@@ -1286,8 +1318,8 @@ function estimateBlockHeight(
     case "numbered_list":
       return (
         block.items.reduce(
-          (height: number, item: string, index: number): number =>
-            height + estimateListEntryHeight(item, availableWidth, block.itemRuns?.[index]) * ((lineSpacing ?? 1.5) / 1.5),
+          (height: number, entry: string, index: number): number =>
+            height + estimateListEntryHeight(entry, listWordsWidth(block.type, item.listLevels?.[index] ?? 0, availableWidth), block.itemRuns?.[index]) * ((lineSpacing ?? 1.5) / 1.5),
           0
         ) + 8
       )
@@ -1462,15 +1494,24 @@ function estimateLineFieldDepth(block: StyledFieldBlock, answers: Record<string,
 
   const answer = answerOverride ?? formatFieldValue(block, answers[block.fieldKey])
 
-  // A comb's row of boxes sits on the line beside its label.
-  if (combBoxes(block, answer)) {
-    return Math.max(estimateWordWrappedHeight(label, width * LINE_LABEL_SHARE, 15) + LINE_RULE_DROP, COMB_HEIGHT)
-  }
-
   if (block.type === "text_field" && block.multiline) {
     const needed = answer ? estimateWordWrappedHeight(answer, estimateAnswerWidth(block, width), RULED_LINE_PITCH) : 0
 
     return estimateWordWrappedHeight(label, width, 15) + 3 + RULED_LINE_PITCH * Math.max(1, Math.round(Math.max(answerBoxHeight(block), needed) / RULED_LINE_PITCH))
+  }
+
+  // A label past its share stands over a line the width of the column.
+  if (estimateWordWrappedHeight(label, width * LINE_LABEL_SHARE, 15) > 15) {
+    const above = estimateWordWrappedHeight(label, width, 15)
+
+    return combBoxes(block, answer)
+      ? above + COMB_HEIGHT
+      : above + Math.max(15, estimateWordWrappedHeight(answer, estimateAnswerWidth(block, width), 15)) + LINE_RULE_DROP
+  }
+
+  // A comb's row of boxes sits on the line beside its label.
+  if (combBoxes(block, answer)) {
+    return Math.max(15 + LINE_RULE_DROP, COMB_HEIGHT)
   }
 
   // The label takes at most its share of the width; the answer at least the rest.
@@ -1498,9 +1539,16 @@ function hasBranding(content: TemplateContent): boolean {
   )
 }
 
+// The width an item's words are drawn in, beside its marker and set in by its level.
+function listWordsWidth(type: "bullet_list" | "numbered_list", level: number, availableWidth: number): number {
+  return availableWidth - listItemInset(type, level).words
+}
+
+// An item's words measured in the width they are drawn in, set in under its
+// marker, a little more cautiously than a paragraph's.
 function estimateListEntryHeight(
   value: string,
-  availableWidth: number,
+  wordsWidth: number,
   runs?: readonly TextRun[] | null
 ): number {
   const scale = runScale(runs, 10)
@@ -1508,7 +1556,7 @@ function estimateListEntryHeight(
   return (
     estimateWrappedTextHeight(
       value,
-      scalePdfCharacterEstimate(82, availableWidth) / scale,
+      scalePdfCharacterEstimate(82, wordsWidth) / scale,
       15 * scale
     ) + 4
   )

@@ -25,12 +25,10 @@ export const PAPER_FRAME =
  * always the width divided by 736.
  */
 export const PAGE_SIZES = {
-  // A Templates card: 96px on phones, 150px from `sm` up.
+  // A Templates or Files card: 96px on phones, 150px from `sm` up.
   card: { frame: "w-[96px] sm:w-[150px]", zoom: "[zoom:0.1304] sm:[zoom:0.2038]" },
   // A Files filmstrip frame.
   film: { frame: "w-[46px]", zoom: "[zoom:0.0625]" },
-  // A Files icon: 52px on phones, 64px from `sm` up.
-  icon: { frame: "w-[52px] sm:w-[64px]", zoom: "[zoom:0.0707] sm:[zoom:0.087]" },
   // The Files Columns preview.
   preview: { frame: "w-[150px]", zoom: "[zoom:0.2038]" },
   // The Files Gallery stage.
@@ -100,7 +98,7 @@ function readFirstPage(
   title: string
 ): TemplateRenderPlan | null {
   try {
-    const plan = createTemplateRenderPlan({ content, mode: "preview", title })
+    const plan = createTemplateRenderPlan({ content, mode: "blank", title })
 
     if (plan.blocks.length === 0) {
       return null

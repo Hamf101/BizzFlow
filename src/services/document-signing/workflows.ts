@@ -8,10 +8,12 @@ import {
 } from "@/services/document-signing-email-service"
 import {
   assertRequiredAnswersComplete,
+  calculationBase,
   collectFields,
   deriveChangedAnswerPatch,
   normalizeAnswerPatch,
   pruneHiddenAnswerPatch,
+  withCalculatedAnswers,
   pruneHiddenAnswerValues,
   templateRequiresRecipientInitials,
 } from "@/services/document-signing/answer-validation"
@@ -30,7 +32,9 @@ import {
   normalizeOptionalDrawing,
   normalizeRequiredDrawing,
 } from "@/services/document-signing/drawing-validation"
+import { MAX_ATTEMPTS, waitBeforeRetry } from "@/services/serialization-retry"
 import {
+  CHANGED_ANSWERS_MESSAGE,
   createDatabaseError,
   DocumentSigningServiceError,
   runSigningOperation,
@@ -181,62 +185,65 @@ export async function saveGeneratedDocumentAnswers(
         "mutation",
         "Archived documents cannot be changed."
       )
-      const view = await loadGeneratedDocumentView(
-        client,
-        input.organizationId,
-        input.documentId
-      )
-
-      if (view.workflowStatus === "completed") {
-        throw new DocumentSigningServiceError(
-          "Completed documents cannot be changed.",
-          409
+      return retryOnChangedAnswers(async (): Promise<GeneratedDocumentSigningView> => {
+        const view = await loadGeneratedDocumentView(
+          client,
+          input.organizationId,
+          input.documentId
         )
-      }
 
-      // A signature stands for the answers as they were signed, so the last
-      // word belongs to the signers from here on.
-      if (
-        view.recipients.some(
-          (recipient: DocumentSigningRecipient): boolean =>
-            recipient.status === "signed"
-        )
-      ) {
-        throw new DocumentSigningServiceError(SIGNED_ANSWERS_MESSAGE, 409)
-      }
-
-      const content = view.document.templateSnapshot
-      const normalizedPatch = await normalizeAnswerPatch(
-        collectFields(content),
-        input.values,
-        { sent: view.workflowStatus !== "draft" || view.recipients.length > 0 }
-      )
-      const visiblePatch = pruneHiddenAnswerPatch(
-        content,
-        view.answers,
-        normalizedPatch
-      )
-      const persistedValues = await mergeGeneratedDocumentAnswers(
-        client,
-        input.organizationId,
-        input.documentId,
-        visiblePatch
-      )
-
-      for (const [fieldKey, value] of Object.entries(visiblePatch)) {
-        if (!isDeepStrictEqual(persistedValues[fieldKey], value)) {
+        if (view.workflowStatus === "completed") {
           throw new DocumentSigningServiceError(
-            "Saved document answers could not be verified.",
-            500
+            "Completed documents cannot be changed.",
+            409
           )
         }
-      }
 
-      return loadGeneratedDocumentView(
-        client,
-        input.organizationId,
-        input.documentId
-      )
+        // A signature stands for the answers as they were signed, so the last
+        // word belongs to the signers from here on.
+        if (
+          view.recipients.some(
+            (recipient: DocumentSigningRecipient): boolean =>
+              recipient.status === "signed"
+          )
+        ) {
+          throw new DocumentSigningServiceError(SIGNED_ANSWERS_MESSAGE, 409)
+        }
+
+        const content = view.document.templateSnapshot
+        const normalizedPatch = await normalizeAnswerPatch(
+          collectFields(content),
+          input.values,
+          { sent: view.workflowStatus !== "draft" || view.recipients.length > 0 }
+        )
+        const visiblePatch = withCalculatedAnswers(
+          content,
+          view.answers,
+          pruneHiddenAnswerPatch(content, view.answers, normalizedPatch)
+        )
+        const persistedValues = await mergeGeneratedDocumentAnswers(
+          client,
+          input.organizationId,
+          input.documentId,
+          visiblePatch,
+          calculationBase(content, view.answers)
+        )
+
+        for (const [fieldKey, value] of Object.entries(visiblePatch)) {
+          if (!isDeepStrictEqual(persistedValues[fieldKey], value)) {
+            throw new DocumentSigningServiceError(
+              "Saved document answers could not be verified.",
+              500
+            )
+          }
+        }
+
+        return loadGeneratedDocumentView(
+          client,
+          input.organizationId,
+          input.documentId
+        )
+      })
     }
   )
 }
@@ -759,83 +766,109 @@ export async function completePublicDocumentSigning(
         return loadPublicSigningView(client, recipient)
       }
 
-      const view = await loadPublicSigningView(client, recipient)
-      const isLastRequiredRecipient = view.signers.every(
-        (signer: PublicSignerStatus): boolean =>
-          signer.id === recipient.id ||
-          !signer.requiresSignature ||
-          signer.status === "signed"
-      )
-      const fieldByKey = collectFields(view.document.templateSnapshot)
-      const submittedValues = await normalizeAnswerPatch(fieldByKey, input.values)
-      const baselineValues =
-        input.baselineValues === undefined
-          ? undefined
-          : await normalizeAnswerPatch(fieldByKey, input.baselineValues)
-      const changedAnswerPatch = deriveChangedAnswerPatch(
-        submittedValues,
-        baselineValues
-      )
-      const answerPatch = pruneHiddenAnswerPatch(
-        view.document.templateSnapshot,
-        view.answers,
-        changedAnswerPatch
-      )
-      // An answer someone else has signed is kept as signed by
-      // complete_document_recipient_signature, under its row lock.
-      const effectiveValues = pruneHiddenAnswerValues(
-        view.document.templateSnapshot,
-        { ...view.answers, ...answerPatch }
-      )
-      assertRequiredAnswersComplete(
-        view.document.templateSnapshot,
-        fieldByKey,
-        effectiveValues,
-        isLastRequiredRecipient
-      )
-      const requiresInitials = templateRequiresRecipientInitials(
-        view.document.templateSnapshot,
-        effectiveValues,
-        view.signers.findIndex((signer: PublicSignerStatus): boolean => signer.id === recipient.id) + 1
-      )
-      const [signatureData, initialsData] = await Promise.all([
-        recipient.requires_signature
-          ? normalizeRequiredDrawing(input.signatureDataUrl, "signature")
-          : normalizeOptionalDrawing(input.signatureDataUrl, "signature"),
-        requiresInitials
-          ? normalizeRequiredDrawing(
-              input.initialsDataUrl ?? null,
-              "initials acknowledgement"
-            )
-          : normalizeOptionalDrawing(
-              input.initialsDataUrl ?? null,
-              "initials acknowledgement"
-            ),
-      ])
-      const workflowStatus = await completeRecipientSignature(client, {
-        organizationId: recipient.org_id,
-        documentId: recipient.document_id,
-        recipientId: recipient.id,
-        tokenHash,
-        values: answerPatch,
-        signatureData,
-        initialsData,
-      })
-
-      if (
-        workflowStatus !== "awaiting_signatures" &&
-        workflowStatus !== "completed"
-      ) {
-        throw new DocumentSigningServiceError(
-          "Signing completed with an invalid workflow state.",
-          500
+      return retryOnChangedAnswers(async (): Promise<PublicDocumentSigningView> => {
+        const view = await loadPublicSigningView(client, recipient)
+        const isLastRequiredRecipient = view.signers.every(
+          (signer: PublicSignerStatus): boolean =>
+            signer.id === recipient.id ||
+            !signer.requiresSignature ||
+            signer.status === "signed"
         )
-      }
+        const fieldByKey = collectFields(view.document.templateSnapshot)
+        const submittedValues = await normalizeAnswerPatch(fieldByKey, input.values)
+        const baselineValues =
+          input.baselineValues === undefined
+            ? undefined
+            : await normalizeAnswerPatch(fieldByKey, input.baselineValues)
+        const changedAnswerPatch = deriveChangedAnswerPatch(
+          submittedValues,
+          baselineValues
+        )
+        const answerPatch = withCalculatedAnswers(
+          view.document.templateSnapshot,
+          view.answers,
+          pruneHiddenAnswerPatch(view.document.templateSnapshot, view.answers, changedAnswerPatch)
+        )
+        // An answer someone else has signed is kept as signed by
+        // complete_document_recipient_signature, under its row lock.
+        const effectiveValues = pruneHiddenAnswerValues(
+          view.document.templateSnapshot,
+          { ...view.answers, ...answerPatch }
+        )
+        assertRequiredAnswersComplete(
+          view.document.templateSnapshot,
+          fieldByKey,
+          effectiveValues,
+          isLastRequiredRecipient
+        )
+        const requiresInitials = templateRequiresRecipientInitials(
+          view.document.templateSnapshot,
+          effectiveValues,
+          view.signers.findIndex((signer: PublicSignerStatus): boolean => signer.id === recipient.id) + 1
+        )
+        const [signatureData, initialsData] = await Promise.all([
+          recipient.requires_signature
+            ? normalizeRequiredDrawing(input.signatureDataUrl, "signature")
+            : normalizeOptionalDrawing(input.signatureDataUrl, "signature"),
+          requiresInitials
+            ? normalizeRequiredDrawing(
+                input.initialsDataUrl ?? null,
+                "initials acknowledgement"
+              )
+            : normalizeOptionalDrawing(
+                input.initialsDataUrl ?? null,
+                "initials acknowledgement"
+              ),
+        ])
+        const workflowStatus = await completeRecipientSignature(client, {
+          organizationId: recipient.org_id,
+          documentId: recipient.document_id,
+          recipientId: recipient.id,
+          tokenHash,
+          values: answerPatch,
+          signatureData,
+          initialsData,
+          expectedValues: calculationBase(view.document.templateSnapshot, view.answers),
+        })
 
-      const updatedRecipient = await loadRecipientByToken(client, tokenHash)
-      return loadPublicSigningView(client, updatedRecipient)
+        if (
+          workflowStatus !== "awaiting_signatures" &&
+          workflowStatus !== "completed"
+        ) {
+          throw new DocumentSigningServiceError(
+            "Signing completed with an invalid workflow state.",
+            500
+          )
+        }
+
+        const updatedRecipient = await loadRecipientByToken(client, tokenHash)
+        return loadPublicSigningView(client, updatedRecipient)
+      })
     }
   )
+}
+
+/**
+ * Runs a save that works answers out from the answers it read, from a fresh
+ * read each time the database finds someone else changed them first, after
+ * a pause that spreads colliding writers out; the last conflict reaches the
+ * caller.
+ *
+ * @param attempt - The whole read, work-out and save.
+ * @returns What the save that went through returns.
+ */
+async function retryOnChangedAnswers<T>(attempt: () => Promise<T>): Promise<T> {
+  for (let tries = 1; ; tries += 1) {
+    try {
+      return await attempt()
+    } catch (error) {
+      if (tries === MAX_ATTEMPTS || !(error instanceof DocumentSigningServiceError) || error.message !== CHANGED_ANSWERS_MESSAGE) {
+        throw error
+      }
+
+      await waitBeforeRetry(tries)
+    }
+  }
 }
 
 async function requireMemberDocumentAccess(

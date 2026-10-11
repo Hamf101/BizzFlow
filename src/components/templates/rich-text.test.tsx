@@ -37,7 +37,7 @@ it("formats each list item on its own, and leaves plain text as plain as before"
     type: "bullet_list",
   })
 
-  expect(list).toContain('<li>Weekly <span class="doc-highlight" style="--doc-highlight:#f2cd5c;background-color:#f2cd5c">visit</span></li>')
-  expect(list).toContain("<li>Deep clean</li>")
+  expect(list).toContain('<span class="min-w-0">Weekly <span class="doc-highlight" style="--doc-highlight:#f2cd5c;background-color:#f2cd5c">visit</span></span>')
+  expect(list).toContain('<span class="min-w-0">Deep clean</span>')
   expect(draw({ alignment: "left", id: ID, text: "Pay now.", type: "paragraph" })).not.toContain("<span")
 })

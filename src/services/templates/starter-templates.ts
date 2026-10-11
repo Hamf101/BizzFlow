@@ -309,6 +309,8 @@ export async function seedStarterTemplatesForOrganization(
           .select("id")
           .eq("org_id", input.organizationId)
           .eq("title", starter.title)
+          // One in Trash is on its way out, so the starter comes back.
+          .is("trashed_at", null)
           // Titles are not unique; any one is enough to skip.
           .limit(1)
 

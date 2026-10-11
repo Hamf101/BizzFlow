@@ -8,6 +8,9 @@ export class DocumentSigningServiceError extends ServiceError {
   override readonly name = "DocumentSigningServiceError"
 }
 
+/** Said when answers changed between reading them and saving what was worked out from them. */
+export const CHANGED_ANSWERS_MESSAGE = "This document changed while you were saving. Try again."
+
 /**
  * Translates a Supabase or Postgres failure to the stable signing error contract.
  *
@@ -57,6 +60,11 @@ export function createDatabaseError(
       error.message ?? "Signing state changed before it could be saved.",
       409
     )
+  }
+
+  // The answers a formula was worked out from changed before the row lock.
+  if (error?.code === "40001") {
+    return new DocumentSigningServiceError(CHANGED_ANSWERS_MESSAGE, 409)
   }
 
   if (error?.code === "22023") {

@@ -48,7 +48,7 @@ export const FLOW_PLAYBOOKS = [
 
   "Quote or proposal.",
   "Order: the supplier's details (business name, business address, business number, contact); the customer's details, with a billing address when it may differ from where the work is done; quote number, date and 'Valid until'; a description of the work; the costs; what is not included and how changes are priced; optional extras; payment terms; start and finish dates; acceptance.",
-  "Costs are one table with a row per item and columns for item, quantity, unit price and amount, then tax on a row of its own and a total.",
+  "Costs are one table_field labelled 'Items' with blank rows and columns Item, Quantity (number), Unit price (money) and Amount (money, formula {Quantity} * {Unit price}, total true). Under it, money text_fields that work themselves out: 'Subtotal' is SUM({Items.Amount}); when tax applies, a required number field 'Tax rate' with suffix '%' that the business fills in, then 'Tax' is {Subtotal} * {Tax rate}%; and 'Total' is {Subtotal} + {Tax}, or {Subtotal} without tax. Never set the rate yourself.",
   "Always include a quote date and a 'Valid until' date field, both required. Set quote number, date and valid until in one row.",
   "Payment terms are fields: deposit, when the balance is due, how to pay, and what happens if payment is late. Never invent a late fee or interest rate.",
   "When the customer is a person rather than a business, add a paragraph before acceptance on their right to cancel: how long they have, how to cancel, and that work they ask to start sooner is paid for as far as it went, with a checkbox_field, not required, for asking the work to start within that time. Leave the period as 'Needs input: ...' when the user has not given it.",
@@ -61,7 +61,7 @@ export const FLOW_PLAYBOOKS = [
   "Service agreement.",
   "Shape: first the details of this deal as fillable fields, then the standing terms as headed clauses.",
   "Deal details: the provider and the customer, each with their address (multiline); the start date, which is also when the agreement takes effect, never a separate effective date; the services (multiline); fees, whether they include tax, when they are due, how to pay, and what happens if payment is late; the term; and governing law with the courts that hear disputes.",
-  "Clauses, in this order, each under a level 2 heading and in short plain sentences: Services; Fees and payment; Term and termination; Ownership of work; Confidentiality; Warranties; Limitation of liability; Disputes; General terms.",
+  "Clauses, in this order, each a section made with set_section and titled by its name alone, in short plain sentences: Services; Fees and payment; Term and termination; Ownership of work; Confidentiality; Warranties; Limitation of liability; Disputes; General terms. Number them with set_layout sectionNumbers 'clauses', and write each clause's sentences as a numbered_list, so they read 3.1, 3.2; a point that only details the one above it is set in a level, as (a), (b). The deal details come first, as a section of their own.",
   "Every clause uses only facts the deal details give, by their names, such as 'the start date'. Term and termination: either side may end it on the notice period, or at once when a breach is not put right within a period set as a field; payment, ownership and confidentiality outlast it.",
   "Ownership of work: say which intellectual property rights pass to the customer and when; anything the provider made before or outside the agreement stays theirs, and the customer gets a licence to use it as part of the work.",
   "Disputes: the parties first try to settle a dispute by talking, then by mediation, and only then in the courts named in the deal details.",
@@ -72,7 +72,7 @@ export const FLOW_PLAYBOOKS = [
 
   "Forms that ask about health.",
   "These parts are added to the document's own playbook, never instead of it: a consent and service agreement is still a service agreement, with its deal details, clauses and both signatures.",
-  "Ask only the health questions the service needs. An emergency contact is a name, their relationship to the person, and a phone number, under a label that says whose contact it is.",
+  "Ask only the health questions the service needs, in the plain words a clinician uses: 'Are you pregnant?', 'Current medications', never a softened phrase. An emergency contact is a name, their relationship to the person, and a phone number, under a label that says whose contact it is.",
   "Consent is one checkbox_field for each purpose, never checked by default, in plain words: what the person agrees to, and that they can withdraw it. Consent to treatment is separate from consent to keep or share their information.",
   "Never state or imply that the form, the business or BizFlow complies with HIPAA, GDPR or any other regulation.",
 ].join(" ")

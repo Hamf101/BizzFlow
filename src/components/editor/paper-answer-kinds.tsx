@@ -8,6 +8,7 @@ import { PageBreaks } from "@/components/editor/table-cells"
 import { cn } from "@/lib/utils"
 import type { ChoiceGridFieldBlock, TableFieldBlock } from "@/types/template"
 import { MAX_TABLE_FIELD_ROWS } from "@/types/template-answer-kinds"
+import { tableTotalRow } from "@/types/template-formula"
 
 // The printed edge of a checkbox, a signature's line, a boxed section, a
 // grid's rules and a table's cells. An answer box's edge is fainter, the
@@ -220,10 +221,19 @@ export function PaperTable({
   // was typed; saving leaves the wholly blank ones off.
   const write = (rowIndex: number, column: number, text: string): void =>
     onChange?.(rows.map((row, at) => (at === rowIndex ? row.map((cell, index) => (index === column ? text : cell)) : row)))
-  const cell = (rowIndex: number, column: number, text: string): ReactNode =>
-    fill ? (
+  // A phone's list repeats the table's cells; it names its rows on from the table's, so no two share a name.
+  const cell = (rowIndex: number, column: number, text: string, named = rowIndex): ReactNode =>
+    block.columns[column]?.formula !== undefined ? (
+      // A worked-out cell is never typed: it shows what its formula gives, and while built, the formula.
+      mode === "design" ? (
+        // One line, so a long formula never makes its row, or a thumbnail's, taller.
+        rowIndex === 0 ? <span className="block truncate text-muted-foreground">= {block.columns[column]?.formula}</span> : null
+      ) : (
+        <output aria-label={`${block.columns[column]?.label ?? ""}, row ${named + 1}`}>{text}</output>
+      )
+    ) : fill ? (
       <input
-        aria-label={`${block.columns[column]?.label ?? ""}, row ${rowIndex + 1}`}
+        aria-label={`${block.columns[column]?.label ?? ""}, row ${named + 1}`}
         className="w-full min-w-0 bg-transparent outline-none"
         inputMode={block.columns[column]?.format === "number" || block.columns[column]?.format === "money" ? "decimal" : undefined}
         maxLength={500}
@@ -235,6 +245,7 @@ export function PaperTable({
       <span className="whitespace-pre-wrap">{text}</span>
     )
   const canAdd = fill && block.addRows === true && rows.length < MAX_TABLE_FIELD_ROWS
+  const total = mode === "design" ? null : tableTotalRow(block, rows)
   // Columns share the width equally, as in print, so the widest need sets every column's.
   const fit = narrowBelow(block.columns.length * Math.max(...block.columns.map((column) => COLUMN_WIDTH[column.format ?? "text"])))
 
@@ -271,6 +282,17 @@ export function PaperTable({
             </Fragment>
           ))}
         </tbody>
+        {total ? (
+          <tfoot>
+            <tr className="font-bold">
+              {total.map((text, column) => (
+                <td key={column} style={{ border: RULE, padding: "0.25em 0.4em" }}>
+                  {text}
+                </td>
+              ))}
+            </tr>
+          </tfoot>
+        ) : null}
       </table>
       {/* Narrow: each row as its own list of the columns. */}
       <div className={fit.narrow} style={{ gap: "0.6em" }}>
@@ -281,12 +303,24 @@ export function PaperTable({
                 <span className="w-2/5 shrink-0 font-bold" style={{ fontSize: "0.9em" }}>
                   {block.columns[column]?.label}
                 </span>
-                <span className="min-w-0 flex-1">{cell(rowIndex + rows.length, column, text)}</span>
+                <span className="min-w-0 flex-1">{cell(rowIndex, column, text, rowIndex + rows.length)}</span>
               </div>
             ))}
           </div>
         ))}
       </div>
+      {total ? (
+        <div className={cn(fit.narrow, "font-bold")} role="group" aria-label="Total" style={{ border: RULE, marginTop: "0.6em", padding: "0.4em 0.6em" }}>
+          {block.columns.map((column, at) =>
+            column.total ? (
+              <div className="flex gap-[0.6em]" key={at}>
+                <span className="w-2/5 shrink-0">Total {column.label}</span>
+                <span className="min-w-0 flex-1">{total[at]}</span>
+              </div>
+            ) : null
+          )}
+        </div>
+      ) : null}
       {canAdd ? (
         <button
           className="mt-[0.4em] inline-flex items-center gap-[0.3em] text-[0.9em] text-muted-foreground hover:text-foreground"

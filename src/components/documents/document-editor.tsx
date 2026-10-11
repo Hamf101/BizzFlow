@@ -4,7 +4,6 @@ import { Download, FilePen, Files, History, MessageSquare, MoreHorizontal, Palet
 import { type ReactElement, useEffect, useMemo, useRef, useState } from "react"
 
 import type { DocumentContentInput } from "@/app/(editor)/documents/[documentId]/edit/actions"
-import { DocumentRecipientCollection } from "@/components/documents/document-recipient-collection"
 import { useFlowHandoff } from "@/components/flow/flow-handoff"
 import { DesignToolsContext } from "@/components/editor/design-tools"
 import { DESIGN_TOOLS } from "@/components/editor/design-tools-provided"
@@ -27,6 +26,7 @@ import {
   TemplateFlowPanel,
   PageSetupPanel,
   TemplateBrandingPanel,
+  DocumentRecipientCollection,
   SendToAnswerDialog,
   ShareDialog,
 } from "@/components/editor/lazy-panels"
@@ -566,8 +566,8 @@ export function DocumentEditor({
                 documentTitle={proposal ? proposal.candidateDraft.title : page.title}
                 fields={fillable && !proposal ? "fill" : "read"}
                 narrow={narrow}
-                onAnswerChange={(fieldKey, value) =>
-                  setAnswers((current) => applyVisibleTemplateFieldValue(page.content, current, fieldKey, value))
+                onAnswerChange={(fieldKey, value, settle) =>
+                  setAnswers((current) => applyVisibleTemplateFieldValue(page.content, current, fieldKey, value, settle))
                 }
                 overlay={room && !proposal ? <RoomLayer narrow={narrow} others={live.others} revision={page.content} room={room} /> : null}
                 textEditable={editable && !proposal}

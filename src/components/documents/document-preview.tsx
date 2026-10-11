@@ -110,8 +110,8 @@ export function DocumentPreview({
             documentTitle={document.title}
             fields="fill"
             narrow={narrow}
-            onAnswerChange={(fieldKey, value) =>
-              setAnswers((current) => applyVisibleTemplateFieldValue(content, current, fieldKey, value))
+            onAnswerChange={(fieldKey, value, settle) =>
+              setAnswers((current) => applyVisibleTemplateFieldValue(content, current, fieldKey, value, settle))
             }
             textEditable={false}
             zoom={zoom}

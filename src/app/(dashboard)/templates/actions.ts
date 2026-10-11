@@ -21,6 +21,7 @@ import {
   getDocumentTemplate,
   getDocumentTemplateVersion,
   publishDocumentTemplate,
+  purgeTrashedDocumentTemplate,
   MAX_BULK_TEMPLATES,
   type TemplateBulkResult,
   TemplateServiceError,
@@ -269,9 +270,38 @@ export async function duplicateTemplateAction(formData: FormData): Promise<void>
   })
 }
 
+/**
+ * Deletes a template in Trash for good, once its exact title is typed.
+ *
+ * @param formData - The template's id and the typed title.
+ * @returns Never returns; redirects back to Trash with how it went.
+ */
+export async function purgeTemplateAction(formData: FormData): Promise<void> {
+  const templateId = getFormString(formData, "templateId")
+
+  await runFormAction({
+    event: "template_purge_action",
+    // Someone answered it since it went to Trash: say so, rather than "refresh".
+    failure: (error) => (error instanceof TemplateServiceError && error.statusCode === 409 ? "template_has_answers" : undefined),
+    log: { templateId },
+    path: "/templates?status=trash",
+    success: "template_deleted",
+    run: async () => {
+      const { actor } = await loadTemplateActionContext()
+
+      await purgeTrashedDocumentTemplate({
+        ...actor,
+        confirmationTitle: getFormString(formData, "confirmationTitle"),
+        templateId: requireFormId(templateId, "Template id"),
+      })
+      revalidatePath("/templates")
+    },
+  })
+}
+
 const templateChangeSchema = z.object({
   category: z.string().nullable().optional(),
-  change: z.enum(["archive", "restore", "duplicate", "category"]),
+  change: z.enum(["archive", "restore", "trash", "duplicate", "category"]),
   templateIds: z.array(z.string().uuid()).min(1).max(MAX_BULK_TEMPLATES),
 })
 

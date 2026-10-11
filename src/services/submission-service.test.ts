@@ -27,6 +27,7 @@ import {
 import { PostgrestReadQuery } from "@/services/postgrest-fake.test-support"
 import { parseTemplateContent, type TemplateContent } from "@/types/template"
 import { createStructuredAnswerContent } from "@/types/template-answer.test-support"
+import { createQuoteContent } from "@/types/template-calculation.test-support"
 
 type FakeRow = Record<string, unknown>
 type FakeTables = Record<string, FakeRow[]>
@@ -1388,6 +1389,32 @@ describe("suggested changes", () => {
     )
   })
 
+  it("suggests the answers a person gives, never a worked-out one, and reads every worked-out answer afresh once one is accepted", async () => {
+    const quote = createQuoteContent()
+    const stored = { items: [["Desk", "2", "10.00", "20.00"]], subtotal: "20.00", vat: "4.00", total: "24.00" }
+    const client = createClient({
+      submissions: [createAssignedSubmissionRow({ assigned_to: MANAGER_ID, template_snapshot: quote, values: stored })],
+      submission_reviewers: [createReviewerRow(MANAGER_ID)]
+    })
+    client.rpc.mockResolvedValue({ data: 1, error: null })
+
+    await suggest(MANAGER_ID, { items: [["Desk", "3", "10.00", ""]], total: "1" }, client)
+    expect(client.rpc).toHaveBeenCalledWith(
+      "suggest_submission_answers",
+      expect.objectContaining({ target_values: { items: [["Desk", "3", "10.00", "30.00"]] } })
+    )
+
+    // The database changes only the accepted answer; the totals follow it as it is read.
+    client.rpc.mockResolvedValue({ data: createAssignedSubmissionRow({ template_snapshot: quote, values: { ...stored, items: [["Desk", "3", "10.00", "30.00"]] } }), error: null })
+
+    const accepted = await decideSubmissionSuggestion(
+      { accept: true, actorUserId: STAFF_ID, organizationId: ORGANIZATION_ID, submissionId: SUBMISSION_ID, suggestionId: "90000000-0000-4000-8000-000000000001" },
+      { client: client as never }
+    )
+
+    expect(accepted.values).toMatchObject({ subtotal: "30.00", vat: "6.00", total: "36.00" })
+  })
+
   it("turns away staff, outside reviewers, and a form with nothing changed before the database is asked", async () => {
     const client = reviewing()
 
@@ -1509,6 +1536,26 @@ describe("internal submission file workflow", () => {
     expect(result.file).not.toHaveProperty("storageKey")
     expect(createSignedSubmissionUploadUrl).toHaveBeenCalledOnce()
     expect(client.rpc).toHaveBeenCalledTimes(2)
+  })
+
+  it("takes no file for a field its rule hides, as a public form does not", async () => {
+    const [, notes, evidence] = createSnapshot().blocks
+    const snapshot = parseTemplateContent({
+      schemaVersion: 3, branding: {}, layout: {}, sections: [], fieldGroups: [], blockRules: [],
+      blocks: [notes, { ...evidence, visibleWhen: { sourceBlockId: notes?.id, operator: "answered" } }],
+    })
+    const upload = (values: Record<string, unknown>) => {
+      const client = createClient({ submissions: [createSubmissionRow({ template_snapshot: snapshot, values })] })
+
+      client.rpc.mockResolvedValue({ data: createFileRow({ original_filename: "Evidence.pdf", safe_filename: "Evidence.pdf", storage_key: buildExpectedStorageKey(FILE_ID, "Evidence.pdf") }), error: null })
+      return allocateInternalSubmissionFile(
+        { actorUserId: STAFF_ID, organizationId: ORGANIZATION_ID, submissionId: SUBMISSION_ID, expectedRevision: 1, fieldKey: "evidence", originalFilename: "Evidence.pdf", contentType: "application/pdf", byteSize: 1_024, checksumSha256: CHECKSUM },
+        { client: client as never, createId: () => FILE_ID, validateSubmissionUploadRequest: vi.fn(), now: () => new Date("2026-07-18T18:00:00.000Z"), createSignedSubmissionUploadUrl: vi.fn(async () => ({ uploadUrl: "https://r2.example/upload", storageKey: buildExpectedStorageKey(FILE_ID, "Evidence.pdf"), expiresInSeconds: 300 })) as never }
+      )
+    }
+
+    await expect(upload({})).rejects.toMatchObject({ statusCode: 400 })
+    await expect(upload({ notes: "See attached" })).resolves.toMatchObject({ uploadUrl: "https://r2.example/upload" })
   })
 
   it("reuses exact pending metadata without allocating a second row", async () => {

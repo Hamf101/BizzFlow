@@ -59,7 +59,7 @@ it("applies dropdown options as they are typed, and keeps one a rule needs until
   // Naming it again renames it, and the rule follows.
   typeInto(option(1), "Studio flat")
   expect(saved("dropdown_field").options).toEqual(["Studio flat", "One bedroom"])
-  expect(saved("text_field").visibleWhen?.value).toBe("Studio flat")
+  expect(saved("text_field").visibleWhen).toMatchObject({ value: "Studio flat" })
   expect(document.querySelector('[role="alert"]')).toBeNull()
 })
 

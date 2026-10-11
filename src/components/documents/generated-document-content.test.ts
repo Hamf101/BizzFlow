@@ -129,8 +129,12 @@ describe("GeneratedDocumentContent", () => {
 })
 
 function createStructuredContent(): TemplateContentV3 {
+  const blank = createBlankTemplateContent()
+
   return {
-    ...createBlankTemplateContent(),
+    ...blank,
+    // At the preset margins, so a layout's marginPreset is what decides them.
+    layout: { ...blank.layout, margins: undefined },
     blocks: [
       {
         id: CONTROLLER_ID,

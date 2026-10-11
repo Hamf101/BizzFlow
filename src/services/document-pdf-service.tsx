@@ -31,7 +31,7 @@ export async function renderGeneratedDocumentPdf(
   const startedAt = performance.now()
 
   try {
-    const normalizedInput = normalizePdfInput(input)
+    const normalizedInput = normalizePdfInput(input, { fillable: options.fillable })
     const pages = createPdfPagePlans(normalizedInput)
     const buffer = await renderPdfLibDocument(normalizedInput, pages, options)
 

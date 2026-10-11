@@ -190,7 +190,16 @@ export function PaperField({
   switch (block.type) {
     case "text_field":
       height = block.multiline ? BOX_HEIGHT.lines : BOX_HEIGHT.line
-      answer = fill ? (
+      // A worked-out answer is never typed: it shows what its formula gives, and while built, the formula.
+      answer = block.formula ? (
+        mode === "design" ? (
+          <span className="block truncate text-muted-foreground">= {block.formula}</span>
+        ) : (
+          <output aria-label={block.label} id={block.id}>
+            {text || placeholder("Calculated")}
+          </output>
+        )
+      ) : fill ? (
         block.multiline ? (
           <textarea
             aria-label={block.label}
@@ -410,14 +419,16 @@ export function PaperField({
     ) : (
       // The label, and beside it the line its answer is written on.
       <div className="flex flex-col" data-paper-line="">
-        {/* A wrapped label's last line and the answer sit together on the line. */}
-        <div className="flex items-end" style={{ gap: "0.6em", lineHeight: 1.5 }}>
-          <span className="max-w-[45%] shrink-0" style={{ paddingBottom: "0.27em" }}>
+        {/* A label within its 45% share sits beside the line; a longer one
+            leaves the answer too little room, so the line wraps under it at
+            full width, as the PDF stacks it. */}
+        <div className="flex flex-wrap items-end" style={{ columnGap: "0.6em", lineHeight: 1.5 }}>
+          <span className="max-w-full" style={{ paddingBottom: "0.27em" }}>
             {block.label}
             {star}
           </span>
           <div
-            className={cn("min-w-0 flex-1 transition-colors focus-within:border-ring focus-within:shadow-[0_0.07em_0_0_var(--color-ring)]", fill && "cursor-text")}
+            className={cn("min-w-[calc(55%-0.6em)] flex-1 transition-colors focus-within:border-ring focus-within:shadow-[0_0.07em_0_0_var(--color-ring)]", fill && "cursor-text")}
             style={{ borderBottom: RULE, paddingBottom: "0.2em" }}
           >
             {answer}

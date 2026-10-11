@@ -433,7 +433,7 @@ export function evaluateTemplateQuality(
       code: "collects_health_information",
       severity: "warning",
       message:
-        "This form asks for health information. BizFlow is not set up for HIPAA-covered records, so check the rules that apply to you before using it.",
+        "This form asks about health. Ask it plainly; before you use it, check the privacy rules that apply to you, as BizFlow is not set up for HIPAA-covered records.",
       affectedBlockIds: healthFieldIds
     })
   }

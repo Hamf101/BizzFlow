@@ -901,6 +901,21 @@ export type AdminDatabase = {
         }
         Returns: number
       }
+      purge_trashed_document_template: {
+        Args: {
+          target_org_id: string
+          target_template_id: string
+          target_actor_user_id: string
+          target_confirmation_title: string
+        }
+        Returns: undefined
+      }
+      purge_due_trashed_document_templates: {
+        Args: {
+          target_limit: number
+        }
+        Returns: number
+      }
       lease_resource_purge_objects: {
         Args: {
           target_limit: number
@@ -1026,6 +1041,7 @@ export type AdminDatabase = {
           target_values: Record<string, unknown>
           target_signature_data: Record<string, unknown> | null
           target_initials_data: Record<string, unknown> | null
+          target_expected_values?: Record<string, unknown>
         }
         Returns: string
       }
@@ -1034,6 +1050,7 @@ export type AdminDatabase = {
           target_org_id: string
           target_document_id: string
           target_values: Record<string, unknown>
+          target_expected_values?: Record<string, unknown>
         }
         Returns: Record<string, unknown>
       }

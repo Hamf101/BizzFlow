@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import { createBlankTemplateContent } from "@/types/template"
 
-import { formatFieldValue, normalizePdfInput } from "./shared"
+import { fitMarginWords, formatFieldValue, normalizePdfInput } from "./shared"
 import type { PdfFieldBlock } from "./types"
 
 describe("printed answers", () => {
@@ -58,5 +58,20 @@ describe("drawn boxes", () => {
     })
 
     expect(answers).toEqual({ a: drawing("Rmlyc3Q="), bb: drawing("U2U="), ccc: drawing("U2VuZGVy") })
+  })
+})
+
+describe("header and footer words", () => {
+  it("lets a long title use the room a short page count leaves, and keeps a centred word clear of both sides", () => {
+    // A 400-point line: the title would need 600, the page count 60.
+    const titled = fitMarginWords({ left: 600, right: 60 }, 400, 12)
+
+    expect(titled).toEqual({ left: 328, right: 60 })
+    // Both long: they share the line evenly and never meet.
+    expect(fitMarginWords({ left: 600, right: 300 }, 400, 12)).toEqual({ left: 194, right: 194 })
+    // A centred word takes up to a third and stays centred; the sides share what is left.
+    expect(fitMarginWords({ center: 50, left: 600, right: 20 }, 400, 12)).toEqual({ center: 50, left: 163, right: 20 })
+    expect(fitMarginWords({ center: 900 }, 300, 12)).toEqual({ center: 100 })
+    expect(fitMarginWords({}, 400, 12)).toEqual({})
   })
 })

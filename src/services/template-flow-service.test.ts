@@ -325,6 +325,40 @@ describe("template Flow service", () => {
     }
   })
 
+  it("shows a paragraph by several answers, keeps a rule a restated block leaves out, and takes one off when told", async () => {
+    const content = createContent()
+    content.blocks.push(
+      { id: FIELD_ID, type: "text_field", fieldKey: "income", label: "Income", required: false, helpText: null, placeholder: null, multiline: false, format: "money" },
+      { id: COMPANION_ID, type: "text_field", fieldKey: "employer", label: "Employer", required: false, helpText: null, placeholder: null, multiline: false, visibleWhen: { sourceBlockId: FIELD_ID, operator: "answered" } }
+    )
+    const rule = { match: "any", conditions: [{ sourceBlockId: FIELD_ID, operator: "greater_than", value: "50000" }, { sourceBlockId: COMPANION_ID, operator: "not_answered" }] }
+    const restate = (visibleWhen?: null): TestFlowOperation => ({
+      type: "update_block",
+      summary: "Reworded the employer question",
+      payload: { blockId: COMPANION_ID, block: { type: "text_field", fieldKey: "employer", label: "Who employs you?", required: false, helpText: null, placeholder: null, multiline: false, ...(visibleWhen === null ? { visibleWhen } : {}) } },
+    })
+    const { run } = runFlow(content, [
+      { type: "add_block", summary: "Added a note for higher earners", payload: { afterBlockId: COMPANION_ID, block: { type: "paragraph", text: "Read the higher-rate guide.", alignment: "left", visibleWhen: rule } } },
+      restate(),
+    ])
+    const blocks = (await run).proposal?.candidateDraft.content.blocks ?? []
+
+    expect(blocks.at(-1)).toMatchObject({ type: "paragraph", visibleWhen: rule })
+    expect(blocks.find((block) => block.id === COMPANION_ID)).toMatchObject({ label: "Who employs you?", visibleWhen: { operator: "answered" } })
+
+    const removed = await runFlow(content, [restate(null)]).run
+
+    expect(removed.proposal?.candidateDraft.content.blocks.find((block) => block.id === COMPANION_ID)).not.toHaveProperty("visibleWhen")
+ 
+    // A rule Flow writes may lose a test whose source Flow then removes on request.
+    const { run: dropped } = runFlow(content, [
+      { type: "add_block", summary: "Added a note for higher earners", payload: { afterBlockId: COMPANION_ID, block: { type: "paragraph", text: "Read the higher-rate guide.", alignment: "left", visibleWhen: rule } } },
+      { type: "remove_block", summary: "Removed the employer question", payload: { blockId: COMPANION_ID } },
+    ])
+
+    expect((await dropped).proposal?.candidateDraft.content.blocks.at(-1)).toMatchObject({ visibleWhen: { sourceBlockId: FIELD_ID, operator: "greater_than" } })
+  })
+
   it("keeps appended free-form blocks in provider operation order", async () => {
     const aiProvider = createTestAiProvider([
       flowProviderResult({
@@ -1281,6 +1315,93 @@ describe("Flow building with the blocks it adds", () => {
     ])
   })
 
+  it("works out a quote: amounts by formula with a total, then the sums that follow; a formula naming a later answer is refused, and why", async () => {
+    const add = (summary: string, block: Record<string, unknown>): TestFlowOperation => ({ type: "add_block", summary, payload: { afterBlockId: null, block } })
+    const money = (fieldKey: string, label: string, formula: string): TestFlowOperation =>
+      add(`Worked out ${label}`, { type: "text_field", fieldKey, label, required: false, helpText: null, placeholder: null, multiline: false, format: "money", prefix: "£", formula })
+    const costs = add("Added the costs", {
+      type: "table_field",
+      fieldKey: "costs",
+      label: "Costs",
+      required: false,
+      helpText: null,
+      columns: [
+        { label: "Item" },
+        { label: "Quantity", format: "number" },
+        { label: "Unit price", format: "money" },
+        { label: "Amount", format: "money", formula: "{Quantity} * {Unit price}", total: true },
+      ],
+      rows: 5,
+    })
+    const { aiProvider, run } = runFlow(createContent(), [
+      costs,
+      money("subtotal", "Subtotal", "SUM({Costs.Amount})"),
+      add("Asked the tax rate", { type: "text_field", fieldKey: "tax_rate", label: "Tax rate", required: true, helpText: null, placeholder: null, multiline: false, format: "number", suffix: "%" }),
+      money("tax", "Tax", "{Subtotal} * {Tax rate}%"),
+      money("total", "Total", "{Subtotal} + {Tax}"),
+    ])
+    const blocks = (await run).proposal?.candidateDraft.content.blocks ?? []
+    const instruction = String(readProviderRequests(aiProvider)[0]?.systemInstruction)
+
+    expect(blocks.find((block) => block.type === "table_field")).toMatchObject({ columns: [{}, {}, {}, { formula: "{Quantity} * {Unit price}", total: true }] })
+    expect(blocks.filter((block) => block.type === "text_field" && block.formula).map((block) => block.type === "text_field" && block.formula)).toEqual([
+      "SUM({Costs.Amount})",
+      "{Subtotal} * {Tax rate}%",
+      "{Subtotal} + {Tax}",
+    ])
+    for (const word of ['"formula"', '"total"', "SUM("]) {
+      expect(instruction).toContain(word)
+    }
+
+    // The total before the subtotal it adds up: refused with the reason, for the one correction.
+    const early = runFlow(createContent(), [money("total", "Total", "{Subtotal} + {Tax}")])
+
+    await expect(early.run).rejects.toMatchObject({ statusCode: 502 })
+    expect(String(readProviderRequests(early.aiProvider)[1]?.input)).toMatch(/formula: Nothing above is called \{Subtotal\}/)
+  })
+
+  it("numbers an agreement's clauses: sections 1, 2 with their lists going on 1.1, and sub-clauses a level in", async () => {
+    const { aiProvider, run } = runFlow(createContent(), [
+      { type: "set_layout", summary: "Numbered the clauses", payload: { sectionNumbers: "clauses" } },
+      { type: "add_block", summary: "Added the services clause", payload: { afterBlockId: null, block: { type: "numbered_list", items: ["The provider does the work.", "On time.", "With care."], levels: [0, 1, 1] } } },
+    ])
+    const draft = (await run).proposal?.candidateDraft.content
+    const instruction = String(readProviderRequests(aiProvider)[0]?.systemInstruction)
+
+    expect(draft && "layout" in draft ? draft.layout.sectionNumbers : null).toBe("clauses")
+    expect(draft?.blocks.at(-1)).toMatchObject({ type: "numbered_list", levels: [0, 1, 1] })
+    expect(instruction).toContain('"levels"')
+    expect(instruction).toContain("letters|numbers|clauses|none")
+
+    // Rewording the clauses keeps their sub-clauses; a list of another length starts flat unless Flow sets levels.
+    const content = createContent()
+    content.blocks.push({ id: FIELD_ID, type: "numbered_list", items: ["The provider does the work.", "On time.", "With care."], levels: [0, 1, 1] })
+    const reword = (items: string[]) => runFlow(content, [{ type: "update_block", summary: "Reworded the services clause", payload: { blockId: FIELD_ID, block: { type: "numbered_list", items } } }]).run
+    const kept = (await reword(["The provider does the work.", "Promptly.", "Carefully."])).proposal?.candidateDraft.content.blocks.at(-1)
+    const regrown = (await reword(["The provider does the work.", "Promptly."])).proposal?.candidateDraft.content.blocks.at(-1)
+
+    expect(kept).toMatchObject({ items: ["The provider does the work.", "Promptly.", "Carefully."], levels: [0, 1, 1] })
+    expect(regrown).not.toHaveProperty("levels")
+  })
+
+  it("sets margins by name or side by side, keeps the sides it does not name, and gives a style its own", async () => {
+    const layoutOf = async (...operations: TestFlowOperation[]) => {
+      const content = (await runFlow(createContent(), operations).run).proposal?.candidateDraft.content
+
+      return content && "layout" in content ? content.layout : null
+    }
+    const margins = (payload: Record<string, unknown>): TestFlowOperation => ({ type: "set_layout", summary: "Set the margins", payload })
+
+    expect((await layoutOf(margins({ margins: "wide" })))?.margins).toEqual({ top: 72, right: 144, bottom: 72, left: 144 })
+    expect((await layoutOf(margins({ margins: "narrow" }), margins({ margins: { left: 90 } })))?.margins).toEqual({ top: 36, right: 36, bottom: 36, left: 90 })
+    expect((await layoutOf(margins({ style: "official" })))?.margins).toEqual({ top: 36, right: 36, bottom: 36, left: 36 })
+
+    const told = runFlow(createContent(), [margins({ margins: "normal" })])
+
+    await told.run
+    expect(String(readProviderRequests(told.aiProvider)[0]?.systemInstruction)).toContain('"margins":"narrow|normal|wide"')
+  })
+
   it("tells the model which operation failed and why, so its one correction lands", async () => {
     const add = { type: "add_block", summary: "Added a note", payload: { ref: "new:1", afterBlockId: null, block: { type: "paragraph", text: "A note.", alignment: "left" } } }
     const { aiProvider, run } = runFlow(createContent(), [add, { type: "move_block", summary: "Moved it up", payload: { blockId: "new:2", afterBlockId: null } }], [add])
@@ -1303,6 +1424,11 @@ describe("Flow building with the blocks it adds", () => {
       [
         /operations\[0\] add_block: .*visibleWhen/,
         [{ type: "add_block", summary: "Asked the pet's name", payload: { afterBlockId: PARAGRAPH_ID, block: { type: "text_field", fieldKey: "name", label: "Pet's name", required: false, helpText: null, placeholder: null, multiline: false, visibleWhen: { sourceBlockId: FIELD_ID, operator: "equals", value: true } } } }],
+      ],
+      // Two tests, one naming a field below: dropping that one would quietly weaken the rule.
+      [
+        /operations\[0\] add_block: .*visibleWhen/,
+        [{ type: "add_block", summary: "Asked the vet's name", payload: { afterBlockId: FIELD_ID, block: { type: "text_field", fieldKey: "vet", label: "Vet's name", required: false, helpText: null, placeholder: null, multiline: false, visibleWhen: { match: "all", conditions: [{ sourceBlockId: FIELD_ID, operator: "equals", value: true }, { sourceBlockId: COMPANION_ID, operator: "answered" }] } } } }],
       ],
       // A move that puts a field's source after it: the field would show for everyone.
       [/operations\[0\] move_block: .*conditional field/, [{ type: "move_block", summary: "Moved the question down", payload: { blockId: FIELD_ID, afterBlockId: COMPANION_ID } }]],
@@ -1738,9 +1864,7 @@ function readOtherCompanions(
     ): block is Extract<TemplateBlock, { type: "text_field" }> =>
       block.type === "text_field" &&
       block.required &&
-      block.visibleWhen?.sourceBlockId === dropdownId &&
-      block.visibleWhen.operator === "equals" &&
-      block.visibleWhen.value === "Other"
+      JSON.stringify(block.visibleWhen) === JSON.stringify({ sourceBlockId: dropdownId, operator: "equals", value: "Other" })
   )
 }
 

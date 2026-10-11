@@ -64,6 +64,8 @@ type TemplateListFilters = {
   organizationId: string
   query: string | null
   statuses: readonly DocumentTemplateStatus[] | null
+  /** Only the templates in Trash, rather than none of them. */
+  trash: boolean
 }
 
 // Filters go through a minimal view of the query builder: relating
@@ -76,6 +78,7 @@ type TemplateFilterQuery = {
   ilike(column: string, pattern: string): TemplateFilterQuery
   in(column: string, values: readonly string[]): TemplateFilterQuery
   is(column: string, value: null): TemplateFilterQuery
+  not(column: string, operator: "is", value: null): TemplateFilterQuery
 }
 
 /**
@@ -127,13 +130,23 @@ export async function listTemplatePage(
         organizationId: input.organizationId,
         query: TEMPLATE_LIST_INPUT.search(input.query),
         statuses: normalizeTemplateStatusFilter(input.statuses),
+        trash: input.trash === true,
       }
       const from = (page - 1) * pageSize
+
+      // What was published holds nothing in Trash; only those who edit a template see it there.
+      if (filters.trash && templateRelation(filters) !== "document_templates") {
+        return { page, pageSize, templates: [], total: 0 }
+      }
+
       const { rows, total } = await readCountedPage(
         await filterVisibleTemplates(
           client
             .from(templateRelation(filters))
-            .select(TEMPLATE_SUMMARY_COLUMNS, { count: "exact" }),
+            .select(
+              templateRelation(filters) === "document_templates" ? `${TEMPLATE_SUMMARY_COLUMNS},trashed_at` : TEMPLATE_SUMMARY_COLUMNS,
+              { count: "exact" }
+            ),
           filters
         )
           // The id breaks ties, so a page boundary never repeats or skips a
@@ -276,6 +289,11 @@ function filterVisibleTemplates<TQuery>(
   )
 
   filtered = onlyVisibleTemplates(filtered, filters, filters.canManage)
+
+  // Only working copies can be in Trash; the published view never holds one.
+  if (templateRelation(filters) === "document_templates") {
+    filtered = filters.trash ? filtered.not("trashed_at", "is", null) : filtered.is("trashed_at", null)
+  }
 
   if (filters.statuses !== null) {
     filtered = filtered.in("status", filters.statuses)

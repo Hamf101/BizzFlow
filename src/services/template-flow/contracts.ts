@@ -22,6 +22,7 @@ import {
   templateContentSchema,
   templateContentV3Schema,
   templateFieldGroupSchema,
+  templateFieldVisibilitySchema,
   templateLayoutSchema,
   textRunSchema,
   textFieldBlockObjectSchema,
@@ -97,50 +98,53 @@ export const flowRequestSchema = z
 
 const generatedRunSchema = textRunSchema.pick({ bold: true, italic: true, text: true, underline: true }).strict()
 
+// A rule as Flow writes it; null takes a block's rule off.
+const FLOW_VISIBLE_WHEN = { visibleWhen: templateFieldVisibilitySchema.nullable().optional() }
+
 const generatedBlockSchema = z.discriminatedUnion("type", [
   // Flow may make words bold, italic or underlined; fonts, sizes and colours stay the editor's.
-  headingBlockObjectSchema.omit({ id: true }).extend({ runs: z.array(generatedRunSchema).max(200).optional() }).strict(),
-  paragraphBlockObjectSchema.omit({ id: true }).extend({ runs: z.array(generatedRunSchema).max(200).optional() }).strict(),
-  bulletListBlockObjectSchema.omit({ id: true, itemRuns: true }),
-  numberedListBlockObjectSchema.omit({ id: true, itemRuns: true }),
-  tableBlockSchema.omit({ id: true }),
+  headingBlockObjectSchema.omit({ id: true }).extend({ runs: z.array(generatedRunSchema).max(200).optional(), ...FLOW_VISIBLE_WHEN }).strict(),
+  paragraphBlockObjectSchema.omit({ id: true }).extend({ runs: z.array(generatedRunSchema).max(200).optional(), ...FLOW_VISIBLE_WHEN }).strict(),
+  bulletListBlockObjectSchema.omit({ id: true, itemRuns: true }).extend(FLOW_VISIBLE_WHEN),
+  numberedListBlockObjectSchema.omit({ id: true, itemRuns: true }).extend(FLOW_VISIBLE_WHEN),
+  tableBlockSchema.omit({ id: true }).extend(FLOW_VISIBLE_WHEN),
   dividerBlockSchema.omit({ id: true }),
   textFieldBlockObjectSchema
     .omit({ id: true, fieldKey: true })
-    .extend({ fieldKey: generatedFieldKeySchema })
+    .extend({ fieldKey: generatedFieldKeySchema, ...FLOW_VISIBLE_WHEN })
     .strict(),
   dateFieldBlockSchema
     .omit({ id: true, fieldKey: true })
-    .extend({ fieldKey: generatedFieldKeySchema })
+    .extend({ fieldKey: generatedFieldKeySchema, ...FLOW_VISIBLE_WHEN })
     .strict(),
   checkboxFieldBlockSchema
     .omit({ id: true, fieldKey: true })
-    .extend({ fieldKey: generatedFieldKeySchema })
+    .extend({ fieldKey: generatedFieldKeySchema, ...FLOW_VISIBLE_WHEN })
     .strict(),
   dropdownFieldBlockSchema
     .omit({ id: true, fieldKey: true })
     // The question its "Other" answer asks; it names the field Flow adds for it.
-    .extend({ fieldKey: generatedFieldKeySchema, otherLabel: z.string().trim().min(1).max(160).optional() })
+    .extend({ fieldKey: generatedFieldKeySchema, otherLabel: z.string().trim().min(1).max(160).optional(), ...FLOW_VISIBLE_WHEN })
     .strict(),
   choiceGridFieldBlockSchema
     .omit({ id: true, fieldKey: true })
-    .extend({ fieldKey: generatedFieldKeySchema })
+    .extend({ fieldKey: generatedFieldKeySchema, ...FLOW_VISIBLE_WHEN })
     .strict(),
   tableFieldBlockSchema
     .omit({ id: true, fieldKey: true })
-    .extend({ fieldKey: generatedFieldKeySchema })
+    .extend({ fieldKey: generatedFieldKeySchema, ...FLOW_VISIBLE_WHEN })
     .strict(),
   initialsFieldBlockSchema
     .omit({ id: true, fieldKey: true })
-    .extend({ fieldKey: generatedFieldKeySchema })
+    .extend({ fieldKey: generatedFieldKeySchema, ...FLOW_VISIBLE_WHEN })
     .strict(),
   signatureFieldBlockSchema
     .omit({ id: true, fieldKey: true })
-    .extend({ fieldKey: generatedFieldKeySchema })
+    .extend({ fieldKey: generatedFieldKeySchema, ...FLOW_VISIBLE_WHEN })
     .strict(),
   fileFieldBlockSchema
     .omit({ id: true, fieldKey: true })
-    .extend({ fieldKey: generatedFieldKeySchema })
+    .extend({ fieldKey: generatedFieldKeySchema, ...FLOW_VISIBLE_WHEN })
     .strict()
 ])
 
@@ -277,13 +281,28 @@ const flowWireOperationSchema = z.discriminatedUnion("type", [
           style: z.enum(Object.keys(DOCUMENT_STYLES) as [DocumentStyle, ...DocumentStyle[]]).optional(),
           pageSize: templateLayoutSchema.shape.pageSize.unwrap().optional(),
           orientation: templateLayoutSchema.shape.orientation.unwrap().optional(),
+          // Kept so proposals already made still rebuild; Flow now sets margins.
           marginPreset: templateLayoutSchema.shape.marginPreset.unwrap().optional(),
+          // A named size, or points for the sides that change.
+          margins: z
+            .union([
+              z.enum(["narrow", "normal", "wide"]),
+              z
+                .object({
+                  top: z.number().min(0).max(144).optional(),
+                  right: z.number().min(0).max(144).optional(),
+                  bottom: z.number().min(0).max(144).optional(),
+                  left: z.number().min(0).max(144).optional(),
+                })
+                .strict(),
+            ])
+            .optional(),
           lineSpacing: templateLayoutSchema.shape.lineSpacing,
           paragraphSpacing: templateLayoutSchema.shape.paragraphSpacing,
           fieldStyle: templateLayoutSchema.shape.fieldStyle,
           sectionStyle: templateLayoutSchema.shape.sectionStyle,
           // "none" takes numbering away, where absent leaves it as it is.
-          sectionNumbers: z.enum(["letters", "numbers", "none"]).optional(),
+          sectionNumbers: z.enum(["letters", "numbers", "clauses", "none"]).optional(),
           headerText: templateLayoutSchema.shape.headerText,
           footerText: templateLayoutSchema.shape.footerText,
           headerPolicy: templateLayoutSchema.shape.headerPolicy.unwrap().optional(),

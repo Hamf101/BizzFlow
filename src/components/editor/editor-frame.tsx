@@ -257,16 +257,19 @@ export function EditorFrame({
       </header>
       {/* An open panel takes its own column on a laptop, so it never covers the
           page; Fit follows because the scroll area's width changes. */}
+      {/* A phone has no room to float a notice over what is being typed, so it
+          takes a line of its own above the page. */}
+      {narrow && banner ? <div className="flex justify-center px-3 py-2">{banner}</div> : null}
       <div className="group/stage relative min-h-0 flex-1">
         {/* The page scrolls under the toolbar, with any notice just below it. */}
-        {(toolbar && !narrow) || banner ? (
+        {!narrow && (toolbar || banner) ? (
           <div
             className={cn(
               "pointer-events-none absolute inset-x-0 top-3 z-30 flex flex-col items-center gap-2 px-4",
               !narrow && "group-has-[[data-slot=editor-panel]:not([hidden])]/stage:right-[23.5rem]"
             )}
           >
-            {narrow ? null : toolbar}
+            {toolbar}
             {banner}
           </div>
         ) : null}

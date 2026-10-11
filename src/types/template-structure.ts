@@ -1,4 +1,13 @@
-import { type TemplateBlock, type TemplateContentV3, type TemplateFieldGroup, type TemplateSection } from "@/types/template"
+import { formulaProblem, hasFormulas, renameInFormula } from "@/types/template-formula"
+import {
+  type TemplateBlock,
+  type TemplateContentV3,
+  type TemplateFieldGroup,
+  type TemplateSection,
+  visibilityConditionProblem,
+  visibilityConditions,
+  visibilityRule
+} from "@/types/template"
 import { isPinnedBlock, MAX_ROW_COLUMNS, MAX_TEMPLATE_BLOCK_COUNT, ruleHasEffect } from "@/types/template-limits"
 
 type TemplateFieldBlock = Extract<TemplateBlock, { fieldKey: string }>
@@ -37,13 +46,15 @@ export type TemplateDropdownOptionEditResult =
       dependentBlockIds: readonly string[]
     }>
 
-/** Stable reason code returned when a structural edit would break visibility. */
+/** Stable reason code returned when a structural edit would break visibility or a formula. */
 export type TemplateVisibilityStructureEditErrorCode =
   | "block_not_found"
   | "visibility_source_in_use"
   | "visibility_order_conflict"
+  | "formula_source_in_use"
+  | "formula_order_conflict"
 
-/** Validation result for a delete or move that can affect visibility rules. */
+/** Validation result for a delete or move that can affect visibility rules or formulas. */
 export type TemplateVisibilityStructureEditResult =
   | Readonly<{
       success: true
@@ -196,12 +207,12 @@ export function createUniqueTemplateFieldKey(
 }
 
 /**
- * Validates deleting a block without orphaning conditional fields.
+ * Validates deleting a block without orphaning conditional fields or formulas.
  *
  * @param blocks - Current canonical block order.
  * @param blockId - Block proposed for deletion.
- * @returns Success when no field uses the block as a visibility source, or an
- * actionable refusal containing every affected field id.
+ * @returns Success when no field uses the block as a visibility source and no
+ * formula names it, or an actionable refusal containing every affected field id.
  */
 export function evaluateTemplateBlockDeletion(
   blocks: readonly TemplateBlock[],
@@ -219,14 +230,16 @@ export function evaluateTemplateBlockDeletion(
   }
 
   const dependents = findTemplateVisibilityDependents(blocks, blockId)
-
-  if (dependents.length === 0) {
-    return { success: true }
-  }
-
   const sourceLabel = isTemplateFieldBlock(block)
     ? `“${block.label}”`
     : "This block"
+
+  if (dependents.length === 0) {
+    const broken = findBrokenFormulas(blocks, blocks.filter((candidate: TemplateBlock): boolean => candidate.id !== blockId))
+
+    return broken.length === 0 ? { success: true } : createFormulaConflict(broken, sourceLabel)
+  }
+
   const fieldWord = dependents.length === 1 ? "field depends" : "fields depend"
   const conditionWord = dependents.length === 1 ? "field" : "fields"
 
@@ -235,7 +248,7 @@ export function evaluateTemplateBlockDeletion(
     code: "visibility_source_in_use",
     message: `${sourceLabel} cannot be deleted because ${dependents.length} conditional ${fieldWord} on it. Change the affected ${conditionWord} to Always visible or choose another condition first.`,
     dependentBlockIds: dependents.map(
-      (dependent: TemplateFieldBlock): string => dependent.id
+      (dependent: TemplateBlock): string => dependent.id
     )
   }
 }
@@ -330,7 +343,7 @@ export function evaluateTemplateDropdownOptionEdit(
       ...new Set<string>(
         removedReferencedOptions.flatMap((option: string): string[] =>
           findDropdownVisibilityDependents(blocks, dropdownBlockId, option).map(
-            (block: TemplateFieldBlock): string => block.id
+            (block: TemplateBlock): string => block.id
           )
         )
       )
@@ -865,9 +878,10 @@ export function moveTemplateBlockTo(
   }
 
   const conflicts = findVisibilityOrderConflicts(blocks)
+  const broken = conflicts.length > 0 ? [] : findBrokenFormulas(content.blocks, blocks)
 
-  if (conflicts.length > 0) {
-    return createOrderConflict(conflicts)
+  if (conflicts.length > 0 || broken.length > 0) {
+    return conflicts.length > 0 ? createOrderConflict(conflicts) : createFormulaConflict(broken, null)
   }
 
   const index = createBlockIndex(blocks)
@@ -939,9 +953,10 @@ export function moveTemplateSection(
     ...content.blocks.slice(end),
   ]
   const conflicts = findVisibilityOrderConflicts(blocks)
+  const broken = conflicts.length > 0 ? [] : findBrokenFormulas(content.blocks, blocks)
 
-  if (conflicts.length > 0) {
-    return createOrderConflict(conflicts)
+  if (conflicts.length > 0 || broken.length > 0) {
+    return conflicts.length > 0 ? createOrderConflict(conflicts) : createFormulaConflict(broken, null)
   }
 
   const index = createBlockIndex(blocks)
@@ -1151,6 +1166,9 @@ export function updateTemplateBlock(
         dropdownValueRemaps
       )
     )
+    .map((candidate: TemplateBlock): TemplateBlock =>
+      priorBlock ? renameFormulaReferences(candidate, priorBlock, normalizedBlock) : candidate
+    )
 
   return reconcileTemplateStructure(
     content,
@@ -1158,6 +1176,46 @@ export function updateTemplateBlock(
     getIndexedSections(content),
     getIndexedFieldGroups(content)
   )
+}
+
+// A formula names answers by their labels, so renaming a number, a table or
+// one of its columns renames it in every formula that names it.
+function renameFormulaReferences(candidate: TemplateBlock, prior: TemplateBlock, next: TemplateBlock): TemplateBlock {
+  const renames: Array<{ from: string; to: string; table: boolean; ownColumns: boolean }> = []
+
+  // A label cleared to be retyped is no name to rename to.
+  if ("label" in prior && "label" in next && prior.label !== next.label && next.label.trim() && (prior.type === "text_field" || prior.type === "table_field")) {
+    renames.push({ from: prior.label, to: next.label, table: prior.type === "table_field", ownColumns: false })
+  }
+
+  if (prior.type === "table_field" && next.type === "table_field" && prior.columns.length === next.columns.length) {
+    for (const [at, column] of prior.columns.entries()) {
+      const label = next.columns[at]?.label ?? column.label
+
+      if (label !== column.label && label.trim()) {
+        renames.push({ from: `${prior.label}.${column.label}`, to: `${next.label}.${label}`, table: false, ownColumns: false })
+        renames.push({ from: column.label, to: label, table: false, ownColumns: true })
+      }
+    }
+  }
+
+  const rename = (formula: string | undefined, own: boolean): string | undefined =>
+    formula === undefined
+      ? undefined
+      : renameInFormula(formula, renames.filter((change) => !change.ownColumns || own))
+
+  if (renames.length === 0) return candidate
+  if (candidate.type === "text_field" && candidate.formula !== undefined) return { ...candidate, formula: rename(candidate.formula, false) }
+  if (candidate.type === "table_field" && candidate.columns.some((column) => column.formula !== undefined)) {
+    return {
+      ...candidate,
+      columns: candidate.columns.map((column) =>
+        column.formula === undefined ? column : { ...column, formula: rename(column.formula, candidate.id === next.id) }
+      ),
+    }
+  }
+
+  return candidate
 }
 
 /**
@@ -1304,6 +1362,58 @@ function createOrderConflict(dependentBlockIds: readonly string[]): Extract<Temp
     code: "visibility_order_conflict",
     dependentBlockIds,
     message: `This move would place ${dependentBlockIds.length} conditional ${fieldWord} before the checkbox or dropdown that controls visibility. Keep each source above the fields it controls, or change the affected conditions first.`,
+    success: false,
+  }
+}
+
+type FormulaCheck = Readonly<{ blockId: string; name: string; works: boolean }>
+
+// Every formula, by the block holding it and the name it answers to: a
+// field's label, or a column's as {Table.Column}.
+function checkFormulas(blocks: readonly TemplateBlock[]): FormulaCheck[] {
+  return blocks.flatMap((block: TemplateBlock, index: number): FormulaCheck[] =>
+    block.type === "text_field"
+      ? block.formula === undefined ? [] : [{ blockId: block.id, name: block.label, works: formulaProblem(blocks, index, block.formula) === null }]
+      : block.type === "table_field"
+        ? block.columns.flatMap((column, at): FormulaCheck[] =>
+            column.formula === undefined ? [] : [{ blockId: block.id, name: `${block.label}.${column.label}`, works: formulaProblem(blocks, index, column.formula, at) === null }]
+          )
+        : []
+  )
+}
+
+// What worked out before a change, kept per block list: a drag asks of the
+// same page at every step, so its formulas are read once, not each time.
+const workingFormulas = new WeakMap<readonly TemplateBlock[], ReadonlySet<string>>()
+
+// The formulas a delete or move would break: each works out before it and
+// not after. One already broken is not this change's doing.
+function findBrokenFormulas(before: readonly TemplateBlock[], after: readonly TemplateBlock[]): FormulaCheck[] {
+  if (!hasFormulas(before)) return []
+
+  let worked = workingFormulas.get(before)
+
+  if (worked === undefined) {
+    worked = new Set(checkFormulas(before).flatMap((check) => (check.works ? [`${check.blockId}.${check.name}`] : [])))
+    workingFormulas.set(before, worked)
+  }
+
+  return checkFormulas(after).filter((check) => !check.works && worked.has(`${check.blockId}.${check.name}`))
+}
+
+// A delete (naming what is deleted) or a move (null) that would break formulas.
+function createFormulaConflict(broken: readonly FormulaCheck[], deleted: string | null): Extract<TemplateVisibilityStructureEditResult, { success: false }> {
+  const one = broken.length === 1
+  const formulas = `the ${one ? "formula" : "formulas"} in ${broken.map((check) => `“${check.name}”`).join(", ")}`
+  const change = one ? "that formula" : "those formulas"
+
+  return {
+    code: deleted === null ? "formula_order_conflict" : "formula_source_in_use",
+    dependentBlockIds: [...new Set(broken.map((check) => check.blockId))],
+    message:
+      deleted === null
+        ? `This move would put ${formulas} above ${one ? "an answer it uses" : "answers they use"}. Keep each answer above the formulas that use it, or change ${change} first.`
+        : `${deleted} cannot be deleted because ${formulas} ${one ? "uses" : "use"} it. Change ${change} first.`,
     success: false,
   }
 }
@@ -1468,49 +1578,36 @@ function withoutWidths(group: TemplateFieldGroup): TemplateFieldGroup {
   return widths === undefined ? group : rest
 }
 
+// A test whose source has gone, moved below it, or no longer suits it is
+// dropped; the rest of the rule stays, and a rule left with none goes.
 function removeInvalidVisibilityConditions(
   inputBlocks: readonly TemplateBlock[]
 ): TemplateBlock[] {
   const blockIndexById = new Map(
-    inputBlocks.map(
-      (block: TemplateBlock, index: number): readonly [string, number] => [
-        block.id,
-        index
-      ]
-    )
+    inputBlocks.map((block: TemplateBlock, index: number): readonly [string, number] => [block.id, index])
   )
 
-  return inputBlocks.map(
-    (block: TemplateBlock, targetIndex: number): TemplateBlock => {
-      if (!isTemplateFieldBlock(block) || block.visibleWhen === undefined) {
-        return block
-      }
-
-      const condition = block.visibleWhen
-      const sourceIndex = blockIndexById.get(condition.sourceBlockId)
-      const source =
-        sourceIndex === undefined ? undefined : inputBlocks[sourceIndex]
-      const isValidCheckboxCondition =
-        source?.type === "checkbox_field" &&
-        typeof condition.value === "boolean"
-      const isValidDropdownCondition =
-        source?.type === "dropdown_field" &&
-        typeof condition.value === "string" &&
-        source.options.includes(condition.value)
-
-      if (
-        sourceIndex !== undefined &&
-        sourceIndex < targetIndex &&
-        (isValidCheckboxCondition || isValidDropdownCondition)
-      ) {
-        return block
-      }
-
-      const repairedBlock: TemplateFieldBlock = { ...block }
-      delete repairedBlock.visibleWhen
-      return repairedBlock
+  return inputBlocks.map((block: TemplateBlock, targetIndex: number): TemplateBlock => {
+    if (!("visibleWhen" in block) || block.visibleWhen === undefined) {
+      return block
     }
-  )
+
+    const conditions = visibilityConditions(block.visibleWhen)
+    const kept = conditions.filter((condition) => {
+      const sourceIndex = blockIndexById.get(condition.sourceBlockId)
+
+      return sourceIndex !== undefined && sourceIndex < targetIndex && visibilityConditionProblem(inputBlocks[sourceIndex], condition) === null
+    })
+
+    if (kept.length === conditions.length) {
+      return block
+    }
+
+    const { visibleWhen, ...rest } = block
+    const rule = visibilityRule("conditions" in visibleWhen ? visibleWhen.match : "all", kept)
+
+    return (rule === undefined ? rest : { ...rest, visibleWhen: rule }) as TemplateBlock
+  })
 }
 
 function getIndexedSections(content: TemplateContentV3): IndexedSection[] {
@@ -1650,22 +1747,23 @@ function findDropdownVisibilityDependents(
   blocks: readonly TemplateBlock[],
   dropdownBlockId: string,
   option: string
-): TemplateFieldBlock[] {
-  return findTemplateVisibilityDependents(blocks, dropdownBlockId).filter(
-    (block: TemplateFieldBlock): boolean =>
-      block.visibleWhen?.value === option
+): TemplateBlock[] {
+  return findTemplateVisibilityDependents(blocks, dropdownBlockId).filter((block: TemplateBlock): boolean =>
+    readRuleConditions(block).some((condition) => condition.sourceBlockId === dropdownBlockId && condition.value === option)
   )
 }
 
 function findTemplateVisibilityDependents(
   blocks: readonly TemplateBlock[],
   sourceBlockId: string
-): TemplateFieldBlock[] {
-  return blocks.filter(
-    (block: TemplateBlock): block is TemplateFieldBlock =>
-      isTemplateFieldBlock(block) &&
-      block.visibleWhen?.sourceBlockId === sourceBlockId
+): TemplateBlock[] {
+  return blocks.filter((block: TemplateBlock): boolean =>
+    readRuleConditions(block).some((condition) => condition.sourceBlockId === sourceBlockId)
   )
+}
+
+function readRuleConditions(block: TemplateBlock): ReturnType<typeof visibilityConditions> {
+  return "visibleWhen" in block ? visibilityConditions(block.visibleWhen) : []
 }
 
 function findVisibilityOrderConflicts(
@@ -1673,18 +1771,10 @@ function findVisibilityOrderConflicts(
 ): string[] {
   const blockIndexById = createBlockIndex(blocks)
 
-  return blocks.flatMap(
-    (block: TemplateBlock, targetIndex: number): string[] => {
-      if (!isTemplateFieldBlock(block) || block.visibleWhen === undefined) {
-        return []
-      }
-
-      const sourceIndex = blockIndexById.get(block.visibleWhen.sourceBlockId)
-
-      return sourceIndex !== undefined && sourceIndex < targetIndex
-        ? []
-        : [block.id]
-    }
+  return blocks.flatMap((block: TemplateBlock, targetIndex: number): string[] =>
+    readRuleConditions(block).every((condition) => (blockIndexById.get(condition.sourceBlockId) ?? Infinity) < targetIndex)
+      ? []
+      : [block.id]
   )
 }
 
@@ -1693,30 +1783,23 @@ function remapDropdownVisibilityValue(
   dropdownBlockId: string,
   valueRemaps: readonly TemplateDropdownOptionValueRemap[]
 ): TemplateBlock {
-  if (
-    !isTemplateFieldBlock(block) ||
-    block.visibleWhen?.sourceBlockId !== dropdownBlockId ||
-    typeof block.visibleWhen.value !== "string"
-  ) {
+  if (!("visibleWhen" in block) || block.visibleWhen === undefined) {
     return block
   }
 
-  const valueRemap = valueRemaps.find(
-    (candidate: TemplateDropdownOptionValueRemap): boolean =>
-      candidate.from === block.visibleWhen?.value
-  )
+  const rule = block.visibleWhen
+  let changed = false
+  const conditions = visibilityConditions(rule).map((condition) => {
+    const valueRemap =
+      condition.sourceBlockId === dropdownBlockId
+        ? valueRemaps.find((candidate: TemplateDropdownOptionValueRemap): boolean => candidate.from === condition.value)
+        : undefined
 
-  if (valueRemap === undefined) {
-    return block
-  }
+    changed ||= valueRemap !== undefined
+    return valueRemap === undefined ? condition : { ...condition, value: valueRemap.to }
+  })
 
-  return {
-    ...block,
-    visibleWhen: {
-      ...block.visibleWhen,
-      value: valueRemap.to
-    }
-  }
+  return changed ? ({ ...block, visibleWhen: visibilityRule("conditions" in rule ? rule.match : "all", conditions) } as TemplateBlock) : block
 }
 
 function areStringArraysEqual(

@@ -20,6 +20,7 @@ import { PaperGrid, PaperTable } from "@/components/editor/paper-answer-kinds"
 import { cn } from "@/lib/utils"
 import {
   shouldRenderTemplateFooter,
+  numberedSectionTitle,
   shouldRenderTemplateHeader,
   type TemplateRenderBlock,
   type TemplateRenderPlan,
@@ -247,7 +248,7 @@ function PreviewSection({
             data-template-section-label="true"
             style={{ color: "var(--template-primary)" }}
           >
-            {section.label}
+            {numberedSectionTitle(section) ?? ""}
           </h2>
         </div>
       )}
@@ -320,9 +321,10 @@ function PreviewFieldGroup({
               })}
             >
               <div className={group.columns > 1 ? "min-w-0" : CONTENT_PADDING}>
+                {renderBlock.cue ? <p className="mb-1 text-xs text-muted-foreground">{renderBlock.cue}</p> : null}
                 <div className="relative rounded-[4px] border border-transparent transition-colors">
                   <div className="relative z-10 px-2 py-1.5">
-                    <PreviewBlock block={renderBlock.block} />
+                    <PreviewBlock block={renderBlock.block} listMarkers={renderBlock.listMarkers} />
                   </div>
                 </div>
               </div>
@@ -334,12 +336,13 @@ function PreviewFieldGroup({
   )
 }
 
-function PreviewBlock({ block }: { block: TemplateBlock }): ReactElement {
+function PreviewBlock({ block, listMarkers }: { block: TemplateBlock; listMarkers?: readonly string[] | null }): ReactElement {
   if (isStaticTemplateBlock(block)) {
     return (
       <TemplateStaticBlock
         accentColorVariable="var(--template-accent)"
         block={block}
+        listMarkers={listMarkers}
         primaryColorVariable="var(--template-primary)"
       />
     )

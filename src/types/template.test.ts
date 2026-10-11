@@ -1,3 +1,4 @@
+import { createQuoteContent } from "@/types/template-calculation.test-support"
 import { describe, expect, it } from "vitest"
 
 import { formatDateAnswer } from "@/lib/date-format"
@@ -121,6 +122,72 @@ describe("template content schema", () => {
     ]
 
     expect(templateContentV3Schema.safeParse(content).error?.issues).toBeUndefined()
+  })
+
+  it("refuses a condition that could never be tested: the wrong comparison for its source, a value where none belongs, or too many rules", () => {
+    const id = (n: number): string => `72000000-0000-4000-8000-00000000000${n}`
+    const text = (n: number, extra: object = {}) => ({ id: id(n), type: "text_field", fieldKey: `t${n}`, label: `T${n}`, required: false, helpText: null, placeholder: null, multiline: false, ...extra })
+    const base = [
+      text(1, { format: "number" }),
+      text(2),
+      { id: id(3), type: "signature_field", fieldKey: "sign", label: "Sign", required: false, helpText: null },
+      { id: id(4), type: "checkbox_field", fieldKey: "ok", label: "OK", required: false, helpText: null, checkedByDefault: false },
+    ]
+    const parses = (visibleWhen: object): boolean => {
+      const content = createBlankTemplateContent()
+
+      content.blocks = [...base, { id: id(9), type: "paragraph", text: "Shown by a rule", alignment: "left", visibleWhen }] as never
+      content.sections = []
+      return templateContentV3Schema.safeParse(content).success
+    }
+    const rule = (n: number, operator: string, value?: string | boolean) => ({ sourceBlockId: id(n), operator, ...(value === undefined ? {} : { value }) })
+
+    expect(parses(rule(1, "greater_than", "10.5"))).toBe(true)
+    expect(parses({ match: "any", conditions: [rule(2, "answered"), rule(4, "not_equals", true)] })).toBe(true)
+    // More or less than needs a number field and a number.
+    expect(parses(rule(2, "greater_than", "10"))).toBe(false)
+    expect(parses(rule(1, "less_than", "ten"))).toBe(false)
+    // Answered takes no value; equals needs one; a tick box is ticked or not.
+    expect(parses(rule(2, "answered", "x"))).toBe(false)
+    expect(parses(rule(2, "equals"))).toBe(false)
+    expect(parses(rule(4, "answered"))).toBe(false)
+    // A signature is never compared.
+    expect(parses(rule(3, "answered"))).toBe(false)
+    // Combined rules are two to four.
+    expect(parses({ match: "all", conditions: [rule(2, "answered")] })).toBe(false)
+    expect(parses({ match: "all", conditions: Array.from({ length: 5 }, () => rule(2, "answered")) })).toBe(false)
+  })
+
+  it("works out answers only by a formula it can run: earlier numbers and amounts, a column to the left, a whole column only inside SUM", () => {
+    const quote = createQuoteContent()
+    const table = quote.blocks[0] as object
+    const parses = (overrides: Record<number, object>): boolean => {
+      try {
+        createQuoteContent(overrides)
+        return true
+      } catch {
+        return false
+      }
+    }
+    const field = (index: number, extra: object) => ({ ...(quote.blocks[index] as object), ...extra })
+    const column = (extra: object) => ({ ...table, columns: [...(table as { columns: object[] }).columns.slice(0, 3), { label: "Amount", format: "money", ...extra }] })
+
+    expect(quote.blocks).toHaveLength(4)
+    expect(parses({ 3: field(3, { formula: "ROUND(MAX({Subtotal}, {VAT}) / 3, 2)" }) })).toBe(true)
+    // Only a number or amount is worked out, on one line.
+    expect(parses({ 1: field(1, { format: undefined }) })).toBe(false)
+    expect(parses({ 1: field(1, { multiline: true }) })).toBe(false)
+    // A formula names what comes before it, and so never itself.
+    expect(parses({ 2: field(2, { formula: "{Total} * 20%" }) })).toBe(false)
+    expect(parses({ 2: field(2, { formula: "{VAT} + 1" }) })).toBe(false)
+    expect(parses({ 2: field(2, { formula: "{Postage}" }) })).toBe(false)
+    expect(parses({ 2: field(2, { formula: "{Items.Amount} * 2" }) })).toBe(false)
+    expect(parses({ 2: field(2, { formula: "{Subtotal} *" }) })).toBe(false)
+    // A column works from the columns to its left; words are no number.
+    expect(parses({ 0: column({ formula: "{Amount} * 2" }) })).toBe(false)
+    expect(parses({ 0: column({ formula: "{Item} * 2" }) })).toBe(false)
+    expect(parses({ 0: column({ format: "date", formula: "{Qty}" }) })).toBe(false)
+    expect(parses({ 0: column({ format: undefined, total: true, formula: undefined }) })).toBe(false)
   })
 
   it("rejects later, self, or incompatible visibility sources", () => {
@@ -386,6 +453,8 @@ describe("answer kinds", () => {
 
   it("takes typed text with units, comb boxes, choose-several choices, question grids and fillable tables", () => {
     expect(parses({ ...field, type: "text_field", format: "money", prefix: "£", suffix: "per month" })).toBe(true)
+    // A question long enough for a declaration read out in full.
+    expect(parses({ ...field, type: "checkbox_field", label: "x".repeat(300) })).toBe(true)
     expect(parses({ ...field, type: "text_field", comb: 9 })).toBe(true)
     expect(parses({ ...field, type: "dropdown_field", options: ["Email", "Phone"], multiple: true, across: true })).toBe(true)
     expect(parses({ ...field, type: "choice_grid_field", rows: ["Staff were helpful", "The room was clean"], options: ["Yes", "No", "N/A"] })).toBe(true)
@@ -395,6 +464,7 @@ describe("answer kinds", () => {
   })
 
   it("refuses shapes that cannot be filled in or printed", () => {
+    expect(parses({ ...field, type: "checkbox_field", label: "x".repeat(301) })).toBe(false)
     // Comb boxes hold one line of characters.
     expect(parses({ ...field, type: "text_field", comb: 9, multiline: true })).toBe(false)
     expect(parses({ ...field, type: "text_field", comb: 1 })).toBe(false)

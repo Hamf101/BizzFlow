@@ -10,6 +10,7 @@ import {
   BringToFront,
   ChevronDown,
   Copy,
+  Eye,
   Link2,
   Rows2,
   Section,
@@ -25,6 +26,7 @@ import { canStartSection, convertTextBlock, isLine, isList, type LineBlock, type
 import { FieldGroupSettings } from "@/components/editor/field-group-settings"
 import { placeImage, placementOf } from "@/components/editor/image-placement"
 import { BlockFields } from "@/components/editor/block-fields"
+import { VisibilityRuleFields } from "@/components/editor/visibility-rule-fields"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -161,6 +163,34 @@ export function BlockToolbar({ actions, block }: { actions: CanvasActions; block
             <PopoverTitle className="mb-3 font-semibold">Field settings</PopoverTitle>
             <BlockFields block={block} blocks={blocks} onChange={(next) => controller.updateBlock(next, `settings:${block.id}`)} />
             {group ? <FieldGroupSettings controller={controller} group={group} /> : null}
+          </PopoverContent>
+        </Popover>
+      ) : null}
+      {/* Words, a list, a table or a picture in the text can show by an answer, as a field can. */}
+      {!isField(block) && block.type !== "divider" && !(block.type === "image" && block.placement) ? (
+        <Popover>
+          <PopoverTrigger
+            render={
+              <Button
+                aria-label="Show when"
+                className={cn("size-10 md:pointer-fine:size-8", "visibleWhen" in block && block.visibleWhen && "text-primary")}
+                size="icon-sm"
+                title="Show when"
+                type="button"
+                variant="ghost"
+              >
+                <Eye />
+              </Button>
+            }
+          />
+          <PopoverContent className="w-80">
+            <PopoverTitle className="sr-only">Show when</PopoverTitle>
+            <VisibilityRuleFields
+              block={block}
+              blocks={blocks}
+              className="border-t-0 pt-0"
+              onChange={(next) => controller.updateBlock(next, `rule:${block.id}`)}
+            />
           </PopoverContent>
         </Popover>
       ) : null}

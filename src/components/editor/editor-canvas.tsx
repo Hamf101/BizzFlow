@@ -4,6 +4,7 @@ import { Plus } from "lucide-react"
 import {
   type CSSProperties,
   Fragment,
+  type MouseEvent,
   type ReactElement,
   type ReactNode,
   useEffect,
@@ -28,7 +29,8 @@ import { PRINTED_HEADING, printedSpace } from "@/components/editor/paper-field"
 import { rowGridColumns } from "@/components/templates/template-render-groups"
 import type { EditorController, FocusRequest } from "@/components/editor/use-editor-controller"
 import { resolveDocumentSurfaceInk } from "@/lib/document-surface"
-import { getVisibleTemplateBlocks } from "@/types/template-visibility"
+import { getVisibleTemplateBlocks, type AnswerSettler } from "@/types/template-visibility"
+import { useCalculatedAnswers } from "@/components/editor/use-calculated-answers"
 import { cn } from "@/lib/utils"
 import {
   createTemplateRenderPlan,
@@ -73,7 +75,8 @@ export type EditorCanvasProps = Readonly<{
   documentTitle: string
   fields: "design" | "fill" | "read"
   narrow: boolean
-  onAnswerChange?: (fieldKey: string, value: unknown) => void
+  /** A change, with how to bring the answers to what the page shows once it is made. */
+  onAnswerChange?: (fieldKey: string, value: unknown, settle: AnswerSettler) => void
   /** Drawn over the pages at their shown size, such as where others are. */
   overlay?: ReactNode
   /** What a page that takes uploads puts in a file field while it is filled in. */
@@ -92,7 +95,7 @@ export type EditorCanvasProps = Readonly<{
  */
 export function EditorCanvas({
   allowFiles,
-  answers = EMPTY_ANSWERS,
+  answers: givenAnswers = EMPTY_ANSWERS,
   controller,
   designable,
   documentTitle,
@@ -104,10 +107,11 @@ export function EditorCanvas({
   textEditable,
   zoom,
 }: EditorCanvasProps): ReactElement {
-  const { MarginGuides, SectionPieces } = useDesignTools() ?? {}
+  const { MarginGuides, MarginTextBand, SectionPieces } = useDesignTools() ?? {}
   // Fixed for the page's life: an editor provides designing before its canvas first draws.
   const useEditing = useDesignTools()?.useCanvasEditing ?? useNoEditing
   const content = controller.content
+  const { answers, settle } = useCalculatedAnswers(content, givenAnswers)
   const plan = useMemo(
     (): TemplateRenderPlan =>
       createTemplateRenderPlan({
@@ -154,6 +158,8 @@ export function EditorCanvas({
   const [headerHeight, setHeaderHeight] = useState(0)
   const [layout, setLayout] = useState<ReturnType<typeof paginate>>({ inside: {}, pageCount: 1, pages: {}, spacers: {} })
   const [fontsReady, setFontsReady] = useState(0)
+  // The header or footer being written in place, after a double-click in its margin.
+  const [writing, setWriting] = useState<{ edge: "header" | "footer"; page: number } | null>(null)
   // eslint-disable-next-line react-hooks/refs -- a hook either way; the editing one reads the refs only in effects and handlers.
   const editing = useEditing({ allowFiles, content, controller, layout, narrow, point, rootRef, textEditable, unitElements, unitOf, units, zoom })
   const { dragging, focusPageEnd } = editing
@@ -164,6 +170,18 @@ export function EditorCanvas({
   // The words in a page's margins, filled in for that page as they print.
   const marginWords = (page: number, pages: number): ReturnType<typeof resolveTemplateMarginWords> =>
     resolveTemplateMarginWords(plan.layout, page + 1, pages, plan.title || documentTitle)
+  const marginText = (edge: "header" | "footer", page: number, pageLabel: string | null, style: CSSProperties): ReactElement | null =>
+    designable && MarginTextBand && writing?.edge === edge && writing.page === page ? (
+      <MarginTextBand
+        edge={edge}
+        layout={plan.layout}
+        onChange={controller.setLayout}
+        onClose={() => setWriting(null)}
+        page={page + 1}
+        pageLabel={pageLabel}
+        style={style}
+      />
+    ) : null
   const frame: PageFrame = {
     gap: PAGE_GAP_PX,
     height: pageHeight,
@@ -245,7 +263,7 @@ export function EditorCanvas({
         ? focus
         : null
     },
-    onAnswerChange,
+    onAnswerChange: (fieldKey, value) => onAnswerChange(fieldKey, value, settle),
     renderFileField,
     ...editing.actions,
     textEditable,
@@ -371,16 +389,27 @@ export function EditorCanvas({
         className="relative mx-auto w-full max-w-2xl bg-card px-5 py-6 shadow-sm"
         data-document-surface="screen"
         data-slot="editor-pages"
+        // A double-tap above the writing writes the header, below it the footer.
+        onDoubleClick={(event) => {
+          const box = event.currentTarget.getBoundingClientRect()
+          const edge = event.clientY - box.top < 56 ? "header" : box.bottom - event.clientY < 96 ? "footer" : null
+
+          if (designable && edge && event.target === event.currentTarget) setWriting({ edge, page: 0 })
+        }}
         ref={rootRef}
         style={inkStyle}
       >
         {PRINTED_FACE}
         {CELL_JOINS}
-        <MarginWords className="mb-4 flex justify-between gap-3 text-[11px]" words={columnWords.header} />
+        {marginText("header", 0, null, { fontSize: 12, marginBottom: 16, position: "relative" }) ?? (
+          <MarginWords className="mb-4 text-[11px]" words={columnWords.header} />
+        )}
         <Selectable actions={actions}>{flow}</Selectable>
         {textEditable && SectionPieces ? <SectionPieces root={rootRef} sectionId={controller.currentSectionId} narrow zoom={1} revision={content} /> : null}
         {units.length === 0 ? <EmptyPageLine actions={actions} onStart={() => focusPageEnd(0)} /> : null}
-        <MarginWords className="mt-6 flex justify-between gap-3 text-[11px]" words={columnWords.footer} />
+        {marginText("footer", 0, columnWords.pageLabel, { fontSize: 12, marginTop: 24, position: "relative" }) ?? (
+          <MarginWords className="mt-6 text-[11px]" words={columnWords.footer} />
+        )}
         {textEditable ? (
           <AddPageButton className="mt-6" onClick={() => controller.addPage(content.blocks.at(-1)?.id ?? null)} />
         ) : null}
@@ -395,6 +424,15 @@ export function EditorCanvas({
   const pageWords = Array.from({ length: pageCount }, (_, page) => marginWords(page, pageCount))
   const wordsSize = 7.5 * point
   const wordsInset: CSSProperties = { fontSize: wordsSize, left: margins.left, right: margins.right }
+  // Which margin a point on a page is in, where its words can be written.
+  const marginEdgeAt = (event: MouseEvent<HTMLElement>): "header" | "footer" | null => {
+    if (!designable || !MarginTextBand) return null
+
+    const y = (event.clientY - event.currentTarget.getBoundingClientRect().top) / zoom
+
+    return y < margins.top ? "header" : y > pageHeight - margins.bottom ? "footer" : null
+  }
+  const bandInset: CSSProperties = { fontSize: wordsSize, paddingLeft: margins.left, paddingRight: margins.right }
 
   return (
     <div
@@ -417,10 +455,17 @@ export function EditorCanvas({
             className="group/page absolute inset-x-0 cursor-text bg-card shadow-[0_1px_2px_rgba(37,35,41,0.08),0_10px_30px_rgba(37,35,41,0.1)]"
             data-page={page + 1}
             key={page}
+            // As a word processor: a double-click in the top margin writes the header, in the bottom one the footer.
+            onDoubleClick={(event) => {
+              const edge = marginEdgeAt(event)
+
+              if (edge && !(event.target as Element).closest('[data-slot="margin-text-band"]')) setWriting({ edge, page })
+            }}
             onMouseDown={(event) => {
               if (event.target === event.currentTarget) {
                 event.preventDefault()
-                focusPageEnd(page)
+                // A click in the top or bottom margin leaves the caret, and the page, where they are, for a double-click there.
+                if (!marginEdgeAt(event)) focusPageEnd(page)
               }
             }}
             role="region"
@@ -460,6 +505,8 @@ export function EditorCanvas({
                 zone={{ height: margins.top, top: 0 }}
               />
             ) : null}
+            {marginText("header", page, null, { ...bandInset, minHeight: "3.6em", height: margins.top, top: 0 })}
+            {marginText("footer", page, pageWords[page].pageLabel, { ...bandInset, bottom: 0, minHeight: "3.6em", height: margins.bottom })}
             {/* Baselines as the PDF sets them: midway down the top margin, midway up the bottom. */}
             <MarginWords
               className="absolute"
@@ -469,16 +516,9 @@ export function EditorCanvas({
             <MarginWords
               className="absolute"
               style={{ ...wordsInset, bottom: margins.bottom / 2 - (WORDS_LINE_EM - WORDS_ASCENT_EM) * wordsSize }}
-              words={pageWords[page].footer}
+              words={pageWords[page].pageLabel ? { ...pageWords[page].footer, right: pageWords[page].pageLabel } : pageWords[page].footer}
             />
-            {pageWords[page].pageLabel ? (
-              <p
-                className="absolute text-muted-foreground tabular-nums"
-                style={{ bottom: margins.bottom * 0.55, fontSize: 8 * point, right: margins.right }}
-              >
-                {pageWords[page].pageLabel}
-              </p>
-            ) : textEditable && !footerOn(page) && Object.keys(pageWords[page].footer).length === 0 ? (
+            {pageWords[page].pageLabel ? null : textEditable && !footerOn(page) && Object.keys(pageWords[page].footer).length === 0 ? (
               <MarginPill
                 label="Page numbers"
                 onClick={() =>
@@ -528,6 +568,7 @@ export function EditorCanvas({
 
 function UnitBlocks({ actions, unit }: { actions: CanvasActions; unit: CanvasUnit }): ReactElement {
   const { EditorSection, FrameEdges } = useDesignTools() ?? {}
+  const cue = [...new Set(unit.blocks.flatMap((renderBlock) => (renderBlock.cue ? [renderBlock.cue] : [])))].join("  ·  ")
   const printedTitle = unit.sectionLabel ? (
     <PrintedSectionTitle label={unit.sectionLabel} number={unit.sectionNumber} sectionStyle={actions.controller.content.layout.sectionStyle} />
   ) : null
@@ -544,6 +585,12 @@ function UnitBlocks({ actions, unit }: { actions: CanvasActions; unit: CanvasUni
           {unit.groupLabel}
         </p>
       ) : null}
+      {cue ? (
+        // While the page is built, each branch starts with its rule, as a blank form prints it.
+        <p className="text-muted-foreground" data-slot="branch-cue" style={{ fontSize: "0.9em", lineHeight: 12 / 9, marginBottom: printedSpace(4) }}>
+          {cue}
+        </p>
+      ) : null}
       <div
         className="relative grid"
         data-cell-row={unit.columns > 1 && !actions.narrow ? "" : undefined}
@@ -558,7 +605,7 @@ function UnitBlocks({ actions, unit }: { actions: CanvasActions; unit: CanvasUni
         }}
       >
         {unit.blocks.map((renderBlock) => (
-          <CanvasBlock actions={actions} block={renderBlock.block} key={renderBlock.block.id} />
+          <CanvasBlock actions={actions} block={renderBlock.block} key={renderBlock.block.id} listMarkers={renderBlock.listMarkers} />
         ))}
         {actions.textEditable && !actions.narrow ? <RowSeams controller={actions.controller} unit={unit} /> : null}
         {FrameEdges && actions.textEditable && !actions.narrow && unit.columns === 1 && unit.blocks[0] ? (
@@ -715,6 +762,10 @@ const WORDS_ASCENT_EM = 1
 
 // Words in a margin, each in its third of the line and cut short where they
 // would run into the next, as the PDF prints them.
+// Each slot runs as far as its neighbours let it, as the PDF fits them
+// (fitMarginWords): a centred word keeps to a third and the sides share the
+// rest; otherwise the shorter side keeps its words and the longer takes what
+// is left, so a long title runs up to the page count.
 function MarginWords({
   className,
   style,
@@ -728,15 +779,24 @@ function MarginWords({
     return null
   }
 
+  const centred = Boolean(words.center)
+  const keeps = (words.left ?? "").length <= (words.right ?? "").length ? "left" : "right"
+  const side = (slot: "left" | "right") =>
+    cn("min-w-0 truncate", slot === "right" && "text-right", !centred && keeps === slot && "max-w-[calc(50%-0.375rem)] shrink-0")
+
   return (
     <div
-      className={cn("pointer-events-none grid grid-cols-3 text-muted-foreground tabular-nums", className)}
+      className={cn(
+        "pointer-events-none gap-3 text-muted-foreground tabular-nums",
+        centred ? "grid grid-cols-[1fr_fit-content(33.333%)_1fr]" : "flex justify-between",
+        className
+      )}
       data-slot="margin-words"
       style={{ lineHeight: WORDS_LINE_EM, ...style }}
     >
-      <span className="min-w-0 truncate">{words.left}</span>
-      <span className="min-w-0 truncate text-center">{words.center}</span>
-      <span className="min-w-0 truncate text-right">{words.right}</span>
+      <span className={side("left")}>{words.left}</span>
+      {centred ? <span className="min-w-0 truncate text-center">{words.center}</span> : null}
+      <span className={side("right")}>{words.right}</span>
     </div>
   )
 }

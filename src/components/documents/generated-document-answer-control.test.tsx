@@ -4,7 +4,7 @@ import { act } from "react"
 import { describe, expect, it } from "vitest"
 
 import { GeneratedDocumentContent } from "@/components/documents/generated-document-content"
-import { createBlankTemplateContent, type TemplateContentV3 } from "@/types/template"
+import { createBlankTemplateContent, parseTemplateContent, type TemplateContentV3 } from "@/types/template"
 import { mount } from "@/test/render"
 
 const CONTROLLER_ID = "20000000-0000-4000-8000-000000000001"
@@ -43,7 +43,51 @@ describe("GeneratedDocumentContent answer ownership", () => {
 
     expect(getInput("full_name").value).toBe("Ada Lovelace")
   })
+
+  it("shows a worked-out answer, never a box for it, and keeps an answer its figure reveals", async () => {
+    const root = mount()
+    act(() => root.render(<GeneratedDocumentContent content={createDoubledContent()} editable title="Worked out" />))
+    // The arithmetic loads only once a document with a formula is drawn.
+    await act(async () => {
+      await import("@/types/template-calculation")
+    })
+
+    type(byId(BASE_ID), "60")
+
+    expect(document.getElementById(DOUBLED_ID)).toBeNull()
+    expect(document.body.textContent).toContain("120")
+
+    type(byId(DETAILS_ID), "Gate code 4512")
+    expect(byId(DETAILS_ID).value).toBe("Gate code 4512")
+  })
 })
+
+const BASE_ID = "20000000-0000-4000-8000-000000000011"
+const DOUBLED_ID = "20000000-0000-4000-8000-000000000012"
+const DETAILS_ID = "20000000-0000-4000-8000-000000000013"
+
+function byId(id: string): HTMLInputElement {
+  const element = document.getElementById(id)
+
+  if (!(element instanceof HTMLInputElement)) throw new Error(`Expected an input for ${id}.`)
+
+  return element
+}
+
+// Details shows once Doubled, twice Base, is over 100.
+function createDoubledContent(): TemplateContentV3 {
+  const field = (id: string, label: string, extra: object = {}) => ({ id, type: "text_field", fieldKey: label.toLowerCase(), label, required: false, helpText: null, placeholder: null, multiline: false, ...extra })
+
+  return parseTemplateContent({
+    ...createBlankTemplateContent(),
+    sections: [],
+    blocks: [
+      field(BASE_ID, "Base", { format: "number" }),
+      field(DOUBLED_ID, "Doubled", { format: "number", formula: "{Base} * 2" }),
+      field(DETAILS_ID, "Details", { visibleWhen: { sourceBlockId: DOUBLED_ID, operator: "greater_than", value: "100" } }),
+    ],
+  }) as TemplateContentV3
+}
 
 function getInput(fieldKey: string): HTMLInputElement | HTMLTextAreaElement {
   const blockId = BLOCK_ID_BY_FIELD_KEY[fieldKey]

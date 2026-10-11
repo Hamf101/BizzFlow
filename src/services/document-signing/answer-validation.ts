@@ -4,6 +4,8 @@ import { normalizeOptionalDrawing } from "@/services/document-signing/drawing-va
 import { DocumentSigningServiceError } from "@/services/document-signing/errors"
 import { boxSigner } from "@/types/box-signers"
 import type { TemplateBlock, TemplateContent } from "@/types/template"
+import { calculateTemplateAnswers } from "@/types/template-calculation"
+import { calculatedFieldKeys } from "@/types/template-formula"
 import {
   isTemplateAnswerComplete,
   normalizeTemplateAnswer
@@ -164,6 +166,55 @@ export function pruneHiddenAnswerPatch(
       visibleFieldKeys.has(fieldKey)
     )
   )
+}
+
+/**
+ * The answers a formula is worked out from, for the database to refuse the
+ * save once someone else has changed them; none when nothing is worked out.
+ *
+ * @param content - Validated immutable template snapshot.
+ * @param storedValues - Answers as read before working anything out.
+ * @returns The stored answers, or undefined without a formula.
+ */
+export function calculationBase(
+  content: TemplateContent,
+  storedValues: Record<string, unknown>
+): Record<string, unknown> | undefined {
+  return calculatedFieldKeys(content.blocks).length > 0 ? storedValues : undefined
+}
+
+/**
+ * Puts what each formula works out into a visible answer patch, from the
+ * stored answers with the patch over them; what a page sent for one counts
+ * for nothing. A worked-out answer that has not changed stays out, so a
+ * signer agreeing to it is never seen to rewrite it.
+ *
+ * @param content - Validated immutable template snapshot.
+ * @param storedValues - Answers already stored.
+ * @param patch - Visible normalized patch.
+ * @returns The patch with every changed worked-out answer, hidden ones removed.
+ */
+export function withCalculatedAnswers(
+  content: TemplateContent,
+  storedValues: Readonly<Record<string, unknown>>,
+  patch: Readonly<Record<string, unknown>>
+): Record<string, unknown> {
+  const keys = calculatedFieldKeys(content.blocks)
+
+  if (keys.length === 0) {
+    return { ...patch }
+  }
+
+  const calculated = calculateTemplateAnswers(content, { ...storedValues, ...patch })
+  const next: Record<string, unknown> = { ...patch }
+
+  for (const fieldKey of keys) {
+    if (calculated[fieldKey] !== undefined && (fieldKey in patch || !isDeepStrictEqual(calculated[fieldKey], storedValues[fieldKey]))) {
+      next[fieldKey] = calculated[fieldKey]
+    }
+  }
+
+  return pruneHiddenAnswerPatch(content, storedValues, next)
 }
 
 /**

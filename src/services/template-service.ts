@@ -21,6 +21,8 @@ export {
   listDocumentTemplates,
   listDocumentTemplateVersions,
   publishDocumentTemplate,
+  purgeDueTrashedTemplates,
+  purgeTrashedDocumentTemplate,
   updateDocumentTemplate,
 } from "./templates/template-lifecycle-service"
 export { listTemplatePage } from "./templates/template-list-service"

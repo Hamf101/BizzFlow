@@ -9,6 +9,7 @@ import { DesignToolsContext } from "./design-tools"
 import { DESIGN_TOOLS } from "./design-tools-provided"
 import { INSERT_CHOICES } from "./block-catalog"
 import { EditorCanvas } from "./editor-canvas"
+import { setMarginText } from "./margin-text-band"
 import { useReadOnlyController } from "./read-only-controller"
 import { useEditorController, type EditorController } from "./use-editor-controller"
 import { useEditorHistory } from "./use-editor-history"
@@ -300,4 +301,62 @@ it("fills in a page with nothing to design: answers go back, and a file field ho
   // Nothing to type into but its fields, and nothing to choose.
   expect(document.querySelector("[contenteditable]")).toBeNull()
   expect(document.querySelector('[aria-label="Section title"]')).toBeNull()
+})
+
+it("numbers a section's list as its clauses, and Tab sets an item in a level as (a), Shift+Tab out again", async () => {
+  const L = "70000000-0000-4000-8000-000000000031"
+  const clauses: TemplateContentV3 = {
+    ...createEmptyDocumentContent(),
+    layout: { ...createEmptyDocumentContent().layout, sectionNumbers: "clauses" },
+    blocks: [{ id: L, type: "numbered_list", items: ["Pay monthly.", "Late fees.", "Interest."] }],
+    sections: [{ id: S, label: "Terms", startBlockId: L, keepTogether: false, pageBreakBefore: false }],
+  }
+  root = mount()
+  await act(async () => root.render(<Canvas initial={clauses} />))
+  const item = (index: number) => document.querySelector<HTMLElement>(`[data-caret-key="${L}:${index}"]`)!
+  const markers = () => [0, 1, 2].map((index) => document.querySelector<HTMLElement>(`[data-line-key="${L}:${index}"]`)!.style.getPropertyValue("--marker"))
+  const press = (index: number, shiftKey = false) =>
+    act(async () => void item(index).dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Tab", shiftKey })))
+
+  expect(markers()).toEqual(['"1.1"', '"1.2"', '"1.3"'])
+
+  // The first item has nothing above to sit under.
+  await press(0)
+  await press(1)
+  expect(markers()).toEqual(['"1.1"', '"(a)"', '"1.2"'])
+
+  await press(1, true)
+  expect(markers()).toEqual(['"1.1"', '"1.2"', '"1.3"'])
+  expect(controller.content.blocks[0]).toMatchObject({ levels: undefined })
+})
+
+it("writes the header and footer in place after a double-click in the page's top or bottom margin", async () => {
+  root = mount()
+  await act(async () => root.render(<Canvas narrow={false} />))
+  const page = document.querySelector<HTMLElement>('[data-page="1"]')!
+  const height = parseFloat(page.style.height)
+  const type = (name: string, text: string) =>
+    act(async () => {
+      const input = document.querySelector<HTMLInputElement>(`[aria-label="${name}"]`)!
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, text)
+      input.dispatchEvent(new Event("input", { bubbles: true }))
+    })
+
+  await act(async () => void page.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, clientY: 8 })))
+  // The band loads the first time it is needed.
+  await act(async () => { await import("./margin-text-band"); await new Promise((resolve) => setTimeout(resolve, 0)) })
+  expect(document.activeElement?.getAttribute("aria-label")).toBe("Header left")
+  await type("Header centre", "Form {page}")
+  expect(controller.content.layout.headerText).toEqual({ center: "Form {page}" })
+  await act(async () => void document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "Escape" })))
+  expect(document.querySelector('[data-slot="margin-text-band"]')).toBeNull()
+  // A double-click in the writing area is the text's, not the header's or footer's.
+  await act(async () => void page.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, clientY: height / 2 })))
+  expect(document.querySelector('[data-slot="margin-text-band"]')).toBeNull()
+
+  await act(async () => void page.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, clientY: height - 8 })))
+  await type("Footer left", "Rev. 2")
+  expect(controller.content.layout.footerText).toEqual({ left: "Rev. 2" })
+  // A header shown on the first page only, written on the second, shows on every page.
+  expect(setMarginText({ ...controller.content.layout, headerPolicy: "first_page" }, "headerText", "left", "Draft", 2).headerPolicy).toBe("all_pages")
 })

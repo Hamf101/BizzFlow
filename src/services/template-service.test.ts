@@ -16,6 +16,7 @@ import {
   listDocumentTemplates,
   listDocumentTemplateVersions,
   publishDocumentTemplate,
+  purgeTrashedDocumentTemplate,
   recordDocumentRecentAccess,
   updateDocumentTemplate,
   duplicateDocumentTemplate
@@ -23,6 +24,7 @@ import {
 import {
   restoreDocumentTemplate,
   setDocumentTemplateCategory,
+  trashDocumentTemplate,
 } from "@/services/templates/template-lifecycle-service"
 import {
   createBlankTemplateContent,
@@ -33,6 +35,7 @@ import {
   type TemplateContentV3
 } from "@/types/template"
 import { insertTemplateBlock } from "@/types/template-structure"
+import { TEMPLATE_ANSWERED_MESSAGE } from "@/types/template-trash"
 import {
   PostgrestWriteQuery,
   type FakeOperation,
@@ -138,9 +141,14 @@ class FakeClient {
       | "get_folder_access_level"
       | "get_template_access_level"
       | "hidden_template_ids"
-      | "editable_template_ids",
+      | "editable_template_ids"
+      | "purge_trashed_document_template",
     args: Record<string, unknown>
-  ): Promise<{ data: unknown; error: null }> {
+  ): Promise<{ data: unknown; error: { code: string; message: string } | null }> {
+    if (functionName === "purge_trashed_document_template") {
+      return purgeTrashedTemplate(this.tables, args)
+    }
+
     if (
       functionName === "get_template_access_level" ||
       functionName === "hidden_template_ids" ||
@@ -185,6 +193,22 @@ class FakeClient {
       error: null,
     }
   }
+}
+
+// Stands in for public.purge_trashed_document_template, with its error codes.
+function purgeTrashedTemplate(tables: FakeTables, args: Record<string, unknown>): { data: null; error: { code: string; message: string } | null } {
+  const template = tables.document_templates.find((row) => row.id === args.target_template_id && row.org_id === args.target_org_id)
+  const refuse = (code: string) => ({ data: null, error: { code, message: code } })
+
+  if (!template || !template.trashed_at) return refuse("P0002")
+  if (template.title !== args.target_confirmation_title) return refuse("22023")
+  if ([...(tables.submissions ?? []), ...(tables.public_form_links ?? []).filter((row) => row.document_id)].some((row) => row.template_id === template.id)) return refuse("P0001")
+
+  for (const document of tables.documents.filter((row) => row.template_id === template.id)) {
+    Object.assign(document, { template_id: null, template_revision: null })
+  }
+  tables.document_templates.splice(tables.document_templates.indexOf(template), 1)
+  return { data: null, error: null }
 }
 
 // Stands in for the published_document_templates view: each published
@@ -1578,5 +1602,129 @@ describe("templates that are shared, and kept to chosen people", () => {
     ).resolves.toMatchObject({ title: "Private lease" })
     // A viewer may look but not make documents from it.
     await expect(createGeneratedDocument(as(OTHER_MANAGER_ID), deps)).rejects.toMatchObject({ statusCode: 403 })
+  })
+})
+
+describe("templates in Trash", () => {
+  const ask = (actorUserId: string, templateId: string, organizationId = ORG_ID) => ({ actorUserId, organizationId, templateId })
+  const TRASHED_AT = "2026-07-18T09:00:00.000Z"
+  const PICKED = ["status", "archived_at", "archived_by", "published_at", "published_by", "revision", "trashed_at", "trashed_by", "pre_trash_status"]
+  const shape = (row: FakeRow): FakeRow => Object.fromEntries(PICKED.map((key) => [key, row[key] ?? null]))
+
+  function trashDeps(client: FakeClient, recorded: unknown[] = []) {
+    return {
+      client: client as never,
+      now: () => new Date(TRASHED_AT),
+      recordAuditLog: async (entry: unknown) => {
+        recorded.push(entry)
+      },
+    }
+  }
+
+  it("moves a template to Trash as archived and Restore puts back exactly what it had, archived or not", async () => {
+    const tables = createBaseTables()
+    Object.assign(templateIn(tables, DRAFT_TEMPLATE_ID), { archived_at: "2026-07-01T00:00:00.000Z", archived_by: STAFF_ID, status: "archived" })
+    templateIn(tables, TEMPLATE_ID).category = "HR"
+    const before = [shape(templateIn(tables, TEMPLATE_ID)), shape(templateIn(tables, DRAFT_TEMPLATE_ID))]
+    const recorded: unknown[] = []
+    const deps = trashDeps(new FakeClient(tables), recorded)
+
+    await trashDocumentTemplate(ask(MANAGER_ID, TEMPLATE_ID), deps)
+    await trashDocumentTemplate(ask(MANAGER_ID, DRAFT_TEMPLATE_ID), deps)
+
+    expect(shape(templateIn(tables, TEMPLATE_ID))).toMatchObject({
+      archived_at: TRASHED_AT,
+      archived_by: MANAGER_ID,
+      pre_trash_status: "published",
+      status: "archived",
+      trashed_at: TRASHED_AT,
+      trashed_by: MANAGER_ID,
+    })
+    // Already archived: its archive stays as it was.
+    expect(shape(templateIn(tables, DRAFT_TEMPLATE_ID))).toMatchObject({ archived_by: STAFF_ID, pre_trash_status: "archived", trashed_at: TRASHED_AT })
+    expect(recorded).toEqual([
+      expect.objectContaining({ action: "template.trashed", targetId: TEMPLATE_ID, targetType: "template" }),
+      expect.objectContaining({ action: "template.trashed", targetId: DRAFT_TEMPLATE_ID }),
+    ])
+    await expect(trashDocumentTemplate(ask(MANAGER_ID, TEMPLATE_ID), deps)).rejects.toMatchObject({ statusCode: 409 })
+    // Its category is not offered while it is in Trash.
+    await expect(listDocumentTemplateCategories({ actorUserId: MANAGER_ID, organizationId: ORG_ID }, deps)).resolves.toEqual([])
+
+    await restoreDocumentTemplate(ask(MANAGER_ID, TEMPLATE_ID), deps)
+    await restoreDocumentTemplate(ask(MANAGER_ID, DRAFT_TEMPLATE_ID), deps)
+
+    expect([shape(templateIn(tables, TEMPLATE_ID)), shape(templateIn(tables, DRAFT_TEMPLATE_ID))]).toEqual(before)
+  })
+
+  it("refuses a template people have sent answers through, even a draft answer, which can still be archived", async () => {
+    const tables = createBaseTables()
+    tables.submissions = [{ id: "60000000-0000-4000-8000-000000000001", org_id: ORG_ID, status: "draft", template_id: TEMPLATE_ID }]
+    const deps = trashDeps(new FakeClient(tables))
+
+    await expect(trashDocumentTemplate(ask(MANAGER_ID, TEMPLATE_ID), deps)).rejects.toMatchObject({
+      message: TEMPLATE_ANSWERED_MESSAGE,
+      statusCode: 409,
+    })
+    expect(shape(templateIn(tables, TEMPLATE_ID))).toMatchObject({ status: "published", trashed_at: null })
+    await expect(archiveDocumentTemplate(ask(MANAGER_ID, TEMPLATE_ID), deps)).resolves.toMatchObject({ status: "archived" })
+  })
+
+  it("refuses a template whose documents were sent to answer, so deleting it never takes their links", async () => {
+    const tables = createBaseTables()
+    tables.public_form_links = [{ document_id: DOCUMENT_ID, id: "61000000-0000-4000-8000-000000000001", org_id: ORG_ID, template_id: TEMPLATE_ID }]
+    const deps = trashDeps(new FakeClient(tables))
+
+    await expect(trashDocumentTemplate(ask(MANAGER_ID, TEMPLATE_ID), deps)).rejects.toMatchObject({ message: TEMPLATE_ANSWERED_MESSAGE, statusCode: 409 })
+    expect(shape(templateIn(tables, TEMPLATE_ID))).toMatchObject({ status: "published", trashed_at: null })
+  })
+
+  it("refuses another workspace's template and a member who cannot edit it", async () => {
+    const tables = createBaseTables()
+    const elsewhere = "30000000-0000-4000-8000-000000000077"
+    tables.document_templates.push({ ...createTemplateRow(elsewhere, "published"), org_id: OTHER_ORG_ID })
+    const deps = trashDeps(new FakeClient(tables))
+
+    await expect(trashDocumentTemplate(ask(MANAGER_ID, elsewhere), deps)).rejects.toMatchObject({ statusCode: 404 })
+    await expect(trashDocumentTemplate(ask(STAFF_ID, TEMPLATE_ID), deps)).rejects.toMatchObject({ statusCode: 403 })
+    await expect(
+      purgeTrashedDocumentTemplate({ ...ask(STAFF_ID, TEMPLATE_ID), confirmationTitle: "Published handbook" }, deps)
+    ).rejects.toMatchObject({ statusCode: 403 })
+    expect(templateIn(tables, TEMPLATE_ID).status).toBe("published")
+  })
+
+  it("deletes a template for good only from Trash and with its exact title, and its documents keep their content", async () => {
+    const tables = createBaseTables()
+    Object.assign(tables.documents[0] as FakeRow, { template_id: TEMPLATE_ID, template_revision: 1 })
+    const deps = trashDeps(new FakeClient(tables))
+    const purge = (confirmationTitle: string) => purgeTrashedDocumentTemplate({ ...ask(MANAGER_ID, TEMPLATE_ID), confirmationTitle }, deps)
+
+    await expect(purge("Published handbook")).rejects.toMatchObject({ statusCode: 404 })
+    await trashDocumentTemplate(ask(MANAGER_ID, TEMPLATE_ID), deps)
+    await expect(purge("published handbook")).rejects.toMatchObject({ statusCode: 400 })
+
+    tables.submissions = [{ id: "60000000-0000-4000-8000-000000000001", org_id: ORG_ID, status: "submitted", template_id: TEMPLATE_ID }]
+    await expect(purge("Published handbook")).rejects.toMatchObject({ statusCode: 409 })
+
+    tables.submissions = []
+    await purge("Published handbook")
+
+    expect(tables.document_templates.some((row) => row.id === TEMPLATE_ID)).toBe(false)
+    expect(tables.documents[0]).toMatchObject({ id: DOCUMENT_ID, template_id: null, template_revision: null })
+  })
+
+  it("moves a selection to Trash, says how many were answered, and Undo brings the rest back", async () => {
+    const tables = createBaseTables()
+    tables.submissions = [{ id: "60000000-0000-4000-8000-000000000001", org_id: ORG_ID, status: "draft", template_id: TEMPLATE_ID }]
+    const deps = trashDeps(new FakeClient(tables))
+    const change = (kind: "restore" | "trash", templateIds: string[]) =>
+      changeDocumentTemplates({ actorUserId: MANAGER_ID, change: kind, organizationId: ORG_ID, templateIds }, deps)
+
+    const trashed = await change("trash", [TEMPLATE_ID, DRAFT_TEMPLATE_ID])
+
+    expect(trashed).toMatchObject({ answered: 1, changed: [DRAFT_TEMPLATE_ID], failed: 1 })
+    expect(templateIn(tables, DRAFT_TEMPLATE_ID)).toMatchObject({ pre_trash_status: "draft", status: "archived" })
+
+    await change("restore", trashed.changed)
+    expect(shape(templateIn(tables, DRAFT_TEMPLATE_ID))).toMatchObject({ status: "draft", trashed_at: null })
   })
 })

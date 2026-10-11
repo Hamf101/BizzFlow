@@ -292,8 +292,8 @@ export async function getPublicFormLinkByToken(
 
 /**
  * Serves a link sent to one person: what was sent, frozen as it stood, with
- * the answers already in it. It closes while its document is in the trash and
- * opens again if the document comes back.
+ * the answers already in it. It closes while its document, or its template, is
+ * in the trash and opens again if it comes back.
  */
 async function previewSentLink(
   client: ReturnType<typeof createAdminClient>,
@@ -329,7 +329,10 @@ async function previewSentLink(
   ])
   const lifecycle = (documentRes.data as { lifecycle_state?: string } | null)?.lifecycle_state
 
-  if (templateRes.error || !templateRes.data || documentRes.error || (link.documentId && lifecycle !== "active")) {
+  // Closed, too, while its template is in Trash, so nothing there gets answered.
+  const trashed = Boolean((templateRes.data as { trashed_at?: string | null } | null)?.trashed_at)
+
+  if (templateRes.error || !templateRes.data || trashed || documentRes.error || (link.documentId && lifecycle !== "active")) {
     return invalid("not_found", link)
   }
 

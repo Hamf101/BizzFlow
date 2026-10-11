@@ -88,6 +88,26 @@ export function createPdfLayoutMetrics(
   }
 }
 
+const LIST_LEVEL_INDENT = 18
+// Room for a number as wide as 12.12 or (viii) before an item's words.
+const LIST_NUMBER_HANG = 26
+
+/**
+ * Where a list item's marker and words start, from the left of its frame:
+ * each level down is set in by a further 18 points, and the words hang clear
+ * of the marker, so a long item wraps under its words, not its number. The
+ * planner measures the words in the width the renderer draws them in.
+ *
+ * @param type - The list's type.
+ * @param level - How far the item is set in, 0 at the margin.
+ * @returns The marker's and the words' insets.
+ */
+export function listItemInset(type: "bullet_list" | "numbered_list", level: number): { marker: number; words: number } {
+  const marker = 12 + level * LIST_LEVEL_INDENT
+
+  return { marker, words: marker + (type === "bullet_list" ? 10 : LIST_NUMBER_HANG) }
+}
+
 /**
  * Scales a character-count wrapping estimate to the active content width.
  *

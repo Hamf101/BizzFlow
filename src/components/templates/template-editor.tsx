@@ -58,10 +58,6 @@ import type { WorkingCopy } from "@/lib/collaboration/working-copy-doc"
 import { createTemplateFlowDraftFingerprint } from "@/services/template-flow-proposal-state"
 import { resolvePageGeometry } from "@/services/templates/template-render-plan"
 import {
-  evaluateTemplateQuality,
-  isTemplateQualityIssueSaveBlocking,
-} from "@/services/templates/template-quality-service"
-import {
   type DocumentTemplate,
   type DocumentTemplateVersion,
   type TemplateContentV3,
@@ -165,11 +161,8 @@ export function TemplateEditor({
   const [, startTransition] = useTransition()
   const revisionRef = useRef(template.revision)
   const isDraft = template.status === "draft"
-  const quality = useMemo(
-    () => evaluateTemplateQuality({ content, description: state.description, title: state.title }),
-    [content, state.description, state.title]
-  )
-  const validationErrors = quality.issues.filter(isTemplateQualityIssueSaveBlocking).length
+  const quality = useTemplateQuality(content, state.description, state.title)
+  const validationErrors = quality?.blocking ?? 0
   const controller = useEditorController({
     change: (update, coalesceKey) =>
       history.set((current) => ({ ...current, content: update(current.content as TemplateContentV3) }), coalesceKey),
@@ -190,7 +183,7 @@ export function TemplateEditor({
   )
   const preview = useEditorController({ change: () => undefined, content: candidate, undo: () => undefined })
   const autosave = useAutosave<TemplateEditorState>({
-    enabled: !live.session && live.unavailable && isDraft && validationErrors === 0,
+    enabled: !live.session && live.unavailable && isDraft && quality !== null && validationErrors === 0,
     initialVersion: String(template.revision),
     save: async (value, version) => {
       const result = await saveDraftAction(toDraftInput(template.id, Number(version), value))
@@ -241,6 +234,11 @@ export function TemplateEditor({
       return true
     }
 
+    if (quality === null) {
+      bizflowToast.info("Checking the template. Try again in a moment.")
+      return true
+    }
+
     if (!quality.summary.isBlocking) {
       return false
     }
@@ -285,6 +283,11 @@ export function TemplateEditor({
   async function save(): Promise<void> {
     if (live.session) {
       await live.checkpoint("Checkpoint")
+      return
+    }
+
+    if (quality === null) {
+      bizflowToast.info("Checking the template. Try again in a moment.")
       return
     }
 
@@ -361,7 +364,7 @@ export function TemplateEditor({
       label: "Brand",
     },
     {
-      badge: quality.summary.criticalCount || undefined,
+      badge: quality?.summary.criticalCount || undefined,
       content: (close) => (
         <TemplateChecksPanel
           content={content}
@@ -627,8 +630,8 @@ export function TemplateEditor({
             // The boxes take answers, so the author tries the form as they build it.
             fields={proposal ? "read" : "fill"}
             narrow={narrow}
-            onAnswerChange={(fieldKey, value) =>
-              setTestAnswers((answers) => applyVisibleTemplateFieldValue(content, answers, fieldKey, value))
+            onAnswerChange={(fieldKey, value, settle) =>
+              setTestAnswers((answers) => applyVisibleTemplateFieldValue(content, answers, fieldKey, value, settle))
             }
             overlay={room && !proposal ? <RoomLayer narrow={narrow} others={live.others} revision={content} room={room} /> : null}
             textEditable={editable && !proposal}
@@ -723,4 +726,31 @@ function stableJson(value: unknown): string {
       ? Object.fromEntries(Object.entries(entry).sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0)))
       : entry
   )
+}
+
+const loadQuality = () => import("@/services/templates/template-quality-service")
+
+/**
+ * The template's checks, worked out once the checker has loaded: it waits
+ * until after the page is drawn, so opening a template never waits on it.
+ * Until then there is nothing to say, and nothing saves.
+ *
+ * @returns The checks, or null while the checker loads.
+ */
+function useTemplateQuality(content: TemplateContentV3, description: string, title: string) {
+  const [checker, setChecker] = useState<Awaited<ReturnType<typeof loadQuality>> | null>(null)
+
+  useEffect(() => {
+    void loadQuality().then(setChecker)
+  }, [])
+
+  return useMemo(() => {
+    if (!checker) {
+      return null
+    }
+
+    const quality = checker.evaluateTemplateQuality({ content, description, title })
+
+    return { blocking: quality.issues.filter(checker.isTemplateQualityIssueSaveBlocking).length, summary: quality.summary }
+  }, [checker, content, description, title])
 }

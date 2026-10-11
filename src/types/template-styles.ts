@@ -1,4 +1,4 @@
-import type { TemplateLayout } from "@/types/template"
+import { MARGIN_SIZES, type TemplateLayout } from "@/types/template"
 
 /** What a document style sets; the rest of the page setup is left as it is. */
 type StyleSettings = Pick<
@@ -13,13 +13,13 @@ type StyleSettings = Pick<
  */
 export const DOCUMENT_STYLES = {
   // Airy, boxed answers: intake forms, sign-ups and anything filled in on a screen.
-  modern: { density: "balanced", fieldStyle: "box", lineSpacing: undefined, marginPreset: "standard", margins: undefined, paragraphSpacing: undefined, sectionNumbers: undefined, sectionStyle: "plain" },
+  modern: { density: "balanced", fieldStyle: "box", lineSpacing: undefined, marginPreset: "standard", margins: MARGIN_SIZES.normal, paragraphSpacing: undefined, sectionNumbers: undefined, sectionStyle: "plain" },
   // Answers on lines and numbered sections: agreements, letters, printed applications.
-  classic: { density: "balanced", fieldStyle: "line", lineSpacing: undefined, marginPreset: "generous", margins: undefined, paragraphSpacing: undefined, sectionNumbers: "numbers", sectionStyle: "plain" },
+  classic: { density: "balanced", fieldStyle: "line", lineSpacing: undefined, marginPreset: "generous", margins: MARGIN_SIZES.normal, paragraphSpacing: undefined, sectionNumbers: "numbers", sectionStyle: "plain" },
   // Dense lettered sections under bars, answers in cells: government, medical and official forms.
-  official: { density: "compact", fieldStyle: "cell", lineSpacing: 1.3, marginPreset: "compact", margins: undefined, paragraphSpacing: 6, sectionNumbers: "letters", sectionStyle: "band" },
+  official: { density: "compact", fieldStyle: "cell", lineSpacing: 1.3, marginPreset: "compact", margins: MARGIN_SIZES.narrow, paragraphSpacing: 6, sectionNumbers: "letters", sectionStyle: "band" },
   // Tight spacing, boxed answers: checklists, logs and one-page forms.
-  compact: { density: "compact", fieldStyle: "box", lineSpacing: 1.3, marginPreset: "compact", margins: undefined, paragraphSpacing: 4, sectionNumbers: undefined, sectionStyle: "plain" },
+  compact: { density: "compact", fieldStyle: "box", lineSpacing: 1.3, marginPreset: "compact", margins: MARGIN_SIZES.narrow, paragraphSpacing: 4, sectionNumbers: undefined, sectionStyle: "plain" },
 } as const satisfies Record<string, StyleSettings>
 
 export type DocumentStyle = keyof typeof DOCUMENT_STYLES
@@ -32,7 +32,8 @@ export type DocumentStyle = keyof typeof DOCUMENT_STYLES
  * @returns The page setup in that style.
  */
 export function applyDocumentStyle(layout: TemplateLayout, style: DocumentStyle): TemplateLayout {
-  return { ...layout, ...DOCUMENT_STYLES[style] }
+  // Margins copied, so no page shares the style's own.
+  return { ...layout, ...DOCUMENT_STYLES[style], margins: { ...DOCUMENT_STYLES[style].margins } }
 }
 
 /**
@@ -47,7 +48,14 @@ export function documentStyleOf(layout: TemplateLayout): DocumentStyle | null {
 
   return (
     (Object.keys(DOCUMENT_STYLES) as DocumentStyle[]).find((style) =>
-      Object.entries(DOCUMENT_STYLES[style]).every(([key, value]) => drawn[key as keyof StyleSettings] === value)
+      Object.entries(DOCUMENT_STYLES[style]).every(([key, value]) => sameSetting(drawn[key as keyof StyleSettings], value))
     ) ?? null
   )
+}
+
+// Settings are words and numbers, but margins are four of them.
+function sameSetting(left: unknown, right: unknown): boolean {
+  return typeof left === "object" && left !== null && typeof right === "object" && right !== null
+    ? (["top", "right", "bottom", "left"] as const).every((side) => (left as Record<string, unknown>)[side] === (right as Record<string, unknown>)[side])
+    : left === right
 }

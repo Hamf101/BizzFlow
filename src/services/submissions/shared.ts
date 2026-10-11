@@ -18,7 +18,7 @@ import {
 } from "@/services/submissions/validation"
 import {
   parseSubmissionFileRow,
-  parseSubmissionRow,
+  parseSubmissionRow as parseStoredSubmissionRow,
   SubmissionDomainError,
   type Submission,
   type SubmissionAnswers,
@@ -29,6 +29,8 @@ import { SubmissionReviewDomainError } from "@/types/submission-review"
 import { requireOrgPermission } from "@/services/organizations/active-membership"
 import { runOperation } from "@/services/operation"
 import { asSupabaseError } from "@/services/supabase-error"
+import { calculateTemplateAnswers } from "@/types/template-calculation"
+import { calculatedFieldKeys } from "@/types/template-formula"
 
 /** Columns required by the canonical submission row parser. */
 export const SUBMISSION_COLUMNS =
@@ -473,4 +475,32 @@ function getKnownMutationMessage(message: string | undefined): string | null {
   )
     ? message
     : null
+}
+
+/**
+ * Parses a stored submission with every worked-out answer worked out afresh
+ * from its answers, so one accepted suggestion, which the database writes on
+ * its own, still shows the totals that follow from it.
+ *
+ * @param value - Untrusted persistence data.
+ * @returns The submission.
+ * @throws SubmissionDomainError when the row violates the persistence contract.
+ */
+export function parseSubmissionRow(value: unknown): Submission {
+  const submission = parseStoredSubmissionRow(value)
+  const keys = calculatedFieldKeys(submission.templateSnapshot.blocks)
+
+  if (keys.length === 0) {
+    return submission
+  }
+
+  const calculated = calculateTemplateAnswers(submission.templateSnapshot, submission.values)
+
+  return {
+    ...submission,
+    values: {
+      ...submission.values,
+      ...(Object.fromEntries(keys.flatMap((key) => (calculated[key] === undefined ? [] : [[key, calculated[key]]]))) as Submission["values"]),
+    },
+  }
 }

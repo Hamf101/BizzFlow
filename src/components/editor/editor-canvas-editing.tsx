@@ -38,7 +38,7 @@ import { type DragBox, type DragLine, type DropTarget, useBlockDrag } from "@/co
 import { addPageBreak, type EditorController } from "@/components/editor/use-editor-controller"
 import { bizflowToast } from "@/components/ui/toaster"
 import { cn } from "@/lib/utils"
-import type { BlockFrame, TemplateContentV3, TextRun } from "@/types/template"
+import { MAX_LIST_LEVEL, type BlockFrame, type TemplateContentV3, type TextRun } from "@/types/template"
 import {
   frameOf,
   getTemplateBlockSlot,
@@ -187,7 +187,7 @@ export function useCanvasEditing({
 
     // The typed / and its query go; the words around them stay as they were.
     const end = open.start + 1 + open.query.length
-    const rest: ListEntry = {
+    const rest: Omit<ListEntry, "level"> = {
       runs: joinRuns(
         { runs: sliceRuns(block.runs, 0, open.start), text: block.text.slice(0, open.start) },
         { runs: sliceRuns(block.runs, end), text: block.text.slice(end) }
@@ -640,7 +640,7 @@ export function useCanvasEditing({
     },
     onListInput(block: ListBlock, item: number, text: string, runs: TextRun[] | undefined): void {
       controller.updateBlock(
-        withEntries(block, listEntries(block).map((entry, index) => (index === item ? { runs, text } : entry))),
+        withEntries(block, listEntries(block).map((entry, index) => (index === item ? { ...entry, runs, text } : entry))),
         `list:${block.id}:${item}`
       )
     },
@@ -650,21 +650,42 @@ export function useCanvasEditing({
       }
 
       const entries = listEntries(block).map((entry, index) =>
-        index === item ? { runs: caret.runs, text: caret.text } : entry
+        index === item ? { ...entry, runs: caret.runs, text: caret.text } : entry
       )
+      const level = entries[item]?.level ?? 0
+      // Tab sets an item in a level, under the one above, and Shift+Tab out again.
+      const setLevel = (to: number): void => {
+        const next = entries.map((entry, index) => (index === item ? { ...entry, level: to } : entry))
 
-      if (event.key === "Enter") {
+        controller.change((current) => updateTemplateBlock(current, withEntries(block, next)))
+        controller.requestFocus({ blockId: block.id, item, offset: caret.offset })
+      }
+
+      if (event.key === "Tab" && !event.metaKey && !event.ctrlKey && !event.altKey) {
         event.preventDefault()
 
+        const to = event.shiftKey ? level - 1 : level + 1
+
+        if (to >= 0 && to <= Math.min(MAX_LIST_LEVEL, item === 0 ? 0 : (entries[item - 1]?.level ?? 0) + 1)) {
+          setLevel(to)
+        }
+      } else if (event.key === "Enter") {
+        event.preventDefault()
+
+        // An empty item comes out a level first, and out of the list only from the top.
         if (caret.text.length === 0) {
-          liftItem(block, entries, item)
+          if (level > 0) {
+            setLevel(level - 1)
+          } else {
+            liftItem(block, entries, item)
+          }
           return
         }
 
         const next = [
           ...entries.slice(0, item),
-          { runs: sliceRuns(caret.runs, 0, caret.offset), text: caret.text.slice(0, caret.offset) },
-          { runs: sliceRuns(caret.runs, caret.offset), text: caret.text.slice(caret.offset) },
+          { level, runs: sliceRuns(caret.runs, 0, caret.offset), text: caret.text.slice(0, caret.offset) },
+          { level, runs: sliceRuns(caret.runs, caret.offset), text: caret.text.slice(caret.offset) },
           ...entries.slice(item + 1),
         ]
 
@@ -677,7 +698,7 @@ export function useCanvasEditing({
           const previous = entries[item - 1] ?? { text: "" }
           const merged = [
             ...entries.slice(0, item - 1),
-            { runs: joinRuns(previous, { runs: caret.runs, text: caret.text }), text: previous.text + caret.text },
+            { level: previous.level, runs: joinRuns(previous, { runs: caret.runs, text: caret.text }), text: previous.text + caret.text },
             ...entries.slice(item + 1),
           ]
 

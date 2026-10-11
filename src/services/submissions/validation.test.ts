@@ -7,6 +7,7 @@ import {
 import { mergeAndNormalizeSubmissionAnswers } from "@/services/submissions/shared"
 import type { Submission } from "@/types/submission"
 import { parseTemplateContent, type TemplateContent } from "@/types/template"
+import { createQuoteContent } from "@/types/template-calculation.test-support"
 import {
   createStructuredAnswerContent,
   STRUCTURED_ANSWERS
@@ -37,6 +38,20 @@ describe("submission answer validation", () => {
       manager_initials: DRAWING_DATA_URL,
       manager_signature: DRAWING_DATA_URL
     })
+  })
+
+  it("works out the formula answers on every save, from the whole of the answers, replacing what the browser sent", async () => {
+    const quote = createQuoteContent()
+
+    await expect(normalizeSubmissionDraftAnswers(quote, { items: [["Desk", "2", "10.00", "1"]], total: "1" })).resolves.toMatchObject({
+      items: [["Desk", "2", "10.00", "20.00"]],
+      subtotal: "20.00",
+      total: "24.00",
+    })
+    // A patch that changes only the table still brings the totals it changes.
+    await expect(
+      normalizeSubmissionDraftAnswers(quote, { items: [["Desk", "1", "10.00", ""]] }, { items: [["Desk", "2", "10.00", "20.00"]], total: "24.00" })
+    ).resolves.toMatchObject({ total: "12.00" })
   })
 
   it("allows a draft to keep required answers incomplete", async () => {
