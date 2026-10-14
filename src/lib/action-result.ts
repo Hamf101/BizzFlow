@@ -32,6 +32,7 @@ export const ACTION_FEEDBACK_CODES = [
   "role_removed",
   "role_updated",
   "sample_content_added",
+  "signing_cancelled",
   "signing_invitation_resent",
   "signing_invitations_sent",
   "starter_content_added",

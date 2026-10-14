@@ -1,8 +1,9 @@
 import * as z from "zod"
 
 import { collectFields, keepValidAnswers, pruneHiddenAnswerPatch } from "@/services/document-signing/answer-validation"
-import { saveGeneratedDocumentAnswers } from "@/services/document-signing/workflows"
-import { upgradeV2TemplateContentToV3 } from "@/types/template"
+import { DocumentSigningServiceError } from "@/services/document-signing/errors"
+import { getGeneratedDocumentSigningView, saveGeneratedDocumentAnswers } from "@/services/document-signing/workflows"
+import { type TemplateContent, upgradeV2TemplateContentToV3 } from "@/types/template"
 import { deleteTemplateBlock } from "@/types/template-structure"
 
 import { requireTemplateAccess } from "./access"
@@ -13,6 +14,7 @@ import { getClient, getPublishedTemplateById, getTemplateById, requirePermission
 
 const TITLE_MAX_LENGTH = 180
 const FILLED = " (filled)"
+const COPY = " (copy)"
 
 export type CreateFilledTemplateCopyInput = TemplateActorInput & {
   templateId: string
@@ -22,6 +24,8 @@ export type CreateFilledTemplateCopyInput = TemplateActorInput & {
 
 /** The filled copy, or none when no answer fit; and how many answers did and didn't fit. */
 export type FilledTemplateCopy = { documentId: string | null; dropped: number; kept: number }
+
+export type CreateDocumentCopyInput = TemplateActorInput & { documentId: string }
 
 export type FilledTemplateCopyDeps = TemplateServiceDeps & {
   /** The member's own answer save; a test stands in for it. */
@@ -79,33 +83,101 @@ export async function createFilledTemplateCopy(
     }
 
     // Not template-backed: the copy keeps the page as it stands now, not a published revision.
-    const document = await createGeneratedDocument(
-      {
-        actorUserId,
-        organizationId,
-        content,
-        description: template.description,
-        title: `${template.title.trim().slice(0, TITLE_MAX_LENGTH - FILLED.length)}${FILLED}`,
-      },
+    const documentId = await createDocumentWithAnswers(
+      { actorUserId, organizationId, content, description: template.description, folderId: null, title: withSuffix(template.title, FILLED) },
+      values,
       deps
     )
 
-    try {
-      await (deps.saveAnswers ?? saveGeneratedDocumentAnswers)(
-        { actorUserId, documentId: document.id, organizationId, values },
-        { client: deps.client }
-      )
-    } catch (error: unknown) {
-      // A copy without its answers would only be found later, empty, and a retry would make another.
-      const { error: cleanupError } = await client.from("documents").delete().eq("id", document.id).eq("org_id", organizationId)
+    return { documentId, dropped, kept }
+  })
+}
 
-      if (cleanupError) {
-        console.error("filled_copy_cleanup_failed", { documentId: document.id, organizationId })
-      }
+/**
+ * Makes a new draft of a document to edit, most often one that is completed
+ * and so fixed for good: the same page, folder and answers, but no signers
+ * and no signature or initials, which belonged to the document as it was.
+ *
+ * @param input - The member, their organization, and the document to copy.
+ * @param deps - Optional injected dependencies for tests.
+ * @returns The new document's id.
+ * @throws TemplateServiceError: 403 when the member cannot make documents or
+ *   add to the folder, 404 when they cannot open the original.
+ */
+export async function createDocumentCopy(
+  input: CreateDocumentCopyInput,
+  deps: FilledTemplateCopyDeps = {}
+): Promise<{ documentId: string }> {
+  const { actorUserId, documentId, organizationId } = input
 
-      throw error
+  return runTemplateOperation("create_document_copy", { actorUserId, documentId, organizationId }, async () => {
+    const client = getClient(deps)
+
+    await requirePermission(client, organizationId, actorUserId, "documents:create", "You cannot create documents.")
+
+    const { answers, document } = await getGeneratedDocumentSigningView(input, { client: deps.client }).catch(asTemplateError)
+    const content = document.templateSnapshot
+    const values = Object.fromEntries(
+      Object.entries(answers).filter(([fieldKey]) => !isDrawnBox(content, fieldKey))
+    )
+
+    return {
+      documentId: await createDocumentWithAnswers(
+        { actorUserId, organizationId, content, description: document.description, folderId: document.folderId, title: withSuffix(document.title, COPY) },
+        values,
+        deps
+      ),
+    }
+  })
+}
+
+function isDrawnBox(content: TemplateContent, fieldKey: string): boolean {
+  const type = collectFields(content).get(fieldKey)?.type
+
+  return type === "signature_field" || type === "initials_field"
+}
+
+function withSuffix(title: string, suffix: string): string {
+  return `${title.trim().slice(0, TITLE_MAX_LENGTH - suffix.length)}${suffix}`
+}
+
+function asTemplateError(error: unknown): never {
+  throw error instanceof DocumentSigningServiceError ? new TemplateServiceError(error.message, error.statusCode) : error
+}
+
+/**
+ * Makes a standalone document and saves its answers as the member's own save
+ * would, leaving nothing behind when they can't be saved.
+ *
+ * @returns The new document's id.
+ */
+async function createDocumentWithAnswers(
+  document: TemplateActorInput & { content: TemplateContent; description: string | null; folderId: string | null; title: string },
+  values: Record<string, unknown>,
+  deps: FilledTemplateCopyDeps
+): Promise<string> {
+  const { actorUserId, organizationId } = document
+  const { id } = await createGeneratedDocument(document, deps)
+
+  if (Object.keys(values).length === 0) {
+    return id
+  }
+
+  try {
+    await (deps.saveAnswers ?? saveGeneratedDocumentAnswers)(
+      { actorUserId, documentId: id, organizationId, values },
+      { client: deps.client }
+    )
+  } catch (error: unknown) {
+    // A copy without its answers would only be found later, empty, and a retry would make another.
+    const { error: cleanupError } = await getClient(deps).from("documents").delete().eq("id", id).eq("org_id", organizationId)
+
+    if (cleanupError) {
+      console.error("filled_copy_cleanup_failed", { documentId: id, organizationId })
     }
 
-    return { documentId: document.id, dropped, kept }
-  })
+    throw error
+  }
+
+  return id
 }

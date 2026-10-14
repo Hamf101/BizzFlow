@@ -69,7 +69,9 @@ class FakeQuery implements PromiseLike<FakeResult> {
   }
 
   is(column: string, value: unknown): FakeQuery {
-    return this.eq(column, value)
+    // A nullable column the row was seeded without is null, as in the database.
+    this.filters.push((row: FakeRow): boolean => (row[column] ?? null) === value)
+    return this
   }
 
   in(column: string, values: readonly unknown[]): FakeQuery {
@@ -109,7 +111,9 @@ class FakeQuery implements PromiseLike<FakeResult> {
       const payloads = Array.isArray(this.payload)
         ? this.payload
         : [this.payload ?? {}]
+      // Columns the database fills on insert.
       const rows = payloads.map((payload: FakeRow): FakeRow => ({
+        ...(this.tableName === "documents" ? { lifecycle_state: "active" } : {}),
         ...payload
       }))
       table.push(...rows)
@@ -242,12 +246,17 @@ export class FakeClient {
       return { data: { ...(answer.values as FakeRow) }, error: null }
     }
 
+    if (functionName === "cancel_document_signing") {
+      return this.cancelDocumentSigning(args)
+    }
+
     if (functionName !== "complete_document_recipient_signature") {
       throw new Error(`Unsupported fake RPC: ${functionName}`)
     }
 
     const recipient = this.tables.document_signing_recipients.find(
       (row: FakeRow): boolean =>
+        isCurrentRecipient(row) &&
         row.id === args.target_recipient_id &&
         row.document_id === args.target_document_id &&
         row.org_id === args.target_org_id &&
@@ -276,6 +285,7 @@ export class FakeClient {
     const hasPendingRequiredRecipient =
       this.tables.document_signing_recipients.some(
         (row: FakeRow): boolean =>
+          isCurrentRecipient(row) &&
           row.document_id === args.target_document_id &&
           row.org_id === args.target_org_id &&
           row.requires_signature === true &&
@@ -287,6 +297,31 @@ export class FakeClient {
 
     return { data: answer.workflow_status, error: null }
   }
+
+  // As cancel_document_signing: under the answer row, only while awaiting signatures.
+  private cancelDocumentSigning(args: Record<string, unknown>): FakeResult {
+    const answer = this.tables.document_answers.find(
+      (row: FakeRow): boolean => row.document_id === args.target_document_id && row.org_id === args.target_org_id
+    )
+
+    if (answer?.workflow_status !== "awaiting_signatures") {
+      return { data: null, error: { code: "23514", message: "Only a document awaiting signatures can be taken back." } }
+    }
+
+    answer.workflow_status = "draft"
+    const revoked = this.tables.document_signing_recipients.filter(
+      (row: FakeRow): boolean => isCurrentRecipient(row) && row.document_id === args.target_document_id && row.org_id === args.target_org_id
+    )
+    revoked.forEach((row: FakeRow): void => {
+      row.revoked_at = NOW.toISOString()
+    })
+
+    return { data: revoked.map(({ email, id, name, status }: FakeRow) => ({ email, id, name, status })), error: null }
+  }
+}
+
+function isCurrentRecipient(row: FakeRow): boolean {
+  return (row.revoked_at ?? null) === null
 }
 
 function mergeVisibleDocumentAnswers(

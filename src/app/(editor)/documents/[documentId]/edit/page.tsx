@@ -5,7 +5,7 @@ import { DocumentEditor } from "@/components/documents/document-editor"
 import { DocumentOpenTracker } from "@/components/documents/document-open-tracker"
 import { getFallbackDisplayName } from "@/lib/display-name"
 import { loadMemberName } from "@/lib/page-member-name"
-import { canEditDocument, canSendDocument, canShareResource } from "@/lib/permissions"
+import { canEditDocument, canPerformOrganizationAction, canSendDocument, canShareResource } from "@/lib/permissions"
 import { readPersonName } from "@/services/document-service"
 import { getEditorLayout } from "@/services/organizations/editor-layout-service"
 import type { EditorLayout } from "@/types/editor-layout"
@@ -13,6 +13,8 @@ import { saveEditorLayoutAction } from "@/app/(editor)/editor-layout-actions"
 
 import { loadDocumentPage } from "../load-document-page"
 import {
+  cancelDocumentSigningAction,
+  copyDocumentAction,
   fillDocumentAnswersAction,
   resendGeneratedDocumentInvitationAction,
   saveDocumentAnswersAction,
@@ -65,9 +67,12 @@ export default async function GeneratedDocumentEditorPage({
     return (
       <DocumentEditor
         backHref={backHref}
+        canCopy={false}
+        cancelSigningAction={cancelDocumentSigningAction}
         canFill={canFill}
         canSend={false}
         canShare={false}
+        copyAction={copyDocumentAction}
         editorLayout={{ initial: guestLayout, save: saveEditorLayoutAction }}
         guest
         me={{ id: user.id, name: guestName ?? getFallbackDisplayName(user.email) }}
@@ -95,9 +100,12 @@ export default async function GeneratedDocumentEditorPage({
       <DocumentOpenTracker documentId={view.document.id} organizationId={context.organization.id} />
       <DocumentEditor
         backHref={backHref}
+        canCopy={canPerformOrganizationAction(context.membership, "documents:create")}
+        cancelSigningAction={cancelDocumentSigningAction}
         canFill={canFill}
         canSend={canSend}
         canShare={canShare}
+        copyAction={copyDocumentAction}
         editorLayout={{ initial: editorLayout, save: saveEditorLayoutAction }}
         me={{ id: user.id, name }}
         resendAction={resendGeneratedDocumentInvitationAction}

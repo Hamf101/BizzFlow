@@ -9,7 +9,7 @@ export {
   createGeneratedDocument,
   recordDocumentRecentAccess,
 } from "./templates/generated-document-service"
-export { createFilledTemplateCopy } from "./templates/filled-copy-service"
+export { createDocumentCopy, createFilledTemplateCopy } from "./templates/filled-copy-service"
 export { changeDocumentTemplates } from "./templates/template-bulk-service"
 export {
   archiveDocumentTemplate,

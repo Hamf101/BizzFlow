@@ -2,7 +2,9 @@ import { randomUUID } from "node:crypto"
 import { isDeepStrictEqual } from "node:util"
 
 import type { OrganizationPermissionAction } from "@/lib/permissions"
+import { recordAuditLogBestEffort } from "@/services/audit-service"
 import {
+  sendDocumentSigningCancelledEmail as defaultSendDocumentSigningCancelledEmail,
   sendDocumentSigningEmail as defaultSendDocumentSigningEmail,
   DocumentSigningEmailServiceError,
 } from "@/services/document-signing-email-service"
@@ -41,6 +43,7 @@ import {
   runSigningOperation,
 } from "@/services/document-signing/errors"
 import {
+  cancelSigningWorkflow,
   cleanupRecipients,
   completeRecipientSignature,
   insertSigningRecipients,
@@ -731,6 +734,82 @@ export async function resendDocumentSigningInvitation(
       return mapSigningRecipient(updatedRecipient)
     }
   )
+}
+
+/**
+ * Takes a document awaiting signatures back to an editable draft, so its
+ * sender can change it and send it again. Every signer's link stops working
+ * and every signature so far stops counting: each was given for the words as
+ * they stood. The answers stay, since nothing records who typed which; each
+ * signer is told by email, best effort, as the cancel has already happened.
+ *
+ * @param input - Actor, organization, and document identifiers.
+ * @param deps - Optional database, clock, audit, and email dependencies.
+ * @returns How many signatures were cancelled.
+ * @throws DocumentSigningServiceError: 403 without send and fill rights, 404
+ *   for a document they cannot open, 409 once completed or when not sent.
+ */
+export async function cancelDocumentSigning(
+  input: GetGeneratedDocumentSigningViewInput,
+  deps: DocumentSigningServiceDeps = {}
+): Promise<{ cancelledSignatures: number }> {
+  return runSigningOperation("cancel_document_signing", input, async () => {
+    const client = resolveSigningClient(deps.client)
+    const { actorUserId, documentId, organizationId } = input
+
+    // Whoever may send it may take it back, and only to edit it.
+    await requireMemberDocumentAccess(client, organizationId, documentId, actorUserId, "contributor", "mutation", "documents:send", "You cannot send documents for signing.")
+    await requireMemberDocumentAccess(client, organizationId, documentId, actorUserId, "contributor", "mutation", "documents:fill", "You cannot edit this document.")
+    await requireMemberSigningDocumentLifecycle(client, organizationId, documentId, "mutation", "Archived documents cannot be changed.")
+    const view = await loadGeneratedDocumentView(client, organizationId, documentId)
+
+    if (view.workflowStatus === "completed") {
+      throw new DocumentSigningServiceError("Completed documents cannot be changed. Edit a copy instead.", 409)
+    }
+
+    if (view.workflowStatus !== "awaiting_signatures") {
+      throw new DocumentSigningServiceError("This document is not waiting for signatures.", 409)
+    }
+
+    const revoked = await cancelSigningWorkflow(client, organizationId, documentId)
+    const cancelledSignatures = revoked.filter((recipient) => recipient.status === "signed").length
+    const revokedAt = getSigningNow(deps.now).toISOString()
+
+    await recordAuditLogBestEffort(
+      {
+        organizationId,
+        actorUserId,
+        action: "document.signing_cancelled",
+        targetType: "document",
+        targetId: documentId,
+        metadata: { cancelledSignatures, revokedLinks: revoked.length },
+      },
+      deps.recordAuditLog
+    )
+
+    const sendEmail = deps.sendDocumentSigningCancelledEmail ?? defaultSendDocumentSigningCancelledEmail
+    const deliveries = await Promise.allSettled(
+      revoked.map((recipient) =>
+        sendEmail({
+          documentId,
+          documentTitle: view.document.title,
+          organizationName: view.organizationName,
+          recipientEmail: recipient.email,
+          recipientId: recipient.id,
+          recipientName: recipient.name,
+          revokedAt,
+          signed: recipient.status === "signed",
+        })
+      )
+    )
+    const failedDeliveries = deliveries.filter((delivery) => delivery.status === "rejected").length
+
+    if (failedDeliveries > 0) {
+      console.warn("document_signing_cancelled_email_incomplete", { organizationId, documentId, failedDeliveries })
+    }
+
+    return { cancelledSignatures }
+  })
 }
 
 /**

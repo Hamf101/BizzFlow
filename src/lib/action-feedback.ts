@@ -75,6 +75,7 @@ export const ACTION_FEEDBACK = {
   role_removed: done("Role removed"),
   role_updated: done("Role updated"),
   sample_content_added: done("Sample submissions ready"),
+  signing_cancelled: done("Signing cancelled"),
   signing_invitation_resent: done("Signing invitation resent"),
   signing_invitations_sent: done("Signing invitations sent"),
   starter_content_added: done("Starter templates ready"),

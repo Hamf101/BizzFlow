@@ -21,12 +21,14 @@ import { loadAuthenticatedPageUser } from "@/lib/page-auth"
 import { findGuestOrganizationId } from "@/services/document-service"
 import type { SaveResult } from "@/components/editor/use-autosave"
 import {
+  cancelDocumentSigning,
   fillGeneratedDocumentAnswers,
   resendDocumentSigningInvitation,
   saveGeneratedDocumentAnswers,
   sendDocumentForSigning,
   updateGeneratedDocumentContent,
 } from "@/services/document-signing-service"
+import { createDocumentCopy } from "@/services/template-service"
 import type { DocumentRecipientInput } from "@/types/signing"
 import type { FlowFillResult } from "@/types/template-flow"
 
@@ -210,6 +212,60 @@ export async function resendGeneratedDocumentInvitationAction(
         recipientId: requireFormId(recipientId, "Recipient id"),
       })
       revalidateDocumentEditor(documentId)
+    },
+  })
+}
+
+/**
+ * Takes a document awaiting signatures back to a draft to edit, revoking every
+ * signer's link and telling each of them by email.
+ *
+ * @param formData - Generated document id.
+ * @returns Never returns; redirects back to the editor, now editable.
+ */
+export async function cancelDocumentSigningAction(formData: FormData): Promise<void> {
+  const documentId = getFormString(formData, "documentId")
+  const editorPath = getDocumentEditorPath(documentId)
+
+  // It emails every signer, so it spends the member's outbound budget as a
+  // send does. Both calls redirect by throwing; keep them outside the run.
+  const user = await loadAuthenticatedPageUser(editorPath)
+  await enforceOutboundEmailRateLimit({ userId: user.id, redirectPath: editorPath })
+
+  await runFormAction({
+    event: "generated_document_cancel_signing_action",
+    log: { documentId },
+    path: editorPath,
+    success: "signing_cancelled",
+    run: async () => {
+      const { actor } = await loadActionContext(NO_ORGANIZATION)
+
+      await cancelDocumentSigning({ ...actor, documentId: requireFormId(documentId, "Document id") })
+      revalidateDocumentEditor(documentId)
+    },
+  })
+}
+
+/**
+ * Makes a new draft of a document, without its signatures, and opens it.
+ *
+ * @param formData - The id of the document to copy.
+ * @returns Never returns; redirects to the copy's editor.
+ */
+export async function copyDocumentAction(formData: FormData): Promise<void> {
+  const documentId = getFormString(formData, "documentId")
+
+  await runFormAction({
+    event: "generated_document_copy_action",
+    log: { documentId },
+    path: getDocumentEditorPath(documentId),
+    success: "document_created",
+    run: async () => {
+      const { actor } = await loadActionContext(NO_ORGANIZATION)
+      const copy = await createDocumentCopy({ ...actor, documentId: requireFormId(documentId, "Document id") })
+
+      revalidatePath("/documents")
+      return { path: getDocumentEditorPath(copy.documentId) }
     },
   })
 }

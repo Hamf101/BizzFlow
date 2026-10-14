@@ -1,10 +1,11 @@
 "use client"
 
-import { Eye, Files, History, MessageSquare, MoreHorizontal, Palette, Send, UserPlus } from "lucide-react"
+import { Copy, Eye, Files, History, MessageSquare, MoreHorizontal, Palette, Send, UserPlus } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { type ReactElement, useEffect, useMemo, useRef, useState } from "react"
 
 import type { DocumentContentInput } from "@/app/(editor)/documents/[documentId]/edit/actions"
+import { EditSentDocumentButton, signedDocumentActions } from "@/components/documents/edit-signed-document"
 import { mergeFilledAnswers, whyNotFill } from "@/components/documents/fill-answers"
 import { type FlowHandoff, useFlowHandoff } from "@/components/flow/flow-handoff"
 import { DesignToolsContext } from "@/components/editor/design-tools"
@@ -79,10 +80,16 @@ const SENT_STARTER: FlowStarter = {
 
 type DocumentEditorProps = {
   backHref: string
+  /** Whether the member may make documents, and so edit a copy of a completed one. */
+  canCopy: boolean
+  /** Takes a document awaiting signatures back to an editable draft. */
+  cancelSigningAction: (formData: FormData) => Promise<void>
   canFill: boolean
   canSend: boolean
   /** Whether the member may choose who else can open this document. */
   canShare: boolean
+  /** Makes a new draft of the document and opens it. */
+  copyAction: (formData: FormData) => Promise<void>
   /** Where this person keeps the dock and zoom. */
   editorLayout?: EditorLayoutStore
   /** Fills the document with answers Flow read off a form, keeping only those its fields take. */
@@ -108,9 +115,12 @@ type DocumentEditorProps = {
  */
 export function DocumentEditor({
   backHref,
+  canCopy,
+  cancelSigningAction,
   canFill,
   canSend,
   canShare,
+  copyAction,
   editorLayout,
   fillAnswersAction,
   guest = false,
@@ -130,6 +140,7 @@ export function DocumentEditor({
   // remaining signers can still fill what is theirs.
   const signedCount = view.recipients.filter((recipient) => recipient.status === "signed").length
   const fillable = canFill && !completed && signedCount === 0
+  const offers = signedDocumentActions({ canCopy, canFill, canSend, workflowStatus: view.workflowStatus })
   const initial = useMemo(
     (): DocumentPage => ({ content: upgradeV2TemplateContentToV3(document.templateSnapshot), title: document.title }),
     [document]
@@ -280,7 +291,7 @@ export function DocumentEditor({
   useMissingPictureAddresses({ content: page.content, path: livePath, pictures, roomId: live.roomId, session: live.session })
   const exports = exportLinks(`/api/documents/${encodeURIComponent(document.id)}`, { fillable: !completed })
   // Anything more than Export and Preview, which a phone folds in with them.
-  const more = canShare || (canSend && document.templateId !== null)
+  const more = canShare || (canSend && document.templateId !== null) || offers.copy
 
   const tools: DockTool[] = [
     {
@@ -497,6 +508,18 @@ export function DocumentEditor({
                         Share…
                       </DropdownMenuItem>
                     ) : null}
+                    {offers.copy ? (
+                      <DropdownMenuItem
+                        onClick={() => {
+                          const data = new FormData()
+                          data.set("documentId", document.id)
+                          void copyAction(data)
+                        }}
+                      >
+                        <Copy />
+                        Edit a copy
+                      </DropdownMenuItem>
+                    ) : null}
                     {/* Answers are kept as a template's submissions, so it needs one. */}
                     {canSend && document.templateId ? (
                       <DropdownMenuItem onClick={() => setAsking(true)}>
@@ -623,6 +646,8 @@ export function DocumentEditor({
               <Send />
               Send
             </Button>
+          ) : offers.edit ? (
+            <EditSentDocumentButton action={cancelSigningAction} documentId={document.id} signedCount={signedCount} />
           ) : null
         }
         saveStatus={writable || fillable ? saveStatus : null}

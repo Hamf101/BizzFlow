@@ -94,3 +94,49 @@ function createSigningDeliveryReference(
 
   return `document-signing/${input.documentId}/${input.recipientId}/${tokenDigest}`
 }
+
+/** One signer whose link stopped working when the sender took the document back to edit. */
+export type SendDocumentSigningCancelledEmailInput = Omit<SendDocumentSigningEmailInput, "token"> & {
+  /** When the cancelled round began, so a second cancel is a second email. */
+  revokedAt: string
+  signed: boolean
+}
+
+/**
+ * Tells a signer the document they were sent is being changed, so their link
+ * no longer works; one who signed learns their signature no longer counts.
+ *
+ * @param input - Document, organization, signer, and whether they had signed.
+ * @param deps - Optional email transport dependency for tests.
+ * @returns Resolves after EmailJS accepts the email.
+ * @throws DocumentSigningEmailServiceError when configuration or delivery fails.
+ */
+export async function sendDocumentSigningCancelledEmail(
+  input: SendDocumentSigningCancelledEmailInput,
+  deps: DocumentSigningEmailServiceDeps = {}
+): Promise<void> {
+  const lead = `${input.organizationName} is changing ${input.documentTitle}, so the signing link you were sent no longer works.`
+  const next = input.signed
+    ? "Your signature no longer counts. If they still need it, you will get a new link to sign the changed document."
+    : "If they still need your signature, you will get a new link."
+
+  await deliverTransactionalEmail({
+    name: "document",
+    logPrefix: "document_signing_cancelled_email",
+    ids: { documentId: input.documentId, recipientId: input.recipientId },
+    // Nothing to open: the old link is gone and a new one comes with its own email.
+    path: () => "/",
+    deliveryReference: `document-signing-cancelled/${input.documentId}/${input.recipientId}/${input.revokedAt}`,
+    toEmail: input.recipientEmail,
+    compose: () => ({
+      subject: `${input.documentTitle} is being changed`,
+      contentHtml: [lead, next]
+        .map((line) => `<p style="margin:0 0 12px;color:#706a72;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:24px;">${escapeHtml(line)}</p>`)
+        .join(""),
+      text: `${lead} ${next}`,
+    }),
+    fail: (message, statusCode) => new DocumentSigningEmailServiceError(message, statusCode),
+    explainRejection: true,
+    transport: deps.transport,
+  })
+}

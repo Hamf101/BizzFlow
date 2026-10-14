@@ -30,6 +30,7 @@ export const AUDIT_LOG_ACTIONS = [
   "document.sent_to_answer",
   "document.sharing_inheritance_changed",
   "document.finalized",
+  "document.signing_cancelled",
   "document_version.created",
   "document_version.download_url_issued",
   "template.access_granted",

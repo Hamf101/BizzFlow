@@ -394,6 +394,7 @@ export type Database = {
           name: string
           org_id: string
           requires_signature: boolean
+          revoked_at: string | null
           signature_data: Json | null
           signed_at: string | null
           signer_number: number
@@ -412,6 +413,7 @@ export type Database = {
           name: string
           org_id: string
           requires_signature?: boolean
+          revoked_at?: string | null
           signature_data?: Json | null
           signed_at?: string | null
           signer_number: number
@@ -430,6 +432,7 @@ export type Database = {
           name?: string
           org_id?: string
           requires_signature?: boolean
+          revoked_at?: string | null
           signature_data?: Json | null
           signed_at?: string | null
           signer_number?: number
@@ -3135,6 +3138,15 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      cancel_document_signing: {
+        Args: { target_document_id: string; target_org_id: string }
+        Returns: {
+          email: string
+          id: string
+          name: string
+          status: string
+        }[]
       }
       compact_working_copy_room: {
         Args: {

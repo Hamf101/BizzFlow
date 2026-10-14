@@ -1045,6 +1045,13 @@ export type AdminDatabase = {
         }
         Returns: string
       }
+      cancel_document_signing: {
+        Args: {
+          target_org_id: string
+          target_document_id: string
+        }
+        Returns: { id: string; name: string; email: string; status: string }[]
+      }
       merge_generated_document_answers: {
         Args: {
           target_org_id: string

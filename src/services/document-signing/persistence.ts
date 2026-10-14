@@ -109,6 +109,8 @@ export async function loadGeneratedDocumentView(
         .select(RECIPIENT_COLUMNS)
         .eq("document_id", documentId)
         .eq("org_id", organizationId)
+        // Signers whose round the sender cancelled are no longer the document's.
+        .is("revoked_at", null)
         // The order they were added in, which a signer's boxes are assigned by.
         .order("signer_number", { ascending: true }),
       client
@@ -264,6 +266,8 @@ export async function loadRecipientByToken(
     .from("document_signing_recipients")
     .select(RECIPIENT_COLUMNS)
     .eq("token_hash", tokenHash)
+    // A link from a round the sender cancelled opens nothing.
+    .is("revoked_at", null)
     .maybeSingle()
 
   if (error) {
@@ -368,6 +372,36 @@ export async function startSigningWorkflow(
   return Boolean(data)
 }
 
+/** A signer whose link a cancelled round revoked. */
+export type RevokedSigningRecipient = Pick<DocumentSigningRecipientRow, "email" | "id" | "name" | "status">
+
+/**
+ * Takes a document awaiting signatures back to a draft and revokes every
+ * signer's link, atomically under the answer row's lock, so a signature
+ * landing at the same moment either completes the document first or is refused.
+ *
+ * @param client - Signing persistence client.
+ * @param organizationId - Tenant identifier.
+ * @param documentId - Generated-document identifier.
+ * @returns The signers whose links were revoked.
+ */
+export async function cancelSigningWorkflow(
+  client: SigningServiceClient,
+  organizationId: string,
+  documentId: string
+): Promise<RevokedSigningRecipient[]> {
+  const { data, error } = await client.rpc("cancel_document_signing", {
+    target_org_id: organizationId,
+    target_document_id: documentId,
+  })
+
+  if (error || !Array.isArray(data)) {
+    throw createDatabaseError(error, "Unable to cancel signing.")
+  }
+
+  return data as RevokedSigningRecipient[]
+}
+
 /**
  * Replaces a pending recipient's private link metadata.
  *
@@ -392,6 +426,7 @@ export async function refreshSigningRecipientLink(
     .eq("document_id", input.documentId)
     .eq("org_id", input.organizationId)
     .neq("status", "signed")
+    .is("revoked_at", null)
     .select(RECIPIENT_COLUMNS)
     .maybeSingle()
 
@@ -422,6 +457,7 @@ export async function markSigningRecipientViewed(
     .eq("id", recipient.id)
     .eq("token_hash", recipient.token_hash)
     .eq("status", "pending")
+    .is("revoked_at", null)
     .select(RECIPIENT_COLUMNS)
     .maybeSingle()
 
