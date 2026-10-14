@@ -835,7 +835,7 @@ function estimateRowsPiece(item: PdfBlockFlowItem, width: number): number {
 let measuringFaces: { bold: PDFFont; regular: PDFFont } | undefined
 const rowHeights = new WeakMap<readonly string[], Map<number, number>>()
 
-function measuringFace(bold: boolean): PDFFont {
+export function measuringFace(bold: boolean): PDFFont {
   measuringFaces ??= { bold: measuringFont(PDF_BOLD_FONT_PATH), regular: measuringFont(PDF_REGULAR_FONT_PATH) }
 
   return bold ? measuringFaces.bold : measuringFaces.regular

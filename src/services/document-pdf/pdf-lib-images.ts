@@ -39,25 +39,8 @@ export async function embedPdfLibImage(
     return cached
   }
 
-  const image = asset ? await readStoredImage(context, asset) : parseEmbeddedImage(dataUrl)
-
-  if (!image) {
-    throw createInvalidImageError()
-  }
-
+  const { dimensions, ...image } = await readPicture(picture, context.readImage)
   const { bytes } = image
-  const dimensions = readImageDimensions(bytes, image.format)
-
-  if (!dimensions) {
-    throw createInvalidImageError()
-  }
-
-  if (exceedsEmbeddedImageLimit(image.format, dimensions)) {
-    throw new DocumentPdfServiceError(
-      "An embedded document image is too large.",
-      400
-    )
-  }
 
   if (
     image.format === "png" &&
@@ -84,6 +67,43 @@ export async function embedPdfLibImage(
   } catch {
     throw createInvalidImageError()
   }
+}
+
+/**
+ * Reads a picture's bytes and size, refusing one unreadable or over the
+ * per-image limit before anything decodes it: a stored picture's print copy,
+ * or the data of one embedded before pictures were stored.
+ *
+ * @param picture - A PNG or JPEG data URL, or a block or logo's stored or embedded picture.
+ * @param readImage - Reads a stored picture's print copy.
+ * @returns The bytes, their format and the picture's size in pixels.
+ * @throws DocumentPdfServiceError when the picture is unreadable or too large.
+ */
+export async function readPicture(
+  picture: string | { asset?: TemplateImageAsset | null; dataUrl?: string | null },
+  readImage: PdfLibRenderContext["readImage"]
+): Promise<PdfImageBytes & { dimensions: { height: number; width: number } }> {
+  const { asset, dataUrl } = typeof picture === "string" ? { asset: null, dataUrl: picture } : picture
+  const image = asset ? await readStoredImage(readImage, asset) : parseEmbeddedImage(dataUrl)
+
+  if (!image) {
+    throw createInvalidImageError()
+  }
+
+  const dimensions = readImageDimensions(image.bytes, image.format)
+
+  if (!dimensions) {
+    throw createInvalidImageError()
+  }
+
+  if (exceedsEmbeddedImageLimit(image.format, dimensions)) {
+    throw new DocumentPdfServiceError(
+      "An embedded document image is too large.",
+      400
+    )
+  }
+
+  return { ...image, dimensions }
 }
 
 /**
@@ -146,14 +166,14 @@ function parseEmbeddedImage(dataUrl: string | null | undefined): PdfImageBytes |
 }
 
 async function readStoredImage(
-  context: PdfLibRenderContext,
+  readImage: PdfLibRenderContext["readImage"],
   asset: TemplateImageAsset
 ): Promise<PdfImageBytes | null> {
-  if (!context.readImage) {
+  if (!readImage) {
     throw new DocumentPdfServiceError("This document's pictures could not be loaded.", 500)
   }
 
-  const bytes = Buffer.from(await context.readImage(asset))
+  const bytes = Buffer.from(await readImage(asset))
   // The print copy is a PNG or a JPEG; its first bytes say which.
   const format = bytes[0] === 0x89 && bytes[1] === 0x50 ? "png" : bytes[0] === 0xff && bytes[1] === 0xd8 ? "jpeg" : null
 

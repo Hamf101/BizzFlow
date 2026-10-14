@@ -1291,7 +1291,7 @@ function drawPdfLibCombRow(context: PdfLibRenderContext, item: PdfBlockFlowItem,
 }
 
 // A field's label, marked when it must be answered or when it carries on from the last page.
-function fieldLabel(item: PdfBlockFlowItem): string {
+export function fieldLabel(item: PdfBlockFlowItem): string {
   const block = item.block as PdfFieldBlock
 
   return `${block.label}${item.fieldContinued ? " (continued)" : block.required ? " *" : ""}`
