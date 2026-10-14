@@ -4,6 +4,7 @@
   // tests or the helpers only tests import.
   "entry": [
     "e2e/**/*.{ts,tsx}",
+    "playwright.demo.config.ts",
     "src/**/*.test.{ts,tsx}",
     "scripts/**/*.{mjs,ts,tsx}",
     "src/sentry.server.config.ts!",

@@ -18,6 +18,7 @@
     "check": "pnpm lint && pnpm typecheck && pnpm check:test-integrity && pnpm test && pnpm check:duplication && pnpm check:deadcode && pnpm build && pnpm check:route-js && pnpm audit:dependencies",
     "check:e2e": "pnpm build:e2e && pnpm test:e2e",
     "test:e2e": "playwright test",
+    "demo:record": "playwright test -c playwright.demo.config.ts",
     "test:sql": "sh scripts/test-sql.sh",
     "db:types": "supabase gen types typescript --local --schema public > src/types/database.ts",
     "e2e:up": "corepack pnpm exec supabase start && docker compose -f docker-compose.e2e.yml up -d --wait minio && docker compose -f docker-compose.e2e.yml run --rm create-bucket && pnpm e2e:env",

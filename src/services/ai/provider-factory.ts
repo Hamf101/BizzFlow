@@ -3,6 +3,7 @@ import { APPROVED_AI_MODELS } from "@/services/ai/approved-models"
 import type { AiEffort, AiProvider, AiRuntime } from "@/services/ai/contracts"
 import { GeminiAiProvider } from "@/services/ai/gemini-provider"
 import { OpenRouterAiProvider } from "@/services/ai/openrouter-provider"
+import { createReplayProvider, recordTo, REPLAY_PROVIDER_ID } from "@/services/ai/replay-provider"
 
 type AiProviderFactory = (config: AiEnv, effort: AiEffort) => AiProvider
 
@@ -28,6 +29,15 @@ const AI_PROVIDER_FACTORIES: Readonly<Record<string, AiProviderFactory>> = {
 export function createAiRuntime(options: { model?: string; requireApproved?: boolean } = {}): AiRuntime {
   const config = getAiEnv()
   const model = options.model ?? config.AI_MODEL
+
+  // Replay never reaches a vendor, so it serves whichever model is asked for.
+  if (config.AI_PROVIDER === REPLAY_PROVIDER_ID) {
+    return {
+      provider: createReplayProvider(config.AI_REPLAY_FILE),
+      model: { provider: REPLAY_PROVIDER_ID, model },
+    }
+  }
+
   const approved = APPROVED_AI_MODELS.find(
     (candidate) =>
       candidate.model === model && (options.model !== undefined || candidate.provider === config.AI_PROVIDER)
@@ -43,8 +53,10 @@ export function createAiRuntime(options: { model?: string; requireApproved?: boo
     throw new Error(`AI model ${provider}/${model} is not approved for Flow.`)
   }
 
+  const real = createProvider(config, config.AI_EFFORT ?? approved?.effort ?? "low")
+
   return {
-    provider: createProvider(config, config.AI_EFFORT ?? approved?.effort ?? "low"),
+    provider: config.AI_RECORD_FILE ? recordTo(config.AI_RECORD_FILE, real) : real,
     model: { provider, model },
   }
 }
