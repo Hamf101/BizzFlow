@@ -3,6 +3,7 @@ import type {
   buildDocumentObjectKey,
   createSignedDocumentDownloadUrl,
   createSignedDocumentUploadUrl,
+  deleteDocumentStorageObject,
   validateDocumentUploadRequest,
   verifyDocumentUpload,
 } from "@/services/document-storage-service"
@@ -163,4 +164,5 @@ export type DocumentServiceDeps = {
   createSignedDocumentUploadUrl?: typeof createSignedDocumentUploadUrl
   createSignedDocumentDownloadUrl?: typeof createSignedDocumentDownloadUrl
   verifyDocumentUpload?: typeof verifyDocumentUpload
+  deleteDocumentStorageObject?: typeof deleteDocumentStorageObject
 }

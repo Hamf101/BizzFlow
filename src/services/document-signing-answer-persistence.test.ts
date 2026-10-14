@@ -604,6 +604,20 @@ describe("document signing answer persistence", () => {
     await expect(fill(new FakeClient(tables))).rejects.toMatchObject({ statusCode: 409 })
     expect(tables.document_answers[0].values).toEqual({})
   })
+
+  it("counts a filled answer only when the save keeps it, never one the page's own answers hide", async () => {
+    const tables = createBaseTables()
+    tables.documents[0].template_snapshot = createConditionalSigningSnapshot()
+    tables.document_answers[0].values = { include_details: false }
+
+    const filled = await fillGeneratedDocumentAnswers(
+      { actorUserId: MANAGER_ID, answers: { approval_details: "Read off the form" }, documentId: DOCUMENT_ID, organizationId: ORG_ID },
+      { client: new FakeClient(tables) as never }
+    )
+
+    expect(filled).toMatchObject({ dropped: 1, kept: 0 })
+    expect(tables.document_answers[0].values).toEqual({ include_details: false })
+  })
 })
 
 function createConditionalSigningSnapshot(): TemplateContent {

@@ -18,6 +18,8 @@ export async function uploadDocumentFile(input: {
   file: File
   folderId: string | null
   organizationId: string
+  /** Told the new document's id once it exists, before its bytes are sent. */
+  onPrepared?: (documentId: string) => void
   signal?: AbortSignal
   title: string
 }): Promise<CreateDocumentUploadUrlResponse> {
@@ -44,10 +46,27 @@ export async function uploadDocumentFile(input: {
 
   const uploadMetadata = (await response.json()) as CreateDocumentUploadUrlResponse
 
+  input.onPrepared?.(uploadMetadata.documentId)
   await uploadFileToSignedUrl(uploadMetadata.uploadUrl, file, "Unable to upload file to storage.", contentType, signal)
   await completeDocumentUploadRequest(uploadMetadata, organizationId, "Unable to complete upload.", signal)
 
   return uploadMetadata
+}
+
+/**
+ * Takes back a new document whose upload stopped before it completed, so
+ * nothing unopenable is left in Files. Best effort: it outlives the page.
+ *
+ * @param documentId - The document {@link uploadDocumentFile} prepared.
+ * @param organizationId - Its workspace.
+ */
+export function discardDocumentUpload(documentId: string, organizationId: string): void {
+  void fetch(`/api/documents/${encodeURIComponent(documentId)}/complete-upload`, {
+    body: JSON.stringify({ organizationId }),
+    headers: { "content-type": "application/json" },
+    keepalive: true,
+    method: "DELETE",
+  }).catch(() => undefined)
 }
 
 /**

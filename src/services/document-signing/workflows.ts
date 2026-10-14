@@ -272,8 +272,9 @@ export async function fillGeneratedDocumentAnswers(
     }
 
     const view = await getGeneratedDocumentSigningView({ actorUserId, documentId, organizationId }, deps)
-    const values = await keepValidAnswers(collectFields(view.document.templateSnapshot), input.answers as Record<string, unknown>)
-
+    const content = view.document.templateSnapshot
+    // Counted as the save will keep them: an answer the page's own answers hide is pruned.
+    const values = pruneHiddenAnswerPatch(content, view.answers, await keepValidAnswers(collectFields(content), input.answers as Record<string, unknown>))
     const kept = Object.keys(values).length
 
     // Saved even when none fit, so its refusals still answer.

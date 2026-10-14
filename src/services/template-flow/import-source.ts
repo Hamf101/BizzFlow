@@ -118,9 +118,20 @@ export async function toFlowAttachment(bytes: Uint8Array, contentType: string): 
   }
 
   if (kind === "document") {
-    const pages = await PDFDocument.load(bytes, { ignoreEncryption: true, updateMetadata: false })
-      .then((pdf) => pdf.getPageCount())
-      .catch(() => null)
+    const pdf = await PDFDocument.load(bytes, { ignoreEncryption: true, updateMetadata: false }).catch(() => null)
+
+    // The model can't read one either, and would only fail without saying why.
+    if (pdf?.isEncrypted) {
+      throw new TemplateFlowServiceError("Flow can't read a password-protected PDF. Remove its protection and attach it again.", 422)
+    }
+
+    const pages = (() => {
+      try {
+        return pdf?.getPageCount() ?? null
+      } catch {
+        return null
+      }
+    })()
 
     if (pages === null) {
       throw new TemplateFlowServiceError("Flow couldn't open this PDF.", 422)
@@ -167,7 +178,7 @@ export async function readSourceAnswers(
   const renamed = Object.entries(answers).flatMap(([writtenKey, value]): [string, unknown][] => {
     const fieldKey = application.fieldKeys?.get(writtenKey)
 
-    return fieldKey === undefined ? [] : [[fieldKey, value]]
+    return fieldKey == null ? [] : [[fieldKey, value]]
   })
 
   // With no sender given, a signature or initials box refuses any answer, and a file field is no field here.

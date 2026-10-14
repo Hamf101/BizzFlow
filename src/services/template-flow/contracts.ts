@@ -438,8 +438,8 @@ export type FlowApplicationResult = {
   draft: EditableFlowDraft
   ledgerItems: TemplateFlowLedgerItem[]
   changedBlockIds: string[]
-  /** The key the model wrote for each field it added or changed → the key the field has. Never shown or logged. */
-  fieldKeys?: ReadonlyMap<string, string>
+  /** The key the model wrote for each field it added or changed → the key the field has, or null when it wrote it on two. Never shown or logged. */
+  fieldKeys?: ReadonlyMap<string, string | null>
 }
 
 export type TemplateFlowProposalReceipt = {

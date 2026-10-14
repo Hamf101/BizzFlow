@@ -1,14 +1,15 @@
 import * as z from "zod"
 
-import { collectFields, keepValidAnswers } from "@/services/document-signing/answer-validation"
+import { collectFields, keepValidAnswers, pruneHiddenAnswerPatch } from "@/services/document-signing/answer-validation"
 import { saveGeneratedDocumentAnswers } from "@/services/document-signing/workflows"
 import { upgradeV2TemplateContentToV3 } from "@/types/template"
 import { deleteTemplateBlock } from "@/types/template-structure"
 
+import { requireTemplateAccess } from "./access"
 import type { TemplateActorInput, TemplateServiceDeps } from "./contracts"
+import { TemplateServiceError } from "./errors"
 import { createGeneratedDocument } from "./generated-document-service"
-import { getDocumentTemplate } from "./template-lifecycle-service"
-import { getClient, requirePermission, runTemplateOperation } from "./shared"
+import { getClient, getPublishedTemplateById, getTemplateById, requirePermission, runTemplateOperation } from "./shared"
 
 const TITLE_MAX_LENGTH = 180
 const FILLED = " (filled)"
@@ -38,7 +39,8 @@ export type FilledTemplateCopyDeps = TemplateServiceDeps & {
  * @param deps - Optional injected dependencies for tests.
  * @returns The new document, or none when no answer fits, and how many answers fit.
  * @throws TemplateServiceError: 404 when the template cannot be opened, 403
- *   when the member cannot make documents, 400 for answers that are not an object.
+ *   when the member cannot make documents or only views it, 409 when a
+ *   non-editor's template is not published, 400 for answers that are not an object.
  */
 export async function createFilledTemplateCopy(
   input: CreateFilledTemplateCopyInput,
@@ -52,12 +54,22 @@ export async function createFilledTemplateCopy(
     await requirePermission(client, organizationId, actorUserId, "documents:create", "You cannot create documents.")
 
     const answers = z.record(z.string(), z.unknown()).parse(input.answers)
-    const template = await getDocumentTemplate({ actorUserId, organizationId, templateId }, deps)
+    // As making a document from a template: someone who uses it, and its published
+    // version unless they edit it, when its working copy is theirs to copy.
+    const level = await requireTemplateAccess(client, { actorUserId, organizationId, templateId }, "user", "You cannot use document templates.")
+    const working = await getTemplateById(client, organizationId, templateId)
+
+    if (level !== "editor" && working.status !== "published") {
+      throw new TemplateServiceError("Only published templates can create documents.", 409)
+    }
+
+    const template = level === "editor" ? working : await getPublishedTemplateById(client, organizationId, templateId)
     // A document takes no file uploads, so a place to attach one stays on the template.
     const content = template.content.blocks
       .filter((block) => block.type === "file_field")
       .reduce((page, block) => deleteTemplateBlock(page, block.id), upgradeV2TemplateContentToV3(template.content))
-    const values = await keepValidAnswers(collectFields(content), answers)
+    // Counted as the save will keep them: a new copy holds no answers yet, so one its form's own answers hide is pruned.
+    const values = pruneHiddenAnswerPatch(content, {}, await keepValidAnswers(collectFields(content), answers))
     const kept = Object.keys(values).length
     const dropped = Object.keys(answers).length - kept
 

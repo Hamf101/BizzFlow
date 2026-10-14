@@ -330,8 +330,9 @@ export function applyFlowOperations(
   // change can name the earlier ones it cannot stand without.
   const addedBy = new Map<string, number>()
   const touchedBy = new Map<string, number[]>()
-  // The key the model wrote for a field → the key Flow gave it.
-  const fieldKeys = new Map<string, string>()
+  // The key the model wrote for a field → the key Flow gave it; null once it
+  // wrote that key on two different fields, so no answer can land on the wrong one.
+  const fieldKeys = new Map<string, string | null>()
 
   for (const [index, operation] of operations.entries()) {
     recordAffectedOtherDropdowns(nextDraft, operation, otherInvariantContext)
@@ -378,7 +379,9 @@ export function applyFlowOperations(
       const written = nextDraft.content.blocks.find((block: TemplateBlock): boolean => block.id === affectedBlockIds[0])
 
       if (written !== undefined && "fieldKey" in written) {
-        fieldKeys.set(operation.payload.block.fieldKey, written.fieldKey)
+        const writtenKey = operation.payload.block.fieldKey
+
+        fieldKeys.set(writtenKey, fieldKeys.has(writtenKey) && fieldKeys.get(writtenKey) !== written.fieldKey ? null : written.fieldKey)
       }
     }
 

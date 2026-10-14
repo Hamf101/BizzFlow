@@ -1845,12 +1845,17 @@ describe("Flow recreating a form from a file", () => {
 
   it("refuses a file Flow cannot read, and never asks the model", async () => {
     const elevenPages = await pdfOfPages(11)
+    const locked = await PDFDocument.create()
+    locked.addPage()
+    locked.encrypt({ ownerPassword: "owner", userPassword: "reader" })
+    const passwordProtected = await locked.save()
     const refusals = [
       { file: { contentType: "text/csv", byteSize: 4 }, bytes: new TextEncoder().encode("a,b\n"), statusCode: 415 },
       { file: { contentType: "image/png", byteSize: 4 }, bytes: new TextEncoder().encode("%PDF"), statusCode: 415 },
       { file: { contentType: "image/png", byteSize: 15 * 1024 * 1024 + 1 }, bytes: PNG_BYTES, statusCode: 413 },
       { file: { contentType: "application/pdf", byteSize: elevenPages.byteLength }, bytes: elevenPages, statusCode: 422 },
-      { file: { contentType: "application/pdf", byteSize: 9 }, bytes: new TextEncoder().encode("%PDF-1.7 "), statusCode: 422 }
+      { file: { contentType: "application/pdf", byteSize: 9 }, bytes: new TextEncoder().encode("%PDF-1.7 "), statusCode: 422 },
+      { file: { contentType: "application/pdf", byteSize: passwordProtected.byteLength }, bytes: passwordProtected, statusCode: 422 }
     ]
 
     for (const refusal of refusals) {
@@ -1901,6 +1906,24 @@ describe("Flow recreating a form from a file", () => {
 
     // "name" was taken by the field already there, which this form never answered.
     expect((await run).proposal?.sourceAnswers).toEqual({ name_2: "Biscuit" })
+  })
+
+  it("drops an answer whose key the model wrote on two different fields, rather than guess which", async () => {
+    const field = (label: string) => ({ type: "text_field", fieldKey: "name", label, required: false, helpText: null, placeholder: null, multiline: false })
+    const aiProvider = createTestAiProvider([
+      flowProviderResult({
+        ...successfulFlowPayload(),
+        operations: [
+          { type: "add_block", summary: "Added the owner", payload: { afterBlockId: null, block: field("Owner name") } },
+          { type: "add_block", summary: "Added the pet", payload: { afterBlockId: null, block: field("Pet name") } },
+          { type: "add_block", summary: "Added the vet", payload: { afterBlockId: null, block: { ...field("Vet"), fieldKey: "vet" } } }
+        ],
+        sourceAnswersJson: JSON.stringify({ name: "Ada", vet: "Dr. Lee" })
+      })
+    ])
+    const { run } = runSourceTurn(sourceClient({ contentType: "image/png", byteSize: PNG_BYTES.byteLength }), PNG_BYTES, aiProvider)
+
+    expect((await run).proposal?.sourceAnswers).toEqual({ vet: "Dr. Lee" })
   })
 })
 

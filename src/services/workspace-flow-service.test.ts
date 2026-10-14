@@ -80,6 +80,21 @@ describe("workspace Flow", () => {
     ).rejects.toMatchObject({ statusCode: 404 })
     expect(generateStructured).not.toHaveBeenCalled()
   })
+
+  it("says plainly what an attached form needs, rather than starting a document or dropping the file", async () => {
+    const withFile = { ...input("make this into a form"), sourceDocumentId: "30000000-0000-4000-8000-000000000001" }
+    const documentsOnly = { customPermissions: ["documents:view", "documents:create"] as const, role: "staff" as const }
+    const create = { action: "create", reply: "Recreating your form.", target: "document", title: "Pet intake" }
+
+    await expect(
+      executeWorkspaceFlow(withFile, { ...deps(documentsOnly, create), requireSource: async () => undefined })
+    ).resolves.toEqual({ kind: "reply", reply: "Flow recreates an attached form as a template, and your role can't start templates. Ask a manager." })
+
+    // Asked something else, the file is not silently left out.
+    await expect(
+      executeWorkspaceFlow(withFile, { ...deps("staff", { action: "find", reply: "Here they are.", subject: "templates" }), requireSource: async () => undefined })
+    ).resolves.toEqual({ kind: "reply", reply: "Flow recreates an attached form as a new template. Ask it to make one, or remove the file to ask something else." })
+  })
 })
 
 function input(message: string): Parameters<typeof executeWorkspaceFlow>[0] {

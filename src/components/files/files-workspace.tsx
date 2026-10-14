@@ -225,8 +225,11 @@ export function FilesWorkspace({
       : []
 
   const canShare = (item: { accessLevel: string; lifecycleState: DocumentLifecycleState }): boolean => canShareResource(membership, item)
-  // An upload Flow can recreate a form from; what is in Trash is out of its reach.
+  // An upload Flow can recreate a form from, as a template the member may start; what is in Trash is out of its reach.
+  const canStartTemplates =
+    canPerformOrganizationAction(membership, "templates:create") || canPerformOrganizationAction(membership, "templates:manage")
   const flowable = (document: AccessibleDocumentSummary): boolean =>
+    canStartTemplates &&
     document.sourceKind !== "generated" &&
     lifecycle !== "trash" &&
     FLOW_FILE_TYPES.includes(cards.get(document.id)?.contentType ?? "")

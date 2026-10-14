@@ -5,6 +5,7 @@ import {
   completeDocumentUpload,
   createDocumentReplacementUploadUrl,
   createDocumentUploadUrl,
+  discardPendingDocumentUpload,
 } from "@/services/document-service"
 import {
   createDeps,
@@ -633,5 +634,40 @@ describe("document upload lifecycle", () => {
     expect(client.tables.documents[0]?.current_version_id).toBe("version-1")
     expect(client.tables.document_versions[1]?.status).toBe("upload_pending")
     expect(rpcSpy.mock.calls.map(([functionName]) => functionName)).toEqual(["get_document_access_level"])
+  })
+
+  it("takes back the uploader's own upload that never completed, and nothing else", async () => {
+    const pendingKey = "organizations/org-1/documents/document-2/versions/version-2/original.pdf"
+    const client = new FakeSupabaseClient({
+      organization_memberships: [createMembershipRow("staff")],
+      documents: [
+        createDocumentRow(),
+        createDocumentRow({ id: "document-2", current_version_id: null }),
+        createDocumentRow({ id: "document-3", current_version_id: null, created_by: "user-2" }),
+        // A document made in BizFlow has no version either, and must never go this way.
+        createDocumentRow({ id: "document-4", current_version_id: null, source_kind: "generated" }),
+      ],
+      document_versions: [
+        createVersionRow(),
+        createVersionRow({ id: "version-2", document_id: "document-2", status: "upload_pending", storage_key: pendingKey }),
+      ],
+    })
+    const deps = { ...createDeps(client), deleteDocumentStorageObject: vi.fn(async () => undefined) }
+    const discard = (documentId: string, organizationId = "org-1") =>
+      discardPendingDocumentUpload({ actorUserId: "user-1", organizationId, documentId }, deps)
+    const ids = (): unknown[] => client.tables.documents.map((row) => row.id)
+
+    // An upload that completed, someone else's, and one in another workspace stay.
+    await expect(discard("document-1")).rejects.toMatchObject({ statusCode: 404 })
+    await expect(discard("document-3")).rejects.toMatchObject({ statusCode: 404 })
+    await expect(discard("document-4")).rejects.toMatchObject({ statusCode: 404 })
+    await expect(discard("document-2", "org-2")).rejects.toMatchObject({ statusCode: 403 })
+    expect(ids()).toEqual(["document-1", "document-2", "document-3", "document-4"])
+
+    await discard("document-2")
+
+    expect(ids()).toEqual(["document-1", "document-3", "document-4"])
+    // Whatever bytes reached storage before the upload stopped go with it.
+    expect(deps.deleteDocumentStorageObject).toHaveBeenCalledWith({ storageKey: pendingKey })
   })
 })

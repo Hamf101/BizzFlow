@@ -4,7 +4,7 @@ import { LoaderCircle, Paperclip, X } from "lucide-react"
 import { type ReactElement, useEffect, useEffectEvent, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 
-import { uploadDocumentFile } from "@/components/documents/document-upload-client"
+import { discardDocumentUpload, uploadDocumentFile } from "@/components/documents/document-upload-client"
 import type { FlowSource } from "@/components/flow/flow-handoff"
 import { FLOW_FILE_TYPES } from "@/types/template-flow"
 
@@ -61,7 +61,7 @@ export function useFlowAttachment(organizationId: string, onAdded?: () => void):
   const [chip, setChip] = useState<Chip | null>(null)
   const [error, setError] = useState<string | null>(null)
   // The upload under way, if one is: removing its chip, choosing another file
-  // or closing Flow stops it. One already in Files stays there.
+  // or closing Flow stops it and takes back its document. One already in Files stays there.
   const upload = useRef<AbortController | null>(null)
   const stop = (): void => {
     upload.current?.abort()
@@ -83,11 +83,16 @@ export function useFlowAttachment(organizationId: string, onAdded?: () => void):
     upload.current = running
     setError(null)
     setChip({ name: file.name })
+    // The document an unfinished upload made, which nobody could open.
+    let prepared: string | null = null
 
     void uploadDocumentFile({
       contentType,
       file,
       folderId: filesFolder(),
+      onPrepared: (documentId) => {
+        prepared = documentId
+      },
       organizationId,
       signal: running.signal,
       title: file.name.replace(/\.[^.]+$/, "").trim().slice(0, TITLE_MAX_LENGTH) || "Attached form",
@@ -100,6 +105,9 @@ export function useFlowAttachment(organizationId: string, onAdded?: () => void):
         onAdded?.()
       },
       (reason: unknown) => {
+        // Stopped or failed after the document was made: it goes too.
+        if (prepared) discardDocumentUpload(prepared, organizationId)
+
         if (running.signal.aborted) return
 
         upload.current = null

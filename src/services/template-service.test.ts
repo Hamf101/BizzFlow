@@ -1810,6 +1810,45 @@ describe("a filled copy of a template recreated from a form", () => {
     expect(made()).toBe(false)
   })
 
+  it("counts only the answers a save keeps, and makes no copy when the form's own answers hide every one", async () => {
+    const { deps, tables } = setUp()
+    tables.document_templates[1] = createTemplateRow(
+      DRAFT_TEMPLATE_ID,
+      "draft",
+      createContentWithBlocks([
+        ...answered().blocks,
+        {
+          id: "50000000-0000-4000-8000-000000000023", type: "text_field", fieldKey: "terms_note", label: "Anything to add?", required: false, helpText: null, placeholder: null, multiline: false,
+          visibleWhen: { sourceBlockId: "50000000-0000-4000-8000-000000000021", operator: "equals", value: true },
+        },
+      ])
+    )
+    const copy = (answers: Record<string, unknown>) =>
+      createFilledTemplateCopy({ actorUserId: MANAGER_ID, answers, organizationId: ORG_ID, templateId: DRAFT_TEMPLATE_ID }, deps)
+
+    // Not agreed, so the note is hidden: the save would prune its answer.
+    await expect(copy({ terms_note: "Too long" })).resolves.toEqual({ documentId: null, dropped: 1, kept: 0 })
+    expect(tables.documents.some((row: FakeRow): boolean => row.id === CREATED_DOCUMENT_ID)).toBe(false)
+
+    await expect(copy({ client_name: "Ada Lovelace", terms_note: "Too long" })).resolves.toEqual({ documentId: CREATED_DOCUMENT_ID, dropped: 1, kept: 1 })
+    expect(tables.document_answers.find((row: FakeRow): boolean => row.document_id === CREATED_DOCUMENT_ID)?.values).toEqual({ client_name: "Ada Lovelace" })
+  })
+
+  it("takes a template as making a document from it would: never one only viewed, nor an unpublished one for a non-editor", async () => {
+    const { deps, tables } = setUp()
+    const madeCopy = (): boolean => tables.documents.some((row: FakeRow): boolean => row.id === CREATED_DOCUMENT_ID)
+    tables.document_templates[0] = { ...createTemplateRow(TEMPLATE_ID, "published", answered()), access_restricted: true }
+    tables.template_access_grants = [{ template_id: TEMPLATE_ID, user_id: STAFF_ID, organization_role: null, access_level: "viewer" }]
+
+    await expect(fill(STAFF_ID, deps, TEMPLATE_ID)).rejects.toMatchObject({ statusCode: 403 })
+    // Staff may use the draft, not edit it: its working copy is no one's to copy yet.
+    await expect(fill(STAFF_ID, deps)).rejects.toMatchObject({ statusCode: 409 })
+    expect(madeCopy()).toBe(false)
+
+    tables.template_access_grants[0]!.access_level = "user"
+    await expect(fill(STAFF_ID, deps, TEMPLATE_ID)).resolves.toMatchObject({ documentId: CREATED_DOCUMENT_ID, kept: 1 })
+  })
+
   it("refuses a template in another workspace as not found, and a role that cannot make documents", async () => {
     const { deps, tables } = setUp()
     tables.document_templates[1]!.org_id = OTHER_ORG_ID

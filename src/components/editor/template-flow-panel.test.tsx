@@ -248,3 +248,114 @@ it("says how many answers from the form were filled in, and how many didn't fit"
   expect(describeFill(1, 2)).toBe("Filled 1 answer. 2 didn't fit the form.")
   expect(describeFill(0, 3)).toBe("No answers fit the form.")
 })
+
+// A form recreated over several turns: each turn answers the fields it made.
+function importEditor(turns: ReadonlyArray<Readonly<{ answers: Record<string, unknown>; operations: TemplateFlowLedgerItem[] }>>) {
+  const bodies: Array<Record<string, unknown>> = []
+  const fillAction = vi.fn(async (answers: Record<string, unknown>) => ({ answers, dropped: 0, kept: Object.keys(answers).length, ok: true as const }))
+  let turn = 0
+  vi.stubGlobal("fetch", vi.fn(async (url: string, init: { body: string }) => {
+    if (url.endsWith("/rebuild")) {
+      return { ok: true, json: async () => ({ proposal: proposal("Rebuilt", [item(0, "add_block", "Kept")]) }) }
+    }
+
+    bodies.push(JSON.parse(init.body))
+    const at = turn++
+    const { answers, operations } = turns[at] ?? { answers: {}, operations: [item(0, "set_title", "Retitled")] }
+    const message = (role: "user" | "assistant", id: string) => ({
+      id, role, content: "Done.", authorName: null, operations: role === "assistant" ? operations : [], changedBlockIds: [], receiptStatus: null, createdAt: "2026-10-06T09:00:00.000Z",
+    })
+
+    return {
+      ok: true,
+      json: async () => ({
+        proposal: { ...proposal(`Turn ${at}`, operations), sourceAnswers: answers },
+        messages: [message("user", `u-${at}`), message("assistant", `a-${at}`)],
+        needsConfirmation: false,
+        persistenceWarning: null,
+      }),
+    }
+  }))
+
+  function Editor(): ReactElement {
+    const [pending, setPending] = useState<TemplateFlowProposal | null>(null)
+    const [applied, setApplied] = useState<string | null>(null)
+
+    return (
+      <TemplateFlowPanel
+        autoSend={{ instruction: "Recreate this form", source: { id: "40000000-0000-4000-8000-000000000001", name: "Intake.pdf" } }}
+        canUndo={applied !== null}
+        draft={draft}
+        fill={{ action: fillAction, here: true }}
+        initialMessages={[]}
+        lastAppliedMessageId={applied}
+        onApplyProposal={(_, messageId) => {
+          setPending(null)
+          setApplied(messageId)
+        }}
+        onProposalReceived={setPending}
+        onProposalStale={setPending}
+        onRejectProposal={() => setPending(null)}
+        onUndo={() => setApplied(null)}
+        organizationId="10000000-0000-4000-8000-000000000001"
+        pendingProposal={pending}
+        templateId={TEMPLATE_ID}
+      />
+    )
+  }
+
+  const container = document.createElement("div")
+  document.body.append(container)
+  root = mount(container)
+  act(() => root?.render(<Editor />))
+
+  return { bodies, fillAction }
+}
+
+const fillButtons = (): HTMLButtonElement[] => [...document.querySelectorAll("button")].filter((button) => button.textContent?.trim() === "Fill in answers")
+
+it("fills every applied turn's answers from the form at once, then lets the form go", async () => {
+  const { bodies, fillAction } = importEditor([
+    { answers: { owner_name: "Ada" }, operations: [item(0, "add_block", "Asked the owner")] },
+    { answers: { pet_name: "Biscuit" }, operations: [item(0, "add_block", "Asked the pet")] },
+    { answers: { vet: "Dr. Who" }, operations: [item(0, "add_block", "Asked the vet")] },
+  ])
+
+  await settle()
+  for (const at of [1, 2, 3]) {
+    act(() => buttonNamed("Apply 1 change").click())
+    await settle()
+
+    if (at < 3) {
+      act(() => buttonNamed("Send message to Flow").click())
+      await settle()
+    }
+  }
+
+  // Offered once, on the latest change set, with all three turns' answers.
+  expect(fillButtons()).toHaveLength(1)
+  await act(async () => fillButtons()[0]!.click())
+  await settle()
+  expect(fillAction).toHaveBeenCalledTimes(1)
+  expect(fillAction).toHaveBeenCalledWith({ owner_name: "Ada", pet_name: "Biscuit", vet: "Dr. Who" })
+  expect(fillButtons()).toHaveLength(0)
+
+  // Filled, the form is done with: the next request goes without it.
+  expect(bodies.map((body) => body.sourceDocumentId)).toEqual(Array(3).fill("40000000-0000-4000-8000-000000000001"))
+  expect(document.body.textContent).not.toContain("Intake.pdf")
+})
+
+it("lets answers go when a change is dropped, since the fields they were keyed for were made again", async () => {
+  const { fillAction } = importEditor([
+    { answers: { name: "Ada", name_2: "Biscuit" }, operations: [item(0, "add_block", "Asked the owner"), item(1, "add_block", "Asked the pet")] },
+  ])
+
+  await settle()
+  act(() => buttonNamed("Drop this change", 0).click())
+  await settle()
+  act(() => buttonNamed("Apply 1 change").click())
+  await settle()
+
+  expect(fillButtons()).toHaveLength(0)
+  expect(fillAction).not.toHaveBeenCalled()
+})

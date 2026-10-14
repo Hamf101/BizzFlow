@@ -188,6 +188,11 @@ export async function executeWorkspaceFlow(
       ? canPerformOrganizationAction(membership, "templates:create") || canPerformOrganizationAction(membership, "templates:manage")
       : canPerformOrganizationAction(membership, "documents:create")
   )
+  // Only a template recreates a form, so a file asks for one.
+  if (source.data && !creatable.includes("template")) {
+    return { kind: "reply", reply: "Flow recreates an attached form as a template, and your role can't start templates. Ask a manager." }
+  }
+
   const plan = await requestPlan(
     source.data ? `${message.data}\n\n(The member attached a form to recreate as a new template.)` : message.data,
     historySchema.parse(input.history),
@@ -196,11 +201,13 @@ export async function executeWorkspaceFlow(
     deps
   )
 
+  if (source.data && plan.action !== "create") {
+    return { kind: "reply", reply: "Flow recreates an attached form as a new template. Ask it to make one, or remove the file to ask something else." }
+  }
+
   if (plan.action === "create") {
     // Only the template editor recreates a form.
-    const target = source.data
-      ? creatable.find((candidate) => candidate === "template")
-      : creatable.includes(plan.target as "template") ? plan.target : creatable[0]
+    const target = source.data ? "template" : creatable.includes(plan.target as "template") ? plan.target : creatable[0]
 
     return target && target !== "none"
       ? { kind: "create", reply: plan.reply, ...(source.data ? { sourceDocumentId: source.data } : {}), target, title: plan.title.trim() || "Untitled" }

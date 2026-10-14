@@ -732,6 +732,7 @@ export function createDocumentRow(overrides: FakeRow = {}): FakeRow {
     folder_id: null,
     title: "Signed contract",
     description: null,
+    source_kind: "upload",
     current_version_id: "version-1",
     lifecycle_state: lifecycleState,
     created_by: "user-1",

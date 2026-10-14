@@ -12,6 +12,7 @@ export { createDocumentReplacementUploadUrl } from "@/services/documents/version
 export {
   completeDocumentUpload,
   createDocumentUploadUrl,
+  discardPendingDocumentUpload,
 } from "@/services/documents/version-upload-service"
 export {
   createFolder,

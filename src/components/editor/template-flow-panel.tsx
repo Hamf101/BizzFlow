@@ -157,9 +157,24 @@ export function TemplateFlowPanel({
   const [review, setReview] = useState<FlowReview | null>(null)
   const [isRebuilding, setIsRebuilding] = useState<boolean>(false)
   const attachment = useFlowAttachment(organizationId ?? "")
-  // The answers each proposal read off its form, by its message: kept in this
-  // tab only, never saved with the chat, and the same after a rebuild.
-  const [formAnswers, setFormAnswers] = useState<ReadonlyMap<string, Record<string, unknown>>>(new Map())
+  // The answers each proposal read off its form, by its message, kept in this
+  // tab only and never saved with the chat. A form recreated over several
+  // turns is answered a turn at a time, so every applied turn's answers from
+  // the same form are offered together.
+  const [formAnswers, setFormAnswers] = useState<ReadonlyMap<string, FormAnswers>>(new Map())
+  const justApplied = lastAppliedMessageId === null ? undefined : formAnswers.get(lastAppliedMessageId)
+
+  // Applied from Flow or from the editor's own banner: either way it arrives here.
+  if (lastAppliedMessageId !== null && justApplied && !justApplied.applied) {
+    setFormAnswers(new Map(formAnswers).set(lastAppliedMessageId, { ...justApplied, applied: true }))
+  }
+
+  const appliedAnswers = [...formAnswers.values()].filter((entry) => entry.applied)
+  const fillSourceId = appliedAnswers.at(-1)?.sourceId
+  const combinedAnswers: Record<string, unknown> = Object.assign(
+    {},
+    ...appliedAnswers.filter((entry) => entry.sourceId === fillSourceId).map((entry) => entry.answers)
+  )
   const [filling, setFilling] = useState<boolean>(false)
   const timelineRef = useRef<HTMLDivElement>(null)
   const draftRef = useRef<TemplateFlowDraft>(draft)
@@ -261,8 +276,8 @@ export function TemplateFlowPanel({
       const assistantMessage = result.messages[1]
       const answers = result.proposal?.sourceAnswers
 
-      if (answers && Object.keys(answers).length > 0) {
-        setFormAnswers((current) => new Map(current).set(assistantMessage.id, answers))
+      if (answers && source && Object.keys(answers).length > 0) {
+        setFormAnswers((current) => new Map(current).set(assistantMessage.id, { answers, applied: false, sourceId: source.id }))
       }
 
       if (result.proposal !== null) {
@@ -332,6 +347,9 @@ export function TemplateFlowPanel({
 
     if (drop) {
       dropped.add(index)
+      // The answers are keyed by the fields as first made; a rebuild makes them
+      // again and can key them otherwise, so its answers go rather than land wrong.
+      setFormAnswers((current) => withoutAnswers(current, (id) => id === messageId))
     } else {
       dropped.delete(index)
     }
@@ -437,7 +455,7 @@ export function TemplateFlowPanel({
   }
 
   // Fills with what the form said, once the fields it goes in are saved.
-  async function fillAnswers(messageId: string, answers: Record<string, unknown>): Promise<void> {
+  async function fillAnswers(sourceId: string, answers: Record<string, unknown>): Promise<void> {
     if (!fill) {
       return
     }
@@ -456,6 +474,13 @@ export function TemplateFlowPanel({
     // Said before a filled copy opens; the toast outlasts the move.
     bizflowToast[result.kept > 0 ? "success" : "info"](describeFill(result.kept, result.dropped))
 
+    // Filled in, or nothing fit: the form is done with, so later turns no longer carry it.
+    setFormAnswers((current) => withoutAnswers(current, (_, entry) => entry.sourceId === sourceId))
+
+    if (attachment.source?.id === sourceId) {
+      attachment.clear()
+    }
+
     if (result.href) {
       if (fill.open) {
         fill.open(result.href)
@@ -466,12 +491,6 @@ export function TemplateFlowPanel({
       return
     }
 
-    // Filled in, or nothing fit: nothing more to offer for this proposal.
-    setFormAnswers((current) => {
-      const next = new Map(current)
-      next.delete(messageId)
-      return next
-    })
     setFilling(false)
   }
 
@@ -503,7 +522,7 @@ export function TemplateFlowPanel({
           <ol className="flex flex-col gap-5">
             {messages.map((message: TemplateFlowMessage) => {
               const applied = message.role === "assistant" && message.id === lastAppliedMessageId
-              const answers = applied && fill ? formAnswers.get(message.id) : undefined
+              const answers = applied && fill && fillSourceId && Object.keys(combinedAnswers).length > 0 ? combinedAnswers : undefined
 
               return (
               <FlowMessageEntry
@@ -512,8 +531,12 @@ export function TemplateFlowPanel({
                 filling={filling}
                 key={message.id}
                 message={message}
-                onFill={answers ? (): void => void fillAnswers(message.id, answers) : undefined}
-                onUndo={onUndo}
+                onFill={answers && fillSourceId ? (): void => void fillAnswers(fillSourceId, answers) : undefined}
+                onUndo={(): void => {
+                  // What an undone proposal read off its form no longer has fields to go in.
+                  setFormAnswers((current) => withoutAnswers(current, (id) => id === lastAppliedMessageId))
+                  onUndo()
+                }}
                 // The open card lists these changes and tracks drops; one list, not two.
                 showChanges={displayedPendingProposal === null || message.id !== pendingMessageId}
               />
@@ -605,6 +628,16 @@ export function TemplateFlowPanel({
       </form>
     </aside>
   )
+}
+
+/** The answers one proposal read off a form, whether it was applied, and the form. */
+type FormAnswers = Readonly<{ answers: Record<string, unknown>; applied: boolean; sourceId: string }>
+
+function withoutAnswers(
+  current: ReadonlyMap<string, FormAnswers>,
+  drop: (messageId: string, entry: FormAnswers) => boolean
+): ReadonlyMap<string, FormAnswers> {
+  return new Map([...current].filter(([messageId, entry]) => !drop(messageId, entry)))
 }
 
 /**
