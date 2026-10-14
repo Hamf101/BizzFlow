@@ -1148,7 +1148,7 @@ function findSectionIndex(
 /** Every template lifecycle status. */
 export const DOCUMENT_TEMPLATE_STATUSES = ["draft", "published", "archived"] as const
 export type DocumentTemplateStatus = (typeof DOCUMENT_TEMPLATE_STATUSES)[number]
-export type DocumentSourceKind = "upload" | "generated"
+export type DocumentSourceKind = "upload" | "generated" | "sheet"
 export type GeneratedDocumentWorkflowStatus =
   "draft" | "awaiting_signatures" | "completed"
 export type DocumentSigningRecipientStatus = "pending" | "viewed" | "signed"

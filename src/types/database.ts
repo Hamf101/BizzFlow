@@ -720,6 +720,8 @@ export type Database = {
         Row: {
           archived_at: string | null
           archived_by: string | null
+          conversion_error: string | null
+          conversion_state: string | null
           created_at: string
           created_by: string | null
           current_version_id: string | null
@@ -728,11 +730,13 @@ export type Database = {
           id: string
           lifecycle_state: Database["public"]["Enums"]["resource_lifecycle_state"]
           org_id: string
+          original_version_id: string | null
           pre_trash_lifecycle_state:
             | Database["public"]["Enums"]["resource_lifecycle_state"]
             | null
           purge_after: string | null
           share_inherit: boolean
+          sheet_content: Json | null
           source_kind: string
           template_id: string | null
           template_revision: number | null
@@ -747,6 +751,8 @@ export type Database = {
         Insert: {
           archived_at?: string | null
           archived_by?: string | null
+          conversion_error?: string | null
+          conversion_state?: string | null
           created_at?: string
           created_by?: string | null
           current_version_id?: string | null
@@ -755,11 +761,13 @@ export type Database = {
           id?: string
           lifecycle_state?: Database["public"]["Enums"]["resource_lifecycle_state"]
           org_id: string
+          original_version_id?: string | null
           pre_trash_lifecycle_state?:
             | Database["public"]["Enums"]["resource_lifecycle_state"]
             | null
           purge_after?: string | null
           share_inherit?: boolean
+          sheet_content?: Json | null
           source_kind?: string
           template_id?: string | null
           template_revision?: number | null
@@ -774,6 +782,8 @@ export type Database = {
         Update: {
           archived_at?: string | null
           archived_by?: string | null
+          conversion_error?: string | null
+          conversion_state?: string | null
           created_at?: string
           created_by?: string | null
           current_version_id?: string | null
@@ -782,11 +792,13 @@ export type Database = {
           id?: string
           lifecycle_state?: Database["public"]["Enums"]["resource_lifecycle_state"]
           org_id?: string
+          original_version_id?: string | null
           pre_trash_lifecycle_state?:
             | Database["public"]["Enums"]["resource_lifecycle_state"]
             | null
           purge_after?: string | null
           share_inherit?: boolean
+          sheet_content?: Json | null
           source_kind?: string
           template_id?: string | null
           template_revision?: number | null
@@ -833,6 +845,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "organizations"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documents_original_version_id_document_id_fkey"
+            columns: ["original_version_id", "id"]
+            isOneToOne: false
+            referencedRelation: "document_versions"
+            referencedColumns: ["id", "document_id"]
           },
           {
             foreignKeyName: "documents_template_id_org_id_fkey"

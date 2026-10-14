@@ -31,6 +31,7 @@ import type {
   FolderRow,
 } from "@/types/document"
 import type { OrganizationMembership } from "@/types/organization"
+import type { DocumentSourceKind } from "@/types/template"
 import { loadActiveMembership } from "@/services/organizations/active-membership"
 import { runOperation } from "@/services/operation"
 import { asSupabaseError } from "@/services/supabase-error"
@@ -285,10 +286,7 @@ export function mapDocument(row: DocumentRow): DocumentSummary {
     currentVersionId: row.current_version_id,
     ...(row.source_kind
       ? {
-          sourceKind:
-            row.source_kind === "generated"
-              ? ("generated" as const)
-              : ("upload" as const),
+          sourceKind: parseDocumentSourceKind(row.source_kind),
           templateId: row.template_id ?? null,
           templateRevision: row.template_revision ?? null,
         }
@@ -437,6 +435,17 @@ function parseMembershipStatus(value: string): "active" | "disabled" {
 
   throw new DocumentServiceError(
     "Database returned an unsupported membership status.",
+    500
+  )
+}
+
+function parseDocumentSourceKind(value: string): DocumentSourceKind {
+  if (value === "upload" || value === "generated" || value === "sheet") {
+    return value
+  }
+
+  throw new DocumentServiceError(
+    "Database returned an unsupported document kind.",
     500
   )
 }

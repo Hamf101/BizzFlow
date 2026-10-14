@@ -1,4 +1,5 @@
 import type { ClientFile } from "@/lib/r2/stored-file"
+import type { DocumentSourceKind } from "@/types/template"
 
 export type DocumentVersionStatus = "upload_pending" | "available"
 export type DocumentAccessLevel = "viewer" | "contributor"
@@ -93,7 +94,7 @@ export type DocumentSummary = {
   title: string
   description: string | null
   currentVersionId: string | null
-  sourceKind?: "upload" | "generated"
+  sourceKind?: DocumentSourceKind
   templateId?: string | null
   templateRevision?: number | null
   lifecycleState: DocumentLifecycleState

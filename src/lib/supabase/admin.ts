@@ -29,6 +29,7 @@ import type {
   SubmissionCommentRow,
 } from "@/types/submission-review"
 import type { SavedViewRecord } from "@/types/saved-view"
+import type { SheetContent } from "@/types/sheet"
 import type { TemplateAnswerValue } from "@/types/template-answer"
 
 type DatabaseOrganizationRole =
@@ -222,6 +223,7 @@ type AdminDocumentRow = DocumentRow & {
   template_id: string | null
   template_revision: number | null
   template_snapshot: TemplateContent | null
+  sheet_content: SheetContent | null
 }
 
 type AdminDocumentVersionRow = DocumentVersionRow & {

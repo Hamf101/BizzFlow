@@ -4,6 +4,7 @@ import { recordDocumentAuditLog } from "@/services/documents/audit"
 import type { DocumentServiceClient, DocumentServiceDeps } from "@/services/documents/contracts"
 import { DocumentServiceError } from "@/services/documents/errors"
 import { createSupabaseServiceError, getClient, runDocumentOperation } from "@/services/documents/shared"
+import type { DocumentSourceKind } from "@/types/template"
 
 type GuestDeps = DocumentServiceDeps & { now?: () => Date }
 type GuestLevel = "contributor" | "viewer"
@@ -13,7 +14,7 @@ export type GuestDocument = {
   accessLevel: GuestLevel
   organizationId: string
   organizationName: string
-  sourceKind: "generated" | "upload"
+  sourceKind: DocumentSourceKind
   title: string
 }
 

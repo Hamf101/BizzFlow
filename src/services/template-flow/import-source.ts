@@ -59,7 +59,7 @@ export async function requireFlowSource(input: FlowSourceInput, client: Template
         throw new TemplateFlowServiceError("Document was not found.", 404)
       }
 
-      if (document.sourceKind === "generated") {
+      if (document.sourceKind !== "upload") {
         throw new TemplateFlowServiceError("Flow recreates forms from uploaded files, not from documents made here.", 400)
       }
 
