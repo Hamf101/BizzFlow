@@ -16,6 +16,7 @@ import { type DockTool, EditorDock } from "@/components/editor/editor-dock"
 import { FormatBar } from "@/components/editor/format-bar"
 import { FlowDockSlot, FlowWindow } from "@/components/flow/flow-window"
 import { EditorFrame, type EditorLayoutStore, EditorNotice, EditorSidePanel } from "@/components/editor/editor-frame"
+import { ExportMenu, ExportMenuItems, exportLinks } from "@/components/editor/export-menu"
 import { type SaveResult, useAutosave } from "@/components/editor/use-autosave"
 import { useEditorController } from "@/components/editor/use-editor-controller"
 import {
@@ -165,6 +166,8 @@ export function TemplateEditor({
   const [savedState, setSavedState] = useState(initial)
   const [, startTransition] = useTransition()
   const router = useRouter()
+  // Templates have no PDF of their own yet, so they export as Word.
+  const exports = exportLinks(`/api/templates/${encodeURIComponent(template.id)}`, { pdf: false })
   const revisionRef = useRef(template.revision)
   const isDraft = template.status === "draft"
   const quality = useTemplateQuality(content, state.description, state.title)
@@ -518,52 +521,56 @@ export function TemplateEditor({
           ) : null
         }
         layout={editorLayout}
-        menu={
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <Button aria-label="More" className="size-10" size="icon" title="More" type="button" variant="ghost">
-                  <MoreHorizontal />
-                </Button>
-              }
-            />
-            <DropdownMenuContent align="end" className="w-52">
-              <DropdownMenuItem onClick={() => setDetailsOpen(true)}>
-                <FilePenLine />
-                Details
-              </DropdownMenuItem>
-              {template.status === "published" ? (
-                <>
-                  <DropdownMenuItem onClick={() => setAsking(true)}>
-                    <Send />
-                    Send to answer…
-                  </DropdownMenuItem>
-                  <DropdownMenuItem render={<Link href={`/templates/${template.id}/links`} />}>
-                    <Link2 />
-                    Public links
-                  </DropdownMenuItem>
-                </>
-              ) : null}
-              {/* Whoever can open the editor can edit the template, which is what sharing it takes. */}
-              <DropdownMenuItem onClick={() => setSharing(true)}>
-                <UserPlus />
-                Share…
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={() => {
-                  const formData = new FormData()
-                  formData.set("templateId", template.id)
-                  startTransition(() => archiveAction(formData))
-                }}
-                variant="destructive"
-              >
-                <Archive />
-                Archive
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        }
+        menu={(narrow) => (
+          <>
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button aria-label="More" className="size-10" size="icon" title="More" type="button" variant="ghost">
+                    <MoreHorizontal />
+                  </Button>
+                }
+              />
+              <DropdownMenuContent align="end" className="w-52">
+                <DropdownMenuItem onClick={() => setDetailsOpen(true)}>
+                  <FilePenLine />
+                  Details
+                </DropdownMenuItem>
+                {template.status === "published" ? (
+                  <>
+                    <DropdownMenuItem onClick={() => setAsking(true)}>
+                      <Send />
+                      Send to answer…
+                    </DropdownMenuItem>
+                    <DropdownMenuItem render={<Link href={`/templates/${template.id}/links`} />}>
+                      <Link2 />
+                      Public links
+                    </DropdownMenuItem>
+                  </>
+                ) : null}
+                {/* Whoever can open the editor can edit the template, which is what sharing it takes. */}
+                <DropdownMenuItem onClick={() => setSharing(true)}>
+                  <UserPlus />
+                  Share…
+                </DropdownMenuItem>
+                {narrow ? <ExportMenuItems heading links={exports} /> : null}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={() => {
+                    const formData = new FormData()
+                    formData.set("templateId", template.id)
+                    startTransition(() => archiveAction(formData))
+                  }}
+                  variant="destructive"
+                >
+                  <Archive />
+                  Archive
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            {narrow ? null : <ExportMenu links={exports} />}
+          </>
+        )}
         onRedo={history.redo}
         onRetrySave={() => void (live.session ? live.session.flush() : autosave.flush())}
         onSave={() => void save()}

@@ -353,11 +353,12 @@ export function getCardRequest(
 }
 
 /**
- * Links to a document. A generated document opens as a preview, to look at
- * and try, with Edit from there; one in the bin opens its page, to restore.
+ * Links to a document. A generated document opens in the editor, which
+ * shows those who may not change it the preview instead; one in the bin
+ * opens its page, to restore.
  *
  * @param document - The document to open.
- * @returns The document's page or preview link.
+ * @returns The document's page or editor link.
  */
 export function getDocumentHref(
   document: Pick<AccessibleDocumentSummary, "id" | "lifecycleState" | "sourceKind">
@@ -365,7 +366,7 @@ export function getDocumentHref(
   const documentId = encodeURIComponent(document.id)
 
   return document.sourceKind === "generated" && (document.lifecycleState === "active" || document.lifecycleState === "archived")
-    ? `/documents/${documentId}/preview`
+    ? `/documents/${documentId}/edit`
     : `/documents/${documentId}`
 }
 

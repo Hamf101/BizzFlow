@@ -1,6 +1,7 @@
 "use client"
 
-import { Download, FilePen, Files, History, MessageSquare, MoreHorizontal, Palette, Send, UserPlus } from "lucide-react"
+import { Eye, Files, History, MessageSquare, MoreHorizontal, Palette, Send, UserPlus } from "lucide-react"
+import { useRouter } from "next/navigation"
 import { type ReactElement, useEffect, useMemo, useRef, useState } from "react"
 
 import type { DocumentContentInput } from "@/app/(editor)/documents/[documentId]/edit/actions"
@@ -15,6 +16,7 @@ import { FormatBar } from "@/components/editor/format-bar"
 import { PaperSigning } from "@/components/editor/paper-field"
 import { FlowDockSlot, FlowWindow } from "@/components/flow/flow-window"
 import { EditorFrame, type EditorLayoutStore, EditorNotice, EditorSidePanel } from "@/components/editor/editor-frame"
+import { ExportMenu, ExportMenuItems, exportLinks } from "@/components/editor/export-menu"
 import { type SaveResult, useAutosave } from "@/components/editor/use-autosave"
 import { useEditorController } from "@/components/editor/use-editor-controller"
 import {
@@ -38,12 +40,13 @@ import { useMissingPictureAddresses, usePictureAddresses } from "@/components/ed
 import { useWorkingCopyHistory } from "@/components/editor/use-working-copy-history"
 import type { FlowStarter } from "@/components/editor/template-flow-panel"
 import { useTimeZone } from "@/components/ui/local-date"
-import { Button, buttonVariants } from "@/components/ui/button"
+import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -51,7 +54,6 @@ import { bizflowToast } from "@/components/ui/toaster"
 import type { WorkingCopy } from "@/lib/collaboration/working-copy-doc"
 import { formatMediumDateTime } from "@/lib/date-format"
 import { SigningRecipientStatusBadge } from "@/lib/page-status-badges"
-import { cn } from "@/lib/utils"
 import { createTemplateFlowDraftFingerprint } from "@/services/template-flow-proposal-state"
 import { resolvePageGeometry } from "@/services/templates/template-render-plan"
 import type { DocumentSigningRecipient, GeneratedDocumentSigningView, PublicSignerStatus } from "@/types/signing"
@@ -120,6 +122,7 @@ export function DocumentEditor({
   view,
 }: DocumentEditorProps): ReactElement {
   const timeZone = useTimeZone()
+  const router = useRouter()
   const document = view.document
   const completed = view.workflowStatus === "completed"
   const writable = canFill && view.workflowStatus === "draft" && view.recipients.length === 0
@@ -275,7 +278,9 @@ export function DocumentEditor({
 
   // Pictures someone else added arrive without an address this page can load.
   useMissingPictureAddresses({ content: page.content, path: livePath, pictures, roomId: live.roomId, session: live.session })
-  const pdfHref = `/api/documents/${encodeURIComponent(document.id)}/pdf`
+  const exports = exportLinks(`/api/documents/${encodeURIComponent(document.id)}`, { fillable: !completed })
+  // Anything more than Export and Preview, which a phone folds in with them.
+  const more = canShare || (canSend && document.templateId !== null)
 
   const tools: DockTool[] = [
     {
@@ -353,6 +358,18 @@ export function DocumentEditor({
     }
 
     setSending(true)
+  }
+
+  // The preview is drawn from what the server has, so what is waiting saves first.
+  async function openPreview(): Promise<void> {
+    const saved = (await (live.session ? live.session.flush() : content.flush())) && (await answered.flush())
+
+    if (!saved) {
+      bizflowToast.error("Your latest changes aren't saved yet. Try again in a moment.")
+      return
+    }
+
+    router.push(`/documents/${encodeURIComponent(document.id)}/preview`)
   }
 
   return (
@@ -458,42 +475,60 @@ export function DocumentEditor({
             </Popover>
           ) : null
         }
-        menu={
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <Button aria-label="More" className="size-10" size="icon" title="More" type="button" variant="ghost">
-                  <MoreHorizontal />
-                </Button>
-              }
-            />
-            <DropdownMenuContent align="end" className="w-52">
-              <DropdownMenuItem render={<a href={pdfHref} rel="noreferrer" target="_blank" />}>
-                <Download />
-                Download PDF
-              </DropdownMenuItem>
-              {completed ? null : (
-                <DropdownMenuItem render={<a href={`${pdfHref}?fillable=1`} rel="noreferrer" target="_blank" />}>
-                  <FilePen />
-                  Download fillable PDF
-                </DropdownMenuItem>
+        menu={(narrow) => {
+          // A completed document keeps Export as its main action, and has nothing left to preview.
+          const folded = narrow && !completed
+
+          return (
+            <>
+              {folded || more ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    render={
+                      <Button aria-label="More" className="size-10" size="icon" title="More" type="button" variant="ghost">
+                        <MoreHorizontal />
+                      </Button>
+                    }
+                  />
+                  <DropdownMenuContent align="end" className="w-52">
+                    {canShare ? (
+                      <DropdownMenuItem onClick={() => setSharing(true)}>
+                        <UserPlus />
+                        Share…
+                      </DropdownMenuItem>
+                    ) : null}
+                    {/* Answers are kept as a template's submissions, so it needs one. */}
+                    {canSend && document.templateId ? (
+                      <DropdownMenuItem onClick={() => setAsking(true)}>
+                        <Send />
+                        Send to answer…
+                      </DropdownMenuItem>
+                    ) : null}
+                    {folded ? (
+                      <>
+                        {more ? <DropdownMenuSeparator /> : null}
+                        <DropdownMenuItem onClick={() => void openPreview()}>
+                          <Eye />
+                          Preview
+                        </DropdownMenuItem>
+                        <ExportMenuItems heading links={exports} />
+                      </>
+                    ) : null}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : null}
+              {narrow || completed ? null : (
+                <>
+                  <ExportMenu links={exports} />
+                  <Button className="h-10 px-4" onClick={() => void openPreview()} type="button" variant="outline">
+                    <Eye />
+                    Preview
+                  </Button>
+                </>
               )}
-              {canShare ? (
-                <DropdownMenuItem onClick={() => setSharing(true)}>
-                  <UserPlus />
-                  Share…
-                </DropdownMenuItem>
-              ) : null}
-              {/* Answers are kept as a template's submissions, so it needs one. */}
-              {canSend && document.templateId ? (
-                <DropdownMenuItem onClick={() => setAsking(true)}>
-                  <Send />
-                  Send to answer…
-                </DropdownMenuItem>
-              ) : null}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        }
+            </>
+          )
+        }}
         onRedo={history.redo}
         onRetrySave={() => {
           void (live.session ? live.session.flush() : content.flush())
@@ -582,10 +617,7 @@ export function DocumentEditor({
         )}
         primary={
           completed ? (
-            <a className={cn(buttonVariants(), "h-10 px-4")} href={pdfHref} rel="noreferrer" target="_blank">
-              <Download />
-              Download
-            </a>
+            <ExportMenu links={exports} primary />
           ) : canSend && view.recipients.length === 0 ? (
             <Button className="h-10 px-4" onClick={() => void openSend()} type="button">
               <Send />

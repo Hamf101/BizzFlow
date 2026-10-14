@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import {
   canAssignOrganizationRole,
+  canEditDocument,
   canPerformOrganizationAction,
   canInviteMembers,
   canShareResource,
@@ -307,5 +308,23 @@ describe("who may share an item", () => {
     // Not from Trash or the archive, whoever asks.
     expect(canShareResource("owner_admin", { ...active, lifecycleState: "trashed" })).toBe(false)
     expect(canShareResource("manager", { ...active, lifecycleState: "archived" })).toBe(false)
+  })
+})
+
+describe("who may edit a document", () => {
+  it("is someone who fills documents with Editor access while it is in use; everyone else reads its preview", () => {
+    const active = { accessLevel: "contributor", lifecycleState: "active" } as const
+
+    expect(canEditDocument("staff", active)).toBe(true)
+    // A member or a guest given it to read only.
+    expect(canEditDocument("owner_admin", { ...active, accessLevel: "viewer" })).toBe(false)
+    expect(canEditDocument(null, { ...active, accessLevel: "viewer" })).toBe(false)
+    // A guest given it as an Editor, who has no workspace role.
+    expect(canEditDocument(null, active)).toBe(true)
+    // A role that may not fill documents, even with Editor access.
+    expect(canEditDocument("external_reviewer", active)).toBe(false)
+    // Not from the archive or Trash, whoever asks.
+    expect(canEditDocument("owner_admin", { ...active, lifecycleState: "archived" })).toBe(false)
+    expect(canEditDocument(null, { ...active, lifecycleState: "trashed" })).toBe(false)
   })
 })

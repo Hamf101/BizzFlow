@@ -194,11 +194,11 @@ describe("FilesWorkspace", () => {
       "Welcome pack",
       "Zoning letter",
     ])
-    // Folders open in place; a generated document opens as a preview.
+    // Folders open in place; a generated document opens in the editor, an upload on its page.
     expect(readNames("href")).toEqual([
       `/documents?folderId=${CONTRACTS_ID}`,
       `/documents?folderId=${LEASES_ID}`,
-      `/documents/${WELCOME_ID}/preview`,
+      `/documents/${WELCOME_ID}/edit`,
       `/documents/${ZONING_ID}`,
     ])
 

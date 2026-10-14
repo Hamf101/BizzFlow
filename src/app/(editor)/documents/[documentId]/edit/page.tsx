@@ -5,7 +5,7 @@ import { DocumentEditor } from "@/components/documents/document-editor"
 import { DocumentOpenTracker } from "@/components/documents/document-open-tracker"
 import { getFallbackDisplayName } from "@/lib/display-name"
 import { loadMemberName } from "@/lib/page-member-name"
-import { canPerformOrganizationAction, canSendDocument, canShareResource } from "@/lib/permissions"
+import { canEditDocument, canSendDocument, canShareResource } from "@/lib/permissions"
 import { readPersonName } from "@/services/document-service"
 import { getEditorLayout } from "@/services/organizations/editor-layout-service"
 import type { EditorLayout } from "@/types/editor-layout"
@@ -47,14 +47,16 @@ export default async function GeneratedDocumentEditorPage({
   }
 
   const { backHref, context, user, view } = loaded
+  const canFill = canEditDocument(context?.membership ?? null, { accessLevel: view.accessLevel, lifecycleState: view.document.lifecycleState })
 
-  // Someone outside the workspace edits only what they were given as an Editor,
-  // and never sends or shares it.
+  // Whoever may not change it reads its preview. An Editor still opens a
+  // completed document here, where it is read-only with its export at hand.
+  if (!canFill) {
+    redirect(`/documents/${encodeURIComponent(documentId)}/preview`)
+  }
+
+  // Someone outside the workspace never sends or shares it.
   if (!context) {
-    if (view.accessLevel !== "contributor") {
-      redirect(`/documents/${encodeURIComponent(documentId)}/preview`)
-    }
-
     const [guestLayout, guestName] = await Promise.all([
       loadEditorLayout(user.id),
       readPersonName(user.id).catch(() => null),
@@ -63,7 +65,7 @@ export default async function GeneratedDocumentEditorPage({
     return (
       <DocumentEditor
         backHref={backHref}
-        canFill={view.document.lifecycleState === "active"}
+        canFill={canFill}
         canSend={false}
         canShare={false}
         editorLayout={{ initial: guestLayout, save: saveEditorLayoutAction }}
@@ -79,10 +81,6 @@ export default async function GeneratedDocumentEditorPage({
     )
   }
 
-  const canFill =
-    canPerformOrganizationAction(context.membership, "documents:fill") &&
-    view.accessLevel === "contributor" &&
-    view.document.lifecycleState === "active"
   const canSend = canSendDocument(context.membership, { accessLevel: view.accessLevel, lifecycleState: view.document.lifecycleState })
   const canShare = canShareResource(context.membership, { accessLevel: view.accessLevel, lifecycleState: view.document.lifecycleState })
   // Where the tools were left (without it they start at home), and how the

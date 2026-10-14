@@ -52,7 +52,8 @@ type EditorFrameProps = {
   extra?: ReactNode
   /** Where the tools were left last time; without it they start at home each visit. */
   layout?: EditorLayoutStore
-  menu?: ReactNode
+  /** The top bar's actions before the primary one; a phone may fold some into a menu. */
+  menu?: ReactNode | ((narrow: boolean) => ReactNode)
   onRedo: () => void
   onRetrySave?: () => void
   /** What ⌘S or Ctrl+S keeps, rather than the browser saving the page. */
@@ -252,7 +253,7 @@ export function EditorFrame({
             </Button>
           </>
         ) : null}
-        {menu}
+        {typeof menu === "function" ? menu(narrow) : menu}
         {primary}
       </header>
       {/* An open panel takes its own column on a laptop, so it never covers the
