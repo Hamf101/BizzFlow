@@ -109,3 +109,23 @@ test("New template opens an untitled draft in one click, with the cursor on its 
   if (made.error) throw made.error
   expect(made.data).toEqual({ status: "draft", title: "Untitled template" })
 })
+
+test("words typed while offline stay on the page and are saved once the connection is back", async ({ admin, pageAs }) => {
+  const page = await pageAs("owner_admin")
+  await page.goto("/dashboard")
+  await page.getByRole("button", { name: "New document" }).click()
+  await page.waitForURL(/\/documents\/[0-9a-f-]+\/edit/)
+  const documentId = new URL(page.url()).pathname.split("/")[2] as string
+  await expect(page.locator('[contenteditable="true"]:focus')).toHaveCount(1)
+
+  await page.context().setOffline(true)
+  await expect(page.getByText("You're offline")).toBeVisible()
+  await page.keyboard.type("Written on site, no signal")
+  await expect(page.getByText("Written on site, no signal")).toBeVisible()
+  // Longer than every retry (1, 3, 8, 15 s): saving must still catch up on reconnect.
+  await page.waitForTimeout(20_000)
+
+  await page.context().setOffline(false)
+  await expect(page.getByText("You're offline")).toBeHidden()
+  await expectSaved(admin, "documents", documentId, ({ blocks }) => blocks.map(({ text }) => text)).toEqual(["Written on site, no signal"])
+})

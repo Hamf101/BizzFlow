@@ -9,9 +9,13 @@ import type { TemplateLayout } from "@/types/template"
 const SIDES: readonly PageSide[] = ["top", "right", "bottom", "left"]
 const OPPOSITE = { bottom: "top", left: "right", right: "left", top: "bottom" } as const satisfies Record<PageSide, PageSide>
 const AXIS = { bottom: "y", left: "x", right: "x", top: "y" } as const
+const CORNERS = [["top", "left"], ["top", "right"], ["bottom", "left"], ["bottom", "right"]] as const
+// The marks' length, size-3.
+const CORNER_PX = 12
 
 /**
- * The page's margins as dashed lines to drag, in the points the PDF prints
+ * The page's margins as lines to drag, shown at rest only as marks at the
+ * writing area's corners, in the points the PDF prints
  * them at. Dragging one moves the one across from it too, so the page stays
  * even; dragging with the right button, or holding Alt (Option), moves it
  * alone. Focused, the arrow keys move a pair a point at a time, or ten with
@@ -67,7 +71,8 @@ export function MarginGuides({
             aria-valuenow={value}
             aria-valuetext={`${value} points`}
             className={cn(
-              "absolute z-20 touch-none border-dashed border-primary/25 outline-none hover:border-primary/70 focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-ring/40",
+              // Hidden until a pointer or the keyboard finds it; the corner marks say where it is.
+              "absolute z-20 touch-none border-dashed border-transparent outline-none hover:border-primary/70 focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-ring/40 active:border-primary/70",
               across ? "inset-y-0 w-2.5 cursor-ew-resize" : "inset-x-0 h-2.5 cursor-ns-resize",
               { bottom: "translate-y-full border-t", left: "-translate-x-full border-r", right: "translate-x-full border-l", top: "-translate-y-full border-b" }[side]
             )}
@@ -101,6 +106,19 @@ export function MarginGuides({
           />
         )
       })}
+      {/* The writing area's corners, marked as a word processor marks them. */}
+      {CORNERS.map(([y, x]) => (
+        <span
+          aria-hidden="true"
+          className={cn(
+            "pointer-events-none absolute size-3 border-primary/35",
+            y === "top" ? "border-b" : "border-t",
+            x === "left" ? "border-r" : "border-l"
+          )}
+          key={`${y}-${x}`}
+          style={{ [x]: geometry.margins[x] * point - CORNER_PX, [y]: geometry.margins[y] * point - CORNER_PX }}
+        />
+      ))}
     </>
   )
 }
