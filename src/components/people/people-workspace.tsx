@@ -272,7 +272,7 @@ function MemberDirectory({
       role="table"
     >
       <div
-        className="hidden grid-cols-[minmax(16rem,1.5fr)_minmax(9rem,.75fr)_minmax(8rem,.65fr)_3rem] gap-4 px-3 py-2 text-[11px] font-normal tracking-[0.08em] text-muted-foreground uppercase lg:grid"
+        className="hidden grid-cols-[minmax(16rem,1.5fr)_minmax(9rem,.75fr)_minmax(8rem,.65fr)_3rem] gap-4 px-3 py-2 text-xs font-normal text-muted-foreground lg:grid"
         role="row"
       >
         <span role="columnheader">Member</span>

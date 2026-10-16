@@ -116,7 +116,7 @@ export function TasksWorkspace({
         >
           <div
             className={cn(
-              "hidden gap-4 px-3 py-2 text-[11px] font-normal tracking-[0.08em] text-muted-foreground uppercase lg:grid",
+              "hidden gap-4 px-3 py-2 text-xs font-normal text-muted-foreground lg:grid",
               TASK_GRID
             )}
             role="row"

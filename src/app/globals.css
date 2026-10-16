@@ -212,10 +212,8 @@
 
   .editorial-kicker {
     font-family: var(--font-sans);
-    font-size: 0.625rem;
+    font-size: 0.75rem;
     line-height: 1rem;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
   }
 }
 

@@ -708,6 +708,8 @@ describe("submitPublicForm", () => {
       public_form_link_id: LINK_ID,
       public_draft_token: null,
       submitted_by: null,
+      // The template's own name: who it came from shows beside it, not a "(Public)" tag.
+      title: "Visitor Form",
     })
     expect(submission.values).toEqual({
       full_name: "Ada Lovelace",

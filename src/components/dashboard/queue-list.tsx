@@ -90,7 +90,7 @@ function QueueRow({ hidden, hideOnPhone, item }: { hidden: boolean; hideOnPhone:
           <Icon aria-hidden="true" className="size-[15px] md:size-[17px]" />
         </span>
         <span className="grid min-w-0">
-          <span className={cn("text-[11px] font-semibold tracking-[0.06em] uppercase", TONE_TEXT[item.tone])}>
+          <span className={cn("text-xs font-medium", TONE_TEXT[item.tone])}>
             {item.kind}
           </span>
           <span className="truncate text-sm font-medium">{item.title}</span>

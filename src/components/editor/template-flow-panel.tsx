@@ -861,7 +861,7 @@ function FlowMessageEntry({
       )}
     >
       <div className="flex items-center justify-between gap-2">
-        <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground">
+        <span className="text-[11px] text-muted-foreground">
           {isUser ? message.authorName || "Team member" : "Flow"}
         </span>
         <time
@@ -924,7 +924,7 @@ function FlowLedgerRow({
       {renderOperationIcon(operation.type)}
       <div className="min-w-0">
         <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-          <span className="font-mono text-[9px] uppercase tracking-[0.12em] text-primary">
+          <span className="text-[11px] text-primary">
             {formatOperationType(operation.type)}
           </span>
           <span className="text-xs font-medium">{operation.summary}</span>

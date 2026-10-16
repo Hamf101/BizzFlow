@@ -130,7 +130,7 @@ export async function submitPublicForm(
     target_submission_id: draft ? null : createId(deps),
     target_title: draft
       ? null
-      : input.title?.trim() || `${template.title} (Public)`,
+      : input.title?.trim() || template.title,
     target_template_id: draft ? null : template.id,
     target_template_revision: draft ? null : template.revision,
     target_template_snapshot: draft ? null : template.content,

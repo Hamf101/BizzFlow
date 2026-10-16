@@ -48,7 +48,7 @@ function PageSkeleton({
       >
         {context ? (
           <span
-            className="font-mono text-[10px] tracking-[0.12em] text-muted-foreground uppercase"
+            className="text-xs text-muted-foreground"
             data-slot="page-skeleton-context"
           >
             {context}

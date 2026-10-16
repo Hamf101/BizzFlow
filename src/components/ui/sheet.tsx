@@ -100,7 +100,7 @@ export function SheetTitle({
   return (
     <Dialog.Title
       className={cn(
-        "px-2 pb-1 font-mono text-[10px] font-medium tracking-[0.08em] text-muted-foreground uppercase",
+        "px-2 pb-1 text-xs font-medium text-muted-foreground",
         className
       )}
       data-slot="sheet-title"

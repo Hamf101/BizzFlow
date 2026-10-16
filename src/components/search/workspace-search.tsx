@@ -480,7 +480,7 @@ function SearchPanel({ role, up }: { role: OrganizationPermissionSubject | null;
                   {option.hit && (opening ? index === 0 : !section && option.hit.kind !== options[index - 1]?.hit?.kind) ? (
                     <div
                       aria-hidden="true"
-                      className="px-2.5 pt-3 pb-1 text-[10px] font-semibold tracking-[0.16em] text-primary uppercase first:pt-1.5"
+                      className="px-2.5 pt-3 pb-1 text-xs font-medium text-primary first:pt-1.5"
                     >
                       {opening && section ? OPENING[section.kind] : sections.find((each) => each.kind === option.hit?.kind)?.label}
                     </div>
