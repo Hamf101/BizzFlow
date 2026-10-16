@@ -94,8 +94,8 @@ type FormActionOptions = {
   event: string
   /** Where a failure returns, and where signing in again comes back to. */
   path: string
-  /** The outcome shown on success; none when the next page says it already. */
-  success?: ActionFeedbackCode
+  /** The outcome shown on success. */
+  success: ActionFeedbackCode
   /** Safe identifiers for the logs. */
   log?: Readonly<Record<string, string | number | null | undefined>>
   /** A failure's own outcome; undefined falls back to its status code. */
@@ -142,8 +142,10 @@ export async function runFormAction(options: FormActionOptions): Promise<never> 
 
   // Outside the try: redirect() throws NEXT_REDIRECT, which a catch would
   // turn into a failure.
-  const successPath = outcome?.path ?? options.path
-  const successCode = outcome?.code ?? options.success
-
-  redirect(successCode ? buildFeedbackRedirect(successPath, successCode) : successPath)
+  redirect(
+    buildFeedbackRedirect(
+      outcome?.path ?? options.path,
+      outcome?.code ?? options.success
+    )
+  )
 }

@@ -111,7 +111,7 @@ test.describe("responsive interaction evidence", () => {
     const viewports = [320, 390, 430, 768, 1024, 1440] as const
 
     await page.goto("/templates")
-    await expect(page.getByRole("link", { name: "Create template" })).toBeVisible()
+    await expect(page.getByRole("button", { name: "Create template" })).toBeVisible()
 
     for (const width of viewports) {
       await page.setViewportSize({ height: 900, width })
@@ -121,7 +121,7 @@ test.describe("responsive interaction evidence", () => {
       const mobileNavigation = page.getByRole("navigation", {
         name: "Mobile navigation",
       })
-      const primaryAction = page.getByRole("link", { name: "Create template" })
+      const primaryAction = page.getByRole("button", { name: "Create template" })
 
       await expectNoHorizontalPageClipping(page)
       await expectReachablePrimaryAction(primaryAction, page)

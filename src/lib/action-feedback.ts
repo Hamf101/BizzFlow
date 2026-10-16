@@ -7,6 +7,8 @@ type ActionFeedbackDefinition = Readonly<{
   description?: string
   durationMs: number
   persistent: boolean
+  /** Counted, but no toast: the page it lands on already says it. */
+  quiet?: boolean
   title: string
   tone: "success" | "error" | "info"
 }>
@@ -47,7 +49,8 @@ export const ACTION_FEEDBACK = {
     ...problem("Permanent deletion queued", "The item will be removed after the retention check completes.", "info"),
     persistent: false,
   },
-  document_created: done("Document created"),
+  // The new document or template opening is the notice; a toast would cover its format bar.
+  document_created: { ...done("Document created"), quiet: true },
   document_uploaded: done("Document uploaded", "document_uploaded"),
   folder_created: done("Folder created"),
   invalid_input: problem("Some information needs attention", "Check the information and try again."),
@@ -89,7 +92,7 @@ export const ACTION_FEEDBACK = {
   task_completed: done("Task completed", "task_completed"),
   task_created: done("Task created", "task_created"),
   task_status_updated: done("Task status updated"),
-  template_created: done("Template created", "template_created"),
+  template_created: { ...done("Template created", "template_created"), quiet: true },
   template_duplicated: done("Template duplicated", "template_duplicated"),
   template_published: done("Template published", "template_published"),
   template_updated: done("Template updated", "template_published"),

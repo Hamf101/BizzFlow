@@ -86,9 +86,8 @@ export async function createGeneratedDocumentAction(
 
   await runFormAction({
     event: "create_generated_document_action",
-    // No notice: the new document opening is the confirmation, and a toast
-    // would sit over its format bar.
     path: buildRedirect("/documents/new", folderId ? { folderId } : {}),
+    success: "document_created",
     run: async () => {
       const { actor, organization } = await loadActionContext("Create an organization before adding documents.")
       const blankContent = templateId ? undefined : createEmptyDocumentContent()

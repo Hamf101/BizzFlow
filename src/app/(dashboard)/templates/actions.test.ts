@@ -225,7 +225,7 @@ describe("template mutation outcomes", () => {
     formData.set("description", "Internal policies")
 
     await expect(createTemplateAction(formData)).rejects.toThrow(
-      `NEXT_REDIRECT:/templates/${TEMPLATE_ID}/edit?feedback=template_created`
+      `NEXT_REDIRECT:/templates/${TEMPLATE_ID}/edit?new=1&feedback=template_created`
     )
     expect(createDocumentTemplate).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({
@@ -234,6 +234,17 @@ describe("template mutation outcomes", () => {
         title: "Client handbook",
       })
     )
+  })
+
+  it("names a template made in one click, or with only spaces for a title, Untitled template", async () => {
+    for (const title of [null, "   "]) {
+      const formData = new FormData()
+      if (title !== null) formData.set("title", title)
+      vi.mocked(createDocumentTemplate).mockClear()
+
+      await expect(createTemplateAction(formData)).rejects.toThrow(`/templates/${TEMPLATE_ID}/edit?new=1`)
+      expect(createDocumentTemplate).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ title: "Untitled template" }))
+    }
   })
 
   it("archives only after the service succeeds", async () => {

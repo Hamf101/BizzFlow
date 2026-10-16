@@ -2,6 +2,7 @@ import { Plus } from "lucide-react"
 import Link from "next/link"
 import type { CSSProperties, ReactElement, ReactNode } from "react"
 
+import { createTemplateAction } from "@/app/(dashboard)/templates/actions"
 import { ListFilterChips } from "@/components/data/list-filter-chips"
 import { ListPagination } from "@/components/data/list-pagination"
 import { ListQuery } from "@/components/data/list-query"
@@ -24,6 +25,7 @@ import {
 } from "@/components/templates/template-selection"
 import { LocalDate } from "@/components/ui/local-date"
 import { buttonVariants } from "@/components/ui/button"
+import { OneClickForm } from "@/components/ui/one-click-form"
 import { cn } from "@/lib/utils"
 import type { DocumentTemplateCard, DocumentTemplateStatus } from "@/types/template"
 import { TEMPLATE_TRASH_RETENTION_DAYS } from "@/types/template-trash"
@@ -97,16 +99,16 @@ export function TemplatesWorkspace({
             views={listViews}
           />
           {canCreate ? (
-            <Link
+            <OneClickForm
+              action={createTemplateAction}
               className={cn(
                 buttonVariants(),
                 "h-11 rounded-[12px] px-4 font-normal"
               )}
-              href="/templates/new"
             >
               <Plus aria-hidden="true" data-icon="inline-start" />
               <span className="max-sm:sr-only">Create template</span>
-            </Link>
+            </OneClickForm>
           ) : null}
         </div>
       </div>
@@ -218,9 +220,9 @@ const actsOn = (template: DocumentTemplateCard, canCreate: boolean): boolean => 
 function NewTemplateTile(): ReactElement {
   return (
     <li className="grid" data-slot="template-new">
-      <Link
-        className="group grid content-center justify-items-center gap-2.5 rounded-[12px] px-2.5 py-4 outline-none focus-visible:ring-2 focus-visible:ring-ring/35"
-        href="/templates/new"
+      <OneClickForm
+        action={createTemplateAction}
+        className="group grid cursor-pointer content-center justify-items-center gap-2.5 rounded-[12px] px-2.5 py-4 outline-none focus-visible:ring-2 focus-visible:ring-ring/35"
       >
         <span
           aria-hidden="true"
@@ -232,7 +234,7 @@ function NewTemplateTile(): ReactElement {
         <span className="w-[96px] text-[11.5px] text-foreground sm:w-[150px] sm:text-sm">
           New template
         </span>
-      </Link>
+      </OneClickForm>
     </li>
   )
 }

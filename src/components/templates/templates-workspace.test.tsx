@@ -132,7 +132,11 @@ describe("TemplatesWorkspace", () => {
       templates: [createTemplate({ id: DRAFT_ID, title: "Mine" }), createTemplate({ canEdit: false, id: PUBLISHED_ID, status: "published", title: "Theirs" })],
     })
 
-    expect(document.querySelector('a[href="/templates/new"]')).not.toBeNull()
+    // New is one click that opens the editor, not a form to fill first.
+    expect([...document.querySelectorAll("form button")].map((button: Element) => button.textContent)).toEqual([
+      "Create template",
+      "New template",
+    ])
     expect(
       [...document.querySelectorAll('a[data-slot="template-title"]')].map((link: Element) => link.getAttribute("href"))
     ).toEqual([`/templates/${DRAFT_ID}/edit`])
@@ -152,7 +156,7 @@ describe("TemplatesWorkspace", () => {
     expect(
       document.querySelector('nav[aria-label="Filter templates by status"]')
     ).toBeNull()
-    expect(document.querySelector('a[href="/templates/new"]')).toBeNull()
+    expect(document.querySelector("form button")).toBeNull()
     expect(document.querySelector('[data-slot="template-card"] a')).toBeNull()
     expect(document.querySelector('button[aria-label^="Actions for"]')).toBeNull()
     expect(readCards("template-status")).toEqual([undefined])

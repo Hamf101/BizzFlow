@@ -90,3 +90,22 @@ test("Flow is one press away on every workspace page", async ({ isMobile, pageAs
     expect(button!.y + button!.height).toBeLessThanOrEqual(bar!.y)
   }
 })
+
+test("New template opens an untitled draft in one click, with the cursor on its page", async ({ admin, pageAs }) => {
+  const page = await pageAs("owner_admin")
+
+  await page.goto("/templates")
+  const tile = page.locator('[data-slot="template-new"]').getByRole("button", { name: "New template" })
+  await waitForHydration(tile)
+  await tile.click()
+  await page.waitForURL(/\/templates\/[0-9a-f-]+\/edit\?new=1$/)
+  const templateId = new URL(page.url()).pathname.split("/")[2] as string
+
+  await expect(page.locator('[contenteditable="true"]:focus')).toHaveCount(1)
+  await page.keyboard.type("Scope of work")
+  await expectSaved(admin, "document_templates", templateId, ({ blocks }) => blocks.map(({ text }) => text)).toEqual(["Scope of work"])
+
+  const made = await admin.from("document_templates").select("title,status").eq("id", templateId).single()
+  if (made.error) throw made.error
+  expect(made.data).toEqual({ status: "draft", title: "Untitled template" })
+})

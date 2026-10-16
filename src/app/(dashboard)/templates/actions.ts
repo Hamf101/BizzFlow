@@ -46,15 +46,15 @@ const loadTemplateActionContext = (): ReturnType<typeof loadActionContext> =>
   loadActionContext(NO_ORGANIZATION)
 
 /**
- * Creates an initial draft template and opens its guided editor.
+ * Creates a draft template and opens its editor, ready to type.
  *
- * @param formData - New template title and optional description.
+ * @param formData - An optional title, description and category.
  * @returns Never returns; redirects to the new editor or a user-safe error.
  */
 export async function createTemplateAction(formData: FormData): Promise<void> {
   await runFormAction({
     event: "template_create_action",
-    path: "/templates/new",
+    path: "/templates",
     success: "template_created",
     run: async () => {
       const { actor, organization } = await loadTemplateActionContext()
@@ -62,14 +62,16 @@ export async function createTemplateAction(formData: FormData): Promise<void> {
       content.branding.organizationName = organization.name
       const template = await createDocumentTemplate({
         ...actor,
-        title: getFormString(formData, "title"),
+        // One-click New sends no title; it is renamed in the editor.
+        title: getFormString(formData, "title").trim() || "Untitled template",
         description: getFormString(formData, "description") || null,
         category: getFormString(formData, "category") || null,
         content,
       })
 
       revalidatePath("/templates")
-      return { path: `/templates/${template.id}/edit` }
+      // Opens with the cursor on its empty page (see TemplateEditor).
+      return { path: `/templates/${template.id}/edit?new=1` }
     },
   })
 }

@@ -29,7 +29,7 @@ beforeEach(() => {
 
 it("asks a member without an organization to create one, from templates and documents alike", async () => {
   await expect(createTemplateAction(new FormData())).rejects.toThrow(
-    "NEXT_REDIRECT:/templates/new?feedback=organization_required"
+    "NEXT_REDIRECT:/templates?feedback=organization_required"
   )
   await expect(createGeneratedDocumentAction(new FormData())).rejects.toThrow(
     "NEXT_REDIRECT:/documents/new?feedback=organization_required"

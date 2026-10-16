@@ -49,10 +49,14 @@ export const metadata: Metadata = { title: "Template editor" }
 
 export default async function EditTemplatePage({
   params,
+  searchParams,
 }: {
   params: EditTemplateParams
+  searchParams: Promise<{ new?: string | string[] }>
 }): Promise<ReactElement> {
   const { templateId } = await params
+  // Set by New on a template it just made.
+  const startTyping = (await searchParams).new === "1"
   const editorPath = `/templates/${templateId}/edit`
   const user = await loadAuthenticatedPageUser(editorPath)
   const contextResult = await loadPageOrganizationContext({
@@ -166,6 +170,7 @@ export default async function EditTemplatePage({
 
   return (
     <TemplateEditor
+      startTyping={startTyping}
       archiveAction={archiveTemplateAction}
       categorySuggestions={categorySuggestions}
       editorLayout={{ initial: editorLayout, save: saveEditorLayoutAction }}

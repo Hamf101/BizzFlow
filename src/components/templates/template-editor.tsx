@@ -85,6 +85,8 @@ type TemplateEditorProps = {
   me: Readonly<{ id: string; name: string }>
   publishAction: (formData: FormData) => Promise<void>
   saveDraftAction: (input: TemplateDraftInput) => Promise<SaveResult>
+  /** A template just made with New: the cursor starts on its page. */
+  startTyping?: boolean
   template: DocumentTemplate
   /** The versions it was published at, newest first. */
   versions?: readonly DocumentTemplateVersion[]
@@ -112,6 +114,7 @@ export function TemplateEditor({
   saveDraftAction,
   template,
   versions = [],
+  startTyping = false,
 }: TemplateEditorProps): ReactElement {
   const initial = useMemo(
     (): TemplateEditorState => ({
@@ -670,6 +673,9 @@ export function TemplateEditor({
               setTestAnswers((answers) => applyVisibleTemplateFieldValue(content, answers, fieldKey, value, settle))
             }
             overlay={room && !proposal ? <RoomLayer narrow={narrow} others={live.others} revision={content} room={room} /> : null}
+            // Once the room's copy is on screen (or there is none), so the line
+            // the cursor starts in isn't swapped out from under it.
+            startTyping={startTyping && (liveMode || live.unavailable)}
             textEditable={editable && !proposal}
             zoom={zoom}
           />

@@ -40,7 +40,7 @@ export function ActionFeedback(): null {
 
     const feedback = getActionFeedback(feedbackValue)
     if (feedback) {
-      bizflowToast[feedback.tone](feedback.title, {
+      if (!feedback.quiet) bizflowToast[feedback.tone](feedback.title, {
         ...(feedback.description
           ? { description: feedback.description }
           : {}),

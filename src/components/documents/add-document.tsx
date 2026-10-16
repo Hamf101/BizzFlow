@@ -10,8 +10,9 @@ import {
   useState,
 } from "react"
 
+import { createGeneratedDocumentAction } from "@/app/(dashboard)/documents/actions"
 import { UPLOAD_ACCEPT, uploadDocumentFile } from "@/components/documents/document-upload-client"
-import { NewDocumentButton } from "@/components/documents/new-document-button"
+import { OneClickForm } from "@/components/ui/one-click-form"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -95,13 +96,18 @@ export function AddDocument({
           />
           <PageTile icon={<Upload />} label="Upload" />
         </label>
-        <NewDocumentButton className={TILE} folderId={folderId}>
+        <OneClickForm action={createGeneratedDocumentAction} className={TILE} fields={{ folderId }}>
           <PageTile icon={<Plus />} label="Blank document" />
-        </NewDocumentButton>
+        </OneClickForm>
         {templates.map((template: DocumentTemplateChoice) => (
-          <NewDocumentButton className={TILE} folderId={folderId} key={template.id} templateId={template.id}>
+          <OneClickForm
+            action={createGeneratedDocumentAction}
+            className={TILE}
+            fields={{ folderId, templateId: template.id }}
+            key={template.id}
+          >
             <PageTile icon={<LayoutTemplate />} label={template.title} />
-          </NewDocumentButton>
+          </OneClickForm>
         ))}
       </div>
 

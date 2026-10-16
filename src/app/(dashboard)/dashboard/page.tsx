@@ -11,7 +11,7 @@ import {
   selectDueThisWeek,
 } from "@/components/dashboard/dashboard-view"
 import { OnboardingChecklist } from "@/components/dashboard/onboarding-checklist"
-import { NewDocumentButton } from "@/components/documents/new-document-button"
+import { OneClickForm } from "@/components/ui/one-click-form"
 import { DatedTitle } from "@/components/navigation/dated-title"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { buttonVariants } from "@/components/ui/button"
@@ -43,6 +43,8 @@ import {
   seedStarterTemplatesAction,
 } from "./actions"
 import type { Metadata } from "next"
+
+import { createGeneratedDocumentAction } from "../documents/actions"
 
 // ponytail: the queue ranks the first page of each source (20 submissions per
 // kind, 50 open tasks, the 20 documents you generated most recently); page
@@ -269,8 +271,8 @@ export default async function DashboardPage(): Promise<ReactElement> {
       id: "template",
       title: "Publish a template",
       completed: progress.value.hasPublishedTemplate,
-      href: "/templates/new",
-      actionText: "New template",
+      href: "/templates",
+      actionText: "Open templates",
     },
     {
       id: "submission",
@@ -290,10 +292,10 @@ export default async function DashboardPage(): Promise<ReactElement> {
           </h1>
         </DatedTitle>
         {can("documents:create") ? (
-          <NewDocumentButton className={buttonVariants()}>
+          <OneClickForm action={createGeneratedDocumentAction} className={buttonVariants()}>
             <Plus aria-hidden="true" />
             New document
-          </NewDocumentButton>
+          </OneClickForm>
         ) : null}
       </header>
 
