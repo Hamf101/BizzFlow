@@ -144,7 +144,7 @@ export function PublicFormLinksPanel({
                       >
                         {copiedToken === link.token ? (
                           <>
-                            <Check className="mr-1 size-3.5 text-emerald-600" />
+                            <Check className="mr-1 size-3.5 text-success" />
                             Copied
                           </>
                         ) : (
