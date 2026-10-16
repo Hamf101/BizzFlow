@@ -209,7 +209,9 @@ function Workflow({ workflow }: { workflow: WorkflowSummary }): ReactElement {
           </li>
         ))}
       </ul>
-      <ul className="flex gap-2 overflow-x-auto pb-0.5 md:hidden">
+      {/* Tiles past the edge fade out, which says the row scrolls; the room at
+          its end lets the last one scroll clear of the fade. */}
+      <ul className="-mr-1 flex gap-2 overflow-x-auto pr-7 pb-0.5 [mask-image:linear-gradient(to_right,black_calc(100%-28px),transparent)] [scrollbar-width:none] md:hidden [&::-webkit-scrollbar]:hidden">
         {stages.map((stage) => (
           <li className="flex-none" key={stage.status}>
             <Link
