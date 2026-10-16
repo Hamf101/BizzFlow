@@ -283,6 +283,23 @@ export default async function SubmissionDetailPage({
         </Alert>
       )}
 
+      {/* The reviewer's next step comes before the form it is about, not after all of it. */}
+      {submission.status !== "draft" && (
+        <SubmissionReviewControls
+          activity={detail.activity}
+          canAssign={canAssign && !peopleResult.errorMessage}
+          canReview={canReview}
+          canShare={detail.canShare && !peopleResult.errorMessage}
+          comments={detail.comments}
+          currentUserId={user.id}
+          isRequester={detail.isRequester}
+          members={peopleResult.members}
+          reviewers={detail.reviewers}
+          submission={submission}
+          tally={detail.tally}
+        />
+      )}
+
       <Card className="min-w-0">
         <CardHeader>
           <CardTitle>Submission form</CardTitle>
@@ -372,19 +389,6 @@ export default async function SubmissionDetailPage({
       {submission.status !== "draft" && (
         <div className="grid items-start gap-4 lg:grid-cols-2">
           <div className="flex flex-col gap-4">
-            <SubmissionReviewControls
-              activity={detail.activity}
-              canAssign={canAssign && !peopleResult.errorMessage}
-              canReview={canReview}
-              canShare={detail.canShare && !peopleResult.errorMessage}
-              comments={detail.comments}
-              currentUserId={user.id}
-              isRequester={detail.isRequester}
-              members={peopleResult.members}
-              reviewers={detail.reviewers}
-              submission={submission}
-              tally={detail.tally}
-            />
             <SubmissionDiscussionCard
               canComment={canComment}
               submissionId={submission.id}
