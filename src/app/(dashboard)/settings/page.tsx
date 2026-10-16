@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/card"
 import { Field, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import { Switch } from "@/components/ui/switch"
+import { SubmitOnChangeSwitch } from "@/components/ui/submit-on-change-switch"
 import { NoticeSoundSwitch } from "@/components/sharing/notice-sound-switch"
 import { RolesAndAccessSettings } from "@/components/settings/roles-and-access-settings"
 import { buildFeedbackRedirect } from "@/lib/action-result"
@@ -169,7 +169,7 @@ export default async function SettingsPage(): Promise<ReactElement> {
                 <div className="flex flex-col gap-0.5">
                   <FieldLabel htmlFor="emailNotificationsEnabled" className="text-base">Email</FieldLabel>
                 </div>
-                <Switch
+                <SubmitOnChangeSwitch
                   id="emailNotificationsEnabled"
                   name="emailNotificationsEnabled"
                   defaultChecked={settings.emailNotificationsEnabled}
@@ -180,16 +180,19 @@ export default async function SettingsPage(): Promise<ReactElement> {
                 <div className="flex flex-col gap-0.5">
                   <FieldLabel htmlFor="smsNotificationsEnabled" className="text-base">SMS</FieldLabel>
                 </div>
-                <Switch
+                <SubmitOnChangeSwitch
                   id="smsNotificationsEnabled"
                   name="smsNotificationsEnabled"
                   defaultChecked={settings.smsNotificationsEnabled}
                 />
               </div>
 
-              <Button type="submit" variant="outline" className="w-fit">
-                Save
-              </Button>
+              {/* Each switch saves itself; this is for a browser without script. */}
+              <noscript>
+                <Button type="submit" variant="outline" className="w-fit">
+                  Save
+                </Button>
+              </noscript>
             </form>
             <div className="mt-6 border-t border-border/60 pt-6">
               <NoticeSoundSwitch />
@@ -227,7 +230,7 @@ export default async function SettingsPage(): Promise<ReactElement> {
                     Email
                   </FieldLabel>
                 </div>
-                <Switch
+                <SubmitOnChangeSwitch
                   id="orgEmailNotificationsEnabled"
                   name="orgEmailNotificationsEnabled"
                   defaultChecked={organizationSettings.emailNotificationsEnabled}
@@ -243,16 +246,18 @@ export default async function SettingsPage(): Promise<ReactElement> {
                     SMS
                   </FieldLabel>
                 </div>
-                <Switch
+                <SubmitOnChangeSwitch
                   id="orgSmsNotificationsEnabled"
                   name="orgSmsNotificationsEnabled"
                   defaultChecked={organizationSettings.smsNotificationsEnabled}
                 />
               </div>
 
-              <Button type="submit" variant="outline" className="w-fit">
-                Save
-              </Button>
+              <noscript>
+                <Button type="submit" variant="outline" className="w-fit">
+                  Save
+                </Button>
+              </noscript>
             </form>
           </CardContent>
         </Card>
