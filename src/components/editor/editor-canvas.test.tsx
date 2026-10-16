@@ -37,13 +37,41 @@ const TERMS: TemplateContentV3 = {
   sections: [{ id: S, label: "Terms", startBlockId: B, keepTogether: false, pageBreakBefore: false }],
 }
 
-function Canvas({ editable = true, fields = "design", initial = TERMS, narrow = true }: { editable?: boolean; fields?: "design" | "fill"; initial?: TemplateContentV3; narrow?: boolean }) {
+function Canvas({ editable = true, fields = "design", initial = TERMS, narrow = true, startTyping = false }: { editable?: boolean; fields?: "design" | "fill"; initial?: TemplateContentV3; narrow?: boolean; startTyping?: boolean }) {
   const history = useEditorHistory<TemplateContentV3>(initial)
   const current = useEditorController({ change: history.set, content: history.state, undo: history.undo })
   const [answers, setAnswers] = useState<Record<string, unknown>>({})
   useEffect(() => { controller = current })
-  return <DesignToolsContext.Provider value={DESIGN_TOOLS}><EditorCanvas allowFiles answers={answers} controller={current} designable={editable} documentTitle="Agreement" fields={fields} narrow={narrow} onAnswerChange={(key, value) => setAnswers((all) => ({ ...all, [key]: value }))} textEditable={editable} zoom={1} /></DesignToolsContext.Provider>
+  return <DesignToolsContext.Provider value={DESIGN_TOOLS}><EditorCanvas allowFiles answers={answers} controller={current} designable={editable} documentTitle="Agreement" fields={fields} narrow={narrow} onAnswerChange={(key, value) => setAnswers((all) => ({ ...all, [key]: value }))} startTyping={startTyping} textEditable={editable} zoom={1} /></DesignToolsContext.Provider>
 }
+
+it("puts the cursor on a brand-new blank page, and leaves an empty page that was only opened, or can't be edited, as it was", async () => {
+  const typingLine = () => document.activeElement?.closest('[contenteditable="true"]')
+
+  root = mount()
+  await act(async () => root.render(<Canvas initial={createEmptyDocumentContent()} startTyping />))
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+  expect(controller.content.blocks).toMatchObject([{ type: "paragraph", text: "" }])
+  expect(typingLine()).toBeTruthy()
+  root.unmount()
+
+  for (const props of [{}, { editable: false, startTyping: true }]) {
+    root = mount()
+    await act(async () => root.render(<Canvas initial={createEmptyDocumentContent()} {...props} />))
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+    expect(controller.content.blocks).toEqual([])
+    expect(typingLine()).toBeFalsy()
+    root.unmount()
+  }
+})
+
+it("never adds a line to a written page, even opened from a link that still says it is new", async () => {
+  root = mount()
+  await act(async () => root.render(<Canvas initial={TERMS} startTyping />))
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+  expect(controller.content.blocks).toEqual(TERMS.blocks)
+  root.unmount()
+})
 
 it("edits section titles, keeps an emptied title valid, switches rules and moves the caret into its text", async () => {
   root = mount()

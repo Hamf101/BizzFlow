@@ -81,6 +81,8 @@ export type EditorCanvasProps = Readonly<{
   overlay?: ReactNode
   /** What a page that takes uploads puts in a file field while it is filled in. */
   renderFileField?: CanvasActions["renderFileField"]
+  /** A blank page just made: the cursor goes on it, as a word processor's New does. */
+  startTyping?: boolean
   textEditable: boolean
   zoom: number
 }>
@@ -104,6 +106,7 @@ export function EditorCanvas({
   onAnswerChange = () => undefined,
   overlay,
   renderFileField,
+  startTyping = false,
   textEditable,
   zoom,
 }: EditorCanvasProps): ReactElement {
@@ -163,6 +166,14 @@ export function EditorCanvas({
   // eslint-disable-next-line react-hooks/refs -- a hook either way; the editing one reads the refs only in effects and handlers.
   const editing = useEditing({ allowFiles, content, controller, layout, narrow, point, rootRef, textEditable, unitElements, unitOf, units, zoom })
   const { dragging, focusPageEnd } = editing
+  const startedTyping = useRef(false)
+
+  // Once, and only on an empty page: a page someone only opened isn't changed.
+  useEffect(() => {
+    if (!startTyping || !textEditable || startedTyping.current || units.length > 0) return
+    startedTyping.current = true
+    focusPageEnd(0)
+  })
   const headerOn = (page: number): boolean =>
     hasBranding && shouldRenderTemplateHeader(plan.layout, page + 1)
   const footerOn = (page: number): boolean =>

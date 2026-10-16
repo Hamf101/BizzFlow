@@ -191,10 +191,10 @@ test("New document on home makes one blank document even when double-clicked, an
   })
 
   await page.getByRole("button", { name: "New document" }).dblclick()
-  await expect(page).toHaveURL(/\/documents\/[0-9a-f-]{36}\/edit$/)
+  await expect(page).toHaveURL(/\/documents\/[0-9a-f-]{36}\/edit\?new=1$/)
   expect(creates).toBe(1)
 
-  const opened = await admin.from("documents").select("title").eq("id", page.url().split("/").at(-2)!).single()
+  const opened = await admin.from("documents").select("title").eq("id", new URL(page.url()).pathname.split("/")[2]!).single()
   if (opened.error) throw opened.error
   expect(opened.data.title).toBe("Untitled document")
 })

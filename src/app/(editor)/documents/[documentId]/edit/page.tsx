@@ -38,10 +38,14 @@ export const metadata: Metadata = { title: "Document editor" }
 
 export default async function GeneratedDocumentEditorPage({
   params,
+  searchParams,
 }: {
   params: GeneratedDocumentEditorParams
+  searchParams: Promise<{ new?: string | string[] }>
 }): Promise<ReactElement> {
   const { documentId } = await params
+  // Set by New on a blank document it just made.
+  const startTyping = (await searchParams).new === "1"
   const loaded = await loadDocumentPage(documentId, `/documents/${encodeURIComponent(documentId)}/edit`)
 
   if ("failure" in loaded) {
@@ -113,6 +117,7 @@ export default async function GeneratedDocumentEditorPage({
         saveAnswersAction={saveDocumentAnswersAction}
         saveContentAction={saveDocumentContentAction}
         sendAction={sendGeneratedDocumentAction}
+        startTyping={startTyping}
         view={view}
       />
     </>

@@ -2,34 +2,30 @@ import { expect, expectSaved, test, uniqueName } from "../support/fixtures"
 import { waitForHydration } from "../support/hydration"
 import { seedSigningDocument, seedTemplate } from "../support/seed"
 
-test("writes on a blank document's own page, adds a field with /, and keeps it all", async ({
+test("a blank document opens in one click with the cursor on the page, takes a field with /, and keeps it all", async ({
   admin,
   pageAs,
 }) => {
   const page = await pageAs("owner_admin")
-  const title = uniqueName("Welcome letter")
 
   await page.goto("/documents/new")
-  const create = page.getByRole("button", { exact: true, name: "Create" })
-  await waitForHydration(create)
-  await create.click()
-  const dialog = page.getByRole("dialog", { name: "Create document" })
-  await dialog.getByLabel("Title").fill(title)
-  await dialog.getByRole("button", { name: "Create" }).click()
+  const blank = page.getByRole("button", { name: "Blank document" })
+  await waitForHydration(blank)
+  await blank.click()
   await page.waitForURL(/\/documents\/[0-9a-f-]+\/edit/)
   const documentId = new URL(page.url()).pathname.split("/")[2] as string
 
   // Blank means an empty page: no printed title, header, or page numbers.
-  const emptyPage = page.locator('[data-slot="empty-page"]')
-  await waitForHydration(emptyPage)
   await expect(page.locator("[data-printed-title]")).toHaveCount(0)
   await expect(page.getByText(/^Page 1 of/)).toHaveCount(0)
 
-  await emptyPage.click()
+  // Like a word processor: the cursor is already on the page, so typing just works.
+  await expect(page.locator('[contenteditable="true"]:focus')).toHaveCount(1)
   await page.keyboard.type("Dear tenant,")
   await page.keyboard.press("Enter")
   await page.keyboard.type("/sig")
-  await expect(page.locator('[data-slot="slash-menu"]')).toContainText("Signature")
+  // Every key after the / lands: the menu narrows to Signature and has it chosen.
+  await expect(page.locator('[data-slot="slash-menu"] [aria-selected="true"]')).toHaveText(/Signature/)
   await page.keyboard.press("Enter")
   await expect(page.locator('[data-block-type="signature_field"]')).toBeVisible()
 

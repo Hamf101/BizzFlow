@@ -80,6 +80,8 @@ const SENT_STARTER: FlowStarter = {
 
 type DocumentEditorProps = {
   backHref: string
+  /** A blank document just made with New: the cursor starts on its page. */
+  startTyping?: boolean
   /** Whether the member may make documents, and so edit a copy of a completed one. */
   canCopy: boolean
   /** Takes a document awaiting signatures back to an editable draft. */
@@ -129,6 +131,7 @@ export function DocumentEditor({
   saveAnswersAction,
   saveContentAction,
   sendAction,
+  startTyping = false,
   view,
 }: DocumentEditorProps): ReactElement {
   const timeZone = useTimeZone()
@@ -676,6 +679,9 @@ export function DocumentEditor({
                   setAnswers((current) => applyVisibleTemplateFieldValue(page.content, current, fieldKey, value, settle))
                 }
                 overlay={room && !proposal ? <RoomLayer narrow={narrow} others={live.others} revision={page.content} room={room} /> : null}
+                // Once the room's copy is the one on screen (or there is none), so the
+                // line the cursor starts in isn't swapped out from under it.
+                startTyping={startTyping && (history.liveStatus !== null || live.unavailable)}
                 textEditable={editable && !proposal}
                 zoom={zoom}
               />

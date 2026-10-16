@@ -37,17 +37,16 @@ test("a published template's edits are kept as they're made, reach staff on Upda
 
   // A document started now copies the published version.
   await page.goto("/documents/new")
-  const create = page.getByRole("button", { exact: true, name: "Create" })
-  await waitForHydration(create)
-  await create.click()
-  const dialog = page.getByRole("dialog", { name: "Create document" })
-  await dialog.getByLabel("Template").click()
-  await page.getByRole("option", { exact: true, name: template.title }).click()
-  await dialog.getByLabel("Title").fill(uniqueName("Supplier terms"))
-  await dialog.getByRole("button", { name: "Create" }).click()
-  await page.waitForURL(/\/documents\/[0-9a-f-]+\/edit/)
+  // One click on the template's own tile; the document takes its name.
+  const fromTemplate = page.getByRole("button", { exact: true, name: template.title })
+  await waitForHydration(fromTemplate)
+  await fromTemplate.click()
+  await page.waitForURL(/\/documents\/[0-9a-f-]+\/edit$/)
   const documentPath = new URL(page.url()).pathname
   await expect(page.getByText("Pay within 30 days.")).toBeVisible()
+  const made = await admin.from("documents").select("title").eq("id", documentPath.split("/")[2]!).single()
+  if (made.error) throw made.error
+  expect(made.data.title).toBe(template.title)
 
   // Update publishes the working copy; the document keeps what it copied.
   await page.goto(`/templates/${template.id}/edit`)
