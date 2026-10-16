@@ -122,9 +122,9 @@ jobs:
           git diff --exit-code src/types/database.ts
 
       # Object storage. The app targets the S3 API with path-style addressing,
-      # so MinIO is a drop-in stand-in for R2.
+      # so Versity Gateway (docker-compose.yml) is a drop-in stand-in for R2.
       - name: Start object storage
-        run: docker compose -f docker-compose.e2e.yml up -d --wait
+        run: docker compose up -d --wait
 
       - name: Write E2E environment
         run: pnpm e2e:env

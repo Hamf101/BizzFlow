@@ -9,7 +9,7 @@ const usesHttps =
 
 // Sentry needs no connect-src entry because browser events tunnel through the
 // same-origin /monitoring route. Browser uploads need the configured R2 origin
-// exactly, including the local MinIO origin used by the end-to-end suite.
+// exactly, including the local storage origin used by the end-to-end suite.
 const contentSecurityPolicy = buildContentSecurityPolicy({
   appUrl: process.env.NEXT_PUBLIC_APP_URL,
   isProduction,

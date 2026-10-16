@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process"
 
 // The local stack's database container, named from supabase/config.toml's project_id.
-const DATABASE_CONTAINER = "supabase_db_BizzFlow"
+const DATABASE_CONTAINER = "supabase_db_bizzflow"
 
 function sql(query: string): string {
   return execFileSync(

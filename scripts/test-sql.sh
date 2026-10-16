@@ -5,7 +5,7 @@
 # Postgres client. `supabase db query` is not used: it sends a file as one
 # prepared statement, which refuses more than one command.
 # SUPABASE_DB_CONTAINER picks another stack (default: config.toml's project).
-container="${SUPABASE_DB_CONTAINER:-supabase_db_BizzFlow}"
+container="${SUPABASE_DB_CONTAINER:-supabase_db_bizzflow}"
 failed=""
 
 for file in supabase/tests/*.sql; do

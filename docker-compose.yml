@@ -1,0 +1,46 @@
+# Object storage for local dev and the end-to-end suite.
+#
+# The app stores file bytes in Cloudflare R2 over the S3 API with
+# `forcePathStyle: true` (src/lib/r2/client.ts), so a local S3 implementation is
+# a drop-in substitute and keeps the suite free of cloud credentials.
+#
+# Postgres and Auth are NOT here: those come from `supabase start`, which owns
+# the migrations and mints the JWT keys the app expects.
+#
+# Versity Gateway serves a plain directory over S3. It replaced MinIO, whose
+# images were withdrawn from Docker Hub and quay.io in 2026. It honours
+# `IfNoneMatch: "*"` (create-only writes) and checks SigV4 signatures as R2
+# does. A posix bucket is just a directory, so the entrypoint makes it — no
+# separate create-bucket step. `--region auto` matches R2's region string.
+#
+# The same name as supabase/config.toml's project_id, so Docker shows storage
+# and the Supabase containers as one "bizzflow" group, and every checkout shares
+# that one stack instead of starting its own. Never run `down --remove-orphans`
+# here: Compose counts the Supabase containers as orphans of this project.
+name: bizzflow
+
+services:
+  storage:
+    image: versity/versitygw:v1.9.0
+    entrypoint:
+      - sh
+      - -c
+      - mkdir -p /data/bizflow-e2e && exec versitygw --port :9000 --region auto --health /health --cors-allow-origin '*' posix /data
+    environment:
+      ROOT_ACCESS_KEY: bizflow-e2e
+      ROOT_SECRET_KEY: bizflow-e2e-secret
+    ports:
+      - "9000:9000"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9000/health"]
+      interval: 2s
+      timeout: 5s
+      retries: 20
+    # Kept across restarts like the Supabase database, so files uploaded in
+    # local dev still open after the stack comes back. Object keys carry record
+    # ids, so leftovers never collide with a new run's create-only writes.
+    volumes:
+      - storage-data:/data
+
+volumes:
+  storage-data:
