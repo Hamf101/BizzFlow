@@ -283,6 +283,13 @@ export default async function SubmissionDetailPage({
         </Alert>
       )}
 
+      {peopleResult.errorMessage && submission.status !== "draft" && (
+        <Alert variant="destructive">
+          <AlertTitle>Reviewer names unavailable</AlertTitle>
+          <AlertDescription>{peopleResult.errorMessage}</AlertDescription>
+        </Alert>
+      )}
+
       {/* The reviewer's next step comes before the form it is about, not after all of it. */}
       {submission.status !== "draft" && (
         <SubmissionReviewControls
@@ -378,13 +385,6 @@ export default async function SubmissionDetailPage({
         submission={submission}
         suggestions={detail.suggestions}
       />
-
-      {peopleResult.errorMessage && submission.status !== "draft" && (
-        <Alert variant="destructive">
-          <AlertTitle>Reviewer names unavailable</AlertTitle>
-          <AlertDescription>{peopleResult.errorMessage}</AlertDescription>
-        </Alert>
-      )}
 
       {submission.status !== "draft" && (
         <div className="grid items-start gap-4 lg:grid-cols-2">

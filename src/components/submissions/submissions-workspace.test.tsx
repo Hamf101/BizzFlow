@@ -115,6 +115,20 @@ describe("SubmissionsWorkspace", () => {
     expect(chip?.getAttribute("href")).toBe("/submissions?status=draft&size=25")
   })
 
+  it("says where an answer came from: a link sent to one person, or a public link anyone could open", () => {
+    renderWorkspace({
+      submissions: [
+        createSubmission({ fromPublicLink: true, sentTo: "jordan@example.test", title: "Quote" }),
+        createSubmission({ fromPublicLink: true, id: SECOND_SUBMISSION_ID, title: "Quote" }),
+      ],
+    })
+
+    expect([...document.querySelectorAll('[data-slot="submission-source"]')].map((line) => line.textContent)).toEqual([
+      "Sent to jordan@example.test",
+      "From a public link",
+    ])
+  })
+
   it("shows the assignee only to people who assign reviews", () => {
     renderWorkspace({ canAssign: false })
 

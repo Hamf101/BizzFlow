@@ -95,6 +95,7 @@ describe("submission persistence types", () => {
       assignedAt: null,
       requiredApprovals: null,
       sentTo: null,
+      fromPublicLink: false,
     })
   })
 

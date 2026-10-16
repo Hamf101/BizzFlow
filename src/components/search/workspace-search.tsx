@@ -400,8 +400,9 @@ function SearchPanel({ role, up }: { role: OrganizationPermissionSubject | null;
     }
   }
 
-  // Counts are of what the words found.
-  const counted = asked ? current : null
+  // Counts are of what the words found. One letter looks only through what
+  // was opened lately, so it counts nothing it could claim as a total.
+  const counted = asked.length > 1 ? current : null
   const every = counted ? Object.values(counted.result.totals).reduce((sum, count) => sum + (count ?? 0), 0) : undefined
   const filters = [{ count: every, kind: null, label: "All" }, ...sections.map((each) => ({ count: counted?.result.totals[each.kind], kind: each.kind, label: each.label }))]
 
@@ -497,7 +498,7 @@ function SearchPanel({ role, up }: { role: OrganizationPermissionSubject | null;
                     <HitRow hit={option.hit} />
                   ) : (
                     <span className="flex-1 px-0.5 text-[13px] text-primary">
-                      {opening ? `Go to ${section?.label} →` : `Show all ${total} in ${section?.label} →`}
+                      {opening ? `Go to ${section?.label} →` : counted ? `Show all ${total} in ${section?.label} →` : `Show all in ${section?.label} →`}
                     </span>
                   )}
                   {option === chosen ? (

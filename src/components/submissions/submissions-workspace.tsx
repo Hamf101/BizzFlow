@@ -215,9 +215,9 @@ function SubmissionRow({
             submissionId={submission.id}
             title={submission.title}
           />
-          {submission.sentTo ? (
-            <span className="truncate text-xs text-muted-foreground" data-slot="submission-sent-to">
-              Sent to {submission.sentTo}
+          {submission.sentTo || submission.fromPublicLink ? (
+            <span className="truncate text-xs text-muted-foreground" data-slot="submission-source">
+              {submission.sentTo ? `Sent to ${submission.sentTo}` : "From a public link"}
             </span>
           ) : null}
           <span

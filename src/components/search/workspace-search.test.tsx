@@ -138,6 +138,11 @@ it("shows what the member had lately the moment it opens, and searches from the 
 
   await type("l")
   expect(fetchMock).toHaveBeenLastCalledWith("/api/search?q=l", expect.anything())
+  // One letter looks only through recent files, so it claims no totals it didn't count.
+  expect(document.querySelector('[role="dialog"]')?.textContent).not.toMatch(/Show all \d/)
+  expect([...document.querySelectorAll("button[aria-pressed]")].map((pill) => pill.textContent)).toEqual(
+    [...document.querySelectorAll("button[aria-pressed]")].map((pill) => pill.textContent?.replace(/\d+$/, ""))
+  )
 })
 
 it("narrows to one section, whose whole list opens with the same words in the view it was in", async () => {

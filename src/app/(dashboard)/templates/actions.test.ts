@@ -236,17 +236,6 @@ describe("template mutation outcomes", () => {
     )
   })
 
-  it("names a template made in one click, or with only spaces for a title, Untitled template", async () => {
-    for (const title of [null, "   "]) {
-      const formData = new FormData()
-      if (title !== null) formData.set("title", title)
-      vi.mocked(createDocumentTemplate).mockClear()
-
-      await expect(createTemplateAction(formData)).rejects.toThrow(`/templates/${TEMPLATE_ID}/edit?new=1`)
-      expect(createDocumentTemplate).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ title: "Untitled template" }))
-    }
-  })
-
   it("archives only after the service succeeds", async () => {
     const formData = new FormData()
     formData.set("templateId", TEMPLATE_ID)

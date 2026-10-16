@@ -1,6 +1,6 @@
 "use client"
 
-import type { ReactElement, ReactNode } from "react"
+import { type ReactElement, type ReactNode, type RefObject, useEffect, useRef } from "react"
 import { useFormStatus } from "react-dom"
 
 /**
@@ -22,18 +22,36 @@ export function OneClickForm({
   /** Hidden fields sent with it; null sends an empty value. */
   fields?: Readonly<Record<string, string | null>>
 }): ReactElement {
+  // Set the moment it is pressed: a second press in the same frame, before the
+  // button can grey out, is turned away instead of making a second one.
+  const busyRef = useRef(false)
+
   return (
-    <form action={action} className="contents">
+    <form
+      action={action}
+      className="contents"
+      onSubmit={(event) => {
+        if (busyRef.current) event.preventDefault()
+        busyRef.current = true
+      }}
+    >
       {Object.entries(fields).map(([name, value]) => (
         <input key={name} name={name} type="hidden" value={value ?? ""} />
       ))}
-      <Submit className={className}>{children}</Submit>
+      <Submit busyRef={busyRef} className={className}>
+        {children}
+      </Submit>
     </form>
   )
 }
 
-function Submit({ children, className }: { children: ReactNode; className?: string }): ReactElement {
+function Submit({ busyRef, children, className }: { busyRef: RefObject<boolean>; children: ReactNode; className?: string }): ReactElement {
   const { pending } = useFormStatus()
+
+  // Ready again once it has finished, as when a refusal brings the page back.
+  useEffect(() => {
+    if (!pending) busyRef.current = false
+  }, [busyRef, pending])
 
   // Disabled while it works, so a double click makes one, not two.
   return (

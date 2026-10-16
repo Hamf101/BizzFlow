@@ -443,6 +443,17 @@ describe("template categories", () => {
     ).rejects.toMatchObject({ statusCode: 400 })
   })
 
+  it("names a template made without a title, or with only spaces, Untitled template", async () => {
+    const client = new FakeClient(createBaseTables())
+
+    const created = await createDocumentTemplate(
+      { actorUserId: MANAGER_ID, organizationId: ORG_ID, title: "   " },
+      { client: client as never, createId: () => NEW_TEMPLATE_ID }
+    )
+
+    expect(created.title).toBe("Untitled template")
+  })
+
   it("stores a whitespace-only category as uncategorised", async () => {
     const client = new FakeClient(createBaseTables())
 

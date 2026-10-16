@@ -257,7 +257,8 @@ export async function createDocumentTemplate(
         .insert({
           id: createId(deps),
           org_id: input.organizationId,
-          title: normalizeTitle(input.title),
+          // One-click New sends no title; it is renamed in the editor.
+          title: normalizeTitle(input.title.trim() || "Untitled template"),
           description: normalizeDescription(input.description),
           category: normalizeCategory(input.category),
           status: "draft",

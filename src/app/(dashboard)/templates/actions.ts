@@ -62,8 +62,7 @@ export async function createTemplateAction(formData: FormData): Promise<void> {
       content.branding.organizationName = organization.name
       const template = await createDocumentTemplate({
         ...actor,
-        // One-click New sends no title; it is renamed in the editor.
-        title: getFormString(formData, "title").trim() || "Untitled template",
+        title: getFormString(formData, "title"),
         description: getFormString(formData, "description") || null,
         category: getFormString(formData, "category") || null,
         content,

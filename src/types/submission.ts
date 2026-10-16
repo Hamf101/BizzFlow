@@ -220,6 +220,8 @@ export type SubmissionBase = {
   requiredApprovals: number | null
   /** Whom it was sent to answer, when it came through a link sent to one person. */
   sentTo?: string | null
+  /** Answered through a public link rather than inside the workspace. */
+  fromPublicLink?: boolean
   createdAt: string
   updatedAt: string
 }
@@ -323,6 +325,7 @@ export function parseSubmissionRow(value: unknown): Submission {
   > = {
     requiredApprovals: row.required_approvals ?? null,
     sentTo: row.public_form_link?.recipient_email ?? null,
+    fromPublicLink: Boolean(row.public_form_link),
     id: row.id,
     organizationId: row.org_id,
     title: row.title,
