@@ -35,6 +35,20 @@ describe("runFormAction", () => {
     expect(JSON.stringify(redirectMock.mock.calls)).not.toMatch(/EmailJS|acme|81f2/)
   })
 
+  it("lands a quiet success on its page with no notice, while its failure still reports one", async () => {
+    const quiet = (work: () => Promise<void | { path: string }>): Promise<never> =>
+      runFormAction({ event: "test_action", path: PATH, run: work })
+
+    await expect(quiet(async () => ({ path: "/documents/d1/edit" }))).rejects.toThrow(/^NEXT_REDIRECT:\/documents\/d1\/edit$/)
+    await expect(quiet(async () => Promise.reject(new Error("boom")))).rejects.toThrow(`NEXT_REDIRECT:${PATH}?feedback=`)
+  })
+
+  it("still reports an outcome the work names itself when the action has no default notice", async () => {
+    await expect(
+      runFormAction({ event: "test_action", path: PATH, run: async () => ({ path: "/documents?folderId=f1", code: "folder_created" }) })
+    ).rejects.toThrow("NEXT_REDIRECT:/documents?folderId=f1&feedback=folder_created")
+  })
+
   it("sends a member whose session ended to sign in, and back to the same page", async () => {
     await expect(run(async () => Promise.reject(new AuthenticationError("Sign in to continue.")))).rejects.toThrow(
       `NEXT_REDIRECT:/login?next=${encodeURIComponent(PATH)}`
