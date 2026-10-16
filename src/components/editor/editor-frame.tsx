@@ -454,7 +454,8 @@ export function EditorSidePanel({
     <aside
       aria-label={title}
       className={cn(
-        "absolute z-30 flex flex-col overflow-hidden rounded-[18px] border border-border bg-popover text-popover-foreground shadow-xl",
+        // Slides in from the side it sits on, so it reads as arriving, not appearing.
+        "absolute z-30 flex flex-col overflow-hidden rounded-[18px] border border-border bg-popover text-popover-foreground shadow-xl animate-in fade-in slide-in-from-right-3 duration-200 ease-out",
         narrow ? "inset-x-2 top-2 bottom-2" : "top-3 right-3 max-h-[calc(100%-1.5rem)] w-[22rem]"
       )}
       data-slot="editor-panel"
