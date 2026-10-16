@@ -306,12 +306,11 @@ function SearchPanel({ role, up }: { role: OrganizationPermissionSubject | null;
     return itemKind ? [{ href: item.href, kind: itemKind, label: item.label }] : []
   })
   const section = sections.find((each) => each.kind === kind)
-  // Two letters make a search; before that, a chosen section opens its own
-  // list, as a Spotlight category does.
-  const asked = words.length >= 2 ? words : ""
+  // The first letter makes a search. Before any, the panel shows what the
+  // member had lately, or a chosen section's own list, as Spotlight does.
+  const asked = words
   const opening = !asked && section !== undefined
-  const current =
-    found && (asked ? found.words === asked : opening && found.words === "" && found.kind === kind) ? found : null
+  const current = found && found.words === asked && (asked !== "" || found.kind === kind) ? found : null
   // Narrowing shows at once what is already here, while the rest arrives.
   const hits = current
     ? current.result.hits.filter((hit) => !section || hit.kind === section.kind).sort(
@@ -338,10 +337,6 @@ function SearchPanel({ role, up }: { role: OrganizationPermissionSubject | null;
   const chosen = options[Math.min(active, options.length - 1)]
 
   useEffect(() => {
-    if (!asked && !kind) {
-      return undefined
-    }
-
     const params = new URLSearchParams()
 
     if (kind) {
@@ -466,69 +461,70 @@ function SearchPanel({ role, up }: { role: OrganizationPermissionSubject | null;
         </div>
       </div>
 
-      {asked || opening ? (
-        <div className="grid md:h-[26rem] md:grid-cols-2">
-          <div
-            aria-label="Results"
-            className="max-h-[min(26rem,55dvh)] overflow-y-auto p-2 md:max-h-none md:border-r md:border-foreground/[0.08]"
-            id={listId}
-            role="listbox"
-          >
-            {options.length > 0 ? (
-              options.map((option, index) => (
-                <Fragment key={option.key}>
-                  {option.hit && (opening ? index === 0 : !section && option.hit.kind !== options[index - 1]?.hit?.kind) ? (
-                    <div
-                      aria-hidden="true"
-                      className="px-2.5 pt-3 pb-1 text-xs font-medium text-primary first:pt-1.5"
-                    >
-                      {opening && section ? OPENING[section.kind] : sections.find((each) => each.kind === option.hit?.kind)?.label}
-                    </div>
-                  ) : null}
-                  <Link
-                    aria-selected={option === chosen}
-                    className={cn(
-                      "flex min-h-11 items-center gap-3 rounded-[12px] px-2.5 py-2 outline-none",
-                      option === chosen && "bg-primary/15"
-                    )}
-                    href={option.href}
-                    id={`${listId}-${index}`}
-                    onClick={() => searchHandle.close()}
-                    onMouseMove={() => setActive(index)}
-                    role="option"
-                    tabIndex={-1}
+      {/* Always: before any words it shows what the member had lately. */}
+      <div className="grid md:h-[26rem] md:grid-cols-2">
+        <div
+          aria-label="Results"
+          className="max-h-[min(26rem,55dvh)] overflow-y-auto p-2 md:max-h-none md:border-r md:border-foreground/[0.08]"
+          id={listId}
+          role="listbox"
+        >
+          {options.length > 0 ? (
+            options.map((option, index) => (
+              <Fragment key={option.key}>
+                {option.hit && (opening ? index === 0 : !section && option.hit.kind !== options[index - 1]?.hit?.kind) ? (
+                  <div
+                    aria-hidden="true"
+                    className="px-2.5 pt-3 pb-1 text-xs font-medium text-primary first:pt-1.5"
                   >
-                    {option.hit ? (
-                      <HitRow hit={option.hit} />
-                    ) : (
-                      <span className="flex-1 px-0.5 text-[13px] text-primary">
-                        {opening ? `Go to ${section?.label} →` : `Show all ${total} in ${section?.label} →`}
-                      </span>
-                    )}
-                    {option === chosen ? (
-                      <CornerDownLeft aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
-                    ) : null}
-                  </Link>
-                </Fragment>
-              ))
-            ) : (
-              <p className="px-3 py-6 text-sm text-muted-foreground" role="status">
-                {failure ??
-                  (current
-                    ? section && sectionFailed
-                      ? `${section.label} could not be searched. Try again.`
-                      : failedLabels
-                        ? `Nothing matches “${current.words}” (${failedLabels} could not be searched).`
-                        : `Nothing${section ? ` in ${section.label}` : ""} matches “${current.words}”.`
-                    : "Searching…")}
-              </p>
-            )}
-          </div>
-          <div className="hidden overflow-y-auto md:block">
-            {chosen?.hit ? <Preview hit={chosen.hit} key={chosen.key} onOpen={go} /> : null}
-          </div>
+                    {opening && section ? OPENING[section.kind] : sections.find((each) => each.kind === option.hit?.kind)?.label}
+                  </div>
+                ) : null}
+                <Link
+                  aria-selected={option === chosen}
+                  className={cn(
+                    "flex min-h-11 items-center gap-3 rounded-[12px] px-2.5 py-2 outline-none",
+                    option === chosen && "bg-primary/15"
+                  )}
+                  href={option.href}
+                  id={`${listId}-${index}`}
+                  onClick={() => searchHandle.close()}
+                  onMouseMove={() => setActive(index)}
+                  role="option"
+                  tabIndex={-1}
+                >
+                  {option.hit ? (
+                    <HitRow hit={option.hit} />
+                  ) : (
+                    <span className="flex-1 px-0.5 text-[13px] text-primary">
+                      {opening ? `Go to ${section?.label} →` : `Show all ${total} in ${section?.label} →`}
+                    </span>
+                  )}
+                  {option === chosen ? (
+                    <CornerDownLeft aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
+                  ) : null}
+                </Link>
+              </Fragment>
+            ))
+          ) : (
+            <p className="px-3 py-6 text-sm text-muted-foreground" role="status">
+              {failure ??
+                (current
+                  ? section && sectionFailed
+                    ? `${section.label} could not be searched. Try again.`
+                    : failedLabels
+                      ? `Nothing matches “${current.words}” (${failedLabels} could not be searched).`
+                      : current.words
+                        ? `Nothing${section ? ` in ${section.label}` : ""} matches “${current.words}”.`
+                        : "Nothing yet. What you open will show here."
+                  : "Searching…")}
+            </p>
+          )}
         </div>
-      ) : null}
+        <div className="hidden overflow-y-auto md:block">
+          {chosen?.hit ? <Preview hit={chosen.hit} key={chosen.key} onOpen={go} /> : null}
+        </div>
+      </div>
 
       <div className="flex items-center justify-between gap-3 px-4 py-2.5 text-xs text-muted-foreground md:px-5">
         <span>Only what you can open</span>
