@@ -70,8 +70,10 @@ test("a quote goes out, comes back accepted, and becomes an assigned, reminded j
   await page.context().addCookies(owner)
   await page.goto(`/submissions?q=${encodeURIComponent(QUOTE)}`)
   await caption(page, "Back at Northside, the accepted quote is waiting in Submissions.")
-  await page.getByRole("link", { name: QUOTE }).first().click()
-  await expect(page.getByText("Jordan Reyes").first()).toBeVisible()
+  // Exact: the search's own "Matching …, show everything" link carries the name too.
+  await page.getByRole("link", { exact: true, name: QUOTE }).first().click()
+  await page.waitForURL(/\/submissions\/[0-9a-f-]{36}$/)
+  await expect(page.getByText("Jordan Reyes", { exact: true }).first()).toBeVisible()
   await caption(page, "Every answer is there, with who sent it and when.")
 
   // 4. The job goes to an engineer, with a due date.
