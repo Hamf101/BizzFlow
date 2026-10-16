@@ -101,7 +101,8 @@ export async function createGeneratedDocumentAction(
         ...actor,
         folderId: folderId || null,
         templateId: templateId || null,
-        title: getFormString(formData, "title"),
+        // One-click New sends no title; the document is renamed in the editor.
+        title: getFormString(formData, "title").trim() || "Untitled document",
         description: getFormString(formData, "description") || null,
         content: blankContent,
       })

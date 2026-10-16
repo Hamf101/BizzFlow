@@ -1,3 +1,4 @@
+import { Plus } from "lucide-react"
 import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
 import type { ReactElement } from "react"
@@ -10,8 +11,10 @@ import {
   selectDueThisWeek,
 } from "@/components/dashboard/dashboard-view"
 import { OnboardingChecklist } from "@/components/dashboard/onboarding-checklist"
+import { NewDocumentButton } from "@/components/documents/new-document-button"
 import { DatedTitle } from "@/components/navigation/dated-title"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { buttonVariants } from "@/components/ui/button"
 import { readTimeZone, TIME_ZONE_COOKIE } from "@/lib/date-format"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
 import { getPageErrorMessage } from "@/lib/page-errors"
@@ -280,13 +283,18 @@ export default async function DashboardPage(): Promise<ReactElement> {
 
   return (
     <div className="flex flex-col gap-6">
-      <header className="grid items-baseline gap-x-6 gap-y-4 lg:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]">
-        <p className="text-2xl leading-none font-medium tracking-[-0.02em] lg:col-start-2 lg:row-start-1">
-          {firstName ? `Welcome back, ${firstName}!` : "Welcome back!"}
-        </p>
-        <DatedTitle className="lg:col-start-1 lg:row-start-1">
-          <h1 className="text-2xl leading-none font-medium tracking-[-0.02em]">Dashboard</h1>
+      <header className="flex flex-wrap items-start justify-between gap-4">
+        <DatedTitle>
+          <h1 className="text-2xl leading-none font-medium tracking-[-0.02em]">
+            {firstName ? `Welcome back, ${firstName}` : "Welcome back"}
+          </h1>
         </DatedTitle>
+        {can("documents:create") ? (
+          <NewDocumentButton className={buttonVariants()}>
+            <Plus aria-hidden="true" />
+            New document
+          </NewDocumentButton>
+        ) : null}
       </header>
 
       {/* Setting up is for those who can; a new staff member starts at their own work. */}
