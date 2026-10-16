@@ -360,7 +360,7 @@ test("Tab stays inside an open dialog, however many times it is pressed", async 
   }
 })
 
-test("an icon tile's actions come before its name in the Tab order, where they sit on the tile", async ({ admin, pageAs, tenant }) => {
+test("Tab meets an icon tile's name, then its actions, in the order the eye reads them on the tile", async ({ admin, pageAs, tenant }) => {
   const name = uniqueName("Order")
   const owner = tenant.users.owner_admin
   await seedFolder(admin, tenant.organizationId, owner.id, name)
@@ -371,13 +371,17 @@ test("an icon tile's actions come before its name in the Tab order, where they s
   await page.goto("/documents")
   await waitForHydration(tile)
 
-  const actionsFirst = await tile.evaluate((element) => {
+  // The name opens the tile's top row and its actions close it, so Tab goes name, then actions.
+  const placed = await tile.evaluate((element) => {
     const actions = element.querySelector('button[aria-label^="Actions for"]') as Element
     const link = element.querySelector('[data-slot="file-name"]') as Element
-    return Boolean(actions.compareDocumentPosition(link) & Node.DOCUMENT_POSITION_FOLLOWING)
+    return {
+      actionsAfterName: Boolean(link.compareDocumentPosition(actions) & Node.DOCUMENT_POSITION_FOLLOWING),
+      actionsRightOfName: actions.getBoundingClientRect().left >= link.getBoundingClientRect().left,
+    }
   })
 
-  expect(actionsFirst).toBe(true)
+  expect(placed).toEqual({ actionsAfterName: true, actionsRightOfName: true })
 })
 
 test("a required public form field shows its error on the page and ties it to the field", async ({ admin, browser, tenant }) => {
