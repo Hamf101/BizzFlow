@@ -16,6 +16,7 @@ type FakeTableName =
   | "document_activity_events"
   | "document_answers"
   | "document_guest_grants"
+  | "document_recent_accesses"
   | "audit_logs"
 
 type FakeTables = Record<FakeTableName, FakeRow[]>
@@ -51,6 +52,7 @@ export class FakeSupabaseClient {
       document_activity_events: seed.document_activity_events ?? [],
       document_answers: seed.document_answers ?? [],
       document_guest_grants: seed.document_guest_grants ?? [],
+      document_recent_accesses: seed.document_recent_accesses ?? [],
       audit_logs: seed.audit_logs ?? [],
     }
   }

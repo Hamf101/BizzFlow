@@ -96,8 +96,20 @@ describe("searchWorkspace", () => {
     const deps = fakes("owner_admin")
 
     await search({ query: " l " }, deps)
-    expect(deps.listFiles).toHaveBeenCalledWith(expect.objectContaining({ query: "l" }))
     expect(deps.listTemplates).toHaveBeenCalledWith(expect.objectContaining({ query: "l" }))
+  })
+
+  it("answers one letter in Files from what was opened lately, never reading the whole library", async () => {
+    const deps = fakes("owner_admin")
+
+    const found = await search({ query: "L" }, deps)
+    expect(found.hits.find((hit) => hit.kind === "files")?.item).toMatchObject({ title: "Lease recent" })
+    expect(deps.listFiles).not.toHaveBeenCalled()
+
+    // A letter none of them has finds none, rather than everything.
+    const none = await search({ kind: "files", query: "z" }, deps)
+    expect(none.hits).toEqual([])
+    expect(deps.listFiles).not.toHaveBeenCalled()
   })
 
   it("opens on what the member had lately in every section, before any words or a chosen section", async () => {
@@ -106,7 +118,8 @@ describe("searchWorkspace", () => {
     const opened = await search({}, deps)
     // Recently opened files lead; people have no "lately", so they wait for words.
     expect(opened.hits.find((hit) => hit.kind === "files")?.item).toMatchObject({ title: "Lease recent" })
-    expect(deps.listRecentFiles).toHaveBeenCalledWith(expect.objectContaining({ limit: 4 }))
+    // What this member opened, not what anyone changed last.
+    expect(deps.listRecentFiles).toHaveBeenCalledWith(expect.objectContaining({ limit: 4, openedBy: ME }))
     expect(deps.listFiles).not.toHaveBeenCalled()
     expect(deps.listPeople).not.toHaveBeenCalled()
     expect(deps.listTasks).toHaveBeenCalledWith(expect.objectContaining({ sort: { direction: "asc", key: "due" } }))

@@ -32,11 +32,12 @@ test("search arrives at what it found without reloading the document", async ({
 test("search shows what was just opened before a letter is typed, and answers the first letter", async ({ pageAs }) => {
   const page = await pageAs("manager")
   await page.goto("/dashboard")
-  const opened = page.waitForRequest((request) => request.method() === "POST" && request.url().endsWith("/opened"))
+  // Kept once the server answers; leaving on the request alone could cancel it.
+  const opened = page.waitForResponse((response) => response.request().method() === "POST" && response.url().endsWith("/opened"))
   await page.getByRole("button", { name: "New document" }).click()
   await page.waitForURL(/\/documents\/[0-9a-f-]+\/edit/)
   const documentId = new URL(page.url()).pathname.split("/")[2] as string
-  await opened
+  expect((await opened).status(), "the visit is recorded").toBeLessThan(300)
 
   await page.goto("/dashboard")
   const search = await openSearch(page)

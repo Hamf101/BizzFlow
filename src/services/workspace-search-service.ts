@@ -91,6 +91,8 @@ const PERMISSIONS: Record<WorkspaceSearchKind, OrganizationPermissionAction> = {
 // Across every section a few of each; in one section, a list's worth.
 const SHOWN_EACH = 4
 const SHOWN_ONE = 20
+// How far back one letter looks in what the member opened.
+const RECENT_FOR_A_LETTER = 50
 
 const inputSchema = z
   .object({
@@ -112,9 +114,22 @@ function pick<T extends object, K extends keyof T>(value: T, keys: readonly K[])
 const FINDERS: Record<WorkspaceSearchKind, (actor: Actor, query: string, limit: number, deps: WorkspaceSearchDeps) => Promise<Found>> = {
   async files(actor, query, limit, deps) {
     if (!query) {
-      const recent = await (deps.listRecentFiles ?? listRecentDocuments)({ ...actor, limit })
+      const recent = await (deps.listRecentFiles ?? listRecentDocuments)({ ...actor, limit, openedBy: actor.actorUserId })
 
       return { hits: recent.map((document) => ({ item: pick(document, FIELDS.files), kind: "files" as const })), total: recent.length }
+    }
+
+    // One letter matches nearly the whole library, so it looks only through
+    // what the member opened lately, as a word processor's recent list does.
+    if (query.length === 1) {
+      const letter = query.toLocaleLowerCase()
+      const recent = (
+        await (deps.listRecentFiles ?? listRecentDocuments)({ ...actor, limit: RECENT_FOR_A_LETTER, openedBy: actor.actorUserId })
+      ).filter(
+        (document) => document.title.toLocaleLowerCase().includes(letter)
+      )
+
+      return { hits: recent.slice(0, limit).map((document) => ({ item: pick(document, FIELDS.files), kind: "files" as const })), total: recent.length }
     }
 
     // As the Files list searches: folders by name, then documents by title,

@@ -401,6 +401,32 @@ export async function listRecentDocuments(
         query = query.eq("created_by", input.generatedBy).eq("source_kind", "generated")
       }
 
+      // What the member opened, from the visits the editor records, in the
+      // order they were last opened.
+      let openedOrder: string[] | null = null
+
+      if (input.openedBy) {
+        const visits = await client
+          .from("document_recent_accesses")
+          .select("document_id")
+          .eq("org_id", input.organizationId)
+          .eq("user_id", input.openedBy)
+          .order("last_opened_at", { ascending: false })
+          .limit(input.limit * 3)
+
+        if (visits.error) {
+          throw createSupabaseServiceError(visits.error, "Unable to load documents.")
+        }
+
+        openedOrder = (visits.data ?? []).map((visit: { document_id: string }) => visit.document_id)
+
+        if (openedOrder.length === 0) {
+          return []
+        }
+
+        query = query.in("id", openedOrder)
+      }
+
       // ponytail: reads three times the limit and keeps what the member may
       // open, so someone shut out of most new documents sees fewer; page on
       // when that matters.
@@ -412,7 +438,10 @@ export async function listRecentDocuments(
         throw createSupabaseServiceError(error, "Unable to load documents.")
       }
 
-      const rows = (data ?? []) as unknown as DocumentRow[]
+      const fetched = (data ?? []) as unknown as DocumentRow[]
+      const rows = openedOrder
+        ? openedOrder.flatMap((id: string) => fetched.filter((row: DocumentRow) => row.id === id))
+        : fetched
       const access = await getEffectiveDocumentAccessLevels(
         {
           actorUserId: input.actorUserId,

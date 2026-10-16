@@ -67,6 +67,8 @@ export type ListRecentDocumentsInput = {
   /** Only generated documents this member created, such as those they sent. */
   generatedBy?: string
   limit: number
+  /** What this member opened, last opened first, instead of what anyone changed last. */
+  openedBy?: string
 }
 
 export type ListDocumentCardsInput = {

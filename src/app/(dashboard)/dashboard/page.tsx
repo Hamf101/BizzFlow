@@ -201,7 +201,8 @@ export default async function DashboardPage(): Promise<ReactElement> {
           "dashboard_files_load_failed",
           async () => {
             const [recent, generated] = await Promise.all([
-              listRecentDocuments({ ...actor, limit: 3 }),
+              // Recent files are the ones this member opened.
+              listRecentDocuments({ ...actor, limit: 3, openedBy: user.id }),
               listRecentDocuments({ ...actor, generatedBy: user.id, limit: PAGE }),
             ])
             const documentIds = [

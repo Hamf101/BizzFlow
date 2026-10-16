@@ -27,6 +27,7 @@ export type RateLimitBucket =
   | "working_copy_read"
   | "request_ip"
   | "member_request"
+  | "member_search"
   | "member_export"
 
 /**
@@ -90,6 +91,9 @@ const BUCKET_CONFIGS: Readonly<Record<RateLimitBucket, BucketConfig>> = {
   // 1,200 a minute refused real pages when two browsers ran the e2e suite.
   request_ip: { limit: 6_000, windowSeconds: 60, failMode: "open" },
   member_request: { limit: 600, windowSeconds: 60, failMode: "open" },
+  // Search asks from the first letter, once typing pauses (150 ms); a member
+  // typing all day stays well under this.
+  member_search: { limit: 120, windowSeconds: 60, failMode: "open" },
   // A CSV export reads a whole list; nobody needs more than a few a minute.
   member_export: { limit: 6, windowSeconds: 60, failMode: "open" },
 }
