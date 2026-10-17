@@ -26,6 +26,7 @@ import {
   PDF_REGULAR_FONT_PATH
 } from "./constants"
 import { DocumentPdfServiceError } from "./errors"
+import { drawSigningCertificate } from "./pdf-lib-certificate"
 import { embedPdfLibImage, fitPdfImage } from "./pdf-lib-images"
 import { drawRichPdfText } from "./pdf-lib-rich-text"
 import { drawPdfLibSigner, drawPdfLibSigningIntro } from "./pdf-lib-signing"
@@ -235,6 +236,16 @@ export async function renderPdfLibDocument(
     if (input.renderPlan.geometry.scale !== 1) {
       page.scale(input.renderPlan.geometry.scale, input.renderPlan.geometry.scale)
     }
+  }
+
+  // A completed document closes with who signed it, from where, and when.
+  if (input.workflowStatus === "completed" && input.signers.length > 0) {
+    drawSigningCertificate(document, input, { bold: boldFont, regular: regularFont }, {
+      height: layout.pageHeight,
+      margin: layout.margin,
+      scale: input.renderPlan.geometry.scale,
+      width: layout.pageWidth,
+    })
   }
 
   // Drawn once every field is on its page, in a face that writes every answer.

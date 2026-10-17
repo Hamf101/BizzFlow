@@ -36,7 +36,7 @@ import {
 const ANSWER_COLUMNS =
   "document_id,org_id,values,workflow_status,created_at,updated_at"
 const RECIPIENT_COLUMNS =
-  "id,org_id,document_id,user_id,name,email,requires_signature,status,token_hash,token_expires_at,invited_at,viewed_at,signed_at,signature_data,initials_data,sent_by"
+  "id,org_id,document_id,user_id,name,email,requires_signature,status,token_hash,token_expires_at,invited_at,viewed_at,signed_at,signature_data,initials_data,sent_by,consented_at,signed_ip"
 
 type OrganizationRow = {
   name: string
@@ -625,6 +625,8 @@ export function mapSigningRecipient(
     invitedAt: row.invited_at,
     viewedAt: row.viewed_at,
     signedAt: row.signed_at,
+    consentedAt: row.consented_at ?? null,
+    signedIp: row.signed_ip ?? null,
     signatureDataUrl: getDrawingDataUrl(row.signature_data),
     initialsDataUrl: getDrawingDataUrl(row.initials_data),
   }

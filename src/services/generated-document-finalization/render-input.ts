@@ -38,6 +38,9 @@ export function buildCanonicalFinalizationRenderInput(
       requiresSignature: recipient.requiresSignature,
       status: recipient.status,
       signedAt: recipient.signedAt,
+      // Only when known, so a document signed before these were kept hashes as it did.
+      ...(recipient.consentedAt ? { consentedAt: recipient.consentedAt } : {}),
+      ...(recipient.signedIp ? { signedIp: recipient.signedIp } : {}),
       signatureDataUrl: recipient.signatureDataUrl,
       initialsDataUrl: recipient.initialsDataUrl,
     })),

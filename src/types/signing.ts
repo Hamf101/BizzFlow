@@ -19,6 +19,8 @@ export type DocumentSigningRecipient = {
   invitedAt: string
   viewedAt: string | null
   signedAt: string | null
+  consentedAt: string | null
+  signedIp: string | null
   signatureDataUrl: string | null
   initialsDataUrl: string | null
 }

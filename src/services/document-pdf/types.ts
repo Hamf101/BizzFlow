@@ -13,6 +13,10 @@ export type DocumentPdfSigner = {
   requiresSignature: boolean
   status: "pending" | "viewed" | "signed"
   signedAt: string | null
+  /** When they agreed to sign electronically, for the signing certificate. */
+  consentedAt?: string | null
+  /** The address they signed from, for the signing certificate. */
+  signedIp?: string | null
   signatureDataUrl?: string | null
   initialsDataUrl?: string | null
 }

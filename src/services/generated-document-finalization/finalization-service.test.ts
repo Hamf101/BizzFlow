@@ -463,7 +463,7 @@ function createSigningView(
         viewedAt: "2026-07-18T04:15:00.000Z",
         signedAt: "2026-07-18T04:30:00.000Z",
         signatureDataUrl: null,
-        initialsDataUrl: null,
+        initialsDataUrl: null, consentedAt: null, signedIp: null,
       },
       {
         id: "70000000-0000-4000-8000-000000000001",
@@ -479,7 +479,7 @@ function createSigningView(
         viewedAt: "2026-07-18T03:15:00.000Z",
         signedAt: "2026-07-18T03:30:00.000Z",
         signatureDataUrl: null,
-        initialsDataUrl: null,
+        initialsDataUrl: null, consentedAt: null, signedIp: null,
       },
     ],
   }

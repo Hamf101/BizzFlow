@@ -242,6 +242,8 @@ export function createSampleDocumentInput(
         requiresSignature: true,
         status: "signed",
         signedAt: "2026-07-17T18:30:00.000Z",
+        consentedAt: "2026-07-17T18:29:00.000Z",
+        signedIp: "203.0.113.7",
         signatureDataUrl: SAMPLE_SIGNATURE_DATA_URL,
         initialsDataUrl: SAMPLE_INITIALS_DATA_URL
       },

@@ -1234,7 +1234,8 @@ describe("document PDF service", () => {
     expect(a3Metrics.pageCapacity).toBeCloseTo(a4Metrics.pageCapacity, 0)
     expect(a3Metrics.contentWidth).toBeCloseTo(a4Metrics.contentWidth, 2)
     expect(createPdfPagePlans(a3)).toEqual(a4Pages)
-    expect(rendered.getPageCount()).toBe(a4Pages.length)
+    // And the signing certificate a completed document closes with.
+    expect(rendered.getPageCount()).toBe(a4Pages.length + 1)
     expect(rendered.getPage(0).getWidth()).toBeCloseTo(841.89, 1)
     expect(rendered.getPage(0).getHeight()).toBeCloseTo(1190.55, 1)
   })
@@ -1277,7 +1278,8 @@ describe("document PDF service", () => {
     const renderedDocument = await PDFDocument.load(buffer)
 
     expect(plannedPageCount).toBeGreaterThan(1)
-    expect(renderedDocument.getPageCount()).toBe(plannedPageCount)
+    // And the signing certificate a completed document closes with.
+    expect(renderedDocument.getPageCount()).toBe(plannedPageCount + 1)
   })
 
   it("renders byte-identical PDFs for the same persisted metadata timestamp", { timeout: 30_000 }, async () => {
