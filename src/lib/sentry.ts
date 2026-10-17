@@ -1,6 +1,6 @@
 import * as Sentry from "@sentry/nextjs"
 
-import { scrubMonitoringEvent, setErrorReporter } from "@/lib/observability"
+import { scrubMonitoringEvent, setCronMonitor, setErrorReporter } from "@/lib/observability"
 
 /**
  * Starts Sentry for one runtime with the scrubbing every runtime shares, and
@@ -20,4 +20,13 @@ export function startSentry(options: Parameters<typeof Sentry.init>[0]): void {
   setErrorReporter((error, context) => {
     Sentry.captureException(error, { extra: context })
   })
+
+  setCronMonitor((slug, schedule, job) =>
+    Sentry.withMonitor(slug, job, {
+      checkinMargin: 10,
+      maxRuntime: 15,
+      schedule: { type: "crontab", value: schedule },
+      timezone: "Etc/UTC",
+    })
+  )
 }

@@ -1,6 +1,7 @@
 import { cron } from "inngest"
 
 import { inngest } from "@/inngest/client"
+import { monitorCron } from "@/lib/observability"
 import {
   runBackgroundStep,
   type BackgroundStepRunner,
@@ -51,7 +52,8 @@ export async function handleDueTaskReminders(
     deps.deliverDueTaskReminders ??
     ((reminders: TaskReminder[]) => deliverDueTaskReminders(reminders))
   const reminders = await runBackgroundStep(step, "find-due-task-reminders", () =>
-    findDue()
+    // The heartbeat: this step runs once per scheduled run.
+    monitorCron("process-due-task-reminders", DUE_TASK_REMINDER_CRON, () => findDue())
   )
   const summary: TaskReminderRunSummary = {
     scannedCount: 0,

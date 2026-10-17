@@ -1,4 +1,4 @@
-import { createNoStoreResponse, refuseCronRequest } from "@/app/api/cron/_cron"
+import { createNoStoreResponse, monitoredCronResponse, refuseCronRequest } from "@/app/api/cron/_cron"
 import { captureUnexpectedError, describeErrorForLog } from "@/lib/observability"
 import { cleanupAbandonedDocumentUploads, processDueResourcePurges } from "@/services/document-service"
 import { purgeDueTrashedTemplates } from "@/services/template-service"
@@ -25,26 +25,28 @@ export async function GET(request: Request): Promise<Response> {
     return refusal
   }
 
-  // Each runs whatever the others do, so one failing never stalls the rest.
-  const [documents, templates, uploads] = await Promise.allSettled([
-    processDueResourcePurges(),
-    purgeDueTrashedTemplates(),
-    cleanupAbandonedDocumentUploads(),
-  ])
+  return monitoredCronResponse("document-purge", "45 3 * * *", async (): Promise<Response> => {
+    // Each runs whatever the others do, so one failing never stalls the rest.
+    const [documents, templates, uploads] = await Promise.allSettled([
+      processDueResourcePurges(),
+      purgeDueTrashedTemplates(),
+      cleanupAbandonedDocumentUploads(),
+    ])
 
-  if (documents.status === "fulfilled" && templates.status === "fulfilled" && uploads.status === "fulfilled") {
-    return createNoStoreResponse({ ...documents.value, templatesPurged: templates.value, abandonedUploads: uploads.value }, 200)
-  }
-
-  for (const failed of [documents, templates, uploads]) {
-    if (failed.status === "rejected") {
-      console.error("document_purge_cron_failed", {
-        durationMs: Date.now() - startedAt,
-        ...describeErrorForLog(failed.reason),
-      })
-      captureUnexpectedError(failed.reason, { routeName: "cron_document_purge" })
+    if (documents.status === "fulfilled" && templates.status === "fulfilled" && uploads.status === "fulfilled") {
+      return createNoStoreResponse({ ...documents.value, templatesPurged: templates.value, abandonedUploads: uploads.value }, 200)
     }
-  }
 
-  return createNoStoreResponse({ error: "Document purge failed." }, 500)
+    for (const failed of [documents, templates, uploads]) {
+      if (failed.status === "rejected") {
+        console.error("document_purge_cron_failed", {
+          durationMs: Date.now() - startedAt,
+          ...describeErrorForLog(failed.reason),
+        })
+        captureUnexpectedError(failed.reason, { routeName: "cron_document_purge" })
+      }
+    }
+
+    return createNoStoreResponse({ error: "Document purge failed." }, 500)
+  })
 }
