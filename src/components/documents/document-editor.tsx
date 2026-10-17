@@ -180,6 +180,8 @@ export function DocumentEditor({
   const [savedPage, setSavedPage] = useState(initial)
   const [savedAnswers, setSavedAnswers] = useState<Record<string, unknown>>(view.answers)
   const [proposal, setProposal] = useState<TemplateFlowProposal | null>(null)
+  // Who turned the last round down, until the sender dismisses it or sends again.
+  const [declined, setDeclined] = useState(view.guest ? null : (view.declined ?? null))
   const [flowUndo, setFlowUndo] = useState<{ messageId: string; page: DocumentPage } | null>(null)
   const [flowOpen, setFlowOpen] = useState(false)
   const [carried, setCarried] = useState<FlowHandoff | null>(null)
@@ -428,6 +430,10 @@ export function DocumentEditor({
                 : writable
                   ? "Flow's suggestion"
                   : "Flow's suggestion · this document can no longer change"}
+            </EditorNotice>
+          ) : declined ? (
+            <EditorNotice actions={[{ label: "Dismiss", onClick: () => setDeclined(null) }]}>
+              {declined.name} declined to sign: “{declined.reason}”
             </EditorNotice>
           ) : null
         }

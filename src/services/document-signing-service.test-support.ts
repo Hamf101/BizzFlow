@@ -250,6 +250,10 @@ export class FakeClient {
       return this.cancelDocumentSigning(args)
     }
 
+    if (functionName === "decline_document_signing") {
+      return this.declineDocumentSigning(args)
+    }
+
     if (functionName !== "complete_document_recipient_signature") {
       throw new Error(`Unsupported fake RPC: ${functionName}`)
     }
@@ -299,6 +303,29 @@ export class FakeClient {
       : "completed"
 
     return { data: answer.workflow_status, error: null }
+  }
+
+  // As decline_document_signing: the decliner's live link, then a cancel.
+  private declineDocumentSigning(args: Record<string, unknown>): FakeResult {
+    const recipient = this.tables.document_signing_recipients.find(
+      (row: FakeRow): boolean => isCurrentRecipient(row) && row.id === args.target_recipient_id && row.token_hash === args.target_token_hash
+    )
+
+    if (!recipient) {
+      return { data: null, error: { code: "P0002", message: "Signing link was not found." } }
+    }
+
+    if (recipient.status === "signed") {
+      return { data: null, error: { code: "23514", message: "A signer who signed cannot decline." } }
+    }
+
+    const revoked = this.cancelDocumentSigning(args)
+
+    if (!revoked.error) {
+      Object.assign(recipient, { status: "declined", declined_at: NOW.toISOString(), decline_reason: args.target_reason })
+    }
+
+    return revoked
   }
 
   // As cancel_document_signing: under the answer row, only while awaiting signatures.
@@ -488,7 +515,7 @@ export function createRecipientRow(
     consented_at: null,
     signed_ip: null,
     declined_at: null,
-    decline_reason: null
+    decline_reason: null, revoked_at: null, sent_by: null,
   }
 }
 

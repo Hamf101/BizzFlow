@@ -17,7 +17,12 @@ alter table public.document_signing_recipients
   add column consented_at timestamptz,
   add column signed_ip text,
   add column declined_at timestamptz,
-  add column decline_reason text;
+  add column decline_reason text,
+  -- Who sent the round, so a decline reaches them. Null on rounds sent before this.
+  add column sent_by uuid references public.profiles (id) on delete set null;
+
+create index document_signing_recipients_sent_by_idx
+  on public.document_signing_recipients (sent_by) where sent_by is not null;
 
 alter table public.document_signing_recipients
   drop constraint document_signing_recipients_status_check,

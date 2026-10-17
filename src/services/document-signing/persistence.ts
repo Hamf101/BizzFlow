@@ -21,6 +21,7 @@ import type {
   DocumentSigningRecipient,
   MemberDocumentSigningView,
   PublicDocumentSigningView,
+  SigningDecline,
   PublicSignerStatus,
 } from "@/types/signing"
 import {
@@ -35,7 +36,7 @@ import {
 const ANSWER_COLUMNS =
   "document_id,org_id,values,workflow_status,created_at,updated_at"
 const RECIPIENT_COLUMNS =
-  "id,org_id,document_id,user_id,name,email,requires_signature,status,token_hash,token_expires_at,invited_at,viewed_at,signed_at,signature_data,initials_data"
+  "id,org_id,document_id,user_id,name,email,requires_signature,status,token_hash,token_expires_at,invited_at,viewed_at,signed_at,signature_data,initials_data,sent_by"
 
 type OrganizationRow = {
   name: string
@@ -92,7 +93,7 @@ export async function loadGeneratedDocumentView(
   organizationId: string,
   documentId: string
 ): Promise<MemberDocumentSigningView> {
-  const [documentResult, answerResult, recipientResult, organizationResult] =
+  const [documentResult, answerResult, recipientResult, organizationResult, historyResult] =
     await Promise.all([
       client
         .from("documents")
@@ -120,6 +121,11 @@ export async function loadGeneratedDocumentView(
         .select("name")
         .eq("id", organizationId)
         .maybeSingle(),
+      client
+        .from("document_signing_recipients")
+        .select("name,status,revoked_at,declined_at,decline_reason")
+        .eq("document_id", documentId)
+        .eq("org_id", organizationId),
     ])
 
   if (documentResult.error) {
@@ -157,6 +163,10 @@ export async function loadGeneratedDocumentView(
     )
   }
 
+  if (historyResult.error || !historyResult.data) {
+    throw createDatabaseError(historyResult.error, "Unable to load signing recipients.")
+  }
+
   const document = mapGeneratedDocument(
     documentResult.data as GeneratedDocumentRow
   )
@@ -175,7 +185,29 @@ export async function loadGeneratedDocumentView(
     recipients: (recipientResult.data as DocumentSigningRecipientRow[]).map(
       mapSigningRecipient
     ),
+    declined: findLastDecline(historyResult.data as SigningHistoryRow[]),
   }
+}
+
+type SigningHistoryRow = Pick<DocumentSigningRecipientRow, "decline_reason" | "declined_at" | "name"> & {
+  revoked_at: string | null
+  // Wider than a live signer's status: a round's history includes "declined".
+  status: string
+}
+
+// A decline ends its round, revoking every link at that moment; once a later
+// round is sent (or cancelled) it is no longer the document's latest news.
+function findLastDecline(rows: SigningHistoryRow[]): SigningDecline | null {
+  if (rows.some((row) => row.revoked_at === null)) {
+    return null
+  }
+
+  const lastRevokedAt = rows.reduce<string | null>((last, row) => (row.revoked_at && (!last || row.revoked_at > last) ? row.revoked_at : last), null)
+  const decline = rows.find((row) => row.status === "declined" && row.revoked_at === lastRevokedAt)
+
+  return decline?.declined_at && decline.decline_reason
+    ? { name: decline.name, reason: decline.decline_reason, declinedAt: decline.declined_at }
+    : null
 }
 
 /**
@@ -399,6 +431,35 @@ export async function cancelSigningWorkflow(
 
   if (error || !Array.isArray(data)) {
     throw createDatabaseError(error, "Unable to cancel signing.")
+  }
+
+  return data as RevokedSigningRecipient[]
+}
+
+/**
+ * Records a signer's decline with its reason and, under the answer row's lock,
+ * takes the document back to a draft with every link revoked.
+ *
+ * @param client - Signing persistence client.
+ * @param recipient - The declining signer, loaded through their token.
+ * @param reason - Their trimmed reason.
+ * @returns The signers whose links were revoked, the decliner included.
+ */
+export async function declineSigningWorkflow(
+  client: SigningServiceClient,
+  recipient: DocumentSigningRecipientRow,
+  reason: string
+): Promise<RevokedSigningRecipient[]> {
+  const { data, error } = await client.rpc("decline_document_signing", {
+    target_org_id: recipient.org_id,
+    target_document_id: recipient.document_id,
+    target_recipient_id: recipient.id,
+    target_token_hash: recipient.token_hash,
+    target_reason: reason,
+  })
+
+  if (error || !Array.isArray(data)) {
+    throw createDatabaseError(error, "Unable to decline signing.")
   }
 
   return data as RevokedSigningRecipient[]

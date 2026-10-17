@@ -31,6 +31,7 @@ export const AUDIT_LOG_ACTIONS = [
   "document.sharing_inheritance_changed",
   "document.finalized",
   "document.signing_cancelled",
+  "document.signing_declined",
   "document_version.created",
   "document_version.download_url_issued",
   "template.access_granted",

@@ -398,6 +398,7 @@ export type Database = {
           org_id: string
           requires_signature: boolean
           revoked_at: string | null
+          sent_by: string | null
           signature_data: Json | null
           signed_at: string | null
           signed_ip: string | null
@@ -421,6 +422,7 @@ export type Database = {
           org_id: string
           requires_signature?: boolean
           revoked_at?: string | null
+          sent_by?: string | null
           signature_data?: Json | null
           signed_at?: string | null
           signed_ip?: string | null
@@ -444,6 +446,7 @@ export type Database = {
           org_id?: string
           requires_signature?: boolean
           revoked_at?: string | null
+          sent_by?: string | null
           signature_data?: Json | null
           signed_at?: string | null
           signed_ip?: string | null
@@ -467,6 +470,13 @@ export type Database = {
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "document_signing_recipients_sent_by_fkey"
+            columns: ["sent_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {

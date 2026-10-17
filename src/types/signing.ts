@@ -35,7 +35,12 @@ type SigningViewBase = {
 export type MemberDocumentSigningView = SigningViewBase & {
   guest?: undefined
   recipients: DocumentSigningRecipient[]
+  /** The signer who turned the last round down, until the document is sent again. */
+  declined?: SigningDecline | null
 }
+
+/** Who declined to sign, why, and when. */
+export type SigningDecline = { name: string; reason: string; declinedAt: string }
 
 /** A generated document as a member or a guest may read it. */
 export type GeneratedDocumentSigningView =

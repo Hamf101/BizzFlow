@@ -100,6 +100,38 @@ test.describe("signing", () => {
     expect(body.subarray(0, 5).toString("latin1")).toBe("%PDF-")
   })
 
+  test("a signer declines with a reason, and the sender sees why", async ({ admin, browser, pageAs, tenant }) => {
+    const template = await seedTemplate(admin, tenant.organizationId, uniqueName("Declinable"), "published")
+    const title = uniqueName("Agreement")
+    const { documentId, signingToken } = await seedSigningDocument(admin, tenant.organizationId, template, title, tenant.users.manager.id, {
+      email: uniqueEmail("decliner"),
+      name: "Jordan Lee",
+    })
+    const context = await browser.newContext()
+    const page = await context.newPage()
+
+    await page.goto(`/sign/${signingToken}`)
+    await waitForHydration(page.getByRole("button", { name: "Submit signature" }))
+    await page.getByText("Decline to sign").click()
+    // A decline needs a reason.
+    await page.getByRole("button", { exact: true, name: "Decline" }).click()
+    await expect(page.getByText("You declined to sign")).toBeHidden()
+    await page.getByLabel(/Why are you not signing/).fill("The start date is wrong.")
+    await page.getByRole("button", { exact: true, name: "Decline" }).click()
+    await expect(page.getByText("You declined to sign")).toBeVisible()
+
+    // The link is spent, and the document is the sender's draft again.
+    await page.goto(`/sign/${signingToken}`)
+    await expect(page.getByRole("button", { name: "Submit signature" })).toBeHidden()
+    await context.close()
+    const { data } = await admin.from("document_answers").select("workflow_status").eq("document_id", documentId).single()
+    expect(data?.workflow_status).toBe("draft")
+
+    const sender = await pageAs("manager")
+    await sender.goto(`/documents/${documentId}/edit`)
+    await expect(sender.getByText("Jordan Lee declined to sign: “The start date is wrong.”")).toBeVisible()
+  })
+
   test("rejects an unknown signing token", async ({ browser }) => {
     const context = await browser.newContext()
     const page = await context.newPage()

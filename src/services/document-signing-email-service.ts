@@ -130,13 +130,61 @@ export async function sendDocumentSigningCancelledEmail(
     toEmail: input.recipientEmail,
     compose: () => ({
       subject: `${input.documentTitle} is being changed`,
-      contentHtml: [lead, next]
-        .map((line) => `<p style="margin:0 0 12px;color:#706a72;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:24px;">${escapeHtml(line)}</p>`)
-        .join(""),
+      contentHtml: toParagraphs([lead, next]),
       text: `${lead} ${next}`,
     }),
     fail: (message, statusCode) => new DocumentSigningEmailServiceError(message, statusCode),
     explainRejection: true,
     transport: deps.transport,
   })
+}
+
+/** The sender of a round one signer declined. */
+export type SendDocumentSigningDeclinedEmailInput = {
+  declinedAt: string
+  declinerName: string
+  documentId: string
+  documentTitle: string
+  reason: string
+  recipientEmail: string
+}
+
+/**
+ * Tells the sender a signer declined, and why; the document is a draft again.
+ *
+ * @param input - Document, who declined, their reason, and the sender's address.
+ * @param deps - Optional email transport dependency for tests.
+ * @returns Resolves after EmailJS accepts the email.
+ * @throws DocumentSigningEmailServiceError when configuration or delivery fails.
+ */
+export async function sendDocumentSigningDeclinedEmail(
+  input: SendDocumentSigningDeclinedEmailInput,
+  deps: DocumentSigningEmailServiceDeps = {}
+): Promise<void> {
+  const lead = `${input.declinerName} declined to sign ${input.documentTitle}.`
+  const reason = `Their reason: “${input.reason}”`
+  const next = "The document is a draft again and every signing link has stopped working. Change it and send it again when you are ready."
+
+  await deliverTransactionalEmail({
+    name: "document",
+    logPrefix: "document_signing_declined_email",
+    ids: { documentId: input.documentId },
+    path: () => `/documents/${encodeURIComponent(input.documentId)}/edit`,
+    deliveryReference: `document-signing-declined/${input.documentId}/${input.declinedAt}`,
+    toEmail: input.recipientEmail,
+    compose: () => ({
+      subject: `${input.declinerName} declined to sign ${input.documentTitle}`,
+      contentHtml: toParagraphs([lead, reason, next]),
+      text: `${lead} ${reason} ${next}`,
+    }),
+    fail: (message, statusCode) => new DocumentSigningEmailServiceError(message, statusCode),
+    explainRejection: true,
+    transport: deps.transport,
+  })
+}
+
+function toParagraphs(lines: string[]): string {
+  return lines
+    .map((line) => `<p style="margin:0 0 12px;color:#706a72;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:24px;">${escapeHtml(line)}</p>`)
+    .join("")
 }

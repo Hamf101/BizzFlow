@@ -1056,6 +1056,16 @@ export type AdminDatabase = {
         }
         Returns: { id: string; name: string; email: string; status: string }[]
       }
+      decline_document_signing: {
+        Args: {
+          target_org_id: string
+          target_document_id: string
+          target_recipient_id: string
+          target_token_hash: string
+          target_reason: string
+        }
+        Returns: { id: string; name: string; email: string; status: string }[]
+      }
       merge_generated_document_answers: {
         Args: {
           target_org_id: string

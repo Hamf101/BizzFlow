@@ -14,6 +14,7 @@ import { buildRedirect, getFormString } from "@/lib/form-utils"
 import { checkRateLimit, RateLimitError } from "@/lib/rate-limit"
 import {
   completePublicDocumentSigning,
+  declinePublicDocumentSigning,
   DocumentSigningServiceError,
 } from "@/services/document-signing-service"
 import { finalizeCompletedGeneratedDocument } from "@/services/generated-document-finalization-service"
@@ -88,6 +89,35 @@ export async function completePublicSigningAction(
           : "Your signature was recorded. The document is waiting for the other parties.",
     })
   )
+}
+
+/** What a decline reported: why it failed, or whose document was turned down. */
+export type DeclineSigningState = Readonly<{ error: string } | { declinedFor: string }> | null
+
+/**
+ * Declines to sign through a private link, with the signer's reason.
+ *
+ * @param _previous - What the last try reported.
+ * @param formData - Private token and reason.
+ * @returns Why it failed, or the organization that was told; the link stops
+ *   working, so the confirmation stays on this page rather than reloading it.
+ */
+export async function declinePublicSigningAction(
+  _previous: DeclineSigningState,
+  formData: FormData
+): Promise<DeclineSigningState> {
+  try {
+    await checkRateLimit("public_signing", getClientIp(await headers()))
+    const declined = await declinePublicDocumentSigning({
+      token: getFormString(formData, "token"),
+      reason: getFormString(formData, "reason"),
+    })
+    return { declinedFor: declined.organizationName }
+  } catch (error: unknown) {
+    const errorMessage = getPublicSigningActionErrorMessage(error, "Unable to decline. Try again.")
+    console.warn("public_document_signing_decline_failed", { reason: errorMessage })
+    return { error: errorMessage }
+  }
 }
 
 function getSigningPath(token: string): string {

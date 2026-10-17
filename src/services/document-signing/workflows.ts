@@ -5,6 +5,7 @@ import type { OrganizationPermissionAction } from "@/lib/permissions"
 import { recordAuditLogBestEffort } from "@/services/audit-service"
 import {
   sendDocumentSigningCancelledEmail as defaultSendDocumentSigningCancelledEmail,
+  sendDocumentSigningDeclinedEmail as defaultSendDocumentSigningDeclinedEmail,
   sendDocumentSigningEmail as defaultSendDocumentSigningEmail,
   DocumentSigningEmailServiceError,
 } from "@/services/document-signing-email-service"
@@ -22,6 +23,7 @@ import {
 } from "@/services/document-signing/answer-validation"
 import type {
   CompletePublicDocumentSigningInput,
+  DeclinePublicDocumentSigningInput,
   DocumentSigningServiceDeps,
   GetGeneratedDocumentSigningViewInput,
   GetPublicDocumentSigningViewInput,
@@ -46,6 +48,7 @@ import {
   cancelSigningWorkflow,
   cleanupRecipients,
   completeRecipientSignature,
+  declineSigningWorkflow,
   insertSigningRecipients,
   loadGeneratedDocumentView,
   loadPublicSigningView,
@@ -526,6 +529,7 @@ export async function sendDocumentForSigning(
               signed_at: null,
               signature_data: null,
               initials_data: null,
+              sent_by: input.actorUserId,
             },
           }
         }
@@ -970,6 +974,96 @@ export async function completePublicDocumentSigning(
       })
     }
   )
+}
+
+/**
+ * Lets a signer turn the document down with a reason: the document goes back to
+ * its sender as a draft, every link stops working, and the sender and the
+ * other signers are told. An email that fails never undoes the decline.
+ *
+ * @param input - Private token and the signer's reason.
+ * @param deps - Optional clock, database, email and audit dependencies for tests.
+ * @returns The document's title and organization, for the page that confirms it.
+ * @throws DocumentSigningServiceError for a missing reason, a bad link, or a signer who signed.
+ */
+export async function declinePublicDocumentSigning(
+  input: DeclinePublicDocumentSigningInput,
+  deps: DocumentSigningServiceDeps = {}
+): Promise<{ documentTitle: string; organizationName: string }> {
+  return runSigningOperation("decline_public_document_signing", {}, async () => {
+    const reason = input.reason.trim()
+
+    if (reason.length < 1 || reason.length > 500) {
+      throw new DocumentSigningServiceError("Say why you are not signing, in up to 500 characters.", 400)
+    }
+
+    const client = resolveSigningClient(deps.client)
+    const recipient = await loadRecipientByToken(client, hashToken(normalizeToken(input.token)))
+    assertRecipientLinkUsable(recipient, getSigningNow(deps.now))
+    await requirePublicSigningDocumentLifecycle(client, recipient, "mutation")
+
+    if (recipient.status === "signed") {
+      throw new DocumentSigningServiceError("You have already signed this document.", 409)
+    }
+
+    const view = await loadPublicSigningView(client, recipient)
+    const revoked = await declineSigningWorkflow(client, recipient, reason)
+    const declinedAt = getSigningNow(deps.now).toISOString()
+    const documentId = recipient.document_id
+    const organizationId = recipient.org_id
+
+    await recordAuditLogBestEffort(
+      {
+        organizationId,
+        actorUserId: null,
+        action: "document.signing_declined",
+        targetType: "document",
+        targetId: documentId,
+        metadata: { recipientId: recipient.id, revokedLinks: revoked.length },
+      },
+      deps.recordAuditLog
+    )
+
+    const senderEmail = await loadProfileEmail(client, recipient.sent_by ?? view.document.createdBy)
+    const sendDeclined = deps.sendDocumentSigningDeclinedEmail ?? defaultSendDocumentSigningDeclinedEmail
+    const sendCancelled = deps.sendDocumentSigningCancelledEmail ?? defaultSendDocumentSigningCancelledEmail
+    const deliveries = await Promise.allSettled([
+      ...(senderEmail
+        ? [sendDeclined({ declinedAt, declinerName: recipient.name, documentId, documentTitle: view.document.title, reason, recipientEmail: senderEmail })]
+        : []),
+      ...revoked
+        .filter((other) => other.id !== recipient.id)
+        .map((other) =>
+          sendCancelled({
+            documentId,
+            documentTitle: view.document.title,
+            organizationName: view.organizationName,
+            recipientEmail: other.email,
+            recipientId: other.id,
+            recipientName: other.name,
+            revokedAt: declinedAt,
+            signed: other.status === "signed",
+          })
+        ),
+    ])
+    const failedDeliveries = deliveries.filter((delivery) => delivery.status === "rejected").length
+
+    if (failedDeliveries > 0 || !senderEmail) {
+      console.warn("document_signing_declined_email_incomplete", { organizationId, documentId, failedDeliveries, senderFound: Boolean(senderEmail) })
+    }
+
+    return { documentTitle: view.document.title, organizationName: view.organizationName }
+  })
+}
+
+// tenant-scope: profiles are global; the id comes from this document's own rows
+async function loadProfileEmail(client: SigningServiceClient, userId: string | null): Promise<string | null> {
+  if (!userId) {
+    return null
+  }
+
+  const { data } = await client.from("profiles").select("email").eq("id", userId).maybeSingle()
+  return (data as { email?: string | null } | null)?.email ?? null
 }
 
 /**

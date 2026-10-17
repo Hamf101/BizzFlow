@@ -1288,6 +1288,8 @@ export type DocumentSigningRecipientRow = Record<string, unknown> & {
   signed_ip?: string | null
   declined_at?: string | null
   decline_reason?: string | null
+  sent_by?: string | null
+  revoked_at?: string | null
 }
 
 /** Database row tracking the last time a member opened a tenant document. */

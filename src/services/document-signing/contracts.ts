@@ -2,6 +2,7 @@ import type { AdminSupabaseClient } from "@/lib/supabase/admin"
 import type { RecordAuditLogInput } from "@/services/audit-service"
 import type {
   SendDocumentSigningCancelledEmailInput,
+  SendDocumentSigningDeclinedEmailInput,
   SendDocumentSigningEmailInput,
 } from "@/services/document-signing-email-service"
 import type { DocumentRecipientInput } from "@/types/signing"
@@ -74,5 +75,14 @@ export type DocumentSigningServiceDeps = {
   sendDocumentSigningCancelledEmail?: (
     input: SendDocumentSigningCancelledEmailInput
   ) => Promise<void>
+  sendDocumentSigningDeclinedEmail?: (
+    input: SendDocumentSigningDeclinedEmailInput
+  ) => Promise<void>
   recordAuditLog?: (input: RecordAuditLogInput) => Promise<unknown>
+}
+
+/** A signer's private link and their reason for not signing. */
+export type DeclinePublicDocumentSigningInput = {
+  token: string
+  reason: string
 }
