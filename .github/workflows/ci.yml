@@ -34,6 +34,18 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Lint, type-check and Next keep caches of what they already checked or
+      # built; a changed lockfile or lint/TypeScript config starts them afresh.
+      - name: Restore lint, type-check and build caches
+        uses: actions/cache@v4
+        with:
+          path: |
+            .next/cache
+            tsconfig.tsbuildinfo
+            node_modules/.cache/eslint
+          key: gates-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'eslint.config.mjs', 'tsconfig.json') }}-${{ github.sha }}
+          restore-keys: gates-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'eslint.config.mjs', 'tsconfig.json') }}-
+
       # The steps below are `pnpm check`, in order, one step each so a failure
       # names its gate. Keep the two in step by hand.
       - name: Lint
@@ -61,6 +73,8 @@ jobs:
       - name: Build
         run: pnpm build
         env:
+          # Type-checked two steps up.
+          BUILD_SKIP_TYPECHECK: "1"
           NEXT_PUBLIC_APP_URL: http://localhost:3000
           SUPABASE_URL: https://example.supabase.co
           SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci
