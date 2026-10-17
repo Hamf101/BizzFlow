@@ -10,21 +10,17 @@ const OPS = "30000000-0000-4000-8000-000000000001"
 const STAFF_ROLE = "40000000-0000-4000-8000-000000000001"
 
 function seed(): FakeSupabaseClient {
-  const client = new FakeSupabaseClient({
+  return new FakeSupabaseClient({
     organization_memberships: [
       { org_id: ORG, user_id: OWNER, role: "owner_admin", status: "active", manager_user_id: null },
       { org_id: ORG, user_id: STAFF, role: "staff", status: "active", manager_user_id: null },
     ],
-  })
-  Object.assign(client.tables, {
     org_units: [{ id: OPS, org_id: ORG, parent_id: null, name: "Ops" }],
-    org_unit_members: [],
     organization_roles: [
       { id: "owner-role", org_id: ORG, name: "Owner", system_key: "owner_admin", visibility_scope: null, archived_at: null },
       { id: STAFF_ROLE, org_id: ORG, name: "Staff", system_key: "staff", visibility_scope: null, archived_at: null },
     ],
   })
-  return client
 }
 
 const owner = { actorUserId: OWNER, organizationId: ORG }

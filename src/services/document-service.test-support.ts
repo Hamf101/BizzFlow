@@ -18,6 +18,9 @@ type FakeTableName =
   | "document_guest_grants"
   | "document_recent_accesses"
   | "audit_logs"
+  | "org_units"
+  | "org_unit_members"
+  | "organization_roles"
 
 type FakeTables = Record<FakeTableName, FakeRow[]>
 
@@ -54,6 +57,9 @@ export class FakeSupabaseClient {
       document_guest_grants: seed.document_guest_grants ?? [],
       document_recent_accesses: seed.document_recent_accesses ?? [],
       audit_logs: seed.audit_logs ?? [],
+      org_units: seed.org_units ?? [],
+      org_unit_members: seed.org_unit_members ?? [],
+      organization_roles: seed.organization_roles ?? [],
     }
   }
 

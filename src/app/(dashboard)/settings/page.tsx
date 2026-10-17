@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input"
 import { SubmitOnChangeSwitch } from "@/components/ui/submit-on-change-switch"
 import { NoticeSoundSwitch } from "@/components/sharing/notice-sound-switch"
 import { RolesAndAccessSettings } from "@/components/settings/roles-and-access-settings"
+import { TeamsSettings } from "@/components/settings/teams-settings"
 import { buildFeedbackRedirect } from "@/lib/action-result"
 import { LocalDate } from "@/components/ui/local-date"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
@@ -31,6 +32,7 @@ import {
 import type { NotificationDelivery } from "@/types/notification"
 import {
   getMemberSettings,
+  getOrganizationStructure,
   listOrganizationPeople,
   OrganizationServiceError,
   type MemberSettings,
@@ -38,6 +40,7 @@ import {
 } from "@/services/organization-service"
 import {
   archiveOrganizationRoleAction,
+  changeStructureAction,
   createOrganizationRoleAction,
   updateNotificationPreferencesAction,
   updateOrganizationNotificationSettingsAction,
@@ -123,6 +126,8 @@ export default async function SettingsPage(): Promise<ReactElement> {
           organizationId={context.organization.id}
         />
       ) : null}
+
+      {isOwner ? <TeamsSection actorUserId={user.id} organizationId={context.organization.id} /> : null}
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
@@ -310,6 +315,28 @@ async function RolesAndAccessSection({
       updateRoleAction={updateOrganizationRoleAction}
     />
   )
+}
+
+// Teams, reporting lines and each role's reach, for the owner to arrange.
+async function TeamsSection({ actorUserId, organizationId }: { actorUserId: string; organizationId: string }): Promise<ReactElement | null> {
+  const loaded = await Promise.all([
+    getOrganizationStructure({ actorUserId, organizationId }),
+    listOrganizationPeople(actorUserId, organizationId),
+  ]).catch((error: unknown) => {
+    console.warn("settings_teams_load_failed", { organizationId, reason: error instanceof Error ? error.message : "Unknown error" })
+    return null
+  })
+
+  if (!loaded) {
+    return (
+      <Alert variant="destructive">
+        <AlertTitle>Teams unavailable</AlertTitle>
+        <AlertDescription>Reload the page to try again.</AlertDescription>
+      </Alert>
+    )
+  }
+
+  return <TeamsSettings change={changeStructureAction} members={loaded[1].members} structure={loaded[0]} />
 }
 
 /**
