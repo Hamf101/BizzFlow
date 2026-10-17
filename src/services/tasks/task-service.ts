@@ -1,3 +1,5 @@
+import type { OrganizationRole } from "@/lib/permissions"
+import { loadMemberReach } from "@/services/member-reach"
 import {
   escapeLikePattern,
   readCountedPage,
@@ -86,6 +88,8 @@ const TASK_PAGE_ORDERS: Record<
 
 type TaskListFilters = {
   assignedTo: string | null
+  /** The members a narrowed role sees: only their tasks. Null or absent for everyone. */
+  visibleIds?: readonly string[] | null
   organizationId: string
   /** Title search text, matched literally and without regard to case. */
   query: string | null
@@ -100,6 +104,7 @@ type TaskFilterQuery = {
   eq(column: string, value: string): TaskFilterQuery
   ilike(column: string, pattern: string): TaskFilterQuery
   in(column: string, values: readonly string[]): TaskFilterQuery
+  or(filters: string): TaskFilterQuery
 }
 
 function filterTaskList<TQuery>(query: TQuery, filters: TaskListFilters): TQuery {
@@ -107,6 +112,11 @@ function filterTaskList<TQuery>(query: TQuery, filters: TaskListFilters): TQuery
     "org_id",
     filters.organizationId
   )
+
+  if (filters.visibleIds) {
+    const ids = filters.visibleIds.join(",")
+    filtered = filtered.or(`assigned_to.in.(${ids}),created_by.in.(${ids})`)
+  }
 
   if (filters.statuses !== null) {
     filtered = filtered.in("status", filters.statuses)
@@ -341,13 +351,14 @@ export async function listTaskPage(
     },
     async (): Promise<TaskPage> => {
       const client = getTaskClient(deps)
-      await requireTaskPermission(
+      const role = await requireTaskPermission(
         client,
         input.organizationId,
         input.actorUserId,
         "tasks:view",
         "You cannot view tasks."
       )
+      const visibleIds = await loadVisibleTaskPeople(client, role, input)
 
       const page = TASK_LIST_INPUT.page(input.page)
       const pageSize = TASK_LIST_INPUT.pageSize(input.pageSize)
@@ -360,6 +371,7 @@ export async function listTaskPage(
         organizationId: input.organizationId,
         query: TASK_LIST_INPUT.search(input.query),
         statuses: normalizeTaskStatusFilter(input.statuses),
+        visibleIds,
       }
       let query = filterTaskList(
         // tenant-scope: filterTaskList adds .eq("org_id", filters.organizationId)
@@ -408,7 +420,7 @@ export async function getTask(
     },
     async (): Promise<TaskDetail> => {
       const client = getTaskClient(deps)
-      await requireTaskPermission(
+      const role = await requireTaskPermission(
         client,
         input.organizationId,
         input.actorUserId,
@@ -417,6 +429,13 @@ export async function getTask(
       )
 
       const task = await getTaskById(client, input.organizationId, input.taskId)
+      const visibleIds = await loadVisibleTaskPeople(client, role, input)
+
+      // A narrowed role opens only the tasks of the people it sees, by link as in the list.
+      if (visibleIds && !visibleIds.includes(task.assignedTo ?? "") && !visibleIds.includes(task.createdBy ?? "")) {
+        throw new TaskServiceError("Task was not found.", 404)
+      }
+
       const reminders = await listTaskReminderRows(
         client,
         input.organizationId,
@@ -744,4 +763,14 @@ async function publishTaskAssignment(
       reason: error instanceof Error ? error.message : "Unknown publish error",
     })
   }
+}
+
+// An owner sees every task; anyone else, the tasks of the people their role
+// reaches, which is everyone until an owner narrows it or places them.
+async function loadVisibleTaskPeople(
+  client: TaskServiceClient,
+  role: OrganizationRole,
+  input: { actorUserId: string; organizationId: string }
+): Promise<readonly string[] | null> {
+  return role === "owner_admin" ? null : (await loadMemberReach(client, input.organizationId, input.actorUserId)).visible
 }

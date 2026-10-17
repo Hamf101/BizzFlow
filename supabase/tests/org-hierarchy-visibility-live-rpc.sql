@@ -94,6 +94,18 @@ begin
     raise exception 'An outside reviewer did not see exactly their inviter''s side: %', seen;
   end if;
 
+  -- For work: who each looks over, and whether their reach is everything.
+  if (public.member_reach(org, lee) -> 'everyone')::boolean
+      or (select array_agg(value::uuid order by value::uuid) from jsonb_array_elements_text(public.member_reach(org, lee) -> 'supervised'))
+        <> (select array_agg(id order by id) from unnest(array[avery, ash, blair]) id)
+      or (select array_agg(value::uuid) from jsonb_array_elements_text(public.member_reach(org, morgan) -> 'supervised')) <> array[avery]
+      or jsonb_array_length(public.member_reach(org, avery) -> 'supervised') <> 0
+      or not (public.member_reach(org, morgan) -> 'everyone')::boolean
+      or public.member_reach(org, morgan) -> 'visible' <> 'null'::jsonb
+      or not (public.member_reach(org, casey) -> 'everyone')::boolean then
+    raise exception 'member_reach did not say who each looks over: %', public.member_reach(org, lee);
+  end if;
+
   -- A role set to everyone widens it; an inactive viewer sees nobody.
   update public.organization_roles set visibility_scope = 'everyone'
   where org_id = org and system_key = 'staff';

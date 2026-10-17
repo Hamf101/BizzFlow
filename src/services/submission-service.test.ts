@@ -62,9 +62,20 @@ class FakeQuery extends PostgrestReadQuery {
 }
 
 class FakeClient {
-  readonly rpc = vi.fn<RpcHandler>()
+  /** Every RPC but member_reach, as each test mocks it. */
+  readonly rpcCalls = vi.fn<RpcHandler>()
+  /** What member_reach answers: by default, everyone with nobody supervised. */
+  reach: Record<string, { everyone: boolean; supervised: string[]; visible: string[] | null }> = {}
 
   constructor(readonly tables: FakeTables) {}
+
+  rpc(functionName: string, args: Record<string, unknown>): ReturnType<RpcHandler> {
+    if (functionName === "member_reach") {
+      return Promise.resolve({ data: this.reach[String(args.target_user_id)] ?? { everyone: true, supervised: [], visible: null }, error: null }) as ReturnType<RpcHandler>
+    }
+
+    return this.rpcCalls(functionName, args)
+  }
 
   from(tableName: string): FakeQuery {
     return new FakeQuery(tableName, this.tables)
@@ -93,6 +104,43 @@ describe("internal submission visibility", () => {
     expect(staffRows.map((submission) => submission.id)).toEqual([
       SUBMISSION_ID
     ])
+  })
+
+  it("shows a lead what the people they look over submitted, but never their drafts", async () => {
+    const client = createClient({
+      submissions: [
+        createSubmissionRow({ id: OTHER_SUBMISSION_ID, status: "submitted", submitted_by: OTHER_STAFF_ID, submitted_at: "2026-07-18T17:00:00.000Z", created_by: OTHER_STAFF_ID, updated_by: OTHER_STAFF_ID }),
+        createSubmissionRow({ id: SUBMISSION_ID, status: "draft", created_by: OTHER_STAFF_ID, updated_by: OTHER_STAFF_ID }),
+      ],
+    })
+    client.reach[STAFF_ID] = { everyone: false, supervised: [OTHER_STAFF_ID], visible: [STAFF_ID, OTHER_STAFF_ID] }
+
+    const rows = (await listSubmissionPage(createPageInput(STAFF_ID), { client: client as never })).submissions
+
+    expect(rows.map((submission) => submission.id)).toEqual([OTHER_SUBMISSION_ID])
+    await expect(
+      getInternalSubmission({ actorUserId: STAFF_ID, organizationId: ORGANIZATION_ID, submissionId: OTHER_SUBMISSION_ID }, { client: client as never })
+    ).resolves.toMatchObject({ submission: { id: OTHER_SUBMISSION_ID } })
+    await expect(
+      getInternalSubmission({ actorUserId: STAFF_ID, organizationId: ORGANIZATION_ID, submissionId: SUBMISSION_ID }, { client: client as never })
+    ).rejects.toMatchObject({ statusCode: 404 })
+  })
+
+  it("keeps a manager narrowed to a branch to the work of the people they see, by list and by link", async () => {
+    const client = createClient({
+      submissions: [
+        createSubmissionRow({ id: SUBMISSION_ID, status: "submitted", submitted_by: STAFF_ID, submitted_at: "2026-07-18T17:00:00.000Z", created_by: STAFF_ID, updated_by: STAFF_ID }),
+        createSubmissionRow({ id: OTHER_SUBMISSION_ID, status: "submitted", submitted_by: OTHER_STAFF_ID, submitted_at: "2026-07-18T17:00:00.000Z", created_by: OTHER_STAFF_ID, updated_by: OTHER_STAFF_ID }),
+      ],
+    })
+    client.reach[MANAGER_ID] = { everyone: false, supervised: [], visible: [MANAGER_ID, STAFF_ID] }
+
+    const rows = (await listSubmissionPage(createPageInput(MANAGER_ID), { client: client as never })).submissions
+
+    expect(rows.map((submission) => submission.id)).toEqual([SUBMISSION_ID])
+    await expect(
+      getInternalSubmission({ actorUserId: MANAGER_ID, organizationId: ORGANIZATION_ID, submissionId: OTHER_SUBMISSION_ID }, { client: client as never })
+    ).rejects.toMatchObject({ statusCode: 404 })
   })
 
   it("shows external reviewers only assigned non-drafts and hides other staff rows", async () => {
@@ -201,7 +249,7 @@ describe("external reviewers", () => {
 
   it("may approve or ask for changes as a reviewer, but rejecting needs review permission", async () => {
     const client = createClient({ submissions: [createAssignedSubmissionRow()] })
-    client.rpc.mockResolvedValue({ data: createAssignedSubmissionRow(), error: null })
+    client.rpcCalls.mockResolvedValue({ data: createAssignedSubmissionRow(), error: null })
     const decide = (targetStatus: "approved" | "rejected" | "needs_changes") =>
       transitionInternalSubmission(
         { actorUserId: EXTERNAL_ID, comment: "Because", expectedRevision: 3, organizationId: ORGANIZATION_ID, submissionId: SUBMISSION_ID, targetStatus },
@@ -211,7 +259,7 @@ describe("external reviewers", () => {
     await expect(decide("approved")).resolves.toBeDefined()
     await expect(decide("needs_changes")).resolves.toBeDefined()
     await expect(decide("rejected")).rejects.toMatchObject({ statusCode: 403 })
-    expect(client.rpc).toHaveBeenCalledTimes(2)
+    expect(client.rpcCalls).toHaveBeenCalledTimes(2)
   })
 })
 
@@ -566,7 +614,7 @@ describe("submission list pages", () => {
 describe("internal submission draft lifecycle", () => {
   it("creates a draft through the atomic snapshot RPC", async () => {
     const client = createClient()
-    client.rpc.mockImplementation(async (functionName, args) => {
+    client.rpcCalls.mockImplementation(async (functionName, args) => {
       if (functionName === "get_template_access_level") {
         return { data: "user", error: null }
       }
@@ -606,7 +654,7 @@ describe("internal submission draft lifecycle", () => {
     ["cannot see the template", null, 404]
   ])("refuses a draft from a template the member %s", async (_case, level, statusCode) => {
     const client = createClient()
-    client.rpc.mockImplementation(async (functionName) => ({
+    client.rpcCalls.mockImplementation(async (functionName) => ({
       data: functionName === "get_template_access_level" ? level : "must not be reached",
       error: null
     }))
@@ -623,7 +671,7 @@ describe("internal submission draft lifecycle", () => {
         { client: client as never }
       )
     ).rejects.toMatchObject({ statusCode })
-    expect(client.rpc).toHaveBeenCalledOnce()
+    expect(client.rpcCalls).toHaveBeenCalledOnce()
   })
 
   it("merges a form patch over persisted values before saving", async () => {
@@ -634,7 +682,7 @@ describe("internal submission draft lifecycle", () => {
         })
       ]
     })
-    client.rpc.mockImplementation(async (functionName, args) => {
+    client.rpcCalls.mockImplementation(async (functionName, args) => {
       expect(functionName).toBe("save_internal_submission_draft")
       expect(args.target_values).toEqual({
         vendor_name: "Northstar",
@@ -681,7 +729,7 @@ describe("internal submission draft lifecycle", () => {
         { client: client as never }
       )
     ).rejects.toMatchObject({ statusCode: 403 })
-    expect(client.rpc).not.toHaveBeenCalled()
+    expect(client.rpcCalls).not.toHaveBeenCalled()
   })
 
   it("rejects a stale draft revision before replacing answers", async () => {
@@ -702,7 +750,7 @@ describe("internal submission draft lifecycle", () => {
       message: "Submission draft has changed. Reload and try again.",
       statusCode: 409
     })
-    expect(client.rpc).not.toHaveBeenCalled()
+    expect(client.rpcCalls).not.toHaveBeenCalled()
   })
 
   it("submits a complete merged answer set with verified file fields", async () => {
@@ -714,7 +762,7 @@ describe("internal submission draft lifecycle", () => {
       ],
       submission_files: [createFileRow({ status: "available" })]
     })
-    client.rpc.mockImplementation(async (functionName, args) => {
+    client.rpcCalls.mockImplementation(async (functionName, args) => {
       expect(functionName).toBe("submit_internal_submission")
       expect(args.target_values).toEqual({
         vendor_name: "Northstar",
@@ -769,7 +817,7 @@ describe("internal submission draft lifecycle", () => {
       message: "Wait for pending file uploads before submitting.",
       statusCode: 409
     })
-    expect(client.rpc).not.toHaveBeenCalled()
+    expect(client.rpcCalls).not.toHaveBeenCalled()
   })
 
   it("rejects submit when a required snapshot answer is missing", async () => {
@@ -794,7 +842,7 @@ describe("internal submission draft lifecycle", () => {
         "Vendor name must be completed before this submission can be submitted.",
       statusCode: 400
     })
-    expect(client.rpc).not.toHaveBeenCalled()
+    expect(client.rpcCalls).not.toHaveBeenCalled()
   })
 
   it("passes an exact submitted retry through to the idempotent RPC", async () => {
@@ -809,7 +857,7 @@ describe("internal submission draft lifecycle", () => {
       submissions: [submittedRow],
       submission_files: [createFileRow({ status: "available" })]
     })
-    client.rpc.mockImplementation(async (functionName, args) => {
+    client.rpcCalls.mockImplementation(async (functionName, args) => {
       expect(functionName).toBe("submit_internal_submission")
       expect(args).toMatchObject({
         target_expected_revision: 1,
@@ -830,7 +878,7 @@ describe("internal submission draft lifecycle", () => {
     )
 
     expect(result).toMatchObject({ status: "submitted", revision: 2 })
-    expect(client.rpc).toHaveBeenCalledOnce()
+    expect(client.rpcCalls).toHaveBeenCalledOnce()
   })
 
   it("saves and resubmits creator changes after review requests updates", async () => {
@@ -843,7 +891,7 @@ describe("internal submission draft lifecycle", () => {
       submissions: [needsChangesRow],
       submission_files: [createFileRow({ status: "available" })]
     })
-    client.rpc.mockImplementation(async (functionName, args) => {
+    client.rpcCalls.mockImplementation(async (functionName, args) => {
       if (functionName === "save_internal_submission_draft") {
         return {
           data: createAssignedSubmissionRow({
@@ -903,7 +951,7 @@ describe("internal submission draft lifecycle", () => {
 describe("internal submission review workflow", () => {
   it("returns the safe review conflict message from the database", async () => {
     const client = createClient()
-    client.rpc.mockResolvedValue({
+    client.rpcCalls.mockResolvedValue({
       data: null,
       error: Object.assign(
         new Error("Submission review has changed. Reload and try again."),
@@ -932,7 +980,7 @@ describe("internal submission review workflow", () => {
     const client = createClient({
       submissions: [createAssignedSubmissionRow()]
     })
-    client.rpc.mockImplementation(async (functionName, args) => {
+    client.rpcCalls.mockImplementation(async (functionName, args) => {
       expect(functionName).toBe("transition_internal_submission")
       expect(args).toMatchObject({
         target_expected_revision: 3,
@@ -982,14 +1030,14 @@ describe("internal submission review workflow", () => {
         { client: client as never }
       )
     ).rejects.toMatchObject({ statusCode: 400 })
-    expect(client.rpc).not.toHaveBeenCalled()
+    expect(client.rpcCalls).not.toHaveBeenCalled()
   })
 
   it("lets an assigned external reviewer add a general comment", async () => {
     const client = createClient({
       submissions: [createAssignedSubmissionRow()]
     })
-    client.rpc.mockImplementation(async (functionName, args) => {
+    client.rpcCalls.mockImplementation(async (functionName, args) => {
       expect(functionName).toBe("create_internal_submission_comment")
       expect(args).toEqual({
         target_org_id: ORGANIZATION_ID,
@@ -1045,14 +1093,14 @@ describe("several reviewers on one submission", () => {
 
   it("lets a manager name the reviewers and how many must approve, and passes them on in order", async () => {
     const client = createClient()
-    client.rpc.mockResolvedValue({ data: createAssignedSubmissionRow({ assigned_to: MANAGER_ID, required_approvals: 2 }), error: null })
+    client.rpcCalls.mockResolvedValue({ data: createAssignedSubmissionRow({ assigned_to: MANAGER_ID, required_approvals: 2 }), error: null })
 
     const result = await setInternalSubmissionReviewers(
       input(MANAGER_ID, { requiredApprovals: 2 }),
       { client: client as never }
     )
 
-    expect(client.rpc).toHaveBeenCalledWith("set_submission_reviewers", {
+    expect(client.rpcCalls).toHaveBeenCalledWith("set_submission_reviewers", {
       target_actor_user_id: MANAGER_ID,
       target_expected_revision: 2,
       target_org_id: ORGANIZATION_ID,
@@ -1074,20 +1122,20 @@ describe("several reviewers on one submission", () => {
     await expect(attempt(MANAGER_ID, { reviewerIds: ["../x"] })).rejects.toMatchObject({ statusCode: 400 })
     await expect(attempt(MANAGER_ID, { requiredApprovals: 3 })).rejects.toMatchObject({ statusCode: 400 })
     await expect(attempt(MANAGER_ID, { requiredApprovals: 0 })).rejects.toMatchObject({ statusCode: 400 })
-    expect(client.rpc).not.toHaveBeenCalled()
+    expect(client.rpcCalls).not.toHaveBeenCalled()
   })
 
   it("says so when the database keeps the reviewers someone more senior chose out of a manager's hands", async () => {
     const client = createClient()
     const refusal = "The reviewers were chosen by someone more senior, so only they or an owner can change them."
-    client.rpc.mockResolvedValue({ data: null, error: Object.assign(new Error(refusal), { code: "42501" }) })
+    client.rpcCalls.mockResolvedValue({ data: null, error: Object.assign(new Error(refusal), { code: "42501" }) })
 
     await expect(setInternalSubmissionReviewers(input(MANAGER_ID), { client: client as never })).rejects.toMatchObject({ message: refusal, statusCode: 403 })
   })
 
   it("sets a change request aside only with a note, and only for someone who may review", async () => {
     const client = createClient()
-    client.rpc.mockResolvedValue({ data: createAssignedSubmissionRow({ assigned_to: MANAGER_ID }), error: null })
+    client.rpcCalls.mockResolvedValue({ data: createAssignedSubmissionRow({ assigned_to: MANAGER_ID }), error: null })
     const dismiss = (actor: string, comment: string) =>
       dismissSubmissionChangesRequest(
         { actorUserId: actor, alsoApprove: true, comment, expectedRevision: 4, organizationId: ORGANIZATION_ID, reviewerUserId: SECOND_MANAGER_ID, submissionId: SUBMISSION_ID },
@@ -1096,10 +1144,10 @@ describe("several reviewers on one submission", () => {
 
     await expect(dismiss(MANAGER_ID, "   ")).rejects.toMatchObject({ statusCode: 400 })
     await expect(dismiss(STAFF_ID, "Seen it")).rejects.toMatchObject({ statusCode: 403 })
-    expect(client.rpc).not.toHaveBeenCalled()
+    expect(client.rpcCalls).not.toHaveBeenCalled()
 
     await dismiss(MANAGER_ID, "  Seen it, fine  ")
-    expect(client.rpc).toHaveBeenCalledWith("dismiss_submission_changes_request", {
+    expect(client.rpcCalls).toHaveBeenCalledWith("dismiss_submission_changes_request", {
       target_actor_user_id: MANAGER_ID,
       target_also_approve: true,
       target_comment: "Seen it, fine",
@@ -1282,29 +1330,29 @@ describe("sharing a submission beyond its reviewers", () => {
       submissions: [createAssignedSubmissionRow({ assigned_to: MANAGER_ID })],
       submission_reviewers: [createReviewerRow(MANAGER_ID), shared(OTHER_STAFF_ID, { assigned_by: MANAGER_ID })]
     })
-    client.rpc.mockResolvedValue({ data: [EXTERNAL_ID], error: null })
+    client.rpcCalls.mockResolvedValue({ data: [EXTERNAL_ID], error: null })
 
     await shareInternalSubmission(
       { actorUserId: STAFF_ID, organizationId: ORGANIZATION_ID, submissionId: SUBMISSION_ID, userIds: [EXTERNAL_ID] },
       { client: client as never, notify: vi.fn(async () => undefined) }
     )
 
-    expect(client.rpc).toHaveBeenCalledWith("set_submission_sharing", expect.objectContaining({ target_user_ids: [EXTERNAL_ID, OTHER_STAFF_ID] }))
+    expect(client.rpcCalls).toHaveBeenCalledWith("set_submission_sharing", expect.objectContaining({ target_user_ids: [EXTERNAL_ID, OTHER_STAFF_ID] }))
   })
 
   it("passes everyone on, tells only whoever was newly added, and turns away nonsense first", async () => {
     const notify = vi.fn(async () => undefined)
     const client = createClient({ profiles: [{ email: "staff@example.test", full_name: "Sam Staff", id: STAFF_ID }] })
-    client.rpc.mockResolvedValue({ data: [OTHER_STAFF_ID], error: null })
+    client.rpcCalls.mockResolvedValue({ data: [OTHER_STAFF_ID], error: null })
     const share = (userIds: string[]) =>
       shareInternalSubmission({ actorUserId: STAFF_ID, organizationId: ORGANIZATION_ID, submissionId: SUBMISSION_ID, userIds }, { client: client as never, notify })
 
     await expect(share(["../x"])).rejects.toMatchObject({ statusCode: 400 })
     await expect(share(Array.from({ length: 51 }, (_, index) => `20000000-0000-4000-8000-${String(100 + index).padStart(12, "0")}`))).rejects.toMatchObject({ statusCode: 400 })
-    expect(client.rpc).not.toHaveBeenCalled()
+    expect(client.rpcCalls).not.toHaveBeenCalled()
 
     await expect(share([OTHER_STAFF_ID, EXTERNAL_ID, OTHER_STAFF_ID])).resolves.toEqual([OTHER_STAFF_ID])
-    expect(client.rpc).toHaveBeenCalledWith("set_submission_sharing", {
+    expect(client.rpcCalls).toHaveBeenCalledWith("set_submission_sharing", {
       target_actor_user_id: STAFF_ID,
       target_org_id: ORGANIZATION_ID,
       target_submission_id: SUBMISSION_ID,
@@ -1332,7 +1380,7 @@ describe("telling reviewers they were asked", () => {
       submission_reviewers: [createReviewerRow(EXTERNAL_ID), createReviewerRow(OTHER_STAFF_ID, { can_approve: false })]
     })
     client.tables.profiles = [{ email: "maya@example.test", full_name: "Maya Manager", id: MANAGER_ID }]
-    client.rpc.mockResolvedValue({ data: createAssignedSubmissionRow(), error: null })
+    client.rpcCalls.mockResolvedValue({ data: createAssignedSubmissionRow(), error: null })
 
     await expect(
       setInternalSubmissionReviewers(
@@ -1358,10 +1406,10 @@ describe("suggested changes", () => {
 
   it("keeps only the typed answers a reviewer changed, and passes them on for the submitter to accept", async () => {
     const client = reviewing()
-    client.rpc.mockResolvedValue({ data: 1, error: null })
+    client.rpcCalls.mockResolvedValue({ data: 1, error: null })
 
     await expect(suggest(MANAGER_ID, { notes: "", vendor_name: "Acme Ltd" }, client)).resolves.toBe(1)
-    expect(client.rpc).toHaveBeenCalledWith("suggest_submission_answers", {
+    expect(client.rpcCalls).toHaveBeenCalledWith("suggest_submission_answers", {
       target_actor_user_id: MANAGER_ID,
       target_org_id: ORGANIZATION_ID,
       target_submission_id: SUBMISSION_ID,
@@ -1380,10 +1428,10 @@ describe("suggested changes", () => {
       ],
       submission_reviewers: [createReviewerRow(MANAGER_ID)]
     })
-    client.rpc.mockResolvedValue({ data: 1, error: null })
+    client.rpcCalls.mockResolvedValue({ data: 1, error: null })
 
     await suggest(MANAGER_ID, { checks: { "Exits clear": "Yes", "Lights work": "No" }, tools: ["Ladder", "Saw"] }, client)
-    expect(client.rpc).toHaveBeenCalledWith(
+    expect(client.rpcCalls).toHaveBeenCalledWith(
       "suggest_submission_answers",
       expect.objectContaining({ target_values: { tools: ["Ladder", "Saw"] } })
     )
@@ -1396,16 +1444,16 @@ describe("suggested changes", () => {
       submissions: [createAssignedSubmissionRow({ assigned_to: MANAGER_ID, template_snapshot: quote, values: stored })],
       submission_reviewers: [createReviewerRow(MANAGER_ID)]
     })
-    client.rpc.mockResolvedValue({ data: 1, error: null })
+    client.rpcCalls.mockResolvedValue({ data: 1, error: null })
 
     await suggest(MANAGER_ID, { items: [["Desk", "3", "10.00", ""]], total: "1" }, client)
-    expect(client.rpc).toHaveBeenCalledWith(
+    expect(client.rpcCalls).toHaveBeenCalledWith(
       "suggest_submission_answers",
       expect.objectContaining({ target_values: { items: [["Desk", "3", "10.00", "30.00"]] } })
     )
 
     // The database changes only the accepted answer; the totals follow it as it is read.
-    client.rpc.mockResolvedValue({ data: createAssignedSubmissionRow({ template_snapshot: quote, values: { ...stored, items: [["Desk", "3", "10.00", "30.00"]] } }), error: null })
+    client.rpcCalls.mockResolvedValue({ data: createAssignedSubmissionRow({ template_snapshot: quote, values: { ...stored, items: [["Desk", "3", "10.00", "30.00"]] } }), error: null })
 
     const accepted = await decideSubmissionSuggestion(
       { accept: true, actorUserId: STAFF_ID, organizationId: ORGANIZATION_ID, submissionId: SUBMISSION_ID, suggestionId: "90000000-0000-4000-8000-000000000001" },
@@ -1421,7 +1469,7 @@ describe("suggested changes", () => {
     await expect(suggest(STAFF_ID, { vendor_name: "Other" }, client)).rejects.toMatchObject({ statusCode: 403 })
     await expect(suggest(EXTERNAL_ID, { vendor_name: "Other" }, client)).rejects.toMatchObject({ statusCode: 403 })
     await expect(suggest(MANAGER_ID, { vendor_name: "Acme" }, client)).rejects.toMatchObject({ statusCode: 400 })
-    expect(client.rpc).not.toHaveBeenCalled()
+    expect(client.rpcCalls).not.toHaveBeenCalled()
   })
 
   it("offers suggesting only to an owner or manager reviewing it, while it is reviewed, and lists the trail", async () => {
@@ -1454,7 +1502,7 @@ describe("suggested changes", () => {
 
   it("lets someone who may edit submissions accept or decline; the database checks it is theirs", async () => {
     const client = reviewing()
-    client.rpc.mockResolvedValue({ data: createAssignedSubmissionRow(), error: null })
+    client.rpcCalls.mockResolvedValue({ data: createAssignedSubmissionRow(), error: null })
     const decide = (actorUserId: string) =>
       decideSubmissionSuggestion(
         { accept: true, actorUserId, organizationId: ORGANIZATION_ID, submissionId: SUBMISSION_ID, suggestionId: "90000000-0000-4000-8000-000000000001" },
@@ -1463,7 +1511,7 @@ describe("suggested changes", () => {
 
     await expect(decide(EXTERNAL_ID)).rejects.toMatchObject({ statusCode: 403 })
     await expect(decide(STAFF_ID)).resolves.toBeDefined()
-    expect(client.rpc).toHaveBeenCalledWith("decide_submission_suggestion", {
+    expect(client.rpcCalls).toHaveBeenCalledWith("decide_submission_suggestion", {
       target_accept: true,
       target_actor_user_id: STAFF_ID,
       target_org_id: ORGANIZATION_ID,
@@ -1482,7 +1530,7 @@ describe("internal submission file workflow", () => {
       expiresInSeconds: 300,
       input
     }))
-    client.rpc.mockImplementation(async (functionName, args) => {
+    client.rpcCalls.mockImplementation(async (functionName, args) => {
       if (functionName === "allocate_internal_submission_file") {
         expect(args.target_storage_key).toBe(
           buildExpectedStorageKey(FILE_ID, "Evidence-final.pdf")
@@ -1535,7 +1583,7 @@ describe("internal submission file workflow", () => {
     // The object key is internal: nothing that reaches a browser carries it.
     expect(result.file).not.toHaveProperty("storageKey")
     expect(createSignedSubmissionUploadUrl).toHaveBeenCalledOnce()
-    expect(client.rpc).toHaveBeenCalledTimes(2)
+    expect(client.rpcCalls).toHaveBeenCalledTimes(2)
   })
 
   it("takes no file for a field its rule hides, as a public form does not", async () => {
@@ -1547,7 +1595,7 @@ describe("internal submission file workflow", () => {
     const upload = (values: Record<string, unknown>) => {
       const client = createClient({ submissions: [createSubmissionRow({ template_snapshot: snapshot, values })] })
 
-      client.rpc.mockResolvedValue({ data: createFileRow({ original_filename: "Evidence.pdf", safe_filename: "Evidence.pdf", storage_key: buildExpectedStorageKey(FILE_ID, "Evidence.pdf") }), error: null })
+      client.rpcCalls.mockResolvedValue({ data: createFileRow({ original_filename: "Evidence.pdf", safe_filename: "Evidence.pdf", storage_key: buildExpectedStorageKey(FILE_ID, "Evidence.pdf") }), error: null })
       return allocateInternalSubmissionFile(
         { actorUserId: STAFF_ID, organizationId: ORGANIZATION_ID, submissionId: SUBMISSION_ID, expectedRevision: 1, fieldKey: "evidence", originalFilename: "Evidence.pdf", contentType: "application/pdf", byteSize: 1_024, checksumSha256: CHECKSUM },
         { client: client as never, createId: () => FILE_ID, validateSubmissionUploadRequest: vi.fn(), now: () => new Date("2026-07-18T18:00:00.000Z"), createSignedSubmissionUploadUrl: vi.fn(async () => ({ uploadUrl: "https://r2.example/upload", storageKey: buildExpectedStorageKey(FILE_ID, "Evidence.pdf"), expiresInSeconds: 300 })) as never }
@@ -1568,7 +1616,7 @@ describe("internal submission file workflow", () => {
       ]
     })
     const createId = vi.fn(() => "unexpected")
-    client.rpc.mockImplementation(async (functionName, args) => {
+    client.rpcCalls.mockImplementation(async (functionName, args) => {
       expect(functionName).toBe("record_internal_submission_file_upload_window")
       expect(args.target_file_id).toBe(FILE_ID)
       return { data: createFileRow(), error: null }
@@ -1599,7 +1647,7 @@ describe("internal submission file workflow", () => {
     )
 
     expect(result.uploadUrl).toBe("https://r2.example/retry")
-    expect(client.rpc).toHaveBeenCalledOnce()
+    expect(client.rpcCalls).toHaveBeenCalledOnce()
     expect(createId).not.toHaveBeenCalled()
   })
 
@@ -1612,7 +1660,7 @@ describe("internal submission file workflow", () => {
       expect(input).toMatchObject({ checksumSha256: CHECKSUM })
       events.push("verify")
     })
-    client.rpc.mockImplementation(async (functionName, args) => {
+    client.rpcCalls.mockImplementation(async (functionName, args) => {
       expect(functionName).toBe("complete_internal_submission_file")
       expect(args.target_checksum_sha256).toBe(CHECKSUM)
       events.push("rpc")
@@ -1666,7 +1714,7 @@ describe("internal submission file workflow", () => {
       message: "Pending submission file metadata does not match this upload.",
       statusCode: 409
     })
-    expect(client.rpc).not.toHaveBeenCalled()
+    expect(client.rpcCalls).not.toHaveBeenCalled()
   })
 
   it("tombstones an active file before best-effort object cleanup", async () => {
@@ -1674,7 +1722,7 @@ describe("internal submission file workflow", () => {
       submission_files: [createFileRow({ status: "available" })]
     })
     const deleteSubmissionStorageObject = vi.fn(async () => undefined)
-    client.rpc.mockImplementation(async (functionName) => {
+    client.rpcCalls.mockImplementation(async (functionName) => {
       expect(functionName).toBe("supersede_internal_submission_file")
       return {
         data: {
@@ -1717,7 +1765,7 @@ describe("internal submission file workflow", () => {
       ],
       submission_files: [createFileRow({ status: "available" })]
     })
-    client.rpc.mockResolvedValue({
+    client.rpcCalls.mockResolvedValue({
       data: {
         ...createFileRow({ status: "superseded" }),
         storage_key: buildExpectedStorageKey(FILE_ID)
@@ -1848,7 +1896,7 @@ describe("internal submission file cleanup", () => {
       ]
     })
     const deleteSubmissionStorageObject = vi.fn(async () => undefined)
-    client.rpc.mockImplementation(async (functionName, args) => {
+    client.rpcCalls.mockImplementation(async (functionName, args) => {
       expect(functionName).toBe("mark_internal_submission_file_storage_cleaned")
       expect(args).toEqual({
         target_file_id: FILE_ID,
@@ -1876,7 +1924,7 @@ describe("internal submission file cleanup", () => {
     expect(deleteSubmissionStorageObject).toHaveBeenCalledWith({
       storageKey: buildExpectedStorageKey(FILE_ID)
     })
-    expect(client.rpc).toHaveBeenCalledOnce()
+    expect(client.rpcCalls).toHaveBeenCalledOnce()
   })
 })
 
@@ -1884,7 +1932,7 @@ describe("abandoned submission file expiry", () => {
   it("expires abandoned drafts and dead uploads in one bounded database pass", async () => {
     const client = createClient()
 
-    client.rpc.mockResolvedValue({
+    client.rpcCalls.mockResolvedValue({
       data: { expired_drafts: 2, expired_files: 5 },
       error: null
     })
@@ -1892,7 +1940,7 @@ describe("abandoned submission file expiry", () => {
     await expect(
       expireAbandonedSubmissionFiles({}, { client: client as never })
     ).resolves.toEqual({ expiredDrafts: 2, expiredFiles: 5 })
-    expect(client.rpc).toHaveBeenCalledWith(
+    expect(client.rpcCalls).toHaveBeenCalledWith(
       "expire_abandoned_submission_files",
       { target_batch_size: 250 }
     )
@@ -1906,7 +1954,7 @@ describe("abandoned submission file expiry", () => {
       await expect(
         expireAbandonedSubmissionFiles({ batchSize }, { client: client as never })
       ).rejects.toThrow(RangeError)
-      expect(client.rpc).not.toHaveBeenCalled()
+      expect(client.rpcCalls).not.toHaveBeenCalled()
     }
   )
 
@@ -1916,7 +1964,7 @@ describe("abandoned submission file expiry", () => {
       code: "08006"
     })
 
-    client.rpc.mockResolvedValue({ data: null, error: failure })
+    client.rpcCalls.mockResolvedValue({ data: null, error: failure })
 
     await expect(
       expireAbandonedSubmissionFiles({}, { client: client as never })

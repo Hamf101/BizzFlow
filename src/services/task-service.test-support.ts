@@ -97,6 +97,17 @@ export class FakeSupabaseClient {
     return new FakeQueryBuilder(this, tableName)
   }
 
+  /** What member_reach answers per member: by default, everyone. */
+  reach: Record<string, { everyone: boolean; supervised: string[]; visible: string[] | null }> = {}
+
+  async rpc(functionName: string, args: Record<string, unknown>): Promise<{ data: unknown; error: null }> {
+    if (functionName !== "member_reach") {
+      throw new Error(`Unsupported fake RPC: ${functionName}`)
+    }
+
+    return { data: this.reach[String(args.target_user_id)] ?? { everyone: true, supervised: [], visible: null }, error: null }
+  }
+
   /**
    * Registers a concurrent writer that runs before the next update executes.
    *

@@ -3813,6 +3813,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      member_reach: {
+        Args: { target_org_id: string; target_user_id: string }
+        Returns: Json
+      }
       merge_generated_document_answers: {
         Args: {
           target_document_id: string

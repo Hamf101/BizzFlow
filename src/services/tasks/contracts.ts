@@ -17,7 +17,7 @@ import type {
 } from "@/types/task"
 
 /** Narrow trusted Supabase client used by task services. */
-export type TaskServiceClient = Pick<AdminSupabaseClient, "from">
+export type TaskServiceClient = Pick<AdminSupabaseClient, "from" | "rpc">
 
 /** Scalar values permitted in task operation logs. */
 export type TaskLogValue = string | number | boolean | null | undefined

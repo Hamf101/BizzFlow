@@ -1,3 +1,4 @@
+import { loadMemberReach } from "@/services/member-reach"
 import { randomUUID } from "node:crypto"
 
 import {
@@ -188,13 +189,25 @@ export async function assertSubmissionVisible(
   submission: Submission,
   actorUserId: string
 ): Promise<void> {
-  // Staff see their own work and what was shared with them.
+  // Staff see their own work, what was shared with them, and what the people
+  // they lead or manage submitted.
   if (
     role === "staff" &&
     submission.createdBy !== actorUserId &&
-    (submission.status === "draft" || !(await isSubmissionReviewer(client, submission, actorUserId)))
+    (submission.status === "draft" ||
+      (!(await isSubmissionReviewer(client, submission, actorUserId)) &&
+        !(await loadMemberReach(client, submission.organizationId, actorUserId)).supervised.includes(submission.createdBy ?? "")))
   ) {
     throw new SubmissionServiceError("Submission was not found.", 404)
+  }
+
+  // A role narrowed to a branch sees work from the people it sees, and what it reviews.
+  if (role !== "staff" && role !== "external_reviewer" && role !== "owner_admin") {
+    const { visible } = await loadMemberReach(client, submission.organizationId, actorUserId)
+
+    if (visible && !visible.includes(submission.createdBy ?? "") && !(await isSubmissionReviewer(client, submission, actorUserId))) {
+      throw new SubmissionServiceError("Submission was not found.", 404)
+    }
   }
 
   // An external reviewer sees a submitted piece of work only when they review it or it was shared with them.

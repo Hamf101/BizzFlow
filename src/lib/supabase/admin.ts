@@ -1073,6 +1073,10 @@ export type AdminDatabase = {
         }
         Returns: { id: string; name: string; email: string; status: string }[]
       }
+      member_reach: {
+        Args: { target_org_id: string; target_user_id: string }
+        Returns: { everyone: boolean; supervised: string[]; visible: string[] | null }
+      }
       visible_member_ids: {
         Args: { target_org_id: string; target_user_id: string }
         Returns: string[]
