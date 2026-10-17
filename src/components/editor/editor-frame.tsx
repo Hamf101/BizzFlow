@@ -488,7 +488,8 @@ function SaveStatus({
     "unsaved-local": "Unsaved",
     conflict: "Changed elsewhere",
     error: "Not saved",
-    offline: "Offline",
+    // Unsent changes wait on this device and go out when it reconnects.
+    offline: "Offline, kept on this device",
     saved: "Saved",
     saving: "Saving…",
     stopped: "Editing stopped",
