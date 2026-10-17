@@ -39,6 +39,7 @@ export const ACTION_FEEDBACK_CODES = [
   "submission_assigned",
   "submission_created",
   "submission_review_updated",
+  "submission_reviewed_next",
   "submission_shared",
   "submission_submitted",
   "task_completed",

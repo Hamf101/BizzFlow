@@ -87,6 +87,7 @@ export const ACTION_FEEDBACK = {
   submission_assigned: done("Submission assigned"),
   submission_created: done("Submission created", "submission_created"),
   submission_review_updated: done("Submission review updated"),
+  submission_reviewed_next: { ...done("Review saved"), description: "Here's the next one waiting." },
   submission_shared: done("Sharing updated"),
   submission_submitted: done("Submission sent for review", "submission_submitted"),
   task_completed: done("Task completed", "task_completed"),
