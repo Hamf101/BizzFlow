@@ -534,6 +534,11 @@ class FakeQueryBuilder {
     return this
   }
 
+  lt(column: string, value: unknown): FakeQueryBuilder {
+    this.filters.push((row: FakeRow) => row[column] !== null && String(row[column]) < String(value))
+    return this
+  }
+
   order(
     column: string,
     options: { ascending?: boolean } = {}

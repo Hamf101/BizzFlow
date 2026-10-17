@@ -1,6 +1,6 @@
 import { createNoStoreResponse, refuseCronRequest } from "@/app/api/cron/_cron"
 import { captureUnexpectedError, describeErrorForLog } from "@/lib/observability"
-import { processDueResourcePurges } from "@/services/document-service"
+import { cleanupAbandonedDocumentUploads, processDueResourcePurges } from "@/services/document-service"
 import { purgeDueTrashedTemplates } from "@/services/template-service"
 
 /** Leaves the batch room to finish rather than be killed mid-delete. */
@@ -25,14 +25,18 @@ export async function GET(request: Request): Promise<Response> {
     return refusal
   }
 
-  // Each runs whatever the other does, so one failing never stalls the other.
-  const [documents, templates] = await Promise.allSettled([processDueResourcePurges(), purgeDueTrashedTemplates()])
+  // Each runs whatever the others do, so one failing never stalls the rest.
+  const [documents, templates, uploads] = await Promise.allSettled([
+    processDueResourcePurges(),
+    purgeDueTrashedTemplates(),
+    cleanupAbandonedDocumentUploads(),
+  ])
 
-  if (documents.status === "fulfilled" && templates.status === "fulfilled") {
-    return createNoStoreResponse({ ...documents.value, templatesPurged: templates.value }, 200)
+  if (documents.status === "fulfilled" && templates.status === "fulfilled" && uploads.status === "fulfilled") {
+    return createNoStoreResponse({ ...documents.value, templatesPurged: templates.value, abandonedUploads: uploads.value }, 200)
   }
 
-  for (const failed of [documents, templates]) {
+  for (const failed of [documents, templates, uploads]) {
     if (failed.status === "rejected") {
       console.error("document_purge_cron_failed", {
         durationMs: Date.now() - startedAt,
