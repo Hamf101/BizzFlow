@@ -34,6 +34,7 @@ export {
   createInternalSubmissionComment,
   transitionInternalSubmission,
 } from "@/services/submissions/review-service"
+export { reviewSubmissionsInBulk } from "@/services/submissions/bulk-review-service"
 export {
   dismissSubmissionChangesRequest,
   setInternalSubmissionReviewers,

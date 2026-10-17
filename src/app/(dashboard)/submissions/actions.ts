@@ -1,12 +1,14 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
+import * as z from "zod"
 
 import { parseGeneratedDocumentAnswers } from "@/components/documents/generated-document-form-data"
 import type { ActionFeedbackCode } from "@/lib/action-result"
 import {
   ActionError,
   loadActionContext,
+  loadActionContextOrSignIn,
   requireFormId,
   runFormAction,
   type ActionActor,
@@ -18,6 +20,7 @@ import {
   decideSubmissionSuggestion,
   dismissSubmissionChangesRequest,
   listSubmissionPage,
+  reviewSubmissionsInBulk,
   saveInternalSubmissionDraft,
   setInternalSubmissionReviewers,
   shareInternalSubmission,
@@ -242,6 +245,29 @@ async function openNextInQueue(actor: ActionActor, result: unknown): Promise<{ c
   const next = submissions.find((submission) => submission.id !== submissionId)
 
   return next ? { code: "submission_reviewed_next", path: getSubmissionPath(next.id) } : undefined
+}
+
+const reviewChangeSchema = z.object({
+  change: z.enum(["approve", "start"]),
+  items: z.array(z.object({ id: z.string().uuid(), revision: z.number().int().positive() })).min(1).max(50),
+})
+
+/** One review step for several selected submissions. */
+export type SubmissionReviewChange = z.infer<typeof reviewChangeSchema>
+
+/**
+ * Starts or approves the selected submissions, each as one at a time would be.
+ *
+ * @param input - The change and the submissions at the revisions shown.
+ * @returns The ids changed, and how many were refused.
+ */
+export async function reviewSubmissionsAction(input: SubmissionReviewChange): Promise<{ changed: string[]; failed: number }> {
+  const change = reviewChangeSchema.parse(input)
+  const { actor } = await loadActionContextOrSignIn("/submissions", NO_ORGANIZATION)
+  const result = await reviewSubmissionsInBulk({ ...change, ...actor })
+
+  revalidatePath("/submissions")
+  return result
 }
 
 /**

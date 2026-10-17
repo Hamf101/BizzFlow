@@ -144,6 +144,7 @@ export default async function SubmissionsPage({
     <SubmissionsShell>
       <SubmissionsWorkspace
         canAssign={canAssign}
+        canReview={canPerformOrganizationAction(context.membership, "submissions:review")}
         canCreate={canPerformOrganizationAction(
           context.membership,
           "submissions:create"
