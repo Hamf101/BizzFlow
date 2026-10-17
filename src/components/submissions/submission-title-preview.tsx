@@ -25,7 +25,8 @@ const GeneratedDocumentContent = dynamic(
     import("@/components/documents/generated-document-content").then(
       (loaded) => loaded.GeneratedDocumentContent
     ),
-  { ssr: false }
+  // Until it arrives, the page pulses as it does while the answers load.
+  { loading: () => <div className="h-[56rem] bg-muted/60 motion-safe:animate-pulse" />, ssr: false }
 )
 
 /** How long the pointer rests on a title before its pages open. */

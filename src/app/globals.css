@@ -417,4 +417,7 @@
   --muted-foreground: #5d5763;
   --border: #cfc8bf;
   --input: #cfc8bf;
+  /* Ink that turns over with a dark screen stays as printed on paper. */
+  --doc-ink-from: 0;
+  --doc-ink-by: 1;
 }
