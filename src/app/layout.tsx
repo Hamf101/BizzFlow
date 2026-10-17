@@ -13,6 +13,9 @@ export const metadata: Metadata = {
   },
   description:
     "Create, organize, sign, and review accountable business documents.",
+  // Installed on a phone's home screen, it opens as its own app.
+  appleWebApp: { capable: true, title: "BizFlow" },
+  icons: { apple: "/icons/180" },
 };
 
 export default function RootLayout({
