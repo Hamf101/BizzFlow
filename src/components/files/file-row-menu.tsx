@@ -294,7 +294,7 @@ export function FileRowMenu({
             <Button
               aria-label={`Actions for ${name}`}
               className={cn(
-                "size-8 rounded-[8px] text-muted-foreground max-md:size-11",
+                "size-8 rounded-md text-muted-foreground max-md:size-11",
                 // While a phone selects, its bar holds the actions.
                 selection?.phoneSelecting && "invisible"
               )}

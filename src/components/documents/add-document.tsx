@@ -32,7 +32,7 @@ export type DocumentTemplateChoice = { id: string; title: string }
 
 const TITLE_MAX_LENGTH = 180
 const TILE =
-  "group grid cursor-pointer justify-items-center gap-2.5 rounded-[12px] px-2.5 py-3 outline-none has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring/35 focus-visible:ring-2 focus-visible:ring-ring/35"
+  "group grid cursor-pointer justify-items-center gap-2.5 rounded-lg px-2.5 py-3 outline-none has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring/35 focus-visible:ring-2 focus-visible:ring-ring/35"
 
 /**
  * The ways to add a document, each one page tile: upload a file, which asks
@@ -155,7 +155,7 @@ function PageTile({ icon, label }: { icon: ReactNode; label: string }): ReactEle
     <>
       <span
         aria-hidden="true"
-        className="grid w-[120px] place-items-center rounded-[8px] border border-dashed border-muted-foreground/40 text-primary transition-colors group-hover:border-primary/60 sm:w-[150px] [&_svg]:size-6"
+        className="grid w-[120px] place-items-center rounded-md border border-dashed border-muted-foreground/40 text-primary transition-colors group-hover:border-primary/60 sm:w-[150px] [&_svg]:size-6"
         style={{ aspectRatio: "595 / 842" }}
       >
         {icon}

@@ -365,7 +365,7 @@ export function PhoneSelectButton(): ReactElement | null {
 
   return (
     <Button
-      className="h-11 rounded-[12px] bg-card px-4 font-normal md:hidden"
+      className="h-11 rounded-lg bg-card px-4 font-normal md:hidden"
       onClick={selection.phoneSelecting ? selection.clear : selection.start}
       type="button"
       variant="outline"

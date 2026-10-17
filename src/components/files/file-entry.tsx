@@ -97,7 +97,7 @@ export function FileArt({
       {entry.extension ? (
         <span
           className={cn(
-            "absolute right-0 bottom-0 rounded-tl-[3px] bg-primary px-1 font-mono font-semibold tracking-[0.05em] text-primary-foreground",
+            "absolute right-0 bottom-0 rounded-tl-xs bg-primary px-1 font-mono font-semibold tracking-[0.05em] text-primary-foreground",
             large ? "text-[11px] leading-5" : "text-[8px] leading-[1.4]"
           )}
         >
@@ -209,7 +209,7 @@ export function FileDetails({
       </dl>
       <div className="flex items-center gap-1.5">
         <Link
-          className={cn(buttonVariants({ size: "sm", variant: "outline" }), "rounded-[9px]")}
+          className={cn(buttonVariants({ size: "sm", variant: "outline" }), "rounded-sm")}
           href={entry.href}
         >
           Open

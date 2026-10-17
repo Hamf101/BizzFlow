@@ -682,7 +682,7 @@ function FlowPendingProposalReceipt({
   return (
     <section
       aria-label="Pending Flow proposal"
-      className="mt-5 overflow-hidden rounded-[8px] border border-primary/20 bg-card shadow-sm"
+      className="mt-5 overflow-hidden rounded-md border border-primary/20 bg-card shadow-sm"
     >
       <div className="flex items-start justify-between gap-3 border-b border-primary/10 px-3 py-2.5">
         <div>
@@ -816,7 +816,7 @@ function FlowEmptyState({
       <div className="mt-5 flex flex-col gap-2">
         {starter.prompts.map((prompt: string) => (
           <button
-            className="group flex items-center justify-between gap-3 rounded-[8px] border border-primary/10 bg-card/65 px-3 py-2.5 text-left text-sm transition-colors hover:border-primary/25 hover:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+            className="group flex items-center justify-between gap-3 rounded-md border border-primary/10 bg-card/65 px-3 py-2.5 text-left text-sm transition-colors hover:border-primary/25 hover:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
             key={prompt}
             onClick={(): void => {
               void onSelectPrompt(prompt)
@@ -876,7 +876,7 @@ function FlowMessageEntry({
       </p>
 
       {showChanges && message.operations.length > 0 && (
-        <div className="mt-3 overflow-hidden rounded-[8px] border border-primary/12 bg-card/70">
+        <div className="mt-3 overflow-hidden rounded-md border border-primary/12 bg-card/70">
           <div className="border-b border-primary/10 px-3 py-2">
             <span className="editorial-kicker text-primary">
               Proposed change set

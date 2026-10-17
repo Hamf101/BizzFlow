@@ -205,7 +205,7 @@ function Undelivered({ sent }: { sent: SentAnswerRequest }): ReactElement {
   const url = `${window.location.origin}/forms/${sent.token}`
 
   return (
-    <div className="flex flex-col gap-2 rounded-[10px] border border-border bg-muted/50 p-3" role="status">
+    <div className="flex flex-col gap-2 rounded-lg border border-border bg-muted/50 p-3" role="status">
       <p className="text-sm">
         The email to <span className="font-medium">{sent.email}</span> couldn&apos;t be sent. Send them this link yourself; it won&apos;t be shown again.
       </p>

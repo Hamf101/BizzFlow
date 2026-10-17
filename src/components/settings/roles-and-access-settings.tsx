@@ -204,7 +204,7 @@ function RoleEditorDialog({
       <DialogTrigger
         render={
           <Button
-            className="grid min-h-16 w-full grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 rounded-[12px] px-3 text-left font-normal hover:bg-secondary/45"
+            className="grid min-h-16 w-full grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 rounded-lg px-3 text-left font-normal hover:bg-secondary/45"
             type="button"
             variant="ghost"
           />
@@ -356,11 +356,11 @@ function PermissionGroups({
 
         return (
           <details
-            className="rounded-[12px] bg-secondary/35 open:bg-secondary/45"
+            className="rounded-lg bg-secondary/35 open:bg-secondary/45"
             key={group.label}
             open={index === 0}
           >
-            <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 rounded-[12px] px-3 text-sm font-normal outline-none focus-visible:ring-2 focus-visible:ring-ring/35">
+            <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 rounded-lg px-3 text-sm font-normal outline-none focus-visible:ring-2 focus-visible:ring-ring/35">
               <span>{group.label}</span>
               <span className="text-xs text-muted-foreground">
                 {selectedCount} of {group.permissions.length}
@@ -371,7 +371,7 @@ function PermissionGroups({
                 (permission: OrganizationPermissionAction): ReactNode => (
                   <label
                     className={cn(
-                      "flex min-h-11 items-center justify-between gap-3 rounded-[9px] px-2 text-sm font-normal",
+                      "flex min-h-11 items-center justify-between gap-3 rounded-sm px-2 text-sm font-normal",
                       !disabled && "cursor-pointer hover:bg-card/65"
                     )}
                     key={permission}

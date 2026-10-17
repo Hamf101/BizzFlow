@@ -148,7 +148,7 @@ function FlowConversation({
           <p className="px-1 pb-1 text-lg font-medium">What do you need?</p>
           {PROMPTS.map((prompt) => (
             <button
-              className="group flex items-center justify-between gap-3 rounded-[12px] border border-border bg-card px-3 py-2.5 text-left text-sm outline-none transition-colors hover:bg-muted/45 focus-visible:ring-2 focus-visible:ring-ring/40"
+              className="group flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-3 py-2.5 text-left text-sm outline-none transition-colors hover:bg-muted/45 focus-visible:ring-2 focus-visible:ring-ring/40"
               key={prompt}
               onClick={() => void send(prompt)}
               type="button"
@@ -164,14 +164,14 @@ function FlowConversation({
             <li
               className={cn(
                 "text-sm",
-                turn.role === "member" && "max-w-[85%] justify-self-end rounded-[14px] bg-secondary px-3 py-2 text-secondary-foreground",
+                turn.role === "member" && "max-w-[85%] justify-self-end rounded-lg bg-secondary px-3 py-2 text-secondary-foreground",
                 turn.failed && "text-destructive"
               )}
               key={turn.id}
             >
               {turn.text}
               {turn.items && turn.items.length > 0 ? (
-                <ul className="mt-2 divide-y divide-border overflow-hidden rounded-[12px] border border-border">
+                <ul className="mt-2 divide-y divide-border overflow-hidden rounded-lg border border-border">
                   {turn.items.map((item) => (
                     <li key={item.id}>
                       <Link className="grid px-3 py-2 outline-none hover:bg-muted/45 focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-inset" href={item.href} onClick={onLeave}>

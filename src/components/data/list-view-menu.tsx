@@ -86,7 +86,7 @@ export function ListViewMenu({
           render={
             <Button
               aria-label={adjusted ? `${label} (changed)` : label}
-              className="relative size-11 rounded-[12px] bg-card"
+              className="relative size-11 rounded-lg bg-card"
               size="icon"
               type="button"
               variant="outline"
@@ -235,7 +235,7 @@ export function ListViewTitle({
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger className="-ml-1.5 inline-flex items-center gap-1 rounded-[9px] px-1.5 py-0.5 outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/35 data-popup-open:bg-muted">
+      <DropdownMenuTrigger className="-ml-1.5 inline-flex items-center gap-1 rounded-sm px-1.5 py-0.5 outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/35 data-popup-open:bg-muted">
         {current?.name ?? title}
         <ChevronDown aria-hidden="true" className="size-4 text-muted-foreground" />
       </DropdownMenuTrigger>

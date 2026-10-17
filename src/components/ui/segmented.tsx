@@ -46,7 +46,7 @@ export function Segmented<Value extends string>({
   return (
     <div
       aria-label={label}
-      className={cn("inline-flex rounded-[11px] border border-border bg-card/70 p-0.5", className)}
+      className={cn("inline-flex rounded-md border border-border bg-card/70 p-0.5", className)}
       onKeyDown={handleKey}
       role="radiogroup"
     >
@@ -54,7 +54,7 @@ export function Segmented<Value extends string>({
         <button
           aria-checked={option.value === value}
           className={cn(
-            "h-8 rounded-[9px] px-3 text-[13px] max-md:h-11 text-muted-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40",
+            "h-8 rounded-sm px-3 text-[13px] max-md:h-11 text-muted-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40",
             option.value === value && "bg-card text-foreground shadow-sm"
           )}
           data-value={option.value}

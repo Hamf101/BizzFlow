@@ -223,7 +223,7 @@ export function FlowAttachButton({ attachment, disabled }: { attachment: FlowAtt
         ? createPortal(
             <div
               aria-hidden="true"
-              className="pointer-events-none absolute inset-x-3 top-13 bottom-3 grid place-items-center rounded-[12px] border border-dashed border-primary/50 bg-popover/90 text-sm font-medium text-primary"
+              className="pointer-events-none absolute inset-x-3 top-13 bottom-3 grid place-items-center rounded-lg border border-dashed border-primary/50 bg-popover/90 text-sm font-medium text-primary"
               data-slot="flow-drop"
             >
               <span className="flex items-center gap-2">
@@ -253,7 +253,7 @@ export function FlowAttachChip({ attachment }: { attachment: FlowAttachment }): 
   return (
     <div className="grid justify-items-start gap-1 pb-2">
       {chip ? (
-        <span className="inline-flex h-7 max-w-full items-center gap-1.5 rounded-[10px] border border-border bg-card pl-2 text-xs max-md:h-9" data-slot="flow-attachment">
+        <span className="inline-flex h-7 max-w-full items-center gap-1.5 rounded-lg border border-border bg-card pl-2 text-xs max-md:h-9" data-slot="flow-attachment">
           {chip.id ? (
             <Paperclip aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
           ) : (

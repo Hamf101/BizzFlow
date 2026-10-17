@@ -18,7 +18,7 @@ const DEFAULT_PAGE = { heightPoints: 842, widthPoints: 595 } as const
 
 /** A sheet of paper lying on the surface, shared by every page picture. */
 export const PAPER_FRAME =
-  "relative shrink-0 overflow-hidden rounded-[3px] bg-card shadow-[0_1px_2px_rgba(37,35,41,0.08),0_8px_18px_rgba(37,35,41,0.08)]"
+  "relative shrink-0 overflow-hidden rounded-xs bg-card shadow-[0_1px_2px_rgba(37,35,41,0.08),0_8px_18px_rgba(37,35,41,0.08)]"
 
 /**
  * Frame widths and the zoom that fits the 736px page into each: the zoom is

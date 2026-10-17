@@ -217,7 +217,7 @@ export function FormatBar({
       className={cn(
         "flex items-center gap-0.5 whitespace-nowrap",
         !narrow &&
-          "pointer-events-auto h-11 max-w-full overflow-x-auto rounded-[14px] border border-border bg-popover px-1.5 text-popover-foreground shadow-lg [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          "pointer-events-auto h-11 max-w-full overflow-x-auto rounded-lg border border-border bg-popover px-1.5 text-popover-foreground shadow-lg [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       )}
       data-slot="format-bar"
       role="toolbar"
@@ -514,7 +514,7 @@ function SizeInput({ disabled, onChange, value }: { disabled: boolean; onChange:
   return (
     <input
       aria-label="Font size"
-      className="h-7 w-10 shrink-0 rounded-[7px] border border-border bg-transparent text-center text-[13px] tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring/35 disabled:opacity-50"
+      className="h-7 w-10 shrink-0 rounded-sm border border-border bg-transparent text-center text-[13px] tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring/35 disabled:opacity-50"
       disabled={disabled}
       inputMode="numeric"
       onBlur={() => setDraft(null)}
@@ -546,7 +546,7 @@ function TableGrid({ onPick }: { onPick: (columns: number, rows: number) => void
             <DropdownMenuItem
               aria-label={`${columns} by ${rows} table`}
               className={cn(
-                "size-[18px] rounded-[4px] border p-0 focus:bg-secondary",
+                "size-[18px] rounded-xs border p-0 focus:bg-secondary",
                 columns <= size.columns && rows <= size.rows ? "border-primary/60 bg-secondary" : "border-border bg-muted/40"
               )}
               key={index}
@@ -573,7 +573,7 @@ function SymbolPicker({ onPick }: { onPick: (symbol: string) => void }): ReactEl
     <div className="grid w-72 gap-2 p-1">
       <input
         aria-label="Search symbols"
-        className="h-8 rounded-[8px] border border-input bg-card px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
+        className="h-8 rounded-md border border-input bg-card px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
         onChange={(event) => setQuery(event.target.value)}
         // Typing is for the search, not the menu's own type-to-jump.
         onKeyDown={(event) => event.key !== "Escape" && event.stopPropagation()}
@@ -645,7 +645,7 @@ function Swatches({
       </PopoverTrigger>
       <PopoverContent className="w-auto" side={narrow ? "top" : "bottom"}>
         <button
-          className="mb-2 h-8 w-full rounded-[8px] px-2 text-left text-sm outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/40"
+          className="mb-2 h-8 w-full rounded-md px-2 text-left text-sm outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/40"
           onClick={() => choose(null)}
           type="button"
         >
@@ -688,7 +688,7 @@ function LinkForm({
       <input
         aria-label="Link"
         autoFocus
-        className="h-9 rounded-[8px] border border-input bg-card px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
+        className="h-9 rounded-md border border-input bg-card px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
         onChange={(event) => setValue(event.target.value)}
         placeholder="Paste a link, or an email address"
         value={value}

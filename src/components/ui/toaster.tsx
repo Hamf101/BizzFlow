@@ -42,7 +42,7 @@ function showToast(
 // Undo and the cross are a word and a mark on the toast, never boxes of
 // their own: the message leads, and Undo sits quietly after it.
 const TOAST_TEXT_BUTTON =
-  "-my-1 shrink-0 rounded-[6px] px-1.5 py-1 text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/35"
+  "-my-1 shrink-0 rounded-sm px-1.5 py-1 text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/35"
 
 const toastClassNames = {
   actionButton: `${TOAST_TEXT_BUTTON} text-primary hover:text-primary/75`,
@@ -57,7 +57,7 @@ const toastClassNames = {
   success: "border-primary/40 text-foreground",
   title: "text-sm font-medium text-foreground",
   toast:
-    "flex w-full items-center gap-3 rounded-[12px] border border-border bg-card py-3 pr-3 pl-4 text-card-foreground shadow-lg",
+    "flex w-full items-center gap-3 rounded-lg border border-border bg-card py-3 pr-3 pl-4 text-card-foreground shadow-lg",
 } as const
 
 /**

@@ -101,7 +101,7 @@ export function FontPicker({
       <Combobox.Trigger
         aria-label={`Font: ${name(value ?? "")}`}
         className={cn(
-          "inline-flex w-32 shrink-0 items-center justify-between gap-1 rounded-[8px] px-2 text-sm outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/35 disabled:pointer-events-none disabled:opacity-50 data-popup-open:bg-muted",
+          "inline-flex w-32 shrink-0 items-center justify-between gap-1 rounded-md px-2 text-sm outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/35 disabled:pointer-events-none disabled:opacity-50 data-popup-open:bg-muted",
           narrow ? "h-11" : "h-8"
         )}
         disabled={disabled}
@@ -113,11 +113,11 @@ export function FontPicker({
         <Combobox.Positioner align="start" className="isolate z-50 outline-none" side={narrow ? "top" : "bottom"} sideOffset={4}>
           <Combobox.Popup
             aria-label="Fonts"
-            className="flex max-h-[min(26rem,var(--available-height))] w-72 origin-(--transform-origin) flex-col rounded-[12px] border border-border bg-popover p-1 text-popover-foreground shadow-lg outline-none transition-[scale,opacity] duration-100 ease-out data-ending-style:scale-[0.98] data-ending-style:opacity-0 data-starting-style:scale-[0.98] data-starting-style:opacity-0"
+            className="flex max-h-[min(26rem,var(--available-height))] w-72 origin-(--transform-origin) flex-col rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-lg outline-none transition-[scale,opacity] duration-100 ease-out data-ending-style:scale-[0.98] data-ending-style:opacity-0 data-starting-style:scale-[0.98] data-starting-style:opacity-0"
           >
             <DocumentFontStyles fonts={open ? [...previewed] : []} />
             <Combobox.Input
-              className="m-1 h-9 shrink-0 rounded-[8px] border border-input bg-card px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
+              className="m-1 h-9 shrink-0 rounded-md border border-input bg-card px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
               placeholder="Search fonts, like Arial or serif"
             />
             <Combobox.List className="min-h-0 overflow-y-auto">
@@ -129,7 +129,7 @@ export function FontPicker({
                   <Combobox.Collection>
                     {(id: string) => (
                       <Combobox.Item
-                        className="flex cursor-default items-center gap-2 rounded-[8px] px-2 py-2 text-sm outline-none select-none data-highlighted:bg-accent data-highlighted:text-accent-foreground"
+                        className="flex cursor-default items-center gap-2 rounded-md px-2 py-2 text-sm outline-none select-none data-highlighted:bg-accent data-highlighted:text-accent-foreground"
                         key={id}
                         value={id}
                       >

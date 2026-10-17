@@ -464,7 +464,7 @@ export function DocumentEditor({
               <PopoverContent align="end" className="w-[min(22rem,calc(100vw-2rem))]">
                 <ul className="grid gap-2">
                   {view.recipients.map((recipient: PublicSignerStatus & Partial<DocumentSigningRecipient>) => (
-                    <li className="grid gap-1.5 rounded-[12px] bg-muted/50 p-2.5" key={recipient.id}>
+                    <li className="grid gap-1.5 rounded-lg bg-muted/50 p-2.5" key={recipient.id}>
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
                           <p className="truncate text-sm font-medium">{recipient.name}</p>

@@ -103,7 +103,7 @@ export function TemplatesWorkspace({
               action={createTemplateAction}
               className={cn(
                 buttonVariants(),
-                "h-11 rounded-[12px] px-4 font-normal"
+                "h-11 rounded-lg px-4 font-normal"
               )}
             >
               <Plus aria-hidden="true" data-icon="inline-start" />
@@ -222,11 +222,11 @@ function NewTemplateTile(): ReactElement {
     <li className="grid" data-slot="template-new">
       <OneClickForm
         action={createTemplateAction}
-        className="group grid cursor-pointer content-center justify-items-center gap-2.5 rounded-[12px] px-2.5 py-4 outline-none focus-visible:ring-2 focus-visible:ring-ring/35"
+        className="group grid cursor-pointer content-center justify-items-center gap-2.5 rounded-lg px-2.5 py-4 outline-none focus-visible:ring-2 focus-visible:ring-ring/35"
       >
         <span
           aria-hidden="true"
-          className="grid w-[96px] place-items-center rounded-[8px] border border-dashed border-muted-foreground/40 text-primary transition-colors group-hover:border-primary/60 sm:w-[150px] [&_svg]:size-6"
+          className="grid w-[96px] place-items-center rounded-md border border-dashed border-muted-foreground/40 text-primary transition-colors group-hover:border-primary/60 sm:w-[150px] [&_svg]:size-6"
           style={{ aspectRatio: "595 / 842" }}
         >
           <Plus />
@@ -277,7 +277,7 @@ function TemplateCard({
   return (
     <Card
       acts={acts}
-      className="relative grid grid-rows-[auto_1fr_auto] overflow-hidden rounded-[12px] border border-border bg-card/70 transition-[translate,box-shadow,border-color] duration-200 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-1 motion-safe:fill-mode-backwards motion-safe:[--tw-animation-delay:var(--card-delay)] sm:hover:border-primary/35 sm:hover:shadow-[0_10px_24px_rgba(37,35,41,0.1)] sm:motion-safe:hover:-translate-y-0.5"
+      className="relative grid grid-rows-[auto_1fr_auto] overflow-hidden rounded-lg border border-border bg-card/70 transition-[translate,box-shadow,border-color] duration-200 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-1 motion-safe:fill-mode-backwards motion-safe:[--tw-animation-delay:var(--card-delay)] sm:hover:border-primary/35 sm:hover:shadow-[0_10px_24px_rgba(37,35,41,0.1)] sm:motion-safe:hover:-translate-y-0.5"
       id={template.id}
       style={riseDelay}
     >
@@ -287,7 +287,7 @@ function TemplateCard({
           <Link
             className={cn(
               titleClassName,
-              "outline-none after:absolute after:inset-0 after:rounded-[12px] hover:text-primary focus-visible:after:ring-2 focus-visible:after:ring-ring/35"
+              "outline-none after:absolute after:inset-0 after:rounded-lg hover:text-primary focus-visible:after:ring-2 focus-visible:after:ring-ring/35"
             )}
             data-slot="template-title"
             href={`/templates/${encodeURIComponent(template.id)}/edit`}
@@ -315,7 +315,7 @@ function TemplateCard({
           </div>
         ) : null}
       </div>
-      <div className="mx-1.5 grid justify-items-center overflow-hidden rounded-t-[8px] bg-card/45 pt-3 sm:pt-4">
+      <div className="mx-1.5 grid justify-items-center overflow-hidden rounded-t-md bg-card/45 pt-3 sm:pt-4">
         <TemplatePageThumbnail
           className={cn(
             "-mb-[18%]",

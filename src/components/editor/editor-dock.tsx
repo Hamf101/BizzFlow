@@ -51,7 +51,7 @@ export function EditorDock({
       aria-label="Editor tools"
       className={cn(
         "flex gap-1 p-1.5",
-        !row && "rounded-[16px] border border-border bg-popover shadow-lg",
+        !row && "rounded-lg border border-border bg-popover shadow-lg",
         orientation === "upright" && "flex-col",
         // On a phone the row runs off the screen's right edge, which shows it scrolls.
         narrow && "max-w-full items-center overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
@@ -84,7 +84,7 @@ export function EditorDock({
           </>
         )
         const buttonClass =
-          "relative grid size-11 shrink-0 place-items-center rounded-[12px] text-foreground/80 outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40 data-popup-open:bg-secondary data-popup-open:text-secondary-foreground"
+          "relative grid size-11 shrink-0 place-items-center rounded-lg text-foreground/80 outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40 data-popup-open:bg-secondary data-popup-open:text-secondary-foreground"
 
         const content = tool.content
 
@@ -117,7 +117,7 @@ export function EditorDock({
   )
 
   return row ? (
-    <div className="flex max-w-full min-w-0 flex-1 items-center rounded-l-[16px] border border-r-0 border-border bg-popover shadow-lg">
+    <div className="flex max-w-full min-w-0 flex-1 items-center rounded-l-lg border border-r-0 border-border bg-popover shadow-lg">
       {nav}
       <span aria-hidden="true" className="h-6 w-px shrink-0 bg-border" />
       {trail}

@@ -83,7 +83,7 @@ export function TemplateBrandingPanel({
   return (
     <div className="grid gap-4">
       {logo && (
-        <div className="flex items-center justify-between gap-3 rounded-[8px] border bg-muted/30 p-3">
+        <div className="flex items-center justify-between gap-3 rounded-md border bg-muted/30 p-3">
           <Image
             alt="Current organization logo"
             className="h-auto max-h-10 w-auto max-w-28 object-contain"
@@ -233,12 +233,12 @@ function ColorControl({
       <FieldLabel htmlFor={id}>{label}</FieldLabel>
       <Popover onOpenChange={(open: boolean): void => (open ? setTyped(value) : undefined)}>
         <PopoverTrigger
-          className="flex h-9 items-center gap-2 rounded-[8px] border bg-card px-2 text-xs outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 data-popup-open:border-ring"
+          className="flex h-9 items-center gap-2 rounded-md border bg-card px-2 text-xs outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 data-popup-open:border-ring"
           id={id}
         >
           <span
             aria-hidden="true"
-            className="size-5 rounded-[5px] border"
+            className="size-5 rounded-xs border"
             style={{ backgroundColor: value }}
           />
           <span className="font-mono">{value.toUpperCase()}</span>
@@ -250,7 +250,7 @@ function ColorControl({
               <button
                 aria-label={color}
                 aria-pressed={color === value.toLowerCase()}
-                className="size-7 rounded-[7px] border outline-none max-md:size-11 ring-offset-2 ring-offset-popover focus-visible:ring-2 focus-visible:ring-ring/50 aria-pressed:ring-2 aria-pressed:ring-foreground/70"
+                className="size-7 rounded-sm border outline-none max-md:size-11 ring-offset-2 ring-offset-popover focus-visible:ring-2 focus-visible:ring-ring/50 aria-pressed:ring-2 aria-pressed:ring-foreground/70"
                 key={color}
                 onClick={(): void => choose(color)}
                 style={{ backgroundColor: color }}

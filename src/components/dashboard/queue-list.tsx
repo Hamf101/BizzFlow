@@ -86,7 +86,7 @@ function QueueRow({ hidden, hideOnPhone, item }: { hidden: boolean; hideOnPhone:
         )}
         href={item.href}
       >
-        <span className={cn("grid size-[30px] place-items-center rounded-[10px] md:size-[34px]", TONE_ICON[item.tone])}>
+        <span className={cn("grid size-[30px] place-items-center rounded-lg md:size-[34px]", TONE_ICON[item.tone])}>
           <Icon aria-hidden="true" className="size-[15px] md:size-[17px]" />
         </span>
         <span className="grid min-w-0">
@@ -109,7 +109,7 @@ function QueueRow({ hidden, hideOnPhone, item }: { hidden: boolean; hideOnPhone:
           </span>
           <span
             aria-hidden="true"
-            className="rounded-[10px] border border-border bg-card px-3 py-1.5 text-[13px] font-medium whitespace-nowrap opacity-0 transition-opacity [grid-area:1/1] group-hover/row:opacity-100 group-focus-visible/row:opacity-100"
+            className="rounded-lg border border-border bg-card px-3 py-1.5 text-[13px] font-medium whitespace-nowrap opacity-0 transition-opacity [grid-area:1/1] group-hover/row:opacity-100 group-focus-visible/row:opacity-100"
           >
             {item.action}
           </span>

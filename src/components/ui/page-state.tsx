@@ -72,9 +72,9 @@ function PageSkeletonGeometry({
   if (variant === "overview") {
     return (
       <div className="grid gap-4 sm:grid-cols-2">
-        <div className="h-24 rounded-2xl bg-secondary/45 sm:col-span-2" />
-        <div className="h-32 rounded-2xl bg-card/45" />
-        <div className="h-32 rounded-2xl bg-card/45" />
+        <div className="h-24 rounded-xl bg-secondary/45 sm:col-span-2" />
+        <div className="h-32 rounded-xl bg-card/45" />
+        <div className="h-32 rounded-xl bg-card/45" />
       </div>
     )
   }
@@ -91,7 +91,7 @@ function PageSkeletonGeometry({
   return (
     <div className="grid gap-4">
       <div className="hidden h-10 w-3/5 rounded-xl bg-secondary/45 sm:block" />
-      <div className="grid rounded-2xl bg-card/35 px-3">
+      <div className="grid rounded-xl bg-card/35 px-3">
         <PageSkeletonRow />
         <PageSkeletonRow />
         <PageSkeletonRow className="hidden sm:grid" />
@@ -109,7 +109,7 @@ function PageSkeletonRow({ className }: { className?: string }): ReactElement {
       )}
       data-slot="page-skeleton-row"
     >
-      <div className="hidden size-9 rounded-[10px] bg-secondary/70 sm:block" />
+      <div className="hidden size-9 rounded-lg bg-secondary/70 sm:block" />
       <div className="grid gap-2">
         <div className="h-3 w-3/5 rounded-md bg-muted" />
         <div className="hidden h-2.5 w-2/5 rounded-md bg-muted/60 sm:block" />
@@ -121,7 +121,7 @@ function PageSkeletonRow({ className }: { className?: string }): ReactElement {
 
 function PageSkeletonSection(): ReactElement {
   return (
-    <div className="grid min-h-36 content-start gap-4 rounded-2xl bg-card/40 p-5">
+    <div className="grid min-h-36 content-start gap-4 rounded-xl bg-card/40 p-5">
       <div className="h-4 w-2/5 rounded-md bg-muted" />
       <div className="h-3 w-4/5 rounded-md bg-muted/65" />
       <div className="h-3 w-3/5 rounded-md bg-muted/50" />
@@ -147,7 +147,7 @@ function ErrorState({
   return (
     <section
       className={cn(
-        "grid gap-3 text-left rounded-2xl bg-destructive/5 px-4 py-5 sm:px-5",
+        "grid gap-3 text-left rounded-xl bg-destructive/5 px-4 py-5 sm:px-5",
         className
       )}
       data-slot="error-state"

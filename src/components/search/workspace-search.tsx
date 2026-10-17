@@ -260,7 +260,7 @@ export function WorkspaceSearch({ role }: { role: OrganizationPermissionSubject 
           className={cn(
             // On a phone, across the top where the keyboard never covers it;
             // wider, wherever it was left (see Place).
-            "fixed top-[max(env(safe-area-inset-top),0.75rem)] left-1/2 z-50 flex w-[calc(100vw-1.5rem)] -translate-x-1/2 flex-col overflow-hidden rounded-[22px] outline-none md:top-[var(--search-top)] md:bottom-[var(--search-bottom)] md:left-[calc(50%_+_var(--search-x))] md:w-[min(46rem,calc(100vw-4rem))] md:[transform:translate(var(--carried-x),var(--carried-y))]",
+            "fixed top-[max(env(safe-area-inset-top),0.75rem)] left-1/2 z-50 flex w-[calc(100vw-1.5rem)] -translate-x-1/2 flex-col overflow-hidden rounded-xl outline-none md:top-[var(--search-top)] md:bottom-[var(--search-bottom)] md:left-[calc(50%_+_var(--search-x))] md:w-[min(46rem,calc(100vw-4rem))] md:[transform:translate(var(--carried-x),var(--carried-y))]",
             // Glass: the page shows through, blurred, as Spotlight's does.
             "border border-foreground/10 bg-popover/60 text-popover-foreground shadow-[inset_0_1px_0_rgb(255_255_255/0.35),0_30px_90px_-24px_rgb(0_0_0/0.38)] backdrop-blur-[30px] backdrop-saturate-[1.7]",
             "origin-top transition-[opacity,scale] duration-150 ease-out data-[ending-style]:scale-[0.98] data-[ending-style]:opacity-0 data-[starting-style]:scale-[0.98] data-[starting-style]:opacity-0 motion-reduce:transition-none",
@@ -432,7 +432,7 @@ function SearchPanel({ role, up }: { role: OrganizationPermissionSubject | null;
           />
           <DialogPrimitive.Close
             aria-label="Close search"
-            className="rounded-[6px] outline-none focus-visible:ring-2 focus-visible:ring-ring/40 max-md:-mr-2.5 max-md:grid max-md:size-11 max-md:place-items-center"
+            className="rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/40 max-md:-mr-2.5 max-md:grid max-md:size-11 max-md:place-items-center"
           >
             {/* A phone has no Escape key to hint at: a cross it can reach instead. */}
             <Key className="max-md:hidden">esc</Key>
@@ -484,7 +484,7 @@ function SearchPanel({ role, up }: { role: OrganizationPermissionSubject | null;
                 <Link
                   aria-selected={option === chosen}
                   className={cn(
-                    "flex min-h-11 items-center gap-3 rounded-[12px] px-2.5 py-2 outline-none",
+                    "flex min-h-11 items-center gap-3 rounded-lg px-2.5 py-2 outline-none",
                     option === chosen && "bg-primary/15"
                   )}
                   href={option.href}
@@ -602,7 +602,7 @@ function Tile({ icon: Icon, large = false }: { icon: LucideIcon; large?: boolean
     <span
       className={cn(
         "grid shrink-0 place-items-center bg-primary/12 text-primary",
-        large ? "size-13 rounded-[14px]" : "size-8 rounded-[9px]"
+        large ? "size-13 rounded-lg" : "size-8 rounded-sm"
       )}
     >
       <Icon aria-hidden="true" className={large ? "size-6" : "size-4"} />
@@ -614,7 +614,7 @@ function Key({ children, className }: { children: ReactNode; className?: string 
   return (
     <kbd
       className={cn(
-        "rounded-[6px] border border-foreground/15 bg-foreground/[0.04] px-1.5 py-1 font-sans text-[11px] leading-none font-medium whitespace-nowrap text-foreground/70",
+        "rounded-sm border border-foreground/15 bg-foreground/[0.04] px-1.5 py-1 font-sans text-[11px] leading-none font-medium whitespace-nowrap text-foreground/70",
         className
       )}
     >

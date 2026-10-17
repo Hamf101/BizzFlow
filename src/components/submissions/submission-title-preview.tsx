@@ -232,7 +232,7 @@ export function SubmissionTitlePreview({
     <>
       <Link
         className={cn(
-          "w-fit max-w-full truncate rounded-[6px] text-sm font-medium text-foreground outline-none hover:text-primary focus-visible:ring-2 focus-visible:ring-ring/35",
+          "w-fit max-w-full truncate rounded-sm text-sm font-medium text-foreground outline-none hover:text-primary focus-visible:ring-2 focus-visible:ring-ring/35",
           anchor !== null && "text-primary"
         )}
         data-slot="submission-title"
@@ -330,12 +330,12 @@ function PreviewPages({
         {/* The notch sits behind the page, pointing back at the row. */}
         <span
           aria-hidden="true"
-          className="absolute -left-[5px] size-3 -translate-y-1/2 rotate-45 rounded-[2px] bg-card"
+          className="absolute -left-[5px] size-3 -translate-y-1/2 rotate-45 rounded-xs bg-card"
           data-slot="submission-preview-caret"
           style={{ top: caretTop }}
         />
         <div
-          className="relative overflow-y-auto rounded-[4px] bg-card shadow-[0_18px_40px_rgba(37,35,41,0.2),0_2px_6px_rgba(37,35,41,0.12)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          className="relative overflow-y-auto rounded-xs bg-card shadow-[0_18px_40px_rgba(37,35,41,0.2),0_2px_6px_rgba(37,35,41,0.12)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
           onScroll={followScroll}
           ref={viewportRef}
           style={{ height: pageHeight, width: PAGE_WIDTH }}
@@ -403,7 +403,7 @@ function PageArrow({
   return (
     <button
       aria-label={label}
-      className="grid size-7 place-items-center rounded-[8px] text-foreground transition-colors outline-none hover:text-primary disabled:text-muted-foreground/45 [filter:drop-shadow(0_0_3px_var(--background))] [&_svg]:size-4"
+      className="grid size-7 place-items-center rounded-md text-foreground transition-colors outline-none hover:text-primary disabled:text-muted-foreground/45 [filter:drop-shadow(0_0_3px_var(--background))] [&_svg]:size-4"
       disabled={disabled}
       onClick={onClick}
       tabIndex={-1}

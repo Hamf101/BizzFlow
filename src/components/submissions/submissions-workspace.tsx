@@ -94,7 +94,7 @@ export function SubmissionsWorkspace({
             <Link
               className={cn(
                 buttonVariants(),
-                "h-11 rounded-[12px] px-4 font-normal"
+                "h-11 rounded-lg px-4 font-normal"
               )}
               href="/submissions/new"
             >
@@ -199,7 +199,7 @@ function SubmissionRow({
   return (
     <div
       className={cn(
-        "grid min-h-14 grid-cols-[minmax(0,1fr)_6rem] items-center gap-3 rounded-[12px] px-1 py-2 transition-[background-color,translate] duration-200 hover:bg-card/65 data-[previewing=true]:bg-card/65 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-1 motion-safe:fill-mode-backwards motion-safe:[--tw-animation-delay:var(--row-delay)] motion-safe:hover:-translate-y-px lg:gap-4 lg:px-3",
+        "grid min-h-14 grid-cols-[minmax(0,1fr)_6rem] items-center gap-3 rounded-lg px-1 py-2 transition-[background-color,translate] duration-200 hover:bg-card/65 data-[previewing=true]:bg-card/65 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-1 motion-safe:fill-mode-backwards motion-safe:[--tw-animation-delay:var(--row-delay)] motion-safe:hover:-translate-y-px lg:gap-4 lg:px-3",
         grid
       )}
       data-slot="submission-row"

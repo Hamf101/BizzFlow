@@ -312,7 +312,7 @@ export function DashboardNavigation({
               aria-current={isActive ? "page" : undefined}
               aria-label={collapsed ? item.label : undefined}
               className={cn(
-                "group relative flex h-11 items-center rounded-[8px] pr-3 text-sm text-foreground/80 transition-colors motion-reduce:transition-none",
+                "group relative flex h-11 items-center rounded-md pr-3 text-sm text-foreground/80 transition-colors motion-reduce:transition-none",
                 "hover:bg-secondary/70 hover:text-foreground",
                 isActive && "bg-secondary text-secondary-foreground",
                 collapsed && "md:w-11 md:pr-0"

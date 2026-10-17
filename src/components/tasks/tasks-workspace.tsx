@@ -161,7 +161,7 @@ function TaskRow({
   return (
     <div
       className={cn(
-        "grid min-h-14 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-[12px] px-1 py-2 transition-colors hover:bg-card/65 lg:gap-4 lg:px-3",
+        "grid min-h-14 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-lg px-1 py-2 transition-colors hover:bg-card/65 lg:gap-4 lg:px-3",
         TASK_GRID
       )}
       data-slot="task-row"
@@ -169,7 +169,7 @@ function TaskRow({
     >
       <div className="flex min-w-0 flex-col gap-0.5" role="cell">
         <Link
-          className="w-fit max-w-full truncate rounded-[6px] text-sm font-medium text-foreground outline-none hover:text-primary focus-visible:ring-2 focus-visible:ring-ring/35"
+          className="w-fit max-w-full truncate rounded-sm text-sm font-medium text-foreground outline-none hover:text-primary focus-visible:ring-2 focus-visible:ring-ring/35"
           href={`/tasks/${encodeURIComponent(task.id)}`}
         >
           {task.title}

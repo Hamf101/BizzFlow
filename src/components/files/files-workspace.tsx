@@ -550,7 +550,7 @@ function FolderPath({
   view: FileListView
 }): ReactElement {
   const linkClassName =
-    "truncate rounded-[6px] outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/35"
+    "truncate rounded-sm outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/35"
 
   return (
     <nav aria-label="Folder path" className={cn("-mt-1", className)}>

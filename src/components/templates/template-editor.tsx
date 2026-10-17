@@ -702,7 +702,7 @@ export function TemplateEditor({
             <Field>
               <FieldLabel htmlFor="template-description">Description</FieldLabel>
               <textarea
-                className="min-h-24 w-full resize-y rounded-[8px] border border-input bg-card px-2.5 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
+                className="min-h-24 w-full resize-y rounded-md border border-input bg-card px-2.5 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
                 id="template-description"
                 maxLength={2_000}
                 onChange={(event) =>
@@ -736,7 +736,7 @@ function TemplateVersions({
   return (
     <ul className="grid gap-1" data-slot="template-versions">
       {versions.map((version) => (
-        <li className="flex min-h-11 items-center gap-3 rounded-[8px] px-2 hover:bg-muted/60" key={version.revision}>
+        <li className="flex min-h-11 items-center gap-3 rounded-md px-2 hover:bg-muted/60" key={version.revision}>
           <span className="min-w-0 flex-1 truncate text-sm">
             {new Date(version.publishedAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}
           </span>

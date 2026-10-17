@@ -71,7 +71,7 @@ export function NavigationTabControls({
         className={cn(
           // The tab itself is the handle, so a press must not select its text
           // or pan the sidebar.
-          "relative min-w-0 touch-none rounded-[8px] select-none",
+          "relative min-w-0 touch-none rounded-md select-none",
           dragging && "z-10 bg-card shadow-lg"
         )}
         data-dragging={dragging || undefined}

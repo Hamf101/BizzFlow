@@ -87,7 +87,7 @@ export function FileListLayout({
         return (
           <SelectableFileItem
             className={cn(
-              "grid min-h-12 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-[12px] px-1 py-1.5 transition-colors hover:bg-card/65 lg:gap-4 lg:px-3",
+              "grid min-h-12 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-lg px-1 py-1.5 transition-colors hover:bg-card/65 lg:gap-4 lg:px-3",
               RISE,
               LIST_GRID,
               entry.id === selected && "bg-secondary/70"
@@ -109,7 +109,7 @@ export function FileListLayout({
               <div className="flex min-w-0 flex-col gap-0.5">
                 <span className="flex min-w-0 items-center gap-2">
                   <Link
-                    className="min-w-0 truncate rounded-[6px] text-sm font-medium text-foreground outline-none hover:text-primary focus-visible:ring-2 focus-visible:ring-ring/35"
+                    className="min-w-0 truncate rounded-sm text-sm font-medium text-foreground outline-none hover:text-primary focus-visible:ring-2 focus-visible:ring-ring/35"
                     data-slot="file-name"
                     href={entry.href}
                   >
@@ -183,7 +183,7 @@ export function FileIconsLayout({
         <SelectableFileItem
           as="li"
           className={cn(
-            "group/tile relative grid min-w-0 grid-rows-[auto_1fr_auto] overflow-hidden rounded-[12px] border border-border bg-card/70 transition-[translate,box-shadow,border-color,background-color] duration-200 active:scale-[0.98] sm:hover:border-primary/35 sm:hover:shadow-[0_10px_24px_rgba(37,35,41,0.1)] sm:motion-safe:hover:-translate-y-0.5",
+            "group/tile relative grid min-w-0 grid-rows-[auto_1fr_auto] overflow-hidden rounded-lg border border-border bg-card/70 transition-[translate,box-shadow,border-color,background-color] duration-200 active:scale-[0.98] sm:hover:border-primary/35 sm:hover:shadow-[0_10px_24px_rgba(37,35,41,0.1)] sm:motion-safe:hover:-translate-y-0.5",
             RISE,
             entry.id === selected && "border-primary/45 bg-secondary/70"
           )}
@@ -195,7 +195,7 @@ export function FileIconsLayout({
           <div className="flex min-w-0 items-start gap-1.5 px-2.5 pt-2.5 pb-2 sm:px-3.5 sm:pt-3">
             <StatusDot className="mt-[5px]" status={entry.status} />
             <Link
-              className="line-clamp-2 min-h-[2.6em] min-w-0 flex-1 rounded-[6px] text-[11.5px] leading-[1.3] font-medium text-balance break-words text-foreground outline-none after:absolute after:inset-0 after:rounded-[12px] hover:text-primary focus-visible:after:ring-2 focus-visible:after:ring-ring/35 sm:line-clamp-1 sm:min-h-0 sm:text-[13.5px] sm:leading-snug"
+              className="line-clamp-2 min-h-[2.6em] min-w-0 flex-1 rounded-sm text-[11.5px] leading-[1.3] font-medium text-balance break-words text-foreground outline-none after:absolute after:inset-0 after:rounded-lg hover:text-primary focus-visible:after:ring-2 focus-visible:after:ring-ring/35 sm:line-clamp-1 sm:min-h-0 sm:text-[13.5px] sm:leading-snug"
               data-slot="file-name"
               href={entry.href}
             >
@@ -210,7 +210,7 @@ export function FileIconsLayout({
           </div>
           <div
             className={cn(
-              "mx-1.5 grid h-[104px] justify-items-center overflow-hidden rounded-t-[8px] bg-card/45 sm:h-[150px]",
+              "mx-1.5 grid h-[104px] justify-items-center overflow-hidden rounded-t-md bg-card/45 sm:h-[150px]",
               entry.kind === "folder" ? "place-items-center" : "pt-3 sm:pt-4"
             )}
           >
@@ -250,7 +250,7 @@ export function FileColumnsLayout({
 }): ReactElement {
   return (
     <ColumnsScroller
-      className="flex min-h-[380px] overflow-x-auto rounded-[12px] border border-border bg-card/55"
+      className="flex min-h-[380px] overflow-x-auto rounded-lg border border-border bg-card/55"
       data-slot="file-columns"
     >
       {columns.map((column: FileColumn) => (
@@ -268,7 +268,7 @@ export function FileColumnsLayout({
                 <Link
                   aria-current={on ? "true" : undefined}
                   className={cn(
-                    "flex min-w-0 items-center gap-2 rounded-[8px] px-2 py-1.5 text-[12.5px] outline-none transition-colors hover:bg-secondary/60 focus-visible:ring-2 focus-visible:ring-ring/35",
+                    "flex min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-[12.5px] outline-none transition-colors hover:bg-secondary/60 focus-visible:ring-2 focus-visible:ring-ring/35",
                     on && "bg-secondary text-secondary-foreground hover:bg-secondary"
                   )}
                   data-slot="file-cell"
@@ -354,7 +354,7 @@ export function FileGalleryLayout({
                 <Link
                   aria-current={on ? "true" : undefined}
                   className={cn(
-                    "grid min-h-[65px] w-[46px] place-items-center rounded-[4px] opacity-75 outline-none transition-opacity hover:opacity-100 focus-visible:ring-2 focus-visible:ring-ring/35",
+                    "grid min-h-[65px] w-[46px] place-items-center rounded-xs opacity-75 outline-none transition-opacity hover:opacity-100 focus-visible:ring-2 focus-visible:ring-ring/35",
                     // A ring, not an outline: `outline-none` would hide an outline.
                     on &&
                       "opacity-100 ring-2 ring-primary ring-offset-2 ring-offset-background"

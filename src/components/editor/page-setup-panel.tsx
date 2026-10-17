@@ -269,7 +269,7 @@ function Points({
       step={step}
       value={value}
     >
-      <NumberField.Group className="flex h-8 w-20 items-center rounded-[8px] border border-input bg-card text-foreground focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/30">
+      <NumberField.Group className="flex h-8 w-20 items-center rounded-md border border-input bg-card text-foreground focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/30">
         <NumberField.Input aria-label={label} className="min-w-0 flex-1 bg-transparent pl-2 text-[13px] tabular-nums outline-none" />
         {unit ? <span className="pr-2 text-xs text-muted-foreground">{unit}</span> : null}
       </NumberField.Group>
@@ -290,12 +290,12 @@ function Choice<Value extends string>({
 }): ReactElement {
   return (
     <Row label={label}>
-      <div aria-label={label} className="inline-flex rounded-[10px] bg-muted p-0.5" role="radiogroup">
+      <div aria-label={label} className="inline-flex rounded-lg bg-muted p-0.5" role="radiogroup">
         {options.map(([option, text]) => (
           <button
             aria-checked={option === value}
             className={cn(
-              "h-8 rounded-[8px] px-2.5 text-[13px] whitespace-nowrap text-muted-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40",
+              "h-8 rounded-md px-2.5 text-[13px] whitespace-nowrap text-muted-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40",
               option === value && "bg-card text-foreground shadow-sm"
             )}
             key={option}

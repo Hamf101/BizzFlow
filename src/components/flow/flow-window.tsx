@@ -31,7 +31,7 @@ const DOT_TONES: readonly Tone[] = ["lavender", "lavender", "lavender", "lavende
 const SMALLEST = { h: 380, w: 320 }
 // Flow's message box, one line tall and growing with the message to about
 // six, and its send button inside it; the same wherever Flow is asked.
-export const FLOW_COMPOSER = "block field-sizing-content max-h-36 min-h-10 max-md:min-h-12 max-md:py-3.5 w-full resize-none rounded-[12px] border border-border bg-card px-3 py-2.5 pr-12 max-md:pr-14 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
+export const FLOW_COMPOSER = "block field-sizing-content max-h-36 min-h-10 max-md:min-h-12 max-md:py-3.5 w-full resize-none rounded-lg border border-border bg-card px-3 py-2.5 pr-12 max-md:pr-14 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
 export const FLOW_SEND = "absolute right-1.5 bottom-1 max-md:bottom-0.5 grid size-8 place-items-center max-md:size-11 rounded-full text-primary outline-none transition-opacity hover:opacity-75 disabled:opacity-35 focus-visible:ring-2 focus-visible:ring-ring/40"
 const SMALLEST_ON_PHONE = 280
 const PHONE = "(width < 48rem)"
@@ -1081,7 +1081,7 @@ export function FlowWindow({
         >
           <button
             aria-label="Resize Flow"
-            className="absolute top-0 left-1/2 hidden h-6 w-18 -translate-x-1/2 cursor-ns-resize touch-none rounded-[12px] outline-none before:absolute before:top-[7px] before:left-4 before:h-[5px] before:w-10 before:rounded-full before:bg-muted-foreground/50 focus-visible:ring-2 focus-visible:ring-ring/40 max-md:block"
+            className="absolute top-0 left-1/2 hidden h-6 w-18 -translate-x-1/2 cursor-ns-resize touch-none rounded-lg outline-none before:absolute before:top-[7px] before:left-4 before:h-[5px] before:w-10 before:rounded-full before:bg-muted-foreground/50 focus-visible:ring-2 focus-visible:ring-ring/40 max-md:block"
             ref={grab}
             title="Drag or tap to resize"
             type="button"
@@ -1116,7 +1116,7 @@ export function FlowWindow({
         aria-controls={windowId}
         aria-haspopup="dialog"
         aria-label="Flow"
-        className="group fixed top-0 left-0 z-40 cursor-pointer touch-none rounded-[12px] outline-none [-webkit-tap-highlight-color:transparent] focus-visible:ring-2 focus-visible:ring-ring/40"
+        className="group fixed top-0 left-0 z-40 cursor-pointer touch-none rounded-lg outline-none [-webkit-tap-highlight-color:transparent] focus-visible:ring-2 focus-visible:ring-ring/40"
         data-slot="flow-launcher"
         ref={hit}
         style={{ height: PAGE.h + REACH.y * 2, width: PAGE.w + REACH.x * 2 }}

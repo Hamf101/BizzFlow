@@ -81,10 +81,18 @@
 }
 
 @theme inline {
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  /* One corner scale, six steps; nothing in src uses an arbitrary radius.
+     xs  marks inside controls: checkboxes, swatches, page sheets
+     sm  badges and chips
+     md  controls: buttons, inputs, selects, menu rows, alerts
+     lg  surfaces: cards, menus, popovers, toasts
+     xl  big surfaces: dialogs, sheets, the search panel
+     full  pills, avatars, switches */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 18px;
   --color-canvas: var(--canvas);
   --color-auth-ground: var(--auth-ground);
   --color-background: var(--background);

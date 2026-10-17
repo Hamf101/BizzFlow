@@ -70,7 +70,7 @@ export function SheetContent({
       />
       <Dialog.Popup
         className={cn(
-          "fixed inset-x-0 bottom-0 z-50 flex max-h-[80svh] flex-col gap-1 overflow-y-auto rounded-t-[18px] border border-b-0 border-border bg-card p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-[0_-8px_32px_rgba(37,35,41,0.14)] outline-none transition-transform duration-[220ms] ease-[cubic-bezier(0.2,0,0,1)] data-[ending-style]:translate-y-full data-[starting-style]:translate-y-full motion-reduce:transform-none motion-reduce:transition-none",
+          "fixed inset-x-0 bottom-0 z-50 flex max-h-[80svh] flex-col gap-1 overflow-y-auto rounded-t-xl border border-b-0 border-border bg-card p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-[0_-8px_32px_rgba(37,35,41,0.14)] outline-none transition-transform duration-[220ms] ease-[cubic-bezier(0.2,0,0,1)] data-[ending-style]:translate-y-full data-[starting-style]:translate-y-full motion-reduce:transform-none motion-reduce:transition-none",
           className
         )}
         data-slot="sheet-content"

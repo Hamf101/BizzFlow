@@ -20,7 +20,7 @@ export default function EditorLoading(): ReactElement {
         <span className="h-4 w-32 rounded-full bg-muted motion-safe:animate-pulse" />
       </div>
       <div aria-hidden="true" className="flex min-h-0 flex-1 justify-center overflow-hidden px-3 pt-4 sm:px-6 sm:pt-18">
-        <div className="grid aspect-[595/842] w-full max-w-[736px] content-start gap-4 rounded-[3px] bg-card p-[8%] shadow-[0_1px_2px_rgba(37,35,41,0.08),0_8px_18px_rgba(37,35,41,0.08)] motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-200">
+        <div className="grid aspect-[595/842] w-full max-w-[736px] content-start gap-4 rounded-xs bg-card p-[8%] shadow-[0_1px_2px_rgba(37,35,41,0.08),0_8px_18px_rgba(37,35,41,0.08)] motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-200">
           <span className="h-6 w-2/5 rounded-full bg-muted motion-safe:animate-pulse" />
           <span className="h-3 w-4/5 rounded-full bg-muted/70 motion-safe:animate-pulse" />
           <span className="h-3 w-3/5 rounded-full bg-muted/70 motion-safe:animate-pulse" />

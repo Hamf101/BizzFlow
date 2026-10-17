@@ -21,7 +21,7 @@ export type Choice = { disabled: boolean; label: ReactNode; value: string }
 
 /** A button drawn as a field, for controls that open a list or calendar of their own. */
 export const FIELD_BUTTON_CLASS_NAME =
-  "flex h-11 w-full items-center justify-between gap-2 rounded-[8px] border border-input bg-card px-2.5 py-1 text-left text-base outline-none transition-colors focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 data-disabled:pointer-events-none data-disabled:cursor-not-allowed data-disabled:opacity-50 data-popup-open:border-ring md:h-8 md:text-sm"
+  "flex h-11 w-full items-center justify-between gap-2 rounded-md border border-input bg-card px-2.5 py-1 text-left text-base outline-none transition-colors focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 data-disabled:pointer-events-none data-disabled:cursor-not-allowed data-disabled:opacity-50 data-popup-open:border-ring md:h-8 md:text-sm"
 
 /** What a select takes: a native select's attributes and `<option>` children. */
 export type SelectProps = Pick<

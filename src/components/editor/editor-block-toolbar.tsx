@@ -74,7 +74,7 @@ export function BlockToolbar({ actions, block }: { actions: CanvasActions; block
   return (
     <div
       className={cn(
-        "absolute bottom-full z-30 mb-[0.8em] flex w-max max-w-[calc(100vw-3rem)] flex-wrap items-center gap-0.5 rounded-[12px] border border-border bg-popover p-1 text-sm text-popover-foreground shadow-lg",
+        "absolute bottom-full z-30 mb-[0.8em] flex w-max max-w-[calc(100vw-3rem)] flex-wrap items-center gap-0.5 rounded-lg border border-border bg-popover p-1 text-sm text-popover-foreground shadow-lg",
         // Rows stack on a phone, so every block there is the column's full width.
         "right-0 justify-end"
       )}

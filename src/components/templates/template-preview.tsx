@@ -71,7 +71,7 @@ export function TemplatePreview({
     <article
       aria-label="Template preview"
       className={cn(
-        "relative mx-auto flex min-h-[34rem] w-full flex-col rounded-[2px] border border-border bg-card text-foreground shadow-[0_8px_30px_rgba(37,35,41,0.08),0_1px_2px_rgba(37,35,41,0.08)]",
+        "relative mx-auto flex min-h-[34rem] w-full flex-col rounded-xs border border-border bg-card text-foreground shadow-[0_8px_30px_rgba(37,35,41,0.08),0_1px_2px_rgba(37,35,41,0.08)]",
         renderPlan.layout.orientation === "portrait"
           ? "max-w-[46rem]"
           : "max-w-[64rem]",
@@ -194,7 +194,7 @@ function PreviewFlow({
       {blocks.length === 0 ? (
         <div className="grid grid-cols-1">
           <div className={CONTENT_PADDING}>
-            <div className="rounded-[6px] border border-dashed border-border px-4 py-12 text-center text-xs text-muted-foreground">
+            <div className="rounded-sm border border-dashed border-border px-4 py-12 text-center text-xs text-muted-foreground">
               Add an element or ask Flow to create the document
             </div>
           </div>
@@ -322,7 +322,7 @@ function PreviewFieldGroup({
             >
               <div className={group.columns > 1 ? "min-w-0" : CONTENT_PADDING}>
                 {renderBlock.cue ? <p className="mb-1 text-xs text-muted-foreground">{renderBlock.cue}</p> : null}
-                <div className="relative rounded-[4px] border border-transparent transition-colors">
+                <div className="relative rounded-xs border border-transparent transition-colors">
                   <div className="relative z-10 px-2 py-1.5">
                     <PreviewBlock block={renderBlock.block} listMarkers={renderBlock.listMarkers} />
                   </div>

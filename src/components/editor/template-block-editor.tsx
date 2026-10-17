@@ -200,7 +200,7 @@ function ImageFields({
         {source ? (
           <Image
             alt={block.altText}
-            className="h-auto max-h-44 w-auto max-w-full rounded object-contain"
+            className="h-auto max-h-44 w-auto max-w-full rounded-xs object-contain"
             height={block.asset?.height ?? 320}
             src={source}
             unoptimized

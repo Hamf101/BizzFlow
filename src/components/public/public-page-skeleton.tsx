@@ -59,9 +59,9 @@ export function PublicPageSkeleton({
         data-slot="public-page-skeleton-content"
       >
         <div className="h-6 w-40 max-w-full rounded-md bg-muted" />
-        <div className="h-64 rounded-[14px] border border-border/60 bg-card" />
+        <div className="h-64 rounded-lg border border-border/60 bg-card" />
         {variant === "wide" && (
-          <div className="h-40 rounded-[14px] border border-border/60 bg-card" />
+          <div className="h-40 rounded-lg border border-border/60 bg-card" />
         )}
       </div>
     </div>

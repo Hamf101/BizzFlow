@@ -208,7 +208,7 @@ export function EditorFrame({
         </Link>
         <input
           aria-label="Title"
-          className="h-9 min-w-0 truncate rounded-[9px] bg-transparent px-2 text-[15px] font-medium outline-none transition-colors hover:bg-muted/70 focus:bg-card focus-visible:ring-2 focus-visible:ring-ring/35 disabled:hover:bg-transparent"
+          className="h-9 min-w-0 truncate rounded-sm bg-transparent px-2 text-[15px] font-medium outline-none transition-colors hover:bg-muted/70 focus:bg-card focus-visible:ring-2 focus-visible:ring-ring/35 disabled:hover:bg-transparent"
           disabled={!titleEditable}
           maxLength={180}
           onChange={(event) => onTitleChange(event.target.value)}
@@ -455,7 +455,7 @@ export function EditorSidePanel({
       aria-label={title}
       className={cn(
         // Slides in from the side it sits on, so it reads as arriving, not appearing.
-        "absolute z-30 flex flex-col overflow-hidden rounded-[18px] border border-border bg-popover text-popover-foreground shadow-xl animate-in fade-in slide-in-from-right-3 duration-200 ease-out",
+        "absolute z-30 flex flex-col overflow-hidden rounded-xl border border-border bg-popover text-popover-foreground shadow-xl animate-in fade-in slide-in-from-right-3 duration-200 ease-out",
         narrow ? "inset-x-2 top-2 bottom-2" : "top-3 right-3 max-h-[calc(100%-1.5rem)] w-[22rem]"
       )}
       data-slot="editor-panel"
