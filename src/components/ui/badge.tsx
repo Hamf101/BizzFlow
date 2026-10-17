@@ -14,6 +14,10 @@ const badgeVariants = cva(
           "bg-secondary text-secondary-foreground [a]:hover:bg-secondary/80",
         destructive:
           "bg-destructive/10 text-destructive focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:focus-visible:ring-destructive/40 [a]:hover:bg-destructive/20",
+        // Tinted like destructive, for statuses that read as good news or a nudge.
+        success: "bg-success/12 text-success dark:bg-success/20",
+        warning: "bg-warning/12 text-warning dark:bg-warning/20",
+        accent: "bg-primary/10 text-primary dark:bg-primary/20",
         outline:
           "border-border text-foreground [a]:hover:bg-muted [a]:hover:text-muted-foreground",
         ghost:
