@@ -67,4 +67,12 @@ describe("getVisibleNavigationItems", () => {
       expect(primary).toHaveLength(Math.min(4, visible.length))
     }
   )
+
+  it.each(["owner_admin", "manager", "external_reviewer"] as const)("puts Submissions in a reviewer's phone bar (%s)", (role) => {
+    expect(getMobileNavigationLayout(role).primary.map((item) => item.href)).toContain("/submissions")
+  })
+
+  it("keeps Templates in the phone bar of someone who does not review", () => {
+    expect(getMobileNavigationLayout("staff").primary.map((item) => item.href)).toContain("/templates")
+  })
 })

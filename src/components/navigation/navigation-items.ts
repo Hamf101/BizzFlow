@@ -136,8 +136,13 @@ export function getMobileNavigationLayout(
 } {
   const visible = getVisibleNavigationItems(role, preferences)
   if (preferences?.order.length) return { primary: visible.slice(0, MOBILE_PRIMARY_COUNT), overflow: visible.slice(MOBILE_PRIMARY_COUNT) }
+  // A reviewer's day is the queue, so Submissions takes Templates' place.
+  const hrefs =
+    role && canPerformOrganizationAction(role, "submissions:review")
+      ? MOBILE_PRIMARY_HREFS.map((href) => (href === "/templates" ? "/submissions" : href))
+      : MOBILE_PRIMARY_HREFS
   const preferred = visible.filter((item: NavigationItem): boolean =>
-    MOBILE_PRIMARY_HREFS.includes(item.href)
+    hrefs.includes(item.href)
   )
   // Backfill from what is left so a restricted role still gets a full bar.
   const remainder = visible.filter(
