@@ -1344,11 +1344,93 @@ export type Database = {
           },
         ]
       }
+      org_unit_members: {
+        Row: {
+          created_at: string
+          is_lead: boolean
+          org_id: string
+          unit_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          is_lead?: boolean
+          org_id: string
+          unit_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          is_lead?: boolean
+          org_id?: string
+          unit_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_unit_members_member_fkey"
+            columns: ["org_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "organization_memberships"
+            referencedColumns: ["org_id", "user_id"]
+          },
+          {
+            foreignKeyName: "org_unit_members_unit_fkey"
+            columns: ["org_id", "unit_id"]
+            isOneToOne: false
+            referencedRelation: "org_units"
+            referencedColumns: ["org_id", "id"]
+          },
+        ]
+      }
+      org_units: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          org_id: string
+          parent_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          org_id: string
+          parent_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          org_id?: string
+          parent_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_units_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "org_units_parent_fkey"
+            columns: ["org_id", "parent_id"]
+            isOneToOne: false
+            referencedRelation: "org_units"
+            referencedColumns: ["org_id", "id"]
+          },
+        ]
+      }
       organization_memberships: {
         Row: {
           created_at: string
           email_notifications_enabled: boolean
           id: string
+          manager_user_id: string | null
           navigation_order: string[]
           org_id: string
           role: Database["public"]["Enums"]["organization_role"]
@@ -1363,6 +1445,7 @@ export type Database = {
           created_at?: string
           email_notifications_enabled?: boolean
           id?: string
+          manager_user_id?: string | null
           navigation_order?: string[]
           org_id: string
           role: Database["public"]["Enums"]["organization_role"]
@@ -1377,6 +1460,7 @@ export type Database = {
           created_at?: string
           email_notifications_enabled?: boolean
           id?: string
+          manager_user_id?: string | null
           navigation_order?: string[]
           org_id?: string
           role?: Database["public"]["Enums"]["organization_role"]
@@ -1388,6 +1472,13 @@ export type Database = {
           workspace_display_name?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "organization_memberships_manager_fkey"
+            columns: ["org_id", "manager_user_id"]
+            isOneToOne: false
+            referencedRelation: "organization_memberships"
+            referencedColumns: ["org_id", "user_id"]
+          },
           {
             foreignKeyName: "organization_memberships_org_id_fkey"
             columns: ["org_id"]
@@ -1421,6 +1512,7 @@ export type Database = {
           permissions: string[] | null
           system_key: Database["public"]["Enums"]["organization_role"] | null
           updated_at: string
+          visibility_scope: string | null
         }
         Insert: {
           archived_at?: string | null
@@ -1431,6 +1523,7 @@ export type Database = {
           permissions?: string[] | null
           system_key?: Database["public"]["Enums"]["organization_role"] | null
           updated_at?: string
+          visibility_scope?: string | null
         }
         Update: {
           archived_at?: string | null
@@ -1441,6 +1534,7 @@ export type Database = {
           permissions?: string[] | null
           system_key?: Database["public"]["Enums"]["organization_role"] | null
           updated_at?: string
+          visibility_scope?: string | null
         }
         Relationships: [
           {
@@ -4213,6 +4307,10 @@ export type Database = {
       validate_internal_submission_values: {
         Args: { target_template_snapshot: Json; target_values: Json }
         Returns: undefined
+      }
+      visible_member_ids: {
+        Args: { target_org_id: string; target_user_id: string }
+        Returns: string[]
       }
     }
     Enums: {
