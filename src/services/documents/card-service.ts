@@ -82,17 +82,17 @@ export async function listDocumentCards(
       const reachable = input.documentIds.filter((id: string): boolean =>
         access.has(id)
       )
-      const [statuses, types] = await Promise.all([
+      const [statuses, types, contents] = await Promise.all([
         readWorkflowStatuses(client, input.organizationId, reachable),
         input.withContentTypes ? readUploadTypes(client, input.organizationId, reachable) : new Map<string, string>(),
+        readCardContents(
+          client,
+          input.organizationId,
+          input.contentIds
+            .filter((id: string): boolean => access.has(id))
+            .slice(0, MAX_DOCUMENT_CARD_CONTENTS)
+        ),
       ])
-      const contents = await readCardContents(
-        client,
-        input.organizationId,
-        input.contentIds
-          .filter((id: string): boolean => access.has(id))
-          .slice(0, MAX_DOCUMENT_CARD_CONTENTS)
-      )
 
       return reachable.map(
         (id: string): DocumentCard => ({
