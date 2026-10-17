@@ -7,6 +7,7 @@ export const AUDIT_LOG_ACTIONS = [
   "membership.role_updated",
   "organization_role.created",
   "organization_role.updated",
+  "organization.structure_changed",
   "organization_role.archived",
   "membership.access_updated",
   "folder.created",

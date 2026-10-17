@@ -126,6 +126,7 @@ const eslintConfig = defineConfig([
       "src/services/organizations/editor-layout-service.ts",
       "src/services/organizations/invitation-service.ts",
       "src/services/organizations/lifecycle-service.ts",
+      "src/services/organizations/hierarchy-service.ts",
       "src/services/organizations/membership-service.ts",
       "src/services/organizations/navigation-service.ts",
       "src/services/organizations/onboarding-service.ts",

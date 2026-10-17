@@ -514,6 +514,20 @@ class FakeQueryBuilder {
     return this
   }
 
+  // As PostgREST's upsert on the table's primary key: a row with the same key is replaced.
+  upsert(value: FakeRow): FakeQueryBuilder {
+    const key = this.tableName === "org_unit_members" ? ["unit_id", "user_id"] : ["id"]
+    const table = this.client.tables[this.tableName]
+    this.client.tables[this.tableName] = table.filter((row: FakeRow) => !key.every((column) => row[column] === value[column]))
+    this.insertRows = [value]
+    return this
+  }
+
+  neq(column: string, value: unknown): FakeQueryBuilder {
+    this.filters.push((row: FakeRow) => row[column] !== value)
+    return this
+  }
+
   eq(column: string, value: unknown): FakeQueryBuilder {
     this.filters.push((row: FakeRow) => row[column] === value)
     return this

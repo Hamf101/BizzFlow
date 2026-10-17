@@ -91,6 +91,7 @@ type MembershipRow = Record<string, unknown> & {
   status: DatabaseMembershipStatus
   email_notifications_enabled: boolean
   sms_notifications_enabled: boolean
+  manager_user_id?: string | null
   created_at: string
   updated_at: string
 }
@@ -101,6 +102,7 @@ type OrganizationRoleRow = Record<string, unknown> & {
   system_key: DatabaseOrganizationRole | null
   name: string
   permissions: string[] | null
+  visibility_scope?: "branch" | "everyone" | "inviter" | null
   archived_at: string | null
   created_at: string
   updated_at: string
@@ -547,6 +549,16 @@ export type AdminDatabase = {
         Partial<OrganizationRoleRow> &
           Pick<OrganizationRoleRow, "org_id" | "name">,
         Partial<OrganizationRoleRow>
+      >
+      org_units: DatabaseTable<
+        { id: string; org_id: string; parent_id: string | null; name: string; created_at: string; updated_at: string },
+        { id?: string; org_id: string; parent_id: string | null; name: string },
+        { name?: string; parent_id?: string | null }
+      >
+      org_unit_members: DatabaseTable<
+        { org_id: string; unit_id: string; user_id: string; is_lead: boolean; created_at: string },
+        { org_id: string; unit_id: string; user_id: string; is_lead?: boolean },
+        { is_lead?: boolean }
       >
       saved_list_views: DatabaseTable<
         SavedViewRecord,
