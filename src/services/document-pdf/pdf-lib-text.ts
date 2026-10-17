@@ -70,6 +70,27 @@ export function wrapPdfText(
   size: number,
   maximumWidth: number
 ): string[] {
+  // The planner and the drawing wrap the same words more than once, and each
+  // wrap measures every growing line; a font's answers last as long as it does.
+  const cache = wrapCache.get(font) ?? new Map<string, string[]>()
+  const key = `${size}|${maximumWidth}|${value}`
+  const known = cache.get(key)
+
+  wrapCache.set(font, cache)
+
+  if (known) {
+    return [...known]
+  }
+
+  const lines = wrapUncached(value, font, size, maximumWidth)
+
+  cache.set(key, lines)
+  return [...lines]
+}
+
+const wrapCache = new WeakMap<PDFFont, Map<string, string[]>>()
+
+function wrapUncached(value: string, font: PDFFont, size: number, maximumWidth: number): string[] {
   const safeValue = normalizeStandardFontText(value, font).trim()
 
   if (safeValue.length === 0) {
