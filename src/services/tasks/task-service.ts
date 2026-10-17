@@ -286,13 +286,14 @@ export async function listTasks(
     },
     async (): Promise<Task[]> => {
       const client = getTaskClient(deps)
-      await requireTaskPermission(
+      const role = await requireTaskPermission(
         client,
         input.organizationId,
         input.actorUserId,
         "tasks:view",
         "You cannot view tasks."
       )
+      const visibleIds = await loadVisibleTaskPeople(client, role, input)
 
       const statuses = normalizeTaskStatusFilter(input.statuses)
       const assignedTo = normalizeOptionalTaskUuid(
@@ -309,6 +310,7 @@ export async function listTasks(
         organizationId: input.organizationId,
         query: null,
         statuses,
+        visibleIds,
       })
 
       if (submissionId !== null) {

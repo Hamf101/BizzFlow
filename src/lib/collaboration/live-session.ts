@@ -104,8 +104,10 @@ export function startLiveSession<State>(options: Readonly<{
   let gather: readonly [number, number] = GATHER.together
 
   const notify = (): void => listeners.forEach((listener) => listener())
-  // Best effort: a device that cannot store still edits, as before.
-  const remember = (): void => void options.unsent?.save(pending).catch(() => undefined)
+  // Best effort: a device that cannot store still edits, as before. Written at
+  // once, so closing the tab a moment later loses nothing, as one merged update.
+  const remember = (): void =>
+    void options.unsent?.save(pending.length > 0 ? [Y.mergeUpdates(pending)] : []).catch(() => undefined)
   const setStatus = (next: LiveStatus): void => {
     if (current !== next) {
       current = next
