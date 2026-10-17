@@ -14,6 +14,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { LinkQrCode } from "@/components/templates/link-qr-code"
 import { DateTimePicker } from "@/components/ui/date-picker"
 import { copyText } from "@/components/ui/toaster"
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
@@ -36,6 +37,8 @@ export function PublicFormLinksPanel({
   const timeZone = useTimeZone()
   const [copiedToken, setCopiedToken] = useState<string | null>(null)
   const [showCreateForm, setShowCreateForm] = useState(false)
+  // The address a printed code opens; the server render has no window.
+  const origin = typeof window === "undefined" ? "" : window.location.origin
 
   const handleCopy = async (token: string): Promise<void> => {
     if (await copyText(`${window.location.origin}/forms/${token}`)) {
@@ -68,6 +71,11 @@ export function PublicFormLinksPanel({
         {showCreateForm && (
           <form action={createAction} className="flex flex-col gap-4 rounded-lg border bg-muted/20 p-4">
             <input name="templateId" type="hidden" value={templateId} />
+            <Field>
+              <FieldLabel htmlFor="link-label">Name</FieldLabel>
+              <Input id="link-label" maxLength={80} name="label" placeholder="e.g. Front desk, Website" />
+              <FieldDescription>Where it&apos;s used, so you can tell your links apart.</FieldDescription>
+            </Field>
             <div className="grid gap-4 sm:grid-cols-2">
               <Field>
                 <FieldLabel htmlFor="link-expires-at">Expires</FieldLabel>
@@ -105,6 +113,7 @@ export function PublicFormLinksPanel({
                 key={link.id}
               >
                 <div className="flex min-w-0 flex-col gap-1">
+                  {link.label ? <span className="truncate font-medium text-foreground">{link.label}</span> : null}
                   <div className="flex items-center gap-2">
                     {/* The token has nothing to break on, which is the one real
                         horizontal overflow at 375px. Truncate for display;
@@ -154,6 +163,7 @@ export function PublicFormLinksPanel({
                           </>
                         )}
                       </Button>
+                      <LinkQrCode name={link.label ?? "Public link"} url={`${origin}/forms/${link.token}`} />
                       <Link
                         aria-label="Open public form in a new tab"
                         className={cn(buttonVariants({ size: "sm", variant: "ghost" }))}

@@ -25,6 +25,7 @@ export async function createPublicFormLinkAction(
       templateId,
       expiresAt: expiresAt || null,
       maxSubmissions: maxSubmissionsRaw ? Number(maxSubmissionsRaw) : null,
+      label: getFormString(formData, "label") || null,
     })
   )
 }

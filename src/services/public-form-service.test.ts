@@ -78,8 +78,8 @@ describe("public form link management", () => {
     const client = seedLinkManagement()
     const deps = createDeps(client, [LINK_ID])
 
-    const link = await createPublicFormLink({ ...manage, expiresAt: "2026-12-31T12:00", maxSubmissions: 5 }, deps)
-    expect(link).toMatchObject({ token: PUBLIC_TOKEN, maxSubmissions: 5, expiresAt: "2026-12-31T12:00:00.000Z" })
+    const link = await createPublicFormLink({ ...manage, expiresAt: "2026-12-31T12:00", label: "  Front desk  ", maxSubmissions: 5 }, deps)
+    expect(link).toMatchObject({ token: PUBLIC_TOKEN, label: "Front desk", maxSubmissions: 5, expiresAt: "2026-12-31T12:00:00.000Z" })
     // Only the token's hash is kept; its editor sees the token again, derived.
     expect(client.tables.public_form_links[0]).toMatchObject({ token_hash: hashToken(PUBLIC_TOKEN) })
     expect(JSON.stringify(client.tables.public_form_links[0])).not.toContain(PUBLIC_TOKEN)
@@ -111,6 +111,7 @@ describe("public form link management", () => {
     await expect(createPublicFormLink({ ...manage, expiresAt: "next tuesday" }, deps)).rejects.toMatchObject({ statusCode: 400 })
     await expect(createPublicFormLink({ ...manage, maxSubmissions: 0 }, deps)).rejects.toMatchObject({ statusCode: 400 })
     await expect(createPublicFormLink({ ...manage, maxSubmissions: 1.5 }, deps)).rejects.toMatchObject({ statusCode: 400 })
+    await expect(createPublicFormLink({ ...manage, label: "x".repeat(81) }, deps)).rejects.toMatchObject({ statusCode: 400 })
 
     expect(client.tables.public_form_links.map((row) => [row.id, row.status])).toEqual([
       ["other-template-link", "active"],

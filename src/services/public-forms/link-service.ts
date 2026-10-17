@@ -104,6 +104,7 @@ export async function createPublicFormLink(
         status: "active",
         expires_at: expiresAt,
         max_submissions: limits.data.maxSubmissions ?? null,
+        label: limits.data.label,
         submission_count: 0,
         created_by: input.actorUserId,
         created_at: timestamp,

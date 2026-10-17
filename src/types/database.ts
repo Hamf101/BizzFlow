@@ -1530,6 +1530,7 @@ export type Database = {
           document_id: string | null
           expires_at: string | null
           id: string
+          label: string | null
           max_submissions: number | null
           org_id: string
           recipient_email: string | null
@@ -1551,6 +1552,7 @@ export type Database = {
           document_id?: string | null
           expires_at?: string | null
           id?: string
+          label?: string | null
           max_submissions?: number | null
           org_id: string
           recipient_email?: string | null
@@ -1572,6 +1574,7 @@ export type Database = {
           document_id?: string | null
           expires_at?: string | null
           id?: string
+          label?: string | null
           max_submissions?: number | null
           org_id?: string
           recipient_email?: string | null
