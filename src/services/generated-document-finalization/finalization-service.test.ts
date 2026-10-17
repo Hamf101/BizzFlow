@@ -38,13 +38,17 @@ describe("generated document finalization service", () => {
     const persistence = createPersistence()
     const storage = createStorage()
 
+    const sendSignedCopies = vi.fn(async () => 2)
+
     await finalizeCompletedGeneratedDocument(
       { id: DOCUMENT_ID, organizationId: ORGANIZATION_ID, createdBy: ACTOR_ID },
-      { persistence, storage, loadSigningView: async () => createSigningView("completed"), renderPdf: async () => PDF, createId: () => FINALIZATION_ID }
+      { persistence, storage, loadSigningView: async () => createSigningView("completed"), renderPdf: async () => PDF, createId: () => FINALIZATION_ID, sendSignedCopies }
     )
 
     expect(persistence.prepare).toHaveBeenCalledWith(expect.objectContaining({ createdBy: ACTOR_ID }))
     expect(storage.store).toHaveBeenCalledOnce()
+    // Only once the paper is stored does anyone get a link to it.
+    expect(sendSignedCopies).toHaveBeenCalledWith({ organizationId: ORGANIZATION_ID, documentId: DOCUMENT_ID })
 
     const pending = createPersistence({ existing: createFinalizationRecord() })
     await expect(findFinalizedGeneratedDocumentVersionId(input, { persistence: pending })).resolves.toBeNull()

@@ -648,6 +648,11 @@ export type AdminDatabase = {
         DocumentSigningRecipientInsert,
         Partial<DocumentSigningRecipientRow>
       >
+      document_signed_copy_links: DatabaseTable<
+        { id: string; org_id: string; document_id: string; email: string; token_hash: string; expires_at: string; created_at: string },
+        { org_id: string; document_id: string; email: string; token_hash: string; expires_at?: string },
+        Record<string, never>
+      >
       document_recent_accesses: DatabaseTable<
         DocumentRecentAccessRow,
         DocumentRecentAccessInsert,

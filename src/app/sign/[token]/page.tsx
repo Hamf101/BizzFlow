@@ -145,6 +145,10 @@ export default async function PublicSigningPage({
         <Alert className="mx-auto w-full max-w-6xl">
           <CheckCircle2 />
           <AlertTitle>All parties have signed</AlertTitle>
+          <AlertDescription>
+            {/* A plain link: the copy page sends the browser on to the file. */}
+            <a href={`/sign/copy/${encodeURIComponent(token)}`}>Download your signed copy</a>
+          </AlertDescription>
         </Alert>
       ) : isRecipientSigned ? (
         <Alert className="mx-auto w-full max-w-6xl">

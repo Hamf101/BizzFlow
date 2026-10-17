@@ -384,6 +384,51 @@ export type Database = {
           },
         ]
       }
+      document_signed_copy_links: {
+        Row: {
+          created_at: string
+          document_id: string
+          email: string
+          expires_at: string
+          id: string
+          org_id: string
+          token_hash: string
+        }
+        Insert: {
+          created_at?: string
+          document_id: string
+          email: string
+          expires_at?: string
+          id?: string
+          org_id: string
+          token_hash: string
+        }
+        Update: {
+          created_at?: string
+          document_id?: string
+          email?: string
+          expires_at?: string
+          id?: string
+          org_id?: string
+          token_hash?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_signed_copy_links_document_org_fkey"
+            columns: ["document_id", "org_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id", "org_id"]
+          },
+          {
+            foreignKeyName: "document_signed_copy_links_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       document_signing_recipients: {
         Row: {
           consented_at: string | null

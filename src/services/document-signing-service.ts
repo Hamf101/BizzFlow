@@ -17,3 +17,4 @@ export {
   sendDocumentForSigning,
   updateGeneratedDocumentContent,
 } from "@/services/document-signing/workflows"
+export { openSignedCopy, sendSignedCopies } from "@/services/document-signing/signed-copies"

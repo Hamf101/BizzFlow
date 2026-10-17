@@ -37,6 +37,7 @@ import {
   normalizeOptionalDrawing,
   normalizeRequiredDrawing,
 } from "@/services/document-signing/drawing-validation"
+import { loadProfileEmail } from "@/services/document-signing/signed-copies"
 import { MAX_ATTEMPTS, waitBeforeRetry } from "@/services/serialization-retry"
 import {
   CHANGED_ANSWERS_MESSAGE,
@@ -1054,16 +1055,6 @@ export async function declinePublicDocumentSigning(
 
     return { documentTitle: view.document.title, organizationName: view.organizationName }
   })
-}
-
-// tenant-scope: profiles are global; the id comes from this document's own rows
-async function loadProfileEmail(client: SigningServiceClient, userId: string | null): Promise<string | null> {
-  if (!userId) {
-    return null
-  }
-
-  const { data } = await client.from("profiles").select("email").eq("id", userId).maybeSingle()
-  return (data as { email?: string | null } | null)?.email ?? null
 }
 
 /**

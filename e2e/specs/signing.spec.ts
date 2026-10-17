@@ -83,6 +83,16 @@ test.describe("signing", () => {
       })
       .toBe("signed")
 
+    // Once the paper is final, the signer's own link downloads their copy, and
+    // the signer and the sender were each sent a link of their own.
+    await page.reload()
+    await expect(page.getByRole("link", { name: "Download your signed copy" })).toBeVisible()
+    await expect
+      .poll(async (): Promise<string | undefined> => (await context.request.get(`/sign/copy/${signingToken}`)).headers()["content-type"], { timeout: 30_000 })
+      .toContain("application/pdf")
+    const { count } = await admin.from("document_signed_copy_links").select("id", { count: "exact", head: true }).eq("document_id", documentId)
+    expect(count).toBe(2)
+
     await context.close()
 
     // The rendered document is what the customer keeps, so check it is a PDF

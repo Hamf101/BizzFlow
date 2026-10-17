@@ -116,6 +116,8 @@ export type GeneratedDocumentFinalizationServiceDeps = {
   r2Env?: R2Env
   putObject?: FinalizationPutObject
   headObject?: FinalizationHeadObject
+  /** Emails everyone the signed copy once the paper is final. */
+  sendSignedCopies?: (document: { organizationId: string; documentId: string }) => Promise<unknown>
 }
 
 /** Minimal conditional PUT command executor used by the R2 adapter. */
