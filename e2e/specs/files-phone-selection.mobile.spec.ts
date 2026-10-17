@@ -43,9 +43,14 @@ test("a phone selects by press and hold, ticks with taps, and acts from the bar"
   // Press and hold selects instead of opening a menu, and the list stays
   // still under the finger, so the release cannot land on another item.
   await tile(names[0]).scrollIntoViewIfNeeded()
-  const before = await tile(names[0]).boundingBox()
+  // Measured at its centre: the pressed tile shrinks a little about it.
+  const middle = async () => {
+    const box = await tile(names[0]).boundingBox()
+    return box && box.y + box.height / 2
+  }
+  const before = await middle()
   await pressAndHold(page, tile(names[0]), oneSelected)
-  expect((await tile(names[0]).boundingBox())?.y).toBe(before?.y)
+  expect(await middle()).toBeCloseTo(before ?? Number.NaN, 0)
   await expect(page.getByRole("menu")).toHaveCount(0)
   await expect(bar).toBeVisible()
 
