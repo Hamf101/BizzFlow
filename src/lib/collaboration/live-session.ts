@@ -20,6 +20,12 @@ export class RoomRefusal extends Error {
   }
 }
 
+/** Where a device keeps one room's changes until they are kept, across closing the page. */
+export type UnsentStore = Readonly<{
+  load: () => Promise<readonly Uint8Array[]>
+  save: (updates: readonly Uint8Array[]) => Promise<void>
+}>
+
 /** Where this editor's changes stand, as the top bar says it; stopped once it may no longer edit here. */
 export type LiveStatus = "offline" | "saved" | "saving" | "stopped"
 
@@ -72,6 +78,8 @@ export function startLiveSession<State>(options: Readonly<{
   opened: Readonly<{ revision: number; state: Uint8Array }>
   toCopy: (state: State) => WorkingCopy
   transport: RoomTransport
+  /** Keeps unsent changes on this device, so going offline and closing the page loses nothing. */
+  unsent?: UnsentStore
 }>): LiveSession<State> {
   const listeners = new Set<() => void>()
   let doc = newWorkingCopyDoc()
@@ -96,6 +104,8 @@ export function startLiveSession<State>(options: Readonly<{
   let gather: readonly [number, number] = GATHER.together
 
   const notify = (): void => listeners.forEach((listener) => listener())
+  // Best effort: a device that cannot store still edits, as before.
+  const remember = (): void => void options.unsent?.save(pending).catch(() => undefined)
   const setStatus = (next: LiveStatus): void => {
     if (current !== next) {
       current = next
@@ -117,6 +127,7 @@ export function startLiveSession<State>(options: Readonly<{
 
       if (origin !== REMOTE) {
         pending.push(update)
+        remember()
         // Waiting to be kept already counts as saving; offline stays offline until it is back.
         if (current === "saved") {
           current = "saving"
@@ -174,6 +185,7 @@ export function startLiveSession<State>(options: Readonly<{
       try {
         const kept = await options.transport.send(update)
         pending = pending.slice(count)
+        remember()
         retry = 0
 
         if (kept.revision === revision + 1) {
@@ -185,6 +197,7 @@ export function startLiveSession<State>(options: Readonly<{
         if (error instanceof RoomRefusal) {
           options.onRefused?.(error.message)
           pending = []
+          remember()
 
           try {
             if (error.status === 403 || error.status === 404) {
@@ -258,6 +271,17 @@ export function startLiveSession<State>(options: Readonly<{
   }
 
   begin(options.opened)
+
+  // What this device made last time and never got kept goes in again, and so
+  // out to the room; a change the room already has changes nothing.
+  void options.unsent?.load().then(
+    (updates) => {
+      if (updates.length > 0 && !stopped) {
+        doc.transact(() => updates.forEach((update) => Y.applyUpdate(doc, update, LOCAL)), LOCAL)
+      }
+    },
+    () => undefined
+  )
 
   return {
     alone: (value) => {

@@ -105,9 +105,10 @@ export function useLiveRoom<State>(options: Readonly<{
 
     void (async () => {
       const opened = await request<OpenedRoom>(path, { method: "POST" })
-      const [{ RoomRefusal, startLiveSession }, { RealtimeClient: Client }] = await Promise.all([
+      const [{ RoomRefusal, startLiveSession }, { RealtimeClient: Client }, { createUnsentStore }] = await Promise.all([
         import("@/lib/collaboration/live-session"),
         import("@supabase/realtime-js"),
+        import("@/lib/collaboration/unsent-store"),
       ])
 
       if (stopped) {
@@ -142,6 +143,7 @@ export function useLiveRoom<State>(options: Readonly<{
         opened: { revision: opened.revision, state: fromBase64(opened.state) },
         toCopy: (state) => latest.current.toCopy(state),
         transport,
+        unsent: createUnsentStore(`${me.id}:${opened.roomId}`),
       })
       setSession(live)
 
