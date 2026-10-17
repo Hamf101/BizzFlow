@@ -47,8 +47,11 @@ describe("generated document Word export", () => {
     const words = textOf(body)
 
     expect(hasAllowedFileSignature(docx, DOCX)).toBe(true)
-    // A page break before every page but the first, as the PDF pages it.
-    expect(body.split("<w:pageBreakBefore/>").length).toBe((await PDFDocument.load(pdf)).getPageCount())
+    // A page break before every page but the first, as the PDF pages it; the
+    // signing certificate a completed PDF closes with is evidence, so an
+    // editable Word file leaves it out.
+    const certificatePages = input.workflowStatus === "completed" && (input.signers?.length ?? 0) > 0 ? 1 : 0
+    expect(body.split("<w:pageBreakBefore/>").length).toBe((await PDFDocument.load(pdf)).getPageCount() - certificatePages)
     // A4 with the sample's 40-point margins, in twentieths of a point.
     expect(body).toMatch(/<w:pgSz w:w="11906" w:h="16838"/)
     expect(body).toMatch(/<w:pgMar w:top="800" w:right="800" w:bottom="800" w:left="800"/)
