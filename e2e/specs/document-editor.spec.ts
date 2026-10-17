@@ -129,3 +129,24 @@ test("words typed while offline stay on the page and are saved once the connecti
   await expect(page.getByText("You're offline")).toBeHidden()
   await expectSaved(admin, "documents", documentId, ({ blocks }) => blocks.map(({ text }) => text)).toEqual(["Written on site, no signal"])
 })
+
+test("words typed offline, with the tab closed before the connection came back, are saved when the document opens again", async ({ admin, pageAs }) => {
+  const page = await pageAs("owner_admin")
+  await page.goto("/dashboard")
+  await page.getByRole("button", { name: "New document" }).click()
+  await page.waitForURL(/\/documents\/[0-9a-f-]+\/edit/)
+  const address = page.url()
+  const documentId = new URL(address).pathname.split("/")[2] as string
+  await expect(page.locator('[contenteditable="true"]:focus')).toHaveCount(1)
+
+  await page.context().setOffline(true)
+  await page.keyboard.type("Kept on the device")
+  await expect(page.getByText("Offline, kept on this device")).toBeVisible({ timeout: 10_000 })
+  await page.close()
+
+  const context = page.context()
+  await context.setOffline(false)
+  const again = await context.newPage()
+  await again.goto(address)
+  await expectSaved(admin, "documents", documentId, ({ blocks }) => blocks.map(({ text }) => text)).toEqual(["Kept on the device"])
+})
