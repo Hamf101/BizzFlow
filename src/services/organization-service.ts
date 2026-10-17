@@ -32,8 +32,5 @@ export {
 export {
   changeOrganizationStructure,
   getOrganizationStructure,
-  VISIBILITY_SCOPES,
   type OrganizationStructure,
-  type OrganizationStructureChange,
-  type VisibilityScope,
 } from "@/services/organizations/hierarchy-service"

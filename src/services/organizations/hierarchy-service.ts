@@ -5,8 +5,7 @@ import { getActiveMembership } from "@/services/organizations/repository"
 import { recordOrganizationAuditLog, runOrganizationOperation } from "@/services/organizations/shared"
 
 /** How far a role sees: everyone, its own branch, or its inviter's side. */
-export const VISIBILITY_SCOPES = ["everyone", "branch", "inviter"] as const
-export type VisibilityScope = (typeof VISIBILITY_SCOPES)[number]
+type VisibilityScope = "everyone" | "branch" | "inviter"
 
 type Actor = { actorUserId: string; organizationId: string }
 
