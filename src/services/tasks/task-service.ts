@@ -363,7 +363,7 @@ export async function listTaskPage(
       }
       let query = filterTaskList(
         // tenant-scope: filterTaskList adds .eq("org_id", filters.organizationId)
-        client.from("tasks").select(TASK_COLUMNS, { count: "exact" }),
+        client.from("tasks").select(TASK_COLUMNS, { count: input.withTotal === false ? undefined : "exact" }),
         filters
       )
 

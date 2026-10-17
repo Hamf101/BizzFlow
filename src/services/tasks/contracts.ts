@@ -63,6 +63,8 @@ export type ListTasksInput = TaskActorInput & {
 
 /** Input for one page of the tenant task list. */
 export type ListTaskPageInput = TaskActorInput & {
+  /** False when the caller shows the rows only, so no total is counted. */
+  withTotal?: boolean
   assignedTo?: string
   /** One-based page number. */
   page: number

@@ -130,6 +130,7 @@ export default async function DashboardPage(): Promise<ReactElement> {
                 page: 1,
                 pageSize: 50,
                 sort: { direction: "asc", key: "due" },
+                withTotal: false,
                 statuses: ["open", "in_progress"],
               })
             ).tasks,
@@ -147,6 +148,7 @@ export default async function DashboardPage(): Promise<ReactElement> {
                 pageSize: PAGE,
                 sort: { direction: "asc", key: "updated" },
                 statuses: ["submitted", "in_review"],
+                withTotal: false,
               })
             ).submissions,
           []
@@ -164,6 +166,7 @@ export default async function DashboardPage(): Promise<ReactElement> {
                 createdBy: user.id,
                 sort: { direction: "desc", key: "updated" },
                 statuses: ["needs_changes", "draft"],
+                withTotal: false,
               })
             ).submissions,
           []
