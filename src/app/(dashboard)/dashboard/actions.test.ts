@@ -182,12 +182,25 @@ function welcomeForm(fields: Record<string, string> = {}): FormData {
 }
 
 describe("dashboard starter content actions", () => {
-  it("adds starter templates for the authenticated organization", async () => {
-    await expect(seedStarterTemplatesAction()).rejects.toThrow(
+  it("adds the starter templates for the kind of business chosen, and the default for anything else", async () => {
+    const chosen = new FormData()
+    chosen.set("businessKind", "office")
+
+    await expect(seedStarterTemplatesAction(chosen)).rejects.toThrow(
       "NEXT_REDIRECT:/dashboard?feedback=starter_content_added"
     )
     expect(seedStarterTemplatesForOrganization).toHaveBeenCalledExactlyOnceWith({
       actorUserId: USER_ID,
+      businessKind: "office",
+      organizationId: ORGANIZATION_ID,
+    })
+
+    const made = new FormData()
+    made.set("businessKind", "bank'; drop table")
+    await expect(seedStarterTemplatesAction(made)).rejects.toThrow("starter_content_added")
+    expect(seedStarterTemplatesForOrganization).toHaveBeenLastCalledWith({
+      actorUserId: USER_ID,
+      businessKind: undefined,
       organizationId: ORGANIZATION_ID,
     })
   })
@@ -205,7 +218,7 @@ describe("dashboard starter content actions", () => {
   it("fails closed when starter content has no organization context", async () => {
     vi.mocked(getCurrentOrganizationContext).mockResolvedValue(null)
 
-    await expect(seedStarterTemplatesAction()).rejects.toThrow(
+    await expect(seedStarterTemplatesAction(new FormData())).rejects.toThrow(
       "NEXT_REDIRECT:/dashboard?feedback=organization_required"
     )
   })

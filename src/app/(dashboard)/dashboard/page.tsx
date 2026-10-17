@@ -34,7 +34,7 @@ import { countSubmissionsByStatus, listSubmissionPage } from "@/services/submiss
 import { listTaskPage } from "@/services/task-service"
 import {
   SAMPLE_SUBMISSION_COUNT,
-  STARTER_TEMPLATES,
+  BUSINESS_KINDS,
 } from "@/services/templates/starter-templates"
 import type { GeneratedDocumentWorkflowStatus } from "@/types/template"
 
@@ -309,7 +309,8 @@ export default async function DashboardPage(): Promise<ReactElement> {
           sampleAction={seedSampleSubmissionsAction}
           sampleActionLabel={`Add ${SAMPLE_SUBMISSION_COUNT} sample submissions`}
           seedAction={seedStarterTemplatesAction}
-          seedActionLabel={`Add ${STARTER_TEMPLATES.length} starter templates`}
+          businessKinds={BUSINESS_KINDS}
+          seedActionLabel="Add starter templates"
           steps={onboardingSteps}
         />
       ) : null}

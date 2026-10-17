@@ -12,6 +12,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { Select } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 
 export type OnboardingStep = {
@@ -25,14 +26,17 @@ export type OnboardingStep = {
 export function OnboardingChecklist({
   sampleAction,
   sampleActionLabel,
+  businessKinds,
   seedAction,
   seedActionLabel,
   steps,
 }: {
   sampleAction?: () => Promise<void>
   sampleActionLabel?: string
-  seedAction?: () => Promise<void>
+  seedAction?: (formData: FormData) => Promise<void>
   seedActionLabel?: string
+  /** The kinds of business to choose from, so the starters added fit. */
+  businessKinds?: ReadonlyArray<{ id: string; label: string }>
   steps: OnboardingStep[]
 }): ReactElement {
   const completedCount = steps.filter((s) => s.completed).length
@@ -92,7 +96,16 @@ export function OnboardingChecklist({
         {(seedAction || sampleAction) && (
           <div className="flex flex-wrap justify-end gap-2 pt-2">
             {seedAction && (
-              <form action={seedAction}>
+              <form action={seedAction} className="flex flex-wrap items-center gap-2">
+                {businessKinds?.length ? (
+                  <Select aria-label="Your kind of business" className="w-56" defaultValue={businessKinds[0].id} name="businessKind">
+                    {businessKinds.map((kind) => (
+                      <option key={kind.id} value={kind.id}>
+                        {kind.label}
+                      </option>
+                    ))}
+                  </Select>
+                ) : null}
                 <Button size="sm" type="submit" variant="secondary">
                   <Sparkles className="mr-1.5 size-3.5" />
                   {seedActionLabel ?? "Add starter templates"}
