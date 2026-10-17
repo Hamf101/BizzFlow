@@ -867,6 +867,11 @@ export async function completePublicDocumentSigning(
     "complete_public_document_signing",
     {},
     async (): Promise<PublicDocumentSigningView> => {
+      // ESIGN-style consent comes first: without it nothing is read or signed.
+      if (input.consented !== true) {
+        throw new DocumentSigningServiceError("Agree to sign electronically to sign.", 400)
+      }
+
       const client = resolveSigningClient(deps.client)
       const token = normalizeToken(input.token)
       const tokenHash = hashToken(token)
@@ -946,6 +951,8 @@ export async function completePublicDocumentSigning(
           signatureData,
           initialsData,
           expectedValues: calculationBase(view.document.templateSnapshot, view.answers),
+          consented: true,
+          ip: input.ip ?? null,
         })
 
         if (

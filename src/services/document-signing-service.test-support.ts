@@ -277,6 +277,9 @@ export class FakeClient {
     recipient.signed_at = NOW.toISOString()
     recipient.signature_data = args.target_signature_data
     recipient.initials_data = args.target_initials_data
+    // As the function does: consent and the address are kept with the signature.
+    recipient.consented_at = args.target_consented ? NOW.toISOString() : null
+    recipient.signed_ip = typeof args.target_ip === "string" && args.target_ip.trim() ? args.target_ip.trim().slice(0, 64) : null
     answer.values = mergeVisibleDocumentAnswers(
       this.tables,
       args,
@@ -481,7 +484,11 @@ export function createRecipientRow(
     viewed_at: null,
     signed_at: null,
     signature_data: null,
-    initials_data: null
+    initials_data: null,
+    consented_at: null,
+    signed_ip: null,
+    declined_at: null,
+    decline_reason: null
   }
 }
 

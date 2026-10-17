@@ -5,7 +5,8 @@ import { finalizeCompletedGeneratedDocument } from "@/services/generated-documen
 
 import { completePublicSigningAction } from "./actions"
 
-vi.mock("next/headers", () => ({ headers: vi.fn(async () => new Headers()) }))
+const headerValues = vi.hoisted(() => new Map<string, string>())
+vi.mock("next/headers", () => ({ headers: vi.fn(async () => new Headers([...headerValues])) }))
 vi.mock("next/navigation", () => ({
   redirect: vi.fn((destination: string): never => {
     throw new Error(`NEXT_REDIRECT:${destination}`)
@@ -25,7 +26,11 @@ vi.mock("@/services/generated-document-finalization-service", () => ({
 const DOCUMENT = { id: "document-1", organizationId: "org-1", createdBy: "user-1" }
 
 describe("public signing action", () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    headerValues.clear()
+    headerValues.set("x-forwarded-for", "198.51.100.4")
+  })
 
   it.each([
     ["completed", 1],
@@ -42,6 +47,25 @@ describe("public signing action", () => {
     await expect(completePublicSigningAction(null, formData)).rejects.toThrow("NEXT_REDIRECT:/sign/token-1")
     expect(finalizeCompletedGeneratedDocument).toHaveBeenCalledTimes(calls)
     if (calls) expect(finalizeCompletedGeneratedDocument).toHaveBeenCalledWith(DOCUMENT)
+  })
+
+  it("passes the consent box and the signer's address on, and never \"unknown\" as an address", async () => {
+    vi.mocked(completePublicDocumentSigning).mockResolvedValue({
+      document: DOCUMENT,
+      recipient: { id: "recipient-1" },
+      workflowStatus: "awaiting_signatures",
+    } as never)
+    const formData = new FormData()
+    formData.set("token", "token-1")
+    formData.set("consent", "on")
+
+    await expect(completePublicSigningAction(null, formData)).rejects.toThrow("NEXT_REDIRECT")
+    expect(completePublicDocumentSigning).toHaveBeenLastCalledWith(expect.objectContaining({ consented: true, ip: "198.51.100.4" }))
+
+    headerValues.set("x-forwarded-for", "")
+    formData.delete("consent")
+    await completePublicSigningAction(null, formData).catch(() => undefined)
+    expect(completePublicDocumentSigning).toHaveBeenLastCalledWith(expect.objectContaining({ consented: false, ip: null }))
   })
 
   it("answers a refusal on the same page, so the signer's drawing and answers stay", async () => {

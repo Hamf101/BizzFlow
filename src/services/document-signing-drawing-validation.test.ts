@@ -41,7 +41,7 @@ describe("document signing drawing and signature validation", () => {
 
     await expect(
       completePublicDocumentSigning(
-        {
+        { consented: true,
           token: TOKEN_ONE,
           values: {},
           signatureDataUrl: DRAWING_DATA_URL,
@@ -69,7 +69,7 @@ describe("document signing drawing and signature validation", () => {
 
     await expect(
       completePublicDocumentSigning(
-        {
+        { consented: true,
           token: TOKEN_ONE,
           values: { client_name: "Northstar Labs" },
           signatureDataUrl: MALFORMED_DRAWING_DATA_URL,
@@ -99,7 +99,7 @@ describe("document signing drawing and signature validation", () => {
 
     await expect(
       completePublicDocumentSigning(
-        {
+        { consented: true,
           token: TOKEN_ONE,
           values: { client_name: "Northstar Labs" },
           signatureDataUrl: TINY_DRAWING_DATA_URL,
@@ -128,7 +128,7 @@ describe("document signing drawing and signature validation", () => {
 
     await expect(
       completePublicDocumentSigning(
-        {
+        { consented: true,
           token: TOKEN_ONE,
           values: { client_name: "Northstar Labs" },
           signatureDataUrl: toImageDataUrl(
@@ -169,14 +169,14 @@ describe("document signing drawing and signature validation", () => {
 
     // Signer 2 has no initials box, so signs without initials.
     await completePublicDocumentSigning(
-      { token: SECOND_TOKEN, values: { client_name: "Northstar Labs" }, signatureDataUrl: DRAWING_DATA_URL },
+      { consented: true, token: SECOND_TOKEN, values: { client_name: "Northstar Labs" }, signatureDataUrl: DRAWING_DATA_URL },
       deps
     )
     expect(tables.document_signing_recipients[1].status).toBe("signed")
 
     await expect(
       completePublicDocumentSigning(
-        {
+        { consented: true,
           token: TOKEN_ONE,
           values: { client_name: "Northstar Labs" },
           signatureDataUrl: DRAWING_DATA_URL,
@@ -189,7 +189,7 @@ describe("document signing drawing and signature validation", () => {
     })
 
     const completedView = await completePublicDocumentSigning(
-      {
+      { consented: true,
         token: TOKEN_ONE,
         values: { client_name: "Northstar Labs" },
         signatureDataUrl: DRAWING_DATA_URL,

@@ -1282,6 +1282,12 @@ export type DocumentSigningRecipientRow = Record<string, unknown> & {
   signed_at: string | null
   signature_data: Record<string, unknown> | null
   initials_data: Record<string, unknown> | null
+  /** When they agreed to sign electronically; null before consent was asked. */
+  consented_at?: string | null
+  /** The address they signed from, for the completion certificate. */
+  signed_ip?: string | null
+  declined_at?: string | null
+  decline_reason?: string | null
 }
 
 /** Database row tracking the last time a member opened a tenant document. */

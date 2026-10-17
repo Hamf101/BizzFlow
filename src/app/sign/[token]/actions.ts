@@ -40,9 +40,13 @@ export async function completePublicSigningAction(
   let workflowStatus: GeneratedDocumentWorkflowStatus = "awaiting_signatures"
 
   try {
-    await checkRateLimit("public_signing", getClientIp(await headers()))
+    const ip = getClientIp(await headers())
+    await checkRateLimit("public_signing", ip)
 
     const view = await completePublicDocumentSigning({
+      consented: formData.get("consent") === "on",
+      // Kept for the completion certificate; an address the proxy didn't give is none.
+      ip: ip === "unknown" ? null : ip,
       token,
       values: parseGeneratedDocumentAnswers(formData),
       baselineValues: parseGeneratedDocumentAnswerBaseline(formData),

@@ -419,6 +419,7 @@ test("a signer without a pointing device can type their signature", async ({ adm
   await page.goto(`/sign/${signingToken}`)
   await waitForHydration(page.getByRole("button", { name: "Submit signature" }))
   await page.getByLabel("Or type your signature").fill("Avery Morgan")
+  await page.getByRole("checkbox", { name: /I agree to sign electronically/ }).check()
   await page.getByRole("button", { name: "Submit signature" }).click()
 
   await expect(page.getByText(/your signature is recorded/i)).toBeVisible()

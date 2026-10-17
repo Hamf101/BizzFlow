@@ -1044,6 +1044,8 @@ export type AdminDatabase = {
           target_signature_data: Record<string, unknown> | null
           target_initials_data: Record<string, unknown> | null
           target_expected_values?: Record<string, unknown>
+          target_consented?: boolean | null
+          target_ip?: string | null
         }
         Returns: string
       }

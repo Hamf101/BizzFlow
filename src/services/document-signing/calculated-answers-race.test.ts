@@ -111,7 +111,7 @@ describe("answers a formula works out under concurrent saves", () => {
     }
 
     await completePublicDocumentSigning(
-      { token: TOKEN_ONE, values: { ...READ, a: "2" }, baselineValues: READ, signatureDataUrl: DRAWING_DATA_URL },
+      { consented: true, token: TOKEN_ONE, values: { ...READ, a: "2" }, baselineValues: READ, signatureDataUrl: DRAWING_DATA_URL },
       { client: client as never, now: (): Date => NOW }
     )
 

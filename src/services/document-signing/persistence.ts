@@ -62,6 +62,8 @@ export type CompleteRecipientSignatureInput = {
   initialsData: DrawingData | null
   // The answers the patch was worked out from; refused once they change.
   expectedValues?: Record<string, unknown>
+  consented: boolean
+  ip: string | null
 }
 
 /**
@@ -490,6 +492,8 @@ export async function completeRecipientSignature(
       target_signature_data: input.signatureData,
       target_initials_data: input.initialsData,
       target_expected_values: input.expectedValues,
+      target_consented: input.consented,
+      target_ip: input.ip,
     }
   )
 

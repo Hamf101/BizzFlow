@@ -51,6 +51,10 @@ export type GetPublicDocumentSigningViewInput = {
 
 /** Final answers and drawings submitted through a private signing link. */
 export type CompletePublicDocumentSigningInput = {
+  /** The signer agreed to sign electronically; nothing is signed without it. */
+  consented: boolean
+  /** The address the signature came from, kept for the completion certificate. */
+  ip?: string | null
   token: string
   values: Record<string, unknown>
   baselineValues?: Record<string, unknown>

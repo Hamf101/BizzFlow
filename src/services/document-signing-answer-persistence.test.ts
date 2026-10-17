@@ -246,6 +246,28 @@ describe("document signing answer persistence", () => {
     })
   })
 
+  it("signs nothing without consent to sign electronically, and keeps the consent and address with a signature", async () => {
+    const tables = createBaseTables()
+    tables.document_signing_recipients.push(createRecipientRow(RECIPIENT_ONE_ID, TOKEN_ONE, "Avery Morgan", "avery@example.com"))
+    tables.document_answers[0].workflow_status = "awaiting_signatures"
+    const client = new FakeClient(tables)
+    const sign = (consented: boolean) =>
+      completePublicDocumentSigning(
+        { consented, ip: "203.0.113.7", token: TOKEN_ONE, values: { client_name: "Acme Ltd" }, signatureDataUrl: DRAWING_DATA_URL },
+        { client: client as never, now: (): Date => NOW }
+      )
+
+    await expect(sign(false)).rejects.toMatchObject({ statusCode: 400 })
+    expect(tables.document_signing_recipients[0]).toMatchObject({ status: "pending", consented_at: null })
+
+    await sign(true)
+    expect(tables.document_signing_recipients[0]).toMatchObject({
+      consented_at: NOW.toISOString(),
+      signed_ip: "203.0.113.7",
+      status: "signed",
+    })
+  })
+
   it("does not overwrite a fresher answer when the submitted value matches its page baseline", async () => {
     const tables = createBaseTables()
     tables.document_signing_recipients.push(
@@ -261,7 +283,7 @@ describe("document signing answer persistence", () => {
     const client = new FakeClient(tables)
 
     const completedView = await completePublicDocumentSigning(
-      {
+      { consented: true,
         token: TOKEN_ONE,
         values: { client_name: "Old value" },
         baselineValues: { client_name: "Old value" },
@@ -292,7 +314,7 @@ describe("document signing answer persistence", () => {
     const client = new FakeClient(tables)
 
     const completedView = await completePublicDocumentSigning(
-      {
+      { consented: true,
         token: TOKEN_ONE,
         values: { client_name: "Intentional edit" },
         baselineValues: { client_name: "Old page value" },
@@ -347,7 +369,7 @@ describe("document signing answer persistence", () => {
     const completingTables = signedTables()
     const completingClient = new FakeClient(completingTables)
     const completed = await completePublicDocumentSigning(
-      {
+      { consented: true,
         baselineValues: { client_name: "As signed" },
         signatureDataUrl: DRAWING_DATA_URL,
         token: secondToken,
@@ -404,7 +426,7 @@ describe("document signing answer persistence", () => {
       const signerTables = tablesWithBoxes(true)
       await expect(
         completePublicDocumentSigning(
-          {
+          { consented: true,
             initialsDataUrl: DRAWING_DATA_URL,
             signatureDataUrl: DRAWING_DATA_URL,
             token: TOKEN_ONE,
@@ -435,7 +457,7 @@ describe("document signing answer persistence", () => {
 
     // A signer who changes the quantity changes the total with it; the page's total counts for nothing.
     const signed = await completePublicDocumentSigning(
-      { token: TOKEN_ONE, values: { items: [["Desk", "3", "10.00", ""]], total: "0.01" }, baselineValues: saved.answers, signatureDataUrl: DRAWING_DATA_URL },
+      { consented: true, token: TOKEN_ONE, values: { items: [["Desk", "3", "10.00", ""]], total: "0.01" }, baselineValues: saved.answers, signatureDataUrl: DRAWING_DATA_URL },
       { client: client as never, now: (): Date => NOW }
     )
 
@@ -516,7 +538,7 @@ describe("document signing answer persistence", () => {
     const client = new FakeClient(tables)
 
     const completedView = await completePublicDocumentSigning(
-      {
+      { consented: true,
         token: TOKEN_ONE,
         values: {
           include_details: false,
@@ -555,7 +577,7 @@ describe("document signing answer persistence", () => {
 
     await expect(
       completePublicDocumentSigning(
-        {
+        { consented: true,
           token: TOKEN_ONE,
           values: { include_details: true },
           baselineValues: { include_details: false },

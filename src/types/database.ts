@@ -386,6 +386,9 @@ export type Database = {
       }
       document_signing_recipients: {
         Row: {
+          consented_at: string | null
+          decline_reason: string | null
+          declined_at: string | null
           document_id: string
           email: string
           id: string
@@ -397,6 +400,7 @@ export type Database = {
           revoked_at: string | null
           signature_data: Json | null
           signed_at: string | null
+          signed_ip: string | null
           signer_number: number
           status: string
           token_expires_at: string
@@ -405,6 +409,9 @@ export type Database = {
           viewed_at: string | null
         }
         Insert: {
+          consented_at?: string | null
+          decline_reason?: string | null
+          declined_at?: string | null
           document_id: string
           email: string
           id?: string
@@ -416,6 +423,7 @@ export type Database = {
           revoked_at?: string | null
           signature_data?: Json | null
           signed_at?: string | null
+          signed_ip?: string | null
           signer_number: number
           status?: string
           token_expires_at: string
@@ -424,6 +432,9 @@ export type Database = {
           viewed_at?: string | null
         }
         Update: {
+          consented_at?: string | null
+          decline_reason?: string | null
+          declined_at?: string | null
           document_id?: string
           email?: string
           id?: string
@@ -435,6 +446,7 @@ export type Database = {
           revoked_at?: string | null
           signature_data?: Json | null
           signed_at?: string | null
+          signed_ip?: string | null
           signer_number?: number
           status?: string
           token_expires_at?: string
@@ -3178,9 +3190,11 @@ export type Database = {
       }
       complete_document_recipient_signature: {
         Args: {
+          target_consented?: boolean
           target_document_id: string
           target_expected_values?: Json
           target_initials_data: Json
+          target_ip?: string
           target_org_id: string
           target_recipient_id: string
           target_signature_data: Json
@@ -3365,6 +3379,21 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      decline_document_signing: {
+        Args: {
+          target_document_id: string
+          target_org_id: string
+          target_reason: string
+          target_recipient_id: string
+          target_token_hash: string
+        }
+        Returns: {
+          email: string
+          id: string
+          name: string
+          status: string
+        }[]
       }
       dismiss_submission_changes_request: {
         Args: {

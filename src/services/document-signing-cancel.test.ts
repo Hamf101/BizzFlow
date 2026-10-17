@@ -154,7 +154,7 @@ describe("cancelDocumentSigning", () => {
       { ...deps, createId: (): string => RECIPIENT_THREE_ID, createToken: (): string => TOKEN_THREE }
     )
     const sign = (token: string) =>
-      completePublicDocumentSigning({ token, values: {}, signatureDataUrl: DRAWING_DATA_URL }, deps)
+      completePublicDocumentSigning({ consented: true, token, values: {}, signatureDataUrl: DRAWING_DATA_URL }, deps)
 
     await expect(sign(TOKEN_TWO)).rejects.toMatchObject({ statusCode: 404 })
     await expect(sign(TOKEN_THREE)).resolves.toMatchObject({ workflowStatus: "completed", signers: [{ id: RECIPIENT_THREE_ID }] })

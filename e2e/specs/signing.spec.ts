@@ -63,6 +63,10 @@ test.describe("signing", () => {
 
     await drawSignature(page, "Signature drawing area")
 
+    // Without agreeing to sign electronically, submitting signs nothing.
+    await page.getByRole("button", { name: "Submit signature" }).click()
+    await expect(page.getByText("Your signature is recorded", { exact: true })).toBeHidden()
+    await page.getByRole("checkbox", { name: /I agree to sign electronically/ }).check()
     await page.getByRole("button", { name: "Submit signature" }).click()
 
     await expect(page.getByText(/your signature is recorded/i)).toBeVisible()
@@ -270,6 +274,7 @@ async function signAs(browser: Browser, token: string, title: string): Promise<v
   await page.goto(`/sign/${token}`)
   await expect(page.getByRole("heading", { exact: true, level: 1, name: title })).toBeVisible()
   await drawSignature(page, "Signature drawing area")
+  await page.getByRole("checkbox", { name: /I agree to sign electronically/ }).check()
   await page.getByRole("button", { name: "Submit signature" }).click()
   await expect(page.getByText(/your signature is recorded/i)).toBeVisible()
   await context.close()

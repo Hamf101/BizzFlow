@@ -355,7 +355,7 @@ describe("document signing invitation, token, and public workflows", () => {
     const client = new FakeClient(tables)
 
     const firstView = await completePublicDocumentSigning(
-      {
+      { consented: true,
         token: TOKEN_TWO,
         values: { client_name: "Northstar Labs" },
         signatureDataUrl: DRAWING_DATA_URL,
@@ -363,7 +363,7 @@ describe("document signing invitation, token, and public workflows", () => {
       { client: client as never, now: (): Date => NOW }
     )
     const completedView = await completePublicDocumentSigning(
-      {
+      { consented: true,
         token: TOKEN_ONE,
         values: {},
         signatureDataUrl: DRAWING_DATA_URL,
@@ -402,7 +402,7 @@ describe("document signing invitation, token, and public workflows", () => {
     // While the document is live, one recipient opens their link and the other signs.
     await getPublicDocumentSigningView({ token: TOKEN_ONE }, deps)
     await completePublicDocumentSigning(
-      {
+      { consented: true,
         signatureDataUrl: DRAWING_DATA_URL,
         token: TOKEN_TWO,
         values: { client_name: "Northstar Labs" },
@@ -423,7 +423,7 @@ describe("document signing invitation, token, and public workflows", () => {
     ).rejects.toMatchObject(unavailable)
     await expect(
       completePublicDocumentSigning(
-        { signatureDataUrl: DRAWING_DATA_URL, token: TOKEN_TWO, values: {} },
+        { consented: true, signatureDataUrl: DRAWING_DATA_URL, token: TOKEN_TWO, values: {} },
         deps
       )
     ).rejects.toMatchObject(unavailable)
@@ -466,7 +466,7 @@ describe("document signing invitation, token, and public workflows", () => {
     expect(view.answers).toEqual({ client_name: "Northstar Labs" })
     await expect(
       completePublicDocumentSigning(
-        { signatureDataUrl: DRAWING_DATA_URL, token: TOKEN_ONE, values: {} },
+        { consented: true, signatureDataUrl: DRAWING_DATA_URL, token: TOKEN_ONE, values: {} },
         deps
       )
     ).rejects.toMatchObject({
