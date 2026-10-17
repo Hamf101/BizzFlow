@@ -18,7 +18,7 @@ type Unit = OrganizationStructure["units"][number]
 const REACH_LABELS = {
   everyone: "Everyone",
   branch: "Their teams and reporting line",
-  inviter: "Whoever invited them, and that person's teams",
+  inviter: "Their inviter's side",
 } as const
 
 /**
@@ -79,11 +79,11 @@ export function TeamsSettings({
         <section aria-label="Reporting lines" className="flex flex-col gap-2 border-t pt-5">
           <h3 className="text-sm font-medium">Reports to</h3>
           {members.map((member) => (
-            <div className="flex flex-wrap items-center justify-between gap-2" key={member.userId}>
+            <div className="grid gap-1.5 sm:flex sm:items-center sm:justify-between sm:gap-2" key={member.userId}>
               <span className="min-w-0 truncate text-sm">{name(member.userId)}</span>
               <Select
                 aria-label={`Who ${name(member.userId)} reports to`}
-                className="w-56"
+                className="w-full sm:w-56"
                 onChange={(event) => save({ kind: "set_manager", userId: member.userId, managerUserId: event.target.value || null })}
                 value={structure.managers[member.userId] ?? ""}
               >
@@ -105,11 +105,11 @@ export function TeamsSettings({
           {structure.roles
             .filter((role) => role.systemKey !== "owner_admin")
             .map((role) => (
-              <div className="flex flex-wrap items-center justify-between gap-2" key={role.id}>
+              <div className="grid gap-1.5 sm:flex sm:items-center sm:justify-between sm:gap-2" key={role.id}>
                 <span className="text-sm">{role.name}</span>
                 <Select
                   aria-label={`What ${role.name} sees`}
-                  className="w-72"
+                  className="w-full sm:w-72"
                   onChange={(event) => save({ kind: "set_role_scope", roleId: role.id, scope: event.target.value as keyof typeof REACH_LABELS })}
                   value={role.scope}
                 >

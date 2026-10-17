@@ -234,6 +234,8 @@ export function SubmissionTitlePreview({
       <Link
         className={cn(
           "w-fit max-w-full truncate rounded-sm text-sm font-medium text-foreground outline-none hover:text-primary focus-visible:ring-2 focus-visible:ring-ring/35",
+          // A phone's tap anywhere on the row opens it, as in Files and Templates.
+          "max-md:after:absolute max-md:after:inset-0 max-md:after:rounded-lg",
           anchor !== null && "text-primary"
         )}
         data-slot="submission-title"

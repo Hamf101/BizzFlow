@@ -212,7 +212,7 @@ function SubmissionRow({
   return (
     <Row
       className={cn(
-        "grid min-h-14 grid-cols-[minmax(0,1fr)_6rem] items-center gap-3 rounded-lg px-1 py-2 transition-[background-color,translate] duration-200 hover:bg-card/65 data-[previewing=true]:bg-card/65 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-1 motion-safe:fill-mode-backwards motion-safe:[--tw-animation-delay:var(--row-delay)] motion-safe:hover:-translate-y-px lg:gap-4 lg:px-3",
+        "relative grid min-h-14 grid-cols-[minmax(0,1fr)_6rem] items-center gap-3 rounded-lg px-1 py-2 transition-[background-color,translate] duration-200 hover:bg-card/65 data-[previewing=true]:bg-card/65 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-1 motion-safe:fill-mode-backwards motion-safe:[--tw-animation-delay:var(--row-delay)] motion-safe:hover:-translate-y-px lg:gap-4 lg:px-3",
         grid
       )}
       itemId={submission.id}
