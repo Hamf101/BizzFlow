@@ -34,22 +34,22 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # Lint, type-check and Next keep caches of what they already checked or
-      # built; a changed lockfile or lint/TypeScript config starts them afresh.
-      - name: Restore lint, type-check and build caches
+      # Type-check and Next keep caches of what they already checked or built;
+      # a changed lockfile or TypeScript config starts them afresh. Lint runs
+      # cold here: its typed rules can change verdict when another file does.
+      - name: Restore type-check and build caches
         uses: actions/cache@v4
         with:
           path: |
             .next/cache
             tsconfig.tsbuildinfo
-            node_modules/.cache/eslint
           key: gates-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'eslint.config.mjs', 'tsconfig.json') }}-${{ github.sha }}
           restore-keys: gates-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'eslint.config.mjs', 'tsconfig.json') }}-
 
       # The steps below are `pnpm check`, in order, one step each so a failure
       # names its gate. Keep the two in step by hand.
       - name: Lint
-        run: pnpm lint
+        run: pnpm exec eslint .
 
       - name: Type-check
         run: pnpm typecheck
