@@ -1,4 +1,3 @@
-import { readFile } from "node:fs/promises"
 
 import * as fontkit from "fontkit"
 import {
@@ -23,7 +22,8 @@ import {
   PDF_BOLD_FONT_PATH,
   PDF_BOLD_ITALIC_FONT_PATH,
   PDF_ITALIC_FONT_PATH,
-  PDF_REGULAR_FONT_PATH
+  PDF_REGULAR_FONT_PATH,
+  readBundledFont
 } from "./constants"
 import { DocumentPdfServiceError } from "./errors"
 import { drawSigningCertificate } from "./pdf-lib-certificate"
@@ -104,11 +104,6 @@ import type {
 
 type PdfContentFrame = Readonly<{ x: number; width: number }>
 
-let bundledPdfFontsPromise: Promise<{
-  bold: Buffer
-  regular: Buffer
-}> | null = null
-
 /**
  * Renders normalized page plans through the production pdf-lib adapter.
  *
@@ -146,7 +141,7 @@ export async function renderPdfLibDocument(
     const key = `${bold ? "bold" : "regular"}${italic ? "-italic" : ""}`
     const face =
       faces.get(key) ??
-      readFile(bold ? PDF_BOLD_ITALIC_FONT_PATH : PDF_ITALIC_FONT_PATH).then((bytes: Buffer) => document.embedFont(bytes, { subset: true }))
+      readBundledFont(bold ? PDF_BOLD_ITALIC_FONT_PATH : PDF_ITALIC_FONT_PATH).then((bytes: Buffer) => document.embedFont(bytes, { subset: true }))
 
     faces.set(key, face)
 
@@ -271,12 +266,9 @@ async function loadBundledPdfFonts(): Promise<{
   bold: Buffer
   regular: Buffer
 }> {
-  bundledPdfFontsPromise ??= Promise.all([
-    readFile(PDF_REGULAR_FONT_PATH),
-    readFile(PDF_BOLD_FONT_PATH)
-  ]).then(([regular, bold]: [Buffer, Buffer]) => ({ bold, regular }))
+  const [regular, bold] = await Promise.all([readBundledFont(PDF_REGULAR_FONT_PATH), readBundledFont(PDF_BOLD_FONT_PATH)])
 
-  return bundledPdfFontsPromise
+  return { bold, regular }
 }
 
 async function drawPdfLibPage(

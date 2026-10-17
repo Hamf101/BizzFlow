@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises"
 import { resolve } from "node:path"
 
 export const MAX_DRAWING_DATA_URL_LENGTH = 2_800_000
@@ -37,3 +38,21 @@ export const PDF_BOLD_ITALIC_FONT_PATH = resolve(
   PDF_FONT_PACKAGE_DIRECTORY,
   "DejaVuSans-BoldOblique.ttf"
 )
+
+const bundledFonts = new Map<string, Promise<Buffer>>()
+
+/**
+ * Reads a bundled font file once per server process; every later export reuses it.
+ *
+ * @param path - One of the font paths above.
+ * @returns The font's bytes.
+ */
+export function readBundledFont(path: string): Promise<Buffer> {
+  const font = bundledFonts.get(path) ?? readFile(path)
+
+  bundledFonts.set(path, font)
+  // A failed read is not kept, so the next export tries again.
+  font.catch(() => bundledFonts.delete(path))
+
+  return font
+}

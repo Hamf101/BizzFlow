@@ -1,4 +1,3 @@
-import { readFile } from "node:fs/promises"
 
 import {
   Document,
@@ -18,7 +17,7 @@ import {
 import { shouldRenderTemplateFooter, shouldRenderTemplateHeader } from "@/services/templates/template-render-plan"
 import type { TemplateBlock, TemplateLayout, TextRun as TextRunOf } from "@/types/template"
 
-import { PDF_BOLD_FONT_PATH, PDF_BOLD_ITALIC_FONT_PATH, PDF_ITALIC_FONT_PATH, PDF_REGULAR_FONT_PATH } from "../document-pdf/constants"
+import { PDF_BOLD_FONT_PATH, PDF_BOLD_ITALIC_FONT_PATH, PDF_ITALIC_FONT_PATH, PDF_REGULAR_FONT_PATH, readBundledFont } from "../document-pdf/constants"
 import { boxedPdfMetrics, createPdfLayoutMetrics, getPdfRowFrames, listItemInset, SECTION_BOX_EDGE, SECTION_BOX_GAP, SECTION_BOX_INSET, SIGNER_NAME_LEADING } from "../document-pdf/layout"
 import { readPicture } from "../document-pdf/pdf-lib-images"
 import { measuringFace } from "../document-pdf/planner"
@@ -109,7 +108,7 @@ export async function renderDocxDocument(input: NormalizedPdfInput, pages: reado
     creator: "BizFlow Docs",
     description: "Generated business document",
     // Word shows the letters the PDF prints, wherever it opens.
-    fonts: await Promise.all(faces.map(async (path: string) => ({ data: await readFile(path), name: DOCX_FONT_FAMILY }))),
+    fonts: await Promise.all(faces.map(async (path: string) => ({ data: await readBundledFont(path), name: DOCX_FONT_FAMILY }))),
     sections: [
       {
         children: body,
