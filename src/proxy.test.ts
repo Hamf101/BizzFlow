@@ -43,10 +43,19 @@ describe("proxy rate limits", () => {
       if (bucket === "member_request") throw new RateLimitError(30)
     })
 
-    const response = await proxy(request("/api/search?q=a"))
+    const response = await proxy(request("/api/notices"))
 
     expect(response.status).toBe(429)
     expect(spend).toHaveBeenCalledWith("member_request", "user-1")
+  })
+
+  it("spends search's own budget, not the general one, as the member types", async () => {
+    spend.mockResolvedValue(undefined)
+
+    await proxy(request("/api/search?q=a"))
+
+    expect(spend).toHaveBeenCalledWith("member_search", "user-1")
+    expect(spend).not.toHaveBeenCalledWith("member_request", "user-1")
   })
 
   it("lets a request within both budgets through", async () => {
