@@ -1061,6 +1061,10 @@ export type AdminDatabase = {
         }
         Returns: { id: string; name: string; email: string; status: string }[]
       }
+      visible_member_ids: {
+        Args: { target_org_id: string; target_user_id: string }
+        Returns: string[]
+      }
       decline_document_signing: {
         Args: {
           target_org_id: string
