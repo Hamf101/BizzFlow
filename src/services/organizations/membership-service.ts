@@ -61,7 +61,12 @@ export async function listOrganizationPeople(
         )
       }
 
-      const memberships = await listActiveMemberships(client, organizationId)
+      // Invites and roles don't wait on the members' profiles.
+      const [memberships, invites, roles] = await Promise.all([
+        listActiveMemberships(client, organizationId),
+        canInviteMembers(actorMembership) ? listManageableInvites(client, organizationId) : [],
+        listOrganizationRoleRecords(client, organizationId),
+      ])
       const profiles = await listProfilesByUserIds(
         client,
         memberships.map(
@@ -92,10 +97,8 @@ export async function listOrganizationPeople(
             }
           }
         ),
-        invites: canInviteMembers(actorMembership)
-          ? await listManageableInvites(client, organizationId)
-          : [],
-        roles: await listOrganizationRoleRecords(client, organizationId),
+        invites,
+        roles,
       }
     }
   )
