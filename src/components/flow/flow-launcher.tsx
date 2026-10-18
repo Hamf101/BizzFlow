@@ -10,6 +10,7 @@ import { createTemplateAction } from "@/app/(dashboard)/templates/actions"
 import { FLOW_COMPOSER_ATTACH, FlowAttachButton, FlowAttachChip, RECREATE, useFlowAttachment, useFlowOpenWith } from "@/components/flow/flow-attach"
 import { handOffToFlow } from "@/components/flow/flow-handoff"
 import { FlowModelPicker, useFlowModel } from "@/components/flow/flow-model-picker"
+import { FlowMessage } from "@/components/flow/flow-message"
 import { FLOW_COMPOSER, FLOW_SEND, FlowWindow } from "@/components/flow/flow-window"
 import { cn } from "@/lib/utils"
 import type { WorkspaceFlowAnswer, WorkspaceFlowItem } from "@/services/workspace-flow-service"
@@ -161,14 +162,7 @@ function FlowConversation({
       ) : (
         <ol aria-live="polite" className="grid gap-3 py-1">
           {turns.map((turn) => (
-            <li
-              className={cn(
-                "text-sm",
-                turn.role === "member" && "max-w-[85%] justify-self-end rounded-lg bg-secondary px-3 py-2 text-secondary-foreground",
-                turn.failed && "text-destructive"
-              )}
-              key={turn.id}
-            >
+            <FlowMessage failed={turn.failed} from={turn.role} key={turn.id}>
               {turn.text}
               {turn.items && turn.items.length > 0 ? (
                 <ul className="mt-2 divide-y divide-border overflow-hidden rounded-lg border border-border">
@@ -183,13 +177,17 @@ function FlowConversation({
                 </ul>
               ) : null}
               {turn.moreHref ? (
-                <Link className="mt-1.5 inline-block text-xs text-muted-foreground underline-offset-2 hover:underline" href={turn.moreHref} onClick={onLeave}>
+                <Link className="mt-1.5 block w-fit text-xs text-muted-foreground underline-offset-2 hover:underline" href={turn.moreHref} onClick={onLeave}>
                   Open the list
                 </Link>
               ) : null}
-            </li>
+            </FlowMessage>
           ))}
-          {busy ? <li className="text-sm text-muted-foreground">Thinking…</li> : null}
+          {busy ? (
+            <FlowMessage from="flow">
+              <span className="text-muted-foreground">Thinking…</span>
+            </FlowMessage>
+          ) : null}
         </ol>
       )}
       </div>

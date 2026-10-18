@@ -359,3 +359,44 @@ it("lets answers go when a change is dropped, since the fields they were keyed f
   expect(fillButtons()).toHaveLength(0)
   expect(fillAction).not.toHaveBeenCalled()
 })
+
+it("names a teammate once at the start of each run of their messages, starting a new run after a break, and voices Flow's turns as Flow", () => {
+  const said = (id: string, role: "user" | "assistant", authorName: string | null, content: string, createdAt = "2026-10-18T09:00:00.000Z") => ({
+    id, role, content, authorName, operations: [], changedBlockIds: [], receiptStatus: null, createdAt,
+  })
+
+  act(() =>
+    mount().render(
+      <TemplateFlowPanel
+        canUndo={false}
+        draft={draft}
+        initialMessages={[
+          said("m-1", "user", "Ana Lopez", "Draft a parking permit."),
+          said("m-2", "user", "Ana Lopez", "For staff only."),
+          said("m-3", "assistant", null, "Here's a first draft."),
+          said("m-4", "assistant", null, "Want a second vehicle?"),
+          said("m-5", "user", "Ben Okafor", "Yes, add one."),
+          // Back after lunch: a new run, so the later time shows.
+          said("m-6", "user", "Ben Okafor", "And a visitor badge.", "2026-10-18T13:00:00.000Z"),
+        ]}
+        lastAppliedMessageId={null}
+        onApplyProposal={() => undefined}
+        onUndo={() => undefined}
+        pendingProposal={null}
+        templateId={TEMPLATE_ID}
+      />
+    )
+  )
+
+  const text = document.body.textContent ?? ""
+  expect(text.split("Ana Lopez")).toHaveLength(2)
+  expect(text.split("Ben Okafor")).toHaveLength(3)
+  for (const words of ["Draft a parking permit.", "For staff only.", "Here's a first draft.", "Want a second vehicle?", "Yes, add one."]) {
+    expect(text).toContain(words)
+  }
+  // Flow's mark stands in for its name on screen; a screen reader still hears who spoke.
+  expect([...document.querySelectorAll("li")].filter((entry) => entry.textContent?.startsWith("Flow")).map((entry) => entry.textContent)).toEqual([
+    "FlowHere's a first draft.",
+    "FlowWant a second vehicle?",
+  ])
+})

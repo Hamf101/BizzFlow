@@ -35,6 +35,7 @@ import * as z from "zod"
 import { FLOW_COMPOSER_ATTACH, FlowAttachButton, FlowAttachChip, RECREATE, useFlowAttachment } from "@/components/flow/flow-attach"
 import type { FlowHandoff, FlowSource } from "@/components/flow/flow-handoff"
 import { FlowModelPicker, useFlowModel } from "@/components/flow/flow-model-picker"
+import { FlowMessage } from "@/components/flow/flow-message"
 import { FLOW_COMPOSER, FLOW_SEND } from "@/components/flow/flow-window"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -73,6 +74,9 @@ const TEMPLATE_STARTER: FlowStarter = {
 
 /** What an empty conversation offers: a line, a few first messages, and the box's hint. */
 export type FlowStarter = Readonly<{ heading: string; placeholder: string; prompts: readonly string[] }>
+
+// A pause this long between one author's messages starts a new run, which shows its time again.
+const RUN_BREAK_MS = 10 * 60_000
 
 /** A proposal as Flow made it, and the changes its reviewer dropped by hand. */
 type FlowReview = Readonly<{ original: TemplateFlowProposal; dropped: ReadonlySet<number> }>
@@ -519,8 +523,9 @@ export function TemplateFlowPanel({
         {messages.length === 0 ? (
           <FlowEmptyState onSelectPrompt={submitMessage} starter={starter} />
         ) : (
-          <ol className="flex flex-col gap-5">
-            {messages.map((message: TemplateFlowMessage) => {
+          <ol className="flex flex-col gap-3">
+            {messages.map((message: TemplateFlowMessage, index: number) => {
+              const previous = messages[index - 1]
               const applied = message.role === "assistant" && message.id === lastAppliedMessageId
               const answers = applied && fill && fillSourceId && Object.keys(combinedAnswers).length > 0 ? combinedAnswers : undefined
 
@@ -539,6 +544,11 @@ export function TemplateFlowPanel({
                 }}
                 // The open card lists these changes and tracks drops; one list, not two.
                 showChanges={displayedPendingProposal === null || message.id !== pendingMessageId}
+                startsRun={
+                  previous?.role !== message.role ||
+                  previous.authorName !== message.authorName ||
+                  Date.parse(message.createdAt) - Date.parse(previous.createdAt) > RUN_BREAK_MS
+                }
               />
               )
             })}
@@ -839,7 +849,8 @@ function FlowMessageEntry({
   message,
   onFill,
   onUndo,
-  showChanges
+  showChanges,
+  startsRun
 }: {
   canUndo: boolean
   /** Whether the answers go into this page rather than a copy. */
@@ -850,30 +861,30 @@ function FlowMessageEntry({
   onFill?: () => void
   onUndo: () => void
   showChanges: boolean
+  /** Whether this opens a run of one author's messages, which names them once. */
+  startsRun: boolean
 }): ReactElement {
-  const isUser = message.role === "user"
+  if (message.role === "user") {
+    return (
+      <FlowMessage
+        author={
+          startsRun ? (
+            <>
+              {message.authorName || "Team member"}
+              <time dateTime={message.createdAt}>{formatMessageTime(message.createdAt)}</time>
+            </>
+          ) : undefined
+        }
+        from="member"
+      >
+        {message.content}
+      </FlowMessage>
+    )
+  }
 
   return (
-    <li
-      className={cn(
-        "border-l pl-3",
-        isUser ? "border-border" : "border-primary/35"
-      )}
-    >
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-[11px] text-muted-foreground">
-          {isUser ? message.authorName || "Team member" : "Flow"}
-        </span>
-        <time
-          className="text-[10px] text-muted-foreground"
-          dateTime={message.createdAt}
-        >
-          {formatMessageTime(message.createdAt)}
-        </time>
-      </div>
-      <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed">
-        {message.content}
-      </p>
+    <FlowMessage from="flow">
+      <p className="whitespace-pre-wrap">{message.content}</p>
 
       {showChanges && message.operations.length > 0 && (
         <div className="mt-3 overflow-hidden rounded-md border border-primary/12 bg-card/70">
@@ -910,7 +921,7 @@ function FlowMessageEntry({
           </div>
         </div>
       )}
-    </li>
+    </FlowMessage>
   )
 }
 

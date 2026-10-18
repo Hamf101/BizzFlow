@@ -52,7 +52,7 @@ const easeOut = (q: number): number => 1 - (1 - q) ** 3
 const easeInOut = (q: number): number => (q < 0.5 ? 4 * q ** 3 : 1 - (-2 * q + 2) ** 3 / 2)
 
 // Every piece of the page, the fold last, with the way out from the page's middle.
-const PIECES = [
+export const PIECES = [
   ...FACETS.map((facet) => ({ flap: false, points: facet.corners.map((corner) => CORNERS[corner]), strength: facet.strength, tone: facet.tones[0] })),
   { flap: true, points: [...FLAP], strength: 1, tone: "wisteria" as const },
 ].map((piece) => {
@@ -934,7 +934,7 @@ function readSafeBottom(): number {
   return height
 }
 
-const PIECE_STYLE = (tone: string, strength: number): CSSProperties =>
+export const PIECE_STYLE = (tone: string, strength: number): CSSProperties =>
   ({
     fill: `color-mix(in oklch, var(--fold-${tone}) calc(var(--s, 1) * ${strength} * var(--fold-strength) * 100%), var(--popover))`,
     stroke: "var(--fold-seam)",
