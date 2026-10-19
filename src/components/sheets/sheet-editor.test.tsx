@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import type { ComponentProps } from "react"
 
 import { act } from "react"
 import { beforeAll, expect, it, vi } from "vitest"
@@ -15,7 +16,11 @@ beforeAll(() => {
 
 const saved = () => vi.fn(async () => ({ ok: true as const, version: "2026-10-14T12:00:01.000Z" }))
 
-function open({ canEdit = true, content = book({ B2: 4, C2: 5 }), saveAction = saved() } = {}) {
+function open({
+  canEdit = true,
+  content = book({ B2: 4, C2: 5 }),
+  saveAction = saved(),
+}: { canEdit?: boolean; content?: ReturnType<typeof book>; saveAction?: ComponentProps<typeof SheetEditor>["saveAction"] } = {}) {
   const sheet: Sheet = {
     accessLevel: canEdit ? "contributor" : "viewer",
     content,
