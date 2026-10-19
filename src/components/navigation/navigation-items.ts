@@ -131,7 +131,11 @@ export function getMobileNavigationLayout(
   overflow: NavigationItem[]
 } {
   const visible = getVisibleNavigationItems(role, preferences)
-  if (preferences?.order.length) return { primary: visible.slice(0, MOBILE_PRIMARY_COUNT), overflow: visible.slice(MOBILE_PRIMARY_COUNT) }
+  if (preferences?.order.length) {
+    // Flow's own button is always on a phone's screen, so it never takes a slot.
+    const primary = visible.filter((item) => item.href !== "/flow").slice(0, MOBILE_PRIMARY_COUNT)
+    return { primary, overflow: visible.filter((item) => !primary.includes(item)) }
+  }
   // A reviewer's day is the queue, so Submissions takes Templates' place.
   const hrefs =
     role && canPerformOrganizationAction(role, "submissions:review")

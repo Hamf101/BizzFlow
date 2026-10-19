@@ -107,13 +107,13 @@ export function OnboardingChecklist({
                 className={cn(
                   "flex min-h-11 w-full items-center gap-2.5 rounded-md px-2.5 text-left text-sm outline-none transition-colors hover:bg-background/70 focus-visible:ring-2 focus-visible:ring-ring/40",
                   step.id === open?.id && "bg-background font-medium shadow-sm",
-                  step.completed ? "text-success" : step.id === open?.id ? "text-foreground" : "text-muted-foreground"
+                  step.id === open?.id ? "text-foreground" : step.completed ? "text-foreground/80" : "text-muted-foreground"
                 )}
                 onClick={() => setOpenId(step.id)}
                 type="button"
               >
                 <span aria-hidden="true" className="grid size-5 place-items-center text-xs tabular-nums">
-                  {step.completed ? <Check className="size-4" /> : index + 1}
+                  {step.completed ? <Check className="size-4 text-success" /> : index + 1}
                 </span>
                 {step.title}
                 {step.completed ? <span className="sr-only"> (done)</span> : null}

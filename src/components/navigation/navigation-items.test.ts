@@ -74,6 +74,12 @@ describe("getVisibleNavigationItems", () => {
     expect(getMobileNavigationLayout(role).primary.map((item) => item.href)).toContain("/submissions")
   })
 
+  it("never gives Flow a phone bar slot, even when a saved order puts it first", () => {
+    const { overflow, primary } = getMobileNavigationLayout("owner_admin", { labels: {}, order: ["/flow", "/settings", "/dashboard"] })
+    expect(primary.map((item) => item.href)).toEqual(["/settings", "/dashboard", "/people", "/documents"])
+    expect(overflow.map((item) => item.href)).toContain("/flow")
+  })
+
   it("keeps Templates in the phone bar of someone who does not review", () => {
     expect(getMobileNavigationLayout("staff").primary.map((item) => item.href)).toContain("/templates")
   })
