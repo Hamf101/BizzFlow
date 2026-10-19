@@ -35,6 +35,7 @@ import { listTaskPage } from "@/services/task-service"
 import {
   SAMPLE_SUBMISSION_COUNT,
   BUSINESS_KINDS,
+  STARTER_TEMPLATES,
 } from "@/services/templates/starter-templates"
 import type { GeneratedDocumentWorkflowStatus } from "@/types/template"
 
@@ -52,6 +53,15 @@ import { createGeneratedDocumentAction } from "../documents/actions"
 const PAGE = 20
 
 export const metadata: Metadata = { title: "Dashboard" }
+
+
+// What each kind of work's starter pack holds, for the getting started preview.
+const STARTERS_BY_KIND = Object.fromEntries(
+  BUSINESS_KINDS.map((kind) => [
+    kind.id,
+    STARTER_TEMPLATES.filter((starter) => starter.kinds.includes(kind.id)).map(({ category, title }) => ({ category, title })),
+  ])
+)
 
 export default async function DashboardPage(): Promise<ReactElement> {
   const user = await loadAuthenticatedPageUser("/dashboard")
@@ -259,7 +269,7 @@ export default async function DashboardPage(): Promise<ReactElement> {
   const onboardingSteps = [
     {
       id: "org",
-      title: "Create a workspace",
+      title: "Create your workspace",
       completed: true,
       href: "/dashboard",
       actionText: "Create",
@@ -269,18 +279,18 @@ export default async function DashboardPage(): Promise<ReactElement> {
       title: "Invite your team",
       completed: progress.value.hasInvitedMembers,
       href: "/people",
-      actionText: "Invite",
+      actionText: "Invite people",
     },
     {
       id: "template",
-      title: "Publish a template",
+      title: "Pick your forms",
       completed: progress.value.hasPublishedTemplate,
       href: "/templates",
       actionText: "Open templates",
     },
     {
       id: "submission",
-      title: "Collect a submission",
+      title: "Get your first answers",
       completed: progress.value.hasSubmission,
       href: "/submissions",
       actionText: "Open submissions",
@@ -310,7 +320,7 @@ export default async function DashboardPage(): Promise<ReactElement> {
           sampleActionLabel={`Add ${SAMPLE_SUBMISSION_COUNT} sample submissions`}
           seedAction={seedStarterTemplatesAction}
           businessKinds={BUSINESS_KINDS}
-          seedActionLabel="Add starter templates"
+          starters={STARTERS_BY_KIND}
           steps={onboardingSteps}
         />
       ) : null}
