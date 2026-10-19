@@ -4,7 +4,7 @@ import type { ReactElement } from "react"
 
 import { ProfileFields } from "@/components/auth/profile-fields"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Button } from "@/components/ui/button"
+import { SubmitButton } from "@/components/ui/submit-button"
 import {
   Field,
   FieldDescription,
@@ -96,9 +96,9 @@ export default async function WelcomePage({
             </FieldDescription>
           </Field>
         </FieldGroup>
-        <Button type="submit" className="w-full">
+        <SubmitButton className="w-full" pendingText="Creating your workspace…">
           Create workspace
-        </Button>
+        </SubmitButton>
       </form>
     </AuthPageCard>
   )

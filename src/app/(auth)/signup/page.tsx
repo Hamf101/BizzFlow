@@ -3,7 +3,7 @@ import { redirect } from "next/navigation"
 
 import { NewPasswordFields } from "@/components/auth/new-password-fields"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Button } from "@/components/ui/button"
+import { SubmitButton } from "@/components/ui/submit-button"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { buildAcceptInvitePath } from "@/lib/auth-redirects"
@@ -91,9 +91,9 @@ export default async function SignupPage({
           </Field>
           <NewPasswordFields />
         </FieldGroup>
-        <Button type="submit" className="w-full">
+        <SubmitButton className="w-full" pendingText="Signing up…">
           Sign up
-        </Button>
+        </SubmitButton>
       </form>
     </AuthPageCard>
   )

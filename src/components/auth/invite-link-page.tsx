@@ -5,7 +5,7 @@ import { NewPasswordFields } from "@/components/auth/new-password-fields"
 import { PasswordInput } from "@/components/auth/password-input"
 import { ProfileFields } from "@/components/auth/profile-fields"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Button } from "@/components/ui/button"
+import { SubmitButton } from "@/components/ui/submit-button"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
@@ -92,9 +92,9 @@ export async function InviteLinkPage({
       >
         <form action={actions.switchAccount}>
           {tokenField}
-          <Button type="submit" className="w-full">
+          <SubmitButton className="w-full" pendingText="Logging out…">
             Log out and continue
-          </Button>
+          </SubmitButton>
         </form>
       </AuthPageCard>
     )
@@ -110,9 +110,9 @@ export async function InviteLinkPage({
         <form action={actions.accept} className="flex flex-col gap-5">
           {tokenField}
           {problem}
-          <Button type="submit" className="w-full">
+          <SubmitButton className="w-full" pendingText="Just a moment…">
             {submitLabel}
-          </Button>
+          </SubmitButton>
         </form>
       </AuthPageCard>
     )
@@ -171,9 +171,9 @@ export async function InviteLinkPage({
             </>
           )}
         </FieldGroup>
-        <Button type="submit" className="w-full">
+        <SubmitButton className="w-full" pendingText="Just a moment…">
           {submitLabel}
-        </Button>
+        </SubmitButton>
       </form>
     </AuthPageCard>
   )

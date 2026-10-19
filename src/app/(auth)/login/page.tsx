@@ -2,7 +2,7 @@ import Link from "next/link"
 
 import { PasswordInput } from "@/components/auth/password-input"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Button } from "@/components/ui/button"
+import { SubmitButton } from "@/components/ui/submit-button"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { readSignedFlash } from "@/lib/form-utils"
@@ -86,9 +86,9 @@ export default async function LoginPage({
             />
           </Field>
         </FieldGroup>
-        <Button type="submit" className="w-full">
+        <SubmitButton className="w-full" pendingText="Logging in…">
           Log in
-        </Button>
+        </SubmitButton>
       </form>
     </AuthPageCard>
   )
