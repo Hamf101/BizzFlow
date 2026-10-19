@@ -38,7 +38,7 @@ import { type DragBox, type DragLine, type DropTarget, useBlockDrag } from "@/co
 import { addPageBreak, type EditorController } from "@/components/editor/use-editor-controller"
 import { bizflowToast } from "@/components/ui/toaster"
 import { cn } from "@/lib/utils"
-import { MAX_LIST_LEVEL, type BlockFrame, type TemplateContentV3, type TextRun } from "@/types/template"
+import { MAX_LIST_LEVEL, type BlockFrame, type TemplateBlock, type TemplateContentV3, type TextRun } from "@/types/template"
 import {
   frameOf,
   getTemplateBlockSlot,
@@ -175,9 +175,11 @@ export function useCanvasEditing({
     })
   }
 
-  function chooseSlash(choice: InsertChoice): void {
-    const open = slash
-    const block = content.blocks.find((candidate) => candidate.id === open?.blockId)
+  function chooseSlash(
+    choice: InsertChoice,
+    open: SlashState | null = slash,
+    block: TemplateBlock | undefined = content.blocks.find((candidate) => candidate.id === open?.blockId)
+  ): void {
 
     setSlash(null)
 
@@ -244,8 +246,8 @@ export function useCanvasEditing({
     return false
   }
 
-  function handleSlashKey(event: globalThis.KeyboardEvent, blockId: string): boolean {
-    if (!slash || slash.blockId !== blockId) {
+  function handleSlashKey(event: globalThis.KeyboardEvent, caret: TextCaret, block: LineBlock): boolean {
+    if (!slash || slash.blockId !== block.id) {
       return false
     }
 
@@ -259,10 +261,13 @@ export function useCanvasEditing({
 
     if (event.key === "Enter" || event.key === "Tab") {
       event.preventDefault()
-      const choice = slashChoices[slash.active]
+      // A key can land before the menu has drawn the last letters typed, so
+      // the choice is made from what the line holds now.
+      const query = caret.text.slice(slash.start + 1, caret.offset)
+      const choice = query === slash.query ? slashChoices[slash.active] : findInsertChoices({ allowFiles, query })[0]
 
       if (choice) {
-        chooseSlash(choice)
+        chooseSlash(choice, { ...slash, query }, { ...block, runs: caret.runs, text: caret.text })
       } else {
         setSlash(null)
       }
@@ -583,7 +588,7 @@ export function useCanvasEditing({
       updateSlash(block.id, text, caret)
     },
     onLineKeyDown(event: globalThis.KeyboardEvent, caret: TextCaret, block: LineBlock): void {
-      if (handleSlashKey(event, block.id) || event.isComposing) {
+      if (handleSlashKey(event, caret, block) || event.isComposing) {
         return
       }
 

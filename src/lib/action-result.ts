@@ -35,6 +35,7 @@ export const ACTION_FEEDBACK_CODES = [
   "signing_cancelled",
   "signing_invitation_resent",
   "signing_invitations_sent",
+  "signing_invitations_partly_sent",
   "starter_content_added",
   "submission_assigned",
   "submission_created",

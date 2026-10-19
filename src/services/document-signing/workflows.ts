@@ -446,8 +446,8 @@ function parseDocumentContent(value: unknown): TemplateContent {
  *
  * @param input - Actor, generated document, and recipient collection.
  * @param deps - Optional id, token, clock, database, and email dependencies.
- * @returns Created recipients after EmailJS accepts every invitation.
- * @throws DocumentSigningServiceError for invalid recipients, state, or delivery.
+ * @returns Created recipients, and how many of their emails could not be sent.
+ * @throws DocumentSigningServiceError for invalid recipients or state, before anything is saved.
  */
 export async function sendDocumentForSigning(
   input: SendDocumentForSigningInput,
@@ -620,16 +620,15 @@ export async function sendDocumentForSigning(
           recipientCount: createdRows.length,
           failedDeliveries,
         })
-        throw new DocumentSigningServiceError(
-          "Some signing emails could not be delivered. The recipients were saved so you can resend them.",
-          502
-        )
       }
 
+      // The round is saved and out for signing either way; an email that did
+      // not go is counted, not thrown, so no one sends the document again.
       return {
         documentId: input.documentId,
         workflowStatus: "awaiting_signatures",
         recipients: createdRows.map(mapSigningRecipient),
+        undelivered: failedDeliveries,
       }
     }
   )

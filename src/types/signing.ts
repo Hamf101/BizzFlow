@@ -97,4 +97,6 @@ export type SendDocumentForSigningResult = {
   documentId: string
   workflowStatus: "awaiting_signatures"
   recipients: DocumentSigningRecipient[]
+  /** How many invitation emails could not be sent; each can be resent. */
+  undelivered: number
 }

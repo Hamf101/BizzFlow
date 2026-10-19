@@ -159,12 +159,14 @@ export async function sendGeneratedDocumentAction(
     run: async () => {
       const { actor } = await loadActionContext(NO_ORGANIZATION)
 
-      await sendDocumentForSigning({
+      const { undelivered } = await sendDocumentForSigning({
         ...actor,
         documentId: requireFormId(documentId, "Document id"),
         recipients: parseRecipientCollection(getFormString(formData, "recipients")),
       })
       revalidateDocumentEditor(documentId)
+
+      return undelivered > 0 ? { code: "signing_invitations_partly_sent" } : undefined
     },
   })
 }

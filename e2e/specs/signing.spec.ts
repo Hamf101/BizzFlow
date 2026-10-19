@@ -207,10 +207,11 @@ test.describe("signing", () => {
         await dialog.getByLabel("Email").nth(index).fill(signer.email)
       }
       await dialog.getByRole("button", { exact: true, name: "Send" }).click()
-      // Sent or not, the action lands back on the editor with its feedback.
-      await sender.waitForURL(/[?&]feedback=/)
-      // E2E has no email, so the invitations are not delivered; the signers
-      // are saved all the same, and their links are given known tokens here.
+      // E2E has no email, so the invitations are not delivered; the document
+      // is out for signing all the same, and says so, pointing to Resend.
+      await sender.waitForURL(/[?&]feedback=signing_invitations_partly_sent/)
+      await expect(sender.getByText("Sent for signing", { exact: true })).toBeVisible()
+      // The signers' links are given known tokens here.
       let tokens: [string, string][] = []
       await expect.poll(async () => (tokens = await rekeySigners(admin, documentId)).length).toBe(2)
       return Object.fromEntries(tokens)

@@ -81,6 +81,11 @@ export const ACTION_FEEDBACK = {
   signing_cancelled: done("Signing cancelled"),
   signing_invitation_resent: done("Signing invitation resent"),
   signing_invitations_sent: done("Signing invitations sent"),
+  signing_invitations_partly_sent: problem(
+    "Sent for signing",
+    "We couldn't email everyone. Use Resend in the signers list for anyone who didn't get it.",
+    "info"
+  ),
   starter_content_added: done("Starter templates ready"),
   template_deleted: done("Template deleted"),
   template_has_answers: problem("This template can't be deleted", TEMPLATE_ANSWERED_MESSAGE, "info"),

@@ -111,6 +111,42 @@ describe("document signing invitation, token, and public workflows", () => {
     )
   })
 
+  it("still sends for signing when an email fails, and says how many were not emailed", async () => {
+    const client = new FakeClient(createBaseTables())
+    const ids = [RECIPIENT_ONE_ID, RECIPIENT_TWO_ID]
+    const tokens = [TOKEN_ONE, TOKEN_TWO]
+    const sendDocumentSigningEmail = vi.fn(async ({ recipientEmail }: { recipientEmail: string }): Promise<void> => {
+      if (recipientEmail === "jordan@example.com") throw new Error("Email transport is disabled")
+    })
+
+    const result = await sendDocumentForSigning(
+      {
+        actorUserId: MANAGER_ID,
+        organizationId: ORG_ID,
+        documentId: DOCUMENT_ID,
+        recipients: [
+          { name: "Avery Morgan", email: "avery@example.com" },
+          { name: "Jordan Lee", email: "jordan@example.com" },
+        ],
+      },
+      {
+        client: client as never,
+        createId: (): string => ids.shift()!,
+        createToken: (): string => tokens.shift()!,
+        now: (): Date => NOW,
+        sendDocumentSigningEmail,
+      }
+    )
+
+    expect(result).toMatchObject({ undelivered: 1, workflowStatus: "awaiting_signatures" })
+    expect(client.tables.document_answers[0].workflow_status).toBe("awaiting_signatures")
+    // Both stay saved and pending, so Resend reaches the one not emailed.
+    expect(client.tables.document_signing_recipients.map((row: FakeRow) => [row.email, row.status])).toEqual([
+      ["avery@example.com", "pending"],
+      ["jordan@example.com", "pending"],
+    ])
+  })
+
   it("rotates and emails a pending recipient link without storing the raw token", async () => {
     const tables = createBaseTables()
     tables.document_signing_recipients.push(
