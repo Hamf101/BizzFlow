@@ -319,24 +319,21 @@ async function RolesAndAccessSection({
 
 // Teams, reporting lines and each role's reach, for the owner to arrange.
 async function TeamsSection({ actorUserId, organizationId }: { actorUserId: string; organizationId: string }): Promise<ReactElement | null> {
-  const loaded = await Promise.all([
-    getOrganizationStructure({ actorUserId, organizationId }),
-    listOrganizationPeople(actorUserId, organizationId),
-  ]).catch((error: unknown) => {
+  const structure = await getOrganizationStructure({ actorUserId, organizationId }).catch((error: unknown) => {
     console.warn("settings_teams_load_failed", { organizationId, reason: error instanceof Error ? error.message : "Unknown error" })
     return null
   })
 
-  if (!loaded) {
+  if (!structure) {
     return (
       <Alert variant="destructive">
-        <AlertTitle>Teams unavailable</AlertTitle>
+        <AlertTitle>Reach unavailable</AlertTitle>
         <AlertDescription>Reload the page to try again.</AlertDescription>
       </Alert>
     )
   }
 
-  return <TeamsSettings change={changeStructureAction} members={loaded[1].members} structure={loaded[0]} />
+  return <TeamsSettings change={changeStructureAction} structure={structure} />
 }
 
 /**

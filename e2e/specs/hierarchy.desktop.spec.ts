@@ -33,15 +33,19 @@ async function as(browser: Browser, user: SeededUser): Promise<Page> {
 test("an owner puts someone in a team, and from then on they see their team, not everyone", async ({ browser }) => {
   const staff = tenant.users.staff
   const owner = await as(browser, tenant.users.owner_admin)
-  const teams = owner.getByRole("region", { name: "Teams" })
 
-  await owner.goto("/settings")
-  await teams.getByRole("textbox", { name: "New team" }).fill("Ops")
-  await teams.getByRole("button", { name: "Add" }).last().click()
-  await expect(teams.getByRole("textbox", { name: "Team name" })).toHaveValue("Ops")
-  await teams.getByRole("combobox", { name: "Add someone to Ops" }).click()
-  await owner.getByRole("option", { name: "E2E staff" }).click()
-  await expect(teams.getByRole("button", { name: "Make E2E staff lead Ops" })).toBeVisible()
+  // The owner makes a team on People's chart and moves the staff member into it,
+  // told first what that changes.
+  await owner.goto("/people?view=teams")
+  await owner.getByRole("textbox", { name: "New team", exact: true }).fill("Ops")
+  await owner.getByRole("button", { name: "Add new team", exact: true }).click()
+  await expect(owner.getByRole("textbox", { name: "Name of Ops" })).toHaveValue("Ops")
+  await owner.getByRole("region", { name: "Not in a team yet" }).getByRole("button", { name: "E2E staff" }).click()
+  await owner.getByRole("combobox", { name: "Team" }).click()
+  await owner.getByRole("option", { name: "Ops" }).click()
+  await expect(owner.getByRole("status")).toContainText("Once in a team, E2E staff sees only their teams and reporting line.")
+  await owner.getByRole("button", { name: "Move E2E staff" }).click()
+  await expect(owner.locator('[data-slot="team"]').filter({ hasText: "E2E staff" })).toBeVisible()
 
   // Placed, the staff member sees their team; Blair, placed nowhere, everyone.
   const placed = await as(browser, staff)
@@ -56,6 +60,7 @@ test("an owner puts someone in a team, and from then on they see their team, not
   await expect(unplaced.getByRole("main").getByText("E2E manager").first()).toBeVisible()
 
   // Widening staff to everyone gives the placed member everyone back.
+  await owner.goto("/settings")
   await owner.getByRole("combobox", { name: "What Staff sees" }).click()
   await owner.getByRole("option", { name: "Everyone" }).click()
   await expect(owner.getByRole("combobox", { name: "What Staff sees" })).toContainText("Everyone")

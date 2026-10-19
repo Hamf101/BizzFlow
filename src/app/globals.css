@@ -500,3 +500,19 @@
     animation: none !important;
   }
 }
+
+/*
+ * People's org chart: on a phone, teams nest as an indented list; from md up
+ * they hang as a tree, each team joined to the one above by drawn lines.
+ */
+.org-tree ul { margin: 0.75rem 0 0 0.75rem; padding: 0 0 0 0.75rem; list-style: none; border-left: 1px solid var(--border); display: flex; flex-direction: column; gap: 0.75rem; }
+@media (min-width: 48rem) {
+  .org-tree ul { position: relative; flex-direction: row; justify-content: center; gap: 0; margin: 0; padding: 1.5rem 0 0; border: 0; }
+  .org-tree ul::before { content: ""; position: absolute; top: 0; left: 50%; height: 1.5rem; border-left: 1px solid var(--border); }
+  .org-tree li { position: relative; display: flex; flex-direction: column; align-items: center; padding: 1.5rem 0.5rem 0; }
+  .org-tree li::before, .org-tree li::after { content: ""; position: absolute; top: 0; width: 50%; height: 1.5rem; border-top: 1px solid var(--border); }
+  .org-tree li::before { right: 50%; }
+  .org-tree li::after { left: 50%; border-left: 1px solid var(--border); }
+  .org-tree li:first-child::before, .org-tree li:last-child::after { border-top: 0; }
+  .org-tree li:only-child::before { display: none; }
+}
