@@ -29,7 +29,7 @@ export default async function ResetPasswordPage({
     Boolean(params.token_hash) || (await getAuthenticatedUser().then(() => true, () => false))
 
   const backToLogIn = (
-    <Link className="text-sm font-medium text-primary underline-offset-4 hover:underline" href="/login">
+    <Link className="-my-3 inline-block py-3 text-sm font-medium text-primary underline-offset-4 hover:underline" href="/login">
       Back to log in
     </Link>
   )

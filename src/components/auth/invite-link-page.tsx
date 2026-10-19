@@ -32,7 +32,7 @@ export type InviteLinkPageProps = {
   actions: { accept: FormAction; join: FormAction; switchAccount: FormAction }
 }
 
-const linkClassName = "text-sm font-medium text-primary underline-offset-4 hover:underline"
+const linkClassName = "-my-3 inline-block py-3 text-sm font-medium text-primary underline-offset-4 hover:underline"
 
 /**
  * The card a link that no longer works shows, with a way to log in.
@@ -156,7 +156,7 @@ export async function InviteLinkPage({
               <div className="flex items-center justify-between gap-3">
                 <FieldLabel htmlFor="password">Password</FieldLabel>
                 <Link
-                  className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+                  className="-my-3 inline-block py-3 text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
                   href="/forgot-password"
                 >
                   Forgot password?

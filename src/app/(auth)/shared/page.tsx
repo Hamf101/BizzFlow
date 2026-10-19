@@ -10,7 +10,7 @@ import { listGuestDocuments } from "@/services/document-service"
 
 export const metadata: Metadata = { title: "Shared with you" }
 
-const LINK = "text-sm font-medium text-primary underline-offset-4 hover:underline"
+const LINK = "-my-3 inline-block py-3 text-sm font-medium text-primary underline-offset-4 hover:underline"
 
 /**
  * Home for someone given documents from outside a workspace: each document

@@ -31,7 +31,7 @@ export default async function LoginPage({
         <>
           <span className="text-sm text-muted-foreground">New to BizFlow?</span>
           <Link
-            className="text-sm font-medium text-primary underline-offset-4 hover:underline"
+            className="-my-3 inline-block py-3 text-sm font-medium text-primary underline-offset-4 hover:underline"
             href="/signup"
           >
             Sign up
@@ -71,7 +71,7 @@ export default async function LoginPage({
             <div className="flex items-center justify-between gap-3">
               <FieldLabel htmlFor="password">Password</FieldLabel>
               <Link
-                className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+                className="-my-3 inline-block py-3 text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
                 href="/forgot-password"
               >
                 Forgot password?

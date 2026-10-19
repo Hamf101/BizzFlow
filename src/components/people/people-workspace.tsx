@@ -179,10 +179,10 @@ export function PeopleWorkspace({
 
         {getOrganizationRoleFromSubject(actorRole) === "owner_admin" ? (
           <Link
-            className="mt-auto mb-12 w-fit whitespace-nowrap text-sm font-normal text-primary underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/35 md:mb-0"
+            className="mt-auto mb-12 inline-flex min-h-11 w-fit items-center whitespace-nowrap text-sm font-normal text-primary underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/35 md:mb-0"
             href="/settings#roles-and-access"
           >
-            Edit roles and access →
+            Edit roles and access
           </Link>
         ) : null}
       </section>
@@ -384,7 +384,7 @@ function MemberProfilePreview({
           id={triggerId}
           render={
             <button
-              className="min-w-0 truncate rounded-sm px-0.5 py-1 text-left text-sm font-medium text-foreground outline-none hover:text-primary focus-visible:ring-2 focus-visible:ring-ring/35"
+              className="min-w-0 truncate rounded-sm px-0.5 py-1 text-left text-sm font-medium max-md:py-2.5 text-foreground outline-none hover:text-primary focus-visible:ring-2 focus-visible:ring-ring/35"
               type="button"
             />
           }

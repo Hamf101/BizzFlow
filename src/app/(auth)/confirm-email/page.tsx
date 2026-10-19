@@ -13,7 +13,7 @@ type ConfirmEmailSearchParams = Promise<{
   type?: string
 }>
 
-const linkClassName = "text-sm font-medium text-primary underline-offset-4 hover:underline"
+const linkClassName = "-my-3 inline-block py-3 text-sm font-medium text-primary underline-offset-4 hover:underline"
 
 /**
  * Where the confirmation email lands. It confirms only when pressed, so a mail

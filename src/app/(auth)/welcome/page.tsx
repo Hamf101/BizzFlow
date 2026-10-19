@@ -50,7 +50,7 @@ export default async function WelcomePage({
       <AuthPageCard
         description={errorMessage}
         footer={
-          <Link className="text-sm font-medium text-primary underline-offset-4 hover:underline" href="/welcome">
+          <Link className="-my-3 inline-block py-3 text-sm font-medium text-primary underline-offset-4 hover:underline" href="/welcome">
             Try again
           </Link>
         }
