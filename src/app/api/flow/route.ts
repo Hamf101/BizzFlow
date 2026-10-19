@@ -1,6 +1,4 @@
-import { NextResponse } from "next/server"
-
-import { createTemplateRouteErrorResponse, startFlowTurn } from "@/app/api/templates/_utils"
+import { createTemplateRouteErrorResponse, startFlowTurn, streamFlowTurn } from "@/app/api/templates/_utils"
 import { readTrustedJsonObject } from "@/lib/request-security"
 import { executeWorkspaceFlow } from "@/services/workspace-flow-service"
 
@@ -18,15 +16,19 @@ export async function POST(request: Request): Promise<Response> {
     const { organizationId, userId } = await startFlowTurn()
     const body = await readTrustedJsonObject(request)
 
-    return NextResponse.json(
-      await executeWorkspaceFlow({
-        actorUserId: userId,
-        history: body.history,
-        message: body.message,
-        model: body.model,
-        organizationId,
-        sourceDocumentId: body.sourceDocumentId,
-      })
+    return await streamFlowTurn(request, "workspace_flow", (onStage) =>
+      executeWorkspaceFlow(
+        {
+          actorUserId: userId,
+          history: body.history,
+          mentions: body.mentions,
+          message: body.message,
+          model: body.model,
+          organizationId,
+          sourceDocumentId: body.sourceDocumentId,
+        },
+        { onStage }
+      )
     )
   } catch (error: unknown) {
     return createTemplateRouteErrorResponse(error, "workspace_flow")

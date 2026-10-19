@@ -37,6 +37,58 @@ describe("workspace Flow", () => {
     )
   })
 
+  it("answers the everyday asks at once, without waiting on the model", async () => {
+    const generateStructured = vi.fn()
+    const listTasks = vi.fn(async () => [task("40000000-0000-4000-8000-000000000001", "2026-09-20T09:00:00.000Z")])
+    const listSubmissions = vi.fn(async () => [])
+    const quick = deps("staff", {}, { getAiRuntime: () => ({ model: { model: "test-model", provider: "test" }, provider: { generateStructured, id: "test" } }), listSubmissions, listTasks })
+
+    await expect(executeWorkspaceFlow(input("What's overdue?"), quick)).resolves.toMatchObject({ kind: "found", reply: "1 overdue task" })
+    await expect(executeWorkspaceFlow(input("what needs my review"), quick)).resolves.toMatchObject({ kind: "found", moreHref: "/submissions?status=submitted" })
+    await expect(executeWorkspaceFlow(input("my tasks"), quick)).resolves.toMatchObject({ kind: "found" })
+    expect(listTasks).toHaveBeenLastCalledWith(expect.objectContaining({ assignedTo: ME }))
+    // A phone's curly apostrophe is the same ask.
+    await expect(executeWorkspaceFlow(input("What’s overdue?"), quick)).resolves.toMatchObject({ kind: "found" })
+    expect(generateStructured).not.toHaveBeenCalled()
+
+    // A role that can't see the list hears so, as it would from the model's plan.
+    const refused = deps("external_reviewer", {}, {
+      getAiRuntime: () => ({ model: { model: "test-model", provider: "test" }, provider: { generateStructured, id: "test" } }),
+      listTasks: async () => {
+        throw new TemplateFlowServiceError("Forbidden.", 403)
+      },
+    })
+    await expect(executeWorkspaceFlow(input("What's overdue?"), refused)).resolves.toEqual({ kind: "reply", reply: "Your role can't see tasks." })
+
+    // Anything else, or the same words about something mentioned, still goes to the model.
+    await executeWorkspaceFlow(input("what's overdue for the Smith account?"), quick).catch(() => undefined)
+    expect(generateStructured).toHaveBeenCalledTimes(1)
+  })
+
+  it("says what it is doing: reading the message, then looking through the member's work", async () => {
+    const stages: string[] = []
+    const listTasks = vi.fn(async () => [])
+
+    await executeWorkspaceFlow(input("tasks about the van"), deps("staff", { action: "find", reply: "", subject: "tasks" }, { listTasks, onStage: (stage) => stages.push(stage) }))
+    await executeWorkspaceFlow(input("hello"), deps("staff", { action: "none", reply: "Hi." }, { onStage: (stage) => stages.push(stage) }))
+
+    expect(stages).toEqual(["thinking", "finding", "thinking"])
+  })
+
+  it("plans with what the member mentioned in view", async () => {
+    const generateStructured = vi.fn(deps("staff", { action: "none", reply: "It's due on the 20th." }).getAiRuntime!().provider.generateStructured)
+    const mention = { id: "30000000-0000-4000-8000-000000000009", kind: "tasks" }
+    const resolveMentions = vi.fn(async () => [{ details: "Task, open, due 2026-10-20", kind: "tasks" as const, name: "Renew permits" }])
+
+    await executeWorkspaceFlow(
+      { ...input("when is this due?"), mentions: [mention] },
+      deps("staff", {}, { getAiRuntime: () => ({ model: { model: "test-model", provider: "test" }, provider: { generateStructured, id: "test" } }), resolveMentions })
+    )
+
+    expect(resolveMentions).toHaveBeenCalledWith({ actorUserId: ME, mentions: [mention], organizationId: ORG })
+    expect(generateStructured.mock.calls[0]![0].input).toContain("Mentioned: Renew permits (tasks): Task, open, due 2026-10-20")
+  })
+
   it("starts only what the member may create", async () => {
     const plan = { action: "create", reply: "Starting an intake form.", target: "template", title: "Client intake" }
 

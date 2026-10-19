@@ -1,11 +1,18 @@
 "use client"
 
-import { LoaderCircle, Paperclip, X } from "lucide-react"
+import { AtSign, Camera, Folder, Link2, LoaderCircle, type LucideIcon, Paperclip, Plus, X } from "lucide-react"
 import { type ReactElement, useEffect, useEffectEvent, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 
 import { discardDocumentUpload, uploadDocumentFile } from "@/components/documents/document-upload-client"
 import type { FlowSource } from "@/components/flow/flow-handoff"
+import { type FlowMentions, FlowPicker, linkedMention, parseFlowLink } from "@/components/flow/flow-mentions"
+import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Input } from "@/components/ui/input"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { useMediaQuery } from "@/lib/use-media-query"
 import { FLOW_FILE_TYPES } from "@/types/template-flow"
 
 // What Flow reads; the server checks every file again, by its bytes.
@@ -15,7 +22,7 @@ const MAX_BYTES = 15 * 1024 * 1024
 const TITLE_MAX_LENGTH = 180
 const OPEN_WITH = "bizflow:flow-open-with"
 
-// Room at the message box's start for the paperclip.
+// Room at the message box's start for the plus.
 export const FLOW_COMPOSER_ATTACH = "pl-10 max-md:pl-13"
 
 /** What an empty message with a file attached asks for. */
@@ -137,18 +144,23 @@ export function useFlowAttachment(organizationId: string, onAdded?: () => void):
 }
 
 /**
- * The paperclip inside Flow's message box, and the Flow window taking a file
- * dropped on it.
+ * The plus inside Flow's message box: a file to read, from the computer, the
+ * camera or Files, or something in the workspace to mention. The Flow window
+ * also takes a file dropped on it.
  *
- * @param props - The attachment, and whether it can change now.
- * @returns The button and its file picker.
+ * @param props - The attachment, the mentions, and whether they can change now.
+ * @returns The button, its menu and pickers, and its file inputs.
  */
-export function FlowAttachButton({ attachment, disabled }: { attachment: FlowAttachment; disabled?: boolean }): ReactElement {
+export function FlowAddButton({ attachment, disabled, mentions }: { attachment: FlowAttachment; disabled?: boolean; mentions: FlowMentions }): ReactElement {
   const input = useRef<HTMLInputElement>(null)
+  const camera = useRef<HTMLInputElement>(null)
   const button = useRef<HTMLButtonElement>(null)
   // The window a file is dragged over, while it is.
   const [over, setOver] = useState<HTMLElement | null>(null)
+  const [picking, setPicking] = useState<"files" | "mention" | "link" | null>(null)
   const attach = useRef(attachment.attach)
+  // A phone or tablet: the only screens with a camera worth offering.
+  const touch = useMediaQuery("(pointer: coarse)")
 
   useEffect(() => {
     attach.current = attachment.attach
@@ -193,17 +205,58 @@ export function FlowAttachButton({ attachment, disabled }: { attachment: FlowAtt
 
   return (
     <>
-      <button
-        aria-label="Attach a form"
-        ref={button}
-        className="absolute bottom-1 left-1.5 max-md:bottom-0.5 grid size-8 place-items-center rounded-full text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40 disabled:opacity-35 max-md:size-11"
-        disabled={disabled}
-        onClick={() => input.current?.click()}
-        title="Attach a PDF, PNG or JPEG"
-        type="button"
-      >
-        <Paperclip aria-hidden="true" className="size-4" />
-      </button>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          aria-label="Add to your message"
+          className="absolute bottom-1 left-1.5 max-md:bottom-0.5 grid size-8 place-items-center rounded-full text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40 disabled:opacity-35 data-[popup-open]:bg-muted data-[popup-open]:text-foreground max-md:size-11 [&>svg]:transition-transform [&>svg]:duration-200 data-[popup-open]:[&>svg]:rotate-45"
+          disabled={disabled}
+          ref={button}
+        >
+          <Plus aria-hidden="true" className="size-[18px] stroke-[1.75]" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="min-w-48" side="top" sideOffset={8}>
+          <AddItem hint="A PDF or a photo of a form, for Flow to read" icon={Paperclip} onClick={() => input.current?.click()}>
+            Attach a file
+          </AddItem>
+          {touch ? (
+            <AddItem hint="Photograph a paper form" icon={Camera} onClick={() => camera.current?.click()}>
+              Take a photo
+            </AddItem>
+          ) : null}
+          <AddItem hint="Something already in your Files" icon={Folder} onClick={() => setPicking("files")}>
+            From Files
+          </AddItem>
+          <AddItem hint="Point Flow at a template, file, submission, task or person" icon={AtSign} onClick={() => setPicking("mention")}>
+            Mention
+          </AddItem>
+          <AddItem hint="A link to something in BizFlow" icon={Link2} onClick={() => setPicking("link")}>
+            Paste a link
+          </AddItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <FlowPicker
+        onOpenChange={(open) => setPicking(open ? "files" : null)}
+        onPick={(item) => attachment.set({ id: item.id, name: item.name })}
+        only="files"
+        open={picking === "files"}
+      />
+      <FlowPicker onOpenChange={(open) => setPicking(open ? "mention" : null)} onPick={mentions.add} open={picking === "mention"} />
+      <FlowLinkDialog mentions={mentions} onOpenChange={(open) => setPicking(open ? "link" : null)} open={picking === "link"} />
+      <input
+        accept="image/jpeg,image/png"
+        capture="environment"
+        className="hidden"
+        onChange={(event) => {
+          const file = event.target.files?.[0]
+
+          event.target.value = ""
+
+          if (file) attachment.attach(file)
+        }}
+        ref={camera}
+        tabIndex={-1}
+        type="file"
+      />
       <input
         accept={ACCEPT}
         className="hidden"
@@ -304,4 +357,80 @@ export function useFlowOpenWith(onOpen: (source: FlowSource) => void): void {
     window.addEventListener(OPEN_WITH, listener)
     return () => window.removeEventListener(OPEN_WITH, listener)
   }, [])
+}
+
+// What an option does, said after a second's hover, so the menu itself stays short.
+const HINT_DELAY_MS = 1_000
+
+function AddItem({ children, hint, icon: Icon, onClick }: { children: string; hint: string; icon: LucideIcon; onClick: () => void }): ReactElement {
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        delay={HINT_DELAY_MS}
+        render={
+          <DropdownMenuItem className="max-md:py-2.5" onClick={onClick}>
+            <Icon aria-hidden="true" />
+            {children}
+          </DropdownMenuItem>
+        }
+      />
+      <TooltipContent side="right">{hint}</TooltipContent>
+    </Tooltip>
+  )
+}
+
+function FlowLinkDialog({ mentions, onOpenChange, open }: { mentions: FlowMentions; onOpenChange: (open: boolean) => void; open: boolean }): ReactElement {
+  const [link, setLink] = useState("")
+  const [error, setError] = useState<string | null>(null)
+  const close = (next: boolean): void => {
+    if (!next) {
+      setLink("")
+      setError(null)
+    }
+    onOpenChange(next)
+  }
+
+  return (
+    <Dialog onOpenChange={close} open={open}>
+      <DialogContent className="gap-3 sm:max-w-md">
+        <DialogTitle>Paste a link</DialogTitle>
+        <form
+          className="grid gap-2"
+          onSubmit={(event) => {
+            event.preventDefault()
+            const found = parseFlowLink(link, location.origin)
+
+            if (!found) {
+              setError("That isn't a link to a template, file, submission or task in BizFlow.")
+              return
+            }
+
+            mentions.add(linkedMention(found))
+            close(false)
+          }}
+        >
+          <Input
+            aria-describedby={error ? "flow-link-error" : undefined}
+            aria-invalid={error !== null}
+            aria-label="Link"
+            autoFocus
+            onChange={(event) => {
+              setLink(event.target.value)
+              setError(null)
+            }}
+            placeholder="Paste a link to a template, file, submission or task"
+            value={link}
+          />
+          {error ? (
+            <p className="text-sm text-destructive" id="flow-link-error">
+              {error}
+            </p>
+          ) : null}
+          <Button className="justify-self-end" disabled={link.trim() === ""} type="submit">
+            Add
+          </Button>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
 }

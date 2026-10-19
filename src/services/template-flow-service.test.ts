@@ -219,6 +219,7 @@ describe("template Flow service", () => {
         id: "00000000-0000-4000-8000-000000000099",
         role: "assistant",
         content: "What would you like to improve?",
+        authorUserId: null,
         authorName: null,
         operations: [],
         changedBlockIds: [],
@@ -529,6 +530,40 @@ describe("template Flow service", () => {
       provider: TEST_PROVIDER_ID,
       model: TEST_MODEL
     })
+  })
+
+  it("says what it is doing as it does it, so the member never waits on silence", async () => {
+    const stages: string[] = []
+    const aiProvider = createTestAiProvider([rawFlowProviderResult(successfulFlowPayload())])
+
+    await executeTemplateFlow(createInput(createBlankTemplateContent(), "Create an agreement."), {
+      ...createDependencies({ aiProvider }),
+      onStage: (stage) => stages.push(stage),
+    })
+
+    expect(stages).toEqual(["reading", "writing", "checking"])
+  })
+
+  it("hands Flow what the member mentioned, read as them, and nothing when they mention nothing", async () => {
+    const aiProvider = createTestAiProvider([rawFlowProviderResult(successfulFlowPayload())])
+    const asked: unknown[] = []
+    const mention = { id: "76000000-0000-4000-8000-000000000001", kind: "templates" as const }
+    const deps = {
+      ...createDependencies({ aiProvider }),
+      resolveMentions: async (input: unknown) => {
+        asked.push(input)
+        return [{ details: "Template, published. Holds: Vehicle", kind: "templates" as const, name: "Staff parking permit" }]
+      },
+    }
+
+    await executeTemplateFlow({ ...createInput(createBlankTemplateContent(), "Match @Staff parking permit."), mentions: [mention, mention] }, deps)
+    await executeTemplateFlow(createInput(createBlankTemplateContent(), "Create an agreement."), deps)
+
+    const [first, second] = readProviderRequests(aiProvider).map((request) => JSON.parse(request.input) as Record<string, unknown>)
+    expect(first!.mentioned).toEqual([{ details: "Template, published. Holds: Vehicle", kind: "templates", name: "Staff parking permit" }])
+    expect(second).not.toHaveProperty("mentioned")
+    // Each item once, and only for the turn that names it.
+    expect(asked).toEqual([expect.objectContaining({ mentions: [mention] })])
   })
 
   it("runs the model the member picked, and refuses one Flow doesn't offer", async () => {

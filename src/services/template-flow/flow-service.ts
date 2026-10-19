@@ -30,6 +30,7 @@ import type {
 } from "@/types/template-flow"
 import {
   type DocumentFlowServiceDeps,
+  type FlowStage,
   type EditableFlowRequest,
   type ExecuteDocumentFlowInput,
   type ExecuteTemplateFlowInput,
@@ -60,6 +61,7 @@ import {
   resolveFlowAuthorName,
 } from "@/services/template-flow/persistence"
 import { loadFlowSource, readSourceAnswers } from "@/services/template-flow/import-source"
+import { resolveFlowMentions } from "@/services/template-flow/mentions"
 import {
   FLOW_SOURCE_INSTRUCTION,
   buildFlowDocumentContext,
@@ -119,8 +121,9 @@ export async function executeTemplateFlow(
   }
 
   await authorizeFlowRequest(request, deps, startedAt)
+  deps.onStage?.("reading")
 
-  const [source, aiRuntime, history, authorName] = await Promise.all([
+  const [source, aiRuntime, history, authorName, mentioned] = await Promise.all([
     request.sourceDocumentId === undefined
       ? null
       : (deps.loadSource ?? ((subject) => loadFlowSource(subject, { client: getFlowClient(deps.client) })))({
@@ -133,12 +136,17 @@ export async function executeTemplateFlow(
       organizationId: request.organizationId,
       templateId: request.templateId
     }),
-    (deps.resolveAuthorName ?? ((actorUserId) => resolveFlowAuthorName(actorUserId, deps.client)))(request.actorUserId)
+    (deps.resolveAuthorName ?? ((actorUserId) => resolveFlowAuthorName(actorUserId, deps.client)))(request.actorUserId),
+    request.mentions?.length
+      ? (deps.resolveMentions ?? resolveFlowMentions)({ actorUserId: request.actorUserId, mentions: request.mentions, organizationId: request.organizationId })
+      : []
   ])
   const createId = deps.createId ?? randomUUID
   const providerResult = await requestFlowProvider({
     createId,
     history,
+    mentioned,
+    onStage: deps.onStage,
     runtime: aiRuntime,
     request,
     source,
@@ -262,6 +270,7 @@ export async function executeDocumentFlow(
       actorUserId,
       draft: input.draft,
       instruction: input.instruction,
+      mentions: input.mentions,
       model: input.model,
       organizationId,
       sourceDocumentId: input.sourceDocumentId,
@@ -517,6 +526,8 @@ async function loadAiRuntime(
 async function requestFlowProvider(input: {
   createId: () => string
   history: TemplateFlowMessage[]
+  mentioned: ReadonlyArray<{ details: string; kind: string; name: string }>
+  onStage?: (stage: FlowStage) => void
   request: EditableFlowRequest
   runtime: AiRuntime
   source: AiAttachment | null
@@ -555,6 +566,7 @@ async function requestFlowProvider(input: {
         role: message.role,
         content: message.content
       })),
+    ...(input.mentioned.length > 0 ? { mentioned: input.mentioned } : {}),
     userMessage: input.request.instruction,
     ...(input.source ? { attachedForm: FLOW_SOURCE_INSTRUCTION } : {})
   }
@@ -584,6 +596,7 @@ async function requestFlowProvider(input: {
       }
 
       calls += 1
+      input.onStage?.("tidying")
       const result = await input.runtime.provider.generateStructured({
         model,
         input: createFlowRevisePrompt({ request, priorResponse: firstText, faults, draft: first.application.draft }),
@@ -640,6 +653,9 @@ async function requestFlowProvider(input: {
     providerCall += 1
   ) {
     let result: AiStructuredGenerationResult
+
+    // A repair is still writing: the member hears it once.
+    if (providerCall === 1) input.onStage?.("writing")
 
     try {
       result = await input.runtime.provider.generateStructured({
@@ -708,6 +724,7 @@ async function requestFlowProvider(input: {
     >
 
     if (parsedOutput.success) {
+      if (providerCall === 1) input.onStage?.("checking")
       const candidateValidation = validateFlowCandidate({
         createId: input.createId,
         request: input.request,

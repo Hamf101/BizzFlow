@@ -313,6 +313,42 @@
   }
 }
 
+/*
+ * Flow at work (flow-message.tsx): each piece of its mark eases out from the
+ * page's middle and back, on its own pace, start, way and turn, and the stage
+ * it is on rises in, then breathes.
+ */
+.flow-mark-working polygon {
+  animation: flow-mark-part var(--p) cubic-bezier(0.45, 0, 0.55, 1) var(--l) infinite alternate;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.flow-working-now {
+  animation:
+    flow-working-rise 0.25s ease-out,
+    flow-working-breathe 1.6s ease-in-out 0.25s infinite;
+}
+
+@keyframes flow-mark-part {
+  to {
+    transform: translate(var(--x), var(--y)) rotate(var(--r));
+  }
+}
+
+@keyframes flow-working-rise {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+@keyframes flow-working-breathe {
+  50% {
+    opacity: 0.55;
+  }
+}
+
 @keyframes auth-fold-float {
   from {
     transform: translateY(-8px) rotate(-1.6deg);

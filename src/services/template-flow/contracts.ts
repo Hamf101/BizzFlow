@@ -85,6 +85,21 @@ export const editableFlowDraftSchema = flowDraftSchema
   .extend({ content: templateContentV3Schema })
   .strict()
 
+/** What Flow is doing right now, told to the member while they wait. */
+export type FlowStage = "reading" | "writing" | "checking" | "tidying" | "thinking" | "finding"
+
+export const FLOW_MENTION_KINDS = ["templates", "submissions", "tasks", "files", "people"] as const
+
+/** What a member points Flow at with @: at most five items, each once. */
+export const flowMentionsSchema = z
+  .array(z.object({ id: z.string().uuid(), kind: z.enum(FLOW_MENTION_KINDS) }).strict())
+  // Bounded before the duplicates are compared, so a flood costs nothing to refuse.
+  .max(20, { error: "Mention at most five things at once." })
+  .transform((mentions) => mentions.filter((mention, index) => mentions.findIndex((other) => other.id === mention.id && other.kind === mention.kind) === index))
+  .pipe(z.array(z.object({ id: z.string(), kind: z.enum(FLOW_MENTION_KINDS) })).max(5, { error: "Mention at most five things at once." }))
+
+export type FlowMention = z.infer<typeof flowMentionsSchema>[number]
+
 export const flowRequestSchema = z
   .object({
     actorUserId: z.string().trim().min(1),
@@ -94,7 +109,9 @@ export const flowRequestSchema = z
     instruction: z.string().trim().min(2).max(2_000),
     model: flowModelSchema.optional(),
     // An uploaded form for Flow to recreate, sent again on each turn that continues it.
-    sourceDocumentId: z.string().uuid().optional()
+    sourceDocumentId: z.string().uuid().optional(),
+    // What the member pointed at with @, for this turn only.
+    mentions: flowMentionsSchema.optional()
   })
   .strict()
 
@@ -472,6 +489,7 @@ export type ExecuteTemplateFlowInput = {
   instruction: unknown
   model?: unknown
   sourceDocumentId?: unknown
+  mentions?: unknown
 }
 
 /** An uploaded document Flow is asked to read, and who asks. */
@@ -493,6 +511,7 @@ export type ExecuteDocumentFlowInput = {
   model?: unknown
   /** An uploaded form for Flow to recreate on the page, sent again on each turn that continues it. */
   sourceDocumentId?: unknown
+  mentions?: unknown
 }
 
 export type RebuildTemplateFlowProposalInput = Omit<ExecuteTemplateFlowInput, "instruction" | "model"> & {
@@ -542,6 +561,10 @@ export type TemplateFlowServiceDeps = {
     actorUserId: string
   }) => Promise<void>
   resolveAuthorName?: (actorUserId: string) => Promise<string>
+  /** Hears each stage of the turn as it starts. */
+  onStage?: (stage: FlowStage) => void
+  /** Reads what the member mentioned, as them. */
+  resolveMentions?: (input: { actorUserId: string; mentions: readonly FlowMention[]; organizationId: string }) => Promise<ReadonlyArray<{ details: string; kind: FlowMention["kind"]; name: string }>>
 }
 
 /** Error raised when Flow cannot safely complete a template conversation turn. */

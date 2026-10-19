@@ -32,10 +32,12 @@ import {
 } from "react"
 import * as z from "zod"
 
-import { FLOW_COMPOSER_ATTACH, FlowAttachButton, FlowAttachChip, RECREATE, useFlowAttachment } from "@/components/flow/flow-attach"
+import { FLOW_COMPOSER_ATTACH, FlowAddButton, FlowAttachChip, RECREATE, useFlowAttachment } from "@/components/flow/flow-attach"
 import type { FlowHandoff, FlowSource } from "@/components/flow/flow-handoff"
 import { FlowModelPicker, useFlowModel } from "@/components/flow/flow-model-picker"
-import { FlowMessage } from "@/components/flow/flow-message"
+import { FlowMentionChips, useFlowMentions } from "@/components/flow/flow-mentions"
+import { FlowMessage, FlowWorking } from "@/components/flow/flow-message"
+import { FLOW_STREAM_HEADERS, readFlowTurn } from "@/components/flow/flow-stream"
 import { FLOW_COMPOSER, FLOW_SEND } from "@/components/flow/flow-window"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -58,6 +60,7 @@ import type {
   TemplateFlowResult,
   TemplateFlowWireOperation
 } from "@/types/template-flow"
+import type { FlowStage } from "@/services/template-flow/contracts"
 
 // The server bounds every AI call itself (two at most per turn), so this only
 // catches a connection that never answers, and must outlast the longest turn.
@@ -161,6 +164,10 @@ export function TemplateFlowPanel({
   const [review, setReview] = useState<FlowReview | null>(null)
   const [isRebuilding, setIsRebuilding] = useState<boolean>(false)
   const attachment = useFlowAttachment(organizationId ?? "")
+  const mentions = useFlowMentions()
+  // How far the turn in flight has got, as the server says, and whether it is reading a form.
+  const [stages, setStages] = useState<readonly FlowStage[]>([])
+  const [readingForm, setReadingForm] = useState(false)
   // The answers each proposal read off its form, by its message, kept in this
   // tab only and never saved with the chat. A form recreated over several
   // turns is answered a turn at a time, so every applied turn's answers from
@@ -243,7 +250,13 @@ export function TemplateFlowPanel({
     setErrorMessage(null)
     setWarningMessage(null)
     setIsLoading(true)
+    // Said at once, before the server's first word arrives.
+    setStages(["reading"])
+    setReadingForm(source !== null)
     setInstruction("")
+    // A mention goes with this message only; a failed send puts it back.
+    const mentioned = mentions.items
+    mentions.clear()
     const controller = new AbortController()
     const timeoutId = window.setTimeout(
       (): void => controller.abort(),
@@ -257,21 +270,22 @@ export function TemplateFlowPanel({
           templateId,
           draft: toTemplateFlowDraft(draft),
           instruction: trimmedInstruction,
+          mentions: mentions.payload,
           model: flowModel.chosen(),
           // Sent again on every turn while it stays attached: each turn reads it afresh.
           sourceDocumentId: source?.id
         }),
-        headers: { "Content-Type": "application/json" },
+        headers: FLOW_STREAM_HEADERS,
         method: "POST",
         signal: controller.signal
       })
-      const payload = await readJsonResponse(response)
+      const turn = await readFlowTurn(response, (stage) => setStages((current) => (current.at(-1) === stage ? current : [...current, stage])))
 
-      if (!response.ok) {
-        throw new Error(readApiError(payload))
+      if (!turn.ok) {
+        throw new Error(turn.error)
       }
 
-      const result = parseFlowResult(payload)
+      const result = parseFlowResult(turn.payload)
       setMessages((currentMessages: TemplateFlowMessage[]) => [
         ...currentMessages,
         ...result.messages
@@ -329,6 +343,7 @@ export function TemplateFlowPanel({
       })
       setErrorMessage(reason)
       setInstruction(message.trim())
+      mentions.restore(mentioned)
     } finally {
       window.clearTimeout(timeoutId)
       setIsLoading(false)
@@ -546,7 +561,7 @@ export function TemplateFlowPanel({
                 showChanges={displayedPendingProposal === null || message.id !== pendingMessageId}
                 startsRun={
                   previous?.role !== message.role ||
-                  previous.authorName !== message.authorName ||
+                  (previous.authorUserId ?? previous.authorName) !== (message.authorUserId ?? message.authorName) ||
                   Date.parse(message.createdAt) - Date.parse(previous.createdAt) > RUN_BREAK_MS
                 }
               />
@@ -570,10 +585,9 @@ export function TemplateFlowPanel({
         )}
 
         {isLoading && (
-          <div className="mt-5 flex items-center gap-2 border-l border-primary/30 pl-3 text-sm text-muted-foreground">
-            <LoaderCircle className="size-4 animate-spin text-primary" />
-            <span>Flow is reading the document…</span>
-          </div>
+          <ul className="mt-3 flex flex-col">
+            <FlowWorking readingForm={readingForm} stages={stages} />
+          </ul>
         )}
       </div>
 
@@ -594,6 +608,7 @@ export function TemplateFlowPanel({
         <label className="sr-only" htmlFor="flow-composer">
           Ask Flow
         </label>
+        {organizationId ? <FlowMentionChips mentions={mentions} /> : null}
         {organizationId ? <FlowAttachChip attachment={attachment} /> : null}
         <div className="relative">
           {/* One line tall, growing with the message to about six. */}
@@ -607,11 +622,12 @@ export function TemplateFlowPanel({
               setInstruction(event.target.value)
             }
             onKeyDown={handleComposerKeyDown}
+            onPaste={organizationId ? mentions.onPaste : undefined}
             placeholder={starter.placeholder}
             value={instruction}
           />
           {organizationId ? (
-            <FlowAttachButton attachment={attachment} disabled={isLoading || pendingProposal !== null} />
+            <FlowAddButton attachment={attachment} disabled={isLoading || pendingProposal !== null} mentions={mentions} />
           ) : null}
           <button
             aria-label="Send message to Flow"
@@ -864,18 +880,23 @@ function FlowMessageEntry({
   /** Whether this opens a run of one author's messages, which names them once. */
   startsRun: boolean
 }): ReactElement {
+  const time = <time dateTime={message.createdAt}>{formatMessageTime(message.createdAt)}</time>
+
   if (message.role === "user") {
+    const name = message.authorName || "Team member"
+
     return (
       <FlowMessage
         author={
           startsRun ? (
             <>
-              {message.authorName || "Team member"}
-              <time dateTime={message.createdAt}>{formatMessageTime(message.createdAt)}</time>
+              {name}
+              {time}
             </>
           ) : undefined
         }
         from="member"
+        speaker={name}
       >
         {message.content}
       </FlowMessage>
@@ -883,7 +904,7 @@ function FlowMessageEntry({
   }
 
   return (
-    <FlowMessage from="flow">
+    <FlowMessage author={startsRun ? time : undefined} from="flow">
       <p className="whitespace-pre-wrap">{message.content}</p>
 
       {showChanges && message.operations.length > 0 && (
@@ -1076,6 +1097,8 @@ const flowMessageSchema = z.object({
   id: z.string(),
   role: z.enum(["user", "assistant"]),
   content: z.string(),
+  // A server from before author ids were sent leaves it out.
+  authorUserId: z.string().nullable().catch(null),
   authorName: z.string().nullable(),
   operations: z.array(ledgerItemSchema),
   changedBlockIds: strings,

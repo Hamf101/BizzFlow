@@ -6,7 +6,7 @@ import { createBlankTemplateContent } from "@/types/template"
 type Json = Record<string, unknown>
 
 const ledger = (): Json => ({ id: "i", type: "add_block", summary: "s", target: "t", affectedBlockIds: ["b"], dependsOn: [0] })
-const message = (role: string): Json => ({ id: `m-${role}`, role, content: "c", authorName: null, operations: [ledger()], changedBlockIds: ["b"], receiptStatus: null, createdAt: "2026-10-06T09:00:00.000Z" })
+const message = (role: string): Json => ({ id: `m-${role}`, role, content: "c", authorUserId: null, authorName: null, operations: [ledger()], changedBlockIds: ["b"], receiptStatus: null, createdAt: "2026-10-06T09:00:00.000Z" })
 const issue = (): Json => ({ code: "c", severity: "warning", message: "m", affectedBlockIds: ["b"] })
 const proposal = (): Json => ({
   id: "p",
@@ -42,6 +42,7 @@ const resultCases: Array<[string, (r: Json) => unknown, (r: Json) => unknown]> =
   ["payload a list", () => [], () => null],
   ["payload a string", () => "x", () => null],
   ["author named", (r) => withMessage(r, { authorName: "Ada" }), (r) => withMessage(r, { authorName: "Ada" })],
+  ["author id from an older server missing", (r) => withMessage(r, { authorUserId: undefined }), (r) => r],
   ["author missing", (r) => withMessage(r, { authorName: undefined }), () => null],
   ["author a number", (r) => withMessage(r, { authorName: 1 }), () => null],
   ["receipt proposed", (r) => withMessage(r, { receiptStatus: "proposed" }), (r) => withMessage(r, { receiptStatus: "proposed" })],

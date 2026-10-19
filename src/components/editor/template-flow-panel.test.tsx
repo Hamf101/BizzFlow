@@ -2,7 +2,7 @@
 
 import { act, type ReactElement, useState } from "react"
 import type { Root } from "react-dom/client"
-import { afterEach, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, expect, it, vi } from "vitest"
 
 import { describeFill, TemplateFlowPanel } from "@/components/editor/template-flow-panel"
 import { createTemplateFlowDraftFingerprint } from "@/services/template-flow-proposal-state"
@@ -14,6 +14,11 @@ const TEMPLATE_ID = "30000000-0000-4000-8000-000000000001"
 const draft: TemplateFlowDraft = { title: "Vehicle form", description: "", content: createBlankTemplateContent() }
 
 let root: Root | null = null
+
+// jsdom has no media queries; the add menu asks whether a camera is at hand.
+beforeEach(() => {
+  vi.stubGlobal("matchMedia", () => ({ addEventListener: () => undefined, matches: false, removeEventListener: () => undefined }))
+})
 
 afterEach(() => {
   root = null
@@ -75,10 +80,7 @@ it("drops a change with what needs it, applies only the kept ones, and keeps the
   const fetchFlow = vi.fn(async (url: string) =>
     url.endsWith("/rebuild")
       ? new Promise((resolve) => rebuilds.push((ok) => resolve({ ok, json: async () => (ok ? { proposal: rebuilt } : { error: "Flow is busy." }) })))
-      : {
-          ok: true,
-          json: async () => ({ proposal: proposed, messages: [message("user", "m-1"), message("assistant", "m-2")], needsConfirmation: false, persistenceWarning: null }),
-        }
+      : Response.json({ proposal: proposed, messages: [message("user", "m-1"), message("assistant", "m-2")], needsConfirmation: false, persistenceWarning: null })
   )
   const onApplyProposal = vi.fn()
   let held: TemplateFlowProposal | null = null
@@ -163,7 +165,7 @@ it("drops a change with what needs it, applies only the kept ones, and keeps the
 
 it("sends a message, even one carried in on open, to the model this person picked last", async () => {
   localStorage.setItem("bizflow.flow-model", "gemini-3.5-flash")
-  const fetchFlow = vi.fn(async () => ({ ok: false, json: async () => ({ error: "Stop here." }) }))
+  const fetchFlow = vi.fn(async () => Response.json({ error: "Stop here." }, { status: 500 }))
   vi.stubGlobal("fetch", fetchFlow)
 
   const container = document.createElement("div")
@@ -203,7 +205,7 @@ it("keeps a proposal rejected while it rebuilds rejected", async () => {
   vi.stubGlobal("fetch", vi.fn(async (url: string) =>
     url.endsWith("/rebuild")
       ? new Promise((resolve) => { endRebuild = () => resolve({ ok: true, json: async () => ({ proposal: proposal("Rebuilt", [proposed.operations[1]!]) }) }) })
-      : { ok: true, json: async () => ({ proposal: proposed, messages: [message("user", "m-1"), message("assistant", "m-2")], needsConfirmation: false, persistenceWarning: null }) }
+      : Response.json({ proposal: proposed, messages: [message("user", "m-1"), message("assistant", "m-2")], needsConfirmation: false, persistenceWarning: null })
   ))
   let held: TemplateFlowProposal | null = null
 
@@ -266,15 +268,12 @@ function importEditor(turns: ReadonlyArray<Readonly<{ answers: Record<string, un
       id, role, content: "Done.", authorName: null, operations: role === "assistant" ? operations : [], changedBlockIds: [], receiptStatus: null, createdAt: "2026-10-06T09:00:00.000Z",
     })
 
-    return {
-      ok: true,
-      json: async () => ({
-        proposal: { ...proposal(`Turn ${at}`, operations), sourceAnswers: answers },
-        messages: [message("user", `u-${at}`), message("assistant", `a-${at}`)],
-        needsConfirmation: false,
-        persistenceWarning: null,
-      }),
-    }
+    return Response.json({
+      proposal: { ...proposal(`Turn ${at}`, operations), sourceAnswers: answers },
+      messages: [message("user", `u-${at}`), message("assistant", `a-${at}`)],
+      needsConfirmation: false,
+      persistenceWarning: null,
+    })
   }))
 
   function Editor(): ReactElement {
@@ -360,10 +359,12 @@ it("lets answers go when a change is dropped, since the fields they were keyed f
   expect(fillAction).not.toHaveBeenCalled()
 })
 
-it("names a teammate once at the start of each run of their messages, starting a new run after a break, and voices Flow's turns as Flow", () => {
-  const said = (id: string, role: "user" | "assistant", authorName: string | null, content: string, createdAt = "2026-10-18T09:00:00.000Z") => ({
-    id, role, content, authorName, operations: [], changedBlockIds: [], receiptStatus: null, createdAt,
+it("names a teammate once at the start of each run of their messages, starting a new run after a break or another person of the same name", () => {
+  const said = (id: string, role: "user" | "assistant", author: [string, string] | null, content: string, createdAt = "2026-10-18T09:00:00.000Z") => ({
+    id, role, content, authorUserId: author?.[0] ?? null, authorName: author?.[1] ?? null, operations: [], changedBlockIds: [], receiptStatus: null, createdAt,
   })
+  const ana: [string, string] = ["u-ana", "Ana Lopez"]
+  const ben: [string, string] = ["u-ben", "Ben Okafor"]
 
   act(() =>
     mount().render(
@@ -371,13 +372,16 @@ it("names a teammate once at the start of each run of their messages, starting a
         canUndo={false}
         draft={draft}
         initialMessages={[
-          said("m-1", "user", "Ana Lopez", "Draft a parking permit."),
-          said("m-2", "user", "Ana Lopez", "For staff only."),
+          said("m-1", "user", ana, "Draft a parking permit."),
+          said("m-2", "user", ana, "For staff only."),
           said("m-3", "assistant", null, "Here's a first draft."),
           said("m-4", "assistant", null, "Want a second vehicle?"),
-          said("m-5", "user", "Ben Okafor", "Yes, add one."),
+          said("m-5", "user", ben, "Yes, add one."),
           // Back after lunch: a new run, so the later time shows.
-          said("m-6", "user", "Ben Okafor", "And a visitor badge.", "2026-10-18T13:00:00.000Z"),
+          said("m-6", "user", ben, "And a visitor badge.", "2026-10-18T13:00:00.000Z"),
+          // Two different people who happen to share a name.
+          said("m-7", "user", ["u-sam-1", "Sam Lee"], "Add a cost centre."),
+          said("m-8", "user", ["u-sam-2", "Sam Lee"], "And a manager's signature."),
         ]}
         lastAppliedMessageId={null}
         onApplyProposal={() => undefined}
@@ -388,15 +392,21 @@ it("names a teammate once at the start of each run of their messages, starting a
     )
   )
 
-  const text = document.body.textContent ?? ""
-  expect(text.split("Ana Lopez")).toHaveLength(2)
-  expect(text.split("Ben Okafor")).toHaveLength(3)
-  for (const words of ["Draft a parking permit.", "For staff only.", "Here's a first draft.", "Want a second vehicle?", "Yes, add one."]) {
-    expect(text).toContain(words)
+  const entries = [...document.querySelectorAll("li")]
+  const shown = (entry: Element): string => {
+    const copy = entry.cloneNode(true) as Element
+    copy.querySelectorAll(".sr-only").forEach((hidden) => hidden.remove())
+    return copy.textContent ?? ""
   }
-  // Flow's mark stands in for its name on screen; a screen reader still hears who spoke.
-  expect([...document.querySelectorAll("li")].filter((entry) => entry.textContent?.startsWith("Flow")).map((entry) => entry.textContent)).toEqual([
-    "FlowHere's a first draft.",
-    "FlowWant a second vehicle?",
+  const onScreen = entries.map(shown).join("|")
+  expect(onScreen.split("Ana Lopez")).toHaveLength(2)
+  expect(onScreen.split("Ben Okafor")).toHaveLength(3)
+  expect(onScreen.split("Sam Lee")).toHaveLength(3)
+
+  // A screen reader hears who spoke on every turn, Flow's included.
+  expect(entries.map((entry) => entry.textContent?.match(/^(Ana Lopez|Ben Okafor|Sam Lee|Flow)/)?.[0])).toEqual([
+    "Ana Lopez", "Ana Lopez", "Flow", "Flow", "Ben Okafor", "Ben Okafor", "Sam Lee", "Sam Lee",
   ])
+  // Each run shows its time once, Flow's as well as a member's.
+  expect(entries.map((entry) => entry.querySelector("time") !== null)).toEqual([true, false, true, false, true, true, true, true])
 })

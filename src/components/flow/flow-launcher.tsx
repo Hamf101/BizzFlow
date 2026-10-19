@@ -7,12 +7,15 @@ import { type FormEvent, type KeyboardEvent, type ReactElement, useRef, useState
 
 import { createGeneratedDocumentAction } from "@/app/(dashboard)/documents/actions"
 import { createTemplateAction } from "@/app/(dashboard)/templates/actions"
-import { FLOW_COMPOSER_ATTACH, FlowAttachButton, FlowAttachChip, RECREATE, useFlowAttachment, useFlowOpenWith } from "@/components/flow/flow-attach"
+import { FLOW_COMPOSER_ATTACH, FlowAddButton, FlowAttachChip, RECREATE, useFlowAttachment, useFlowOpenWith } from "@/components/flow/flow-attach"
 import { handOffToFlow } from "@/components/flow/flow-handoff"
 import { FlowModelPicker, useFlowModel } from "@/components/flow/flow-model-picker"
-import { FlowMessage } from "@/components/flow/flow-message"
+import { FlowMentionChips, useFlowMentions } from "@/components/flow/flow-mentions"
+import { FlowMessage, FlowWorking } from "@/components/flow/flow-message"
+import { FLOW_STREAM_HEADERS, readFlowTurn } from "@/components/flow/flow-stream"
 import { FLOW_COMPOSER, FLOW_SEND, FlowWindow } from "@/components/flow/flow-window"
 import { cn } from "@/lib/utils"
+import type { FlowStage } from "@/services/template-flow/contracts"
 import type { WorkspaceFlowAnswer, WorkspaceFlowItem } from "@/services/workspace-flow-service"
 
 const PROMPTS = ["What's overdue?", "What needs my review?", "Start an intake form"] as const
@@ -62,6 +65,9 @@ function FlowConversation({
   // Read at once, not from the last render, so a quick second Enter never sends twice.
   const sending = useRef(false)
   const flowModel = useFlowModel()
+  const mentions = useFlowMentions()
+  // How far the turn in flight has got, as the server says.
+  const [stages, setStages] = useState<readonly FlowStage[]>([])
   const router = useRouter()
   // Files shows a file attached on it in place.
   const attachment = useFlowAttachment(organizationId, () => {
@@ -92,19 +98,26 @@ function FlowConversation({
     const history = turns.slice(-6).map((turn) => ({ role: turn.role, text: turn.text }))
     add({ role: "member", text: trimmed })
     setText("")
+    // A mention goes with this message only; a failed send puts it back.
+    const mentioned = mentions.items
+    mentions.clear()
     setBusy(true)
+    // Said at once, before the server's first word arrives.
+    setStages(["thinking"])
 
     try {
       const response = await fetch("/api/flow", {
-        body: JSON.stringify({ history, message: trimmed, model: flowModel.chosen(), sourceDocumentId: source?.id }),
-        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ history, mentions: mentions.payload, message: trimmed, model: flowModel.chosen(), sourceDocumentId: source?.id }),
+        headers: FLOW_STREAM_HEADERS,
         method: "POST",
       })
-      const payload = (await response.json().catch(() => ({}))) as Partial<WorkspaceFlowAnswer> & { error?: string }
+      const turn = await readFlowTurn(response, (stage) => setStages((current) => (current.at(-1) === stage ? current : [...current, stage])))
 
-      if (!response.ok || !payload.kind) {
-        throw new Error(payload.error ?? "Flow couldn't answer that.")
-      }
+      if (!turn.ok) throw new Error(turn.error)
+
+      const payload = (turn.payload ?? {}) as Partial<WorkspaceFlowAnswer>
+
+      if (!payload.kind) throw new Error("Flow couldn't answer that.")
 
       const answer = payload as WorkspaceFlowAnswer
       add({
@@ -128,6 +141,7 @@ function FlowConversation({
     } catch (error: unknown) {
       add({ failed: true, role: "flow", text: error instanceof Error ? error.message : "Flow couldn't answer that." })
       setText(message.trim())
+      mentions.restore(mentioned)
     } finally {
       sending.current = false
       setBusy(false)
@@ -162,7 +176,7 @@ function FlowConversation({
       ) : (
         <ol aria-live="polite" className="grid gap-3 py-1">
           {turns.map((turn) => (
-            <FlowMessage failed={turn.failed} from={turn.role} key={turn.id}>
+            <FlowMessage failed={turn.failed} from={turn.role} key={turn.id} speaker={turn.role === "member" ? "You" : undefined}>
               {turn.text}
               {turn.items && turn.items.length > 0 ? (
                 <ul className="mt-2 divide-y divide-border overflow-hidden rounded-lg border border-border">
@@ -183,11 +197,7 @@ function FlowConversation({
               ) : null}
             </FlowMessage>
           ))}
-          {busy ? (
-            <FlowMessage from="flow">
-              <span className="text-muted-foreground">Thinking…</span>
-            </FlowMessage>
-          ) : null}
+          {busy ? <FlowWorking stages={stages} /> : null}
         </ol>
       )}
       </div>
@@ -201,6 +211,7 @@ function FlowConversation({
         <label className="sr-only" htmlFor="workspace-flow-composer">
           Ask Flow
         </label>
+        <FlowMentionChips mentions={mentions} />
         <FlowAttachChip attachment={attachment} />
         <div className="relative">
           {/* One line tall, growing with the message to about six. */}
@@ -211,10 +222,11 @@ function FlowConversation({
             maxLength={2_000}
             onChange={(event) => setText(event.target.value)}
             onKeyDown={handleKey}
+            onPaste={mentions.onPaste}
             placeholder="Ask Flow…"
             value={text}
           />
-          <FlowAttachButton attachment={attachment} disabled={busy} />
+          <FlowAddButton attachment={attachment} disabled={busy} mentions={mentions} />
           <button
             aria-label="Send to Flow"
             className={FLOW_SEND}

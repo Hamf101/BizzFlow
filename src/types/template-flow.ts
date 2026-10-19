@@ -79,6 +79,8 @@ export type TemplateFlowMessage = {
   id: string
   role: "user" | "assistant"
   content: string
+  /** Who wrote a member's message, so two people of one name stay apart; null for Flow. */
+  authorUserId: string | null
   authorName: string | null
   operations: TemplateFlowLedgerItem[]
   changedBlockIds: string[]

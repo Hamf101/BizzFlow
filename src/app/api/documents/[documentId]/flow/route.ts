@@ -1,6 +1,4 @@
-import { NextResponse } from "next/server"
-
-import { createTemplateRouteErrorResponse, startFlowTurn } from "@/app/api/templates/_utils"
+import { createTemplateRouteErrorResponse, startFlowTurn, streamFlowTurn } from "@/app/api/templates/_utils"
 import { readTrustedJsonObject } from "@/lib/request-security"
 import { executeDocumentFlow } from "@/services/template-flow-service"
 
@@ -22,17 +20,16 @@ export async function POST(
     const { organizationId, userId } = await startFlowTurn()
     const { documentId } = await context.params
     const body = await readTrustedJsonObject(request)
-    const result = await executeDocumentFlow({
+    return await streamFlowTurn(request, "documents_flow", (onStage) => executeDocumentFlow({
       actorUserId: userId,
       documentId,
       draft: body.draft,
       instruction: body.instruction,
+      mentions: body.mentions,
       model: body.model,
       organizationId,
       sourceDocumentId: body.sourceDocumentId,
-    })
-
-    return NextResponse.json(result)
+    }, { onStage }))
   } catch (error: unknown) {
     return createTemplateRouteErrorResponse(error, "documents_flow")
   }
