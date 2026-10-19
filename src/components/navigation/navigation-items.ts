@@ -140,9 +140,10 @@ export function getMobileNavigationLayout(
   const preferred = visible.filter((item: NavigationItem): boolean =>
     hrefs.includes(item.href)
   )
-  // Backfill from what is left so a restricted role still gets a full bar.
+  // Backfill from what is left so a restricted role still gets a full bar;
+  // never with Flow, whose own button is always on a phone's screen.
   const remainder = visible.filter(
-    (item: NavigationItem): boolean => !preferred.includes(item)
+    (item: NavigationItem): boolean => !preferred.includes(item) && item.href !== "/flow"
   )
   const primary = [
     ...preferred,
