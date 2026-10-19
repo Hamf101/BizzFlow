@@ -1,38 +1,23 @@
-import type { ReactElement, ReactNode } from "react"
+import type { ReactElement } from "react"
 
 import { cn } from "@/lib/utils"
 
-/*
- * Flow's tab icon, drawn on Lucide's grid and stroke so it sits beside the
- * other tabs' icons; its motion lives in globals.css, under "Nav icons".
+/**
+ * Flow's tab icon: its floating button, small, a swarm of dots that turns on
+ * hover (the motion lives in globals.css, under "Nav icons").
  */
-
-function NavIcon({ children, className }: { children: ReactNode; className?: string }): ReactElement {
-  return (
-    <svg
-      aria-hidden="true"
-      className={cn("nav-icon", className)}
-      fill="none"
-      height="24"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="2"
-      viewBox="0 0 24 24"
-      width="24"
-    >
-      {children}
-    </svg>
-  )
-}
-
-/** The folded page, its corner folding over. */
 export function FlowIcon({ className }: { className?: string }): ReactElement {
   return (
-    <NavIcon className={className}>
-      <path d="M5 3h9l5 5v13H5z" />
-      <path d="M14 3v5h5" data-move="fold" />
-      <path d="M9 13h6M9 17h4" />
-    </NavIcon>
+    <svg aria-hidden="true" className={cn("nav-icon", className)} fill="currentColor" height="24" viewBox="0 0 24 24" width="24">
+      <g data-move="swarm">
+        <circle cx="12" cy="12" r="2.2" />
+        <circle cx="12" cy="4.5" r="1.6" />
+        <circle cx="18.5" cy="8.2" r="1.3" />
+        <circle cx="18.5" cy="15.8" r="1.7" />
+        <circle cx="12" cy="19.5" r="1.2" />
+        <circle cx="5.5" cy="15.8" r="1.5" />
+        <circle cx="5.5" cy="8.2" r="1.1" />
+      </g>
+    </svg>
   )
 }

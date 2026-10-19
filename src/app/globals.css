@@ -472,7 +472,7 @@
   transform-origin: center;
   transition: transform 0.45s cubic-bezier(0.3, 1.4, 0.5, 1), opacity 0.3s;
 }
-:is(a, button):is(:hover, :active) .nav-icon [data-move="fold"] { transform: rotate(-90deg) scale(0.85); }
+:is(a, button):is(:hover, :active) .nav-icon [data-move="swarm"] { transform: rotate(120deg) scale(1.08); transition-duration: 0.9s; }
 :is(nav, header, aside) :is(a, button):is(:hover, :active) .lucide-settings { transform: rotate(120deg); transition-duration: 0.7s; }
 :is(nav, header, aside) :is(a, button):is(:hover, :active) .lucide-search { transform: rotate(-14deg); }
 :is(nav, header, aside) :is(a, button):is(:hover, :active) .lucide-folder { transform: translateY(-1.5px) rotate(-4deg); }
