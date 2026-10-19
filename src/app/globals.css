@@ -256,6 +256,8 @@
    */
   .auth-fold-float {
     animation: auth-fold-float 10s ease-in-out infinite alternate;
+    /* The lean toward the pointer (auth-backdrop.tsx): each move retargets it from where it is. */
+    transition: translate 0.9s cubic-bezier(0.2, 0.8, 0.2, 1);
   }
 
   /*

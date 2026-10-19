@@ -1,7 +1,7 @@
 "use client"
 
 import { X } from "lucide-react"
-import { type CSSProperties, type ReactElement, type ReactNode, useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react"
+import { type CSSProperties, type ReactElement, type ReactNode, startTransition, useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react"
 import { createPortal } from "react-dom"
 
 import { CORNERS, FACETS, FLAP, type Point, type Tone } from "@/components/brand/folded-page"
@@ -265,7 +265,9 @@ function animate(parts: Parts): {
   let box: Rect = { h: 0, w: 0, x: 0, y: 0 }
   let mode: Mode = "closed"
   let wanted = false
-  let trip: { clicked: number; start: number; total: number; unfold: [number, number] } | null = null
+  // `begun` is false until the first frame draws it: the clock starts there, not
+  // at the click, so time spent setting up never shows as a jump into the trip.
+  let trip: { begun: boolean; clicked: number; start: number; total: number; unfold: [number, number] } | null = null
   let drag: { id: number; moved: boolean; start: Spot; from: Spot } | null = null
   let glide: { to: Spot; vx: number; vy: number } | null = null
   let moving: { grab: boolean; id: number; moved: boolean; start: Spot; from: Rect } | null = null
@@ -285,6 +287,7 @@ function animate(parts: Parts): {
   // And each particle its own start and pace between the swarm and the page.
   const specks = makeSpecks(parts.dots).map((speck) => ({ ...speck, go: 0, travel: 0 }))
   const tints = new Map<Tone, string>()
+  let tintTheme: string | null = null
   let paint: CanvasRenderingContext2D | null = null
   // Two endless sways per dot, across its orbit and down it. Asked for less
   // motion, or where nothing can animate (a test's page), the swarm holds still where it starts.
@@ -386,6 +389,7 @@ function animate(parts: Parts): {
     const trips = pieces.map((piece) => piece.trip)
     const folded = Math.max(...trips.map(landing))
     trip = {
+      begun: false,
       clicked: now,
       start: now - (still ? 1e6 : 0),
       total: Math.max(folded, ...specks.map(({ go, travel }) => go + travel)),
@@ -408,9 +412,16 @@ function animate(parts: Parts): {
 
   // The particles' canvas, sized to the screen, with the swarm's tones as it needs them.
   function showSpecks(): void {
+    if (!readySpecks()) return
+
+    parts.specks.hidden = false
+  }
+
+  // Context, size and tones, ready before they are needed.
+  function readySpecks(): boolean {
     paint ??= still ? null : parts.specks.getContext("2d")
 
-    if (!paint) return
+    if (!paint) return false
 
     // Resizing a canvas clears and reallocates it, a phone's at three times
     // the screen, so it happens only when the screen itself changed.
@@ -424,14 +435,19 @@ function animate(parts: Parts): {
       paint.setTransform(dpr, 0, 0, dpr, 0, 0)
     }
 
-    // The theme can change between trips, so the tones are read per trip, but only the few there are.
-    tints.clear()
-    for (const tone of new Set(DOT_TONES)) {
-      parts.specks.style.color = DOT_FILL(tone)
-      tints.set(tone, getComputedStyle(parts.specks).color)
+    // Read back only when the theme has changed: each read forces the page's styles to settle.
+    const theme = document.documentElement.className
+
+    if (theme !== tintTheme) {
+      tintTheme = theme
+      tints.clear()
+      for (const tone of new Set(DOT_TONES)) {
+        parts.specks.style.color = DOT_FILL(tone)
+        tints.set(tone, getComputedStyle(parts.specks).color)
+      }
     }
 
-    parts.specks.hidden = false
+    return true
   }
 
   function want(open: boolean): void {
@@ -587,6 +603,13 @@ function animate(parts: Parts): {
     frame = 0
     const dt = Math.min(0.032, last ? (now - last) / 1000 : 0.016)
     last = now
+
+    if (trip && !trip.begun) {
+      const late = Math.max(0, now - trip.clicked)
+      trip.begun = true
+      trip.clicked += late
+      trip.start += late
+    }
     const again = stepGlide(dt)
     const t = trip ? now - trip.start : 0
     const [from, to] = trip?.unfold ?? [0, 1]
@@ -746,6 +769,7 @@ function animate(parts: Parts): {
       return
     }
 
+    want(true)
     parts.toggle(true)
   }
   const onKey = (event: KeyboardEvent): void => {
@@ -755,6 +779,7 @@ function animate(parts: Parts): {
     if (event.key === "Escape" && (mode === "open" || mode === "opening") && (parts.win.contains(focus) || focus === document.body || focus === null)) {
       event.preventDefault()
       returnFocus = true
+      want(false)
       parts.toggle(false)
     }
   }
@@ -893,6 +918,7 @@ function animate(parts: Parts): {
   box = windowBox()
   place()
   kick()
+  const warm = (window.requestIdleCallback ?? ((task: () => void) => window.setTimeout(task, 200)))(() => void readySpecks())
 
   return {
     dockTo(next) {
@@ -904,6 +930,7 @@ function animate(parts: Parts): {
       place()
     },
     stop() {
+      ;(window.cancelIdleCallback ?? window.clearTimeout)(warm)
       slotWatch?.disconnect()
       for (const animation of motion) animation.cancel()
       cancelAnimationFrame(frame)
@@ -1017,7 +1044,8 @@ export function FlowWindow({
       shadow: shadow.current,
       specks: specks.current,
       swarm: swarm.current,
-      toggle: (next) => latest.current.onOpenChange(next),
+      // The engine has started already; the page around it may take its time to draw.
+      toggle: (next) => startTransition(() => latest.current.onOpenChange(next)),
       win: win.current,
     })
     engine.current = running
@@ -1093,7 +1121,10 @@ export function FlowWindow({
           <button
             aria-label="Close Flow"
             className="absolute top-0 right-0 size-[34px] text-secondary-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40 max-md:size-10"
-            onClick={() => latest.current.onOpenChange(false)}
+            onClick={() => {
+              engine.current?.want(false)
+              startTransition(() => latest.current.onOpenChange(false))
+            }}
             type="button"
           >
             <X aria-hidden="true" className="absolute top-[calc(70%-6px)] left-[calc(30%-6px)] size-3 stroke-2" />
