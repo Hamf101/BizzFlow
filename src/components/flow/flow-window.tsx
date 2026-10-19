@@ -1,6 +1,7 @@
 "use client"
 
-import { X } from "lucide-react"
+import { Maximize2, X } from "lucide-react"
+import Link from "next/link"
 import { type CSSProperties, type ReactElement, type ReactNode, startTransition, useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react"
 import { createPortal } from "react-dom"
 
@@ -797,7 +798,7 @@ function animate(parts: Parts): {
     const target = event.target as Element
     const grab = parts.grab.contains(target)
 
-    if (mode !== "open" || event.button !== 0 || (target.closest("button") && !grab)) return
+    if (mode !== "open" || event.button !== 0 || (target.closest("a, button") && !grab)) return
 
     parts.head.setPointerCapture?.(event.pointerId)
     moving = { from: { ...box }, grab, id: event.pointerId, moved: false, start: { x: event.clientX, y: event.clientY } }
@@ -993,11 +994,14 @@ const QUIET_SCROLL = "[&_*]:[scrollbar-width:none] [&_*::-webkit-scrollbar]:hidd
  */
 export function FlowWindow({
   children,
+  expandHref,
   onOpenChange,
   open,
   phoneBottom = 16,
 }: {
   children: ReactNode
+  /** A page with room for the whole conversation, if there is one. */
+  expandHref?: string
   onOpenChange: (open: boolean) => void
   open: boolean
   phoneBottom?: number
@@ -1117,6 +1121,16 @@ export function FlowWindow({
           <h2 className="text-[15px] font-semibold" id={titleId}>
             Flow
           </h2>
+          {expandHref ? (
+            <Link
+              aria-label="Open in Flow tab"
+              className="mr-7 ml-auto grid size-8 place-items-center rounded-md text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40 max-md:mr-9 max-md:size-10"
+              href={expandHref}
+              title="Open in Flow tab"
+            >
+              <Maximize2 aria-hidden="true" className="size-4" />
+            </Link>
+          ) : null}
           {/* The page's folded corner is the way to close it. */}
           <button
             aria-label="Close Flow"

@@ -1,14 +1,15 @@
 // @vitest-environment jsdom
 
-import { act } from "react"
+import { act, type ReactElement } from "react"
 import { afterEach, expect, it, vi } from "vitest"
 
 import { openFlowWith } from "@/components/flow/flow-attach"
 import { takeFlowHandoff } from "@/components/flow/flow-handoff"
-import { FlowLauncher } from "@/components/flow/flow-launcher"
+import { FlowLauncher, FlowTab } from "@/components/flow/flow-launcher"
 import { mount } from "@/test/render"
 
-vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }))
+const route = vi.hoisted(() => ({ pathname: "/dashboard" }))
+vi.mock("next/navigation", () => ({ usePathname: () => route.pathname, useRouter: () => ({ refresh: vi.fn() }) }))
 vi.mock("@/app/(dashboard)/templates/actions", () => ({ createTemplateAction: vi.fn(async () => undefined) }))
 vi.mock("@/app/(dashboard)/documents/actions", () => ({ createGeneratedDocumentAction: vi.fn(async () => undefined) }))
 
@@ -76,4 +77,38 @@ it("turns a pasted BizFlow link into a mention that goes with the next message o
 
   expect(composer.value).toBe("and now?")
   expect(document.querySelector('[data-slot="flow-mention"]')?.textContent).toContain("Task")
+})
+
+it("carries the popup's conversation into the Flow tab, where the popup steps aside", async () => {
+  vi.stubGlobal("matchMedia", () => ({ addEventListener: () => undefined, matches: false, removeEventListener: () => undefined }))
+  vi.stubGlobal("fetch", vi.fn(async () => Response.json({ kind: "reply", reply: "Two are overdue." })))
+  // Another workspace's conversation never shows here.
+  const ORG = "10000000-0000-4000-8000-000000000009"
+  const root = mount()
+
+  // The layout keeps the launcher mounted from page to page.
+  const page = (tab: boolean): ReactElement => (
+    <>
+      <FlowLauncher organizationId={ORG} />
+      {tab ? <FlowTab organizationId={ORG} /> : null}
+    </>
+  )
+
+  await act(async () => root.render(page(false)))
+  expect(document.querySelector('a[aria-label="Open in Flow tab"]')?.getAttribute("href")).toBe("/flow")
+  expect(document.body.textContent).not.toContain("Recreate this form")
+  await act(async () => [...document.querySelectorAll("button")].find((button) => button.textContent === "What's overdue?")?.click())
+  expect(document.body.textContent).toContain("Two are overdue.")
+
+  route.pathname = "/flow"
+  await act(async () => root.render(page(true)))
+
+  expect(document.querySelectorAll('[data-slot="flow-window"]')).toHaveLength(0)
+  expect([...document.querySelectorAll("li")].map((entry) => entry.textContent)).toEqual(["YouWhat's overdue?", "FlowTwo are overdue."])
+
+  // Leaving the workspace, as signing out does, leaves nothing for the next person.
+  await act(async () => root.render(<></>))
+  await act(async () => root.render(page(true)))
+  expect(document.querySelectorAll("li")).toHaveLength(0)
+  route.pathname = "/dashboard"
 })
