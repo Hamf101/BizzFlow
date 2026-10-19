@@ -168,7 +168,6 @@ export function FilesWorkspace({
           label: activeFolder ? "New subfolder" : "New folder",
         }
       : null
-  const newSheet = addDocumentHref ? () => actions.createSheet(activeFolder?.id ?? null) : null
   const offersNew = addDocumentHref !== null || newFolder !== null
   const canManageFolders = canPerformOrganizationAction(membership, "folders:manage")
   const canManageDocuments = canPerformOrganizationAction(
@@ -502,7 +501,12 @@ export function FilesWorkspace({
               views={listViews}
             />
             {offersNew ? (
-              <NewFileMenu addDocumentHref={addDocumentHref} newFolder={newFolder} newSheet={newSheet} />
+              <NewFileMenu
+                addDocumentHref={addDocumentHref}
+                createSheet={addDocumentHref ? actions.createSheet : null}
+                folderId={activeFolder?.id ?? null}
+                newFolder={newFolder}
+              />
             ) : null}
           </div>
         </div>

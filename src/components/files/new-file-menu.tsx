@@ -39,12 +39,15 @@ export type NewFolderForm = {
 export function NewFileMenu({
   addDocumentHref,
   newFolder,
-  newSheet,
+  createSheet,
+  folderId,
 }: {
   addDocumentHref: string | null
   newFolder: NewFolderForm | null
-  /** Creates an empty sheet here and opens it. */
-  newSheet: (() => Promise<void>) | null
+  /** The server action that starts an empty sheet in a folder and opens it. */
+  createSheet: ((folderId: string | null) => Promise<void>) | null
+  /** Where a new sheet goes: the open folder, or null for the top of Files. */
+  folderId: string | null
 }): ReactElement {
   const [naming, setNaming] = useState(false)
   const [starting, startSheet] = useTransition()
@@ -67,8 +70,8 @@ export function NewFileMenu({
               Document
             </DropdownMenuItem>
           ) : null}
-          {newSheet ? (
-            <DropdownMenuItem disabled={starting} onClick={() => startSheet(newSheet)}>
+          {createSheet ? (
+            <DropdownMenuItem disabled={starting} onClick={() => startSheet(() => createSheet(folderId))}>
               <FileSpreadsheet aria-hidden="true" />
               Sheet
             </DropdownMenuItem>
