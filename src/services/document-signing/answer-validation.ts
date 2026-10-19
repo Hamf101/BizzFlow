@@ -165,7 +165,8 @@ export function pruneHiddenAnswerValues(
  * Keeps only patch entries visible after applying the patch to stored answers.
  *
  * Stored answers are first pruned under their pre-patch visibility state so a
- * previously hidden stale value cannot reappear when its controller changes.
+ * previously hidden stale value cannot reappear when its controller changes,
+ * and formulas are worked out over the merge before visibility is read.
  *
  * @param content - Validated immutable template snapshot.
  * @param storedValues - Current persisted answer values.
@@ -178,10 +179,13 @@ export function pruneHiddenAnswerPatch(
   patch: Readonly<Record<string, unknown>>
 ): Record<string, unknown> {
   const visibleStoredValues = pruneHiddenAnswerValues(content, storedValues)
-  const effectiveValues = {
+  // Worked out before visibility is read: a page never sends a formula's
+  // answer, so a rule testing one must see what the patch makes it, not what
+  // was stored.
+  const effectiveValues = calculateTemplateAnswers(content, {
     ...visibleStoredValues,
     ...patch
-  }
+  })
   const visibleFieldKeys = collectVisibleFieldKeys(content, effectiveValues)
 
   return Object.fromEntries(

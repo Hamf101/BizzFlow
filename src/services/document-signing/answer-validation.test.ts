@@ -7,9 +7,10 @@ import {
   normalizeAnswerPatch,
   pruneHiddenAnswerPatch,
   pruneHiddenAnswerValues,
-  templateRequiresRecipientInitials
+  templateRequiresRecipientInitials,
+  withCalculatedAnswers
 } from "@/services/document-signing/answer-validation"
-import { parseTemplateContent, type TemplateContent } from "@/types/template"
+import { createBlankTemplateContent, parseTemplateContent, type TemplateContent } from "@/types/template"
 import {
   createStructuredAnswerContent,
   STRUCTURED_ANSWERS
@@ -32,6 +33,27 @@ describe("document signing answer visibility", () => {
         other_details: "Stale detail"
       })
     ).toEqual({ category: "Standard" })
+  })
+
+  it("keeps an answer a signer reveals by changing what a formula works from", () => {
+    const id = (n: number): string => `74200000-0000-4000-8000-00000000000${n}`
+    const field = (n: number, label: string, extra: object = {}) => ({ id: id(n), type: "text_field", fieldKey: label.toLowerCase(), label, required: false, helpText: null, placeholder: null, multiline: false, ...extra })
+    const content = parseTemplateContent({
+      ...createBlankTemplateContent(),
+      sections: [],
+      blocks: [
+        field(1, "Base", { format: "number" }),
+        field(2, "Doubled", { format: "number", formula: "{Base} * 2" }),
+        field(3, "Details", { visibleWhen: { sourceBlockId: id(2), operator: "greater_than", value: "100" } }),
+      ],
+    })
+    // A worked-out field has no input on the page, so the signer's patch never carries it.
+    const stored = { base: "40", doubled: "80" }
+    const patch = { base: "60", details: "Gate code 4512" }
+
+    expect(withCalculatedAnswers(content, stored, pruneHiddenAnswerPatch(content, stored, patch))).toEqual({ base: "60", doubled: "120", details: "Gate code 4512" })
+    // Lowering Base still hides Details and lets its answer go.
+    expect(pruneHiddenAnswerPatch(content, { base: "60", doubled: "120", details: "x" }, { base: "10", details: "y" })).toEqual({ base: "10" })
   })
 
   it("prunes stale checkbox-dependent values before and after a patch", () => {
