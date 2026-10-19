@@ -4,6 +4,9 @@ import type { SheetFormat } from "@/types/sheet"
 // How a cell's value reads on screen, in the viewer's locale. Display only:
 // the value itself is never changed.
 
+/** The currency a money cell shows when it names none: the naira, for the workspaces BizFlow serves. */
+export const DEFAULT_CURRENCY = "NGN"
+
 export type DisplayOptions = { locale: string; /** The organisation's currency, for money cells that name none. */ currency: string }
 
 const formatters = new Map<string, Intl.NumberFormat | Intl.DateTimeFormat>()

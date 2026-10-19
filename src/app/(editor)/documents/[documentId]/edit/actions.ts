@@ -7,8 +7,7 @@ import {
   enforceActionRateLimit,
   enforceOutboundEmailRateLimit,
 } from "@/lib/action-rate-limit"
-import { getErrorStatusCode } from "@/lib/action-result"
-import { AuthenticationError, getAuthenticatedUser } from "@/lib/auth"
+import { getAuthenticatedUser } from "@/lib/auth"
 import {
   ActionError,
   loadActionContext,
@@ -18,6 +17,7 @@ import {
 } from "@/lib/form-action"
 import { getFormString } from "@/lib/form-utils"
 import { loadAuthenticatedPageUser } from "@/lib/page-auth"
+import { toSaveFailure } from "@/lib/save-failure"
 import { findGuestOrganizationId } from "@/services/document-service"
 import type { SaveResult } from "@/components/editor/use-autosave"
 import {
@@ -109,25 +109,6 @@ export async function fillDocumentAnswersAction(documentId: string, answers: unk
     const failure = toSaveFailure(error, "generated_document_answers_fill_failed", documentId)
 
     return { message: failure.ok ? "The answers couldn't be filled in." : failure.message, ok: false }
-  }
-}
-
-function toSaveFailure(error: unknown, eventName: string, documentId: string): SaveResult {
-  if (error instanceof AuthenticationError) {
-    return { message: "Sign in again to keep saving.", ok: false, status: 401 }
-  }
-
-  const statusCode = getErrorStatusCode(error) ?? 500
-
-  console.warn(eventName, {
-    documentId,
-    reason: error instanceof Error ? error.message : "Unknown generated document save error",
-  })
-
-  return {
-    message: statusCode === 500 ? "The document could not be saved." : (error as Error).message,
-    ok: false,
-    status: statusCode,
   }
 }
 

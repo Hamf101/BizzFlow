@@ -1,8 +1,8 @@
 "use client"
 
-import { FilePlus2, FolderPlus, Plus } from "lucide-react"
+import { FilePlus2, FileSpreadsheet, FolderPlus, Plus } from "lucide-react"
 import Link from "next/link"
-import { type ReactElement, useState } from "react"
+import { type ReactElement, useState, useTransition } from "react"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -30,20 +30,24 @@ export type NewFolderForm = {
 }
 
 /**
- * Starts something new in the current location: a document, or a folder named
- * in a small dialog.
+ * Starts something new in the current location: a document, a sheet that
+ * opens at once, or a folder named in a small dialog.
  *
- * @param props - Where a new document starts, and the folder form, when allowed.
+ * @param props - Where a new document starts, how to start a sheet, and the folder form, when allowed.
  * @returns The New button, its menu, and the folder dialog.
  */
 export function NewFileMenu({
   addDocumentHref,
   newFolder,
+  newSheet,
 }: {
   addDocumentHref: string | null
   newFolder: NewFolderForm | null
+  /** Creates an empty sheet here and opens it. */
+  newSheet: (() => Promise<void>) | null
 }): ReactElement {
   const [naming, setNaming] = useState(false)
+  const [starting, startSheet] = useTransition()
 
   return (
     <>
@@ -61,6 +65,12 @@ export function NewFileMenu({
             <DropdownMenuItem render={<Link href={addDocumentHref} />}>
               <FilePlus2 aria-hidden="true" />
               Document
+            </DropdownMenuItem>
+          ) : null}
+          {newSheet ? (
+            <DropdownMenuItem disabled={starting} onClick={() => startSheet(newSheet)}>
+              <FileSpreadsheet aria-hidden="true" />
+              Sheet
             </DropdownMenuItem>
           ) : null}
           {newFolder ? (

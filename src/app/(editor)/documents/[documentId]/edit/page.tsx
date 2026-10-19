@@ -3,6 +3,7 @@ import type { ReactElement } from "react"
 
 import { DocumentEditor } from "@/components/documents/document-editor"
 import { DocumentOpenTracker } from "@/components/documents/document-open-tracker"
+import { SheetEditor } from "@/components/sheets/sheet-editor"
 import { getFallbackDisplayName } from "@/lib/display-name"
 import { loadMemberName } from "@/lib/page-member-name"
 import { canEditDocument, canPerformOrganizationAction, canSendDocument, canShareResource } from "@/lib/permissions"
@@ -21,6 +22,7 @@ import {
   saveDocumentContentAction,
   sendGeneratedDocumentAction,
 } from "./actions"
+import { saveSheetAction } from "./sheet-actions"
 import type { Metadata } from "next"
 
 type GeneratedDocumentEditorParams = Promise<{
@@ -50,6 +52,27 @@ export default async function GeneratedDocumentEditorPage({
 
   if ("failure" in loaded) {
     return loaded.failure
+  }
+
+  // A sheet opens in its grid, read-only for whoever may not change it.
+  if ("sheet" in loaded) {
+    const { backHref, context, sheet } = loaded
+    const item = { accessLevel: sheet.accessLevel, lifecycleState: sheet.lifecycleState }
+
+    return (
+      <>
+        {context ? <DocumentOpenTracker documentId={sheet.id} organizationId={context.organization.id} /> : null}
+        <SheetEditor
+          backHref={backHref}
+          canEdit={canEditDocument(context?.membership ?? null, item)}
+          canShare={context ? canShareResource(context.membership, item) : false}
+          guest={!context}
+          organizationId={context?.organization.id ?? null}
+          saveAction={saveSheetAction}
+          sheet={sheet}
+        />
+      </>
+    )
   }
 
   const { backHref, context, user, view } = loaded

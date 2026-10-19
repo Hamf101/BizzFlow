@@ -9,6 +9,17 @@ export type DocumentLifecycleState =
   | "trashed"
   | "purge_pending"
 
+/**
+ * Whether a document opens in the editor: a generated document or a sheet,
+ * while active or archived. Uploads, and anything in Trash, open their page.
+ *
+ * @param document - Its kind and where it stands.
+ * @returns True when its link is the editor's.
+ */
+export function opensInEditor(document: { sourceKind?: DocumentSourceKind | null; lifecycleState: string }): boolean {
+  return (document.sourceKind === "generated" || document.sourceKind === "sheet") && (document.lifecycleState === "active" || document.lifecycleState === "archived")
+}
+
 export type FolderRow = Record<string, unknown> & {
   id: string
   org_id: string

@@ -73,6 +73,8 @@ export type FilesWorkspaceActions = {
   archiveDocument: FormAction
   archiveFolder: FormAction
   createFolder: FormAction
+  /** Starts an empty sheet in a folder, null for the top of Files, and opens it. */
+  createSheet: (folderId: string | null) => Promise<void>
   requestDocumentPurge: FormAction
   requestFolderPurge: FormAction
   restoreDocument: FormAction
@@ -166,6 +168,7 @@ export function FilesWorkspace({
           label: activeFolder ? "New subfolder" : "New folder",
         }
       : null
+  const newSheet = addDocumentHref ? () => actions.createSheet(activeFolder?.id ?? null) : null
   const offersNew = addDocumentHref !== null || newFolder !== null
   const canManageFolders = canPerformOrganizationAction(membership, "folders:manage")
   const canManageDocuments = canPerformOrganizationAction(
@@ -354,10 +357,10 @@ export function FilesWorkspace({
         return {
           content: card?.content ?? null,
           count: null,
-          extension: generated ? null : getFileExtension(document.title),
+          extension: document.sourceKind === "upload" ? getFileExtension(document.title) : null,
           href: getDocumentHref(document),
           id: document.id,
-          kind: generated ? "document" : "upload",
+          kind: generated ? "document" : document.sourceKind === "sheet" ? "sheet" : "upload",
           menu: documentMenu(document),
           modified: <LocalDate value={document.updatedAt} />,
           name: document.title,
@@ -499,7 +502,7 @@ export function FilesWorkspace({
               views={listViews}
             />
             {offersNew ? (
-              <NewFileMenu addDocumentHref={addDocumentHref} newFolder={newFolder} />
+              <NewFileMenu addDocumentHref={addDocumentHref} newFolder={newFolder} newSheet={newSheet} />
             ) : null}
           </div>
         </div>

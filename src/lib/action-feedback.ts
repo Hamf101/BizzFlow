@@ -53,6 +53,7 @@ export const ACTION_FEEDBACK = {
   document_created: { ...done("Document created"), quiet: true },
   document_uploaded: done("Document uploaded", "document_uploaded"),
   folder_created: done("Folder created"),
+  sheet_created: done("Sheet created"),
   invalid_input: problem("Some information needs attention", "Check the information and try again."),
   invite_accepted: done("You joined the workspace"),
   invite_already_member: problem("That person is already a member or invited", "Find them in People. No invite was sent."),

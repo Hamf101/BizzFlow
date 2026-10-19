@@ -7,4 +7,4 @@ export type {
   UpdateSheetContentInput,
 } from "@/services/sheets/contracts"
 export { SheetServiceError } from "@/services/sheets/errors"
-export { createSheet, getSheet, renameSheet, updateSheetContent } from "@/services/sheets/sheet-service"
+export { createSheet, getSheet, isSheetDocument, renameSheet, updateSheetContent } from "@/services/sheets/sheet-service"

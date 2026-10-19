@@ -22,6 +22,8 @@ const formatSchema = z.strictObject({
   type: z.enum(["general", "number", "money", "percent", "date", "text"]),
   decimals: z.int().min(0).max(10).optional(),
   currency: z.string().regex(/^[A-Z]{3}$/).optional(),
+  bold: z.boolean().optional(),
+  align: z.enum(["left", "center", "right"]).optional(),
 })
 
 const cellSchema = z.strictObject({

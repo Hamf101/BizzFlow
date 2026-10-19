@@ -1,6 +1,6 @@
 "use client"
 
-import { ChevronDown, Download, FilePen, FileText, FileType, type LucideIcon } from "lucide-react"
+import { ChevronDown, Download, FilePen, FileSpreadsheet, FileText, FileType, type LucideIcon } from "lucide-react"
 import type { ReactElement } from "react"
 
 import { Button } from "@/components/ui/button"
@@ -24,13 +24,30 @@ type ExportLinks = Readonly<{
  * What a document or template at `base` can be exported as.
  *
  * @param base - Its API address, such as `/api/documents/<id>`.
- * @param options - Whether a PDF (default) and a fillable PDF are offered, and the original upload's address.
+ * @param options - Whether a PDF (default) and a fillable PDF are offered, and the original upload's address;
+ *   for a sheet, CSV, with Excel only when `xlsx` is set.
  * @returns The links, in menu order.
  */
 export function exportLinks(
   base: string,
-  { fillable = false, original, pdf = true }: { fillable?: boolean; original?: string; pdf?: boolean } = {}
+  {
+    fillable = false,
+    original,
+    pdf = true,
+    sheet = false,
+    xlsx = false,
+  }: { fillable?: boolean; original?: string; pdf?: boolean; sheet?: boolean; xlsx?: boolean } = {}
 ): ExportLinks {
+  // A sheet saves as a spreadsheet: CSV, and Excel once `xlsx` is passed.
+  if (sheet) {
+    return {
+      formats: [
+        ...(xlsx ? [{ href: `${base}/export?format=xlsx`, icon: FileSpreadsheet, label: "Excel (.xlsx)" }] : []),
+        { href: `${base}/export?format=csv`, icon: FileText, label: "CSV" },
+      ],
+    }
+  }
+
   return {
     formats: [
       ...(pdf ? [{ href: `${base}/pdf`, icon: FileText, label: "PDF" }] : []),

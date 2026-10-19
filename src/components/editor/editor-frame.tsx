@@ -48,8 +48,10 @@ type EditorFrameProps = {
   canRedo: boolean
   canUndo: boolean
   children: (view: { narrow: boolean; zoom: number }) => ReactNode
-  dock: (narrow: boolean, orientation: DockOrientation) => ReactNode
+  dock?: (narrow: boolean, orientation: DockOrientation) => ReactNode
   extra?: ReactNode
+  /** The children fill the screen under the top bar and scroll themselves, as a sheet's grid does: no page, dock or zoom. */
+  fill?: boolean
   /** Where the tools were left last time; without it they start at home each visit. */
   layout?: EditorLayoutStore
   /** The top bar's actions before the primary one; a phone may fold some into a menu. */
@@ -61,7 +63,7 @@ type EditorFrameProps = {
   onTitleChange: (title: string) => void
   onUndo: () => void
   /** The page's width in printed points, which Fit zooms to. */
-  pageWidthPoints: number
+  pageWidthPoints?: number
   panel?: (narrow: boolean) => ReactNode
   /** Who else is here. */
   people?: (narrow: boolean) => ReactNode
@@ -70,6 +72,8 @@ type EditorFrameProps = {
   saveStatus: AutosaveStatus | "blocked" | "stopped" | "unsaved-local" | null
   title: string
   titleEditable: boolean
+  /** Muted after the title, such as a sheet's ".xlsx". */
+  titleSuffix?: string
   /** The formatting toolbar, floating at the top of the canvas on a laptop. */
   toolbar?: ReactNode
 }
@@ -90,6 +94,7 @@ export function EditorFrame({
   children,
   dock,
   extra,
+  fill = false,
   layout: layoutStore,
   menu,
   onRedo,
@@ -97,13 +102,14 @@ export function EditorFrame({
   onSave,
   onTitleChange,
   onUndo,
-  pageWidthPoints,
+  pageWidthPoints = 0,
   panel,
   people,
   primary,
   saveStatus,
   title,
   titleEditable,
+  titleSuffix,
   toolbar,
 }: EditorFrameProps): ReactElement {
   const narrow = useMediaQuery(NARROW)
@@ -179,7 +185,7 @@ export function EditorFrame({
         } else {
           onUndo()
         }
-      } else if (narrow) {
+      } else if (narrow || fill) {
         // The page has no zoom of its own on a phone's column: the browser's zoom stays the browser's.
         return
       } else if (key === "=" || key === "+" || key === "-") {
@@ -193,7 +199,7 @@ export function EditorFrame({
 
     document.addEventListener("keydown", handleKey)
     return () => document.removeEventListener("keydown", handleKey)
-  }, [narrow, onRedo, onSave, onUndo, zoom])
+  }, [fill, narrow, onRedo, onSave, onUndo, zoom])
 
   return (
     <div className="flex h-dvh flex-col bg-canvas text-foreground" data-slot="editor">
@@ -220,6 +226,7 @@ export function EditorFrame({
           style={{ width: `min(${Math.max(6, title.length + 2)}ch, 42vw)` }}
           value={title}
         />
+        {titleSuffix ? <span className="-ml-2 shrink-0 text-[15px] text-muted-foreground">{titleSuffix}</span> : null}
         <SaveStatus onRetry={onRetrySave} status={saveStatus} />
         <span className="grow" />
         {people?.(narrow)}
@@ -261,6 +268,15 @@ export function EditorFrame({
       {/* A phone has no room to float a notice over what is being typed, so it
           takes a line of its own above the page. */}
       {narrow && banner ? <div className="flex justify-center px-3 py-2">{banner}</div> : null}
+      {fill ? (
+        <div className="relative flex min-h-0 flex-1 flex-col">
+          {children({ narrow, zoom: 1 })}
+          {!narrow && banner ? (
+            <div className="pointer-events-none absolute inset-x-0 top-3 z-30 flex justify-center px-4">{banner}</div>
+          ) : null}
+          {panel?.(narrow)}
+        </div>
+      ) : (
       <div className="group/stage relative min-h-0 flex-1">
         {/* The page scrolls under the toolbar, with any notice just below it. */}
         {!narrow && (toolbar || banner) ? (
@@ -296,7 +312,7 @@ export function EditorFrame({
           )}
           data-slot="editor-tools"
         >
-          {!sized ? null : narrow ? (
+          {!sized || !dock ? null : narrow ? (
             <div className="pointer-events-auto absolute right-0 bottom-[calc(1rem+env(safe-area-inset-bottom))] left-2 flex">
               {dock(true, "flat")}
             </div>
@@ -373,6 +389,7 @@ export function EditorFrame({
         </div>
         {panel?.(narrow)}
       </div>
+      )}
     </div>
   )
 }

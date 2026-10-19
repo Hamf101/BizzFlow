@@ -719,7 +719,7 @@ function present(hit: WorkspaceSearchHit): Shown {
         copy: link(href),
         description: item.description,
         facts: [
-          ["Kind", item.sourceKind === "generated" ? "Document" : "Uploaded file"],
+          ["Kind", item.sourceKind === "generated" ? "Document" : item.sourceKind === "sheet" ? "Sheet" : "Uploaded file"],
           ["Created", formatMediumDate(item.createdAt)],
           ["Edited", formatMediumDate(item.updatedAt)],
         ],

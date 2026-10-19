@@ -28,6 +28,7 @@ export const ACTION_FEEDBACK_CODES = [
   "resource_trashed",
   "retry_later",
   "role_created",
+  "sheet_created",
   "role_in_use",
   "role_removed",
   "role_updated",

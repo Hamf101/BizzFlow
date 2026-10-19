@@ -218,9 +218,9 @@ export function parseFormula(text: string): { node: FormulaNode } | { error: str
   }
 }
 
-const shiftRef = (ref: CellRef, rows: number, columns: number) => {
+const shiftRef = (ref: CellRef, rows: number, columns: number): CellRef | null => {
   const moved = { ...ref, row: ref.rowAbs ? ref.row : ref.row + rows, col: ref.colAbs ? ref.col : ref.col + columns }
-  return isInGrid(moved.row, moved.col) ? formatCellRef(moved) : null
+  return isInGrid(moved.row, moved.col) ? moved : null
 }
 
 /**
@@ -235,27 +235,87 @@ const shiftRef = (ref: CellRef, rows: number, columns: number) => {
  * @returns The moved formula; one that cannot be read is returned unchanged.
  */
 export function shiftFormula(formula: string, rows: number, columns: number): string {
-  let tokens: Token[]
-  try {
-    tokens = tokenize(formula)
-  } catch {
-    return formula
-  }
+  return mapReferences(formula, ({ first, last, sheet }) => {
+    const start = shiftRef(first, rows, columns)
+    const end = last && shiftRef(last, rows, columns)
+    return start && (!last || end) ? { first: start, last: end, sheet } : null
+  })
+}
 
-  let out = ""
-  let copied = 0
+/** One reference in a formula: a cell, or a range cell:cell, and the tab it names (null for its own). */
+export type FormulaReference = { sheet: string | null; first: CellRef; last: CellRef | null }
+
+type RefToken = Token & { t: "ref" }
+
+// A ref token, and the one that closes its range when a ":" follows.
+function* references(tokens: Token[]): Generator<{ token: RefToken; end: RefToken | null }> {
   for (let at = 0; at < tokens.length; at += 1) {
     const token = tokens[at]!
     if (token.t !== "ref") continue
     const colon = tokens[at + 1]
-    const end = colon?.t === "op" && colon.v === ":" && tokens[at + 2]?.t === "ref" ? (tokens[at + 2] as Token & { t: "ref" }) : null
-    const first = shiftRef(token.ref, rows, columns)
-    const last = end && shiftRef(end.ref, rows, columns)
-
-    if (first === null || (end && last === null)) out += `${formula.slice(copied, token.s)}#REF!`
-    else out += formula.slice(copied, token.refStart) + first + (end ? formula.slice(token.e, end.refStart) + last : "")
-    copied = (end ?? token).e
+    const end = colon?.t === "op" && colon.v === ":" && tokens[at + 2]?.t === "ref" ? (tokens[at + 2] as RefToken) : null
+    yield { token, end }
     if (end) at += 2
+  }
+}
+
+function tokensOf(formula: string): Token[] | null {
+  try {
+    return tokenize(formula)
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Every reference a formula makes, where it is written, for outlining the
+ * cells it reads. A formula that cannot be read has none.
+ *
+ * @param formula - The formula, without its "=".
+ * @returns Each reference with its start and end in the text.
+ */
+export function formulaReferences(formula: string): Array<FormulaReference & { start: number; end: number }> {
+  return [...references(tokensOf(formula) ?? [])].map(({ token, end }) => ({
+    end: (end ?? token).e,
+    first: token.ref,
+    last: end?.ref ?? null,
+    sheet: token.sheet,
+    start: token.s,
+  }))
+}
+
+/** A tab name as a formula writes it: quoted unless it reads as a plain word. */
+export function formulaSheetName(name: string): string {
+  return /^[\p{L}_][\p{L}\p{N}_.]*$/u.test(name) && !parseCellRef(name) && !/^(TRUE|FALSE)$/i.test(name) ? name : `'${name.replaceAll("'", "''")}'`
+}
+
+/**
+ * Rewrites each reference in a formula, keeping everything else exactly as
+ * written: the moves behind fill, paste, inserting rows and renaming tabs.
+ *
+ * @param formula - The formula, without its "=".
+ * @param move - The reference's new cells and tab, or null for #REF!.
+ * @returns The rewritten formula; one that cannot be read is returned unchanged.
+ */
+export function mapReferences(formula: string, move: (reference: FormulaReference) => FormulaReference | null): string {
+  const tokens = tokensOf(formula)
+  if (!tokens) return formula
+
+  let out = ""
+  let copied = 0
+  for (const { token, end } of references(tokens)) {
+    const next = move({ sheet: token.sheet, first: token.ref, last: end?.ref ?? null })
+    // A tab named anew is written anew; otherwise its prefix stays as typed.
+    const prefix = (ref: RefToken) =>
+      ref.refStart === ref.s ? "" : next?.sheet === token.sheet ? formula.slice(ref.s, ref.refStart) : `${formulaSheetName(next!.sheet!)}!`
+
+    out += formula.slice(copied, token.s)
+    if (!next || (end && !next.last)) out += "#REF!"
+    else {
+      out += prefix(token) + formatCellRef(next.first)
+      if (end) out += formula.slice(token.e, end.s) + prefix(end) + formatCellRef(next.last!)
+    }
+    copied = (end ?? token).e
   }
   return out + formula.slice(copied)
 }

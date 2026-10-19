@@ -33,7 +33,7 @@ import type {
 } from "@/services/sheets/contracts"
 import { SheetServiceError } from "@/services/sheets/errors"
 import { asSupabaseError } from "@/services/supabase-error"
-import type { DocumentRow, DocumentSummary } from "@/types/document"
+import type { DocumentLifecycleState, DocumentRow, DocumentSummary } from "@/types/document"
 import { parseSheetContent, type SheetContent } from "@/types/sheet"
 
 const EMPTY_SHEET: SheetContent = { version: 1, tabs: [{ id: "t1", name: "Sheet1", cells: {} }] }
@@ -111,10 +111,10 @@ export async function createSheet(input: CreateSheetInput, deps: SheetServiceDep
 export async function getSheet(input: SheetInput, deps: SheetServiceDeps = {}): Promise<Sheet> {
   return runSheetOperation("get_sheet", input, async () => {
     const client = getClient(deps)
-    const { accessLevel } = await requireDocumentReader(input, client)
+    const { accessLevel, guest } = await requireDocumentReader(input, client)
     const result = await client
       .from("documents")
-      .select("id,title,sheet_content,updated_at,lifecycle_state")
+      .select("id,title,sheet_content,updated_at,lifecycle_state,folder_id")
       .eq("id", input.documentId)
       .eq("org_id", input.organizationId)
       .eq("source_kind", "sheet")
@@ -125,8 +125,37 @@ export async function getSheet(input: SheetInput, deps: SheetServiceDeps = {}): 
     const row = result.data!
 
     // Every write went through parseSheetContent, so the stored sheet is trusted.
-    return { id: row.id, title: row.title, content: row.sheet_content!, updatedAt: row.updated_at, accessLevel }
+    return {
+      id: row.id,
+      title: row.title,
+      content: row.sheet_content!,
+      updatedAt: row.updated_at,
+      accessLevel,
+      folderId: guest ? null : row.folder_id,
+      lifecycleState: row.lifecycle_state as DocumentLifecycleState,
+    }
   })
+}
+
+/**
+ * Whether a document is a sheet, so its page opens the grid rather than the
+ * page editor. It says nothing more: opening it checks the reader.
+ *
+ * @param input - Organization and document.
+ * @param deps - Injected client for tests.
+ * @returns True for a sheet in that workspace.
+ */
+export async function isSheetDocument(input: { organizationId: string; documentId: string }, deps: SheetServiceDeps = {}): Promise<boolean> {
+  const { data, error } = await getClient(deps)
+    .from("documents")
+    .select("id")
+    .eq("id", input.documentId)
+    .eq("org_id", input.organizationId)
+    .eq("source_kind", "sheet")
+    .maybeSingle()
+
+  if (error) throw createSupabaseServiceError(error, "Unable to load the document.")
+  return data !== null
 }
 
 /**

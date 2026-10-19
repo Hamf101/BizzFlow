@@ -7,9 +7,10 @@ import {
   type ListSortOption,
 } from "@/components/data/list-option"
 import { defineListState, formatListSort } from "@/lib/list-state"
-import type {
-  AccessibleDocumentFolder,
-  AccessibleDocumentSummary,
+import {
+  opensInEditor,
+  type AccessibleDocumentFolder,
+  type AccessibleDocumentSummary,
 } from "@/types/document"
 import type { GeneratedDocumentWorkflowStatus } from "@/types/template"
 
@@ -353,9 +354,9 @@ export function getCardRequest(
 }
 
 /**
- * Links to a document. A generated document opens in the editor, which
- * shows those who may not change it the preview instead; one in the bin
- * opens its page, to restore.
+ * Links to a document. A generated document or a sheet opens in the editor,
+ * which shows those who may not change it a preview or a read-only grid; one
+ * in the bin opens its page, to restore.
  *
  * @param document - The document to open.
  * @returns The document's page or editor link.
@@ -365,7 +366,7 @@ export function getDocumentHref(
 ): string {
   const documentId = encodeURIComponent(document.id)
 
-  return document.sourceKind === "generated" && (document.lifecycleState === "active" || document.lifecycleState === "archived")
+  return opensInEditor(document)
     ? `/documents/${documentId}/edit`
     : `/documents/${documentId}`
 }
@@ -433,13 +434,13 @@ export function selectLocation(
 }
 
 /**
- * Names what a document is: a filled-in document or an uploaded file.
+ * Names what a document is: a filled-in document, a sheet or an uploaded file.
  *
  * @param document - The document to describe.
- * @returns Document or File.
+ * @returns Document, Sheet or File.
  */
 export function describeDocumentKind(document: AccessibleDocumentSummary): string {
-  return document.sourceKind === "generated" ? "Document" : "File"
+  return document.sourceKind === "generated" ? "Document" : document.sourceKind === "sheet" ? "Sheet" : "File"
 }
 
 /** How a Files view marks where a generated document stands. */

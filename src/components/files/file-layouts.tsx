@@ -1,4 +1,4 @@
-import { ChevronRight, FileText, Folder } from "lucide-react"
+import { ChevronRight } from "lucide-react"
 import Link from "next/link"
 import type { CSSProperties, ReactElement } from "react"
 
@@ -8,6 +8,7 @@ import {
   FileDetails,
   StatusDot,
   type FileEntry,
+  EntryIcon,
 } from "@/components/files/file-entry"
 import { SelectableFileItem } from "@/components/files/file-selection"
 import { cn } from "@/lib/utils"
@@ -82,8 +83,6 @@ export function FileListLayout({
         </span>
       </div>
       {entries.map((entry: FileEntry, index: number) => {
-        const Icon = entry.kind === "folder" ? Folder : FileText
-
         return (
           <SelectableFileItem
             className={cn(
@@ -99,8 +98,9 @@ export function FileListLayout({
             style={riseDelay(index)}
           >
             <div className="flex min-w-0 items-center gap-3" role="cell">
-              <Icon
+              <EntryIcon
                 aria-hidden="true"
+                kind={entry.kind}
                 className={cn(
                   "size-[18px] shrink-0",
                   entry.kind === "folder" ? "text-primary" : "text-muted-foreground"
@@ -260,8 +260,7 @@ export function FileColumnsLayout({
           key={column.location ?? "top"}
         >
           {column.entries.map((entry: FileEntry) => {
-            const Icon = entry.kind === "folder" ? Folder : FileText
-            const on = entry.id === column.selected
+                const on = entry.id === column.selected
 
             return (
               <li key={entry.id}>
@@ -274,8 +273,9 @@ export function FileColumnsLayout({
                   data-slot="file-cell"
                   href={entry.selectHref}
                 >
-                  <Icon
+                  <EntryIcon
                     aria-hidden="true"
+                    kind={entry.kind}
                     className={cn(
                       "size-[15px] shrink-0",
                       entry.kind !== "folder"

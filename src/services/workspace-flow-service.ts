@@ -23,7 +23,7 @@ import {
 import { type FlowStage, flowMentionsSchema } from "@/services/template-flow/contracts"
 import { resolveFlowMentions } from "@/services/template-flow/mentions"
 import { listTemplatePage } from "@/services/template-service"
-import type { AccessibleDocumentSummary } from "@/types/document"
+import { opensInEditor, type AccessibleDocumentSummary } from "@/types/document"
 import type { Submission, SubmissionStatus } from "@/types/submission"
 import type { Task } from "@/types/task"
 import type { DocumentTemplateCard } from "@/types/template"
@@ -313,10 +313,7 @@ async function find(plan: Plan, actor: Actor, deps: WorkspaceFlowDeps, now: Date
     filter = "any"
     const documents = await (deps.searchFiles ?? searchFiles)({ ...actor, query })
     items = documents.map((document) => ({
-      href:
-        document.sourceKind === "generated" && (document.lifecycleState === "active" || document.lifecycleState === "archived")
-          ? `/documents/${encodeURIComponent(document.id)}/edit`
-          : `/documents/${encodeURIComponent(document.id)}`,
+      href: `/documents/${encodeURIComponent(document.id)}${opensInEditor(document) ? "/edit" : ""}`,
       id: document.id,
       meta: `Edited ${formatDay(document.updatedAt)}`,
       title: document.title,

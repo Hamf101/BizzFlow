@@ -13,6 +13,7 @@ import { loadPageOrganizationContext } from "@/lib/page-organization-context"
 import { cn } from "@/lib/utils"
 import { findGuestDocument } from "@/services/document-service"
 import { getGeneratedDocumentSigningView } from "@/services/document-signing-service"
+import { getSheet, isSheetDocument, type Sheet } from "@/services/sheet-service"
 import { withTemplateImageUrls } from "@/services/template-image-service"
 import type { GeneratedDocumentSigningView } from "@/types/signing"
 
@@ -20,15 +21,17 @@ type PageContext = NonNullable<Awaited<ReturnType<typeof loadPageOrganizationCon
 
 type PageUser = Awaited<ReturnType<typeof loadAuthenticatedPageUser>>
 
+type Opened = {
+  backHref: string
+  /** Null for someone outside the workspace who was given this one document. */
+  context: PageContext | null
+  user: PageUser
+}
+
 export type LoadedDocumentPage =
   | { failure: ReactElement }
-  | {
-      backHref: string
-      /** Null for someone outside the workspace who was given this one document. */
-      context: PageContext | null
-      user: PageUser
-      view: GeneratedDocumentSigningView
-    }
+  | (Opened & { view: GeneratedDocumentSigningView })
+  | (Opened & { sheet: Sheet })
 
 /**
  * Loads a generated document for the editor or its preview, once the member
@@ -58,7 +61,9 @@ export async function loadDocumentPage(documentId: string, path: string): Promis
   }
 
   if (guest) {
-    return loadView({ context: null, documentId, organizationId: guest.organizationId, user })
+    const opening = { context: null, documentId, organizationId: guest.organizationId, user }
+
+    return guest.sourceKind === "sheet" ? loadSheet(opening) : loadView(opening)
   }
 
   const contextResult = await loadPageOrganizationContext({
@@ -75,20 +80,34 @@ export async function loadDocumentPage(documentId: string, path: string): Promis
     redirect(buildFeedbackRedirect("/dashboard", "organization_required"))
   }
 
-  return loadView({ context: contextResult.context, documentId, organizationId: contextResult.context.organization.id, user })
+  const opening = { context: contextResult.context, documentId, organizationId: contextResult.context.organization.id, user }
+
+  // A sheet opens in the grid; a lookup that fails falls through to the document, which reports it.
+  return (await isSheetDocument(opening).catch(() => false)) ? loadSheet(opening) : loadView(opening)
 }
 
-async function loadView({
-  context,
-  documentId,
-  organizationId,
-  user,
-}: {
+type Opening = {
   context: PageContext | null
   documentId: string
   organizationId: string
   user: PageUser
-}): Promise<LoadedDocumentPage> {
+}
+
+async function loadSheet({ context, documentId, organizationId, user }: Opening): Promise<LoadedDocumentPage> {
+  try {
+    const sheet = await getSheet({ actorUserId: user.id, organizationId, documentId })
+
+    return { backHref: backTo(context, sheet.folderId), context, sheet, user }
+  } catch (error: unknown) {
+    return { failure: <Unavailable message={getPageErrorMessage(error, "Unable to load the sheet.")} title="Sheet unavailable" /> }
+  }
+}
+
+function backTo(context: PageContext | null, folderId: string | null): string {
+  return !context ? "/shared" : folderId ? `/documents?folderId=${encodeURIComponent(folderId)}` : "/documents"
+}
+
+async function loadView({ context, documentId, organizationId, user }: Opening): Promise<LoadedDocumentPage> {
   const viewResult = await getGeneratedDocumentSigningView({
     actorUserId: user.id,
     organizationId,
@@ -121,10 +140,8 @@ async function loadView({
     return { failure: <Unavailable message={viewResult.errorMessage} title="Generated document unavailable" /> }
   }
 
-  const folderId = viewResult.view.document.folderId
-
   return {
-    backHref: !context ? "/shared" : folderId ? `/documents?folderId=${encodeURIComponent(folderId)}` : "/documents",
+    backHref: backTo(context, viewResult.view.document.folderId),
     context,
     user,
     view: viewResult.view,

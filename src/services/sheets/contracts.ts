@@ -1,5 +1,5 @@
 import type { DocumentServiceDeps } from "@/services/documents/contracts"
-import type { DocumentAccessLevel } from "@/types/document"
+import type { DocumentAccessLevel, DocumentLifecycleState } from "@/types/document"
 import type { SheetContent } from "@/types/sheet"
 
 /** Injected client, ids, audit and the clock TODAY() reads. */
@@ -30,4 +30,8 @@ export type Sheet = {
   content: SheetContent
   updatedAt: string
   accessLevel: DocumentAccessLevel
+  /** Null at the top of Files, and for a guest, who never sees where it is filed. */
+  folderId: string | null
+  /** Archived sheets open read-only. */
+  lifecycleState: DocumentLifecycleState
 }

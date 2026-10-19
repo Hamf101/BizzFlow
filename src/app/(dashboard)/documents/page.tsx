@@ -48,6 +48,7 @@ import {
   trashDocumentAction,
   trashFolderAction,
 } from "./actions"
+import { createSheetAction } from "@/app/(editor)/documents/[documentId]/edit/sheet-actions"
 import type { Metadata } from "next"
 
 /**
@@ -145,6 +146,7 @@ export default async function FilesPage({
           archiveDocument: archiveDocumentAction,
           archiveFolder: archiveFolderAction,
           createFolder: createFolderAction,
+          createSheet: createSheetAction,
           requestDocumentPurge: requestDocumentPurgeAction,
           requestFolderPurge: requestFolderPurgeAction,
           restoreDocument: restoreDocumentAction,

@@ -1,4 +1,5 @@
 import type { Metadata } from "next"
+import { redirect } from "next/navigation"
 import type { ReactElement } from "react"
 
 import { DocumentOpenTracker } from "@/components/documents/document-open-tracker"
@@ -26,6 +27,11 @@ export default async function DocumentPreviewPage({
 
   if ("failure" in loaded) {
     return loaded.failure
+  }
+
+  // A sheet has no preview: its grid is read-only for whoever may not change it.
+  if ("sheet" in loaded) {
+    redirect(`/documents/${encodeURIComponent(documentId)}/edit`)
   }
 
   const { backHref, context, view } = loaded

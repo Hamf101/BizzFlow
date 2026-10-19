@@ -33,6 +33,7 @@ const actions: FilesWorkspaceActions = {
   archiveDocument: formAction,
   archiveFolder: formAction,
   createFolder: formAction,
+  createSheet: async () => {},
   requestDocumentPurge: formAction,
   requestFolderPurge: formAction,
   restoreDocument: formAction,

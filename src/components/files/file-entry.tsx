@@ -1,4 +1,4 @@
-import { FileText, Folder } from "lucide-react"
+import { FileSpreadsheet, FileText, Folder, type LucideProps } from "lucide-react"
 import Link from "next/link"
 import type { ReactElement, ReactNode } from "react"
 
@@ -23,7 +23,7 @@ export type FileEntry = {
   /** Where the entry opens: into a folder, or the document itself. */
   href: string
   id: string
-  kind: "document" | "folder" | "upload"
+  kind: "document" | "folder" | "sheet" | "upload"
   /** The entry's actions, where the member may manage it. */
   menu: ReactNode
   modified: ReactNode
@@ -35,6 +35,11 @@ export type FileEntry = {
   status: WorkflowStatusLook | null
   /** Folder, Document, or File. */
   type: string
+}
+
+/** The icon for an entry's kind: a folder, a sheet, or a page for the rest. */
+export function EntryIcon({ kind, ...props }: LucideProps & { kind: FileEntry["kind"] }): ReactElement {
+  return kind === "folder" ? <Folder {...props} /> : kind === "sheet" ? <FileSpreadsheet {...props} /> : <FileText {...props} />
 }
 
 /** How large a file is drawn, from a filmstrip frame to the Gallery stage. */
@@ -90,8 +95,9 @@ export function FileArt({
       data-document-surface="paper"
       data-slot="file-upload-page"
     >
-      <FileText
+      <EntryIcon
         className={cn("text-muted-foreground/50", large ? "size-10" : "size-4")}
+        kind={entry.kind}
         strokeWidth={1.25}
       />
       {entry.extension ? (
