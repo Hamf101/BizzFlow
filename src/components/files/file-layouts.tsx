@@ -192,7 +192,7 @@ export function FileIconsLayout({
           slot="file-tile"
           style={riseDelay(index)}
         >
-          <div className="flex min-w-0 items-start gap-1.5 px-2.5 pt-2.5 pb-2 sm:px-3.5 sm:pt-3">
+          <div className="flex min-w-0 items-start gap-1.5 px-2.5 pt-2.5 pb-2 group-data-[ticking]/tile:pl-9 sm:px-3.5 sm:pt-3 md:group-data-[ticking]/tile:pl-3.5">
             <StatusDot className="mt-[5px]" status={entry.status} />
             <Link
               className="line-clamp-2 min-h-[2.6em] min-w-0 flex-1 rounded-sm text-[11.5px] leading-[1.3] font-medium text-balance break-words text-foreground outline-none after:absolute after:inset-0 after:rounded-lg hover:text-primary focus-visible:after:ring-2 focus-visible:after:ring-ring/35 sm:line-clamp-1 sm:min-h-0 sm:text-[13.5px] sm:leading-snug"

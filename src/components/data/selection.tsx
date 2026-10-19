@@ -322,6 +322,8 @@ export function SelectableItem({
           pointer.current = event.pointerType
           held.current = false
         }}
+        // Marks the item while its tick shows, so its content can make room for it.
+        data-ticking={ticking ? "" : undefined}
         render={<Element />}
         role={role}
         style={style}
