@@ -1,3 +1,4 @@
+import { loadMemberReach } from "@/services/member-reach"
 import {
   canPerformOrganizationAction,
   canInviteMembers,
@@ -363,12 +364,11 @@ export async function listVisibleMemberIds(
   client: Pick<AdminSupabaseClient, "rpc">,
   organizationId: string,
   userId: string
-): Promise<Set<string>> {
-  const { data, error } = await client.rpc("visible_member_ids", { target_org_id: organizationId, target_user_id: userId })
-
-  if (error || !Array.isArray(data)) {
+): Promise<Set<string> | null> {
+  // The same answer every other list on the page uses, asked once.
+  const { visible } = await loadMemberReach(client, organizationId, userId).catch(() => {
     throw new OrganizationServiceError("Unable to load who you can see.", 500)
-  }
+  })
 
-  return new Set(data as string[])
+  return visible ? new Set(visible) : null
 }

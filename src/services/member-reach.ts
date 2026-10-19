@@ -1,3 +1,5 @@
+import { cache } from "react"
+
 import type { AdminSupabaseClient } from "@/lib/supabase/admin"
 
 /** How far a member reaches for work (see member_reach in the database). */
@@ -17,7 +19,8 @@ export type MemberReach = {
  * @returns Who they look over, and who they see (null when everyone).
  * @throws Error when the database cannot answer.
  */
-export async function loadMemberReach(
+// Once per request: every list a page shows asks the same question.
+export const loadMemberReach = cache(async function loadMemberReach(
   client: Pick<AdminSupabaseClient, "rpc">,
   organizationId: string,
   userId: string
@@ -30,4 +33,4 @@ export async function loadMemberReach(
 
   const reach = data as { everyone?: boolean; supervised?: string[] | null; visible?: string[] | null }
   return { supervised: reach.supervised ?? [], visible: reach.everyone ? null : (reach.visible ?? []) }
-}
+})

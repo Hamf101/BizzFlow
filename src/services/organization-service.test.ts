@@ -592,7 +592,7 @@ describe("organization service atomic mutations", () => {
         },
       ],
       organization_roles: [{ data: [], error: null }],
-    }, { visible_member_ids: [{ data: [MEMBER_ID], error: null }] })
+    }, { member_reach: [{ data: { everyone: false, supervised: [], visible: [MEMBER_ID] }, error: null }] })
 
     const people = await listOrganizationPeople(
       MEMBER_ID,
@@ -618,13 +618,13 @@ describe("organization service atomic mutations", () => {
         profiles: [{ data: profiles.slice(0, 1), error: null }],
         organization_roles: [{ data: [], error: null }],
       },
-      { visible_member_ids: [{ data: [MEMBER_ID], error: null }] }
+      { member_reach: [{ data: { everyone: false, supervised: [], visible: [MEMBER_ID] }, error: null }] }
     )
 
     const seen = await listOrganizationPeople(MEMBER_ID, ORGANIZATION_ID, { client: asStaff as never })
 
     expect(seen.members.map((member) => member.userId)).toEqual([MEMBER_ID])
-    expect(asStaff.rpcCalls).toEqual([{ functionName: "visible_member_ids", args: { target_org_id: ORGANIZATION_ID, target_user_id: MEMBER_ID } }])
+    expect(asStaff.rpcCalls).toEqual([{ functionName: "member_reach", args: { target_org_id: ORGANIZATION_ID, target_user_id: MEMBER_ID } }])
   })
 
   it("uses workspace display names and editable role labels in the people list", async () => {
