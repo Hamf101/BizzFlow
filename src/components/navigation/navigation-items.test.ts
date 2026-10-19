@@ -7,6 +7,7 @@ import {
 
 const FULL_MEMBER_DESTINATIONS = [
   "/dashboard",
+  "/flow",
   "/people",
   "/documents",
   "/templates",
