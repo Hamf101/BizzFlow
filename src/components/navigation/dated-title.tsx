@@ -24,8 +24,8 @@ export function DatedTitle({ children, className }: { children: ReactNode; class
   return (
     <div className={cn("flex min-w-0 flex-col gap-2", className)}>
       {children}
-      {/* One line tall while it waits, so the page never shifts when the date arrives. */}
-      <p className="min-h-[1lh] text-[13px] text-muted-foreground">{today}</p>
+      {/* One line, always: tall while it waits, and never wrapping, so the page never shifts when the date arrives or the actions beside it change. */}
+      <p className="min-h-[1lh] truncate text-[13px] text-muted-foreground">{today}</p>
     </div>
   )
 }
