@@ -117,18 +117,21 @@ export function OrgChart({
   return (
     <div aria-busy={busy} className={cn("grid gap-6", person && "md:grid-cols-[minmax(0,1fr)_20rem]")}>
       <div className="flex min-w-0 flex-col gap-4">
+        <NewTeam onAdd={(teamName, parentId) => save([{ kind: "save_unit", name: teamName, parentId }])} units={structure.units} />
         <div className="org-tree overflow-x-auto rounded-xl bg-muted/40 p-4 md:p-8">
-          <div className="flex md:justify-center">
-            <div className="rounded-lg border bg-card px-4 py-3 text-sm font-semibold">{workspaceName}</div>
+          {/* As wide as the tree, so a tree wider than the screen scrolls from its left edge. */}
+          <div className="md:mx-auto md:w-max md:min-w-full">
+            <div className="flex md:justify-center">
+              <div className="rounded-lg border bg-card px-4 py-3 text-sm font-semibold">{workspaceName}</div>
+            </div>
+            {roots.length ? (
+              <ul>
+                {roots.map((unit) => (
+                  <TeamNode ask={ask} key={unit.id} name={name} save={save} select={setSelected} selected={selected} unit={unit} units={structure.units} />
+                ))}
+              </ul>
+            ) : null}
           </div>
-          <ul>
-            {roots.map((unit) => (
-              <TeamNode ask={ask} key={unit.id} name={name} save={save} select={setSelected} selected={selected} unit={unit} units={structure.units} />
-            ))}
-            <li>
-              <NewTeam label="New team" onAdd={(teamName) => save([{ kind: "save_unit", name: teamName, parentId: null }])} />
-            </li>
-          </ul>
         </div>
 
         {unplaced.length > 0 ? (
@@ -233,7 +236,7 @@ function TeamNode({
           </Button>
         </div>
         <div className="flex flex-wrap gap-1.5">
-          {unit.members.length === 0 ? <span className="px-1 text-xs text-muted-foreground">Drag someone here</span> : null}
+          {unit.members.length === 0 ? <span className="px-1 text-xs text-muted-foreground"><span className="md:hidden">Open someone to move them here</span><span className="hidden md:inline">Drag someone here</span></span> : null}
           {unit.members.map((member) => (
             <PersonChip
               from={unit.id}
@@ -246,7 +249,6 @@ function TeamNode({
             />
           ))}
         </div>
-        <NewTeam label={`New team in ${unit.name}`} onAdd={(teamName) => save([{ kind: "save_unit", name: teamName, parentId: unit.id }])} quiet />
       </div>
       {children.length > 0 ? (
         <ul>
@@ -277,7 +279,7 @@ function PersonChip({
   return (
     <button
       aria-pressed={selected}
-      className="inline-flex min-h-11 cursor-grab items-center gap-1.5 rounded-full border border-transparent bg-muted px-3 text-sm outline-none transition-colors hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring/40 active:cursor-grabbing aria-pressed:border-primary aria-pressed:bg-secondary md:min-h-8"
+      className="inline-flex min-h-11 cursor-grab items-center gap-1.5 rounded-full border border-transparent bg-secondary px-3 text-sm text-secondary-foreground outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/40 active:cursor-grabbing aria-pressed:border-primary aria-pressed:bg-secondary md:min-h-8"
       draggable
       onClick={onOpen}
       onDragStart={(event) => {
@@ -389,23 +391,35 @@ function PersonPanel({
   )
 }
 
-function NewTeam({ label, onAdd, quiet = false }: { label: string; onAdd: (name: string) => void; quiet?: boolean }): ReactElement {
+function NewTeam({ onAdd, units }: { onAdd: (name: string, parentId: string | null) => void; units: readonly Unit[] }): ReactElement {
   const [value, setValue] = useState("")
+  const [parentId, setParentId] = useState("")
 
   return (
     <form
-      className="flex items-center gap-1.5"
+      className="flex flex-wrap items-center gap-2"
       onSubmit={(event: FormEvent) => {
         event.preventDefault()
         if (value.trim()) {
-          onAdd(value.trim())
+          onAdd(value.trim(), parentId || null)
           setValue("")
         }
       }}
     >
-      <Input aria-label={label} className={quiet ? "h-8 text-xs" : "h-9 bg-card md:w-56"} maxLength={80} onChange={(event) => setValue(event.target.value)} placeholder={label} value={value} />
-      <Button aria-label={`Add ${label.toLowerCase()}`} disabled={!value.trim()} size="icon" type="submit" variant={quiet ? "ghost" : "outline"}>
+      <Input aria-label="New team" className="h-11 min-w-0 flex-1 bg-card sm:h-9 sm:max-w-56" maxLength={80} onChange={(event) => setValue(event.target.value)} placeholder="New team" value={value} />
+      {units.length ? (
+        <Select aria-label="Inside" className="h-11 w-auto sm:h-9" onChange={(event) => setParentId(event.target.value)} value={parentId}>
+          <option value="">At the top</option>
+          {units.map((unit) => (
+            <option key={unit.id} value={unit.id}>
+              Inside {unit.name}
+            </option>
+          ))}
+        </Select>
+      ) : null}
+      <Button aria-label="Add new team" disabled={!value.trim()} type="submit" variant="outline">
         <Plus aria-hidden="true" className="size-4" />
+        Add
       </Button>
     </form>
   )
