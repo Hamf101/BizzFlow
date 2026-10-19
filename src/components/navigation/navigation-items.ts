@@ -22,6 +22,8 @@ export type NavigationItem = {
    * member may open it — the dashboard, and the personal settings page.
    */
   requiredAction?: OrganizationPermissionAction
+  /** Open to every member, but only once there is a workspace to work in. */
+  needsOrganization?: true
 }
 
 /**
@@ -32,7 +34,7 @@ export type NavigationItem = {
  */
 export const NAVIGATION_ITEMS: readonly NavigationItem[] = [
   { href: "/dashboard", icon: DashboardIcon, label: "Dashboard" },
-  { href: "/flow", icon: FlowIcon, label: "Flow", requiredAction: "documents:create" },
+  { href: "/flow", icon: FlowIcon, label: "Flow", needsOrganization: true },
   {
     href: "/people",
     icon: PeopleIcon,
@@ -98,7 +100,7 @@ export function getVisibleNavigationItems(
 ): NavigationItem[] {
   if (!role) {
     return NAVIGATION_ITEMS.filter(
-      (item: NavigationItem): boolean => !item.requiredAction
+      (item: NavigationItem): boolean => !item.requiredAction && !item.needsOrganization
     )
   }
 

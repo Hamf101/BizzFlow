@@ -34,6 +34,7 @@ describe("getVisibleNavigationItems", () => {
       getVisibleNavigationItems("external_reviewer").map((item) => item.href)
     ).toEqual([
       "/dashboard",
+      "/flow",
       "/people",
       "/documents",
       "/submissions",
