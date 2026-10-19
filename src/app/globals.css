@@ -462,30 +462,24 @@
 
 /*
  * Nav icons: each moves the way its page changes when its link is pointed at
- * or pressed. The drawn ones (nav-icons.tsx) mark their moving parts with
- * data-move; Lucide's keep their shapes and move whole. Only in navigation, so
+ * or pressed. Flow's own (nav-icons.tsx) marks its moving part with data-move;
+ * Lucide's move whole. Only in navigation, so
  * the same icon elsewhere on a page stays still.
  */
 .nav-icon *,
-:is(nav, header, aside) :is(.lucide-search, .lucide-folder, .lucide-list-checks, .lucide-clipboard-check, .lucide-settings) {
+:is(nav, header, aside) :is(.lucide-search, .lucide-folder, .lucide-list-checks, .lucide-clipboard-check, .lucide-settings, .lucide-layout-dashboard, .lucide-users, .lucide-layout-template, .lucide-inbox) {
   transform-box: fill-box;
   transform-origin: center;
   transition: transform 0.45s cubic-bezier(0.3, 1.4, 0.5, 1), opacity 0.3s;
 }
-:is(a, button):is(:hover, :active) .nav-icon [data-move="left"] { transform: translateX(-1.5px); }
-:is(a, button):is(:hover, :active) .nav-icon [data-move="right"] { transform: translateX(1.5px); }
-:is(a, button):is(:hover, :active) .nav-icon [data-move="rise"] { transform: translateY(-1.5px); }
-:is(a, button):is(:hover, :active) .nav-icon [data-move="drop"] { transform: translateY(4px) scaleY(0.82); opacity: 0.85; }
-:is(a, button):is(:hover, :active) .nav-icon [data-move="grow"] { transform: scale(1.1); }
 :is(a, button):is(:hover, :active) .nav-icon [data-move="fold"] { transform: rotate(-90deg) scale(0.85); }
-.nav-icon [data-move="flow"] { stroke-dasharray: 3 2.4; }
-:is(a, button):is(:hover, :active) .nav-icon [data-move="flow"] { animation: nav-icon-flow 0.9s linear infinite; }
-@keyframes nav-icon-flow { to { stroke-dashoffset: -10.8; } }
-:is(a, button):is(:hover, :active) .nav-icon [data-move="trade-right"] { transform: translateX(10px); }
-:is(a, button):is(:hover, :active) .nav-icon [data-move="trade-left"] { transform: translateX(-10px); }
 :is(nav, header, aside) :is(a, button):is(:hover, :active) .lucide-settings { transform: rotate(120deg); transition-duration: 0.7s; }
 :is(nav, header, aside) :is(a, button):is(:hover, :active) .lucide-search { transform: rotate(-14deg); }
 :is(nav, header, aside) :is(a, button):is(:hover, :active) .lucide-folder { transform: translateY(-1.5px) rotate(-4deg); }
+:is(nav, header, aside) :is(a, button):is(:hover, :active) .lucide-layout-dashboard { transform: scale(1.1); }
+:is(nav, header, aside) :is(a, button):is(:hover, :active) .lucide-users { transform: translateY(-1.5px); }
+:is(nav, header, aside) :is(a, button):is(:hover, :active) .lucide-layout-template { transform: rotate(-8deg); }
+:is(nav, header, aside) :is(a, button):is(:hover, :active) .lucide-inbox { transform: translateY(1.5px); }
 :is(nav, header, aside) :is(a, button):is(:hover, :active) :is(.lucide-list-checks, .lucide-clipboard-check) { transform: scale(1.08); }
 :is(nav, header, aside) :is(a, button):is(:hover, :active) :is(.lucide-list-checks, .lucide-clipboard-check) path:is([d^="m3"], [d^="m9"]) {
   stroke-dasharray: 9;
@@ -494,7 +488,7 @@
 @keyframes nav-icon-tick { from { stroke-dashoffset: 9; } to { stroke-dashoffset: 0; } }
 @media (prefers-reduced-motion: reduce) {
   .nav-icon *,
-  :is(nav, header, aside) :is(.lucide-search, .lucide-folder, .lucide-list-checks, .lucide-clipboard-check, .lucide-settings),
+  :is(nav, header, aside) :is(.lucide-search, .lucide-folder, .lucide-list-checks, .lucide-clipboard-check, .lucide-settings, .lucide-layout-dashboard, .lucide-users, .lucide-layout-template, .lucide-inbox),
   :is(nav, header, aside) :is(.lucide-list-checks, .lucide-clipboard-check) path {
     transition: none !important;
     animation: none !important;

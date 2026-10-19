@@ -1,7 +1,16 @@
-import { ClipboardCheck, Folder, ListChecks, Settings } from "lucide-react"
+import {
+  ClipboardCheck,
+  Folder,
+  Inbox,
+  LayoutDashboard,
+  LayoutTemplate,
+  ListChecks,
+  Settings,
+  Users,
+} from "lucide-react"
 import type { ComponentType } from "react"
 
-import { DashboardIcon, FlowIcon, PeopleIcon, SubmissionsIcon, TemplatesIcon } from "@/components/navigation/nav-icons"
+import { FlowIcon } from "@/components/navigation/nav-icons"
 import type { NavigationPreferences } from "@/types/navigation"
 
 import {
@@ -33,11 +42,11 @@ export type NavigationItem = {
  * be filtered rather than offering a member a route they will bounce off.
  */
 export const NAVIGATION_ITEMS: readonly NavigationItem[] = [
-  { href: "/dashboard", icon: DashboardIcon, label: "Dashboard" },
+  { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
   { href: "/flow", icon: FlowIcon, label: "Flow", needsOrganization: true },
   {
     href: "/people",
-    icon: PeopleIcon,
+    icon: Users,
     label: "People",
     requiredAction: "people:view",
   },
@@ -49,13 +58,13 @@ export const NAVIGATION_ITEMS: readonly NavigationItem[] = [
   },
   {
     href: "/templates",
-    icon: TemplatesIcon,
+    icon: LayoutTemplate,
     label: "Templates",
     requiredAction: "templates:view",
   },
   {
     href: "/submissions",
-    icon: SubmissionsIcon,
+    icon: Inbox,
     label: "Submissions",
     shortLabel: "Subs",
     requiredAction: "submissions:view",
