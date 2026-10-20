@@ -7,7 +7,6 @@ import {
 
 const FULL_MEMBER_DESTINATIONS = [
   "/dashboard",
-  "/flow",
   "/people",
   "/documents",
   "/templates",
@@ -34,7 +33,6 @@ describe("getVisibleNavigationItems", () => {
       getVisibleNavigationItems("external_reviewer").map((item) => item.href)
     ).toEqual([
       "/dashboard",
-      "/flow",
       "/people",
       "/documents",
       "/submissions",
@@ -74,10 +72,12 @@ describe("getVisibleNavigationItems", () => {
     expect(getMobileNavigationLayout(role).primary.map((item) => item.href)).toContain("/submissions")
   })
 
-  it("never gives Flow a phone bar slot, even when a saved order puts it first", () => {
-    const { overflow, primary } = getMobileNavigationLayout("owner_admin", { labels: {}, order: ["/flow", "/settings", "/dashboard"] })
+  it("keeps Flow out of the tabs a member moves and renames, even when a saved order names it", () => {
+    // Flow sits fixed under Search, and its own button is on every phone screen.
+    const preferences = { labels: { "/flow": "Chat" }, order: ["/flow", "/settings", "/dashboard"] }
+    const { overflow, primary } = getMobileNavigationLayout("owner_admin", preferences)
     expect(primary.map((item) => item.href)).toEqual(["/settings", "/dashboard", "/people", "/documents"])
-    expect(overflow.map((item) => item.href)).toContain("/flow")
+    expect([...primary, ...overflow, ...getVisibleNavigationItems("owner_admin", preferences)].map((item) => item.href)).not.toContain("/flow")
   })
 
   it("keeps Templates in the phone bar of someone who does not review", () => {

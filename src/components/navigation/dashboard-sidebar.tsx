@@ -2,6 +2,7 @@
 
 import { PanelLeftClose, Search } from "lucide-react"
 import Link from "next/link"
+import { usePathname } from "next/navigation"
 import { useState, type MouseEvent, type ReactElement } from "react"
 
 import { BizFlowMark } from "@/components/brand/bizflow-mark"
@@ -10,6 +11,7 @@ import {
   type DashboardAccount,
 } from "@/components/navigation/dashboard-account-menu"
 import { DashboardNavigation } from "@/components/navigation/dashboard-navigation"
+import { FlowIcon } from "@/components/navigation/nav-icons"
 import { SearchShortcut, WorkspaceSearchTrigger } from "@/components/search/workspace-search"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -36,6 +38,7 @@ export function DashboardSidebar({
   signOutAction,
 }: DashboardSidebarProps): ReactElement {
   const [collapsed, setCollapsed] = useState(false)
+  const flowOpen = usePathname() === "/flow"
 
   function expandFromEmptyRail(event: MouseEvent<HTMLElement>): void {
     if (!collapsed || !(event.target instanceof Element)) {
@@ -132,6 +135,25 @@ export function DashboardSidebar({
             </span>
             <SearchShortcut className={cn(collapsed && "md:hidden")} />
           </WorkspaceSearchTrigger>
+        ) : null}
+        {account.permissionSubject ? (
+          // Fixed under Search like Search itself: never moved or renamed.
+          <Link
+            aria-current={flowOpen ? "page" : undefined}
+            aria-label={collapsed ? "Flow" : undefined}
+            className={cn(
+              "group flex h-11 items-center rounded-md pr-3 text-sm text-foreground/80 outline-none transition-colors hover:bg-secondary/70 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40 motion-reduce:transition-none",
+              flowOpen && "bg-secondary font-medium text-secondary-foreground",
+              collapsed && "md:w-11 md:pr-0"
+            )}
+            href="/flow"
+            title={collapsed ? "Flow" : undefined}
+          >
+            <span className="grid size-11 shrink-0 place-items-center">
+              <FlowIcon className={cn("size-5", flowOpen && "text-primary")} />
+            </span>
+            <span className={cn("truncate", collapsed && "md:hidden")}>Flow</span>
+          </Link>
         ) : null}
         <DashboardNavigation
           collapsed={collapsed}
