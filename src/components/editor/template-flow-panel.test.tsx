@@ -163,7 +163,7 @@ it("drops a change with what needs it, applies only the kept ones, and keeps the
   expect(document.body.textContent).toContain("Proposed change set")
 })
 
-it("sends a message, even one carried in on open, to the model this person picked last", async () => {
+it("sends a message, even one carried in on open with what it mentioned, to the model this person picked last", async () => {
   localStorage.setItem("bizflow.flow-model", "gemini-3.5-flash")
   const fetchFlow = vi.fn(async () => Response.json({ error: "Stop here." }, { status: 500 }))
   vi.stubGlobal("fetch", fetchFlow)
@@ -174,7 +174,7 @@ it("sends a message, even one carried in on open, to the model this person picke
   act(() =>
     root?.render(
       <TemplateFlowPanel
-        autoSend={{ instruction: "Ask about the vehicle." }}
+        autoSend={{ instruction: "Make a template like this", mentions: [{ id: "70000000-0000-4000-8000-000000000001", kind: "templates", name: "Lease" }] }}
         canUndo={false}
         draft={draft}
         initialMessages={[]}
@@ -184,6 +184,7 @@ it("sends a message, even one carried in on open, to the model this person picke
         onProposalStale={() => undefined}
         onRejectProposal={() => undefined}
         onUndo={() => undefined}
+        organizationId="10000000-0000-4000-8000-000000000001"
         pendingProposal={null}
         templateId={TEMPLATE_ID}
       />
@@ -193,6 +194,8 @@ it("sends a message, even one carried in on open, to the model this person picke
 
   const [, init] = fetchFlow.mock.calls[0] as unknown as [string, { body: string }]
   expect(JSON.parse(init.body).model).toBe("gemini-3.5-flash")
+  // What the request mentioned on the workspace page goes with it here.
+  expect(JSON.parse(init.body).mentions).toEqual([{ id: "70000000-0000-4000-8000-000000000001", kind: "templates" }])
   expect(buttonNamed("Flow model: Gemini 3.5 Flash")).toBeTruthy()
 })
 

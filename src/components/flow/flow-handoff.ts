@@ -1,13 +1,15 @@
 import { useEffect, useEffectEvent } from "react"
 
+import type { FlowMentionItem } from "@/components/flow/flow-mentions"
+
 const KEY = "bizflow:flow-handoff"
 const FRESH_MS = 60_000
 
 /** An uploaded file attached to Flow, which reads it on every turn while it stays. */
 export type FlowSource = Readonly<{ id: string; name: string }>
 
-/** A request for the editor that opens next, and the file it is about. */
-export type FlowHandoff = Readonly<{ instruction: string; source?: FlowSource }>
+/** A request for the editor that opens next, the file it is about, and what it mentioned. */
+export type FlowHandoff = Readonly<{ instruction: string; mentions?: readonly FlowMentionItem[]; source?: FlowSource }>
 
 /**
  * Leaves a member's request for the editor that opens next, so Flow there
@@ -15,10 +17,11 @@ export type FlowHandoff = Readonly<{ instruction: string; source?: FlowSource }>
  *
  * @param instruction - What the member asked Flow for.
  * @param source - The file attached to the request, if any.
+ * @param mentions - What the request mentioned, which the editor's Flow reads again.
  */
-export function handOffToFlow(instruction: string, source?: FlowSource): void {
+export function handOffToFlow(instruction: string, source?: FlowSource, mentions?: readonly FlowMentionItem[]): void {
   try {
-    sessionStorage.setItem(KEY, JSON.stringify({ at: Date.now(), instruction, source }))
+    sessionStorage.setItem(KEY, JSON.stringify({ at: Date.now(), instruction, mentions, source }))
   } catch {
     // Storage can be unavailable; the editor then opens without the request.
   }
@@ -33,15 +36,25 @@ export function takeFlowHandoff(): FlowHandoff | null {
   try {
     const raw = sessionStorage.getItem(KEY)
     sessionStorage.removeItem(KEY)
-    const value = raw ? (JSON.parse(raw) as { at?: unknown; instruction?: unknown; source?: { id?: unknown; name?: unknown } }) : null
+    const value = raw
+      ? (JSON.parse(raw) as { at?: unknown; instruction?: unknown; mentions?: unknown; source?: { id?: unknown; name?: unknown } })
+      : null
 
     if (!value || typeof value.at !== "number" || Date.now() - value.at >= FRESH_MS || typeof value.instruction !== "string") {
       return null
     }
 
     const { id, name } = value.source ?? {}
+    // Only their ids and kinds go to the server, which checks each one again.
+    const mentions = (Array.isArray(value.mentions) ? value.mentions : []).filter(
+      (item): item is FlowMentionItem => typeof item?.id === "string" && typeof item.kind === "string" && typeof item.name === "string"
+    )
 
-    return typeof id === "string" && typeof name === "string" ? { instruction: value.instruction, source: { id, name } } : { instruction: value.instruction }
+    return {
+      instruction: value.instruction,
+      ...(mentions.length > 0 ? { mentions } : {}),
+      ...(typeof id === "string" && typeof name === "string" ? { source: { id, name } } : {}),
+    }
   } catch {
     return null
   }

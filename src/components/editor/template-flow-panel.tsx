@@ -35,7 +35,7 @@ import * as z from "zod"
 import { FLOW_COMPOSER_ATTACH, FlowAddButton, FlowAttachChip, RECREATE, useFlowAttachment } from "@/components/flow/flow-attach"
 import type { FlowHandoff, FlowSource } from "@/components/flow/flow-handoff"
 import { FlowModelPicker, useFlowModel } from "@/components/flow/flow-model-picker"
-import { FlowMentionChips, useFlowMentions } from "@/components/flow/flow-mentions"
+import { FlowMentionChips, type FlowMentionItem, useFlowMentions } from "@/components/flow/flow-mentions"
 import { FlowMessage, FlowWorking } from "@/components/flow/flow-message"
 import { FLOW_STREAM_HEADERS, readFlowTurn } from "@/components/flow/flow-stream"
 import { FLOW_COMPOSER, FLOW_SEND } from "@/components/flow/flow-window"
@@ -212,14 +212,14 @@ export function TemplateFlowPanel({
   }, [pendingProposal])
 
   const carried = useRef<string | null>(null)
-  const sendCarried = useEffectEvent(({ instruction, source }: FlowHandoff): void => {
+  const sendCarried = useEffectEvent(({ instruction, mentions: carriedMentions, source }: FlowHandoff): void => {
     const attached = organizationId ? source : undefined
 
     if (attached) {
       attachment.set(attached)
     }
 
-    void submitMessage(instruction, attached ?? null)
+    void submitMessage(instruction, attached ?? null, organizationId ? carriedMentions : undefined)
   })
 
   useEffect((): void => {
@@ -240,7 +240,11 @@ export function TemplateFlowPanel({
     }
   }, [messages, isLoading, pendingProposal])
 
-  async function submitMessage(message: string, source: FlowSource | null = attachment.source): Promise<void> {
+  async function submitMessage(
+    message: string,
+    source: FlowSource | null = attachment.source,
+    mentioned: readonly FlowMentionItem[] = mentions.items
+  ): Promise<void> {
     const trimmedInstruction = message.trim() || (source ? RECREATE : "")
 
     if (!trimmedInstruction || isLoading || pendingProposal !== null || attachment.uploading) {
@@ -255,7 +259,6 @@ export function TemplateFlowPanel({
     setReadingForm(source !== null)
     setInstruction("")
     // A mention goes with this message only; a failed send puts it back.
-    const mentioned = mentions.items
     mentions.clear()
     const controller = new AbortController()
     const timeoutId = window.setTimeout(
@@ -270,7 +273,7 @@ export function TemplateFlowPanel({
           templateId,
           draft: toTemplateFlowDraft(draft),
           instruction: trimmedInstruction,
-          mentions: mentions.payload,
+          mentions: mentioned.length > 0 ? mentioned.map(({ id, kind }) => ({ id, kind })) : undefined,
           model: flowModel.chosen(),
           // Sent again on every turn while it stays attached: each turn reads it afresh.
           sourceDocumentId: source?.id

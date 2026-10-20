@@ -180,7 +180,7 @@ function FlowConversation({
 
       if (answer.kind === "create") {
         // The new draft's editor picks the request up and Flow carries on there.
-        handOffToFlow(trimmed, answer.sourceDocumentId && source ? source : undefined)
+        handOffToFlow(trimmed, answer.sourceDocumentId && source ? source : undefined, mentioned)
         // The new template has the form now; the next request here starts fresh.
         attachment.clear()
         const formData = new FormData()
