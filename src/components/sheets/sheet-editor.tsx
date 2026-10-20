@@ -257,9 +257,11 @@ export function SheetEditor({ backHref, canEdit, canShare, guest, organizationId
     if (ours?.cut) {
       const cut = ours.cut
       // ponytail: cut to another tab lands as written but leaves what read it behind; follow it there too if asked
-      change((current) => (cut.tabId === tab.id ? moveCells(current, tab.id, cut.range, at, block) : pasteCells(current, tab.id, at, block)))
-      // A cut goes down once; pasting it again copies it from where it now is.
-      clip.current = { cells: ours.cells, from: at, tsv: ours.tsv }
+      const next = cut.tabId === tab.id ? moveCells(content, tab.id, cut.range, at, block) : pasteCells(content, tab.id, at, block)
+      change(() => next)
+      // A cut goes down once; pasting it again copies it, as it landed, from where it now is.
+      const landed = next.tabs.find((candidate) => candidate.id === tab.id)!.cells
+      clip.current = { cells: block.map((line, rows) => line.map((_, cols) => landed[cellAddress(at.row + rows, at.col + cols)] ?? null)), from: at, tsv: ours.tsv }
     } else {
       change((current) => pasteCells(current, tab.id, at, block, ours?.from))
     }

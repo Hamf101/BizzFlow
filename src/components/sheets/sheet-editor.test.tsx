@@ -172,3 +172,29 @@ it("stops saving and says so when the sheet changed elsewhere", async () => {
   })
   expect(saveAction).toHaveBeenCalledWith(expect.objectContaining({ documentId: "sheet-1", expectedUpdatedAt: "2026-10-14T12:00:00.000Z" }))
 })
+
+it("moves a cut block, then copies it on from where it landed", () => {
+  open({ content: book({ A1: 5, B1: "=A1*2" }) })
+  let clipboard = ""
+  const clip = (type: "cut" | "paste") =>
+    act(() =>
+      grid().dispatchEvent(
+        Object.assign(new Event(type, { bubbles: true, cancelable: true }), {
+          clipboardData: { getData: () => clipboard, setData: (_: string, text: string) => (clipboard = text) },
+        })
+      )
+    )
+
+  click("A1")
+  click("B1", true)
+  clip("cut")
+  click("C1")
+  clip("paste")
+  expect(cell("D1").textContent).toBe("10")
+
+  // Pasted again, it is a copy of C1:D1: D1's "C1*2" becomes "E1*2" at F1.
+  click("E1")
+  clip("paste")
+  click("F1")
+  expect(formulaBar().value).toBe("=E1*2")
+})
