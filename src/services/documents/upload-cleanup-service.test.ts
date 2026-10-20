@@ -41,13 +41,24 @@ describe("cleanupAbandonedDocumentUploads", () => {
     expect(client.tables.document_versions.map((row) => row.id).sort()).toEqual(["kept-1", "recent-1"])
   })
 
-  it("keeps the rows when the bytes could not be removed, so the next run tries again", async () => {
+  it("keeps an upload completed after the sweep listed it, bytes and all", async () => {
     const client = seed()
-    vi.spyOn(console, "error").mockImplementation(() => undefined)
+    const from = client.from.bind(client)
+    let versionQueries = 0
+    // The second document_versions query is the claim on empty-1: it completes just before.
+    client.from = ((table: Parameters<typeof from>[0]) => {
+      if (table === "document_versions" && versionQueries++ === 1) {
+        Object.assign(client.tables.document_versions.find((row) => row.id === "empty-1")!, { status: "available" })
+      }
+      return from(table)
+    }) as typeof client.from
+    const deleteDocumentStorageObject = vi.fn<(input: { storageKey: string }) => Promise<void>>(async () => {})
 
-    await expect(
-      cleanupAbandonedDocumentUploads({ client: client as never, now: () => NOW, deleteDocumentStorageObject: async () => Promise.reject(new Error("R2 down")) })
-    ).resolves.toEqual({ removed: 0, failed: 2 })
-    expect(client.tables.document_versions).toHaveLength(4)
+    await expect(cleanupAbandonedDocumentUploads({ client: client as never, now: () => NOW, deleteDocumentStorageObject })).resolves.toEqual({
+      removed: 1,
+      failed: 0,
+    })
+    expect(deleteDocumentStorageObject.mock.calls.map(([input]) => input.storageKey)).toEqual(["k/kept-2"])
+    expect(client.tables.document_versions.map((row) => row.id).sort()).toEqual(["empty-1", "kept-1", "recent-1"])
   })
 })

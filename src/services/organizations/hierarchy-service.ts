@@ -122,15 +122,16 @@ export async function changeOrganizationStructure(
             .eq("org_id", org)
             .eq("user_id", change.userId)
             .select("user_id")
-        case "set_role_scope":
-          return client
-            .from("organization_roles")
-            .update({ visibility_scope: change.scope })
-            .eq("org_id", org)
-            .eq("id", change.roleId)
-            // An owner's reach is everything, always.
-            .neq("system_key", "owner_admin")
-            .select("id")
+        case "set_role_scope": {
+          // An owner's reach is everything, always. Asked first, as a custom role's key is null, which no SQL filter on it lets through.
+          const role = await client.from("organization_roles").select("system_key").eq("org_id", org).eq("id", change.roleId)
+
+          if (role.error || (role.data ?? []).some((row) => row.system_key === "owner_admin")) {
+            return { data: [], error: role.error }
+          }
+
+          return client.from("organization_roles").update({ visibility_scope: change.scope }).eq("org_id", org).eq("id", change.roleId).select("id")
+        }
       }
     })()
 

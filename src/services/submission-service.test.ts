@@ -140,7 +140,14 @@ describe("internal submission visibility", () => {
     expect(rows.map((submission) => submission.id)).toEqual([SUBMISSION_ID])
     await expect(
       getInternalSubmission({ actorUserId: MANAGER_ID, organizationId: ORGANIZATION_ID, submissionId: OTHER_SUBMISSION_ID }, { client: client as never })
+    ).rejects.toMatchObject({ statusCode: 404 })    // Nor can they put themselves on it as its reviewer.
+    await expect(
+      setInternalSubmissionReviewers(
+        { actorUserId: MANAGER_ID, expectedRevision: 1, organizationId: ORGANIZATION_ID, requiredApprovals: null, reviewerIds: [MANAGER_ID], submissionId: OTHER_SUBMISSION_ID },
+        { client: client as never }
+      )
     ).rejects.toMatchObject({ statusCode: 404 })
+    expect(client.rpcCalls).not.toHaveBeenCalledWith("set_submission_reviewers", expect.anything())
   })
 
   it("shows external reviewers only assigned non-drafts and hides other staff rows", async () => {

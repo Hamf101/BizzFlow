@@ -11,6 +11,7 @@ do $$
 <<consent_decline_test>>
 declare
   owner_id uuid := gen_random_uuid();
+  sender_id uuid := gen_random_uuid();
   organization_id uuid := gen_random_uuid();
   document_id uuid := gen_random_uuid();
   first_id uuid := gen_random_uuid();
@@ -39,6 +40,12 @@ begin
   insert into public.profiles (id, email, full_name)
   values (owner_id, 'rpc-' || replace(owner_id::text, '-', '') || '@example.invalid', 'Consent and decline verification');
 
+  insert into auth.users (id, email, created_at, updated_at)
+  values (sender_id, 'rpc-' || replace(sender_id::text, '-', '') || '@example.invalid', now(), now());
+
+  insert into public.profiles (id, email, full_name)
+  values (sender_id, 'rpc-' || replace(sender_id::text, '-', '') || '@example.invalid', 'Consent and decline sender');
+
   insert into public.organizations (id, name, slug, created_by)
   values (organization_id, 'Consent and decline verification', 'consent-rpc-' || replace(organization_id::text, '-', ''), owner_id);
 
@@ -48,11 +55,11 @@ begin
   insert into public.document_answers (document_id, org_id, values, workflow_status)
   values (document_id, organization_id, '{}', 'awaiting_signatures');
 
-  insert into public.document_signing_recipients (id, org_id, document_id, name, email, token_hash, token_expires_at)
+  insert into public.document_signing_recipients (id, org_id, document_id, name, email, token_hash, token_expires_at, sent_by)
   values
-    (first_id, organization_id, document_id, 'First', 'first@example.invalid', first_token, now() + interval '1 day'),
-    (second_id, organization_id, document_id, 'Second', 'second@example.invalid', second_token, now() + interval '1 day'),
-    (third_id, organization_id, document_id, 'Third', 'third@example.invalid', third_token, now() + interval '1 day');
+    (first_id, organization_id, document_id, 'First', 'first@example.invalid', first_token, now() + interval '1 day', sender_id),
+    (second_id, organization_id, document_id, 'Second', 'second@example.invalid', second_token, now() + interval '1 day', null),
+    (third_id, organization_id, document_id, 'Third', 'third@example.invalid', third_token, now() + interval '1 day', null);
 
   -- An explicit "no" to signing electronically signs nothing.
   begin
@@ -131,5 +138,15 @@ begin
     raise exception 'A revoked link declined.' using errcode = 'XX001';
   exception when sqlstate 'P0002' then null;
   end;
+
+  -- Whoever sent it may leave: a signed row forgets its sender and keeps its signature.
+  delete from public.profiles where id = sender_id;
+
+  if not exists (
+    select 1 from public.document_signing_recipients recipient
+    where recipient.id = consent_decline_test.first_id and recipient.status = 'signed' and recipient.sent_by is null
+  ) then
+    raise exception 'Deleting the sender did not leave the signed row in place without them.';
+  end if;
 end;
 $$;

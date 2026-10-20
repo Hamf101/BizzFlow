@@ -16,9 +16,9 @@ export type CleanupAbandonedDocumentUploadsDeps = {
 
 /**
  * Removes uploads nobody finished: a version still pending a day after its
- * upload URL expired loses its bytes, if any arrived, then its row; a document
- * that was nothing but that first version goes with it. Bytes go first, so a
- * failure leaves the rows for the next run to try again.
+ * upload URL expired loses its row, then its bytes, if any arrived; a document
+ * that was nothing but that first version goes with it. The row goes first, and
+ * only while still pending, so an upload completed meanwhile keeps its bytes.
  *
  * @param deps - Optional database, clock and storage dependencies for tests.
  * @returns How many uploads were removed, and how many could not be.
@@ -46,18 +46,23 @@ export async function cleanupAbandonedDocumentUploads(
 
   for (const version of (data ?? []) as AbandonedVersion[]) {
     try {
-      await deleteObject({ storageKey: version.storage_key })
-      // Only while still pending: one finished meanwhile is kept.
+      // Claims the version against its completion: one finished meanwhile is kept.
       const gone = await client
         .from("document_versions")
         .delete()
         .eq("id", version.id)
         .eq("org_id", version.org_id)
         .eq("status", "upload_pending")
+        .select("id")
 
       if (gone.error) {
         throw gone.error
       }
+
+      if (!gone.data?.length) {
+        continue
+      }
+
 
       if (version.version_number === 1) {
         const empty = await client
@@ -72,10 +77,12 @@ export async function cleanupAbandonedDocumentUploads(
         }
       }
 
+      // ponytail: a failed delete here orphans private bytes (logged below); a retry queue if that ever adds up
+      await deleteObject({ storageKey: version.storage_key })
       removed += 1
     } catch (cause: unknown) {
       failed += 1
-      console.error("document_upload_cleanup_failed", { organizationId: version.org_id, versionId: version.id, cause: String(cause) })
+      console.error("document_upload_cleanup_failed", { organizationId: version.org_id, storageKey: version.storage_key, versionId: version.id, cause: String(cause) })
     }
   }
 

@@ -530,7 +530,8 @@ class FakeQueryBuilder {
   }
 
   neq(column: string, value: unknown): FakeQueryBuilder {
-    this.filters.push((row: FakeRow) => row[column] !== value)
+    // As SQL: a null is never unequal to anything.
+    this.filters.push((row: FakeRow) => row[column] != null && row[column] !== value)
     return this
   }
 

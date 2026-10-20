@@ -19,6 +19,7 @@ function seed(): FakeSupabaseClient {
     organization_roles: [
       { id: "owner-role", org_id: ORG, name: "Owner", system_key: "owner_admin", visibility_scope: null, archived_at: null },
       { id: STAFF_ROLE, org_id: ORG, name: "Staff", system_key: "staff", visibility_scope: null, archived_at: null },
+      { id: "custom-role", org_id: ORG, name: "Site lead", system_key: null, visibility_scope: null, archived_at: null },
     ],
   })
 }
@@ -33,11 +34,14 @@ describe("organization structure", () => {
     await changeOrganizationStructure({ ...owner, change: { kind: "set_unit_member", unitId: OPS, userId: STAFF, place: "lead" } }, deps(client))
     await changeOrganizationStructure({ ...owner, change: { kind: "set_manager", userId: STAFF, managerUserId: OWNER } }, deps(client))
     await changeOrganizationStructure({ ...owner, change: { kind: "set_role_scope", roleId: STAFF_ROLE, scope: "everyone" } }, deps(client))
+    // A role the owner made has no system key, and narrows all the same.
+    await changeOrganizationStructure({ ...owner, change: { kind: "set_role_scope", roleId: "custom-role", scope: "branch" } }, deps(client))
 
     const structure = await getOrganizationStructure(owner, deps(client))
     expect(structure.units).toEqual([{ id: OPS, name: "Ops", parentId: null, members: [{ isLead: true, userId: STAFF }] }])
     expect(structure.managers).toEqual({ [STAFF]: OWNER })
     expect(structure.roles.find((role) => role.id === STAFF_ROLE)).toMatchObject({ scope: "everyone", setByOwner: true })
+    expect(structure.roles.find((role) => role.id === "custom-role")).toMatchObject({ scope: "branch" })
     // An owner's reach is always everyone, whatever is asked.
     expect(structure.roles.find((role) => role.systemKey === "owner_admin")).toMatchObject({ scope: "everyone" })
 

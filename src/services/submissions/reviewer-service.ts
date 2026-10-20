@@ -13,14 +13,15 @@ import type {
 import { SubmissionServiceError } from "@/services/submissions/errors"
 import type { SubmissionListFilters } from "@/services/submissions/list-filters"
 import {
+  assertSubmissionVisible,
   createSubmissionDatabaseError,
   createSubmissionMutationError,
   getSubmissionById,
   getSubmissionClient,
+  parseSubmissionRow,
   requireSubmissionPermission,
   runSubmissionOperation,
 } from "@/services/submissions/shared"
-import { parseSubmissionRow } from "@/services/submissions/shared"
 import type { Submission } from "@/types/submission"
 import { parseSubmissionReviewerRow, type SubmissionReviewer, type SubmissionReviewTally } from "@/types/submission-review"
 import { LOWERCASE_UUID_PATTERN } from "@/services/input"
@@ -51,7 +52,7 @@ export async function setInternalSubmissionReviewers(
     async (): Promise<Submission> => {
       const client = getSubmissionClient(deps)
 
-      await requireSubmissionPermission(
+      const subject = await requireSubmissionPermission(
         client,
         input.organizationId,
         input.actorUserId,
@@ -61,6 +62,7 @@ export async function setInternalSubmissionReviewers(
 
       // The database keeps reviewers someone more senior chose out of a junior's hands.
       const current = await getSubmissionById(client, input.organizationId, input.submissionId)
+      await assertSubmissionVisible(client, getOrganizationRoleFromSubject(subject), current, input.actorUserId)
       const reviewerIds = input.reviewerIds.map((id) => id.trim().toLowerCase())
 
       if (
@@ -191,6 +193,7 @@ export async function shareInternalSubmission(
       // The form lists only the people this person can see; anyone it was shared
       // with whom they cannot see stays shared.
       const submission = await getSubmissionById(client, input.organizationId, input.submissionId)
+      await assertSubmissionVisible(client, getOrganizationRoleFromSubject(subject), submission, input.actorUserId)
       const { all, visible } = await readReviewers(client, submission, { role: getOrganizationRoleFromSubject(subject), userId: input.actorUserId })
       const hidden = all.filter((reviewer) => !reviewer.canApprove && !visible.includes(reviewer)).map((reviewer) => reviewer.userId)
       const userIds = [...new Set([...ticked, ...hidden])]

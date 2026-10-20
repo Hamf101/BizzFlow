@@ -430,14 +430,7 @@ export async function getTask(
         "You cannot view tasks."
       )
 
-      const task = await getTaskById(client, input.organizationId, input.taskId)
-      const visibleIds = await loadVisibleTaskPeople(client, role, input)
-
-      // A narrowed role opens only the tasks of the people it sees, by link as in the list.
-      if (visibleIds && !visibleIds.includes(task.assignedTo ?? "") && !visibleIds.includes(task.createdBy ?? "")) {
-        throw new TaskServiceError("Task was not found.", 404)
-      }
-
+      const task = await getReachableTask(client, role, input)
       const reminders = await listTaskReminderRows(
         client,
         input.organizationId,
@@ -471,7 +464,7 @@ export async function updateTask(
     },
     async (): Promise<Task> => {
       const client = getTaskClient(deps)
-      await requireTaskPermission(
+      const role = await requireTaskPermission(
         client,
         input.organizationId,
         input.actorUserId,
@@ -482,7 +475,7 @@ export async function updateTask(
       const expectedRevision = normalizeExpectedTaskRevision(
         input.expectedRevision
       )
-      const task = await requireEditableTask(client, input, expectedRevision)
+      const task = await requireEditableTask(client, role, input, expectedRevision)
       const values: TaskMutationValues = {
         updated_by: input.actorUserId,
         updated_at: taskNowIso(deps),
@@ -561,7 +554,7 @@ export async function assignTask(
     },
     async (): Promise<Task> => {
       const client = getTaskClient(deps)
-      await requireTaskPermission(
+      const role = await requireTaskPermission(
         client,
         input.organizationId,
         input.actorUserId,
@@ -579,7 +572,7 @@ export async function assignTask(
               input.assignedTo,
               "Task assignee must be a valid user id."
             )
-      const task = await requireEditableTask(client, input, expectedRevision)
+      const task = await requireEditableTask(client, role, input, expectedRevision)
 
       if (assignedTo !== null) {
         await requireInternalTaskMember(
@@ -648,7 +641,7 @@ export async function transitionTaskStatus(
     },
     async (): Promise<Task> => {
       const client = getTaskClient(deps)
-      await requireTaskPermission(
+      const role = await requireTaskPermission(
         client,
         input.organizationId,
         input.actorUserId,
@@ -660,11 +653,7 @@ export async function transitionTaskStatus(
         input.expectedRevision
       )
       const targetStatus = normalizeTaskStatus(input.targetStatus)
-      const task = await getTaskById(
-        client,
-        input.organizationId,
-        input.taskId
-      )
+      const task = await getReachableTask(client, role, input)
       assertExpectedRevisionMatches(task, expectedRevision)
 
       if (!canTransitionTaskStatus(task.status, targetStatus)) {
@@ -704,12 +693,30 @@ export async function transitionTaskStatus(
   )
 }
 
+// A narrowed role reaches only the tasks of the people it sees, by link as in
+// the list: reading and changing alike, so a move out of a team ends both.
+async function getReachableTask(
+  client: TaskServiceClient,
+  role: OrganizationRole,
+  input: GetTaskInput
+): Promise<Task> {
+  const task = await getTaskById(client, input.organizationId, input.taskId)
+  const visibleIds = await loadVisibleTaskPeople(client, role, input)
+
+  if (visibleIds && !visibleIds.includes(task.assignedTo ?? "") && !visibleIds.includes(task.createdBy ?? "")) {
+    throw new TaskServiceError("Task was not found.", 404)
+  }
+
+  return task
+}
+
 async function requireEditableTask(
   client: TaskServiceClient,
+  role: OrganizationRole,
   input: GetTaskInput,
   expectedRevision: number
 ): Promise<Task> {
-  const task = await getTaskById(client, input.organizationId, input.taskId)
+  const task = await getReachableTask(client, role, input)
   assertTaskIsOpenForChanges(task)
   assertExpectedRevisionMatches(task, expectedRevision)
 
