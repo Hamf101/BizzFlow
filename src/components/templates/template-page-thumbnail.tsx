@@ -27,6 +27,8 @@ export const PAPER_FRAME =
 export const PAGE_SIZES = {
   // A Templates or Files card: 96px on phones, 150px from `sm` up.
   card: { frame: "w-[96px] sm:w-[150px]", zoom: "[zoom:0.1304] sm:[zoom:0.2038]" },
+  // A Files page on its desk: 72px on phones, 92px from `sm` up.
+  icon: { frame: "w-[72px] sm:w-[92px]", zoom: "[zoom:0.0978] sm:[zoom:0.125]" },
   // A Files filmstrip frame.
   film: { frame: "w-[46px]", zoom: "[zoom:0.0625]" },
   // The Files Columns preview.

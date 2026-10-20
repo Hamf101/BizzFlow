@@ -153,10 +153,11 @@ export function FileListLayout({
 }
 
 /**
- * Cards the way Templates draws them: the name over the item's picture and
- * its date under it. The name's link covers the whole card; the menu sits in
- * the card's corner on wide screens and at its foot on phones, never on the
- * picture. A ⌘-, Ctrl-, or Shift-click selects a card instead of opening it.
+ * Things on a desk, as Finder draws them: each folder or page with its name
+ * underneath and no card around it, so Files never reads as Templates. The
+ * name's link covers the whole item, and its menu shows on hover or focus,
+ * always on a touch screen. A ⌘-, Ctrl-, or Shift-click selects an item
+ * instead of opening it.
  *
  * @param props - The open folder's entries, the chosen one, and extra classes.
  * @returns The Icons layout.
@@ -174,7 +175,7 @@ export function FileIconsLayout({
     <ul
       aria-label="Files"
       className={cn(
-        "grid grid-cols-2 gap-2.5 sm:grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] sm:gap-4 xl:grid-cols-[repeat(auto-fill,minmax(14rem,1fr))]",
+        "grid grid-cols-3 gap-x-1.5 gap-y-3 sm:grid-cols-[repeat(auto-fill,minmax(9rem,1fr))] sm:gap-x-3 sm:gap-y-4",
         className
       )}
       data-slot="file-icons"
@@ -183,44 +184,38 @@ export function FileIconsLayout({
         <SelectableFileItem
           as="li"
           className={cn(
-            "group/tile relative grid min-w-0 grid-rows-[auto_1fr_auto] overflow-hidden rounded-lg border border-border bg-card/70 transition-[translate,box-shadow,border-color,background-color] duration-200 active:scale-[0.98] sm:hover:border-primary/35 sm:hover:shadow-[0_10px_24px_rgba(37,35,41,0.1)] sm:motion-safe:hover:-translate-y-0.5",
+            "group/tile relative grid min-w-0 content-start justify-items-center gap-2 rounded-lg px-1.5 pt-3 pb-2.5 text-center transition-colors hover:bg-card/65 active:scale-[0.98]",
             RISE,
-            entry.id === selected && "border-primary/45 bg-secondary/70"
+            entry.id === selected && "bg-secondary/70 hover:bg-secondary/70"
           )}
           itemId={entry.id}
           key={entry.id}
           slot="file-tile"
           style={riseDelay(index)}
         >
-          <div className="flex min-w-0 items-start gap-1.5 px-2.5 pt-2.5 pb-2 group-data-[ticking]/tile:pl-9 sm:px-3.5 sm:pt-3 md:group-data-[ticking]/tile:pl-3.5">
+          {/* First in the markup so Tab meets it where the eye does, at the
+              item's top corner, before the name under the picture. */}
+          {entry.menu ? (
+            <div className="absolute top-1 right-1 z-10 opacity-0 transition-opacity group-focus-within/tile:opacity-100 group-hover/tile:opacity-100 has-[[data-popup-open]]:opacity-100 [@media(hover:none)]:opacity-100">
+              {entry.menu}
+            </div>
+          ) : null}
+          {/* One height for every picture, so names line up along a row. */}
+          <span className="grid h-[104px] w-full content-end justify-items-center sm:h-[132px]">
+            <FileArt entry={entry} size="icon" />
+          </span>
+          <span className="flex max-w-full min-w-0 items-start justify-center gap-1.5">
             <StatusDot className="mt-[5px]" status={entry.status} />
             <Link
-              className="line-clamp-2 min-h-[2.6em] min-w-0 flex-1 rounded-sm text-[11.5px] leading-[1.3] font-medium text-balance break-words text-foreground outline-none after:absolute after:inset-0 after:rounded-lg hover:text-primary focus-visible:after:ring-2 focus-visible:after:ring-ring/35 sm:line-clamp-1 sm:min-h-0 sm:text-[13.5px] sm:leading-snug"
+              className="line-clamp-2 min-w-0 rounded-sm text-[11.5px] leading-snug font-medium break-words text-foreground outline-none after:absolute after:inset-0 after:rounded-lg focus-visible:after:ring-2 focus-visible:after:ring-ring/35 sm:text-[13px]"
               data-slot="file-name"
               href={entry.href}
             >
               {entry.name}
             </Link>
-            {entry.menu ? (
-              // Above the card's own link, so the menu opens instead of the item.
-              <div className="relative z-10 -my-1 -mr-1.5 max-sm:absolute max-sm:right-1.5 max-sm:bottom-0 max-sm:m-0">
-                {entry.menu}
-              </div>
-            ) : null}
-          </div>
-          <div
-            className={cn(
-              "mx-1.5 grid h-[104px] justify-items-center overflow-hidden rounded-t-md bg-card/45 sm:h-[150px]",
-              entry.kind === "folder" ? "place-items-center" : "pt-3 sm:pt-4"
-            )}
-          >
-            <FileArt entry={entry} size="card" />
-          </div>
+          </span>
           <span
-            className={cn(
-              "truncate border-t border-border/60 px-2.5 py-2 text-[10.5px] text-muted-foreground tabular-nums sm:px-3.5 sm:py-2.5 sm:text-xs",
-              entry.menu && "max-sm:pr-10"
-            )}
+            className="-mt-1.5 max-w-full truncate text-[10.5px] text-muted-foreground tabular-nums sm:text-xs"
             data-slot={entry.note ? "file-retention" : "file-meta"}
           >
             {entry.note ??

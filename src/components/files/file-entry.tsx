@@ -43,11 +43,11 @@ export function EntryIcon({ kind, ...props }: LucideProps & { kind: FileEntry["k
 }
 
 /** How large a file is drawn, from a filmstrip frame to the Gallery stage. */
-export type FileArtSize = "card" | "film" | "preview" | "stage"
+export type FileArtSize = "film" | "icon" | "preview" | "stage"
 
 const FOLDER_ART: Record<FileArtSize, string> = {
-  card: "size-[64px] sm:size-[88px]",
   film: "size-10 opacity-75",
+  icon: "size-[80px] sm:size-[100px]",
   preview: "size-[110px]",
   stage: "size-[168px]",
 }
