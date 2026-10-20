@@ -10,7 +10,6 @@ import {
 } from "lucide-react"
 import type { ComponentType } from "react"
 
-import { FlowIcon } from "@/components/navigation/nav-icons"
 import type { NavigationPreferences } from "@/types/navigation"
 
 import {
@@ -31,19 +30,17 @@ export type NavigationItem = {
    * member may open it — the dashboard, and the personal settings page.
    */
   requiredAction?: OrganizationPermissionAction
-  /** Open to every member, but only once there is a workspace to work in. */
-  needsOrganization?: true
 }
 
 /**
- * Every dashboard destination, in sidebar order.
+ * Every dashboard destination a member may move and rename, in sidebar order.
+ * Search and Flow sit fixed above them in the sidebar.
  *
  * `requiredAction` mirrors what each page actually enforces, so navigation can
  * be filtered rather than offering a member a route they will bounce off.
  */
 export const NAVIGATION_ITEMS: readonly NavigationItem[] = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
-  { href: "/flow", icon: FlowIcon, label: "Flow", needsOrganization: true },
   {
     href: "/people",
     icon: Users,
@@ -109,7 +106,7 @@ export function getVisibleNavigationItems(
 ): NavigationItem[] {
   if (!role) {
     return NAVIGATION_ITEMS.filter(
-      (item: NavigationItem): boolean => !item.requiredAction && !item.needsOrganization
+      (item: NavigationItem): boolean => !item.requiredAction
     )
   }
 
@@ -141,8 +138,7 @@ export function getMobileNavigationLayout(
 } {
   const visible = getVisibleNavigationItems(role, preferences)
   if (preferences?.order.length) {
-    // Flow's own button is always on a phone's screen, so it never takes a slot.
-    const primary = visible.filter((item) => item.href !== "/flow").slice(0, MOBILE_PRIMARY_COUNT)
+    const primary = visible.slice(0, MOBILE_PRIMARY_COUNT)
     return { primary, overflow: visible.filter((item) => !primary.includes(item)) }
   }
   // A reviewer's day is the queue, so Submissions takes Templates' place.
@@ -153,10 +149,9 @@ export function getMobileNavigationLayout(
   const preferred = visible.filter((item: NavigationItem): boolean =>
     hrefs.includes(item.href)
   )
-  // Backfill from what is left so a restricted role still gets a full bar;
-  // never with Flow, whose own button is always on a phone's screen.
+  // Backfill from what is left so a restricted role still gets a full bar.
   const remainder = visible.filter(
-    (item: NavigationItem): boolean => !preferred.includes(item) && item.href !== "/flow"
+    (item: NavigationItem): boolean => !preferred.includes(item)
   )
   const primary = [
     ...preferred,
